@@ -2,6 +2,9 @@ package controlplane
 
 import _ "embed"
 
+//go:embed sql/clock__get.sql
+var sqlClockGet string
+
 // Каждая декларация связывает конкретный именованный запрос с бинарём на
 // этапе компиляции. Удалённый или переименованный SQL-файл поэтому завершает
 // сборку ошибкой, а не вызывает панику уже запущенного сервиса.
@@ -50,6 +53,9 @@ var sqlOutboxTerminalRepair string
 
 //go:embed sql/owner_gate__next_delivery.sql
 var sqlOwnerGateNextDelivery string
+
+//go:embed sql/owner_gate__by_delivery_claim_key.sql
+var sqlOwnerGateByDeliveryClaimKey string
 
 //go:embed sql/owner_gate__next_expired.sql
 var sqlOwnerGateNextExpired string
@@ -117,14 +123,71 @@ var sqlRuntimeRevisionComponents string
 //go:embed sql/runtime_revision__latest.sql
 var sqlRuntimeRevisionLatest string
 
+//go:embed sql/runtime_execution__get_for_update.sql
+var sqlRuntimeExecutionGetForUpdate string
+
+//go:embed sql/runtime_execution__get_by_turn_for_update.sql
+var sqlRuntimeExecutionGetByTurnForUpdate string
+
+//go:embed sql/runtime_execution__get_by_turn.sql
+var sqlRuntimeExecutionGetByTurn string
+
+//go:embed sql/runtime_execution__session_has_live.sql
+var sqlRuntimeExecutionSessionHasLive string
+
+//go:embed sql/runtime_execution__insert.sql
+var sqlRuntimeExecutionInsert string
+
+//go:embed sql/runtime_execution__update.sql
+var sqlRuntimeExecutionUpdate string
+
+//go:embed sql/runtime_execution__next_expired.sql
+var sqlRuntimeExecutionNextExpired string
+
+//go:embed sql/runtime_incident__insert.sql
+var sqlRuntimeIncidentInsert string
+
+//go:embed sql/integration_continuation__get_for_update.sql
+var sqlIntegrationContinuationGetForUpdate string
+
+//go:embed sql/integration_continuation__get.sql
+var sqlIntegrationContinuationGet string
+
+//go:embed sql/integration_continuation__get_by_continuation_turn.sql
+var sqlIntegrationContinuationGetByContinuationTurn string
+
+//go:embed sql/integration_continuation__next_expired.sql
+var sqlIntegrationContinuationNextExpired string
+
+//go:embed sql/integration_continuation__blocks_cleanup.sql
+var sqlIntegrationContinuationBlocksCleanup string
+
+//go:embed sql/integration_continuation__insert.sql
+var sqlIntegrationContinuationInsert string
+
+//go:embed sql/integration_continuation__update.sql
+var sqlIntegrationContinuationUpdate string
+
 //go:embed sql/schedule__due.sql
 var sqlScheduleDue string
+
+//go:embed sql/schedule_occurrence__get.sql
+var sqlScheduleOccurrenceGet string
 
 //go:embed sql/schedule_occurrence__get_for_update.sql
 var sqlScheduleOccurrenceGetForUpdate string
 
+//go:embed sql/schedule_occurrence__get_by_current_turn.sql
+var sqlScheduleOccurrenceGetByCurrentTurn string
+
+//go:embed sql/schedule_occurrence__get_by_claim_key.sql
+var sqlScheduleOccurrenceGetByClaimKey string
+
 //go:embed sql/schedule_occurrence__has_open.sql
 var sqlScheduleOccurrenceHasOpen string
+
+//go:embed sql/schedule_occurrence__has_blocking_execution.sql
+var sqlScheduleOccurrenceHasBlockingExecution string
 
 //go:embed sql/schedule_occurrence__list.sql
 var sqlScheduleOccurrenceList string
@@ -133,7 +196,7 @@ var sqlScheduleOccurrenceList string
 var sqlScheduleOccurrenceNext string
 
 //go:embed sql/schedule_occurrence__lock_expired.sql
-var sqlScheduleOccurrenceLockExpired string
+var sqlScheduleOccurrenceExpiredCandidates string
 
 //go:embed sql/schedule_occurrence__save.sql
 var sqlScheduleOccurrenceSave string
@@ -155,6 +218,9 @@ var sqlScheduledRunGetByCurrentTurnForUpdate string
 
 //go:embed sql/scheduled_run__wait_owner.sql
 var sqlScheduledRunWaitOwner string
+
+//go:embed sql/scheduled_run__suspend_external.sql
+var sqlScheduledRunSuspendExternal string
 
 //go:embed sql/scheduled_run__continue.sql
 var sqlScheduledRunContinue string
@@ -213,8 +279,8 @@ var sqlProviderPoolNextSlot string
 //go:embed sql/work_claim__active_for_update.sql
 var sqlWorkClaimActiveForUpdate string
 
-//go:embed sql/process_turn__active_for_update.sql
-var sqlProcessTurnActiveForUpdate string
+//go:embed sql/process_turn__active_candidates.sql
+var sqlProcessTurnActiveCandidates string
 
 //go:embed sql/owner_gate__active_by_process.sql
 var sqlOwnerGateActiveByProcess string

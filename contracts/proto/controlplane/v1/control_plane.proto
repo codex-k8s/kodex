@@ -112,6 +112,60 @@ service ControlPlaneService {
   // источник истины.
   rpc RecordMemoryEmbedding(RecordMemoryEmbeddingRequest) returns (RecordMemoryEmbeddingResponse);
 
+  // ClaimRuntimeExecution материализует server-owned immutable snapshot для
+  // точной попытки из проверенного runtime grant; request не принимает IDs.
+  rpc ClaimRuntimeExecution(ClaimRuntimeExecutionRequest) returns (ClaimRuntimeExecutionResponse);
+  // GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
+  rpc GetRuntimeExecution(GetRuntimeExecutionRequest) returns (GetRuntimeExecutionResponse);
+  // AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
+  rpc AdmitRuntimeExecution(AdmitRuntimeExecutionRequest) returns (AdmitRuntimeExecutionResponse);
+  // HeartbeatRuntimeExecution продлевает только текущую lease/fence.
+  rpc HeartbeatRuntimeExecution(HeartbeatRuntimeExecutionRequest) returns (HeartbeatRuntimeExecutionResponse);
+  // RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
+  rpc RecordRuntimeIncident(RecordRuntimeIncidentRequest) returns (RecordRuntimeIncidentResponse);
+  // CompleteRuntimeExecution фиксирует единственный terminal result/error.
+  rpc CompleteRuntimeExecution(CompleteRuntimeExecutionRequest) returns (CompleteRuntimeExecutionResponse);
+  // CancelRuntimeExecution закрывает весь graph исполнения одной owner transaction.
+  rpc CancelRuntimeExecution(CancelRuntimeExecutionRequest) returns (CancelRuntimeExecutionResponse);
+  // RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
+  rpc RetryRuntimeExecution(RetryRuntimeExecutionRequest) returns (RetryRuntimeExecutionResponse);
+  // ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
+  rpc ExpireRuntimeExecution(ExpireRuntimeExecutionRequest) returns (ExpireRuntimeExecutionResponse);
+  // RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
+  rpc RecordRuntimeArchive(RecordRuntimeArchiveRequest) returns (RecordRuntimeArchiveResponse);
+  // VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
+  rpc VerifyRuntimeRestore(VerifyRuntimeRestoreRequest) returns (VerifyRuntimeRestoreResponse);
+  // AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
+  rpc AuthorizeRuntimeCleanup(AuthorizeRuntimeCleanupRequest) returns (AuthorizeRuntimeCleanupResponse);
+  // ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
+  rpc ConsumeRuntimeCleanupAuthorization(ConsumeRuntimeCleanupAuthorizationRequest) returns (ConsumeRuntimeCleanupAuthorizationResponse);
+  // ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
+  rpc ExpireRuntimeCleanupAuthorization(ExpireRuntimeCleanupAuthorizationRequest) returns (ExpireRuntimeCleanupAuthorizationResponse);
+
+  // ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
+  rpc ResolveIntegrationSession(ResolveIntegrationSessionRequest) returns (ResolveIntegrationSessionResponse);
+  // SuspendForIntegrationApproval атомарно переводит точный graph в WAITING_EXTERNAL.
+  rpc SuspendForIntegrationApproval(SuspendForIntegrationApprovalRequest) returns (SuspendForIntegrationApprovalResponse);
+  // ApproveIntegrationInvocation фиксирует единственное положительное решение.
+  rpc ApproveIntegrationInvocation(ApproveIntegrationInvocationRequest) returns (ApproveIntegrationInvocationResponse);
+  // RejectIntegrationInvocation фиксирует отказ и один continuation turn.
+  rpc RejectIntegrationInvocation(RejectIntegrationInvocationRequest) returns (RejectIntegrationInvocationResponse);
+  // ExpireIntegrationInvocation использует только database clock и server state.
+  rpc ExpireIntegrationInvocation(ExpireIntegrationInvocationRequest) returns (ExpireIntegrationInvocationResponse);
+  // CancelIntegrationInvocation закрывает ожидающий или approved intent.
+  rpc CancelIntegrationInvocation(CancelIntegrationInvocationRequest) returns (CancelIntegrationInvocationResponse);
+  // BeginIntegrationExecution ограждает исполнение одобренного invocation.
+  rpc BeginIntegrationExecution(BeginIntegrationExecutionRequest) returns (BeginIntegrationExecutionResponse);
+  // CompleteIntegrationExecution фиксирует structured result и continuation.
+  rpc CompleteIntegrationExecution(CompleteIntegrationExecutionRequest) returns (CompleteIntegrationExecutionResponse);
+  // FailIntegrationExecution фиксирует structured error и continuation.
+  rpc FailIntegrationExecution(FailIntegrationExecutionRequest) returns (FailIntegrationExecutionResponse);
+  // GetIntegrationContinuation разрешает version-pinned structured rejoin по
+  // проверенному current turn; request не принимает continuation IDs.
+  rpc GetIntegrationContinuation(GetIntegrationContinuationRequest) returns (GetIntegrationContinuationResponse);
+  // AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
+  rpc AcknowledgeIntegrationContinuation(AcknowledgeIntegrationContinuationRequest) returns (AcknowledgeIntegrationContinuationResponse);
+
   // CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
 }
@@ -417,6 +471,13 @@ enum ConfigurationManager {
   CONFIGURATION_MANAGER_GIT = 2;
 }
 
+// ProcessContinuationKind различает закрытые owner-gate и integration binding.
+enum ProcessContinuationKind {
+  PROCESS_CONTINUATION_KIND_UNSPECIFIED = 0;
+  PROCESS_CONTINUATION_KIND_OWNER_GATE = 1;
+  PROCESS_CONTINUATION_KIND_INTEGRATION = 2;
+}
+
 // ConfigurationOwnership фиксирует единственный источник управляемой конфигурации.
 message ConfigurationOwnership {
   ConfigurationManager managed_by = 1;
@@ -625,6 +686,9 @@ message ProcessRunSpec {
   string current_runtime_revision_id = 39;
   uint64 current_runtime_revision_version = 40;
   string current_input_sha256 = 41;
+  ProcessContinuationKind continuation_kind = 42;
+  string continuation_integration_id = 43;
+  string continuation_outcome_sha256 = 44;
 }
 
 // ScheduleSpec описывает версионированное сообщение контракта control-plane.
@@ -1477,6 +1541,553 @@ message RecordMemoryEmbeddingResponse {
   string memory_record_id = 1;
   uint64 resource_version = 2;
   string projection_sha256 = 3;
+}
+
+// RuntimeResourceClass — закрытый server-owned класс ресурсов.
+enum RuntimeResourceClass {
+  RUNTIME_RESOURCE_CLASS_UNSPECIFIED = 0;
+  RUNTIME_RESOURCE_CLASS_STANDARD = 1;
+  RUNTIME_RESOURCE_CLASS_HIGH_MEMORY = 2;
+  RUNTIME_RESOURCE_CLASS_ACCELERATED = 3;
+}
+
+// ClusterAccessProfile — закрытый server-owned профиль доступа к кластеру.
+enum ClusterAccessProfile {
+  CLUSTER_ACCESS_PROFILE_UNSPECIFIED = 0;
+  CLUSTER_ACCESS_PROFILE_NONE = 1;
+  CLUSTER_ACCESS_PROFILE_PROJECT_READ_ONLY = 2;
+  CLUSTER_ACCESS_PROFILE_CLUSTER_ADMIN = 3;
+}
+
+// RuntimeExecutionState — полный жизненный цикл одной immutable attempt.
+enum RuntimeExecutionState {
+  RUNTIME_EXECUTION_STATE_UNSPECIFIED = 0;
+  RUNTIME_EXECUTION_STATE_PENDING = 1;
+  RUNTIME_EXECUTION_STATE_ADMITTED = 2;
+  RUNTIME_EXECUTION_STATE_RUNNING = 3;
+  RUNTIME_EXECUTION_STATE_SUCCEEDED = 4;
+  RUNTIME_EXECUTION_STATE_FAILED = 5;
+  RUNTIME_EXECUTION_STATE_CANCELLED = 6;
+  RUNTIME_EXECUTION_STATE_EXPIRED = 7;
+  RUNTIME_EXECUTION_STATE_RETRIED = 8;
+  RUNTIME_EXECUTION_STATE_SUSPENDED = 9;
+}
+
+// RuntimeTerminalOutcome — закрытый terminal outcome специализированной команды.
+enum RuntimeTerminalOutcome {
+  RUNTIME_TERMINAL_OUTCOME_UNSPECIFIED = 0;
+  RUNTIME_TERMINAL_OUTCOME_SUCCEEDED = 1;
+  RUNTIME_TERMINAL_OUTCOME_FAILED = 2;
+  RUNTIME_TERMINAL_OUTCOME_SUSPENDED = 3;
+  RUNTIME_TERMINAL_OUTCOME_CANCELLED = 4;
+  RUNTIME_TERMINAL_OUTCOME_EXPIRED = 5;
+}
+
+// RuntimeCleanupAuthorizationState — crash-safe lifecycle destructive authorization.
+enum RuntimeCleanupAuthorizationState {
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_UNSPECIFIED = 0;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_NONE = 1;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_ACTIVE = 2;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_CONSUMED = 3;
+  RUNTIME_CLEANUP_AUTHORIZATION_STATE_EXPIRED = 4;
+}
+
+// RuntimeIncidentKind — закрытый класс watchdog incident.
+enum RuntimeIncidentKind {
+  RUNTIME_INCIDENT_KIND_UNSPECIFIED = 0;
+  RUNTIME_INCIDENT_KIND_HEARTBEAT_MISSED = 1;
+  RUNTIME_INCIDENT_KIND_RECONCILE_FAILED = 2;
+  RUNTIME_INCIDENT_KIND_WORKLOAD_UNAVAILABLE = 3;
+}
+
+// RuntimeExecution — immutable snapshot и изменяемый monotonic fence одной attempt.
+message RuntimeExecution {
+  string execution_id = 1;
+  string organization_id = 2;
+  string project_id = 3;
+  string process_id = 4;
+  string session_id = 5;
+  string thread_id = 6;
+  string role_id = 7;
+  string turn_id = 8;
+  uint32 attempt = 9;
+  string runtime_revision_id = 10;
+  uint64 runtime_revision_version = 11;
+  string runtime_revision_sha256 = 12;
+  string immutable_input_sha256 = 13;
+  RuntimeResourceClass resource_class = 14;
+  ClusterAccessProfile cluster_access_profile = 15;
+  string workload_id = 16;
+  string workload_spiffe_id = 17;
+  uint64 grant_generation = 18;
+  uint64 version = 19;
+  uint64 fence = 20;
+  RuntimeExecutionState state = 21;
+  string lease_id = 22;
+  google.protobuf.Timestamp lease_expires_at = 23;
+  RuntimeTerminalOutcome terminal_outcome = 24;
+  string terminal_reference = 25;
+  string terminal_sha256 = 26;
+  string archive_reference = 27;
+  string archive_sha256 = 28;
+  string restore_proof_reference = 29;
+  string restore_proof_sha256 = 30;
+  string restore_verifier_workload_id = 31;
+  string cleanup_authorization_id = 32;
+  google.protobuf.Timestamp created_at = 33;
+  google.protobuf.Timestamp updated_at = 34;
+  google.protobuf.Timestamp cleanup_authorization_expires_at = 35;
+  string restore_verifier_spiffe_id = 36;
+  uint64 restore_verifier_generation = 37;
+  RuntimeCleanupAuthorizationState cleanup_authorization_state = 38;
+  uint64 cleanup_authorization_generation = 39;
+  google.protobuf.Timestamp cleanup_consumed_at = 40;
+}
+
+message ClaimRuntimeExecutionRequest {
+  string idempotency_key = 1;
+}
+
+message ClaimRuntimeExecutionResponse {
+  RuntimeExecution execution = 1;
+}
+
+message GetRuntimeExecutionRequest {
+  string execution_id = 1;
+  uint64 expected_version = 2;
+}
+
+message GetRuntimeExecutionResponse {
+  RuntimeExecution execution = 1;
+}
+
+message AdmitRuntimeExecutionRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  uint64 expected_grant_generation = 5;
+}
+
+message AdmitRuntimeExecutionResponse {
+  RuntimeExecution execution = 1;
+  string lease_token = 2;
+}
+
+message HeartbeatRuntimeExecutionRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  uint64 expected_grant_generation = 5;
+  string lease_token = 6;
+}
+
+message HeartbeatRuntimeExecutionResponse {
+  RuntimeExecution execution = 1;
+}
+
+message RecordRuntimeIncidentRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  RuntimeIncidentKind kind = 5;
+  string incident_id = 6;
+  string evidence_sha256 = 7;
+}
+
+message RecordRuntimeIncidentResponse {
+  RuntimeExecution execution = 1;
+}
+
+message CompleteRuntimeExecutionRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  uint64 expected_grant_generation = 5;
+  string lease_token = 6;
+  RuntimeTerminalOutcome outcome = 7;
+  string terminal_reference = 8;
+  string terminal_sha256 = 9;
+}
+
+message CompleteRuntimeExecutionResponse {
+  RuntimeExecution execution = 1;
+}
+
+message CancelRuntimeExecutionRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string reason_code = 5;
+}
+
+message CancelRuntimeExecutionResponse {
+  RuntimeExecution execution = 1;
+}
+
+message RetryRuntimeExecutionRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+}
+
+message RetryRuntimeExecutionResponse {
+  RuntimeExecution previous_execution = 1;
+  Resource turn = 2;
+}
+
+message ExpireRuntimeExecutionRequest {
+  string idempotency_key = 1;
+}
+
+message ExpireRuntimeExecutionResponse {
+  RuntimeExecution execution = 1;
+}
+
+message RecordRuntimeArchiveRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string archive_reference = 5;
+  string archive_sha256 = 6;
+}
+
+message RecordRuntimeArchiveResponse {
+  RuntimeExecution execution = 1;
+}
+
+message VerifyRuntimeRestoreRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string archive_sha256 = 5;
+  string restore_proof_reference = 6;
+  string restore_proof_sha256 = 7;
+}
+
+message VerifyRuntimeRestoreResponse {
+  RuntimeExecution execution = 1;
+}
+
+message AuthorizeRuntimeCleanupRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string archive_sha256 = 5;
+  string restore_proof_sha256 = 6;
+  uint64 expected_cleanup_generation = 7;
+}
+
+message AuthorizeRuntimeCleanupResponse {
+  RuntimeExecution execution = 1;
+}
+
+message ConsumeRuntimeCleanupAuthorizationRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string cleanup_authorization_id = 5;
+  uint64 cleanup_authorization_generation = 6;
+  string archive_sha256 = 7;
+  string restore_proof_sha256 = 8;
+}
+
+message ConsumeRuntimeCleanupAuthorizationResponse {
+  RuntimeExecution execution = 1;
+}
+
+message ExpireRuntimeCleanupAuthorizationRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string cleanup_authorization_id = 5;
+  uint64 cleanup_authorization_generation = 6;
+}
+
+message ExpireRuntimeCleanupAuthorizationResponse {
+  RuntimeExecution execution = 1;
+}
+
+// IntegrationApprovalState — единственное решение по approval.
+enum IntegrationApprovalState {
+  INTEGRATION_APPROVAL_STATE_UNSPECIFIED = 0;
+  INTEGRATION_APPROVAL_STATE_PENDING = 1;
+  INTEGRATION_APPROVAL_STATE_APPROVED = 2;
+  INTEGRATION_APPROVAL_STATE_REJECTED = 3;
+  INTEGRATION_APPROVAL_STATE_EXPIRED = 4;
+  INTEGRATION_APPROVAL_STATE_CANCELLED = 5;
+}
+
+// IntegrationExecutionState — отдельный terminal execution result.
+enum IntegrationExecutionState {
+  INTEGRATION_EXECUTION_STATE_UNSPECIFIED = 0;
+  INTEGRATION_EXECUTION_STATE_NOT_STARTED = 1;
+  INTEGRATION_EXECUTION_STATE_EXECUTING = 2;
+  INTEGRATION_EXECUTION_STATE_SUCCEEDED = 3;
+  INTEGRATION_EXECUTION_STATE_FAILED = 4;
+  INTEGRATION_EXECUTION_STATE_NOT_APPLICABLE = 5;
+}
+
+// IntegrationContinuationState — durable suspension/rejoin lifecycle.
+enum IntegrationContinuationState {
+  INTEGRATION_CONTINUATION_STATE_UNSPECIFIED = 0;
+  INTEGRATION_CONTINUATION_STATE_SUSPENDED = 1;
+  INTEGRATION_CONTINUATION_STATE_READY = 2;
+  INTEGRATION_CONTINUATION_STATE_REJOINED = 3;
+}
+
+// IntegrationExecutionBinding — server-owned tuple приостановленного исполнения.
+message IntegrationExecutionBinding {
+  string organization_id = 1;
+  string project_id = 2;
+  string process_id = 3;
+  string session_id = 4;
+  uint64 session_version = 5;
+  string thread_id = 6;
+  string role_id = 7;
+  string turn_id = 8;
+  uint64 turn_version = 9;
+  uint32 attempt = 10;
+  string runtime_revision_id = 11;
+  uint64 runtime_revision_version = 12;
+  string runtime_revision_sha256 = 13;
+  string immutable_input_sha256 = 14;
+  uint64 grant_generation = 15;
+  uint64 fence = 16;
+  IntegrationApprovalBinding integration_binding = 17;
+}
+
+// PinnedIntegrationResource связывает owner resource с exact version/digest.
+message PinnedIntegrationResource {
+  string resource_id = 1;
+  uint64 version = 2;
+  string projection_sha256 = 3;
+}
+
+// IntegrationApprovalBinding — выбранная gateway связка, которую owner
+// повторно разрешает из RuntimeRevision; caller fields не являются authority.
+message IntegrationApprovalBinding {
+  PinnedIntegrationResource integration = 1;
+  repeated PinnedIntegrationResource credential_bindings = 2;
+}
+
+// IntegrationContinuation — typed durable suspension и structured result/error.
+message IntegrationContinuation {
+  string continuation_id = 1;
+  IntegrationExecutionBinding binding = 2;
+  string invocation_id = 3;
+  string approval_id = 4;
+  string integration_id = 5;
+  string request_sha256 = 6;
+  IntegrationApprovalState approval_state = 7;
+  IntegrationExecutionState execution_state = 8;
+  IntegrationContinuationState continuation_state = 9;
+  uint64 version = 10;
+  uint64 fence = 11;
+  google.protobuf.Timestamp approval_expires_at = 12;
+  string decision_reference = 13;
+  string decision_sha256 = 14;
+  string result_reference = 15;
+  string result_sha256 = 16;
+  string error_code = 17;
+  string error_reference = 18;
+  string error_sha256 = 19;
+  string continuation_turn_id = 20;
+  uint64 continuation_turn_version = 21;
+  string continuation_runtime_revision_id = 22;
+  uint64 continuation_runtime_revision_version = 23;
+  string continuation_input_sha256 = 24;
+  google.protobuf.Timestamp created_at = 25;
+  google.protobuf.Timestamp updated_at = 26;
+  // continuation_attempt — текущая server-owned delivery attempt; retry
+  // перепривязывает тот же immutable outcome и увеличивает version/fence.
+  uint32 continuation_attempt = 27;
+}
+
+message ResolveIntegrationSessionRequest {}
+
+message ResolveIntegrationSessionResponse {
+  IntegrationSessionContext context = 1;
+}
+
+// IntegrationSessionContext материализует только exact RuntimeRevision-bound
+// integration metadata; request не выбирает tenant/session/turn/role.
+message IntegrationSessionContext {
+  string organization_id = 1;
+  string project_id = 2;
+  string owner_actor_id = 3;
+  string session_id = 4;
+  uint64 session_version = 5;
+  string turn_id = 6;
+  uint64 turn_version = 7;
+  uint32 attempt = 8;
+  string input_sha256 = 9;
+  string runtime_revision_id = 10;
+  uint64 runtime_revision_version = 11;
+  string runtime_manifest_sha256 = 12;
+  string role_id = 13;
+  uint64 role_version = 14;
+  repeated string role_capabilities = 15;
+  uint64 grant_generation = 16;
+  repeated IntegrationSessionBinding integrations = 17;
+  string process_id = 18;
+  string thread_id = 19;
+  string runtime_revision_sha256 = 20;
+}
+
+// IntegrationSessionBinding содержит одну exact integration projection.
+message IntegrationSessionBinding {
+  string integration_id = 1;
+  uint64 integration_version = 2;
+  string projection_sha256 = 3;
+  string definition_ref = 4;
+  uint64 definition_version = 5;
+  repeated string capabilities = 6;
+  string endpoint_ref = 7;
+  repeated IntegrationCredentialBinding credential_bindings = 8;
+}
+
+// IntegrationCredentialBinding содержит только metadata-ссылку, не secret value.
+message IntegrationCredentialBinding {
+  string credential_binding_id = 1;
+  uint64 credential_binding_version = 2;
+  string projection_sha256 = 3;
+  string purpose = 4;
+  string secret_ref = 5;
+  string principal_ref = 6;
+  uint64 credential_revision = 7;
+  google.protobuf.Timestamp expires_at = 8;
+}
+
+message SuspendForIntegrationApprovalRequest {
+  string idempotency_key = 1;
+  string invocation_id = 2;
+  string approval_id = 3;
+  string integration_id = 4;
+  string request_sha256 = 5;
+  google.protobuf.Timestamp approval_expires_at = 6;
+  IntegrationApprovalBinding selected_binding = 7;
+}
+
+message SuspendForIntegrationApprovalResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message IntegrationDecisionReference {
+  string idempotency_key = 1;
+  string continuation_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string invocation_id = 5;
+  string approval_id = 6;
+  string request_sha256 = 7;
+  string decision_reference = 8;
+  string decision_sha256 = 9;
+}
+
+message ApproveIntegrationInvocationRequest {
+  IntegrationDecisionReference decision = 1;
+}
+
+message ApproveIntegrationInvocationResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message RejectIntegrationInvocationRequest {
+  IntegrationDecisionReference decision = 1;
+}
+
+message RejectIntegrationInvocationResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message ExpireIntegrationInvocationRequest {
+  string idempotency_key = 1;
+}
+
+message ExpireIntegrationInvocationResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message CancelIntegrationInvocationRequest {
+  IntegrationDecisionReference decision = 1;
+}
+
+message CancelIntegrationInvocationResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message BeginIntegrationExecutionRequest {
+  string idempotency_key = 1;
+  string continuation_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string invocation_id = 5;
+  string request_sha256 = 6;
+}
+
+message BeginIntegrationExecutionResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message CompleteIntegrationExecutionRequest {
+  string idempotency_key = 1;
+  string continuation_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string invocation_id = 5;
+  string request_sha256 = 6;
+  string result_reference = 7;
+  string result_sha256 = 8;
+}
+
+message CompleteIntegrationExecutionResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message FailIntegrationExecutionRequest {
+  string idempotency_key = 1;
+  string continuation_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string invocation_id = 5;
+  string request_sha256 = 6;
+  string error_code = 7;
+  string error_reference = 8;
+  string error_sha256 = 9;
+}
+
+message FailIntegrationExecutionResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+// Первый read не принимает неизвестные owner OCC tokens: exact row разрешается
+// только из проверенного continuation Turn/application grant.
+message GetIntegrationContinuationRequest {}
+
+message GetIntegrationContinuationResponse {
+  IntegrationContinuation continuation = 1;
+}
+
+message AcknowledgeIntegrationContinuationRequest {
+  string idempotency_key = 1;
+  uint64 expected_version = 2;
+  uint64 expected_fence = 3;
+  string expected_input_sha256 = 4;
+}
+
+message AcknowledgeIntegrationContinuationResponse {
+  IntegrationContinuation continuation = 1;
 }
 
 // CheckReadinessRequest описывает версионированное сообщение контракта control-plane.

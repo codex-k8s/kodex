@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -204,11 +203,4 @@ func technicalServer(
 		MaxHeaderBytes:    8 << 10,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
-}
-
-func closeWithLabel(label string, close func() error) error {
-	if err := close(); err != nil {
-		return fmt.Errorf("%s: %w", label, err)
-	}
-	return nil
 }

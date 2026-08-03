@@ -144,6 +144,9 @@ func validateScheduledRunBinding(
 	occurrence domainrepo.ScheduleOccurrence,
 	run domainrepo.ScheduledRun,
 ) error {
+	if !validSHA256Text(run.EffectiveInputSHA256) {
+		return errs.ErrStateConflict
+	}
 	if run.CurrentSessionID == "" {
 		run.CurrentSessionID = run.SessionID
 		run.CurrentSessionVersion = run.SessionVersion
@@ -162,6 +165,9 @@ func validateScheduledRunBinding(
 			run.CurrentRuntimeRevisionVersion = run.ContinuationRuntimeRevisionVersion
 			run.CurrentInputSHA256 = run.ContinuationInputSHA256
 		}
+	}
+	if !validSHA256Text(run.CurrentInputSHA256) {
+		return errs.ErrStateConflict
 	}
 	if run.OccurrenceID != occurrence.ID || run.Attempt != occurrence.Attempt ||
 		run.CurrentSessionID != occurrence.ExecutionSessionID ||
@@ -182,27 +188,11 @@ func (service *Service) validateActiveWorkClaimGraph(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
+	graph lockedOwnerGraph,
 	claim entity.Resource,
 	spec entity.WorkClaimSpec,
 ) error {
-	session, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.SessionID,
-	)
-	if err != nil {
-		return err
-	}
-	turn, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.TurnID,
-	)
-	if err != nil {
-		return err
-	}
-	process, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.ProcessRunID,
-	)
-	if err != nil {
-		return err
-	}
+	session, turn, process := graph.Session, graph.Turn, graph.Process
 	turnSpec, turnOK := turn.Spec.(entity.TurnSpec)
 	processSpec, processOK := process.Spec.(entity.ProcessRunSpec)
 	if !turnOK || !processOK || claim.State != enum.StateActive ||

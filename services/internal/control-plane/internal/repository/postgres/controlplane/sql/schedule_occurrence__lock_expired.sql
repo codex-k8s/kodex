@@ -1,4 +1,4 @@
--- name: ScheduleOccurrenceLockExpired
+-- name: ScheduleOccurrenceExpiredCandidates
 SELECT
     occurrence.id::text,
     occurrence.schedule_id::text,
@@ -27,6 +27,7 @@ SELECT
     coalesce(occurrence.claimant_workload_id, ''),
     coalesce(occurrence.authority_generation, 0),
     coalesce(occurrence.token_hash, ''),
+    coalesce(occurrence.claim_key_sha256, ''),
     coalesce(occurrence.lease_expires_at, 'epoch'::timestamptz),
     occurrence.available_at,
     coalesce(occurrence.outcome, ''),
@@ -47,5 +48,4 @@ WHERE occurrence.organization_id = @organization_id::uuid
   AND occurrence.state = 'CLAIMED'
   AND occurrence.lease_expires_at <= @now
 ORDER BY occurrence.lease_expires_at, occurrence.scheduled_for, occurrence.id
-FOR UPDATE OF occurrence SKIP LOCKED
 LIMIT 16

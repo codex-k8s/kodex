@@ -221,7 +221,7 @@ func (service *Service) Resolve(
 					},
 				}
 			}
-			if input.Identity.CallerWorkload == "agent-runner" {
+			if input.Identity.BoundTurnID != "" {
 				turn, err := tx.GetForUpdate(
 					ctx,
 					input.Identity.OrganizationID,
@@ -253,7 +253,7 @@ func (service *Service) Resolve(
 				Revision:     input.Identity.SessionRevision,
 				DigestSHA256: input.Identity.CredentialDigest,
 			}
-			if input.Identity.CallerWorkload == "agent-runner" {
+			if input.Identity.BoundTurnID != "" {
 				provenance.Reference = fmt.Sprintf(
 					"%s/%d/%d",
 					input.Identity.BoundTurnID,
@@ -354,7 +354,11 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 		len(identity.CredentialDigest) != 64 {
 		return errors.New("application identity is invalid")
 	}
-	if identity.CallerWorkload == "agent-runner" &&
+	if (identity.CallerWorkload == "agent-runner" ||
+		identity.CallerWorkload == "runtime-controller" ||
+		identity.CallerWorkload == "integration-gateway" ||
+		identity.CallerWorkload == "runtime-restore-verifier" ||
+		identity.CallerWorkload == "runtime-cleanup-authorizer") &&
 		(value.ValidateID(identity.BoundSessionID) != nil ||
 			value.ValidateID(identity.BoundTurnID) != nil ||
 			identity.BoundAttempt == 0 || identity.BoundAttempt > 100 ||

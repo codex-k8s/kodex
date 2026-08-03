@@ -28,5 +28,4 @@ WHERE organization_id = @organization_id::uuid
       ) <= @now
   )
 ORDER BY created_at, id
-FOR UPDATE SKIP LOCKED
 LIMIT 1

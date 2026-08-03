@@ -52,22 +52,105 @@ func (service *Service) EnqueueTurn(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var enqueueSession entity.Resource
+	var enqueueProcessGraph lockedOwnerGraph
+	var enqueueDelegated bool
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"enqueue_turn",
 		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			session, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.SessionID,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			extraSessions := []string{input.SessionID}
+			if input.ProcessRunID == "" {
+				locked, err := service.lockOwnerGraphSet(
+					ctx, tx, input.Principal, nil, extraSessions,
+				)
+				if err != nil {
+					return 0, err
+				}
+				session, ok := locked.Sessions[input.SessionID]
+				if !ok || session.Kind != enum.KindSession ||
+					session.State != enum.StateActive ||
+					session.OwnerActorID != input.Principal.ActorID {
+					return 0, errs.ErrStateConflict
+				}
+				enqueueSession = session
+				return lifecycleReceiptApplyOrReplay, nil
+			}
+			candidate, err := tx.Get(
+				ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, input.ProcessRunID,
 			)
 			if err != nil {
-				return entity.Resource{}, err
+				return 0, err
 			}
+			candidateSpec, ok := candidate.Spec.(entity.ProcessRunSpec)
+			candidateCurrent, currentErr := currentExecution(candidateSpec)
+			if !ok || currentErr != nil || candidate.Kind != enum.KindProcessRun ||
+				candidate.State != enum.StateRunning ||
+				candidateSpec.RootInitiatorActorID != input.Principal.ActorID {
+				return 0, errs.ErrStateConflict
+			}
+			locked, err := service.lockOwnerGraphSet(
+				ctx, tx, input.Principal, []string{candidateCurrent.TurnID}, extraSessions,
+			)
+			if err != nil {
+				return 0, err
+			}
+			graph, ok := locked.ByTurn[candidateCurrent.TurnID]
+			if !ok || graph.Process.ID != input.ProcessRunID ||
+				graph.Process.Version != candidate.Version {
+				return 0, errs.ErrStateConflict
+			}
+			processSpec, ok := graph.Process.Spec.(entity.ProcessRunSpec)
+			lockedCurrent, lockedCurrentErr := currentExecution(processSpec)
+			if !ok || lockedCurrentErr != nil || lockedCurrent != candidateCurrent {
+				return 0, errs.ErrStateConflict
+			}
+			session, ok := locked.Sessions[input.SessionID]
+			if !ok || session.Kind != enum.KindSession ||
+				session.State != enum.StateActive ||
+				session.OwnerActorID != input.Principal.ActorID {
+				return 0, errs.ErrStateConflict
+			}
+			delegated := input.Principal.AuthoritySource == "AGENT_SESSION"
+			if delegated {
+				turnSpec, turnOK := graph.Turn.Spec.(entity.TurnSpec)
+				if !turnOK || graph.Turn.ID != input.Principal.AuthorityReference ||
+					turnSpec.Attempt != uint32(input.Principal.AuthorityRevision) ||
+					turnSpec.EffectiveInputSHA256 != input.Principal.AuthorityDigest ||
+					input.Principal.AuthorityGrantGeneration == 0 {
+					return 0, errs.ErrPermissionDenied
+				}
+				if err := requireOwnerGraphRuntimeDisposition(
+					graph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
+				); err != nil {
+					return 0, err
+				}
+			} else if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent,
+			); err != nil {
+				return 0, err
+			}
+			enqueueSession = session
+			enqueueProcessGraph = graph
+			enqueueDelegated = delegated
+			return lifecycleReceiptApplyOrReplay, nil
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			storedSpec, ok := stored.Spec.(entity.TurnSpec)
+			if !ok || stored.Kind != enum.KindTurn ||
+				stored.OwnerActorID != input.Principal.ActorID ||
+				storedSpec.SessionID != enqueueSession.ID ||
+				storedSpec.ProcessRunID != input.ProcessRunID {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			session := enqueueSession
 			sessionSpec, ok := session.Spec.(entity.SessionSpec)
 			if !ok || session.Kind != enum.KindSession ||
 				session.State != enum.StateActive ||
@@ -75,8 +158,7 @@ func (service *Service) EnqueueTurn(
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			var delegation domainrepo.DelegationEdge
-			delegated := input.ProcessRunID != "" &&
-				input.Principal.AuthoritySource == "AGENT_SESSION"
+			delegated := input.ProcessRunID != "" && enqueueDelegated
 			if !delegated {
 				roleIDs, err := tx.ActorRoleIDs(
 					ctx,
@@ -104,15 +186,7 @@ func (service *Service) EnqueueTurn(
 				return entity.Resource{}, err
 			}
 			if input.ProcessRunID != "" {
-				process, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.ProcessRunID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				process := enqueueProcessGraph.Process
 				processSpec, ok := process.Spec.(entity.ProcessRunSpec)
 				if !ok || process.Kind != enum.KindProcessRun ||
 					process.State != enum.StateRunning ||
@@ -121,13 +195,7 @@ func (service *Service) EnqueueTurn(
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 				if delegated {
-					sourceTurn, err := tx.GetForUpdate(
-						ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-						input.Principal.AuthorityReference,
-					)
-					if err != nil {
-						return entity.Resource{}, err
-					}
+					sourceTurn := enqueueProcessGraph.Turn
 					sourceSpec, ok := sourceTurn.Spec.(entity.TurnSpec)
 					if !ok || sourceTurn.Kind != enum.KindTurn || sourceTurn.State.Terminal() ||
 						sourceTurn.OwnerActorID != processSpec.RootInitiatorActorID ||
@@ -137,13 +205,7 @@ func (service *Service) EnqueueTurn(
 						input.Principal.AuthorityGrantGeneration == 0 {
 						return entity.Resource{}, errs.ErrPermissionDenied
 					}
-					sourceSession, err := tx.GetForUpdate(
-						ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-						sourceSpec.SessionID,
-					)
-					if err != nil {
-						return entity.Resource{}, err
-					}
+					sourceSession := enqueueProcessGraph.Session
 					sourceSessionSpec, ok := sourceSession.Spec.(entity.SessionSpec)
 					if !ok || sourceSession.Kind != enum.KindSession ||
 						sourceSession.State != enum.StateActive ||
@@ -284,6 +346,8 @@ func (service *Service) ClaimTurn(
 		return ClaimTurnResult{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		input.Principal.CallerWorkload != agentRunnerWorkload ||
+		input.Principal.CallerSPIFFEID != agentRunnerSPIFFEID ||
 		input.Principal.AuthoritySource != "AGENT_SESSION" ||
 		value.ValidateID(input.Principal.AuthorityReference) != nil ||
 		input.Principal.AuthorityRevision == 0 ||
@@ -309,6 +373,48 @@ func (service *Service) ClaimTurn(
 			ActorID:        input.Principal.ActorID,
 		},
 		func(tx domainrepo.Transaction) error {
+			authorityGraph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, input.Principal.AuthorityReference,
+			)
+			if err != nil {
+				return err
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				authorityGraph, runtimeDispositionAbsent,
+			); err != nil {
+				return err
+			}
+			authorityTurn := authorityGraph.Turn
+			authoritySpec, ok := authorityTurn.Spec.(entity.TurnSpec)
+			if !ok || authorityTurn.Kind != enum.KindTurn ||
+				authorityTurn.OwnerActorID != input.Principal.ActorID ||
+				uint64(authoritySpec.Attempt) != input.Principal.AuthorityRevision ||
+				authoritySpec.EffectiveInputSHA256 != input.Principal.AuthorityDigest ||
+				(authorityTurn.State != enum.StateQueued &&
+					authorityTurn.State != enum.StateClaimed) {
+				return errs.ErrPermissionDenied
+			}
+			if err := requireCurrentTurnBinding(authorityGraph); err != nil {
+				return err
+			}
+			var authorityLease domainrepo.TurnLease
+			if authorityTurn.State == enum.StateClaimed {
+				authorityLease, err = tx.GetTurnLeaseForUpdate(ctx, authorityTurn.ID)
+				if err != nil || authorityLease.Attempt != authoritySpec.Attempt ||
+					authorityLease.AuthorityGeneration !=
+						input.Principal.AuthorityGrantGeneration ||
+					authorityLease.WorkloadID != input.Principal.CallerWorkload ||
+					authorityLease.Fence != authorityTurn.Version {
+					if err != nil {
+						return err
+					}
+					return errs.ErrStateConflict
+				}
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
 			receipt, receiptErr := tx.GetReceipt(
 				ctx,
 				input.Principal.OrganizationID,
@@ -316,24 +422,31 @@ func (service *Service) ClaimTurn(
 				keyHash,
 			)
 			if receiptErr == nil {
-				if receipt.RequestHash != requestHash {
+				if receipt.RequestHash != requestHash ||
+					authorityTurn.State != enum.StateClaimed ||
+					!authorityLease.ExpiresAt.After(now) ||
+					resourceReceiptMatchesCurrent(authorityTurn, receipt.Result) != nil {
 					return errs.ErrIdempotencyConflict
 				}
 				var payload claimTurnReceipt
 				if json.Unmarshal(receipt.Payload, &payload) != nil ||
-					payload.LeaseExpiresAt.IsZero() {
+					payload.LeaseExpiresAt.IsZero() ||
+					!payload.LeaseExpiresAt.Equal(authorityLease.ExpiresAt) ||
+					payload.Attempt != authorityLease.Attempt ||
+					payload.AuthorityGeneration != authorityLease.AuthorityGeneration {
 					return errs.ErrInternal
 				}
+				leaseToken := service.leaseToken(
+					authorityTurn.ID, authorityTurn.Version, payload.Attempt,
+					payload.AuthorityGeneration, input.Principal.CallerWorkload,
+					input.IdempotencyKey,
+				)
+				if authorityLease.TokenHash != hashString(leaseToken) {
+					return errs.ErrStateConflict
+				}
 				result = ClaimTurnResult{
-					Turn: receipt.Result,
-					LeaseToken: service.leaseToken(
-						receipt.Result.ID,
-						receipt.Result.Version,
-						payload.Attempt,
-						payload.AuthorityGeneration,
-						input.Principal.CallerWorkload,
-						input.IdempotencyKey,
-					),
+					Turn:                authorityTurn,
+					LeaseToken:          leaseToken,
 					LeaseExpiresAt:      payload.LeaseExpiresAt,
 					Attempt:             payload.Attempt,
 					AuthorityGeneration: payload.AuthorityGeneration,
@@ -343,8 +456,7 @@ func (service *Service) ClaimTurn(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
-			expired, err := tx.ExpiredClaimedTurns(
+			expired, err := tx.ExpiredClaimedTurnCandidates(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
@@ -356,12 +468,39 @@ func (service *Service) ClaimTurn(
 				return err
 			}
 			for _, stale := range expired {
-				staleSpec, ok := stale.Turn.Spec.(entity.TurnSpec)
-				if !ok || staleSpec.Attempt != stale.Lease.Attempt ||
-					stale.Lease.AuthorityGeneration == 0 ||
+				// ExpiredClaimedTurnCandidates выполняет только unlocked discovery.
+				// Перед эффектом весь owner graph берётся в каноническом порядке и
+				// lease/deadline повторно проверяются под locks.
+				graph, graphErr := service.lockOwnerGraphByTurn(
+					ctx, tx, input.Principal, stale.Turn.ID,
+				)
+				if graphErr != nil {
+					return graphErr
+				}
+				if err := requireOwnerGraphRuntimeDisposition(
+					graph, runtimeDispositionAbsent,
+				); err != nil {
+					return err
+				}
+				lockedLease, leaseErr := tx.GetTurnLeaseForUpdate(ctx, graph.Turn.ID)
+				if leaseErr != nil {
+					return leaseErr
+				}
+				recoveryNow, err := tx.CurrentTime(ctx)
+				if err != nil {
+					return err
+				}
+				staleSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+				if !ok || graph.Turn.State != enum.StateClaimed ||
+					graph.Turn.Version != stale.Turn.Version ||
+					staleSpec.Attempt != lockedLease.Attempt ||
+					lockedLease.AuthorityGeneration == 0 ||
+					lockedLease.ExpiresAt.After(recoveryNow) ||
 					staleSpec.Attempt >= 100 {
 					return errs.ErrStateConflict
 				}
+				stale.Turn = graph.Turn
+				stale.Lease = lockedLease
 				if err := tx.FinishTurnAttempt(ctx, domainrepo.TurnAttempt{
 					TurnID:              stale.Turn.ID,
 					Attempt:             staleSpec.Attempt,
@@ -370,19 +509,19 @@ func (service *Service) ClaimTurn(
 					State:               "EXPIRED",
 					InputSHA256:         staleSpec.EffectiveInputSHA256,
 					LeaseFence:          stale.Lease.Fence,
-					FinishedAt:          now,
+					FinishedAt:          recoveryNow,
 					Outcome:             "lease_expired",
 				}); err != nil {
 					return err
 				}
 				if err := service.revokeExecutionClaims(
 					ctx, tx, input.Principal, staleSpec.ProcessRunID, stale.Turn.ID,
-					"lease_expired", now,
+					"lease_expired", recoveryNow,
 				); err != nil {
 					return err
 				}
 				requeued, staleSpec, err := service.prepareRetriedExecution(
-					ctx, tx, input.Principal, stale.Turn, staleSpec, now,
+					ctx, tx, input.Principal, graph, staleSpec, recoveryNow,
 				)
 				if err != nil {
 					return errs.ErrStateConflict
@@ -405,7 +544,7 @@ func (service *Service) ClaimTurn(
 					State:               "QUEUED",
 					InputSHA256:         staleSpec.EffectiveInputSHA256,
 					LeaseFence:          requeued.Version,
-					StartedAt:           now,
+					StartedAt:           recoveryNow,
 				}); err != nil {
 					return err
 				}
@@ -435,7 +574,16 @@ func (service *Service) ClaimTurn(
 			if err != nil {
 				return err
 			}
-			claimed, err := turn.Transition(enum.StateClaimed, now)
+			if turn.ID != authorityGraph.Turn.ID ||
+				turn.Version != authorityGraph.Turn.Version ||
+				turn.State != authorityGraph.Turn.State {
+				return errs.ErrStateConflict
+			}
+			claimNow, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			claimed, err := turn.Transition(enum.StateClaimed, claimNow)
 			if err != nil {
 				return errs.ErrStateConflict
 			}
@@ -454,8 +602,13 @@ func (service *Service) ClaimTurn(
 				input.Principal.CallerWorkload,
 				input.IdempotencyKey,
 			)
-			expiresAt := now.Add(service.turnLeaseDuration)
+			expiresAt := claimNow.Add(service.turnLeaseDuration)
 			if err := tx.Update(ctx, claimed, turn.Version); err != nil {
+				return err
+			}
+			if _, err := service.propagateCurrentTurnTransition(
+				ctx, tx, input.Principal, authorityGraph, claimed, claimNow,
+			); err != nil {
 				return err
 			}
 			if err := tx.SaveTurnLease(ctx, domainrepo.TurnLease{
@@ -477,7 +630,7 @@ func (service *Service) ClaimTurn(
 				State:               "CLAIMED",
 				InputSHA256:         turnSpec.EffectiveInputSHA256,
 				LeaseFence:          claimed.Version,
-				StartedAt:           now,
+				StartedAt:           claimNow,
 			}); err != nil {
 				return err
 			}
@@ -578,44 +731,18 @@ func (service *Service) RenewTurn(
 			ActorID:        input.Principal.ActorID,
 		},
 		func(tx domainrepo.Transaction) error {
-			receipt, receiptErr := tx.GetReceipt(
-				ctx,
-				input.Principal.OrganizationID,
-				"renew_turn",
-				keyHash,
-			)
-			if receiptErr == nil {
-				if receipt.RequestHash != requestHash {
-					return errs.ErrIdempotencyConflict
-				}
-				var payload claimTurnReceipt
-				if json.Unmarshal(receipt.Payload, &payload) != nil ||
-					payload.LeaseExpiresAt.IsZero() ||
-					payload.Attempt != input.Attempt ||
-					payload.AuthorityGeneration != input.Principal.AuthorityGrantGeneration {
-					return errs.ErrInternal
-				}
-				result = RenewTurnResult{
-					Turn:                receipt.Result,
-					LeaseToken:          input.LeaseToken,
-					LeaseExpiresAt:      payload.LeaseExpiresAt,
-					Attempt:             payload.Attempt,
-					AuthorityGeneration: payload.AuthorityGeneration,
-				}
-				return nil
-			}
-			if !errors.Is(receiptErr, errs.ErrNotFound) {
-				return receiptErr
-			}
-			current, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.TurnID,
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
 			)
 			if err != nil {
 				return err
 			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent,
+			); err != nil {
+				return err
+			}
+			current := graph.Turn
 			spec, ok := current.Spec.(entity.TurnSpec)
 			if err := requireLifecycleOwner(input.Principal, current); err != nil {
 				return err
@@ -628,10 +755,58 @@ func (service *Service) RenewTurn(
 				spec.EffectiveInputSHA256 != input.Principal.AuthorityDigest {
 				return errs.ErrStateConflict
 			}
-			if err := requireActiveTurnSession(ctx, tx, input.Principal, current, spec); err != nil {
+			if err := requireActiveTurnSession(
+				ctx, tx, input.Principal, current, spec,
+			); err != nil {
 				return err
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
+			lease, err := tx.GetTurnLeaseForUpdate(ctx, input.TurnID)
+			if err != nil {
+				return err
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			if lease.TokenHash != hashString(input.LeaseToken) ||
+				lease.WorkloadID != input.Principal.CallerWorkload ||
+				lease.AuthorityGeneration != input.Principal.AuthorityGrantGeneration ||
+				lease.AuthorityGeneration != input.AuthorityGeneration ||
+				lease.Attempt != input.Attempt || lease.Fence != current.Version ||
+				!lease.ExpiresAt.After(now) {
+				return errs.ErrStateConflict
+			}
+			receipt, receiptErr := tx.GetReceipt(
+				ctx,
+				input.Principal.OrganizationID,
+				"renew_turn",
+				keyHash,
+			)
+			if receiptErr == nil {
+				if receipt.RequestHash != requestHash ||
+					resourceReceiptMatchesCurrent(current, receipt.Result) != nil {
+					return errs.ErrIdempotencyConflict
+				}
+				var payload claimTurnReceipt
+				if json.Unmarshal(receipt.Payload, &payload) != nil ||
+					payload.LeaseExpiresAt.IsZero() ||
+					payload.Attempt != input.Attempt ||
+					payload.AuthorityGeneration != input.Principal.AuthorityGrantGeneration ||
+					!payload.LeaseExpiresAt.Equal(lease.ExpiresAt) {
+					return errs.ErrInternal
+				}
+				result = RenewTurnResult{
+					Turn:                current,
+					LeaseToken:          input.LeaseToken,
+					LeaseExpiresAt:      payload.LeaseExpiresAt,
+					Attempt:             payload.Attempt,
+					AuthorityGeneration: payload.AuthorityGeneration,
+				}
+				return nil
+			}
+			if !errors.Is(receiptErr, errs.ErrNotFound) {
+				return receiptErr
+			}
 			renewed, err := tx.RenewTurnLease(
 				ctx,
 				domainrepo.TurnLease{
@@ -648,12 +823,10 @@ func (service *Service) RenewTurn(
 			if err != nil {
 				return err
 			}
-			if err := service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"renew_turn",
-				current,
+			if err := appendOwnerStateAudit(
+				ctx, tx, input.Principal, "renew_turn", current.OrganizationID,
+				current.ProjectID, current.ID, auditKindTurnLease,
+				renewed.Fence, now,
 			); err != nil {
 				return err
 			}
@@ -740,22 +913,70 @@ func (service *Service) CompleteTurn(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var receiptTurn entity.Resource
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"complete_turn",
 		requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent,
+			); err != nil {
+				return 0, err
+			}
+			current := graph.Turn
+			spec, ok := current.Spec.(entity.TurnSpec)
+			if !ok || requireLifecycleOwner(input.Principal, current) != nil ||
+				spec.Attempt != input.Attempt ||
+				spec.EffectiveInputSHA256 != input.Principal.AuthorityDigest {
+				return 0, errs.ErrStateConflict
+			}
+			if current.Version == input.ExpectedVersion && !current.State.Terminal() {
+				lease, err := tx.ValidateTurnLease(
+					ctx, input.TurnID, hashString(input.LeaseToken),
+					input.Principal.CallerWorkload, input.AuthorityGeneration,
+					input.Attempt, service.now(),
+				)
+				if err != nil || lease.Fence != current.Version {
+					if err != nil {
+						return 0, err
+					}
+					return 0, errs.ErrStateConflict
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version == input.ExpectedVersion+1 &&
+				current.State == input.TerminalState && spec.Outcome == input.Outcome &&
+				spec.ResultArtifactID == input.ResultArtifactID {
+				receiptTurn = current
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(receiptTurn, stored)
+		},
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			current, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.TurnID,
+			graph, err := service.prelockScheduledGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
 			)
 			if err != nil {
 				return entity.Resource{}, err
 			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent,
+			); err != nil {
+				return entity.Resource{}, err
+			}
+			current := graph.Turn
 			if err := requireLifecycleOwner(input.Principal, current); err != nil {
 				return entity.Resource{}, err
 			}
@@ -976,22 +1197,68 @@ func (service *Service) RetryTurn(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var receiptTurn entity.Resource
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"retry_turn",
 		requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			current := graph.Turn
+			spec, ok := current.Spec.(entity.TurnSpec)
+			if !ok || requireLifecycleOwner(input.Principal, current) != nil {
+				return 0, errs.ErrStateConflict
+			}
+			if graph.Runtime != nil &&
+				(graph.Runtime.State != "SUSPENDED" ||
+					current.State != enum.StateWaitingOwner) {
+				return 0, errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent, runtimeDispositionTerminal,
+			); err != nil {
+				return 0, err
+			}
+			if current.Version == input.ExpectedVersion && slices.Contains(
+				[]enum.State{enum.StateFailed, enum.StateBlocked,
+					enum.StateWaitingOwner}, current.State,
+			) {
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version == input.ExpectedVersion+1 &&
+				current.State == enum.StateQueued && spec.Attempt > 1 &&
+				graph.Runtime == nil {
+				receiptTurn = current
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(receiptTurn, stored)
+		},
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			current, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.TurnID,
+			graph, err := service.prelockScheduledGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
 			)
 			if err != nil {
 				return entity.Resource{}, err
 			}
+			if graph.Runtime != nil && graph.Runtime.State != "SUSPENDED" {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent, runtimeDispositionTerminal,
+			); err != nil {
+				return entity.Resource{}, err
+			}
+			current := graph.Turn
 			spec, ok := current.Spec.(entity.TurnSpec)
 			if err := requireLifecycleOwner(input.Principal, current); err != nil {
 				return entity.Resource{}, err
@@ -1000,7 +1267,6 @@ func (service *Service) RetryTurn(
 				current.Version != input.ExpectedVersion ||
 				(current.State != enum.StateFailed &&
 					current.State != enum.StateBlocked &&
-					current.State != enum.StateWaitingExternal &&
 					current.State != enum.StateWaitingOwner) ||
 				spec.Attempt == ^uint32(0) {
 				return entity.Resource{}, errs.ErrStateConflict
@@ -1012,11 +1278,18 @@ func (service *Service) RetryTurn(
 			if err != nil || previousAttempt.InputSHA256 != spec.EffectiveInputSHA256 {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			if current.State == enum.StateFailed {
+			switch current.State {
+			case enum.StateFailed:
 				if previousAttempt.FinishedAt.IsZero() {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-			} else {
+			case enum.StateWaitingOwner:
+				if previousAttempt.State != "WAITING_OWNER" ||
+					previousAttempt.FinishedAt.IsZero() ||
+					previousAttempt.Outcome != "owner_gate_pending" {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			default:
 				if !previousAttempt.FinishedAt.IsZero() {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
@@ -1032,6 +1305,9 @@ func (service *Service) RetryTurn(
 				return entity.Resource{}, leaseErr
 			}
 			if leaseErr == nil {
+				if current.State == enum.StateWaitingOwner {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
 				if lease.Attempt != spec.Attempt ||
 					lease.AuthorityGeneration != previousAttempt.AuthorityGeneration {
 					return entity.Resource{}, errs.ErrStateConflict
@@ -1047,7 +1323,7 @@ func (service *Service) RetryTurn(
 				return entity.Resource{}, err
 			}
 			retried, spec, err := service.prepareRetriedExecution(
-				ctx, tx, input.Principal, current, spec, now,
+				ctx, tx, input.Principal, graph, spec, now,
 			)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
@@ -1107,22 +1383,56 @@ func (service *Service) CancelTurn(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var receiptTurn entity.Resource
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"cancel_turn",
 		requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent,
+			); err != nil {
+				return 0, err
+			}
+			current := graph.Turn
+			spec, ok := current.Spec.(entity.TurnSpec)
+			if !ok || requireLifecycleOwner(input.Principal, current) != nil {
+				return 0, errs.ErrStateConflict
+			}
+			if current.Version == input.ExpectedVersion && !current.State.Terminal() {
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version == input.ExpectedVersion+1 &&
+				current.State == enum.StateCancelled && spec.Outcome == input.ReasonCode {
+				receiptTurn = current
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(receiptTurn, stored)
+		},
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			current, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.TurnID,
+			graph, err := service.prelockScheduledGraphByTurn(
+				ctx, tx, input.Principal, input.TurnID,
 			)
 			if err != nil {
 				return entity.Resource{}, err
 			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent,
+			); err != nil {
+				return entity.Resource{}, err
+			}
+			current := graph.Turn
 			if err := requireLifecycleOwner(input.Principal, current); err != nil {
 				return entity.Resource{}, err
 			}
@@ -1385,30 +1695,7 @@ func (service *Service) ResolveOwnerGate(
 			ActorID:        input.Principal.ActorID,
 		},
 		func(tx domainrepo.Transaction) error {
-			receipt, receiptErr := tx.GetReceipt(
-				ctx,
-				input.Principal.OrganizationID,
-				"resolve_owner_gate",
-				keyHash,
-			)
-			if receiptErr == nil {
-				if receipt.RequestHash != requestHash {
-					return errs.ErrIdempotencyConflict
-				}
-				var payload ownerGateReceipt
-				if json.Unmarshal(receipt.Payload, &payload) != nil {
-					return errs.ErrInternal
-				}
-				result = OwnerGateResult{
-					OwnerGate: receipt.Result,
-					Process:   payload.Process,
-				}
-				return nil
-			}
-			if !errors.Is(receiptErr, errs.ErrNotFound) {
-				return receiptErr
-			}
-			gate, err := tx.GetForUpdate(
+			gateCandidate, err := tx.Get(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
@@ -1417,8 +1704,34 @@ func (service *Service) ResolveOwnerGate(
 			if err != nil {
 				return err
 			}
+			candidateSpec, ok := gateCandidate.Spec.(entity.OwnerGateSpec)
+			if !ok || gateCandidate.Kind != enum.KindOwnerGate ||
+				(gateCandidate.Version != input.ExpectedVersion &&
+					gateCandidate.Version != input.ExpectedVersion+1) ||
+				candidateSpec.ProcessRunID != input.ProcessRunID ||
+				candidateSpec.SessionID != input.SessionID ||
+				candidateSpec.TurnID != input.TurnID {
+				return errs.ErrNotFound
+			}
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, candidateSpec.TurnID,
+			)
+			if err != nil {
+				return err
+			}
+			// OwnerGate является pinned owner resource и блокируется только
+			// после полного execution graph.
+			gate, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				gateCandidate.ID,
+			)
+			if err != nil {
+				return err
+			}
 			if gate.Kind != enum.KindOwnerGate ||
-				gate.Version != input.ExpectedVersion {
+				(gate.Version != input.ExpectedVersion &&
+					gate.Version != input.ExpectedVersion+1) ||
+				gate.Version != gateCandidate.Version {
 				return errs.ErrVersionMismatch
 			}
 			gateSpec, ok := gate.Spec.(entity.OwnerGateSpec)
@@ -1437,16 +1750,43 @@ func (service *Service) ResolveOwnerGate(
 				!validSHA256Text(gateSpec.DeliveryClaimTokenSHA256) {
 				return errs.ErrNotFound
 			}
-			process, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.ProcessRunID,
-			)
-			if err != nil {
+			process := graph.Process
+			processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+			if graph.Runtime != nil &&
+				(graph.Runtime.State != "SUSPENDED" ||
+					graph.Runtime.TerminalReference != gate.ID) {
+				return errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent, runtimeDispositionTerminal,
+			); err != nil {
 				return err
 			}
-			processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+			receipt, receiptErr := tx.GetReceipt(
+				ctx, input.Principal.OrganizationID, "resolve_owner_gate", keyHash,
+			)
+			if receiptErr == nil {
+				if receipt.RequestHash != requestHash ||
+					gate.Version != input.ExpectedVersion+1 {
+					return errs.ErrIdempotencyConflict
+				}
+				var payload ownerGateReceipt
+				if json.Unmarshal(receipt.Payload, &payload) != nil {
+					return errs.ErrInternal
+				}
+				if resourceReceiptMatchesCurrent(gate, receipt.Result) != nil ||
+					resourceReceiptMatchesCurrent(process, payload.Process) != nil {
+					return errs.ErrStateConflict
+				}
+				result = OwnerGateResult{OwnerGate: gate, Process: process}
+				return nil
+			}
+			if !errors.Is(receiptErr, errs.ErrNotFound) {
+				return receiptErr
+			}
+			if gate.Version != input.ExpectedVersion {
+				return errs.ErrVersionMismatch
+			}
 			execution, executionErr := currentExecution(processSpec)
 			executionMatches := executionErr == nil &&
 				execution.SessionID == gateSpec.SessionID &&
@@ -1462,13 +1802,7 @@ func (service *Service) ResolveOwnerGate(
 				processSpec.OccurrenceID != gateSpec.OccurrenceID {
 				return errs.ErrStateConflict
 			}
-			gateTurn, err := tx.GetForUpdate(
-				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-				gateSpec.TurnID,
-			)
-			if err != nil {
-				return err
-			}
+			gateTurn := graph.Turn
 			gateTurnSpec, ok := gateTurn.Spec.(entity.TurnSpec)
 			if !ok || gateTurn.Kind != enum.KindTurn ||
 				gateTurn.State != enum.StateWaitingOwner ||
@@ -1482,29 +1816,14 @@ func (service *Service) ResolveOwnerGate(
 			var relatedOccurrence domainrepo.ScheduleOccurrence
 			var relatedSchedule entity.Resource
 			if gateSpec.OccurrenceID != "" {
-				occurrence, err := tx.GetScheduleOccurrenceForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					gateSpec.OccurrenceID,
-				)
-				if err != nil {
-					return err
-				}
+				occurrence := graph.Occurrence
 				if occurrence.ScheduleID != gateSpec.ScheduleID ||
+					occurrence.ID != gateSpec.OccurrenceID ||
 					occurrence.State != "WAITING_OWNER" ||
 					occurrence.EffectiveInputSHA256 == "" {
 					return errs.ErrStateConflict
 				}
-				schedule, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					gateSpec.ScheduleID,
-				)
-				if err != nil {
-					return err
-				}
+				schedule := graph.Schedule
 				if schedule.Kind != enum.KindSchedule {
 					return errs.ErrStateConflict
 				}
@@ -1514,7 +1833,7 @@ func (service *Service) ResolveOwnerGate(
 			now := service.now().UTC().Truncate(time.Microsecond)
 			if !gateSpec.ExpiresAt.After(now) {
 				result, err = service.expireOwnerGateGraph(
-					ctx, tx, input.Principal, gate, now,
+					ctx, tx, input.Principal, gate, graph, now,
 				)
 				if err != nil {
 					return err
@@ -1583,15 +1902,10 @@ func (service *Service) ResolveOwnerGate(
 			attempt, err := tx.GetTurnAttemptForUpdate(
 				ctx, gateTurn.ID, gateTurnSpec.Attempt,
 			)
-			if err != nil || attempt.State != "CLAIMED" ||
-				attempt.InputSHA256 != gateTurnSpec.EffectiveInputSHA256 {
+			if err != nil || attempt.State != "WAITING_OWNER" ||
+				attempt.InputSHA256 != gateTurnSpec.EffectiveInputSHA256 ||
+				attempt.FinishedAt.IsZero() || attempt.Outcome != "owner_gate_pending" {
 				return errs.ErrStateConflict
-			}
-			attempt.State = string(turnTarget)
-			attempt.FinishedAt = now
-			attempt.Outcome = gateTurnSpec.Outcome
-			if err := tx.FinishTurnAttempt(ctx, attempt); err != nil {
-				return err
 			}
 			if err := service.appendMutationRecords(
 				ctx, tx, input.Principal, "owner_gate_terminal_turn", updatedTurn,
@@ -1640,12 +1954,9 @@ func (service *Service) ResolveOwnerGate(
 						return err
 					}
 				}
-				if err := service.appendMutationRecords(
-					ctx,
-					tx,
-					input.Principal,
-					"owner_gate_occurrence_transition",
-					relatedSchedule,
+				if err := appendScheduleOccurrenceAudit(
+					ctx, tx, input.Principal,
+					"owner_gate_occurrence_transition", relatedOccurrence,
 				); err != nil {
 					return err
 				}

@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.5.0
-updated: 2026-07-31
+version: 1.19.0
+updated: 2026-08-03
 ---
 
 # Диагностика и восстановление control-plane
@@ -13,7 +13,8 @@ updated: 2026-07-31
 ## Назначение и запреты
 
 Runbook применяется при отказе startup/readiness, миграции, authority proof,
-cache, turn lease или outbox relay. Он не разрешает deploy, production change,
+cache, turn lease, runtime execution, integration continuation или outbox
+relay. Он не разрешает deploy, production change,
 ручное изменение доменных таблиц, сброс RLS/high-watermark или вывод secret
 values.
 
@@ -150,7 +151,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260801000100`;
+- migration schema version равна `20260803000100`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -158,8 +159,10 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
   max age 30 дней, dedup window 2 минуты, deny delete/purge и без
   mirror/source/republish/rollup/transform;
-- policy revision, independently delivered proof trust/private key и локальный
-  verifier #186 согласованы;
+- authority policy revision 8, independently delivered proof trust/private key
+  и локальный verifier #186 согласованы; отсутствующие отдельные public JWK для
+  `runtime-restore-verifier` или `runtime-cleanup-authorizer` закрывают startup,
+  а не включают OIDC fallback;
 - OIDC discovery/JWKS доступны только по pinned HTTPS path.
 
 Не обходить отказ readiness отключением dependency или permissive fallback.
@@ -236,6 +239,14 @@ attempt, expiry и version fence. Следующий
 5. выдаёт новую lease; `RenewTurn` принимает только exact
    workload/generation/attempt/token/fence.
 
+Для обычного `QUEUED -> CLAIMED` тот же resolver уже удерживает Session, Turn,
+ProcessRun и применимый scheduled graph. До сохранения lease/attempt/receipt
+проверить, что старые current versions совпадают, затем одним propagation helper
+перенести новую `Turn.Version` в `ProcessRun.CurrentTurnVersion` и, для scheduled
+запуска, в occurrence/run вместе с новой `ProcessRun.Version`. Несовпадение хотя
+бы одной строки означает полный rollback; вручную выравнивать JSON tuple нельзя.
+Exact replay обязан вернуть прежнюю live lease без нового version bump.
+
 Не менять state/lease вручную. Если recovery не проходит, проверить clock,
 RLS scope, OCC conflict и `turn_leases` metadata без token hash.
 
@@ -259,6 +270,205 @@ Manual retry и lease recovery используют специализирова
 создают свежую RuntimeRevision/input/attempt/grant и перепривязывают
 ProcessRun/occurrence/ScheduledRun до следующего claim.
 
+## Runtime execution и integration continuation
+
+Runtime execution диагностируется только по безопасным metadata: exact
+organization/project/process/session/thread/role/turn/attempt,
+`RuntimeRevision` version/digest, immutable input digest, workload/SPIFFE,
+grant generation, version/fence, state и времени lease. Lease token hash,
+proof и значения credential не выводить. При stale heartbeat, terminal,
+cancel, retry или expiry проверить, что один PostgreSQL transaction:
+
+1. выполнил только read-only candidate discovery, затем заблокировал exact
+   graph в порядке RuntimeExecution → occurrence → schedule → scheduled run →
+   Session → Turn → ProcessRun;
+2. после ProcessRun заблокировал только применимые pinned resources,
+   OwnerGate и IntegrationContinuation и сверил
+   attempt/input/revision/workload/generation/version/fence;
+3. удалил совпавший Turn lease, завершил attempt и отозвал WorkClaim;
+4. проверил exact current ProcessRun и отсутствие open children/work, затем тем
+   же `completeProcessFromTurn` согласованно закрыл ProcessRun и применимые
+   occurrence/ScheduledRun;
+5. сделал единственный terminal transition и сохранил semantic receipt/audit.
+
+Для stale `ClaimTurn`, scheduler recovery и `ExpireOwnerGate` candidate queries
+не содержат `FOR UPDATE`: после выбора общий graph resolver получает locks и
+повторно проверяет state/version/lease/deadline. Для scheduled Turn current
+occurrence query обязана находить `CLAIMED`, `WAITING_OWNER`, `CONTINUATION`,
+`SUCCEEDED`, `FAILED` и `CANCELLED`; иначе ожидание или terminal replay
+ошибочно станет unscheduled. PostgreSQL
+deadlock/serialization retry остаётся safety net, а не штатной синхронизацией.
+
+Если первый `ClaimRuntimeExecution` после настоящего `ClaimTurn` возвращает
+state conflict, сравнить безопасные metadata `Turn.Version`,
+`ProcessRun.CurrentTurnVersion` и, для scheduled graph,
+`ScheduleOccurrence.ExecutionTurnVersion`/`ScheduledRun.CurrentTurnVersion` и
+обе process versions. Любое расхождение считается атомарно отклонённым claim,
+а не состоянием для repair SQL. Unscheduled graph не должен иметь occurrence/run.
+
+Для Session lifecycle и delegation проверить batch acquisition всех затронутых
+graphs: RuntimeExecution/occurrence/schedule/run сортируются раньше всех
+Session/Turn/ProcessRun. `ManageSession` обязан повторить open-turn discovery
+под Session lock. ARCHIVE/CLEANUP при open Turn, live runtime либо любой
+non-`REJOINED` continuation той же session должны вернуть закрытый conflict;
+CLOSE/CANCEL с live runtime или scheduled graph не должны менять ни одной
+строки и направляют оператора к specialized transition. `StartProcess` и
+cross-session `EnqueueTurn` повторно сверяют server-owned parent current tuple,
+delegation edge и target после locks; target с появившейся RuntimeExecution не
+перепривязывается. Отсутствие runtime recheck выполняется read-only после
+Session/Turn locks, поэтому не создаёт поздний обратный row lock.
+
+Если RuntimeExecution/Turn terminal, а ProcessRun остался `RUNNING`, считать
+transaction некорректной и не исправлять строки вручную. Retry сохранённых
+`FAILED/EXPIRED` обязан оставить прежний outcome в старой RuntimeExecution,
+перевести её в `RETRIED` и создать новую attempt со свежими
+RuntimeRevision/input/grant. `SUCCEEDED/CANCELLED/SUSPENDED` не retryable.
+
+Archive reference принимается только после terminal state. Restore proof
+разрешён только exact `runtime-restore-verifier` SPIFFE с отдельными audience,
+credential purpose и protected readiness; `control-api-gateway`, OIDC и
+`runtime-controller` этот RPC вызывать не могут. Cleanup issue/expire разрешён
+только `runtime-cleanup-authorizer`, а consume — exact `runtime-controller`.
+Внешние verifier/authorizer deployable и issuer/readback не поставляются #221,
+поэтому до их отдельной материализации destructive path должен оставаться
+fail-closed.
+
+Cleanup lifecycle диагностировать по `NONE/ACTIVE/EXPIRED/CONSUMED`, exact
+authorization ID, монотонной generation и PostgreSQL expiry. Exact replay
+возвращает прежний receipt. Живой `ACTIVE` блокирует новую выдачу; истёкший
+`ACTIVE` сначала атомарно становится `EXPIRED`, затем новый intent получает
+большую generation. `CONSUMED` никогда не переиздаётся. Integration continuation
+проверяется по exact organization/project/session: любая её source или current
+delivery binding до `REJOINED` блокирует issue и повторную проверку consume.
+Строка другой session не блокирует. Ручное обновление `runtime_executions` и
+очистка до restore proof запрещены.
+
+Semantic receipt runtime/integration команд не включает одноразовый JTI,
+correlation ID, nonce и transport timestamp. Повтор потерянного ответа обязан
+использовать новый валидный proof, тот же key и тот же business/authority tuple;
+actor, organization/project, workload/SPIFFE, permission, authority reference,
+attempt/revision/input/fence/generation остаются частью hash. Для ACK owner и
+current delivery binding разрешаются до чтения receipt.
+
+Для любой receipt-bearing lifecycle-команды проверить фактический порядок в
+одной transaction: canonical owner/current graph lock → transport/tenant/owner
+и operation-specific state/version/fence/generation/deadline validation →
+receipt lookup → effect при отсутствии receipt. Если `AdmitRuntimeExecution`
+уже был отозван terminal/cancel/expiry/rebind, старый LeaseToken не должен
+появиться даже при том же semantic intent и новом валидном JTI. Terminal receipt
+возвращается только пока current graph точно совпадает с сохранённым outcome и
+не имеет successor.
+
+Для `ClaimTurn`/`RenewTurn` до receipt должны совпасть exact current Turn,
+RuntimeExecution disposition, workload, generation, attempt, fence, token и
+PostgreSQL expiry. Для нового claim до выдачи token обязана завершиться
+current-tuple propagation; replay проверяет уже сохранённую полную binding и не
+увеличивает версии повторно. `ClaimScheduleOccurrence` использует server-owned
+`claim_key_sha256`: сначала по нему разрешается current occurrence и полный
+graph, затем сверяются workload/generation/token/deadline и только потом
+допустим replay. После runtime claim, terminal, expiry или rebind прежний
+LeaseToken не возвращается.
+
+После `AdmitRuntimeExecution` и каждого `HeartbeatRuntimeExecution` сверить в
+одном readback равные deadlines RuntimeExecution и TurnLease. Они продлеваются
+одной transaction только по PostgreSQL clock и exact attempt/generation/token;
+расхождение считается повреждением graph, generic `RenewTurn` его не чинит.
+`ManageWorkClaim(RENEW)` блокирует canonical owner graph и exact WorkClaim,
+затем непосредственно перед receipt classification читает fresh PostgreSQL
+clock и тем же временем проверяет/apply `WorkClaimSpec.ExpiresAt`: команда,
+начавшаяся до expiry и продолжившая после ожидания lock, не раскрывает ACTIVE
+receipt и не продлевает claim. CREATE/RENEW replay повторно блокирует
+сохранённую claim перед новым decision time. При upgrade уже применённую
+`20260731000500` не менять: expiry predicate функции
+`work_claim_graph_is_active` вводится только `20260803000100` и проверяется
+readback; fresh install и upgrade должны дать одинаковое определение.
+`RequestOwnerGate` до receipt требует живой TurnLease, а для
+ADMITTED/RUNNING — живую runtime lease с тем же deadline; PENDING допустим
+только без выданного lease ID/token/deadline. После deadline выигрывает
+watchdog/expiry, а Gate не создаётся.
+
+При `ManageSchedule(UPDATE/ARCHIVE/DELETE)` Schedule блокируется до receipt и
+authoritative open predicate проверяет как occurrence, так и ScheduledRun.
+UPDATE при open graph не держит pinned rows; ARCHIVE проходит только после
+terminal/no-open graph и остаётся необратимым. `PAUSE` сохраняет queued retry,
+но новый claim ждёт `ACTIVATE`; `ARCHIVED/DELETION_PENDING/DELETED` не могут
+получить новую queued attempt. Concurrent claim/requeue после ожидания Schedule
+повторно сверяет state и immutable snapshot. PostgreSQL `40P01` здесь не
+является допустимым способом выбора winner.
+
+Generic `CompleteTurn`, `CancelTurn`, `CompleteProcess`, `CancelProcess`, stale
+`ClaimTurn` и scheduler recovery не являются runtime authority: при current
+nonterminal RuntimeExecution они обязаны откатиться без изменения graph.
+`ManageWorkClaim` и Process-команды сначала выводят current Turn/Session из
+owner state и используют общий resolver. `RequestOwnerGate` — отдельное
+исключение: exact active runtime атомарно становится `SUSPENDED`, его lease и
+token очищаются, attempt/TurnLease/claims закрываются и лишь затем graph
+становится `WAITING_OWNER`. Owner decision или retry не оживляет прежнюю
+attempt, а создаёт свежие revision/input/grant.
+Claim/Record доставки OwnerGate также не читают receipt заранее: поиск Gate по
+next candidate либо server-stored claim key выполняется без lock, затем
+блокируется полный graph и Gate последним. При истёкшем claim, уже записанном
+Mattermost receipt или terminal decision прежний ClaimToken закрыт.
+
+Integration suspension pin-ит invocation, approval, request digest, полный
+runtime tuple и exact Integration/credential ID+version+projection digest.
+После canonical locks она отдельно сверяет claimant `agent-runner`
+TurnLease/TurnAttempt с exact attempt/generation/input/lease fence и executor
+`runtime-controller` RuntimeExecution с exact workload/SPIFFE/grant. Та же
+transaction переводит старую RuntimeExecution в `SUSPENDED`, закрывает
+lease/attempt/claims/grants и переводит Turn/Session/Process в
+`WAITING_EXTERNAL`; ProcessRun получает полный current tuple с уже увеличенными
+Session/Turn versions, а не pre-suspension binding. Для scheduled process она
+также блокирует граф в общем со scheduler recovery порядке RuntimeExecution→
+occurrence→schedule→scheduled run→session→turn→ProcessRun→pinned resources→
+integration continuation,
+переводит occurrence/run из `CLAIMED` в
+`CONTINUATION`, очищает claimant/generation/token/lease и сохраняет suspended
+current tuple. Поэтому stale scheduler expiry/claim, overlap и delete не могут
+отменить ожидающий approval или открыть параллельный graph; heartbeat/complete/
+retry/expiry старого runtime fence также не проходят. Для `PENDING` допускается
+один из `APPROVED`, `REJECTED`,
+`EXPIRED`, `CANCELLED`. После `APPROVED+NOT_STARTED` cancel конкурирует с
+`BeginIntegrationExecution`: cancel winner создаёт один continuation, begin
+winner оставляет `EXECUTING`, и поздний cancel не отменяет внешний effect.
+Approval/begin повторно требуют активную pinned binding; terminal result/error
+закрывают уже начатый effect по immutable snapshot.
+
+Terminal transition в той же transaction сначала повторно проверяет exact
+source `WAITING_EXTERNAL` Turn, совпадающие suspended Session/Turn versions в
+ProcessRun, `SUSPENDED` RuntimeExecution exact runtime-controller workload/SPIFFE,
+отдельный завершённый `WAITING_EXTERNAL` TurnAttempt claimant `agent-runner`,
+отсутствие TurnLease и open work. Затем source
+Turn получает terminal `CANCELLED` с outcome
+`integration_continuation_materialized`; его RuntimeExecution остаётся
+immutable terminal `SUSPENDED`, а provenance сохраняется в TurnAttempt,
+IntegrationContinuation, audit и `PredecessorTurnID`. Только после этого
+вставляется одна свежая RuntimeRevision/input/continuation Turn/future grant, а
+scheduled occurrence/run перепривязывается к точным новым
+session/turn/process/revision/input versions. Reject, approval expiry,
+pending/approved cancel и execution success/error используют один invariant;
+live/stale predecessor откатывает весь rebind.
+`ProcessRunSpec.continuation_kind` обязан быть закрытым union: `OWNER_GATE`
+требует gate/owner-feedback, `INTEGRATION` требует exact continuation ID/outcome
+digest; смешанная или неполная binding является повреждением графа и закрыто
+отклоняется. Переход между arms выполняется только целой domain operation:
+открытие нового OwnerGate очищает завершённый INTEGRATION arm, а
+`CHANGES_REQUESTED` устанавливает полный OWNER_GATE tuple. Прежний outcome
+остаётся в IntegrationContinuation/audit; фиктивные gate ID или digest
+запрещены.
+Первый защищённый
+`GetIntegrationContinuation` имеет пустой request и разрешает строку из signed
+authority нового Turn; response возвращает current version/fence/input для
+последующего ACK. Если delivery RuntimeExecution завершилась `FAILED/EXPIRED`,
+`RetryRuntimeExecution` в той же transaction сохраняет integration outcome,
+увеличивает delivery attempt/version/fence, создаёт свежие revision/input/grant,
+повторно открывает `READY` и перепривязывает scheduled current tuple. Это
+работает до первого Get, между Get и ACK и после прежнего ACK: старый grant
+закрыт, на текущую binding есть один ACK winner, новый approval и external
+execution не создаются. До реализации agent-runner Issue #192 фактического event
+consumer нет: проверять read/rejoin RPC, а не NATS. При гонке повторно читать
+version/fence; обход OCC и повторная материализация Turn запрещены.
+
 ## Artifact scan и schedule occurrence
 
 `PENDING` artifact не используется как input/result. Внешний scanner вызывает
@@ -281,7 +491,35 @@ Kubernetes/Mattermost/MCP/Codex действий запрещён.
 Успешный claim атомарно создаёт или разрешает execution session, свежую
 `RuntimeRevision`, `Turn` и для цели `PLAYBOOK` корневой `ProcessRun`;
 `ScheduledRun` сохраняет exact версии occurrence/session/turn/process/revision
-и effective input для каждой attempt. Completion не принимает outcome от
+и два разных digest для каждой attempt: immutable schedule snapshot в
+`EffectiveInputSHA256`, exact current execution input в
+`CurrentInputSHA256`. После materialization current digest обязан совпадать с
+`Turn.EffectiveInputSHA256` и `ScheduleOccurrence.EffectiveInputSHA256`; queued
+occurrence до materialization ещё содержит snapshot. Если эти значения
+смешаны, claim/recovery отклоняется: не выравнивать их SQL и не терять snapshot
+provenance. Обычный `FAILED/EXPIRED` completion и watchdog, встретивший уже
+terminal Turn/Process, обязаны вызвать один disposition helper с одинаковой
+retry/dead-letter формулой. Прежний run сначала получает terminal outcome,
+затем occurrence одной OCC записью возвращается в `QUEUED`: digest
+восстанавливается только из immutable snapshot этого run, а claim key/token/
+lease/generation и весь execution tuple очищаются. На maximum attempts либо
+dead-letter deadline occurrence остаётся `DEAD_LETTER`; второй winner не
+создаёт attempt/run/receipt.
+Watchdog recovery выполняется до отдельного scheduler selection: discovery
+не блокирует строки, затем exact owner graph и свежий PostgreSQL clock дают
+один terminal/retry winner, а transaction коммитит run, occurrence, закрытие
+token/claim authority и audit. Только после этого новый poll ищет candidate.
+Поэтому `ErrNotFound` означает отсутствие следующей работы и не откатывает
+уже зафиксированный `QUEUED` backoff либо `DEAD_LETTER`. Тот же принцип
+применяется к overlap `SKIP`: `SKIPPED`+audit — самостоятельный terminal fact.
+Если следующий poll снова видит старую `CLAIMED` строку или прежний token при
+no-candidate, остановить scheduler: это нарушение commit boundary, а не повод
+повторно открывать authority вручную.
+`UpdateScheduleOccurrence` обязан передать `effective_input_sha256`, а SQL —
+записать его; расхождение authoritative readback является дефектом producer, а
+не поводом ручного `UPDATE`. Если locked Schedule уже несёт другой snapshot,
+requeue закрыто останавливается: новое расписание не переписывает provenance
+старой attempt. Completion не принимает outcome от
 scheduler: он перечитывает terminal Turn/Process; retry завершает прежний run
 и создаёт новый отслеживаемый attempt. Источник хода и process lineage содержат exact occurrence. Owner gate из
 такого process повторяет schedule/occurrence и закрыто сверяет active
@@ -329,6 +567,42 @@ Outbox delivered receipt очищается не ранее 31 дня, то ес
 lease expiry и error class. Payload может содержать business metadata и не
 должен попадать в Issue.
 
+Для scheduled `ClaimTurn` сверить, что Schedule outbox имеет sequence только
+реальных версий `CREATE`, due watermark и `ManageSchedule` transition.
+Propagation новой Turn/Process version и изменения occurrence/run не меняют
+Schedule и потому не создают `control_plane.schedule_changed`; они сохраняют
+audit и authoritative read в той же transaction. Дубликат
+`(aggregate_type, aggregate_id, event_sequence)` означает дефект producer и
+полный rollback команды, а не повод удалять outbox row или делать no-op bump
+Schedule. Для Turn/Session/RuntimeRevision каждый опубликованный
+`EventSequence` обязан совпадать с новой `Resource.Version` изменённого
+aggregate.
+
+Для диагностики повторной scheduled attempt сначала прочитать occurrence и оба
+run по attempt. Предыдущий run обязан быть terminal и сохранять snapshot/current
+digests, queued occurrence — иметь следующую attempt, тот же snapshot и пустые
+claim/execution поля, новый run после claim — тот же snapshot и новый current
+digest. Старый scheduler claim receipt/token после requeue не должен
+возвращаться. Не исправлять этот набор ручным SQL: остановить producer и
+выпустить forward-only application fix после подтверждения owner graph.
+
+При невозможности архивировать Schedule сначала прочитать все occurrence и
+ScheduledRun. Любой `QUEUED/CLAIMED/WAITING_OWNER/CONTINUATION` occurrence либо
+`CLAIMED/WAITING_OWNER/CONTINUATION` run является авторитетным blocker; receipt
+ARCHIVE при этом отсутствует. Не архивировать и не переводить occurrence
+вручную. Дождаться specialized terminal/recovery winner. Для гонки runner
+terminal и scheduler expiry сравнить итог с обычным completion: прежний run
+terminal, occurrence ровно `QUEUED` следующей attempt либо `DEAD_LETTER`, token/
+claim/execution authority очищена. Расхождение означает дефект producer и
+требует нового forward-only application fix.
+Для `overlap_policy=QUEUE` проверка не ограничивается current occurrence:
+terminal O1 с historical R1 в `CLAIMED/WAITING_OWNER/CONTINUATION` блокирует
+materialization O2. Selection SQL выполняет ранний filter, а после canonical
+occurrence→Schedule locks тот же закрытый predicate повторяется до первого
+эффекта Session/Turn/Process. Закрывать R1 ручным SQL или создавать O2 в обход
+claim запрещено; после specialized terminal closure R1 следующий poll может
+создать ровно один graph O2.
+
 ## Наблюдаемость
 
 Dashboard: `mattercodex-control-plane`.
@@ -356,9 +630,17 @@ resource ID или произвольный input.
 5. tracing shutdown и Sentry flush получают независимые contexts.
 
 Application rollback допустим только к образу, который понимает уже
-опубликованные Proto/schema/policy revisions. Schema, authority policy,
+опубликованные Proto/schema/policy revisions. Schema и authority policy 8,
 proof generation, audit и outbox назад не откатываются. При несовместимости
 оставить workload not ready и подготовить forward fix.
+
+После миграции `20260803000100` rollback выполняется только вперёд: старый
+runtime выключается, данные runtime execution/continuation сохраняются, новая
+migration или совместимый образ восстанавливает обслуживание. Удалять таблицы,
+уменьшать schema/policy revision, повторно открывать закрытые lease/grant либо
+выдавать cleanup authorization вручную запрещено. Откат определения
+`work_claim_graph_is_active` к варианту без expiry также запрещён; correction
+выпускается следующей `CREATE OR REPLACE` forward migration.
 
 ## Prototype policy
 

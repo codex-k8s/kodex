@@ -24,6 +24,20 @@ const (
 	KindArtifact            Kind = "ARTIFACT"
 )
 
+// ProcessContinuationKind различает взаимоисключающие owner continuation.
+type ProcessContinuationKind string
+
+const (
+	ProcessContinuationNone        ProcessContinuationKind = ""
+	ProcessContinuationOwnerGate   ProcessContinuationKind = "OWNER_GATE"
+	ProcessContinuationIntegration ProcessContinuationKind = "INTEGRATION"
+)
+
+func (kind ProcessContinuationKind) Valid() bool {
+	return kind == ProcessContinuationNone || kind == ProcessContinuationOwnerGate ||
+		kind == ProcessContinuationIntegration
+}
+
 // Valid сообщает принадлежность закрытому множеству.
 func (kind Kind) Valid() bool {
 	switch kind {
@@ -87,7 +101,8 @@ func InitialState(kind Kind) State {
 func TransitionAllowed(kind Kind, from, to State) bool {
 	if !kind.Valid() || from == to ||
 		(from.Terminal() &&
-			!(kind == KindTurn && from == StateFailed && to == StateQueued) &&
+			!(kind == KindTurn && (from == StateFailed || from == StateExpired) && to == StateQueued) &&
+			!(kind == KindProcessRun && (from == StateFailed || from == StateExpired) && to == StateRunning) &&
 			!(kind == KindSession && from == StateCancelled &&
 				to == StateDeletionPending)) {
 		return false
@@ -99,22 +114,24 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 			return to == StateClaimed || to == StateCancelled
 		case StateClaimed:
 			return to == StateRunning || to == StateQueued ||
-				to == StateSucceeded || to == StateFailed || to == StateCancelled
+				to == StateSucceeded || to == StateFailed || to == StateCancelled ||
+				to == StateExpired || to == StateWaitingExternal
 		case StateRunning:
 			return to == StateSucceeded || to == StateFailed ||
-				to == StateCancelled || to == StateBlocked ||
+				to == StateCancelled || to == StateExpired || to == StateBlocked ||
 				to == StateWaitingExternal || to == StateWaitingOwner
 		case StateWaitingExternal, StateWaitingOwner, StateBlocked:
 			return to == StateQueued || to == StateSucceeded ||
 				to == StateCancelled || to == StateFailed
-		case StateFailed:
+		case StateFailed, StateExpired:
 			return to == StateQueued
 		}
 	case KindSession:
 		switch from {
 		case StateActive:
 			return to == StateQueued || to == StateArchived ||
-				to == StateCancelled || to == StateBlocked
+				to == StateCancelled || to == StateBlocked ||
+				to == StateWaitingExternal
 		case StateQueued:
 			return to == StateRunning || to == StateCancelled || to == StateBlocked
 		case StateRunning:
@@ -142,10 +159,12 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		case StateRunning:
 			return to == StateWaitingOwner || to == StateWaitingExternal ||
 				to == StateSucceeded || to == StateFailed ||
-				to == StateCancelled || to == StateBlocked
+				to == StateCancelled || to == StateExpired || to == StateBlocked
 		case StateWaitingOwner, StateWaitingExternal, StateBlocked:
 			return to == StateRunning || to == StateSucceeded ||
-				to == StateFailed || to == StateCancelled
+				to == StateFailed || to == StateCancelled || to == StateExpired
+		case StateFailed, StateExpired:
+			return to == StateRunning
 		}
 	case KindWorkClaim:
 		return from == StateActive &&

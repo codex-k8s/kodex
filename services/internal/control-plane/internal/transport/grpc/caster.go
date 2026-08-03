@@ -374,6 +374,9 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ContinuationRuntimeRevisionID:      value.ProcessRun.GetContinuationRuntimeRevisionId(),
 			ContinuationRuntimeRevisionVersion: value.ProcessRun.GetContinuationRuntimeRevisionVersion(),
 			ContinuationInputSHA256:            value.ProcessRun.GetContinuationInputSha256(),
+			ContinuationKind:                   fromProtoProcessContinuationKind(value.ProcessRun.GetContinuationKind()),
+			ContinuationIntegrationID:          value.ProcessRun.GetContinuationIntegrationId(),
+			ContinuationOutcomeSHA256:          value.ProcessRun.GetContinuationOutcomeSha256(),
 			OwnerFeedbackSHA256:                value.ProcessRun.GetOwnerFeedbackSha256(),
 			CurrentSessionID:                   value.ProcessRun.GetCurrentSessionId(),
 			CurrentSessionVersion:              value.ProcessRun.GetCurrentSessionVersion(),
@@ -788,6 +791,9 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ContinuationRuntimeRevisionId:      value.ContinuationRuntimeRevisionID,
 				ContinuationRuntimeRevisionVersion: value.ContinuationRuntimeRevisionVersion,
 				ContinuationInputSha256:            value.ContinuationInputSHA256,
+				ContinuationKind:                   toProtoProcessContinuationKind(value.ContinuationKind),
+				ContinuationIntegrationId:          value.ContinuationIntegrationID,
+				ContinuationOutcomeSha256:          value.ContinuationOutcomeSHA256,
 				OwnerFeedbackSha256:                value.OwnerFeedbackSHA256,
 				CurrentSessionId:                   value.CurrentSessionID,
 				CurrentSessionVersion:              value.CurrentSessionVersion,
@@ -962,7 +968,7 @@ func optionalDuration(value *durationpb.Duration) (time.Duration, error) {
 }
 
 func optionalTimestamp(value time.Time) *timestamppb.Timestamp {
-	if value.IsZero() {
+	if value.IsZero() || value.Equal(time.Unix(0, 0)) {
 		return nil
 	}
 	return timestamppb.New(value)
@@ -1042,6 +1048,36 @@ func configurationOwnershipToProto(
 		),
 		SourceRef:      ownership.SourceRef,
 		SourceRevision: ownership.SourceRevision,
+	}
+}
+
+func fromProtoProcessContinuationKind(
+	kind controlplanev1.ProcessContinuationKind,
+) enum.ProcessContinuationKind {
+	switch kind {
+	case controlplanev1.ProcessContinuationKind_PROCESS_CONTINUATION_KIND_OWNER_GATE:
+		return enum.ProcessContinuationOwnerGate
+	case controlplanev1.ProcessContinuationKind_PROCESS_CONTINUATION_KIND_INTEGRATION:
+		return enum.ProcessContinuationIntegration
+	case controlplanev1.ProcessContinuationKind_PROCESS_CONTINUATION_KIND_UNSPECIFIED:
+		return enum.ProcessContinuationNone
+	default:
+		// Неизвестное wire-значение сохраняется как invalid domain enum,
+		// чтобы Validate закрыло запрос до семантического использования.
+		return enum.ProcessContinuationKind(kind.String())
+	}
+}
+
+func toProtoProcessContinuationKind(
+	kind enum.ProcessContinuationKind,
+) controlplanev1.ProcessContinuationKind {
+	switch kind {
+	case enum.ProcessContinuationOwnerGate:
+		return controlplanev1.ProcessContinuationKind_PROCESS_CONTINUATION_KIND_OWNER_GATE
+	case enum.ProcessContinuationIntegration:
+		return controlplanev1.ProcessContinuationKind_PROCESS_CONTINUATION_KIND_INTEGRATION
+	default:
+		return controlplanev1.ProcessContinuationKind_PROCESS_CONTINUATION_KIND_UNSPECIFIED
 	}
 }
 

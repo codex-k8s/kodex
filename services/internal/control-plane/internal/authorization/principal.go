@@ -51,17 +51,14 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 	authorityReference := verified.GetAuthority().GetActor().GetProvenance().GetReference()
 	authorityRevision := verified.GetAuthority().GetActor().GetProvenance().GetRevision()
 	authorityGrantGeneration := uint64(0)
-	if authoritySource == "AGENT_SESSION" {
-		parts := strings.Split(authorityReference, "/")
-		if len(parts) != 3 {
-			return value.Principal{}, errors.New("agent grant lineage is invalid")
-		}
+	parts := strings.Split(authorityReference, "/")
+	if len(parts) == 3 {
 		attempt, parseAttemptErr := strconv.ParseUint(parts[1], 10, 32)
 		generation, parseGenerationErr := strconv.ParseUint(parts[2], 10, 64)
 		if parseAttemptErr != nil || parseGenerationErr != nil ||
 			attempt == 0 || generation == 0 ||
 			generation != authorityRevision {
-			return value.Principal{}, errors.New("agent grant lineage is invalid")
+			return value.Principal{}, errors.New("application grant lineage is invalid")
 		}
 		authorityReference = parts[0]
 		authorityRevision = attempt

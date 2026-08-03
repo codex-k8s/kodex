@@ -3,7 +3,9 @@
 `control-plane` — авторитетный внутренний сервис конфигурации и управляющего
 состояния MatterCodex. Он реализует Issue
 [#187](https://github.com/codex-k8s/matter-codex/issues/187) как один
-развёртываемый компонент.
+развёртываемый компонент и расширяет его специализированным runtime и
+integration-continuation контуром Issue
+[#221](https://github.com/codex-k8s/matter-codex/issues/221).
 
 Сервис владеет:
 
@@ -11,6 +13,10 @@
 - метаданными привязок учётных данных, репозиториев, рабочих пространств и
   интеграций;
 - неизменяемыми ревизиями среды исполнения;
+- immutable runtime execution snapshot, lease/fence, архивной ссылкой,
+  независимым restore proof и bounded cleanup authorization;
+- typed integration approval/execution continuation и её version-pinned
+  authoritative read/rejoin;
 - сессиями, ходами и родословной процессов;
 - расписаниями, шлюзами владельца, памятью и заявками на работу;
 - метаданными артефактов, но не их байтами.
@@ -50,12 +56,15 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 - переиспользуемая промышленная композиция клиента: `libs/go/controlplaneclient`;
 - AsyncAPI: `contracts/asyncapi/control-plane/v1/asyncapi.yaml`;
 - политика полномочий: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
+- две lifecycle/authority matrix и сквозная карта:
+  `services/internal/control-plane/runtime-continuation-contract.md`.
 
 Внешнее отображение принадлежит будущему `control-api-gateway`; этот компонент
 публикует только внутренний gRPC. Политика deny-by-default регистрирует
 отдельных производителей доказательств и точные идентичности клиентов для gateway, `agent-runner`,
 `automation-scheduler`, внешнего `artifact-scanner`, `interaction-gateway`,
-`runtime-controller` и локального `memory-indexer`. Последний индексирует
+`runtime-controller`, `integration-gateway` и локального `memory-indexer`.
+Последний индексирует
 локальную проекцию pgvector без внешнего сервиса embeddings, scanner владеет
 сканированием байтов, а `control-plane` — метаданными и автоматом состояний.
 Неизвестные производитель, назначение учётных данных, рабочая нагрузка,
@@ -69,16 +78,23 @@ SPIFFE ID, полный метод, audience или полномочие зак�
 вызвать один из закрытых профилей операций (`AgentRunnerOperations`,
 `AutomationSchedulerOperations`,
 `ArtifactScannerOperations`, `RuntimeControllerOperations`,
-`OwnerGateDeliveryOperations`, `MemoryIndexerOperations`). Consumer
+`RuntimeOwnerOperations`, `RuntimeRestoreVerifierOperations`,
+`RuntimeCleanupAuthorizerOperations`, `IntegrationGatewayOperations`,
+`OwnerGateDeliveryOperations`,
+`MemoryIndexerOperations`). Consumer
 Deployments не принадлежат Issue #187 и здесь не подменяются фиктивными
-развёртываемыми компонентами.
+развёртываемыми компонентами. В частности, внешние deployable/readback и
+issuer profiles `runtime-restore-verifier` и `runtime-cleanup-authorizer` не
+материализованы Issue #221: до их отдельной поставки destructive cleanup path
+остаётся fail-closed. `control-api-gateway` не входит ни в один из этих
+профилей и не может тем же trust path подтвердить restore и разрешить cleanup.
 
 Публикуются только два факта с утверждёнными потребителями:
 
 | Факт                                          | Условие                                                                                               | Потребитель            | Доставка                                  |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
 | `control_plane.runtime_configuration_changed` | устойчивое изменение project/team/chat/role/prompt/binding/workspace/integration/runtime/session/turn | `runtime-controller`   | at-least-once, inbox и курсор потребителя |
-| `control_plane.schedule_changed`              | устойчивое изменение расписания и верхней границы                                                     | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
+| `control_plane.schedule_changed`              | реальное изменение `Schedule.Version`: create/manage либо движение due watermark; occurrence/run не переиздают прежнюю sequence | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
 
 Для процессов, шлюзов владельца, памяти, заявок на работу и метаданных артефактов
 спекулятивные события не публикуются: авторитетные пути — `GetResource`,
@@ -90,25 +106,137 @@ Deployments не принадлежат Issue #187 и здесь не подме
 ограниченным сроком очистки. Потерянное подтверждение безопасно повторяет тот
 же `event_id`.
 
+Runtime execution и integration continuation не добавляют speculative facts в
+AsyncAPI: до материализации будущего потребителя Issue #192 их результат
+доступен через специализированные защищённые read/rejoin RPC. Первый
+`GetIntegrationContinuation` не принимает неизвестные caller-selected OCC
+tokens: exact row разрешается из signed authority нового server-owned Turn и
+возвращает current delivery attempt/version/fence/input; ACK сверяет эти exact
+значения. Retry `FAILED/EXPIRED` атомарно перепривязывает тот же immutable
+outcome к свежим RuntimeRevision/input/attempt/grant и не повторяет approval
+или внешний вызов. `ProcessRunSpec` различает взаимоисключающие typed bindings
+`OWNER_GATE` и `INTEGRATION`; integration binding хранит exact continuation ID
+и outcome digest без фиктивного owner feedback. Закрытые domain operations
+целиком переключают `OWNER_GATE|INTEGRATION|NONE`, очищая поля другого arm:
+после integration rejoin новый OwnerGate не наследует integration ID/digest, а
+`CHANGES_REQUESTED` не смешивает arms. Semantic idempotency не зависит
+от одноразового JTI/correlation ID, но сохраняет полный проверенный owner и
+authority tuple. Cleanup issue и consume повторно проверяют все non-`REJOINED`
+continuation exact session, включая current delivery binding.
+
+Все команды, которые могут встретить один execution graph, используют один
+code-enforced acquisition: read-only candidate, затем существующий
+RuntimeExecution → ScheduleOccurrence → Schedule → ScheduledRun → Session →
+Turn → ProcessRun → pinned resources → OwnerGate → IntegrationContinuation.
+Unscheduled path использует подмножество без schedule rows. Current-turn
+discovery охватывает `CLAIMED`, `WAITING_OWNER`, `CONTINUATION` и terminal
+`SUCCEEDED/FAILED/CANCELLED`; stale ClaimTurn, scheduler recovery, Get/ACK и owner-gate decision
+повторно проверяют exact tuple/deadline/version после locks. PostgreSQL retry
+остаётся safety net, а не способом исправить lock inversion.
+
+`ClaimTurn` после server-owned `QUEUED -> CLAIMED` под теми же locks переносит
+новую `Turn.Version` в `ProcessRun.Current*` и применимые
+`ScheduleOccurrence.Execution*`/`ScheduledRun.Current*`; новый
+`ProcessRun.Version` также становится частью scheduled binding. Только после
+этого одной transaction сохраняются Turn lease/attempt, receipt, audit и outbox.
+Stale process/occurrence/run tuple закрыто отклоняет весь claim, а exact replay
+не создаёт второго version bump. Поэтому первый `ClaimRuntimeExecution` видит
+согласованный scheduled или unscheduled graph без caller-selected versions.
+
+Scheduled producer хранит два разных server-owned digest без смешения типов.
+До materialization `Schedule.EffectiveInputSHA` и queued occurrence содержат
+immutable snapshot target/prompt/artifact/runtime/session policy. После
+`ClaimScheduleOccurrence` exact execution digest совпадает в
+`Turn.EffectiveInputSHA256`, `ScheduleOccurrence.EffectiveInputSHA256` и
+`ScheduledRun.CurrentInputSHA256`, а исходный snapshot остаётся в
+`ScheduledRun.EffectiveInputSHA256`. PostgreSQL `UpdateScheduleOccurrence`
+явно сохраняет изменяемый digest; repository fake повторяет field-level SQL
+contract и не маскирует пропущенный named argument заменой всей структуры.
+Обычный `FAILED/EXPIRED` completion и watchdog, который после ожидания lock
+видит уже terminal Turn/Process, проходят один
+`applyScheduledTerminalDisposition`: одинаково применяют retry/dead-letter,
+завершают прежний run, восстанавливают queued occurrence digest из его
+immutable snapshot и очищают прежний claim/execution tuple. Более новая
+Schedule snapshot не подменяет pinned значение и закрыто блокирует requeue.
+Watchdog discovery и каждая exact recovery disposition коммитятся отдельно от
+следующего scheduler selection; отсутствие новой due строки не откатывает уже
+terminal run, retry/dead-letter, authority cleanup и audit. Overlap `SKIP`
+также фиксирует самостоятельный terminal fact до нового poll. Selection SQL и
+post-lock проверка после occurrence→Schedule учитывают любой historical open
+`ScheduledRun`, поэтому terminal occurrence не освобождает `QUEUE` для второго
+graph до закрытия прежнего run.
+Под `PAUSED` queued retry ждёт `ACTIVATE`; `ARCHIVED/DELETION_PENDING/DELETED`
+не принимают requeue. Retry/suspension/rebind сравнивают current digest,
+сохраняя snapshot provenance.
+Переходы occurrence/run пишут
+audit и доступны authoritative read, но не публикуют повторное событие
+неизменённого Schedule; каждый outbox event использует sequence ровно новой
+версии действительно изменённого Resource aggregate.
+
+Session lifecycle и cross-session delegation используют batch-вариант того же
+resolver: RuntimeExecution/occurrence/schedule/run, Session, Turn и ProcessRun
+глобально сортируются для всех затронутых graphs. `ManageSession` повторяет
+open-turn discovery под Session lock; ARCHIVE/CLEANUP запрещены при open Turn,
+live runtime или любой non-`REJOINED` continuation этой session, а CLOSE/CANCEL
+не закрывают graph в обход specialized runtime/scheduler transition.
+`StartProcess` и `EnqueueTurn` повторно сверяют parent/current/delegation tuple;
+target Turn с materialized runtime не перепривязывается.
+`ManageSchedule(UPDATE/ARCHIVE/DELETE)` блокирует Schedule и проверяет
+authoritative occurrence+run open-set до receipt; UPDATE только затем получает
+pinned rows. ARCHIVE проходит лишь после terminal/no-open graph и необратим.
+
+Каждая lifecycle-команда с receipt использует двухфазный порядок: сначала
+exact owner/current graph, transport authority, attempt/revision/input,
+version/fence/generation/state/expiry, затем receipt и только после отсутствия
+receipt — effect. Admission replay возвращает LeaseToken лишь пока тот же
+RuntimeExecution остаётся current `ADMITTED` и token digest совпадает; после
+terminal/cancel/expiry/rebind старый authority-bearing result закрыт.
+`ManageWorkClaim`, `CompleteProcess` и `CancelProcess` выводят current Turn из
+server-owned ProcessRun и проходят тот же resolver до первого shared row lock.
+Generic Turn/Process и stale scheduler paths закрыто отказываются при live
+RuntimeExecution. `RequestOwnerGate` вместо этого атомарно переводит exact
+active runtime в `SUSPENDED`, очищает lease/token/deadline, завершает attempt и
+лишь затем фиксирует `WAITING_OWNER`; решение или retry создаёт только свежую
+authority.
+OwnerGate delivery claim хранит только server-side hash idempotency key:
+unlocked candidate проходит тот же graph resolver, Gate блокируется последним,
+и receipt читается после workload/SPIFFE/deadline/current-claim проверки.
+После delivery, expiry или decision старый ClaimToken не возвращается.
+`ClaimTurn`/`RenewTurn` также разрешают exact Turn и lease до receipt. Scheduler
+claim сохраняет отдельный server-owned claim-key hash в occurrence: retry
+сначала восстанавливает current graph по этой привязке, и только live exact
+occurrence может повторно вернуть LeaseToken.
+`AdmitRuntimeExecution` и `HeartbeatRuntimeExecution` одной transaction по
+PostgreSQL clock выравнивают deadline RuntimeExecution и зависимого TurnLease;
+generic `RenewTurn` не получает runtime authority. Deadline-sensitive paths
+читают fresh decision time только после canonical graph и exact target row
+locks. Поэтому `ManageWorkClaim(CREATE/RENEW)` replay повторно блокирует
+сохранённую claim до clock/receipt, а RENEW, начавшийся до expiry и продолживший
+после ожидания lock, не раскрывает старый ACTIVE result и не воскресает.
+`RequestOwnerGate`, Turn/scheduler leases и pinned Integration credentials
+используют тот же post-lock invariant.
+
 ## Доменные инварианты
 
 | Область                  | Инвариант                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Все команды              | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Все команды              | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно; receipt читается только после authoritative current eligibility, а superseded authority-bearing result никогда не возвращается                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Проект                   | ID и владельца назначает сервер; создание в организации требует полномочия владельца; slug стабилен                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Команда, роль и prompt   | общий CRUD не управляет полномочиями; отдельная административная команда проверяет полномочие вида, назначаемое подмножество и запрещает самостоятельное включение и повышение                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Управляемая конфигурация | каждый project/team/chat/role/prompt/binding/workspace/integration/schedule хранит `managed_by=UI` или `managed_by=GIT`; Git-объект обновляется только тем же источником с возрастающей ревизией, а переход к UI требует явного `detach_git_management` и отдельного устойчивого полномочия                                                                                                                                                                                                                                                                                                                                                                                      |
 | Привязка учётных данных  | хранится только URI метаданных; назначение и principal неизменяемы; ревизия растёт ровно на один; provider binding несёт server-verified eligibility/capabilities, лимит, usage, время и ревизию наблюдения                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Интеграция               | идентичность определения неизменяема; версия движется только вперёд                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Ревизия среды исполнения | перед каждым ходом сервер разрешает точные сессию и разрешение роли, активные chat/prompt/привязку провайдера и только связанные с ролью workspace/integration/credential; создаётся неизменяемый снимок с версиями, digest, политикой, образом и предшественником; `runtime-controller` читает его через отдельный авторизованный RPC                                                                                                                                                                                                                                                                                                                                           |
-| Сессия                   | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel атомарно закрывают queued/active turns, attempts и grants, а archive/cleanup доходят до terminal tombstone                                                                                                                                                                                                                                                                                       |
-| Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Сессия                   | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel работают только через полный batch owner graph и не обходят live runtime/scheduler authority, archive/cleanup требуют отсутствия open Turn/live runtime и полного session-scoped continuation rejoin                                                                                                                                                                                          |
+| Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence; после runtime admission heartbeat атомарно продлевает RuntimeExecution и TurnLease до одного PostgreSQL deadline                                                                                                                                                                                                                                                                                                                                                                                         |
 | Восстановление хода      | истечение срока или ручной повтор сначала закрывает прежние attempt/lease/gate/claim, затем создаёт свежие `RuntimeRevision`, effective input, attempt и grant и атомарно перепривязывает единый current execution tuple процесса и `ScheduledRun`; `SourceRef` остаётся bounded server-owned identity, номер attempt хранится только в tuple; устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                  |
+| Runtime execution       | control-plane материализует server-owned tuple organization/project/process/session/thread/role/turn/attempt, immutable input digest, RuntimeRevision version/digest, закрытые ResourceClass и `NONE/PROJECT_READ_ONLY/CLUSTER_ADMIN`, exact workload/generation и monotonic fence; terminal/cancel/expiry закрывают Turn/ProcessRun/occurrence/ScheduledRun вместе, retry принимает только active/`FAILED`/`EXPIRED` и создаёт свежие revision/input/attempt/grant; cleanup проходит монотонные `NONE/ACTIVE/EXPIRED/CONSUMED` и невозможна без exact archive checksum и отдельной verifier attestation |
+| Integration continuation | suspension отдельно сверяет claimant `agent-runner` TurnLease/TurnAttempt и executor `runtime-controller` RuntimeExecution/SPIFFE, атомарно терминализирует runtime как `SUSPENDED`, закрывает runtime и scheduler authority, переводит Turn/Session/Process в `WAITING_EXTERNAL` и записывает в ProcessRun/occurrence/ScheduledRun полный current tuple с уже увеличенными Session/Turn versions; terminal decision/result под теми же locks переводит source Turn в terminal `CANCELLED/integration_continuation_materialized`, сохраняет его provenance через RuntimeExecution/TurnAttempt/audit и `PredecessorTurnID`, затем создаёт один fresh RuntimeRevision/input/Turn/grant и перепривязывает полный scheduled current tuple; retry delivery увеличивает attempt/version/fence для того же immutable outcome без повторного external effect, pending/повторно открытая delivery блокирует cleanup до rejoin |
 | Процесс                  | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate                                                                                                                                                                                                                                                                                        |
-| Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO                                                                                                              |
-| Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` под PostgreSQL row lock автономно закрывает просроченный graph, а delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
+| Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; обычный completion и terminal-winner lease recovery используют одну retry/dead-letter disposition, закрывают прежнюю authority и допускают ровно одну новую attempt; recovery и overlap `SKIP` коммитятся до независимого следующего selection, поэтому no-candidate не откатывает disposition/audit; occurrence либо historical run в `QUEUED/CLAIMED/WAITING_OWNER/CONTINUATION` блокируют ARCHIVE/UPDATE/DELETE, а open run блокирует новый `QUEUE` graph даже при terminal occurrence; `PAUSED` сохраняет queued retry до ACTIVATE, закрытые Schedule states requeue не принимают; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
+| Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` выбирает unlocked candidate, затем блокирует полный graph и сам Gate последним, повторно сверяет PostgreSQL deadline и автономно закрывает просроченный graph; delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
 | Память                   | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; единый eligibility скрывает `DELETED` title/content в single/list/generic/FTS/vector путях и оставляет tombstone только в авторизованном audit/read path; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest                                                                                                                                                                                                                                                                                                       |
-| Заявка на работу         | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Заявка на работу         | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна; RENEW и CREATE/RENEW replay получают свежий PostgreSQL clock после canonical graph и exact WorkClaim lock, поэтому ожидание блокировки не позволяет раскрыть receipt или оживить истёкшую ACTIVE строку; database eligibility обновляется отдельной forward-only migration                                                                                                                                                                                                                                                                                                                        |
 | Метаданные артефакта     | только `RegisterArtifact` создаёт `PENDING`; точный scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; прикреплять и использовать разрешено только точный `CLEAN` digest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Ссылки разрешаются внутри текущих настроек RLS организации и проекта;
@@ -130,7 +258,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260801000100`,
+`20260803000100`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -336,8 +464,11 @@ controller bootstrap и закрыто сверяет catalog membership. При
 CLI дополнительно подключается именно этим LOGIN и сохраняет readback; только
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
 `20260731000200`, `20260731000300`, `20260731000400` и
-`20260731000500`, `20260731000600` и `20260801000100` явно forward-only:
-downgrade отклоняется,
+`20260731000500`, `20260731000600`, `20260801000100`,
+`20260802000100` и `20260803000100` явно forward-only. Уже применённая
+`20260731000500` не переписывается; `20260803000100` обновляет
+`work_claim_graph_is_active` через `CREATE OR REPLACE FUNCTION`, закрепляет
+database-expiry predicate и privilege/readback. Downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
 попытки, подтверждения и происхождение вектора. Откат приложения выполняется
 только совместимым образом; откат схемы — новой компенсирующей forward
@@ -361,7 +492,10 @@ downgrade отклоняется,
    Migration Job, deny-all и только NetworkPolicy с точными назначениями;
 5. сравнить все методы Proto с политикой полномочий, а группы ошибок —
    с `contracts/errors/v1/rpc-http-mapping.yaml`;
-6. проверить, что `Closes #187` относится только к одному PR.
+6. для Issue #221 пройти negative/competition/replay сценарии из
+   `runtime-continuation-contract.md` и сверить все перечисленные full methods,
+   operation IDs, permissions и producer profiles;
+7. проверить, что `Closes #187` или `Closes #221` относится только к своему PR.
 
 Фактические проверки PostgreSQL/Redis/NATS/Vault/Kubernetes и staging rollout
 требуют отдельного разрешения и окружения.
@@ -408,3 +542,10 @@ OpenTelemetry, Sentry, Kubernetes и Vault, но вернул quota error. Ис�
   [Vault PKI issue API](https://developer.hashicorp.com/vault/api-docs/secret/pki#generate-certificate-and-key),
   [Shipwright Build](https://shipwright.io/docs/build/) и
   [Tekton Tasks](https://tekton.dev/docs/pipelines/tasks/).
+
+Для Issue #221 Context7 повторно подтвердил API `/jackc/pgx` v5.10.0,
+`/pressly/goose` v3.27.3, `/grpc/grpc-go` v1.82.1, `/bufbuild/buf` и
+`/protocolbuffers/protobuf-go`: транзакции и `Serializable`, forward-only
+migrations, gRPC full method/status/interceptor, `buf format|lint|build|generate`
+и совместимость generated Go API с runtime. Использованы закреплённые
+репозиторием версии инструментов.

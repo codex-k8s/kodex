@@ -23,81 +23,124 @@ import (
 )
 
 const (
-	permissionCreate                = "controlplane.resource.create"
-	permissionUpdate                = "controlplane.resource.update"
-	permissionTransition            = "controlplane.resource.transition"
-	permissionDelete                = "controlplane.resource.delete"
-	permissionAccessManage          = "controlplane.access.manage"
-	permissionRead                  = "controlplane.resource.read"
-	permissionList                  = "controlplane.resource.list"
-	permissionEnqueueTurn           = "controlplane.turn.enqueue"
-	permissionClaimTurn             = "controlplane.turn.claim"
-	permissionRenewTurn             = "controlplane.turn.renew"
-	permissionCompleteTurn          = "controlplane.turn.complete"
-	permissionRetryTurn             = "controlplane.turn.retry"
-	permissionCancelTurn            = "controlplane.turn.cancel"
-	permissionClaimSchedule         = "controlplane.schedule.claim"
-	permissionManageSchedule        = "controlplane.schedule.manage"
-	permissionExecuteSchedule       = "controlplane.schedule.execute"
-	permissionStartProcess          = "controlplane.process.start"
-	permissionCancelProcess         = "controlplane.process.cancel"
-	permissionCompleteProcess       = "controlplane.process.complete"
-	permissionRequestGate           = "controlplane.owner_gate.request"
-	permissionResolveGate           = "controlplane.owner_gate.resolve"
-	permissionRegisterArtifact      = "controlplane.artifact.register"
-	permissionScanArtifact          = "controlplane.artifact.scan"
-	permissionManageSession         = "controlplane.session.manage"
-	permissionWriteMemory           = "controlplane.memory.write"
-	permissionWriteProjectMemory    = "controlplane.memory.project.write"
-	permissionManageWorkClaim       = "controlplane.work_claim.manage"
-	permissionDeliverGate           = "controlplane.owner_gate.deliver"
-	permissionExpireGate            = "controlplane.owner_gate.expire"
-	permissionReadRuntimeRevision   = "controlplane.runtime_revision.read"
-	permissionIndexMemory           = "controlplane.memory.index"
-	permissionRepairOutbox          = "controlplane.outbox.repair"
-	permissionReadOutbox            = "controlplane.outbox.read"
-	permissionApplyGitConfiguration = "controlplane.configuration.git.apply"
-	permissionDetachConfiguration   = "controlplane.configuration.detach"
+	auditKindScheduleOccurrence = "SCHEDULE_OCCURRENCE"
+	auditKindTurnLease          = "TURN_LEASE"
+
+	permissionCreate                 = "controlplane.resource.create"
+	permissionUpdate                 = "controlplane.resource.update"
+	permissionTransition             = "controlplane.resource.transition"
+	permissionDelete                 = "controlplane.resource.delete"
+	permissionAccessManage           = "controlplane.access.manage"
+	permissionRead                   = "controlplane.resource.read"
+	permissionList                   = "controlplane.resource.list"
+	permissionEnqueueTurn            = "controlplane.turn.enqueue"
+	permissionClaimTurn              = "controlplane.turn.claim"
+	permissionRenewTurn              = "controlplane.turn.renew"
+	permissionCompleteTurn           = "controlplane.turn.complete"
+	permissionRetryTurn              = "controlplane.turn.retry"
+	permissionCancelTurn             = "controlplane.turn.cancel"
+	permissionClaimSchedule          = "controlplane.schedule.claim"
+	permissionManageSchedule         = "controlplane.schedule.manage"
+	permissionExecuteSchedule        = "controlplane.schedule.execute"
+	permissionStartProcess           = "controlplane.process.start"
+	permissionCancelProcess          = "controlplane.process.cancel"
+	permissionCompleteProcess        = "controlplane.process.complete"
+	permissionRequestGate            = "controlplane.owner_gate.request"
+	permissionResolveGate            = "controlplane.owner_gate.resolve"
+	permissionRegisterArtifact       = "controlplane.artifact.register"
+	permissionScanArtifact           = "controlplane.artifact.scan"
+	permissionManageSession          = "controlplane.session.manage"
+	permissionWriteMemory            = "controlplane.memory.write"
+	permissionWriteProjectMemory     = "controlplane.memory.project.write"
+	permissionManageWorkClaim        = "controlplane.work_claim.manage"
+	permissionDeliverGate            = "controlplane.owner_gate.deliver"
+	permissionExpireGate             = "controlplane.owner_gate.expire"
+	permissionReadRuntimeRevision    = "controlplane.runtime_revision.read"
+	permissionIndexMemory            = "controlplane.memory.index"
+	permissionRepairOutbox           = "controlplane.outbox.repair"
+	permissionReadOutbox             = "controlplane.outbox.read"
+	permissionApplyGitConfiguration  = "controlplane.configuration.git.apply"
+	permissionDetachConfiguration    = "controlplane.configuration.detach"
+	permissionRuntimeClaim           = "controlplane.runtime_execution.claim"
+	permissionRuntimeRead            = "controlplane.runtime_execution.read"
+	permissionRuntimeAdmit           = "controlplane.runtime_execution.admit"
+	permissionRuntimeHeartbeat       = "controlplane.runtime_execution.heartbeat"
+	permissionRuntimeIncident        = "controlplane.runtime_execution.incident"
+	permissionRuntimeComplete        = "controlplane.runtime_execution.complete"
+	permissionRuntimeCancel          = "controlplane.runtime_execution.cancel"
+	permissionRuntimeRetry           = "controlplane.runtime_execution.retry"
+	permissionRuntimeExpire          = "controlplane.runtime_execution.expire"
+	permissionRuntimeArchive         = "controlplane.runtime_execution.archive"
+	permissionRuntimeRestore         = "controlplane.runtime_execution.restore.verify"
+	permissionRuntimeCleanup         = "controlplane.runtime_execution.cleanup.authorize"
+	permissionRuntimeCleanupConsume  = "controlplane.runtime_execution.cleanup.consume"
+	permissionRuntimeCleanupExpire   = "controlplane.runtime_execution.cleanup.expire"
+	permissionIntegrationResolve     = "controlplane.integration_session.read"
+	permissionIntegrationSuspend     = "controlplane.integration_continuation.suspend"
+	permissionIntegrationDecide      = "controlplane.integration_continuation.decide"
+	permissionIntegrationExecute     = "controlplane.integration_continuation.execute"
+	permissionIntegrationRead        = "controlplane.integration_continuation.read"
+	permissionIntegrationAcknowledge = "controlplane.integration_continuation.acknowledge"
+	agentRunnerWorkload              = "agent-runner"
+	agentRunnerSPIFFEID              = "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
+	controlAPIGatewayWorkload        = "control-api-gateway"
+	controlAPIGatewaySPIFFEID        = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
 )
 
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
 type Config struct {
-	LeaseSigningKey           []byte
-	TurnLeaseDuration         time.Duration
-	MaximumScheduleClaims     int
-	RuntimeImageDigest        string
-	AuthorityPolicyRevision   uint64
-	AuthorityPolicySHA256     string
-	OwnerGateDeliveryWorkload string
-	OwnerGateDeliverySPIFFEID string
-	ScannerWorkload           string
-	ScannerSPIFFEID           string
-	SchedulerWorkload         string
-	SchedulerSPIFFEID         string
-	MemoryIndexerWorkload     string
-	MemoryIndexerSPIFFEID     string
-	Observer                  Observer
+	LeaseSigningKey            []byte
+	TurnLeaseDuration          time.Duration
+	MaximumScheduleClaims      int
+	RuntimeImageDigest         string
+	AuthorityPolicyRevision    uint64
+	AuthorityPolicySHA256      string
+	OwnerGateDeliveryWorkload  string
+	OwnerGateDeliverySPIFFEID  string
+	ScannerWorkload            string
+	ScannerSPIFFEID            string
+	SchedulerWorkload          string
+	SchedulerSPIFFEID          string
+	MemoryIndexerWorkload      string
+	MemoryIndexerSPIFFEID      string
+	RuntimeControllerWorkload  string
+	RuntimeControllerSPIFFEID  string
+	IntegrationGatewayWorkload string
+	IntegrationGatewaySPIFFEID string
+	RestoreVerifierWorkload    string
+	RestoreVerifierSPIFFEID    string
+	CleanupAuthorizerWorkload  string
+	CleanupAuthorizerSPIFFEID  string
+	Observer                   Observer
 }
 
 // Service владеет прикладными переходами; адаптер только сохраняет намерение.
 type Service struct {
-	repository                domainrepo.Repository
-	leaseSigningKey           []byte
-	turnLeaseDuration         time.Duration
-	maximumScheduleClaims     int
-	runtimeImageDigest        string
-	authorityPolicyRevision   uint64
-	authorityPolicySHA256     string
-	ownerGateDeliveryWorkload string
-	ownerGateDeliverySPIFFEID string
-	scannerWorkload           string
-	scannerSPIFFEID           string
-	schedulerWorkload         string
-	schedulerSPIFFEID         string
-	memoryIndexerWorkload     string
-	memoryIndexerSPIFFEID     string
-	observer                  Observer
-	now                       func() time.Time
+	repository                 domainrepo.Repository
+	leaseSigningKey            []byte
+	turnLeaseDuration          time.Duration
+	maximumScheduleClaims      int
+	runtimeImageDigest         string
+	authorityPolicyRevision    uint64
+	authorityPolicySHA256      string
+	ownerGateDeliveryWorkload  string
+	ownerGateDeliverySPIFFEID  string
+	scannerWorkload            string
+	scannerSPIFFEID            string
+	schedulerWorkload          string
+	schedulerSPIFFEID          string
+	memoryIndexerWorkload      string
+	memoryIndexerSPIFFEID      string
+	runtimeControllerWorkload  string
+	runtimeControllerSPIFFEID  string
+	integrationGatewayWorkload string
+	integrationGatewaySPIFFEID string
+	restoreVerifierWorkload    string
+	restoreVerifierSPIFFEID    string
+	cleanupAuthorizerWorkload  string
+	cleanupAuthorizerSPIFFEID  string
+	observer                   Observer
+	now                        func() time.Time
 }
 
 // New создаёт сервис только с полноценными устойчивыми границами.
@@ -118,27 +161,59 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.SchedulerSPIFFEID) ||
 		value.ValidateStableKey(config.MemoryIndexerWorkload) != nil ||
 		!validSPIFFEID(config.MemoryIndexerSPIFFEID) ||
+		value.ValidateStableKey(config.RuntimeControllerWorkload) != nil ||
+		!validSPIFFEID(config.RuntimeControllerSPIFFEID) ||
+		config.RuntimeControllerWorkload == agentRunnerWorkload ||
+		config.RuntimeControllerSPIFFEID == agentRunnerSPIFFEID ||
+		value.ValidateStableKey(config.IntegrationGatewayWorkload) != nil ||
+		!validSPIFFEID(config.IntegrationGatewaySPIFFEID) ||
+		value.ValidateStableKey(config.RestoreVerifierWorkload) != nil ||
+		!validSPIFFEID(config.RestoreVerifierSPIFFEID) ||
+		value.ValidateStableKey(config.CleanupAuthorizerWorkload) != nil ||
+		!validSPIFFEID(config.CleanupAuthorizerSPIFFEID) ||
+		config.RestoreVerifierWorkload == config.RuntimeControllerWorkload ||
+		config.RestoreVerifierSPIFFEID == config.RuntimeControllerSPIFFEID ||
+		config.RestoreVerifierWorkload == config.CleanupAuthorizerWorkload ||
+		config.RestoreVerifierSPIFFEID == config.CleanupAuthorizerSPIFFEID ||
+		config.RestoreVerifierWorkload == config.IntegrationGatewayWorkload ||
+		config.RestoreVerifierSPIFFEID == config.IntegrationGatewaySPIFFEID ||
+		config.RestoreVerifierWorkload == controlAPIGatewayWorkload ||
+		config.RestoreVerifierSPIFFEID == controlAPIGatewaySPIFFEID ||
+		config.CleanupAuthorizerWorkload == config.RuntimeControllerWorkload ||
+		config.CleanupAuthorizerSPIFFEID == config.RuntimeControllerSPIFFEID ||
+		config.CleanupAuthorizerWorkload == config.IntegrationGatewayWorkload ||
+		config.CleanupAuthorizerSPIFFEID == config.IntegrationGatewaySPIFFEID ||
+		config.CleanupAuthorizerWorkload == controlAPIGatewayWorkload ||
+		config.CleanupAuthorizerSPIFFEID == controlAPIGatewaySPIFFEID ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
 	return &Service{
-		repository:                repository,
-		leaseSigningKey:           slices.Clone(config.LeaseSigningKey),
-		turnLeaseDuration:         config.TurnLeaseDuration,
-		maximumScheduleClaims:     config.MaximumScheduleClaims,
-		runtimeImageDigest:        config.RuntimeImageDigest,
-		authorityPolicyRevision:   config.AuthorityPolicyRevision,
-		authorityPolicySHA256:     config.AuthorityPolicySHA256,
-		ownerGateDeliveryWorkload: config.OwnerGateDeliveryWorkload,
-		ownerGateDeliverySPIFFEID: config.OwnerGateDeliverySPIFFEID,
-		scannerWorkload:           config.ScannerWorkload,
-		scannerSPIFFEID:           config.ScannerSPIFFEID,
-		schedulerWorkload:         config.SchedulerWorkload,
-		schedulerSPIFFEID:         config.SchedulerSPIFFEID,
-		memoryIndexerWorkload:     config.MemoryIndexerWorkload,
-		memoryIndexerSPIFFEID:     config.MemoryIndexerSPIFFEID,
-		observer:                  config.Observer,
-		now:                       time.Now,
+		repository:                 repository,
+		leaseSigningKey:            slices.Clone(config.LeaseSigningKey),
+		turnLeaseDuration:          config.TurnLeaseDuration,
+		maximumScheduleClaims:      config.MaximumScheduleClaims,
+		runtimeImageDigest:         config.RuntimeImageDigest,
+		authorityPolicyRevision:    config.AuthorityPolicyRevision,
+		authorityPolicySHA256:      config.AuthorityPolicySHA256,
+		ownerGateDeliveryWorkload:  config.OwnerGateDeliveryWorkload,
+		ownerGateDeliverySPIFFEID:  config.OwnerGateDeliverySPIFFEID,
+		scannerWorkload:            config.ScannerWorkload,
+		scannerSPIFFEID:            config.ScannerSPIFFEID,
+		schedulerWorkload:          config.SchedulerWorkload,
+		schedulerSPIFFEID:          config.SchedulerSPIFFEID,
+		memoryIndexerWorkload:      config.MemoryIndexerWorkload,
+		memoryIndexerSPIFFEID:      config.MemoryIndexerSPIFFEID,
+		runtimeControllerWorkload:  config.RuntimeControllerWorkload,
+		runtimeControllerSPIFFEID:  config.RuntimeControllerSPIFFEID,
+		integrationGatewayWorkload: config.IntegrationGatewayWorkload,
+		integrationGatewaySPIFFEID: config.IntegrationGatewaySPIFFEID,
+		restoreVerifierWorkload:    config.RestoreVerifierWorkload,
+		restoreVerifierSPIFFEID:    config.RestoreVerifierSPIFFEID,
+		cleanupAuthorizerWorkload:  config.CleanupAuthorizerWorkload,
+		cleanupAuthorizerSPIFFEID:  config.CleanupAuthorizerSPIFFEID,
+		observer:                   config.Observer,
+		now:                        time.Now,
 	}, nil
 }
 
@@ -639,6 +714,97 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 
 type resourceMutation func(domainrepo.Transaction) (entity.Resource, error)
 
+type resourceReceiptValidation func(
+	domainrepo.Transaction,
+) (lifecycleReceiptDisposition, error)
+
+func resourceReceiptMatchesCurrent(current, stored entity.Resource) error {
+	currentHash, err := canonicalHash(current)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	storedHash, err := canonicalHash(stored)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	if currentHash != storedHash {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (service *Service) withValidatedResourceReceipt(
+	ctx context.Context,
+	principal value.Principal,
+	idempotencyKey string,
+	scope string,
+	requestHash string,
+	validate resourceReceiptValidation,
+	validateReplay func(domainrepo.Transaction, entity.Resource) error,
+	apply resourceMutation,
+) (entity.Resource, error) {
+	keyHash := hashString(idempotencyKey)
+	var result entity.Resource
+	mutated := false
+	err := service.repository.Transact(
+		ctx,
+		domainrepo.Scope{
+			OrganizationID: principal.OrganizationID,
+			ProjectID:      principal.ProjectID,
+			ActorID:        principal.ActorID,
+		},
+		func(tx domainrepo.Transaction) error {
+			disposition, err := validate(tx)
+			if err != nil {
+				return err
+			}
+			receipt, err := tx.GetReceipt(
+				ctx, principal.OrganizationID, scope, keyHash,
+			)
+			if err == nil {
+				if (disposition != lifecycleReceiptReplay &&
+					disposition != lifecycleReceiptApplyOrReplay) ||
+					receipt.RequestHash != requestHash {
+					return errs.ErrIdempotencyConflict
+				}
+				result = receipt.Result
+				if err := result.Validate(); err != nil {
+					return errs.ErrInternal
+				}
+				return validateReplay(tx, result)
+			}
+			if !errors.Is(err, errs.ErrNotFound) {
+				return err
+			}
+			if disposition != lifecycleReceiptApply &&
+				disposition != lifecycleReceiptApplyOrReplay {
+				return errs.ErrStateConflict
+			}
+			result, err = apply(tx)
+			if err != nil {
+				return err
+			}
+			if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
+				OrganizationID: principal.OrganizationID,
+				ProjectID:      principal.ProjectID,
+				Scope:          scope,
+				KeyHash:        keyHash,
+				RequestHash:    requestHash,
+				Result:         result,
+				CreatedAt:      service.now().UTC().Truncate(time.Microsecond),
+			}); err != nil {
+				return err
+			}
+			mutated = true
+			return nil
+		},
+	)
+	if err == nil && mutated {
+		service.observer.ObserveMutation(result.Kind, scope)
+	}
+	return result, err
+}
+
 func (service *Service) withResourceReceipt(
 	ctx context.Context,
 	principal value.Principal,
@@ -703,6 +869,12 @@ func (service *Service) appendMutationRecords(
 	action string,
 	resource entity.Resource,
 ) error {
+	if resource.Kind == enum.KindSchedule && !scheduleResourceMutationAction(action) {
+		return errs.ErrInternal
+	}
+	if action == "renew_turn" {
+		return errs.ErrInternal
+	}
 	audit := domainrepo.Audit{
 		ID:              uuid.NewString(),
 		OrganizationID:  resource.OrganizationID,
@@ -737,6 +909,60 @@ func (service *Service) appendMutationRecords(
 		OccurredAt:      resource.UpdatedAt,
 		CorrelationID:   principal.CorrelationID,
 	})
+}
+
+// scheduleResourceMutationAction — закрытый реестр команд, которые реально
+// увеличивают Schedule.Version. Изменение occurrence/run не маскируется
+// повторным событием неизменённого Schedule с уже занятой sequence.
+func scheduleResourceMutationAction(action string) bool {
+	switch action {
+	case "create_schedule", "claim_due_schedule",
+		"manage_schedule_UPDATE", "manage_schedule_ACTIVATE",
+		"manage_schedule_PAUSE", "manage_schedule_ARCHIVE",
+		"manage_schedule_DELETE":
+		return true
+	default:
+		return false
+	}
+}
+
+// appendOwnerStateAudit фиксирует изменение owner-row, у которого нет
+// отдельного domain-event контракта. resourceVersion является монотонным
+// attempt/fence владельца; outbox для неизменённого родительского Resource не
+// создаётся, а authoritative read остаётся частью той же транзакции.
+func appendOwnerStateAudit(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	action, organizationID, projectID, resourceID, resourceKind string,
+	resourceVersion uint64,
+	occurredAt time.Time,
+) error {
+	if value.ValidateID(resourceID) != nil || resourceVersion == 0 ||
+		occurredAt.IsZero() {
+		return errs.ErrInternal
+	}
+	return tx.AppendAudit(ctx, domainrepo.Audit{
+		ID: uuid.NewString(), OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: principal.ActorID, Action: action, ResourceID: resourceID,
+		ResourceKind: resourceKind, ResourceVersion: resourceVersion,
+		Outcome: "succeeded", CorrelationID: principal.CorrelationID,
+		PolicyRevision: principal.PolicyRevision, OccurredAt: occurredAt,
+	})
+}
+
+func appendScheduleOccurrenceAudit(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	action string,
+	occurrence domainrepo.ScheduleOccurrence,
+) error {
+	return appendOwnerStateAudit(
+		ctx, tx, principal, action, occurrence.OrganizationID,
+		occurrence.ProjectID, occurrence.ID, auditKindScheduleOccurrence,
+		uint64(occurrence.Attempt), occurrence.UpdatedAt,
+	)
 }
 
 func (service *Service) transitionResource(
@@ -1202,9 +1428,13 @@ type commandIdentity struct {
 	Permission          string
 	PolicyRevision      uint64
 	AuthorityGeneration uint64
-	GrantGeneration     uint64
 	CallerWorkload      string
 	CallerSPIFFEID      string
+	AuthoritySource     string
+	AuthorityReference  string
+	AuthorityRevision   uint64
+	AuthorityDigest     string
+	GrantGeneration     uint64
 }
 
 func identity(principal value.Principal) commandIdentity {
@@ -1215,10 +1445,24 @@ func identity(principal value.Principal) commandIdentity {
 		Permission:          principal.Permission,
 		PolicyRevision:      principal.PolicyRevision,
 		AuthorityGeneration: principal.AuthorityGeneration,
-		GrantGeneration:     principal.AuthorityGrantGeneration,
 		CallerWorkload:      principal.CallerWorkload,
 		CallerSPIFFEID:      principal.CallerSPIFFEID,
+		AuthoritySource:     principal.AuthoritySource,
+		AuthorityReference:  principal.AuthorityReference,
+		AuthorityRevision:   principal.AuthorityRevision,
+		AuthorityDigest:     principal.AuthorityDigest,
+		GrantGeneration:     principal.AuthorityGrantGeneration,
 	}
+}
+
+// semanticCommandHash связывает долговечный intent только со стабильной
+// проверенной authority и бизнес-полями. CorrelationID/JTI и прочие
+// одноразовые transport proof artifacts намеренно не входят в receipt hash.
+func semanticCommandHash(principal value.Principal, command any) (string, error) {
+	return canonicalHash(struct {
+		Identity commandIdentity
+		Command  any
+	}{identity(principal), command})
 }
 
 func canonicalHash(input any) (string, error) {

@@ -66,22 +66,31 @@ func (service *Service) ManageSession(
 	if input.Action != "ARCHIVE" && input.ArchiveRef != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    ManageSessionInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Action                               string
+		SessionID                            string
+		ExpectedVersion                      uint64
+		Name                                 string
+		RoleID                               string
+		ConversationID                       string
+		PreferredProviderCredentialBindingID string
+		ArchiveRef                           string
+		ReasonCode                           string
+	}{
+		input.Action, input.SessionID, input.ExpectedVersion, input.Name,
+		input.RoleID, input.ConversationID,
+		input.PreferredProviderCredentialBindingID, input.ArchiveRef,
+		input.ReasonCode,
+	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
-		ctx,
-		input.Principal,
-		input.IdempotencyKey,
-		"manage_session_"+input.Action,
-		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			now := service.now().UTC().Truncate(time.Microsecond)
-			if input.Action == "CREATE" {
+	if input.Action == "CREATE" {
+		return service.withResourceReceipt(
+			ctx, input.Principal, input.IdempotencyKey, "manage_session_CREATE",
+			requestHash,
+			func(tx domainrepo.Transaction) (entity.Resource, error) {
+				now := service.now().UTC().Truncate(time.Microsecond)
 				role, err := tx.GetForUpdate(
 					ctx,
 					input.Principal.OrganizationID,
@@ -156,55 +165,101 @@ func (service *Service) ManageSession(
 				return session, service.appendMutationRecords(
 					ctx, tx, input.Principal, "create_session", session,
 				)
+			},
+		)
+	}
+
+	var locked lockedSessionLifecycle
+	var replaySession entity.Resource
+	return service.withValidatedResourceReceipt(
+		ctx, input.Principal, input.IdempotencyKey,
+		"manage_session_"+input.Action, requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, err := service.lockSessionLifecycleGraph(
+				ctx, tx, input.Principal, input.SessionID,
+			)
+			if err != nil {
+				return 0, err
 			}
-			current, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
+			locked = current
+			if current.Session.OwnerActorID != input.Principal.ActorID {
+				return 0, errs.ErrNotFound
+			}
+			live, err := tx.SessionHasLiveRuntimeExecution(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 				input.SessionID,
 			)
 			if err != nil {
-				return entity.Resource{}, err
+				return 0, err
 			}
-			if current.Kind != enum.KindSession ||
-				current.OwnerActorID != input.Principal.ActorID {
-				return entity.Resource{}, errs.ErrNotFound
+			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				input.SessionID,
+			)
+			if err != nil {
+				return 0, err
 			}
-			if current.Version != input.ExpectedVersion {
-				return entity.Resource{}, errs.ErrVersionMismatch
+			if live || blocked {
+				return 0, errs.ErrStateConflict
 			}
-			spec, ok := current.Spec.(entity.SessionSpec)
-			if !ok {
-				return entity.Resource{}, errs.ErrInternal
-			}
-			target := enum.StateArchived
-			switch input.Action {
-			case "ARCHIVE":
-				spec.ArchiveRef = input.ArchiveRef
-			case "CANCEL":
-				target = enum.StateCancelled
-			case "CLEANUP":
-				if current.State == enum.StateDeletionPending {
-					target = enum.StateDeleted
-				} else if current.State == enum.StateArchived ||
-					current.State == enum.StateCancelled {
-					target = enum.StateDeletionPending
-				} else {
-					return entity.Resource{}, errs.ErrStateConflict
+			if input.Action == "ARCHIVE" || input.Action == "CLEANUP" {
+				if len(current.Graphs) != 0 {
+					return 0, errs.ErrStateConflict
+				}
+			} else {
+				for _, graph := range current.Graphs {
+					if graph.Occurrence.ID != "" ||
+						requireOwnerGraphRuntimeDisposition(
+							graph, runtimeDispositionAbsent,
+						) != nil {
+						return 0, errs.ErrStateConflict
+					}
 				}
 			}
+			if current.Session.Version == input.ExpectedVersion {
+				if _, err := sessionLifecycleTarget(current.Session, input); err != nil {
+					return 0, err
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if current.Session.Version == input.ExpectedVersion+1 &&
+				sessionLifecycleResultMatches(current.Session, input) {
+				replaySession = current.Session
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(replaySession, stored)
+		},
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return entity.Resource{}, err
+			}
 			if input.Action == "CLOSE" || input.Action == "CANCEL" {
-				if err := service.cancelSessionTurns(
-					ctx, tx, input.Principal, current.ID, input.ReasonCode, now,
+				if err := service.cancelSessionGraphs(
+					ctx, tx, input.Principal, locked.Graphs, input.ReasonCode, now,
 				); err != nil {
 					return entity.Resource{}, err
 				}
 			}
-			updated, err := current.ReplaceAndTransition(spec, target, now)
+			target, err := sessionLifecycleTarget(locked.Session, input)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			spec, ok := locked.Session.Spec.(entity.SessionSpec)
+			if !ok {
+				return entity.Resource{}, errs.ErrInternal
+			}
+			if input.Action == "ARCHIVE" {
+				spec.ArchiveRef = input.ArchiveRef
+			}
+			updated, err := locked.Session.ReplaceAndTransition(spec, target, now)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			if err := tx.Update(ctx, updated, current.Version); err != nil {
+			if err := tx.Update(ctx, updated, locked.Session.Version); err != nil {
 				return entity.Resource{}, err
 			}
 			return updated, service.appendMutationRecords(
@@ -212,6 +267,47 @@ func (service *Service) ManageSession(
 			)
 		},
 	)
+}
+
+func sessionLifecycleTarget(
+	current entity.Resource,
+	input ManageSessionInput,
+) (enum.State, error) {
+	switch input.Action {
+	case "CLOSE", "ARCHIVE":
+		if current.State != enum.StateActive {
+			return "", errs.ErrStateConflict
+		}
+		return enum.StateArchived, nil
+	case "CANCEL":
+		if current.State != enum.StateActive {
+			return "", errs.ErrStateConflict
+		}
+		return enum.StateCancelled, nil
+	case "CLEANUP":
+		if current.State == enum.StateArchived || current.State == enum.StateCancelled {
+			return enum.StateDeletionPending, nil
+		}
+		if current.State == enum.StateDeletionPending {
+			return enum.StateDeleted, nil
+		}
+	}
+	return "", errs.ErrStateConflict
+}
+
+func sessionLifecycleResultMatches(current entity.Resource, input ManageSessionInput) bool {
+	switch input.Action {
+	case "CLOSE":
+		return current.State == enum.StateArchived
+	case "ARCHIVE":
+		spec, ok := current.Spec.(entity.SessionSpec)
+		return ok && current.State == enum.StateArchived && spec.ArchiveRef == input.ArchiveRef
+	case "CANCEL":
+		return current.State == enum.StateCancelled
+	case "CLEANUP":
+		return current.State == enum.StateDeletionPending || current.State == enum.StateDeleted
+	}
+	return false
 }
 
 func (service *Service) selectProviderBinding(
@@ -359,27 +455,64 @@ func weightedCandidateIndex(weights []uint32, slot uint64) (int, bool) {
 	return 0, false
 }
 
-func (service *Service) cancelSessionTurns(
+func (service *Service) cancelSessionGraphs(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
-	sessionID, reason string,
+	graphs []lockedOwnerGraph,
+	reason string,
 	now time.Time,
 ) error {
-	turns, err := tx.OpenSessionTurns(
-		ctx, principal.OrganizationID, principal.ProjectID, sessionID,
-	)
-	if err != nil {
-		return err
-	}
-	for _, item := range turns {
-		if item.Attempt.TurnID != item.Turn.ID {
+	currentProcessTurns := make(map[string]entity.Resource, len(graphs))
+	for _, graph := range graphs {
+		if graph.Occurrence.ID != "" ||
+			requireOwnerGraphRuntimeDisposition(graph, runtimeDispositionAbsent) != nil {
 			return errs.ErrStateConflict
 		}
-		if _, err := service.cancelTurnExecution(
-			ctx, tx, principal, item.Turn, reason, now,
+		turnSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+		if !ok || graph.Turn.State.Terminal() ||
+			graph.Session.ID != turnSpec.SessionID {
+			return errs.ErrStateConflict
+		}
+		cancelled, err := service.cancelTurnExecution(
+			ctx, tx, principal, graph.Turn, reason, now,
+		)
+		if err != nil {
+			return err
+		}
+		cancelledSpec := cancelled.Spec.(entity.TurnSpec)
+		if cancelledSpec.ProcessRunID != "" {
+			processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+			current, currentErr := currentExecution(processSpec)
+			if !processOK || currentErr != nil {
+				return errs.ErrStateConflict
+			}
+			if current.TurnID == cancelled.ID && current.Attempt == cancelledSpec.Attempt {
+				currentProcessTurns[cancelledSpec.ProcessRunID] = cancelled
+			}
+		}
+	}
+	orderedProcessIDs := make([]string, 0, len(currentProcessTurns))
+	for processID := range currentProcessTurns {
+		orderedProcessIDs = append(orderedProcessIDs, processID)
+	}
+	slices.Sort(orderedProcessIDs)
+	for _, processID := range orderedProcessIDs {
+		cancelled := currentProcessTurns[processID]
+		cancelledSpec := cancelled.Spec.(entity.TurnSpec)
+		if err := service.completeProcessFromTurn(
+			ctx, tx, principal, cancelled, cancelledSpec,
 		); err != nil {
 			return err
+		}
+		process, err := tx.GetForUpdate(
+			ctx, principal.OrganizationID, principal.ProjectID, processID,
+		)
+		if err != nil {
+			return err
+		}
+		if process.Kind != enum.KindProcessRun || !process.State.Terminal() {
+			return errs.ErrStateConflict
 		}
 	}
 	return nil
@@ -689,40 +822,173 @@ func (service *Service) ManageWorkClaim(
 		input.ExpectedVersion == 0 {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    ManageWorkClaimInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Action          string
+		WorkClaimID     string
+		ExpectedVersion uint64
+		ProcessRunID    string
+		TurnID          string
+		Summary         string
+		Domains         []string
+		ResourceKeys    []string
+		TTL             time.Duration
+	}{
+		input.Action, input.WorkClaimID, input.ExpectedVersion,
+		input.ProcessRunID, input.TurnID, input.Summary,
+		append([]string{}, input.Domains...),
+		append([]string{}, input.ResourceKeys...), input.TTL,
+	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var receiptClaim entity.Resource
+	var lockedGraph lockedOwnerGraph
+	var workClaimNow time.Time
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"manage_work_claim_"+input.Action,
 		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			now := service.now().UTC().Truncate(time.Microsecond)
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
 			if input.Action == "CREATE" {
-				process, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.ProcessRunID,
+				graph, err := service.lockOwnerGraphByTurn(
+					ctx, tx, input.Principal, input.TurnID,
 				)
 				if err != nil {
-					return entity.Resource{}, err
+					return 0, err
 				}
-				turn, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.TurnID,
-				)
+				if err := requireOwnerGraphRuntimeDisposition(
+					graph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
+				); err != nil {
+					return 0, err
+				}
+				turnSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+				processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+				current, currentErr := currentExecution(processSpec)
+				if !ok || !processOK || currentErr != nil ||
+					graph.Process.ID != input.ProcessRunID || graph.Process.State.Terminal() ||
+					graph.Turn.State.Terminal() || turnSpec.ProcessRunID != graph.Process.ID ||
+					!executionMatchesTurn(current, graph.Turn, turnSpec) {
+					return 0, errs.ErrStateConflict
+				}
+				lockedGraph = graph
+				workClaimNow, err = tx.CurrentTime(ctx)
 				if err != nil {
-					return entity.Resource{}, err
+					return 0, err
 				}
+				return lifecycleReceiptApplyOrReplay, nil
+			}
+			candidate, err := tx.Get(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				input.WorkClaimID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			spec, ok := candidate.Spec.(entity.WorkClaimSpec)
+			if !ok || candidate.Kind != enum.KindWorkClaim ||
+				spec.OwnerActorID != input.Principal.ActorID ||
+				spec.WorkloadID != input.Principal.CallerWorkload {
+				return 0, errs.ErrNotFound
+			}
+			graph, err := service.lockOwnerGraphByTurn(
+				ctx, tx, input.Principal, spec.TurnID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
+			); err != nil {
+				return 0, err
+			}
+			if spec.ProcessRunID != graph.Process.ID || spec.TurnID != graph.Turn.ID {
+				return 0, errs.ErrStateConflict
+			}
+			lockedGraph = graph
+			current, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				input.WorkClaimID,
+			)
+			if err != nil || current.Version != candidate.Version {
+				if err != nil {
+					return 0, err
+				}
+				return 0, errs.ErrStateConflict
+			}
+			currentSpec, ok := current.Spec.(entity.WorkClaimSpec)
+			if !ok || current.Kind != enum.KindWorkClaim ||
+				currentSpec.ProcessRunID != spec.ProcessRunID ||
+				currentSpec.TurnID != spec.TurnID ||
+				currentSpec.OwnerActorID != spec.OwnerActorID ||
+				currentSpec.WorkloadID != spec.WorkloadID {
+				return 0, errs.ErrStateConflict
+			}
+			workClaimNow, err = tx.CurrentTime(ctx)
+			if err != nil {
+				return 0, err
+			}
+			if current.Version == input.ExpectedVersion && current.State == enum.StateActive {
+				if input.Action == "RENEW" {
+					if err := requireUnexpiredWorkClaim(currentSpec, workClaimNow); err != nil {
+						return 0, err
+					}
+				}
+				receiptClaim = current
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version == input.ExpectedVersion+1 &&
+				((input.Action == "RENEW" && current.State == enum.StateActive) ||
+					(input.Action == "RELEASE" && current.State == enum.StateCancelled)) {
+				if input.Action == "RENEW" {
+					if err := requireUnexpiredWorkClaim(currentSpec, workClaimNow); err != nil {
+						return 0, err
+					}
+				}
+				receiptClaim = current
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(tx domainrepo.Transaction, stored entity.Resource) error {
+			current, err := tx.GetForUpdate(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID, stored.ID,
+			)
+			if err != nil {
+				return err
+			}
+			replayNow, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			if receiptClaim.ID == "" {
+				receiptClaim = current
+			}
+			storedSpec, storedOK := stored.Spec.(entity.WorkClaimSpec)
+			currentSpec, currentOK := receiptClaim.Spec.(entity.WorkClaimSpec)
+			if !storedOK || !currentOK || stored.Kind != enum.KindWorkClaim ||
+				storedSpec.ProcessRunID != lockedGraph.Process.ID ||
+				storedSpec.TurnID != lockedGraph.Turn.ID ||
+				currentSpec.ProcessRunID != storedSpec.ProcessRunID ||
+				currentSpec.TurnID != storedSpec.TurnID {
+				return errs.ErrStateConflict
+			}
+			if input.Action == "CREATE" || input.Action == "RENEW" {
+				if err := requireUnexpiredWorkClaim(storedSpec, replayNow); err != nil {
+					return err
+				}
+				if err := requireUnexpiredWorkClaim(currentSpec, replayNow); err != nil {
+					return err
+				}
+			}
+			return resourceReceiptMatchesCurrent(receiptClaim, stored)
+		},
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			now := workClaimNow
+			if input.Action == "CREATE" {
+				process := lockedGraph.Process
+				turn := lockedGraph.Turn
 				processSpec, processOK := process.Spec.(entity.ProcessRunSpec)
 				turnSpec, turnOK := turn.Spec.(entity.TurnSpec)
 				if !processOK || !turnOK ||
@@ -733,9 +999,7 @@ func (service *Service) ManageWorkClaim(
 					turnSpec.ProcessRunID != process.ID {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				execution, err := service.resolveCurrentExecution(
-					ctx, tx, input.Principal, process, processSpec,
-				)
+				execution, err := currentExecution(processSpec)
 				if err != nil || !executionMatchesTurn(execution, turn, turnSpec) {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
@@ -756,7 +1020,7 @@ func (service *Service) ManageWorkClaim(
 						return entity.Resource{}, errs.ErrStateConflict
 					}
 				}
-				if input.Principal.CallerWorkload == "agent-runner" &&
+				if input.Principal.CallerWorkload == agentRunnerWorkload &&
 					(input.Principal.AuthoritySource != "AGENT_SESSION" ||
 						input.Principal.AuthorityReference != turn.ID ||
 						input.Principal.AuthorityRevision != uint64(turnSpec.Attempt) ||
@@ -765,7 +1029,7 @@ func (service *Service) ManageWorkClaim(
 					return entity.Resource{}, errs.ErrPermissionDenied
 				}
 				authorityGeneration := input.Principal.AuthorityGeneration
-				if input.Principal.CallerWorkload == "agent-runner" {
+				if input.Principal.CallerWorkload == agentRunnerWorkload {
 					authorityGeneration = input.Principal.AuthorityGrantGeneration
 					if authorityGeneration == 0 {
 						return entity.Resource{}, errs.ErrPermissionDenied
@@ -823,7 +1087,7 @@ func (service *Service) ManageWorkClaim(
 				spec.WorkloadID != input.Principal.CallerWorkload {
 				return entity.Resource{}, errs.ErrNotFound
 			}
-			if input.Principal.CallerWorkload == "agent-runner" &&
+			if input.Principal.CallerWorkload == agentRunnerWorkload &&
 				(input.Principal.AuthoritySource != "AGENT_SESSION" ||
 					input.Principal.AuthorityReference != spec.TurnID ||
 					input.Principal.AuthorityRevision != uint64(spec.Attempt) ||
@@ -839,8 +1103,11 @@ func (service *Service) ManageWorkClaim(
 					current.State != enum.StateActive {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
+				if err := requireUnexpiredWorkClaim(spec, now); err != nil {
+					return entity.Resource{}, err
+				}
 				if err := service.validateActiveWorkClaimGraph(
-					ctx, tx, input.Principal, current, spec,
+					ctx, tx, input.Principal, lockedGraph, current, spec,
 				); err != nil {
 					return entity.Resource{}, err
 				}
@@ -870,6 +1137,45 @@ func (service *Service) ManageWorkClaim(
 	)
 }
 
+func requireUnexpiredWorkClaim(spec entity.WorkClaimSpec, now time.Time) error {
+	if spec.ExpiresAt.IsZero() || !spec.ExpiresAt.After(now) {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (service *Service) lockOwnerGateAfterGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	candidate entity.Resource,
+) (lockedOwnerGraph, entity.Resource, entity.OwnerGateSpec, error) {
+	spec, ok := candidate.Spec.(entity.OwnerGateSpec)
+	if !ok || candidate.Kind != enum.KindOwnerGate ||
+		value.ValidateID(spec.TurnID) != nil {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{},
+			errs.ErrStateConflict
+	}
+	graph, err := service.lockOwnerGraphByTurn(ctx, tx, principal, spec.TurnID)
+	if err != nil {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{}, err
+	}
+	gate, err := tx.GetForUpdate(
+		ctx, candidate.OrganizationID, candidate.ProjectID, candidate.ID,
+	)
+	if err != nil {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{}, err
+	}
+	lockedSpec, ok := gate.Spec.(entity.OwnerGateSpec)
+	if !ok || gate.Kind != enum.KindOwnerGate || gate.ID != candidate.ID ||
+		gate.Version != candidate.Version || lockedSpec.ProcessRunID != graph.Process.ID ||
+		lockedSpec.SessionID != graph.Session.ID || lockedSpec.TurnID != graph.Turn.ID {
+		return lockedOwnerGraph{}, entity.Resource{}, entity.OwnerGateSpec{},
+			errs.ErrStateConflict
+	}
+	return graph, gate, lockedSpec, nil
+}
+
 // ClaimOwnerGateDelivery выдаёт ограниченное право доставки следующей карточки.
 func (service *Service) ClaimOwnerGateDelivery(
 	ctx context.Context,
@@ -891,71 +1197,126 @@ func (service *Service) ClaimOwnerGateDelivery(
 	if err != nil {
 		return ClaimOwnerGateDeliveryResult{}, errs.ErrInvalidInput
 	}
-	gate, err := service.withResourceReceipt(
-		ctx,
-		input.Principal,
-		input.IdempotencyKey,
-		"claim_owner_gate_delivery",
-		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			now := service.now().UTC().Truncate(time.Microsecond)
-			current, err := tx.NextOwnerGateDelivery(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				now,
+	keyHash := hashString(input.IdempotencyKey)
+	var gate entity.Resource
+	mutated := false
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		candidate, candidateErr := tx.OwnerGateByDeliveryClaimKey(
+			ctx, input.Principal.OrganizationID, input.Principal.ProjectID, keyHash,
+		)
+		replayCandidate := candidateErr == nil
+		if candidateErr != nil {
+			if !errors.Is(candidateErr, errs.ErrNotFound) {
+				return candidateErr
+			}
+			now, nowErr := tx.CurrentTime(ctx)
+			if nowErr != nil {
+				return nowErr
+			}
+			candidate, candidateErr = tx.NextOwnerGateDelivery(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID, now,
 			)
-			if err != nil {
-				return entity.Resource{}, err
+			if candidateErr != nil {
+				return candidateErr
 			}
-			spec, ok := current.Spec.(entity.OwnerGateSpec)
-			if !ok || current.Kind != enum.KindOwnerGate ||
-				current.State != enum.StateWaitingOwner ||
-				spec.MattermostPostID != "" ||
-				spec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
-				spec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID {
-				return entity.Resource{}, errs.ErrStateConflict
+		}
+		graph, current, currentSpec, lockErr := service.lockOwnerGateAfterGraph(
+			ctx, tx, input.Principal, candidate,
+		)
+		if lockErr != nil {
+			return lockErr
+		}
+		if currentSpec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
+			currentSpec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID ||
+			currentSpec.MattermostPostID != "" {
+			return errs.ErrStateConflict
+		}
+		if err := requireClosedRuntimeConsistentWithTurn(graph); err != nil {
+			return err
+		}
+		now, nowErr := tx.CurrentTime(ctx)
+		if nowErr != nil {
+			return nowErr
+		}
+		receipt, receiptErr := tx.GetReceipt(
+			ctx, input.Principal.OrganizationID, "claim_owner_gate_delivery", keyHash,
+		)
+		if receiptErr == nil {
+			if !replayCandidate || receipt.RequestHash != requestHash ||
+				currentSpec.DeliveryClaimKeySHA256 != keyHash ||
+				currentSpec.DeliveryFence != current.Version ||
+				!currentSpec.DeliveryClaimExpiresAt.After(now) ||
+				resourceReceiptMatchesCurrent(current, receipt.Result) != nil {
+				return errs.ErrStateConflict
 			}
-			nextVersion := current.Version + 1
-			expiresAt := now.Add(service.turnLeaseDuration)
-			if spec.ExpiresAt.Before(expiresAt) {
-				expiresAt = spec.ExpiresAt
-			}
-			if !expiresAt.After(now) {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			token := service.leaseToken(
-				current.ID,
-				nextVersion,
-				1,
-				input.Principal.AuthorityGeneration,
-				input.Principal.CallerWorkload,
-				input.IdempotencyKey,
-			)
-			spec.DeliveryClaimTokenSHA256 = hashString(token)
-			spec.DeliveryFence = nextVersion
-			spec.DeliveryClaimExpiresAt = expiresAt
-			updated, err := current.Update(current.Name, spec, now)
-			if err != nil {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			if err := tx.Update(ctx, updated, current.Version); err != nil {
-				return entity.Resource{}, err
-			}
-			return updated, service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"claim_owner_gate_delivery",
-				updated,
-			)
-		},
-	)
+			gate = current
+			return nil
+		}
+		if !errors.Is(receiptErr, errs.ErrNotFound) {
+			return receiptErr
+		}
+		if replayCandidate || current.State != enum.StateWaitingOwner ||
+			currentSpec.DeliveryClaimKeySHA256 != "" ||
+			(currentSpec.DeliveryClaimTokenSHA256 != "" &&
+				currentSpec.DeliveryClaimExpiresAt.After(now)) {
+			return errs.ErrStateConflict
+		}
+		nextVersion := current.Version + 1
+		expiresAt := now.Add(service.turnLeaseDuration)
+		if currentSpec.ExpiresAt.Before(expiresAt) {
+			expiresAt = currentSpec.ExpiresAt
+		}
+		if !expiresAt.After(now) {
+			return errs.ErrStateConflict
+		}
+		token := service.leaseToken(
+			current.ID, nextVersion, 1, input.Principal.AuthorityGeneration,
+			input.Principal.CallerWorkload, input.IdempotencyKey,
+		)
+		currentSpec.DeliveryClaimTokenSHA256 = hashString(token)
+		currentSpec.DeliveryClaimKeySHA256 = keyHash
+		currentSpec.DeliveryFence = nextVersion
+		currentSpec.DeliveryClaimExpiresAt = expiresAt
+		updated, updateErr := current.Update(current.Name, currentSpec, now)
+		if updateErr != nil {
+			return errs.ErrStateConflict
+		}
+		if updateErr = tx.Update(ctx, updated, current.Version); updateErr != nil {
+			return updateErr
+		}
+		if updateErr = service.appendMutationRecords(
+			ctx, tx, input.Principal, "claim_owner_gate_delivery", updated,
+		); updateErr != nil {
+			return updateErr
+		}
+		if updateErr = tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID,
+			Scope:          "claim_owner_gate_delivery",
+			KeyHash:        keyHash,
+			RequestHash:    requestHash,
+			Result:         updated,
+			CreatedAt:      now,
+		}); updateErr != nil {
+			return updateErr
+		}
+		gate = updated
+		mutated = true
+		return nil
+	})
 	if err != nil {
 		return ClaimOwnerGateDeliveryResult{}, err
 	}
+	if mutated {
+		service.observer.ObserveMutation(enum.KindOwnerGate, "claim_owner_gate_delivery")
+	}
 	spec, ok := gate.Spec.(entity.OwnerGateSpec)
 	if !ok || spec.DeliveryFence != gate.Version ||
+		spec.DeliveryClaimKeySHA256 != keyHash ||
 		spec.DeliveryClaimExpiresAt.IsZero() {
 		return ClaimOwnerGateDeliveryResult{}, errs.ErrInternal
 	}
@@ -997,50 +1358,88 @@ func (service *Service) RecordOwnerGateDelivery(
 		!validRuntimeReference(input.MattermostRootPostID) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    RecordOwnerGateDeliveryInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		OwnerGateID           string
+		ExpectedVersion       uint64
+		DeliveryID            string
+		DeliveryPayloadSHA256 string
+		DeliveryClaimSHA256   string
+		DeliveryFence         uint64
+		MattermostPostID      string
+		MattermostChannelID   string
+		MattermostRootPostID  string
+	}{
+		input.OwnerGateID, input.ExpectedVersion, input.DeliveryID,
+		input.DeliveryPayloadSHA256, hashString(input.DeliveryClaimToken),
+		input.DeliveryFence, input.MattermostPostID, input.MattermostChannelID,
+		input.MattermostRootPostID,
+	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var lockedGate entity.Resource
+	var lockedGateSpec entity.OwnerGateSpec
+	var lockedNow time.Time
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"record_owner_gate_delivery",
 		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			gate, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			candidate, err := tx.Get(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 				input.OwnerGateID,
 			)
 			if err != nil {
-				return entity.Resource{}, err
+				return 0, err
 			}
-			if gate.Kind != enum.KindOwnerGate ||
-				gate.Version != input.ExpectedVersion ||
-				gate.State != enum.StateWaitingOwner {
-				return entity.Resource{}, errs.ErrVersionMismatch
+			graph, gate, spec, err := service.lockOwnerGateAfterGraph(
+				ctx, tx, input.Principal, candidate,
+			)
+			if err != nil {
+				return 0, err
 			}
-			spec, ok := gate.Spec.(entity.OwnerGateSpec)
-			if !ok || spec.DeliveryID != input.DeliveryID ||
+			if err := requireClosedRuntimeConsistentWithTurn(graph); err != nil {
+				return 0, err
+			}
+			lockedNow, err = tx.CurrentTime(ctx)
+			if err != nil {
+				return 0, err
+			}
+			if gate.State != enum.StateWaitingOwner || spec.DeliveryID != input.DeliveryID ||
 				spec.DeliveryPayloadSHA256 != input.DeliveryPayloadSHA256 ||
 				spec.DeliveryWorkloadID != input.Principal.CallerWorkload ||
 				spec.DeliverySPIFFEID != input.Principal.CallerSPIFFEID ||
 				spec.DeliveryFence != input.DeliveryFence ||
 				spec.DeliveryClaimTokenSHA256 != hashString(input.DeliveryClaimToken) ||
-				!spec.DeliveryClaimExpiresAt.After(service.now()) ||
-				!spec.ExpiresAt.After(service.now()) ||
-				spec.MattermostPostID != "" {
-				return entity.Resource{}, errs.ErrStateConflict
+				!validSHA256Text(spec.DeliveryClaimKeySHA256) {
+				return 0, errs.ErrStateConflict
 			}
+			lockedGate, lockedGateSpec = gate, spec
+			if gate.Version == input.ExpectedVersion && spec.MattermostPostID == "" &&
+				spec.DeliveryClaimExpiresAt.After(lockedNow) &&
+				spec.ExpiresAt.After(lockedNow) {
+				return lifecycleReceiptApply, nil
+			}
+			if gate.Version == input.ExpectedVersion+1 &&
+				spec.MattermostPostID == input.MattermostPostID &&
+				spec.MattermostChannelID == input.MattermostChannelID &&
+				spec.MattermostRootPostID == input.MattermostRootPostID &&
+				!spec.DeliveredAt.IsZero() {
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(lockedGate, stored)
+		},
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			gate, spec := lockedGate, lockedGateSpec
 			spec.MattermostPostID = input.MattermostPostID
 			spec.MattermostChannelID = input.MattermostChannelID
 			spec.MattermostRootPostID = input.MattermostRootPostID
-			spec.DeliveredAt = service.now().UTC().Truncate(time.Microsecond)
+			spec.DeliveredAt = lockedNow
 			updated, err := gate.Update(gate.Name, spec, spec.DeliveredAt)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict

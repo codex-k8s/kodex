@@ -147,7 +147,7 @@ func Run(
 		maximumSecretFileBytes,
 	)
 	if err != nil || strings.TrimSpace(string(redisPassword)) == "" {
-		return errors.New("Redis credential is unavailable")
+		return errors.New("redis credential is unavailable")
 	}
 	redisCache, err := redisstore.New(redisstore.Config{
 		Address:       config.RedisAddress,
@@ -182,21 +182,29 @@ func Run(
 		return errors.New("turn lease signing key is unavailable")
 	}
 	resourceService, err := resource.New(cachedRepository, resource.Config{
-		LeaseSigningKey:           leaseKey,
-		TurnLeaseDuration:         config.TurnLeaseDuration,
-		MaximumScheduleClaims:     config.ScheduleClaimLimit,
-		RuntimeImageDigest:        config.RuntimeImageDigest,
-		AuthorityPolicyRevision:   loadedPolicy.Revision,
-		AuthorityPolicySHA256:     loadedPolicy.Digest,
-		OwnerGateDeliveryWorkload: "interaction-gateway",
-		OwnerGateDeliverySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
-		ScannerWorkload:           "artifact-scanner",
-		ScannerSPIFFEID:           "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
-		SchedulerWorkload:         "automation-scheduler",
-		SchedulerSPIFFEID:         "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
-		MemoryIndexerWorkload:     "memory-indexer",
-		MemoryIndexerSPIFFEID:     "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
-		Observer:                  businessMetrics,
+		LeaseSigningKey:            leaseKey,
+		TurnLeaseDuration:          config.TurnLeaseDuration,
+		MaximumScheduleClaims:      config.ScheduleClaimLimit,
+		RuntimeImageDigest:         config.RuntimeImageDigest,
+		AuthorityPolicyRevision:    loadedPolicy.Revision,
+		AuthorityPolicySHA256:      loadedPolicy.Digest,
+		OwnerGateDeliveryWorkload:  "interaction-gateway",
+		OwnerGateDeliverySPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		ScannerWorkload:            "artifact-scanner",
+		ScannerSPIFFEID:            "spiffe://mattercodex.local/ns/mattercodex-system/sa/artifact-scanner",
+		SchedulerWorkload:          "automation-scheduler",
+		SchedulerSPIFFEID:          "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+		MemoryIndexerWorkload:      "memory-indexer",
+		MemoryIndexerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
+		RuntimeControllerWorkload:  "runtime-controller",
+		RuntimeControllerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		IntegrationGatewayWorkload: "integration-gateway",
+		IntegrationGatewaySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+		RestoreVerifierWorkload:    "runtime-restore-verifier",
+		RestoreVerifierSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+		CleanupAuthorizerWorkload:  "runtime-cleanup-authorizer",
+		CleanupAuthorizerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+		Observer:                   businessMetrics,
 	})
 	if err != nil {
 		return err

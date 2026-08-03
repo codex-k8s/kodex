@@ -35,7 +35,9 @@
           "control.work-claim.manage",
           "control.process.complete",
           "control.outbox.read",
-          "control.outbox.repair"
+          "control.outbox.repair",
+          "control.runtime-execution.cancel",
+          "control.runtime-execution.retry"
         ],
         "application_credential": "OIDC_BEARER",
         "application_credential_audience": "mattercodex-control-api",
@@ -79,7 +81,9 @@
           "control.agent-work-claim.manage",
           "control.turn.claim",
           "control.turn.renew",
-          "control.turn.complete"
+          "control.turn.complete",
+          "control.integration-continuation.get",
+          "control.integration-continuation.acknowledge"
         ],
         "application_credential": "AGENT_SESSION_GRANT",
         "application_credential_audience": "urn:mattercodex:agent-session",
@@ -259,7 +263,16 @@
         "allowed_operation_ids": [
           "control.runtime-controller.readiness",
           "control.runtime-resource.get",
-          "control.runtime-revision.get"
+          "control.runtime-revision.get",
+          "control.runtime-execution.claim",
+          "control.runtime-execution.get",
+          "control.runtime-execution.admit",
+          "control.runtime-execution.heartbeat",
+          "control.runtime-execution.incident",
+          "control.runtime-execution.complete",
+          "control.runtime-execution.expire",
+          "control.runtime-execution.archive",
+          "control.runtime-execution.cleanup.consume"
         ],
         "application_credential": "RUNTIME_REVISION_GRANT",
         "application_credential_audience": "urn:mattercodex:runtime-revision",
@@ -291,7 +304,116 @@
           "actor",
           "tenant",
           "project",
-          "runtime_revision"
+          "process",
+          "session",
+          "thread",
+          "role",
+          "turn",
+          "attempt",
+          "runtime_revision",
+          "input_sha256",
+          "generation"
+        ],
+        "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
+      },
+      {
+        "allowed_operation_ids": [
+          "control.runtime-restore-verifier.readiness",
+          "control.runtime-execution.restore.verify"
+        ],
+        "application_credential": "RUNTIME_RESTORE_VERIFIER_GRANT",
+        "application_credential_audience": "urn:mattercodex:runtime-restore-verification",
+        "application_credential_issuer": "https://control-plane.mattercodex-system.svc.cluster.local/authority/runtime-restore-verifier",
+        "application_credential_metadata": "authorization",
+        "application_credential_trust_bundle_id": "runtime-restore-verifier-grants-g1",
+        "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:runtime-restore-verifier",
+        "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "authority_proof_max_age_seconds": 15,
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+        "caller_workload_id": "runtime-restore-verifier",
+        "deadline_milliseconds": 2000,
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "max_attempts": 2,
+        "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "producer_id": "control-plane.runtime-restore-verifier",
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "process",
+          "session",
+          "thread",
+          "role",
+          "turn",
+          "attempt",
+          "runtime_revision",
+          "input_sha256",
+          "generation",
+          "archive_checksum"
+        ],
+        "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
+      },
+      {
+        "allowed_operation_ids": [
+          "control.runtime-cleanup-authorizer.readiness",
+          "control.runtime-execution.cleanup.authorize",
+          "control.runtime-execution.cleanup.expire"
+        ],
+        "application_credential": "RUNTIME_CLEANUP_AUTHORIZER_GRANT",
+        "application_credential_audience": "urn:mattercodex:runtime-cleanup-authorization",
+        "application_credential_issuer": "https://control-plane.mattercodex-system.svc.cluster.local/authority/runtime-cleanup-authorizer",
+        "application_credential_metadata": "authorization",
+        "application_credential_trust_bundle_id": "runtime-cleanup-authorizer-grants-g1",
+        "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:runtime-cleanup-authorizer",
+        "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "authority_proof_max_age_seconds": 15,
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
+        "deadline_milliseconds": 2000,
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "max_attempts": 2,
+        "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "producer_id": "control-plane.runtime-cleanup-authorizer",
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "process",
+          "session",
+          "thread",
+          "role",
+          "turn",
+          "attempt",
+          "runtime_revision",
+          "input_sha256",
+          "generation",
+          "archive_checksum",
+          "restore_proof",
+          "cleanup_generation"
         ],
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
@@ -333,6 +455,64 @@
           "project",
           "memory_record",
           "embedding_provenance"
+        ],
+        "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
+      },
+      {
+        "allowed_operation_ids": [
+          "control.integration-gateway.readiness",
+          "control.integration-session.resolve",
+          "control.integration-continuation.suspend",
+          "control.integration-invocation.approve",
+          "control.integration-invocation.reject",
+          "control.integration-invocation.expire",
+          "control.integration-invocation.cancel",
+          "control.integration-execution.begin",
+          "control.integration-execution.complete",
+          "control.integration-execution.fail"
+        ],
+        "application_credential": "AGENT_SESSION_GRANT",
+        "application_credential_audience": "urn:mattercodex:integration-session",
+        "application_credential_issuer": "https://control-plane.mattercodex-system.svc.cluster.local/authority/integration-gateway",
+        "application_credential_metadata": "authorization",
+        "application_credential_trust_bundle_id": "integration-session-grants-g1",
+        "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:integration-gateway",
+        "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "authority_proof_max_age_seconds": 15,
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "deadline_milliseconds": 2000,
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "max_attempts": 2,
+        "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "producer_id": "control-plane.integration-gateway",
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "process",
+          "session",
+          "thread",
+          "role",
+          "turn",
+          "attempt",
+          "runtime_revision",
+          "input_sha256",
+          "generation",
+          "provenance",
+          "integration_metadata"
         ],
         "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
@@ -1571,11 +1751,823 @@
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
         "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.claim",
+        "permission": "controlplane.runtime_execution.claim",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/GetRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.get",
+        "permission": "controlplane.runtime_execution.read",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.admit",
+        "permission": "controlplane.runtime_execution.admit",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.heartbeat",
+        "permission": "controlplane.runtime_execution.heartbeat",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.incident",
+        "permission": "controlplane.runtime_execution.incident",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.complete",
+        "permission": "controlplane.runtime_execution.complete",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.expire",
+        "permission": "controlplane.runtime_execution.expire",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.archive",
+        "permission": "controlplane.runtime_execution.archive",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-controller",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+        "caller_workload_id": "runtime-controller",
+        "full_method": "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.cleanup.consume",
+        "permission": "controlplane.runtime_execution.cleanup.consume",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.cancel",
+        "permission": "controlplane.runtime_execution.cancel",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.retry",
+        "permission": "controlplane.runtime_execution.retry",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-restore-verifier",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+        "caller_workload_id": "runtime-restore-verifier",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-restore-verifier.readiness",
+        "permission": "controlplane.readiness.check",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-restore-verifier",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
+        "caller_workload_id": "runtime-restore-verifier",
+        "full_method": "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.restore.verify",
+        "permission": "controlplane.runtime_execution.restore.verify",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-cleanup-authorizer",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-cleanup-authorizer.readiness",
+        "permission": "controlplane.readiness.check",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-cleanup-authorizer",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
+        "full_method": "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.cleanup.authorize",
+        "permission": "controlplane.runtime_execution.cleanup.authorize",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.runtime-cleanup-authorizer",
+        "authority_sources": [
+          "PROCESS_RUN",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+        "caller_workload_id": "runtime-cleanup-authorizer",
+        "full_method": "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.runtime-execution.cleanup.expire",
+        "permission": "controlplane.runtime_execution.cleanup.expire",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-gateway.readiness",
+        "permission": "controlplane.readiness.check",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ResolveIntegrationSession",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-session.resolve",
+        "permission": "controlplane.integration_session.read",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/SuspendForIntegrationApproval",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-continuation.suspend",
+        "permission": "controlplane.integration_continuation.suspend",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ApproveIntegrationInvocation",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-invocation.approve",
+        "permission": "controlplane.integration_continuation.decide",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/RejectIntegrationInvocation",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-invocation.reject",
+        "permission": "controlplane.integration_continuation.decide",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ExpireIntegrationInvocation",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-invocation.expire",
+        "permission": "controlplane.integration_continuation.decide",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/CancelIntegrationInvocation",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-invocation.cancel",
+        "permission": "controlplane.integration_continuation.decide",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/BeginIntegrationExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-execution.begin",
+        "permission": "controlplane.integration_continuation.execute",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/CompleteIntegrationExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-execution.complete",
+        "permission": "controlplane.integration_continuation.execute",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.integration-gateway",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+        "caller_workload_id": "integration-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/FailIntegrationExecution",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-execution.fail",
+        "permission": "controlplane.integration_continuation.execute",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.agent-session",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+        "caller_workload_id": "agent-runner",
+        "full_method": "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-continuation.get",
+        "permission": "controlplane.integration_continuation.read",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.agent-session",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+        "caller_workload_id": "agent-runner",
+        "full_method": "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.integration-continuation.acknowledge",
+        "permission": "controlplane.integration_continuation.acknowledge",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
       }
     ],
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 6,
+  "policy_revision": 8,
   "v": 1
 }

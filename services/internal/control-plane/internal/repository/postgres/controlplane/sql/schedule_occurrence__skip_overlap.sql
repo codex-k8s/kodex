@@ -13,8 +13,20 @@ WITH skipped AS (
       AND EXISTS (
           SELECT 1
           FROM control_plane.schedule_occurrences AS active
-          WHERE active.schedule_id = occurrence.schedule_id
-            AND active.state = 'CLAIMED'
+          WHERE active.organization_id = occurrence.organization_id
+            AND active.project_id = occurrence.project_id
+            AND active.schedule_id = occurrence.schedule_id
+            AND active.state = ANY(@open_execution_states::text[])
+          UNION ALL
+          SELECT 1
+          FROM control_plane.schedule_occurrences AS run_owner
+          JOIN control_plane.scheduled_runs AS open_run
+            ON open_run.occurrence_id = run_owner.id
+           AND open_run.state = ANY(@open_execution_states::text[])
+          WHERE run_owner.organization_id = occurrence.organization_id
+            AND run_owner.project_id = occurrence.project_id
+            AND run_owner.schedule_id = occurrence.schedule_id
+            AND run_owner.id <> occurrence.id
       )
     RETURNING occurrence.*
 )
@@ -46,6 +58,7 @@ SELECT
     coalesce(claimant_workload_id, ''),
     coalesce(authority_generation, 0),
     coalesce(token_hash, ''),
+    coalesce(claim_key_sha256, ''),
     coalesce(lease_expires_at, 'epoch'::timestamptz),
     available_at,
     coalesce(outcome, ''),

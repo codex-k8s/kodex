@@ -19,50 +19,75 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlPlaneService_CreateProject_FullMethodName              = "/controlplane.v1.ControlPlaneService/CreateProject"
-	ControlPlaneService_ListProjects_FullMethodName               = "/controlplane.v1.ControlPlaneService/ListProjects"
-	ControlPlaneService_CreateResource_FullMethodName             = "/controlplane.v1.ControlPlaneService/CreateResource"
-	ControlPlaneService_UpdateResource_FullMethodName             = "/controlplane.v1.ControlPlaneService/UpdateResource"
-	ControlPlaneService_TransitionResource_FullMethodName         = "/controlplane.v1.ControlPlaneService/TransitionResource"
-	ControlPlaneService_DeleteResource_FullMethodName             = "/controlplane.v1.ControlPlaneService/DeleteResource"
-	ControlPlaneService_ManageAccessResource_FullMethodName       = "/controlplane.v1.ControlPlaneService/ManageAccessResource"
-	ControlPlaneService_GetResource_FullMethodName                = "/controlplane.v1.ControlPlaneService/GetResource"
-	ControlPlaneService_ListResources_FullMethodName              = "/controlplane.v1.ControlPlaneService/ListResources"
-	ControlPlaneService_SearchResources_FullMethodName            = "/controlplane.v1.ControlPlaneService/SearchResources"
-	ControlPlaneService_SearchMemoryRecords_FullMethodName        = "/controlplane.v1.ControlPlaneService/SearchMemoryRecords"
-	ControlPlaneService_ListAuditEvents_FullMethodName            = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
-	ControlPlaneService_ListTombstones_FullMethodName             = "/controlplane.v1.ControlPlaneService/ListTombstones"
-	ControlPlaneService_GetDiagnostics_FullMethodName             = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
-	ControlPlaneService_ListOutboxFailures_FullMethodName         = "/controlplane.v1.ControlPlaneService/ListOutboxFailures"
-	ControlPlaneService_RepairOutboxEvent_FullMethodName          = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
-	ControlPlaneService_EnqueueTurn_FullMethodName                = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
-	ControlPlaneService_ClaimTurn_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimTurn"
-	ControlPlaneService_RenewTurn_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RenewTurn"
-	ControlPlaneService_CompleteTurn_FullMethodName               = "/controlplane.v1.ControlPlaneService/CompleteTurn"
-	ControlPlaneService_RetryTurn_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RetryTurn"
-	ControlPlaneService_CancelTurn_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CancelTurn"
-	ControlPlaneService_ManageSession_FullMethodName              = "/controlplane.v1.ControlPlaneService/ManageSession"
-	ControlPlaneService_ManageMemoryRecord_FullMethodName         = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
-	ControlPlaneService_ManageWorkClaim_FullMethodName            = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
-	ControlPlaneService_ManageSchedule_FullMethodName             = "/controlplane.v1.ControlPlaneService/ManageSchedule"
-	ControlPlaneService_ClaimDueSchedules_FullMethodName          = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
-	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName    = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
-	ControlPlaneService_CompleteScheduleOccurrence_FullMethodName = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
-	ControlPlaneService_CancelScheduleOccurrence_FullMethodName   = "/controlplane.v1.ControlPlaneService/CancelScheduleOccurrence"
-	ControlPlaneService_ListScheduleOccurrences_FullMethodName    = "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences"
-	ControlPlaneService_StartProcess_FullMethodName               = "/controlplane.v1.ControlPlaneService/StartProcess"
-	ControlPlaneService_CancelProcess_FullMethodName              = "/controlplane.v1.ControlPlaneService/CancelProcess"
-	ControlPlaneService_CompleteProcess_FullMethodName            = "/controlplane.v1.ControlPlaneService/CompleteProcess"
-	ControlPlaneService_RequestOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
-	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName     = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
-	ControlPlaneService_ExpireOwnerGate_FullMethodName            = "/controlplane.v1.ControlPlaneService/ExpireOwnerGate"
-	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName    = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
-	ControlPlaneService_ResolveOwnerGate_FullMethodName           = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
-	ControlPlaneService_RegisterArtifact_FullMethodName           = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
-	ControlPlaneService_RecordArtifactScan_FullMethodName         = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
-	ControlPlaneService_GetRuntimeRevision_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
-	ControlPlaneService_RecordMemoryEmbedding_FullMethodName      = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
-	ControlPlaneService_CheckReadiness_FullMethodName             = "/controlplane.v1.ControlPlaneService/CheckReadiness"
+	ControlPlaneService_CreateProject_FullMethodName                      = "/controlplane.v1.ControlPlaneService/CreateProject"
+	ControlPlaneService_ListProjects_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ListProjects"
+	ControlPlaneService_CreateResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/CreateResource"
+	ControlPlaneService_UpdateResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/UpdateResource"
+	ControlPlaneService_TransitionResource_FullMethodName                 = "/controlplane.v1.ControlPlaneService/TransitionResource"
+	ControlPlaneService_DeleteResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/DeleteResource"
+	ControlPlaneService_ManageAccessResource_FullMethodName               = "/controlplane.v1.ControlPlaneService/ManageAccessResource"
+	ControlPlaneService_GetResource_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetResource"
+	ControlPlaneService_ListResources_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ListResources"
+	ControlPlaneService_SearchResources_FullMethodName                    = "/controlplane.v1.ControlPlaneService/SearchResources"
+	ControlPlaneService_SearchMemoryRecords_FullMethodName                = "/controlplane.v1.ControlPlaneService/SearchMemoryRecords"
+	ControlPlaneService_ListAuditEvents_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
+	ControlPlaneService_ListTombstones_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ListTombstones"
+	ControlPlaneService_GetDiagnostics_FullMethodName                     = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
+	ControlPlaneService_ListOutboxFailures_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ListOutboxFailures"
+	ControlPlaneService_RepairOutboxEvent_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
+	ControlPlaneService_EnqueueTurn_FullMethodName                        = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
+	ControlPlaneService_ClaimTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ClaimTurn"
+	ControlPlaneService_RenewTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RenewTurn"
+	ControlPlaneService_CompleteTurn_FullMethodName                       = "/controlplane.v1.ControlPlaneService/CompleteTurn"
+	ControlPlaneService_RetryTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RetryTurn"
+	ControlPlaneService_CancelTurn_FullMethodName                         = "/controlplane.v1.ControlPlaneService/CancelTurn"
+	ControlPlaneService_ManageSession_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ManageSession"
+	ControlPlaneService_ManageMemoryRecord_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
+	ControlPlaneService_ManageWorkClaim_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
+	ControlPlaneService_ManageSchedule_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageSchedule"
+	ControlPlaneService_ClaimDueSchedules_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
+	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName            = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
+	ControlPlaneService_CompleteScheduleOccurrence_FullMethodName         = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
+	ControlPlaneService_CancelScheduleOccurrence_FullMethodName           = "/controlplane.v1.ControlPlaneService/CancelScheduleOccurrence"
+	ControlPlaneService_ListScheduleOccurrences_FullMethodName            = "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences"
+	ControlPlaneService_StartProcess_FullMethodName                       = "/controlplane.v1.ControlPlaneService/StartProcess"
+	ControlPlaneService_CancelProcess_FullMethodName                      = "/controlplane.v1.ControlPlaneService/CancelProcess"
+	ControlPlaneService_CompleteProcess_FullMethodName                    = "/controlplane.v1.ControlPlaneService/CompleteProcess"
+	ControlPlaneService_RequestOwnerGate_FullMethodName                   = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
+	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName             = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
+	ControlPlaneService_ExpireOwnerGate_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ExpireOwnerGate"
+	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName            = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
+	ControlPlaneService_ResolveOwnerGate_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
+	ControlPlaneService_RegisterArtifact_FullMethodName                   = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
+	ControlPlaneService_RecordArtifactScan_FullMethodName                 = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
+	ControlPlaneService_GetRuntimeRevision_FullMethodName                 = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
+	ControlPlaneService_RecordMemoryEmbedding_FullMethodName              = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
+	ControlPlaneService_ClaimRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution"
+	ControlPlaneService_GetRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/GetRuntimeExecution"
+	ControlPlaneService_AdmitRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
+	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName          = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
+	ControlPlaneService_RecordRuntimeIncident_FullMethodName              = "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident"
+	ControlPlaneService_CompleteRuntimeExecution_FullMethodName           = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
+	ControlPlaneService_CancelRuntimeExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution"
+	ControlPlaneService_RetryRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution"
+	ControlPlaneService_ExpireRuntimeExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution"
+	ControlPlaneService_RecordRuntimeArchive_FullMethodName               = "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive"
+	ControlPlaneService_VerifyRuntimeRestore_FullMethodName               = "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore"
+	ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName            = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup"
+	ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName = "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization"
+	ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName  = "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization"
+	ControlPlaneService_ResolveIntegrationSession_FullMethodName          = "/controlplane.v1.ControlPlaneService/ResolveIntegrationSession"
+	ControlPlaneService_SuspendForIntegrationApproval_FullMethodName      = "/controlplane.v1.ControlPlaneService/SuspendForIntegrationApproval"
+	ControlPlaneService_ApproveIntegrationInvocation_FullMethodName       = "/controlplane.v1.ControlPlaneService/ApproveIntegrationInvocation"
+	ControlPlaneService_RejectIntegrationInvocation_FullMethodName        = "/controlplane.v1.ControlPlaneService/RejectIntegrationInvocation"
+	ControlPlaneService_ExpireIntegrationInvocation_FullMethodName        = "/controlplane.v1.ControlPlaneService/ExpireIntegrationInvocation"
+	ControlPlaneService_CancelIntegrationInvocation_FullMethodName        = "/controlplane.v1.ControlPlaneService/CancelIntegrationInvocation"
+	ControlPlaneService_BeginIntegrationExecution_FullMethodName          = "/controlplane.v1.ControlPlaneService/BeginIntegrationExecution"
+	ControlPlaneService_CompleteIntegrationExecution_FullMethodName       = "/controlplane.v1.ControlPlaneService/CompleteIntegrationExecution"
+	ControlPlaneService_FailIntegrationExecution_FullMethodName           = "/controlplane.v1.ControlPlaneService/FailIntegrationExecution"
+	ControlPlaneService_GetIntegrationContinuation_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation"
+	ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName = "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation"
+	ControlPlaneService_CheckReadiness_FullMethodName                     = "/controlplane.v1.ControlPlaneService/CheckReadiness"
 )
 
 // ControlPlaneServiceClient is the client API for ControlPlaneService service.
@@ -169,6 +194,58 @@ type ControlPlaneServiceClient interface {
 	// RecordMemoryEmbedding фиксирует локальную перестраиваемую проекцию, а не
 	// источник истины.
 	RecordMemoryEmbedding(ctx context.Context, in *RecordMemoryEmbeddingRequest, opts ...grpc.CallOption) (*RecordMemoryEmbeddingResponse, error)
+	// ClaimRuntimeExecution материализует server-owned immutable snapshot для
+	// точной попытки из проверенного runtime grant; request не принимает IDs.
+	ClaimRuntimeExecution(ctx context.Context, in *ClaimRuntimeExecutionRequest, opts ...grpc.CallOption) (*ClaimRuntimeExecutionResponse, error)
+	// GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
+	GetRuntimeExecution(ctx context.Context, in *GetRuntimeExecutionRequest, opts ...grpc.CallOption) (*GetRuntimeExecutionResponse, error)
+	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
+	AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error)
+	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
+	HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error)
+	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
+	RecordRuntimeIncident(ctx context.Context, in *RecordRuntimeIncidentRequest, opts ...grpc.CallOption) (*RecordRuntimeIncidentResponse, error)
+	// CompleteRuntimeExecution фиксирует единственный terminal result/error.
+	CompleteRuntimeExecution(ctx context.Context, in *CompleteRuntimeExecutionRequest, opts ...grpc.CallOption) (*CompleteRuntimeExecutionResponse, error)
+	// CancelRuntimeExecution закрывает весь graph исполнения одной owner transaction.
+	CancelRuntimeExecution(ctx context.Context, in *CancelRuntimeExecutionRequest, opts ...grpc.CallOption) (*CancelRuntimeExecutionResponse, error)
+	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
+	RetryRuntimeExecution(ctx context.Context, in *RetryRuntimeExecutionRequest, opts ...grpc.CallOption) (*RetryRuntimeExecutionResponse, error)
+	// ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
+	ExpireRuntimeExecution(ctx context.Context, in *ExpireRuntimeExecutionRequest, opts ...grpc.CallOption) (*ExpireRuntimeExecutionResponse, error)
+	// RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
+	RecordRuntimeArchive(ctx context.Context, in *RecordRuntimeArchiveRequest, opts ...grpc.CallOption) (*RecordRuntimeArchiveResponse, error)
+	// VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
+	VerifyRuntimeRestore(ctx context.Context, in *VerifyRuntimeRestoreRequest, opts ...grpc.CallOption) (*VerifyRuntimeRestoreResponse, error)
+	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
+	AuthorizeRuntimeCleanup(ctx context.Context, in *AuthorizeRuntimeCleanupRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeCleanupResponse, error)
+	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
+	ConsumeRuntimeCleanupAuthorization(ctx context.Context, in *ConsumeRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeCleanupAuthorizationResponse, error)
+	// ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
+	ExpireRuntimeCleanupAuthorization(ctx context.Context, in *ExpireRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ExpireRuntimeCleanupAuthorizationResponse, error)
+	// ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
+	ResolveIntegrationSession(ctx context.Context, in *ResolveIntegrationSessionRequest, opts ...grpc.CallOption) (*ResolveIntegrationSessionResponse, error)
+	// SuspendForIntegrationApproval атомарно переводит точный graph в WAITING_EXTERNAL.
+	SuspendForIntegrationApproval(ctx context.Context, in *SuspendForIntegrationApprovalRequest, opts ...grpc.CallOption) (*SuspendForIntegrationApprovalResponse, error)
+	// ApproveIntegrationInvocation фиксирует единственное положительное решение.
+	ApproveIntegrationInvocation(ctx context.Context, in *ApproveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ApproveIntegrationInvocationResponse, error)
+	// RejectIntegrationInvocation фиксирует отказ и один continuation turn.
+	RejectIntegrationInvocation(ctx context.Context, in *RejectIntegrationInvocationRequest, opts ...grpc.CallOption) (*RejectIntegrationInvocationResponse, error)
+	// ExpireIntegrationInvocation использует только database clock и server state.
+	ExpireIntegrationInvocation(ctx context.Context, in *ExpireIntegrationInvocationRequest, opts ...grpc.CallOption) (*ExpireIntegrationInvocationResponse, error)
+	// CancelIntegrationInvocation закрывает ожидающий или approved intent.
+	CancelIntegrationInvocation(ctx context.Context, in *CancelIntegrationInvocationRequest, opts ...grpc.CallOption) (*CancelIntegrationInvocationResponse, error)
+	// BeginIntegrationExecution ограждает исполнение одобренного invocation.
+	BeginIntegrationExecution(ctx context.Context, in *BeginIntegrationExecutionRequest, opts ...grpc.CallOption) (*BeginIntegrationExecutionResponse, error)
+	// CompleteIntegrationExecution фиксирует structured result и continuation.
+	CompleteIntegrationExecution(ctx context.Context, in *CompleteIntegrationExecutionRequest, opts ...grpc.CallOption) (*CompleteIntegrationExecutionResponse, error)
+	// FailIntegrationExecution фиксирует structured error и continuation.
+	FailIntegrationExecution(ctx context.Context, in *FailIntegrationExecutionRequest, opts ...grpc.CallOption) (*FailIntegrationExecutionResponse, error)
+	// GetIntegrationContinuation разрешает version-pinned structured rejoin по
+	// проверенному current turn; request не принимает continuation IDs.
+	GetIntegrationContinuation(ctx context.Context, in *GetIntegrationContinuationRequest, opts ...grpc.CallOption) (*GetIntegrationContinuationResponse, error)
+	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
+	AcknowledgeIntegrationContinuation(ctx context.Context, in *AcknowledgeIntegrationContinuationRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationContinuationResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 }
@@ -611,6 +688,256 @@ func (c *controlPlaneServiceClient) RecordMemoryEmbedding(ctx context.Context, i
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ClaimRuntimeExecution(ctx context.Context, in *ClaimRuntimeExecutionRequest, opts ...grpc.CallOption) (*ClaimRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetRuntimeExecution(ctx context.Context, in *GetRuntimeExecutionRequest, opts ...grpc.CallOption) (*GetRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdmitRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AdmitRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RecordRuntimeIncident(ctx context.Context, in *RecordRuntimeIncidentRequest, opts ...grpc.CallOption) (*RecordRuntimeIncidentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordRuntimeIncidentResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordRuntimeIncident_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CompleteRuntimeExecution(ctx context.Context, in *CompleteRuntimeExecutionRequest, opts ...grpc.CallOption) (*CompleteRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CancelRuntimeExecution(ctx context.Context, in *CancelRuntimeExecutionRequest, opts ...grpc.CallOption) (*CancelRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CancelRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RetryRuntimeExecution(ctx context.Context, in *RetryRuntimeExecutionRequest, opts ...grpc.CallOption) (*RetryRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetryRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RetryRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ExpireRuntimeExecution(ctx context.Context, in *ExpireRuntimeExecutionRequest, opts ...grpc.CallOption) (*ExpireRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpireRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RecordRuntimeArchive(ctx context.Context, in *RecordRuntimeArchiveRequest, opts ...grpc.CallOption) (*RecordRuntimeArchiveResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordRuntimeArchiveResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordRuntimeArchive_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) VerifyRuntimeRestore(ctx context.Context, in *VerifyRuntimeRestoreRequest, opts ...grpc.CallOption) (*VerifyRuntimeRestoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyRuntimeRestoreResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_VerifyRuntimeRestore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AuthorizeRuntimeCleanup(ctx context.Context, in *AuthorizeRuntimeCleanupRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeCleanupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeRuntimeCleanupResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ConsumeRuntimeCleanupAuthorization(ctx context.Context, in *ConsumeRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeCleanupAuthorizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConsumeRuntimeCleanupAuthorizationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ExpireRuntimeCleanupAuthorization(ctx context.Context, in *ExpireRuntimeCleanupAuthorizationRequest, opts ...grpc.CallOption) (*ExpireRuntimeCleanupAuthorizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpireRuntimeCleanupAuthorizationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ResolveIntegrationSession(ctx context.Context, in *ResolveIntegrationSessionRequest, opts ...grpc.CallOption) (*ResolveIntegrationSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveIntegrationSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveIntegrationSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) SuspendForIntegrationApproval(ctx context.Context, in *SuspendForIntegrationApprovalRequest, opts ...grpc.CallOption) (*SuspendForIntegrationApprovalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SuspendForIntegrationApprovalResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SuspendForIntegrationApproval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ApproveIntegrationInvocation(ctx context.Context, in *ApproveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ApproveIntegrationInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveIntegrationInvocationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ApproveIntegrationInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RejectIntegrationInvocation(ctx context.Context, in *RejectIntegrationInvocationRequest, opts ...grpc.CallOption) (*RejectIntegrationInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RejectIntegrationInvocationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RejectIntegrationInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ExpireIntegrationInvocation(ctx context.Context, in *ExpireIntegrationInvocationRequest, opts ...grpc.CallOption) (*ExpireIntegrationInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpireIntegrationInvocationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ExpireIntegrationInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CancelIntegrationInvocation(ctx context.Context, in *CancelIntegrationInvocationRequest, opts ...grpc.CallOption) (*CancelIntegrationInvocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelIntegrationInvocationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CancelIntegrationInvocation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) BeginIntegrationExecution(ctx context.Context, in *BeginIntegrationExecutionRequest, opts ...grpc.CallOption) (*BeginIntegrationExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginIntegrationExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_BeginIntegrationExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CompleteIntegrationExecution(ctx context.Context, in *CompleteIntegrationExecutionRequest, opts ...grpc.CallOption) (*CompleteIntegrationExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteIntegrationExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteIntegrationExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) FailIntegrationExecution(ctx context.Context, in *FailIntegrationExecutionRequest, opts ...grpc.CallOption) (*FailIntegrationExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailIntegrationExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_FailIntegrationExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetIntegrationContinuation(ctx context.Context, in *GetIntegrationContinuationRequest, opts ...grpc.CallOption) (*GetIntegrationContinuationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIntegrationContinuationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetIntegrationContinuation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AcknowledgeIntegrationContinuation(ctx context.Context, in *AcknowledgeIntegrationContinuationRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationContinuationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcknowledgeIntegrationContinuationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckReadinessResponse)
@@ -725,6 +1052,58 @@ type ControlPlaneServiceServer interface {
 	// RecordMemoryEmbedding фиксирует локальную перестраиваемую проекцию, а не
 	// источник истины.
 	RecordMemoryEmbedding(context.Context, *RecordMemoryEmbeddingRequest) (*RecordMemoryEmbeddingResponse, error)
+	// ClaimRuntimeExecution материализует server-owned immutable snapshot для
+	// точной попытки из проверенного runtime grant; request не принимает IDs.
+	ClaimRuntimeExecution(context.Context, *ClaimRuntimeExecutionRequest) (*ClaimRuntimeExecutionResponse, error)
+	// GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
+	GetRuntimeExecution(context.Context, *GetRuntimeExecutionRequest) (*GetRuntimeExecutionResponse, error)
+	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
+	AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error)
+	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
+	HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error)
+	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
+	RecordRuntimeIncident(context.Context, *RecordRuntimeIncidentRequest) (*RecordRuntimeIncidentResponse, error)
+	// CompleteRuntimeExecution фиксирует единственный terminal result/error.
+	CompleteRuntimeExecution(context.Context, *CompleteRuntimeExecutionRequest) (*CompleteRuntimeExecutionResponse, error)
+	// CancelRuntimeExecution закрывает весь graph исполнения одной owner transaction.
+	CancelRuntimeExecution(context.Context, *CancelRuntimeExecutionRequest) (*CancelRuntimeExecutionResponse, error)
+	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
+	RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error)
+	// ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
+	ExpireRuntimeExecution(context.Context, *ExpireRuntimeExecutionRequest) (*ExpireRuntimeExecutionResponse, error)
+	// RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
+	RecordRuntimeArchive(context.Context, *RecordRuntimeArchiveRequest) (*RecordRuntimeArchiveResponse, error)
+	// VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
+	VerifyRuntimeRestore(context.Context, *VerifyRuntimeRestoreRequest) (*VerifyRuntimeRestoreResponse, error)
+	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
+	AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error)
+	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
+	ConsumeRuntimeCleanupAuthorization(context.Context, *ConsumeRuntimeCleanupAuthorizationRequest) (*ConsumeRuntimeCleanupAuthorizationResponse, error)
+	// ExpireRuntimeCleanupAuthorization закрывает просроченную authorization по PostgreSQL clock.
+	ExpireRuntimeCleanupAuthorization(context.Context, *ExpireRuntimeCleanupAuthorizationRequest) (*ExpireRuntimeCleanupAuthorizationResponse, error)
+	// ResolveIntegrationSession возвращает server-owned execution tuple без IDs запроса.
+	ResolveIntegrationSession(context.Context, *ResolveIntegrationSessionRequest) (*ResolveIntegrationSessionResponse, error)
+	// SuspendForIntegrationApproval атомарно переводит точный graph в WAITING_EXTERNAL.
+	SuspendForIntegrationApproval(context.Context, *SuspendForIntegrationApprovalRequest) (*SuspendForIntegrationApprovalResponse, error)
+	// ApproveIntegrationInvocation фиксирует единственное положительное решение.
+	ApproveIntegrationInvocation(context.Context, *ApproveIntegrationInvocationRequest) (*ApproveIntegrationInvocationResponse, error)
+	// RejectIntegrationInvocation фиксирует отказ и один continuation turn.
+	RejectIntegrationInvocation(context.Context, *RejectIntegrationInvocationRequest) (*RejectIntegrationInvocationResponse, error)
+	// ExpireIntegrationInvocation использует только database clock и server state.
+	ExpireIntegrationInvocation(context.Context, *ExpireIntegrationInvocationRequest) (*ExpireIntegrationInvocationResponse, error)
+	// CancelIntegrationInvocation закрывает ожидающий или approved intent.
+	CancelIntegrationInvocation(context.Context, *CancelIntegrationInvocationRequest) (*CancelIntegrationInvocationResponse, error)
+	// BeginIntegrationExecution ограждает исполнение одобренного invocation.
+	BeginIntegrationExecution(context.Context, *BeginIntegrationExecutionRequest) (*BeginIntegrationExecutionResponse, error)
+	// CompleteIntegrationExecution фиксирует structured result и continuation.
+	CompleteIntegrationExecution(context.Context, *CompleteIntegrationExecutionRequest) (*CompleteIntegrationExecutionResponse, error)
+	// FailIntegrationExecution фиксирует structured error и continuation.
+	FailIntegrationExecution(context.Context, *FailIntegrationExecutionRequest) (*FailIntegrationExecutionResponse, error)
+	// GetIntegrationContinuation разрешает version-pinned structured rejoin по
+	// проверенному current turn; request не принимает continuation IDs.
+	GetIntegrationContinuation(context.Context, *GetIntegrationContinuationRequest) (*GetIntegrationContinuationResponse, error)
+	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
+	AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
@@ -865,6 +1244,81 @@ func (UnimplementedControlPlaneServiceServer) GetRuntimeRevision(context.Context
 }
 func (UnimplementedControlPlaneServiceServer) RecordMemoryEmbedding(context.Context, *RecordMemoryEmbeddingRequest) (*RecordMemoryEmbeddingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordMemoryEmbedding not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ClaimRuntimeExecution(context.Context, *ClaimRuntimeExecutionRequest) (*ClaimRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetRuntimeExecution(context.Context, *GetRuntimeExecutionRequest) (*GetRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdmitRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method HeartbeatRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordRuntimeIncident(context.Context, *RecordRuntimeIncidentRequest) (*RecordRuntimeIncidentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordRuntimeIncident not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CompleteRuntimeExecution(context.Context, *CompleteRuntimeExecutionRequest) (*CompleteRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CancelRuntimeExecution(context.Context, *CancelRuntimeExecutionRequest) (*CancelRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetryRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ExpireRuntimeExecution(context.Context, *ExpireRuntimeExecutionRequest) (*ExpireRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpireRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordRuntimeArchive(context.Context, *RecordRuntimeArchiveRequest) (*RecordRuntimeArchiveResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordRuntimeArchive not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) VerifyRuntimeRestore(context.Context, *VerifyRuntimeRestoreRequest) (*VerifyRuntimeRestoreResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyRuntimeRestore not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeCleanup not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ConsumeRuntimeCleanupAuthorization(context.Context, *ConsumeRuntimeCleanupAuthorizationRequest) (*ConsumeRuntimeCleanupAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConsumeRuntimeCleanupAuthorization not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ExpireRuntimeCleanupAuthorization(context.Context, *ExpireRuntimeCleanupAuthorizationRequest) (*ExpireRuntimeCleanupAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpireRuntimeCleanupAuthorization not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ResolveIntegrationSession(context.Context, *ResolveIntegrationSessionRequest) (*ResolveIntegrationSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveIntegrationSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SuspendForIntegrationApproval(context.Context, *SuspendForIntegrationApprovalRequest) (*SuspendForIntegrationApprovalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SuspendForIntegrationApproval not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ApproveIntegrationInvocation(context.Context, *ApproveIntegrationInvocationRequest) (*ApproveIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveIntegrationInvocation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RejectIntegrationInvocation(context.Context, *RejectIntegrationInvocationRequest) (*RejectIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RejectIntegrationInvocation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ExpireIntegrationInvocation(context.Context, *ExpireIntegrationInvocationRequest) (*ExpireIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpireIntegrationInvocation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CancelIntegrationInvocation(context.Context, *CancelIntegrationInvocationRequest) (*CancelIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelIntegrationInvocation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) BeginIntegrationExecution(context.Context, *BeginIntegrationExecutionRequest) (*BeginIntegrationExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginIntegrationExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CompleteIntegrationExecution(context.Context, *CompleteIntegrationExecutionRequest) (*CompleteIntegrationExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteIntegrationExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) FailIntegrationExecution(context.Context, *FailIntegrationExecutionRequest) (*FailIntegrationExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailIntegrationExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetIntegrationContinuation(context.Context, *GetIntegrationContinuationRequest) (*GetIntegrationContinuationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIntegrationContinuation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcknowledgeIntegrationContinuation not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
@@ -1664,6 +2118,456 @@ func _ControlPlaneService_RecordMemoryEmbedding_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ClaimRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ClaimRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ClaimRuntimeExecution(ctx, req.(*ClaimRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetRuntimeExecution(ctx, req.(*GetRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AdmitRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdmitRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AdmitRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AdmitRuntimeExecution(ctx, req.(*AdmitRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_HeartbeatRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).HeartbeatRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).HeartbeatRuntimeExecution(ctx, req.(*HeartbeatRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RecordRuntimeIncident_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordRuntimeIncidentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordRuntimeIncident(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordRuntimeIncident_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordRuntimeIncident(ctx, req.(*RecordRuntimeIncidentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CompleteRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CompleteRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CompleteRuntimeExecution(ctx, req.(*CompleteRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CancelRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CancelRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CancelRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CancelRuntimeExecution(ctx, req.(*CancelRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RetryRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetryRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RetryRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RetryRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RetryRuntimeExecution(ctx, req.(*RetryRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ExpireRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpireRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ExpireRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ExpireRuntimeExecution(ctx, req.(*ExpireRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RecordRuntimeArchive_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordRuntimeArchiveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordRuntimeArchive(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordRuntimeArchive_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordRuntimeArchive(ctx, req.(*RecordRuntimeArchiveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_VerifyRuntimeRestore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyRuntimeRestoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).VerifyRuntimeRestore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).VerifyRuntimeRestore(ctx, req.(*VerifyRuntimeRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AuthorizeRuntimeCleanup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeRuntimeCleanupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeCleanup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeCleanup(ctx, req.(*AuthorizeRuntimeCleanupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ConsumeRuntimeCleanupAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConsumeRuntimeCleanupAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ConsumeRuntimeCleanupAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ConsumeRuntimeCleanupAuthorization(ctx, req.(*ConsumeRuntimeCleanupAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ExpireRuntimeCleanupAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpireRuntimeCleanupAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ExpireRuntimeCleanupAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ExpireRuntimeCleanupAuthorization(ctx, req.(*ExpireRuntimeCleanupAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ResolveIntegrationSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveIntegrationSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ResolveIntegrationSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ResolveIntegrationSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ResolveIntegrationSession(ctx, req.(*ResolveIntegrationSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_SuspendForIntegrationApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SuspendForIntegrationApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SuspendForIntegrationApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SuspendForIntegrationApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SuspendForIntegrationApproval(ctx, req.(*SuspendForIntegrationApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ApproveIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveIntegrationInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ApproveIntegrationInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ApproveIntegrationInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ApproveIntegrationInvocation(ctx, req.(*ApproveIntegrationInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RejectIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectIntegrationInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RejectIntegrationInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RejectIntegrationInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RejectIntegrationInvocation(ctx, req.(*RejectIntegrationInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ExpireIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpireIntegrationInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ExpireIntegrationInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ExpireIntegrationInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ExpireIntegrationInvocation(ctx, req.(*ExpireIntegrationInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CancelIntegrationInvocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelIntegrationInvocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CancelIntegrationInvocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CancelIntegrationInvocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CancelIntegrationInvocation(ctx, req.(*CancelIntegrationInvocationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_BeginIntegrationExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginIntegrationExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).BeginIntegrationExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_BeginIntegrationExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).BeginIntegrationExecution(ctx, req.(*BeginIntegrationExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CompleteIntegrationExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteIntegrationExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CompleteIntegrationExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CompleteIntegrationExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CompleteIntegrationExecution(ctx, req.(*CompleteIntegrationExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_FailIntegrationExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailIntegrationExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).FailIntegrationExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_FailIntegrationExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).FailIntegrationExecution(ctx, req.(*FailIntegrationExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetIntegrationContinuation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIntegrationContinuationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetIntegrationContinuation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetIntegrationContinuation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetIntegrationContinuation(ctx, req.(*GetIntegrationContinuationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcknowledgeIntegrationContinuationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AcknowledgeIntegrationContinuation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AcknowledgeIntegrationContinuation(ctx, req.(*AcknowledgeIntegrationContinuationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckReadinessRequest)
 	if err := dec(in); err != nil {
@@ -1860,6 +2764,106 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordMemoryEmbedding",
 			Handler:    _ControlPlaneService_RecordMemoryEmbedding_Handler,
+		},
+		{
+			MethodName: "ClaimRuntimeExecution",
+			Handler:    _ControlPlaneService_ClaimRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "GetRuntimeExecution",
+			Handler:    _ControlPlaneService_GetRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "AdmitRuntimeExecution",
+			Handler:    _ControlPlaneService_AdmitRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "HeartbeatRuntimeExecution",
+			Handler:    _ControlPlaneService_HeartbeatRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "RecordRuntimeIncident",
+			Handler:    _ControlPlaneService_RecordRuntimeIncident_Handler,
+		},
+		{
+			MethodName: "CompleteRuntimeExecution",
+			Handler:    _ControlPlaneService_CompleteRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "CancelRuntimeExecution",
+			Handler:    _ControlPlaneService_CancelRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "RetryRuntimeExecution",
+			Handler:    _ControlPlaneService_RetryRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "ExpireRuntimeExecution",
+			Handler:    _ControlPlaneService_ExpireRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "RecordRuntimeArchive",
+			Handler:    _ControlPlaneService_RecordRuntimeArchive_Handler,
+		},
+		{
+			MethodName: "VerifyRuntimeRestore",
+			Handler:    _ControlPlaneService_VerifyRuntimeRestore_Handler,
+		},
+		{
+			MethodName: "AuthorizeRuntimeCleanup",
+			Handler:    _ControlPlaneService_AuthorizeRuntimeCleanup_Handler,
+		},
+		{
+			MethodName: "ConsumeRuntimeCleanupAuthorization",
+			Handler:    _ControlPlaneService_ConsumeRuntimeCleanupAuthorization_Handler,
+		},
+		{
+			MethodName: "ExpireRuntimeCleanupAuthorization",
+			Handler:    _ControlPlaneService_ExpireRuntimeCleanupAuthorization_Handler,
+		},
+		{
+			MethodName: "ResolveIntegrationSession",
+			Handler:    _ControlPlaneService_ResolveIntegrationSession_Handler,
+		},
+		{
+			MethodName: "SuspendForIntegrationApproval",
+			Handler:    _ControlPlaneService_SuspendForIntegrationApproval_Handler,
+		},
+		{
+			MethodName: "ApproveIntegrationInvocation",
+			Handler:    _ControlPlaneService_ApproveIntegrationInvocation_Handler,
+		},
+		{
+			MethodName: "RejectIntegrationInvocation",
+			Handler:    _ControlPlaneService_RejectIntegrationInvocation_Handler,
+		},
+		{
+			MethodName: "ExpireIntegrationInvocation",
+			Handler:    _ControlPlaneService_ExpireIntegrationInvocation_Handler,
+		},
+		{
+			MethodName: "CancelIntegrationInvocation",
+			Handler:    _ControlPlaneService_CancelIntegrationInvocation_Handler,
+		},
+		{
+			MethodName: "BeginIntegrationExecution",
+			Handler:    _ControlPlaneService_BeginIntegrationExecution_Handler,
+		},
+		{
+			MethodName: "CompleteIntegrationExecution",
+			Handler:    _ControlPlaneService_CompleteIntegrationExecution_Handler,
+		},
+		{
+			MethodName: "FailIntegrationExecution",
+			Handler:    _ControlPlaneService_FailIntegrationExecution_Handler,
+		},
+		{
+			MethodName: "GetIntegrationContinuation",
+			Handler:    _ControlPlaneService_GetIntegrationContinuation_Handler,
+		},
+		{
+			MethodName: "AcknowledgeIntegrationContinuation",
+			Handler:    _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler,
 		},
 		{
 			MethodName: "CheckReadiness",

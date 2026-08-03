@@ -244,6 +244,8 @@ func supportedCredential(credential string) bool {
 		"PROCESS_RUN_GRANT",
 		"OWNER_GATE_DELIVERY_GRANT",
 		"RUNTIME_REVISION_GRANT",
+		"RUNTIME_RESTORE_VERIFIER_GRANT",
+		"RUNTIME_CLEANUP_AUTHORIZER_GRANT",
 		"MEMORY_INDEX_GRANT":
 		return true
 	default:
