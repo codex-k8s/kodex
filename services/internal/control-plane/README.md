@@ -94,7 +94,7 @@ issuer profiles `runtime-restore-verifier` и `runtime-cleanup-authorizer` не
 | Факт                                          | Условие                                                                                               | Потребитель            | Доставка                                  |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
 | `control_plane.runtime_configuration_changed` | устойчивое изменение project/team/chat/role/prompt/binding/workspace/integration/runtime/session/turn | `runtime-controller`   | at-least-once, inbox и курсор потребителя |
-| `control_plane.schedule_changed`              | устойчивое изменение расписания и верхней границы                                                     | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
+| `control_plane.schedule_changed`              | реальное изменение `Schedule.Version`: create/manage либо движение due watermark; occurrence/run не переиздают прежнюю sequence | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
 
 Для процессов, шлюзов владельца, памяти, заявок на работу и метаданных артефактов
 спекулятивные события не публикуются: авторитетные пути — `GetResource`,
@@ -142,6 +142,18 @@ discovery охватывает `CLAIMED`, `WAITING_OWNER`, `CONTINUATION` и ter
 Stale process/occurrence/run tuple закрыто отклоняет весь claim, а exact replay
 не создаёт второго version bump. Поэтому первый `ClaimRuntimeExecution` видит
 согласованный scheduled или unscheduled graph без caller-selected versions.
+
+Scheduled producer хранит два разных server-owned digest без смешения типов.
+До materialization `Schedule.EffectiveInputSHA` и queued occurrence содержат
+immutable snapshot target/prompt/artifact/runtime/session policy. После
+`ClaimScheduleOccurrence` exact execution digest совпадает в
+`Turn.EffectiveInputSHA256`, `ScheduleOccurrence.EffectiveInputSHA256` и
+`ScheduledRun.CurrentInputSHA256`, а исходный snapshot остаётся в
+`ScheduledRun.EffectiveInputSHA256`. Retry/recovery/suspension/rebind сравнивают
+current digest, сохраняя snapshot provenance. Переходы occurrence/run пишут
+audit и доступны authoritative read, но не публикуют повторное событие
+неизменённого Schedule; каждый outbox event использует sequence ровно новой
+версии действительно изменённого Resource aggregate.
 
 Session lifecycle и cross-session delegation используют batch-вариант того же
 resolver: RuntimeExecution/occurrence/schedule/run, Session, Turn и ProcessRun

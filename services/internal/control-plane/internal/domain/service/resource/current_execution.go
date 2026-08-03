@@ -230,8 +230,8 @@ func (service *Service) prepareRetriedExecution(
 	if err := tx.RebindScheduledRun(ctx, run, turn.ID, previousAttempt); err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}
-	if err := service.appendMutationRecords(
-		ctx, tx, principal, "rebind_schedule_retry", schedule,
+	if err := appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "rebind_schedule_retry", occurrence,
 	); err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}
@@ -317,8 +317,8 @@ func (service *Service) rebindStandaloneScheduledRetry(
 		schedule.OwnerActorID != retried.OwnerActorID {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	if err := service.appendMutationRecords(
-		ctx, tx, principal, "rebind_schedule_retry", schedule,
+	if err := appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "rebind_schedule_retry", occurrence,
 	); err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}
@@ -550,8 +550,8 @@ func (service *Service) propagateCurrentTurnTransition(
 	); err != nil {
 		return entity.Resource{}, err
 	}
-	if err := service.appendMutationRecords(
-		ctx, tx, principal, "propagate_current_turn_schedule", graph.Schedule,
+	if err := appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "propagate_current_turn_schedule", occurrence,
 	); err != nil {
 		return entity.Resource{}, err
 	}

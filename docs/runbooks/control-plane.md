@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.15.0
+version: 1.16.0
 updated: 2026-08-03
 ---
 
@@ -488,7 +488,13 @@ Kubernetes/Mattermost/MCP/Codex действий запрещён.
 Успешный claim атомарно создаёт или разрешает execution session, свежую
 `RuntimeRevision`, `Turn` и для цели `PLAYBOOK` корневой `ProcessRun`;
 `ScheduledRun` сохраняет exact версии occurrence/session/turn/process/revision
-и effective input для каждой attempt. Completion не принимает outcome от
+и два разных digest для каждой attempt: immutable schedule snapshot в
+`EffectiveInputSHA256`, exact current execution input в
+`CurrentInputSHA256`. После materialization current digest обязан совпадать с
+`Turn.EffectiveInputSHA256` и `ScheduleOccurrence.EffectiveInputSHA256`; queued
+occurrence до materialization ещё содержит snapshot. Если эти значения
+смешаны, claim/recovery отклоняется: не выравнивать их SQL и не терять snapshot
+provenance. Completion не принимает outcome от
 scheduler: он перечитывает terminal Turn/Process; retry завершает прежний run
 и создаёт новый отслеживаемый attempt. Источник хода и process lineage содержат exact occurrence. Owner gate из
 такого process повторяет schedule/occurrence и закрыто сверяет active
@@ -535,6 +541,17 @@ Outbox delivered receipt очищается не ранее 31 дня, то ес
 Проверять только event ID, event name, aggregate type/version, attempt,
 lease expiry и error class. Payload может содержать business metadata и не
 должен попадать в Issue.
+
+Для scheduled `ClaimTurn` сверить, что Schedule outbox имеет sequence только
+реальных версий `CREATE`, due watermark и `ManageSchedule` transition.
+Propagation новой Turn/Process version и изменения occurrence/run не меняют
+Schedule и потому не создают `control_plane.schedule_changed`; они сохраняют
+audit и authoritative read в той же transaction. Дубликат
+`(aggregate_type, aggregate_id, event_sequence)` означает дефект producer и
+полный rollback команды, а не повод удалять outbox row или делать no-op bump
+Schedule. Для Turn/Session/RuntimeRevision каждый опубликованный
+`EventSequence` обязан совпадать с новой `Resource.Version` изменённого
+aggregate.
 
 ## Наблюдаемость
 

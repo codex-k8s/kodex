@@ -144,6 +144,9 @@ func validateScheduledRunBinding(
 	occurrence domainrepo.ScheduleOccurrence,
 	run domainrepo.ScheduledRun,
 ) error {
+	if !validSHA256Text(run.EffectiveInputSHA256) {
+		return errs.ErrStateConflict
+	}
 	if run.CurrentSessionID == "" {
 		run.CurrentSessionID = run.SessionID
 		run.CurrentSessionVersion = run.SessionVersion
@@ -162,6 +165,9 @@ func validateScheduledRunBinding(
 			run.CurrentRuntimeRevisionVersion = run.ContinuationRuntimeRevisionVersion
 			run.CurrentInputSHA256 = run.ContinuationInputSHA256
 		}
+	}
+	if !validSHA256Text(run.CurrentInputSHA256) {
+		return errs.ErrStateConflict
 	}
 	if run.OccurrenceID != occurrence.ID || run.Attempt != occurrence.Attempt ||
 		run.CurrentSessionID != occurrence.ExecutionSessionID ||

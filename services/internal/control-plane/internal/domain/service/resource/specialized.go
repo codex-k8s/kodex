@@ -534,18 +534,8 @@ func (service *Service) ClaimScheduleOccurrence(
 				if err != nil {
 					return err
 				}
-				schedule := graph.Schedule
 				if err := service.recoverExpiredScheduleOccurrence(
 					ctx, tx, input.Principal, graph, recoveryNow,
-				); err != nil {
-					return err
-				}
-				if err := service.appendMutationRecords(
-					ctx,
-					tx,
-					input.Principal,
-					"recover_schedule_occurrence",
-					schedule,
 				); err != nil {
 					return err
 				}
@@ -560,21 +550,8 @@ func (service *Service) ClaimScheduleOccurrence(
 				return err
 			}
 			for _, occurrence := range skipped {
-				schedule, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					occurrence.ScheduleID,
-				)
-				if err != nil {
-					return err
-				}
-				if err := service.appendMutationRecords(
-					ctx,
-					tx,
-					input.Principal,
-					"skip_schedule_occurrence",
-					schedule,
+				if err := appendScheduleOccurrenceAudit(
+					ctx, tx, input.Principal, "skip_schedule_occurrence", occurrence,
 				); err != nil {
 					return err
 				}
@@ -696,6 +673,7 @@ func (service *Service) ClaimScheduleOccurrence(
 			if pinnedInputSHA256 != occurrence.EffectiveInputSHA256 {
 				return errs.ErrStateConflict
 			}
+			scheduleSnapshotInputSHA256 := pinnedInputSHA256
 			claimNow, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
@@ -881,6 +859,7 @@ func (service *Service) ClaimScheduleOccurrence(
 			occurrence.ExecutionProcessVersion = scheduledProcess.Version
 			occurrence.ExecutionRuntimeRevisionID = runtimeRevision.ID
 			occurrence.ExecutionRuntimeRevisionVersion = runtimeRevision.Version
+			occurrence.EffectiveInputSHA256 = turnSpec.EffectiveInputSHA256
 			occurrence.UpdatedAt = claimNow
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
@@ -897,7 +876,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				ProcessRunID: scheduledProcess.ID, ProcessVersion: scheduledProcess.Version,
 				RuntimeRevisionID:             runtimeRevision.ID,
 				RuntimeRevisionVersion:        runtimeRevision.Version,
-				EffectiveInputSHA256:          turnSpec.EffectiveInputSHA256,
+				EffectiveInputSHA256:          scheduleSnapshotInputSHA256,
 				CurrentSessionID:              updatedSession.ID,
 				CurrentSessionVersion:         updatedSession.Version,
 				CurrentTurnID:                 turn.ID,
@@ -912,12 +891,8 @@ func (service *Service) ClaimScheduleOccurrence(
 			}); err != nil {
 				return err
 			}
-			if err := service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"claim_schedule_occurrence",
-				schedule,
+			if err := appendScheduleOccurrenceAudit(
+				ctx, tx, input.Principal, "claim_schedule_occurrence", occurrence,
 			); err != nil {
 				return err
 			}
@@ -1219,12 +1194,8 @@ func (service *Service) CompleteScheduleOccurrence(
 			); err != nil {
 				return err
 			}
-			if err := service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"complete_schedule_occurrence",
-				schedule,
+			if err := appendScheduleOccurrenceAudit(
+				ctx, tx, input.Principal, "complete_schedule_occurrence", occurrence,
 			); err != nil {
 				return err
 			}
@@ -1519,12 +1490,8 @@ func (service *Service) CancelScheduleOccurrence(
 			); err != nil {
 				return err
 			}
-			if err := service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"cancel_schedule_occurrence",
-				schedule,
+			if err := appendScheduleOccurrenceAudit(
+				ctx, tx, input.Principal, "cancel_schedule_occurrence", occurrence,
 			); err != nil {
 				return err
 			}
@@ -2836,9 +2803,8 @@ func (service *Service) RequestOwnerGate(
 					schedule.OwnerActorID != process.OwnerActorID {
 					return errs.ErrStateConflict
 				}
-				if err := service.appendMutationRecords(
-					ctx, tx, input.Principal,
-					"owner_gate_wait_schedule", schedule,
+				if err := appendScheduleOccurrenceAudit(
+					ctx, tx, input.Principal, "owner_gate_wait_schedule", occurrence,
 				); err != nil {
 					return err
 				}

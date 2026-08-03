@@ -823,12 +823,10 @@ func (service *Service) RenewTurn(
 			if err != nil {
 				return err
 			}
-			if err := service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"renew_turn",
-				current,
+			if err := appendOwnerStateAudit(
+				ctx, tx, input.Principal, "renew_turn", current.OrganizationID,
+				current.ProjectID, current.ID, auditKindTurnLease,
+				renewed.Fence, now,
 			); err != nil {
 				return err
 			}
@@ -1956,12 +1954,9 @@ func (service *Service) ResolveOwnerGate(
 						return err
 					}
 				}
-				if err := service.appendMutationRecords(
-					ctx,
-					tx,
-					input.Principal,
-					"owner_gate_occurrence_transition",
-					relatedSchedule,
+				if err := appendScheduleOccurrenceAudit(
+					ctx, tx, input.Principal,
+					"owner_gate_occurrence_transition", relatedOccurrence,
 				); err != nil {
 					return err
 				}

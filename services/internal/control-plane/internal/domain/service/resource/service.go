@@ -23,6 +23,9 @@ import (
 )
 
 const (
+	auditKindScheduleOccurrence = "SCHEDULE_OCCURRENCE"
+	auditKindTurnLease          = "TURN_LEASE"
+
 	permissionCreate                 = "controlplane.resource.create"
 	permissionUpdate                 = "controlplane.resource.update"
 	permissionTransition             = "controlplane.resource.transition"
@@ -866,6 +869,12 @@ func (service *Service) appendMutationRecords(
 	action string,
 	resource entity.Resource,
 ) error {
+	if resource.Kind == enum.KindSchedule && !scheduleResourceMutationAction(action) {
+		return errs.ErrInternal
+	}
+	if action == "renew_turn" {
+		return errs.ErrInternal
+	}
 	audit := domainrepo.Audit{
 		ID:              uuid.NewString(),
 		OrganizationID:  resource.OrganizationID,
@@ -900,6 +909,60 @@ func (service *Service) appendMutationRecords(
 		OccurredAt:      resource.UpdatedAt,
 		CorrelationID:   principal.CorrelationID,
 	})
+}
+
+// scheduleResourceMutationAction — закрытый реестр команд, которые реально
+// увеличивают Schedule.Version. Изменение occurrence/run не маскируется
+// повторным событием неизменённого Schedule с уже занятой sequence.
+func scheduleResourceMutationAction(action string) bool {
+	switch action {
+	case "create_schedule", "claim_due_schedule",
+		"manage_schedule_UPDATE", "manage_schedule_ACTIVATE",
+		"manage_schedule_PAUSE", "manage_schedule_ARCHIVE",
+		"manage_schedule_DELETE":
+		return true
+	default:
+		return false
+	}
+}
+
+// appendOwnerStateAudit фиксирует изменение owner-row, у которого нет
+// отдельного domain-event контракта. resourceVersion является монотонным
+// attempt/fence владельца; outbox для неизменённого родительского Resource не
+// создаётся, а authoritative read остаётся частью той же транзакции.
+func appendOwnerStateAudit(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	action, organizationID, projectID, resourceID, resourceKind string,
+	resourceVersion uint64,
+	occurredAt time.Time,
+) error {
+	if value.ValidateID(resourceID) != nil || resourceVersion == 0 ||
+		occurredAt.IsZero() {
+		return errs.ErrInternal
+	}
+	return tx.AppendAudit(ctx, domainrepo.Audit{
+		ID: uuid.NewString(), OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: principal.ActorID, Action: action, ResourceID: resourceID,
+		ResourceKind: resourceKind, ResourceVersion: resourceVersion,
+		Outcome: "succeeded", CorrelationID: principal.CorrelationID,
+		PolicyRevision: principal.PolicyRevision, OccurredAt: occurredAt,
+	})
+}
+
+func appendScheduleOccurrenceAudit(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	action string,
+	occurrence domainrepo.ScheduleOccurrence,
+) error {
+	return appendOwnerStateAudit(
+		ctx, tx, principal, action, occurrence.OrganizationID,
+		occurrence.ProjectID, occurrence.ID, auditKindScheduleOccurrence,
+		uint64(occurrence.Attempt), occurrence.UpdatedAt,
+	)
 }
 
 func (service *Service) transitionResource(

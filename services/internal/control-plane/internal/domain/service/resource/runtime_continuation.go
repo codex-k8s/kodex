@@ -3560,8 +3560,8 @@ func (service *Service) suspendIntegrationScheduledGraph(
 	); err != nil {
 		return err
 	}
-	return service.appendMutationRecords(
-		ctx, tx, principal, "suspend_integration_schedule", schedule,
+	return appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "suspend_integration_schedule", occurrence,
 	)
 }
 
@@ -4706,8 +4706,8 @@ func (service *Service) materializeIntegrationScheduledGraph(
 	); err != nil {
 		return err
 	}
-	return service.appendMutationRecords(
-		ctx, tx, principal, "materialize_integration_schedule", schedule,
+	return appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "materialize_integration_schedule", occurrence,
 	)
 }
 

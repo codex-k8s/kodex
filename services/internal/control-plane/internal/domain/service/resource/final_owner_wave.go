@@ -260,8 +260,8 @@ func (service *Service) continueOwnerGateGraph(
 		}
 	}
 	if occurrence.ID != "" {
-		if err := service.appendMutationRecords(
-			ctx, tx, principal, "owner_gate_continue_occurrence", schedule,
+		if err := appendScheduleOccurrenceAudit(
+			ctx, tx, principal, "owner_gate_continue_occurrence", occurrence,
 		); err != nil {
 			return OwnerGateResult{}, err
 		}
@@ -352,8 +352,8 @@ func (service *Service) finishContinuationOccurrence(
 	); err != nil {
 		return err
 	}
-	return service.appendMutationRecords(
-		ctx, tx, principal, "complete_owner_continuation_occurrence", schedule,
+	return appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "complete_owner_continuation_occurrence", occurrence,
 	)
 }
 
@@ -630,7 +630,7 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 		turn.Kind != enum.KindTurn || turn.OwnerActorID != schedule.OwnerActorID ||
 		turnSpec.SessionID != session.ID || turnSpec.Attempt == 0 ||
 		turnSpec.RuntimeRevisionID != run.RuntimeRevisionID ||
-		turnSpec.EffectiveInputSHA256 != run.EffectiveInputSHA256 {
+		turnSpec.EffectiveInputSHA256 != run.CurrentInputSHA256 {
 		return errs.ErrStateConflict
 	}
 	if err := requireClosedRuntimeConsistentWithTurn(graph); err != nil {
@@ -663,7 +663,7 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 			}
 		}
 		return service.finishRecoveredOccurrence(
-			ctx, tx, occurrence, string(turn.State), turnSpec.Outcome,
+			ctx, tx, principal, occurrence, string(turn.State), turnSpec.Outcome,
 			turnSpec.ResultArtifactID, now,
 		)
 	}
@@ -780,14 +780,20 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 	occurrence.ExecutionRuntimeRevisionID = ""
 	occurrence.ExecutionRuntimeRevisionVersion = 0
 	occurrence.UpdatedAt = now
-	return tx.UpdateScheduleOccurrence(
+	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, expectedAttempt, expectedToken,
+	); err != nil {
+		return err
+	}
+	return appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "recover_schedule_occurrence", occurrence,
 	)
 }
 
 func (service *Service) finishRecoveredOccurrence(
 	ctx context.Context,
 	tx domainrepo.Transaction,
+	principal value.Principal,
 	occurrence domainrepo.ScheduleOccurrence,
 	state, outcome, resultArtifactID string,
 	now time.Time,
@@ -811,7 +817,12 @@ func (service *Service) finishRecoveredOccurrence(
 	occurrence.TokenHash = ""
 	occurrence.LeaseExpiresAt = time.Time{}
 	occurrence.UpdatedAt = now
-	return tx.UpdateScheduleOccurrence(
+	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, occurrence.Attempt, expectedToken,
+	); err != nil {
+		return err
+	}
+	return appendScheduleOccurrenceAudit(
+		ctx, tx, principal, "recover_schedule_occurrence", occurrence,
 	)
 }
