@@ -8,7 +8,8 @@ SELECT EXISTS (
       AND occurrence.project_id = @project_id::uuid
       AND occurrence.schedule_id = @schedule_id::uuid
       AND (
-        occurrence.state IN ('QUEUED', 'CLAIMED', 'WAITING_OWNER', 'CONTINUATION')
-        OR run.state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION')
+        occurrence.state = 'QUEUED'
+        OR occurrence.state = ANY(@open_execution_states::text[])
+        OR run.state = ANY(@open_execution_states::text[])
       )
 )
