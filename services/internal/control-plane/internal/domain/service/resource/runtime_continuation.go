@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	minimumApprovalLifetime      = time.Minute
-	maximumApprovalLifetime      = 7 * 24 * time.Hour
-	cleanupAuthorizationLifetime = 15 * time.Minute
+	minimumApprovalLifetime       = time.Minute
+	maximumApprovalLifetime       = 7 * 24 * time.Hour
+	cleanupAuthorizationLifetime  = 15 * time.Minute
+	integrationPredecessorOutcome = "integration_continuation_materialized"
 )
 
 var scheduledGraphLockOrder = [...]string{
@@ -2568,10 +2569,6 @@ func (service *Service) integrationSessionContext(
 	principal value.Principal,
 	resolved resolvedExecution,
 ) (IntegrationSessionContext, error) {
-	now, err := tx.CurrentTime(ctx)
-	if err != nil {
-		return IntegrationSessionContext{}, err
-	}
 	revisionSpec := resolved.RevisionSpec
 	if revisionSpec.SessionID != resolved.Session.ID ||
 		revisionSpec.RoleID != resolved.Role.ID {
@@ -2663,9 +2660,7 @@ func (service *Service) integrationSessionContext(
 				return IntegrationSessionContext{}, matchErr
 			}
 			if !ok || credential.Kind != enum.KindCredentialBinding ||
-				credential.State != enum.StateActive || !bound || !matches ||
-				(!credentialSpec.ExpiresAt.IsZero() &&
-					!credentialSpec.ExpiresAt.After(now)) {
+				credential.State != enum.StateActive || !bound || !matches {
 				return IntegrationSessionContext{}, errs.ErrStateConflict
 			}
 			binding.CredentialBindings = append(
@@ -2681,6 +2676,17 @@ func (service *Service) integrationSessionContext(
 			)
 		}
 		result.Integrations = append(result.Integrations, binding)
+	}
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return IntegrationSessionContext{}, err
+	}
+	for _, integration := range result.Integrations {
+		for _, credential := range integration.CredentialBindings {
+			if !credential.ExpiresAt.IsZero() && !credential.ExpiresAt.After(now) {
+				return IntegrationSessionContext{}, errs.ErrStateConflict
+			}
+		}
 	}
 	return result, nil
 }
@@ -2755,7 +2761,6 @@ func (service *Service) resolveSelectedIntegrationBinding(
 	principal value.Principal,
 	resolved resolvedExecution,
 	input SuspendIntegrationInput,
-	now time.Time,
 ) (PinnedIntegrationResource, error) {
 	if !slices.Contains(resolved.RoleSpec.IntegrationIDs, input.IntegrationID) ||
 		!slices.Contains(resolved.RevisionSpec.IntegrationIDs, input.IntegrationID) {
@@ -2784,6 +2789,7 @@ func (service *Service) resolveSelectedIntegrationBinding(
 		component.ProjectionSHA256 != input.IntegrationSHA256 {
 		return PinnedIntegrationResource{}, errs.ErrStateConflict
 	}
+	credentialExpirations := make([]time.Time, 0, len(input.CredentialBindings))
 	for _, selected := range input.CredentialBindings {
 		if !slices.Contains(integrationSpec.CredentialBindingIDs, selected.ResourceID) ||
 			!slices.Contains(resolved.RevisionSpec.CredentialBindingIDs, selected.ResourceID) {
@@ -2809,8 +2815,17 @@ func (service *Service) resolveSelectedIntegrationBinding(
 		if !ok || credential.Kind != enum.KindCredentialBinding ||
 			credential.State != enum.StateActive || !matches ||
 			credential.Version != selected.Version ||
-			credentialComponent.ProjectionSHA256 != selected.ProjectionSHA256 ||
-			(!credentialSpec.ExpiresAt.IsZero() && !credentialSpec.ExpiresAt.After(now)) {
+			credentialComponent.ProjectionSHA256 != selected.ProjectionSHA256 {
+			return PinnedIntegrationResource{}, errs.ErrStateConflict
+		}
+		credentialExpirations = append(credentialExpirations, credentialSpec.ExpiresAt)
+	}
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return PinnedIntegrationResource{}, err
+	}
+	for _, expiresAt := range credentialExpirations {
+		if !expiresAt.IsZero() && !expiresAt.After(now) {
 			return PinnedIntegrationResource{}, errs.ErrStateConflict
 		}
 	}
@@ -3010,10 +3025,7 @@ func (service *Service) validatePinnedIntegrationContinuation(
 			}
 		}
 	}
-	now, err := tx.CurrentTime(ctx)
-	if err != nil {
-		return err
-	}
+	credentialExpirations := make([]time.Time, 0, len(continuation.CredentialBindings))
 	for _, selected := range continuation.CredentialBindings {
 		if !slices.Contains(revisionSpec.CredentialBindingIDs, selected.ResourceID) {
 			return errs.ErrStateConflict
@@ -3036,9 +3048,20 @@ func (service *Service) validatePinnedIntegrationContinuation(
 		}
 		credentialSpec, ok := credential.Spec.(entity.CredentialBindingSpec)
 		matches, matchErr := revisionComponentMatches(credential, component)
-		if matchErr != nil || !ok || !matches || credential.State != enum.StateActive ||
-			(!credentialSpec.ExpiresAt.IsZero() && !credentialSpec.ExpiresAt.After(now)) {
+		if matchErr != nil || !ok || !matches || credential.State != enum.StateActive {
 			return errs.ErrStateConflict
+		}
+		credentialExpirations = append(credentialExpirations, credentialSpec.ExpiresAt)
+	}
+	if requireActive {
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		for _, expiresAt := range credentialExpirations {
+			if !expiresAt.IsZero() && !expiresAt.After(now) {
+				return errs.ErrStateConflict
+			}
 		}
 	}
 	return nil
@@ -3142,12 +3165,8 @@ func (service *Service) SuspendForIntegrationApproval(
 			if err != nil {
 				return 0, err
 			}
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return 0, err
-			}
 			if _, err := service.resolveSelectedIntegrationBinding(
-				ctx, tx, input.Principal, resolved, input, now,
+				ctx, tx, input.Principal, resolved, input,
 			); err != nil {
 				return 0, err
 			}
@@ -3186,7 +3205,7 @@ func (service *Service) SuspendForIntegrationApproval(
 				return errs.ErrPermissionDenied
 			}
 			binding, err := service.resolveSelectedIntegrationBinding(
-				ctx, tx, input.Principal, resolved, input, now,
+				ctx, tx, input.Principal, resolved, input,
 			)
 			if err != nil {
 				return err
@@ -4247,7 +4266,8 @@ func (service *Service) materializeIntegrationContinuation(
 	}
 	sessionSpec, ok := session.Spec.(entity.SessionSpec)
 	if !ok || session.Kind != enum.KindSession || session.State != enum.StateWaitingExternal ||
-		session.OwnerActorID != principal.ActorID {
+		session.OwnerActorID != principal.ActorID ||
+		session.Version != continuation.SessionVersion {
 		return errs.ErrStateConflict
 	}
 	process, err := tx.GetForUpdate(
@@ -4261,7 +4281,12 @@ func (service *Service) materializeIntegrationContinuation(
 	if !ok || currentErr != nil || process.Kind != enum.KindProcessRun ||
 		process.State != enum.StateWaitingExternal ||
 		process.OwnerActorID != principal.ActorID || current.TurnID != continuation.TurnID ||
+		current.SessionID != continuation.SessionID ||
+		current.SessionVersion != continuation.SessionVersion ||
+		current.TurnVersion != continuation.TurnVersion ||
 		current.Attempt != continuation.Attempt ||
+		current.RuntimeRevisionID != continuation.RuntimeRevisionID ||
+		current.RuntimeRevisionVersion != continuation.RuntimeRevisionVersion ||
 		current.InputSHA256 != continuation.ImmutableInputSHA256 {
 		return errs.ErrStateConflict
 	}
@@ -4275,6 +4300,46 @@ func (service *Service) materializeIntegrationContinuation(
 	if !ok || previousTurn.Kind != enum.KindTurn ||
 		previousTurn.State != enum.StateWaitingExternal ||
 		previousTurn.OwnerActorID != principal.ActorID {
+		return errs.ErrStateConflict
+	}
+	// prelockIntegrationTerminalGraph уже держит RuntimeExecution первым в
+	// каноническом порядке. Здесь выполняется только exact readback; поздний
+	// FOR UPDATE после Session/Turn/ProcessRun запрещён.
+	sourceRuntime, err := tx.GetRuntimeExecutionByTurn(
+		ctx, continuation.TurnID, continuation.Attempt,
+	)
+	if err != nil {
+		return err
+	}
+	if sourceRuntime.WorkloadID != service.runtimeControllerWorkload ||
+		sourceRuntime.WorkloadSPIFFEID != service.runtimeControllerSPIFFEID {
+		return errs.ErrStateConflict
+	}
+	sourceAttempt, err := tx.GetTurnAttemptForUpdate(
+		ctx, continuation.TurnID, continuation.Attempt,
+	)
+	if err != nil {
+		return err
+	}
+	if _, leaseErr := tx.GetTurnLeaseForUpdate(ctx, continuation.TurnID); leaseErr == nil {
+		return errs.ErrStateConflict
+	} else if !errors.Is(leaseErr, errs.ErrNotFound) {
+		return leaseErr
+	}
+	replacedTurn, err := replaceIntegrationPredecessor(
+		*continuation, sourceRuntime, previousTurn, sourceAttempt, now,
+	)
+	if err != nil {
+		return err
+	}
+	open, err := tx.ProcessHasOpenWork(
+		ctx, principal.OrganizationID, principal.ProjectID,
+		process.ID, previousTurn.ID, "",
+	)
+	if err != nil {
+		return err
+	}
+	if open {
 		return errs.ErrStateConflict
 	}
 	if _, err := service.requireCleanArtifact(
@@ -4343,6 +4408,9 @@ func (service *Service) materializeIntegrationContinuation(
 	if err != nil {
 		return errs.ErrStateConflict
 	}
+	if err := tx.Update(ctx, replacedTurn, previousTurn.Version); err != nil {
+		return err
+	}
 	if err := tx.Insert(ctx, turn); err != nil {
 		return err
 	}
@@ -4360,6 +4428,7 @@ func (service *Service) materializeIntegrationContinuation(
 		return err
 	}
 	for action, changed := range map[string]entity.Resource{
+		"replace_integration_predecessor_turn":    replacedTurn,
 		"create_integration_continuation_turn":    turn,
 		"queue_integration_continuation_session":  queuedSession,
 		"rebind_integration_continuation_process": runningProcess,
@@ -4376,6 +4445,72 @@ func (service *Service) materializeIntegrationContinuation(
 	continuation.ContinuationRuntimeRevisionVersion = revision.Version
 	continuation.ContinuationInputSHA256 = inputDigest
 	return nil
+}
+
+func replaceIntegrationPredecessor(
+	continuation IntegrationContinuation,
+	sourceRuntime RuntimeExecution,
+	previousTurn entity.Resource,
+	sourceAttempt domainrepo.TurnAttempt,
+	now time.Time,
+) (entity.Resource, error) {
+	previousSpec, ok := previousTurn.Spec.(entity.TurnSpec)
+	if !ok || continuation.ContinuationState != "SUSPENDED" ||
+		continuation.ContinuationTurnID != "" ||
+		previousTurn.Kind != enum.KindTurn ||
+		previousTurn.State != enum.StateWaitingExternal ||
+		previousTurn.OrganizationID != continuation.OrganizationID ||
+		previousTurn.ProjectID != continuation.ProjectID ||
+		previousTurn.ParentID != continuation.SessionID ||
+		previousTurn.ID != continuation.TurnID ||
+		previousTurn.Version != continuation.TurnVersion ||
+		previousSpec.SessionID != continuation.SessionID ||
+		previousSpec.ProcessRunID != continuation.ProcessID ||
+		previousSpec.Attempt != continuation.Attempt ||
+		previousSpec.RuntimeRevisionID != continuation.RuntimeRevisionID ||
+		previousSpec.EffectiveInputSHA256 != continuation.ImmutableInputSHA256 ||
+		previousSpec.Outcome != "" {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	if sourceRuntime.OrganizationID != continuation.OrganizationID ||
+		sourceRuntime.ProjectID != continuation.ProjectID ||
+		sourceRuntime.ProcessID != continuation.ProcessID ||
+		sourceRuntime.SessionID != continuation.SessionID ||
+		sourceRuntime.ThreadID != continuation.ThreadID ||
+		sourceRuntime.RoleID != continuation.RoleID ||
+		sourceRuntime.TurnID != continuation.TurnID ||
+		sourceRuntime.Attempt != continuation.Attempt ||
+		sourceRuntime.RuntimeRevisionID != continuation.RuntimeRevisionID ||
+		sourceRuntime.RuntimeRevisionVersion != continuation.RuntimeRevisionVersion ||
+		sourceRuntime.RuntimeRevisionSHA256 != continuation.RuntimeRevisionSHA256 ||
+		sourceRuntime.ImmutableInputSHA256 != continuation.ImmutableInputSHA256 ||
+		sourceRuntime.GrantGeneration != continuation.GrantGeneration ||
+		sourceRuntime.State != "SUSPENDED" ||
+		sourceRuntime.TerminalOutcome != "SUSPENDED" ||
+		sourceRuntime.TerminalReference != continuation.ID ||
+		sourceRuntime.TerminalSHA256 != continuation.RequestSHA256 ||
+		sourceRuntime.LeaseID != "" || sourceRuntime.LeaseTokenSHA256 != "" ||
+		!sourceRuntime.LeaseExpiresAt.IsZero() {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	if sourceAttempt.TurnID != continuation.TurnID ||
+		sourceAttempt.Attempt != continuation.Attempt ||
+		sourceAttempt.WorkloadID != sourceRuntime.WorkloadID ||
+		sourceAttempt.AuthorityGeneration != continuation.GrantGeneration ||
+		sourceAttempt.State != "WAITING_EXTERNAL" ||
+		sourceAttempt.InputSHA256 != continuation.ImmutableInputSHA256 ||
+		sourceAttempt.FinishedAt.IsZero() ||
+		sourceAttempt.Outcome != "integration_approval" {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	previousSpec.Outcome = integrationPredecessorOutcome
+	replaced, err := previousTurn.ReplaceAndTransition(
+		previousSpec, enum.StateCancelled, now,
+	)
+	if err != nil {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return replaced, nil
 }
 
 func (service *Service) materializeIntegrationScheduledGraph(

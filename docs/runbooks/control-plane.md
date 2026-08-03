@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.12.0
+version: 1.13.0
 updated: 2026-08-03
 ---
 
@@ -151,7 +151,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260802000100`;
+- migration schema version равна `20260803000100`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -356,9 +356,16 @@ LeaseToken не возвращается.
 одном readback равные deadlines RuntimeExecution и TurnLease. Они продлеваются
 одной transaction только по PostgreSQL clock и exact attempt/generation/token;
 расхождение считается повреждением graph, generic `RenewTurn` его не чинит.
-`ManageWorkClaim(RENEW)` проверяет `WorkClaimSpec.ExpiresAt` тем же PostgreSQL
-clock до receipt и mutation: истёкший ACTIVE claim нельзя replay-ить или
-продлить. `RequestOwnerGate` до receipt требует живой TurnLease, а для
+`ManageWorkClaim(RENEW)` блокирует canonical owner graph и exact WorkClaim,
+затем непосредственно перед receipt classification читает fresh PostgreSQL
+clock и тем же временем проверяет/apply `WorkClaimSpec.ExpiresAt`: команда,
+начавшаяся до expiry и продолжившая после ожидания lock, не раскрывает ACTIVE
+receipt и не продлевает claim. CREATE/RENEW replay повторно блокирует
+сохранённую claim перед новым decision time. При upgrade уже применённую
+`20260731000500` не менять: expiry predicate функции
+`work_claim_graph_is_active` вводится только `20260803000100` и проверяется
+readback; fresh install и upgrade должны дать одинаковое определение.
+`RequestOwnerGate` до receipt требует живой TurnLease, а для
 ADMITTED/RUNNING — живую runtime lease с тем же deadline; PENDING допустим
 только без выданного lease ID/token/deadline. После deadline выигрывает
 watchdog/expiry, а Gate не создаётся.
@@ -402,9 +409,18 @@ winner оставляет `EXECUTING`, и поздний cancel не отмен�
 Approval/begin повторно требуют активную pinned binding; terminal result/error
 закрывают уже начатый effect по immutable snapshot.
 
-Terminal transition в той же transaction создаёт одну свежую RuntimeRevision,
-input, continuation Turn и будущий grant, а scheduled occurrence/run
-перепривязывает к точным новым session/turn/process/revision/input versions.
+Terminal transition в той же transaction сначала повторно проверяет exact
+source `WAITING_EXTERNAL` Turn, `SUSPENDED` RuntimeExecution, завершённый
+`WAITING_EXTERNAL` TurnAttempt, отсутствие TurnLease и open work. Затем source
+Turn получает terminal `CANCELLED` с outcome
+`integration_continuation_materialized`; его RuntimeExecution остаётся
+immutable terminal `SUSPENDED`, а provenance сохраняется в TurnAttempt,
+IntegrationContinuation, audit и `PredecessorTurnID`. Только после этого
+вставляется одна свежая RuntimeRevision/input/continuation Turn/future grant, а
+scheduled occurrence/run перепривязывается к точным новым
+session/turn/process/revision/input versions. Reject, approval expiry,
+pending/approved cancel и execution success/error используют один invariant;
+live/stale predecessor откатывает весь rebind.
 `ProcessRunSpec.continuation_kind` обязан быть закрытым union: `OWNER_GATE`
 требует gate/owner-feedback, `INTEGRATION` требует exact continuation ID/outcome
 digest; смешанная или неполная binding является повреждением графа и закрыто
@@ -527,11 +543,13 @@ Application rollback допустим только к образу, которы
 proof generation, audit и outbox назад не откатываются. При несовместимости
 оставить workload not ready и подготовить forward fix.
 
-После миграции `20260802000100` rollback выполняется только вперёд: старый
+После миграции `20260803000100` rollback выполняется только вперёд: старый
 runtime выключается, данные runtime execution/continuation сохраняются, новая
 migration или совместимый образ восстанавливает обслуживание. Удалять таблицы,
 уменьшать schema/policy revision, повторно открывать закрытые lease/grant либо
-выдавать cleanup authorization вручную запрещено.
+выдавать cleanup authorization вручную запрещено. Откат определения
+`work_claim_graph_is_active` к варианту без expiry также запрещён; correction
+выпускается следующей `CREATE OR REPLACE` forward migration.
 
 ## Prototype policy
 

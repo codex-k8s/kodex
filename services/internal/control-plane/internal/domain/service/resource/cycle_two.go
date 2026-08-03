@@ -851,11 +851,6 @@ func (service *Service) ManageWorkClaim(
 		"manage_work_claim_"+input.Action,
 		requestHash,
 		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return 0, err
-			}
-			workClaimNow = now
 			if input.Action == "CREATE" {
 				graph, err := service.lockOwnerGraphByTurn(
 					ctx, tx, input.Principal, input.TurnID,
@@ -878,6 +873,10 @@ func (service *Service) ManageWorkClaim(
 					return 0, errs.ErrStateConflict
 				}
 				lockedGraph = graph
+				workClaimNow, err = tx.CurrentTime(ctx)
+				if err != nil {
+					return 0, err
+				}
 				return lifecycleReceiptApplyOrReplay, nil
 			}
 			candidate, err := tx.Get(
@@ -918,9 +917,21 @@ func (service *Service) ManageWorkClaim(
 				}
 				return 0, errs.ErrStateConflict
 			}
+			currentSpec, ok := current.Spec.(entity.WorkClaimSpec)
+			if !ok || current.Kind != enum.KindWorkClaim ||
+				currentSpec.ProcessRunID != spec.ProcessRunID ||
+				currentSpec.TurnID != spec.TurnID ||
+				currentSpec.OwnerActorID != spec.OwnerActorID ||
+				currentSpec.WorkloadID != spec.WorkloadID {
+				return 0, errs.ErrStateConflict
+			}
+			workClaimNow, err = tx.CurrentTime(ctx)
+			if err != nil {
+				return 0, err
+			}
 			if current.Version == input.ExpectedVersion && current.State == enum.StateActive {
 				if input.Action == "RENEW" {
-					if err := requireUnexpiredWorkClaim(spec, now); err != nil {
+					if err := requireUnexpiredWorkClaim(currentSpec, workClaimNow); err != nil {
 						return 0, err
 					}
 				}
@@ -931,7 +942,7 @@ func (service *Service) ManageWorkClaim(
 				((input.Action == "RENEW" && current.State == enum.StateActive) ||
 					(input.Action == "RELEASE" && current.State == enum.StateCancelled)) {
 				if input.Action == "RENEW" {
-					if err := requireUnexpiredWorkClaim(spec, now); err != nil {
+					if err := requireUnexpiredWorkClaim(currentSpec, workClaimNow); err != nil {
 						return 0, err
 					}
 				}
@@ -947,6 +958,10 @@ func (service *Service) ManageWorkClaim(
 			if err != nil {
 				return err
 			}
+			replayNow, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
 			if receiptClaim.ID == "" {
 				receiptClaim = current
 			}
@@ -959,11 +974,11 @@ func (service *Service) ManageWorkClaim(
 				currentSpec.TurnID != storedSpec.TurnID {
 				return errs.ErrStateConflict
 			}
-			if input.Action == "RENEW" {
-				if err := requireUnexpiredWorkClaim(storedSpec, workClaimNow); err != nil {
+			if input.Action == "CREATE" || input.Action == "RENEW" {
+				if err := requireUnexpiredWorkClaim(storedSpec, replayNow); err != nil {
 					return err
 				}
-				if err := requireUnexpiredWorkClaim(currentSpec, workClaimNow); err != nil {
+				if err := requireUnexpiredWorkClaim(currentSpec, replayNow); err != nil {
 					return err
 				}
 			}

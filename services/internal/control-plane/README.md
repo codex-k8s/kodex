@@ -167,11 +167,13 @@ claim сохраняет отдельный server-owned claim-key hash в occur
 occurrence может повторно вернуть LeaseToken.
 `AdmitRuntimeExecution` и `HeartbeatRuntimeExecution` одной transaction по
 PostgreSQL clock выравнивают deadline RuntimeExecution и зависимого TurnLease;
-generic `RenewTurn` не получает runtime authority. `ManageWorkClaim(RENEW)` до
-receipt и mutation отклоняет уже истёкший `WorkClaimSpec.ExpiresAt`, поэтому
-старый receipt не раскрывается и claim не воскресает. `RequestOwnerGate`
-сверяет живые exact Turn/runtime deadlines до receipt и проигрывает watchdog
-после PostgreSQL deadline.
+generic `RenewTurn` не получает runtime authority. Deadline-sensitive paths
+читают fresh decision time только после canonical graph и exact target row
+locks. Поэтому `ManageWorkClaim(CREATE/RENEW)` replay повторно блокирует
+сохранённую claim до clock/receipt, а RENEW, начавшийся до expiry и продолживший
+после ожидания lock, не раскрывает старый ACTIVE result и не воскресает.
+`RequestOwnerGate`, Turn/scheduler leases и pinned Integration credentials
+используют тот же post-lock invariant.
 
 ## Доменные инварианты
 
@@ -188,12 +190,12 @@ receipt и mutation отклоняет уже истёкший `WorkClaimSpec.Ex
 | Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence; после runtime admission heartbeat атомарно продлевает RuntimeExecution и TurnLease до одного PostgreSQL deadline                                                                                                                                                                                                                                                                                                                                                                                         |
 | Восстановление хода      | истечение срока или ручной повтор сначала закрывает прежние attempt/lease/gate/claim, затем создаёт свежие `RuntimeRevision`, effective input, attempt и grant и атомарно перепривязывает единый current execution tuple процесса и `ScheduledRun`; `SourceRef` остаётся bounded server-owned identity, номер attempt хранится только в tuple; устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                  |
 | Runtime execution       | control-plane материализует server-owned tuple organization/project/process/session/thread/role/turn/attempt, immutable input digest, RuntimeRevision version/digest, закрытые ResourceClass и `NONE/PROJECT_READ_ONLY/CLUSTER_ADMIN`, exact workload/generation и monotonic fence; terminal/cancel/expiry закрывают Turn/ProcessRun/occurrence/ScheduledRun вместе, retry принимает только active/`FAILED`/`EXPIRED` и создаёт свежие revision/input/attempt/grant; cleanup проходит монотонные `NONE/ACTIVE/EXPIRED/CONSUMED` и невозможна без exact archive checksum и отдельной verifier attestation |
-| Integration continuation | suspension атомарно терминализирует старую RuntimeExecution как `SUSPENDED`, закрывает runtime и scheduler lease/attempt/claims, переводит Turn/Session/Process в `WAITING_EXTERNAL`, а применимые occurrence/ScheduledRun — в `CONTINUATION`; terminal decision/result перепривязывает полный scheduled current tuple к свежим RuntimeRevision/input/Turn/grant; retry delivery увеличивает attempt/version/fence для того же immutable outcome без повторного external effect, pending/повторно открытая delivery блокирует cleanup до rejoin |
+| Integration continuation | suspension атомарно терминализирует старую RuntimeExecution как `SUSPENDED`, закрывает runtime и scheduler lease/attempt/claims, переводит Turn/Session/Process в `WAITING_EXTERNAL`, а применимые occurrence/ScheduledRun — в `CONTINUATION`; terminal decision/result под теми же locks переводит source Turn в terminal `CANCELLED/integration_continuation_materialized`, сохраняет его provenance через RuntimeExecution/TurnAttempt/audit и `PredecessorTurnID`, затем создаёт один fresh RuntimeRevision/input/Turn/grant и перепривязывает полный scheduled current tuple; retry delivery увеличивает attempt/version/fence для того же immutable outcome без повторного external effect, pending/повторно открытая delivery блокирует cleanup до rejoin |
 | Процесс                  | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate                                                                                                                                                                                                                                                                                        |
 | Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; lease recovery под row lock сначала закрывает прежние turn/attempt/process/gate/claim/grant и immutable run, затем допускает новую attempt; `WAITING_OWNER/CONTINUATION` остаются открытым графом для overlap/delete и не попадают в scheduler expiry/claim; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
 | Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` выбирает unlocked candidate, затем блокирует полный graph и сам Gate последним, повторно сверяет PostgreSQL deadline и автономно закрывает просроченный graph; delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
 | Память                   | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; единый eligibility скрывает `DELETED` title/content в single/list/generic/FTS/vector путях и оставляет tombstone только в авторизованном audit/read path; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest                                                                                                                                                                                                                                                                                                       |
-| Заявка на работу         | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна; RENEW/replay проверяет PostgreSQL expiry до receipt и не оживляет истёкшую ACTIVE строку                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Заявка на работу         | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна; RENEW и CREATE/RENEW replay получают свежий PostgreSQL clock после canonical graph и exact WorkClaim lock, поэтому ожидание блокировки не позволяет раскрыть receipt или оживить истёкшую ACTIVE строку; database eligibility обновляется отдельной forward-only migration                                                                                                                                                                                                                                                                                                                        |
 | Метаданные артефакта     | только `RegisterArtifact` создаёт `PENDING`; точный scanner переводит `SCANNING`→`CLEAN`/`QUARANTINED`/`FAILED`; прикреплять и использовать разрешено только точный `CLEAN` digest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Ссылки разрешаются внутри текущих настроек RLS организации и проекта;
@@ -215,7 +217,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260802000100`,
+`20260803000100`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -421,9 +423,11 @@ controller bootstrap и закрыто сверяет catalog membership. При
 CLI дополнительно подключается именно этим LOGIN и сохраняет readback; только
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
 `20260731000200`, `20260731000300`, `20260731000400` и
-`20260731000500`, `20260731000600`, `20260801000100` и
-`20260802000100` явно forward-only:
-downgrade отклоняется,
+`20260731000500`, `20260731000600`, `20260801000100`,
+`20260802000100` и `20260803000100` явно forward-only. Уже применённая
+`20260731000500` не переписывается; `20260803000100` обновляет
+`work_claim_graph_is_active` через `CREATE OR REPLACE FUNCTION`, закрепляет
+database-expiry predicate и privilege/readback. Downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
 попытки, подтверждения и происхождение вектора. Откат приложения выполняется
 только совместимым образом; откат схемы — новой компенсирующей forward

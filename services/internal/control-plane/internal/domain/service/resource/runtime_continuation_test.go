@@ -182,6 +182,240 @@ func TestLeaseAndExpiryPredicatesFailClosed(t *testing.T) {
 	}
 }
 
+func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
+	checks := []struct {
+		file      string
+		function  string
+		lock      string
+		clock     string
+		receipt   string
+		lastLock  string
+		lastClock bool
+	}{
+		{"runtime.go", "ClaimTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "", "tx.NextQueuedTurn", true},
+		{"runtime.go", "RenewTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
+		{"specialized.go", "RequestOwnerGate", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
+		{"specialized.go", "ClaimScheduleOccurrence", "service.lockOwnerGraphByTurn", "tx.CurrentTime", "", "tx.NextScheduleOccurrence", true},
+		{"runtime_continuation.go", "integrationSessionContext", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
+		{"runtime_continuation.go", "resolveSelectedIntegrationBinding", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
+		{"runtime_continuation.go", "validatePinnedIntegrationContinuation", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
+	}
+	for _, check := range checks {
+		t.Run(check.function, func(t *testing.T) {
+			source := productionFunctionSource(t, check.file, check.function)
+			lock := strings.Index(source, check.lock)
+			clock := strings.Index(source, check.clock)
+			if check.lastClock {
+				clock = strings.LastIndex(source, check.clock)
+			}
+			if lock < 0 || clock < 0 || lock > clock {
+				t.Fatalf("%s can read decision time before authoritative row lock", check.function)
+			}
+			if check.lastLock != "" {
+				lastLock := strings.LastIndex(source, check.lastLock)
+				if lastLock < 0 || lastLock > clock {
+					t.Fatalf("%s does not refresh decision time after %s", check.function, check.lastLock)
+				}
+			}
+			if check.receipt != "" {
+				receipt := strings.Index(source, check.receipt)
+				if receipt < 0 || clock > receipt {
+					t.Fatalf("%s can expose a receipt before post-lock deadline validation", check.function)
+				}
+			}
+		})
+	}
+
+	workClaim := productionFunctionSource(t, "cycle_two.go", "ManageWorkClaim")
+	if strings.Count(workClaim, "tx.CurrentTime(ctx)") != 3 {
+		t.Fatal("ManageWorkClaim must refresh the decision clock after every exact claim lock")
+	}
+	nonCreate := strings.Index(workClaim, "candidate, err := tx.Get(")
+	rowLock := strings.Index(workClaim[nonCreate:], "current, err := tx.GetForUpdate(")
+	clock := strings.Index(workClaim[nonCreate:], "workClaimNow, err = tx.CurrentTime(ctx)")
+	if nonCreate < 0 || rowLock < 0 || clock < 0 || rowLock > clock {
+		t.Fatal("WorkClaim RENEW/RELEASE decision time is not after exact claim row lock")
+	}
+	createLock := strings.Index(workClaim, "service.lockOwnerGraphByTurn")
+	createClock := strings.Index(workClaim, "workClaimNow, err = tx.CurrentTime(ctx)")
+	if createLock < 0 || createClock < 0 || createLock > createClock {
+		t.Fatal("WorkClaim CREATE decision time is not after canonical graph lock")
+	}
+	replayLock := strings.Index(workClaim, "func(tx domainrepo.Transaction, stored entity.Resource) error")
+	replayClock := strings.Index(workClaim[replayLock:], "replayNow, err := tx.CurrentTime(ctx)")
+	replayClaimLock := strings.Index(workClaim[replayLock:], "current, err := tx.GetForUpdate(")
+	if replayLock < 0 || replayClaimLock < 0 || replayClock < 0 || replayClaimLock > replayClock {
+		t.Fatal("WorkClaim CREATE/RENEW receipt replay time is not after stored claim lock")
+	}
+	for _, claim := range []struct {
+		file     string
+		function string
+		lock     string
+	}{
+		{"runtime.go", "ClaimTurn", "tx.GetTurnLeaseForUpdate"},
+		{"specialized.go", "ClaimScheduleOccurrence", "service.lockOwnerGraphByTurn"},
+	} {
+		source := productionFunctionSource(t, claim.file, claim.function)
+		lock := strings.Index(source, claim.lock)
+		clock := strings.Index(source, "tx.CurrentTime(ctx)")
+		receipt := strings.Index(source, "tx.GetReceipt")
+		if lock < 0 || clock < lock || receipt < clock {
+			t.Fatalf("%s can expose a receipt before post-lock deadline validation", claim.function)
+		}
+	}
+}
+
+func TestIntegrationMaterializationReplacesPredecessorTurn(t *testing.T) {
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	organizationID := "3a3ed463-59fe-4a2b-9f96-58cd7d3dd526"
+	projectID := "fd0570db-07c9-4a9a-8d35-3657119068c3"
+	actorID := "5574792c-5721-4b85-83b7-e8c6857b8fef"
+	sessionID := "1373ea94-fdda-47f7-adbe-7ae3bc633c03"
+	turnID := "8bdfe85e-8ddf-4904-b139-bfa9139df42e"
+	processID := "e910cf2c-702b-4f8a-806f-6cfd094696cd"
+	revisionID := "ca9787b5-0ebf-44bb-bdb5-64b4f35c1713"
+	continuationID := "c27fc37f-c9ec-4c95-a307-101f30d3bc97"
+	digest := strings.Repeat("a", 64)
+	requestDigest := strings.Repeat("b", 64)
+
+	turn, err := entity.New(
+		turnID, organizationID, projectID, sessionID, actorID, enum.KindTurn,
+		"Integration source turn",
+		entity.TurnSpec{
+			SessionID: sessionID, Sequence: 1, SourceRef: "integration:test",
+			PromptArtifactID:  "3f1c3ac0-cd38-4e83-a7ae-68a03df08a96",
+			RuntimeRevisionID: revisionID, ProcessRunID: processID, Attempt: 1,
+			EffectiveInputSHA256: digest,
+		},
+		now,
+	)
+	if err != nil {
+		t.Fatalf("create source turn: %v", err)
+	}
+	turn, err = turn.Transition(enum.StateClaimed, now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("claim source turn: %v", err)
+	}
+	turn, err = turn.Transition(enum.StateWaitingExternal, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("suspend source turn: %v", err)
+	}
+	continuation := IntegrationContinuation{
+		ID: continuationID, OrganizationID: organizationID, ProjectID: projectID,
+		ProcessID: processID, SessionID: sessionID,
+		ThreadID: sessionID, RoleID: actorID, TurnID: turnID,
+		TurnVersion: turn.Version, Attempt: 1, RuntimeRevisionID: revisionID,
+		RuntimeRevisionVersion: 4, RuntimeRevisionSHA256: digest,
+		ImmutableInputSHA256: digest,
+		GrantGeneration:      7, RequestSHA256: requestDigest,
+		ContinuationState: "SUSPENDED",
+	}
+	runtime := RuntimeExecution{
+		OrganizationID: organizationID, ProjectID: projectID, ProcessID: processID,
+		SessionID: sessionID, ThreadID: sessionID, RoleID: actorID,
+		TurnID: turnID, Attempt: 1,
+		RuntimeRevisionID: revisionID, RuntimeRevisionVersion: 4,
+		RuntimeRevisionSHA256: digest, ImmutableInputSHA256: digest, GrantGeneration: 7,
+		WorkloadID: "runtime-controller", State: "SUSPENDED",
+		TerminalOutcome: "SUSPENDED", TerminalReference: continuationID,
+		TerminalSHA256: requestDigest,
+	}
+	attempt := domainrepo.TurnAttempt{
+		TurnID: turnID, Attempt: 1, WorkloadID: runtime.WorkloadID,
+		AuthorityGeneration: 7, State: "WAITING_EXTERNAL", InputSHA256: digest,
+		FinishedAt: now.Add(2 * time.Second), Outcome: "integration_approval",
+	}
+
+	replaced, err := replaceIntegrationPredecessor(
+		continuation, runtime, turn, attempt, now.Add(3*time.Second),
+	)
+	if err != nil {
+		t.Fatalf("replace predecessor: %v", err)
+	}
+	replacedSpec := replaced.Spec.(entity.TurnSpec)
+	if replaced.State != enum.StateCancelled || replaced.Version != turn.Version+1 ||
+		replacedSpec.Outcome != integrationPredecessorOutcome {
+		t.Fatalf("predecessor did not become an immutable replaced terminal: %#v", replaced)
+	}
+
+	runtime.LeaseID = "stale-runtime-lease"
+	if _, err := replaceIntegrationPredecessor(
+		continuation, runtime, turn, attempt, now.Add(3*time.Second),
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("live predecessor authority was accepted: %v", err)
+	}
+	runtime.LeaseID = ""
+	attempt.State = "CLAIMED"
+	if _, err := replaceIntegrationPredecessor(
+		continuation, runtime, turn, attempt, now.Add(3*time.Second),
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("open predecessor attempt was accepted: %v", err)
+	}
+}
+
+func TestIntegrationMaterializationClosesSourceBeforeSuccessorInsert(t *testing.T) {
+	source := productionFunctionSource(
+		t, "runtime_continuation.go", "materializeIntegrationContinuation",
+	)
+	if strings.Contains(source, "tx.GetRuntimeExecutionByTurnForUpdate(") {
+		t.Fatal("materialization acquires RuntimeExecution after Session/Turn/ProcessRun")
+	}
+	prelock := productionFunctionSource(
+		t, "runtime_continuation.go", "prelockIntegrationTerminalGraph",
+	)
+	runtimeLock := strings.Index(prelock, "GetRuntimeExecutionByTurnForUpdate")
+	sessionLock := strings.Index(prelock, "snapshot.SessionID")
+	if runtimeLock < 0 || sessionLock < 0 || runtimeLock > sessionLock {
+		t.Fatal("integration terminal graph does not lock RuntimeExecution before Session")
+	}
+	leaseCheck := strings.Index(source, "tx.GetTurnLeaseForUpdate")
+	replace := strings.Index(source, "replaceIntegrationPredecessor")
+	openWork := strings.Index(source, "tx.ProcessHasOpenWork")
+	update := strings.Index(source, "tx.Update(ctx, replacedTurn")
+	insert := strings.Index(source, "tx.Insert(ctx, turn)")
+	if leaseCheck < 0 || replace < leaseCheck || openWork < replace ||
+		update < openWork || insert < update {
+		t.Fatal("integration successor can be inserted before predecessor authority is closed")
+	}
+}
+
+func TestWorkClaimExpiryMigrationIsForwardOnly(t *testing.T) {
+	baseMigration, err := os.ReadFile(
+		"../../../../cmd/cli/migrations/20260731000500_control_plane_owner_wave_two.sql",
+	)
+	if err != nil {
+		t.Fatalf("read applied migration: %v", err)
+	}
+	functionStart := strings.Index(string(baseMigration), "CREATE FUNCTION control_plane.work_claim_graph_is_active")
+	functionEnd := strings.Index(string(baseMigration)[functionStart:], "$function$;")
+	if functionStart < 0 || functionEnd < 0 {
+		t.Fatal("work_claim_graph_is_active is absent in applied migration")
+	}
+	if strings.Contains(
+		string(baseMigration)[functionStart:functionStart+functionEnd],
+		"statement_timestamp()",
+	) {
+		t.Fatal("already-applied migration was destructively rewritten")
+	}
+	upgrade, err := os.ReadFile(
+		"../../../../cmd/cli/migrations/20260803000100_control_plane_work_claim_expiry.sql",
+	)
+	if err != nil {
+		t.Fatalf("read forward migration: %v", err)
+	}
+	for _, required := range []string{
+		"CREATE OR REPLACE FUNCTION control_plane.work_claim_graph_is_active",
+		"(claim.spec ->> 'expiresAt')::timestamptz > statement_timestamp()",
+		"REVOKE ALL ON FUNCTION control_plane.work_claim_graph_is_active",
+		"version = 20260803000100",
+		"migration 20260803000100 is forward-only",
+	} {
+		if !strings.Contains(string(upgrade), required) {
+			t.Fatalf("forward migration guard is absent: %s", required)
+		}
+	}
+}
+
 func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 	targets := map[string]struct {
 		file                 string

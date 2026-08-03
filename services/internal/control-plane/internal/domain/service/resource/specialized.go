@@ -416,10 +416,6 @@ func (service *Service) ClaimScheduleOccurrence(
 			ActorID:        input.Principal.ActorID,
 		},
 		func(tx domainrepo.Transaction) error {
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return err
-			}
 			bound, boundErr := tx.GetScheduleOccurrenceByClaimKey(
 				ctx,
 				input.Principal.OrganizationID,
@@ -439,6 +435,10 @@ func (service *Service) ClaimScheduleOccurrence(
 				if err := requireOwnerGraphRuntimeDisposition(
 					graph, runtimeDispositionAbsent,
 				); err != nil {
+					return err
+				}
+				now, err := tx.CurrentTime(ctx)
+				if err != nil {
 					return err
 				}
 				current := graph.Occurrence
@@ -504,11 +504,15 @@ func (service *Service) ClaimScheduleOccurrence(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
+			candidateNow, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
 			recovered, err := tx.ExpiredScheduleOccurrenceCandidates(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
-				now,
+				candidateNow,
 			)
 			if err != nil {
 				return err
@@ -526,9 +530,13 @@ func (service *Service) ClaimScheduleOccurrence(
 				if graph.Occurrence.ID != occurrence.ID {
 					return errs.ErrStateConflict
 				}
+				recoveryNow, err := tx.CurrentTime(ctx)
+				if err != nil {
+					return err
+				}
 				schedule := graph.Schedule
 				if err := service.recoverExpiredScheduleOccurrence(
-					ctx, tx, input.Principal, graph, now,
+					ctx, tx, input.Principal, graph, recoveryNow,
 				); err != nil {
 					return err
 				}
@@ -546,7 +554,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
-				now,
+				candidateNow,
 			)
 			if err != nil {
 				return err
@@ -575,7 +583,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				ctx,
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
-				now,
+				candidateNow,
 			)
 			if err != nil {
 				return err
@@ -688,6 +696,13 @@ func (service *Service) ClaimScheduleOccurrence(
 			if pinnedInputSHA256 != occurrence.EffectiveInputSHA256 {
 				return errs.ErrStateConflict
 			}
+			claimNow, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			if occurrence.State != "QUEUED" || occurrence.AvailableAt.After(claimNow) {
+				return errs.ErrStateConflict
+			}
 			session, sessionSpec, err := service.prepareScheduleSession(
 				ctx,
 				tx,
@@ -695,7 +710,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				schedule,
 				scheduleSpec,
 				revisionSpec,
-				now,
+				claimNow,
 			)
 			if err != nil {
 				return err
@@ -718,7 +733,7 @@ func (service *Service) ClaimScheduleOccurrence(
 			updatedSession, err := session.Update(
 				session.Name,
 				sessionSpec,
-				now,
+				claimNow,
 			)
 			if err != nil {
 				return errs.ErrStateConflict
@@ -761,7 +776,7 @@ func (service *Service) ClaimScheduleOccurrence(
 						processID,
 					),
 				},
-				now,
+				claimNow,
 			)
 			if err != nil {
 				return errs.ErrInternal
@@ -778,7 +793,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				State:               "QUEUED",
 				InputSHA256:         turnSpec.EffectiveInputSHA256,
 				LeaseFence:          turn.Version,
-				StartedAt:           now,
+				StartedAt:           claimNow,
 			}); err != nil {
 				return err
 			}
@@ -824,7 +839,7 @@ func (service *Service) ClaimScheduleOccurrence(
 						CurrentRuntimeRevisionVersion: runtimeRevision.Version,
 						CurrentInputSHA256:            turnSpec.EffectiveInputSHA256,
 					},
-					now,
+					claimNow,
 				)
 				if err != nil {
 					return errs.ErrInternal
@@ -857,7 +872,7 @@ func (service *Service) ClaimScheduleOccurrence(
 			occurrence.AuthorityGeneration = input.Principal.AuthorityGeneration
 			occurrence.TokenHash = hashString(token)
 			occurrence.ClaimKeySHA256 = keyHash
-			occurrence.LeaseExpiresAt = now.Add(occurrence.MaximumExecution)
+			occurrence.LeaseExpiresAt = claimNow.Add(occurrence.MaximumExecution)
 			occurrence.ExecutionSessionID = updatedSession.ID
 			occurrence.ExecutionSessionVersion = updatedSession.Version
 			occurrence.ExecutionTurnID = turn.ID
@@ -866,7 +881,7 @@ func (service *Service) ClaimScheduleOccurrence(
 			occurrence.ExecutionProcessVersion = scheduledProcess.Version
 			occurrence.ExecutionRuntimeRevisionID = runtimeRevision.ID
 			occurrence.ExecutionRuntimeRevisionVersion = runtimeRevision.Version
-			occurrence.UpdatedAt = now
+			occurrence.UpdatedAt = claimNow
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
 				occurrence,
@@ -893,7 +908,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				CurrentRuntimeRevisionID:      runtimeRevision.ID,
 				CurrentRuntimeRevisionVersion: runtimeRevision.Version,
 				CurrentInputSHA256:            turnSpec.EffectiveInputSHA256,
-				State:                         "CLAIMED", CreatedAt: now,
+				State:                         "CLAIMED", CreatedAt: claimNow,
 			}); err != nil {
 				return err
 			}
@@ -920,7 +935,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				KeyHash:        keyHash,
 				RequestHash:    requestHash,
 				Payload:        payload,
-				CreatedAt:      now,
+				CreatedAt:      claimNow,
 			}); err != nil {
 				return err
 			}
@@ -2548,13 +2563,6 @@ func (service *Service) RequestOwnerGate(
 				executionTurnID != input.TurnID || executionAttempt != input.Attempt {
 				return errs.ErrStateConflict
 			}
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return err
-			}
-			if !input.ExpiresAt.After(now) || input.ExpiresAt.After(now.Add(30*24*time.Hour)) {
-				return errs.ErrStateConflict
-			}
 			if gateTurn.Kind != enum.KindTurn ||
 				gateTurn.OwnerActorID != process.OwnerActorID ||
 				gateTurnSpec.SessionID != input.SessionID ||
@@ -2581,13 +2589,7 @@ func (service *Service) RequestOwnerGate(
 				sourceLease, err = tx.GetTurnLeaseForUpdate(ctx, gateTurn.ID)
 				if err != nil || sourceLease.Attempt != gateTurnSpec.Attempt ||
 					sourceLease.AuthorityGeneration != sourceAttempt.AuthorityGeneration ||
-					sourceLease.Fence != gateTurn.Version ||
-					!sourceLease.ExpiresAt.After(now) {
-					return errs.ErrStateConflict
-				}
-				if err := requireOwnerGateSuspensionLease(
-					graph.Runtime, sourceLease, now,
-				); err != nil {
+					sourceLease.Fence != gateTurn.Version {
 					return errs.ErrStateConflict
 				}
 			}
@@ -2606,6 +2608,20 @@ func (service *Service) RequestOwnerGate(
 					replaySpec.SessionID != gateTurnSpec.SessionID ||
 					replaySpec.TurnID != gateTurn.ID ||
 					replaySpec.Attempt != gateTurnSpec.Attempt {
+					return errs.ErrStateConflict
+				}
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			if !input.ExpiresAt.After(now) || input.ExpiresAt.After(now.Add(30*24*time.Hour)) {
+				return errs.ErrStateConflict
+			}
+			if process.State == enum.StateRunning {
+				if err := requireOwnerGateSuspensionLease(
+					graph.Runtime, sourceLease, now,
+				); err != nil {
 					return errs.ErrStateConflict
 				}
 			}

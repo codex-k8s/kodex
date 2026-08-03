@@ -392,10 +392,6 @@ func (service *Service) ClaimTurn(
 					authorityTurn.State != enum.StateClaimed) {
 				return errs.ErrPermissionDenied
 			}
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return err
-			}
 			var authorityLease domainrepo.TurnLease
 			if authorityTurn.State == enum.StateClaimed {
 				authorityLease, err = tx.GetTurnLeaseForUpdate(ctx, authorityTurn.ID)
@@ -409,6 +405,10 @@ func (service *Service) ClaimTurn(
 					}
 					return errs.ErrStateConflict
 				}
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
 			}
 			receipt, receiptErr := tx.GetReceipt(
 				ctx,
@@ -481,11 +481,16 @@ func (service *Service) ClaimTurn(
 				if leaseErr != nil {
 					return leaseErr
 				}
+				recoveryNow, err := tx.CurrentTime(ctx)
+				if err != nil {
+					return err
+				}
 				staleSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
 				if !ok || graph.Turn.State != enum.StateClaimed ||
 					graph.Turn.Version != stale.Turn.Version ||
 					staleSpec.Attempt != lockedLease.Attempt ||
-					lockedLease.AuthorityGeneration == 0 || lockedLease.ExpiresAt.After(now) ||
+					lockedLease.AuthorityGeneration == 0 ||
+					lockedLease.ExpiresAt.After(recoveryNow) ||
 					staleSpec.Attempt >= 100 {
 					return errs.ErrStateConflict
 				}
@@ -499,19 +504,19 @@ func (service *Service) ClaimTurn(
 					State:               "EXPIRED",
 					InputSHA256:         staleSpec.EffectiveInputSHA256,
 					LeaseFence:          stale.Lease.Fence,
-					FinishedAt:          now,
+					FinishedAt:          recoveryNow,
 					Outcome:             "lease_expired",
 				}); err != nil {
 					return err
 				}
 				if err := service.revokeExecutionClaims(
 					ctx, tx, input.Principal, staleSpec.ProcessRunID, stale.Turn.ID,
-					"lease_expired", now,
+					"lease_expired", recoveryNow,
 				); err != nil {
 					return err
 				}
 				requeued, staleSpec, err := service.prepareRetriedExecution(
-					ctx, tx, input.Principal, graph, staleSpec, now,
+					ctx, tx, input.Principal, graph, staleSpec, recoveryNow,
 				)
 				if err != nil {
 					return errs.ErrStateConflict
@@ -534,7 +539,7 @@ func (service *Service) ClaimTurn(
 					State:               "QUEUED",
 					InputSHA256:         staleSpec.EffectiveInputSHA256,
 					LeaseFence:          requeued.Version,
-					StartedAt:           now,
+					StartedAt:           recoveryNow,
 				}); err != nil {
 					return err
 				}
@@ -564,7 +569,11 @@ func (service *Service) ClaimTurn(
 			if err != nil {
 				return err
 			}
-			claimed, err := turn.Transition(enum.StateClaimed, now)
+			claimNow, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			claimed, err := turn.Transition(enum.StateClaimed, claimNow)
 			if err != nil {
 				return errs.ErrStateConflict
 			}
@@ -583,7 +592,7 @@ func (service *Service) ClaimTurn(
 				input.Principal.CallerWorkload,
 				input.IdempotencyKey,
 			)
-			expiresAt := now.Add(service.turnLeaseDuration)
+			expiresAt := claimNow.Add(service.turnLeaseDuration)
 			if err := tx.Update(ctx, claimed, turn.Version); err != nil {
 				return err
 			}
@@ -606,7 +615,7 @@ func (service *Service) ClaimTurn(
 				State:               "CLAIMED",
 				InputSHA256:         turnSpec.EffectiveInputSHA256,
 				LeaseFence:          claimed.Version,
-				StartedAt:           now,
+				StartedAt:           claimNow,
 			}); err != nil {
 				return err
 			}
@@ -736,21 +745,20 @@ func (service *Service) RenewTurn(
 			); err != nil {
 				return err
 			}
+			lease, err := tx.GetTurnLeaseForUpdate(ctx, input.TurnID)
+			if err != nil {
+				return err
+			}
 			now, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
 			}
-			lease, err := tx.ValidateTurnLease(
-				ctx, input.TurnID, hashString(input.LeaseToken),
-				input.Principal.CallerWorkload,
-				input.Principal.AuthorityGrantGeneration,
-				input.Attempt, now,
-			)
-			if err != nil || lease.Fence != current.Version ||
-				lease.AuthorityGeneration != input.AuthorityGeneration {
-				if err != nil {
-					return err
-				}
+			if lease.TokenHash != hashString(input.LeaseToken) ||
+				lease.WorkloadID != input.Principal.CallerWorkload ||
+				lease.AuthorityGeneration != input.Principal.AuthorityGrantGeneration ||
+				lease.AuthorityGeneration != input.AuthorityGeneration ||
+				lease.Attempt != input.Attempt || lease.Fence != current.Version ||
+				!lease.ExpiresAt.After(now) {
 				return errs.ErrStateConflict
 			}
 			receipt, receiptErr := tx.GetReceipt(
