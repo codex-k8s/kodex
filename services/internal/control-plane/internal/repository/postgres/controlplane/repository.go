@@ -1089,6 +1089,23 @@ func (wrapped *transaction) OpenSessionTurns(
 	return result, mapError(rows.Err())
 }
 
+func (wrapped *transaction) SessionHasLiveRuntimeExecution(
+	ctx context.Context,
+	organizationID, projectID, sessionID string,
+) (bool, error) {
+	var live bool
+	err := wrapped.tx.QueryRow(
+		ctx,
+		sqlRuntimeExecutionSessionHasLive,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"session_id":      sessionID,
+		},
+	).Scan(&live)
+	return live, mapError(err)
+}
+
 func (wrapped *transaction) SaveTurnLease(
 	ctx context.Context,
 	lease domainrepo.TurnLease,
@@ -2149,6 +2166,17 @@ func (wrapped *transaction) GetRuntimeExecutionByTurnForUpdate(
 ) (domainrepo.RuntimeExecution, error) {
 	return scanRuntimeExecution(wrapped.tx.QueryRow(
 		ctx, sqlRuntimeExecutionGetByTurnForUpdate,
+		pgx.StrictNamedArgs{"turn_id": turnID, "attempt": attempt},
+	))
+}
+
+func (wrapped *transaction) GetRuntimeExecutionByTurn(
+	ctx context.Context,
+	turnID string,
+	attempt uint32,
+) (domainrepo.RuntimeExecution, error) {
+	return scanRuntimeExecution(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeExecutionGetByTurn,
 		pgx.StrictNamedArgs{"turn_id": turnID, "attempt": attempt},
 	))
 }

@@ -52,22 +52,105 @@ func (service *Service) EnqueueTurn(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var enqueueSession entity.Resource
+	var enqueueProcessGraph lockedOwnerGraph
+	var enqueueDelegated bool
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"enqueue_turn",
 		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			session, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.SessionID,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			extraSessions := []string{input.SessionID}
+			if input.ProcessRunID == "" {
+				locked, err := service.lockOwnerGraphSet(
+					ctx, tx, input.Principal, nil, extraSessions,
+				)
+				if err != nil {
+					return 0, err
+				}
+				session, ok := locked.Sessions[input.SessionID]
+				if !ok || session.Kind != enum.KindSession ||
+					session.State != enum.StateActive ||
+					session.OwnerActorID != input.Principal.ActorID {
+					return 0, errs.ErrStateConflict
+				}
+				enqueueSession = session
+				return lifecycleReceiptApplyOrReplay, nil
+			}
+			candidate, err := tx.Get(
+				ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, input.ProcessRunID,
 			)
 			if err != nil {
-				return entity.Resource{}, err
+				return 0, err
 			}
+			candidateSpec, ok := candidate.Spec.(entity.ProcessRunSpec)
+			candidateCurrent, currentErr := currentExecution(candidateSpec)
+			if !ok || currentErr != nil || candidate.Kind != enum.KindProcessRun ||
+				candidate.State != enum.StateRunning ||
+				candidateSpec.RootInitiatorActorID != input.Principal.ActorID {
+				return 0, errs.ErrStateConflict
+			}
+			locked, err := service.lockOwnerGraphSet(
+				ctx, tx, input.Principal, []string{candidateCurrent.TurnID}, extraSessions,
+			)
+			if err != nil {
+				return 0, err
+			}
+			graph, ok := locked.ByTurn[candidateCurrent.TurnID]
+			if !ok || graph.Process.ID != input.ProcessRunID ||
+				graph.Process.Version != candidate.Version {
+				return 0, errs.ErrStateConflict
+			}
+			processSpec, ok := graph.Process.Spec.(entity.ProcessRunSpec)
+			lockedCurrent, lockedCurrentErr := currentExecution(processSpec)
+			if !ok || lockedCurrentErr != nil || lockedCurrent != candidateCurrent {
+				return 0, errs.ErrStateConflict
+			}
+			session, ok := locked.Sessions[input.SessionID]
+			if !ok || session.Kind != enum.KindSession ||
+				session.State != enum.StateActive ||
+				session.OwnerActorID != input.Principal.ActorID {
+				return 0, errs.ErrStateConflict
+			}
+			delegated := input.Principal.AuthoritySource == "AGENT_SESSION"
+			if delegated {
+				turnSpec, turnOK := graph.Turn.Spec.(entity.TurnSpec)
+				if !turnOK || graph.Turn.ID != input.Principal.AuthorityReference ||
+					turnSpec.Attempt != uint32(input.Principal.AuthorityRevision) ||
+					turnSpec.EffectiveInputSHA256 != input.Principal.AuthorityDigest ||
+					input.Principal.AuthorityGrantGeneration == 0 {
+					return 0, errs.ErrPermissionDenied
+				}
+				if err := requireOwnerGraphRuntimeDisposition(
+					graph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
+				); err != nil {
+					return 0, err
+				}
+			} else if err := requireOwnerGraphRuntimeDisposition(
+				graph, runtimeDispositionAbsent,
+			); err != nil {
+				return 0, err
+			}
+			enqueueSession = session
+			enqueueProcessGraph = graph
+			enqueueDelegated = delegated
+			return lifecycleReceiptApplyOrReplay, nil
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			storedSpec, ok := stored.Spec.(entity.TurnSpec)
+			if !ok || stored.Kind != enum.KindTurn ||
+				stored.OwnerActorID != input.Principal.ActorID ||
+				storedSpec.SessionID != enqueueSession.ID ||
+				storedSpec.ProcessRunID != input.ProcessRunID {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			session := enqueueSession
 			sessionSpec, ok := session.Spec.(entity.SessionSpec)
 			if !ok || session.Kind != enum.KindSession ||
 				session.State != enum.StateActive ||
@@ -75,8 +158,7 @@ func (service *Service) EnqueueTurn(
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			var delegation domainrepo.DelegationEdge
-			delegated := input.ProcessRunID != "" &&
-				input.Principal.AuthoritySource == "AGENT_SESSION"
+			delegated := input.ProcessRunID != "" && enqueueDelegated
 			if !delegated {
 				roleIDs, err := tx.ActorRoleIDs(
 					ctx,
@@ -104,15 +186,7 @@ func (service *Service) EnqueueTurn(
 				return entity.Resource{}, err
 			}
 			if input.ProcessRunID != "" {
-				process, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.ProcessRunID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				process := enqueueProcessGraph.Process
 				processSpec, ok := process.Spec.(entity.ProcessRunSpec)
 				if !ok || process.Kind != enum.KindProcessRun ||
 					process.State != enum.StateRunning ||
@@ -121,13 +195,7 @@ func (service *Service) EnqueueTurn(
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 				if delegated {
-					sourceTurn, err := tx.GetForUpdate(
-						ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-						input.Principal.AuthorityReference,
-					)
-					if err != nil {
-						return entity.Resource{}, err
-					}
+					sourceTurn := enqueueProcessGraph.Turn
 					sourceSpec, ok := sourceTurn.Spec.(entity.TurnSpec)
 					if !ok || sourceTurn.Kind != enum.KindTurn || sourceTurn.State.Terminal() ||
 						sourceTurn.OwnerActorID != processSpec.RootInitiatorActorID ||
@@ -137,13 +205,7 @@ func (service *Service) EnqueueTurn(
 						input.Principal.AuthorityGrantGeneration == 0 {
 						return entity.Resource{}, errs.ErrPermissionDenied
 					}
-					sourceSession, err := tx.GetForUpdate(
-						ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-						sourceSpec.SessionID,
-					)
-					if err != nil {
-						return entity.Resource{}, err
-					}
+					sourceSession := enqueueProcessGraph.Session
 					sourceSessionSpec, ok := sourceSession.Spec.(entity.SessionSpec)
 					if !ok || sourceSession.Kind != enum.KindSession ||
 						sourceSession.State != enum.StateActive ||

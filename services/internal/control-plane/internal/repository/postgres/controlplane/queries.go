@@ -129,6 +129,12 @@ var sqlRuntimeExecutionGetForUpdate string
 //go:embed sql/runtime_execution__get_by_turn_for_update.sql
 var sqlRuntimeExecutionGetByTurnForUpdate string
 
+//go:embed sql/runtime_execution__get_by_turn.sql
+var sqlRuntimeExecutionGetByTurn string
+
+//go:embed sql/runtime_execution__session_has_live.sql
+var sqlRuntimeExecutionSessionHasLive string
+
 //go:embed sql/runtime_execution__insert.sql
 var sqlRuntimeExecutionInsert string
 

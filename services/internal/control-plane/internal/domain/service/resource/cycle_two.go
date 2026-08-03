@@ -66,22 +66,31 @@ func (service *Service) ManageSession(
 	if input.Action != "ARCHIVE" && input.ArchiveRef != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-		Input    ManageSessionInput
-	}{identity(input.Principal), input})
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		Action                               string
+		SessionID                            string
+		ExpectedVersion                      uint64
+		Name                                 string
+		RoleID                               string
+		ConversationID                       string
+		PreferredProviderCredentialBindingID string
+		ArchiveRef                           string
+		ReasonCode                           string
+	}{
+		input.Action, input.SessionID, input.ExpectedVersion, input.Name,
+		input.RoleID, input.ConversationID,
+		input.PreferredProviderCredentialBindingID, input.ArchiveRef,
+		input.ReasonCode,
+	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
-		ctx,
-		input.Principal,
-		input.IdempotencyKey,
-		"manage_session_"+input.Action,
-		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			now := service.now().UTC().Truncate(time.Microsecond)
-			if input.Action == "CREATE" {
+	if input.Action == "CREATE" {
+		return service.withResourceReceipt(
+			ctx, input.Principal, input.IdempotencyKey, "manage_session_CREATE",
+			requestHash,
+			func(tx domainrepo.Transaction) (entity.Resource, error) {
+				now := service.now().UTC().Truncate(time.Microsecond)
 				role, err := tx.GetForUpdate(
 					ctx,
 					input.Principal.OrganizationID,
@@ -156,55 +165,101 @@ func (service *Service) ManageSession(
 				return session, service.appendMutationRecords(
 					ctx, tx, input.Principal, "create_session", session,
 				)
+			},
+		)
+	}
+
+	var locked lockedSessionLifecycle
+	var replaySession entity.Resource
+	return service.withValidatedResourceReceipt(
+		ctx, input.Principal, input.IdempotencyKey,
+		"manage_session_"+input.Action, requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, err := service.lockSessionLifecycleGraph(
+				ctx, tx, input.Principal, input.SessionID,
+			)
+			if err != nil {
+				return 0, err
 			}
-			current, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
+			locked = current
+			if current.Session.OwnerActorID != input.Principal.ActorID {
+				return 0, errs.ErrNotFound
+			}
+			live, err := tx.SessionHasLiveRuntimeExecution(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 				input.SessionID,
 			)
 			if err != nil {
-				return entity.Resource{}, err
+				return 0, err
 			}
-			if current.Kind != enum.KindSession ||
-				current.OwnerActorID != input.Principal.ActorID {
-				return entity.Resource{}, errs.ErrNotFound
+			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+				input.SessionID,
+			)
+			if err != nil {
+				return 0, err
 			}
-			if current.Version != input.ExpectedVersion {
-				return entity.Resource{}, errs.ErrVersionMismatch
+			if live || blocked {
+				return 0, errs.ErrStateConflict
 			}
-			spec, ok := current.Spec.(entity.SessionSpec)
-			if !ok {
-				return entity.Resource{}, errs.ErrInternal
-			}
-			target := enum.StateArchived
-			switch input.Action {
-			case "ARCHIVE":
-				spec.ArchiveRef = input.ArchiveRef
-			case "CANCEL":
-				target = enum.StateCancelled
-			case "CLEANUP":
-				if current.State == enum.StateDeletionPending {
-					target = enum.StateDeleted
-				} else if current.State == enum.StateArchived ||
-					current.State == enum.StateCancelled {
-					target = enum.StateDeletionPending
-				} else {
-					return entity.Resource{}, errs.ErrStateConflict
+			if input.Action == "ARCHIVE" || input.Action == "CLEANUP" {
+				if len(current.Graphs) != 0 {
+					return 0, errs.ErrStateConflict
+				}
+			} else {
+				for _, graph := range current.Graphs {
+					if graph.Occurrence.ID != "" ||
+						requireOwnerGraphRuntimeDisposition(
+							graph, runtimeDispositionAbsent,
+						) != nil {
+						return 0, errs.ErrStateConflict
+					}
 				}
 			}
+			if current.Session.Version == input.ExpectedVersion {
+				if _, err := sessionLifecycleTarget(current.Session, input); err != nil {
+					return 0, err
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if current.Session.Version == input.ExpectedVersion+1 &&
+				sessionLifecycleResultMatches(current.Session, input) {
+				replaySession = current.Session
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(replaySession, stored)
+		},
+		func(tx domainrepo.Transaction) (entity.Resource, error) {
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return entity.Resource{}, err
+			}
 			if input.Action == "CLOSE" || input.Action == "CANCEL" {
-				if err := service.cancelSessionTurns(
-					ctx, tx, input.Principal, current.ID, input.ReasonCode, now,
+				if err := service.cancelSessionGraphs(
+					ctx, tx, input.Principal, locked.Graphs, input.ReasonCode, now,
 				); err != nil {
 					return entity.Resource{}, err
 				}
 			}
-			updated, err := current.ReplaceAndTransition(spec, target, now)
+			target, err := sessionLifecycleTarget(locked.Session, input)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			spec, ok := locked.Session.Spec.(entity.SessionSpec)
+			if !ok {
+				return entity.Resource{}, errs.ErrInternal
+			}
+			if input.Action == "ARCHIVE" {
+				spec.ArchiveRef = input.ArchiveRef
+			}
+			updated, err := locked.Session.ReplaceAndTransition(spec, target, now)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			if err := tx.Update(ctx, updated, current.Version); err != nil {
+			if err := tx.Update(ctx, updated, locked.Session.Version); err != nil {
 				return entity.Resource{}, err
 			}
 			return updated, service.appendMutationRecords(
@@ -212,6 +267,47 @@ func (service *Service) ManageSession(
 			)
 		},
 	)
+}
+
+func sessionLifecycleTarget(
+	current entity.Resource,
+	input ManageSessionInput,
+) (enum.State, error) {
+	switch input.Action {
+	case "CLOSE", "ARCHIVE":
+		if current.State != enum.StateActive {
+			return "", errs.ErrStateConflict
+		}
+		return enum.StateArchived, nil
+	case "CANCEL":
+		if current.State != enum.StateActive {
+			return "", errs.ErrStateConflict
+		}
+		return enum.StateCancelled, nil
+	case "CLEANUP":
+		if current.State == enum.StateArchived || current.State == enum.StateCancelled {
+			return enum.StateDeletionPending, nil
+		}
+		if current.State == enum.StateDeletionPending {
+			return enum.StateDeleted, nil
+		}
+	}
+	return "", errs.ErrStateConflict
+}
+
+func sessionLifecycleResultMatches(current entity.Resource, input ManageSessionInput) bool {
+	switch input.Action {
+	case "CLOSE":
+		return current.State == enum.StateArchived
+	case "ARCHIVE":
+		spec, ok := current.Spec.(entity.SessionSpec)
+		return ok && current.State == enum.StateArchived && spec.ArchiveRef == input.ArchiveRef
+	case "CANCEL":
+		return current.State == enum.StateCancelled
+	case "CLEANUP":
+		return current.State == enum.StateDeletionPending || current.State == enum.StateDeleted
+	}
+	return false
 }
 
 func (service *Service) selectProviderBinding(
@@ -359,27 +455,64 @@ func weightedCandidateIndex(weights []uint32, slot uint64) (int, bool) {
 	return 0, false
 }
 
-func (service *Service) cancelSessionTurns(
+func (service *Service) cancelSessionGraphs(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
-	sessionID, reason string,
+	graphs []lockedOwnerGraph,
+	reason string,
 	now time.Time,
 ) error {
-	turns, err := tx.OpenSessionTurns(
-		ctx, principal.OrganizationID, principal.ProjectID, sessionID,
-	)
-	if err != nil {
-		return err
-	}
-	for _, item := range turns {
-		if item.Attempt.TurnID != item.Turn.ID {
+	currentProcessTurns := make(map[string]entity.Resource, len(graphs))
+	for _, graph := range graphs {
+		if graph.Occurrence.ID != "" ||
+			requireOwnerGraphRuntimeDisposition(graph, runtimeDispositionAbsent) != nil {
 			return errs.ErrStateConflict
 		}
-		if _, err := service.cancelTurnExecution(
-			ctx, tx, principal, item.Turn, reason, now,
+		turnSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+		if !ok || graph.Turn.State.Terminal() ||
+			graph.Session.ID != turnSpec.SessionID {
+			return errs.ErrStateConflict
+		}
+		cancelled, err := service.cancelTurnExecution(
+			ctx, tx, principal, graph.Turn, reason, now,
+		)
+		if err != nil {
+			return err
+		}
+		cancelledSpec := cancelled.Spec.(entity.TurnSpec)
+		if cancelledSpec.ProcessRunID != "" {
+			processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+			current, currentErr := currentExecution(processSpec)
+			if !processOK || currentErr != nil {
+				return errs.ErrStateConflict
+			}
+			if current.TurnID == cancelled.ID && current.Attempt == cancelledSpec.Attempt {
+				currentProcessTurns[cancelledSpec.ProcessRunID] = cancelled
+			}
+		}
+	}
+	orderedProcessIDs := make([]string, 0, len(currentProcessTurns))
+	for processID := range currentProcessTurns {
+		orderedProcessIDs = append(orderedProcessIDs, processID)
+	}
+	slices.Sort(orderedProcessIDs)
+	for _, processID := range orderedProcessIDs {
+		cancelled := currentProcessTurns[processID]
+		cancelledSpec := cancelled.Spec.(entity.TurnSpec)
+		if err := service.completeProcessFromTurn(
+			ctx, tx, principal, cancelled, cancelledSpec,
 		); err != nil {
 			return err
+		}
+		process, err := tx.GetForUpdate(
+			ctx, principal.OrganizationID, principal.ProjectID, processID,
+		)
+		if err != nil {
+			return err
+		}
+		if process.Kind != enum.KindProcessRun || !process.State.Terminal() {
+			return errs.ErrStateConflict
 		}
 	}
 	return nil
@@ -710,6 +843,7 @@ func (service *Service) ManageWorkClaim(
 	}
 	var receiptClaim entity.Resource
 	var lockedGraph lockedOwnerGraph
+	var workClaimNow time.Time
 	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
@@ -717,6 +851,11 @@ func (service *Service) ManageWorkClaim(
 		"manage_work_claim_"+input.Action,
 		requestHash,
 		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return 0, err
+			}
+			workClaimNow = now
 			if input.Action == "CREATE" {
 				graph, err := service.lockOwnerGraphByTurn(
 					ctx, tx, input.Principal, input.TurnID,
@@ -780,11 +919,22 @@ func (service *Service) ManageWorkClaim(
 				return 0, errs.ErrStateConflict
 			}
 			if current.Version == input.ExpectedVersion && current.State == enum.StateActive {
+				if input.Action == "RENEW" {
+					if err := requireUnexpiredWorkClaim(spec, now); err != nil {
+						return 0, err
+					}
+				}
+				receiptClaim = current
 				return lifecycleReceiptApply, nil
 			}
 			if current.Version == input.ExpectedVersion+1 &&
 				((input.Action == "RENEW" && current.State == enum.StateActive) ||
 					(input.Action == "RELEASE" && current.State == enum.StateCancelled)) {
+				if input.Action == "RENEW" {
+					if err := requireUnexpiredWorkClaim(spec, now); err != nil {
+						return 0, err
+					}
+				}
 				receiptClaim = current
 				return lifecycleReceiptReplay, nil
 			}
@@ -809,10 +959,18 @@ func (service *Service) ManageWorkClaim(
 				currentSpec.TurnID != storedSpec.TurnID {
 				return errs.ErrStateConflict
 			}
+			if input.Action == "RENEW" {
+				if err := requireUnexpiredWorkClaim(storedSpec, workClaimNow); err != nil {
+					return err
+				}
+				if err := requireUnexpiredWorkClaim(currentSpec, workClaimNow); err != nil {
+					return err
+				}
+			}
 			return resourceReceiptMatchesCurrent(receiptClaim, stored)
 		},
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			now := service.now().UTC().Truncate(time.Microsecond)
+			now := workClaimNow
 			if input.Action == "CREATE" {
 				process := lockedGraph.Process
 				turn := lockedGraph.Turn
@@ -930,8 +1088,11 @@ func (service *Service) ManageWorkClaim(
 					current.State != enum.StateActive {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
+				if err := requireUnexpiredWorkClaim(spec, now); err != nil {
+					return entity.Resource{}, err
+				}
 				if err := service.validateActiveWorkClaimGraph(
-					ctx, tx, input.Principal, current, spec,
+					ctx, tx, input.Principal, lockedGraph, current, spec,
 				); err != nil {
 					return entity.Resource{}, err
 				}
@@ -959,6 +1120,13 @@ func (service *Service) ManageWorkClaim(
 			)
 		},
 	)
+}
+
+func requireUnexpiredWorkClaim(spec entity.WorkClaimSpec, now time.Time) error {
+	if spec.ExpiresAt.IsZero() || !spec.ExpiresAt.After(now) {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (service *Service) lockOwnerGateAfterGraph(

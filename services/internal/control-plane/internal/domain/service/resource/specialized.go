@@ -62,6 +62,35 @@ func (service *Service) ManageSchedule(
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
 			now := service.now().UTC().Truncate(time.Microsecond)
+			var current entity.Resource
+			if input.Action == "UPDATE" {
+				// Schedule — canonical predecessor pinned resources для UPDATE.
+				// Открытый occurrence означает, что безопасная смена immutable
+				// execution input невозможна; переход закрыто отклоняется.
+				current, err = tx.GetForUpdate(
+					ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, input.ScheduleID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				if current.Kind != enum.KindSchedule ||
+					current.Version != input.ExpectedVersion {
+					return entity.Resource{}, errs.ErrVersionMismatch
+				}
+				if err := requireLifecycleOwner(input.Principal, current); err != nil {
+					return entity.Resource{}, err
+				}
+				open, openErr := tx.HasOpenScheduleOccurrence(
+					ctx, current.OrganizationID, current.ProjectID, current.ID,
+				)
+				if openErr != nil {
+					return entity.Resource{}, openErr
+				}
+				if open {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			}
 			if input.Action == "CREATE" || input.Action == "UPDATE" {
 				if input.Action == "CREATE" {
 					if input.DetachGitManagement {
@@ -216,21 +245,23 @@ func (service *Service) ManageSchedule(
 					created,
 				)
 			}
-			current, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.ScheduleID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			if current.Kind != enum.KindSchedule ||
-				current.Version != input.ExpectedVersion {
-				return entity.Resource{}, errs.ErrVersionMismatch
-			}
-			if err := requireLifecycleOwner(input.Principal, current); err != nil {
-				return entity.Resource{}, err
+			if current.ID == "" {
+				current, err = tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.ScheduleID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				if current.Kind != enum.KindSchedule ||
+					current.Version != input.ExpectedVersion {
+					return entity.Resource{}, errs.ErrVersionMismatch
+				}
+				if err := requireLifecycleOwner(input.Principal, current); err != nil {
+					return entity.Resource{}, err
+				}
 			}
 			if input.Action == "UPDATE" {
 				nextSpec, err := configurationUpdateSpec(
@@ -1593,12 +1624,152 @@ func (service *Service) StartProcess(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var startTargetGraph lockedOwnerGraph
+	var startParentGraph lockedOwnerGraph
+	var startDelegation domainrepo.DelegationEdge
+	var receiptProcess entity.Resource
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"start_process",
 		requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			targetTurnID := input.RootTurnID
+			turnIDs := []string{targetTurnID}
+			var parentCandidate entity.Resource
+			var parentCurrent executionTuple
+			if input.ParentProcessID != "" {
+				targetTurnID = input.Principal.AuthorityReference
+				turnIDs[0] = targetTurnID
+				var err error
+				parentCandidate, err = tx.Get(
+					ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, input.ParentProcessID,
+				)
+				if err != nil {
+					return 0, err
+				}
+				parentSpec, ok := parentCandidate.Spec.(entity.ProcessRunSpec)
+				if !ok || parentCandidate.Kind != enum.KindProcessRun ||
+					parentCandidate.State.Terminal() {
+					return 0, errs.ErrStateConflict
+				}
+				parentCurrent, err = currentExecution(parentSpec)
+				if err != nil {
+					return 0, err
+				}
+				turnIDs = append(turnIDs, parentCurrent.TurnID)
+			}
+			locked, err := service.lockOwnerGraphSet(
+				ctx, tx, input.Principal, turnIDs, nil,
+			)
+			if err != nil {
+				return 0, err
+			}
+			targetGraph, ok := locked.ByTurn[targetTurnID]
+			if !ok {
+				return 0, errs.ErrStateConflict
+			}
+			targetSpec, ok := targetGraph.Turn.Spec.(entity.TurnSpec)
+			if !ok || targetGraph.Turn.Kind != enum.KindTurn ||
+				targetGraph.Turn.State.Terminal() ||
+				targetGraph.Session.Kind != enum.KindSession ||
+				targetGraph.Session.State != enum.StateActive ||
+				targetGraph.Turn.OwnerActorID != input.Principal.ActorID ||
+				targetGraph.Session.OwnerActorID != input.Principal.ActorID {
+				return 0, errs.ErrStateConflict
+			}
+			startTargetGraph = targetGraph
+			if input.ParentProcessID == "" {
+				if targetSpec.SessionID != input.RootSessionID ||
+					targetSpec.Attempt != input.RootAttempt {
+					return 0, errs.ErrStateConflict
+				}
+				if targetSpec.ProcessRunID == "" {
+					if err := requireOwnerGraphRuntimeDisposition(
+						targetGraph, runtimeDispositionAbsent,
+					); err != nil {
+						return 0, err
+					}
+					return lifecycleReceiptApply, nil
+				}
+				receiptProcess = targetGraph.Process
+				if err := requireOwnerGraphRuntimeDisposition(
+					targetGraph, runtimeDispositionAbsent,
+					runtimeDispositionNonterminal, runtimeDispositionTerminal,
+				); err != nil {
+					return 0, err
+				}
+				processSpec, ok := receiptProcess.Spec.(entity.ProcessRunSpec)
+				if !ok || processSpec.ParentProcessRunID != "" ||
+					processSpec.RootSessionID != input.RootSessionID ||
+					processSpec.RootTurnID != input.RootTurnID ||
+					processSpec.RootAttempt != input.RootAttempt {
+					return 0, errs.ErrStateConflict
+				}
+				return lifecycleReceiptReplay, nil
+			}
+			parentGraph, ok := locked.ByTurn[parentCurrent.TurnID]
+			if !ok || parentGraph.Process.ID != input.ParentProcessID ||
+				parentGraph.Process.Version != parentCandidate.Version {
+				return 0, errs.ErrStateConflict
+			}
+			parentSpec, ok := parentGraph.Process.Spec.(entity.ProcessRunSpec)
+			lockedParentCurrent, currentErr := currentExecution(parentSpec)
+			if !ok || currentErr != nil || lockedParentCurrent != parentCurrent ||
+				parentGraph.Process.State.Terminal() ||
+				parentSpec.RootInitiatorActorID != input.Principal.ActorID {
+				return 0, errs.ErrStateConflict
+			}
+			if err := requireOwnerGraphRuntimeDisposition(
+				parentGraph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
+			); err != nil {
+				return 0, err
+			}
+			delegation, err := tx.GetDelegationEdgeByTargetTurn(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID, targetTurnID,
+			)
+			if err != nil || delegation.ParentProcessRunID != parentGraph.Process.ID ||
+				delegation.TargetTurnID != targetTurnID ||
+				delegation.TargetAttempt != uint32(input.Principal.AuthorityRevision) ||
+				delegation.TargetInputSHA256 != input.Principal.AuthorityDigest ||
+				delegation.RootInitiatorActorID != parentSpec.RootInitiatorActorID ||
+				delegation.GrantGeneration != input.Principal.AuthorityGrantGeneration ||
+				targetSpec.SessionID != delegation.TargetSessionID ||
+				targetSpec.Attempt != delegation.TargetAttempt ||
+				targetSpec.EffectiveInputSHA256 != delegation.TargetInputSHA256 {
+				return 0, errs.ErrStateConflict
+			}
+			startParentGraph = parentGraph
+			startDelegation = delegation
+			if targetSpec.ProcessRunID == parentGraph.Process.ID {
+				if err := requireOwnerGraphRuntimeDisposition(
+					targetGraph, runtimeDispositionAbsent,
+				); err != nil {
+					return 0, err
+				}
+				return lifecycleReceiptApply, nil
+			}
+			receiptProcess = targetGraph.Process
+			if err := requireOwnerGraphRuntimeDisposition(
+				targetGraph, runtimeDispositionAbsent,
+				runtimeDispositionNonterminal, runtimeDispositionTerminal,
+			); err != nil {
+				return 0, err
+			}
+			childSpec, ok := receiptProcess.Spec.(entity.ProcessRunSpec)
+			if !ok || childSpec.ParentProcessRunID != parentGraph.Process.ID ||
+				childSpec.DelegationID != delegation.ID ||
+				childSpec.TargetTurnID != targetTurnID ||
+				childSpec.TargetAttempt != delegation.TargetAttempt {
+				return 0, errs.ErrStateConflict
+			}
+			return lifecycleReceiptReplay, nil
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(receiptProcess, stored)
+		},
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
 			var delegatedTargetTurn entity.Resource
 			rootActorID := input.Principal.ActorID
@@ -1625,30 +1796,14 @@ func (service *Service) StartProcess(
 			scheduleID := ""
 			occurrenceID := ""
 			if input.ParentProcessID != "" {
-				parent, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.ParentProcessID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				parent := startParentGraph.Process
 				parentSpec, ok := parent.Spec.(entity.ProcessRunSpec)
 				if !ok || parent.Kind != enum.KindProcessRun ||
 					parent.State.Terminal() ||
 					parentSpec.RootInitiatorActorID != input.Principal.ActorID {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				delegation, err := tx.GetDelegationEdgeByTargetTurn(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.Principal.AuthorityReference,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				delegation := startDelegation
 				if delegation.ParentProcessRunID != parent.ID ||
 					delegation.TargetTurnID != input.Principal.AuthorityReference ||
 					delegation.TargetAttempt != uint32(input.Principal.AuthorityRevision) ||
@@ -1657,13 +1812,7 @@ func (service *Service) StartProcess(
 					delegation.GrantGeneration != input.Principal.AuthorityGrantGeneration {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				targetTurn, err := tx.GetForUpdate(
-					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-					delegation.TargetTurnID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				targetTurn := startTargetGraph.Turn
 				targetSpec, ok := targetTurn.Spec.(entity.TurnSpec)
 				if !ok || targetTurn.Kind != enum.KindTurn || targetTurn.State.Terminal() ||
 					targetTurn.OwnerActorID != parentSpec.RootInitiatorActorID ||
@@ -1673,13 +1822,7 @@ func (service *Service) StartProcess(
 					targetSpec.EffectiveInputSHA256 != delegation.TargetInputSHA256 {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				targetSession, err := tx.GetForUpdate(
-					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-					delegation.TargetSessionID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				targetSession := startTargetGraph.Session
 				if targetSession.Kind != enum.KindSession ||
 					targetSession.State != enum.StateActive ||
 					targetSession.OwnerActorID != parentSpec.RootInitiatorActorID {
@@ -1709,24 +1852,8 @@ func (service *Service) StartProcess(
 				targetTurnVersion = targetTurn.Version + 1
 				targetAttempt = delegation.TargetAttempt
 			} else {
-				session, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.RootSessionID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				turn, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.RootTurnID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				session := startTargetGraph.Session
+				turn := startTargetGraph.Turn
 				turnSpec, ok := turn.Spec.(entity.TurnSpec)
 				if !ok || session.Kind != enum.KindSession ||
 					session.State != enum.StateActive ||
@@ -1837,13 +1964,7 @@ func (service *Service) StartProcess(
 			}
 			boundTurn := delegatedTargetTurn
 			if boundTurn.ID == "" {
-				boundTurn, err = tx.GetForUpdate(
-					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-					rootTurnID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
+				boundTurn = startTargetGraph.Turn
 			}
 			boundSpec, ok := boundTurn.Spec.(entity.TurnSpec)
 			if !ok || boundTurn.Kind != enum.KindTurn || boundTurn.State.Terminal() ||
@@ -2427,6 +2548,13 @@ func (service *Service) RequestOwnerGate(
 				executionTurnID != input.TurnID || executionAttempt != input.Attempt {
 				return errs.ErrStateConflict
 			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			if !input.ExpiresAt.After(now) || input.ExpiresAt.After(now.Add(30*24*time.Hour)) {
+				return errs.ErrStateConflict
+			}
 			if gateTurn.Kind != enum.KindTurn ||
 				gateTurn.OwnerActorID != process.OwnerActorID ||
 				gateTurnSpec.SessionID != input.SessionID ||
@@ -2437,6 +2565,31 @@ func (service *Service) RequestOwnerGate(
 				input.Principal.AuthorityRevision != uint64(gateTurnSpec.Attempt) ||
 				input.Principal.AuthorityDigest != gateTurnSpec.EffectiveInputSHA256 {
 				return errs.ErrStateConflict
+			}
+			var sourceAttempt domainrepo.TurnAttempt
+			var sourceLease domainrepo.TurnLease
+			if process.State == enum.StateRunning {
+				sourceAttempt, err = tx.GetTurnAttemptForUpdate(
+					ctx, gateTurn.ID, gateTurnSpec.Attempt,
+				)
+				if err != nil || sourceAttempt.State != "CLAIMED" ||
+					sourceAttempt.InputSHA256 != gateTurnSpec.EffectiveInputSHA256 ||
+					sourceAttempt.AuthorityGeneration !=
+						input.Principal.AuthorityGrantGeneration {
+					return errs.ErrStateConflict
+				}
+				sourceLease, err = tx.GetTurnLeaseForUpdate(ctx, gateTurn.ID)
+				if err != nil || sourceLease.Attempt != gateTurnSpec.Attempt ||
+					sourceLease.AuthorityGeneration != sourceAttempt.AuthorityGeneration ||
+					sourceLease.Fence != gateTurn.Version ||
+					!sourceLease.ExpiresAt.After(now) {
+					return errs.ErrStateConflict
+				}
+				if err := requireOwnerGateSuspensionLease(
+					graph.Runtime, sourceLease, now,
+				); err != nil {
+					return errs.ErrStateConflict
+				}
 			}
 			var replayGate entity.Resource
 			if process.State == enum.StateWaitingOwner {
@@ -2526,20 +2679,7 @@ func (service *Service) RequestOwnerGate(
 			if open {
 				return errs.ErrStateConflict
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
-			attempt, err := tx.GetTurnAttemptForUpdate(
-				ctx, gateTurn.ID, gateTurnSpec.Attempt,
-			)
-			if err != nil || attempt.State != "CLAIMED" ||
-				attempt.InputSHA256 != gateTurnSpec.EffectiveInputSHA256 ||
-				attempt.AuthorityGeneration !=
-					input.Principal.AuthorityGrantGeneration {
-				return errs.ErrStateConflict
-			}
-			lease, err := tx.GetTurnLeaseForUpdate(ctx, gateTurn.ID)
-			if err != nil || lease.Attempt != gateTurnSpec.Attempt ||
-				lease.AuthorityGeneration != attempt.AuthorityGeneration ||
-				lease.Fence != gateTurn.Version {
+			if sourceAttempt.TurnID == "" || sourceLease.TurnID == "" {
 				return errs.ErrStateConflict
 			}
 			gateID := uuid.NewString()
@@ -2548,10 +2688,10 @@ func (service *Service) RequestOwnerGate(
 			); err != nil {
 				return err
 			}
-			attempt.State = "WAITING_OWNER"
-			attempt.FinishedAt = now
-			attempt.Outcome = "owner_gate_pending"
-			if err := tx.FinishTurnAttempt(ctx, attempt); err != nil {
+			sourceAttempt.State = "WAITING_OWNER"
+			sourceAttempt.FinishedAt = now
+			sourceAttempt.Outcome = "owner_gate_pending"
+			if err := tx.FinishTurnAttempt(ctx, sourceAttempt); err != nil {
 				return err
 			}
 			gateTurnSpec.ResultArtifactID = input.ResultArtifactID
@@ -2565,7 +2705,7 @@ func (service *Service) RequestOwnerGate(
 			if err := tx.Update(ctx, waitingTurn, gateTurn.Version); err != nil {
 				return err
 			}
-			if err := tx.DeleteTurnLease(ctx, gateTurn.ID, lease.Fence); err != nil {
+			if err := tx.DeleteTurnLease(ctx, gateTurn.ID, sourceLease.Fence); err != nil {
 				return err
 			}
 			deliveryID := uuid.NewString()

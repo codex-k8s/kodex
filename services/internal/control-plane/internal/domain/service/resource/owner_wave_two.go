@@ -182,27 +182,11 @@ func (service *Service) validateActiveWorkClaimGraph(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
+	graph lockedOwnerGraph,
 	claim entity.Resource,
 	spec entity.WorkClaimSpec,
 ) error {
-	session, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.SessionID,
-	)
-	if err != nil {
-		return err
-	}
-	turn, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.TurnID,
-	)
-	if err != nil {
-		return err
-	}
-	process, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, spec.ProcessRunID,
-	)
-	if err != nil {
-		return err
-	}
+	session, turn, process := graph.Session, graph.Turn, graph.Process
 	turnSpec, turnOK := turn.Spec.(entity.TurnSpec)
 	processSpec, processOK := process.Spec.(entity.ProcessRunSpec)
 	if !turnOK || !processOK || claim.State != enum.StateActive ||

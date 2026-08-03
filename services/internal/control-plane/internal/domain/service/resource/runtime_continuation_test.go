@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
@@ -37,6 +38,150 @@ func TestLifecycleReceiptValidationPrecedesLookup(t *testing.T) {
 	}
 }
 
+func productionFunctionSource(t *testing.T, fileName, functionName string) string {
+	t.Helper()
+	content, err := os.ReadFile(fileName)
+	if err != nil {
+		t.Fatalf("read %s: %v", fileName, err)
+	}
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseFile(fset, fileName, content, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", fileName, err)
+	}
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != functionName {
+			continue
+		}
+		start := fset.Position(function.Pos()).Offset
+		end := fset.Position(function.End()).Offset
+		return string(content[start:end])
+	}
+	t.Fatalf("function %s was not found in %s", functionName, fileName)
+	return ""
+}
+
+func TestRemediationEntryPointsKeepCriticalGuards(t *testing.T) {
+	manageSession := productionFunctionSource(t, "cycle_two.go", "ManageSession")
+	for _, guard := range []string{
+		"lockSessionLifecycleGraph", "SessionHasLiveRuntimeExecution",
+		"IntegrationContinuationBlocksCleanup", "withValidatedResourceReceipt",
+	} {
+		if !strings.Contains(manageSession, guard) {
+			t.Fatalf("ManageSession guard %s is absent", guard)
+		}
+	}
+
+	for _, functionName := range []string{"AdmitRuntimeExecution", "HeartbeatRuntimeExecution"} {
+		source := productionFunctionSource(t, "runtime_continuation.go", functionName)
+		if !strings.Contains(source, "requireActiveRuntimeLeaseGraph") ||
+			!strings.Contains(source, "RenewTurnLease") {
+			t.Fatalf("%s does not renew the exact two-part runtime lease", functionName)
+		}
+	}
+
+	workClaim := productionFunctionSource(t, "cycle_two.go", "ManageWorkClaim")
+	if !strings.Contains(workClaim, "tx.CurrentTime") ||
+		!strings.Contains(workClaim, "requireUnexpiredWorkClaim") {
+		t.Fatal("ManageWorkClaim can classify RENEW without PostgreSQL-clock expiry")
+	}
+
+	ownerGate := productionFunctionSource(t, "specialized.go", "RequestOwnerGate")
+	deadline := strings.Index(ownerGate, "requireOwnerGateSuspensionLease")
+	receipt := strings.Index(ownerGate, "tx.GetReceipt")
+	if deadline < 0 || receipt < 0 || deadline > receipt {
+		t.Fatal("RequestOwnerGate reads receipt before exact lease deadline validation")
+	}
+
+	manageSchedule := productionFunctionSource(t, "specialized.go", "ManageSchedule")
+	scheduleLock := strings.Index(manageSchedule, "if input.Action == \"UPDATE\"")
+	pinnedLock := strings.Index(manageSchedule, "input.Spec.TargetResourceID")
+	if scheduleLock < 0 || pinnedLock < 0 || scheduleLock > pinnedLock {
+		t.Fatal("ManageSchedule UPDATE can lock pinned resource before Schedule")
+	}
+}
+
+func TestPublicGraphEntryPointsDoNotLockSharedRowsBeforeResolver(t *testing.T) {
+	checks := []struct {
+		file     string
+		function string
+		resolver string
+	}{
+		{"cycle_two.go", "ManageWorkClaim", "lockOwnerGraphByTurn"},
+		{"specialized.go", "StartProcess", "lockOwnerGraphSet"},
+		{"runtime.go", "EnqueueTurn", "lockOwnerGraphSet"},
+		{"specialized.go", "CompleteProcess", "lockOwnerGraphByProcess"},
+		{"specialized.go", "CancelProcess", "lockOwnerGraphByProcess"},
+	}
+	for _, check := range checks {
+		t.Run(check.function, func(t *testing.T) {
+			source := productionFunctionSource(t, check.file, check.function)
+			resolver := strings.Index(source, check.resolver)
+			manualLock := strings.Index(source, "tx.GetForUpdate")
+			if resolver < 0 || (manualLock >= 0 && manualLock < resolver) {
+				t.Fatalf("%s can lock a shared row before %s", check.function, check.resolver)
+			}
+		})
+	}
+}
+
+func TestBatchOwnerGraphResolverKeepsGlobalAcquisitionOrder(t *testing.T) {
+	source := productionFunctionSource(t, "owner_graph_lock.go", "lockOwnerGraphSet")
+	calls := []string{
+		"GetRuntimeExecutionByTurnForUpdate", "GetScheduleOccurrenceForUpdate",
+		"GetForUpdate(\n\t\t\tctx, principal.OrganizationID, principal.ProjectID, scheduleID",
+		"GetScheduledRunForUpdate",
+		"GetForUpdate(\n\t\t\tctx, principal.OrganizationID, principal.ProjectID, sessionID",
+		"GetForUpdate(\n\t\t\tctx, principal.OrganizationID, principal.ProjectID, turnID",
+		"GetForUpdate(\n\t\t\tctx, principal.OrganizationID, principal.ProjectID, processID",
+	}
+	previous := -1
+	for _, call := range calls {
+		position := strings.Index(source, call)
+		if position < 0 || position <= previous {
+			t.Fatalf("batch owner graph order is broken at %s", call)
+		}
+		previous = position
+	}
+	postLockAbsenceCheck := strings.LastIndex(source, "tx.GetRuntimeExecutionByTurn(")
+	if postLockAbsenceCheck <= previous {
+		t.Fatal("runtime absence is not rechecked after Session/Turn/Process locks")
+	}
+}
+
+func TestLeaseAndExpiryPredicatesFailClosed(t *testing.T) {
+	now := time.Date(2026, 8, 3, 10, 0, 0, 0, time.UTC)
+	claim := entity.WorkClaimSpec{ExpiresAt: now.Add(time.Second)}
+	if err := requireUnexpiredWorkClaim(claim, now); err != nil {
+		t.Fatalf("live work claim was rejected: %v", err)
+	}
+	claim.ExpiresAt = now
+	if err := requireUnexpiredWorkClaim(claim, now); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("expired work claim returned %v", err)
+	}
+
+	turnLease := domainrepo.TurnLease{ExpiresAt: now.Add(time.Minute)}
+	pending := RuntimeExecution{State: "PENDING"}
+	if err := requireOwnerGateSuspensionLease(&pending, turnLease, now); err != nil {
+		t.Fatalf("live pending runtime was rejected: %v", err)
+	}
+	leased := RuntimeExecution{
+		State: "RUNNING", LeaseID: "lease",
+		LeaseTokenSHA256: strings.Repeat("a", 64),
+		LeaseExpiresAt:   turnLease.ExpiresAt,
+	}
+	if err := requireOwnerGateSuspensionLease(&leased, turnLease, now); err != nil {
+		t.Fatalf("coherent runtime lease was rejected: %v", err)
+	}
+	leased.LeaseExpiresAt = now
+	if err := requireOwnerGateSuspensionLease(
+		&leased, turnLease, now,
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("expired runtime suspension returned %v", err)
+	}
+}
+
 func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 	targets := map[string]struct {
 		file                 string
@@ -45,6 +190,9 @@ func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 		receiptAfterResolver bool
 	}{
 		"ManageWorkClaim":            {"cycle_two.go", true, true, false},
+		"ManageSession":              {"cycle_two.go", true, true, false},
+		"StartProcess":               {"specialized.go", true, true, false},
+		"EnqueueTurn":                {"runtime.go", true, true, false},
 		"CompleteProcess":            {"specialized.go", true, true, false},
 		"CancelProcess":              {"specialized.go", true, true, false},
 		"CompleteTurn":               {"runtime.go", true, true, false},
@@ -104,6 +252,8 @@ func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 			})
 			resolver := calls["lockOwnerGraphByTurn"]
 			resolver = append(resolver, calls["lockOwnerGraphByProcess"]...)
+			resolver = append(resolver, calls["lockOwnerGraphSet"]...)
+			resolver = append(resolver, calls["lockSessionLifecycleGraph"]...)
 			resolver = append(resolver, calls["prelockScheduledGraphByTurn"]...)
 			resolver = append(resolver, calls["lockOwnerGateAfterGraph"]...)
 			if len(resolver) == 0 {
@@ -433,21 +583,30 @@ func TestRuntimeMutationRejectsStaleFenceAndAuthority(t *testing.T) {
 func TestAdmissionReceiptIsExposedOnlyWhileLeaseIsCurrent(t *testing.T) {
 	token := strings.Repeat("a", 64)
 	current := RuntimeExecution{
-		ID:    "3ed0d109-5eba-4e4e-8b98-f755f6e6fc6b",
+		ID:      "3ed0d109-5eba-4e4e-8b98-f755f6e6fc6b",
+		TurnID:  "bd823044-f6c9-43df-a56f-44a9870ef57d",
+		Attempt: 2, GrantGeneration: 7,
 		State: "ADMITTED", Version: 2, Fence: 2,
 		LeaseTokenSHA256: hashString(token),
 	}
 	now := time.Now()
 	current.LeaseExpiresAt = now.Add(time.Minute)
+	turnLease := domainrepo.TurnLease{
+		TurnID: current.TurnID, Attempt: current.Attempt,
+		AuthorityGeneration: current.GrantGeneration,
+		ExpiresAt:           current.LeaseExpiresAt,
+	}
 	stored := AdmitRuntimeExecutionResult{Execution: current, LeaseToken: token}
-	if err := validateAdmitRuntimeReceipt(current, stored, now); err != nil {
+	if err := validateAdmitRuntimeReceipt(current, turnLease, stored, now); err != nil {
 		t.Fatalf("live admission replay was rejected: %v", err)
 	}
 	expired := current
 	expired.LeaseExpiresAt = now
 	expiredStored := stored
 	expiredStored.Execution = expired
-	if err := validateAdmitRuntimeReceipt(expired, expiredStored, now); !errors.Is(
+	expiredLease := turnLease
+	expiredLease.ExpiresAt = now
+	if err := validateAdmitRuntimeReceipt(expired, expiredLease, expiredStored, now); !errors.Is(
 		err, errs.ErrStateConflict,
 	) {
 		t.Fatalf("expired admission lease token was exposed: %v", err)
@@ -457,7 +616,7 @@ func TestAdmissionReceiptIsExposedOnlyWhileLeaseIsCurrent(t *testing.T) {
 	revoked.Version++
 	revoked.Fence++
 	revoked.LeaseTokenSHA256 = ""
-	if err := validateAdmitRuntimeReceipt(revoked, stored, now); !errors.Is(err, errs.ErrStateConflict) {
+	if err := validateAdmitRuntimeReceipt(revoked, turnLease, stored, now); !errors.Is(err, errs.ErrStateConflict) {
 		t.Fatalf("revoked lease token was exposed: %v", err)
 	}
 }

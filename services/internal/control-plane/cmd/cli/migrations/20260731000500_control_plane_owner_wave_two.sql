@@ -330,6 +330,7 @@ SET search_path = pg_catalog, control_plane
 AS $function$
     SELECT claim.kind = 'WORK_CLAIM'
        AND claim.state = 'ACTIVE'
+       AND (claim.spec ->> 'expiresAt')::timestamptz > statement_timestamp()
        AND EXISTS (
             SELECT 1
               FROM control_plane.resources AS session

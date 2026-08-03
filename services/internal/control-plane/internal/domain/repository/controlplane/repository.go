@@ -421,6 +421,7 @@ type Transaction interface {
 	LatestRuntimeRevision(context.Context, string, string) (entity.Resource, error)
 	ExpiredClaimedTurnCandidates(context.Context, string, string, string, int, time.Time) ([]ExpiredTurn, error)
 	OpenSessionTurns(context.Context, string, string, string) ([]SessionTurn, error)
+	SessionHasLiveRuntimeExecution(context.Context, string, string, string) (bool, error)
 	NextQueuedTurn(context.Context, string, string, string) (entity.Resource, error)
 	SaveTurnLease(context.Context, TurnLease) error
 	RenewTurnLease(context.Context, TurnLease, time.Time) (TurnLease, error)
@@ -439,6 +440,7 @@ type Transaction interface {
 	FinishTurnAttempt(context.Context, TurnAttempt) error
 	GetTurnAttemptForUpdate(context.Context, string, uint32) (TurnAttempt, error)
 	GetRuntimeExecutionForUpdate(context.Context, string) (RuntimeExecution, error)
+	GetRuntimeExecutionByTurn(context.Context, string, uint32) (RuntimeExecution, error)
 	GetRuntimeExecutionByTurnForUpdate(context.Context, string, uint32) (RuntimeExecution, error)
 	InsertRuntimeExecution(context.Context, RuntimeExecution) error
 	UpdateRuntimeExecution(context.Context, RuntimeExecution, uint64, uint64) error

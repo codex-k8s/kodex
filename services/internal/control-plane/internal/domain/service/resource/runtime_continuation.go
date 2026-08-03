@@ -239,7 +239,8 @@ func (service *Service) resolveBoundExecution(
 		return resolvedExecution{}, errs.ErrNotFound
 	}
 	sessionSpec, ok := session.Spec.(entity.SessionSpec)
-	if !ok || session.Kind != enum.KindSession || session.OwnerActorID != turn.OwnerActorID {
+	if !ok || session.Kind != enum.KindSession || session.State != enum.StateActive ||
+		session.OwnerActorID != turn.OwnerActorID {
 		return resolvedExecution{}, errs.ErrStateConflict
 	}
 	processSpec, ok := process.Spec.(entity.ProcessRunSpec)
@@ -480,6 +481,7 @@ func (service *Service) AdmitRuntimeExecution(
 	}
 	var result AdmitRuntimeExecutionResult
 	var receiptExecution RuntimeExecution
+	var receiptTurnLease domainrepo.TurnLease
 	var receiptNow time.Time
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "admit_runtime_execution",
@@ -491,18 +493,24 @@ func (service *Service) AdmitRuntimeExecution(
 			if err != nil {
 				return 0, err
 			}
-			if _, err := service.requireActiveRuntimeGraph(
+			activeNow, turnLease, err := service.requireActiveRuntimeLeaseGraph(
 				ctx, tx, input.Principal, locked.Execution,
-			); err != nil {
+			)
+			if err != nil {
 				return 0, err
 			}
 			receiptExecution = locked.Execution
-			receiptNow = locked.Now
+			receiptTurnLease = turnLease
+			receiptNow = activeNow
 			return runtimeMutationReceiptDisposition(
 				locked.Execution, input, []string{"PENDING"}, []string{"ADMITTED"}, 1,
 			)
 		},
-		func() error { return validateAdmitRuntimeReceipt(receiptExecution, result, receiptNow) },
+		func() error {
+			return validateAdmitRuntimeReceipt(
+				receiptExecution, receiptTurnLease, result, receiptNow,
+			)
+		},
 		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
@@ -511,7 +519,7 @@ func (service *Service) AdmitRuntimeExecution(
 			if err := matchRuntimeMutation(execution, input, "PENDING"); err != nil {
 				return err
 			}
-			now, err := service.requireActiveRuntimeGraph(
+			now, turnLease, err := service.requireActiveRuntimeLeaseGraph(
 				ctx, tx, input.Principal, execution,
 			)
 			if err != nil {
@@ -526,6 +534,10 @@ func (service *Service) AdmitRuntimeExecution(
 			execution.LeaseTokenSHA256 = hashString(leaseToken)
 			execution.LeaseExpiresAt = now.Add(service.turnLeaseDuration)
 			execution.UpdatedAt = now
+			turnLease.ExpiresAt = execution.LeaseExpiresAt
+			if _, err := tx.RenewTurnLease(ctx, turnLease, now); err != nil {
+				return err
+			}
 			if err := tx.UpdateRuntimeExecution(
 				ctx, execution, expectedVersion, expectedFence,
 			); err != nil {
@@ -558,6 +570,7 @@ func (service *Service) HeartbeatRuntimeExecution(
 	}
 	var result RuntimeExecution
 	var receiptExecution RuntimeExecution
+	var receiptTurnLease domainrepo.TurnLease
 	err = service.withLifecycleReceipt(
 		ctx, input.Principal, input.IdempotencyKey, "heartbeat_runtime_execution",
 		requestHash, &result,
@@ -568,9 +581,10 @@ func (service *Service) HeartbeatRuntimeExecution(
 			if err != nil {
 				return 0, err
 			}
-			if _, err := service.requireActiveRuntimeGraph(
+			_, turnLease, err := service.requireActiveRuntimeLeaseGraph(
 				ctx, tx, input.Principal, locked.Execution,
-			); err != nil {
+			)
+			if err != nil {
 				return 0, err
 			}
 			if locked.Execution.LeaseTokenSHA256 != hashString(input.LeaseToken) ||
@@ -578,18 +592,27 @@ func (service *Service) HeartbeatRuntimeExecution(
 				return 0, errs.ErrStateConflict
 			}
 			receiptExecution = locked.Execution
+			receiptTurnLease = turnLease
 			return runtimeMutationReceiptDisposition(
 				locked.Execution, input,
 				[]string{"ADMITTED", "RUNNING"}, []string{"RUNNING"}, 1,
 			)
 		},
-		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
+		func() error {
+			if err := runtimeReceiptMatchesCurrent(receiptExecution, result); err != nil {
+				return err
+			}
+			if !receiptTurnLease.ExpiresAt.Equal(receiptExecution.LeaseExpiresAt) {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
 		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
 			if err != nil {
 				return err
 			}
-			now, err := service.requireActiveRuntimeGraph(
+			now, turnLease, err := service.requireActiveRuntimeLeaseGraph(
 				ctx, tx, input.Principal, execution,
 			)
 			if err != nil {
@@ -609,6 +632,10 @@ func (service *Service) HeartbeatRuntimeExecution(
 			execution.State = "RUNNING"
 			execution.LeaseExpiresAt = now.Add(service.turnLeaseDuration)
 			execution.UpdatedAt = now
+			turnLease.ExpiresAt = execution.LeaseExpiresAt
+			if _, err := tx.RenewTurnLease(ctx, turnLease, now); err != nil {
+				return err
+			}
 			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
 			}
@@ -837,6 +864,7 @@ func runtimeReceiptMatchesCurrent(current, stored RuntimeExecution) error {
 
 func validateAdmitRuntimeReceipt(
 	current RuntimeExecution,
+	turnLease domainrepo.TurnLease,
 	stored AdmitRuntimeExecutionResult,
 	now time.Time,
 ) error {
@@ -845,6 +873,10 @@ func validateAdmitRuntimeReceipt(
 	}
 	if current.State != "ADMITTED" || current.LeaseTokenSHA256 == "" ||
 		!current.LeaseExpiresAt.After(now) ||
+		turnLease.TurnID != current.TurnID ||
+		turnLease.Attempt != current.Attempt ||
+		turnLease.AuthorityGeneration != current.GrantGeneration ||
+		!turnLease.ExpiresAt.Equal(current.LeaseExpiresAt) ||
 		hashString(stored.LeaseToken) != current.LeaseTokenSHA256 {
 		return errs.ErrStateConflict
 	}
@@ -2129,11 +2161,33 @@ func (service *Service) requireActiveRuntimeGraph(
 	principal value.Principal,
 	execution RuntimeExecution,
 ) (time.Time, error) {
-	turn, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, execution.TurnID,
+	now, _, err := service.requireActiveRuntimeLeaseGraph(ctx, tx, principal, execution)
+	return now, err
+}
+
+// requireActiveRuntimeLeaseGraph проверяет две части единой runtime lease.
+// TurnLease и RuntimeExecution.LeaseExpiresAt должны оставаться одной exact
+// server-owned tuple; heartbeat/admit продлевают их атомарно PostgreSQL clock.
+func (service *Service) requireActiveRuntimeLeaseGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	execution RuntimeExecution,
+) (time.Time, domainrepo.TurnLease, error) {
+	graph, err := service.lockOwnerGraphByTurn(
+		ctx, tx, principal, execution.TurnID,
 	)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, domainrepo.TurnLease{}, err
+	}
+	if graph.Runtime == nil || graph.Runtime.ID != execution.ID ||
+		graph.Runtime.Version != execution.Version || graph.Runtime.Fence != execution.Fence {
+		return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
+	}
+	session, turn, process := graph.Session, graph.Turn, graph.Process
+	if session.Kind != enum.KindSession || session.State != enum.StateActive ||
+		session.OwnerActorID != principal.ActorID {
+		return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
 	}
 	spec, ok := turn.Spec.(entity.TurnSpec)
 	if !ok || turn.Kind != enum.KindTurn || turn.OwnerActorID != principal.ActorID ||
@@ -2142,19 +2196,26 @@ func (service *Service) requireActiveRuntimeGraph(
 		spec.ProcessRunID != execution.ProcessID || spec.SessionID != execution.SessionID ||
 		spec.RuntimeRevisionID != execution.RuntimeRevisionID ||
 		spec.EffectiveInputSHA256 != execution.ImmutableInputSHA256 {
-		return time.Time{}, errs.ErrStateConflict
+		return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
+	}
+	processSpec, ok := process.Spec.(entity.ProcessRunSpec)
+	current, currentErr := currentExecution(processSpec)
+	if !ok || currentErr != nil || process.Kind != enum.KindProcessRun ||
+		process.State != enum.StateRunning || process.OwnerActorID != principal.ActorID ||
+		!executionMatchesTurn(current, turn, spec) {
+		return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
 	}
 	lease, err := tx.GetTurnLeaseForUpdate(ctx, turn.ID)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, domainrepo.TurnLease{}, err
 	}
 	attempt, err := tx.GetTurnAttemptForUpdate(ctx, turn.ID, execution.Attempt)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, domainrepo.TurnLease{}, err
 	}
 	now, err := tx.CurrentTime(ctx)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, domainrepo.TurnLease{}, err
 	}
 	if lease.Attempt != execution.Attempt ||
 		lease.AuthorityGeneration != execution.GrantGeneration ||
@@ -2162,9 +2223,24 @@ func (service *Service) requireActiveRuntimeGraph(
 		attempt.AuthorityGeneration != execution.GrantGeneration ||
 		attempt.InputSHA256 != execution.ImmutableInputSHA256 ||
 		!attempt.FinishedAt.IsZero() {
-		return time.Time{}, errs.ErrStateConflict
+		return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
 	}
-	return now, nil
+	switch execution.State {
+	case "PENDING":
+		if execution.LeaseID != "" || execution.LeaseTokenSHA256 != "" ||
+			!execution.LeaseExpiresAt.IsZero() {
+			return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
+		}
+	case "ADMITTED", "RUNNING":
+		if execution.LeaseID == "" || execution.LeaseTokenSHA256 == "" ||
+			!execution.LeaseExpiresAt.After(now) ||
+			!execution.LeaseExpiresAt.Equal(lease.ExpiresAt) {
+			return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
+		}
+	default:
+		return time.Time{}, domainrepo.TurnLease{}, errs.ErrStateConflict
+	}
+	return now, lease, nil
 }
 
 func (service *Service) closeRuntimeGraph(
@@ -2846,6 +2922,35 @@ func (service *Service) suspendRuntimeExecutionForOwnerGate(
 		ctx, tx, principal, "suspend_runtime_for_owner_gate", execution.ID,
 		"RUNTIME_EXECUTION", execution.Version, now,
 	)
+}
+
+func requireOwnerGateSuspensionLease(
+	execution *RuntimeExecution,
+	turnLease domainrepo.TurnLease,
+	now time.Time,
+) error {
+	if !turnLease.ExpiresAt.After(now) {
+		return errs.ErrStateConflict
+	}
+	if execution == nil {
+		return nil
+	}
+	switch execution.State {
+	case "PENDING":
+		if execution.LeaseID != "" || execution.LeaseTokenSHA256 != "" ||
+			!execution.LeaseExpiresAt.IsZero() {
+			return errs.ErrStateConflict
+		}
+	case "ADMITTED", "RUNNING":
+		if execution.LeaseID == "" || execution.LeaseTokenSHA256 == "" ||
+			!execution.LeaseExpiresAt.After(now) ||
+			!execution.LeaseExpiresAt.Equal(turnLease.ExpiresAt) {
+			return errs.ErrStateConflict
+		}
+	default:
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (service *Service) validatePinnedIntegrationContinuation(

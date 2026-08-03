@@ -42,5 +42,7 @@ WHERE turn.organization_id = @organization_id::uuid
       'QUEUED', 'CLAIMED', 'RUNNING', 'WAITING_OWNER',
       'WAITING_EXTERNAL', 'BLOCKED'
   )
+-- Candidate discovery намеренно не блокирует graph rows. После выбора
+-- lockOwnerGraphSet получает все RuntimeExecution/schedule/session/turn/process
+-- rows единым глобальным порядком и повторно сверяет этот набор.
 ORDER BY (turn.spec ->> 'sequence')::bigint, turn.id
-FOR UPDATE OF turn, attempt

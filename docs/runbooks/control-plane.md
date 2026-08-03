@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.11.0
-updated: 2026-08-02
+version: 1.12.0
+updated: 2026-08-03
 ---
 
 # Диагностика и восстановление control-plane
@@ -291,6 +291,18 @@ occurrence query обязана находить `CLAIMED`, `WAITING_OWNER`, `CO
 ошибочно станет unscheduled. PostgreSQL
 deadlock/serialization retry остаётся safety net, а не штатной синхронизацией.
 
+Для Session lifecycle и delegation проверить batch acquisition всех затронутых
+graphs: RuntimeExecution/occurrence/schedule/run сортируются раньше всех
+Session/Turn/ProcessRun. `ManageSession` обязан повторить open-turn discovery
+под Session lock. ARCHIVE/CLEANUP при open Turn, live runtime либо любой
+non-`REJOINED` continuation той же session должны вернуть закрытый conflict;
+CLOSE/CANCEL с live runtime или scheduled graph не должны менять ни одной
+строки и направляют оператора к specialized transition. `StartProcess` и
+cross-session `EnqueueTurn` повторно сверяют server-owned parent current tuple,
+delegation edge и target после locks; target с появившейся RuntimeExecution не
+перепривязывается. Отсутствие runtime recheck выполняется read-only после
+Session/Turn locks, поэтому не создаёт поздний обратный row lock.
+
 Если RuntimeExecution/Turn terminal, а ProcessRun остался `RUNNING`, считать
 transaction некорректной и не исправлять строки вручную. Retry сохранённых
 `FAILED/EXPIRED` обязан оставить прежний outcome в старой RuntimeExecution,
@@ -339,6 +351,23 @@ PostgreSQL expiry. `ClaimScheduleOccurrence` использует server-owned
 graph, затем сверяются workload/generation/token/deadline и только потом
 допустим replay. После runtime claim, terminal, expiry или rebind прежний
 LeaseToken не возвращается.
+
+После `AdmitRuntimeExecution` и каждого `HeartbeatRuntimeExecution` сверить в
+одном readback равные deadlines RuntimeExecution и TurnLease. Они продлеваются
+одной transaction только по PostgreSQL clock и exact attempt/generation/token;
+расхождение считается повреждением graph, generic `RenewTurn` его не чинит.
+`ManageWorkClaim(RENEW)` проверяет `WorkClaimSpec.ExpiresAt` тем же PostgreSQL
+clock до receipt и mutation: истёкший ACTIVE claim нельзя replay-ить или
+продлить. `RequestOwnerGate` до receipt требует живой TurnLease, а для
+ADMITTED/RUNNING — живую runtime lease с тем же deadline; PENDING допустим
+только без выданного lease ID/token/deadline. После deadline выигрывает
+watchdog/expiry, а Gate не создаётся.
+
+При `ManageSchedule(UPDATE)` Schedule должен блокироваться до target/prompt/
+revision/session. Если существует open occurrence, UPDATE fail-closed и не
+держит pinned rows; concurrent claim после ожидания Schedule повторно сверяет
+immutable snapshot. PostgreSQL `40P01` здесь не является допустимым способом
+выбора winner.
 
 Generic `CompleteTurn`, `CancelTurn`, `CompleteProcess`, `CancelProcess`, stale
 `ClaimTurn` и scheduler recovery не являются runtime authority: при current
