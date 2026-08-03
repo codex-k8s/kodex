@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: runtime-controller
+  labels: {app.kubernetes.io/name: runtime-controller}
+spec:
+  groups:
+    - name: runtime-controller
+      rules:
+        - alert: RuntimeControllerNotReady
+          expr: max(mattercodex_runtime_controller_readiness{ready="false"}) == 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Runtime controller is not ready
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md
+        - alert: RuntimeControllerReconcileErrors
+          expr: sum(rate(mattercodex_runtime_controller_failures_total[10m])) > 0.1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Runtime reconciliation is repeatedly failing
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md
+        - alert: RuntimeControllerCapacityDeferred
+          expr: sum(increase(mattercodex_runtime_controller_operations_total{operation="capacity",outcome="deferred"}[30m])) > 20
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Runtime capacity admission is persistently deferred
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md
+        - alert: RuntimeControllerArchiveStalled
+          expr: sum(increase(mattercodex_runtime_controller_operations_total{operation=~"archive|restore|cleanup_authorization",outcome="scheduled"}[1h])) > 50
+          for: 30m
+          labels: {severity: critical}
+          annotations:
+            summary: Runtime retention chain is not converging
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md

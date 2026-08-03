@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: Доменные факты control-plane
-  version: 1.0.0
+  version: 1.1.0
   description: >-
     Два утверждённых неизменяемых факта для runtime-controller и
     automation-scheduler. Полное состояние остаётся доступно через gRPC-чтение.
@@ -165,12 +165,37 @@ components:
           format: uuid
         resourceKind:
           type: string
-          minLength: 2
-          maxLength: 64
+          enum:
+            - PROJECT
+            - TEAM
+            - CHAT
+            - ROLE
+            - PROMPT_PROFILE
+            - CREDENTIAL_BINDING
+            - REPOSITORY_WORKSPACE
+            - INTEGRATION
+            - RUNTIME_REVISION
+            - SESSION
+            - TURN
+            - SCHEDULE
         resourceState:
           type: string
-          minLength: 2
-          maxLength: 32
+          enum:
+            - ACTIVE
+            - PAUSED
+            - ARCHIVED
+            - DELETION_PENDING
+            - DELETED
+            - QUEUED
+            - CLAIMED
+            - RUNNING
+            - WAITING_OWNER
+            - WAITING_EXTERNAL
+            - SUCCEEDED
+            - FAILED
+            - CANCELLED
+            - EXPIRED
+            - BLOCKED
         resourceVersion:
           type: integer
           minimum: 1

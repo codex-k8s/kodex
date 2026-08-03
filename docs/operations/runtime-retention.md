@@ -4,8 +4,8 @@ title: Хранение и очистка ресурсов сессий
 type: operations
 status: approved
 owner: sre
-version: 0.2.0
-updated: 2026-07-21
+version: 0.3.0
+updated: 2026-08-03
 ---
 
 # Хранение и очистка ресурсов сессий
@@ -84,16 +84,30 @@ PVC можно удалить, только если одновременно в
 
 До появления S3-архива текущие PVC не удаляются новым автоматическим правилом. Сначала выполняются инвентаризация и архивирование унаследованных сессий, затем предварительный отчет без удаления, и только после ручной приемки владельцем включается автоматическая очистка.
 
-## Активное сдерживание PR-2
+## Шлюз активации runtime-controller
 
-До отдельного результата после PR-4 с доказанным предикатом PostgreSQL/S3 действует безусловный режим `inventory-only` для PVC сессии и Secret токена сессии:
+Issue #188 материализует доказуемый PostgreSQL/S3 предикат через
+специализированные archive, restore proof, cleanup authorization и consume
+команды. До слияния, отдельного владельческого шлюза и развёртывания этого
+unit прежний `runtime prune` остаётся строго `inventory-only`.
 
-- автоматический и ручной `runtime prune`, включая `--apply`, только инвентаризирует эти ресурсы и не вызывает для них `delete` или `patch`;
-- `active`, `queued`, `approval`, `callback`, `no_archive`, `archive_failed`, `grace`, `unknown_db` и `unknown_s3` являются только диагностическими причинами; ни одна причина и их отсутствие не разрешают удаление;
-- Kubernetes-инвентаризация не утверждает наличие или отсутствие архива, если PostgreSQL или S3 не проверены, и сообщает `unknown_db` и `unknown_s3`;
-- повтор предварительного просмотра не изменяет ресурсы;
-- отказ ResourceQuota при создании PVC сессии возвращается как отдельный неустранимый вытеснением вид типизированной ошибки ёмкости; `ChatRunService` не вытесняет простаивающий pod, не вызывает `CleanupAgentSession` и не повторяет запуск с созданием PVC;
-- удаление завершённого session pod по retention привязано к точным `UID` и `resourceVersion` из инвентаризации; `NotFound` и конфликт предусловия считаются безопасным отсутствием удаления и не увеличивают счётчик;
-- очистка несессионных Job, PVC запуска и ConfigMap, а также жизненный цикл session pod остаются отдельными действующими путями и не дают права удалить PVC или Secret сессии.
+После активации удаление session PVC выполняет только `runtime-controller`:
 
-Включающего флага, аварийного обхода или аудита разрешённого удаления сессионных данных в этом состоянии нет. Рост занятого хранилища и более ранний отказ ёмкости являются принятым безопасным компромиссом.
+- controller использует terminal journal и не выводит eligibility из
+  Kubernetes labels;
+- четырёхчасовой TTL относится только к Pod, а PVC ждёт не менее 7 суток;
+- versioned archive, checksum readback и независимый restore proof должны
+  совпасть с authoritative execution;
+- отдельный authorizer повторно проверяет отсутствие queued/running work,
+  approval, callback и continuation, после чего выдаёт bounded authorization;
+- delete использует exact `UID` и `resourceVersion`, а `NotFound` принимается
+  только после заранее сохранённых preconditions;
+- controller потребляет ту же authorization после подтверждённого delete;
+  ошибка, неизвестное состояние или pressure сохраняют PVC;
+- backfill автоматически продолжает archive/proof/authorization для каждого
+  controller-owned terminal journal; legacy PVC без server-owned
+  `RuntimeExecution` и journal остаётся `inventory-only` и не усыновляется по
+  Kubernetes labels.
+
+Очистка несессионных Job и ConfigMap не даёт права удалить session PVC.
+Аварийного флага обхода proof, grace, owner graph или legal/manual hold нет.
