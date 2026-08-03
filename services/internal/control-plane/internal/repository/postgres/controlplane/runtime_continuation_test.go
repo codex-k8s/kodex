@@ -166,3 +166,15 @@ func TestScheduledContinuationRemainsOpenAndUnclaimable(t *testing.T) {
 		}
 	}
 }
+
+func TestScheduleOpenGraphIncludesCurrentScheduledRunAuthority(t *testing.T) {
+	for _, required := range []string{
+		"LEFT JOIN control_plane.scheduled_runs AS run",
+		"run.occurrence_id = occurrence.id",
+		"run.state IN ('CLAIMED', 'WAITING_OWNER', 'CONTINUATION')",
+	} {
+		if !strings.Contains(sqlScheduleOccurrenceHasOpen, required) {
+			t.Fatalf("schedule open-graph query misses %q", required)
+		}
+	}
+}

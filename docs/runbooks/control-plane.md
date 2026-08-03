@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.17.0
+version: 1.18.0
 updated: 2026-08-03
 ---
 
@@ -387,11 +387,14 @@ ADMITTED/RUNNING — живую runtime lease с тем же deadline; PENDING �
 только без выданного lease ID/token/deadline. После deadline выигрывает
 watchdog/expiry, а Gate не создаётся.
 
-При `ManageSchedule(UPDATE)` Schedule должен блокироваться до target/prompt/
-revision/session. Если существует open occurrence, UPDATE fail-closed и не
-держит pinned rows; concurrent claim после ожидания Schedule повторно сверяет
-immutable snapshot. PostgreSQL `40P01` здесь не является допустимым способом
-выбора winner.
+При `ManageSchedule(UPDATE/ARCHIVE/DELETE)` Schedule блокируется до receipt и
+authoritative open predicate проверяет как occurrence, так и ScheduledRun.
+UPDATE при open graph не держит pinned rows; ARCHIVE проходит только после
+terminal/no-open graph и остаётся необратимым. `PAUSE` сохраняет queued retry,
+но новый claim ждёт `ACTIVATE`; `ARCHIVED/DELETION_PENDING/DELETED` не могут
+получить новую queued attempt. Concurrent claim/requeue после ожидания Schedule
+повторно сверяет state и immutable snapshot. PostgreSQL `40P01` здесь не
+является допустимым способом выбора winner.
 
 Generic `CompleteTurn`, `CancelTurn`, `CompleteProcess`, `CancelProcess`, stale
 `ClaimTurn` и scheduler recovery не являются runtime authority: при current
@@ -494,10 +497,14 @@ Kubernetes/Mattermost/MCP/Codex действий запрещён.
 `Turn.EffectiveInputSHA256` и `ScheduleOccurrence.EffectiveInputSHA256`; queued
 occurrence до materialization ещё содержит snapshot. Если эти значения
 смешаны, claim/recovery отклоняется: не выравнивать их SQL и не терять snapshot
-provenance. При `FAILED` completion или scheduler lease expiry прежний run
-сначала получает terminal outcome, затем occurrence одной OCC записью
-возвращается в `QUEUED`: digest восстанавливается только из immutable snapshot
-этого run, а claim key/token/lease/generation и весь execution tuple очищаются.
+provenance. Обычный `FAILED/EXPIRED` completion и watchdog, встретивший уже
+terminal Turn/Process, обязаны вызвать один disposition helper с одинаковой
+retry/dead-letter формулой. Прежний run сначала получает terminal outcome,
+затем occurrence одной OCC записью возвращается в `QUEUED`: digest
+восстанавливается только из immutable snapshot этого run, а claim key/token/
+lease/generation и весь execution tuple очищаются. На maximum attempts либо
+dead-letter deadline occurrence остаётся `DEAD_LETTER`; второй winner не
+создаёт attempt/run/receipt.
 `UpdateScheduleOccurrence` обязан передать `effective_input_sha256`, а SQL —
 записать его; расхождение authoritative readback является дефектом producer, а
 не поводом ручного `UPDATE`. Если locked Schedule уже несёт другой snapshot,
@@ -568,6 +575,16 @@ claim/execution поля, новый run после claim — тот же snapsh
 digest. Старый scheduler claim receipt/token после requeue не должен
 возвращаться. Не исправлять этот набор ручным SQL: остановить producer и
 выпустить forward-only application fix после подтверждения owner graph.
+
+При невозможности архивировать Schedule сначала прочитать все occurrence и
+ScheduledRun. Любой `QUEUED/CLAIMED/WAITING_OWNER/CONTINUATION` occurrence либо
+`CLAIMED/WAITING_OWNER/CONTINUATION` run является авторитетным blocker; receipt
+ARCHIVE при этом отсутствует. Не архивировать и не переводить occurrence
+вручную. Дождаться specialized terminal/recovery winner. Для гонки runner
+terminal и scheduler expiry сравнить итог с обычным completion: прежний run
+terminal, occurrence ровно `QUEUED` следующей attempt либо `DEAD_LETTER`, token/
+claim/execution authority очищена. Расхождение означает дефект producer и
+требует нового forward-only application fix.
 
 ## Наблюдаемость
 

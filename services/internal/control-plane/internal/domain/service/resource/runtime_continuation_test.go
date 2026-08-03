@@ -95,10 +95,13 @@ func TestRemediationEntryPointsKeepCriticalGuards(t *testing.T) {
 	}
 
 	manageSchedule := productionFunctionSource(t, "specialized.go", "ManageSchedule")
-	scheduleLock := strings.Index(manageSchedule, "if input.Action == \"UPDATE\"")
+	scheduleLock := strings.Index(manageSchedule, "scheduleMutationRequiresClosedGraph")
 	pinnedLock := strings.Index(manageSchedule, "input.Spec.TargetResourceID")
 	if scheduleLock < 0 || pinnedLock < 0 || scheduleLock > pinnedLock {
-		t.Fatal("ManageSchedule UPDATE can lock pinned resource before Schedule")
+		t.Fatal("ManageSchedule can lock pinned resource before Schedule/open-graph validation")
+	}
+	if !strings.Contains(manageSchedule, "withValidatedResourceReceipt") {
+		t.Fatal("ManageSchedule existing-row action can expose receipt before owner validation")
 	}
 }
 

@@ -614,8 +614,9 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 ) error {
 	schedule := graph.Schedule
 	occurrence := graph.Occurrence
-	scheduleSpec, ok := schedule.Spec.(entity.ScheduleSpec)
+	_, ok := schedule.Spec.(entity.ScheduleSpec)
 	if !ok || schedule.Kind != enum.KindSchedule ||
+		!scheduleAllowsQueuedOccurrence(schedule.State) ||
 		occurrence.ScheduleID != schedule.ID || occurrence.State != "CLAIMED" ||
 		occurrence.TokenHash == "" || occurrence.ClaimantWorkloadID == "" ||
 		occurrence.AuthorityGeneration == 0 || occurrence.LeaseExpiresAt.After(now) {
@@ -666,10 +667,12 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 				return errs.ErrStateConflict
 			}
 		}
-		return service.finishRecoveredOccurrence(
-			ctx, tx, principal, occurrence, string(turn.State), turnSpec.Outcome,
-			turnSpec.ResultArtifactID, now,
+		_, err := service.applyScheduledTerminalDisposition(
+			ctx, tx, principal, schedule, occurrence, run,
+			scheduledTerminalState(turn.State), turnSpec.Outcome,
+			turnSpec.ResultArtifactID, now, "recover_schedule_occurrence",
 		)
+		return err
 	}
 
 	if _, err := service.cancelTurnExecutionForOwner(
@@ -749,88 +752,10 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 			return err
 		}
 	}
-	if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
-		OccurrenceID: occurrence.ID,
-		Attempt:      occurrence.Attempt,
-		State:        "FAILED",
-		Outcome:      "scheduler_lease_expired",
-		FinishedAt:   now,
-	}); err != nil {
-		return err
-	}
-
-	expectedAttempt := occurrence.Attempt
-	expectedToken := occurrence.TokenHash
-	terminal := occurrence.Attempt >= scheduleSpec.MaximumAttempts ||
-		!now.Before(occurrence.DeadLetterAt)
-	if !terminal {
-		nextAttempt := occurrence.Attempt + 1
-		if err := requeueScheduledOccurrence(
-			&occurrence,
-			schedule,
-			run,
-			nextAttempt,
-			now.Add(scheduleBackoff(scheduleSpec, nextAttempt)),
-			"scheduler_lease_expired",
-			now,
-		); err != nil {
-			return err
-		}
-	} else {
-		occurrence.State = "DEAD_LETTER"
-		occurrence.Outcome = "scheduler_lease_expired"
-		occurrence.ResultArtifactID = ""
-		occurrence.ClaimantWorkloadID = ""
-		occurrence.AuthorityGeneration = 0
-		occurrence.TokenHash = ""
-		occurrence.ClaimKeySHA256 = ""
-		occurrence.LeaseExpiresAt = time.Time{}
-		occurrence.UpdatedAt = now
-	}
-	if err := tx.UpdateScheduleOccurrence(
-		ctx, occurrence, expectedAttempt, expectedToken,
-	); err != nil {
-		return err
-	}
-	return appendScheduleOccurrenceAudit(
-		ctx, tx, principal, "recover_schedule_occurrence", occurrence,
+	_, err := service.applyScheduledTerminalDisposition(
+		ctx, tx, principal, schedule, occurrence, run,
+		"FAILED", "scheduler_lease_expired", "", now,
+		"recover_schedule_occurrence",
 	)
-}
-
-func (service *Service) finishRecoveredOccurrence(
-	ctx context.Context,
-	tx domainrepo.Transaction,
-	principal value.Principal,
-	occurrence domainrepo.ScheduleOccurrence,
-	state, outcome, resultArtifactID string,
-	now time.Time,
-) error {
-	if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
-		OccurrenceID:     occurrence.ID,
-		Attempt:          occurrence.Attempt,
-		State:            state,
-		Outcome:          outcome,
-		ResultArtifactID: resultArtifactID,
-		FinishedAt:       now,
-	}); err != nil {
-		return err
-	}
-	expectedToken := occurrence.TokenHash
-	occurrence.State = state
-	occurrence.Outcome = outcome
-	occurrence.ResultArtifactID = resultArtifactID
-	occurrence.ClaimantWorkloadID = ""
-	occurrence.AuthorityGeneration = 0
-	occurrence.TokenHash = ""
-	occurrence.ClaimKeySHA256 = ""
-	occurrence.LeaseExpiresAt = time.Time{}
-	occurrence.UpdatedAt = now
-	if err := tx.UpdateScheduleOccurrence(
-		ctx, occurrence, occurrence.Attempt, expectedToken,
-	); err != nil {
-		return err
-	}
-	return appendScheduleOccurrenceAudit(
-		ctx, tx, principal, "recover_schedule_occurrence", occurrence,
-	)
+	return err
 }

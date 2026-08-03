@@ -54,291 +54,301 @@ func (service *Service) ManageSchedule(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	return service.withResourceReceipt(
+	var lockedCurrent entity.Resource
+	validate := func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+		current, err := tx.GetForUpdate(
+			ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, input.ScheduleID,
+		)
+		if err != nil {
+			return 0, err
+		}
+		if current.Kind != enum.KindSchedule {
+			return 0, errs.ErrNotFound
+		}
+		if err := requireLifecycleOwner(input.Principal, current); err != nil {
+			return 0, err
+		}
+		if current.Version != input.ExpectedVersion &&
+			current.Version != input.ExpectedVersion+1 {
+			return 0, errs.ErrVersionMismatch
+		}
+		if scheduleMutationRequiresClosedGraph(input.Action) {
+			open, err := tx.HasOpenScheduleOccurrence(
+				ctx, current.OrganizationID, current.ProjectID, current.ID,
+			)
+			if err != nil {
+				return 0, err
+			}
+			if open {
+				return 0, errs.ErrStateConflict
+			}
+		}
+		lockedCurrent = current
+		if current.Version == input.ExpectedVersion {
+			return lifecycleReceiptApplyOrReplay, nil
+		}
+		return lifecycleReceiptReplay, nil
+	}
+	apply := func(tx domainrepo.Transaction) (entity.Resource, error) {
+		now := service.now().UTC().Truncate(time.Microsecond)
+		current := lockedCurrent
+		if input.Action == "CREATE" || input.Action == "UPDATE" {
+			if input.Action == "CREATE" {
+				if input.DetachGitManagement {
+					return entity.Resource{}, errs.ErrInvalidInput
+				}
+				if err := validateConfigurationCreate(
+					ctx,
+					tx,
+					input.Principal,
+					input.Spec,
+				); err != nil {
+					return entity.Resource{}, err
+				}
+			}
+			target, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.Spec.TargetResourceID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			if target.State != enum.StateActive ||
+				target.Kind != enum.KindRole {
+				return entity.Resource{}, errs.ErrNotFound
+			}
+			input.Spec.TargetKind = target.Kind
+			input.Spec.TargetVersion = target.Version
+			targetProjectionSHA256, err := entity.ProjectionSHA256(target)
+			if err != nil {
+				return entity.Resource{}, errs.ErrInternal
+			}
+			promptArtifact, err := service.requireCleanArtifact(
+				ctx,
+				tx,
+				input.Principal,
+				input.Spec.PromptArtifactID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			prompt, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.Spec.PromptProfileID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
+			if !ok || prompt.Kind != enum.KindPromptProfile ||
+				prompt.State != enum.StateActive ||
+				promptSpec.Revision != input.Spec.PromptRevision {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			revision, err := tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.Spec.RuntimeRevisionID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
+			if !ok || revision.Kind != enum.KindRuntimeRevision ||
+				revision.State != enum.StateActive ||
+				revisionSpec.PromptProfileID != prompt.ID ||
+				revisionSpec.PromptRevision != promptSpec.Revision ||
+				revisionSpec.RoleID != target.ID {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if input.Spec.RoomID != "" {
+				room, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.Spec.RoomID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				if room.Kind != enum.KindChat || room.State != enum.StateActive {
+					return entity.Resource{}, errs.ErrNotFound
+				}
+				if revisionSpec.ChatID != room.ID {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			} else if revisionSpec.ChatID != "" {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if input.Spec.SessionPolicy != "NEW" {
+				session, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.Spec.ExecutionSessionID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				sessionSpec, ok := session.Spec.(entity.SessionSpec)
+				if !ok || session.Kind != enum.KindSession ||
+					session.State != enum.StateActive ||
+					session.OwnerActorID != input.Principal.ActorID ||
+					sessionSpec.AgentID != target.ID ||
+					sessionSpec.ProviderAccountBindingID !=
+						revisionSpec.ProviderCredentialBindingID ||
+					sessionSpec.ConversationID != input.Spec.RoomID {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			}
+			input.Spec.EffectiveInputSHA, err = scheduleEffectiveInput(
+				input.Spec,
+				targetProjectionSHA256,
+				promptArtifact.SHA256,
+				revision.Version,
+				revisionSpec.ManifestSHA256,
+			)
+			if err != nil {
+				return entity.Resource{}, errs.ErrInternal
+			}
+			if input.Spec.Validate() != nil {
+				return entity.Resource{}, errs.ErrInvalidInput
+			}
+		}
+		if input.Action == "CREATE" {
+			created, err := entity.New(
+				uuid.NewString(),
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				"",
+				input.Principal.ActorID,
+				enum.KindSchedule,
+				input.Name,
+				input.Spec,
+				now,
+			)
+			if err != nil || validateTemporalCreation(input.Spec, now) != nil {
+				return entity.Resource{}, errs.ErrInvalidInput
+			}
+			if err := tx.Insert(ctx, created); err != nil {
+				return entity.Resource{}, err
+			}
+			return created, service.appendMutationRecords(
+				ctx,
+				tx,
+				input.Principal,
+				"create_schedule",
+				created,
+			)
+		}
+		if current.ID == "" {
+			current, err = tx.GetForUpdate(
+				ctx,
+				input.Principal.OrganizationID,
+				input.Principal.ProjectID,
+				input.ScheduleID,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			if current.Kind != enum.KindSchedule ||
+				current.Version != input.ExpectedVersion {
+				return entity.Resource{}, errs.ErrVersionMismatch
+			}
+			if err := requireLifecycleOwner(input.Principal, current); err != nil {
+				return entity.Resource{}, err
+			}
+		}
+		if input.Action == "UPDATE" {
+			nextSpec, err := configurationUpdateSpec(
+				ctx,
+				tx,
+				input.Principal,
+				current.Spec,
+				input.Spec,
+				input.DetachGitManagement,
+			)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			var ok bool
+			input.Spec, ok = nextSpec.(entity.ScheduleSpec)
+			if !ok {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+		} else {
+			if input.DetachGitManagement {
+				return entity.Resource{}, errs.ErrInvalidInput
+			}
+			if err := authorizeGitManagedMutation(
+				ctx,
+				tx,
+				input.Principal,
+				current.Spec,
+			); err != nil {
+				return entity.Resource{}, err
+			}
+		}
+		var updated entity.Resource
+		switch input.Action {
+		case "UPDATE":
+			if current.State != enum.StateActive &&
+				current.State != enum.StatePaused {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			updated, err = current.Update(input.Name, input.Spec, now)
+		case "ACTIVATE":
+			updated, err = current.Transition(enum.StateActive, now)
+		case "PAUSE":
+			updated, err = current.Transition(enum.StatePaused, now)
+		case "ARCHIVE":
+			updated, err = current.Transition(enum.StateArchived, now)
+		case "DELETE":
+			if current.State == enum.StateArchived {
+				updated, err = current.Transition(enum.StateDeletionPending, now)
+			} else if current.State == enum.StateDeletionPending {
+				updated, err = current.Transition(enum.StateDeleted, now)
+			} else {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+		}
+		if err != nil {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		if err := tx.Update(ctx, updated, current.Version); err != nil {
+			return entity.Resource{}, err
+		}
+		return updated, service.appendMutationRecords(
+			ctx,
+			tx,
+			input.Principal,
+			"manage_schedule_"+input.Action,
+			updated,
+		)
+	}
+	if input.Action == "CREATE" {
+		return service.withResourceReceipt(
+			ctx, input.Principal, input.IdempotencyKey,
+			"manage_schedule_"+input.Action, requestHash, apply,
+		)
+	}
+	return service.withValidatedResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
 		"manage_schedule_"+input.Action,
 		requestHash,
-		func(tx domainrepo.Transaction) (entity.Resource, error) {
-			now := service.now().UTC().Truncate(time.Microsecond)
-			var current entity.Resource
-			if input.Action == "UPDATE" {
-				// Schedule — canonical predecessor pinned resources для UPDATE.
-				// Открытый occurrence означает, что безопасная смена immutable
-				// execution input невозможна; переход закрыто отклоняется.
-				current, err = tx.GetForUpdate(
-					ctx, input.Principal.OrganizationID,
-					input.Principal.ProjectID, input.ScheduleID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				if current.Kind != enum.KindSchedule ||
-					current.Version != input.ExpectedVersion {
-					return entity.Resource{}, errs.ErrVersionMismatch
-				}
-				if err := requireLifecycleOwner(input.Principal, current); err != nil {
-					return entity.Resource{}, err
-				}
-				open, openErr := tx.HasOpenScheduleOccurrence(
-					ctx, current.OrganizationID, current.ProjectID, current.ID,
-				)
-				if openErr != nil {
-					return entity.Resource{}, openErr
-				}
-				if open {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			}
-			if input.Action == "CREATE" || input.Action == "UPDATE" {
-				if input.Action == "CREATE" {
-					if input.DetachGitManagement {
-						return entity.Resource{}, errs.ErrInvalidInput
-					}
-					if err := validateConfigurationCreate(
-						ctx,
-						tx,
-						input.Principal,
-						input.Spec,
-					); err != nil {
-						return entity.Resource{}, err
-					}
-				}
-				target, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.Spec.TargetResourceID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				if target.State != enum.StateActive ||
-					target.Kind != enum.KindRole {
-					return entity.Resource{}, errs.ErrNotFound
-				}
-				input.Spec.TargetKind = target.Kind
-				input.Spec.TargetVersion = target.Version
-				targetProjectionSHA256, err := entity.ProjectionSHA256(target)
-				if err != nil {
-					return entity.Resource{}, errs.ErrInternal
-				}
-				promptArtifact, err := service.requireCleanArtifact(
-					ctx,
-					tx,
-					input.Principal,
-					input.Spec.PromptArtifactID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				prompt, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.Spec.PromptProfileID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
-				if !ok || prompt.Kind != enum.KindPromptProfile ||
-					prompt.State != enum.StateActive ||
-					promptSpec.Revision != input.Spec.PromptRevision {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-				revision, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.Spec.RuntimeRevisionID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
-				if !ok || revision.Kind != enum.KindRuntimeRevision ||
-					revision.State != enum.StateActive ||
-					revisionSpec.PromptProfileID != prompt.ID ||
-					revisionSpec.PromptRevision != promptSpec.Revision ||
-					revisionSpec.RoleID != target.ID {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-				if input.Spec.RoomID != "" {
-					room, err := tx.GetForUpdate(
-						ctx,
-						input.Principal.OrganizationID,
-						input.Principal.ProjectID,
-						input.Spec.RoomID,
-					)
-					if err != nil {
-						return entity.Resource{}, err
-					}
-					if room.Kind != enum.KindChat || room.State != enum.StateActive {
-						return entity.Resource{}, errs.ErrNotFound
-					}
-					if revisionSpec.ChatID != room.ID {
-						return entity.Resource{}, errs.ErrStateConflict
-					}
-				} else if revisionSpec.ChatID != "" {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-				if input.Spec.SessionPolicy != "NEW" {
-					session, err := tx.GetForUpdate(
-						ctx,
-						input.Principal.OrganizationID,
-						input.Principal.ProjectID,
-						input.Spec.ExecutionSessionID,
-					)
-					if err != nil {
-						return entity.Resource{}, err
-					}
-					sessionSpec, ok := session.Spec.(entity.SessionSpec)
-					if !ok || session.Kind != enum.KindSession ||
-						session.State != enum.StateActive ||
-						session.OwnerActorID != input.Principal.ActorID ||
-						sessionSpec.AgentID != target.ID ||
-						sessionSpec.ProviderAccountBindingID !=
-							revisionSpec.ProviderCredentialBindingID ||
-						sessionSpec.ConversationID != input.Spec.RoomID {
-						return entity.Resource{}, errs.ErrStateConflict
-					}
-				}
-				input.Spec.EffectiveInputSHA, err = scheduleEffectiveInput(
-					input.Spec,
-					targetProjectionSHA256,
-					promptArtifact.SHA256,
-					revision.Version,
-					revisionSpec.ManifestSHA256,
-				)
-				if err != nil {
-					return entity.Resource{}, errs.ErrInternal
-				}
-				if input.Spec.Validate() != nil {
-					return entity.Resource{}, errs.ErrInvalidInput
-				}
-			}
-			if input.Action == "CREATE" {
-				created, err := entity.New(
-					uuid.NewString(),
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					"",
-					input.Principal.ActorID,
-					enum.KindSchedule,
-					input.Name,
-					input.Spec,
-					now,
-				)
-				if err != nil || validateTemporalCreation(input.Spec, now) != nil {
-					return entity.Resource{}, errs.ErrInvalidInput
-				}
-				if err := tx.Insert(ctx, created); err != nil {
-					return entity.Resource{}, err
-				}
-				return created, service.appendMutationRecords(
-					ctx,
-					tx,
-					input.Principal,
-					"create_schedule",
-					created,
-				)
-			}
-			if current.ID == "" {
-				current, err = tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.ScheduleID,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				if current.Kind != enum.KindSchedule ||
-					current.Version != input.ExpectedVersion {
-					return entity.Resource{}, errs.ErrVersionMismatch
-				}
-				if err := requireLifecycleOwner(input.Principal, current); err != nil {
-					return entity.Resource{}, err
-				}
-			}
-			if input.Action == "UPDATE" {
-				nextSpec, err := configurationUpdateSpec(
-					ctx,
-					tx,
-					input.Principal,
-					current.Spec,
-					input.Spec,
-					input.DetachGitManagement,
-				)
-				if err != nil {
-					return entity.Resource{}, err
-				}
-				var ok bool
-				input.Spec, ok = nextSpec.(entity.ScheduleSpec)
-				if !ok {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			} else {
-				if input.DetachGitManagement {
-					return entity.Resource{}, errs.ErrInvalidInput
-				}
-				if err := authorizeGitManagedMutation(
-					ctx,
-					tx,
-					input.Principal,
-					current.Spec,
-				); err != nil {
-					return entity.Resource{}, err
-				}
-			}
-			var updated entity.Resource
-			switch input.Action {
-			case "UPDATE":
-				if current.State != enum.StateActive &&
-					current.State != enum.StatePaused {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-				updated, err = current.Update(input.Name, input.Spec, now)
-			case "ACTIVATE":
-				updated, err = current.Transition(enum.StateActive, now)
-			case "PAUSE":
-				updated, err = current.Transition(enum.StatePaused, now)
-			case "ARCHIVE":
-				updated, err = current.Transition(enum.StateArchived, now)
-			case "DELETE":
-				open, openErr := tx.HasOpenScheduleOccurrence(
-					ctx, current.OrganizationID, current.ProjectID, current.ID,
-				)
-				if openErr != nil {
-					return entity.Resource{}, openErr
-				}
-				if open {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-				if current.State == enum.StateArchived {
-					updated, err = current.Transition(enum.StateDeletionPending, now)
-				} else if current.State == enum.StateDeletionPending {
-					updated, err = current.Transition(enum.StateDeleted, now)
-				} else {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			}
-			if err != nil {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			if err := tx.Update(ctx, updated, current.Version); err != nil {
-				return entity.Resource{}, err
-			}
-			return updated, service.appendMutationRecords(
-				ctx,
-				tx,
-				input.Principal,
-				"manage_schedule_"+input.Action,
-				updated,
-			)
+		validate,
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			return resourceReceiptMatchesCurrent(lockedCurrent, stored)
 		},
+		apply,
 	)
 }
 
@@ -1132,12 +1142,16 @@ func (service *Service) CompleteScheduleOccurrence(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
+			decisionNow, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
 			if occurrence.State != "CLAIMED" ||
 				occurrence.Attempt != input.ExpectedAttempt ||
 				occurrence.TokenHash != hashString(input.LeaseToken) ||
 				occurrence.ClaimantWorkloadID != input.Principal.CallerWorkload ||
 				occurrence.AuthorityGeneration != input.Principal.AuthorityGeneration ||
-				!occurrence.LeaseExpiresAt.After(service.now()) {
+				!occurrence.LeaseExpiresAt.After(decisionNow) {
 				return errs.ErrStateConflict
 			}
 			if value.ValidateID(occurrence.ExecutionSessionID) != nil ||
@@ -1149,8 +1163,8 @@ func (service *Service) CompleteScheduleOccurrence(
 				return errs.ErrStateConflict
 			}
 			schedule := graph.Schedule
-			scheduleSpec, ok := schedule.Spec.(entity.ScheduleSpec)
-			if !ok || schedule.Kind != enum.KindSchedule {
+			if _, ok := schedule.Spec.(entity.ScheduleSpec); !ok ||
+				schedule.Kind != enum.KindSchedule {
 				return errs.ErrStateConflict
 			}
 			run := graph.Run
@@ -1189,56 +1203,13 @@ func (service *Service) CompleteScheduleOccurrence(
 					return errs.ErrStateConflict
 				}
 			}
-			expectedToken := occurrence.TokenHash
-			now := service.now().UTC().Truncate(time.Microsecond)
-			if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
-				OccurrenceID: occurrence.ID, Attempt: input.ExpectedAttempt,
-				State: terminalState, Outcome: outcome,
-				ResultArtifactID: resultArtifactID, FinishedAt: now,
-			}); err != nil {
-				return err
-			}
-			requeue := terminalState == "FAILED" &&
-				occurrence.Attempt < scheduleSpec.MaximumAttempts &&
-				now.Sub(occurrence.ScheduledFor) < scheduleSpec.DeadLetterAfter
-			if requeue {
-				nextAttempt := occurrence.Attempt + 1
-				if err := requeueScheduledOccurrence(
-					&occurrence,
-					schedule,
-					run,
-					nextAttempt,
-					now.Add(scheduleBackoff(scheduleSpec, nextAttempt)),
-					outcome,
-					now,
-				); err != nil {
-					return err
-				}
-			} else {
-				occurrence.State = terminalState
-				if terminalState == "FAILED" {
-					occurrence.State = "DEAD_LETTER"
-				}
-				occurrence.Outcome = outcome
-				occurrence.ResultArtifactID = resultArtifactID
-				occurrence.ClaimantWorkloadID = ""
-				occurrence.AuthorityGeneration = 0
-				occurrence.TokenHash = ""
-				occurrence.ClaimKeySHA256 = ""
-				occurrence.LeaseExpiresAt = time.Time{}
-				occurrence.UpdatedAt = now
-			}
-			if err := tx.UpdateScheduleOccurrence(
-				ctx,
-				occurrence,
-				input.ExpectedAttempt,
-				expectedToken,
-			); err != nil {
-				return err
-			}
-			if err := appendScheduleOccurrenceAudit(
-				ctx, tx, input.Principal, "complete_schedule_occurrence", occurrence,
-			); err != nil {
+			now := decisionNow.UTC().Truncate(time.Microsecond)
+			occurrence, err = service.applyScheduledTerminalDisposition(
+				ctx, tx, input.Principal, schedule, occurrence, run,
+				terminalState, outcome, resultArtifactID, now,
+				"complete_schedule_occurrence",
+			)
+			if err != nil {
 				return err
 			}
 			payload, err := json.Marshal(
@@ -1592,20 +1563,6 @@ func (service *Service) CancelScheduleOccurrence(
 		},
 	)
 	return result, err
-}
-
-func scheduleBackoff(spec entity.ScheduleSpec, attempt uint32) time.Duration {
-	delay := spec.InitialBackoff
-	for current := uint32(2); current < attempt && delay < spec.MaximumBackoff; current++ {
-		if delay > spec.MaximumBackoff/2 {
-			return spec.MaximumBackoff
-		}
-		delay *= 2
-	}
-	if delay > spec.MaximumBackoff {
-		return spec.MaximumBackoff
-	}
-	return delay
 }
 
 // StartProcess связывает определённого сервером корневого инициатора с
