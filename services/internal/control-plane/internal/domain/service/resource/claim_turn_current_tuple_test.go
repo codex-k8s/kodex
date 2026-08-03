@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -466,7 +467,29 @@ func (tx *currentTupleTestTransaction) UpdateScheduleOccurrence(
 		(expectedTokenHash != "" && current.TokenHash != expectedTokenHash) {
 		return errs.ErrStateConflict
 	}
-	tx.occurrences[occurrence.ID] = occurrence
+	// Модель fake повторяет поле-за-полем production UPDATE, чтобы новое
+	// изменяемое поле нельзя было случайно "проверить" заменой всей структуры.
+	current.State = occurrence.State
+	current.Attempt = occurrence.Attempt
+	current.EffectiveInputSHA256 = occurrence.EffectiveInputSHA256
+	current.ClaimantWorkloadID = occurrence.ClaimantWorkloadID
+	current.AuthorityGeneration = occurrence.AuthorityGeneration
+	current.TokenHash = occurrence.TokenHash
+	current.ClaimKeySHA256 = occurrence.ClaimKeySHA256
+	current.LeaseExpiresAt = occurrence.LeaseExpiresAt
+	current.AvailableAt = occurrence.AvailableAt
+	current.Outcome = occurrence.Outcome
+	current.ResultArtifactID = occurrence.ResultArtifactID
+	current.ExecutionSessionID = occurrence.ExecutionSessionID
+	current.ExecutionSessionVersion = occurrence.ExecutionSessionVersion
+	current.ExecutionTurnID = occurrence.ExecutionTurnID
+	current.ExecutionTurnVersion = occurrence.ExecutionTurnVersion
+	current.ExecutionProcessRunID = occurrence.ExecutionProcessRunID
+	current.ExecutionProcessVersion = occurrence.ExecutionProcessVersion
+	current.ExecutionRuntimeRevisionID = occurrence.ExecutionRuntimeRevisionID
+	current.ExecutionRuntimeRevisionVersion = occurrence.ExecutionRuntimeRevisionVersion
+	current.UpdatedAt = occurrence.UpdatedAt
+	tx.occurrences[occurrence.ID] = current
 	return nil
 }
 
@@ -1286,6 +1309,186 @@ func TestScheduledProducerClaimTurnRuntimePathPreservesDigestAndOutboxSemantics(
 	)
 	if err != nil || admitted.Execution.State != "ADMITTED" {
 		t.Fatalf("AdmitRuntimeExecution after scheduled producers: %v %+v", err, admitted)
+	}
+}
+
+func TestScheduledRequeueRestoresSnapshotAndNextAttemptReachesClaimTurn(t *testing.T) {
+	for _, scenario := range []struct {
+		name    string
+		outcome string
+	}{
+		{name: "failed_completion", outcome: "execution_failed"},
+		{name: "scheduler_lease_expiry", outcome: "scheduler_lease_expired"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newCurrentTupleFixture(t)
+			produced := fixture.produceScheduledGraph(t)
+			occurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+			run := fixture.tx.runs[turnAttemptMapKey(occurrence.ID, occurrence.Attempt)]
+			schedule := fixture.tx.resources[produced.schedule.ID]
+			previousDigest := occurrence.EffectiveInputSHA256
+			previousClaimKey := occurrence.ClaimKeySHA256
+			previousAttempt := occurrence.Attempt
+			availableAt := fixture.tx.now.Add(time.Second)
+			if err := requeueScheduledOccurrence(
+				&occurrence, schedule, run, previousAttempt+1, availableAt,
+				scenario.outcome, fixture.tx.now,
+			); err != nil {
+				t.Fatalf("requeueScheduledOccurrence: %v", err)
+			}
+			if err := fixture.tx.UpdateScheduleOccurrence(
+				context.Background(), occurrence, previousAttempt,
+				produced.claim.Occurrence.TokenHash,
+			); err != nil {
+				t.Fatalf("persist requeued occurrence: %v", err)
+			}
+			persisted := fixture.tx.occurrences[occurrence.ID]
+			if persisted.State != "QUEUED" || persisted.Attempt != previousAttempt+1 ||
+				persisted.EffectiveInputSHA256 != produced.snapshotDigest ||
+				persisted.ClaimKeySHA256 != "" || occurrenceHasExecutionBinding(persisted) {
+				t.Fatalf("requeue did not restore closed snapshot state: %+v", persisted)
+			}
+			if previousDigest == persisted.EffectiveInputSHA256 || previousClaimKey == "" {
+				t.Fatal("test did not start from a materialized claimed occurrence")
+			}
+
+			scheduler := fixture.principalFor(
+				permissionExecuteSchedule, "scheduler",
+				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+				schedule.ID, schedule.Version, produced.snapshotDigest, fixture.grant,
+			)
+			stale, err := fixture.service.ClaimScheduleOccurrence(
+				context.Background(), ClaimScheduleOccurrenceInput{
+					Principal: scheduler, IdempotencyKey: "claim-occurrence-current-digest",
+				},
+			)
+			if !errors.Is(err, errs.ErrStateConflict) || stale.LeaseToken != "" {
+				t.Fatalf("stale previous claim exposed authority: %v %+v", err, stale)
+			}
+
+			fixture.tx.now = availableAt
+			next, err := fixture.service.ClaimScheduleOccurrence(
+				context.Background(), ClaimScheduleOccurrenceInput{
+					Principal:      scheduler,
+					IdempotencyKey: "claim-requeued-" + scenario.name,
+				},
+			)
+			if err != nil {
+				t.Fatalf("ClaimScheduleOccurrence next attempt: %v", err)
+			}
+			if next.Occurrence.Attempt != previousAttempt+1 ||
+				next.Occurrence.EffectiveInputSHA256 == produced.snapshotDigest ||
+				next.Occurrence.EffectiveInputSHA256 == previousDigest {
+				t.Fatalf("next attempt did not materialize a fresh execution digest: %+v", next)
+			}
+			nextRun := fixture.tx.runs[turnAttemptMapKey(next.Occurrence.ID, next.Occurrence.Attempt)]
+			if nextRun.EffectiveInputSHA256 != produced.snapshotDigest ||
+				nextRun.CurrentInputSHA256 != next.Occurrence.EffectiveInputSHA256 {
+				t.Fatalf("next run lost snapshot/current digest separation: %+v", nextRun)
+			}
+			turn := fixture.tx.resources[next.Occurrence.ExecutionTurnID]
+			turnSpec := turn.Spec.(entity.TurnSpec)
+			claimed, err := fixture.service.ClaimTurn(context.Background(), ClaimTurnInput{
+				Principal: fixture.principalFor(
+					permissionClaimTurn, agentRunnerWorkload, agentRunnerSPIFFEID,
+					turn.ID, uint64(turnSpec.Attempt), turnSpec.EffectiveInputSHA256,
+					fixture.grant,
+				),
+				IdempotencyKey: "claim-requeued-turn-" + scenario.name,
+			})
+			if err != nil || claimed.Turn.State != enum.StateClaimed {
+				t.Fatalf("ClaimTurn after requeue: %v %+v", err, claimed)
+			}
+		})
+	}
+}
+
+func TestScheduledDigestLifecycleUsesClosedHelpers(t *testing.T) {
+	checks := []struct {
+		file, function, helper string
+	}{
+		{"specialized.go", "ClaimScheduleOccurrence", "materializeScheduledOccurrence"},
+		{"specialized.go", "CompleteScheduleOccurrence", "requeueScheduledOccurrence"},
+		{"final_owner_wave.go", "recoverExpiredScheduleOccurrence", "requeueScheduledOccurrence"},
+		{"current_execution.go", "prepareRetriedExecution", "rebindScheduledOccurrence"},
+		{"current_execution.go", "rebindStandaloneScheduledRetry", "rebindScheduledOccurrence"},
+		{"final_owner_wave.go", "continueOwnerGateGraph", "rebindScheduledOccurrence"},
+		{"runtime_continuation.go", "materializeIntegrationScheduledGraph", "rebindScheduledOccurrence"},
+	}
+	for _, check := range checks {
+		source := productionFunctionSource(t, check.file, check.function)
+		if !strings.Contains(source, check.helper+"(") {
+			t.Fatalf("%s bypasses %s", check.function, check.helper)
+		}
+		if strings.Contains(source, "occurrence.EffectiveInputSHA256 =") {
+			t.Fatalf("%s assigns scheduled digest outside the closed helper", check.function)
+		}
+	}
+}
+
+func TestRequeuedScheduleCompletionReceiptRequiresCurrentQueuedSnapshot(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	occurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+	run := fixture.tx.runs[turnAttemptMapKey(occurrence.ID, occurrence.Attempt)]
+	schedule := fixture.tx.resources[produced.schedule.ID]
+	previousAttempt := occurrence.Attempt
+	if err := requeueScheduledOccurrence(
+		&occurrence, schedule, run, previousAttempt+1, fixture.tx.now.Add(time.Second),
+		"execution_failed", fixture.tx.now,
+	); err != nil {
+		t.Fatalf("requeueScheduledOccurrence: %v", err)
+	}
+	payload, err := json.Marshal(scheduleOccurrenceReceipt{Occurrence: occurrence})
+	if err != nil {
+		t.Fatalf("marshal completion receipt: %v", err)
+	}
+	keyHash := hashString("complete-requeued")
+	requestHash := hashString("complete-request")
+	fixture.tx.receipts[receiptMapKey("complete_schedule_occurrence", keyHash)] =
+		domainrepo.Receipt{
+			OrganizationID: fixture.organization,
+			Scope:          "complete_schedule_occurrence",
+			KeyHash:        keyHash,
+			RequestHash:    requestHash,
+			Payload:        payload,
+		}
+	replayed, err := replayRequeuedScheduleCompletion(
+		context.Background(), fixture.tx, fixture.organization, occurrence, schedule,
+		previousAttempt, keyHash, requestHash,
+	)
+	if err != nil || replayed != occurrence {
+		t.Fatalf("current queued completion replay: %v %+v", err, replayed)
+	}
+	stale := occurrence
+	stale.EffectiveInputSHA256 = hashString("stale-requeue-snapshot")
+	if _, err := replayRequeuedScheduleCompletion(
+		context.Background(), fixture.tx, fixture.organization, stale, schedule,
+		previousAttempt, keyHash, requestHash,
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("stale queued completion replay returned %v", err)
+	}
+}
+
+func TestScheduledRequeueRejectsNewerScheduleSnapshot(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	occurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+	run := fixture.tx.runs[turnAttemptMapKey(occurrence.ID, occurrence.Attempt)]
+	schedule := fixture.tx.resources[produced.schedule.ID]
+	newerSpec := schedule.Spec.(entity.ScheduleSpec)
+	newerSpec.EffectiveInputSHA = hashString("newer-schedule-snapshot")
+	schedule.Spec = newerSpec
+	schedule.Version++
+	original := occurrence
+	if err := requeueScheduledOccurrence(
+		&occurrence, schedule, run, occurrence.Attempt+1,
+		fixture.tx.now.Add(time.Second), "execution_failed", fixture.tx.now,
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("requeue against newer Schedule snapshot returned %v", err)
+	}
+	if occurrence != original {
+		t.Fatal("rejected newer Schedule snapshot partially changed occurrence")
 	}
 }
 

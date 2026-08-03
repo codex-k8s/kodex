@@ -45,6 +45,12 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 			args: scheduledRunSuspendArgs(domainrepo.ScheduledRun{}, "", 1),
 		},
 		{
+			name: "schedule occurrence update", sql: sqlScheduleOccurrenceUpdate,
+			args: scheduleOccurrenceUpdateArgs(domainrepo.ScheduleOccurrence{
+				EffectiveInputSHA256: strings.Repeat("a", 64),
+			}, 1, ""),
+		},
+		{
 			name: "scheduled candidate", sql: sqlScheduleOccurrenceGetByCurrentTurn,
 			args: pgx.StrictNamedArgs{
 				"organization_id": "", "project_id": "", "turn_id": "",
@@ -74,6 +80,22 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestScheduleOccurrenceUpdatePersistsCurrentDigest(t *testing.T) {
+	digest := strings.Repeat("b", 64)
+	args := scheduleOccurrenceUpdateArgs(domainrepo.ScheduleOccurrence{
+		EffectiveInputSHA256: digest,
+	}, 1, "")
+	if args["effective_input_sha256"] != digest {
+		t.Fatal("schedule occurrence update loses current digest argument")
+	}
+	if !strings.Contains(
+		sqlScheduleOccurrenceUpdate,
+		"effective_input_sha256 = @effective_input_sha256",
+	) {
+		t.Fatal("schedule occurrence update does not persist current digest")
 	}
 }
 

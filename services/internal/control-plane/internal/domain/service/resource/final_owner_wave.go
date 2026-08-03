@@ -203,18 +203,22 @@ func (service *Service) continueOwnerGateGraph(
 			schedule.OwnerActorID != process.OwnerActorID {
 			return OwnerGateResult{}, errs.ErrStateConflict
 		}
-		occurrence.State = "CONTINUATION"
-		occurrence.Outcome = "owner_gate_changes_requested"
-		occurrence.ExecutionSessionID = session.ID
-		occurrence.ExecutionSessionVersion = updatedSession.Version
-		occurrence.ExecutionTurnID = continuation.ID
-		occurrence.ExecutionTurnVersion = continuation.Version
-		occurrence.ExecutionProcessRunID = continuedProcess.ID
-		occurrence.ExecutionProcessVersion = continuedProcess.Version
-		occurrence.ExecutionRuntimeRevisionID = revision.ID
-		occurrence.ExecutionRuntimeRevisionVersion = revision.Version
-		occurrence.EffectiveInputSHA256 = continuationSpec.EffectiveInputSHA256
-		occurrence.UpdatedAt = now
+		if err := rebindScheduledOccurrence(
+			&occurrence,
+			"CONTINUATION",
+			scheduledOccurrenceExecutionBinding{
+				SessionID: session.ID, SessionVersion: updatedSession.Version,
+				TurnID: continuation.ID, TurnVersion: continuation.Version,
+				ProcessRunID: continuedProcess.ID, ProcessVersion: continuedProcess.Version,
+				RuntimeRevisionID:      revision.ID,
+				RuntimeRevisionVersion: revision.Version,
+				InputSHA256:            continuationSpec.EffectiveInputSHA256,
+			},
+			"owner_gate_changes_requested",
+			now,
+		); err != nil {
+			return OwnerGateResult{}, err
+		}
 		if err := tx.UpdateScheduleOccurrence(
 			ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,
 		); err != nil {
@@ -759,27 +763,30 @@ func (service *Service) recoverExpiredScheduleOccurrence(
 	expectedToken := occurrence.TokenHash
 	terminal := occurrence.Attempt >= scheduleSpec.MaximumAttempts ||
 		!now.Before(occurrence.DeadLetterAt)
-	occurrence.State = "DEAD_LETTER"
 	if !terminal {
-		occurrence.State = "QUEUED"
-		occurrence.Attempt++
-		occurrence.AvailableAt = now.Add(scheduleBackoff(scheduleSpec, occurrence.Attempt))
+		nextAttempt := occurrence.Attempt + 1
+		if err := requeueScheduledOccurrence(
+			&occurrence,
+			schedule,
+			run,
+			nextAttempt,
+			now.Add(scheduleBackoff(scheduleSpec, nextAttempt)),
+			"scheduler_lease_expired",
+			now,
+		); err != nil {
+			return err
+		}
+	} else {
+		occurrence.State = "DEAD_LETTER"
+		occurrence.Outcome = "scheduler_lease_expired"
+		occurrence.ResultArtifactID = ""
+		occurrence.ClaimantWorkloadID = ""
+		occurrence.AuthorityGeneration = 0
+		occurrence.TokenHash = ""
+		occurrence.ClaimKeySHA256 = ""
+		occurrence.LeaseExpiresAt = time.Time{}
+		occurrence.UpdatedAt = now
 	}
-	occurrence.Outcome = "scheduler_lease_expired"
-	occurrence.ResultArtifactID = ""
-	occurrence.ClaimantWorkloadID = ""
-	occurrence.AuthorityGeneration = 0
-	occurrence.TokenHash = ""
-	occurrence.LeaseExpiresAt = time.Time{}
-	occurrence.ExecutionSessionID = ""
-	occurrence.ExecutionSessionVersion = 0
-	occurrence.ExecutionTurnID = ""
-	occurrence.ExecutionTurnVersion = 0
-	occurrence.ExecutionProcessRunID = ""
-	occurrence.ExecutionProcessVersion = 0
-	occurrence.ExecutionRuntimeRevisionID = ""
-	occurrence.ExecutionRuntimeRevisionVersion = 0
-	occurrence.UpdatedAt = now
 	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, expectedAttempt, expectedToken,
 	); err != nil {
@@ -815,6 +822,7 @@ func (service *Service) finishRecoveredOccurrence(
 	occurrence.ClaimantWorkloadID = ""
 	occurrence.AuthorityGeneration = 0
 	occurrence.TokenHash = ""
+	occurrence.ClaimKeySHA256 = ""
 	occurrence.LeaseExpiresAt = time.Time{}
 	occurrence.UpdatedAt = now
 	if err := tx.UpdateScheduleOccurrence(

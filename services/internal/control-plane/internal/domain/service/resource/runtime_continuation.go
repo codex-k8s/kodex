@@ -4674,18 +4674,22 @@ func (service *Service) materializeIntegrationScheduledGraph(
 		run.CurrentProcessVersion != previousProcess.Version {
 		return errs.ErrStateConflict
 	}
-	occurrence.ExecutionSessionID = queuedSession.ID
-	occurrence.ExecutionSessionVersion = queuedSession.Version
-	occurrence.ExecutionTurnID = continuationTurn.ID
-	occurrence.ExecutionTurnVersion = continuationTurn.Version
-	occurrence.ExecutionProcessRunID = runningProcess.ID
-	occurrence.ExecutionProcessVersion = runningProcess.Version
-	occurrence.ExecutionRuntimeRevisionID = revision.ID
-	occurrence.ExecutionRuntimeRevisionVersion = revision.Version
-	occurrence.EffectiveInputSHA256 = inputSHA256
-	occurrence.Outcome = ""
-	occurrence.ResultArtifactID = ""
-	occurrence.UpdatedAt = now
+	if err := rebindScheduledOccurrence(
+		&occurrence,
+		"CONTINUATION",
+		scheduledOccurrenceExecutionBinding{
+			SessionID: queuedSession.ID, SessionVersion: queuedSession.Version,
+			TurnID: continuationTurn.ID, TurnVersion: continuationTurn.Version,
+			ProcessRunID: runningProcess.ID, ProcessVersion: runningProcess.Version,
+			RuntimeRevisionID:      revision.ID,
+			RuntimeRevisionVersion: revision.Version,
+			InputSHA256:            inputSHA256,
+		},
+		"",
+		now,
+	); err != nil {
+		return err
+	}
 	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,
 	); err != nil {

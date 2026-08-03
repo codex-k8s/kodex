@@ -1552,30 +1552,7 @@ func (wrapped *transaction) UpdateScheduleOccurrence(
 	tag, err := wrapped.tx.Exec(
 		ctx,
 		sqlScheduleOccurrenceUpdate,
-		pgx.StrictNamedArgs{
-			"id":                                 occurrence.ID,
-			"state":                              occurrence.State,
-			"attempt":                            occurrence.Attempt,
-			"claimant_workload_id":               occurrence.ClaimantWorkloadID,
-			"authority_generation":               occurrence.AuthorityGeneration,
-			"token_hash":                         occurrence.TokenHash,
-			"claim_key_sha256":                   occurrence.ClaimKeySHA256,
-			"lease_expires_at":                   occurrence.LeaseExpiresAt,
-			"available_at":                       occurrence.AvailableAt,
-			"outcome":                            occurrence.Outcome,
-			"result_artifact_id":                 occurrence.ResultArtifactID,
-			"execution_session_id":               occurrence.ExecutionSessionID,
-			"execution_session_version":          occurrence.ExecutionSessionVersion,
-			"execution_turn_id":                  occurrence.ExecutionTurnID,
-			"execution_turn_version":             occurrence.ExecutionTurnVersion,
-			"execution_process_run_id":           occurrence.ExecutionProcessRunID,
-			"execution_process_version":          occurrence.ExecutionProcessVersion,
-			"execution_runtime_revision_id":      occurrence.ExecutionRuntimeRevisionID,
-			"execution_runtime_revision_version": occurrence.ExecutionRuntimeRevisionVersion,
-			"updated_at":                         occurrence.UpdatedAt,
-			"expected_attempt":                   expectedAttempt,
-			"expected_token_hash":                expectedTokenHash,
-		},
+		scheduleOccurrenceUpdateArgs(occurrence, expectedAttempt, expectedTokenHash),
 	)
 	if err != nil {
 		return mapError(err)
@@ -1584,6 +1561,38 @@ func (wrapped *transaction) UpdateScheduleOccurrence(
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+func scheduleOccurrenceUpdateArgs(
+	occurrence domainrepo.ScheduleOccurrence,
+	expectedAttempt uint32,
+	expectedTokenHash string,
+) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"id":                                 occurrence.ID,
+		"state":                              occurrence.State,
+		"attempt":                            occurrence.Attempt,
+		"effective_input_sha256":             occurrence.EffectiveInputSHA256,
+		"claimant_workload_id":               occurrence.ClaimantWorkloadID,
+		"authority_generation":               occurrence.AuthorityGeneration,
+		"token_hash":                         occurrence.TokenHash,
+		"claim_key_sha256":                   occurrence.ClaimKeySHA256,
+		"lease_expires_at":                   occurrence.LeaseExpiresAt,
+		"available_at":                       occurrence.AvailableAt,
+		"outcome":                            occurrence.Outcome,
+		"result_artifact_id":                 occurrence.ResultArtifactID,
+		"execution_session_id":               occurrence.ExecutionSessionID,
+		"execution_session_version":          occurrence.ExecutionSessionVersion,
+		"execution_turn_id":                  occurrence.ExecutionTurnID,
+		"execution_turn_version":             occurrence.ExecutionTurnVersion,
+		"execution_process_run_id":           occurrence.ExecutionProcessRunID,
+		"execution_process_version":          occurrence.ExecutionProcessVersion,
+		"execution_runtime_revision_id":      occurrence.ExecutionRuntimeRevisionID,
+		"execution_runtime_revision_version": occurrence.ExecutionRuntimeRevisionVersion,
+		"updated_at":                         occurrence.UpdatedAt,
+		"expected_attempt":                   expectedAttempt,
+		"expected_token_hash":                expectedTokenHash,
+	}
 }
 
 func (wrapped *transaction) GetScheduleOccurrenceForUpdate(

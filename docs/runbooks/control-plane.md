@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.16.0
+version: 1.17.0
 updated: 2026-08-03
 ---
 
@@ -494,7 +494,15 @@ Kubernetes/Mattermost/MCP/Codex действий запрещён.
 `Turn.EffectiveInputSHA256` и `ScheduleOccurrence.EffectiveInputSHA256`; queued
 occurrence до materialization ещё содержит snapshot. Если эти значения
 смешаны, claim/recovery отклоняется: не выравнивать их SQL и не терять snapshot
-provenance. Completion не принимает outcome от
+provenance. При `FAILED` completion или scheduler lease expiry прежний run
+сначала получает terminal outcome, затем occurrence одной OCC записью
+возвращается в `QUEUED`: digest восстанавливается только из immutable snapshot
+этого run, а claim key/token/lease/generation и весь execution tuple очищаются.
+`UpdateScheduleOccurrence` обязан передать `effective_input_sha256`, а SQL —
+записать его; расхождение authoritative readback является дефектом producer, а
+не поводом ручного `UPDATE`. Если locked Schedule уже несёт другой snapshot,
+requeue закрыто останавливается: новое расписание не переписывает provenance
+старой attempt. Completion не принимает outcome от
 scheduler: он перечитывает terminal Turn/Process; retry завершает прежний run
 и создаёт новый отслеживаемый attempt. Источник хода и process lineage содержат exact occurrence. Owner gate из
 такого process повторяет schedule/occurrence и закрыто сверяет active
@@ -552,6 +560,14 @@ audit и authoritative read в той же transaction. Дубликат
 Schedule. Для Turn/Session/RuntimeRevision каждый опубликованный
 `EventSequence` обязан совпадать с новой `Resource.Version` изменённого
 aggregate.
+
+Для диагностики повторной scheduled attempt сначала прочитать occurrence и оба
+run по attempt. Предыдущий run обязан быть terminal и сохранять snapshot/current
+digests, queued occurrence — иметь следующую attempt, тот же snapshot и пустые
+claim/execution поля, новый run после claim — тот же snapshot и новый current
+digest. Старый scheduler claim receipt/token после requeue не должен
+возвращаться. Не исправлять этот набор ручным SQL: остановить producer и
+выпустить forward-only application fix после подтверждения owner graph.
 
 ## Наблюдаемость
 

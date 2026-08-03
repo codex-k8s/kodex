@@ -673,6 +673,9 @@ func (service *Service) ClaimScheduleOccurrence(
 			if pinnedInputSHA256 != occurrence.EffectiveInputSHA256 {
 				return errs.ErrStateConflict
 			}
+			if err := validateQueuedScheduledOccurrence(occurrence, schedule); err != nil {
+				return err
+			}
 			scheduleSnapshotInputSHA256 := pinnedInputSHA256
 			claimNow, err := tx.CurrentTime(ctx)
 			if err != nil {
@@ -845,22 +848,27 @@ func (service *Service) ClaimScheduleOccurrence(
 				input.IdempotencyKey,
 			)
 			expectedAttempt := occurrence.Attempt
-			occurrence.State = "CLAIMED"
-			occurrence.ClaimantWorkloadID = input.Principal.CallerWorkload
-			occurrence.AuthorityGeneration = input.Principal.AuthorityGeneration
-			occurrence.TokenHash = hashString(token)
-			occurrence.ClaimKeySHA256 = keyHash
-			occurrence.LeaseExpiresAt = claimNow.Add(occurrence.MaximumExecution)
-			occurrence.ExecutionSessionID = updatedSession.ID
-			occurrence.ExecutionSessionVersion = updatedSession.Version
-			occurrence.ExecutionTurnID = turn.ID
-			occurrence.ExecutionTurnVersion = turn.Version
-			occurrence.ExecutionProcessRunID = scheduledProcess.ID
-			occurrence.ExecutionProcessVersion = scheduledProcess.Version
-			occurrence.ExecutionRuntimeRevisionID = runtimeRevision.ID
-			occurrence.ExecutionRuntimeRevisionVersion = runtimeRevision.Version
-			occurrence.EffectiveInputSHA256 = turnSpec.EffectiveInputSHA256
-			occurrence.UpdatedAt = claimNow
+			if err := materializeScheduledOccurrence(
+				&occurrence,
+				scheduleSnapshotInputSHA256,
+				scheduledOccurrenceExecutionBinding{
+					SessionID: updatedSession.ID, SessionVersion: updatedSession.Version,
+					TurnID: turn.ID, TurnVersion: turn.Version,
+					ProcessRunID: scheduledProcess.ID, ProcessVersion: scheduledProcess.Version,
+					RuntimeRevisionID:      runtimeRevision.ID,
+					RuntimeRevisionVersion: runtimeRevision.Version,
+					InputSHA256:            turnSpec.EffectiveInputSHA256,
+				},
+				scheduledOccurrenceClaimBinding{
+					WorkloadID:          input.Principal.CallerWorkload,
+					AuthorityGeneration: input.Principal.AuthorityGeneration,
+					TokenSHA256:         hashString(token), ClaimKeySHA256: keyHash,
+					LeaseExpiresAt: claimNow.Add(occurrence.MaximumExecution),
+				},
+				claimNow,
+			); err != nil {
+				return err
+			}
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
 				occurrence,
@@ -1061,8 +1069,32 @@ func (service *Service) CompleteScheduleOccurrence(
 			if err != nil {
 				return err
 			}
-			if candidate.ExecutionTurnID == "" || candidate.State == "QUEUED" ||
-				candidate.State == "DEAD_LETTER" || candidate.State == "SKIPPED" {
+			if candidate.State == "QUEUED" {
+				occurrence, lockErr := tx.GetScheduleOccurrenceForUpdate(
+					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+					candidate.ID,
+				)
+				if lockErr != nil {
+					return lockErr
+				}
+				schedule, scheduleErr := tx.GetForUpdate(
+					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+					occurrence.ScheduleID,
+				)
+				if scheduleErr != nil {
+					return scheduleErr
+				}
+				replayed, replayErr := replayRequeuedScheduleCompletion(
+					ctx, tx, input.Principal.OrganizationID, occurrence, schedule,
+					input.ExpectedAttempt, keyHash, requestHash,
+				)
+				if replayErr != nil {
+					return replayErr
+				}
+				result = replayed
+				return nil
+			}
+			if candidate.ExecutionTurnID == "" || candidate.State == "SKIPPED" {
 				return errs.ErrStateConflict
 			}
 			graph, err := service.lockOwnerGraphByTurn(
@@ -1159,32 +1191,42 @@ func (service *Service) CompleteScheduleOccurrence(
 			}
 			expectedToken := occurrence.TokenHash
 			now := service.now().UTC().Truncate(time.Microsecond)
-			occurrence.State = terminalState
-			occurrence.Outcome = outcome
-			occurrence.ResultArtifactID = resultArtifactID
-			occurrence.ClaimantWorkloadID = ""
-			occurrence.AuthorityGeneration = 0
-			occurrence.TokenHash = ""
-			occurrence.LeaseExpiresAt = time.Time{}
-			occurrence.UpdatedAt = now
-			if terminalState == "FAILED" {
-				if occurrence.Attempt < scheduleSpec.MaximumAttempts &&
-					now.Sub(occurrence.ScheduledFor) < scheduleSpec.DeadLetterAfter {
-					occurrence.State = "QUEUED"
-					occurrence.Attempt++
-					occurrence.AvailableAt = now.Add(
-						scheduleBackoff(scheduleSpec, occurrence.Attempt),
-					)
-				} else {
-					occurrence.State = "DEAD_LETTER"
-				}
-			}
 			if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
 				OccurrenceID: occurrence.ID, Attempt: input.ExpectedAttempt,
 				State: terminalState, Outcome: outcome,
 				ResultArtifactID: resultArtifactID, FinishedAt: now,
 			}); err != nil {
 				return err
+			}
+			requeue := terminalState == "FAILED" &&
+				occurrence.Attempt < scheduleSpec.MaximumAttempts &&
+				now.Sub(occurrence.ScheduledFor) < scheduleSpec.DeadLetterAfter
+			if requeue {
+				nextAttempt := occurrence.Attempt + 1
+				if err := requeueScheduledOccurrence(
+					&occurrence,
+					schedule,
+					run,
+					nextAttempt,
+					now.Add(scheduleBackoff(scheduleSpec, nextAttempt)),
+					outcome,
+					now,
+				); err != nil {
+					return err
+				}
+			} else {
+				occurrence.State = terminalState
+				if terminalState == "FAILED" {
+					occurrence.State = "DEAD_LETTER"
+				}
+				occurrence.Outcome = outcome
+				occurrence.ResultArtifactID = resultArtifactID
+				occurrence.ClaimantWorkloadID = ""
+				occurrence.AuthorityGeneration = 0
+				occurrence.TokenHash = ""
+				occurrence.ClaimKeySHA256 = ""
+				occurrence.LeaseExpiresAt = time.Time{}
+				occurrence.UpdatedAt = now
 			}
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
@@ -1221,6 +1263,39 @@ func (service *Service) CompleteScheduleOccurrence(
 		},
 	)
 	return result, err
+}
+
+func replayRequeuedScheduleCompletion(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	organizationID string,
+	occurrence domainrepo.ScheduleOccurrence,
+	schedule entity.Resource,
+	expectedAttempt uint32,
+	keyHash string,
+	requestHash string,
+) (domainrepo.ScheduleOccurrence, error) {
+	if occurrence.Attempt != expectedAttempt+1 ||
+		validateQueuedScheduledOccurrence(occurrence, schedule) != nil {
+		return domainrepo.ScheduleOccurrence{}, errs.ErrStateConflict
+	}
+	receipt, err := tx.GetReceipt(
+		ctx, organizationID, "complete_schedule_occurrence", keyHash,
+	)
+	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			return domainrepo.ScheduleOccurrence{}, errs.ErrStateConflict
+		}
+		return domainrepo.ScheduleOccurrence{}, err
+	}
+	if receipt.RequestHash != requestHash {
+		return domainrepo.ScheduleOccurrence{}, errs.ErrIdempotencyConflict
+	}
+	var payload scheduleOccurrenceReceipt
+	if json.Unmarshal(receipt.Payload, &payload) != nil || payload.Occurrence != occurrence {
+		return domainrepo.ScheduleOccurrence{}, errs.ErrStateConflict
+	}
+	return occurrence, nil
 }
 
 // CancelScheduleOccurrence отзывает ожидающий или текущий запуск без исполнения.
@@ -1319,6 +1394,11 @@ func (service *Service) CancelScheduleOccurrence(
 			if err := requireLifecycleOwner(input.Principal, schedule); err != nil {
 				return err
 			}
+			if occurrence.State == "QUEUED" {
+				if err := validateQueuedScheduledOccurrence(occurrence, schedule); err != nil {
+					return err
+				}
+			}
 			if !queuedSubset {
 				if err := requireClosedRuntimeConsistentWithTurn(graph); err != nil {
 					return err
@@ -1353,13 +1433,7 @@ func (service *Service) CancelScheduleOccurrence(
 			}
 			expectedToken := occurrence.TokenHash
 			now := service.now().UTC().Truncate(time.Microsecond)
-			if occurrence.State == "QUEUED" {
-				if occurrence.ExecutionSessionID != "" ||
-					occurrence.ExecutionTurnID != "" ||
-					occurrence.ExecutionProcessRunID != "" {
-					return errs.ErrStateConflict
-				}
-			} else {
+			if occurrence.State != "QUEUED" {
 				run := graph.Run
 				if validateScheduledRunBinding(occurrence, run) != nil ||
 					run.State != occurrence.State {
@@ -1480,6 +1554,7 @@ func (service *Service) CancelScheduleOccurrence(
 			occurrence.ClaimantWorkloadID = ""
 			occurrence.AuthorityGeneration = 0
 			occurrence.TokenHash = ""
+			occurrence.ClaimKeySHA256 = ""
 			occurrence.LeaseExpiresAt = time.Time{}
 			occurrence.UpdatedAt = now
 			if err := tx.UpdateScheduleOccurrence(

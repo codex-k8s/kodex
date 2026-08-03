@@ -186,20 +186,26 @@ func (service *Service) prepareRetriedExecution(
 		occurrence.ExecutionProcessRunID != process.ID {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	occurrence.ExecutionSessionID = session.ID
-	occurrence.ExecutionSessionVersion = session.Version
-	occurrence.ExecutionTurnID = retried.ID
-	occurrence.ExecutionTurnVersion = retried.Version
-	occurrence.ExecutionProcessVersion = updatedProcess.Version
-	occurrence.ExecutionRuntimeRevisionID = revision.ID
-	occurrence.ExecutionRuntimeRevisionVersion = revision.Version
-	occurrence.EffectiveInputSHA256 = spec.EffectiveInputSHA256
+	targetOccurrenceState := occurrence.State
 	if occurrence.State == "WAITING_OWNER" || occurrence.State == "FAILED" {
-		occurrence.State = "CONTINUATION"
+		targetOccurrenceState = "CONTINUATION"
 	}
-	occurrence.Outcome = ""
-	occurrence.ResultArtifactID = ""
-	occurrence.UpdatedAt = now
+	if err := rebindScheduledOccurrence(
+		&occurrence,
+		targetOccurrenceState,
+		scheduledOccurrenceExecutionBinding{
+			SessionID: session.ID, SessionVersion: session.Version,
+			TurnID: retried.ID, TurnVersion: retried.Version,
+			ProcessRunID: updatedProcess.ID, ProcessVersion: updatedProcess.Version,
+			RuntimeRevisionID:      revision.ID,
+			RuntimeRevisionVersion: revision.Version,
+			InputSHA256:            spec.EffectiveInputSHA256,
+		},
+		"",
+		now,
+	); err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, err
+	}
 	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,
 	); err != nil {
@@ -290,14 +296,21 @@ func (service *Service) rebindStandaloneScheduledRetry(
 		revision.State != enum.StateActive {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
-	occurrence.ExecutionSessionID = spec.SessionID
-	occurrence.ExecutionSessionVersion = run.CurrentSessionVersion
-	occurrence.ExecutionTurnID = retried.ID
-	occurrence.ExecutionTurnVersion = retried.Version
-	occurrence.ExecutionRuntimeRevisionID = spec.RuntimeRevisionID
-	occurrence.ExecutionRuntimeRevisionVersion = revision.Version
-	occurrence.EffectiveInputSHA256 = spec.EffectiveInputSHA256
-	occurrence.UpdatedAt = now
+	if err := rebindScheduledOccurrence(
+		&occurrence,
+		"CLAIMED",
+		scheduledOccurrenceExecutionBinding{
+			SessionID: spec.SessionID, SessionVersion: run.CurrentSessionVersion,
+			TurnID: retried.ID, TurnVersion: retried.Version,
+			RuntimeRevisionID:      spec.RuntimeRevisionID,
+			RuntimeRevisionVersion: revision.Version,
+			InputSHA256:            spec.EffectiveInputSHA256,
+		},
+		"",
+		now,
+	); err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, err
+	}
 	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, occurrence.Attempt, occurrence.TokenHash,
 	); err != nil {

@@ -3,6 +3,7 @@ UPDATE control_plane.schedule_occurrences
 SET
     state = @state,
     attempt = @attempt,
+    effective_input_sha256 = @effective_input_sha256,
     claimant_workload_id = nullif(@claimant_workload_id, ''),
     authority_generation = nullif(@authority_generation, 0),
     token_hash = nullif(@token_hash, ''),

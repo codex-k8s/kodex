@@ -149,8 +149,15 @@ immutable snapshot target/prompt/artifact/runtime/session policy. После
 `ClaimScheduleOccurrence` exact execution digest совпадает в
 `Turn.EffectiveInputSHA256`, `ScheduleOccurrence.EffectiveInputSHA256` и
 `ScheduledRun.CurrentInputSHA256`, а исходный snapshot остаётся в
-`ScheduledRun.EffectiveInputSHA256`. Retry/recovery/suspension/rebind сравнивают
-current digest, сохраняя snapshot provenance. Переходы occurrence/run пишут
+`ScheduledRun.EffectiveInputSHA256`. PostgreSQL `UpdateScheduleOccurrence`
+явно сохраняет изменяемый digest; repository fake повторяет field-level SQL
+contract и не маскирует пропущенный named argument заменой всей структуры.
+`FAILED` completion и scheduler lease expiry через единый закрытый helper
+завершают прежний run, восстанавливают queued occurrence digest из его
+immutable snapshot и очищают прежний claim/execution tuple. Более новая
+Schedule snapshot не подменяет pinned значение и закрыто блокирует requeue.
+Retry/suspension/rebind сравнивают current digest, сохраняя snapshot provenance.
+Переходы occurrence/run пишут
 audit и доступны authoritative read, но не публикуют повторное событие
 неизменённого Schedule; каждый outbox event использует sequence ровно новой
 версии действительно изменённого Resource aggregate.
