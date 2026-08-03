@@ -1020,7 +1020,7 @@ func (service *Service) ManageWorkClaim(
 						return entity.Resource{}, errs.ErrStateConflict
 					}
 				}
-				if input.Principal.CallerWorkload == "agent-runner" &&
+				if input.Principal.CallerWorkload == agentRunnerWorkload &&
 					(input.Principal.AuthoritySource != "AGENT_SESSION" ||
 						input.Principal.AuthorityReference != turn.ID ||
 						input.Principal.AuthorityRevision != uint64(turnSpec.Attempt) ||
@@ -1029,7 +1029,7 @@ func (service *Service) ManageWorkClaim(
 					return entity.Resource{}, errs.ErrPermissionDenied
 				}
 				authorityGeneration := input.Principal.AuthorityGeneration
-				if input.Principal.CallerWorkload == "agent-runner" {
+				if input.Principal.CallerWorkload == agentRunnerWorkload {
 					authorityGeneration = input.Principal.AuthorityGrantGeneration
 					if authorityGeneration == 0 {
 						return entity.Resource{}, errs.ErrPermissionDenied
@@ -1087,7 +1087,7 @@ func (service *Service) ManageWorkClaim(
 				spec.WorkloadID != input.Principal.CallerWorkload {
 				return entity.Resource{}, errs.ErrNotFound
 			}
-			if input.Principal.CallerWorkload == "agent-runner" &&
+			if input.Principal.CallerWorkload == agentRunnerWorkload &&
 				(input.Principal.AuthoritySource != "AGENT_SESSION" ||
 					input.Principal.AuthorityReference != spec.TurnID ||
 					input.Principal.AuthorityRevision != uint64(spec.Attempt) ||

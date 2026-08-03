@@ -346,6 +346,8 @@ func (service *Service) ClaimTurn(
 		return ClaimTurnResult{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		input.Principal.CallerWorkload != agentRunnerWorkload ||
+		input.Principal.CallerSPIFFEID != agentRunnerSPIFFEID ||
 		input.Principal.AuthoritySource != "AGENT_SESSION" ||
 		value.ValidateID(input.Principal.AuthorityReference) != nil ||
 		input.Principal.AuthorityRevision == 0 ||

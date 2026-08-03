@@ -78,6 +78,8 @@ const (
 	permissionIntegrationExecute     = "controlplane.integration_continuation.execute"
 	permissionIntegrationRead        = "controlplane.integration_continuation.read"
 	permissionIntegrationAcknowledge = "controlplane.integration_continuation.acknowledge"
+	agentRunnerWorkload              = "agent-runner"
+	agentRunnerSPIFFEID              = "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
 	controlAPIGatewayWorkload        = "control-api-gateway"
 	controlAPIGatewaySPIFFEID        = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
 )
@@ -158,6 +160,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.MemoryIndexerSPIFFEID) ||
 		value.ValidateStableKey(config.RuntimeControllerWorkload) != nil ||
 		!validSPIFFEID(config.RuntimeControllerSPIFFEID) ||
+		config.RuntimeControllerWorkload == agentRunnerWorkload ||
+		config.RuntimeControllerSPIFFEID == agentRunnerSPIFFEID ||
 		value.ValidateStableKey(config.IntegrationGatewayWorkload) != nil ||
 		!validSPIFFEID(config.IntegrationGatewaySPIFFEID) ||
 		value.ValidateStableKey(config.RestoreVerifierWorkload) != nil ||

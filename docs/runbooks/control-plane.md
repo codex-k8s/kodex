@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.13.0
+version: 1.14.0
 updated: 2026-08-03
 ---
 
@@ -392,11 +392,16 @@ Mattermost receipt или terminal decision прежний ClaimToken закры
 
 Integration suspension pin-ит invocation, approval, request digest, полный
 runtime tuple и exact Integration/credential ID+version+projection digest.
-Та же transaction переводит старую RuntimeExecution в `SUSPENDED`, закрывает
+После canonical locks она отдельно сверяет claimant `agent-runner`
+TurnLease/TurnAttempt с exact attempt/generation/input/lease fence и executor
+`runtime-controller` RuntimeExecution с exact workload/SPIFFE/grant. Та же
+transaction переводит старую RuntimeExecution в `SUSPENDED`, закрывает
 lease/attempt/claims/grants и переводит Turn/Session/Process в
-`WAITING_EXTERNAL`. Для scheduled process она также блокирует граф в общем со
-scheduler recovery порядке RuntimeExecution→occurrence→schedule→scheduled run→
-session→turn→ProcessRun→pinned resources→integration continuation,
+`WAITING_EXTERNAL`; ProcessRun получает полный current tuple с уже увеличенными
+Session/Turn versions, а не pre-suspension binding. Для scheduled process она
+также блокирует граф в общем со scheduler recovery порядке RuntimeExecution→
+occurrence→schedule→scheduled run→session→turn→ProcessRun→pinned resources→
+integration continuation,
 переводит occurrence/run из `CLAIMED` в
 `CONTINUATION`, очищает claimant/generation/token/lease и сохраняет suspended
 current tuple. Поэтому stale scheduler expiry/claim, overlap и delete не могут
@@ -410,8 +415,10 @@ Approval/begin повторно требуют активную pinned binding; 
 закрывают уже начатый effect по immutable snapshot.
 
 Terminal transition в той же transaction сначала повторно проверяет exact
-source `WAITING_EXTERNAL` Turn, `SUSPENDED` RuntimeExecution, завершённый
-`WAITING_EXTERNAL` TurnAttempt, отсутствие TurnLease и open work. Затем source
+source `WAITING_EXTERNAL` Turn, совпадающие suspended Session/Turn versions в
+ProcessRun, `SUSPENDED` RuntimeExecution exact runtime-controller workload/SPIFFE,
+отдельный завершённый `WAITING_EXTERNAL` TurnAttempt claimant `agent-runner`,
+отсутствие TurnLease и open work. Затем source
 Turn получает terminal `CANCELLED` с outcome
 `integration_continuation_materialized`; его RuntimeExecution остаётся
 immutable terminal `SUSPENDED`, а provenance сохраняется в TurnAttempt,

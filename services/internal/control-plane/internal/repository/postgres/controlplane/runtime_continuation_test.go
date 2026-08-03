@@ -119,6 +119,18 @@ func TestIntegrationContinuationCleanupBlockerIsSessionScoped(t *testing.T) {
 	}
 }
 
+func TestMaterializedPredecessorDoesNotRemainInSessionOpenSet(t *testing.T) {
+	if strings.Contains(sqlSessionOpenTurns, "'CANCELLED'") {
+		t.Fatal("terminal integration predecessor remains in the session open set")
+	}
+	if !strings.Contains(
+		sqlIntegrationContinuationBlocksCleanup,
+		"continuation_state <> 'REJOINED'",
+	) {
+		t.Fatal("cleanup does not become eligible after exact continuation rejoin")
+	}
+}
+
 func TestScheduledContinuationRemainsOpenAndUnclaimable(t *testing.T) {
 	for name, query := range map[string]string{
 		"open": sqlScheduleOccurrenceHasOpen,

@@ -316,44 +316,238 @@ func TestIntegrationMaterializationReplacesPredecessorTurn(t *testing.T) {
 		TurnID: turnID, Attempt: 1,
 		RuntimeRevisionID: revisionID, RuntimeRevisionVersion: 4,
 		RuntimeRevisionSHA256: digest, ImmutableInputSHA256: digest, GrantGeneration: 7,
-		WorkloadID: "runtime-controller", State: "SUSPENDED",
-		TerminalOutcome: "SUSPENDED", TerminalReference: continuationID,
+		WorkloadID:       "runtime-controller",
+		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		State:            "SUSPENDED",
+		TerminalOutcome:  "SUSPENDED", TerminalReference: continuationID,
 		TerminalSHA256: requestDigest,
 	}
 	attempt := domainrepo.TurnAttempt{
-		TurnID: turnID, Attempt: 1, WorkloadID: runtime.WorkloadID,
+		TurnID: turnID, Attempt: 1, WorkloadID: agentRunnerWorkload,
 		AuthorityGeneration: 7, State: "WAITING_EXTERNAL", InputSHA256: digest,
+		LeaseFence: turn.Version - 1, StartedAt: now.Add(time.Second),
 		FinishedAt: now.Add(2 * time.Second), Outcome: "integration_approval",
 	}
 
-	replaced, err := replaceIntegrationPredecessor(
-		continuation, runtime, turn, attempt, now.Add(3*time.Second),
-	)
-	if err != nil {
-		t.Fatalf("replace predecessor: %v", err)
+	outcomes := []struct {
+		name      string
+		approval  string
+		execution string
+		digest    string
+	}{
+		{name: "rejected", approval: "REJECTED", execution: "NOT_APPLICABLE", digest: requestDigest},
+		{name: "approval expired", approval: "EXPIRED", execution: "NOT_APPLICABLE", digest: requestDigest},
+		{name: "pending cancel", approval: "CANCELLED", execution: "NOT_APPLICABLE", digest: requestDigest},
+		{name: "approved cancel", approval: "CANCELLED", execution: "NOT_APPLICABLE", digest: requestDigest},
+		{name: "execution success", approval: "APPROVED", execution: "SUCCEEDED", digest: digest},
+		{name: "execution error", approval: "APPROVED", execution: "FAILED", digest: digest},
 	}
-	replacedSpec := replaced.Spec.(entity.TurnSpec)
-	if replaced.State != enum.StateCancelled || replaced.Version != turn.Version+1 ||
-		replacedSpec.Outcome != integrationPredecessorOutcome {
-		t.Fatalf("predecessor did not become an immutable replaced terminal: %#v", replaced)
+	for _, outcome := range outcomes {
+		t.Run(outcome.name, func(t *testing.T) {
+			candidate := continuation
+			candidate.ApprovalState = outcome.approval
+			candidate.ExecutionState = outcome.execution
+			candidate.DecisionSHA256 = requestDigest
+			candidate.ResultSHA256 = digest
+			candidate.ErrorSHA256 = digest
+			gotDigest, err := integrationMaterializationOutcomeDigest(candidate)
+			if err != nil || gotDigest != outcome.digest {
+				t.Fatalf("terminal outcome is not materializable: %s %v", gotDigest, err)
+			}
+			replaced, err := replaceIntegrationPredecessor(
+				candidate, runtime, turn, attempt, agentRunnerWorkload,
+				"runtime-controller",
+				"spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+				now.Add(3*time.Second),
+			)
+			if err != nil {
+				t.Fatalf("replace predecessor: %v", err)
+			}
+			replacedSpec := replaced.Spec.(entity.TurnSpec)
+			if replaced.State != enum.StateCancelled || replaced.Version != turn.Version+1 ||
+				replacedSpec.Outcome != integrationPredecessorOutcome {
+				t.Fatalf("predecessor did not become an immutable replaced terminal: %#v", replaced)
+			}
+		})
+	}
+	pending := continuation
+	pending.ApprovalState = "PENDING"
+	pending.ExecutionState = "NOT_STARTED"
+	if _, err := integrationMaterializationOutcomeDigest(pending); !errors.Is(
+		err, errs.ErrStateConflict,
+	) {
+		t.Fatalf("nonterminal outcome was materialized: %v", err)
+	}
+	alreadyMaterialized := continuation
+	alreadyMaterialized.ContinuationTurnID = "35d9336c-1ace-4f1d-822d-021a44a36e5a"
+	if _, err := replaceIntegrationPredecessor(
+		alreadyMaterialized, runtime, turn, attempt, agentRunnerWorkload,
+		"runtime-controller",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		now.Add(3*time.Second),
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("second successor was accepted: %v", err)
 	}
 
 	runtime.LeaseID = "stale-runtime-lease"
 	if _, err := replaceIntegrationPredecessor(
-		continuation, runtime, turn, attempt, now.Add(3*time.Second),
+		continuation, runtime, turn, attempt, agentRunnerWorkload,
+		"runtime-controller",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		now.Add(3*time.Second),
 	); !errors.Is(err, errs.ErrStateConflict) {
 		t.Fatalf("live predecessor authority was accepted: %v", err)
 	}
 	runtime.LeaseID = ""
 	attempt.State = "CLAIMED"
 	if _, err := replaceIntegrationPredecessor(
-		continuation, runtime, turn, attempt, now.Add(3*time.Second),
+		continuation, runtime, turn, attempt, agentRunnerWorkload,
+		"runtime-controller",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		now.Add(3*time.Second),
 	); !errors.Is(err, errs.ErrStateConflict) {
 		t.Fatalf("open predecessor attempt was accepted: %v", err)
+	}
+	attempt.State = "WAITING_EXTERNAL"
+	attempt.WorkloadID = "runtime-controller"
+	if _, err := replaceIntegrationPredecessor(
+		continuation, runtime, turn, attempt, agentRunnerWorkload,
+		"runtime-controller",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		now.Add(3*time.Second),
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("executor substituted for claimant: %v", err)
+	}
+	attempt.WorkloadID = agentRunnerWorkload
+	attempt.LeaseFence--
+	if _, err := replaceIntegrationPredecessor(
+		continuation, runtime, turn, attempt, agentRunnerWorkload,
+		"runtime-controller",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		now.Add(3*time.Second),
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("stale claimant lease fence was accepted: %v", err)
+	}
+	attempt.LeaseFence++
+	runtime.WorkloadSPIFFEID = agentRunnerSPIFFEID
+	if _, err := replaceIntegrationPredecessor(
+		continuation, runtime, turn, attempt, agentRunnerWorkload,
+		"runtime-controller",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		now.Add(3*time.Second),
+	); !errors.Is(err, errs.ErrStateConflict) {
+		t.Fatalf("claimant SPIFFE substituted for runtime executor: %v", err)
+	}
+}
+
+func TestIntegrationSuspensionPinsExactCurrentVersions(t *testing.T) {
+	now := time.Date(2026, 8, 3, 11, 0, 0, 0, time.UTC)
+	organizationID := "3a3ed463-59fe-4a2b-9f96-58cd7d3dd526"
+	projectID := "fd0570db-07c9-4a9a-8d35-3657119068c3"
+	actorID := "5574792c-5721-4b85-83b7-e8c6857b8fef"
+	sessionID := "1373ea94-fdda-47f7-adbe-7ae3bc633c03"
+	turnID := "8bdfe85e-8ddf-4904-b139-bfa9139df42e"
+	processID := "e910cf2c-702b-4f8a-806f-6cfd094696cd"
+	revisionID := "ca9787b5-0ebf-44bb-bdb5-64b4f35c1713"
+	digest := strings.Repeat("a", 64)
+
+	for _, scheduled := range []bool{false, true} {
+		name := "unscheduled"
+		if scheduled {
+			name = "scheduled"
+		}
+		t.Run(name, func(t *testing.T) {
+			session := entity.Resource{
+				ID: sessionID, OrganizationID: organizationID, ProjectID: projectID,
+				OwnerActorID: actorID, Kind: enum.KindSession, State: enum.StateActive,
+				Version: 5,
+			}
+			turnSpec := entity.TurnSpec{
+				SessionID: sessionID, ProcessRunID: processID, Attempt: 1,
+				RuntimeRevisionID: revisionID, EffectiveInputSHA256: digest,
+			}
+			turn := entity.Resource{
+				ID: turnID, OrganizationID: organizationID, ProjectID: projectID,
+				ParentID: sessionID, OwnerActorID: actorID, Kind: enum.KindTurn,
+				State: enum.StateClaimed, Version: 7, Spec: turnSpec,
+			}
+			processSpec := entity.ProcessRunSpec{
+				PlaybookRef: "playbook:test", PolicyRevision: 1,
+				RootTriggerRef: "manual:test", RootInitiatorActorID: actorID,
+				RootSessionID: sessionID, RootSessionVersion: session.Version,
+				RootTurnID: turnID, RootTurnVersion: turn.Version, RootAttempt: 1,
+				ImmutableInputSHA256: digest, RuntimeRevisionID: revisionID,
+				CurrentSessionID: sessionID, CurrentSessionVersion: session.Version,
+				CurrentTurnID: turnID, CurrentTurnVersion: turn.Version,
+				CurrentAttempt: 1, CurrentRuntimeRevisionID: revisionID,
+				CurrentRuntimeRevisionVersion: 4, CurrentInputSHA256: digest,
+			}
+			if scheduled {
+				processSpec.ScheduleID = "b6ad5c57-e199-4e47-a93b-d99bb19b21e1"
+				processSpec.OccurrenceID = "35d9336c-1ace-4f1d-822d-021a44a36e5a"
+				processSpec.RootTriggerRef = "schedule-occurrence:" + processSpec.OccurrenceID
+			}
+			process := entity.Resource{
+				ID: processID, OrganizationID: organizationID, ProjectID: projectID,
+				OwnerActorID: actorID, Kind: enum.KindProcessRun, Name: "Process",
+				State: enum.StateRunning, Version: 9, Spec: processSpec,
+				CreatedAt: now, UpdatedAt: now,
+			}
+			resolved := resolvedExecution{
+				Turn: turn, TurnSpec: turnSpec, Session: session,
+				Process: process, ProcessSpec: processSpec,
+				Revision: entity.Resource{ID: revisionID, Version: 4},
+			}
+			suspendedSession := session
+			suspendedSession.State = enum.StateWaitingExternal
+			suspendedSession.Version++
+			suspendedTurn := turn
+			suspendedTurn.State = enum.StateWaitingExternal
+			suspendedTurn.Version++
+			got, err := suspendIntegrationProcessRun(
+				resolved, suspendedSession, suspendedTurn, now.Add(time.Second),
+			)
+			if err != nil {
+				t.Fatalf("suspend process: %v", err)
+			}
+			gotSpec := got.Spec.(entity.ProcessRunSpec)
+			current, err := currentExecution(gotSpec)
+			if err != nil || got.State != enum.StateWaitingExternal ||
+				current.SessionID != sessionID ||
+				current.SessionVersion != suspendedSession.Version ||
+				current.TurnID != turnID ||
+				current.TurnVersion != suspendedTurn.Version ||
+				current.RuntimeRevisionID != revisionID ||
+				current.RuntimeRevisionVersion != 4 ||
+				current.InputSHA256 != digest {
+				t.Fatalf("suspended current tuple is stale: %#v %v", current, err)
+			}
+
+			stale := resolved
+			stale.ProcessSpec.CurrentTurnVersion--
+			if _, err := suspendIntegrationProcessRun(
+				stale, suspendedSession, suspendedTurn, now.Add(time.Second),
+			); !errors.Is(err, errs.ErrStateConflict) {
+				t.Fatalf("stale process current tuple was accepted: %v", err)
+			}
+		})
 	}
 }
 
 func TestIntegrationMaterializationClosesSourceBeforeSuccessorInsert(t *testing.T) {
+	claim := productionFunctionSource(t, "runtime.go", "ClaimTurn")
+	if !strings.Contains(claim, "agentRunnerWorkload") ||
+		!strings.Contains(claim, "agentRunnerSPIFFEID") {
+		t.Fatal("TurnAttempt claimant is not pinned to the exact agent-runner identity")
+	}
+	suspension := productionFunctionSource(
+		t, "runtime_continuation.go", "suspendIntegrationGraph",
+	)
+	processRebind := strings.Index(suspension, "suspendIntegrationProcessRun")
+	leaseRevocation := strings.Index(suspension, "tx.DeleteTurnLease")
+	if processRebind < 0 || leaseRevocation < 0 || processRebind > leaseRevocation {
+		t.Fatal("integration suspension revokes authority before exact ProcessRun rebind validation")
+	}
 	source := productionFunctionSource(
 		t, "runtime_continuation.go", "materializeIntegrationContinuation",
 	)
