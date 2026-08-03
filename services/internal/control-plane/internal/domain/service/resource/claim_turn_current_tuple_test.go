@@ -69,6 +69,24 @@ func (tx *currentTupleTestTransaction) CurrentTime(context.Context) (time.Time, 
 	return tx.now, nil
 }
 
+func (tx *currentTupleTestTransaction) SessionHasUnverifiedRuntimeArchive(
+	context.Context, string, string, string,
+) (bool, error) {
+	return false, nil
+}
+
+func (tx *currentTupleTestTransaction) SessionHasActiveRuntimeCleanup(
+	context.Context, string, string, string,
+) (bool, error) {
+	return false, nil
+}
+
+func (tx *currentTupleTestTransaction) LatestSessionRuntimeArchiveForRestore(
+	context.Context, string, string, string,
+) (domainrepo.RuntimeExecution, error) {
+	return domainrepo.RuntimeExecution{}, errs.ErrNotFound
+}
+
 func receiptMapKey(scope, key string) string { return scope + "\x00" + key }
 
 func (tx *currentTupleTestTransaction) GetReceipt(
@@ -944,6 +962,8 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		MemoryIndexerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
 		RuntimeControllerWorkload:  runtimeWorker,
 		RuntimeControllerSPIFFEID:  runtimeSPIFFE,
+		ArchiveWorkload:            "runtime-archive",
+		ArchiveSPIFFEID:            "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
 		IntegrationGatewayWorkload: "integration-gateway",
 		IntegrationGatewaySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		RestoreVerifierWorkload:    "restore-verifier",
@@ -1412,6 +1432,17 @@ func TestProductionClaimTurnPropagatesUnscheduledCurrentTuple(t *testing.T) {
 	claim, execution := fixture.claimAndCreateRuntime(t, process)
 	if execution.TurnID != claim.Turn.ID || execution.ProcessID != process.ID {
 		t.Fatalf("runtime execution does not use claimed graph: %+v", execution)
+	}
+	recovered, err := fixture.service.ClaimRuntimeExecution(
+		context.Background(),
+		fixture.principal(permissionRuntimeClaim, fixture.runtimeWorker, fixture.runtimeSPIFFE),
+		"claim-runtime-after-controller-crash",
+	)
+	if err != nil {
+		t.Fatalf("ClaimRuntimeExecution durable PENDING recovery: %v", err)
+	}
+	if recovered != execution || len(fixture.tx.runtimes) != 1 {
+		t.Fatalf("durable PENDING recovery created a different execution: %+v", recovered)
 	}
 
 	runtimePrincipal := fixture.principal(

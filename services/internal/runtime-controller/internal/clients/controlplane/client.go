@@ -16,12 +16,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Mode string
 
 const (
 	ModeController        Mode = "controller"
+	ModeArchive           Mode = "archive"
 	ModeRestoreVerifier   Mode = "restore-verifier"
 	ModeCleanupAuthorizer Mode = "cleanup-authorizer"
 )
@@ -43,6 +45,8 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	switch config.Mode {
 	case ModeController:
 		operations = sharedclient.RuntimeControllerOperations()
+	case ModeArchive:
+		operations = sharedclient.RuntimeArchiveOperations()
 	case ModeRestoreVerifier:
 		operations = sharedclient.RuntimeRestoreVerifierOperations()
 	case ModeCleanupAuthorizer:
@@ -155,6 +159,33 @@ func (client *Client) GetRevision(
 				ResourceID: credential.GetId(), Purpose: credentialSpec.GetPurpose(),
 				Reference: credentialSpec.GetSecretRef(), Version: credential.GetVersion(),
 			})
+			if credential.GetId() == revision.ProviderCredentialBindingID {
+				revision.ProviderObservedUsage = credentialSpec.GetProviderObservedUsage()
+				revision.ProviderObservedLimit = credentialSpec.GetProviderObservedLimit()
+				revision.ProviderObservationRevision = credentialSpec.GetProviderObservationRevision()
+				if credentialSpec.GetProviderObservedAt() != nil {
+					revision.ProviderObservedAt = credentialSpec.GetProviderObservedAt().AsTime()
+				}
+			}
+		}
+		if component.GetKind() == controlplanev1.ResourceKind_RESOURCE_KIND_ROLE &&
+			component.GetResourceId() == revision.RoleID {
+			roleResponse, roleErr := client.shared.ControlPlane.GetResource(ctx, &controlplanev1.GetResourceRequest{
+				ResourceId: component.GetResourceId(), ExpectedKind: controlplanev1.ResourceKind_RESOURCE_KIND_ROLE,
+				ExpectedVersion: component.GetVersion(),
+			})
+			if roleErr != nil {
+				return entity.Revision{}, mapError(roleErr)
+			}
+			role := roleResponse.GetResource()
+			roleSpec := role.GetSpec().GetRole()
+			if role == nil || roleSpec == nil || role.GetId() != component.GetResourceId() ||
+				role.GetVersion() != component.GetVersion() || roleSpec.GetProviderAccountPool() == nil ||
+				roleSpec.GetProviderAccountPool().GetObservationMaxAge() == nil {
+				return entity.Revision{}, errs.ErrStateConflict
+			}
+			revision.ProviderObservationMaxAge = roleSpec.GetProviderAccountPool().GetObservationMaxAge().AsDuration()
+			revision.AgentProfile = roleSpec.GetStableKey()
 		}
 	}
 	return revision, nil
@@ -313,6 +344,7 @@ func (client *Client) VerifyRestore(
 
 func (client *Client) AuthorizeCleanup(
 	ctx context.Context, key string, execution entity.Execution, generation uint64,
+	pvcName, pvcUID, pvcResourceVersion string,
 ) (entity.Execution, error) {
 	response, err := client.shared.ControlPlane.AuthorizeRuntimeCleanup(
 		ctx, &controlplanev1.AuthorizeRuntimeCleanupRequest{
@@ -321,6 +353,7 @@ func (client *Client) AuthorizeCleanup(
 			ArchiveSha256:             execution.ArchiveSHA256,
 			RestoreProofSha256:        execution.RestoreProofSHA256,
 			ExpectedCleanupGeneration: generation,
+			PvcName:                   pvcName, PvcUid: pvcUID, PvcResourceVersion: pvcResourceVersion,
 		},
 	)
 	if err != nil {
@@ -330,7 +363,7 @@ func (client *Client) AuthorizeCleanup(
 }
 
 func (client *Client) ConsumeCleanup(
-	ctx context.Context, key string, execution entity.Execution,
+	ctx context.Context, key string, execution entity.Execution, proof entity.PVCDeletionProof,
 ) (entity.Execution, error) {
 	response, err := client.shared.ControlPlane.ConsumeRuntimeCleanupAuthorization(
 		ctx, &controlplanev1.ConsumeRuntimeCleanupAuthorizationRequest{
@@ -340,6 +373,11 @@ func (client *Client) ConsumeCleanup(
 			CleanupAuthorizationGeneration: execution.CleanupAuthorizationGeneration,
 			ArchiveSha256:                  execution.ArchiveSHA256,
 			RestoreProofSha256:             execution.RestoreProofSHA256,
+			PvcName:                        proof.PVCName,
+			PvcUid:                         proof.PVCUID,
+			PvcResourceVersion:             proof.PVCResourceVersion,
+			ObservedNotFoundAt:             timestamppb.New(proof.ObservedNotFoundAt),
+			DeletionProofSha256:            proof.SHA256,
 		},
 	)
 	if err != nil {
@@ -385,16 +423,35 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		State:   enum.ExecutionState(trimEnum(source.GetState().String(), "RUNTIME_EXECUTION_STATE_")),
 		LeaseID: source.GetLeaseId(), ArchiveReference: source.GetArchiveReference(),
 		ArchiveSHA256: source.GetArchiveSha256(), RestoreProofReference: source.GetRestoreProofReference(),
-		RestoreProofSHA256:             source.GetRestoreProofSha256(),
-		CleanupAuthorizationID:         source.GetCleanupAuthorizationId(),
-		CleanupAuthorizationGeneration: source.GetCleanupAuthorizationGeneration(),
-		CleanupAuthorizationState:      trimEnum(source.GetCleanupAuthorizationState().String(), "RUNTIME_CLEANUP_AUTHORIZATION_STATE_"),
+		RestoreProofSHA256:                 source.GetRestoreProofSha256(),
+		CleanupAuthorizationID:             source.GetCleanupAuthorizationId(),
+		CleanupAuthorizationGeneration:     source.GetCleanupAuthorizationGeneration(),
+		CleanupAuthorizationState:          trimEnum(source.GetCleanupAuthorizationState().String(), "RUNTIME_CLEANUP_AUTHORIZATION_STATE_"),
+		CleanupPVCName:                     source.GetCleanupPvcName(),
+		CleanupPVCUID:                      source.GetCleanupPvcUid(),
+		CleanupPVCResourceVersion:          source.GetCleanupPvcResourceVersion(),
+		CleanupDeletionProofSHA256:         source.GetCleanupDeletionProofSha256(),
+		RestoreSourceExecutionID:           source.GetRestoreSourceExecutionId(),
+		RestoreSourceArchiveReference:      source.GetRestoreSourceArchiveReference(),
+		RestoreSourceArchiveSHA256:         source.GetRestoreSourceArchiveSha256(),
+		RestoreSourceRuntimeRevisionSHA256: source.GetRestoreSourceRuntimeRevisionSha256(),
+		RestoreSourceImmutableInputSHA256:  source.GetRestoreSourceImmutableInputSha256(),
+		RestoreSourceProofSHA256:           source.GetRestoreSourceProofSha256(),
 	}
 	if source.GetLeaseExpiresAt() != nil {
 		execution.LeaseExpiresAt = source.GetLeaseExpiresAt().AsTime()
 	}
 	if source.GetCleanupAuthorizationExpiresAt() != nil {
 		execution.CleanupAuthorizationExpiresAt = source.GetCleanupAuthorizationExpiresAt().AsTime()
+	}
+	if source.GetCleanupClaimedAt() != nil {
+		execution.CleanupClaimedAt = source.GetCleanupClaimedAt().AsTime()
+	}
+	if source.GetCleanupEligibleAt() != nil {
+		execution.CleanupEligibleAt = source.GetCleanupEligibleAt().AsTime()
+	}
+	if source.GetCleanupNotFoundAt() != nil {
+		execution.CleanupNotFoundAt = source.GetCleanupNotFoundAt().AsTime()
 	}
 	if err := execution.Validate(); err != nil {
 		return entity.Execution{}, errs.ErrStateConflict

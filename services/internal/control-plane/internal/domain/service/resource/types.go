@@ -478,6 +478,9 @@ type RuntimeCleanupInput struct {
 	ArchiveSHA256             string
 	RestoreProofSHA256        string
 	ExpectedCleanupGeneration uint64
+	PVCName                   string
+	PVCUID                    string
+	PVCResourceVersion        string
 }
 
 type RuntimeCleanupAuthorizationInput struct {
@@ -486,6 +489,11 @@ type RuntimeCleanupAuthorizationInput struct {
 	CleanupAuthorizationGeneration uint64
 	ArchiveSHA256                  string
 	RestoreProofSHA256             string
+	PVCName                        string
+	PVCUID                         string
+	PVCResourceVersion             string
+	ObservedNotFoundAt             time.Time
+	DeletionProofSHA256            string
 }
 
 type PinnedIntegrationResource = domainrepo.PinnedIntegrationResource

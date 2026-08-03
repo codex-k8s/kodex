@@ -37,11 +37,13 @@ const (
 	maximumCredentialBytes = 16 << 10
 	maximumArchiveBytes    = int64(64 << 30)
 	maximumEntries         = 1_000_000
+	archiveObjectRetention = 30 * 24 * time.Hour
 )
 
 type Config struct {
 	Endpoint, Bucket, Region, TLSServerName, CAFile string
 	AccessKeyIDFile, SecretAccessKeyFile            string
+	SessionTokenFile                                string
 	RequestTimeout                                  time.Duration
 }
 
@@ -68,10 +70,16 @@ type restoreProof struct {
 	RestoredTreeSHA256 string `json:"restored_tree_sha256"`
 }
 
+type rehydrateProof struct {
+	Schema, SourceExecutionID, TargetExecutionID, ArchiveReference string
+	ArchiveSHA256, ArchiveVersionID, RestoredTreeSHA256, PVCUID    string
+}
+
 func Open(ctx context.Context, config Config) (*Store, error) {
 	if config.Endpoint == "" || config.Bucket == "" || config.Region == "" ||
 		config.TLSServerName == "" || config.CAFile == "" ||
 		config.AccessKeyIDFile == "" || config.SecretAccessKeyFile == "" ||
+		config.SessionTokenFile == "" ||
 		config.RequestTimeout < time.Second || config.RequestTimeout > 30*time.Second {
 		return nil, errors.New("s3 archive configuration is invalid")
 	}
@@ -84,6 +92,10 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 		return nil, err
 	}
 	secretKey, err := readCredential(config.SecretAccessKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	sessionToken, err := readCredential(config.SessionTokenFile)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +112,7 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 	transport.Proxy = nil
 	loaded, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(config.Region),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, sessionToken)),
 		awsconfig.WithHTTPClient(&http.Client{Transport: transport, Timeout: config.RequestTimeout}),
 	)
 	if err != nil {
@@ -113,14 +125,56 @@ func Open(ctx context.Context, config Config) (*Store, error) {
 	store := &Store{client: client, bucket: config.Bucket, timeout: config.RequestTimeout}
 	checkCtx, cancel := context.WithTimeout(ctx, config.RequestTimeout)
 	defer cancel()
-	if _, err := store.client.HeadBucket(checkCtx, &s3.HeadBucketInput{Bucket: aws.String(config.Bucket)}); err != nil {
-		return nil, errors.New("s3 archive bucket is unavailable")
-	}
 	versioning, err := store.client.GetBucketVersioning(checkCtx, &s3.GetBucketVersioningInput{Bucket: aws.String(config.Bucket)})
 	if err != nil || versioning.Status != types.BucketVersioningStatusEnabled {
 		return nil, errors.New("s3 archive bucket versioning is not enabled")
 	}
+	objectLock, err := store.client.GetObjectLockConfiguration(
+		checkCtx, &s3.GetObjectLockConfigurationInput{Bucket: aws.String(config.Bucket)},
+	)
+	if err != nil || objectLock.ObjectLockConfiguration == nil ||
+		objectLock.ObjectLockConfiguration.ObjectLockEnabled != types.ObjectLockEnabledEnabled {
+		return nil, errors.New("s3 archive Object Lock is not enabled")
+	}
+	encryption, err := store.client.GetBucketEncryption(
+		checkCtx, &s3.GetBucketEncryptionInput{Bucket: aws.String(config.Bucket)},
+	)
+	if err != nil || encryption.ServerSideEncryptionConfiguration == nil ||
+		!kmsEncryptionConfigured(encryption.ServerSideEncryptionConfiguration.Rules) {
+		return nil, errors.New("s3 archive KMS encryption is not enabled")
+	}
+	publicAccess, err := store.client.GetPublicAccessBlock(
+		checkCtx, &s3.GetPublicAccessBlockInput{Bucket: aws.String(config.Bucket)},
+	)
+	if err != nil || publicAccess.PublicAccessBlockConfiguration == nil ||
+		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.BlockPublicAcls) ||
+		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.BlockPublicPolicy) ||
+		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.IgnorePublicAcls) ||
+		!aws.ToBool(publicAccess.PublicAccessBlockConfiguration.RestrictPublicBuckets) {
+		return nil, errors.New("s3 archive public access block is not enforced")
+	}
+	if _, err := store.client.ListObjectsV2(checkCtx, &s3.ListObjectsV2Input{
+		Bucket: aws.String(config.Bucket), MaxKeys: aws.Int32(1),
+	}); !accessDenied(err) {
+		return nil, errors.New("s3 archive identity can list bucket")
+	}
 	return store, nil
+}
+
+func accessDenied(err error) bool {
+	var apiError smithy.APIError
+	return errors.As(err, &apiError) &&
+		(apiError.ErrorCode() == "AccessDenied" || apiError.ErrorCode() == "Forbidden")
+}
+
+func kmsEncryptionConfigured(rules []types.ServerSideEncryptionRule) bool {
+	for _, rule := range rules {
+		if rule.ApplyServerSideEncryptionByDefault != nil &&
+			rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm == types.ServerSideEncryptionAwsKms {
+			return true
+		}
+	}
+	return false
 }
 
 func (store *Store) Archive(
@@ -170,7 +224,9 @@ func (store *Store) Archive(
 		Bucket: aws.String(store.bucket), Key: aws.String(key), Body: file,
 		ContentLength: aws.Int64(size), ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
 		ChecksumSHA256: aws.String(checksum), ContentType: aws.String("application/gzip"),
-		Metadata: metadata,
+		Metadata: metadata, ServerSideEncryption: types.ServerSideEncryptionAwsKms,
+		ObjectLockMode:            types.ObjectLockModeCompliance,
+		ObjectLockRetainUntilDate: aws.Time(time.Now().UTC().Add(archiveObjectRetention)),
 	})
 	cancel()
 	if err != nil {
@@ -192,42 +248,15 @@ func (store *Store) RestoreAndProve(
 	execution entity.Execution,
 	reference, expectedSHA256 string,
 ) (Result, error) {
-	bucket, key, versionID, err := parseReference(reference)
-	if err != nil || bucket != store.bucket || len(expectedSHA256) != sha256.Size*2 {
+	_, _, versionID, err := parseReference(reference)
+	if err != nil || len(expectedSHA256) != sha256.Size*2 {
 		return Result{}, errs.ErrArchiveUnverified
 	}
-	temporary, err := os.CreateTemp("", "mattercodex-runtime-restore-*.tar.gz")
+	archivePath, err := store.downloadExactArchive(ctx, execution, reference, expectedSHA256)
 	if err != nil {
-		return Result{}, errors.New("create temporary restore archive")
+		return Result{}, err
 	}
-	archivePath := temporary.Name()
 	defer func() { _ = os.Remove(archivePath) }()
-	requestCtx, cancel := context.WithTimeout(ctx, store.timeout)
-	object, err := store.client.GetObject(requestCtx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket), Key: aws.String(key), VersionId: aws.String(versionID),
-		ChecksumMode: types.ChecksumModeEnabled,
-	})
-	if err != nil {
-		cancel()
-		return Result{}, errors.New("download exact runtime archive")
-	}
-	digest := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(temporary, digest), io.LimitReader(object.Body, maximumArchiveBytes+1))
-	closeBodyErr := object.Body.Close()
-	cancel()
-	closeFileErr := temporary.Close()
-	if copyErr != nil || closeBodyErr != nil || closeFileErr != nil || written > maximumArchiveBytes {
-		return Result{}, errors.New("read exact runtime archive")
-	}
-	actualSHA256 := hex.EncodeToString(digest.Sum(nil))
-	if actualSHA256 != expectedSHA256 || object.VersionId == nil || !validVersionID(*object.VersionId) || *object.VersionId != versionID ||
-		object.ChecksumSHA256 == nil || *object.ChecksumSHA256 != base64.StdEncoding.EncodeToString(digest.Sum(nil)) ||
-		!metadataMatches(object.Metadata, map[string]string{
-			"execution-id": execution.ID, "runtime-revision-sha256": execution.RuntimeRevisionSHA256,
-			"immutable-input-sha256": execution.ImmutableInputSHA256,
-		}) {
-		return Result{}, errs.ErrArchiveUnverified
-	}
 	restoreDir, err := os.MkdirTemp("", "mattercodex-runtime-restore-tree-*")
 	if err != nil {
 		return Result{}, errors.New("create temporary restore tree")
@@ -261,13 +290,16 @@ func (store *Store) RestoreAndProve(
 	} else if found {
 		return existing, nil
 	}
-	requestCtx, cancel = context.WithTimeout(ctx, store.timeout)
+	requestCtx, cancel := context.WithTimeout(ctx, store.timeout)
 	put, err := store.client.PutObject(requestCtx, &s3.PutObjectInput{
 		Bucket: aws.String(store.bucket), Key: aws.String(proofKey), Body: strings.NewReader(string(proofRaw)),
 		ContentLength: aws.Int64(int64(len(proofRaw))), ContentType: aws.String("application/json"),
-		ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
-		ChecksumSHA256:    aws.String(base64.StdEncoding.EncodeToString(proofDigest[:])),
-		Metadata:          proofMetadata,
+		ChecksumAlgorithm:         types.ChecksumAlgorithmSha256,
+		ChecksumSHA256:            aws.String(base64.StdEncoding.EncodeToString(proofDigest[:])),
+		Metadata:                  proofMetadata,
+		ServerSideEncryption:      types.ServerSideEncryptionAwsKms,
+		ObjectLockMode:            types.ObjectLockModeCompliance,
+		ObjectLockRetainUntilDate: aws.Time(time.Now().UTC().Add(archiveObjectRetention)),
 	})
 	cancel()
 	if err != nil || put.VersionId == nil || !validVersionID(*put.VersionId) {
@@ -279,6 +311,110 @@ func (store *Store) RestoreAndProve(
 		return Result{}, err
 	}
 	return result, nil
+}
+
+// RestoreToAndProve восстанавливает exact version в пустой целевой PVC и
+// возвращает digest доказательства, связанного с UID этого PVC.
+func (store *Store) RestoreToAndProve(
+	ctx context.Context,
+	source, target entity.Execution,
+	destination, pvcUID string,
+) (Result, error) {
+	if source.Validate() != nil || target.Validate() != nil || !filepath.IsAbs(destination) ||
+		pvcUID == "" || target.RestoreSourceExecutionID != source.ID ||
+		target.RestoreSourceArchiveReference != source.ArchiveReference ||
+		target.RestoreSourceArchiveSHA256 != source.ArchiveSHA256 {
+		return Result{}, errs.ErrInvalidInput
+	}
+	entries, err := os.ReadDir(destination)
+	if err != nil {
+		return Result{}, errors.New("read rehydrate target")
+	}
+	for _, entry := range entries {
+		if entry.Name() != "lost+found" || !entry.IsDir() {
+			return Result{}, errors.New("rehydrate target is not empty")
+		}
+	}
+	archivePath, err := store.downloadExactArchive(
+		ctx, source, source.ArchiveReference, source.ArchiveSHA256,
+	)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = os.Remove(archivePath) }()
+	if err := extractArchive(archivePath, destination); err != nil {
+		return Result{}, err
+	}
+	treeDigest, err := treeSHA256(destination)
+	if err != nil {
+		return Result{}, err
+	}
+	_, _, versionID, err := parseReference(source.ArchiveReference)
+	if err != nil {
+		return Result{}, err
+	}
+	proof := rehydrateProof{Schema: "mattercodex.runtime-rehydrate-proof.v1",
+		SourceExecutionID: source.ID, TargetExecutionID: target.ID,
+		ArchiveReference: source.ArchiveReference, ArchiveSHA256: source.ArchiveSHA256,
+		ArchiveVersionID: versionID, RestoredTreeSHA256: treeDigest, PVCUID: pvcUID}
+	raw, err := json.Marshal(proof)
+	if err != nil {
+		return Result{}, errors.New("encode rehydrate proof")
+	}
+	digest := sha256.Sum256(raw)
+	return Result{Reference: "journal://" + target.ID + "/rehydrate-proof",
+		SHA256: hex.EncodeToString(digest[:]), Size: int64(len(raw))}, nil
+}
+
+func (store *Store) downloadExactArchive(
+	ctx context.Context,
+	execution entity.Execution,
+	reference, expectedSHA256 string,
+) (string, error) {
+	bucket, key, versionID, err := parseReference(reference)
+	if err != nil || bucket != store.bucket || len(expectedSHA256) != sha256.Size*2 {
+		return "", errs.ErrArchiveUnverified
+	}
+	temporary, err := os.CreateTemp("", "mattercodex-runtime-restore-*.tar.gz")
+	if err != nil {
+		return "", errors.New("create temporary restore archive")
+	}
+	archivePath := temporary.Name()
+	failed := true
+	defer func() {
+		if failed {
+			_ = os.Remove(archivePath)
+		}
+	}()
+	requestCtx, cancel := context.WithTimeout(ctx, store.timeout)
+	object, err := store.client.GetObject(requestCtx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket), Key: aws.String(key), VersionId: aws.String(versionID),
+		ChecksumMode: types.ChecksumModeEnabled,
+	})
+	if err != nil {
+		cancel()
+		_ = temporary.Close()
+		return "", errors.New("download exact runtime archive")
+	}
+	digest := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(temporary, digest), io.LimitReader(object.Body, maximumArchiveBytes+1))
+	closeBodyErr := object.Body.Close()
+	cancel()
+	closeFileErr := temporary.Close()
+	if copyErr != nil || closeBodyErr != nil || closeFileErr != nil || written > maximumArchiveBytes {
+		return "", errors.New("read exact runtime archive")
+	}
+	if hex.EncodeToString(digest.Sum(nil)) != expectedSHA256 || object.VersionId == nil ||
+		!validVersionID(*object.VersionId) || *object.VersionId != versionID ||
+		object.ChecksumSHA256 == nil || *object.ChecksumSHA256 != base64.StdEncoding.EncodeToString(digest.Sum(nil)) ||
+		!metadataMatches(object.Metadata, map[string]string{
+			"execution-id": execution.ID, "runtime-revision-sha256": execution.RuntimeRevisionSHA256,
+			"immutable-input-sha256": execution.ImmutableInputSHA256,
+		}) {
+		return "", errs.ErrArchiveUnverified
+	}
+	failed = false
+	return archivePath, nil
 }
 
 func (store *Store) existingObject(
@@ -301,6 +437,8 @@ func (store *Store) existingObject(
 	if head.VersionId == nil || !validVersionID(*head.VersionId) || head.ContentLength == nil ||
 		*head.ContentLength != expected.Size || head.ChecksumSHA256 == nil ||
 		*head.ChecksumSHA256 != base64Digest(expected.SHA256) ||
+		head.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
+		head.ObjectLockMode != types.ObjectLockModeCompliance ||
 		!metadataMatches(head.Metadata, expected.Metadata) {
 		return Result{}, false, errs.ErrArchiveUnverified
 	}
@@ -322,6 +460,8 @@ func (store *Store) verifyHead(ctx context.Context, result Result) error {
 	if err != nil || head.VersionId == nil || !validVersionID(*head.VersionId) || *head.VersionId != versionID ||
 		head.ContentLength == nil || *head.ContentLength != result.Size ||
 		head.ChecksumSHA256 == nil || *head.ChecksumSHA256 != base64Digest(result.SHA256) ||
+		head.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
+		head.ObjectLockMode != types.ObjectLockModeCompliance ||
 		!metadataMatches(head.Metadata, result.Metadata) {
 		return errs.ErrArchiveUnverified
 	}

@@ -105,6 +105,8 @@ type Config struct {
 	MemoryIndexerSPIFFEID      string
 	RuntimeControllerWorkload  string
 	RuntimeControllerSPIFFEID  string
+	ArchiveWorkload            string
+	ArchiveSPIFFEID            string
 	IntegrationGatewayWorkload string
 	IntegrationGatewaySPIFFEID string
 	RestoreVerifierWorkload    string
@@ -133,6 +135,8 @@ type Service struct {
 	memoryIndexerSPIFFEID      string
 	runtimeControllerWorkload  string
 	runtimeControllerSPIFFEID  string
+	archiveWorkload            string
+	archiveSPIFFEID            string
 	integrationGatewayWorkload string
 	integrationGatewaySPIFFEID string
 	restoreVerifierWorkload    string
@@ -165,6 +169,10 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.RuntimeControllerSPIFFEID) ||
 		config.RuntimeControllerWorkload == agentRunnerWorkload ||
 		config.RuntimeControllerSPIFFEID == agentRunnerSPIFFEID ||
+		value.ValidateStableKey(config.ArchiveWorkload) != nil ||
+		!validSPIFFEID(config.ArchiveSPIFFEID) ||
+		config.ArchiveWorkload == config.RuntimeControllerWorkload ||
+		config.ArchiveSPIFFEID == config.RuntimeControllerSPIFFEID ||
 		value.ValidateStableKey(config.IntegrationGatewayWorkload) != nil ||
 		!validSPIFFEID(config.IntegrationGatewaySPIFFEID) ||
 		value.ValidateStableKey(config.RestoreVerifierWorkload) != nil ||
@@ -206,6 +214,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		memoryIndexerSPIFFEID:      config.MemoryIndexerSPIFFEID,
 		runtimeControllerWorkload:  config.RuntimeControllerWorkload,
 		runtimeControllerSPIFFEID:  config.RuntimeControllerSPIFFEID,
+		archiveWorkload:            config.ArchiveWorkload,
+		archiveSPIFFEID:            config.ArchiveSPIFFEID,
 		integrationGatewayWorkload: config.IntegrationGatewayWorkload,
 		integrationGatewaySPIFFEID: config.IntegrationGatewaySPIFFEID,
 		restoreVerifierWorkload:    config.RestoreVerifierWorkload,

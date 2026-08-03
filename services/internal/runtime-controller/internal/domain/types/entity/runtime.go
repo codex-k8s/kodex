@@ -34,6 +34,12 @@ type Execution struct {
 	CleanupAuthorizationGeneration                                                uint64
 	CleanupAuthorizationState                                                     string
 	CleanupAuthorizationExpiresAt                                                 time.Time
+	CleanupPVCName, CleanupPVCUID, CleanupPVCResourceVersion                      string
+	CleanupClaimedAt, CleanupEligibleAt, CleanupNotFoundAt                        time.Time
+	CleanupDeletionProofSHA256                                                    string
+	RestoreSourceExecutionID, RestoreSourceArchiveReference                       string
+	RestoreSourceArchiveSHA256, RestoreSourceRuntimeRevisionSHA256                string
+	RestoreSourceImmutableInputSHA256, RestoreSourceProofSHA256                   string
 }
 
 func (execution Execution) Validate() error {
@@ -74,10 +80,23 @@ func (execution Execution) Validate() error {
 		return errors.New("runtime execution state is invalid")
 	}
 	if !strings.HasPrefix(execution.WorkloadSPIFFEID, "spiffe://") ||
-		!validArchiveState(execution) || !validCleanupState(execution) {
+		!validArchiveState(execution) || !validCleanupState(execution) || !validRestoreSource(execution) {
 		return errors.New("runtime execution lifecycle evidence is invalid")
 	}
 	return nil
+}
+
+func validRestoreSource(execution Execution) bool {
+	empty := execution.RestoreSourceExecutionID == "" && execution.RestoreSourceArchiveReference == "" &&
+		execution.RestoreSourceArchiveSHA256 == "" && execution.RestoreSourceRuntimeRevisionSHA256 == "" &&
+		execution.RestoreSourceImmutableInputSHA256 == "" && execution.RestoreSourceProofSHA256 == ""
+	present := uuid.Validate(execution.RestoreSourceExecutionID) == nil &&
+		execution.RestoreSourceArchiveReference != "" &&
+		sha256Pattern.MatchString(execution.RestoreSourceArchiveSHA256) &&
+		sha256Pattern.MatchString(execution.RestoreSourceRuntimeRevisionSHA256) &&
+		sha256Pattern.MatchString(execution.RestoreSourceImmutableInputSHA256) &&
+		sha256Pattern.MatchString(execution.RestoreSourceProofSHA256)
+	return empty || present
 }
 
 func validArchiveState(execution Execution) bool {
@@ -93,16 +112,36 @@ func validCleanupState(execution Execution) bool {
 	switch execution.CleanupAuthorizationState {
 	case "NONE":
 		return execution.CleanupAuthorizationGeneration == 0 &&
-			execution.CleanupAuthorizationID == "" && execution.CleanupAuthorizationExpiresAt.IsZero()
-	case "ACTIVE", "EXPIRED", "CONSUMED":
+			execution.CleanupAuthorizationID == "" && execution.CleanupAuthorizationExpiresAt.IsZero() &&
+			execution.CleanupPVCName == "" && execution.CleanupPVCUID == "" &&
+			execution.CleanupPVCResourceVersion == "" && execution.CleanupClaimedAt.IsZero() &&
+			execution.CleanupEligibleAt.IsZero() && execution.CleanupNotFoundAt.IsZero() &&
+			execution.CleanupDeletionProofSHA256 == ""
+	case "ACTIVE", "EXPIRED":
 		return execution.CleanupAuthorizationGeneration > 0 &&
 			uuid.Validate(execution.CleanupAuthorizationID) == nil &&
 			!execution.CleanupAuthorizationExpiresAt.IsZero() &&
 			sha256Pattern.MatchString(execution.ArchiveSHA256) &&
-			sha256Pattern.MatchString(execution.RestoreProofSHA256)
+			sha256Pattern.MatchString(execution.RestoreProofSHA256) && validPVCTuple(execution) &&
+			!execution.CleanupClaimedAt.IsZero() && !execution.CleanupEligibleAt.After(execution.CleanupClaimedAt) &&
+			execution.CleanupNotFoundAt.IsZero() && execution.CleanupDeletionProofSHA256 == ""
+	case "CONSUMED":
+		return execution.CleanupAuthorizationGeneration > 0 &&
+			uuid.Validate(execution.CleanupAuthorizationID) == nil &&
+			!execution.CleanupAuthorizationExpiresAt.IsZero() &&
+			sha256Pattern.MatchString(execution.ArchiveSHA256) &&
+			sha256Pattern.MatchString(execution.RestoreProofSHA256) && validPVCTuple(execution) &&
+			!execution.CleanupClaimedAt.IsZero() && !execution.CleanupEligibleAt.After(execution.CleanupClaimedAt) &&
+			!execution.CleanupNotFoundAt.Before(execution.CleanupClaimedAt) &&
+			sha256Pattern.MatchString(execution.CleanupDeletionProofSHA256)
 	default:
 		return false
 	}
+}
+
+func validPVCTuple(execution Execution) bool {
+	return execution.CleanupPVCName != "" && uuid.Validate(execution.CleanupPVCUID) == nil &&
+		execution.CleanupPVCResourceVersion != ""
 }
 
 type Component struct {
@@ -127,6 +166,12 @@ type Revision struct {
 	IntegrationIDs              []string
 	Components                  []Component
 	Credentials                 []CredentialRef
+	ProviderObservedUsage       uint64
+	ProviderObservedLimit       uint64
+	ProviderObservationRevision uint64
+	ProviderObservedAt          time.Time
+	ProviderObservationMaxAge   time.Duration
+	AgentProfile                string
 }
 
 type CredentialRef struct {
@@ -150,6 +195,11 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		revision.PromptRevision == 0 || revision.AuthorityPolicyRevision == 0 ||
 		len(revision.Components) == 0 || len(revision.Components) > 256 ||
 		len(revision.CredentialBindingIDs) > 64 || len(revision.Credentials) > 64 ||
+		revision.ProviderObservedLimit == 0 ||
+		revision.ProviderObservedUsage > revision.ProviderObservedLimit ||
+		revision.ProviderObservationRevision == 0 || revision.ProviderObservedAt.IsZero() ||
+		revision.ProviderObservationMaxAge < time.Minute || revision.ProviderObservationMaxAge > 24*time.Hour ||
+		!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(revision.AgentProfile) ||
 		len(revision.ImageDigest) != 71 || revision.ImageDigest[:7] != "sha256:" ||
 		!sha256Pattern.MatchString(revision.ImageDigest[7:]) {
 		return errors.New("runtime revision does not match execution")
@@ -254,27 +304,57 @@ type RuntimeStatus struct {
 	JournalName                                                              string
 	PVCDeleted                                                               bool
 	PVCDeletionStarted                                                       bool
+	PVCNotFoundAt                                                            time.Time
+	PVCDeletionProofSHA256                                                   string
 	RetentionOwner                                                           bool
+	RuntimeRevisionSHA256                                                    string
+	Handoff                                                                  *RuntimeHandoff
+}
+
+type RuntimeHandoff struct {
+	Schema, ExecutionID, RuntimeRevisionSHA256, ImmutableInputSHA256 string
+	ExecutionVersion, Fence, GrantGeneration                         uint64
+	Outcome, TerminalReference, TerminalSHA256                       string
+	ObservedAt                                                       time.Time
+}
+
+type PVCDeletionProof struct {
+	PVCName, PVCUID, PVCResourceVersion, SHA256 string
+	ObservedNotFoundAt                          time.Time
 }
 
 type RuntimeJournal struct {
-	Execution          Execution `json:"execution"`
-	AdmitKey           string    `json:"admit_idempotency_key"`
-	HeartbeatKey       string    `json:"heartbeat_idempotency_key"`
-	CompleteKey        string    `json:"complete_idempotency_key"`
-	IncidentKey        string    `json:"incident_idempotency_key"`
-	ArchiveKey         string    `json:"archive_idempotency_key"`
-	RestoreKey         string    `json:"restore_idempotency_key"`
-	CleanupKey         string    `json:"cleanup_idempotency_key"`
-	LeaseSecretName    string    `json:"lease_secret_name"`
-	PodName            string    `json:"pod_name"`
-	PVCName            string    `json:"pvc_name"`
-	CreatedAt          time.Time `json:"created_at"`
-	LastTransition     time.Time `json:"last_transition"`
-	PVCUID             string    `json:"pvc_uid,omitempty"`
-	PVCResourceVersion string    `json:"pvc_resource_version,omitempty"`
-	PVCDeletionOwner   bool      `json:"pvc_deletion_owner,omitempty"`
-	PVCDeleted         bool      `json:"pvc_deleted,omitempty"`
+	Execution                   Execution `json:"execution"`
+	AdmissionRequest            Execution `json:"admission_request"`
+	Phase                       string    `json:"phase"`
+	AdmitKey                    string    `json:"admit_idempotency_key"`
+	HeartbeatKey                string    `json:"heartbeat_idempotency_key"`
+	CompleteKey                 string    `json:"complete_idempotency_key"`
+	IncidentKey                 string    `json:"incident_idempotency_key"`
+	ArchiveKey                  string    `json:"archive_idempotency_key"`
+	RestoreKey                  string    `json:"restore_idempotency_key"`
+	CleanupKey                  string    `json:"cleanup_idempotency_key"`
+	PodName                     string    `json:"pod_name"`
+	PVCName                     string    `json:"pvc_name"`
+	CreatedAt                   time.Time `json:"created_at"`
+	LastTransition              time.Time `json:"last_transition"`
+	PVCUID                      string    `json:"pvc_uid,omitempty"`
+	PVCResourceVersion          string    `json:"pvc_resource_version,omitempty"`
+	PVCDeletionOwner            bool      `json:"pvc_deletion_owner,omitempty"`
+	PVCDeleted                  bool      `json:"pvc_deleted,omitempty"`
+	PVCNotFoundAt               time.Time `json:"pvc_not_found_at,omitempty"`
+	PVCDeletionProofSHA256      string    `json:"pvc_deletion_proof_sha256,omitempty"`
+	RehydratePhase              string    `json:"rehydrate_phase"`
+	RehydratePVCUID             string    `json:"rehydrate_pvc_uid,omitempty"`
+	RehydrateProofReference     string    `json:"rehydrate_proof_reference,omitempty"`
+	RehydrateProofSHA256        string    `json:"rehydrate_proof_sha256,omitempty"`
+	CapacityProviderBindingID   string    `json:"capacity_provider_binding_id,omitempty"`
+	CapacityObservationRevision uint64    `json:"capacity_observation_revision,omitempty"`
+	CapacityObservedAt          time.Time `json:"capacity_observed_at,omitempty"`
+	CapacityObservedUsage       uint64    `json:"capacity_observed_usage,omitempty"`
+	CapacityObservedLimit       uint64    `json:"capacity_observed_limit,omitempty"`
+	CapacityObservationMaxAge   int64     `json:"capacity_observation_max_age_nanos,omitempty"`
+	CapacityOrganizationLimit   int       `json:"capacity_organization_limit,omitempty"`
 }
 
 type CapacityDecision struct {

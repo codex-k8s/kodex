@@ -19,6 +19,7 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w -X main.version=${VERSION}" -o /out/runtime-controller ./cmd/runtime-controller \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-archive ./cmd/runtime-archive \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-restore-verifier ./cmd/runtime-restore-verifier \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-rehydrate ./cmd/runtime-rehydrate \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-cleanup-authorizer ./cmd/runtime-cleanup-authorizer \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/runtime-controller-cli ./cmd/cli
 

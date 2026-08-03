@@ -4,210 +4,218 @@ title: Runtime controller и жизненный цикл ресурсов сес
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-03
 ---
 
 # Runtime controller и жизненный цикл ресурсов сессии
 
 Документ материализует границу `runtime-controller` из `ARCH-MC-004` и
-сквозной контракт Issue #188. `control-plane` остаётся владельцем сессий,
-ходов, `RuntimeRevision`, попыток, grant/fence/lease и terminal state.
-`runtime-controller` владеет только сверкой Kubernetes-ресурсов, допуском по
-ёмкости, runtime health и переносом рабочей копии PVC в S3.
+сквозной контракт Issue #188. `control-plane` остаётся авторитетным владельцем
+сессии, хода, попытки, `RuntimeRevision`, claim/fence/lease/grant и terminal
+state. `runtime-controller` владеет только durable Kubernetes journal,
+материализацией runtime, допуском по ёмкости, health и архивной цепочкой.
+Controller не запускает Codex: role image запускает `agent-runner` в закрытом
+режиме `runtime-session`.
 
-## Защищённые виды и команды
+## Authority matrix
 
-| Вид | Специализированные команды владельца | Кто исполняет |
-| --- | --- | --- |
-| `RuntimeExecution` | `ClaimRuntimeExecution`, `AdmitRuntimeExecution`, `HeartbeatRuntimeExecution`, `RecordRuntimeIncident`, `CompleteRuntimeExecution`, `ExpireRuntimeExecution` | `runtime-controller` |
-| Terminal owner transition | `CancelRuntimeExecution`, `RetryRuntimeExecution` | только owner workload, не controller |
-| `RuntimeArchive` | `RecordRuntimeArchive` | изолированный archive Job controller |
-| `RuntimeRestoreProof` | `VerifyRuntimeRestore` | отдельный `runtime-restore-verifier` |
-| `RuntimeCleanupAuthorization` | `AuthorizeRuntimeCleanup`, `ExpireRuntimeCleanupAuthorization` | отдельный `runtime-cleanup-authorizer` |
-| Destructive cleanup | `ConsumeRuntimeCleanupAuthorization` после guarded delete | `runtime-controller` |
+| Действие | Авторитетный actor и транспорт | Server-owned input | Устойчивый результат | Исполнитель effect |
+| --- | --- | --- | --- | --- |
+| claim/admit/heartbeat/incident/complete/expire | `runtime-controller`, mTLS + bearer application grant + exact operation policy | organization/project/session/thread/turn/attempt, workload, revision, input, generation | `RuntimeExecution`, receipt, audit, event и отзыв authority в одной owner transaction | controller после commit |
+| archive | `runtime-archive`, отдельные SPIFFE/application grant/ServiceAccount | terminal execution и exact PVC | S3 version/checksum/provenance, затем `RecordRuntimeArchive` | archive Job с journal-only RBAC |
+| restore proof | `runtime-restore-verifier`, отдельные identity и grant | exact archive reference/version/checksum | immutable `RuntimeRestoreProof` | verifier Job |
+| cleanup claim/expire | `runtime-cleanup-authorizer`, отдельные identity и grant | owner-locked session graph и exact PVC name/UID/resourceVersion | bounded `ACTIVE` либо `EXPIRED` generation | authorizer Job |
+| guarded PVC delete/finalize | controller может только `ConsumeRuntimeCleanupAuthorization` | active generation, тот же PVC tuple, observed NotFound и deletion proof digest | idempotent `CONSUMED` | controller |
+| cancel/retry/continuation | только owner workload | полный session/turn/process graph | atomic terminal/retry/new revision/grant | не controller |
+| role runtime | exact ServiceAccount profile; bearer остаётся обязательным на application path | immutable runner input и projected credentials | runner handoff exact execution/revision/input tuple | `agent-runner` |
 
-Универсальные CRUD-команды не участвуют в этих переходах. Actor, организация,
-проект, сессия, ход, попытка, workload, grant generation и immutable input
-приходят только из проверенного mTLS, application grant и authority proof.
-Идентификаторы Kubernetes labels, AsyncAPI payload и аргументы Job не являются
-источником полномочий.
+mTLS подтверждает peer и не заменяет bearer, application authority, owner
+resolution, idempotency или replay protection. Payload, labels и NATS envelope
+не назначают actor, tenant, ownership либо access profile.
 
-## Карта сквозных сценариев
+## Сквозные сценарии
 
-### Изменение конфигурации
+### Durable event consumer
 
 ```text
-control-plane transaction
-  -> RuntimeRevision(version, manifest digest)
-  -> transactional outbox
-  -> NATS control_plane.runtime_configuration_changed
-  -> exact durable consumer runtime-controller
-  -> postgresinbox receive/claim/effect
-  -> protected GetRuntimeRevision(exact id/version)
-  -> service-owned projection + inbox + cursor в одной transaction
+control-plane owner transaction + outbox
+  -> CONTROL_PLANE exact subjects:
+       control_plane.runtime_configuration_changed
+       control_plane.schedule_changed
+  -> JetStream durable RUNTIME_CONTROLLER_V1
+  -> postgresinbox.Acquire(canonical envelope)
+       duplicate/stale => durable ACK без gRPC hydration
+       claimable       => protected exact-version gRPC hydration
+  -> postgresinbox.ApplyClaim(effect + cursor, одна transaction)
+  -> ACK только после durable outcome
 ```
 
-Consumer проверяет canonical envelope и закрытую AsyncAPI schema до inbox.
-`duplicate` и `stale` подтверждаются только после durable result; `gap`,
-conflict и terminal predecessor не подтверждаются. Подписка не запускается до
-готовности inbox, точной конфигурации JetStream и защищённого gRPC read path.
-AsyncAPI `1.1.0` закрывает `resourceKind` и `resourceState` фактически
-публикуемыми enum; неизвестное значение отклоняется и в consumer, и в
-PostgreSQL effect.
+Startup barrier проверяет exact `StreamInfo` limits/subjects, exact
+`ConsumerInfo` filter/ack policy/`MaxDeliver`, PostgreSQL principal, inbox
+blockages/dead letters и тот же protected gRPC path, что рабочая обработка.
+При последней доставке consumer читает durable outcome, выполняет bounded
+`Recover`, повторно читает outcome и ACK только доказанный duplicate/applied;
+неизвестное состояние NAK-ится.
 
-### Новый ход и безопасное пересоздание pod
+### Claim, capacity, admission и crash recovery
 
 ```text
-control-plane current turn/grant
-  -> ClaimRuntimeExecution
-  -> GetRuntimeRevision(exact pinned version)
-  -> проверка manifest/version/input/workload/grant tuple
-  -> capacity admission
-  -> Kubernetes journal с устойчивым idempotency key
-  -> server-owned AdmitRuntimeExecution(version+fence, lease token)
-  -> PVC + immutable ConfigMap + immutable Secret + role-image Pod
-  -> Ready readback exact UID/revision/fence
-  -> HeartbeatRuntimeExecution -> RUNNING
+ClaimRuntimeExecution -> PostgreSQL durable PENDING
+  -> немедленный immutable journal с admission request/idempotency tuple
+  -> GetRuntimeRevision(exact id/version)
+  -> durable capacity snapshot и admission
+  -> AdmitRuntimeExecution(PENDING tuple)
+  -> journal ADMITTED_RECOVERABLE с replayable receipt/lease
+  -> PVC [rehydrate gate] -> immutable ConfigMap/credentials -> role Pod
+  -> journal MATERIALIZED -> Ready readback -> heartbeat/RUNNING
 ```
 
-Перед каждым execution создаются новые ConfigMap и Secret. Pod с именем,
-устойчивым для `(role, thread, session)`, пересоздаётся по UID/resourceVersion,
-поэтому старые env, volume projection и credentials не могут обслужить новый
-turn. PVC имеет имя сессионной области и переживает pod replacement. В один
-момент существует не более одного role pod на `(role, thread, session)`.
-Два экземпляра controller не выполняют mutation loops одновременно:
-`coordination.k8s.io/Lease` допускает одного лидера, а потеря аренды отменяет
-consumer и все workers до закрытия зависимостей.
+Journal создаётся до revision read, capacity и любого следующего Kubernetes
+effect. Если controller упал до успешного Create journal, новый server-owned
+claim key заново обнаруживает только exact `PENDING` того же
+session/turn/attempt/grant/revision/input и сохраняет recovery receipt без
+второго state transition. Capacity defer, dependency error или crash поэтому
+оставляют повторяемый `PENDING`. Recovery повторно читает exact revision, перепроверяет свежесть
+capacity snapshot и тем же idempotency key получает admission receipt вместе
+с lease token. Lease token не хранится в Kubernetes Secret, ConfigMap,
+annotation, log или metric; после crash он восстанавливается только replay
+того же owner receipt.
 
-### Ёмкость и вытеснение
+Допуск считает Kubernetes requests и durable `PENDING|ADMITTED|RUNNING`
+journals, server-owned organization limit, exact provider credential binding,
+provider observation revision/usage/limit/max-age, `ResourceQuota` и node
+pressure. Unknown, stale, неполная binding либо pagination переводят execution
+в очередь. Самый старый доказанно terminal idle Pod может быть удалён один раз,
+после чего capacity вычисляется повторно. PVC при eviction не удаляется.
 
-Controller учитывает `ResourceQuota`, requests уже назначенных Pod, Node
-conditions и выбранный закрытый `RuntimeResourceClass`. Недостаток ёмкости
-оставляет execution в `PENDING`. Допустима одна попытка удаления самого старого
-idle pod: candidate обязан быть terminal по защищённому readback, не иметь
-`cluster-admin`, совпадать по UID/resourceVersion и не иметь нового execution.
-PVC, Secret сессионного состояния и очередь не удаляются. Node pressure не
-разрешает принимать новую нагрузку и не ослабляет archive gate.
-Session PVC ограничен 30 GiB; archive Job запрашивает scratch `PVC+1 GiB`, а
-restore verifier — `2*PVC+1 GiB`, чтобы compressed archive и восстановленное
-дерево не вышли за объявленный ephemeral-storage budget.
+### Agent runner, terminal handoff и warm Pod
 
-### Heartbeat, terminal и incident
+Immutable `mattercodex.agent-runner-input.v1` содержит exact execution
+version/fence/grant, RuntimeRevision id/version/SHA-256, input SHA-256, session,
+agent profile, пути credential snapshot и фактический bot-service/MCP route.
+Контейнер получает только команду `runtime-session`, session PVC и projected
+credential volumes. Bot-service и MCP доступны через существующий exact
+Kubernetes Service и bearer, а NetworkPolicy не содержит wildcard egress.
 
-Kubernetes status является наблюдением, а не владельцем состояния. `Ready`
-pod продлевает только точные lease/fence/generation. Missed heartbeat,
-неустранимый reconcile и исчезновение workload публикуются через
-`RecordRuntimeIncident` с закрытым kind и SHA-256 evidence без payload. Успех
-или ошибка role Pod завершаются через `CompleteRuntimeExecution`; cancel,
-retry и expiry закрывают прежние lease/grant/claim в owner-транзакции
-`control-plane`. Stale journal после любого terminal path не способен
-продлить lease или создать новый pod.
+`Succeeded`/`Failed` фаза Pod не завершает turn. После фактического результата
+runner публикует `mattercodex.runtime-turn-handoff.v1` в собственный Pod:
+exact execution version/fence/generation/revision/input, закрытый outcome,
+terminal reference и digest. Только этот handoff разрешает controller вызвать
+`CompleteRuntimeExecution`; выход Pod без handoff публикует incident и ждёт
+owner expiry/cancel/retry.
 
-### Archive, restore proof и cleanup
+После terminal controller сначала архивирует PVC и получает restore proof,
+затем открывает `archive-gate=OPEN`. Новый claim той же session запрещён owner
+query, пока у любого predecessor нет archive+proof. Running/Ready warm Pod
+используется повторно только при том же RuntimeRevision SHA-256 и открытом
+gate: controller публикует новый immutable ConfigMap, переводит gate в
+`SUCCESSOR_READY`, runner сам проверяет новый tuple и закрывает gate. Любое
+несовпадение ведёт к guarded Pod replacement. `CLUSTER_ADMIN` Pod не прогревается
+и удаляется после terminal.
+
+### Archive, restore и rehydrate
+
+Archive Job монтирует exact PVC read-only, создаёт детерминированный tar,
+загружает content-addressed object с SHA-256, KMS encryption и COMPLIANCE
+Object Lock, требует ненулевой `VersionId` и выполняет exact `HeadObject`
+readback. Restore verifier независимо скачивает ту же версию, проверяет
+checksum/provenance, безопасно извлекает дерево и записывает proof.
+
+S3 identities разделены на archive и restore/rehydrate. Vault выдаёт
+short-lived STS credential с session tags exact organization/project/session/
+execution/source execution. IAM source запрещает List/Delete/Bypass,
+cross-tenant prefixes и insecure transport; startup дополнительно проверяет
+versioning, Object Lock, KMS, public-access block и фактический запрет List.
+
+Если session PVC уже был очищен, новый owner claim атомарно pin-ит последний
+`CONSUMED` archive source: source execution, S3 reference/version/checksum,
+revision/input provenance и deletion proof. Controller создаёт новый PVC и до
+старта Pod запускает `runtime-rehydrate`; worker требует пустой volume,
+скачивает только pinned version, проверяет checksum/metadata, извлекает дерево
+и сохраняет journal proof, связанный с UID нового PVC. Unknown, partial или
+mismatch сохраняет Pod отсутствующим.
+
+### Двухфазная cleanup transaction
 
 ```text
-terminal RuntimeExecution
-  -> archive Job mounts exact PVC read-only
-  -> deterministic tar stream + SHA-256
-  -> versioned S3 PutObject + HeadObject checksum/version readback
-  -> RecordRuntimeArchive
-  -> independent restore verifier downloads exact version
-  -> checksum + safe extraction + manifest proof
-  -> VerifyRuntimeRestore
-  -> ожидание PVC retention TTL не менее 7 суток от последней активности
-  -> independent cleanup authorizer rereads owner graph
-  -> AuthorizeRuntimeCleanup(generation, bounded expiry)
-  -> controller rereads exact authorization
-  -> delete PVC with UID/resourceVersion preconditions
+terminal + archive + restore proof
+  -> authorizer lock session/full execution graph
+  -> authoritative eligibility = session.updated_at + 7d и отсутствие work/hold
+  -> ACTIVE generation с exact PVC name/UID/resourceVersion, claimed_at, expiry
+  -> новые ClaimRuntimeExecution той же session запрещены
+  -> controller reread ACTIVE exact tuple
+  -> Kubernetes Delete с UID/resourceVersion preconditions
   -> readback NotFound
-  -> ConsumeRuntimeCleanupAuthorization
+  -> Consume(exact tuple, observed_not_found_at, proof_sha256)
+  -> owner lock + повторная graph/expiry проверка -> CONSUMED
 ```
 
-Ошибка S3, checksum, version, extraction, proof, owner graph, authorization,
-UID или resourceVersion закрыто сохраняет PVC. `NotFound` допустим как
-идемпотентный результат только для того же заранее зафиксированного UID.
-Четырёхчасовой TTL удаляет только warm Pod; он не сокращает семисуточную
-отсрочку PVC.
-Backfill автоматически подхватывает каждый принадлежащий controller terminal
-journal без archive либо restore proof и проходит тот же
-archive/proof/authorization путь. PVC прежнего runtime без server-owned
-`RuntimeExecution` и journal не усыновляется по labels: он остаётся в
-`inventory-only` до отдельного авторитетного mapping. Режима обхода и удаления
-по нехватке диска нет.
+Client grace отсутствует. `LastTransition` journal/Pod не определяет PVC
+eligibility. `NotFound` без заранее сохранённого exact tuple, активной lease и
+proof не считается успехом. Ошибка после Delete повторяется через тот же
+durable journal и idempotency key; finalize допустим только до server-side
+expiry, иначе создаётся новая owner claim после повторной проверки graph.
+Backfill проходит тот же путь. Legacy PVC без server-owned execution/journal
+остаётся `inventory-only`.
 
-Если несколько turn используют один session PVC, controller переносит
-server-owned retention-owner annotation на journal нового admitted execution
-optimistic update с новым `resourceVersion`. Старые journals закрывают
-собственные access/lease, но не архивируют и не удаляют общее состояние;
-guarded delete дополнительно сверяет exact owner annotation и PVC
-`resourceVersion`.
+## Lifecycle matrix
 
-## Матрица жизненного цикла
-
-| Переход | Блокировка и проверка | Атомарный авторитетный результат | Kubernetes/S3 effect |
+| Переход | Закрытая проверка | Owner transaction | Runtime effect/recovery |
 | --- | --- | --- | --- |
-| claim | current session/turn/attempt, exact workload/SPIFFE/grant/input/revision | новый immutable `PENDING`, version=1, fence=1, receipt/audit | отсутствует |
-| admit | capacity success, current owner graph, expected version/fence/generation | `ADMITTED`, новая lease и fence, receipt/audit | после commit создаются fresh resources; replay использует journal key |
-| start/heartbeat | exact lease token, UID/revision readback, неистёкший owner graph | `RUNNING`, продлённые turn/runtime leases, version/fence | status read-only |
-| complete | terminal Pod result, exact lease/fence/generation | turn/process/execution terminal, старые grants/claims/leases закрыты | pod становится idle candidate |
-| cancel | owner permission и полный graph | `CANCELLED`, все lease/grant/claim закрыты | controller удаляет только pod, PVC сохраняет |
-| retry | terminal predecessor, limit и immutable input | predecessor `RETRIED`, новый turn/attempt/revision/grant | новый execution всегда получает fresh Pod/ConfigMap/Secret |
-| lease expiry | PostgreSQL clock и точная lease | `EXPIRED`, полный graph закрыт одним победителем | stale pod удаляется guarded delete |
-| incident | exact current execution/fence и bounded kind/evidence | audit incident; authority не расширяется | отсутствует |
-| archive | terminal graph, exact expected version/fence | immutable S3 reference/checksum | versioned object и exact `HeadObject` readback |
-| restore proof | отдельный verifier identity, exact archive checksum/version | immutable proof, verifier identity/generation, version/fence | безопасная загрузка и распаковка во временный volume |
-| cleanup authorize | отдельный authorizer, terminal graph, proof, отсутствие continuation/hold | bounded ACTIVE authorization generation | отсутствует |
-| PVC cleanup | не менее 7 суток простоя, exact active authorization, terminal graph, UID/resourceVersion | после delete readback authorization `CONSUMED` | один guarded delete; mismatch сохраняет PVC |
-| authorization expiry | PostgreSQL clock и неиспользованная authorization | `EXPIRED`, новое удаление требует новой generation | отсутствует |
-| idle eviction | terminal readback, idle TTL 4 часа/LRU, no queue/new execution, no cluster-admin | authority не меняется | удаляется только exact Pod, не PVC |
-| backfill | controller-owned terminal journal, точный execution/PVC tuple | тот же archive/proof/cleanup graph | неизвестный legacy PVC остаётся inventory-only |
+| claim | current session/turn/attempt/workload/grant/revision/input; нет active cleanup и unverified predecessor | новый PostgreSQL `PENDING`, version/fence, receipt/audit; новый claim key может получить только тот же exact `PENDING` | journal создаётся первым Kubernetes effect и восстанавливается из owner state |
+| capacity defer/error | exact revision; immutable quota/account observation; durable pending accounting | authority не меняется | journal остаётся для retry |
+| admit | current owner graph и expected PENDING tuple | `ADMITTED`, новый fence/lease, receipt/audit | `ADMITTED_RECOVERABLE`; receipt replay восстанавливает lease |
+| materialize/rehydrate | exact PVC/revision/input/credential tuple; restore source при новом PVC | authority не меняется | Pod появляется только после rehydrate proof |
+| start/heartbeat | Ready UID и exact lease/fence/generation | `RUNNING`, renewed leases/version/fence | readback, journal patch |
+| handoff complete | exact runner handoff, current lease/fence/generation | terminal state и atomic revoke всех grants/claims/leases/events | archive gate остаётся CLOSED |
+| Pod exit без handoff | current nonterminal execution | incident audit, не complete | Pod не выдаёт terminal authority |
+| cancel/delete/expiry | полный owner graph | terminal + revoke одной transaction | stale Pod guarded delete; PVC сохраняется |
+| retry/continuation | terminal predecessor и policy | новая attempt, fresh RuntimeRevision/grant | новый admission; warm reuse только совместимый |
+| archive | terminal retention owner и exact PVC | immutable archive provenance | versioned S3 + readback |
+| restore proof | separate verifier, exact archive version/checksum | immutable proof | safe temporary extraction |
+| rehydrate | source только из `CONSUMED` cleanup snapshot | immutable restore source уже pin-нут claim | новый empty PVC, proof UID до Pod |
+| cleanup authorize | session lock, `updated_at+7d`, terminal graph, proof, no work/hold | `ACTIVE` generation + exact PVC tuple/expiry | новые work claims блокируются |
+| PVC delete/finalize | ACTIVE tuple, Kubernetes preconditions, NotFound proof, expiry и повторный graph lock | idempotent `CONSUMED` | partial/unknown fail-closed |
+| idle eviction | terminal readback, LRU, не admin | authority не меняется | удаляется только Pod |
 
 `WAITING_OWNER`, `CHANGES_REQUESTED` и integration continuation принадлежат
-`control-plane`. Для controller они означают отсутствие допустимого claim и
-безусловный запрет очистки; отдельного локального перехода не создаётся.
+`control-plane`: они блокируют claim/cleanup и не получают локального
+обобщённого transition.
 
-## Crash recovery и idempotency
+## Access profiles и deploy boundary
 
-После server-owned claim journal сохраняет version/fence-bound idempotency key
-до каждого следующего state-changing RPC. При crash после удалённого commit тот же key и request hash
-возвращают receipt. Lease token хранится только в отдельном Secret execution и
-не попадает в ConfigMap, log, metric или Pod annotation. Controller сначала
-останавливает workers, затем transport, ожидает workers и только после этого
-закрывает NATS, PostgreSQL, Kubernetes clients и telemetry; обязательные
-cleanup получают независимые bounded contexts.
+Controller credential не может создавать или bind-ить `cluster-admin`
+ClusterRoleBinding и не читает Secret. `PROJECT_READ_ONLY` создаёт узкий
+session ServiceAccount/RoleBinding только после authoritative organization/
+project namespace readback; terminal отзывает binding. `CLUSTER_ADMIN`
+использует заранее установленную отдельную ServiceAccount/ClusterRoleBinding,
+которую controller может только прочитать. Fail-closed
+`ValidatingAdmissionPolicy` разрешает controller использовать её исключительно
+для exact role Pod с полным tuple; runner получает bounded projected token, а
+Pod удаляется сразу после terminal.
 
-Перед действием над nonterminal либо retention-owner journal controller
-выполняет bounded version-pinned rejoin: exact versions `v..v+3` читаются через
-защищённый `GetRuntimeExecution`, а найденный tuple обязан сохранить lineage и
-одинаковый монотонный delta version/fence. Так cancel/retry/expiry и crash после
-heartbeat/archive/restore commit не остаются скрытыми; отсутствие exact версии
-в окне закрыто останавливает effect.
+Archive, restore, rehydrate и cleanup Jobs имеют отдельные ServiceAccount,
+application grants и per-job Role с `resourceNames` только своего journal.
+Общего worker доступа к Secret или journals нет.
 
-## Deploy и NetworkPolicy
+Base NetworkPolicy закрыта. Environment renderer добавляет Kubernetes API
+Service/EndpointSlice как exact CIDR/ports; маршруты проекта в base не
+зашиваются. Он также требует exact `/32|/128` endpoints утверждённого provider
+route и разрешает им только TLS/443. Role Pod имеет DNS, exact bot-service/MCP
+Service, provider endpoints и environment-rendered Kubernetes API только для
+разрешённого access profile. S3
+доступен только archive/restore/rehydrate workers.
 
-Controller, archive worker, restore verifier и cleanup authorizer имеют разные
-ServiceAccount/application grants там, где различается permission. Base
-policy закрыта по умолчанию. Маршрут Kubernetes API не зашит в переносимую
-policy: renderer окружения обязан получить точный API CIDR либо утверждённый
-egress gateway, проверить его и материализовать environment-specific patch.
-Без такого результата профили `PROJECT_READ_ONLY` и `CLUSTER_ADMIN` fail-closed
-не допускаются. S3 использует TLS с exact hostname/CA и scoped credential;
-wildcard HTTPS egress и `skipTLSVerify` запрещены.
+## Наблюдаемость и shutdown
 
-`PROJECT_READ_ONLY` не использует общий cluster-wide ServiceAccount. Controller
-из server-owned `organization/project` выводит имя проектного namespace,
-проверяет его exact annotations и создаёт отдельные ServiceAccount и
-RoleBinding для одного execution. `CLUSTER_ADMIN` также получает отдельные
-ServiceAccount/ClusterRoleBinding. Terminal transition сначала удаляет binding
-и ServiceAccount, затем Pod; projected token имеет bounded TTL. Payload не
-может выбрать namespace, role или profile.
+Business metrics используют закрытые labels. Отдельно наблюдаются durable
+pending/admission recovery, capacity reasons, handoff, archive/restore/
+rehydrate/cleanup, inbox pending/ack-pending/redelivery/blockage/dead-letter и
+incidents. Readiness читает PostgreSQL blockage и exact JetStream info. Все
+alerts имеют абсолютный HTTPS `runbook_url` на `RUN-MC-008`.
 
-## Наблюдаемость
-
-Метрики имеют только закрытые labels `operation` и `outcome`. Session, turn,
-execution, organization, project, object key,
-bucket и URL доступны только как проверенные структурированные log/trace
-attributes. Dashboard покрывает claim/admit/reconcile/heartbeat, capacity,
-idle eviction, archive/proof/cleanup, inbox backlog и incidents. Каждый alert
-содержит абсолютный HTTPS `runbook_url` на `RUN-MC-008`.
+Workers не действуют до startup barrier. Потеря leader lease и shutdown
+сначала cancel-ят workers, затем join-ят их до закрытия PostgreSQL/NATS/
+Kubernetes clients. Tracing shutdown, Sentry flush и прочие cleanup получают
+независимые bounded contexts от неотменённой базы.

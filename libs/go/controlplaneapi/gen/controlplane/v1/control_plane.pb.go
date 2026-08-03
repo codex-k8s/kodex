@@ -11011,49 +11011,62 @@ func (x *RecordMemoryEmbeddingResponse) GetProjectionSha256() string {
 
 // RuntimeExecution — immutable snapshot и изменяемый monotonic fence одной attempt.
 type RuntimeExecution struct {
-	state                          protoimpl.MessageState           `protogen:"open.v1"`
-	ExecutionId                    string                           `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	OrganizationId                 string                           `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
-	ProjectId                      string                           `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	ProcessId                      string                           `protobuf:"bytes,4,opt,name=process_id,json=processId,proto3" json:"process_id,omitempty"`
-	SessionId                      string                           `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ThreadId                       string                           `protobuf:"bytes,6,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
-	RoleId                         string                           `protobuf:"bytes,7,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
-	TurnId                         string                           `protobuf:"bytes,8,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
-	Attempt                        uint32                           `protobuf:"varint,9,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	RuntimeRevisionId              string                           `protobuf:"bytes,10,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
-	RuntimeRevisionVersion         uint64                           `protobuf:"varint,11,opt,name=runtime_revision_version,json=runtimeRevisionVersion,proto3" json:"runtime_revision_version,omitempty"`
-	RuntimeRevisionSha256          string                           `protobuf:"bytes,12,opt,name=runtime_revision_sha256,json=runtimeRevisionSha256,proto3" json:"runtime_revision_sha256,omitempty"`
-	ImmutableInputSha256           string                           `protobuf:"bytes,13,opt,name=immutable_input_sha256,json=immutableInputSha256,proto3" json:"immutable_input_sha256,omitempty"`
-	ResourceClass                  RuntimeResourceClass             `protobuf:"varint,14,opt,name=resource_class,json=resourceClass,proto3,enum=controlplane.v1.RuntimeResourceClass" json:"resource_class,omitempty"`
-	ClusterAccessProfile           ClusterAccessProfile             `protobuf:"varint,15,opt,name=cluster_access_profile,json=clusterAccessProfile,proto3,enum=controlplane.v1.ClusterAccessProfile" json:"cluster_access_profile,omitempty"`
-	WorkloadId                     string                           `protobuf:"bytes,16,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
-	WorkloadSpiffeId               string                           `protobuf:"bytes,17,opt,name=workload_spiffe_id,json=workloadSpiffeId,proto3" json:"workload_spiffe_id,omitempty"`
-	GrantGeneration                uint64                           `protobuf:"varint,18,opt,name=grant_generation,json=grantGeneration,proto3" json:"grant_generation,omitempty"`
-	Version                        uint64                           `protobuf:"varint,19,opt,name=version,proto3" json:"version,omitempty"`
-	Fence                          uint64                           `protobuf:"varint,20,opt,name=fence,proto3" json:"fence,omitempty"`
-	State                          RuntimeExecutionState            `protobuf:"varint,21,opt,name=state,proto3,enum=controlplane.v1.RuntimeExecutionState" json:"state,omitempty"`
-	LeaseId                        string                           `protobuf:"bytes,22,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
-	LeaseExpiresAt                 *timestamppb.Timestamp           `protobuf:"bytes,23,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
-	TerminalOutcome                RuntimeTerminalOutcome           `protobuf:"varint,24,opt,name=terminal_outcome,json=terminalOutcome,proto3,enum=controlplane.v1.RuntimeTerminalOutcome" json:"terminal_outcome,omitempty"`
-	TerminalReference              string                           `protobuf:"bytes,25,opt,name=terminal_reference,json=terminalReference,proto3" json:"terminal_reference,omitempty"`
-	TerminalSha256                 string                           `protobuf:"bytes,26,opt,name=terminal_sha256,json=terminalSha256,proto3" json:"terminal_sha256,omitempty"`
-	ArchiveReference               string                           `protobuf:"bytes,27,opt,name=archive_reference,json=archiveReference,proto3" json:"archive_reference,omitempty"`
-	ArchiveSha256                  string                           `protobuf:"bytes,28,opt,name=archive_sha256,json=archiveSha256,proto3" json:"archive_sha256,omitempty"`
-	RestoreProofReference          string                           `protobuf:"bytes,29,opt,name=restore_proof_reference,json=restoreProofReference,proto3" json:"restore_proof_reference,omitempty"`
-	RestoreProofSha256             string                           `protobuf:"bytes,30,opt,name=restore_proof_sha256,json=restoreProofSha256,proto3" json:"restore_proof_sha256,omitempty"`
-	RestoreVerifierWorkloadId      string                           `protobuf:"bytes,31,opt,name=restore_verifier_workload_id,json=restoreVerifierWorkloadId,proto3" json:"restore_verifier_workload_id,omitempty"`
-	CleanupAuthorizationId         string                           `protobuf:"bytes,32,opt,name=cleanup_authorization_id,json=cleanupAuthorizationId,proto3" json:"cleanup_authorization_id,omitempty"`
-	CreatedAt                      *timestamppb.Timestamp           `protobuf:"bytes,33,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt                      *timestamppb.Timestamp           `protobuf:"bytes,34,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	CleanupAuthorizationExpiresAt  *timestamppb.Timestamp           `protobuf:"bytes,35,opt,name=cleanup_authorization_expires_at,json=cleanupAuthorizationExpiresAt,proto3" json:"cleanup_authorization_expires_at,omitempty"`
-	RestoreVerifierSpiffeId        string                           `protobuf:"bytes,36,opt,name=restore_verifier_spiffe_id,json=restoreVerifierSpiffeId,proto3" json:"restore_verifier_spiffe_id,omitempty"`
-	RestoreVerifierGeneration      uint64                           `protobuf:"varint,37,opt,name=restore_verifier_generation,json=restoreVerifierGeneration,proto3" json:"restore_verifier_generation,omitempty"`
-	CleanupAuthorizationState      RuntimeCleanupAuthorizationState `protobuf:"varint,38,opt,name=cleanup_authorization_state,json=cleanupAuthorizationState,proto3,enum=controlplane.v1.RuntimeCleanupAuthorizationState" json:"cleanup_authorization_state,omitempty"`
-	CleanupAuthorizationGeneration uint64                           `protobuf:"varint,39,opt,name=cleanup_authorization_generation,json=cleanupAuthorizationGeneration,proto3" json:"cleanup_authorization_generation,omitempty"`
-	CleanupConsumedAt              *timestamppb.Timestamp           `protobuf:"bytes,40,opt,name=cleanup_consumed_at,json=cleanupConsumedAt,proto3" json:"cleanup_consumed_at,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	state                              protoimpl.MessageState           `protogen:"open.v1"`
+	ExecutionId                        string                           `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	OrganizationId                     string                           `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	ProjectId                          string                           `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ProcessId                          string                           `protobuf:"bytes,4,opt,name=process_id,json=processId,proto3" json:"process_id,omitempty"`
+	SessionId                          string                           `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ThreadId                           string                           `protobuf:"bytes,6,opt,name=thread_id,json=threadId,proto3" json:"thread_id,omitempty"`
+	RoleId                             string                           `protobuf:"bytes,7,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
+	TurnId                             string                           `protobuf:"bytes,8,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	Attempt                            uint32                           `protobuf:"varint,9,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	RuntimeRevisionId                  string                           `protobuf:"bytes,10,opt,name=runtime_revision_id,json=runtimeRevisionId,proto3" json:"runtime_revision_id,omitempty"`
+	RuntimeRevisionVersion             uint64                           `protobuf:"varint,11,opt,name=runtime_revision_version,json=runtimeRevisionVersion,proto3" json:"runtime_revision_version,omitempty"`
+	RuntimeRevisionSha256              string                           `protobuf:"bytes,12,opt,name=runtime_revision_sha256,json=runtimeRevisionSha256,proto3" json:"runtime_revision_sha256,omitempty"`
+	ImmutableInputSha256               string                           `protobuf:"bytes,13,opt,name=immutable_input_sha256,json=immutableInputSha256,proto3" json:"immutable_input_sha256,omitempty"`
+	ResourceClass                      RuntimeResourceClass             `protobuf:"varint,14,opt,name=resource_class,json=resourceClass,proto3,enum=controlplane.v1.RuntimeResourceClass" json:"resource_class,omitempty"`
+	ClusterAccessProfile               ClusterAccessProfile             `protobuf:"varint,15,opt,name=cluster_access_profile,json=clusterAccessProfile,proto3,enum=controlplane.v1.ClusterAccessProfile" json:"cluster_access_profile,omitempty"`
+	WorkloadId                         string                           `protobuf:"bytes,16,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	WorkloadSpiffeId                   string                           `protobuf:"bytes,17,opt,name=workload_spiffe_id,json=workloadSpiffeId,proto3" json:"workload_spiffe_id,omitempty"`
+	GrantGeneration                    uint64                           `protobuf:"varint,18,opt,name=grant_generation,json=grantGeneration,proto3" json:"grant_generation,omitempty"`
+	Version                            uint64                           `protobuf:"varint,19,opt,name=version,proto3" json:"version,omitempty"`
+	Fence                              uint64                           `protobuf:"varint,20,opt,name=fence,proto3" json:"fence,omitempty"`
+	State                              RuntimeExecutionState            `protobuf:"varint,21,opt,name=state,proto3,enum=controlplane.v1.RuntimeExecutionState" json:"state,omitempty"`
+	LeaseId                            string                           `protobuf:"bytes,22,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
+	LeaseExpiresAt                     *timestamppb.Timestamp           `protobuf:"bytes,23,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	TerminalOutcome                    RuntimeTerminalOutcome           `protobuf:"varint,24,opt,name=terminal_outcome,json=terminalOutcome,proto3,enum=controlplane.v1.RuntimeTerminalOutcome" json:"terminal_outcome,omitempty"`
+	TerminalReference                  string                           `protobuf:"bytes,25,opt,name=terminal_reference,json=terminalReference,proto3" json:"terminal_reference,omitempty"`
+	TerminalSha256                     string                           `protobuf:"bytes,26,opt,name=terminal_sha256,json=terminalSha256,proto3" json:"terminal_sha256,omitempty"`
+	ArchiveReference                   string                           `protobuf:"bytes,27,opt,name=archive_reference,json=archiveReference,proto3" json:"archive_reference,omitempty"`
+	ArchiveSha256                      string                           `protobuf:"bytes,28,opt,name=archive_sha256,json=archiveSha256,proto3" json:"archive_sha256,omitempty"`
+	RestoreProofReference              string                           `protobuf:"bytes,29,opt,name=restore_proof_reference,json=restoreProofReference,proto3" json:"restore_proof_reference,omitempty"`
+	RestoreProofSha256                 string                           `protobuf:"bytes,30,opt,name=restore_proof_sha256,json=restoreProofSha256,proto3" json:"restore_proof_sha256,omitempty"`
+	RestoreVerifierWorkloadId          string                           `protobuf:"bytes,31,opt,name=restore_verifier_workload_id,json=restoreVerifierWorkloadId,proto3" json:"restore_verifier_workload_id,omitempty"`
+	CleanupAuthorizationId             string                           `protobuf:"bytes,32,opt,name=cleanup_authorization_id,json=cleanupAuthorizationId,proto3" json:"cleanup_authorization_id,omitempty"`
+	CreatedAt                          *timestamppb.Timestamp           `protobuf:"bytes,33,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt                          *timestamppb.Timestamp           `protobuf:"bytes,34,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CleanupAuthorizationExpiresAt      *timestamppb.Timestamp           `protobuf:"bytes,35,opt,name=cleanup_authorization_expires_at,json=cleanupAuthorizationExpiresAt,proto3" json:"cleanup_authorization_expires_at,omitempty"`
+	RestoreVerifierSpiffeId            string                           `protobuf:"bytes,36,opt,name=restore_verifier_spiffe_id,json=restoreVerifierSpiffeId,proto3" json:"restore_verifier_spiffe_id,omitempty"`
+	RestoreVerifierGeneration          uint64                           `protobuf:"varint,37,opt,name=restore_verifier_generation,json=restoreVerifierGeneration,proto3" json:"restore_verifier_generation,omitempty"`
+	CleanupAuthorizationState          RuntimeCleanupAuthorizationState `protobuf:"varint,38,opt,name=cleanup_authorization_state,json=cleanupAuthorizationState,proto3,enum=controlplane.v1.RuntimeCleanupAuthorizationState" json:"cleanup_authorization_state,omitempty"`
+	CleanupAuthorizationGeneration     uint64                           `protobuf:"varint,39,opt,name=cleanup_authorization_generation,json=cleanupAuthorizationGeneration,proto3" json:"cleanup_authorization_generation,omitempty"`
+	CleanupConsumedAt                  *timestamppb.Timestamp           `protobuf:"bytes,40,opt,name=cleanup_consumed_at,json=cleanupConsumedAt,proto3" json:"cleanup_consumed_at,omitempty"`
+	CleanupPvcName                     string                           `protobuf:"bytes,41,opt,name=cleanup_pvc_name,json=cleanupPvcName,proto3" json:"cleanup_pvc_name,omitempty"`
+	CleanupPvcUid                      string                           `protobuf:"bytes,42,opt,name=cleanup_pvc_uid,json=cleanupPvcUid,proto3" json:"cleanup_pvc_uid,omitempty"`
+	CleanupPvcResourceVersion          string                           `protobuf:"bytes,43,opt,name=cleanup_pvc_resource_version,json=cleanupPvcResourceVersion,proto3" json:"cleanup_pvc_resource_version,omitempty"`
+	CleanupClaimedAt                   *timestamppb.Timestamp           `protobuf:"bytes,44,opt,name=cleanup_claimed_at,json=cleanupClaimedAt,proto3" json:"cleanup_claimed_at,omitempty"`
+	CleanupEligibleAt                  *timestamppb.Timestamp           `protobuf:"bytes,45,opt,name=cleanup_eligible_at,json=cleanupEligibleAt,proto3" json:"cleanup_eligible_at,omitempty"`
+	CleanupNotFoundAt                  *timestamppb.Timestamp           `protobuf:"bytes,46,opt,name=cleanup_not_found_at,json=cleanupNotFoundAt,proto3" json:"cleanup_not_found_at,omitempty"`
+	CleanupDeletionProofSha256         string                           `protobuf:"bytes,47,opt,name=cleanup_deletion_proof_sha256,json=cleanupDeletionProofSha256,proto3" json:"cleanup_deletion_proof_sha256,omitempty"`
+	RestoreSourceExecutionId           string                           `protobuf:"bytes,48,opt,name=restore_source_execution_id,json=restoreSourceExecutionId,proto3" json:"restore_source_execution_id,omitempty"`
+	RestoreSourceArchiveReference      string                           `protobuf:"bytes,49,opt,name=restore_source_archive_reference,json=restoreSourceArchiveReference,proto3" json:"restore_source_archive_reference,omitempty"`
+	RestoreSourceArchiveSha256         string                           `protobuf:"bytes,50,opt,name=restore_source_archive_sha256,json=restoreSourceArchiveSha256,proto3" json:"restore_source_archive_sha256,omitempty"`
+	RestoreSourceRuntimeRevisionSha256 string                           `protobuf:"bytes,51,opt,name=restore_source_runtime_revision_sha256,json=restoreSourceRuntimeRevisionSha256,proto3" json:"restore_source_runtime_revision_sha256,omitempty"`
+	RestoreSourceImmutableInputSha256  string                           `protobuf:"bytes,52,opt,name=restore_source_immutable_input_sha256,json=restoreSourceImmutableInputSha256,proto3" json:"restore_source_immutable_input_sha256,omitempty"`
+	RestoreSourceProofSha256           string                           `protobuf:"bytes,53,opt,name=restore_source_proof_sha256,json=restoreSourceProofSha256,proto3" json:"restore_source_proof_sha256,omitempty"`
+	unknownFields                      protoimpl.UnknownFields
+	sizeCache                          protoimpl.SizeCache
 }
 
 func (x *RuntimeExecution) Reset() {
@@ -11364,6 +11377,97 @@ func (x *RuntimeExecution) GetCleanupConsumedAt() *timestamppb.Timestamp {
 		return x.CleanupConsumedAt
 	}
 	return nil
+}
+
+func (x *RuntimeExecution) GetCleanupPvcName() string {
+	if x != nil {
+		return x.CleanupPvcName
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetCleanupPvcUid() string {
+	if x != nil {
+		return x.CleanupPvcUid
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetCleanupPvcResourceVersion() string {
+	if x != nil {
+		return x.CleanupPvcResourceVersion
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetCleanupClaimedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CleanupClaimedAt
+	}
+	return nil
+}
+
+func (x *RuntimeExecution) GetCleanupEligibleAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CleanupEligibleAt
+	}
+	return nil
+}
+
+func (x *RuntimeExecution) GetCleanupNotFoundAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CleanupNotFoundAt
+	}
+	return nil
+}
+
+func (x *RuntimeExecution) GetCleanupDeletionProofSha256() string {
+	if x != nil {
+		return x.CleanupDeletionProofSha256
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetRestoreSourceExecutionId() string {
+	if x != nil {
+		return x.RestoreSourceExecutionId
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetRestoreSourceArchiveReference() string {
+	if x != nil {
+		return x.RestoreSourceArchiveReference
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetRestoreSourceArchiveSha256() string {
+	if x != nil {
+		return x.RestoreSourceArchiveSha256
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetRestoreSourceRuntimeRevisionSha256() string {
+	if x != nil {
+		return x.RestoreSourceRuntimeRevisionSha256
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetRestoreSourceImmutableInputSha256() string {
+	if x != nil {
+		return x.RestoreSourceImmutableInputSha256
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetRestoreSourceProofSha256() string {
+	if x != nil {
+		return x.RestoreSourceProofSha256
+	}
+	return ""
 }
 
 type ClaimRuntimeExecutionRequest struct {
@@ -12695,6 +12799,9 @@ type AuthorizeRuntimeCleanupRequest struct {
 	ArchiveSha256             string                 `protobuf:"bytes,5,opt,name=archive_sha256,json=archiveSha256,proto3" json:"archive_sha256,omitempty"`
 	RestoreProofSha256        string                 `protobuf:"bytes,6,opt,name=restore_proof_sha256,json=restoreProofSha256,proto3" json:"restore_proof_sha256,omitempty"`
 	ExpectedCleanupGeneration uint64                 `protobuf:"varint,7,opt,name=expected_cleanup_generation,json=expectedCleanupGeneration,proto3" json:"expected_cleanup_generation,omitempty"`
+	PvcName                   string                 `protobuf:"bytes,8,opt,name=pvc_name,json=pvcName,proto3" json:"pvc_name,omitempty"`
+	PvcUid                    string                 `protobuf:"bytes,9,opt,name=pvc_uid,json=pvcUid,proto3" json:"pvc_uid,omitempty"`
+	PvcResourceVersion        string                 `protobuf:"bytes,10,opt,name=pvc_resource_version,json=pvcResourceVersion,proto3" json:"pvc_resource_version,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -12778,6 +12885,27 @@ func (x *AuthorizeRuntimeCleanupRequest) GetExpectedCleanupGeneration() uint64 {
 	return 0
 }
 
+func (x *AuthorizeRuntimeCleanupRequest) GetPvcName() string {
+	if x != nil {
+		return x.PvcName
+	}
+	return ""
+}
+
+func (x *AuthorizeRuntimeCleanupRequest) GetPvcUid() string {
+	if x != nil {
+		return x.PvcUid
+	}
+	return ""
+}
+
+func (x *AuthorizeRuntimeCleanupRequest) GetPvcResourceVersion() string {
+	if x != nil {
+		return x.PvcResourceVersion
+	}
+	return ""
+}
+
 type AuthorizeRuntimeCleanupResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Execution     *RuntimeExecution      `protobuf:"bytes,1,opt,name=execution,proto3" json:"execution,omitempty"`
@@ -12832,6 +12960,11 @@ type ConsumeRuntimeCleanupAuthorizationRequest struct {
 	CleanupAuthorizationGeneration uint64                 `protobuf:"varint,6,opt,name=cleanup_authorization_generation,json=cleanupAuthorizationGeneration,proto3" json:"cleanup_authorization_generation,omitempty"`
 	ArchiveSha256                  string                 `protobuf:"bytes,7,opt,name=archive_sha256,json=archiveSha256,proto3" json:"archive_sha256,omitempty"`
 	RestoreProofSha256             string                 `protobuf:"bytes,8,opt,name=restore_proof_sha256,json=restoreProofSha256,proto3" json:"restore_proof_sha256,omitempty"`
+	PvcName                        string                 `protobuf:"bytes,9,opt,name=pvc_name,json=pvcName,proto3" json:"pvc_name,omitempty"`
+	PvcUid                         string                 `protobuf:"bytes,10,opt,name=pvc_uid,json=pvcUid,proto3" json:"pvc_uid,omitempty"`
+	PvcResourceVersion             string                 `protobuf:"bytes,11,opt,name=pvc_resource_version,json=pvcResourceVersion,proto3" json:"pvc_resource_version,omitempty"`
+	ObservedNotFoundAt             *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=observed_not_found_at,json=observedNotFoundAt,proto3" json:"observed_not_found_at,omitempty"`
+	DeletionProofSha256            string                 `protobuf:"bytes,13,opt,name=deletion_proof_sha256,json=deletionProofSha256,proto3" json:"deletion_proof_sha256,omitempty"`
 	unknownFields                  protoimpl.UnknownFields
 	sizeCache                      protoimpl.SizeCache
 }
@@ -12918,6 +13051,41 @@ func (x *ConsumeRuntimeCleanupAuthorizationRequest) GetArchiveSha256() string {
 func (x *ConsumeRuntimeCleanupAuthorizationRequest) GetRestoreProofSha256() string {
 	if x != nil {
 		return x.RestoreProofSha256
+	}
+	return ""
+}
+
+func (x *ConsumeRuntimeCleanupAuthorizationRequest) GetPvcName() string {
+	if x != nil {
+		return x.PvcName
+	}
+	return ""
+}
+
+func (x *ConsumeRuntimeCleanupAuthorizationRequest) GetPvcUid() string {
+	if x != nil {
+		return x.PvcUid
+	}
+	return ""
+}
+
+func (x *ConsumeRuntimeCleanupAuthorizationRequest) GetPvcResourceVersion() string {
+	if x != nil {
+		return x.PvcResourceVersion
+	}
+	return ""
+}
+
+func (x *ConsumeRuntimeCleanupAuthorizationRequest) GetObservedNotFoundAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedNotFoundAt
+	}
+	return nil
+}
+
+func (x *ConsumeRuntimeCleanupAuthorizationRequest) GetDeletionProofSha256() string {
+	if x != nil {
+		return x.DeletionProofSha256
 	}
 	return ""
 }
@@ -16398,7 +16566,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1dRecordMemoryEmbeddingResponse\x12(\n" +
 	"\x10memory_record_id\x18\x01 \x01(\tR\x0ememoryRecordId\x12)\n" +
 	"\x10resource_version\x18\x02 \x01(\x04R\x0fresourceVersion\x12+\n" +
-	"\x11projection_sha256\x18\x03 \x01(\tR\x10projectionSha256\"\xb6\x10\n" +
+	"\x11projection_sha256\x18\x03 \x01(\tR\x10projectionSha256\"\x9f\x17\n" +
 	"\x10RuntimeExecution\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1d\n" +
@@ -16446,7 +16614,20 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1brestore_verifier_generation\x18% \x01(\x04R\x19restoreVerifierGeneration\x12q\n" +
 	"\x1bcleanup_authorization_state\x18& \x01(\x0e21.controlplane.v1.RuntimeCleanupAuthorizationStateR\x19cleanupAuthorizationState\x12H\n" +
 	" cleanup_authorization_generation\x18' \x01(\x04R\x1ecleanupAuthorizationGeneration\x12J\n" +
-	"\x13cleanup_consumed_at\x18( \x01(\v2\x1a.google.protobuf.TimestampR\x11cleanupConsumedAt\"G\n" +
+	"\x13cleanup_consumed_at\x18( \x01(\v2\x1a.google.protobuf.TimestampR\x11cleanupConsumedAt\x12(\n" +
+	"\x10cleanup_pvc_name\x18) \x01(\tR\x0ecleanupPvcName\x12&\n" +
+	"\x0fcleanup_pvc_uid\x18* \x01(\tR\rcleanupPvcUid\x12?\n" +
+	"\x1ccleanup_pvc_resource_version\x18+ \x01(\tR\x19cleanupPvcResourceVersion\x12H\n" +
+	"\x12cleanup_claimed_at\x18, \x01(\v2\x1a.google.protobuf.TimestampR\x10cleanupClaimedAt\x12J\n" +
+	"\x13cleanup_eligible_at\x18- \x01(\v2\x1a.google.protobuf.TimestampR\x11cleanupEligibleAt\x12K\n" +
+	"\x14cleanup_not_found_at\x18. \x01(\v2\x1a.google.protobuf.TimestampR\x11cleanupNotFoundAt\x12A\n" +
+	"\x1dcleanup_deletion_proof_sha256\x18/ \x01(\tR\x1acleanupDeletionProofSha256\x12=\n" +
+	"\x1brestore_source_execution_id\x180 \x01(\tR\x18restoreSourceExecutionId\x12G\n" +
+	" restore_source_archive_reference\x181 \x01(\tR\x1drestoreSourceArchiveReference\x12A\n" +
+	"\x1drestore_source_archive_sha256\x182 \x01(\tR\x1arestoreSourceArchiveSha256\x12R\n" +
+	"&restore_source_runtime_revision_sha256\x183 \x01(\tR\"restoreSourceRuntimeRevisionSha256\x12P\n" +
+	"%restore_source_immutable_input_sha256\x184 \x01(\tR!restoreSourceImmutableInputSha256\x12=\n" +
+	"\x1brestore_source_proof_sha256\x185 \x01(\tR\x18restoreSourceProofSha256\"G\n" +
 	"\x1cClaimRuntimeExecutionRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"`\n" +
 	"\x1dClaimRuntimeExecutionResponse\x12?\n" +
@@ -16539,7 +16720,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x17restore_proof_reference\x18\x06 \x01(\tR\x15restoreProofReference\x120\n" +
 	"\x14restore_proof_sha256\x18\a \x01(\tR\x12restoreProofSha256\"_\n" +
 	"\x1cVerifyRuntimeRestoreResponse\x12?\n" +
-	"\texecution\x18\x01 \x01(\v2!.controlplane.v1.RuntimeExecutionR\texecution\"\xd7\x02\n" +
+	"\texecution\x18\x01 \x01(\v2!.controlplane.v1.RuntimeExecutionR\texecution\"\xbd\x03\n" +
 	"\x1eAuthorizeRuntimeCleanupRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12)\n" +
@@ -16547,9 +16728,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0eexpected_fence\x18\x04 \x01(\x04R\rexpectedFence\x12%\n" +
 	"\x0earchive_sha256\x18\x05 \x01(\tR\rarchiveSha256\x120\n" +
 	"\x14restore_proof_sha256\x18\x06 \x01(\tR\x12restoreProofSha256\x12>\n" +
-	"\x1bexpected_cleanup_generation\x18\a \x01(\x04R\x19expectedCleanupGeneration\"b\n" +
+	"\x1bexpected_cleanup_generation\x18\a \x01(\x04R\x19expectedCleanupGeneration\x12\x19\n" +
+	"\bpvc_name\x18\b \x01(\tR\apvcName\x12\x17\n" +
+	"\apvc_uid\x18\t \x01(\tR\x06pvcUid\x120\n" +
+	"\x14pvc_resource_version\x18\n" +
+	" \x01(\tR\x12pvcResourceVersion\"b\n" +
 	"\x1fAuthorizeRuntimeCleanupResponse\x12?\n" +
-	"\texecution\x18\x01 \x01(\v2!.controlplane.v1.RuntimeExecutionR\texecution\"\xa6\x03\n" +
+	"\texecution\x18\x01 \x01(\v2!.controlplane.v1.RuntimeExecutionR\texecution\"\x8f\x05\n" +
 	")ConsumeRuntimeCleanupAuthorizationRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12)\n" +
@@ -16558,7 +16743,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x18cleanup_authorization_id\x18\x05 \x01(\tR\x16cleanupAuthorizationId\x12H\n" +
 	" cleanup_authorization_generation\x18\x06 \x01(\x04R\x1ecleanupAuthorizationGeneration\x12%\n" +
 	"\x0earchive_sha256\x18\a \x01(\tR\rarchiveSha256\x120\n" +
-	"\x14restore_proof_sha256\x18\b \x01(\tR\x12restoreProofSha256\"m\n" +
+	"\x14restore_proof_sha256\x18\b \x01(\tR\x12restoreProofSha256\x12\x19\n" +
+	"\bpvc_name\x18\t \x01(\tR\apvcName\x12\x17\n" +
+	"\apvc_uid\x18\n" +
+	" \x01(\tR\x06pvcUid\x120\n" +
+	"\x14pvc_resource_version\x18\v \x01(\tR\x12pvcResourceVersion\x12M\n" +
+	"\x15observed_not_found_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\x12observedNotFoundAt\x122\n" +
+	"\x15deletion_proof_sha256\x18\r \x01(\tR\x13deletionProofSha256\"m\n" +
 	"*ConsumeRuntimeCleanupAuthorizationResponse\x12?\n" +
 	"\texecution\x18\x01 \x01(\v2!.controlplane.v1.RuntimeExecutionR\texecution\"\xcc\x02\n" +
 	"(ExpireRuntimeCleanupAuthorizationRequest\x12'\n" +
@@ -17432,196 +17623,200 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	204, // 160: controlplane.v1.RuntimeExecution.cleanup_authorization_expires_at:type_name -> google.protobuf.Timestamp
 	21,  // 161: controlplane.v1.RuntimeExecution.cleanup_authorization_state:type_name -> controlplane.v1.RuntimeCleanupAuthorizationState
 	204, // 162: controlplane.v1.RuntimeExecution.cleanup_consumed_at:type_name -> google.protobuf.Timestamp
-	141, // 163: controlplane.v1.ClaimRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 164: controlplane.v1.GetRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 165: controlplane.v1.AdmitRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 166: controlplane.v1.HeartbeatRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	22,  // 167: controlplane.v1.RecordRuntimeIncidentRequest.kind:type_name -> controlplane.v1.RuntimeIncidentKind
-	141, // 168: controlplane.v1.RecordRuntimeIncidentResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	20,  // 169: controlplane.v1.CompleteRuntimeExecutionRequest.outcome:type_name -> controlplane.v1.RuntimeTerminalOutcome
-	141, // 170: controlplane.v1.CompleteRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 171: controlplane.v1.CancelRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 172: controlplane.v1.RetryRuntimeExecutionResponse.previous_execution:type_name -> controlplane.v1.RuntimeExecution
-	53,  // 173: controlplane.v1.RetryRuntimeExecutionResponse.turn:type_name -> controlplane.v1.Resource
-	141, // 174: controlplane.v1.ExpireRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 175: controlplane.v1.RecordRuntimeArchiveResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 176: controlplane.v1.VerifyRuntimeRestoreResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 177: controlplane.v1.AuthorizeRuntimeCleanupResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 178: controlplane.v1.ConsumeRuntimeCleanupAuthorizationResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	141, // 179: controlplane.v1.ExpireRuntimeCleanupAuthorizationResponse.execution:type_name -> controlplane.v1.RuntimeExecution
-	172, // 180: controlplane.v1.IntegrationExecutionBinding.integration_binding:type_name -> controlplane.v1.IntegrationApprovalBinding
-	171, // 181: controlplane.v1.IntegrationApprovalBinding.integration:type_name -> controlplane.v1.PinnedIntegrationResource
-	171, // 182: controlplane.v1.IntegrationApprovalBinding.credential_bindings:type_name -> controlplane.v1.PinnedIntegrationResource
-	170, // 183: controlplane.v1.IntegrationContinuation.binding:type_name -> controlplane.v1.IntegrationExecutionBinding
-	23,  // 184: controlplane.v1.IntegrationContinuation.approval_state:type_name -> controlplane.v1.IntegrationApprovalState
-	24,  // 185: controlplane.v1.IntegrationContinuation.execution_state:type_name -> controlplane.v1.IntegrationExecutionState
-	25,  // 186: controlplane.v1.IntegrationContinuation.continuation_state:type_name -> controlplane.v1.IntegrationContinuationState
-	204, // 187: controlplane.v1.IntegrationContinuation.approval_expires_at:type_name -> google.protobuf.Timestamp
-	204, // 188: controlplane.v1.IntegrationContinuation.created_at:type_name -> google.protobuf.Timestamp
-	204, // 189: controlplane.v1.IntegrationContinuation.updated_at:type_name -> google.protobuf.Timestamp
-	176, // 190: controlplane.v1.ResolveIntegrationSessionResponse.context:type_name -> controlplane.v1.IntegrationSessionContext
-	177, // 191: controlplane.v1.IntegrationSessionContext.integrations:type_name -> controlplane.v1.IntegrationSessionBinding
-	178, // 192: controlplane.v1.IntegrationSessionBinding.credential_bindings:type_name -> controlplane.v1.IntegrationCredentialBinding
-	204, // 193: controlplane.v1.IntegrationCredentialBinding.expires_at:type_name -> google.protobuf.Timestamp
-	204, // 194: controlplane.v1.SuspendForIntegrationApprovalRequest.approval_expires_at:type_name -> google.protobuf.Timestamp
-	172, // 195: controlplane.v1.SuspendForIntegrationApprovalRequest.selected_binding:type_name -> controlplane.v1.IntegrationApprovalBinding
-	173, // 196: controlplane.v1.SuspendForIntegrationApprovalResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	181, // 197: controlplane.v1.ApproveIntegrationInvocationRequest.decision:type_name -> controlplane.v1.IntegrationDecisionReference
-	173, // 198: controlplane.v1.ApproveIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	181, // 199: controlplane.v1.RejectIntegrationInvocationRequest.decision:type_name -> controlplane.v1.IntegrationDecisionReference
-	173, // 200: controlplane.v1.RejectIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	173, // 201: controlplane.v1.ExpireIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	181, // 202: controlplane.v1.CancelIntegrationInvocationRequest.decision:type_name -> controlplane.v1.IntegrationDecisionReference
-	173, // 203: controlplane.v1.CancelIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	173, // 204: controlplane.v1.BeginIntegrationExecutionResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	173, // 205: controlplane.v1.CompleteIntegrationExecutionResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	173, // 206: controlplane.v1.FailIntegrationExecutionResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	173, // 207: controlplane.v1.GetIntegrationContinuationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	173, // 208: controlplane.v1.AcknowledgeIntegrationContinuationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
-	26,  // 209: controlplane.v1.ErrorDetail.reason:type_name -> controlplane.v1.ErrorReason
-	27,  // 210: controlplane.v1.ControlPlaneService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
-	29,  // 211: controlplane.v1.ControlPlaneService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
-	54,  // 212: controlplane.v1.ControlPlaneService.CreateResource:input_type -> controlplane.v1.CreateResourceRequest
-	56,  // 213: controlplane.v1.ControlPlaneService.UpdateResource:input_type -> controlplane.v1.UpdateResourceRequest
-	58,  // 214: controlplane.v1.ControlPlaneService.TransitionResource:input_type -> controlplane.v1.TransitionResourceRequest
-	60,  // 215: controlplane.v1.ControlPlaneService.DeleteResource:input_type -> controlplane.v1.DeleteResourceRequest
-	62,  // 216: controlplane.v1.ControlPlaneService.ManageAccessResource:input_type -> controlplane.v1.ManageAccessResourceRequest
-	64,  // 217: controlplane.v1.ControlPlaneService.GetResource:input_type -> controlplane.v1.GetResourceRequest
-	66,  // 218: controlplane.v1.ControlPlaneService.ListResources:input_type -> controlplane.v1.ListResourcesRequest
-	68,  // 219: controlplane.v1.ControlPlaneService.SearchResources:input_type -> controlplane.v1.SearchResourcesRequest
-	70,  // 220: controlplane.v1.ControlPlaneService.SearchMemoryRecords:input_type -> controlplane.v1.SearchMemoryRecordsRequest
-	74,  // 221: controlplane.v1.ControlPlaneService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
-	77,  // 222: controlplane.v1.ControlPlaneService.ListTombstones:input_type -> controlplane.v1.ListTombstonesRequest
-	79,  // 223: controlplane.v1.ControlPlaneService.GetDiagnostics:input_type -> controlplane.v1.GetDiagnosticsRequest
-	118, // 224: controlplane.v1.ControlPlaneService.ListOutboxFailures:input_type -> controlplane.v1.ListOutboxFailuresRequest
-	121, // 225: controlplane.v1.ControlPlaneService.RepairOutboxEvent:input_type -> controlplane.v1.RepairOutboxEventRequest
-	81,  // 226: controlplane.v1.ControlPlaneService.EnqueueTurn:input_type -> controlplane.v1.EnqueueTurnRequest
-	83,  // 227: controlplane.v1.ControlPlaneService.ClaimTurn:input_type -> controlplane.v1.ClaimTurnRequest
-	85,  // 228: controlplane.v1.ControlPlaneService.RenewTurn:input_type -> controlplane.v1.RenewTurnRequest
-	87,  // 229: controlplane.v1.ControlPlaneService.CompleteTurn:input_type -> controlplane.v1.CompleteTurnRequest
-	89,  // 230: controlplane.v1.ControlPlaneService.RetryTurn:input_type -> controlplane.v1.RetryTurnRequest
-	91,  // 231: controlplane.v1.ControlPlaneService.CancelTurn:input_type -> controlplane.v1.CancelTurnRequest
-	93,  // 232: controlplane.v1.ControlPlaneService.ManageSession:input_type -> controlplane.v1.ManageSessionRequest
-	95,  // 233: controlplane.v1.ControlPlaneService.ManageMemoryRecord:input_type -> controlplane.v1.ManageMemoryRecordRequest
-	97,  // 234: controlplane.v1.ControlPlaneService.ManageWorkClaim:input_type -> controlplane.v1.ManageWorkClaimRequest
-	99,  // 235: controlplane.v1.ControlPlaneService.ManageSchedule:input_type -> controlplane.v1.ManageScheduleRequest
-	101, // 236: controlplane.v1.ControlPlaneService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
-	104, // 237: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:input_type -> controlplane.v1.ClaimScheduleOccurrenceRequest
-	106, // 238: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:input_type -> controlplane.v1.CompleteScheduleOccurrenceRequest
-	108, // 239: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:input_type -> controlplane.v1.CancelScheduleOccurrenceRequest
-	110, // 240: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:input_type -> controlplane.v1.ListScheduleOccurrencesRequest
-	112, // 241: controlplane.v1.ControlPlaneService.StartProcess:input_type -> controlplane.v1.StartProcessRequest
-	114, // 242: controlplane.v1.ControlPlaneService.CancelProcess:input_type -> controlplane.v1.CancelProcessRequest
-	116, // 243: controlplane.v1.ControlPlaneService.CompleteProcess:input_type -> controlplane.v1.CompleteProcessRequest
-	123, // 244: controlplane.v1.ControlPlaneService.RequestOwnerGate:input_type -> controlplane.v1.RequestOwnerGateRequest
-	125, // 245: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:input_type -> controlplane.v1.ClaimOwnerGateDeliveryRequest
-	127, // 246: controlplane.v1.ControlPlaneService.ExpireOwnerGate:input_type -> controlplane.v1.ExpireOwnerGateRequest
-	129, // 247: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:input_type -> controlplane.v1.RecordOwnerGateDeliveryRequest
-	131, // 248: controlplane.v1.ControlPlaneService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
-	133, // 249: controlplane.v1.ControlPlaneService.RegisterArtifact:input_type -> controlplane.v1.RegisterArtifactRequest
-	135, // 250: controlplane.v1.ControlPlaneService.RecordArtifactScan:input_type -> controlplane.v1.RecordArtifactScanRequest
-	137, // 251: controlplane.v1.ControlPlaneService.GetRuntimeRevision:input_type -> controlplane.v1.GetRuntimeRevisionRequest
-	139, // 252: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:input_type -> controlplane.v1.RecordMemoryEmbeddingRequest
-	142, // 253: controlplane.v1.ControlPlaneService.ClaimRuntimeExecution:input_type -> controlplane.v1.ClaimRuntimeExecutionRequest
-	144, // 254: controlplane.v1.ControlPlaneService.GetRuntimeExecution:input_type -> controlplane.v1.GetRuntimeExecutionRequest
-	146, // 255: controlplane.v1.ControlPlaneService.AdmitRuntimeExecution:input_type -> controlplane.v1.AdmitRuntimeExecutionRequest
-	148, // 256: controlplane.v1.ControlPlaneService.HeartbeatRuntimeExecution:input_type -> controlplane.v1.HeartbeatRuntimeExecutionRequest
-	150, // 257: controlplane.v1.ControlPlaneService.RecordRuntimeIncident:input_type -> controlplane.v1.RecordRuntimeIncidentRequest
-	152, // 258: controlplane.v1.ControlPlaneService.CompleteRuntimeExecution:input_type -> controlplane.v1.CompleteRuntimeExecutionRequest
-	154, // 259: controlplane.v1.ControlPlaneService.CancelRuntimeExecution:input_type -> controlplane.v1.CancelRuntimeExecutionRequest
-	156, // 260: controlplane.v1.ControlPlaneService.RetryRuntimeExecution:input_type -> controlplane.v1.RetryRuntimeExecutionRequest
-	158, // 261: controlplane.v1.ControlPlaneService.ExpireRuntimeExecution:input_type -> controlplane.v1.ExpireRuntimeExecutionRequest
-	160, // 262: controlplane.v1.ControlPlaneService.RecordRuntimeArchive:input_type -> controlplane.v1.RecordRuntimeArchiveRequest
-	162, // 263: controlplane.v1.ControlPlaneService.VerifyRuntimeRestore:input_type -> controlplane.v1.VerifyRuntimeRestoreRequest
-	164, // 264: controlplane.v1.ControlPlaneService.AuthorizeRuntimeCleanup:input_type -> controlplane.v1.AuthorizeRuntimeCleanupRequest
-	166, // 265: controlplane.v1.ControlPlaneService.ConsumeRuntimeCleanupAuthorization:input_type -> controlplane.v1.ConsumeRuntimeCleanupAuthorizationRequest
-	168, // 266: controlplane.v1.ControlPlaneService.ExpireRuntimeCleanupAuthorization:input_type -> controlplane.v1.ExpireRuntimeCleanupAuthorizationRequest
-	174, // 267: controlplane.v1.ControlPlaneService.ResolveIntegrationSession:input_type -> controlplane.v1.ResolveIntegrationSessionRequest
-	179, // 268: controlplane.v1.ControlPlaneService.SuspendForIntegrationApproval:input_type -> controlplane.v1.SuspendForIntegrationApprovalRequest
-	182, // 269: controlplane.v1.ControlPlaneService.ApproveIntegrationInvocation:input_type -> controlplane.v1.ApproveIntegrationInvocationRequest
-	184, // 270: controlplane.v1.ControlPlaneService.RejectIntegrationInvocation:input_type -> controlplane.v1.RejectIntegrationInvocationRequest
-	186, // 271: controlplane.v1.ControlPlaneService.ExpireIntegrationInvocation:input_type -> controlplane.v1.ExpireIntegrationInvocationRequest
-	188, // 272: controlplane.v1.ControlPlaneService.CancelIntegrationInvocation:input_type -> controlplane.v1.CancelIntegrationInvocationRequest
-	190, // 273: controlplane.v1.ControlPlaneService.BeginIntegrationExecution:input_type -> controlplane.v1.BeginIntegrationExecutionRequest
-	192, // 274: controlplane.v1.ControlPlaneService.CompleteIntegrationExecution:input_type -> controlplane.v1.CompleteIntegrationExecutionRequest
-	194, // 275: controlplane.v1.ControlPlaneService.FailIntegrationExecution:input_type -> controlplane.v1.FailIntegrationExecutionRequest
-	196, // 276: controlplane.v1.ControlPlaneService.GetIntegrationContinuation:input_type -> controlplane.v1.GetIntegrationContinuationRequest
-	198, // 277: controlplane.v1.ControlPlaneService.AcknowledgeIntegrationContinuation:input_type -> controlplane.v1.AcknowledgeIntegrationContinuationRequest
-	200, // 278: controlplane.v1.ControlPlaneService.CheckReadiness:input_type -> controlplane.v1.CheckReadinessRequest
-	28,  // 279: controlplane.v1.ControlPlaneService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
-	30,  // 280: controlplane.v1.ControlPlaneService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
-	55,  // 281: controlplane.v1.ControlPlaneService.CreateResource:output_type -> controlplane.v1.CreateResourceResponse
-	57,  // 282: controlplane.v1.ControlPlaneService.UpdateResource:output_type -> controlplane.v1.UpdateResourceResponse
-	59,  // 283: controlplane.v1.ControlPlaneService.TransitionResource:output_type -> controlplane.v1.TransitionResourceResponse
-	61,  // 284: controlplane.v1.ControlPlaneService.DeleteResource:output_type -> controlplane.v1.DeleteResourceResponse
-	63,  // 285: controlplane.v1.ControlPlaneService.ManageAccessResource:output_type -> controlplane.v1.ManageAccessResourceResponse
-	65,  // 286: controlplane.v1.ControlPlaneService.GetResource:output_type -> controlplane.v1.GetResourceResponse
-	67,  // 287: controlplane.v1.ControlPlaneService.ListResources:output_type -> controlplane.v1.ListResourcesResponse
-	69,  // 288: controlplane.v1.ControlPlaneService.SearchResources:output_type -> controlplane.v1.SearchResourcesResponse
-	72,  // 289: controlplane.v1.ControlPlaneService.SearchMemoryRecords:output_type -> controlplane.v1.SearchMemoryRecordsResponse
-	75,  // 290: controlplane.v1.ControlPlaneService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
-	78,  // 291: controlplane.v1.ControlPlaneService.ListTombstones:output_type -> controlplane.v1.ListTombstonesResponse
-	80,  // 292: controlplane.v1.ControlPlaneService.GetDiagnostics:output_type -> controlplane.v1.GetDiagnosticsResponse
-	120, // 293: controlplane.v1.ControlPlaneService.ListOutboxFailures:output_type -> controlplane.v1.ListOutboxFailuresResponse
-	122, // 294: controlplane.v1.ControlPlaneService.RepairOutboxEvent:output_type -> controlplane.v1.RepairOutboxEventResponse
-	82,  // 295: controlplane.v1.ControlPlaneService.EnqueueTurn:output_type -> controlplane.v1.EnqueueTurnResponse
-	84,  // 296: controlplane.v1.ControlPlaneService.ClaimTurn:output_type -> controlplane.v1.ClaimTurnResponse
-	86,  // 297: controlplane.v1.ControlPlaneService.RenewTurn:output_type -> controlplane.v1.RenewTurnResponse
-	88,  // 298: controlplane.v1.ControlPlaneService.CompleteTurn:output_type -> controlplane.v1.CompleteTurnResponse
-	90,  // 299: controlplane.v1.ControlPlaneService.RetryTurn:output_type -> controlplane.v1.RetryTurnResponse
-	92,  // 300: controlplane.v1.ControlPlaneService.CancelTurn:output_type -> controlplane.v1.CancelTurnResponse
-	94,  // 301: controlplane.v1.ControlPlaneService.ManageSession:output_type -> controlplane.v1.ManageSessionResponse
-	96,  // 302: controlplane.v1.ControlPlaneService.ManageMemoryRecord:output_type -> controlplane.v1.ManageMemoryRecordResponse
-	98,  // 303: controlplane.v1.ControlPlaneService.ManageWorkClaim:output_type -> controlplane.v1.ManageWorkClaimResponse
-	100, // 304: controlplane.v1.ControlPlaneService.ManageSchedule:output_type -> controlplane.v1.ManageScheduleResponse
-	103, // 305: controlplane.v1.ControlPlaneService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
-	105, // 306: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:output_type -> controlplane.v1.ClaimScheduleOccurrenceResponse
-	107, // 307: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:output_type -> controlplane.v1.CompleteScheduleOccurrenceResponse
-	109, // 308: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:output_type -> controlplane.v1.CancelScheduleOccurrenceResponse
-	111, // 309: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:output_type -> controlplane.v1.ListScheduleOccurrencesResponse
-	113, // 310: controlplane.v1.ControlPlaneService.StartProcess:output_type -> controlplane.v1.StartProcessResponse
-	115, // 311: controlplane.v1.ControlPlaneService.CancelProcess:output_type -> controlplane.v1.CancelProcessResponse
-	117, // 312: controlplane.v1.ControlPlaneService.CompleteProcess:output_type -> controlplane.v1.CompleteProcessResponse
-	124, // 313: controlplane.v1.ControlPlaneService.RequestOwnerGate:output_type -> controlplane.v1.RequestOwnerGateResponse
-	126, // 314: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:output_type -> controlplane.v1.ClaimOwnerGateDeliveryResponse
-	128, // 315: controlplane.v1.ControlPlaneService.ExpireOwnerGate:output_type -> controlplane.v1.ExpireOwnerGateResponse
-	130, // 316: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:output_type -> controlplane.v1.RecordOwnerGateDeliveryResponse
-	132, // 317: controlplane.v1.ControlPlaneService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
-	134, // 318: controlplane.v1.ControlPlaneService.RegisterArtifact:output_type -> controlplane.v1.RegisterArtifactResponse
-	136, // 319: controlplane.v1.ControlPlaneService.RecordArtifactScan:output_type -> controlplane.v1.RecordArtifactScanResponse
-	138, // 320: controlplane.v1.ControlPlaneService.GetRuntimeRevision:output_type -> controlplane.v1.GetRuntimeRevisionResponse
-	140, // 321: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:output_type -> controlplane.v1.RecordMemoryEmbeddingResponse
-	143, // 322: controlplane.v1.ControlPlaneService.ClaimRuntimeExecution:output_type -> controlplane.v1.ClaimRuntimeExecutionResponse
-	145, // 323: controlplane.v1.ControlPlaneService.GetRuntimeExecution:output_type -> controlplane.v1.GetRuntimeExecutionResponse
-	147, // 324: controlplane.v1.ControlPlaneService.AdmitRuntimeExecution:output_type -> controlplane.v1.AdmitRuntimeExecutionResponse
-	149, // 325: controlplane.v1.ControlPlaneService.HeartbeatRuntimeExecution:output_type -> controlplane.v1.HeartbeatRuntimeExecutionResponse
-	151, // 326: controlplane.v1.ControlPlaneService.RecordRuntimeIncident:output_type -> controlplane.v1.RecordRuntimeIncidentResponse
-	153, // 327: controlplane.v1.ControlPlaneService.CompleteRuntimeExecution:output_type -> controlplane.v1.CompleteRuntimeExecutionResponse
-	155, // 328: controlplane.v1.ControlPlaneService.CancelRuntimeExecution:output_type -> controlplane.v1.CancelRuntimeExecutionResponse
-	157, // 329: controlplane.v1.ControlPlaneService.RetryRuntimeExecution:output_type -> controlplane.v1.RetryRuntimeExecutionResponse
-	159, // 330: controlplane.v1.ControlPlaneService.ExpireRuntimeExecution:output_type -> controlplane.v1.ExpireRuntimeExecutionResponse
-	161, // 331: controlplane.v1.ControlPlaneService.RecordRuntimeArchive:output_type -> controlplane.v1.RecordRuntimeArchiveResponse
-	163, // 332: controlplane.v1.ControlPlaneService.VerifyRuntimeRestore:output_type -> controlplane.v1.VerifyRuntimeRestoreResponse
-	165, // 333: controlplane.v1.ControlPlaneService.AuthorizeRuntimeCleanup:output_type -> controlplane.v1.AuthorizeRuntimeCleanupResponse
-	167, // 334: controlplane.v1.ControlPlaneService.ConsumeRuntimeCleanupAuthorization:output_type -> controlplane.v1.ConsumeRuntimeCleanupAuthorizationResponse
-	169, // 335: controlplane.v1.ControlPlaneService.ExpireRuntimeCleanupAuthorization:output_type -> controlplane.v1.ExpireRuntimeCleanupAuthorizationResponse
-	175, // 336: controlplane.v1.ControlPlaneService.ResolveIntegrationSession:output_type -> controlplane.v1.ResolveIntegrationSessionResponse
-	180, // 337: controlplane.v1.ControlPlaneService.SuspendForIntegrationApproval:output_type -> controlplane.v1.SuspendForIntegrationApprovalResponse
-	183, // 338: controlplane.v1.ControlPlaneService.ApproveIntegrationInvocation:output_type -> controlplane.v1.ApproveIntegrationInvocationResponse
-	185, // 339: controlplane.v1.ControlPlaneService.RejectIntegrationInvocation:output_type -> controlplane.v1.RejectIntegrationInvocationResponse
-	187, // 340: controlplane.v1.ControlPlaneService.ExpireIntegrationInvocation:output_type -> controlplane.v1.ExpireIntegrationInvocationResponse
-	189, // 341: controlplane.v1.ControlPlaneService.CancelIntegrationInvocation:output_type -> controlplane.v1.CancelIntegrationInvocationResponse
-	191, // 342: controlplane.v1.ControlPlaneService.BeginIntegrationExecution:output_type -> controlplane.v1.BeginIntegrationExecutionResponse
-	193, // 343: controlplane.v1.ControlPlaneService.CompleteIntegrationExecution:output_type -> controlplane.v1.CompleteIntegrationExecutionResponse
-	195, // 344: controlplane.v1.ControlPlaneService.FailIntegrationExecution:output_type -> controlplane.v1.FailIntegrationExecutionResponse
-	197, // 345: controlplane.v1.ControlPlaneService.GetIntegrationContinuation:output_type -> controlplane.v1.GetIntegrationContinuationResponse
-	199, // 346: controlplane.v1.ControlPlaneService.AcknowledgeIntegrationContinuation:output_type -> controlplane.v1.AcknowledgeIntegrationContinuationResponse
-	201, // 347: controlplane.v1.ControlPlaneService.CheckReadiness:output_type -> controlplane.v1.CheckReadinessResponse
-	279, // [279:348] is the sub-list for method output_type
-	210, // [210:279] is the sub-list for method input_type
-	210, // [210:210] is the sub-list for extension type_name
-	210, // [210:210] is the sub-list for extension extendee
-	0,   // [0:210] is the sub-list for field type_name
+	204, // 163: controlplane.v1.RuntimeExecution.cleanup_claimed_at:type_name -> google.protobuf.Timestamp
+	204, // 164: controlplane.v1.RuntimeExecution.cleanup_eligible_at:type_name -> google.protobuf.Timestamp
+	204, // 165: controlplane.v1.RuntimeExecution.cleanup_not_found_at:type_name -> google.protobuf.Timestamp
+	141, // 166: controlplane.v1.ClaimRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 167: controlplane.v1.GetRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 168: controlplane.v1.AdmitRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 169: controlplane.v1.HeartbeatRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	22,  // 170: controlplane.v1.RecordRuntimeIncidentRequest.kind:type_name -> controlplane.v1.RuntimeIncidentKind
+	141, // 171: controlplane.v1.RecordRuntimeIncidentResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	20,  // 172: controlplane.v1.CompleteRuntimeExecutionRequest.outcome:type_name -> controlplane.v1.RuntimeTerminalOutcome
+	141, // 173: controlplane.v1.CompleteRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 174: controlplane.v1.CancelRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 175: controlplane.v1.RetryRuntimeExecutionResponse.previous_execution:type_name -> controlplane.v1.RuntimeExecution
+	53,  // 176: controlplane.v1.RetryRuntimeExecutionResponse.turn:type_name -> controlplane.v1.Resource
+	141, // 177: controlplane.v1.ExpireRuntimeExecutionResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 178: controlplane.v1.RecordRuntimeArchiveResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 179: controlplane.v1.VerifyRuntimeRestoreResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 180: controlplane.v1.AuthorizeRuntimeCleanupResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	204, // 181: controlplane.v1.ConsumeRuntimeCleanupAuthorizationRequest.observed_not_found_at:type_name -> google.protobuf.Timestamp
+	141, // 182: controlplane.v1.ConsumeRuntimeCleanupAuthorizationResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	141, // 183: controlplane.v1.ExpireRuntimeCleanupAuthorizationResponse.execution:type_name -> controlplane.v1.RuntimeExecution
+	172, // 184: controlplane.v1.IntegrationExecutionBinding.integration_binding:type_name -> controlplane.v1.IntegrationApprovalBinding
+	171, // 185: controlplane.v1.IntegrationApprovalBinding.integration:type_name -> controlplane.v1.PinnedIntegrationResource
+	171, // 186: controlplane.v1.IntegrationApprovalBinding.credential_bindings:type_name -> controlplane.v1.PinnedIntegrationResource
+	170, // 187: controlplane.v1.IntegrationContinuation.binding:type_name -> controlplane.v1.IntegrationExecutionBinding
+	23,  // 188: controlplane.v1.IntegrationContinuation.approval_state:type_name -> controlplane.v1.IntegrationApprovalState
+	24,  // 189: controlplane.v1.IntegrationContinuation.execution_state:type_name -> controlplane.v1.IntegrationExecutionState
+	25,  // 190: controlplane.v1.IntegrationContinuation.continuation_state:type_name -> controlplane.v1.IntegrationContinuationState
+	204, // 191: controlplane.v1.IntegrationContinuation.approval_expires_at:type_name -> google.protobuf.Timestamp
+	204, // 192: controlplane.v1.IntegrationContinuation.created_at:type_name -> google.protobuf.Timestamp
+	204, // 193: controlplane.v1.IntegrationContinuation.updated_at:type_name -> google.protobuf.Timestamp
+	176, // 194: controlplane.v1.ResolveIntegrationSessionResponse.context:type_name -> controlplane.v1.IntegrationSessionContext
+	177, // 195: controlplane.v1.IntegrationSessionContext.integrations:type_name -> controlplane.v1.IntegrationSessionBinding
+	178, // 196: controlplane.v1.IntegrationSessionBinding.credential_bindings:type_name -> controlplane.v1.IntegrationCredentialBinding
+	204, // 197: controlplane.v1.IntegrationCredentialBinding.expires_at:type_name -> google.protobuf.Timestamp
+	204, // 198: controlplane.v1.SuspendForIntegrationApprovalRequest.approval_expires_at:type_name -> google.protobuf.Timestamp
+	172, // 199: controlplane.v1.SuspendForIntegrationApprovalRequest.selected_binding:type_name -> controlplane.v1.IntegrationApprovalBinding
+	173, // 200: controlplane.v1.SuspendForIntegrationApprovalResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	181, // 201: controlplane.v1.ApproveIntegrationInvocationRequest.decision:type_name -> controlplane.v1.IntegrationDecisionReference
+	173, // 202: controlplane.v1.ApproveIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	181, // 203: controlplane.v1.RejectIntegrationInvocationRequest.decision:type_name -> controlplane.v1.IntegrationDecisionReference
+	173, // 204: controlplane.v1.RejectIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	173, // 205: controlplane.v1.ExpireIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	181, // 206: controlplane.v1.CancelIntegrationInvocationRequest.decision:type_name -> controlplane.v1.IntegrationDecisionReference
+	173, // 207: controlplane.v1.CancelIntegrationInvocationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	173, // 208: controlplane.v1.BeginIntegrationExecutionResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	173, // 209: controlplane.v1.CompleteIntegrationExecutionResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	173, // 210: controlplane.v1.FailIntegrationExecutionResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	173, // 211: controlplane.v1.GetIntegrationContinuationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	173, // 212: controlplane.v1.AcknowledgeIntegrationContinuationResponse.continuation:type_name -> controlplane.v1.IntegrationContinuation
+	26,  // 213: controlplane.v1.ErrorDetail.reason:type_name -> controlplane.v1.ErrorReason
+	27,  // 214: controlplane.v1.ControlPlaneService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
+	29,  // 215: controlplane.v1.ControlPlaneService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
+	54,  // 216: controlplane.v1.ControlPlaneService.CreateResource:input_type -> controlplane.v1.CreateResourceRequest
+	56,  // 217: controlplane.v1.ControlPlaneService.UpdateResource:input_type -> controlplane.v1.UpdateResourceRequest
+	58,  // 218: controlplane.v1.ControlPlaneService.TransitionResource:input_type -> controlplane.v1.TransitionResourceRequest
+	60,  // 219: controlplane.v1.ControlPlaneService.DeleteResource:input_type -> controlplane.v1.DeleteResourceRequest
+	62,  // 220: controlplane.v1.ControlPlaneService.ManageAccessResource:input_type -> controlplane.v1.ManageAccessResourceRequest
+	64,  // 221: controlplane.v1.ControlPlaneService.GetResource:input_type -> controlplane.v1.GetResourceRequest
+	66,  // 222: controlplane.v1.ControlPlaneService.ListResources:input_type -> controlplane.v1.ListResourcesRequest
+	68,  // 223: controlplane.v1.ControlPlaneService.SearchResources:input_type -> controlplane.v1.SearchResourcesRequest
+	70,  // 224: controlplane.v1.ControlPlaneService.SearchMemoryRecords:input_type -> controlplane.v1.SearchMemoryRecordsRequest
+	74,  // 225: controlplane.v1.ControlPlaneService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
+	77,  // 226: controlplane.v1.ControlPlaneService.ListTombstones:input_type -> controlplane.v1.ListTombstonesRequest
+	79,  // 227: controlplane.v1.ControlPlaneService.GetDiagnostics:input_type -> controlplane.v1.GetDiagnosticsRequest
+	118, // 228: controlplane.v1.ControlPlaneService.ListOutboxFailures:input_type -> controlplane.v1.ListOutboxFailuresRequest
+	121, // 229: controlplane.v1.ControlPlaneService.RepairOutboxEvent:input_type -> controlplane.v1.RepairOutboxEventRequest
+	81,  // 230: controlplane.v1.ControlPlaneService.EnqueueTurn:input_type -> controlplane.v1.EnqueueTurnRequest
+	83,  // 231: controlplane.v1.ControlPlaneService.ClaimTurn:input_type -> controlplane.v1.ClaimTurnRequest
+	85,  // 232: controlplane.v1.ControlPlaneService.RenewTurn:input_type -> controlplane.v1.RenewTurnRequest
+	87,  // 233: controlplane.v1.ControlPlaneService.CompleteTurn:input_type -> controlplane.v1.CompleteTurnRequest
+	89,  // 234: controlplane.v1.ControlPlaneService.RetryTurn:input_type -> controlplane.v1.RetryTurnRequest
+	91,  // 235: controlplane.v1.ControlPlaneService.CancelTurn:input_type -> controlplane.v1.CancelTurnRequest
+	93,  // 236: controlplane.v1.ControlPlaneService.ManageSession:input_type -> controlplane.v1.ManageSessionRequest
+	95,  // 237: controlplane.v1.ControlPlaneService.ManageMemoryRecord:input_type -> controlplane.v1.ManageMemoryRecordRequest
+	97,  // 238: controlplane.v1.ControlPlaneService.ManageWorkClaim:input_type -> controlplane.v1.ManageWorkClaimRequest
+	99,  // 239: controlplane.v1.ControlPlaneService.ManageSchedule:input_type -> controlplane.v1.ManageScheduleRequest
+	101, // 240: controlplane.v1.ControlPlaneService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
+	104, // 241: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:input_type -> controlplane.v1.ClaimScheduleOccurrenceRequest
+	106, // 242: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:input_type -> controlplane.v1.CompleteScheduleOccurrenceRequest
+	108, // 243: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:input_type -> controlplane.v1.CancelScheduleOccurrenceRequest
+	110, // 244: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:input_type -> controlplane.v1.ListScheduleOccurrencesRequest
+	112, // 245: controlplane.v1.ControlPlaneService.StartProcess:input_type -> controlplane.v1.StartProcessRequest
+	114, // 246: controlplane.v1.ControlPlaneService.CancelProcess:input_type -> controlplane.v1.CancelProcessRequest
+	116, // 247: controlplane.v1.ControlPlaneService.CompleteProcess:input_type -> controlplane.v1.CompleteProcessRequest
+	123, // 248: controlplane.v1.ControlPlaneService.RequestOwnerGate:input_type -> controlplane.v1.RequestOwnerGateRequest
+	125, // 249: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:input_type -> controlplane.v1.ClaimOwnerGateDeliveryRequest
+	127, // 250: controlplane.v1.ControlPlaneService.ExpireOwnerGate:input_type -> controlplane.v1.ExpireOwnerGateRequest
+	129, // 251: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:input_type -> controlplane.v1.RecordOwnerGateDeliveryRequest
+	131, // 252: controlplane.v1.ControlPlaneService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
+	133, // 253: controlplane.v1.ControlPlaneService.RegisterArtifact:input_type -> controlplane.v1.RegisterArtifactRequest
+	135, // 254: controlplane.v1.ControlPlaneService.RecordArtifactScan:input_type -> controlplane.v1.RecordArtifactScanRequest
+	137, // 255: controlplane.v1.ControlPlaneService.GetRuntimeRevision:input_type -> controlplane.v1.GetRuntimeRevisionRequest
+	139, // 256: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:input_type -> controlplane.v1.RecordMemoryEmbeddingRequest
+	142, // 257: controlplane.v1.ControlPlaneService.ClaimRuntimeExecution:input_type -> controlplane.v1.ClaimRuntimeExecutionRequest
+	144, // 258: controlplane.v1.ControlPlaneService.GetRuntimeExecution:input_type -> controlplane.v1.GetRuntimeExecutionRequest
+	146, // 259: controlplane.v1.ControlPlaneService.AdmitRuntimeExecution:input_type -> controlplane.v1.AdmitRuntimeExecutionRequest
+	148, // 260: controlplane.v1.ControlPlaneService.HeartbeatRuntimeExecution:input_type -> controlplane.v1.HeartbeatRuntimeExecutionRequest
+	150, // 261: controlplane.v1.ControlPlaneService.RecordRuntimeIncident:input_type -> controlplane.v1.RecordRuntimeIncidentRequest
+	152, // 262: controlplane.v1.ControlPlaneService.CompleteRuntimeExecution:input_type -> controlplane.v1.CompleteRuntimeExecutionRequest
+	154, // 263: controlplane.v1.ControlPlaneService.CancelRuntimeExecution:input_type -> controlplane.v1.CancelRuntimeExecutionRequest
+	156, // 264: controlplane.v1.ControlPlaneService.RetryRuntimeExecution:input_type -> controlplane.v1.RetryRuntimeExecutionRequest
+	158, // 265: controlplane.v1.ControlPlaneService.ExpireRuntimeExecution:input_type -> controlplane.v1.ExpireRuntimeExecutionRequest
+	160, // 266: controlplane.v1.ControlPlaneService.RecordRuntimeArchive:input_type -> controlplane.v1.RecordRuntimeArchiveRequest
+	162, // 267: controlplane.v1.ControlPlaneService.VerifyRuntimeRestore:input_type -> controlplane.v1.VerifyRuntimeRestoreRequest
+	164, // 268: controlplane.v1.ControlPlaneService.AuthorizeRuntimeCleanup:input_type -> controlplane.v1.AuthorizeRuntimeCleanupRequest
+	166, // 269: controlplane.v1.ControlPlaneService.ConsumeRuntimeCleanupAuthorization:input_type -> controlplane.v1.ConsumeRuntimeCleanupAuthorizationRequest
+	168, // 270: controlplane.v1.ControlPlaneService.ExpireRuntimeCleanupAuthorization:input_type -> controlplane.v1.ExpireRuntimeCleanupAuthorizationRequest
+	174, // 271: controlplane.v1.ControlPlaneService.ResolveIntegrationSession:input_type -> controlplane.v1.ResolveIntegrationSessionRequest
+	179, // 272: controlplane.v1.ControlPlaneService.SuspendForIntegrationApproval:input_type -> controlplane.v1.SuspendForIntegrationApprovalRequest
+	182, // 273: controlplane.v1.ControlPlaneService.ApproveIntegrationInvocation:input_type -> controlplane.v1.ApproveIntegrationInvocationRequest
+	184, // 274: controlplane.v1.ControlPlaneService.RejectIntegrationInvocation:input_type -> controlplane.v1.RejectIntegrationInvocationRequest
+	186, // 275: controlplane.v1.ControlPlaneService.ExpireIntegrationInvocation:input_type -> controlplane.v1.ExpireIntegrationInvocationRequest
+	188, // 276: controlplane.v1.ControlPlaneService.CancelIntegrationInvocation:input_type -> controlplane.v1.CancelIntegrationInvocationRequest
+	190, // 277: controlplane.v1.ControlPlaneService.BeginIntegrationExecution:input_type -> controlplane.v1.BeginIntegrationExecutionRequest
+	192, // 278: controlplane.v1.ControlPlaneService.CompleteIntegrationExecution:input_type -> controlplane.v1.CompleteIntegrationExecutionRequest
+	194, // 279: controlplane.v1.ControlPlaneService.FailIntegrationExecution:input_type -> controlplane.v1.FailIntegrationExecutionRequest
+	196, // 280: controlplane.v1.ControlPlaneService.GetIntegrationContinuation:input_type -> controlplane.v1.GetIntegrationContinuationRequest
+	198, // 281: controlplane.v1.ControlPlaneService.AcknowledgeIntegrationContinuation:input_type -> controlplane.v1.AcknowledgeIntegrationContinuationRequest
+	200, // 282: controlplane.v1.ControlPlaneService.CheckReadiness:input_type -> controlplane.v1.CheckReadinessRequest
+	28,  // 283: controlplane.v1.ControlPlaneService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
+	30,  // 284: controlplane.v1.ControlPlaneService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
+	55,  // 285: controlplane.v1.ControlPlaneService.CreateResource:output_type -> controlplane.v1.CreateResourceResponse
+	57,  // 286: controlplane.v1.ControlPlaneService.UpdateResource:output_type -> controlplane.v1.UpdateResourceResponse
+	59,  // 287: controlplane.v1.ControlPlaneService.TransitionResource:output_type -> controlplane.v1.TransitionResourceResponse
+	61,  // 288: controlplane.v1.ControlPlaneService.DeleteResource:output_type -> controlplane.v1.DeleteResourceResponse
+	63,  // 289: controlplane.v1.ControlPlaneService.ManageAccessResource:output_type -> controlplane.v1.ManageAccessResourceResponse
+	65,  // 290: controlplane.v1.ControlPlaneService.GetResource:output_type -> controlplane.v1.GetResourceResponse
+	67,  // 291: controlplane.v1.ControlPlaneService.ListResources:output_type -> controlplane.v1.ListResourcesResponse
+	69,  // 292: controlplane.v1.ControlPlaneService.SearchResources:output_type -> controlplane.v1.SearchResourcesResponse
+	72,  // 293: controlplane.v1.ControlPlaneService.SearchMemoryRecords:output_type -> controlplane.v1.SearchMemoryRecordsResponse
+	75,  // 294: controlplane.v1.ControlPlaneService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
+	78,  // 295: controlplane.v1.ControlPlaneService.ListTombstones:output_type -> controlplane.v1.ListTombstonesResponse
+	80,  // 296: controlplane.v1.ControlPlaneService.GetDiagnostics:output_type -> controlplane.v1.GetDiagnosticsResponse
+	120, // 297: controlplane.v1.ControlPlaneService.ListOutboxFailures:output_type -> controlplane.v1.ListOutboxFailuresResponse
+	122, // 298: controlplane.v1.ControlPlaneService.RepairOutboxEvent:output_type -> controlplane.v1.RepairOutboxEventResponse
+	82,  // 299: controlplane.v1.ControlPlaneService.EnqueueTurn:output_type -> controlplane.v1.EnqueueTurnResponse
+	84,  // 300: controlplane.v1.ControlPlaneService.ClaimTurn:output_type -> controlplane.v1.ClaimTurnResponse
+	86,  // 301: controlplane.v1.ControlPlaneService.RenewTurn:output_type -> controlplane.v1.RenewTurnResponse
+	88,  // 302: controlplane.v1.ControlPlaneService.CompleteTurn:output_type -> controlplane.v1.CompleteTurnResponse
+	90,  // 303: controlplane.v1.ControlPlaneService.RetryTurn:output_type -> controlplane.v1.RetryTurnResponse
+	92,  // 304: controlplane.v1.ControlPlaneService.CancelTurn:output_type -> controlplane.v1.CancelTurnResponse
+	94,  // 305: controlplane.v1.ControlPlaneService.ManageSession:output_type -> controlplane.v1.ManageSessionResponse
+	96,  // 306: controlplane.v1.ControlPlaneService.ManageMemoryRecord:output_type -> controlplane.v1.ManageMemoryRecordResponse
+	98,  // 307: controlplane.v1.ControlPlaneService.ManageWorkClaim:output_type -> controlplane.v1.ManageWorkClaimResponse
+	100, // 308: controlplane.v1.ControlPlaneService.ManageSchedule:output_type -> controlplane.v1.ManageScheduleResponse
+	103, // 309: controlplane.v1.ControlPlaneService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
+	105, // 310: controlplane.v1.ControlPlaneService.ClaimScheduleOccurrence:output_type -> controlplane.v1.ClaimScheduleOccurrenceResponse
+	107, // 311: controlplane.v1.ControlPlaneService.CompleteScheduleOccurrence:output_type -> controlplane.v1.CompleteScheduleOccurrenceResponse
+	109, // 312: controlplane.v1.ControlPlaneService.CancelScheduleOccurrence:output_type -> controlplane.v1.CancelScheduleOccurrenceResponse
+	111, // 313: controlplane.v1.ControlPlaneService.ListScheduleOccurrences:output_type -> controlplane.v1.ListScheduleOccurrencesResponse
+	113, // 314: controlplane.v1.ControlPlaneService.StartProcess:output_type -> controlplane.v1.StartProcessResponse
+	115, // 315: controlplane.v1.ControlPlaneService.CancelProcess:output_type -> controlplane.v1.CancelProcessResponse
+	117, // 316: controlplane.v1.ControlPlaneService.CompleteProcess:output_type -> controlplane.v1.CompleteProcessResponse
+	124, // 317: controlplane.v1.ControlPlaneService.RequestOwnerGate:output_type -> controlplane.v1.RequestOwnerGateResponse
+	126, // 318: controlplane.v1.ControlPlaneService.ClaimOwnerGateDelivery:output_type -> controlplane.v1.ClaimOwnerGateDeliveryResponse
+	128, // 319: controlplane.v1.ControlPlaneService.ExpireOwnerGate:output_type -> controlplane.v1.ExpireOwnerGateResponse
+	130, // 320: controlplane.v1.ControlPlaneService.RecordOwnerGateDelivery:output_type -> controlplane.v1.RecordOwnerGateDeliveryResponse
+	132, // 321: controlplane.v1.ControlPlaneService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
+	134, // 322: controlplane.v1.ControlPlaneService.RegisterArtifact:output_type -> controlplane.v1.RegisterArtifactResponse
+	136, // 323: controlplane.v1.ControlPlaneService.RecordArtifactScan:output_type -> controlplane.v1.RecordArtifactScanResponse
+	138, // 324: controlplane.v1.ControlPlaneService.GetRuntimeRevision:output_type -> controlplane.v1.GetRuntimeRevisionResponse
+	140, // 325: controlplane.v1.ControlPlaneService.RecordMemoryEmbedding:output_type -> controlplane.v1.RecordMemoryEmbeddingResponse
+	143, // 326: controlplane.v1.ControlPlaneService.ClaimRuntimeExecution:output_type -> controlplane.v1.ClaimRuntimeExecutionResponse
+	145, // 327: controlplane.v1.ControlPlaneService.GetRuntimeExecution:output_type -> controlplane.v1.GetRuntimeExecutionResponse
+	147, // 328: controlplane.v1.ControlPlaneService.AdmitRuntimeExecution:output_type -> controlplane.v1.AdmitRuntimeExecutionResponse
+	149, // 329: controlplane.v1.ControlPlaneService.HeartbeatRuntimeExecution:output_type -> controlplane.v1.HeartbeatRuntimeExecutionResponse
+	151, // 330: controlplane.v1.ControlPlaneService.RecordRuntimeIncident:output_type -> controlplane.v1.RecordRuntimeIncidentResponse
+	153, // 331: controlplane.v1.ControlPlaneService.CompleteRuntimeExecution:output_type -> controlplane.v1.CompleteRuntimeExecutionResponse
+	155, // 332: controlplane.v1.ControlPlaneService.CancelRuntimeExecution:output_type -> controlplane.v1.CancelRuntimeExecutionResponse
+	157, // 333: controlplane.v1.ControlPlaneService.RetryRuntimeExecution:output_type -> controlplane.v1.RetryRuntimeExecutionResponse
+	159, // 334: controlplane.v1.ControlPlaneService.ExpireRuntimeExecution:output_type -> controlplane.v1.ExpireRuntimeExecutionResponse
+	161, // 335: controlplane.v1.ControlPlaneService.RecordRuntimeArchive:output_type -> controlplane.v1.RecordRuntimeArchiveResponse
+	163, // 336: controlplane.v1.ControlPlaneService.VerifyRuntimeRestore:output_type -> controlplane.v1.VerifyRuntimeRestoreResponse
+	165, // 337: controlplane.v1.ControlPlaneService.AuthorizeRuntimeCleanup:output_type -> controlplane.v1.AuthorizeRuntimeCleanupResponse
+	167, // 338: controlplane.v1.ControlPlaneService.ConsumeRuntimeCleanupAuthorization:output_type -> controlplane.v1.ConsumeRuntimeCleanupAuthorizationResponse
+	169, // 339: controlplane.v1.ControlPlaneService.ExpireRuntimeCleanupAuthorization:output_type -> controlplane.v1.ExpireRuntimeCleanupAuthorizationResponse
+	175, // 340: controlplane.v1.ControlPlaneService.ResolveIntegrationSession:output_type -> controlplane.v1.ResolveIntegrationSessionResponse
+	180, // 341: controlplane.v1.ControlPlaneService.SuspendForIntegrationApproval:output_type -> controlplane.v1.SuspendForIntegrationApprovalResponse
+	183, // 342: controlplane.v1.ControlPlaneService.ApproveIntegrationInvocation:output_type -> controlplane.v1.ApproveIntegrationInvocationResponse
+	185, // 343: controlplane.v1.ControlPlaneService.RejectIntegrationInvocation:output_type -> controlplane.v1.RejectIntegrationInvocationResponse
+	187, // 344: controlplane.v1.ControlPlaneService.ExpireIntegrationInvocation:output_type -> controlplane.v1.ExpireIntegrationInvocationResponse
+	189, // 345: controlplane.v1.ControlPlaneService.CancelIntegrationInvocation:output_type -> controlplane.v1.CancelIntegrationInvocationResponse
+	191, // 346: controlplane.v1.ControlPlaneService.BeginIntegrationExecution:output_type -> controlplane.v1.BeginIntegrationExecutionResponse
+	193, // 347: controlplane.v1.ControlPlaneService.CompleteIntegrationExecution:output_type -> controlplane.v1.CompleteIntegrationExecutionResponse
+	195, // 348: controlplane.v1.ControlPlaneService.FailIntegrationExecution:output_type -> controlplane.v1.FailIntegrationExecutionResponse
+	197, // 349: controlplane.v1.ControlPlaneService.GetIntegrationContinuation:output_type -> controlplane.v1.GetIntegrationContinuationResponse
+	199, // 350: controlplane.v1.ControlPlaneService.AcknowledgeIntegrationContinuation:output_type -> controlplane.v1.AcknowledgeIntegrationContinuationResponse
+	201, // 351: controlplane.v1.ControlPlaneService.CheckReadiness:output_type -> controlplane.v1.CheckReadinessResponse
+	283, // [283:352] is the sub-list for method output_type
+	214, // [214:283] is the sub-list for method input_type
+	214, // [214:214] is the sub-list for extension type_name
+	214, // [214:214] is the sub-list for extension extendee
+	0,   // [0:214] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_control_plane_proto_init() }

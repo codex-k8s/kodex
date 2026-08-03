@@ -13,5 +13,6 @@ resources:
   - prometheusrule.yaml
   - dashboard.yaml
   - vault-secret-provider-classes.yaml
+  - s3-security-policy.yaml
 components:
   - ../../components/internal-rpc-authority-runtime-controller-issuer

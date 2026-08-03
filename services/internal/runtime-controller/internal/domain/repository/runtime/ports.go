@@ -26,9 +26,9 @@ type ControlPlane interface {
 	Expire(context.Context, string) (entity.Execution, error)
 	RecordArchive(context.Context, string, entity.Execution, string, string) (entity.Execution, error)
 	VerifyRestore(context.Context, string, entity.Execution, string, string, string) (entity.Execution, error)
-	AuthorizeCleanup(context.Context, string, entity.Execution, uint64) (entity.Execution, error)
+	AuthorizeCleanup(context.Context, string, entity.Execution, uint64, string, string, string) (entity.Execution, error)
 	ExpireCleanup(context.Context, string, entity.Execution) (entity.Execution, error)
-	ConsumeCleanup(context.Context, string, entity.Execution) (entity.Execution, error)
+	ConsumeCleanup(context.Context, string, entity.Execution, entity.PVCDeletionProof) (entity.Execution, error)
 	Close() error
 }
 
@@ -41,13 +41,14 @@ type Journal struct {
 	ArchiveIdempotencyKey   string
 	RestoreIdempotencyKey   string
 	CleanupIdempotencyKey   string
-	LeaseTokenSecretName    string
+	AdmissionRequest        entity.Execution
+	Phase                   string
 	LeaseToken              string
 }
 
 type Cluster interface {
 	Check(context.Context) error
-	Capacity(context.Context, entity.Execution) (entity.CapacityDecision, error)
+	Capacity(context.Context, entity.Execution, entity.Revision) (entity.CapacityDecision, error)
 	EnsureJournal(context.Context, entity.Execution) (Journal, error)
 	LoadJournal(context.Context, entity.RuntimeStatus) (Journal, error)
 	Materialize(context.Context, entity.Execution, entity.Revision, string, Journal) (entity.RuntimeStatus, error)
@@ -55,9 +56,10 @@ type Cluster interface {
 	UpdateJournal(context.Context, entity.Execution, string) error
 	RevokeAccess(context.Context, entity.Execution) error
 	DeletePod(context.Context, entity.RuntimeStatus) error
-	DeletePVC(context.Context, entity.RuntimeStatus) error
+	DeletePVC(context.Context, entity.RuntimeStatus) (entity.PVCDeletionProof, error)
 	EnsureArchiveJob(context.Context, entity.Execution, entity.RuntimeStatus) error
 	EnsureRestoreVerifierJob(context.Context, entity.Execution, entity.RuntimeStatus) error
 	EnsureCleanupAuthorizerJob(context.Context, entity.Execution, entity.RuntimeStatus) error
+	OpenArchiveGate(context.Context, entity.Execution, entity.RuntimeStatus) error
 	CleanupTemporary(context.Context, time.Time) (int, error)
 }

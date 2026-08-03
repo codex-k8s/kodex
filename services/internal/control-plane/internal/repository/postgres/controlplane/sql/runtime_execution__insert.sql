@@ -12,6 +12,12 @@ INSERT INTO control_plane.runtime_executions (
     cleanup_authorization_id, cleanup_authorization_expires_at,
     cleanup_authorization_state, cleanup_authorization_generation,
     cleanup_consumed_at,
+    cleanup_pvc_name, cleanup_pvc_uid, cleanup_pvc_resource_version,
+    cleanup_claimed_at, cleanup_eligible_at, cleanup_not_found_at,
+    cleanup_deletion_proof_sha256,
+    restore_source_execution_id, restore_source_archive_reference,
+    restore_source_archive_sha256, restore_source_runtime_revision_sha256,
+    restore_source_immutable_input_sha256, restore_source_proof_sha256,
     created_at, updated_at
 ) VALUES (
     @id, @organization_id, @project_id, @process_id, @session_id, @thread_id,
@@ -30,5 +36,17 @@ INSERT INTO control_plane.runtime_executions (
     nullif(@cleanup_authorization_expires_at, 'epoch'::timestamptz),
     @cleanup_authorization_state, @cleanup_authorization_generation,
     nullif(@cleanup_consumed_at, 'epoch'::timestamptz),
+    nullif(@cleanup_pvc_name, ''), nullif(@cleanup_pvc_uid, '')::uuid,
+    nullif(@cleanup_pvc_resource_version, ''),
+    nullif(@cleanup_claimed_at, 'epoch'::timestamptz),
+    nullif(@cleanup_eligible_at, 'epoch'::timestamptz),
+    nullif(@cleanup_not_found_at, 'epoch'::timestamptz),
+    nullif(@cleanup_deletion_proof_sha256, ''),
+    nullif(@restore_source_execution_id, '')::uuid,
+    nullif(@restore_source_archive_reference, ''),
+    nullif(@restore_source_archive_sha256, ''),
+    nullif(@restore_source_runtime_revision_sha256, ''),
+    nullif(@restore_source_immutable_input_sha256, ''),
+    nullif(@restore_source_proof_sha256, ''),
     @created_at, @updated_at
 );

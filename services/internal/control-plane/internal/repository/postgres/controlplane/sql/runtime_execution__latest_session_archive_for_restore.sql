@@ -30,4 +30,13 @@ SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        coalesce(restore_source_proof_sha256, ''),
        created_at, updated_at
 FROM control_plane.runtime_executions
-WHERE turn_id = @turn_id AND attempt = @attempt;
+WHERE organization_id = @organization_id
+  AND project_id = @project_id
+  AND session_id = @session_id
+  AND cleanup_authorization_state = 'CONSUMED'
+  AND archive_reference IS NOT NULL
+  AND archive_sha256 IS NOT NULL
+  AND restore_proof_sha256 IS NOT NULL
+  AND cleanup_deletion_proof_sha256 IS NOT NULL
+ORDER BY cleanup_consumed_at DESC, id DESC
+LIMIT 1;

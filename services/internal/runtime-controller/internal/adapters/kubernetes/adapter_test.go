@@ -46,10 +46,12 @@ func TestDeletePVCRetriesCrashAfterDeletionEvidence(t *testing.T) {
 	document := journalDocument{
 		Execution: execution, AdmitKey: uuid.NewString(), HeartbeatKey: uuid.NewString(),
 		CompleteKey: uuid.NewString(), IncidentKey: uuid.NewString(), ArchiveKey: uuid.NewString(),
-		RestoreKey: uuid.NewString(), CleanupKey: uuid.NewString(), LeaseSecretName: "lease",
+		RestoreKey: uuid.NewString(), CleanupKey: uuid.NewString(), Phase: "MATERIALIZED", RehydratePhase: "NOT_REQUIRED",
 		PodName: "pod", PVCName: "session", CreatedAt: time.Now().UTC(), LastTransition: time.Now().UTC(),
 		PVCUID: string(pvcUID), PVCResourceVersion: "7",
 	}
+	document.AdmissionRequest = execution
+	document.AdmissionRequest.State = enum.ExecutionPending
 	raw, err := marshalJournal(document)
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +66,7 @@ func TestDeletePVCRetriesCrashAfterDeletionEvidence(t *testing.T) {
 	adapter := &Adapter{client: client, config: Config{Namespace: "test"}, now: time.Now}
 	status := entity.RuntimeStatus{ExecutionID: execution.ID, PVCName: "session", PVCUID: string(pvcUID),
 		PVCResourceVersion: "7", PVCDeletionStarted: true, RetentionOwner: true}
-	if err := adapter.DeletePVC(context.Background(), status); err != nil {
+	if _, err := adapter.DeletePVC(context.Background(), status); err != nil {
 		t.Fatalf("guarded retry failed: %v", err)
 	}
 	if _, err := client.CoreV1().PersistentVolumeClaims("test").Get(context.Background(), "session", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
@@ -80,7 +82,7 @@ func TestDeletePVCRetriesCrashAfterDeletionEvidence(t *testing.T) {
 	}
 }
 
-func TestRevokeAccessWithoutRuntimePod(t *testing.T) {
+func TestRevokeAccessRemovesGrantButPreservesStableWarmIdentity(t *testing.T) {
 	execution := testExecution()
 	execution.State = enum.ExecutionCancelled
 	execution.AccessProfile = enum.AccessProjectRead
@@ -101,8 +103,8 @@ func TestRevokeAccessWithoutRuntimePod(t *testing.T) {
 	if err := adapter.RevokeAccess(context.Background(), execution); err != nil {
 		t.Fatalf("terminal access revocation failed: %v", err)
 	}
-	if _, err := client.CoreV1().ServiceAccounts("test").Get(context.Background(), name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
-		t.Fatalf("runtime access service account remains: %v", err)
+	if _, err := client.CoreV1().ServiceAccounts("test").Get(context.Background(), name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("stable warm runtime identity was removed: %v", err)
 	}
 	if _, err := client.RbacV1().RoleBindings(namespaceName).Get(context.Background(), name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Fatalf("runtime access role binding remains: %v", err)
@@ -131,8 +133,10 @@ func TestListSelectsAnnotatedJournalAsSingleRetentionOwner(t *testing.T) {
 		created := now.Add(time.Duration(index) * time.Minute)
 		document := journalDocument{Execution: execution, AdmitKey: uuid.NewString(), HeartbeatKey: uuid.NewString(),
 			CompleteKey: uuid.NewString(), IncidentKey: uuid.NewString(), ArchiveKey: uuid.NewString(),
-			RestoreKey: uuid.NewString(), CleanupKey: uuid.NewString(), LeaseSecretName: "lease-" + strconv.Itoa(index),
+			RestoreKey: uuid.NewString(), CleanupKey: uuid.NewString(), Phase: "MATERIALIZED", RehydratePhase: "NOT_REQUIRED",
 			PodName: "pod-" + strconv.Itoa(index), PVCName: pvcName, CreatedAt: created, LastTransition: created}
+		document.AdmissionRequest = execution
+		document.AdmissionRequest.State = enum.ExecutionPending
 		raw, err := marshalJournal(document)
 		if err != nil {
 			t.Fatal(err)

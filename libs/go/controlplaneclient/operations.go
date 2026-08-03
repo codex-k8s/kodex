@@ -43,7 +43,6 @@ func RuntimeControllerOperations() map[string]string {
 		"control.runtime-execution.incident":        controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
 		"control.runtime-execution.complete":        controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
 		"control.runtime-execution.expire":          controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
-		"control.runtime-execution.archive":         controlplanev1.ControlPlaneService_RecordRuntimeArchive_FullMethodName,
 		"control.runtime-execution.cleanup.consume": controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
 	}
 }
@@ -53,6 +52,14 @@ func RuntimeOwnerOperations() map[string]string {
 	return map[string]string{
 		"control.runtime-execution.cancel": controlplanev1.ControlPlaneService_CancelRuntimeExecution_FullMethodName,
 		"control.runtime-execution.retry":  controlplanev1.ControlPlaneService_RetryRuntimeExecution_FullMethodName,
+	}
+}
+
+// RuntimeArchiveOperations выдаёт archive worker только readiness и запись archive evidence.
+func RuntimeArchiveOperations() map[string]string {
+	return map[string]string{
+		"control.runtime-archive.readiness":        controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-execution.archive.record": controlplanev1.ControlPlaneService_RecordRuntimeArchive_FullMethodName,
 	}
 }
 

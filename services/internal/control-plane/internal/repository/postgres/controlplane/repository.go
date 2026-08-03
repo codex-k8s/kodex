@@ -1106,6 +1106,45 @@ func (wrapped *transaction) SessionHasLiveRuntimeExecution(
 	return live, mapError(err)
 }
 
+func (wrapped *transaction) SessionHasUnverifiedRuntimeArchive(
+	ctx context.Context,
+	organizationID, projectID, sessionID string,
+) (bool, error) {
+	var blocked bool
+	err := wrapped.tx.QueryRow(ctx, sqlRuntimeExecutionSessionHasUnverifiedArchive, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"session_id":      sessionID,
+	}).Scan(&blocked)
+	return blocked, mapError(err)
+}
+
+func (wrapped *transaction) SessionHasActiveRuntimeCleanup(
+	ctx context.Context,
+	organizationID, projectID, sessionID string,
+) (bool, error) {
+	var active bool
+	err := wrapped.tx.QueryRow(ctx, sqlRuntimeExecutionSessionHasActiveCleanup, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"session_id":      sessionID,
+	}).Scan(&active)
+	return active, mapError(err)
+}
+
+func (wrapped *transaction) LatestSessionRuntimeArchiveForRestore(
+	ctx context.Context,
+	organizationID, projectID, sessionID string,
+) (domainrepo.RuntimeExecution, error) {
+	return scanRuntimeExecution(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeExecutionLatestSessionArchiveForRestore, pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"session_id":      sessionID,
+		},
+	))
+}
+
 func (wrapped *transaction) SaveTurnLease(
 	ctx context.Context,
 	lease domainrepo.TurnLease,
@@ -2398,24 +2437,37 @@ func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamed
 		"grant_generation":         execution.GrantGeneration,
 		"version":                  execution.Version, "fence": execution.Fence,
 		"state": execution.State, "lease_id": execution.LeaseID,
-		"lease_token_sha256":               execution.LeaseTokenSHA256,
-		"lease_expires_at":                 execution.LeaseExpiresAt,
-		"terminal_outcome":                 execution.TerminalOutcome,
-		"terminal_reference":               execution.TerminalReference,
-		"terminal_sha256":                  execution.TerminalSHA256,
-		"archive_reference":                execution.ArchiveReference,
-		"archive_sha256":                   execution.ArchiveSHA256,
-		"restore_proof_reference":          execution.RestoreProofReference,
-		"restore_proof_sha256":             execution.RestoreProofSHA256,
-		"restore_verifier_workload_id":     execution.RestoreVerifierWorkload,
-		"restore_verifier_spiffe_id":       execution.RestoreVerifierSPIFFEID,
-		"restore_verifier_generation":      execution.RestoreVerifierGeneration,
-		"cleanup_authorization_id":         execution.CleanupAuthorizationID,
-		"cleanup_authorization_expires_at": execution.CleanupAuthorizationExpiresAt,
-		"cleanup_authorization_state":      execution.CleanupAuthorizationState,
-		"cleanup_authorization_generation": execution.CleanupAuthorizationGeneration,
-		"cleanup_consumed_at":              execution.CleanupConsumedAt,
-		"created_at":                       execution.CreatedAt, "updated_at": execution.UpdatedAt,
+		"lease_token_sha256":                     execution.LeaseTokenSHA256,
+		"lease_expires_at":                       execution.LeaseExpiresAt,
+		"terminal_outcome":                       execution.TerminalOutcome,
+		"terminal_reference":                     execution.TerminalReference,
+		"terminal_sha256":                        execution.TerminalSHA256,
+		"archive_reference":                      execution.ArchiveReference,
+		"archive_sha256":                         execution.ArchiveSHA256,
+		"restore_proof_reference":                execution.RestoreProofReference,
+		"restore_proof_sha256":                   execution.RestoreProofSHA256,
+		"restore_verifier_workload_id":           execution.RestoreVerifierWorkload,
+		"restore_verifier_spiffe_id":             execution.RestoreVerifierSPIFFEID,
+		"restore_verifier_generation":            execution.RestoreVerifierGeneration,
+		"cleanup_authorization_id":               execution.CleanupAuthorizationID,
+		"cleanup_authorization_expires_at":       execution.CleanupAuthorizationExpiresAt,
+		"cleanup_authorization_state":            execution.CleanupAuthorizationState,
+		"cleanup_authorization_generation":       execution.CleanupAuthorizationGeneration,
+		"cleanup_consumed_at":                    execution.CleanupConsumedAt,
+		"cleanup_pvc_name":                       execution.CleanupPVCName,
+		"cleanup_pvc_uid":                        execution.CleanupPVCUID,
+		"cleanup_pvc_resource_version":           execution.CleanupPVCResourceVersion,
+		"cleanup_claimed_at":                     execution.CleanupClaimedAt,
+		"cleanup_eligible_at":                    execution.CleanupEligibleAt,
+		"cleanup_not_found_at":                   execution.CleanupNotFoundAt,
+		"cleanup_deletion_proof_sha256":          execution.CleanupDeletionProofSHA256,
+		"restore_source_execution_id":            execution.RestoreSourceExecutionID,
+		"restore_source_archive_reference":       execution.RestoreSourceArchiveReference,
+		"restore_source_archive_sha256":          execution.RestoreSourceArchiveSHA256,
+		"restore_source_runtime_revision_sha256": execution.RestoreSourceRuntimeRevisionSHA256,
+		"restore_source_immutable_input_sha256":  execution.RestoreSourceImmutableInputSHA256,
+		"restore_source_proof_sha256":            execution.RestoreSourceProofSHA256,
+		"created_at":                             execution.CreatedAt, "updated_at": execution.UpdatedAt,
 	}
 }
 
@@ -2443,6 +2495,13 @@ func runtimeExecutionUpdateArgs(
 		"cleanup_authorization_state":      execution.CleanupAuthorizationState,
 		"cleanup_authorization_generation": execution.CleanupAuthorizationGeneration,
 		"cleanup_consumed_at":              execution.CleanupConsumedAt,
+		"cleanup_pvc_name":                 execution.CleanupPVCName,
+		"cleanup_pvc_uid":                  execution.CleanupPVCUID,
+		"cleanup_pvc_resource_version":     execution.CleanupPVCResourceVersion,
+		"cleanup_claimed_at":               execution.CleanupClaimedAt,
+		"cleanup_eligible_at":              execution.CleanupEligibleAt,
+		"cleanup_not_found_at":             execution.CleanupNotFoundAt,
+		"cleanup_deletion_proof_sha256":    execution.CleanupDeletionProofSHA256,
 		"updated_at":                       execution.UpdatedAt,
 		"expected_version":                 expectedVersion, "expected_fence": expectedFence,
 	}
@@ -2552,6 +2611,13 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 		&execution.RestoreVerifierGeneration, &execution.CleanupAuthorizationID,
 		&execution.CleanupAuthorizationExpiresAt, &execution.CleanupAuthorizationState,
 		&execution.CleanupAuthorizationGeneration, &execution.CleanupConsumedAt,
+		&execution.CleanupPVCName, &execution.CleanupPVCUID,
+		&execution.CleanupPVCResourceVersion, &execution.CleanupClaimedAt,
+		&execution.CleanupEligibleAt, &execution.CleanupNotFoundAt,
+		&execution.CleanupDeletionProofSHA256,
+		&execution.RestoreSourceExecutionID, &execution.RestoreSourceArchiveReference,
+		&execution.RestoreSourceArchiveSHA256, &execution.RestoreSourceRuntimeRevisionSHA256,
+		&execution.RestoreSourceImmutableInputSHA256, &execution.RestoreSourceProofSHA256,
 		&execution.CreatedAt, &execution.UpdatedAt,
 	)
 	if err != nil {

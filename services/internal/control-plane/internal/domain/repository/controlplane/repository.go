@@ -226,47 +226,60 @@ type TurnAttempt struct {
 
 // RuntimeExecution хранит immutable execution tuple и monotonic owner fence.
 type RuntimeExecution struct {
-	ID                             string
-	OrganizationID                 string
-	ProjectID                      string
-	ProcessID                      string
-	SessionID                      string
-	ThreadID                       string
-	RoleID                         string
-	TurnID                         string
-	Attempt                        uint32
-	RuntimeRevisionID              string
-	RuntimeRevisionVersion         uint64
-	RuntimeRevisionSHA256          string
-	ImmutableInputSHA256           string
-	ResourceClass                  string
-	ClusterAccessProfile           string
-	WorkloadID                     string
-	WorkloadSPIFFEID               string
-	GrantGeneration                uint64
-	Version                        uint64
-	Fence                          uint64
-	State                          string
-	LeaseID                        string
-	LeaseTokenSHA256               string
-	LeaseExpiresAt                 time.Time
-	TerminalOutcome                string
-	TerminalReference              string
-	TerminalSHA256                 string
-	ArchiveReference               string
-	ArchiveSHA256                  string
-	RestoreProofReference          string
-	RestoreProofSHA256             string
-	RestoreVerifierWorkload        string
-	RestoreVerifierSPIFFEID        string
-	RestoreVerifierGeneration      uint64
-	CleanupAuthorizationID         string
-	CleanupAuthorizationExpiresAt  time.Time
-	CleanupAuthorizationState      string
-	CleanupAuthorizationGeneration uint64
-	CleanupConsumedAt              time.Time
-	CreatedAt                      time.Time
-	UpdatedAt                      time.Time
+	ID                                 string
+	OrganizationID                     string
+	ProjectID                          string
+	ProcessID                          string
+	SessionID                          string
+	ThreadID                           string
+	RoleID                             string
+	TurnID                             string
+	Attempt                            uint32
+	RuntimeRevisionID                  string
+	RuntimeRevisionVersion             uint64
+	RuntimeRevisionSHA256              string
+	ImmutableInputSHA256               string
+	ResourceClass                      string
+	ClusterAccessProfile               string
+	WorkloadID                         string
+	WorkloadSPIFFEID                   string
+	GrantGeneration                    uint64
+	Version                            uint64
+	Fence                              uint64
+	State                              string
+	LeaseID                            string
+	LeaseTokenSHA256                   string
+	LeaseExpiresAt                     time.Time
+	TerminalOutcome                    string
+	TerminalReference                  string
+	TerminalSHA256                     string
+	ArchiveReference                   string
+	ArchiveSHA256                      string
+	RestoreProofReference              string
+	RestoreProofSHA256                 string
+	RestoreVerifierWorkload            string
+	RestoreVerifierSPIFFEID            string
+	RestoreVerifierGeneration          uint64
+	CleanupAuthorizationID             string
+	CleanupAuthorizationExpiresAt      time.Time
+	CleanupAuthorizationState          string
+	CleanupAuthorizationGeneration     uint64
+	CleanupConsumedAt                  time.Time
+	CleanupPVCName                     string
+	CleanupPVCUID                      string
+	CleanupPVCResourceVersion          string
+	CleanupClaimedAt                   time.Time
+	CleanupEligibleAt                  time.Time
+	CleanupNotFoundAt                  time.Time
+	CleanupDeletionProofSHA256         string
+	RestoreSourceExecutionID           string
+	RestoreSourceArchiveReference      string
+	RestoreSourceArchiveSHA256         string
+	RestoreSourceRuntimeRevisionSHA256 string
+	RestoreSourceImmutableInputSHA256  string
+	RestoreSourceProofSHA256           string
+	CreatedAt                          time.Time
+	UpdatedAt                          time.Time
 }
 
 // PinnedIntegrationResource хранит exact owner version/projection без secret value.
@@ -422,6 +435,9 @@ type Transaction interface {
 	ExpiredClaimedTurnCandidates(context.Context, string, string, string, int, time.Time) ([]ExpiredTurn, error)
 	OpenSessionTurns(context.Context, string, string, string) ([]SessionTurn, error)
 	SessionHasLiveRuntimeExecution(context.Context, string, string, string) (bool, error)
+	SessionHasUnverifiedRuntimeArchive(context.Context, string, string, string) (bool, error)
+	SessionHasActiveRuntimeCleanup(context.Context, string, string, string) (bool, error)
+	LatestSessionRuntimeArchiveForRestore(context.Context, string, string, string) (RuntimeExecution, error)
 	NextQueuedTurn(context.Context, string, string, string) (entity.Resource, error)
 	SaveTurnLease(context.Context, TurnLease) error
 	RenewTurnLease(context.Context, TurnLease, time.Time) (TurnLease, error)

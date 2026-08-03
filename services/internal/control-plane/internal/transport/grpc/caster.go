@@ -974,6 +974,13 @@ func optionalTimestamp(value time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(value)
 }
 
+func timestampOrZero(value *timestamppb.Timestamp) time.Time {
+	if value == nil || !value.IsValid() {
+		return time.Time{}
+	}
+	return value.AsTime()
+}
+
 func optionalProtoDuration(value time.Duration) *durationpb.Duration {
 	if value == 0 {
 		return nil

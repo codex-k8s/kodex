@@ -4,7 +4,7 @@ title: Хранение и очистка ресурсов сессий
 type: operations
 status: approved
 owner: sre
-version: 0.3.0
+version: 0.4.0
 updated: 2026-08-03
 ---
 
@@ -67,7 +67,12 @@ PVC можно удалить, только если одновременно в
 
 ## Очиститель
 
-Очиститель работает идемпотентно по фазам `eligible -> archiving -> kubernetes_cleanup -> retained -> purged`. Записи выбираются из PostgreSQL через `FOR UPDATE SKIP LOCKED`; Kubernetes `NotFound` считается успешным повтором.
+Очиститель работает идемпотентно по фазам `eligible -> archiving ->
+restore_proved -> cleanup_claimed -> kubernetes_cleanup -> consumed`. Записи
+выбираются под PostgreSQL session/full graph lock. Kubernetes `NotFound`
+считается допустимым повтором только при активной owner claim того же generation,
+заранее сохранённых PVC name/UID/resourceVersion, bounded expiry и durable
+deletion proof.
 
 Обязательные возможности:
 
@@ -95,19 +100,27 @@ unit прежний `runtime prune` остаётся строго `inventory-onl
 
 - controller использует terminal journal и не выводит eligibility из
   Kubernetes labels;
-- четырёхчасовой TTL относится только к Pod, а PVC ждёт не менее 7 суток;
+- четырёхчасовой TTL относится только к Pod, а eligibility PVC выводится из
+  authoritative `session.updated_at + 7d`, а не timestamp journal/Pod;
 - versioned archive, checksum readback и независимый restore proof должны
   совпасть с authoritative execution;
 - отдельный authorizer повторно проверяет отсутствие queued/running work,
   approval, callback и continuation, после чего выдаёт bounded authorization;
-- delete использует exact `UID` и `resourceVersion`, а `NotFound` принимается
-  только после заранее сохранённых preconditions;
-- controller потребляет ту же authorization после подтверждённого delete;
+- authorizer под session/full graph lock сначала создаёт bounded claim с exact
+  PVC name/UID/resourceVersion и запрещает новый work той же session;
+- только после claim delete использует exact `UID` и `resourceVersion`, а
+  `NotFound` принимается с observed timestamp и deletion proof;
+- controller потребляет ту же authorization до server-side expiry после
+  повторного owner graph lock;
   ошибка, неизвестное состояние или pressure сохраняют PVC;
 - backfill автоматически продолжает archive/proof/authorization для каждого
   controller-owned terminal journal; legacy PVC без server-owned
   `RuntimeExecution` и journal остаётся `inventory-only` и не усыновляется по
   Kubernetes labels.
+
+После `CONSUMED` cleanup следующий claim pin-ит последний authoritative S3
+version/checksum/provenance. Новый PVC сначала fail-closed восстанавливается и
+получает proof, связанный с его UID; role Pod до этого не запускается.
 
 Очистка несессионных Job и ConfigMap не даёт права удалить session PVC.
 Аварийного флага обхода proof, grace, owner graph или legal/manual hold нет.

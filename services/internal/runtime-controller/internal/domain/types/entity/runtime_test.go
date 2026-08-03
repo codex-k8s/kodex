@@ -3,6 +3,7 @@ package entity
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/enum"
 	"github.com/google/uuid"
@@ -56,8 +57,11 @@ func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 		SessionID: execution.SessionID, RoleID: execution.RoleID,
 		ProviderCredentialBindingID: credentialID, PromptProfileID: promptID, PromptRevision: 1,
 		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: strings.Repeat("e", 64),
-		CredentialBindingIDs: []string{credentialID},
-		Credentials:          []CredentialRef{{ResourceID: credentialID, Purpose: "provider", Reference: "k8s-secret://provider", Version: 1}},
+		CredentialBindingIDs:  []string{credentialID},
+		Credentials:           []CredentialRef{{ResourceID: credentialID, Purpose: "provider", Reference: "k8s-secret://provider", Version: 1}},
+		ProviderObservedUsage: 1, ProviderObservedLimit: 2, ProviderObservationRevision: 1,
+		ProviderObservedAt: time.Now().UTC(), ProviderObservationMaxAge: time.Hour,
+		AgentProfile: "developer",
 		Components: []Component{
 			{Kind: "RESOURCE_KIND_PROJECT", ResourceID: execution.ProjectID, Version: 1, ProjectionSHA256: strings.Repeat("1", 64)},
 			{Kind: "RESOURCE_KIND_SESSION", ResourceID: execution.SessionID, Version: 1, ProjectionSHA256: strings.Repeat("2", 64)},

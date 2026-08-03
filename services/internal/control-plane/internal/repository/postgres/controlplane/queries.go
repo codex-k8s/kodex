@@ -135,6 +135,15 @@ var sqlRuntimeExecutionGetByTurn string
 //go:embed sql/runtime_execution__session_has_live.sql
 var sqlRuntimeExecutionSessionHasLive string
 
+//go:embed sql/runtime_execution__session_has_unverified_archive.sql
+var sqlRuntimeExecutionSessionHasUnverifiedArchive string
+
+//go:embed sql/runtime_execution__session_has_active_cleanup.sql
+var sqlRuntimeExecutionSessionHasActiveCleanup string
+
+//go:embed sql/runtime_execution__latest_session_archive_for_restore.sql
+var sqlRuntimeExecutionLatestSessionArchiveForRestore string
+
 //go:embed sql/runtime_execution__insert.sql
 var sqlRuntimeExecutionInsert string
 

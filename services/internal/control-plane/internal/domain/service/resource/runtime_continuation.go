@@ -21,6 +21,7 @@ const (
 	minimumApprovalLifetime       = time.Minute
 	maximumApprovalLifetime       = 7 * 24 * time.Hour
 	cleanupAuthorizationLifetime  = 15 * time.Minute
+	runtimeCleanupRetention       = 7 * 24 * time.Hour
 	integrationPredecessorOutcome = "integration_continuation_materialized"
 )
 
@@ -384,14 +385,13 @@ func (service *Service) ClaimRuntimeExecution(
 				return lifecycleReceiptApply, nil
 			}
 			receiptExecution = *resolved.Runtime
-			if receiptExecution.State != "PENDING" || receiptExecution.Version != 1 ||
-				receiptExecution.Fence != 1 ||
-				receiptExecution.GrantGeneration != principal.AuthorityGrantGeneration ||
-				receiptExecution.RuntimeRevisionSHA256 != resolved.RevisionHash ||
-				receiptExecution.ImmutableInputSHA256 != principal.AuthorityDigest {
+			if !recoverablePendingRuntime(receiptExecution, resolved, principal) {
 				return 0, errs.ErrStateConflict
 			}
-			return lifecycleReceiptReplay, nil
+			// Новый server-owned claim key может заново обнаружить durable PENDING,
+			// если controller упал до создания Kubernetes journal. Owner transaction
+			// сохраняет новый receipt без повторного state transition или audit.
+			return lifecycleReceiptApplyOrReplay, nil
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
@@ -400,6 +400,40 @@ func (service *Service) ClaimRuntimeExecution(
 				return err
 			}
 			if resolved.Runtime != nil {
+				if !recoverablePendingRuntime(*resolved.Runtime, resolved, principal) {
+					return errs.ErrStateConflict
+				}
+				result = *resolved.Runtime
+				return nil
+			}
+			archiveBlocked, err := tx.SessionHasUnverifiedRuntimeArchive(
+				ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if archiveBlocked {
+				return errs.ErrStateConflict
+			}
+			cleanupActive, err := tx.SessionHasActiveRuntimeCleanup(
+				ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if cleanupActive {
+				return errs.ErrStateConflict
+			}
+			restoreSource, restoreErr := tx.LatestSessionRuntimeArchiveForRestore(
+				ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+			)
+			if restoreErr != nil && !errors.Is(restoreErr, errs.ErrNotFound) {
+				return restoreErr
+			}
+			if restoreErr == nil && (restoreSource.CleanupAuthorizationState != "CONSUMED" ||
+				!validSHA256Text(restoreSource.ArchiveSHA256) ||
+				!validSHA256Text(restoreSource.RestoreProofSHA256) ||
+				!validSHA256Text(restoreSource.CleanupDeletionProofSHA256)) {
 				return errs.ErrStateConflict
 			}
 			resourceClass, clusterProfile := runtimeResourcePolicy(resolved.RoleSpec)
@@ -426,6 +460,14 @@ func (service *Service) ClaimRuntimeExecution(
 				CleanupAuthorizationState: "NONE",
 				CreatedAt:                 now, UpdatedAt: now,
 			}
+			if restoreErr == nil {
+				result.RestoreSourceExecutionID = restoreSource.ID
+				result.RestoreSourceArchiveReference = restoreSource.ArchiveReference
+				result.RestoreSourceArchiveSHA256 = restoreSource.ArchiveSHA256
+				result.RestoreSourceRuntimeRevisionSHA256 = restoreSource.RuntimeRevisionSHA256
+				result.RestoreSourceImmutableInputSHA256 = restoreSource.ImmutableInputSHA256
+				result.RestoreSourceProofSHA256 = restoreSource.RestoreProofSHA256
+			}
 			if err := tx.InsertRuntimeExecution(ctx, result); err != nil {
 				return err
 			}
@@ -436,6 +478,21 @@ func (service *Service) ClaimRuntimeExecution(
 		},
 	)
 	return result, err
+}
+
+func recoverablePendingRuntime(
+	execution RuntimeExecution,
+	resolved resolvedExecution,
+	principal value.Principal,
+) bool {
+	return execution.State == "PENDING" && execution.Version == 1 && execution.Fence == 1 &&
+		execution.GrantGeneration == principal.AuthorityGrantGeneration &&
+		execution.RuntimeRevisionID == resolved.Revision.ID &&
+		execution.RuntimeRevisionVersion == resolved.Revision.Version &&
+		execution.RuntimeRevisionSHA256 == resolved.RevisionHash &&
+		execution.ImmutableInputSHA256 == principal.AuthorityDigest &&
+		execution.SessionID == resolved.Session.ID && execution.TurnID == resolved.Turn.ID &&
+		execution.Attempt == resolved.TurnSpec.Attempt
 }
 
 func (service *Service) GetRuntimeExecution(
@@ -512,9 +569,13 @@ func (service *Service) AdmitRuntimeExecution(
 			)
 		},
 		func() error {
-			return validateAdmitRuntimeReceipt(
+			if err := validateAdmitRuntimeReceipt(
 				receiptExecution, receiptTurnLease, result, receiptNow,
-			)
+			); err != nil {
+				return err
+			}
+			result.Execution = receiptExecution
+			return nil
 		},
 		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
@@ -873,10 +934,18 @@ func validateAdmitRuntimeReceipt(
 	stored AdmitRuntimeExecutionResult,
 	now time.Time,
 ) error {
-	if err := runtimeReceiptMatchesCurrent(current, stored.Execution); err != nil {
-		return err
-	}
-	if current.State != "ADMITTED" || current.LeaseTokenSHA256 == "" ||
+	if current.ID != stored.Execution.ID || current.OrganizationID != stored.Execution.OrganizationID ||
+		current.ProjectID != stored.Execution.ProjectID || current.SessionID != stored.Execution.SessionID ||
+		current.TurnID != stored.Execution.TurnID || current.Attempt != stored.Execution.Attempt ||
+		current.RuntimeRevisionID != stored.Execution.RuntimeRevisionID ||
+		current.RuntimeRevisionVersion != stored.Execution.RuntimeRevisionVersion ||
+		current.RuntimeRevisionSHA256 != stored.Execution.RuntimeRevisionSHA256 ||
+		current.ImmutableInputSHA256 != stored.Execution.ImmutableInputSHA256 ||
+		current.GrantGeneration != stored.Execution.GrantGeneration ||
+		(current.State != "ADMITTED" && current.State != "RUNNING") ||
+		current.Version < stored.Execution.Version || current.Fence < stored.Execution.Fence ||
+		current.Version-stored.Execution.Version != current.Fence-stored.Execution.Fence ||
+		current.LeaseTokenSHA256 == "" ||
 		!current.LeaseExpiresAt.After(now) ||
 		turnLease.TurnID != current.TurnID ||
 		turnLease.Attempt != current.Attempt ||
@@ -1485,11 +1554,14 @@ func (service *Service) RecordRuntimeArchive(
 	input RuntimeArchiveInput,
 ) (RuntimeExecution, error) {
 	if err := validateRuntimeMutation(
-		service, input.RuntimeExecutionInput, permissionRuntimeArchive, true,
+		service, input.RuntimeExecutionInput, permissionRuntimeArchive, false,
 	); err != nil {
 		return RuntimeExecution{}, err
 	}
-	if !validBoundedReference(input.ArchiveReference) ||
+	if input.Principal.CallerWorkload != service.archiveWorkload ||
+		input.Principal.CallerSPIFFEID != service.archiveSPIFFEID ||
+		input.ExpectedGrantGeneration == 0 ||
+		!validBoundedReference(input.ArchiveReference) ||
 		!validSHA256Text(input.ArchiveSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1518,6 +1590,9 @@ func (service *Service) RecordRuntimeArchive(
 				return 0, errs.ErrStateConflict
 			}
 			execution := locked.Execution
+			if requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil {
+				return 0, errs.ErrStateConflict
+			}
 			var disposition lifecycleReceiptDisposition
 			switch {
 			case execution.Version == input.ExpectedVersion &&
@@ -1544,7 +1619,8 @@ func (service *Service) RecordRuntimeArchive(
 				return err
 			}
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
-				!runtimeTerminal(execution.State) || execution.ArchiveSHA256 != "" {
+				!runtimeTerminal(execution.State) || execution.ArchiveSHA256 != "" ||
+				requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil {
 				return errs.ErrStateConflict
 			}
 			now, err := tx.CurrentTime(ctx)
@@ -1640,13 +1716,16 @@ func (service *Service) VerifyRuntimeRestore(
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
-			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
 			if err != nil {
 				return err
 			}
-			if err := service.requireRuntimeOwner(ctx, tx, input.Principal, execution); err != nil {
-				return err
+			if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+				return errs.ErrStateConflict
 			}
+			execution := locked.Execution
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
 				!runtimeTerminal(execution.State) ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
@@ -1691,7 +1770,8 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		return RuntimeExecution{}, err
 	}
 	if input.Principal.CallerWorkload != service.cleanupAuthorizerWorkload ||
-		input.Principal.CallerSPIFFEID != service.cleanupAuthorizerSPIFFEID {
+		input.Principal.CallerSPIFFEID != service.cleanupAuthorizerSPIFFEID ||
+		!validRuntimePVCTuple(input.PVCName, input.PVCUID, input.PVCResourceVersion) {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
 	}
 	if !validSHA256Text(input.ArchiveSHA256) ||
@@ -1703,8 +1783,12 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		ArchiveSHA256             string
 		RestoreProofSHA256        string
 		ExpectedCleanupGeneration uint64
+		PVCName                   string
+		PVCUID                    string
+		PVCResourceVersion        string
 	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveSHA256,
-		input.RestoreProofSHA256, input.ExpectedCleanupGeneration})
+		input.RestoreProofSHA256, input.ExpectedCleanupGeneration,
+		input.PVCName, input.PVCUID, input.PVCResourceVersion})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1754,6 +1838,9 @@ func (service *Service) AuthorizeRuntimeCleanup(
 				execution.Fence != input.ExpectedFence+(execution.Version-input.ExpectedVersion) ||
 				execution.CleanupAuthorizationState != "ACTIVE" ||
 				execution.CleanupAuthorizationGeneration != input.ExpectedCleanupGeneration+1 ||
+				execution.CleanupPVCName != input.PVCName ||
+				execution.CleanupPVCUID != input.PVCUID ||
+				execution.CleanupPVCResourceVersion != input.PVCResourceVersion ||
 				value.ValidateID(execution.CleanupAuthorizationID) != nil ||
 				!execution.CleanupAuthorizationExpiresAt.After(locked.Now) {
 				return 0, errs.ErrStateConflict
@@ -1763,13 +1850,16 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
-			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
 			if err != nil {
 				return err
 			}
-			if err := service.requireRuntimeOwner(ctx, tx, input.Principal, execution); err != nil {
-				return err
+			if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+				return errs.ErrStateConflict
 			}
+			execution := locked.Execution
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
 				!runtimeTerminal(execution.State) ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
@@ -1780,15 +1870,8 @@ func (service *Service) AuthorizeRuntimeCleanup(
 				requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil {
 				return errs.ErrStateConflict
 			}
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return err
-			}
-			if err := lockRuntimeCleanupSession(
-				ctx, tx, input.Principal, execution,
-			); err != nil {
-				return err
-			}
+			now := locked.Now
+			session := locked.Graph.Session
 			blocked, err := tx.IntegrationContinuationBlocksCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
@@ -1811,6 +1894,10 @@ func (service *Service) AuthorizeRuntimeCleanup(
 					return err
 				}
 			}
+			eligibleAt := session.UpdatedAt.Add(runtimeCleanupRetention)
+			if eligibleAt.After(now) {
+				return errs.ErrStateConflict
+			}
 			expectedVersion, expectedFence := execution.Version, execution.Fence
 			execution.Version++
 			execution.Fence++
@@ -1819,6 +1906,13 @@ func (service *Service) AuthorizeRuntimeCleanup(
 			execution.CleanupAuthorizationExpiresAt = now.Add(cleanupAuthorizationLifetime)
 			execution.CleanupAuthorizationState = "ACTIVE"
 			execution.CleanupConsumedAt = time.Time{}
+			execution.CleanupPVCName = input.PVCName
+			execution.CleanupPVCUID = input.PVCUID
+			execution.CleanupPVCResourceVersion = input.PVCResourceVersion
+			execution.CleanupClaimedAt = now
+			execution.CleanupEligibleAt = eligibleAt
+			execution.CleanupNotFoundAt = time.Time{}
+			execution.CleanupDeletionProofSHA256 = ""
 			execution.UpdatedAt = now
 			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
@@ -1885,7 +1979,9 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		value.ValidateID(input.CleanupAuthorizationID) != nil ||
 		input.CleanupAuthorizationGeneration == 0 ||
 		!validSHA256Text(input.ArchiveSHA256) ||
-		!validSHA256Text(input.RestoreProofSHA256) {
+		!validSHA256Text(input.RestoreProofSHA256) ||
+		!validRuntimePVCTuple(input.PVCName, input.PVCUID, input.PVCResourceVersion) ||
+		input.ObservedNotFoundAt.IsZero() || !validSHA256Text(input.DeletionProofSHA256) {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
@@ -1894,9 +1990,15 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		CleanupAuthorizationGeneration uint64
 		ArchiveSHA256                  string
 		RestoreProofSHA256             string
+		PVCName                        string
+		PVCUID                         string
+		PVCResourceVersion             string
+		ObservedNotFoundAt             time.Time
+		DeletionProofSHA256            string
 	}{runtimeIntent(input.RuntimeExecutionInput), input.CleanupAuthorizationID,
 		input.CleanupAuthorizationGeneration, input.ArchiveSHA256,
-		input.RestoreProofSHA256})
+		input.RestoreProofSHA256, input.PVCName, input.PVCUID,
+		input.PVCResourceVersion, input.ObservedNotFoundAt, input.DeletionProofSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1919,7 +2021,10 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 			if execution.CleanupAuthorizationID != input.CleanupAuthorizationID ||
 				execution.CleanupAuthorizationGeneration != input.CleanupAuthorizationGeneration ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
-				execution.RestoreProofSHA256 != input.RestoreProofSHA256 {
+				execution.RestoreProofSHA256 != input.RestoreProofSHA256 ||
+				execution.CleanupPVCName != input.PVCName ||
+				execution.CleanupPVCUID != input.PVCUID ||
+				execution.CleanupPVCResourceVersion != input.PVCResourceVersion {
 				return 0, errs.ErrStateConflict
 			}
 			blocked, err := tx.IntegrationContinuationBlocksCleanup(
@@ -1941,7 +2046,9 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 			case execution.Version == input.ExpectedVersion+1 &&
 				execution.Fence == input.ExpectedFence+1 &&
 				execution.CleanupAuthorizationState == "CONSUMED" &&
-				!execution.CleanupConsumedAt.IsZero():
+				!execution.CleanupConsumedAt.IsZero() &&
+				execution.CleanupNotFoundAt.Equal(input.ObservedNotFoundAt) &&
+				execution.CleanupDeletionProofSHA256 == input.DeletionProofSHA256:
 				disposition = lifecycleReceiptReplay
 			default:
 				return 0, errs.ErrStateConflict
@@ -1951,14 +2058,17 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
-			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
 			if err != nil {
 				return err
 			}
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return err
+			if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+				return errs.ErrStateConflict
 			}
+			execution := locked.Execution
+			now := locked.Now
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
 				requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil ||
 				execution.CleanupAuthorizationState != "ACTIVE" ||
@@ -1966,13 +2076,13 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 				execution.CleanupAuthorizationGeneration != input.CleanupAuthorizationGeneration ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
 				execution.RestoreProofSHA256 != input.RestoreProofSHA256 ||
-				!execution.CleanupAuthorizationExpiresAt.After(now) {
+				execution.CleanupPVCName != input.PVCName ||
+				execution.CleanupPVCUID != input.PVCUID ||
+				execution.CleanupPVCResourceVersion != input.PVCResourceVersion ||
+				!execution.CleanupAuthorizationExpiresAt.After(now) ||
+				input.ObservedNotFoundAt.Before(execution.CleanupClaimedAt) ||
+				input.ObservedNotFoundAt.After(now) {
 				return errs.ErrStateConflict
-			}
-			if err := lockRuntimeCleanupSession(
-				ctx, tx, input.Principal, execution,
-			); err != nil {
-				return err
 			}
 			blocked, err := tx.IntegrationContinuationBlocksCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
@@ -1988,6 +2098,8 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 			execution.Fence++
 			execution.CleanupAuthorizationState = "CONSUMED"
 			execution.CleanupConsumedAt = now
+			execution.CleanupNotFoundAt = input.ObservedNotFoundAt
+			execution.CleanupDeletionProofSHA256 = input.DeletionProofSHA256
 			execution.UpdatedAt = now
 			if err := tx.UpdateRuntimeExecution(
 				ctx, execution, expectedVersion, expectedFence,
@@ -2004,24 +2116,9 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 	return result, err
 }
 
-func lockRuntimeCleanupSession(
-	ctx context.Context,
-	tx domainrepo.Transaction,
-	principal value.Principal,
-	execution RuntimeExecution,
-) error {
-	session, err := tx.GetForUpdate(
-		ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
-	)
-	if err != nil {
-		return err
-	}
-	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID ||
-		session.OrganizationID != execution.OrganizationID ||
-		session.ProjectID != execution.ProjectID {
-		return errs.ErrNotFound
-	}
-	return nil
+func validRuntimePVCTuple(name, uid, resourceVersion string) bool {
+	return len(name) >= 1 && len(name) <= 253 && value.ValidateID(uid) == nil &&
+		len(resourceVersion) >= 1 && len(resourceVersion) <= 64
 }
 
 func (service *Service) ExpireRuntimeCleanupAuthorization(

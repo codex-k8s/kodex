@@ -198,6 +198,8 @@ func Run(
 		MemoryIndexerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
 		RuntimeControllerWorkload:  "runtime-controller",
 		RuntimeControllerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		ArchiveWorkload:            "runtime-archive",
+		ArchiveSPIFFEID:            "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
 		IntegrationGatewayWorkload: "integration-gateway",
 		IntegrationGatewaySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		RestoreVerifierWorkload:    "runtime-restore-verifier",

@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/clients/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/enum"
 	"github.com/google/uuid"
 )
 
@@ -27,13 +28,14 @@ type journalDocument = entity.RuntimeJournal
 
 type Config struct {
 	ExecutionID, JournalName, Namespace string
+	PVCName, PVCUID, PVCResourceVersion string
 	ExpectedVersion, ExpectedFence      uint64
 	ControlPlane                        controlplane.Config
 	Archive                             archive.Config
 }
 
 func RunArchive(ctx context.Context) error {
-	config, err := loadConfig(controlplane.ModeController)
+	config, err := loadConfig(controlplane.ModeArchive)
 	if err != nil {
 		return err
 	}
@@ -87,6 +89,42 @@ func RunRestoreVerifier(ctx context.Context) error {
 	return kubeadapter.PatchWorkerJournal(ctx, config.Namespace, config.JournalName, execution.ID, updated)
 }
 
+func RunRehydrate(ctx context.Context) error {
+	config, err := loadConfig(controlplane.ModeRestoreVerifier)
+	if err != nil {
+		return err
+	}
+	document, client, store, err := open(ctx, config)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	target := document.Execution
+	if err := exactExecution(config, document.Execution, target); err != nil ||
+		target.RestoreSourceExecutionID == "" || document.RehydratePhase != "PENDING" ||
+		config.PVCUID == "" {
+		return errs.ErrStateConflict
+	}
+	source := target
+	source.ID = target.RestoreSourceExecutionID
+	source.RuntimeRevisionSHA256 = target.RestoreSourceRuntimeRevisionSHA256
+	source.ImmutableInputSHA256 = target.RestoreSourceImmutableInputSHA256
+	source.ArchiveReference = target.RestoreSourceArchiveReference
+	source.ArchiveSHA256 = target.RestoreSourceArchiveSHA256
+	source.State = enum.ExecutionSucceeded
+	source.RestoreSourceExecutionID, source.RestoreSourceArchiveReference = "", ""
+	source.RestoreSourceArchiveSHA256, source.RestoreSourceRuntimeRevisionSHA256 = "", ""
+	source.RestoreSourceImmutableInputSHA256, source.RestoreSourceProofSHA256 = "", ""
+	proof, err := store.RestoreToAndProve(ctx, source, target, "/restore-target", config.PVCUID)
+	if err != nil {
+		return err
+	}
+	return kubeadapter.PatchWorkerRehydration(
+		ctx, config.Namespace, config.JournalName, target.ID, config.PVCUID,
+		proof.Reference, proof.SHA256,
+	)
+}
+
 func RunCleanupAuthorizer(ctx context.Context) error {
 	config, err := loadConfig(controlplane.ModeCleanupAuthorizer)
 	if err != nil {
@@ -117,6 +155,7 @@ func RunCleanupAuthorizer(ctx context.Context) error {
 	}
 	updated, err := client.AuthorizeCleanup(
 		ctx, document.CleanupKey, execution, execution.CleanupAuthorizationGeneration,
+		config.PVCName, config.PVCUID, config.PVCResourceVersion,
 	)
 	if err != nil {
 		return err
@@ -169,7 +208,8 @@ func readJournal(config Config) (journalDocument, error) {
 		document.Execution.Fence != config.ExpectedFence || document.ArchiveKey == "" ||
 		document.RestoreKey == "" || document.CleanupKey == "" || document.AdmitKey == "" ||
 		document.HeartbeatKey == "" || document.CompleteKey == "" || document.IncidentKey == "" ||
-		document.LeaseSecretName == "" || document.PodName == "" || document.PVCName == "" ||
+		document.AdmissionRequest.Validate() != nil || document.AdmissionRequest.State != "PENDING" ||
+		document.Phase == "" || document.PodName == "" || document.PVCName == "" ||
 		document.CreatedAt.IsZero() || document.LastTransition.Before(document.CreatedAt) {
 		return journalDocument{}, errs.ErrStateConflict
 	}
@@ -210,6 +250,8 @@ func loadConfig(mode controlplane.Mode) (Config, error) {
 	config := Config{
 		ExecutionID: os.Getenv("RUNTIME_EXECUTION_ID"), JournalName: os.Getenv("RUNTIME_JOURNAL_NAME"),
 		Namespace: strings.TrimSpace(string(namespaceRaw)), ExpectedVersion: version, ExpectedFence: fence,
+		PVCName: os.Getenv("RUNTIME_PVC_NAME"), PVCUID: os.Getenv("RUNTIME_PVC_UID"),
+		PVCResourceVersion: os.Getenv("RUNTIME_PVC_RESOURCE_VERSION"),
 		ControlPlane: controlplane.Config{Mode: mode,
 			Target:                "control-plane.mattercodex-system.svc:8443",
 			TLSServerName:         "control-plane.mattercodex-system.svc.cluster.local",
@@ -224,11 +266,16 @@ func loadConfig(mode controlplane.Mode) (Config, error) {
 			CAFile:              "/var/run/config/mattercodex/runtime-worker/s3/ca.pem",
 			AccessKeyIDFile:     "/var/run/secrets/mattercodex/runtime-worker/s3/access-key-id",
 			SecretAccessKeyFile: "/var/run/secrets/mattercodex/runtime-worker/s3/secret-access-key", RequestTimeout: 15 * time.Second,
+			SessionTokenFile: "/var/run/secrets/mattercodex/runtime-worker/s3/session-token",
 		},
 	}
 	if config.ExecutionID == "" || config.JournalName == "" || config.Namespace == "" ||
 		filepath.Base(config.JournalName) != config.JournalName {
 		return Config{}, errors.New("runtime worker identity is invalid")
+	}
+	if mode == controlplane.ModeCleanupAuthorizer && (config.PVCName == "" ||
+		uuid.Validate(config.PVCUID) != nil || config.PVCResourceVersion == "") {
+		return Config{}, errors.New("runtime cleanup PVC tuple is invalid")
 	}
 	return config, nil
 }

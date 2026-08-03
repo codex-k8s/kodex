@@ -1642,6 +1642,19 @@ message RuntimeExecution {
   RuntimeCleanupAuthorizationState cleanup_authorization_state = 38;
   uint64 cleanup_authorization_generation = 39;
   google.protobuf.Timestamp cleanup_consumed_at = 40;
+  string cleanup_pvc_name = 41;
+  string cleanup_pvc_uid = 42;
+  string cleanup_pvc_resource_version = 43;
+  google.protobuf.Timestamp cleanup_claimed_at = 44;
+  google.protobuf.Timestamp cleanup_eligible_at = 45;
+  google.protobuf.Timestamp cleanup_not_found_at = 46;
+  string cleanup_deletion_proof_sha256 = 47;
+  string restore_source_execution_id = 48;
+  string restore_source_archive_reference = 49;
+  string restore_source_archive_sha256 = 50;
+  string restore_source_runtime_revision_sha256 = 51;
+  string restore_source_immutable_input_sha256 = 52;
+  string restore_source_proof_sha256 = 53;
 }
 
 message ClaimRuntimeExecutionRequest {
@@ -1784,6 +1797,9 @@ message AuthorizeRuntimeCleanupRequest {
   string archive_sha256 = 5;
   string restore_proof_sha256 = 6;
   uint64 expected_cleanup_generation = 7;
+  string pvc_name = 8;
+  string pvc_uid = 9;
+  string pvc_resource_version = 10;
 }
 
 message AuthorizeRuntimeCleanupResponse {
@@ -1799,6 +1815,11 @@ message ConsumeRuntimeCleanupAuthorizationRequest {
   uint64 cleanup_authorization_generation = 6;
   string archive_sha256 = 7;
   string restore_proof_sha256 = 8;
+  string pvc_name = 9;
+  string pvc_uid = 10;
+  string pvc_resource_version = 11;
+  google.protobuf.Timestamp observed_not_found_at = 12;
+  string deletion_proof_sha256 = 13;
 }
 
 message ConsumeRuntimeCleanupAuthorizationResponse {

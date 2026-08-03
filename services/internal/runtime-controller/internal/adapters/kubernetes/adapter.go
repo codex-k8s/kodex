@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
@@ -47,35 +48,37 @@ const (
 	roleComponent      = "role-runtime"
 	archiveComponent   = "runtime-archive"
 	restoreComponent   = "runtime-restore-verifier"
+	rehydrateComponent = "runtime-rehydrate"
 	cleanupComponent   = "runtime-cleanup-authorizer"
 	journalDataKey     = "journal.json"
-	leaseTokenKey      = "lease-token"
 	maximumJournalSize = 1 << 20
 	maximumPVCBytes    = int64(30 << 30)
 )
 
 type Config struct {
-	Environment           string
-	Namespace             string
-	RoleImageRepository   string
-	ControllerImage       string
-	AuthorityImage        string
-	StorageClass          string
-	PVCSize               string
-	RuntimeServiceAccount string
-	ReadClusterRole       string
-	AdminClusterRole      string
-	ArchiveServiceAccount string
-	RestoreServiceAccount string
-	CleanupServiceAccount string
-	MaximumPods           int
-	MaximumCPU            int64
-	MaximumMemoryBytes    int64
-	JobTTL                time.Duration
-	S3Endpoint            string
-	S3TLSServerName       string
-	S3Bucket              string
-	S3Region              string
+	Environment                   string
+	Namespace                     string
+	RoleImageRepository           string
+	AgentGatewayURL               string
+	MCPGatewayURL                 string
+	ControllerImage               string
+	AuthorityImage                string
+	StorageClass                  string
+	PVCSize                       string
+	ReadClusterRole               string
+	AdminClusterRole              string
+	ArchiveServiceAccount         string
+	RestoreServiceAccount         string
+	CleanupServiceAccount         string
+	MaximumPods                   int
+	MaximumOrganizationExecutions int
+	MaximumCPU                    int64
+	MaximumMemoryBytes            int64
+	JobTTL                        time.Duration
+	S3Endpoint                    string
+	S3TLSServerName               string
+	S3Bucket                      string
+	S3Region                      string
 }
 
 type Adapter struct {
@@ -104,15 +107,17 @@ func InCluster(config Config) (*Adapter, error) {
 func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 	if client == nil || (config.Environment != "staging" && config.Environment != "production") ||
 		config.Namespace == "" || config.RoleImageRepository == "" ||
+		config.AgentGatewayURL == "" || config.MCPGatewayURL == "" ||
 		config.ControllerImage == "" || config.AuthorityImage == "" ||
 		config.StorageClass == "" || config.PVCSize == "" || config.MaximumPods < 1 ||
+		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
 		config.MaximumCPU < 1 || config.MaximumMemoryBytes < 1 ||
 		config.JobTTL < time.Minute || config.JobTTL > 24*time.Hour ||
 		config.S3Endpoint == "" || config.S3TLSServerName == "" || config.S3Bucket == "" || config.S3Region == "" {
 		return nil, errors.New("kubernetes adapter configuration is invalid")
 	}
 	for _, serviceAccount := range []string{
-		config.RuntimeServiceAccount, config.ReadClusterRole, config.AdminClusterRole,
+		config.ReadClusterRole, config.AdminClusterRole,
 		config.ArchiveServiceAccount, config.RestoreServiceAccount, config.CleanupServiceAccount,
 	} {
 		if serviceAccount == "" {
@@ -226,6 +231,53 @@ func PatchWorkerJournal(
 	return nil
 }
 
+// PatchWorkerRehydration фиксирует target-PVC proof без изменения owner execution.
+func PatchWorkerRehydration(
+	ctx context.Context,
+	namespace, name, expectedExecutionID, pvcUID, reference, proofSHA256 string,
+) error {
+	if namespace == "" || name != journalName(expectedExecutionID) || uuid.Validate(pvcUID) != nil ||
+		reference != "journal://"+expectedExecutionID+"/rehydrate-proof" || len(proofSHA256) != sha256.Size*2 {
+		return errs.ErrInvalidInput
+	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return errors.New("load rehydrate Kubernetes configuration")
+	}
+	config.Timeout = 5 * time.Second
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return errors.New("create rehydrate Kubernetes client")
+	}
+	configMap, err := client.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return errors.New("read rehydrate runtime journal")
+	}
+	var document journalDocument
+	if decodeJournal([]byte(configMap.Data[journalDataKey]), &document) != nil ||
+		document.Execution.ID != expectedExecutionID || document.RehydratePhase != "PENDING" ||
+		document.Execution.RestoreSourceExecutionID == "" {
+		return errs.ErrStateConflict
+	}
+	document.RehydratePhase = "COMPLETE"
+	document.RehydratePVCUID = pvcUID
+	document.RehydrateProofReference = reference
+	document.RehydrateProofSHA256 = proofSHA256
+	document.LastTransition = time.Now().UTC()
+	raw, err := marshalJournal(document)
+	if err != nil {
+		return err
+	}
+	configMap.Data[journalDataKey] = string(raw)
+	if _, err := client.CoreV1().ConfigMaps(namespace).Update(ctx, configMap, metav1.UpdateOptions{}); err != nil {
+		if apierrors.IsConflict(err) {
+			return errs.ErrStateConflict
+		}
+		return errors.New("update rehydrate runtime journal")
+	}
+	return nil
+}
+
 func (adapter *Adapter) Check(ctx context.Context) error {
 	if _, err := adapter.client.CoreV1().Namespaces().Get(
 		ctx, adapter.config.Namespace, metav1.GetOptions{},
@@ -256,16 +308,20 @@ func (adapter *Adapter) EnsureJournal(
 	}
 	now := adapter.now().UTC()
 	document := journalDocument{
-		Execution:       execution,
-		AdmitKey:        commandKey(execution, "admit"),
-		HeartbeatKey:    commandKey(execution, "heartbeat"),
-		CompleteKey:     commandKey(execution, "complete"),
-		IncidentKey:     commandKey(execution, "incident"),
-		ArchiveKey:      commandKey(execution, "archive"),
-		RestoreKey:      commandKey(execution, "restore"),
-		CleanupKey:      commandKey(execution, "cleanup"),
-		LeaseSecretName: leaseName(execution.ID), PodName: podName(execution),
-		PVCName: pvcName(execution), CreatedAt: now, LastTransition: now,
+		Execution: execution, AdmissionRequest: execution, Phase: "CLAIMED",
+		AdmitKey:     commandKey(execution, "admit"),
+		HeartbeatKey: commandKey(execution, "heartbeat"),
+		CompleteKey:  commandKey(execution, "complete"),
+		IncidentKey:  commandKey(execution, "incident"),
+		ArchiveKey:   commandKey(execution, "archive"),
+		RestoreKey:   commandKey(execution, "restore"),
+		CleanupKey:   commandKey(execution, "cleanup"),
+		PodName:      podName(execution),
+		PVCName:      pvcName(execution), CreatedAt: now, LastTransition: now,
+		RehydratePhase: "NOT_REQUIRED",
+	}
+	if execution.RestoreSourceExecutionID != "" {
+		document.RehydratePhase = "PENDING"
 	}
 	raw, err := marshalJournal(document)
 	if err != nil {
@@ -321,15 +377,6 @@ func (adapter *Adapter) castJournal(
 		configMap.Labels[executionLabel] != shortID(document.Execution.ID) {
 		return runtimerepo.Journal{}, errs.ErrStateConflict
 	}
-	leaseToken := ""
-	secret, err := adapter.client.CoreV1().Secrets(adapter.config.Namespace).Get(
-		ctx, document.LeaseSecretName, metav1.GetOptions{},
-	)
-	if err == nil {
-		leaseToken = string(secret.Data[leaseTokenKey])
-	} else if !apierrors.IsNotFound(err) {
-		return runtimerepo.Journal{}, errors.New("read runtime lease secret")
-	}
 	return runtimerepo.Journal{
 		Execution: document.Execution, AdmitIdempotencyKey: document.AdmitKey,
 		HeartbeatIdempotencyKey: document.HeartbeatKey,
@@ -338,14 +385,22 @@ func (adapter *Adapter) castJournal(
 		ArchiveIdempotencyKey:   document.ArchiveKey,
 		RestoreIdempotencyKey:   document.RestoreKey,
 		CleanupIdempotencyKey:   document.CleanupKey,
-		LeaseTokenSecretName:    document.LeaseSecretName, LeaseToken: leaseToken,
+		AdmissionRequest:        document.AdmissionRequest, Phase: document.Phase,
 	}, nil
 }
 
 func (adapter *Adapter) Capacity(
 	ctx context.Context,
 	execution entity.Execution,
+	revision entity.Revision,
 ) (entity.CapacityDecision, error) {
+	if revision.ValidateFor(execution) != nil ||
+		!revision.ProviderObservedAt.Add(revision.ProviderObservationMaxAge).After(adapter.now().UTC()) {
+		return entity.CapacityDecision{Reason: "quota_stale"}, nil
+	}
+	if err := adapter.persistCapacitySnapshot(ctx, execution, revision); err != nil {
+		return entity.CapacityDecision{}, err
+	}
 	pods, err := adapter.client.CoreV1().Pods(adapter.config.Namespace).List(
 		ctx, metav1.ListOptions{LabelSelector: fields.OneTermEqualSelector(managedLabel, "true").String()},
 	)
@@ -355,8 +410,11 @@ func (adapter *Adapter) Capacity(
 	requestedCPU, requestedMemory, accelerator := resourcesFor(execution.ResourceClass)
 	var usedCPU, usedMemory int64
 	var active int
+	organizationActive, providerActive := 0, uint64(0)
+	unknownOrganizationBinding := false
 	var idle []entity.RuntimeStatus
 	stableName := podName(execution)
+	reusable := false
 	for index := range pods.Items {
 		pod := &pods.Items[index]
 		if pod.Labels[componentLabel] != roleComponent {
@@ -369,11 +427,49 @@ func (adapter *Adapter) Capacity(
 		}
 		status := castStatus(pod, nil)
 		if pod.Name == stableName && pod.Labels[executionLabel] != shortID(execution.ID) {
-			return entity.CapacityDecision{Reason: "session_replacement", Eviction: &status}, nil
+			if pod.Annotations["runtime.mattercodex.dev/revision-sha256"] == execution.RuntimeRevisionSHA256 &&
+				pod.Annotations["runtime.mattercodex.dev/archive-gate"] == "OPEN" && status.Ready && status.Phase == "Running" {
+				reusable = true
+				for _, container := range pod.Spec.Containers {
+					usedCPU -= container.Resources.Requests.Cpu().MilliValue()
+					usedMemory -= container.Resources.Requests.Memory().Value()
+				}
+				active--
+			} else {
+				return entity.CapacityDecision{Reason: "session_replacement", Eviction: &status}, nil
+			}
 		}
 		if terminalLabel(pod.Labels["runtime.mattercodex.dev/state"]) &&
 			status.AccessProfile != enum.AccessClusterAdmin {
 			idle = append(idle, status)
+		}
+	}
+	journals, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: managedLabel + "=true," + componentLabel + "=" + journalComponent,
+		Limit:         10000,
+	})
+	if err != nil || journals.Continue != "" {
+		return entity.CapacityDecision{}, errors.New("list durable runtime capacity claims")
+	}
+	for index := range journals.Items {
+		var document journalDocument
+		if decodeJournal([]byte(journals.Items[index].Data[journalDataKey]), &document) != nil ||
+			document.Execution.Validate() != nil {
+			return entity.CapacityDecision{}, errors.New("runtime capacity journal is invalid")
+		}
+		if document.Execution.State != enum.ExecutionPending &&
+			document.Execution.State != enum.ExecutionAdmitted &&
+			document.Execution.State != enum.ExecutionRunning {
+			continue
+		}
+		if document.Execution.OrganizationID == execution.OrganizationID {
+			organizationActive++
+			if document.CapacityProviderBindingID == "" || document.CapacityObservationRevision == 0 {
+				unknownOrganizationBinding = true
+			}
+		}
+		if document.CapacityProviderBindingID == revision.ProviderCredentialBindingID {
+			providerActive++
 		}
 	}
 	quotaBlocked, err := adapter.quotaBlocked(ctx, requestedCPU, requestedMemory, accelerator)
@@ -385,20 +481,75 @@ func (adapter *Adapter) Capacity(
 		return entity.CapacityDecision{}, err
 	}
 	admitted := active < adapter.config.MaximumPods &&
+		organizationActive <= adapter.config.MaximumOrganizationExecutions && !unknownOrganizationBinding &&
+		revision.ProviderObservedUsage+providerActive <= revision.ProviderObservedLimit &&
 		usedCPU+requestedCPU <= adapter.config.MaximumCPU &&
 		usedMemory+requestedMemory <= adapter.config.MaximumMemoryBytes &&
 		!quotaBlocked && !nodePressure
 	if admitted {
-		return entity.CapacityDecision{Admitted: true, Reason: "admitted"}, nil
+		reason := "admitted"
+		if reusable {
+			reason = "warm_reuse"
+		}
+		return entity.CapacityDecision{Admitted: true, Reason: reason}, nil
 	}
 	sort.Slice(idle, func(left, right int) bool {
 		return idle[left].LastTransition.Before(idle[right].LastTransition)
 	})
 	decision := entity.CapacityDecision{Reason: "bounded_capacity"}
+	if unknownOrganizationBinding {
+		decision.Reason = "quota_stale"
+	} else if organizationActive > adapter.config.MaximumOrganizationExecutions {
+		decision.Reason = "organization_quota"
+	} else if revision.ProviderObservedUsage+providerActive > revision.ProviderObservedLimit {
+		decision.Reason = "provider_quota"
+	}
 	if len(idle) > 0 {
 		decision.Eviction = &idle[0]
 	}
 	return decision, nil
+}
+
+func (adapter *Adapter) persistCapacitySnapshot(ctx context.Context, execution entity.Execution, revision entity.Revision) error {
+	configMaps := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace)
+	current, err := configMaps.Get(ctx, journalName(execution.ID), metav1.GetOptions{})
+	if err != nil {
+		return errors.New("read runtime journal for capacity snapshot")
+	}
+	var document journalDocument
+	if decodeJournal([]byte(current.Data[journalDataKey]), &document) != nil ||
+		document.Execution.ID != execution.ID || document.Execution.State != enum.ExecutionPending {
+		return errs.ErrStateConflict
+	}
+	if document.CapacityProviderBindingID != "" &&
+		(document.CapacityProviderBindingID != revision.ProviderCredentialBindingID ||
+			document.CapacityObservationRevision != revision.ProviderObservationRevision ||
+			!document.CapacityObservedAt.Equal(revision.ProviderObservedAt) ||
+			document.CapacityObservedUsage != revision.ProviderObservedUsage ||
+			document.CapacityObservedLimit != revision.ProviderObservedLimit ||
+			document.CapacityObservationMaxAge != int64(revision.ProviderObservationMaxAge) ||
+			document.CapacityOrganizationLimit != adapter.config.MaximumOrganizationExecutions) {
+		return errs.ErrStateConflict
+	}
+	document.CapacityProviderBindingID = revision.ProviderCredentialBindingID
+	document.CapacityObservationRevision = revision.ProviderObservationRevision
+	document.CapacityObservedAt = revision.ProviderObservedAt
+	document.CapacityObservedUsage = revision.ProviderObservedUsage
+	document.CapacityObservedLimit = revision.ProviderObservedLimit
+	document.CapacityObservationMaxAge = int64(revision.ProviderObservationMaxAge)
+	document.CapacityOrganizationLimit = adapter.config.MaximumOrganizationExecutions
+	raw, err := marshalJournal(document)
+	if err != nil {
+		return err
+	}
+	current.Data[journalDataKey] = string(raw)
+	if _, err := configMaps.Update(ctx, current, metav1.UpdateOptions{}); err != nil {
+		if apierrors.IsConflict(err) {
+			return errs.ErrStateConflict
+		}
+		return errors.New("persist immutable runtime capacity snapshot")
+	}
+	return nil
 }
 
 func (adapter *Adapter) quotaBlocked(
@@ -482,6 +633,15 @@ func (adapter *Adapter) Materialize(
 	if err := adapter.ensurePVC(ctx, execution); err != nil {
 		return entity.RuntimeStatus{}, err
 	}
+	if execution.RestoreSourceExecutionID != "" {
+		ready, err := adapter.ensureRehydrated(ctx, execution)
+		if err != nil {
+			return entity.RuntimeStatus{}, err
+		}
+		if !ready {
+			return entity.RuntimeStatus{}, errs.ErrDependency
+		}
+	}
 	if err := adapter.ensureExecutionConfig(ctx, execution, revision); err != nil {
 		return entity.RuntimeStatus{}, err
 	}
@@ -499,11 +659,41 @@ func (adapter *Adapter) Materialize(
 		ctx, desired.Name, metav1.GetOptions{},
 	)
 	if err == nil {
+		if existing.Labels[executionLabel] != shortID(execution.ID) &&
+			existing.Annotations["runtime.mattercodex.dev/revision-sha256"] == execution.RuntimeRevisionSHA256 &&
+			existing.Annotations["runtime.mattercodex.dev/archive-gate"] == "OPEN" &&
+			castStatus(existing, nil).Ready && existing.Status.Phase == corev1.PodRunning {
+			if err := adapter.ensureRunnerHandoffRBAC(ctx, execution); err != nil {
+				return entity.RuntimeStatus{}, err
+			}
+			updated := existing.DeepCopy()
+			updated.Labels[executionLabel] = shortID(execution.ID)
+			updated.Labels["runtime.mattercodex.dev/state"] = strings.ToLower(string(execution.State))
+			updated.Annotations["runtime.mattercodex.dev/execution-id"] = execution.ID
+			updated.Annotations["runtime.mattercodex.dev/version"] = strconv.FormatUint(execution.Version, 10)
+			updated.Annotations["runtime.mattercodex.dev/fence"] = strconv.FormatUint(execution.Fence, 10)
+			updated.Annotations["runtime.mattercodex.dev/grant-generation"] = strconv.FormatUint(execution.GrantGeneration, 10)
+			updated.Annotations["runtime.mattercodex.dev/input-sha256"] = execution.ImmutableInputSHA256
+			updated.Annotations["runtime.mattercodex.dev/archive-gate"] = "SUCCESSOR_READY"
+			updated.Annotations["runtime.mattercodex.dev/next-input-config"] = configName(execution)
+			delete(updated.Annotations, "runtime.mattercodex.dev/turn-handoff")
+			reused, updateErr := adapter.client.CoreV1().Pods(adapter.config.Namespace).Update(ctx, updated, metav1.UpdateOptions{})
+			if updateErr != nil {
+				return entity.RuntimeStatus{}, errors.New("advance warm runtime pod input")
+			}
+			if err := adapter.patchJournalPhase(ctx, execution.ID, "MATERIALIZED"); err != nil {
+				return entity.RuntimeStatus{}, err
+			}
+			return castStatus(reused, nil), nil
+		}
 		if existing.Labels[executionLabel] != shortID(execution.ID) ||
 			existing.Annotations["runtime.mattercodex.dev/revision-sha256"] != execution.RuntimeRevisionSHA256 ||
 			existing.Annotations["runtime.mattercodex.dev/input-sha256"] != execution.ImmutableInputSHA256 ||
 			!podMatches(existing, desired) {
 			return entity.RuntimeStatus{}, errs.ErrStateConflict
+		}
+		if err := adapter.patchJournalPhase(ctx, execution.ID, "MATERIALIZED"); err != nil {
+			return entity.RuntimeStatus{}, err
 		}
 		return castStatus(existing, nil), nil
 	}
@@ -516,7 +706,36 @@ func (adapter *Adapter) Materialize(
 	if err != nil {
 		return entity.RuntimeStatus{}, errors.New("create role runtime pod")
 	}
+	if err := adapter.patchJournalPhase(ctx, execution.ID, "MATERIALIZED"); err != nil {
+		return entity.RuntimeStatus{}, err
+	}
 	return castStatus(created, nil), nil
+}
+
+func (adapter *Adapter) patchJournalPhase(ctx context.Context, executionID, phase string) error {
+	configMap, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(
+		ctx, journalName(executionID), metav1.GetOptions{},
+	)
+	if err != nil {
+		return errors.New("read runtime journal phase")
+	}
+	var document journalDocument
+	if decodeJournal([]byte(configMap.Data[journalDataKey]), &document) != nil || document.Execution.ID != executionID {
+		return errs.ErrStateConflict
+	}
+	document.Phase = phase
+	document.LastTransition = adapter.now().UTC()
+	raw, err := marshalJournal(document)
+	if err != nil {
+		return err
+	}
+	configMap.Data[journalDataKey] = string(raw)
+	if _, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Update(
+		ctx, configMap, metav1.UpdateOptions{},
+	); err != nil {
+		return errors.New("update runtime journal phase")
+	}
+	return nil
 }
 
 func (adapter *Adapter) ensurePVC(ctx context.Context, execution entity.Execution) error {
@@ -584,15 +803,66 @@ func (adapter *Adapter) ensurePVC(ctx context.Context, execution entity.Executio
 	return nil
 }
 
+func (adapter *Adapter) ensureRehydrated(
+	ctx context.Context,
+	execution entity.Execution,
+) (bool, error) {
+	pvc, err := adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace).Get(
+		ctx, pvcName(execution), metav1.GetOptions{},
+	)
+	if err != nil {
+		return false, errors.New("read rehydrate target PVC")
+	}
+	if pvc.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
+		pvc.Annotations["runtime.mattercodex.dev/retention-owner-execution-id"] != execution.ID {
+		return false, errs.ErrStateConflict
+	}
+	configMap, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(
+		ctx, journalName(execution.ID), metav1.GetOptions{},
+	)
+	if err != nil {
+		return false, errors.New("read rehydrate journal")
+	}
+	var document journalDocument
+	if decodeJournal([]byte(configMap.Data[journalDataKey]), &document) != nil ||
+		document.Execution.ID != execution.ID || document.Execution.RestoreSourceExecutionID == "" {
+		return false, errs.ErrStateConflict
+	}
+	switch document.RehydratePhase {
+	case "COMPLETE":
+		if document.RehydratePVCUID != string(pvc.UID) ||
+			document.RehydrateProofReference != "journal://"+execution.ID+"/rehydrate-proof" ||
+			len(document.RehydrateProofSHA256) != sha256.Size*2 {
+			return false, errs.ErrStateConflict
+		}
+		return true, nil
+	case "PENDING":
+		status := castStatus(nil, pvc)
+		status.ExecutionID = execution.ID
+		status.RetentionOwner = true
+		if err := adapter.ensureWorkerJob(ctx, execution, status, rehydrateComponent); err != nil {
+			return false, err
+		}
+		return false, nil
+	default:
+		return false, errs.ErrStateConflict
+	}
+}
+
 func (adapter *Adapter) ensureExecutionConfig(
 	ctx context.Context,
 	execution entity.Execution,
 	revision entity.Revision,
 ) error {
+	runtimeInput, err := adapter.runnerInput(execution, revision)
+	if err != nil {
+		return err
+	}
 	snapshot := struct {
-		Execution entity.Execution `json:"execution"`
-		Revision  entity.Revision  `json:"runtime_revision"`
-	}{Execution: execution, Revision: revision}
+		Execution   entity.Execution `json:"execution"`
+		Revision    entity.Revision  `json:"runtime_revision"`
+		RunnerInput runnerInput      `json:"runner_input"`
+	}{Execution: execution, Revision: revision, RunnerInput: runtimeInput}
 	raw, err := json.Marshal(snapshot)
 	if err != nil || len(raw) > maximumJournalSize {
 		return errs.ErrStateConflict
@@ -625,6 +895,57 @@ func (adapter *Adapter) ensureExecutionConfig(
 	return nil
 }
 
+type runnerCredentialFiles struct {
+	SessionToken string `json:"session_token"`
+	MCPToken     string `json:"mcp_token"`
+	CodexAuth    string `json:"codex_auth"`
+}
+
+type runnerInput struct {
+	Schema                 string                `json:"schema"`
+	ExecutionID            string                `json:"execution_id"`
+	ExecutionVersion       uint64                `json:"execution_version"`
+	Fence                  uint64                `json:"fence"`
+	GrantGeneration        uint64                `json:"grant_generation"`
+	RuntimeRevisionID      string                `json:"runtime_revision_id"`
+	RuntimeRevisionVersion uint64                `json:"runtime_revision_version"`
+	RuntimeRevisionSHA256  string                `json:"runtime_revision_sha256"`
+	ImmutableInputSHA256   string                `json:"immutable_input_sha256"`
+	SessionKey             string                `json:"session_key"`
+	AgentProfile           string                `json:"agent_profile"`
+	BotServiceURL          string                `json:"bot_service_url"`
+	MCPURL                 string                `json:"mcp_url"`
+	CredentialFiles        runnerCredentialFiles `json:"credential_files"`
+}
+
+func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.Revision) (runnerInput, error) {
+	files := runnerCredentialFiles{}
+	for index, credential := range revision.Credentials {
+		base := "/var/run/secrets/mattercodex/runtime/credential-" + strconv.Itoa(index)
+		switch credential.Purpose {
+		case "session-token":
+			files.SessionToken = base + "/token"
+		case "mcp-token":
+			files.MCPToken = base + "/token"
+		case "codex-auth":
+			files.CodexAuth = base + "/auth.json"
+		}
+	}
+	if files.SessionToken == "" || files.MCPToken == "" || files.CodexAuth == "" || revision.AgentProfile == "" {
+		return runnerInput{}, errs.ErrStateConflict
+	}
+	return runnerInput{
+		Schema: "mattercodex.agent-runner-input.v1", ExecutionID: execution.ID,
+		ExecutionVersion: execution.Version, Fence: execution.Fence, GrantGeneration: execution.GrantGeneration,
+		RuntimeRevisionID: execution.RuntimeRevisionID, RuntimeRevisionVersion: execution.RuntimeRevisionVersion,
+		RuntimeRevisionSHA256: execution.RuntimeRevisionSHA256, ImmutableInputSHA256: execution.ImmutableInputSHA256,
+		SessionKey: execution.SessionID, AgentProfile: revision.AgentProfile,
+		BotServiceURL:   adapter.config.AgentGatewayURL,
+		MCPURL:          strings.TrimRight(adapter.config.MCPGatewayURL, "/") + "/mcp/sessions/" + url.PathEscape(execution.SessionID),
+		CredentialFiles: files,
+	}, nil
+}
+
 func (adapter *Adapter) updateJournalAndLease(
 	ctx context.Context,
 	execution entity.Execution,
@@ -643,8 +964,17 @@ func (adapter *Adapter) updateJournalAndLease(
 		return errs.ErrStateConflict
 	}
 	document.Execution = execution
+	if document.AdmissionRequest.Validate() != nil || document.AdmissionRequest.State != enum.ExecutionPending ||
+		!sameAdmissionLineage(document.AdmissionRequest, execution) {
+		return errs.ErrStateConflict
+	}
 	refreshCommandKeys(&document)
 	document.LastTransition = adapter.now().UTC()
+	if leaseToken != "" {
+		document.Phase = "ADMITTED_RECOVERABLE"
+	} else if execution.State.Terminal() {
+		document.Phase = "AUTHORITY_REVOKED"
+	}
 	raw, err := marshalJournal(document)
 	if err != nil {
 		return err
@@ -668,57 +998,22 @@ func (adapter *Adapter) updateJournalAndLease(
 		); err != nil {
 			return errors.New("update runtime pod lifecycle label")
 		}
-		if execution.State.Terminal() {
-			if err := adapter.revokeAccessProfile(ctx, pod); err != nil {
-				return err
-			}
-		}
 	} else if podErr != nil && !apierrors.IsNotFound(podErr) {
 		return errors.New("read runtime pod lifecycle label")
 	}
-	secrets := adapter.client.CoreV1().Secrets(adapter.config.Namespace)
-	if leaseToken == "" {
-		existing, err := secrets.Get(ctx, document.LeaseSecretName, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		if err != nil {
-			return errors.New("read runtime lease secret for revocation")
-		}
-		uid := existing.UID
-		resourceVersion := existing.ResourceVersion
-		if err := secrets.Delete(ctx, existing.Name, metav1.DeleteOptions{
-			Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
-		}); err != nil && !apierrors.IsNotFound(err) {
-			return errors.New("revoke runtime lease secret")
-		}
-		return nil
-	}
-	if len(leaseToken) > 16<<10 {
-		return errs.ErrStateConflict
-	}
-	desired := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-		Name: document.LeaseSecretName, Labels: labels(execution, "lease"),
-	}, Immutable: boolPointer(true), Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{leaseTokenKey: []byte(leaseToken)}}
-	existing, err := secrets.Get(ctx, desired.Name, metav1.GetOptions{})
-	if err == nil {
-		if existing.Immutable == nil || !*existing.Immutable || existing.Type != corev1.SecretTypeOpaque ||
-			existing.Labels[executionLabel] != shortID(execution.ID) ||
-			existing.Labels[componentLabel] != "lease" ||
-			!bytesEqual(existing.Data[leaseTokenKey], desired.Data[leaseTokenKey]) {
-			return errs.ErrStateConflict
-		}
-		return nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return errors.New("read runtime lease secret")
-	}
-	if _, err := secrets.Create(ctx, desired, metav1.CreateOptions{}); err != nil &&
-		!apierrors.IsAlreadyExists(err) {
-		return errors.New("create runtime lease secret")
-	}
 	return nil
+}
+
+func sameAdmissionLineage(request, current entity.Execution) bool {
+	return request.ID == current.ID && request.OrganizationID == current.OrganizationID &&
+		request.ProjectID == current.ProjectID && request.SessionID == current.SessionID &&
+		request.TurnID == current.TurnID && request.Attempt == current.Attempt &&
+		request.RuntimeRevisionID == current.RuntimeRevisionID &&
+		request.RuntimeRevisionVersion == current.RuntimeRevisionVersion &&
+		request.RuntimeRevisionSHA256 == current.RuntimeRevisionSHA256 &&
+		request.ImmutableInputSHA256 == current.ImmutableInputSHA256 &&
+		request.GrantGeneration == current.GrantGeneration && request.Version <= current.Version &&
+		request.Fence <= current.Fence
 }
 
 func (adapter *Adapter) UpdateJournal(
@@ -758,25 +1053,17 @@ func (adapter *Adapter) rolePod(
 		volumes = append(volumes, volume)
 		mounts = append(mounts, mount)
 	}
-	serviceAccount := adapter.config.RuntimeServiceAccount
-	if execution.AccessProfile != enum.AccessNone {
-		volumes = append(volumes, corev1.Volume{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{
-			Projected: &corev1.ProjectedVolumeSource{DefaultMode: int32Pointer(0o440), Sources: []corev1.VolumeProjection{
-				{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-					Audience: "https://kubernetes.default.svc", ExpirationSeconds: int64Pointer(600), Path: "token",
-				}},
-				{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
-				{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}}}},
+	serviceAccount := accessServiceAccountName(execution)
+	volumes = append(volumes, corev1.Volume{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{
+		Projected: &corev1.ProjectedVolumeSource{DefaultMode: int32Pointer(0o440), Sources: []corev1.VolumeProjection{
+			{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+				Audience: "https://kubernetes.default.svc", ExpirationSeconds: int64Pointer(600), Path: "token",
 			}},
-		}})
-		mounts = append(mounts, corev1.VolumeMount{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true})
-	}
-	switch execution.AccessProfile {
-	case enum.AccessProjectRead:
-		serviceAccount = accessServiceAccountName(execution)
-	case enum.AccessClusterAdmin:
-		serviceAccount = accessServiceAccountName(execution)
-	}
+			{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
+			{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}}}},
+		}},
+	}})
+	mounts = append(mounts, corev1.VolumeMount{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true})
 	cpu, memory, accelerator := resourcesFor(execution.ResourceClass)
 	requests := corev1.ResourceList{
 		corev1.ResourceCPU:    *resource.NewMilliQuantity(cpu, resource.DecimalSI),
@@ -795,6 +1082,7 @@ func (adapter *Adapter) rolePod(
 		Name: podName(execution), Labels: labels,
 		Annotations: map[string]string{
 			"runtime.mattercodex.dev/execution-id":      execution.ID,
+			"runtime.mattercodex.dev/session-id":        execution.SessionID,
 			"runtime.mattercodex.dev/version":           strconv.FormatUint(execution.Version, 10),
 			"runtime.mattercodex.dev/fence":             strconv.FormatUint(execution.Fence, 10),
 			"runtime.mattercodex.dev/grant-generation":  strconv.FormatUint(execution.GrantGeneration, 10),
@@ -802,22 +1090,28 @@ func (adapter *Adapter) rolePod(
 			"runtime.mattercodex.dev/input-sha256":      execution.ImmutableInputSHA256,
 			"runtime.mattercodex.dev/manifest-sha256":   revision.ManifestSHA256,
 			"runtime.mattercodex.dev/project-namespace": projectNamespaceName(execution.ProjectID),
+			"runtime.mattercodex.dev/archive-gate":      "CLOSED",
+			"runtime.mattercodex.dev/next-input-config": configName(execution),
 		},
 	}, Spec: corev1.PodSpec{
 		ServiceAccountName: serviceAccount, AutomountServiceAccountToken: boolPointer(false),
 		EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever,
 		TerminationGracePeriodSeconds: int64Pointer(30),
-		SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true),
+		SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(10001),
 			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 		Containers: []corev1.Container{{
 			Name: "role-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
 			ImagePullPolicy: corev1.PullIfNotPresent,
+			Args:            []string{"runtime-session"},
 			Env: []corev1.EnvVar{
 				{Name: "MATTERCODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/mattercodex/runtime/runtime.json"},
 				{Name: "MATTERCODEX_EXECUTION_ID", Value: execution.ID},
+				{Name: "MATTERCODEX_RUNTIME_POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+				{Name: "MATTERCODEX_RUNTIME_POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 			},
 			Resources:       corev1.ResourceRequirements{Requests: requests, Limits: limits},
 			SecurityContext: restrictedSecurityContext(10001), VolumeMounts: mounts,
+			StartupProbe:   &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30},
 			ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 5, TimeoutSeconds: 2, FailureThreshold: 3},
 			LivenessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 10, TimeoutSeconds: 2, FailureThreshold: 3},
 		}}, Volumes: volumes,
@@ -825,26 +1119,55 @@ func (adapter *Adapter) rolePod(
 }
 
 func (adapter *Adapter) ensureAccessProfile(ctx context.Context, execution entity.Execution) error {
-	if execution.AccessProfile == enum.AccessNone {
-		return nil
-	}
 	name := accessServiceAccountName(execution)
+	if execution.AccessProfile == enum.AccessClusterAdmin {
+		serviceAccount, err := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace).Get(
+			ctx, name, metav1.GetOptions{},
+		)
+		if err != nil || serviceAccount.Labels[accessLabel] != strings.ToLower(string(enum.AccessClusterAdmin)) {
+			return errors.New("read prebound cluster admin admission identity")
+		}
+		binding, err := adapter.client.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
+		expectedSubject := rbacv1.Subject{Kind: "ServiceAccount", Name: name, Namespace: adapter.config.Namespace}
+		expectedRole := rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: adapter.config.AdminClusterRole}
+		if err != nil || !sameBinding(binding.Subjects, expectedSubject) || binding.RoleRef != expectedRole {
+			return errors.New("read prebound cluster admin admission grant")
+		}
+		return adapter.ensureRunnerHandoffRBAC(ctx, execution)
+	}
 	serviceAccounts := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace)
 	existing, err := serviceAccounts.Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		existing, err = serviceAccounts.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
 			Name: name, Labels: labels(execution, "runtime-access"),
-			Annotations: map[string]string{"runtime.mattercodex.dev/execution-id": execution.ID},
+			Annotations: map[string]string{
+				"runtime.mattercodex.dev/execution-id":    execution.ID,
+				"runtime.mattercodex.dev/organization-id": execution.OrganizationID,
+				"runtime.mattercodex.dev/project-id":      execution.ProjectID,
+				"runtime.mattercodex.dev/session-id":      execution.SessionID,
+			},
 		}, AutomountServiceAccountToken: boolPointer(false)}, metav1.CreateOptions{})
 	}
 	if err != nil {
 		return errors.New("ensure exact runtime access service account")
 	}
-	if existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
+	if existing.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
+		existing.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
+		existing.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID {
 		return errs.ErrStateConflict
+	}
+	if existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
+		updated := existing.DeepCopy()
+		updated.Annotations["runtime.mattercodex.dev/execution-id"] = execution.ID
+		updated.Labels = labels(execution, "runtime-access")
+		_, err = serviceAccounts.Update(ctx, updated, metav1.UpdateOptions{})
+		if err != nil {
+			return errors.New("advance runtime access service account")
+		}
 	}
 	subject := rbacv1.Subject{Kind: "ServiceAccount", Name: name, Namespace: adapter.config.Namespace}
 	switch execution.AccessProfile {
+	case enum.AccessNone:
 	case enum.AccessProjectRead:
 		projectNamespace := projectNamespaceName(execution.ProjectID)
 		namespace, err := adapter.client.CoreV1().Namespaces().Get(ctx, projectNamespace, metav1.GetOptions{})
@@ -868,22 +1191,44 @@ func (adapter *Adapter) ensureAccessProfile(ctx context.Context, execution entit
 		if !sameBinding(binding.Subjects, subject) || binding.RoleRef != desired.RoleRef {
 			return errs.ErrStateConflict
 		}
-	case enum.AccessClusterAdmin:
-		bindings := adapter.client.RbacV1().ClusterRoleBindings()
-		desired := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "runtime-access")},
-			Subjects: []rbacv1.Subject{subject}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: adapter.config.AdminClusterRole}}
-		binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			binding, err = bindings.Create(ctx, desired, metav1.CreateOptions{})
-		}
-		if err != nil {
-			return errors.New("ensure exact cluster admin binding")
-		}
-		if !sameBinding(binding.Subjects, subject) || binding.RoleRef != desired.RoleRef {
-			return errs.ErrStateConflict
-		}
 	default:
 		return errs.ErrStateConflict
+	}
+	return adapter.ensureRunnerHandoffRBAC(ctx, execution)
+}
+
+func (adapter *Adapter) ensureRunnerHandoffRBAC(ctx context.Context, execution entity.Execution) error {
+	name := "runtime-handoff-" + shortID(execution.SessionID)
+	roles := adapter.client.RbacV1().Roles(adapter.config.Namespace)
+	desired := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "runtime-handoff")}, Rules: []rbacv1.PolicyRule{
+		{APIGroups: []string{""}, Resources: []string{"pods"}, ResourceNames: []string{podName(execution)}, Verbs: []string{"get", "patch"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{configName(execution)}, Verbs: []string{"get"}},
+	}}
+	existing, err := roles.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		existing, err = roles.Create(ctx, desired, metav1.CreateOptions{})
+	} else if err == nil {
+		updated := existing.DeepCopy()
+		updated.Rules = desired.Rules
+		existing, err = roles.Update(ctx, updated, metav1.UpdateOptions{})
+	}
+	if err != nil || !reflect.DeepEqual(existing.Rules, desired.Rules) {
+		return errors.New("ensure exact runtime handoff role")
+	}
+	bindingDesired := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "runtime-handoff")},
+		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: accessServiceAccountName(execution), Namespace: adapter.config.Namespace}},
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
+	bindings := adapter.client.RbacV1().RoleBindings(adapter.config.Namespace)
+	binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		binding, err = bindings.Create(ctx, bindingDesired, metav1.CreateOptions{})
+	} else if err == nil && (!reflect.DeepEqual(binding.Subjects, bindingDesired.Subjects) || binding.RoleRef != bindingDesired.RoleRef) {
+		updated := binding.DeepCopy()
+		updated.Subjects, updated.RoleRef = bindingDesired.Subjects, bindingDesired.RoleRef
+		binding, err = bindings.Update(ctx, updated, metav1.UpdateOptions{})
+	}
+	if err != nil || !reflect.DeepEqual(binding.Subjects, bindingDesired.Subjects) || binding.RoleRef != bindingDesired.RoleRef {
+		return errors.New("ensure exact runtime handoff binding")
 	}
 	return nil
 }
@@ -995,6 +1340,8 @@ func (adapter *Adapter) List(ctx context.Context) ([]entity.RuntimeStatus, error
 		}
 		status.PVCDeleted = document.PVCDeleted
 		status.PVCDeletionStarted = document.PVCUID != ""
+		status.PVCNotFoundAt = document.PVCNotFoundAt
+		status.PVCDeletionProofSHA256 = document.PVCDeletionProofSHA256
 		if status.LastTransition.IsZero() {
 			status.LastTransition = document.LastTransition
 		} else if document.LastTransition.After(status.LastTransition) {
@@ -1026,6 +1373,31 @@ func castStatus(pod *corev1.Pod, pvc *corev1.PersistentVolumeClaim) entity.Runti
 	}
 	status.PodName, status.PodUID, status.PodResourceVersion = pod.Name, string(pod.UID), pod.ResourceVersion
 	status.ExecutionID = pod.Annotations["runtime.mattercodex.dev/execution-id"]
+	status.RuntimeRevisionSHA256 = pod.Annotations["runtime.mattercodex.dev/revision-sha256"]
+	if raw := pod.Annotations["runtime.mattercodex.dev/turn-handoff"]; raw != "" {
+		var handoff struct {
+			Schema                string    `json:"schema"`
+			ExecutionID           string    `json:"execution_id"`
+			ExecutionVersion      uint64    `json:"execution_version"`
+			Fence                 uint64    `json:"fence"`
+			GrantGeneration       uint64    `json:"grant_generation"`
+			RuntimeRevisionSHA256 string    `json:"runtime_revision_sha256"`
+			ImmutableInputSHA256  string    `json:"immutable_input_sha256"`
+			Outcome               string    `json:"outcome"`
+			TerminalReference     string    `json:"terminal_reference"`
+			TerminalSHA256        string    `json:"terminal_sha256"`
+			ObservedAt            time.Time `json:"observed_at"`
+		}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&handoff) == nil && errors.Is(decoder.Decode(&struct{}{}), io.EOF) {
+			status.Handoff = &entity.RuntimeHandoff{Schema: handoff.Schema, ExecutionID: handoff.ExecutionID,
+				ExecutionVersion: handoff.ExecutionVersion, Fence: handoff.Fence, GrantGeneration: handoff.GrantGeneration,
+				RuntimeRevisionSHA256: handoff.RuntimeRevisionSHA256, ImmutableInputSHA256: handoff.ImmutableInputSHA256,
+				Outcome: handoff.Outcome, TerminalReference: handoff.TerminalReference,
+				TerminalSHA256: handoff.TerminalSHA256, ObservedAt: handoff.ObservedAt}
+		}
+	}
 	status.Version, _ = strconv.ParseUint(pod.Annotations["runtime.mattercodex.dev/version"], 10, 64)
 	status.Fence, _ = strconv.ParseUint(pod.Annotations["runtime.mattercodex.dev/fence"], 10, 64)
 	status.GrantGeneration, _ = strconv.ParseUint(pod.Annotations["runtime.mattercodex.dev/grant-generation"], 10, 64)
@@ -1099,8 +1471,8 @@ func (adapter *Adapter) DeletePod(ctx context.Context, status entity.RuntimeStat
 }
 
 func (adapter *Adapter) revokeAccessProfile(ctx context.Context, pod *corev1.Pod) error {
-	if pod == nil || pod.Labels[accessLabel] == strings.ToLower(string(enum.AccessNone)) {
-		return nil
+	if pod == nil {
+		return errs.ErrStateConflict
 	}
 	name := pod.Spec.ServiceAccountName
 	executionID := pod.Annotations["runtime.mattercodex.dev/execution-id"]
@@ -1108,6 +1480,7 @@ func (adapter *Adapter) revokeAccessProfile(ctx context.Context, pod *corev1.Pod
 		return errs.ErrStateConflict
 	}
 	switch enum.AccessProfile(strings.ToUpper(pod.Labels[accessLabel])) {
+	case enum.AccessNone:
 	case enum.AccessProjectRead:
 		namespace := pod.Annotations["runtime.mattercodex.dev/project-namespace"]
 		binding, err := adapter.client.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -1121,16 +1494,7 @@ func (adapter *Adapter) revokeAccessProfile(ctx context.Context, pod *corev1.Pod
 			return errors.New("revoke exact project read binding")
 		}
 	case enum.AccessClusterAdmin:
-		binding, err := adapter.client.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
-		if err == nil {
-			uid, version := binding.UID, binding.ResourceVersion
-			err = adapter.client.RbacV1().ClusterRoleBindings().Delete(
-				ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version}},
-			)
-		}
-		if err != nil && !apierrors.IsNotFound(err) {
-			return errors.New("revoke exact cluster admin binding")
-		}
+		return nil
 	default:
 		return errs.ErrStateConflict
 	}
@@ -1148,6 +1512,38 @@ func (adapter *Adapter) revokeAccessProfile(ctx context.Context, pod *corev1.Pod
 		ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version}},
 	); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("revoke exact runtime access service account")
+	}
+	return adapter.deleteRunnerHandoffRBAC(ctx, pod, name)
+}
+
+func (adapter *Adapter) deleteRunnerHandoffRBAC(ctx context.Context, pod *corev1.Pod, serviceAccount string) error {
+	name := "runtime-handoff-" + pod.Labels[sessionLabel]
+	if pod.Labels[sessionLabel] == "" || name != "runtime-handoff-"+shortID(pod.Annotations["runtime.mattercodex.dev/session-id"]) {
+		return errs.ErrStateConflict
+	}
+	bindings := adapter.client.RbacV1().RoleBindings(adapter.config.Namespace)
+	binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		expectedSubject := rbacv1.Subject{Kind: "ServiceAccount", Name: serviceAccount, Namespace: adapter.config.Namespace}
+		if !sameBinding(binding.Subjects, expectedSubject) || binding.RoleRef != (rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName, Kind: "Role", Name: name,
+		}) {
+			return errs.ErrStateConflict
+		}
+		uid, version := binding.UID, binding.ResourceVersion
+		err = bindings.Delete(ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version}})
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return errors.New("revoke runtime handoff binding")
+	}
+	roles := adapter.client.RbacV1().Roles(adapter.config.Namespace)
+	role, err := roles.Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		uid, version := role.UID, role.ResourceVersion
+		err = roles.Delete(ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version}})
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return errors.New("revoke runtime handoff role")
 	}
 	return nil
 }
@@ -1188,54 +1584,28 @@ func (adapter *Adapter) RevokeAccess(ctx context.Context, execution entity.Execu
 			}
 		}
 	case enum.AccessClusterAdmin:
-		binding, err := adapter.client.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
-		if err == nil {
-			expectedRole := rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: adapter.config.AdminClusterRole}
-			if !sameBinding(binding.Subjects, subject) || binding.RoleRef != expectedRole {
-				return errs.ErrStateConflict
-			}
-			uid, version := binding.UID, binding.ResourceVersion
-			err = adapter.client.RbacV1().ClusterRoleBindings().Delete(ctx, name,
-				metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version}})
-		}
-		if err != nil && !apierrors.IsNotFound(err) {
-			return errors.New("revoke exact cluster admin binding")
-		}
+		return nil
 	default:
 		return errs.ErrStateConflict
-	}
-	serviceAccount, err := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace).Get(
-		ctx, name, metav1.GetOptions{},
-	)
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-	if err != nil {
-		return errors.New("read runtime access service account before revocation")
-	}
-	if serviceAccount.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
-		return errs.ErrStateConflict
-	}
-	uid, version := serviceAccount.UID, serviceAccount.ResourceVersion
-	if err := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace).Delete(ctx, name,
-		metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version}}); err != nil && !apierrors.IsNotFound(err) {
-		return errors.New("revoke exact runtime access service account")
 	}
 	return nil
 }
 
-func (adapter *Adapter) DeletePVC(ctx context.Context, status entity.RuntimeStatus) error {
+func (adapter *Adapter) DeletePVC(
+	ctx context.Context,
+	status entity.RuntimeStatus,
+) (entity.PVCDeletionProof, error) {
 	if status.PVCDeleted {
-		return nil
+		return pvcDeletionProof(status)
 	}
 	if !status.RetentionOwner || status.PVCName == "" || status.PVCUID == "" || status.PVCResourceVersion == "" {
-		return errs.ErrStateConflict
+		return entity.PVCDeletionProof{}, errs.ErrStateConflict
 	}
 	uid := types.UID(status.PVCUID)
 	resourceVersion := status.PVCResourceVersion
 	if !status.PVCDeletionStarted {
-		if err := adapter.recordPVCDeletion(ctx, status, false); err != nil {
-			return err
+		if _, err := adapter.recordPVCDeletion(ctx, status, false); err != nil {
+			return entity.PVCDeletionProof{}, err
 		}
 	}
 	pvc, readErr := adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace).Get(
@@ -1245,16 +1615,16 @@ func (adapter *Adapter) DeletePVC(ctx context.Context, status entity.RuntimeStat
 		return adapter.recordPVCDeletion(ctx, status, true)
 	}
 	if readErr != nil {
-		return errors.New("read runtime PVC before guarded deletion")
+		return entity.PVCDeletionProof{}, errors.New("read runtime PVC before guarded deletion")
 	}
 	if pvc.UID != uid ||
 		pvc.Annotations["runtime.mattercodex.dev/retention-owner-execution-id"] != status.ExecutionID ||
 		pvc.Annotations["runtime.mattercodex.dev/retention-owner-journal"] != journalName(status.ExecutionID) {
-		return errs.ErrStateConflict
+		return entity.PVCDeletionProof{}, errs.ErrStateConflict
 	}
 	if pvc.DeletionTimestamp == nil {
 		if pvc.ResourceVersion != resourceVersion {
-			return errs.ErrStateConflict
+			return entity.PVCDeletionProof{}, errs.ErrStateConflict
 		}
 		err := adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace).Delete(
 			ctx, status.PVCName, metav1.DeleteOptions{
@@ -1263,19 +1633,19 @@ func (adapter *Adapter) DeletePVC(ctx context.Context, status entity.RuntimeStat
 		)
 		if err != nil && !apierrors.IsNotFound(err) {
 			if apierrors.IsConflict(err) {
-				return errs.ErrStateConflict
+				return entity.PVCDeletionProof{}, errs.ErrStateConflict
 			}
-			return errors.New("delete exact runtime PVC")
+			return entity.PVCDeletionProof{}, errors.New("delete exact runtime PVC")
 		}
 	}
 	_, readErr = adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace).Get(
 		ctx, status.PVCName, metav1.GetOptions{},
 	)
 	if readErr == nil {
-		return errs.ErrDependency
+		return entity.PVCDeletionProof{}, errs.ErrDependency
 	}
 	if !apierrors.IsNotFound(readErr) {
-		return errors.New("read back deleted runtime PVC")
+		return entity.PVCDeletionProof{}, errors.New("read back deleted runtime PVC")
 	}
 	return adapter.recordPVCDeletion(ctx, status, true)
 }
@@ -1284,12 +1654,12 @@ func (adapter *Adapter) recordPVCDeletion(
 	ctx context.Context,
 	status entity.RuntimeStatus,
 	deleted bool,
-) error {
+) (entity.PVCDeletionProof, error) {
 	configMap, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(
 		ctx, journalName(status.ExecutionID), metav1.GetOptions{},
 	)
 	if err != nil {
-		return errors.New("read runtime journal for PVC deletion")
+		return entity.PVCDeletionProof{}, errors.New("read runtime journal for PVC deletion")
 	}
 	var document journalDocument
 	if decodeJournal([]byte(configMap.Data[journalDataKey]), &document) != nil ||
@@ -1297,24 +1667,54 @@ func (adapter *Adapter) recordPVCDeletion(
 		(document.PVCUID != "" && document.PVCUID != status.PVCUID) ||
 		(document.PVCResourceVersion != "" && document.PVCResourceVersion != status.PVCResourceVersion) ||
 		document.PVCDeleted && !deleted || document.PVCDeletionOwner && document.PVCUID == "" {
-		return errs.ErrStateConflict
+		return entity.PVCDeletionProof{}, errs.ErrStateConflict
 	}
 	document.PVCUID = status.PVCUID
 	document.PVCResourceVersion = status.PVCResourceVersion
 	document.PVCDeletionOwner = true
 	document.PVCDeleted = deleted
+	if deleted && document.PVCNotFoundAt.IsZero() {
+		document.PVCNotFoundAt = adapter.now().UTC().Truncate(time.Microsecond)
+		document.PVCDeletionProofSHA256 = deletionProofSHA256(
+			document.PVCName, document.PVCUID, document.PVCResourceVersion, document.PVCNotFoundAt,
+		)
+	}
 	raw, err := marshalJournal(document)
 	if err != nil {
-		return err
+		return entity.PVCDeletionProof{}, err
 	}
 	configMap.Data[journalDataKey] = string(raw)
 	if _, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Update(ctx, configMap, metav1.UpdateOptions{}); err != nil {
 		if apierrors.IsConflict(err) {
-			return errs.ErrStateConflict
+			return entity.PVCDeletionProof{}, errs.ErrStateConflict
 		}
-		return errors.New("persist runtime PVC deletion evidence")
+		return entity.PVCDeletionProof{}, errors.New("persist runtime PVC deletion evidence")
 	}
-	return nil
+	if !deleted {
+		return entity.PVCDeletionProof{}, nil
+	}
+	return entity.PVCDeletionProof{PVCName: document.PVCName, PVCUID: document.PVCUID,
+		PVCResourceVersion: document.PVCResourceVersion, ObservedNotFoundAt: document.PVCNotFoundAt,
+		SHA256: document.PVCDeletionProofSHA256}, nil
+}
+
+func deletionProofSHA256(name, uid, resourceVersion string, observedAt time.Time) string {
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		"runtime-pvc-not-found-v1", name, uid, resourceVersion, observedAt.Format(time.RFC3339Nano),
+	}, "\n")))
+	return hex.EncodeToString(digest[:])
+}
+
+func pvcDeletionProof(status entity.RuntimeStatus) (entity.PVCDeletionProof, error) {
+	proof := entity.PVCDeletionProof{PVCName: status.PVCName, PVCUID: status.PVCUID,
+		PVCResourceVersion: status.PVCResourceVersion, ObservedNotFoundAt: status.PVCNotFoundAt,
+		SHA256: status.PVCDeletionProofSHA256}
+	if proof.ObservedNotFoundAt.IsZero() || proof.SHA256 != deletionProofSHA256(
+		proof.PVCName, proof.PVCUID, proof.PVCResourceVersion, proof.ObservedNotFoundAt,
+	) {
+		return entity.PVCDeletionProof{}, errs.ErrStateConflict
+	}
+	return proof, nil
 }
 
 func (adapter *Adapter) EnsureArchiveJob(
@@ -1341,13 +1741,38 @@ func (adapter *Adapter) EnsureCleanupAuthorizerJob(
 	return adapter.ensureWorkerJob(ctx, execution, status, cleanupComponent)
 }
 
+func (adapter *Adapter) OpenArchiveGate(ctx context.Context, execution entity.Execution, status entity.RuntimeStatus) error {
+	if !execution.State.Terminal() || execution.ArchiveSHA256 == "" || execution.RestoreProofSHA256 == "" || status.PodName == "" {
+		return errs.ErrStateConflict
+	}
+	pod, err := adapter.client.CoreV1().Pods(adapter.config.Namespace).Get(ctx, status.PodName, metav1.GetOptions{})
+	if err != nil {
+		return errors.New("read warm runtime archive gate")
+	}
+	if pod.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+		pod.Annotations["runtime.mattercodex.dev/revision-sha256"] != execution.RuntimeRevisionSHA256 ||
+		pod.Annotations["runtime.mattercodex.dev/archive-gate"] == "OPEN" {
+		if pod.Annotations["runtime.mattercodex.dev/archive-gate"] == "OPEN" {
+			return nil
+		}
+		return errs.ErrStateConflict
+	}
+	updated := pod.DeepCopy()
+	updated.Annotations["runtime.mattercodex.dev/archive-gate"] = "OPEN"
+	if _, err := adapter.client.CoreV1().Pods(adapter.config.Namespace).Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
+		return errors.New("open verified runtime archive gate")
+	}
+	return nil
+}
+
 func (adapter *Adapter) ensureWorkerJob(
 	ctx context.Context,
 	execution entity.Execution,
 	status entity.RuntimeStatus,
 	component string,
 ) error {
-	if !execution.State.Terminal() || status.PVCName == "" {
+	if (!execution.State.Terminal() && (component != rehydrateComponent ||
+		execution.RestoreSourceExecutionID == "")) || status.PVCName == "" {
 		return errs.ErrStateConflict
 	}
 	name := workerJobName(component, execution)
@@ -1358,6 +1783,15 @@ func (adapter *Adapter) ensureWorkerJob(
 		if existing.Labels[executionLabel] != shortID(execution.ID) ||
 			existing.Annotations["runtime.mattercodex.dev/fence"] != strconv.FormatUint(execution.Fence, 10) {
 			return errs.ErrStateConflict
+		}
+		if existing.Status.Failed > 0 && existing.Status.Active == 0 && component == cleanupComponent {
+			uid, version := existing.UID, existing.ResourceVersion
+			if deleteErr := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Delete(
+				ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version}},
+			); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
+				return errors.New("replace failed cleanup eligibility probe")
+			}
+			return nil
 		}
 		if existing.Status.Failed > 0 && existing.Status.Active == 0 {
 			return errs.ErrDependency
@@ -1371,10 +1805,44 @@ func (adapter *Adapter) ensureWorkerJob(
 	if err != nil {
 		return err
 	}
+	if err := adapter.ensureWorkerJournalRBAC(ctx, execution, component, job.Spec.Template.Spec.ServiceAccountName); err != nil {
+		return err
+	}
 	if _, err := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Create(
 		ctx, job, metav1.CreateOptions{},
 	); err != nil && !apierrors.IsAlreadyExists(err) {
 		return errors.New("create runtime worker job")
+	}
+	return nil
+}
+
+func (adapter *Adapter) ensureWorkerJournalRBAC(
+	ctx context.Context,
+	execution entity.Execution,
+	component, serviceAccount string,
+) error {
+	name := workerJobName(component, execution)
+	desired := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "worker-journal-authority")},
+		Rules: []rbacv1.PolicyRule{{APIGroups: []string{""}, Resources: []string{"configmaps"},
+			ResourceNames: []string{journalName(execution.ID)}, Verbs: []string{"get", "update"}}}}
+	roles := adapter.client.RbacV1().Roles(adapter.config.Namespace)
+	role, err := roles.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		role, err = roles.Create(ctx, desired, metav1.CreateOptions{})
+	}
+	if err != nil || !reflect.DeepEqual(role.Rules, desired.Rules) {
+		return errors.New("ensure exact worker journal role")
+	}
+	bindingDesired := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: desired.Labels},
+		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: serviceAccount, Namespace: adapter.config.Namespace}},
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
+	bindings := adapter.client.RbacV1().RoleBindings(adapter.config.Namespace)
+	binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		binding, err = bindings.Create(ctx, bindingDesired, metav1.CreateOptions{})
+	}
+	if err != nil || !reflect.DeepEqual(binding.Subjects, bindingDesired.Subjects) || binding.RoleRef != bindingDesired.RoleRef {
+		return errors.New("ensure exact worker journal binding")
 	}
 	return nil
 }
@@ -1387,10 +1855,13 @@ func (adapter *Adapter) workerJob(
 	command, serviceAccount, workload, spiffe := "", "", "", ""
 	switch component {
 	case archiveComponent:
-		command, serviceAccount, workload = "/usr/local/bin/runtime-archive", adapter.config.ArchiveServiceAccount, "runtime-controller"
+		command, serviceAccount, workload = "/usr/local/bin/runtime-archive", adapter.config.ArchiveServiceAccount, "runtime-archive"
 		spiffe = "spiffe://mattercodex.local/ns/" + adapter.config.Namespace + "/sa/" + serviceAccount
 	case restoreComponent:
 		command, serviceAccount, workload = "/usr/local/bin/runtime-restore-verifier", adapter.config.RestoreServiceAccount, "runtime-restore-verifier"
+		spiffe = "spiffe://mattercodex.local/ns/" + adapter.config.Namespace + "/sa/" + serviceAccount
+	case rehydrateComponent:
+		command, serviceAccount, workload = "/usr/local/bin/runtime-rehydrate", adapter.config.RestoreServiceAccount, "runtime-restore-verifier"
 		spiffe = "spiffe://mattercodex.local/ns/" + adapter.config.Namespace + "/sa/" + serviceAccount
 	case cleanupComponent:
 		command, serviceAccount, workload = "/usr/local/bin/runtime-cleanup-authorizer", adapter.config.CleanupServiceAccount, "runtime-cleanup-authorizer"
@@ -1416,12 +1887,15 @@ func (adapter *Adapter) workerJob(
 		{Name: "RUNTIME_S3_TLS_SERVER_NAME", Value: adapter.config.S3TLSServerName},
 		{Name: "RUNTIME_S3_BUCKET", Value: adapter.config.S3Bucket},
 		{Name: "RUNTIME_S3_REGION", Value: adapter.config.S3Region},
+		{Name: "RUNTIME_PVC_NAME", Value: status.PVCName},
+		{Name: "RUNTIME_PVC_UID", Value: status.PVCUID},
+		{Name: "RUNTIME_PVC_RESOURCE_VERSION", Value: status.PVCResourceVersion},
 	}
 	mainResources := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("50m"), corev1.ResourceMemory: resource.MustParse("64Mi")},
 		Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m"), corev1.ResourceMemory: resource.MustParse("512Mi")},
 	}
-	if component == archiveComponent || component == restoreComponent {
+	if component == archiveComponent || component == restoreComponent || component == rehydrateComponent {
 		scratch := adapter.workerScratch(component)
 		mainResources.Requests[corev1.ResourceEphemeralStorage] = scratch
 		mainResources.Limits[corev1.ResourceEphemeralStorage] = scratch
@@ -1477,9 +1951,6 @@ func (adapter *Adapter) workerVolumes(
 	status entity.RuntimeStatus,
 ) ([]corev1.Volume, []corev1.VolumeMount) {
 	workload := component
-	if component == archiveComponent {
-		workload = "runtime-controller"
-	}
 	volumes := []corev1.Volume{
 		{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{DefaultMode: int32Pointer(0o440), Sources: []corev1.VolumeProjection{
 			{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: int64Pointer(600), Path: "token"}},
@@ -1511,9 +1982,9 @@ func (adapter *Adapter) workerVolumes(
 		{Name: "control-plane-ca", MountPath: "/var/run/config/mattercodex/runtime-worker/control-plane", ReadOnly: true},
 		{Name: "application-grant", MountPath: "/var/run/secrets/mattercodex/runtime-worker/application-grant", ReadOnly: true},
 	}
-	if component == archiveComponent || component == restoreComponent {
-		s3CredentialProfile := "runtime-controller-s3"
-		if component == restoreComponent {
+	if component == archiveComponent || component == restoreComponent || component == rehydrateComponent {
+		s3CredentialProfile := "runtime-archive-s3"
+		if component == restoreComponent || component == rehydrateComponent {
 			s3CredentialProfile = "runtime-restore-verifier-s3"
 		}
 		volumes = append(volumes,
@@ -1535,6 +2006,12 @@ func (adapter *Adapter) workerVolumes(
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: status.PVCName, ReadOnly: true},
 		}})
 		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/archive-source", ReadOnly: true})
+	}
+	if component == rehydrateComponent {
+		volumes = append(volumes, corev1.Volume{Name: "session", VolumeSource: corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: status.PVCName},
+		}})
+		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/restore-target"})
 	}
 	return volumes, mounts
 }
@@ -1642,7 +2119,7 @@ func (adapter *Adapter) CleanupTemporary(ctx context.Context, before time.Time) 
 	for index := range jobs.Items {
 		job := &jobs.Items[index]
 		switch job.Labels[componentLabel] {
-		case archiveComponent, restoreComponent, cleanupComponent:
+		case archiveComponent, restoreComponent, rehydrateComponent, cleanupComponent:
 		default:
 			continue
 		}
@@ -1655,6 +2132,24 @@ func (adapter *Adapter) CleanupTemporary(ctx context.Context, before time.Time) 
 			ctx, job.Name, metav1.DeleteOptions{PropagationPolicy: propagationPointer(metav1.DeletePropagationBackground), Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion}},
 		); err != nil && !apierrors.IsNotFound(err) {
 			return deleted, errors.New("delete temporary runtime job")
+		}
+		binding, err := adapter.client.RbacV1().RoleBindings(adapter.config.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
+		if err == nil {
+			bindingUID, bindingVersion := binding.UID, binding.ResourceVersion
+			err = adapter.client.RbacV1().RoleBindings(adapter.config.Namespace).Delete(ctx, job.Name,
+				metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &bindingUID, ResourceVersion: &bindingVersion}})
+		}
+		if err != nil && !apierrors.IsNotFound(err) {
+			return deleted, errors.New("delete exact worker journal binding")
+		}
+		role, err := adapter.client.RbacV1().Roles(adapter.config.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
+		if err == nil {
+			roleUID, roleVersion := role.UID, role.ResourceVersion
+			err = adapter.client.RbacV1().Roles(adapter.config.Namespace).Delete(ctx, job.Name,
+				metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &roleUID, ResourceVersion: &roleVersion}})
+		}
+		if err != nil && !apierrors.IsNotFound(err) {
+			return deleted, errors.New("delete exact worker journal role")
 		}
 		deleted++
 	}
@@ -1671,7 +2166,6 @@ func labels(execution entity.Execution, component string) map[string]string {
 }
 
 func journalName(executionID string) string { return "runtime-journal-" + shortID(executionID) }
-func leaseName(executionID string) string   { return "runtime-lease-" + shortID(executionID) }
 func configName(execution entity.Execution) string {
 	return "runtime-config-" + shortID(execution.ID) + "-v" + strconv.FormatUint(execution.RuntimeRevisionVersion, 10)
 }
@@ -1682,7 +2176,10 @@ func podName(execution entity.Execution) string {
 	return "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID, 24)
 }
 func accessServiceAccountName(execution entity.Execution) string {
-	return "runtime-access-" + shortID(execution.ID)
+	if execution.AccessProfile == enum.AccessClusterAdmin {
+		return "runtime-role-cluster-admin"
+	}
+	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID, 24)
 }
 func projectNamespaceName(projectID string) string {
 	return "mattercodex-project-" + stableHash(projectID, 20)
@@ -1725,9 +2222,14 @@ func marshalJournal(document journalDocument) ([]byte, error) {
 		document.HeartbeatKey == "" || document.CompleteKey == "" ||
 		document.IncidentKey == "" || document.ArchiveKey == "" ||
 		document.RestoreKey == "" || document.CleanupKey == "" ||
-		document.LeaseSecretName == "" || document.PodName == "" || document.PVCName == "" ||
+		document.PodName == "" || document.PVCName == "" || document.Phase == "" ||
 		document.CreatedAt.IsZero() || document.LastTransition.Before(document.CreatedAt) ||
-		document.PVCDeleted && (!document.PVCDeletionOwner || document.PVCUID == "" || document.PVCResourceVersion == "") {
+		!validRehydrateJournal(document) ||
+		!validCapacityJournal(document) ||
+		document.PVCDeleted && (!document.PVCDeletionOwner || document.PVCUID == "" || document.PVCResourceVersion == "" ||
+			document.PVCNotFoundAt.IsZero() || document.PVCDeletionProofSHA256 != deletionProofSHA256(
+			document.PVCName, document.PVCUID, document.PVCResourceVersion, document.PVCNotFoundAt,
+		)) {
 		return nil, errs.ErrStateConflict
 	}
 	raw, err := json.Marshal(document)
@@ -1753,11 +2255,50 @@ func decodeJournal(raw []byte, document *journalDocument) error {
 	pvcEvidencePresent := document.PVCUID != "" && document.PVCResourceVersion != ""
 	if document.CreatedAt.IsZero() || document.LastTransition.Before(document.CreatedAt) ||
 		(!pvcEvidenceEmpty && !pvcEvidencePresent) ||
+		!validRehydrateJournal(*document) ||
+		!validCapacityJournal(*document) ||
 		document.PVCDeletionOwner && !pvcEvidencePresent ||
-		document.PVCDeleted && !document.PVCDeletionOwner {
+		document.PVCDeleted && (!document.PVCDeletionOwner || document.PVCNotFoundAt.IsZero() ||
+			document.PVCDeletionProofSHA256 != deletionProofSHA256(
+				document.PVCName, document.PVCUID, document.PVCResourceVersion, document.PVCNotFoundAt,
+			)) {
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+func validCapacityJournal(document journalDocument) bool {
+	empty := document.CapacityProviderBindingID == "" && document.CapacityObservationRevision == 0 &&
+		document.CapacityObservedAt.IsZero() && document.CapacityObservedUsage == 0 &&
+		document.CapacityObservedLimit == 0 && document.CapacityObservationMaxAge == 0 &&
+		document.CapacityOrganizationLimit == 0
+	if empty {
+		return true
+	}
+	maximumAge := time.Duration(document.CapacityObservationMaxAge)
+	return uuid.Validate(document.CapacityProviderBindingID) == nil &&
+		document.CapacityObservationRevision > 0 && !document.CapacityObservedAt.IsZero() &&
+		document.CapacityObservedLimit > 0 && document.CapacityObservedUsage <= document.CapacityObservedLimit &&
+		maximumAge >= time.Minute && maximumAge <= 24*time.Hour &&
+		document.CapacityOrganizationLimit >= 1 && document.CapacityOrganizationLimit <= 10_000
+}
+
+func validRehydrateJournal(document journalDocument) bool {
+	source := document.Execution.RestoreSourceExecutionID != ""
+	switch document.RehydratePhase {
+	case "NOT_REQUIRED":
+		return !source && document.RehydratePVCUID == "" &&
+			document.RehydrateProofReference == "" && document.RehydrateProofSHA256 == ""
+	case "PENDING":
+		return source && document.RehydratePVCUID == "" &&
+			document.RehydrateProofReference == "" && document.RehydrateProofSHA256 == ""
+	case "COMPLETE":
+		return source && uuid.Validate(document.RehydratePVCUID) == nil &&
+			document.RehydrateProofReference == "journal://"+document.Execution.ID+"/rehydrate-proof" &&
+			len(document.RehydrateProofSHA256) == sha256.Size*2
+	default:
+		return false
+	}
 }
 
 func resourcesFor(class enum.ResourceClass) (cpuMilli, memoryBytes int64, accelerator bool) {

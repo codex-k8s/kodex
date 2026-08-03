@@ -7,7 +7,7 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --environment staging|production --controller-image-ref <repository@sha256:digest> --authority-image-ref <repository@sha256:digest> --kubernetes-api-cidrs <ip/32[,ipv6/128]> --kubernetes-api-ports <443[,endpoint-port]>\n' "$0" >&2
+  printf 'Usage: %s --environment staging|production --controller-image-ref <repository@sha256:digest> --authority-image-ref <repository@sha256:digest> --kubernetes-api-cidrs <ip/32[,ipv6/128]> --kubernetes-api-ports <443[,endpoint-port]> --provider-egress-cidrs <ip/32[,ipv6/128]>\n' "$0" >&2
 }
 
 environment_name=""
@@ -15,6 +15,7 @@ controller_image=""
 authority_image=""
 api_cidrs_raw=""
 api_ports_raw=""
+provider_cidrs_raw=""
 while (($# > 0)); do
   case "$1" in
     --environment) environment_name="${2:-}"; shift 2 ;;
@@ -22,6 +23,7 @@ while (($# > 0)); do
     --authority-image-ref) authority_image="${2:-}"; shift 2 ;;
     --kubernetes-api-cidrs) api_cidrs_raw="${2:-}"; shift 2 ;;
     --kubernetes-api-ports) api_ports_raw="${2:-}"; shift 2 ;;
+    --provider-egress-cidrs) provider_cidrs_raw="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) fail "unsupported argument: $1" ;;
   esac
@@ -39,11 +41,16 @@ validate_image "$authority_image" "ghcr.io/codex-k8s/matter-codex/internal-rpc-a
 
 IFS=',' read -r -a api_cidrs <<<"$api_cidrs_raw"
 IFS=',' read -r -a api_ports <<<"$api_ports_raw"
+IFS=',' read -r -a provider_cidrs <<<"$provider_cidrs_raw"
 ((${#api_cidrs[@]} >= 1 && ${#api_cidrs[@]} <= 32)) || fail "Kubernetes API CIDRs must contain one to 32 exact endpoints"
 ((${#api_ports[@]} >= 1 && ${#api_ports[@]} <= 8)) || fail "Kubernetes API ports must contain one to eight exact ports"
+((${#provider_cidrs[@]} >= 1 && ${#provider_cidrs[@]} <= 64)) || fail "provider egress CIDRs must contain one to 64 exact endpoints"
 has_service_port=false
 for cidr in "${api_cidrs[@]}"; do
   [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ || "$cidr" =~ ^[0-9a-fA-F:]+/128$ ]] || fail "Kubernetes API endpoint must be IPv4 /32 or IPv6 /128"
+done
+for cidr in "${provider_cidrs[@]}"; do
+  [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ || "$cidr" =~ ^[0-9a-fA-F:]+/128$ ]] || fail "provider egress endpoint must be IPv4 /32 or IPv6 /128"
 done
 for port in "${api_ports[@]}"; do
   [[ "$port" =~ ^[0-9]+$ ]] && ((10#$port >= 1 && 10#$port <= 65535)) || fail "Kubernetes API port is invalid"
@@ -80,7 +87,7 @@ emit_policy runtime-controller-workers-kubernetes-api-exact-endpoints '    match
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
-        values: [runtime-archive, runtime-restore-verifier, runtime-cleanup-authorizer]'
+        values: [runtime-archive, runtime-restore-verifier, runtime-rehydrate, runtime-cleanup-authorizer]'
 emit_policy runtime-role-kubernetes-api-exact-endpoints '    matchLabels:
       app.kubernetes.io/name: runtime-controller
       app.kubernetes.io/component: role-runtime
@@ -88,3 +95,10 @@ emit_policy runtime-role-kubernetes-api-exact-endpoints '    matchLabels:
       - key: runtime.mattercodex.dev/access-profile
         operator: In
         values: [project_read_only, cluster_admin]'
+
+printf '%s\n' '---' 'apiVersion: networking.k8s.io/v1' 'kind: NetworkPolicy' 'metadata:' \
+  '  name: runtime-role-provider-exact-endpoints' '  namespace: mattercodex-system' 'spec:' \
+  '  podSelector:' '    matchLabels:' '      app.kubernetes.io/name: runtime-controller' \
+  '      app.kubernetes.io/component: role-runtime' '  policyTypes: [Egress]' '  egress:' '    - to:'
+for cidr in "${provider_cidrs[@]}"; do printf '        - ipBlock: {cidr: %s}\n' "$cidr"; done
+printf '%s\n' '      ports:' '        - {protocol: TCP, port: 443}'

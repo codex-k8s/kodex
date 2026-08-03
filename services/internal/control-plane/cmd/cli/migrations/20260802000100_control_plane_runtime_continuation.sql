@@ -56,10 +56,49 @@ CREATE TABLE control_plane.runtime_executions (
         cleanup_authorization_generation BETWEEN 0 AND 9007199254740991
     ),
     cleanup_consumed_at timestamptz,
+    cleanup_pvc_name text CHECK (
+        cleanup_pvc_name IS NULL OR length(cleanup_pvc_name) BETWEEN 1 AND 253
+    ),
+    cleanup_pvc_uid uuid,
+    cleanup_pvc_resource_version text CHECK (
+        cleanup_pvc_resource_version IS NULL OR length(cleanup_pvc_resource_version) BETWEEN 1 AND 64
+    ),
+    cleanup_claimed_at timestamptz,
+    cleanup_eligible_at timestamptz,
+    cleanup_not_found_at timestamptz,
+    cleanup_deletion_proof_sha256 text CHECK (
+        cleanup_deletion_proof_sha256 IS NULL OR cleanup_deletion_proof_sha256 ~ '^[a-f0-9]{64}$'
+    ),
+    restore_source_execution_id uuid,
+    restore_source_archive_reference text,
+    restore_source_archive_sha256 text CHECK (
+        restore_source_archive_sha256 IS NULL OR restore_source_archive_sha256 ~ '^[a-f0-9]{64}$'
+    ),
+    restore_source_runtime_revision_sha256 text CHECK (
+        restore_source_runtime_revision_sha256 IS NULL OR restore_source_runtime_revision_sha256 ~ '^[a-f0-9]{64}$'
+    ),
+    restore_source_immutable_input_sha256 text CHECK (
+        restore_source_immutable_input_sha256 IS NULL OR restore_source_immutable_input_sha256 ~ '^[a-f0-9]{64}$'
+    ),
+    restore_source_proof_sha256 text CHECK (
+        restore_source_proof_sha256 IS NULL OR restore_source_proof_sha256 ~ '^[a-f0-9]{64}$'
+    ),
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL CHECK (updated_at >= created_at),
     UNIQUE (organization_id, project_id, id),
     UNIQUE (organization_id, project_id, turn_id, attempt),
+    CHECK (
+        (restore_source_execution_id IS NULL AND restore_source_archive_reference IS NULL
+            AND restore_source_archive_sha256 IS NULL
+            AND restore_source_runtime_revision_sha256 IS NULL
+            AND restore_source_immutable_input_sha256 IS NULL
+            AND restore_source_proof_sha256 IS NULL)
+        OR (restore_source_execution_id IS NOT NULL AND restore_source_archive_reference IS NOT NULL
+            AND restore_source_archive_sha256 IS NOT NULL
+            AND restore_source_runtime_revision_sha256 IS NOT NULL
+            AND restore_source_immutable_input_sha256 IS NOT NULL
+            AND restore_source_proof_sha256 IS NOT NULL)
+    ),
     CHECK (
         (lease_id IS NULL AND lease_token_sha256 IS NULL AND lease_expires_at IS NULL)
         OR (lease_id IS NOT NULL AND lease_token_sha256 IS NOT NULL AND lease_expires_at IS NOT NULL)
@@ -102,18 +141,31 @@ CREATE TABLE control_plane.runtime_executions (
             AND cleanup_authorization_generation = 0
             AND cleanup_authorization_id IS NULL
             AND cleanup_authorization_expires_at IS NULL
-            AND cleanup_consumed_at IS NULL)
+            AND cleanup_consumed_at IS NULL
+            AND cleanup_pvc_name IS NULL AND cleanup_pvc_uid IS NULL
+            AND cleanup_pvc_resource_version IS NULL AND cleanup_claimed_at IS NULL
+            AND cleanup_eligible_at IS NULL AND cleanup_not_found_at IS NULL
+            AND cleanup_deletion_proof_sha256 IS NULL)
         OR (cleanup_authorization_state = 'ACTIVE'
             AND cleanup_authorization_generation > 0
             AND cleanup_authorization_id IS NOT NULL
             AND cleanup_authorization_expires_at > updated_at
             AND cleanup_consumed_at IS NULL
+            AND cleanup_pvc_name IS NOT NULL AND cleanup_pvc_uid IS NOT NULL
+            AND cleanup_pvc_resource_version IS NOT NULL
+            AND cleanup_claimed_at = updated_at
+            AND cleanup_eligible_at <= cleanup_claimed_at
+            AND cleanup_not_found_at IS NULL AND cleanup_deletion_proof_sha256 IS NULL
             AND archive_sha256 IS NOT NULL AND restore_proof_sha256 IS NOT NULL)
         OR (cleanup_authorization_state = 'EXPIRED'
             AND cleanup_authorization_generation > 0
             AND cleanup_authorization_id IS NOT NULL
             AND cleanup_authorization_expires_at <= updated_at
             AND cleanup_consumed_at IS NULL
+            AND cleanup_pvc_name IS NOT NULL AND cleanup_pvc_uid IS NOT NULL
+            AND cleanup_pvc_resource_version IS NOT NULL
+            AND cleanup_claimed_at IS NOT NULL AND cleanup_eligible_at <= cleanup_claimed_at
+            AND cleanup_not_found_at IS NULL AND cleanup_deletion_proof_sha256 IS NULL
             AND archive_sha256 IS NOT NULL AND restore_proof_sha256 IS NOT NULL)
         OR (cleanup_authorization_state = 'CONSUMED'
             AND cleanup_authorization_generation > 0
@@ -121,6 +173,11 @@ CREATE TABLE control_plane.runtime_executions (
             AND cleanup_authorization_expires_at IS NOT NULL
             AND cleanup_consumed_at IS NOT NULL
             AND cleanup_consumed_at <= updated_at
+            AND cleanup_pvc_name IS NOT NULL AND cleanup_pvc_uid IS NOT NULL
+            AND cleanup_pvc_resource_version IS NOT NULL
+            AND cleanup_claimed_at IS NOT NULL AND cleanup_eligible_at <= cleanup_claimed_at
+            AND cleanup_not_found_at BETWEEN cleanup_claimed_at AND cleanup_consumed_at
+            AND cleanup_deletion_proof_sha256 IS NOT NULL
             AND archive_sha256 IS NOT NULL AND restore_proof_sha256 IS NOT NULL)
     )
 );

@@ -17,9 +17,8 @@ import (
 )
 
 const (
-	terminalSucceeded  = "SUCCEEDED"
-	terminalFailed     = "FAILED"
-	cleanupExpiryGrace = 30 * time.Second
+	terminalSucceeded = "SUCCEEDED"
+	terminalFailed    = "FAILED"
 )
 
 type Observer interface {
@@ -83,6 +82,10 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 		service.observer.Observe("claim", "invalid")
 		return errs.ErrStateConflict
 	}
+	journal, err := service.cluster.EnsureJournal(ctx, execution)
+	if err != nil {
+		return err
+	}
 	revision, err := service.controlPlane.GetRevision(
 		ctx, execution.RuntimeRevisionID, execution.RuntimeRevisionVersion,
 	)
@@ -92,7 +95,7 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 	if err := revision.ValidateFor(execution); err != nil {
 		return errs.ErrStateConflict
 	}
-	decision, err := service.cluster.Capacity(ctx, execution)
+	decision, err := service.cluster.Capacity(ctx, execution, revision)
 	if err != nil {
 		service.observer.Observe("capacity", "error")
 		return err
@@ -102,7 +105,7 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 			service.observer.Observe("evict", "rejected")
 			return errs.ErrCapacityDeferred
 		}
-		decision, err = service.cluster.Capacity(ctx, execution)
+		decision, err = service.cluster.Capacity(ctx, execution, revision)
 		if err != nil {
 			return err
 		}
@@ -110,10 +113,6 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 	if !decision.Admitted {
 		service.observer.Observe("capacity", "deferred")
 		return errs.ErrCapacityDeferred
-	}
-	journal, err := service.cluster.EnsureJournal(ctx, execution)
-	if err != nil {
-		return err
 	}
 	admitted, err := service.controlPlane.Admit(
 		ctx, journal.AdmitIdempotencyKey, execution,
@@ -132,6 +131,10 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 		ctx, admitted.Execution, revision, admitted.LeaseToken, journal,
 	)
 	if err != nil {
+		if errors.Is(err, errs.ErrDependency) && admitted.Execution.RestoreSourceExecutionID != "" {
+			service.observer.Observe("rehydrate", "scheduled")
+			return nil
+		}
 		_ = service.recordIncident(ctx, journal, admitted.Execution,
 			enum.IncidentReconcileFailed, "materialize_failed")
 		return err
@@ -193,6 +196,13 @@ func (service *Service) reconcileStatus(ctx context.Context, status entity.Runti
 	if execution.State == enum.ExecutionPending {
 		return service.resumeAdmission(ctx, journal)
 	}
+	if (execution.State == enum.ExecutionAdmitted || execution.State == enum.ExecutionRunning) && journal.LeaseToken == "" {
+		journal, err = service.recoverAdmission(ctx, journal)
+		if err != nil {
+			return err
+		}
+		execution = journal.Execution
+	}
 	if (execution.State == enum.ExecutionAdmitted || execution.State == enum.ExecutionRunning) &&
 		status.Phase == "Missing" {
 		if time.Since(status.LastTransition) >= service.watchdog {
@@ -214,16 +224,26 @@ func (service *Service) reconcileStatus(ctx context.Context, status entity.Runti
 			return err
 		}
 		_, err = service.cluster.Materialize(ctx, execution, revision, journal.LeaseToken, journal)
+		if errors.Is(err, errs.ErrDependency) && execution.RestoreSourceExecutionID != "" {
+			service.observer.Observe("rehydrate", "scheduled")
+			return nil
+		}
 		return err
 	}
 	if execution.State.Terminal() {
 		return service.reconcileRetention(ctx, journal, status)
 	}
+	if status.Handoff != nil {
+		if err := validateHandoff(execution, *status.Handoff); err != nil {
+			return err
+		}
+		return service.complete(ctx, journal, status, status.Handoff.Outcome)
+	}
 	switch status.Phase {
-	case "Succeeded":
-		return service.complete(ctx, journal, status, terminalSucceeded)
-	case "Failed":
-		return service.complete(ctx, journal, status, terminalFailed)
+	case "Succeeded", "Failed":
+		return service.recordIncident(
+			ctx, journal, execution, enum.IncidentWorkloadUnavailable, "runner_exited_without_handoff",
+		)
 	case "Running":
 		if status.Ready {
 			err := service.heartbeat(ctx, journal)
@@ -240,6 +260,31 @@ func (service *Service) reconcileStatus(ctx context.Context, status entity.Runti
 		}
 	}
 	return nil
+}
+
+func (service *Service) recoverAdmission(
+	ctx context.Context,
+	journal runtimerepo.Journal,
+) (runtimerepo.Journal, error) {
+	request := journal.AdmissionRequest
+	if request.Validate() != nil || request.State != enum.ExecutionPending ||
+		!sameExecutionLineage(request, journal.Execution) {
+		return runtimerepo.Journal{}, errs.ErrStateConflict
+	}
+	admitted, err := service.controlPlane.Admit(ctx, journal.AdmitIdempotencyKey, request)
+	if err != nil {
+		return runtimerepo.Journal{}, err
+	}
+	if admitted.LeaseToken == "" || !sameExecutionLineage(request, admitted.Execution) ||
+		(admitted.Execution.State != enum.ExecutionAdmitted && admitted.Execution.State != enum.ExecutionRunning) {
+		return runtimerepo.Journal{}, errs.ErrStateConflict
+	}
+	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
+		return runtimerepo.Journal{}, err
+	}
+	journal.Execution = admitted.Execution
+	journal.LeaseToken = admitted.LeaseToken
+	return journal, nil
 }
 
 func (service *Service) rejoinExecution(
@@ -305,17 +350,44 @@ func (service *Service) resumeAdmission(
 	if err != nil {
 		return err
 	}
+	if err := revision.ValidateFor(journal.Execution); err != nil {
+		return errs.ErrStateConflict
+	}
+	decision, err := service.cluster.Capacity(ctx, journal.Execution, revision)
+	if err != nil {
+		return err
+	}
+	if !decision.Admitted && decision.Eviction != nil {
+		if err := service.evict(ctx, *decision.Eviction, decision.Reason == "session_replacement"); err != nil {
+			return errs.ErrCapacityDeferred
+		}
+		decision, err = service.cluster.Capacity(ctx, journal.Execution, revision)
+		if err != nil {
+			return err
+		}
+	}
+	if !decision.Admitted {
+		service.observer.Observe("capacity", "deferred")
+		return errs.ErrCapacityDeferred
+	}
 	admitted, err := service.controlPlane.Admit(
-		ctx, journal.AdmitIdempotencyKey, journal.Execution,
+		ctx, journal.AdmitIdempotencyKey, journal.AdmissionRequest,
 	)
 	if err != nil {
 		return err
 	}
 	journal.Execution = admitted.Execution
 	journal.LeaseToken = admitted.LeaseToken
+	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
+		return err
+	}
 	_, err = service.cluster.Materialize(
 		ctx, admitted.Execution, revision, admitted.LeaseToken, journal,
 	)
+	if errors.Is(err, errs.ErrDependency) && admitted.Execution.RestoreSourceExecutionID != "" {
+		service.observer.Observe("rehydrate", "scheduled")
+		return nil
+	}
 	return err
 }
 
@@ -344,10 +416,17 @@ func (service *Service) complete(
 	outcome string,
 ) error {
 	reference := "kubernetes-pod:" + status.PodUID
-	digest := sha256.Sum256([]byte(reference + ":" + outcome))
+	digestHex := ""
+	if status.Handoff != nil {
+		reference = status.Handoff.TerminalReference
+		digestHex = status.Handoff.TerminalSHA256
+	} else {
+		digest := sha256.Sum256([]byte(reference + ":" + outcome))
+		digestHex = hex.EncodeToString(digest[:])
+	}
 	updated, err := service.controlPlane.Complete(
 		ctx, journal.CompleteIdempotencyKey, journal.Execution,
-		journal.LeaseToken, outcome, reference, hex.EncodeToString(digest[:]),
+		journal.LeaseToken, outcome, reference, digestHex,
 	)
 	if err != nil {
 		return err
@@ -358,6 +437,29 @@ func (service *Service) complete(
 	journal.Execution = updated
 	service.observer.Observe("complete", "terminal")
 	return service.reconcileRetention(ctx, journal, status)
+}
+
+func validateHandoff(execution entity.Execution, handoff entity.RuntimeHandoff) error {
+	if handoff.Schema != "mattercodex.runtime-turn-handoff.v1" || handoff.ExecutionID != execution.ID ||
+		handoff.ExecutionVersion == 0 || handoff.Fence == 0 || handoff.GrantGeneration != execution.GrantGeneration ||
+		handoff.RuntimeRevisionSHA256 != execution.RuntimeRevisionSHA256 ||
+		handoff.ImmutableInputSHA256 != execution.ImmutableInputSHA256 ||
+		handoff.ExecutionVersion > execution.Version || handoff.Fence > execution.Fence ||
+		execution.Version-handoff.ExecutionVersion != execution.Fence-handoff.Fence ||
+		(handoff.Outcome != terminalSucceeded && handoff.Outcome != terminalFailed) ||
+		handoff.TerminalReference == "" || !sha256PatternString(handoff.TerminalSHA256) ||
+		handoff.ObservedAt.IsZero() || handoff.ObservedAt.After(time.Now().UTC().Add(time.Minute)) {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func sha256PatternString(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 func (service *Service) recordIncident(
@@ -390,13 +492,12 @@ func (service *Service) reconcileRetention(
 		return err
 	}
 	idle := time.Since(status.LastTransition)
-	podTerminal := status.Phase == "Succeeded" || status.Phase == "Failed"
-	if status.PodName != "" && !podTerminal {
+	if execution.AccessProfile == enum.AccessClusterAdmin && status.PodName != "" {
 		if err := service.cluster.DeletePod(ctx, status); err != nil {
 			return err
 		}
+		status.PodName = ""
 		service.observer.Observe("idle_eviction", "deleted")
-		return nil
 	}
 	if idle >= service.warmTTL && status.PodName != "" {
 		if err := service.cluster.DeletePod(ctx, status); err != nil {
@@ -414,7 +515,10 @@ func (service *Service) reconcileRetention(
 	case execution.RestoreProofSHA256 == "":
 		service.observer.Observe("restore", "scheduled")
 		return service.cluster.EnsureRestoreVerifierJob(ctx, execution, status)
-	case idle < service.pvcRetentionTTL:
+	case status.PodName != "":
+		if err := service.cluster.OpenArchiveGate(ctx, execution, status); err != nil {
+			return err
+		}
 		return nil
 	case execution.CleanupAuthorizationState == "NONE" ||
 		execution.CleanupAuthorizationState == "EXPIRED":
@@ -425,15 +529,20 @@ func (service *Service) reconcileRetention(
 			execution.CleanupAuthorizationExpiresAt.IsZero() {
 			return errs.ErrCleanupUnauthorized
 		}
-		if !execution.CleanupAuthorizationExpiresAt.Add(cleanupExpiryGrace).After(time.Now().UTC()) {
+		if !execution.CleanupAuthorizationExpiresAt.After(time.Now().UTC()) {
 			service.observer.Observe("cleanup_authorization", "scheduled")
 			return service.cluster.EnsureCleanupAuthorizerJob(ctx, execution, status)
 		}
-		if err := service.cluster.DeletePVC(ctx, status); err != nil {
+		if execution.CleanupPVCName != status.PVCName || execution.CleanupPVCUID != status.PVCUID ||
+			execution.CleanupPVCResourceVersion != status.PVCResourceVersion {
+			return errs.ErrCleanupUnauthorized
+		}
+		proof, err := service.cluster.DeletePVC(ctx, status)
+		if err != nil {
 			return err
 		}
 		updated, err := service.controlPlane.ConsumeCleanup(
-			ctx, journal.CleanupIdempotencyKey, execution,
+			ctx, journal.CleanupIdempotencyKey, execution, proof,
 		)
 		if err != nil {
 			return err

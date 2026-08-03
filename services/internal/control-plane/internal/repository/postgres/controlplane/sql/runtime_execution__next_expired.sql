@@ -16,6 +16,18 @@ SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        coalesce(cleanup_authorization_expires_at, 'epoch'::timestamptz),
        cleanup_authorization_state, cleanup_authorization_generation,
        coalesce(cleanup_consumed_at, 'epoch'::timestamptz),
+       coalesce(cleanup_pvc_name, ''), coalesce(cleanup_pvc_uid::text, ''),
+       coalesce(cleanup_pvc_resource_version, ''),
+       coalesce(cleanup_claimed_at, 'epoch'::timestamptz),
+       coalesce(cleanup_eligible_at, 'epoch'::timestamptz),
+       coalesce(cleanup_not_found_at, 'epoch'::timestamptz),
+       coalesce(cleanup_deletion_proof_sha256, ''),
+       coalesce(restore_source_execution_id::text, ''),
+       coalesce(restore_source_archive_reference, ''),
+       coalesce(restore_source_archive_sha256, ''),
+       coalesce(restore_source_runtime_revision_sha256, ''),
+       coalesce(restore_source_immutable_input_sha256, ''),
+       coalesce(restore_source_proof_sha256, ''),
        created_at, updated_at
 FROM control_plane.runtime_executions
 WHERE organization_id = @organization_id

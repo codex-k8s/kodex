@@ -35,3 +35,24 @@ spec:
           annotations:
             summary: Runtime retention chain is not converging
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md
+        - alert: RuntimeControllerInboxDeadLetter
+          expr: max(mattercodex_runtime_controller_inbox_state{state="dead_letter"}) > 0
+          for: 1m
+          labels: {severity: critical}
+          annotations:
+            summary: Runtime durable inbox contains dead-letter deliveries
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md
+        - alert: RuntimeControllerInboxBlocked
+          expr: max(mattercodex_runtime_controller_inbox_state{state="blocked"}) > 0
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Runtime PostgreSQL inbox remains blocked
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md
+        - alert: RuntimeControllerJetStreamBacklog
+          expr: max(mattercodex_runtime_controller_inbox_state{state=~"pending|ack_pending|redelivered"}) > 1000
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Runtime JetStream consumer backlog exceeds the bounded operating window
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/runtime-controller.md
