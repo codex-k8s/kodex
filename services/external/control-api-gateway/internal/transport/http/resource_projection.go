@@ -15,7 +15,7 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 	switch value := resource.GetSpec().GetValue().(type) {
 	case *controlplanev1.ResourceSpec_Project:
 		ownership, err := projectionOwnership(value.Project.GetOwnership(), version)
-		locale := generated.ProjectProjectionLocale(value.Project.GetLocale())
+		locale := generated.ProjectLocale(value.Project.GetLocale())
 		if err != nil || !locale.Valid() {
 			return generated.ResourceSpecProjection{}, errors.New("project projection is invalid")
 		}
@@ -30,7 +30,7 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		return generated.ResourceSpecProjection{Team: &generated.TeamProjection{StableKey: value.Team.GetStableKey(), ExternalTeamRef: value.Team.GetExternalTeamRef(), MemberActorIds: members, RoleIds: roles, Ownership: ownership}}, nil
 	case *controlplanev1.ResourceSpec_Chat:
 		ownership, err := projectionOwnership(value.Chat.GetOwnership(), version)
-		room := generated.ChatProjectionRoomType(strings.TrimPrefix(value.Chat.GetRoomType().String(), "ROOM_TYPE_"))
+		room := generated.ChatRoomType(strings.TrimPrefix(value.Chat.GetRoomType().String(), "ROOM_TYPE_"))
 		agent, agentErr := optionalUUID(value.Chat.GetDefaultAgentId())
 		if err != nil || agentErr != nil || !room.Valid() {
 			return generated.ResourceSpecProjection{}, errors.New("chat projection is invalid")
@@ -130,7 +130,7 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 	case *controlplanev1.ResourceSpec_WorkClaim:
 		return workClaimProjection(value.WorkClaim)
 	case *controlplanev1.ResourceSpec_Artifact:
-		status := generated.ArtifactProjectionScanStatus(strings.TrimPrefix(value.Artifact.GetScanStatus().String(), "ARTIFACT_SCAN_STATE_"))
+		status := generated.ArtifactScanStatus(strings.TrimPrefix(value.Artifact.GetScanStatus().String(), "ARTIFACT_SCAN_STATE_"))
 		var scanned *time.Time
 		if value.Artifact.GetScannedAt() != nil {
 			item := value.Artifact.GetScannedAt().AsTime()
@@ -153,10 +153,10 @@ func roleProjection(value *controlplanev1.RoleSpec, version uint64) (generated.R
 	workspaces, e4 := parseUUIDs(value.GetRepositoryWorkspaceIds())
 	integrations, e5 := parseUUIDs(value.GetIntegrationIds())
 	pool := value.GetProviderAccountPool()
-	policy := generated.ProviderPoolProjectionPolicy("")
+	policy := generated.ProviderPoolPolicy("")
 	bindings := []generated.ProviderPoolBindingProjection{}
 	if pool != nil {
-		policy = generated.ProviderPoolProjectionPolicy(pool.GetPolicy())
+		policy = generated.ProviderPoolPolicy(pool.GetPolicy())
 		for _, item := range pool.GetBindings() {
 			id, parseErr := requiredUUID(item.GetCredentialBindingId())
 			if parseErr != nil {
@@ -238,7 +238,7 @@ func ownerGateProjection(value *controlplanev1.OwnerGateSpec) (generated.Resourc
 	if err != nil {
 		return generated.ResourceSpecProjection{}, err
 	}
-	decision := generated.OwnerGateProjectionDecision(strings.TrimPrefix(value.GetDecision().String(), "OWNER_GATE_DECISION_"))
+	decision := generated.OwnerGateDecision(strings.TrimPrefix(value.GetDecision().String(), "OWNER_GATE_DECISION_"))
 	if value.GetDecision() == controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_UNSPECIFIED {
 		decision = generated.PENDING
 	}

@@ -1,0 +1,43 @@
+
+package generated
+
+type ConfigurationChangeAction uint
+
+const (
+  ConfigurationChangeActionCreate ConfigurationChangeAction = iota
+  ConfigurationChangeActionUpdate
+  ConfigurationChangeActionTransition
+  ConfigurationChangeActionDelete
+  ConfigurationChangeActionDetachAccessConfiguration
+  ConfigurationChangeActionCopyAccessConfiguration
+  ConfigurationChangeActionCreateSchedule
+  ConfigurationChangeActionManageScheduleUpdate
+  ConfigurationChangeActionManageScheduleActivate
+  ConfigurationChangeActionManageSchedulePause
+  ConfigurationChangeActionManageScheduleArchive
+  ConfigurationChangeActionManageScheduleDelete
+)
+
+// Value returns the value of the enum.
+func (op ConfigurationChangeAction) Value() any {
+	if op >= ConfigurationChangeAction(len(ConfigurationChangeActionValues)) {
+		return nil
+	}
+	return ConfigurationChangeActionValues[op]
+}
+
+var ConfigurationChangeActionValues = []any{"create","update","transition","delete","detach_access_configuration","copy_access_configuration","create_schedule","manage_schedule_UPDATE","manage_schedule_ACTIVATE","manage_schedule_PAUSE","manage_schedule_ARCHIVE","manage_schedule_DELETE"}
+var ValuesToConfigurationChangeAction = map[any]ConfigurationChangeAction{
+  ConfigurationChangeActionValues[ConfigurationChangeActionCreate]: ConfigurationChangeActionCreate,
+  ConfigurationChangeActionValues[ConfigurationChangeActionUpdate]: ConfigurationChangeActionUpdate,
+  ConfigurationChangeActionValues[ConfigurationChangeActionTransition]: ConfigurationChangeActionTransition,
+  ConfigurationChangeActionValues[ConfigurationChangeActionDelete]: ConfigurationChangeActionDelete,
+  ConfigurationChangeActionValues[ConfigurationChangeActionDetachAccessConfiguration]: ConfigurationChangeActionDetachAccessConfiguration,
+  ConfigurationChangeActionValues[ConfigurationChangeActionCopyAccessConfiguration]: ConfigurationChangeActionCopyAccessConfiguration,
+  ConfigurationChangeActionValues[ConfigurationChangeActionCreateSchedule]: ConfigurationChangeActionCreateSchedule,
+  ConfigurationChangeActionValues[ConfigurationChangeActionManageScheduleUpdate]: ConfigurationChangeActionManageScheduleUpdate,
+  ConfigurationChangeActionValues[ConfigurationChangeActionManageScheduleActivate]: ConfigurationChangeActionManageScheduleActivate,
+  ConfigurationChangeActionValues[ConfigurationChangeActionManageSchedulePause]: ConfigurationChangeActionManageSchedulePause,
+  ConfigurationChangeActionValues[ConfigurationChangeActionManageScheduleArchive]: ConfigurationChangeActionManageScheduleArchive,
+  ConfigurationChangeActionValues[ConfigurationChangeActionManageScheduleDelete]: ConfigurationChangeActionManageScheduleDelete,
+}

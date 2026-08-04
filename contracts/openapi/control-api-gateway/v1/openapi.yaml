@@ -463,15 +463,42 @@ components:
     ETag: { description: Точная версия ресурса для следующего If-Match., schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
   schemas:
     ResourceKind:
+      title: ResourceKind
       type: string
       enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT]
     MutableResourceKind:
+      title: MutableResourceKind
       type: string
       enum: [CHAT, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION]
-    AccessResourceKind: { type: string, enum: [TEAM, ROLE, PROMPT_PROFILE] }
+    AccessResourceKind: { title: AccessResourceKind, type: string, enum: [TEAM, ROLE, PROMPT_PROFILE] }
     LifecycleState:
+      title: LifecycleState
       type: string
       enum: [ACTIVE, PAUSED, ARCHIVED, DELETION_PENDING, DELETED, QUEUED, CLAIMED, RUNNING, WAITING_OWNER, WAITING_EXTERNAL, SUCCEEDED, FAILED, CANCELLED, EXPIRED, BLOCKED]
+    ChatRoomType:
+      title: ChatRoomType
+      type: string
+      enum: [USER, COORDINATION, WORK_CONTROL, RUNS]
+    ConfigurationManagedBy:
+      title: ConfigurationManagedBy
+      type: string
+      enum: [ui, git]
+    ProjectLocale:
+      title: ProjectLocale
+      type: string
+      enum: [ru, en]
+    ProviderPoolPolicy:
+      title: ProviderPoolPolicy
+      type: string
+      enum: [least_used, weighted]
+    OwnerGateDecision:
+      title: OwnerGateDecision
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED]
+    ArtifactScanStatus:
+      title: ArtifactScanStatus
+      type: string
+      enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]
     ProjectSpec:
       type: object
       additionalProperties: false
@@ -492,7 +519,7 @@ components:
       additionalProperties: false
       properties:
         stableKey: { type: string, minLength: 1, maxLength: 160 }
-        roomType: { type: string, enum: [USER, COORDINATION, WORK_CONTROL, RUNS] }
+        roomType: { $ref: '#/components/schemas/ChatRoomType' }
         defaultAgentId: { type: string, format: uuid }
         externalChannelRef: { type: string, maxLength: 512 }
         workPolicy: { type: string, maxLength: 80 }
@@ -624,23 +651,26 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
       required: [kind, name]
     ConfigurationOwnershipProjection:
+      title: ConfigurationOwnershipProjection
       type: object
       additionalProperties: false
       properties:
-        managedBy: { type: string, enum: [ui, git] }
+        managedBy: { $ref: '#/components/schemas/ConfigurationManagedBy' }
         source: { type: string, minLength: 1, maxLength: 512 }
         revision: { type: integer, format: int64, minimum: 1 }
       required: [managedBy, source, revision]
     ProjectProjection:
+      title: ProjectProjection
       type: object
       additionalProperties: false
       properties:
         slug: { type: string }
         description: { type: string }
-        locale: { type: string, enum: [ru, en] }
+        locale: { $ref: '#/components/schemas/ProjectLocale' }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [slug, description, locale, ownership]
     TeamProjection:
+      title: TeamProjection
       type: object
       additionalProperties: false
       properties:
@@ -651,17 +681,19 @@ components:
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [stableKey, externalTeamRef, memberActorIds, roleIds, ownership]
     ChatProjection:
+      title: ChatProjection
       type: object
       additionalProperties: false
       properties:
         stableKey: { type: string }
-        roomType: { type: string, enum: [USER, COORDINATION, WORK_CONTROL, RUNS] }
+        roomType: { $ref: '#/components/schemas/ChatRoomType' }
         defaultAgentId: { type: string, format: uuid }
         externalChannelRef: { type: string }
         workPolicy: { type: string }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [stableKey, roomType, externalChannelRef, workPolicy, ownership]
     ProviderPoolBindingProjection:
+      title: ProviderPoolBindingProjection
       type: object
       additionalProperties: false
       properties:
@@ -669,15 +701,17 @@ components:
         weight: { type: integer, minimum: 1, maximum: 10000 }
       required: [credentialBindingId, weight]
     ProviderPoolProjection:
+      title: ProviderPoolProjection
       type: object
       additionalProperties: false
       properties:
-        policy: { type: string, enum: [least_used, weighted] }
+        policy: { $ref: '#/components/schemas/ProviderPoolPolicy' }
         policyRevision: { type: integer, format: int64, minimum: 1 }
         observationMaxAgeSeconds: { type: integer, format: int64, minimum: 60 }
         bindings: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/ProviderPoolBindingProjection' } }
       required: [policy, policyRevision, observationMaxAgeSeconds, bindings]
     RoleProjection:
+      title: RoleProjection
       type: object
       additionalProperties: false
       properties:
@@ -692,6 +726,7 @@ components:
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [stableKey, capabilities, allowedTargetRoleIds, promptProfileId, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds, providerAccountPool, ownership]
     PromptProfileProjection:
+      title: PromptProfileProjection
       type: object
       additionalProperties: false
       properties:
@@ -702,6 +737,7 @@ components:
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [revision, contentSha256, sourceRef, locale, ownership]
     CredentialBindingProjection:
+      title: CredentialBindingProjection
       type: object
       additionalProperties: false
       properties:
@@ -718,6 +754,7 @@ components:
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [purpose, immutableSecretRef, principalRef, revision, providerEligible, providerCapabilities, providerObservationRevision, contentSha256, ownership]
     RepositoryWorkspaceProjection:
+      title: RepositoryWorkspaceProjection
       type: object
       additionalProperties: false
       properties:
@@ -728,6 +765,7 @@ components:
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [repositoryRef, workspaceMode, defaultBranch, ownership]
     IntegrationProjection:
+      title: IntegrationProjection
       type: object
       additionalProperties: false
       properties:
@@ -739,6 +777,7 @@ components:
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [definitionRef, definitionVersion, capabilities, credentialBindingIds, endpointRef, ownership]
     RuntimeRevisionProjection:
+      title: RuntimeRevisionProjection
       type: object
       additionalProperties: false
       properties:
@@ -753,6 +792,7 @@ components:
         authorityPolicyRevision: { type: integer, format: int64, minimum: 1 }
       required: [manifestSha256, imageDigest, promptProfileId, promptRevision, sessionId, roleId, effectiveRuntimeSha256, authorityPolicyRevision]
     SessionProjection:
+      title: SessionProjection
       type: object
       additionalProperties: false
       properties:
@@ -763,6 +803,7 @@ components:
         lastTurnSequence: { type: integer, format: int64, minimum: 0 }
       required: [agentId, providerAccountBindingId, lastTurnSequence]
     TurnProjection:
+      title: TurnProjection
       type: object
       additionalProperties: false
       properties:
@@ -776,6 +817,7 @@ components:
         effectiveInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
       required: [sessionId, sequence, sourceRef, runtimeRevisionId, attempt, effectiveInputSha256]
     ProcessRunProjection:
+      title: ProcessRunProjection
       type: object
       additionalProperties: false
       properties:
@@ -793,6 +835,7 @@ components:
         currentAttempt: { type: integer, minimum: 1 }
       required: [playbookRef, policyRevision, rootTriggerRef, rootSessionId, rootTurnId, rootAttempt, immutableInputSha256, runtimeRevisionId]
     ScheduleProjection:
+      title: ScheduleProjection
       type: object
       additionalProperties: false
       properties:
@@ -806,19 +849,21 @@ components:
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [targetResourceId, targetKind, targetVersion, timezone, nextRunAt, maximumAttempts, ownership]
     OwnerGateProjection:
+      title: OwnerGateProjection
       type: object
       additionalProperties: false
       properties:
         processRunId: { type: string, format: uuid }
         resultSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         expiresAt: { type: string, format: date-time }
-        decision: { type: string, enum: [PENDING, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED] }
+        decision: { $ref: '#/components/schemas/OwnerGateDecision' }
         sessionId: { type: string, format: uuid }
         turnId: { type: string, format: uuid }
         attempt: { type: integer, minimum: 1 }
         immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
       required: [processRunId, resultSha256, expiresAt, decision, sessionId, turnId, attempt, immutableInputSha256]
     MemoryRecordProjection:
+      title: MemoryRecordProjection
       type: object
       additionalProperties: false
       properties:
@@ -830,6 +875,7 @@ components:
         importance: { type: integer, minimum: 0 }
       required: [scope, title, contentSha256, provenance, importance]
     WorkClaimProjection:
+      title: WorkClaimProjection
       type: object
       additionalProperties: false
       properties:
@@ -844,6 +890,7 @@ components:
         authorityGeneration: { type: integer, format: int64, minimum: 1 }
       required: [processRunId, turnId, domains, resourceKeys, workloadId, sessionId, attempt, expiresAt, authorityGeneration]
     ArtifactProjection:
+      title: ArtifactProjection
       type: object
       additionalProperties: false
       properties:
@@ -852,12 +899,13 @@ components:
         sizeBytes: { type: integer, format: int64, minimum: 0 }
         mediaType: { type: string }
         sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-        scanStatus: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
+        scanStatus: { $ref: '#/components/schemas/ArtifactScanStatus' }
         scanPolicyRevision: { type: integer, format: int64, minimum: 0 }
         scanEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         scannedAt: { type: string, format: date-time }
       required: [artifactKind, direction, sizeBytes, mediaType, sha256, scanStatus, scanPolicyRevision]
     ResourceSpecProjection:
+      title: ResourceSpecProjection
       type: object
       additionalProperties: false
       minProperties: 1
@@ -881,6 +929,7 @@ components:
         workClaim: { $ref: '#/components/schemas/WorkClaimProjection' }
         artifact: { $ref: '#/components/schemas/ArtifactProjection' }
     Resource:
+      title: Resource
       type: object
       additionalProperties: false
       properties:
@@ -925,12 +974,15 @@ components:
         nextPageToken: { type: string }
       required: [events]
     ConfigurationChangeAction:
+      title: ConfigurationChangeAction
       type: string
       enum: [create, update, transition, delete, detach_access_configuration, copy_access_configuration, create_schedule, manage_schedule_UPDATE, manage_schedule_ACTIVATE, manage_schedule_PAUSE, manage_schedule_ARCHIVE, manage_schedule_DELETE]
     ConfigurationChangeOutcome:
+      title: ConfigurationChangeOutcome
       type: string
       enum: [succeeded]
     ConfigurationChange:
+      title: ConfigurationChange
       type: object
       additionalProperties: false
       properties:
@@ -953,9 +1005,11 @@ components:
         nextPageToken: { type: string }
       required: [changes]
     RuntimeIncidentKind:
+      title: RuntimeIncidentKind
       type: string
       enum: [HEARTBEAT_MISSED, RECONCILE_FAILED, WORKLOAD_UNAVAILABLE]
     RuntimeIncident:
+      title: RuntimeIncident
       type: object
       additionalProperties: false
       properties:

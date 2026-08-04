@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-api-gatewa
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-08-04
 ---
 
@@ -158,6 +158,31 @@ snapshot и синтетические удаления запрещены.
 Frame >16 KiB, неизвестный channel/kind, повтор enum или отсутствие CSRF
 закрывает connection policy violation. Не увеличивать предел без отдельного
 Issue и threat review.
+
+## Восстановление WebSocket codegen
+
+Source of truth — named components
+`contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml`; external projection
+schemas принадлежат OpenAPI. Воспроизводимое восстановление выполняется только
+командой:
+
+```bash
+make gen-control-api-gateway-asyncapi
+```
+
+Target сам удаляет ровно gateway-owned generated directory, запускает
+AsyncAPI CLI и затем проверяет отсутствие anonymous files/symbols и generated
+JSON codecs. В generated directory запрещены ручные изменения, сохранённые
+копии моделей и любые `grep`/numeric-order/`sed`/`awk`/`cp`/`mv`
+postprocessors. При structural check failure исправить source component
+`title`/`$id`/`$ref`, удалить generated directory и повторить прямую
+generation; подбирать anonymous type по номеру запрещено.
+
+Runtime JSON обслуживает только strict adapter вне generated directory. Если
+unknown/empty/null closed enum или out-of-range outgoing projection дошли до
+boundary, frame не отправляется, connection получает bounded problem/close, а
+внутреннее enum/type name не раскрывается. Не включать `--goIncludeTags` без
+отдельной проверки fail-closed decoder и утверждённого contract change.
 
 ## Rate limits и observability
 

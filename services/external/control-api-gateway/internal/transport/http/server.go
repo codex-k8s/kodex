@@ -730,7 +730,7 @@ func mutableSpec(kind generated.MutableResourceKind, input generated.ResourceSpe
 		if input.Chat == nil {
 			break
 		}
-		room := map[generated.ChatSpecRoomType]controlplanev1.RoomType{generated.ChatSpecRoomTypeUSER: controlplanev1.RoomType_ROOM_TYPE_USER, generated.ChatSpecRoomTypeCOORDINATION: controlplanev1.RoomType_ROOM_TYPE_COORDINATION, generated.ChatSpecRoomTypeWORKCONTROL: controlplanev1.RoomType_ROOM_TYPE_WORK_CONTROL, generated.ChatSpecRoomTypeRUNS: controlplanev1.RoomType_ROOM_TYPE_RUNS}[input.Chat.RoomType]
+		room := map[generated.ChatRoomType]controlplanev1.RoomType{generated.USER: controlplanev1.RoomType_ROOM_TYPE_USER, generated.COORDINATION: controlplanev1.RoomType_ROOM_TYPE_COORDINATION, generated.WORKCONTROL: controlplanev1.RoomType_ROOM_TYPE_WORK_CONTROL, generated.RUNS: controlplanev1.RoomType_ROOM_TYPE_RUNS}[input.Chat.RoomType]
 		if room == 0 {
 			break
 		}

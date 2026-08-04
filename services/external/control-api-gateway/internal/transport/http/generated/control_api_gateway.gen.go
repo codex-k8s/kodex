@@ -42,75 +42,51 @@ func (e AccessResourceKind) Valid() bool {
 	}
 }
 
-// Defines values for ArtifactProjectionScanStatus.
+// Defines values for ArtifactScanStatus.
 const (
-	ArtifactProjectionScanStatusCLEAN       ArtifactProjectionScanStatus = "CLEAN"
-	ArtifactProjectionScanStatusFAILED      ArtifactProjectionScanStatus = "FAILED"
-	ArtifactProjectionScanStatusPENDING     ArtifactProjectionScanStatus = "PENDING"
-	ArtifactProjectionScanStatusQUARANTINED ArtifactProjectionScanStatus = "QUARANTINED"
-	ArtifactProjectionScanStatusSCANNING    ArtifactProjectionScanStatus = "SCANNING"
+	ArtifactScanStatusCLEAN       ArtifactScanStatus = "CLEAN"
+	ArtifactScanStatusFAILED      ArtifactScanStatus = "FAILED"
+	ArtifactScanStatusPENDING     ArtifactScanStatus = "PENDING"
+	ArtifactScanStatusQUARANTINED ArtifactScanStatus = "QUARANTINED"
+	ArtifactScanStatusSCANNING    ArtifactScanStatus = "SCANNING"
 )
 
-// Valid indicates whether the value is a known member of the ArtifactProjectionScanStatus enum.
-func (e ArtifactProjectionScanStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the ArtifactScanStatus enum.
+func (e ArtifactScanStatus) Valid() bool {
 	switch e {
-	case ArtifactProjectionScanStatusCLEAN:
+	case ArtifactScanStatusCLEAN:
 		return true
-	case ArtifactProjectionScanStatusFAILED:
+	case ArtifactScanStatusFAILED:
 		return true
-	case ArtifactProjectionScanStatusPENDING:
+	case ArtifactScanStatusPENDING:
 		return true
-	case ArtifactProjectionScanStatusQUARANTINED:
+	case ArtifactScanStatusQUARANTINED:
 		return true
-	case ArtifactProjectionScanStatusSCANNING:
+	case ArtifactScanStatusSCANNING:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ChatProjectionRoomType.
+// Defines values for ChatRoomType.
 const (
-	ChatProjectionRoomTypeCOORDINATION ChatProjectionRoomType = "COORDINATION"
-	ChatProjectionRoomTypeRUNS         ChatProjectionRoomType = "RUNS"
-	ChatProjectionRoomTypeUSER         ChatProjectionRoomType = "USER"
-	ChatProjectionRoomTypeWORKCONTROL  ChatProjectionRoomType = "WORK_CONTROL"
+	COORDINATION ChatRoomType = "COORDINATION"
+	RUNS         ChatRoomType = "RUNS"
+	USER         ChatRoomType = "USER"
+	WORKCONTROL  ChatRoomType = "WORK_CONTROL"
 )
 
-// Valid indicates whether the value is a known member of the ChatProjectionRoomType enum.
-func (e ChatProjectionRoomType) Valid() bool {
+// Valid indicates whether the value is a known member of the ChatRoomType enum.
+func (e ChatRoomType) Valid() bool {
 	switch e {
-	case ChatProjectionRoomTypeCOORDINATION:
+	case COORDINATION:
 		return true
-	case ChatProjectionRoomTypeRUNS:
+	case RUNS:
 		return true
-	case ChatProjectionRoomTypeUSER:
+	case USER:
 		return true
-	case ChatProjectionRoomTypeWORKCONTROL:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ChatSpecRoomType.
-const (
-	ChatSpecRoomTypeCOORDINATION ChatSpecRoomType = "COORDINATION"
-	ChatSpecRoomTypeRUNS         ChatSpecRoomType = "RUNS"
-	ChatSpecRoomTypeUSER         ChatSpecRoomType = "USER"
-	ChatSpecRoomTypeWORKCONTROL  ChatSpecRoomType = "WORK_CONTROL"
-)
-
-// Valid indicates whether the value is a known member of the ChatSpecRoomType enum.
-func (e ChatSpecRoomType) Valid() bool {
-	switch e {
-	case ChatSpecRoomTypeCOORDINATION:
-		return true
-	case ChatSpecRoomTypeRUNS:
-		return true
-	case ChatSpecRoomTypeUSER:
-		return true
-	case ChatSpecRoomTypeWORKCONTROL:
+	case WORKCONTROL:
 		return true
 	default:
 		return false
@@ -180,14 +156,14 @@ func (e ConfigurationChangeOutcome) Valid() bool {
 	}
 }
 
-// Defines values for ConfigurationOwnershipProjectionManagedBy.
+// Defines values for ConfigurationManagedBy.
 const (
-	Git ConfigurationOwnershipProjectionManagedBy = "git"
-	Ui  ConfigurationOwnershipProjectionManagedBy = "ui"
+	Git ConfigurationManagedBy = "git"
+	Ui  ConfigurationManagedBy = "ui"
 )
 
-// Valid indicates whether the value is a known member of the ConfigurationOwnershipProjectionManagedBy enum.
-func (e ConfigurationOwnershipProjectionManagedBy) Valid() bool {
+// Valid indicates whether the value is a known member of the ConfigurationManagedBy enum.
+func (e ConfigurationManagedBy) Valid() bool {
 	switch e {
 	case Git:
 		return true
@@ -309,17 +285,17 @@ func (e MutableResourceKind) Valid() bool {
 	}
 }
 
-// Defines values for OwnerGateProjectionDecision.
+// Defines values for OwnerGateDecision.
 const (
-	APPROVED         OwnerGateProjectionDecision = "APPROVED"
-	CANCELLED        OwnerGateProjectionDecision = "CANCELLED"
-	CHANGESREQUESTED OwnerGateProjectionDecision = "CHANGES_REQUESTED"
-	PENDING          OwnerGateProjectionDecision = "PENDING"
-	REJECTED         OwnerGateProjectionDecision = "REJECTED"
+	APPROVED         OwnerGateDecision = "APPROVED"
+	CANCELLED        OwnerGateDecision = "CANCELLED"
+	CHANGESREQUESTED OwnerGateDecision = "CHANGES_REQUESTED"
+	PENDING          OwnerGateDecision = "PENDING"
+	REJECTED         OwnerGateDecision = "REJECTED"
 )
 
-// Valid indicates whether the value is a known member of the OwnerGateProjectionDecision enum.
-func (e OwnerGateProjectionDecision) Valid() bool {
+// Valid indicates whether the value is a known member of the OwnerGateDecision enum.
+func (e OwnerGateDecision) Valid() bool {
 	switch e {
 	case APPROVED:
 		return true
@@ -336,14 +312,14 @@ func (e OwnerGateProjectionDecision) Valid() bool {
 	}
 }
 
-// Defines values for ProjectProjectionLocale.
+// Defines values for ProjectLocale.
 const (
-	En ProjectProjectionLocale = "en"
-	Ru ProjectProjectionLocale = "ru"
+	En ProjectLocale = "en"
+	Ru ProjectLocale = "ru"
 )
 
-// Valid indicates whether the value is a known member of the ProjectProjectionLocale enum.
-func (e ProjectProjectionLocale) Valid() bool {
+// Valid indicates whether the value is a known member of the ProjectLocale enum.
+func (e ProjectLocale) Valid() bool {
 	switch e {
 	case En:
 		return true
@@ -354,14 +330,14 @@ func (e ProjectProjectionLocale) Valid() bool {
 	}
 }
 
-// Defines values for ProviderPoolProjectionPolicy.
+// Defines values for ProviderPoolPolicy.
 const (
-	LeastUsed ProviderPoolProjectionPolicy = "least_used"
-	Weighted  ProviderPoolProjectionPolicy = "weighted"
+	LeastUsed ProviderPoolPolicy = "least_used"
+	Weighted  ProviderPoolPolicy = "weighted"
 )
 
-// Valid indicates whether the value is a known member of the ProviderPoolProjectionPolicy enum.
-func (e ProviderPoolProjectionPolicy) Valid() bool {
+// Valid indicates whether the value is a known member of the ProviderPoolPolicy enum.
+func (e ProviderPoolPolicy) Valid() bool {
 	switch e {
 	case LeastUsed:
 		return true
@@ -468,19 +444,19 @@ type AccessSpecInput struct {
 
 // ArtifactProjection defines model for ArtifactProjection.
 type ArtifactProjection struct {
-	ArtifactKind       string                       `json:"artifactKind"`
-	Direction          string                       `json:"direction"`
-	MediaType          string                       `json:"mediaType"`
-	ScanEvidenceSha256 *string                      `json:"scanEvidenceSha256,omitempty"`
-	ScanPolicyRevision int64                        `json:"scanPolicyRevision"`
-	ScanStatus         ArtifactProjectionScanStatus `json:"scanStatus"`
-	ScannedAt          *time.Time                   `json:"scannedAt,omitempty"`
-	Sha256             string                       `json:"sha256"`
-	SizeBytes          int64                        `json:"sizeBytes"`
+	ArtifactKind       string             `json:"artifactKind"`
+	Direction          string             `json:"direction"`
+	MediaType          string             `json:"mediaType"`
+	ScanEvidenceSha256 *string            `json:"scanEvidenceSha256,omitempty"`
+	ScanPolicyRevision int64              `json:"scanPolicyRevision"`
+	ScanStatus         ArtifactScanStatus `json:"scanStatus"`
+	ScannedAt          *time.Time         `json:"scannedAt,omitempty"`
+	Sha256             string             `json:"sha256"`
+	SizeBytes          int64              `json:"sizeBytes"`
 }
 
-// ArtifactProjectionScanStatus defines model for ArtifactProjection.ScanStatus.
-type ArtifactProjectionScanStatus string
+// ArtifactScanStatus defines model for ArtifactScanStatus.
+type ArtifactScanStatus string
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
@@ -507,25 +483,22 @@ type ChatProjection struct {
 	DefaultAgentId     *openapi_types.UUID              `json:"defaultAgentId,omitempty"`
 	ExternalChannelRef string                           `json:"externalChannelRef"`
 	Ownership          ConfigurationOwnershipProjection `json:"ownership"`
-	RoomType           ChatProjectionRoomType           `json:"roomType"`
+	RoomType           ChatRoomType                     `json:"roomType"`
 	StableKey          string                           `json:"stableKey"`
 	WorkPolicy         string                           `json:"workPolicy"`
 }
 
-// ChatProjectionRoomType defines model for ChatProjection.RoomType.
-type ChatProjectionRoomType string
+// ChatRoomType defines model for ChatRoomType.
+type ChatRoomType string
 
 // ChatSpec defines model for ChatSpec.
 type ChatSpec struct {
 	DefaultAgentId     *openapi_types.UUID `json:"defaultAgentId,omitempty"`
 	ExternalChannelRef *string             `json:"externalChannelRef,omitempty"`
-	RoomType           ChatSpecRoomType    `json:"roomType"`
+	RoomType           ChatRoomType        `json:"roomType"`
 	StableKey          string              `json:"stableKey"`
 	WorkPolicy         string              `json:"workPolicy"`
 }
-
-// ChatSpecRoomType defines model for ChatSpec.RoomType.
-type ChatSpecRoomType string
 
 // ConfigurationChange defines model for ConfigurationChange.
 type ConfigurationChange struct {
@@ -553,15 +526,15 @@ type ConfigurationChangePage struct {
 	NextPageToken *string               `json:"nextPageToken,omitempty"`
 }
 
+// ConfigurationManagedBy defines model for ConfigurationManagedBy.
+type ConfigurationManagedBy string
+
 // ConfigurationOwnershipProjection defines model for ConfigurationOwnershipProjection.
 type ConfigurationOwnershipProjection struct {
-	ManagedBy ConfigurationOwnershipProjectionManagedBy `json:"managedBy"`
-	Revision  int64                                     `json:"revision"`
-	Source    string                                    `json:"source"`
+	ManagedBy ConfigurationManagedBy `json:"managedBy"`
+	Revision  int64                  `json:"revision"`
+	Source    string                 `json:"source"`
 }
-
-// ConfigurationOwnershipProjectionManagedBy defines model for ConfigurationOwnershipProjection.ManagedBy.
-type ConfigurationOwnershipProjectionManagedBy string
 
 // CopyAccessResource defines model for CopyAccessResource.
 type CopyAccessResource struct {
@@ -676,20 +649,20 @@ type MemoryRecordProjection struct {
 // MutableResourceKind defines model for MutableResourceKind.
 type MutableResourceKind string
 
+// OwnerGateDecision defines model for OwnerGateDecision.
+type OwnerGateDecision string
+
 // OwnerGateProjection defines model for OwnerGateProjection.
 type OwnerGateProjection struct {
-	Attempt              int                         `json:"attempt"`
-	Decision             OwnerGateProjectionDecision `json:"decision"`
-	ExpiresAt            time.Time                   `json:"expiresAt"`
-	ImmutableInputSha256 string                      `json:"immutableInputSha256"`
-	ProcessRunId         openapi_types.UUID          `json:"processRunId"`
-	ResultSha256         string                      `json:"resultSha256"`
-	SessionId            openapi_types.UUID          `json:"sessionId"`
-	TurnId               openapi_types.UUID          `json:"turnId"`
+	Attempt              int                `json:"attempt"`
+	Decision             OwnerGateDecision  `json:"decision"`
+	ExpiresAt            time.Time          `json:"expiresAt"`
+	ImmutableInputSha256 string             `json:"immutableInputSha256"`
+	ProcessRunId         openapi_types.UUID `json:"processRunId"`
+	ResultSha256         string             `json:"resultSha256"`
+	SessionId            openapi_types.UUID `json:"sessionId"`
+	TurnId               openapi_types.UUID `json:"turnId"`
 }
-
-// OwnerGateProjectionDecision defines model for OwnerGateProjection.Decision.
-type OwnerGateProjectionDecision string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -717,16 +690,16 @@ type ProcessRunProjection struct {
 	RuntimeRevisionId    openapi_types.UUID  `json:"runtimeRevisionId"`
 }
 
+// ProjectLocale defines model for ProjectLocale.
+type ProjectLocale string
+
 // ProjectProjection defines model for ProjectProjection.
 type ProjectProjection struct {
 	Description string                           `json:"description"`
-	Locale      ProjectProjectionLocale          `json:"locale"`
+	Locale      ProjectLocale                    `json:"locale"`
 	Ownership   ConfigurationOwnershipProjection `json:"ownership"`
 	Slug        string                           `json:"slug"`
 }
-
-// ProjectProjectionLocale defines model for ProjectProjection.Locale.
-type ProjectProjectionLocale string
 
 // ProjectSpec defines model for ProjectSpec.
 type ProjectSpec struct {
@@ -758,16 +731,16 @@ type ProviderPoolBindingProjection struct {
 	Weight              int                `json:"weight"`
 }
 
+// ProviderPoolPolicy defines model for ProviderPoolPolicy.
+type ProviderPoolPolicy string
+
 // ProviderPoolProjection defines model for ProviderPoolProjection.
 type ProviderPoolProjection struct {
 	Bindings                 []ProviderPoolBindingProjection `json:"bindings"`
 	ObservationMaxAgeSeconds int64                           `json:"observationMaxAgeSeconds"`
-	Policy                   ProviderPoolProjectionPolicy    `json:"policy"`
+	Policy                   ProviderPoolPolicy              `json:"policy"`
 	PolicyRevision           int64                           `json:"policyRevision"`
 }
-
-// ProviderPoolProjectionPolicy defines model for ProviderPoolProjection.Policy.
-type ProviderPoolProjectionPolicy string
 
 // RepositoryWorkspaceProjection defines model for RepositoryWorkspaceProjection.
 type RepositoryWorkspaceProjection struct {

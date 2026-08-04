@@ -4,7 +4,7 @@ title: Control API gateway
 type: service
 status: approved
 owner: backend
-version: 1.2.0
+version: 1.3.0
 updated: 2026-08-04
 ---
 
@@ -30,6 +30,23 @@ tenant из payload. Эти поля разрешает `AuthorityProofResolverS
 - internal RPC: `contracts/proto/controlplane/v1/control_plane.proto`;
 - authority policy: существующий профиль `control-api-gateway` в
   `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
+
+AsyncAPI — единственный source of truth для имён WebSocket envelope, message
+type, channel, resource kind, projection alias и list wrapper. Каждый такой
+component имеет стабильные `title` и `$id`; projection DTO ссылаются на
+канонические OpenAPI schemas. Команда
+`make gen-control-api-gateway-asyncapi` сначала полностью удаляет только
+generated directory, затем напрямую вызывает AsyncAPI CLI 6.0.2 с встроенной
+Modelina 4.4.3 и выполняет fail-only structural check. Ручное редактирование
+generated files и любой mutating postprocessor запрещены.
+
+Generated package намеренно не содержит JSON tags/codecs и не участвует в
+public runtime decode: Modelina Go enum decoder с `--goIncludeTags` не
+гарантирует fail-closed unknown lookup. Тонкая граница
+`internal/transport/websocket/protocol.go` принимает только named closed
+enums, отклоняет unknown/empty/null и out-of-range marshal и перед выдачей
+snapshot валидирует все OpenAPI projection enums. Internal Proto names и
+oneof наружу не экспортируются.
 
 OpenAPI требует `Idempotency-Key` для каждой state-changing команды и
 `If-Match: "<positive-version>"` для update/transition/delete/detach/copy.
@@ -93,7 +110,7 @@ issuer. Payload identity не используется.
 | --- | --- |
 | Producer profile | существующий `control-plane.oidc`: OIDC bearer metadata, resolver exact mTLS SPIFFE, server-resolved actor/tenant/project/ownership и durable owner-session fence |
 | Client operation profile | `controlplaneclient.ControlAPIGatewayOperations`; exact 21 materialized method, включая session/search/detach/copy/incidents, специализированные TLS prepare/confirm/check и readiness, без broad lifecycle permissions |
-| Generated adapters | OpenAPI std HTTP server, AsyncAPI Go models, generated control-plane gRPC client |
+| Generated adapters | OpenAPI std HTTP server/models, named structural AsyncAPI Go models, strict handwritten WebSocket JSON adapter и generated control-plane gRPC client |
 | Consumer effect | typed REST page либо connection-local atomic complete replace-snapshot; browser не подтверждает domain effect и не влияет на state owner |
 | Readiness | OIDC/session/TLS state прочитаны; local served material разрешён read-only `CheckGatewayPublicTLS` как APPLIED, PENDING до confirm recovery либо неистёкший PREVIOUS; `controlplaneclient.Check` проходит resolver → local issuer → protected `CheckReadiness`; loopback TLS readback сверяет exact peer digest/expiry и не продвигает watermark |
 | Deploy ownership | Dockerfile, Kustomize base/overlays, Service/Ingress TLS passthrough, issuer component, Vault Secrets Operator, exact NetworkPolicy, PDB, metrics/dashboard/alerts |
@@ -167,8 +184,12 @@ Context7 вызван для `coreos/go-oidc`, `coder/websocket` и `oapi-codege
   models и `std-http-server` generation;
 - [Redocly CLI](https://redocly.com/docs/cli/commands/lint/) — source OpenAPI
   validation с recommended rules;
-- [AsyncAPI CLI](https://www.asyncapi.com/docs/tools/cli) — validate и Go
-  model generation;
+- [AsyncAPI CLI 6.0.2](https://github.com/asyncapi/cli/tree/v6.0.2) и
+  [CLI usage](https://www.asyncapi.com/docs/tools/cli/usage) — `validate`,
+  `generate models golang`, `--goIncludeComments`/`--goIncludeTags`;
+- [Modelina 4.4.3 Go](https://github.com/asyncapi/modelina/blob/v4.4.3/docs/languages/Go.md)
+  и [name interpretation](https://github.com/asyncapi/modelina/blob/v4.4.3/src/interpreter/Utils.ts) —
+  JSON tags/codecs и стабильное имя из `title`/`$id`;
 - [Kubernetes NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/),
   [Kustomize](https://kubectl.docs.kubernetes.io/references/kustomize/) и
   [Secrets Store CSI Driver](https://secrets-store-csi-driver.sigs.k8s.io/);

@@ -63,71 +63,164 @@ components:
     Subscribe:
       name: subscribe
       contentType: application/json
-      payload: { $ref: '#/components/schemas/Subscribe' }
+      payload: { $ref: '#/components/schemas/SubscribeEnvelope' }
     Snapshot:
       name: snapshot
       contentType: application/json
-      payload: { $ref: '#/components/schemas/Snapshot' }
+      payload: { $ref: '#/components/schemas/SnapshotEnvelope' }
     Problem:
       name: problem
       contentType: application/problem+json
-      payload: { $ref: '#/components/schemas/Problem' }
+      payload: { $ref: '#/components/schemas/ProblemEnvelope' }
   schemas:
-    Subscribe:
+    SubscribeEnvelope:
+      title: SubscribeEnvelope
+      $id: urn:mattercodex:control-api:ws:SubscribeEnvelope
       type: object
       additionalProperties: false
       properties:
-        type: { const: SUBSCRIBE }
-        requestId: { type: string, format: uuid }
-        channels:
-          type: array
-          minItems: 1
-          maxItems: 4
-          uniqueItems: true
-          items: { enum: [RUNS, INCIDENTS, RESOURCES, CONFIGURATION_CHANGES] }
-        resourceKinds:
-          type: array
-          maxItems: 8
-          uniqueItems: true
-          items: { enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT] }
+        type: { $ref: '#/components/schemas/SubscribeMessageType' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+        channels: { $ref: '#/components/schemas/ProjectionChannelList' }
+        resourceKinds: { $ref: '#/components/schemas/ResourceKindList' }
       required: [type, requestId, channels]
-    Snapshot:
+    SubscribeMessageType:
+      title: SubscribeMessageType
+      $id: urn:mattercodex:control-api:ws:SubscribeMessageType
+      type: string
+      enum: [SUBSCRIBE]
+    SnapshotEnvelope:
+      title: SnapshotEnvelope
+      $id: urn:mattercodex:control-api:ws:SnapshotEnvelope
       type: object
       additionalProperties: false
       properties:
-        type: { const: SNAPSHOT }
-        requestId: { type: string, format: uuid }
-        channel: { enum: [RUNS, INCIDENTS, RESOURCES, CONFIGURATION_CHANGES] }
-        sequence: { type: integer, minimum: 1 }
-        snapshotId: { type: string, format: uuid }
-        complete: { const: true }
-        serverTime: { type: string, format: date-time }
+        type: { $ref: '#/components/schemas/SnapshotMessageType' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+        channel: { $ref: '#/components/schemas/ProjectionChannel' }
+        sequence: { $ref: '#/components/schemas/SnapshotSequence' }
+        snapshotId: { $ref: '#/components/schemas/SnapshotId' }
+        complete: { $ref: '#/components/schemas/CompleteSnapshot' }
+        serverTime: { $ref: '#/components/schemas/ServerTime' }
         items: { $ref: '#/components/schemas/SnapshotItems' }
       required: [type, requestId, channel, sequence, snapshotId, complete, serverTime, items]
+    SnapshotMessageType:
+      title: SnapshotMessageType
+      $id: urn:mattercodex:control-api:ws:SnapshotMessageType
+      type: string
+      enum: [SNAPSHOT]
     SnapshotItems:
+      title: SnapshotItems
+      $id: urn:mattercodex:control-api:ws:SnapshotItems
       type: object
       additionalProperties: false
       minProperties: 1
       maxProperties: 1
       properties:
-        resources:
-          type: array
-          maxItems: 500
-          items: { $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/Resource' }
-        incidents:
-          type: array
-          maxItems: 500
-          items: { $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/RuntimeIncident' }
-        configurationChanges:
-          type: array
-          maxItems: 500
-          items: { $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/ConfigurationChange' }
-    Problem:
+        resources: { $ref: '#/components/schemas/ResourceProjectionList' }
+        incidents: { $ref: '#/components/schemas/RuntimeIncidentProjectionList' }
+        configurationChanges: { $ref: '#/components/schemas/ConfigurationChangeProjectionList' }
+    ProblemEnvelope:
+      title: ProblemEnvelope
+      $id: urn:mattercodex:control-api:ws:ProblemEnvelope
       type: object
       additionalProperties: false
       properties:
-        type: { const: PROBLEM }
-        requestId: { type: string, format: uuid }
-        code: { type: string, pattern: '^[A-Z][A-Z0-9_]*$' }
-        retryable: { type: boolean }
+        type: { $ref: '#/components/schemas/ProblemMessageType' }
+        requestId: { $ref: '#/components/schemas/RequestId' }
+        code: { $ref: '#/components/schemas/ProblemCode' }
+        retryable: { $ref: '#/components/schemas/Retryable' }
       required: [type, requestId, code, retryable]
+    ProblemMessageType:
+      title: ProblemMessageType
+      $id: urn:mattercodex:control-api:ws:ProblemMessageType
+      type: string
+      enum: [PROBLEM]
+    ProjectionChannel:
+      title: ProjectionChannel
+      $id: urn:mattercodex:control-api:ws:ProjectionChannel
+      type: string
+      enum: [RUNS, INCIDENTS, RESOURCES, CONFIGURATION_CHANGES]
+    ProjectionChannelList:
+      title: ProjectionChannelList
+      $id: urn:mattercodex:control-api:ws:ProjectionChannelList
+      type: array
+      minItems: 1
+      maxItems: 4
+      uniqueItems: true
+      items: { $ref: '#/components/schemas/ProjectionChannel' }
+    ResourceKind:
+      title: ResourceKind
+      $id: urn:mattercodex:control-api:ws:ResourceKind
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/ResourceKind'
+    ResourceKindList:
+      title: ResourceKindList
+      $id: urn:mattercodex:control-api:ws:ResourceKindList
+      type: array
+      maxItems: 8
+      uniqueItems: true
+      items: { $ref: '#/components/schemas/ResourceKind' }
+    ResourceProjection:
+      title: ResourceProjection
+      $id: urn:mattercodex:control-api:ws:ResourceProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/Resource'
+    ResourceProjectionList:
+      title: ResourceProjectionList
+      $id: urn:mattercodex:control-api:ws:ResourceProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/ResourceProjection' }
+    RuntimeIncidentProjection:
+      title: RuntimeIncidentProjection
+      $id: urn:mattercodex:control-api:ws:RuntimeIncidentProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/RuntimeIncident'
+    RuntimeIncidentProjectionList:
+      title: RuntimeIncidentProjectionList
+      $id: urn:mattercodex:control-api:ws:RuntimeIncidentProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/RuntimeIncidentProjection' }
+    ConfigurationChangeProjection:
+      title: ConfigurationChangeProjection
+      $id: urn:mattercodex:control-api:ws:ConfigurationChangeProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/ConfigurationChange'
+    ConfigurationChangeProjectionList:
+      title: ConfigurationChangeProjectionList
+      $id: urn:mattercodex:control-api:ws:ConfigurationChangeProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/ConfigurationChangeProjection' }
+    RequestId:
+      title: RequestId
+      $id: urn:mattercodex:control-api:ws:RequestId
+      type: string
+      format: uuid
+    SnapshotId:
+      title: SnapshotId
+      $id: urn:mattercodex:control-api:ws:SnapshotId
+      type: string
+      format: uuid
+    SnapshotSequence:
+      title: SnapshotSequence
+      $id: urn:mattercodex:control-api:ws:SnapshotSequence
+      type: integer
+      minimum: 1
+    CompleteSnapshot:
+      title: CompleteSnapshot
+      $id: urn:mattercodex:control-api:ws:CompleteSnapshot
+      type: boolean
+      const: true
+    ServerTime:
+      title: ServerTime
+      $id: urn:mattercodex:control-api:ws:ServerTime
+      type: string
+      format: date-time
+    ProblemCode:
+      title: ProblemCode
+      $id: urn:mattercodex:control-api:ws:ProblemCode
+      type: string
+      pattern: '^[A-Z][A-Z0-9_]*$'
+    Retryable:
+      title: Retryable
+      $id: urn:mattercodex:control-api:ws:Retryable
+      type: boolean

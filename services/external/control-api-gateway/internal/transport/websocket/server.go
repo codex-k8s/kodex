@@ -23,7 +23,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/projection"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
 	httptransport "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http"
-	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/websocket/generated"
+	httpgenerated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
@@ -138,7 +138,7 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	}
 	sequence := uint64(0)
 	if err := server.publish(ctx, connection, subscribe, &sequence); err != nil {
-		server.sendProblem(ctx, connection, subscribe.RequestId, err)
+		server.sendProblem(ctx, connection, subscribe.RequestID, err)
 		return
 	}
 	ticker := time.NewTicker(server.pollInterval)
@@ -152,7 +152,7 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 			return
 		case <-ticker.C:
 			if err := server.publish(ctx, connection, subscribe, &sequence); err != nil {
-				server.sendProblem(ctx, connection, subscribe.RequestId, err)
+				server.sendProblem(ctx, connection, subscribe.RequestID, err)
 				return
 			}
 		case <-ping.C:
@@ -166,70 +166,50 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	}
 }
 
-type rawSubscribe struct {
-	Type          string   `json:"type"`
-	RequestID     string   `json:"requestId"`
-	Channels      []string `json:"channels"`
-	ResourceKinds []string `json:"resourceKinds,omitempty"`
-}
-
-func readSubscribe(ctx context.Context, connection *websocket.Conn) (generated.Subscribe, error) {
+func readSubscribe(ctx context.Context, connection *websocket.Conn) (SubscribeEnvelope, error) {
 	readContext, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 	messageType, raw, err := connection.Read(readContext)
 	if err != nil || messageType != websocket.MessageText || len(raw) == 0 || len(raw) > maximumReadBytes {
-		return generated.Subscribe{}, errors.New("subscription frame is invalid")
+		return SubscribeEnvelope{}, errors.New("subscription frame is invalid")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	var input rawSubscribe
-	if decoder.Decode(&input) != nil || decoder.Decode(&struct{}{}) != io.EOF || input.Type != "SUBSCRIBE" ||
+	var input SubscribeEnvelope
+	if decoder.Decode(&input) != nil || decoder.Decode(&struct{}{}) != io.EOF || input.Type != SubscribeMessageTypeSubscribe ||
 		uuid.Validate(input.RequestID) != nil || len(input.Channels) == 0 || len(input.Channels) > 4 || len(input.ResourceKinds) > 8 {
-		return generated.Subscribe{}, errors.New("subscription payload is invalid")
+		return SubscribeEnvelope{}, errors.New("subscription payload is invalid")
 	}
-	channels := make([]generated.AnonymousSchema_4, 0, len(input.Channels))
-	seenChannels := make(map[string]struct{}, len(input.Channels))
+	seenChannels := make(map[ProjectionChannel]struct{}, len(input.Channels))
 	for _, value := range input.Channels {
 		if _, duplicate := seenChannels[value]; duplicate {
-			return generated.Subscribe{}, errors.New("subscription channel is duplicated")
+			return SubscribeEnvelope{}, errors.New("subscription channel is duplicated")
 		}
 		seenChannels[value] = struct{}{}
-		converted, ok := generated.ValuesToAnonymousSchema_4[value]
-		if !ok {
-			return generated.Subscribe{}, errors.New("subscription channel is invalid")
-		}
-		channels = append(channels, converted)
 	}
-	kinds := make([]generated.AnonymousSchema_6, 0, len(input.ResourceKinds))
-	seenKinds := make(map[string]struct{}, len(input.ResourceKinds))
+	seenKinds := make(map[ResourceKind]struct{}, len(input.ResourceKinds))
 	for _, value := range input.ResourceKinds {
 		if _, duplicate := seenKinds[value]; duplicate {
-			return generated.Subscribe{}, errors.New("subscription resource kind is duplicated")
+			return SubscribeEnvelope{}, errors.New("subscription resource kind is duplicated")
 		}
 		seenKinds[value] = struct{}{}
-		converted, ok := generated.ValuesToAnonymousSchema_6[value]
-		if !ok {
-			return generated.Subscribe{}, errors.New("subscription resource kind is invalid")
-		}
-		kinds = append(kinds, converted)
 	}
-	if _, needsResources := seenChannels["RESOURCES"]; needsResources && len(kinds) == 0 {
-		return generated.Subscribe{}, errors.New("resource subscription requires resourceKinds")
+	if _, needsResources := seenChannels[ProjectionChannelResources]; needsResources && len(input.ResourceKinds) == 0 {
+		return SubscribeEnvelope{}, errors.New("resource subscription requires resourceKinds")
 	}
-	return generated.Subscribe{ReservedType: input.Type, RequestId: input.RequestID, Channels: channels, ResourceKinds: kinds}, nil
+	return input, nil
 }
 
-func (server *Server) publish(ctx context.Context, connection *websocket.Conn, subscribe generated.Subscribe, sequence *uint64) error {
+func (server *Server) publish(ctx context.Context, connection *websocket.Conn, subscribe SubscribeEnvelope, sequence *uint64) error {
 	for _, channel := range subscribe.Channels {
-		name, _ := channel.Value().(string)
-		items, err := server.snapshot(ctx, name, subscribe.ResourceKinds)
+		name := string(channel)
+		items, err := server.snapshot(ctx, channel, subscribe.ResourceKinds)
 		if err != nil {
 			server.metrics.ObserveSnapshot(name, "failure")
 			return err
 		}
 		*sequence++
-		outChannel := generated.ValuesToAnonymousSchema_9[name]
-		message := generated.Snapshot{ReservedType: "SNAPSHOT", RequestId: subscribe.RequestId, Channel: &outChannel, Sequence: int(*sequence), SnapshotId: uuid.NewString(), Complete: true, ServerTime: time.Now().UTC().Format(time.RFC3339Nano), Items: items}
+		message := SnapshotEnvelope{Type: SnapshotMessageTypeSnapshot, RequestID: subscribe.RequestID, Channel: channel, Sequence: *sequence, SnapshotID: uuid.NewString(), Complete: true, ServerTime: time.Now().UTC().Format(time.RFC3339Nano), Items: items}
 		writeContext, cancel := context.WithTimeout(ctx, writeTimeout)
 		err = wsjsonWrite(writeContext, connection, message)
 		cancel()
@@ -241,44 +221,43 @@ func (server *Server) publish(ctx context.Context, connection *websocket.Conn, s
 	return nil
 }
 
-func (server *Server) snapshot(ctx context.Context, channel string, kinds []generated.AnonymousSchema_6) (*generated.SnapshotItems, error) {
+func (server *Server) snapshot(ctx context.Context, channel ProjectionChannel, kinds []ResourceKind) (SnapshotItems, error) {
 	rpcContext, cancel := context.WithTimeout(ctx, server.rpcTimeout)
 	defer cancel()
 	switch channel {
-	case "RUNS":
+	case ProjectionChannelRuns:
 		items, err := server.allResources(rpcContext, controlplanev1.ResourceKind_RESOURCE_KIND_PROCESS_RUN)
-		return &generated.SnapshotItems{Resources: items}, err
-	case "RESOURCES":
-		items := make([]generated.AnonymousSchema_15, 0)
+		return SnapshotItems{Resources: items}, err
+	case ProjectionChannelResources:
+		items := make([]httpgenerated.Resource, 0)
 		for _, kind := range kinds {
-			name, _ := kind.Value().(string)
-			protoKind := controlplanev1.ResourceKind(controlplanev1.ResourceKind_value["RESOURCE_KIND_"+name])
+			protoKind := controlplanev1.ResourceKind(controlplanev1.ResourceKind_value["RESOURCE_KIND_"+string(kind)])
 			if protoKind == controlplanev1.ResourceKind_RESOURCE_KIND_UNSPECIFIED {
-				return nil, errors.New("resource kind is invalid")
+				return SnapshotItems{}, errors.New("resource kind is invalid")
 			}
 			converted, err := server.allResources(rpcContext, protoKind)
 			if err != nil {
-				return nil, err
+				return SnapshotItems{}, err
 			}
 			if len(items)+len(converted) > maximumItems {
-				return nil, errSnapshotLimit
+				return SnapshotItems{}, errSnapshotLimit
 			}
 			items = append(items, converted...)
 		}
-		return &generated.SnapshotItems{Resources: items}, nil
-	case "INCIDENTS":
+		return SnapshotItems{Resources: items}, nil
+	case ProjectionChannelIncidents:
 		items, err := server.allIncidents(rpcContext)
-		return &generated.SnapshotItems{Incidents: items}, err
-	case "CONFIGURATION_CHANGES":
+		return SnapshotItems{Incidents: items}, err
+	case ProjectionChannelConfigurationChanges:
 		items, err := server.allConfigurationChanges(rpcContext)
-		return &generated.SnapshotItems{ConfigurationChanges: items}, err
+		return SnapshotItems{ConfigurationChanges: items}, err
 	default:
-		return nil, errors.New("subscription channel is invalid")
+		return SnapshotItems{}, errors.New("subscription channel is invalid")
 	}
 }
 
-func (server *Server) allResources(ctx context.Context, kind controlplanev1.ResourceKind) ([]generated.AnonymousSchema_15, error) {
-	items := make([]generated.AnonymousSchema_15, 0)
+func (server *Server) allResources(ctx context.Context, kind controlplanev1.ResourceKind) ([]httpgenerated.Resource, error) {
+	items := make([]httpgenerated.Resource, 0)
 	token := ""
 	for {
 		response, err := server.control.ListResources(ctx, &controlplanev1.ListResourcesRequest{Kind: kind, PageSize: rpcPageSize, PageToken: token})
@@ -293,11 +272,7 @@ func (server *Server) allResources(ctx context.Context, kind controlplanev1.Reso
 			if err != nil {
 				return nil, err
 			}
-			converted, err := convertExternal[generated.AnonymousSchema_15](external)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, converted)
+			items = append(items, external)
 		}
 		next := response.GetNextPageToken()
 		if next != "" && (len(response.GetResources()) == 0 || next == token) {
@@ -313,8 +288,8 @@ func (server *Server) allResources(ctx context.Context, kind controlplanev1.Reso
 	}
 }
 
-func (server *Server) allIncidents(ctx context.Context) ([]generated.AnonymousSchema_182, error) {
-	items := make([]generated.AnonymousSchema_182, 0)
+func (server *Server) allIncidents(ctx context.Context) ([]httpgenerated.RuntimeIncident, error) {
+	items := make([]httpgenerated.RuntimeIncident, 0)
 	token := ""
 	for {
 		response, err := server.control.ListRuntimeIncidents(ctx, &controlplanev1.ListRuntimeIncidentsRequest{PageSize: rpcPageSize, PageToken: token})
@@ -329,11 +304,7 @@ func (server *Server) allIncidents(ctx context.Context) ([]generated.AnonymousSc
 			if err != nil {
 				return nil, err
 			}
-			converted, err := convertExternal[generated.AnonymousSchema_182](external)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, converted)
+			items = append(items, external)
 		}
 		next := response.GetNextPageToken()
 		if next != "" && (len(response.GetIncidents()) == 0 || next == token) {
@@ -349,8 +320,8 @@ func (server *Server) allIncidents(ctx context.Context) ([]generated.AnonymousSc
 	}
 }
 
-func (server *Server) allConfigurationChanges(ctx context.Context) ([]generated.AnonymousSchema_191, error) {
-	items := make([]generated.AnonymousSchema_191, 0)
+func (server *Server) allConfigurationChanges(ctx context.Context) ([]httpgenerated.ConfigurationChange, error) {
+	items := make([]httpgenerated.ConfigurationChange, 0)
 	token := ""
 	scanned := 0
 	for {
@@ -366,15 +337,11 @@ func (server *Server) allConfigurationChanges(ctx context.Context) ([]generated.
 			if !projection.IsConfigurationAction(item.GetAction()) {
 				continue
 			}
-			external, err := httptransport.ConvertAuditEvent(item)
+			external, err := httptransport.ConvertConfigurationChange(item)
 			if err != nil {
 				return nil, err
 			}
-			converted, err := convertExternal[generated.AnonymousSchema_191](external)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, converted)
+			items = append(items, external)
 		}
 		next := response.GetNextPageToken()
 		if next != "" && (len(response.GetEvents()) == 0 || next == token) {
@@ -388,20 +355,6 @@ func (server *Server) allConfigurationChanges(ctx context.Context) ([]generated.
 			return nil, errSnapshotLimit
 		}
 	}
-}
-
-func convertExternal[T any](input any) (T, error) {
-	var output T
-	raw, err := json.Marshal(input)
-	if err != nil {
-		return output, err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&output) != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		return output, errors.New("typed external projection is invalid")
-	}
-	return output, nil
 }
 
 func (server *Server) Shutdown(ctx context.Context) error {
@@ -456,7 +409,7 @@ func (server *Server) sendProblem(ctx context.Context, connection *websocket.Con
 	}
 	writeContext, cancel := context.WithTimeout(ctx, writeTimeout)
 	defer cancel()
-	_ = wsjsonWrite(writeContext, connection, generated.Problem{ReservedType: "PROBLEM", RequestId: requestID, Code: code, Retryable: retryable})
+	_ = wsjsonWrite(writeContext, connection, ProblemEnvelope{Type: ProblemMessageTypeProblem, RequestID: requestID, Code: code, Retryable: retryable})
 	_ = connection.Close(websocket.StatusInternalError, "projection unavailable")
 }
 

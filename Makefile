@@ -7,8 +7,9 @@ PROTOBUF_GO_PLUGIN_REVISION := 1
 GRPC_GO_PLUGIN_REMOTE := buf.build/grpc/go:v1.6.2
 GRPC_GO_PLUGIN_REVISION := 1
 ASYNCAPI ?= asyncapi
+CONTROL_API_GATEWAY_ASYNCAPI_VERSION := @asyncapi/cli/6.0.2
 
-.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-integration-gateway-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-proto-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-integration-gateway-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -57,20 +58,26 @@ gen-control-api-gateway-openapi-go:
 	oapi-codegen -config tools/codegen/openapi/control-api-gateway-go.yaml contracts/openapi/control-api-gateway/v1/openapi.yaml
 	gofmt -w services/external/control-api-gateway/internal/transport/http/generated
 
-lint-control-api-gateway-asyncapi:
+check-control-api-gateway-asyncapi-toolchain:
+	@version="$$($(ASYNCAPI) --version)"; \
+	case "$$version" in \
+		"$(CONTROL_API_GATEWAY_ASYNCAPI_VERSION) "*) ;; \
+		*) echo "unexpected AsyncAPI CLI version: expected $(CONTROL_API_GATEWAY_ASYNCAPI_VERSION)" >&2; exit 1 ;; \
+	esac
+
+lint-control-api-gateway-asyncapi: check-control-api-gateway-asyncapi-toolchain
 	$(ASYNCAPI) validate contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml
 
-gen-control-api-gateway-asyncapi:
-	rm -f services/external/control-api-gateway/internal/transport/websocket/generated/anonymous_schema_*.go \
-		services/external/control-api-gateway/internal/transport/websocket/generated/problem.go \
-		services/external/control-api-gateway/internal/transport/websocket/generated/realtime.go \
-		services/external/control-api-gateway/internal/transport/websocket/generated/snapshot.go \
-		services/external/control-api-gateway/internal/transport/websocket/generated/snapshot_items.go \
-		services/external/control-api-gateway/internal/transport/websocket/generated/subscribe.go
+gen-control-api-gateway-asyncapi: check-control-api-gateway-asyncapi-toolchain
+	rm -rf services/external/control-api-gateway/internal/transport/websocket/generated
+	mkdir -p services/external/control-api-gateway/internal/transport/websocket/generated
 	$(ASYNCAPI) generate models golang contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml \
-		--packageName generated --goIncludeComments --goIncludeTags --no-interactive \
+		--packageName generated --goIncludeComments --no-interactive \
 		--output services/external/control-api-gateway/internal/transport/websocket/generated
-	./tools/codegen/normalize-control-api-gateway-asyncapi.sh
+	$(MAKE) check-control-api-gateway-asyncapi-codegen
+
+check-control-api-gateway-asyncapi-codegen:
+	./tools/codegen/check-control-api-gateway-asyncapi.sh
 
 gen-openapi-ts:
 	openapi-ts -f tools/codegen/openapi/control-center-ts.config.mjs
