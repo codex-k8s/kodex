@@ -4,7 +4,7 @@ title: Control API gateway
 type: service
 status: approved
 owner: backend
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-04
 ---
 
@@ -32,7 +32,9 @@ tenant из payload. Эти поля разрешает `AuthorityProofResolverS
   `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
 
 OpenAPI требует `Idempotency-Key` для каждой state-changing команды и
-`If-Match: "<positive-version>"` для update/transition/delete. Gateway
+`If-Match: "<positive-version>"` для update/transition/delete/detach/copy.
+Missing либо malformed ETag централизованно даёт typed `400 INVALID_REQUEST`
+до body decode и RPC; валидный ETag передаётся без ослабления. Gateway
 передаёт их без ослабления. `control-plane` сначала разрешает ресурс внутри
 trusted owner/tenant boundary, затем проверяет OCC и receipt. Create не
 принимает project/owner/ownership: project и owner разрешает `control-plane`,
@@ -55,17 +57,17 @@ issuer. Payload identity не используется.
 | #191, PRD-MC-001/005, owner создаёт проект | `POST /api/v1/projects` | `control.project.create` → `CreateProject` | control-plane назначает ID/owner; semantic receipt по `Idempotency-Key` | `201`+`ETag`; state/idempotency/audit и каждый обязательный outbox fact атомарны; client перечитывает REST/WS snapshot |
 | #191, owner читает проекты | `GET /api/v1/projects` | `control.project.list` → `ListProjects` | control-plane eligibility и pagination token | `200`; только authoritative read path, события не требуются |
 | #191, owner создаёт UI-конфигурацию | `POST /api/v1/resources` для `CHAT|CREDENTIAL_BINDING|REPOSITORY_WORKSPACE|INTEGRATION` | закрытый kind/spec caster → `control.resource.create` → `CreateResource` | control-plane назначает project/owner; `Idempotency-Key`; secret value запрещён | `201`+`ETag`; audit и каждый применимый outbox fact принадлежат owner transaction; WS получает свежий read snapshot |
-| #191, owner читает ресурс/список | `GET /api/v1/resources[/{id}]` | `control.resource.get|list` → `GetResource|ListResources` | resource сначала разрешён control-plane внутри текущей области | `200`+`ETag` для single; скрытый и отсутствующий одинаково `404`; authoritative read path |
-| #191, owner ищет ресурс | `GET /api/v1/resources/search` | typed query → `control.resource.search` → `SearchResources` | control-plane применяет тот же authoritative owner eligibility для каждого закрытого kind | `200`; typed page/cursor, скрытые ресурсы не попадают в search result |
+| #191, owner читает ресурс/список | `GET /api/v1/resources[/{id}]` | `control.resource.get|list` → `GetResource|ListResources` | resource сначала разрешён control-plane внутри текущей области; verified actor predicate находится в named SQL до `ORDER BY/LIMIT` | `200`+`ETag` для single; cursor вычисляется по последней eligible строке, скрытый и отсутствующий одинаково `404`; authoritative read path |
+| #191, owner ищет ресурс | `GET /api/v1/resources/search` | typed query → `control.resource.search` → `SearchResources` | control-plane применяет тот же authoritative organization/project/verified-actor predicate в named SQL до page limit для каждого закрытого kind | `200`; typed page/cursor прогрессирует по eligible строкам, скрытые ресурсы не попадают в search result и не создают ранний EOF |
 | #191, owner обновляет UI-конфигурацию | `PUT /api/v1/resources/{id}` | closed kind/spec → `control.resource.update` → `UpdateResource` | owner resolution → `If-Match` → idempotency; Git-owned generic update запрещён | `200`+новый `ETag`; audit/read snapshot; parallel version даёт `412` |
 | #191, owner меняет lifecycle | `POST /api/v1/resources/{id}/transition` | closed state/reason → `control.resource.transition` → `TransitionResource` | owner resolution → OCC/idempotency; полный lifecycle проверяет control-plane | `200`; недопустимый переход `409`; authoritative resource/audit read path |
 | #191, owner удаляет конфигурацию | `DELETE /api/v1/resources/{id}` | `control.resource.delete` → `DeleteResource` | owner resolution → OCC/idempotency; tombstone/связи принадлежат control-plane | `200`; state/tombstone/audit фиксируются owner transaction; WS перечитывает snapshot |
 | #191, owner управляет authority-bearing team/role/prompt | `POST /api/v1/access-resources` | closed kind/action/spec → `control.access.manage` → `ManageAccessResource` | специализированная команда; create без caller owner, остальные с resource ID+`If-Match` | `200`; self-grant/универсальный CRUD запрещены; audit/read snapshot |
 | #191, owner отделяет Git-owned access resource | `POST /api/v1/access-resources/{id}/detach` | `control.access.detach` → `DetachAccessResource` | trusted owner/kind resolution → exact version/idempotency; ownership меняет control-plane | `200`; одна transaction обновляет ownership/version/audit/receipt |
-| #191, owner копирует Git-owned access resource | `POST /api/v1/access-resources/{id}/copy` | `control.access.copy` → `CopyAccessResource` | locked source owner/kind/version; новый ID/owner/UI source назначает сервер | `201`; source остаётся неизменным, copy/audit/receipt атомарны |
+| #191, owner копирует Git-owned access resource | `POST /api/v1/access-resources/{id}/copy` | `control.access.copy` → `CopyAccessResource` | locked source owner/kind/version; новый ID/owner и immutable UI lineage source/revision назначает сервер | `201`; copy создаётся `PAUSED`, source остаётся неизменным, copy/audit/receipt атомарны; activation — отдельный transition |
 | #191, owner наблюдает runs | `GET /api/v1/runs` | `control.resource.list` → `ListResources(PROCESS_RUN)` | control-plane владеет run lifecycle/version | `200`; авторитетный read path, gateway не выводит terminal state самостоятельно |
-| #191, owner наблюдает incidents | `GET /api/v1/incidents` | `control.runtime-incident.list` → `ListRuntimeIncidents` | control-plane владеет append-only incident/evidence eligibility и cursor | `200`; typed `incidentId/kind/evidenceSha256/executionFence/workloadId/occurredAt`, secret values отсутствуют |
-| #191, owner читает configuration changes/audit | `GET /api/v1/configuration-changes|audit` | `control.audit.list` → paged `ListAuditEvents`; gateway сканирует authoritative cursor до полной requested page | control-plane владеет audit; gateway cap 500 сканированных событий | `200`; configuration projection использует закрытые action/outcome enums; при превышении cap fail-closed |
+| #191, owner наблюдает incidents | `GET /api/v1/incidents` | `control.runtime-incident.list` → `ListRuntimeIncidents` | control-plane связывает incident с runtime execution и root `PROCESS_RUN.owner_actor_id`; organization/project/verified actor predicate применяется в named SQL до cursor/limit | `200`; другой actor того же project не видит hidden run/evidence в REST/WS; typed `incidentId/kind/evidenceSha256/executionFence/workloadId/occurredAt`, secret values отсутствуют |
+| #191, owner читает configuration changes/audit | `GET /api/v1/configuration-changes|audit` | `control.audit.list` → paged `ListAuditEvents`; gateway сканирует authoritative cursor до полной requested page | control-plane владеет audit; gateway cap 500 сканированных событий | `200`; закрытый registry включает `detach_access_configuration` и `copy_access_configuration`; при превышении cap fail-closed |
 | #191, owner читает diagnostics | `GET /api/v1/diagnostics` | `control.diagnostics.get` → `GetDiagnostics` | control-plane владеет schema/outbox/lease metadata | `200`; только ограниченный authoritative read path |
 | #191, owner подписывается на realtime | `WSS /api/v1/realtime`, subprotocol `mattercodex.control.v1` + CSRF | та же session fence; все RPC pages читаются до конца, incidents идут через `ListRuntimeIncidents` | connection-local sequence не является domain version; typed items несут server version/evidence | один `complete=true` snapshot до 500 items; overflow/scan cap → PROBLEM+close без replace; reconnect = resubscribe/read current |
 
@@ -79,23 +81,23 @@ issuer. Payload identity не используется.
 | Session rotation | новые cookies шифруются current key; current и previous принимаются на overlap | lower/unknown key не принимается; rollback key не материализуется gateway |
 | Session expiry/logout | deadline закрывает HTTP/WS; logout сначала фиксирует durable revoke, затем удаляет cookies | rejoin только через более новую OIDC session revision и новый admit |
 | Create | closed command registry; owner/project отсутствуют в request | unknown/protected kind → `400`, RPC не вызывается |
-| Update/transition/delete | resource ID передаётся как locator; control-plane делает owner resolution до OCC/receipt | hidden/missing → одинаковый `404`; version → `412`; lifecycle → `409` |
+| Update/transition/delete/detach/copy | ETag парсится централизованно до RPC; resource ID передаётся как locator; control-plane делает owner resolution до OCC/receipt | missing/malformed `If-Match` → typed `400` без RPC; hidden/missing → одинаковый `404`; version → `412`; lifecycle → `409` |
 | WS subscribe | exact Origin, session, CSRF subprotocol+cookie, ≤4 channel, ≤8 kind, bounded frame/connection | policy close без snapshot |
 | WS retry/reconnect | новый authority proof/session fence на каждую страницу каждого poll; reconnect читает current state | gateway не replay-ит устаревший или частичный snapshot и не синтезирует delete |
 | Rate/concurrency | малый pre-auth admission; раздельные global/per-organization+subject HTTP и WS quota, bounded inactive-key cleanup | один subject/долгий WS не занимает HTTP или чужой subject quota; close освобождает slot |
-| Public TLS rotation | VSO доставляет candidate+CA, versioned metadata задаёт generation/predecessor; control-plane принимает exact same или `+1` и хранит served watermark | rollback/skipped generation/mismatched digest/expiry закрывают startup/readiness; peer readback проверяет exact SNI/CA/DER digest |
+| Public TLS rotation | один `VaultStaticSecret` атомарно доставляет cert/key/CA и server-owned generation/digests; `Prepare` сохраняет PENDING, listener+loopback exact SNI/CA/DER readback предшествует `Confirm`, который переводит N+1 в APPLIED и N в bounded PREVIOUS | crash до Confirm оставляет N APPLIED; rollback/skipped/mixed material/expiry закрывают startup; старый N ready только до конца overlap, readiness выполняет read-only `Check` |
 
 ## Материализация рабочего пути
 
 | Часть | Исполняемая материализация |
 | --- | --- |
 | Producer profile | существующий `control-plane.oidc`: OIDC bearer metadata, resolver exact mTLS SPIFFE, server-resolved actor/tenant/project/ownership и durable owner-session fence |
-| Client operation profile | `controlplaneclient.ControlAPIGatewayOperations`; exact 19 materialized methods, включая session/search/detach/copy/incidents/TLS/readiness, без broad lifecycle permissions |
+| Client operation profile | `controlplaneclient.ControlAPIGatewayOperations`; exact 21 materialized method, включая session/search/detach/copy/incidents, специализированные TLS prepare/confirm/check и readiness, без broad lifecycle permissions |
 | Generated adapters | OpenAPI std HTTP server, AsyncAPI Go models, generated control-plane gRPC client |
 | Consumer effect | typed REST page либо connection-local atomic complete replace-snapshot; browser не подтверждает domain effect и не влияет на state owner |
-| Readiness | OIDC/session/TLS state прочитаны; public TLS admitted в control-plane; `controlplaneclient.Check` проходит resolver → local issuer → protected `CheckReadiness`; loopback TLS readback сверяет exact peer digest/expiry |
+| Readiness | OIDC/session/TLS state прочитаны; local served material разрешён read-only `CheckGatewayPublicTLS` как APPLIED, PENDING до confirm recovery либо неистёкший PREVIOUS; `controlplaneclient.Check` проходит resolver → local issuer → protected `CheckReadiness`; loopback TLS readback сверяет exact peer digest/expiry и не продвигает watermark |
 | Deploy ownership | Dockerfile, Kustomize base/overlays, Service/Ingress TLS passthrough, issuer component, Vault Secrets Operator, exact NetworkPolicy, PDB, metrics/dashboard/alerts |
-| Failure policy | startup fail-closed; readiness снимается при protected RPC/TLS mismatch; HTTP/WS unknown error detail → `INTERNAL`; admission останавливается и REST/WS join завершается до client/OIDC/telemetry shutdown |
+| Failure policy | startup fail-closed; readiness снимается при protected RPC/TLS mismatch; HTTP/WS unknown error detail → `INTERNAL`; admission останавливается, tracked WebSocket закрываются параллельно и force-close/join подчиняется shutdown budget до client/OIDC/telemetry shutdown |
 
 ## Security boundary
 
@@ -112,14 +114,15 @@ issuer. Payload identity не используется.
 - metric `route/status/channel/outcome` нормализованы закрытыми множествами;
   IDs, paths, actions и внешние значения не являются labels;
 - configuration projection принимает только фактические control-plane audit
-  actions `create|update|transition|delete|create_schedule|manage_schedule_*`;
+  actions `create|update|transition|delete|detach_access_configuration|copy_access_configuration|create_schedule|manage_schedule_*`;
 - audit/diagnostics не содержат bearer, cookie, CSRF, key, DSN или secret value.
 
 ## Конфигурация и secret delivery
 
 Все `CONTROL_API_GATEWAY_*_FILE` — абсолютные regular files без разрешений
 `other`. Значения не входят в manifest, README, логи или ошибки. Vault Secrets
-Operator атомарно материализует public TLS, CA, forward-only TLS metadata,
+Operator одним versioned Secret атомарно материализует public TLS cert/key/CA
+и forward-only TLS generation/digests,
 current/previous session keys и readiness application grant в Kubernetes
 Secrets с rollout restart. Уже
 принятый `internal-rpc-authority-control-api-gateway-issuer` component

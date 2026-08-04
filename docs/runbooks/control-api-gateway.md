@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-api-gatewa
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-04
 ---
 
@@ -34,7 +34,7 @@ kubectl kustomize deploy/k8s/overlays/staging/control-api-gateway \
 ```
 
 3. Сверить Deployment, Service, passthrough Ingress, PDB, ServiceMonitor,
-   PrometheusRule, VaultConnection/VaultAuth/VaultPKISecret/VaultStaticSecret,
+   PrometheusRule, VaultConnection/VaultAuth/VaultStaticSecret,
    issuer-owned SecretProviderClass, deny-all и exact-path NetworkPolicy.
 4. В Deployment должна быть ровно одна application container и один issuer,
    а каждый `startupProbe`/`readinessProbe` — ровно один handler `httpGet` на
@@ -62,8 +62,10 @@ Startup fail-closed до обслуживания `8443`. Проверять п�
 - readiness application grant доступен как файл безопасного mode;
 - local issuer UDS проверил peer UID/GID, snapshot, proof trust, durable replay
   и served-state readback;
-- `AdmitGatewayPublicTLS` подтверждает exact DER SHA-256/generation в durable
-  control-plane watermark; loopback TLS readback использует exact SNI/CA;
+- `PrepareGatewayPublicTLS` сохраняет candidate как durable PENDING, local
+  listener проходит loopback exact SNI/CA/DER SHA-256 readback и только затем
+  `ConfirmGatewayPublicTLS` продвигает APPLIED; readiness использует read-only
+  `CheckGatewayPublicTLS`;
 - `controlplaneclient.Check` последовательно проходит resolver, local issuer и
   защищённый `CheckReadiness` тем же путём, что рабочие RPC;
 - OTLP TLS и Sentry file/expected host настроены.
@@ -112,22 +114,31 @@ resolver, permission и domain owner check.
 
 1. Read-only получить текущие generation и certificate SHA-256 из
    control-plane served-state readback, не читая private key.
-2. Выпустить candidate через существующий `VaultPKISecret`; определить его
-   DER SHA-256 локальным безопасным инструментом без вывода certificate body.
-3. Записать в owner-managed Vault metadata только `generation=current+1`,
-   `predecessor-generation=current` и exact predecessor SHA-256. VSO выполняет
-   rollout restart; gateway сам вычисляет candidate SHA-256.
-4. Каждый pod до traffic вызывает `AdmitGatewayPublicTLS`. Control-plane
-   принимает только exact replay текущего состояния либо `+1` с exact
-   predecessor. Skipped generation, rollback и другой certificate той же
-   generation закрыто отклоняются.
-5. `/readyz` становится ready только после protected RPC и loopback TLS peer
-   readback exact SNI/CA/SHA-256/expiry. Сверить все replicas и authoritative
-   generation до удаления overlap CA.
+2. Owner rotation controller атомарно записывает один versioned Vault KV
+   envelope: `tls-crt`, `tls-key`, `ca-crt`, `generation=current+1`, exact
+   `certificate-sha256`, `predecessor-generation=current` и exact predecessor
+   SHA-256. Private key не попадает в RPC/БД/логи/readback.
+3. Один `VaultStaticSecret` материализует весь envelope в один Kubernetes
+   Secret и выполняет rolling restart. Два независимых VSO destination для
+   certificate и generation запрещены: mixed N/N+1 должен быть невозможен.
+4. Новый pod вызывает `PrepareGatewayPublicTLS`. Control-plane сохраняет
+   exact candidate как idempotent PENDING только для `current+1` и exact
+   predecessor, не меняя APPLIED; старые N replicas остаются ready.
+5. Gateway загружает candidate, запускает TLS listener, выполняет loopback peer
+   readback exact SNI/CA/leaf digest/expiry и затем вызывает
+   `ConfirmGatewayPublicTLS`. Confirm одной transaction переводит N+1 в
+   APPLIED, N в PREVIOUS и фиксирует 15-минутный overlap.
+6. `/readyz` использует только read-only `CheckGatewayPublicTLS`, protected
+   `CheckReadiness` и loopback served readback. APPLIED и неистёкший PREVIOUS
+   могут одновременно быть ready; после overlap старые N replicas обязаны
+   стать not ready и замениться.
 
-После crash используется тот же exact replay. При частичном rollout старые
-pods после продвижения watermark становятся not ready; откатывать metadata
-нельзя — следует выпустить следующую generation с текущим predecessor.
+Crash после Prepare оставляет N APPLIED и N+1 PENDING; exact replay продолжает
+rollout. Crash после local load до Confirm также не продвигает state. Crash
+после Confirm безопасен, потому что N+1 уже доказан served, а N принят на
+bounded overlap. Unknown/skipped/rollback/mismatched digest закрыто
+отклоняются; rollback metadata запрещён — выпускается следующая generation от
+текущего APPLIED predecessor.
 
 ## WebSocket snapshots
 

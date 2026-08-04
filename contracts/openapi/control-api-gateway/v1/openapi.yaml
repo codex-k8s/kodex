@@ -926,7 +926,7 @@ components:
       required: [events]
     ConfigurationChangeAction:
       type: string
-      enum: [create, update, transition, delete, create_schedule, manage_schedule_UPDATE, manage_schedule_ACTIVATE, manage_schedule_PAUSE, manage_schedule_ARCHIVE, manage_schedule_DELETE]
+      enum: [create, update, transition, delete, detach_access_configuration, copy_access_configuration, create_schedule, manage_schedule_UPDATE, manage_schedule_ACTIVATE, manage_schedule_PAUSE, manage_schedule_ARCHIVE, manage_schedule_DELETE]
     ConfigurationChangeOutcome:
       type: string
       enum: [succeeded]

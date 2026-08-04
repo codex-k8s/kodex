@@ -23,6 +23,10 @@ WHERE organization_id = @organization_id::uuid
       '00000000-0000-0000-0000-000000000000'::uuid
   )
   AND (
+      kind NOT IN ('SESSION', 'TURN', 'PROCESS_RUN', 'SCHEDULE', 'OWNER_GATE', 'WORK_CLAIM')
+      OR owner_actor_id = @actor_id::uuid
+  )
+  AND (
       kind <> 'WORK_CLAIM'
       OR state <> 'ACTIVE'
       OR control_plane.work_claim_graph_is_active(resources)

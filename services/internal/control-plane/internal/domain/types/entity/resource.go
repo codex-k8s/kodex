@@ -80,6 +80,30 @@ func New(
 	return resource, nil
 }
 
+// NewPausedAccessConfiguration создаёт authority-bearing UI copy сразу в
+// PAUSED: промежуточного ACTIVE aggregate и grant/reference effect нет.
+func NewPausedAccessConfiguration(
+	id string,
+	organizationID string,
+	projectID string,
+	parentID string,
+	ownerActorID string,
+	kind enum.Kind,
+	name string,
+	spec Spec,
+	now time.Time,
+) (Resource, error) {
+	if kind != enum.KindTeam && kind != enum.KindRole && kind != enum.KindPromptProfile {
+		return Resource{}, errors.New("paused access configuration kind is invalid")
+	}
+	resource, err := New(id, organizationID, projectID, parentID, ownerActorID, kind, name, spec, now)
+	if err != nil {
+		return Resource{}, err
+	}
+	resource.State = enum.StatePaused
+	return resource, nil
+}
+
 // Update применяет прикладное обновление и увеличивает версию OCC.
 func (resource Resource) Update(name string, spec Spec, now time.Time) (Resource, error) {
 	if resource.State.Terminal() || resource.State == enum.StateDeletionPending ||

@@ -28,8 +28,10 @@ var (
 	ErrUnauthenticated = errors.New("owner credential cannot establish session")
 )
 
-type identityContextKey struct{}
-type verifiedAuthorizationContextKey struct{}
+type (
+	identityContextKey              struct{}
+	verifiedAuthorizationContextKey struct{}
+)
 
 type verifiedAuthorization struct {
 	principal oidcauth.Principal

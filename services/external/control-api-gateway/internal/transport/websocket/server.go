@@ -46,6 +46,10 @@ type ControlPlane interface {
 	ListRuntimeIncidents(context.Context, *controlplanev1.ListRuntimeIncidentsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeIncidentsResponse, error)
 }
 
+type trackedConnection interface {
+	CloseNow() error
+}
+
 type Server struct {
 	control        ControlPlane
 	security       *boundary.Boundary
@@ -56,7 +60,7 @@ type Server struct {
 	rpcTimeout     time.Duration
 	connections    atomic.Int64
 	connectionMu   sync.Mutex
-	active         map[*websocket.Conn]struct{}
+	active         map[trackedConnection]struct{}
 	connectionWG   sync.WaitGroup
 	stopping       bool
 }
@@ -74,7 +78,7 @@ func New(control ControlPlane, security *boundary.Boundary, metrics *internalobs
 		}
 		patterns = append(patterns, parsed.Hostname())
 	}
-	return &Server{control: control, security: security, metrics: metrics, logger: logger, originPatterns: patterns, pollInterval: pollInterval, rpcTimeout: rpcTimeout, active: make(map[*websocket.Conn]struct{})}, nil
+	return &Server{control: control, security: security, metrics: metrics, logger: logger, originPatterns: patterns, pollInterval: pollInterval, rpcTimeout: rpcTimeout, active: make(map[trackedConnection]struct{})}, nil
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -144,7 +148,7 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 	for {
 		select {
 		case <-ctx.Done():
-			_ = connection.Close(websocket.StatusNormalClosure, "session ended")
+			_ = connection.CloseNow()
 			return
 		case <-ticker.C:
 			if err := server.publish(ctx, connection, subscribe, &sequence); err != nil {
@@ -403,16 +407,36 @@ func convertExternal[T any](input any) (T, error) {
 func (server *Server) Shutdown(ctx context.Context) error {
 	server.connectionMu.Lock()
 	server.stopping = true
-	connections := make([]*websocket.Conn, 0, len(server.active))
+	connections := make([]trackedConnection, 0, len(server.active))
 	for connection := range server.active {
 		connections = append(connections, connection)
 	}
 	server.connectionMu.Unlock()
-	for _, connection := range connections {
-		_ = connection.Close(websocket.StatusGoingAway, "gateway stopping")
-	}
+
+	// Число параллельных операций ограничено глобальной квотой WebSocket.
+	// coder/websocket Close не принимает context, а повторный CloseNow ждёт уже
+	// начатый handshake. Поэтому первая половина budget оставлена handlers для
+	// естественного выхода, затем выполняется concurrent force-close и join.
 	done := make(chan struct{})
 	go func() { server.connectionWG.Wait(); close(done) }()
+	graceCtx := ctx
+	graceCancel := func() {}
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining > 0 {
+			graceCtx, graceCancel = context.WithTimeout(ctx, remaining/2)
+		}
+	}
+	defer graceCancel()
+	select {
+	case <-done:
+		return nil
+	case <-graceCtx.Done():
+	}
+	for _, connection := range connections {
+		connection := connection
+		go func() { _ = connection.CloseNow() }()
+	}
 	select {
 	case <-done:
 		return nil

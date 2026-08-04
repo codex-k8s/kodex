@@ -61,6 +61,12 @@ lint-control-api-gateway-asyncapi:
 	$(ASYNCAPI) validate contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml
 
 gen-control-api-gateway-asyncapi:
+	rm -f services/external/control-api-gateway/internal/transport/websocket/generated/anonymous_schema_*.go \
+		services/external/control-api-gateway/internal/transport/websocket/generated/problem.go \
+		services/external/control-api-gateway/internal/transport/websocket/generated/realtime.go \
+		services/external/control-api-gateway/internal/transport/websocket/generated/snapshot.go \
+		services/external/control-api-gateway/internal/transport/websocket/generated/snapshot_items.go \
+		services/external/control-api-gateway/internal/transport/websocket/generated/subscribe.go
 	$(ASYNCAPI) generate models golang contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml \
 		--packageName generated --goIncludeComments --goIncludeTags --no-interactive \
 		--output services/external/control-api-gateway/internal/transport/websocket/generated

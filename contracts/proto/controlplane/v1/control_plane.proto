@@ -57,9 +57,14 @@ service ControlPlaneService {
   rpc AdmitOwnerSession(AdmitOwnerSessionRequest) returns (AdmitOwnerSessionResponse);
   // RevokeOwnerSession закрывает только exact current browser session.
   rpc RevokeOwnerSession(RevokeOwnerSessionRequest) returns (RevokeOwnerSessionResponse);
-  // AdmitGatewayPublicTLS фиксирует forward-only generation после exact served
-  // peer readback gateway и возвращает durable authoritative state.
-  rpc AdmitGatewayPublicTLS(AdmitGatewayPublicTLSRequest) returns (AdmitGatewayPublicTLSResponse);
+  // PrepareGatewayPublicTLS сохраняет candidate как PENDING, не продвигая
+  // обслуживаемое APPLIED generation.
+  rpc PrepareGatewayPublicTLS(PrepareGatewayPublicTLSRequest) returns (PrepareGatewayPublicTLSResponse);
+  // ConfirmGatewayPublicTLS продвигает только exact PENDING после local served
+  // peer readback и оставляет predecessor в bounded PREVIOUS overlap.
+  rpc ConfirmGatewayPublicTLS(ConfirmGatewayPublicTLSRequest) returns (ConfirmGatewayPublicTLSResponse);
+  // CheckGatewayPublicTLS выполняет read-only exact served-state readback.
+  rpc CheckGatewayPublicTLS(CheckGatewayPublicTLSRequest) returns (CheckGatewayPublicTLSResponse);
 
   // EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
   rpc EnqueueTurn(EnqueueTurnRequest) returns (EnqueueTurnResponse);
@@ -1088,15 +1093,22 @@ message RevokeOwnerSessionResponse {
   OwnerSessionState session = 1;
 }
 
-message GatewayPublicTLSState {
+message GatewayPublicTLSMaterial {
   uint64 generation = 1;
   string certificate_sha256 = 2;
   google.protobuf.Timestamp not_before = 3;
   google.protobuf.Timestamp not_after = 4;
+}
+
+message GatewayPublicTLSState {
+  GatewayPublicTLSMaterial applied = 1;
+  GatewayPublicTLSMaterial pending = 2;
+  GatewayPublicTLSMaterial previous = 3;
+  google.protobuf.Timestamp overlap_expires_at = 4;
   google.protobuf.Timestamp updated_at = 5;
 }
 
-message AdmitGatewayPublicTLSRequest {
+message PrepareGatewayPublicTLSRequest {
   string idempotency_key = 1;
   uint64 generation = 2;
   string certificate_sha256 = 3;
@@ -1106,7 +1118,26 @@ message AdmitGatewayPublicTLSRequest {
   google.protobuf.Timestamp not_after = 7;
 }
 
-message AdmitGatewayPublicTLSResponse {
+message ConfirmGatewayPublicTLSRequest {
+  string idempotency_key = 1;
+  uint64 generation = 2;
+  string certificate_sha256 = 3;
+}
+
+message CheckGatewayPublicTLSRequest {
+  uint64 generation = 1;
+  string certificate_sha256 = 2;
+}
+
+message PrepareGatewayPublicTLSResponse {
+  GatewayPublicTLSState state = 1;
+}
+
+message ConfirmGatewayPublicTLSResponse {
+  GatewayPublicTLSState state = 1;
+}
+
+message CheckGatewayPublicTLSResponse {
   GatewayPublicTLSState state = 1;
 }
 

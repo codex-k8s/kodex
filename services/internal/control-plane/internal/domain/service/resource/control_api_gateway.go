@@ -124,15 +124,8 @@ func (service *Service) CopyAccessResource(
 			if !ok || configured.ConfigurationOwnership().ManagedBy != "GIT" {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			copiedSpec, err := entity.WithConfigurationOwnership(
-				source.Spec, entity.ConfigurationOwnership{ManagedBy: "UI"},
-			)
-			if err != nil {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			created, err := entity.New(uuid.NewString(), source.OrganizationID,
-				source.ProjectID, source.ParentID, input.Principal.ActorID, source.Kind,
-				input.Name, copiedSpec, service.now().UTC().Truncate(time.Microsecond))
+			created, err := copyAccessResource(source, input.Principal.ActorID, input.Name,
+				service.now().UTC().Truncate(time.Microsecond))
 			if err != nil {
 				return entity.Resource{}, errs.ErrInvalidInput
 			}
@@ -150,6 +143,21 @@ func (service *Service) CopyAccessResource(
 		})
 }
 
+func copyAccessResource(source entity.Resource, ownerActorID, name string, now time.Time) (entity.Resource, error) {
+	copiedSpec, err := entity.WithConfigurationOwnership(source.Spec, entity.ConfigurationOwnership{
+		ManagedBy: "UI", SourceRef: source.ID, SourceRevision: source.Version,
+	})
+	if err != nil {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	created, err := entity.NewPausedAccessConfiguration(uuid.NewString(), source.OrganizationID, source.ProjectID,
+		source.ParentID, ownerActorID, source.Kind, name, copiedSpec, now)
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	return created, nil
+}
+
 func (service *Service) ListRuntimeIncidents(
 	ctx context.Context,
 	input ListRuntimeIncidentsInput,
@@ -159,6 +167,7 @@ func (service *Service) ListRuntimeIncidents(
 	}
 	input.Filter.OrganizationID = input.Principal.OrganizationID
 	input.Filter.ProjectID = input.Principal.ProjectID
+	input.Filter.ActorID = input.Principal.ActorID
 	if input.Principal.ProjectID == "" || input.Filter.Validate() != nil {
 		return nil, errs.ErrInvalidInput
 	}
@@ -261,11 +270,13 @@ func (service *Service) ownerSessionCommand(ctx context.Context, principal value
 	return result, err
 }
 
-func (service *Service) AdmitGatewayPublicTLS(
+const gatewayPublicTLSOverlap = 15 * time.Minute
+
+func (service *Service) PrepareGatewayPublicTLS(
 	ctx context.Context,
-	input GatewayPublicTLSInput,
+	input PrepareGatewayPublicTLSInput,
 ) (domainrepo.GatewayPublicTLSState, error) {
-	if err := authorize(input.Principal, permissionGatewayPublicTLSAdmit); err != nil {
+	if err := authorize(input.Principal, permissionGatewayPublicTLSPrepare); err != nil {
 		return domainrepo.GatewayPublicTLSState{}, err
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
@@ -282,25 +293,26 @@ func (service *Service) AdmitGatewayPublicTLS(
 		!input.NotAfter.After(now.Add(5*time.Minute)) {
 		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
 	}
-	requested := domainrepo.GatewayPublicTLSState{
+	scope := domainrepo.GatewayPublicTLSState{
 		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
-		WorkloadID: controlAPIGatewayWorkload, Generation: input.Generation,
-		CertificateSHA256: input.CertificateSHA256, NotBefore: input.NotBefore.UTC(),
-		NotAfter: input.NotAfter.UTC(),
+		WorkloadID: controlAPIGatewayWorkload,
+	}
+	candidate := domainrepo.GatewayPublicTLSMaterial{
+		Generation: input.Generation, CertificateSHA256: input.CertificateSHA256,
+		NotBefore: input.NotBefore.UTC(), NotAfter: input.NotAfter.UTC(),
 	}
 	requestHash, err := canonicalHash(struct {
 		Identity                     commandIdentity
-		State                        domainrepo.GatewayPublicTLSState
+		Candidate                    domainrepo.GatewayPublicTLSMaterial
 		PredecessorGeneration        uint64
 		PredecessorCertificateSHA256 string
 	}{
-		identity(input.Principal), requested, input.PredecessorGeneration,
+		identity(input.Principal), candidate, input.PredecessorGeneration,
 		input.PredecessorCertificateSHA256,
 	})
 	if err != nil {
 		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
 	}
-	requested.UpdatedAt = now
 	keyHash := hashString(input.IdempotencyKey)
 	var result domainrepo.GatewayPublicTLSState
 	err = service.repository.Transact(ctx, domainrepo.Scope{
@@ -308,7 +320,7 @@ func (service *Service) AdmitGatewayPublicTLS(
 		ActorID: input.Principal.ActorID,
 	}, func(tx domainrepo.Transaction) error {
 		receipt, receiptErr := tx.GetReceipt(ctx, input.Principal.OrganizationID,
-			"admit_gateway_public_tls", keyHash)
+			"prepare_gateway_public_tls", keyHash)
 		if receiptErr == nil {
 			if receipt.RequestHash != requestHash || json.Unmarshal(receipt.Payload, &result) != nil {
 				return errs.ErrIdempotencyConflict
@@ -318,8 +330,8 @@ func (service *Service) AdmitGatewayPublicTLS(
 		if !errors.Is(receiptErr, errs.ErrNotFound) {
 			return receiptErr
 		}
-		result, receiptErr = tx.AdmitGatewayPublicTLS(ctx, requested,
-			input.PredecessorGeneration, input.PredecessorCertificateSHA256)
+		result, receiptErr = tx.PrepareGatewayPublicTLS(ctx, scope, candidate,
+			input.PredecessorGeneration, input.PredecessorCertificateSHA256, now)
 		if receiptErr != nil {
 			return receiptErr
 		}
@@ -329,9 +341,99 @@ func (service *Service) AdmitGatewayPublicTLS(
 		}
 		return tx.SaveReceipt(ctx, domainrepo.Receipt{
 			OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
-			Scope: "admit_gateway_public_tls", KeyHash: keyHash, RequestHash: requestHash,
-			Payload: payload, CreatedAt: requested.UpdatedAt,
+			Scope: "prepare_gateway_public_tls", KeyHash: keyHash, RequestHash: requestHash,
+			Payload: payload, CreatedAt: now,
 		})
+	})
+	return result, err
+}
+
+func (service *Service) ConfirmGatewayPublicTLS(
+	ctx context.Context,
+	input ConfirmGatewayPublicTLSInput,
+) (domainrepo.GatewayPublicTLSState, error) {
+	if err := authorize(input.Principal, permissionGatewayPublicTLSConfirm); err != nil {
+		return domainrepo.GatewayPublicTLSState{}, err
+	}
+	if input.Principal.CallerWorkload != controlAPIGatewayWorkload ||
+		input.Principal.CallerSPIFFEID != controlAPIGatewaySPIFFEID ||
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || input.Generation == 0 ||
+		!validSHA256Text(input.CertificateSHA256) {
+		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
+	}
+	now := service.now().UTC().Truncate(time.Microsecond)
+	scope := domainrepo.GatewayPublicTLSState{
+		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		WorkloadID: controlAPIGatewayWorkload,
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity          commandIdentity
+		Generation        uint64
+		CertificateSHA256 string
+	}{identity(input.Principal), input.Generation, input.CertificateSHA256})
+	if err != nil {
+		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
+	}
+	keyHash := hashString(input.IdempotencyKey)
+	var result domainrepo.GatewayPublicTLSState
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		ActorID: input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		receipt, receiptErr := tx.GetReceipt(ctx, input.Principal.OrganizationID,
+			"confirm_gateway_public_tls", keyHash)
+		if receiptErr == nil {
+			if receipt.RequestHash != requestHash || json.Unmarshal(receipt.Payload, &result) != nil {
+				return errs.ErrIdempotencyConflict
+			}
+			return nil
+		}
+		if !errors.Is(receiptErr, errs.ErrNotFound) {
+			return receiptErr
+		}
+		result, receiptErr = tx.ConfirmGatewayPublicTLS(ctx, scope, input.Generation,
+			input.CertificateSHA256, now, now.Add(gatewayPublicTLSOverlap))
+		if receiptErr != nil {
+			return receiptErr
+		}
+		payload, marshalErr := json.Marshal(result)
+		if marshalErr != nil {
+			return errs.ErrInternal
+		}
+		return tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+			Scope: "confirm_gateway_public_tls", KeyHash: keyHash, RequestHash: requestHash,
+			Payload: payload, CreatedAt: now,
+		})
+	})
+	return result, err
+}
+
+func (service *Service) CheckGatewayPublicTLS(
+	ctx context.Context,
+	input CheckGatewayPublicTLSInput,
+) (domainrepo.GatewayPublicTLSState, error) {
+	if err := authorize(input.Principal, permissionGatewayPublicTLSCheck); err != nil {
+		return domainrepo.GatewayPublicTLSState{}, err
+	}
+	if input.Principal.CallerWorkload != controlAPIGatewayWorkload ||
+		input.Principal.CallerSPIFFEID != controlAPIGatewaySPIFFEID || input.Generation == 0 ||
+		!validSHA256Text(input.CertificateSHA256) {
+		return domainrepo.GatewayPublicTLSState{}, errs.ErrInvalidInput
+	}
+	scope := domainrepo.GatewayPublicTLSState{
+		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		WorkloadID: controlAPIGatewayWorkload,
+	}
+	var result domainrepo.GatewayPublicTLSState
+	err := service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		ActorID: input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		var readErr error
+		result, readErr = tx.CheckGatewayPublicTLS(ctx, scope, input.Generation,
+			input.CertificateSHA256, service.now().UTC().Truncate(time.Microsecond))
+		return readErr
 	})
 	return result, err
 }

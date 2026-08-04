@@ -11,6 +11,8 @@ const (
 	AnonymousSchema_193Update
 	AnonymousSchema_193Transition
 	AnonymousSchema_193Delete
+	AnonymousSchema_193DetachAccessConfiguration
+	AnonymousSchema_193CopyAccessConfiguration
 	AnonymousSchema_193CreateSchedule
 	AnonymousSchema_193ManageScheduleUpdate
 	AnonymousSchema_193ManageScheduleActivate
@@ -27,18 +29,20 @@ func (op AnonymousSchema_193) Value() any {
 	return AnonymousSchema_193Values[op]
 }
 
-var AnonymousSchema_193Values = []any{"create", "update", "transition", "delete", "create_schedule", "manage_schedule_UPDATE", "manage_schedule_ACTIVATE", "manage_schedule_PAUSE", "manage_schedule_ARCHIVE", "manage_schedule_DELETE"}
+var AnonymousSchema_193Values = []any{"create", "update", "transition", "delete", "detach_access_configuration", "copy_access_configuration", "create_schedule", "manage_schedule_UPDATE", "manage_schedule_ACTIVATE", "manage_schedule_PAUSE", "manage_schedule_ARCHIVE", "manage_schedule_DELETE"}
 var ValuesToAnonymousSchema_193 = map[any]AnonymousSchema_193{
-	AnonymousSchema_193Values[AnonymousSchema_193Create]:                 AnonymousSchema_193Create,
-	AnonymousSchema_193Values[AnonymousSchema_193Update]:                 AnonymousSchema_193Update,
-	AnonymousSchema_193Values[AnonymousSchema_193Transition]:             AnonymousSchema_193Transition,
-	AnonymousSchema_193Values[AnonymousSchema_193Delete]:                 AnonymousSchema_193Delete,
-	AnonymousSchema_193Values[AnonymousSchema_193CreateSchedule]:         AnonymousSchema_193CreateSchedule,
-	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleUpdate]:   AnonymousSchema_193ManageScheduleUpdate,
-	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleActivate]: AnonymousSchema_193ManageScheduleActivate,
-	AnonymousSchema_193Values[AnonymousSchema_193ManageSchedulePause]:    AnonymousSchema_193ManageSchedulePause,
-	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleArchive]:  AnonymousSchema_193ManageScheduleArchive,
-	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleDelete]:   AnonymousSchema_193ManageScheduleDelete,
+	AnonymousSchema_193Values[AnonymousSchema_193Create]:                    AnonymousSchema_193Create,
+	AnonymousSchema_193Values[AnonymousSchema_193Update]:                    AnonymousSchema_193Update,
+	AnonymousSchema_193Values[AnonymousSchema_193Transition]:                AnonymousSchema_193Transition,
+	AnonymousSchema_193Values[AnonymousSchema_193Delete]:                    AnonymousSchema_193Delete,
+	AnonymousSchema_193Values[AnonymousSchema_193DetachAccessConfiguration]: AnonymousSchema_193DetachAccessConfiguration,
+	AnonymousSchema_193Values[AnonymousSchema_193CopyAccessConfiguration]:   AnonymousSchema_193CopyAccessConfiguration,
+	AnonymousSchema_193Values[AnonymousSchema_193CreateSchedule]:            AnonymousSchema_193CreateSchedule,
+	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleUpdate]:      AnonymousSchema_193ManageScheduleUpdate,
+	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleActivate]:    AnonymousSchema_193ManageScheduleActivate,
+	AnonymousSchema_193Values[AnonymousSchema_193ManageSchedulePause]:       AnonymousSchema_193ManageSchedulePause,
+	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleArchive]:     AnonymousSchema_193ManageScheduleArchive,
+	AnonymousSchema_193Values[AnonymousSchema_193ManageScheduleDelete]:      AnonymousSchema_193ManageScheduleDelete,
 }
 
 func (op *AnonymousSchema_193) UnmarshalJSON(raw []byte) error {

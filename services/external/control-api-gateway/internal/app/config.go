@@ -23,7 +23,7 @@ type Config struct {
 	TLSCertificateFile                string        `env:"CONTROL_API_GATEWAY_TLS_CERTIFICATE_FILE"`
 	TLSPrivateKeyFile                 string        `env:"CONTROL_API_GATEWAY_TLS_PRIVATE_KEY_FILE"`
 	PublicTLSCAFile                   string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_CA_FILE"`
-	PublicTLSStateFile                string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_STATE_FILE"`
+	PublicTLSMaterialFile             string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_MATERIAL_FILE"`
 	PublicTLSServerName               string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME"`
 	OIDCIssuer                        string        `env:"CONTROL_API_GATEWAY_OIDC_ISSUER"`
 	OIDCAudience                      string        `env:"CONTROL_API_GATEWAY_OIDC_AUDIENCE"`
@@ -58,12 +58,12 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		HTTPListen: ":8443", TechnicalListen: ":9090",
-		TLSCertificateFile:  "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.crt",
-		TLSPrivateKeyFile:   "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.key",
-		PublicTLSCAFile:     "/var/run/secrets/mattercodex/control-api-gateway/public-tls/ca.crt",
-		PublicTLSStateFile:  "/var/run/secrets/mattercodex/control-api-gateway/public-tls-state/state.json",
-		PublicTLSServerName: "control-api.mattercodex.local",
-		OIDCIssuer:          "https://sso.mattercodex.local/realms/mattercodex", OIDCAudience: "mattercodex-control-api",
+		TLSCertificateFile:    "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.crt",
+		TLSPrivateKeyFile:     "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.key",
+		PublicTLSCAFile:       "/var/run/secrets/mattercodex/control-api-gateway/public-tls/ca.crt",
+		PublicTLSMaterialFile: "/var/run/secrets/mattercodex/control-api-gateway/public-tls/material.json",
+		PublicTLSServerName:   "control-api.mattercodex.local",
+		OIDCIssuer:            "https://sso.mattercodex.local/realms/mattercodex", OIDCAudience: "mattercodex-control-api",
 		OIDCTLSServerName: "sso.mattercodex.local", OIDCCAFile: "/var/run/config/mattercodex/control-api-gateway/oidc/ca.pem",
 		AllowedOrigins:         "https://control.mattercodex.local",
 		SessionCurrentKeyFile:  "/var/run/secrets/mattercodex/control-api-gateway/session/current.hex",
@@ -95,7 +95,7 @@ func (config Config) validate() error {
 	if config.HTTPListen == config.TechnicalListen {
 		return errors.New("control API listeners must be separate")
 	}
-	for _, path := range []string{config.TLSCertificateFile, config.TLSPrivateKeyFile, config.PublicTLSCAFile, config.PublicTLSStateFile, config.OIDCCAFile, config.SessionCurrentKeyFile, config.ControlPlaneCAFile, config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile, config.ControlPlaneApplicationGrantFile} {
+	for _, path := range []string{config.TLSCertificateFile, config.TLSPrivateKeyFile, config.PublicTLSCAFile, config.PublicTLSMaterialFile, config.OIDCCAFile, config.SessionCurrentKeyFile, config.ControlPlaneCAFile, config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile, config.ControlPlaneApplicationGrantFile} {
 		if !filepath.IsAbs(path) {
 			return errors.New("control API runtime path is invalid")
 		}

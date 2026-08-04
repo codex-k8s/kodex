@@ -26,6 +26,7 @@ func (service *Service) Search(
 	}
 	input.Filter.OrganizationID = input.Principal.OrganizationID
 	input.Filter.ProjectID = input.Principal.ProjectID
+	input.Filter.ActorID = input.Principal.ActorID
 	if input.Principal.ProjectID == "" ||
 		input.Filter.Kind == enum.KindProject ||
 		input.Filter.Validate() != nil {
@@ -52,11 +53,7 @@ func (service *Service) Search(
 		}
 		return resources, nil
 	}
-	resources, err := service.repository.Search(ctx, input.Filter)
-	if err != nil {
-		return nil, err
-	}
-	return filterOwnerBoundResources(resources, input.Principal.ActorID), nil
+	return service.repository.Search(ctx, input.Filter)
 }
 
 func (service *Service) ListScheduleOccurrences(

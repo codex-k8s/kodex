@@ -41,7 +41,7 @@ spec:
             - {name: CONTROL_API_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
             - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME, value: control-api.mattercodex.local}
             - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_CA_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/ca.crt}
-            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_STATE_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls-state/state.json}
+            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_MATERIAL_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/material.json}
             - {name: CONTROL_API_GATEWAY_OIDC_ISSUER, value: "https://sso.mattercodex.local/realms/mattercodex"}
             - {name: CONTROL_API_GATEWAY_OIDC_AUDIENCE, value: mattercodex-control-api}
             - {name: CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME, value: sso.mattercodex.local}
@@ -100,7 +100,6 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: public-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/public-tls, readOnly: true}
-            - {name: public-tls-state, mountPath: /var/run/secrets/mattercodex/control-api-gateway/public-tls-state, readOnly: true}
             - {name: oidc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/oidc, readOnly: true}
             - {name: session-keys, mountPath: /var/run/secrets/mattercodex/control-api-gateway/session, readOnly: true}
             - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/control-plane-client, readOnly: true}
@@ -111,9 +110,7 @@ spec:
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: public-tls
-          secret: {secretName: control-api-gateway-public-tls, defaultMode: 0440}
-        - name: public-tls-state
-          secret: {secretName: control-api-gateway-public-tls-state, defaultMode: 0440, items: [{key: state.json, path: state.json}]}
+          secret: {secretName: control-api-gateway-public-tls-material, defaultMode: 0440}
         - name: oidc-ca
           configMap: {name: mattercodex-oidc-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: session-keys

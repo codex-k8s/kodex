@@ -96,11 +96,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	state.publicTLS, err = publictls.New(publictls.Config{CertificateFile: config.TLSCertificateFile, PrivateKeyFile: config.TLSPrivateKeyFile, CAFile: config.PublicTLSCAFile, StateFile: config.PublicTLSStateFile, ServerName: config.PublicTLSServerName})
+	state.publicTLS, err = publictls.New(publictls.Config{CertificateFile: config.TLSCertificateFile, PrivateKeyFile: config.TLSPrivateKeyFile, CAFile: config.PublicTLSCAFile, MaterialFile: config.PublicTLSMaterialFile, ServerName: config.PublicTLSServerName})
 	if err != nil {
 		return err
 	}
-	if err := state.publicTLS.Admit(startup, state.control.ControlPlane); err != nil {
+	if err := state.publicTLS.Prepare(startup, state.control.ControlPlane); err != nil {
 		return err
 	}
 	if err := state.control.Check(startup); err != nil {
@@ -132,13 +132,21 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	})
 	technicalMux.Handle("/metrics", state.metrics.PrometheusHandler())
 	state.technical = &http.Server{Addr: config.TechnicalListen, Handler: state.telemetry.HTTPMiddleware(internalobservability.Route, businessMetrics.ObserveHTTP, technicalMux), BaseContext: baseContext, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	publicTLSReady := make(chan struct{})
 	state.workers = serviceruntime.StartWorkers(
 		lifecycle,
 		httpWorker(state.public, true, config.ShutdownTimeout),
 		httpWorker(state.technical, false, config.ShutdownTimeout),
-		readinessWorker(state.control, state.publicTLS, config.HTTPListen, state.readiness, state.metrics, state.logger, config.ReadinessInterval, config.RPCTimeout),
+		readinessWorker(publicTLSReady, state.control, state.publicTLS, config.HTTPListen, state.readiness, state.metrics, state.logger, config.ReadinessInterval, config.RPCTimeout),
 		admissionWorker(security, state.realtime, config.ShutdownTimeout),
 	)
+	if err := completePublicTLSStartup(startup, state.publicTLS, state.control, config.HTTPListen); err != nil {
+		state.workers.Stop()
+		wait, cancel := context.WithTimeout(context.WithoutCancel(shutdownBase), config.ShutdownTimeout)
+		defer cancel()
+		return errors.Join(err, state.workers.Wait(wait))
+	}
+	close(publicTLSReady)
 	if err := state.workers.Wait(context.WithoutCancel(lifecycle)); err != nil {
 		return err
 	}
@@ -174,14 +182,38 @@ func httpWorker(server *http.Server, tlsEnabled bool, shutdownTimeout time.Durat
 	}
 }
 
-func readinessWorker(control *controlplaneclient.Client, publicTLS *publictls.Manager, listen string, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
+func completePublicTLSStartup(ctx context.Context, publicTLS *publictls.Manager, control *controlplaneclient.Client, listen string) error {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if err := publicTLS.VerifyServed(ctx, listen); err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+	if err := publicTLS.Confirm(ctx, control.ControlPlane); err != nil {
+		return err
+	}
+	return publicTLS.Check(ctx, control.ControlPlane)
+}
+
+func readinessWorker(started <-chan struct{}, control *controlplaneclient.Client, publicTLS *publictls.Manager, listen string, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
 	return func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-started:
+		}
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, timeout)
 			err := errors.Join(
-				publicTLS.Admit(check, control.ControlPlane),
+				publicTLS.Check(check, control.ControlPlane),
 				control.Check(check),
 				publicTLS.VerifyServed(check, listen),
 			)

@@ -101,7 +101,7 @@ type OwnerSessionInput struct {
 	ExpectedRevision uint64
 }
 
-type GatewayPublicTLSInput struct {
+type PrepareGatewayPublicTLSInput struct {
 	Principal                    value.Principal
 	IdempotencyKey               string
 	Generation                   uint64
@@ -110,6 +110,19 @@ type GatewayPublicTLSInput struct {
 	PredecessorCertificateSHA256 string
 	NotBefore                    time.Time
 	NotAfter                     time.Time
+}
+
+type ConfirmGatewayPublicTLSInput struct {
+	Principal         value.Principal
+	IdempotencyKey    string
+	Generation        uint64
+	CertificateSHA256 string
+}
+
+type CheckGatewayPublicTLSInput struct {
+	Principal         value.Principal
+	Generation        uint64
+	CertificateSHA256 string
 }
 
 type ListTombstonesInput struct {
@@ -549,8 +562,10 @@ type MemorySearchHit struct {
 	VectorProjectionUsed bool
 }
 
-type RuntimeExecution = domainrepo.RuntimeExecution
-type IntegrationContinuation = domainrepo.IntegrationContinuation
+type (
+	RuntimeExecution        = domainrepo.RuntimeExecution
+	IntegrationContinuation = domainrepo.IntegrationContinuation
+)
 
 type RuntimeExecutionInput struct {
 	Principal               value.Principal

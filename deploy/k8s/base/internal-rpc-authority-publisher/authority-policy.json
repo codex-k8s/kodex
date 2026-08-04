@@ -21,7 +21,9 @@
           "control.audit.list",
           "control.runtime-incident.list",
           "control.diagnostics.get",
-          "control.gateway-public-tls.admit",
+          "control.gateway-public-tls.prepare",
+          "control.gateway-public-tls.confirm",
+          "control.gateway-public-tls.check",
           "control.readiness.check"
         ],
         "application_credential": "OIDC_BEARER",
@@ -1192,7 +1194,7 @@
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/AdmitGatewayPublicTLS",
+        "full_method": "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
           "primary_gid": 10001,
@@ -1204,8 +1206,66 @@
           "shared_fs_gid": 29000,
           "uid": 10001
         },
-        "operation_id": "control.gateway-public-tls.admit",
-        "permission": "controlplane.gateway_public_tls.admit",
+        "operation_id": "control.gateway-public-tls.prepare",
+        "permission": "controlplane.gateway_public_tls.prepare",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.gateway-public-tls.confirm",
+        "permission": "controlplane.gateway_public_tls.confirm",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.gateway-public-tls.check",
+        "permission": "controlplane.gateway_public_tls.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -2550,6 +2610,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 12,
+  "policy_revision": 13,
   "v": 1
 }

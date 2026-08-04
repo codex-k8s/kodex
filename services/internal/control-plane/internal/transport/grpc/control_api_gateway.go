@@ -135,11 +135,11 @@ func ownerSessionState(state domainrepo.OwnerSessionState) *controlplanev1.Owner
 	}
 }
 
-func (server *Server) AdmitGatewayPublicTLS(ctx context.Context,
-	request *controlplanev1.AdmitGatewayPublicTLSRequest,
-) (*controlplanev1.AdmitGatewayPublicTLSResponse, error) {
+func (server *Server) PrepareGatewayPublicTLS(ctx context.Context,
+	request *controlplanev1.PrepareGatewayPublicTLSRequest,
+) (*controlplanev1.PrepareGatewayPublicTLSResponse, error) {
 	principal, err := authorization.Principal(ctx,
-		controlplanev1.ControlPlaneService_AdmitGatewayPublicTLS_FullMethodName)
+		controlplanev1.ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName)
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
@@ -147,7 +147,7 @@ func (server *Server) AdmitGatewayPublicTLS(ctx context.Context,
 		request.GetNotBefore().CheckValid() != nil || request.GetNotAfter().CheckValid() != nil {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
-	state, err := server.service.AdmitGatewayPublicTLS(ctx, resource.GatewayPublicTLSInput{
+	state, err := server.service.PrepareGatewayPublicTLS(ctx, resource.PrepareGatewayPublicTLSInput{
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
 		Generation: request.GetGeneration(), CertificateSHA256: request.GetCertificateSha256(),
 		PredecessorGeneration:        request.GetPredecessorGeneration(),
@@ -157,11 +157,63 @@ func (server *Server) AdmitGatewayPublicTLS(ctx context.Context,
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	return &controlplanev1.AdmitGatewayPublicTLSResponse{State: &controlplanev1.GatewayPublicTLSState{
-		Generation: state.Generation, CertificateSha256: state.CertificateSHA256,
-		NotBefore: timestamppb.New(state.NotBefore), NotAfter: timestamppb.New(state.NotAfter),
-		UpdatedAt: timestamppb.New(state.UpdatedAt),
-	}}, nil
+	return &controlplanev1.PrepareGatewayPublicTLSResponse{State: gatewayPublicTLSState(state)}, nil
+}
+
+func (server *Server) ConfirmGatewayPublicTLS(ctx context.Context,
+	request *controlplanev1.ConfirmGatewayPublicTLSRequest,
+) (*controlplanev1.ConfirmGatewayPublicTLSResponse, error) {
+	principal, err := authorization.Principal(ctx,
+		controlplanev1.ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	state, err := server.service.ConfirmGatewayPublicTLS(ctx, resource.ConfirmGatewayPublicTLSInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		Generation: request.GetGeneration(), CertificateSHA256: request.GetCertificateSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ConfirmGatewayPublicTLSResponse{State: gatewayPublicTLSState(state)}, nil
+}
+
+func (server *Server) CheckGatewayPublicTLS(ctx context.Context,
+	request *controlplanev1.CheckGatewayPublicTLSRequest,
+) (*controlplanev1.CheckGatewayPublicTLSResponse, error) {
+	principal, err := authorization.Principal(ctx,
+		controlplanev1.ControlPlaneService_CheckGatewayPublicTLS_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	state, err := server.service.CheckGatewayPublicTLS(ctx, resource.CheckGatewayPublicTLSInput{
+		Principal: principal, Generation: request.GetGeneration(), CertificateSHA256: request.GetCertificateSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.CheckGatewayPublicTLSResponse{State: gatewayPublicTLSState(state)}, nil
+}
+
+func gatewayPublicTLSState(state domainrepo.GatewayPublicTLSState) *controlplanev1.GatewayPublicTLSState {
+	result := &controlplanev1.GatewayPublicTLSState{UpdatedAt: timestamppb.New(state.UpdatedAt)}
+	result.Applied = gatewayPublicTLSMaterial(state.Applied)
+	result.Pending = gatewayPublicTLSMaterial(state.Pending)
+	result.Previous = gatewayPublicTLSMaterial(state.Previous)
+	if !state.OverlapExpiresAt.IsZero() {
+		result.OverlapExpiresAt = timestamppb.New(state.OverlapExpiresAt)
+	}
+	return result
+}
+
+func gatewayPublicTLSMaterial(material domainrepo.GatewayPublicTLSMaterial) *controlplanev1.GatewayPublicTLSMaterial {
+	if material.Generation == 0 {
+		return nil
+	}
+	return &controlplanev1.GatewayPublicTLSMaterial{
+		Generation: material.Generation, CertificateSha256: material.CertificateSHA256,
+		NotBefore: timestamppb.New(material.NotBefore), NotAfter: timestamppb.New(material.NotAfter),
+	}
 }
 
 func toProtoRuntimeIncidentKind(value string) controlplanev1.RuntimeIncidentKind {

@@ -119,26 +119,32 @@ func (e ChatSpecRoomType) Valid() bool {
 
 // Defines values for ConfigurationChangeAction.
 const (
-	Create                 ConfigurationChangeAction = "create"
-	CreateSchedule         ConfigurationChangeAction = "create_schedule"
-	Delete                 ConfigurationChangeAction = "delete"
-	ManageScheduleACTIVATE ConfigurationChangeAction = "manage_schedule_ACTIVATE"
-	ManageScheduleARCHIVE  ConfigurationChangeAction = "manage_schedule_ARCHIVE"
-	ManageScheduleDELETE   ConfigurationChangeAction = "manage_schedule_DELETE"
-	ManageSchedulePAUSE    ConfigurationChangeAction = "manage_schedule_PAUSE"
-	ManageScheduleUPDATE   ConfigurationChangeAction = "manage_schedule_UPDATE"
-	Transition             ConfigurationChangeAction = "transition"
-	Update                 ConfigurationChangeAction = "update"
+	CopyAccessConfiguration   ConfigurationChangeAction = "copy_access_configuration"
+	Create                    ConfigurationChangeAction = "create"
+	CreateSchedule            ConfigurationChangeAction = "create_schedule"
+	Delete                    ConfigurationChangeAction = "delete"
+	DetachAccessConfiguration ConfigurationChangeAction = "detach_access_configuration"
+	ManageScheduleACTIVATE    ConfigurationChangeAction = "manage_schedule_ACTIVATE"
+	ManageScheduleARCHIVE     ConfigurationChangeAction = "manage_schedule_ARCHIVE"
+	ManageScheduleDELETE      ConfigurationChangeAction = "manage_schedule_DELETE"
+	ManageSchedulePAUSE       ConfigurationChangeAction = "manage_schedule_PAUSE"
+	ManageScheduleUPDATE      ConfigurationChangeAction = "manage_schedule_UPDATE"
+	Transition                ConfigurationChangeAction = "transition"
+	Update                    ConfigurationChangeAction = "update"
 )
 
 // Valid indicates whether the value is a known member of the ConfigurationChangeAction enum.
 func (e ConfigurationChangeAction) Valid() bool {
 	switch e {
+	case CopyAccessConfiguration:
+		return true
 	case Create:
 		return true
 	case CreateSchedule:
 		return true
 	case Delete:
+		return true
+	case DetachAccessConfiguration:
 		return true
 	case ManageScheduleACTIVATE:
 		return true

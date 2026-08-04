@@ -273,6 +273,12 @@ func projectionOwnership(value *controlplanev1.ConfigurationOwnership, resourceV
 	}
 	switch value.GetManagedBy() {
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI:
+		if value.GetSourceRef() != "" && value.GetSourceRevision() != 0 {
+			return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
+		}
+		if value.GetSourceRef() != "" || value.GetSourceRevision() != 0 {
+			return generated.ConfigurationOwnershipProjection{}, errors.New("UI ownership lineage is incomplete")
+		}
 		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: "owner-ui", Revision: int64(resourceVersion)}, nil
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_GIT:
 		if value.GetSourceRef() == "" || value.GetSourceRevision() == 0 {

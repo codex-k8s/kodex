@@ -40,7 +40,9 @@ const (
 	ControlPlaneService_RepairOutboxEvent_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
 	ControlPlaneService_AdmitOwnerSession_FullMethodName                  = "/controlplane.v1.ControlPlaneService/AdmitOwnerSession"
 	ControlPlaneService_RevokeOwnerSession_FullMethodName                 = "/controlplane.v1.ControlPlaneService/RevokeOwnerSession"
-	ControlPlaneService_AdmitGatewayPublicTLS_FullMethodName              = "/controlplane.v1.ControlPlaneService/AdmitGatewayPublicTLS"
+	ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName            = "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS"
+	ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName            = "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS"
+	ControlPlaneService_CheckGatewayPublicTLS_FullMethodName              = "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS"
 	ControlPlaneService_EnqueueTurn_FullMethodName                        = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
 	ControlPlaneService_ClaimTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ClaimTurn"
 	ControlPlaneService_RenewTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RenewTurn"
@@ -161,9 +163,14 @@ type ControlPlaneServiceClient interface {
 	AdmitOwnerSession(ctx context.Context, in *AdmitOwnerSessionRequest, opts ...grpc.CallOption) (*AdmitOwnerSessionResponse, error)
 	// RevokeOwnerSession закрывает только exact current browser session.
 	RevokeOwnerSession(ctx context.Context, in *RevokeOwnerSessionRequest, opts ...grpc.CallOption) (*RevokeOwnerSessionResponse, error)
-	// AdmitGatewayPublicTLS фиксирует forward-only generation после exact served
-	// peer readback gateway и возвращает durable authoritative state.
-	AdmitGatewayPublicTLS(ctx context.Context, in *AdmitGatewayPublicTLSRequest, opts ...grpc.CallOption) (*AdmitGatewayPublicTLSResponse, error)
+	// PrepareGatewayPublicTLS сохраняет candidate как PENDING, не продвигая
+	// обслуживаемое APPLIED generation.
+	PrepareGatewayPublicTLS(ctx context.Context, in *PrepareGatewayPublicTLSRequest, opts ...grpc.CallOption) (*PrepareGatewayPublicTLSResponse, error)
+	// ConfirmGatewayPublicTLS продвигает только exact PENDING после local served
+	// peer readback и оставляет predecessor в bounded PREVIOUS overlap.
+	ConfirmGatewayPublicTLS(ctx context.Context, in *ConfirmGatewayPublicTLSRequest, opts ...grpc.CallOption) (*ConfirmGatewayPublicTLSResponse, error)
+	// CheckGatewayPublicTLS выполняет read-only exact served-state readback.
+	CheckGatewayPublicTLS(ctx context.Context, in *CheckGatewayPublicTLSRequest, opts ...grpc.CallOption) (*CheckGatewayPublicTLSResponse, error)
 	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(ctx context.Context, in *EnqueueTurnRequest, opts ...grpc.CallOption) (*EnqueueTurnResponse, error)
 	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
@@ -532,10 +539,30 @@ func (c *controlPlaneServiceClient) RevokeOwnerSession(ctx context.Context, in *
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) AdmitGatewayPublicTLS(ctx context.Context, in *AdmitGatewayPublicTLSRequest, opts ...grpc.CallOption) (*AdmitGatewayPublicTLSResponse, error) {
+func (c *controlPlaneServiceClient) PrepareGatewayPublicTLS(ctx context.Context, in *PrepareGatewayPublicTLSRequest, opts ...grpc.CallOption) (*PrepareGatewayPublicTLSResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AdmitGatewayPublicTLSResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AdmitGatewayPublicTLS_FullMethodName, in, out, cOpts...)
+	out := new(PrepareGatewayPublicTLSResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ConfirmGatewayPublicTLS(ctx context.Context, in *ConfirmGatewayPublicTLSRequest, opts ...grpc.CallOption) (*ConfirmGatewayPublicTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmGatewayPublicTLSResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CheckGatewayPublicTLS(ctx context.Context, in *CheckGatewayPublicTLSRequest, opts ...grpc.CallOption) (*CheckGatewayPublicTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckGatewayPublicTLSResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CheckGatewayPublicTLS_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1245,9 +1272,14 @@ type ControlPlaneServiceServer interface {
 	AdmitOwnerSession(context.Context, *AdmitOwnerSessionRequest) (*AdmitOwnerSessionResponse, error)
 	// RevokeOwnerSession закрывает только exact current browser session.
 	RevokeOwnerSession(context.Context, *RevokeOwnerSessionRequest) (*RevokeOwnerSessionResponse, error)
-	// AdmitGatewayPublicTLS фиксирует forward-only generation после exact served
-	// peer readback gateway и возвращает durable authoritative state.
-	AdmitGatewayPublicTLS(context.Context, *AdmitGatewayPublicTLSRequest) (*AdmitGatewayPublicTLSResponse, error)
+	// PrepareGatewayPublicTLS сохраняет candidate как PENDING, не продвигая
+	// обслуживаемое APPLIED generation.
+	PrepareGatewayPublicTLS(context.Context, *PrepareGatewayPublicTLSRequest) (*PrepareGatewayPublicTLSResponse, error)
+	// ConfirmGatewayPublicTLS продвигает только exact PENDING после local served
+	// peer readback и оставляет predecessor в bounded PREVIOUS overlap.
+	ConfirmGatewayPublicTLS(context.Context, *ConfirmGatewayPublicTLSRequest) (*ConfirmGatewayPublicTLSResponse, error)
+	// CheckGatewayPublicTLS выполняет read-only exact served-state readback.
+	CheckGatewayPublicTLS(context.Context, *CheckGatewayPublicTLSRequest) (*CheckGatewayPublicTLSResponse, error)
 	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error)
 	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
@@ -1469,8 +1501,14 @@ func (UnimplementedControlPlaneServiceServer) AdmitOwnerSession(context.Context,
 func (UnimplementedControlPlaneServiceServer) RevokeOwnerSession(context.Context, *RevokeOwnerSessionRequest) (*RevokeOwnerSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeOwnerSession not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) AdmitGatewayPublicTLS(context.Context, *AdmitGatewayPublicTLSRequest) (*AdmitGatewayPublicTLSResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AdmitGatewayPublicTLS not implemented")
+func (UnimplementedControlPlaneServiceServer) PrepareGatewayPublicTLS(context.Context, *PrepareGatewayPublicTLSRequest) (*PrepareGatewayPublicTLSResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareGatewayPublicTLS not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ConfirmGatewayPublicTLS(context.Context, *ConfirmGatewayPublicTLSRequest) (*ConfirmGatewayPublicTLSResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmGatewayPublicTLS not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CheckGatewayPublicTLS(context.Context, *CheckGatewayPublicTLSRequest) (*CheckGatewayPublicTLSResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckGatewayPublicTLS not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnqueueTurn not implemented")
@@ -2066,20 +2104,56 @@ func _ControlPlaneService_RevokeOwnerSession_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_AdmitGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AdmitGatewayPublicTLSRequest)
+func _ControlPlaneService_PrepareGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareGatewayPublicTLSRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AdmitGatewayPublicTLS(ctx, in)
+		return srv.(ControlPlaneServiceServer).PrepareGatewayPublicTLS(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_AdmitGatewayPublicTLS_FullMethodName,
+		FullMethod: ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AdmitGatewayPublicTLS(ctx, req.(*AdmitGatewayPublicTLSRequest))
+		return srv.(ControlPlaneServiceServer).PrepareGatewayPublicTLS(ctx, req.(*PrepareGatewayPublicTLSRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ConfirmGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmGatewayPublicTLSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ConfirmGatewayPublicTLS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ConfirmGatewayPublicTLS(ctx, req.(*ConfirmGatewayPublicTLSRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CheckGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckGatewayPublicTLSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CheckGatewayPublicTLS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CheckGatewayPublicTLS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CheckGatewayPublicTLS(ctx, req.(*CheckGatewayPublicTLSRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3346,8 +3420,16 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_RevokeOwnerSession_Handler,
 		},
 		{
-			MethodName: "AdmitGatewayPublicTLS",
-			Handler:    _ControlPlaneService_AdmitGatewayPublicTLS_Handler,
+			MethodName: "PrepareGatewayPublicTLS",
+			Handler:    _ControlPlaneService_PrepareGatewayPublicTLS_Handler,
+		},
+		{
+			MethodName: "ConfirmGatewayPublicTLS",
+			Handler:    _ControlPlaneService_ConfirmGatewayPublicTLS_Handler,
+		},
+		{
+			MethodName: "CheckGatewayPublicTLS",
+			Handler:    _ControlPlaneService_CheckGatewayPublicTLS_Handler,
 		},
 		{
 			MethodName: "EnqueueTurn",

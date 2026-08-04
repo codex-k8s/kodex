@@ -404,16 +404,24 @@ type OwnerSessionState struct {
 	UpdatedAt              time.Time
 }
 
-// GatewayPublicTLSState — durable forward-only served certificate watermark.
-type GatewayPublicTLSState struct {
-	OrganizationID    string
-	ProjectID         string
-	WorkloadID        string
+// GatewayPublicTLSMaterial — публичные метаданные exact leaf без private key.
+type GatewayPublicTLSMaterial struct {
 	Generation        uint64
 	CertificateSHA256 string
 	NotBefore         time.Time
 	NotAfter          time.Time
-	UpdatedAt         time.Time
+}
+
+// GatewayPublicTLSState — durable APPLIED/PENDING/PREVIOUS served protocol.
+type GatewayPublicTLSState struct {
+	OrganizationID   string
+	ProjectID        string
+	WorkloadID       string
+	Applied          GatewayPublicTLSMaterial
+	Pending          GatewayPublicTLSMaterial
+	Previous         GatewayPublicTLSMaterial
+	OverlapExpiresAt time.Time
+	UpdatedAt        time.Time
 }
 
 // IntegrationContinuation хранит typed approval, execution result и rejoin tuple.
@@ -585,7 +593,9 @@ type Transaction interface {
 	AdmitOwnerSession(context.Context, OwnerSessionState) (OwnerSessionState, error)
 	RequireOwnerSession(context.Context, OwnerSessionState, bool) error
 	RevokeOwnerSession(context.Context, OwnerSessionState) (OwnerSessionState, error)
-	AdmitGatewayPublicTLS(context.Context, GatewayPublicTLSState, uint64, string) (GatewayPublicTLSState, error)
+	PrepareGatewayPublicTLS(context.Context, GatewayPublicTLSState, GatewayPublicTLSMaterial, uint64, string, time.Time) (GatewayPublicTLSState, error)
+	ConfirmGatewayPublicTLS(context.Context, GatewayPublicTLSState, uint64, string, time.Time, time.Time) (GatewayPublicTLSState, error)
+	CheckGatewayPublicTLS(context.Context, GatewayPublicTLSState, uint64, string, time.Time) (GatewayPublicTLSState, error)
 	GetIntegrationContinuationForUpdate(context.Context, string) (IntegrationContinuation, error)
 	AdmitContinuationGrantVerifierState(context.Context, uint64, uint64, uint64, string, uint64) error
 	GetIntegrationContinuation(context.Context, string) (IntegrationContinuation, error)

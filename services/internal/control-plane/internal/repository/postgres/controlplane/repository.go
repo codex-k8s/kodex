@@ -62,8 +62,10 @@ func (wrapped *transaction) CurrentTime(ctx context.Context) (time.Time, error) 
 	return current.UTC().Truncate(time.Microsecond), nil
 }
 
-var _ domainrepo.Repository = (*Repository)(nil)
-var _ domainrepo.Transaction = (*transaction)(nil)
+var (
+	_ domainrepo.Repository  = (*Repository)(nil)
+	_ domainrepo.Transaction = (*transaction)(nil)
+)
 
 // New создаёт репозиторий выполнения.
 func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
@@ -153,7 +155,7 @@ func (repository *Repository) List(
 		ctx,
 		filter.OrganizationID,
 		filter.ProjectID,
-		nullActorID,
+		filter.ActorID,
 		func(tx pgx.Tx) error {
 			states := make([]string, 0, len(filter.States))
 			for _, state := range filter.States {
@@ -165,6 +167,7 @@ func (repository *Repository) List(
 				pgx.StrictNamedArgs{
 					"organization_id": filter.OrganizationID,
 					"project_id":      filter.ProjectID,
+					"actor_id":        filter.ActorID,
 					"kind":            string(filter.Kind),
 					"parent_id":       filter.ParentID,
 					"states":          states,
@@ -198,7 +201,7 @@ func (repository *Repository) Search(
 		ctx,
 		filter.OrganizationID,
 		filter.ProjectID,
-		nullActorID,
+		filter.ActorID,
 		func(tx pgx.Tx) error {
 			states := make([]string, 0, len(filter.States))
 			for _, state := range filter.States {
@@ -210,6 +213,7 @@ func (repository *Repository) Search(
 				pgx.StrictNamedArgs{
 					"organization_id": filter.OrganizationID,
 					"project_id":      filter.ProjectID,
+					"actor_id":        filter.ActorID,
 					"kind":            string(filter.Kind),
 					"states":          states,
 					"query":           filter.Query,
@@ -271,9 +275,11 @@ func (repository *Repository) ResolveRuntimeAgentBindingIntent(
 			kind     string
 			state    string
 			spec     []byte
-		}{{&session, sessionKind, sessionState, sessionSpec},
+		}{
+			{&session, sessionKind, sessionState, sessionSpec},
 			{&turn, turnKind, turnState, turnSpec},
-			{&revision, revisionKind, revisionState, revisionSpec}} {
+			{&revision, revisionKind, revisionState, revisionSpec},
+		} {
 			item.resource.Kind = enum.Kind(item.kind)
 			item.resource.State = enum.State(item.state)
 			var err error
@@ -432,11 +438,11 @@ func (repository *Repository) ListRuntimeIncidents(
 	filter domainquery.RuntimeIncidentFilter,
 ) ([]domainrepo.RuntimeIncident, error) {
 	var incidents []domainrepo.RuntimeIncident
-	err := repository.read(ctx, filter.OrganizationID, filter.ProjectID, nullActorID,
+	err := repository.read(ctx, filter.OrganizationID, filter.ProjectID, filter.ActorID,
 		func(tx pgx.Tx) error {
 			rows, err := tx.Query(ctx, sqlRuntimeIncidentList, pgx.StrictNamedArgs{
 				"organization_id": filter.OrganizationID, "project_id": filter.ProjectID,
-				"after_id": filter.AfterID, "limit": filter.Limit,
+				"actor_id": filter.ActorID, "after_id": filter.AfterID, "limit": filter.Limit,
 			})
 			if err != nil {
 				return err
@@ -2710,17 +2716,19 @@ func scanOwnerSession(row pgx.Row) (domainrepo.OwnerSessionState, error) {
 	return result, nil
 }
 
-func (wrapped *transaction) AdmitGatewayPublicTLS(
+func (wrapped *transaction) PrepareGatewayPublicTLS(
 	ctx context.Context,
 	state domainrepo.GatewayPublicTLSState,
+	candidate domainrepo.GatewayPublicTLSMaterial,
 	predecessorGeneration uint64,
 	predecessorSHA256 string,
+	updatedAt time.Time,
 ) (domainrepo.GatewayPublicTLSState, error) {
-	result, err := scanGatewayPublicTLS(wrapped.tx.QueryRow(ctx, sqlGatewayPublicTLSAdmit, pgx.StrictNamedArgs{
+	result, err := scanGatewayPublicTLS(wrapped.tx.QueryRow(ctx, sqlGatewayPublicTLSPrepare, pgx.StrictNamedArgs{
 		"organization_id": state.OrganizationID, "project_id": state.ProjectID,
-		"workload_id": state.WorkloadID, "generation": state.Generation,
-		"certificate_sha256": state.CertificateSHA256, "not_before": state.NotBefore,
-		"not_after": state.NotAfter, "updated_at": state.UpdatedAt,
+		"workload_id": state.WorkloadID, "generation": candidate.Generation,
+		"certificate_sha256": candidate.CertificateSHA256, "not_before": candidate.NotBefore,
+		"not_after": candidate.NotAfter, "updated_at": updatedAt,
 		"predecessor_generation":         predecessorGeneration,
 		"predecessor_certificate_sha256": predecessorSHA256,
 	}))
@@ -2730,15 +2738,76 @@ func (wrapped *transaction) AdmitGatewayPublicTLS(
 	return result, err
 }
 
+func (wrapped *transaction) ConfirmGatewayPublicTLS(
+	ctx context.Context,
+	state domainrepo.GatewayPublicTLSState,
+	generation uint64,
+	certificateSHA256 string,
+	updatedAt time.Time,
+	overlapExpiresAt time.Time,
+) (domainrepo.GatewayPublicTLSState, error) {
+	result, err := scanGatewayPublicTLS(wrapped.tx.QueryRow(ctx, sqlGatewayPublicTLSConfirm, pgx.StrictNamedArgs{
+		"organization_id": state.OrganizationID, "project_id": state.ProjectID,
+		"workload_id": state.WorkloadID, "generation": generation,
+		"certificate_sha256": certificateSHA256, "updated_at": updatedAt,
+		"overlap_expires_at": overlapExpiresAt,
+	}))
+	if errors.Is(err, errs.ErrNotFound) {
+		return domainrepo.GatewayPublicTLSState{}, errs.ErrPermissionDenied
+	}
+	return result, err
+}
+
+func (wrapped *transaction) CheckGatewayPublicTLS(
+	ctx context.Context,
+	state domainrepo.GatewayPublicTLSState,
+	generation uint64,
+	certificateSHA256 string,
+	checkedAt time.Time,
+) (domainrepo.GatewayPublicTLSState, error) {
+	result, err := scanGatewayPublicTLS(wrapped.tx.QueryRow(ctx, sqlGatewayPublicTLSCheck, pgx.StrictNamedArgs{
+		"organization_id": state.OrganizationID, "project_id": state.ProjectID,
+		"workload_id": state.WorkloadID, "generation": generation,
+		"certificate_sha256": certificateSHA256, "checked_at": checkedAt,
+	}))
+	if errors.Is(err, errs.ErrNotFound) {
+		return domainrepo.GatewayPublicTLSState{}, errs.ErrPermissionDenied
+	}
+	return result, err
+}
+
 func scanGatewayPublicTLS(row pgx.Row) (domainrepo.GatewayPublicTLSState, error) {
 	var result domainrepo.GatewayPublicTLSState
+	var appliedGeneration, pendingGeneration, previousGeneration *uint64
+	var appliedSHA256, pendingSHA256, previousSHA256 *string
+	var appliedNotBefore, appliedNotAfter, pendingNotBefore, pendingNotAfter *time.Time
+	var previousNotBefore, previousNotAfter, overlapExpiresAt *time.Time
 	if err := row.Scan(&result.OrganizationID, &result.ProjectID, &result.WorkloadID,
-		&result.Generation, &result.CertificateSHA256, &result.NotBefore,
-		&result.NotAfter, &result.UpdatedAt); err != nil {
+		&appliedGeneration, &appliedSHA256, &appliedNotBefore, &appliedNotAfter,
+		&pendingGeneration, &pendingSHA256, &pendingNotBefore, &pendingNotAfter,
+		&previousGeneration, &previousSHA256, &previousNotBefore, &previousNotAfter,
+		&overlapExpiresAt, &result.UpdatedAt); err != nil {
 		return domainrepo.GatewayPublicTLSState{}, mapError(err)
 	}
-	result.NotBefore = result.NotBefore.UTC()
-	result.NotAfter = result.NotAfter.UTC()
+	if appliedGeneration != nil {
+		result.Applied = domainrepo.GatewayPublicTLSMaterial{
+			Generation:        *appliedGeneration,
+			CertificateSHA256: *appliedSHA256, NotBefore: appliedNotBefore.UTC(), NotAfter: appliedNotAfter.UTC(),
+		}
+	}
+	if pendingGeneration != nil {
+		result.Pending = domainrepo.GatewayPublicTLSMaterial{
+			Generation:        *pendingGeneration,
+			CertificateSHA256: *pendingSHA256, NotBefore: pendingNotBefore.UTC(), NotAfter: pendingNotAfter.UTC(),
+		}
+	}
+	if previousGeneration != nil {
+		result.Previous = domainrepo.GatewayPublicTLSMaterial{
+			Generation:        *previousGeneration,
+			CertificateSHA256: *previousSHA256, NotBefore: previousNotBefore.UTC(), NotAfter: previousNotAfter.UTC(),
+		}
+		result.OverlapExpiresAt = overlapExpiresAt.UTC()
+	}
 	result.UpdatedAt = result.UpdatedAt.UTC()
 	return result, nil
 }

@@ -207,7 +207,8 @@ func (service *Service) Resolve(
 					CurrentRevision:        input.Identity.SessionRevision,
 				}
 				switch input.OperationID {
-				case "control.owner-session.admit", "control.readiness.check", "control.gateway-public-tls.admit":
+				case "control.owner-session.admit", "control.readiness.check",
+					"control.gateway-public-tls.prepare", "control.gateway-public-tls.confirm", "control.gateway-public-tls.check":
 				case "control.owner-session.revoke":
 					if err := tx.RequireOwnerSession(ctx, session, true); err != nil {
 						return errs.ErrPermissionDenied
@@ -235,7 +236,8 @@ func (service *Service) Resolve(
 				return receiptErr
 			}
 			if input.Identity.BoundContinuationID != "" {
-				if err := tx.AdmitContinuationGrantVerifierState(ctx,
+				if err := tx.AdmitContinuationGrantVerifierState(
+					ctx,
 					input.Identity.BoundSignerKeysetRevision,
 					input.Identity.BoundSignerHighWatermark,
 					input.Identity.BoundSignerServedGeneration,

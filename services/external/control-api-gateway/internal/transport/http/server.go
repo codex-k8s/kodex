@@ -129,9 +129,12 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 }
 
 func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *http.Request, params generated.DeleteOwnerSessionParams) {
-	revision, ok := parseETag(params.IfMatch)
+	revision, ok := requireETag(writer, params.IfMatch)
 	identity, identityOK := boundary.IdentityFromContext(request.Context())
-	if !ok || !identityOK {
+	if !ok {
+		return
+	}
+	if !identityOK {
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
@@ -247,9 +250,8 @@ func (server *Server) GetResource(writer http.ResponseWriter, request *http.Requ
 }
 
 func (server *Server) UpdateResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.UpdateResourceParams) {
-	version, ok := parseETag(params.IfMatch)
+	version, ok := requireETag(writer, params.IfMatch)
 	if !ok {
-		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
 	var body generated.UpdateResource
@@ -292,9 +294,8 @@ func (server *Server) SearchResources(writer http.ResponseWriter, request *http.
 }
 
 func (server *Server) DeleteResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.DeleteResourceParams) {
-	version, ok := parseETag(params.IfMatch)
+	version, ok := requireETag(writer, params.IfMatch)
 	if !ok {
-		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
 	response, err := server.control.DeleteResource(request.Context(), &controlplanev1.DeleteResourceRequest{
@@ -304,9 +305,8 @@ func (server *Server) DeleteResource(writer http.ResponseWriter, request *http.R
 }
 
 func (server *Server) TransitionResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.TransitionResourceParams) {
-	version, ok := parseETag(params.IfMatch)
+	version, ok := requireETag(writer, params.IfMatch)
 	if !ok {
-		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
 	var body generated.TransitionResource
@@ -364,9 +364,8 @@ func (server *Server) ManageAccessResource(writer http.ResponseWriter, request *
 		}
 		resourceID = body.ResourceId.String()
 		var versionOK bool
-		version, versionOK = parseETag(*params.IfMatch)
+		version, versionOK = requireETag(writer, *params.IfMatch)
 		if !versionOK {
-			writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 			return
 		}
 	} else if body.ResourceId != nil || params.IfMatch != nil {
@@ -381,9 +380,12 @@ func (server *Server) ManageAccessResource(writer http.ResponseWriter, request *
 }
 
 func (server *Server) DetachAccessResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.DetachAccessResourceParams) {
-	version, ok := parseETag(params.IfMatch)
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
 	var body generated.DetachAccessResource
-	if !ok || !decodeJSON(writer, request, &body) {
+	if !decodeJSON(writer, request, &body) {
 		return
 	}
 	kind, ok := accessKind(body.Kind)
@@ -398,9 +400,12 @@ func (server *Server) DetachAccessResource(writer http.ResponseWriter, request *
 }
 
 func (server *Server) CopyAccessResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.CopyAccessResourceParams) {
-	version, ok := parseETag(params.IfMatch)
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
 	var body generated.CopyAccessResource
-	if !ok || !decodeJSON(writer, request, &body) {
+	if !decodeJSON(writer, request, &body) {
 		return
 	}
 	kind, ok := accessKind(body.Kind)
@@ -672,6 +677,14 @@ func parseETag(raw string) (uint64, bool) {
 	}
 	parsed, err := strconv.ParseUint(raw[1:len(raw)-1], 10, 64)
 	return parsed, err == nil && parsed > 0
+}
+
+func requireETag(writer http.ResponseWriter, raw string) (uint64, bool) {
+	value, ok := parseETag(raw)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+	}
+	return value, ok
 }
 
 func pageSize(value *int) (uint32, bool) {

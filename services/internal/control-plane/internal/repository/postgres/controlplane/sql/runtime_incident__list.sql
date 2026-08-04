@@ -1,11 +1,23 @@
-SELECT id, organization_id, project_id, execution_id, execution_fence,
-    kind, evidence_sha256, workload_id, occurred_at
-FROM control_plane.runtime_execution_incidents
-WHERE organization_id = @organization_id::uuid
-  AND project_id = @project_id::uuid
-  AND id > coalesce(
+SELECT incident.id, incident.organization_id, incident.project_id,
+    incident.execution_id, incident.execution_fence, incident.kind,
+    incident.evidence_sha256, incident.workload_id, incident.occurred_at
+FROM control_plane.runtime_execution_incidents AS incident
+JOIN control_plane.runtime_executions AS execution
+  ON execution.organization_id = incident.organization_id
+ AND execution.project_id = incident.project_id
+ AND execution.id = incident.execution_id
+JOIN control_plane.resources AS process
+  ON process.organization_id = execution.organization_id
+ AND process.project_id = execution.project_id
+ AND process.id = execution.process_id
+ AND process.kind = 'PROCESS_RUN'
+ AND process.state <> 'DELETED'
+ AND process.owner_actor_id = @actor_id::uuid
+WHERE incident.organization_id = @organization_id::uuid
+  AND incident.project_id = @project_id::uuid
+  AND incident.id > coalesce(
       nullif(@after_id, '')::uuid,
       '00000000-0000-0000-0000-000000000000'::uuid
   )
-ORDER BY id
+ORDER BY incident.id
 LIMIT @limit;
