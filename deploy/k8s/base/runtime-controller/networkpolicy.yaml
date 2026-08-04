@@ -54,7 +54,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
-        values: [runtime-archive, runtime-restore-verifier, runtime-rehydrate, runtime-cleanup-authorizer]
+        values: [runtime-archive, runtime-restore-verifier, runtime-rehydrate, runtime-cleanup-authorizer, runtime-credential-broker]
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:
@@ -136,4 +136,4 @@ spec:
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattermost}}
           podSelector: {matchLabels: {app.kubernetes.io/name: matter-codex-bot-service, app.kubernetes.io/component: bot-service}}
-      ports: [{protocol: TCP, port: 8080}]
+      ports: [{protocol: TCP, port: 8443}]

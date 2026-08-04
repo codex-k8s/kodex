@@ -38,47 +38,51 @@ import (
 )
 
 const (
-	managedLabel       = "runtime.mattercodex.dev/managed"
-	executionLabel     = "runtime.mattercodex.dev/execution"
-	sessionLabel       = "runtime.mattercodex.dev/session"
-	roleLabel          = "runtime.mattercodex.dev/role"
-	accessLabel        = "runtime.mattercodex.dev/access-profile"
-	componentLabel     = "app.kubernetes.io/component"
-	journalComponent   = "runtime-journal"
-	roleComponent      = "role-runtime"
-	archiveComponent   = "runtime-archive"
-	restoreComponent   = "runtime-restore-verifier"
-	rehydrateComponent = "runtime-rehydrate"
-	cleanupComponent   = "runtime-cleanup-authorizer"
-	journalDataKey     = "journal.json"
-	maximumJournalSize = 1 << 20
-	maximumPVCBytes    = int64(30 << 30)
+	managedLabel        = "runtime.mattercodex.dev/managed"
+	executionLabel      = "runtime.mattercodex.dev/execution"
+	sessionLabel        = "runtime.mattercodex.dev/session"
+	roleLabel           = "runtime.mattercodex.dev/role"
+	accessLabel         = "runtime.mattercodex.dev/access-profile"
+	componentLabel      = "app.kubernetes.io/component"
+	journalComponent    = "runtime-journal"
+	roleComponent       = "role-runtime"
+	archiveComponent    = "runtime-archive"
+	restoreComponent    = "runtime-restore-verifier"
+	rehydrateComponent  = "runtime-rehydrate"
+	cleanupComponent    = "runtime-cleanup-authorizer"
+	credentialComponent = "runtime-credential-broker"
+	journalDataKey      = "journal.json"
+	maximumJournalSize  = 1 << 20
+	maximumPVCBytes     = int64(30 << 30)
 )
 
 type Config struct {
-	Environment                   string
-	Namespace                     string
-	RoleImageRepository           string
-	AgentGatewayURL               string
-	MCPGatewayURL                 string
-	ControllerImage               string
-	AuthorityImage                string
-	StorageClass                  string
-	PVCSize                       string
-	ReadClusterRole               string
-	AdminClusterRole              string
-	ArchiveServiceAccount         string
-	RestoreServiceAccount         string
-	CleanupServiceAccount         string
-	MaximumPods                   int
-	MaximumOrganizationExecutions int
-	MaximumCPU                    int64
-	MaximumMemoryBytes            int64
-	JobTTL                        time.Duration
-	S3Endpoint                    string
-	S3TLSServerName               string
-	S3Bucket                      string
-	S3Region                      string
+	Environment                    string
+	Namespace                      string
+	RoleImageRepository            string
+	AgentGatewayURL                string
+	MCPGatewayURL                  string
+	ControllerImage                string
+	AuthorityImage                 string
+	StorageClass                   string
+	PVCSize                        string
+	ReadClusterRole                string
+	AdminClusterRole               string
+	ArchiveServiceAccount          string
+	RestoreServiceAccount          string
+	CleanupServiceAccount          string
+	CredentialBrokerServiceAccount string
+	S3ArchiveBrokerServiceAccount  string
+	S3RestoreBrokerServiceAccount  string
+	MaximumPods                    int
+	MaximumOrganizationExecutions  int
+	MaximumCPU                     int64
+	MaximumMemoryBytes             int64
+	JobTTL                         time.Duration
+	S3Endpoint                     string
+	S3TLSServerName                string
+	S3Bucket                       string
+	S3Region                       string
 }
 
 type Adapter struct {
@@ -119,6 +123,8 @@ func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 	for _, serviceAccount := range []string{
 		config.ReadClusterRole, config.AdminClusterRole,
 		config.ArchiveServiceAccount, config.RestoreServiceAccount, config.CleanupServiceAccount,
+		config.CredentialBrokerServiceAccount, config.S3ArchiveBrokerServiceAccount,
+		config.S3RestoreBrokerServiceAccount,
 	} {
 		if serviceAccount == "" {
 			return nil, errors.New("runtime service account configuration is invalid")
@@ -234,10 +240,11 @@ func PatchWorkerJournal(
 // PatchWorkerRehydration фиксирует target-PVC proof без изменения owner execution.
 func PatchWorkerRehydration(
 	ctx context.Context,
-	namespace, name, expectedExecutionID, pvcUID, reference, proofSHA256 string,
+	namespace, name string, execution entity.Execution, pvcUID, reference, proofSHA256 string,
 ) error {
-	if namespace == "" || name != journalName(expectedExecutionID) || uuid.Validate(pvcUID) != nil ||
-		reference != "journal://"+expectedExecutionID+"/rehydrate-proof" || len(proofSHA256) != sha256.Size*2 {
+	if namespace == "" || execution.Validate() != nil || name != journalName(execution.ID) ||
+		execution.RestoreAssignmentState != "CONSUMED" || uuid.Validate(pvcUID) != nil ||
+		reference != "journal://"+execution.ID+"/rehydrate-proof" || len(proofSHA256) != sha256.Size*2 {
 		return errs.ErrInvalidInput
 	}
 	config, err := rest.InClusterConfig()
@@ -255,7 +262,7 @@ func PatchWorkerRehydration(
 	}
 	var document journalDocument
 	if decodeJournal([]byte(configMap.Data[journalDataKey]), &document) != nil ||
-		document.Execution.ID != expectedExecutionID || document.RehydratePhase != "PENDING" ||
+		document.Execution.ID != execution.ID || document.RehydratePhase != "PENDING" ||
 		document.Execution.RestoreSourceExecutionID == "" {
 		return errs.ErrStateConflict
 	}
@@ -263,6 +270,8 @@ func PatchWorkerRehydration(
 	document.RehydratePVCUID = pvcUID
 	document.RehydrateProofReference = reference
 	document.RehydrateProofSHA256 = proofSHA256
+	document.Execution = execution
+	refreshCommandKeys(&document)
 	document.LastTransition = time.Now().UTC()
 	raw, err := marshalJournal(document)
 	if err != nil {
@@ -427,7 +436,7 @@ func (adapter *Adapter) Capacity(
 		}
 		status := castStatus(pod, nil)
 		if pod.Name == stableName && pod.Labels[executionLabel] != shortID(execution.ID) {
-			if pod.Annotations["runtime.mattercodex.dev/revision-sha256"] == execution.RuntimeRevisionSHA256 &&
+			if pod.Annotations["runtime.mattercodex.dev/effective-runtime-sha256"] == execution.EffectiveRuntimeSHA256 &&
 				pod.Annotations["runtime.mattercodex.dev/archive-gate"] == "OPEN" && status.Ready && status.Phase == "Running" {
 				reusable = true
 				for _, container := range pod.Spec.Containers {
@@ -645,13 +654,20 @@ func (adapter *Adapter) Materialize(
 	if err := adapter.ensureExecutionConfig(ctx, execution, revision); err != nil {
 		return entity.RuntimeStatus{}, err
 	}
-	if err := adapter.ensureAccessProfile(ctx, execution); err != nil {
-		return entity.RuntimeStatus{}, err
-	}
 	if err := adapter.updateJournalAndLease(ctx, execution, leaseToken); err != nil {
 		return entity.RuntimeStatus{}, err
 	}
-	desired, err := adapter.rolePod(execution, revision)
+	credentialsReady, err := adapter.ensureCredentialBroker(ctx, execution)
+	if err != nil {
+		return entity.RuntimeStatus{}, err
+	}
+	if !credentialsReady {
+		return entity.RuntimeStatus{}, errs.ErrDependency
+	}
+	if err := adapter.ensureAccessProfile(ctx, execution); err != nil {
+		return entity.RuntimeStatus{}, err
+	}
+	desired, err := adapter.rolePod(ctx, execution, revision)
 	if err != nil {
 		return entity.RuntimeStatus{}, err
 	}
@@ -660,7 +676,7 @@ func (adapter *Adapter) Materialize(
 	)
 	if err == nil {
 		if existing.Labels[executionLabel] != shortID(execution.ID) &&
-			existing.Annotations["runtime.mattercodex.dev/revision-sha256"] == execution.RuntimeRevisionSHA256 &&
+			existing.Annotations["runtime.mattercodex.dev/effective-runtime-sha256"] == execution.EffectiveRuntimeSHA256 &&
 			existing.Annotations["runtime.mattercodex.dev/archive-gate"] == "OPEN" &&
 			castStatus(existing, nil).Ready && existing.Status.Phase == corev1.PodRunning {
 			if err := adapter.ensureRunnerHandoffRBAC(ctx, execution); err != nil {
@@ -674,6 +690,11 @@ func (adapter *Adapter) Materialize(
 			updated.Annotations["runtime.mattercodex.dev/fence"] = strconv.FormatUint(execution.Fence, 10)
 			updated.Annotations["runtime.mattercodex.dev/grant-generation"] = strconv.FormatUint(execution.GrantGeneration, 10)
 			updated.Annotations["runtime.mattercodex.dev/input-sha256"] = execution.ImmutableInputSHA256
+			updated.Annotations["runtime.mattercodex.dev/revision-sha256"] = execution.RuntimeRevisionSHA256
+			updated.Annotations["runtime.mattercodex.dev/effective-runtime-sha256"] = execution.EffectiveRuntimeSHA256
+			updated.Annotations["runtime.mattercodex.dev/workload-ticket-sha256"] = execution.WorkloadTicketSHA256
+			updated.Annotations["runtime.mattercodex.dev/workload-ticket"] = execution.WorkloadTicket
+			updated.Annotations["runtime.mattercodex.dev/credential-snapshot-sha256"] = execution.CredentialSnapshotSHA256
 			updated.Annotations["runtime.mattercodex.dev/archive-gate"] = "SUCCESSOR_READY"
 			updated.Annotations["runtime.mattercodex.dev/next-input-config"] = configName(execution)
 			delete(updated.Annotations, "runtime.mattercodex.dev/turn-handoff")
@@ -687,7 +708,7 @@ func (adapter *Adapter) Materialize(
 			return castStatus(reused, nil), nil
 		}
 		if existing.Labels[executionLabel] != shortID(execution.ID) ||
-			existing.Annotations["runtime.mattercodex.dev/revision-sha256"] != execution.RuntimeRevisionSHA256 ||
+			existing.Annotations["runtime.mattercodex.dev/effective-runtime-sha256"] != execution.EffectiveRuntimeSHA256 ||
 			existing.Annotations["runtime.mattercodex.dev/input-sha256"] != execution.ImmutableInputSHA256 ||
 			!podMatches(existing, desired) {
 			return entity.RuntimeStatus{}, errs.ErrStateConflict
@@ -700,16 +721,7 @@ func (adapter *Adapter) Materialize(
 	if !apierrors.IsNotFound(err) {
 		return entity.RuntimeStatus{}, errors.New("read role runtime pod")
 	}
-	created, err := adapter.client.CoreV1().Pods(adapter.config.Namespace).Create(
-		ctx, desired, metav1.CreateOptions{},
-	)
-	if err != nil {
-		return entity.RuntimeStatus{}, errors.New("create role runtime pod")
-	}
-	if err := adapter.patchJournalPhase(ctx, execution.ID, "MATERIALIZED"); err != nil {
-		return entity.RuntimeStatus{}, err
-	}
-	return castStatus(created, nil), nil
+	return entity.RuntimeStatus{}, errs.ErrDependency
 }
 
 func (adapter *Adapter) patchJournalPhase(ctx context.Context, executionID, phase string) error {
@@ -858,11 +870,18 @@ func (adapter *Adapter) ensureExecutionConfig(
 	if err != nil {
 		return err
 	}
+	desiredPod, err := adapter.rolePod(ctx, execution, revision)
+	if err != nil {
+		return err
+	}
 	snapshot := struct {
-		Execution   entity.Execution `json:"execution"`
-		Revision    entity.Revision  `json:"runtime_revision"`
-		RunnerInput runnerInput      `json:"runner_input"`
-	}{Execution: execution, Revision: revision, RunnerInput: runtimeInput}
+		Execution      entity.Execution `json:"execution"`
+		Revision       entity.Revision  `json:"runtime_revision"`
+		RunnerInput    runnerInput      `json:"runner_input"`
+		WorkloadTicket string           `json:"workload_ticket"`
+		DesiredPod     *corev1.Pod      `json:"desired_pod"`
+	}{Execution: execution, Revision: revision, RunnerInput: runtimeInput,
+		WorkloadTicket: execution.WorkloadTicket, DesiredPod: desiredPod}
 	raw, err := json.Marshal(snapshot)
 	if err != nil || len(raw) > maximumJournalSize {
 		return errs.ErrStateConflict
@@ -901,25 +920,44 @@ type runnerCredentialFiles struct {
 	CodexAuth    string `json:"codex_auth"`
 }
 
+type runnerTLSBinding struct {
+	ServerName      string `json:"server_name"`
+	CAFile          string `json:"ca_file"`
+	CertificateFile string `json:"certificate_file"`
+	PrivateKeyFile  string `json:"private_key_file"`
+	BindingSHA256   string `json:"binding_sha256"`
+}
+
 type runnerInput struct {
-	Schema                 string                `json:"schema"`
-	ExecutionID            string                `json:"execution_id"`
-	ExecutionVersion       uint64                `json:"execution_version"`
-	Fence                  uint64                `json:"fence"`
-	GrantGeneration        uint64                `json:"grant_generation"`
-	RuntimeRevisionID      string                `json:"runtime_revision_id"`
-	RuntimeRevisionVersion uint64                `json:"runtime_revision_version"`
-	RuntimeRevisionSHA256  string                `json:"runtime_revision_sha256"`
-	ImmutableInputSHA256   string                `json:"immutable_input_sha256"`
-	SessionKey             string                `json:"session_key"`
-	AgentProfile           string                `json:"agent_profile"`
-	BotServiceURL          string                `json:"bot_service_url"`
-	MCPURL                 string                `json:"mcp_url"`
-	CredentialFiles        runnerCredentialFiles `json:"credential_files"`
+	Schema                   string                `json:"schema"`
+	ExecutionID              string                `json:"execution_id"`
+	ExecutionVersion         uint64                `json:"execution_version"`
+	Fence                    uint64                `json:"fence"`
+	GrantGeneration          uint64                `json:"grant_generation"`
+	RuntimeRevisionID        string                `json:"runtime_revision_id"`
+	RuntimeRevisionVersion   uint64                `json:"runtime_revision_version"`
+	RuntimeRevisionSHA256    string                `json:"runtime_revision_sha256"`
+	EffectiveRuntimeSHA256   string                `json:"effective_runtime_sha256"`
+	ImmutableInputSHA256     string                `json:"immutable_input_sha256"`
+	SessionKey               string                `json:"session_key"`
+	AgentSessionID           int64                 `json:"agent_session_id"`
+	AgentSessionTurnID       int64                 `json:"agent_session_turn_id"`
+	AgentRunID               string                `json:"agent_run_id"`
+	AgentBindingSHA256       string                `json:"agent_binding_sha256"`
+	CredentialSnapshotSHA256 string                `json:"credential_snapshot_sha256"`
+	WorkloadTicketSHA256     string                `json:"workload_ticket_sha256"`
+	AgentProfile             string                `json:"agent_profile"`
+	BotServiceURL            string                `json:"bot_service_url"`
+	MCPURL                   string                `json:"mcp_url"`
+	BotServiceTLS            runnerTLSBinding      `json:"bot_service_tls"`
+	MCPTLS                   runnerTLSBinding      `json:"mcp_tls"`
+	CredentialFiles          runnerCredentialFiles `json:"credential_files"`
 }
 
 func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.Revision) (runnerInput, error) {
 	files := runnerCredentialFiles{}
+	botTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.AgentGatewayURL)}
+	mcpTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.MCPGatewayURL)}
 	for index, credential := range revision.Credentials {
 		base := "/var/run/secrets/mattercodex/runtime/credential-" + strconv.Itoa(index)
 		switch credential.Purpose {
@@ -929,21 +967,44 @@ func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.
 			files.MCPToken = base + "/token"
 		case "codex-auth":
 			files.CodexAuth = base + "/auth.json"
+		case "bot-client-tls":
+			botTLS.CAFile, botTLS.CertificateFile, botTLS.PrivateKeyFile = base+"/ca.pem", base+"/tls.crt", base+"/tls.key"
+			botTLS.BindingSHA256 = credential.ContentSHA256
+		case "mcp-client-tls":
+			mcpTLS.CAFile, mcpTLS.CertificateFile, mcpTLS.PrivateKeyFile = base+"/ca.pem", base+"/tls.crt", base+"/tls.key"
+			mcpTLS.BindingSHA256 = credential.ContentSHA256
 		}
 	}
-	if files.SessionToken == "" || files.MCPToken == "" || files.CodexAuth == "" || revision.AgentProfile == "" {
+	if files.SessionToken == "" || files.MCPToken == "" || files.CodexAuth == "" ||
+		botTLS.BindingSHA256 == "" || mcpTLS.BindingSHA256 == "" || revision.AgentProfile == "" {
 		return runnerInput{}, errs.ErrStateConflict
 	}
 	return runnerInput{
 		Schema: "mattercodex.agent-runner-input.v1", ExecutionID: execution.ID,
 		ExecutionVersion: execution.Version, Fence: execution.Fence, GrantGeneration: execution.GrantGeneration,
 		RuntimeRevisionID: execution.RuntimeRevisionID, RuntimeRevisionVersion: execution.RuntimeRevisionVersion,
-		RuntimeRevisionSHA256: execution.RuntimeRevisionSHA256, ImmutableInputSHA256: execution.ImmutableInputSHA256,
-		SessionKey: execution.SessionID, AgentProfile: revision.AgentProfile,
-		BotServiceURL:   adapter.config.AgentGatewayURL,
-		MCPURL:          strings.TrimRight(adapter.config.MCPGatewayURL, "/") + "/mcp/sessions/" + url.PathEscape(execution.SessionID),
+		RuntimeRevisionSHA256:  execution.RuntimeRevisionSHA256,
+		EffectiveRuntimeSHA256: execution.EffectiveRuntimeSHA256,
+		ImmutableInputSHA256:   execution.ImmutableInputSHA256,
+		SessionKey:             execution.AgentSessionKey, AgentSessionID: execution.AgentSessionID,
+		AgentSessionTurnID: execution.AgentSessionTurnID, AgentRunID: execution.AgentRunID,
+		AgentBindingSHA256:       execution.AgentBindingSHA256,
+		CredentialSnapshotSHA256: execution.CredentialSnapshotSHA256,
+		WorkloadTicketSHA256:     execution.WorkloadTicketSHA256,
+		AgentProfile:             revision.AgentProfile,
+		BotServiceURL:            adapter.config.AgentGatewayURL,
+		MCPURL:                   strings.TrimRight(adapter.config.MCPGatewayURL, "/") + "/mcp/sessions/" + url.PathEscape(execution.AgentSessionKey),
+		BotServiceTLS:            botTLS, MCPTLS: mcpTLS,
 		CredentialFiles: files,
 	}, nil
+}
+
+func mustURLHostname(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
 }
 
 func (adapter *Adapter) updateJournalAndLease(
@@ -1025,9 +1086,13 @@ func (adapter *Adapter) UpdateJournal(
 }
 
 func (adapter *Adapter) rolePod(
+	ctx context.Context,
 	execution entity.Execution,
 	revision entity.Revision,
 ) (*corev1.Pod, error) {
+	if !validWorkloadTicket(execution.WorkloadTicket) {
+		return nil, errs.ErrStateConflict
+	}
 	volumes := []corev1.Volume{
 		{Name: "session", VolumeSource: corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName(execution)},
@@ -1040,16 +1105,13 @@ func (adapter *Adapter) rolePod(
 		}}},
 	}
 	mounts := []corev1.VolumeMount{
-		{Name: "session", MountPath: "/workspace"},
+		{Name: "session", MountPath: "/workspace", SubPath: "session"},
 		{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
 		{Name: "tmp", MountPath: "/tmp"},
 	}
-	for index, credential := range revision.Credentials {
+	for index := range revision.Credentials {
 		name := "credential-" + strconv.Itoa(index)
-		volume, mount, err := credentialVolume(name, credential)
-		if err != nil {
-			return nil, err
-		}
+		volume, mount := executionCredentialVolume(execution, name, index)
 		volumes = append(volumes, volume)
 		mounts = append(mounts, mount)
 	}
@@ -1081,17 +1143,21 @@ func (adapter *Adapter) rolePod(
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 		Name: podName(execution), Labels: labels,
 		Annotations: map[string]string{
-			"runtime.mattercodex.dev/execution-id":      execution.ID,
-			"runtime.mattercodex.dev/session-id":        execution.SessionID,
-			"runtime.mattercodex.dev/version":           strconv.FormatUint(execution.Version, 10),
-			"runtime.mattercodex.dev/fence":             strconv.FormatUint(execution.Fence, 10),
-			"runtime.mattercodex.dev/grant-generation":  strconv.FormatUint(execution.GrantGeneration, 10),
-			"runtime.mattercodex.dev/revision-sha256":   execution.RuntimeRevisionSHA256,
-			"runtime.mattercodex.dev/input-sha256":      execution.ImmutableInputSHA256,
-			"runtime.mattercodex.dev/manifest-sha256":   revision.ManifestSHA256,
-			"runtime.mattercodex.dev/project-namespace": projectNamespaceName(execution.ProjectID),
-			"runtime.mattercodex.dev/archive-gate":      "CLOSED",
-			"runtime.mattercodex.dev/next-input-config": configName(execution),
+			"runtime.mattercodex.dev/execution-id":               execution.ID,
+			"runtime.mattercodex.dev/session-id":                 execution.SessionID,
+			"runtime.mattercodex.dev/version":                    strconv.FormatUint(execution.Version, 10),
+			"runtime.mattercodex.dev/fence":                      strconv.FormatUint(execution.Fence, 10),
+			"runtime.mattercodex.dev/grant-generation":           strconv.FormatUint(execution.GrantGeneration, 10),
+			"runtime.mattercodex.dev/revision-sha256":            execution.RuntimeRevisionSHA256,
+			"runtime.mattercodex.dev/effective-runtime-sha256":   execution.EffectiveRuntimeSHA256,
+			"runtime.mattercodex.dev/workload-ticket-sha256":     execution.WorkloadTicketSHA256,
+			"runtime.mattercodex.dev/workload-ticket":            execution.WorkloadTicket,
+			"runtime.mattercodex.dev/credential-snapshot-sha256": execution.CredentialSnapshotSHA256,
+			"runtime.mattercodex.dev/input-sha256":               execution.ImmutableInputSHA256,
+			"runtime.mattercodex.dev/manifest-sha256":            revision.ManifestSHA256,
+			"runtime.mattercodex.dev/project-namespace":          projectNamespaceName(execution.ProjectID),
+			"runtime.mattercodex.dev/archive-gate":               "CLOSED",
+			"runtime.mattercodex.dev/next-input-config":          configName(execution),
 		},
 	}, Spec: corev1.PodSpec{
 		ServiceAccountName: serviceAccount, AutomountServiceAccountToken: boolPointer(false),
@@ -1099,6 +1165,15 @@ func (adapter *Adapter) rolePod(
 		TerminationGracePeriodSeconds: int64Pointer(30),
 		SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(10001),
 			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+		InitContainers: []corev1.Container{{
+			Name: "workspace-init", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"},
+			SecurityContext: restrictedSecurityContext(10001),
+			VolumeMounts:    []corev1.VolumeMount{{Name: "session", MountPath: "/workspace-root"}},
+			Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{
+				corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")},
+				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}},
+		}},
 		Containers: []corev1.Container{{
 			Name: "role-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
 			ImagePullPolicy: corev1.PullIfNotPresent,
@@ -1137,33 +1212,14 @@ func (adapter *Adapter) ensureAccessProfile(ctx context.Context, execution entit
 	}
 	serviceAccounts := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace)
 	existing, err := serviceAccounts.Get(ctx, name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		existing, err = serviceAccounts.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
-			Name: name, Labels: labels(execution, "runtime-access"),
-			Annotations: map[string]string{
-				"runtime.mattercodex.dev/execution-id":    execution.ID,
-				"runtime.mattercodex.dev/organization-id": execution.OrganizationID,
-				"runtime.mattercodex.dev/project-id":      execution.ProjectID,
-				"runtime.mattercodex.dev/session-id":      execution.SessionID,
-			},
-		}, AutomountServiceAccountToken: boolPointer(false)}, metav1.CreateOptions{})
-	}
 	if err != nil {
-		return errors.New("ensure exact runtime access service account")
+		return errors.New("read broker-owned runtime access service account")
 	}
 	if existing.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
 		existing.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
-		existing.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID {
+		existing.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
+		existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
 		return errs.ErrStateConflict
-	}
-	if existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
-		updated := existing.DeepCopy()
-		updated.Annotations["runtime.mattercodex.dev/execution-id"] = execution.ID
-		updated.Labels = labels(execution, "runtime-access")
-		_, err = serviceAccounts.Update(ctx, updated, metav1.UpdateOptions{})
-		if err != nil {
-			return errors.New("advance runtime access service account")
-		}
 	}
 	subject := rbacv1.Subject{Kind: "ServiceAccount", Name: name, Namespace: adapter.config.Namespace}
 	switch execution.AccessProfile {
@@ -1182,11 +1238,8 @@ func (adapter *Adapter) ensureAccessProfile(ctx context.Context, execution entit
 		desired := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "runtime-access")},
 			Subjects: []rbacv1.Subject{subject}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: adapter.config.ReadClusterRole}}
 		binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			binding, err = bindings.Create(ctx, desired, metav1.CreateOptions{})
-		}
 		if err != nil {
-			return errors.New("ensure exact project read binding")
+			return errors.New("read broker-owned project read binding")
 		}
 		if !sameBinding(binding.Subjects, subject) || binding.RoleRef != desired.RoleRef {
 			return errs.ErrStateConflict
@@ -1205,48 +1258,65 @@ func (adapter *Adapter) ensureRunnerHandoffRBAC(ctx context.Context, execution e
 		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{configName(execution)}, Verbs: []string{"get"}},
 	}}
 	existing, err := roles.Get(ctx, name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		existing, err = roles.Create(ctx, desired, metav1.CreateOptions{})
-	} else if err == nil {
-		updated := existing.DeepCopy()
-		updated.Rules = desired.Rules
-		existing, err = roles.Update(ctx, updated, metav1.UpdateOptions{})
-	}
-	if err != nil || !reflect.DeepEqual(existing.Rules, desired.Rules) {
-		return errors.New("ensure exact runtime handoff role")
+	if err != nil || !handoffRulesMatch(existing.Rules, desired.Rules, execution) {
+		return errors.New("read broker-owned runtime handoff role")
 	}
 	bindingDesired := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "runtime-handoff")},
 		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: accessServiceAccountName(execution), Namespace: adapter.config.Namespace}},
 		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
 	bindings := adapter.client.RbacV1().RoleBindings(adapter.config.Namespace)
 	binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		binding, err = bindings.Create(ctx, bindingDesired, metav1.CreateOptions{})
-	} else if err == nil && (!reflect.DeepEqual(binding.Subjects, bindingDesired.Subjects) || binding.RoleRef != bindingDesired.RoleRef) {
-		updated := binding.DeepCopy()
-		updated.Subjects, updated.RoleRef = bindingDesired.Subjects, bindingDesired.RoleRef
-		binding, err = bindings.Update(ctx, updated, metav1.UpdateOptions{})
-	}
 	if err != nil || !reflect.DeepEqual(binding.Subjects, bindingDesired.Subjects) || binding.RoleRef != bindingDesired.RoleRef {
-		return errors.New("ensure exact runtime handoff binding")
+		return errors.New("read broker-owned runtime handoff binding")
 	}
 	return nil
 }
 
-func credentialVolume(name string, credential entity.CredentialRef) (corev1.Volume, corev1.VolumeMount, error) {
+func handoffRulesMatch(actual, base []rbacv1.PolicyRule, execution entity.Execution) bool {
+	if len(actual) != 3 || len(base) != 2 || !reflect.DeepEqual(actual[:2], base) {
+		return false
+	}
+	secretRule := actual[2]
+	prefix := "runtime-credential-" + shortID(execution.ID) + "-"
+	if !reflect.DeepEqual(secretRule.APIGroups, []string{""}) ||
+		!reflect.DeepEqual(secretRule.Resources, []string{"secrets"}) ||
+		!reflect.DeepEqual(secretRule.Verbs, []string{"get"}) || len(secretRule.ResourceNames) == 0 {
+		return false
+	}
+	for index, name := range secretRule.ResourceNames {
+		if name != prefix+strconv.Itoa(index) {
+			return false
+		}
+	}
+	return true
+}
+
+func executionCredentialVolume(
+	execution entity.Execution,
+	name string,
+	index int,
+) (corev1.Volume, corev1.VolumeMount) {
 	path := "/var/run/secrets/mattercodex/runtime/" + name
-	if secret, ok := strings.CutPrefix(credential.Reference, "k8s-secret://"); ok && validDNSLabel(secret) {
-		return corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-			SecretName: secret, DefaultMode: int32Pointer(0o440),
-		}}}, corev1.VolumeMount{Name: name, MountPath: path, ReadOnly: true}, nil
+	secretName := executionCredentialSecretName(execution, index)
+	return corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+		SecretName: secretName, DefaultMode: int32Pointer(0o440),
+	}}}, corev1.VolumeMount{Name: name, MountPath: path, ReadOnly: true}
+}
+
+func secretDataSHA256(data map[string][]byte) string {
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		keys = append(keys, key)
 	}
-	if provider, ok := strings.CutPrefix(credential.Reference, "vault-csi://"); ok && validDNSLabel(provider) {
-		return corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{CSI: &corev1.CSIVolumeSource{
-			Driver: "secrets-store.csi.k8s.io", ReadOnly: boolPointer(true),
-			VolumeAttributes: map[string]string{"secretProviderClass": provider},
-		}}}, corev1.VolumeMount{Name: name, MountPath: path, ReadOnly: true}, nil
+	sort.Strings(keys)
+	digest := sha256.New()
+	for _, key := range keys {
+		_, _ = digest.Write([]byte(key))
+		_, _ = digest.Write([]byte{0})
+		_, _ = digest.Write(data[key])
+		_, _ = digest.Write([]byte{0})
 	}
-	return corev1.Volume{}, corev1.VolumeMount{}, errs.ErrStateConflict
+	return hex.EncodeToString(digest.Sum(nil))
 }
 
 func (adapter *Adapter) List(ctx context.Context) ([]entity.RuntimeStatus, error) {
@@ -1342,6 +1412,8 @@ func (adapter *Adapter) List(ctx context.Context) ([]entity.RuntimeStatus, error
 		status.PVCDeletionStarted = document.PVCUID != ""
 		status.PVCNotFoundAt = document.PVCNotFoundAt
 		status.PVCDeletionProofSHA256 = document.PVCDeletionProofSHA256
+		status.PVCDeletionAuthorizationID = document.PVCDeletionAuthorizationID
+		status.PVCDeletionAuthorizationGeneration = document.PVCDeletionGeneration
 		if status.LastTransition.IsZero() {
 			status.LastTransition = document.LastTransition
 		} else if document.LastTransition.After(status.LastTransition) {
@@ -1593,9 +1665,16 @@ func (adapter *Adapter) RevokeAccess(ctx context.Context, execution entity.Execu
 
 func (adapter *Adapter) DeletePVC(
 	ctx context.Context,
+	execution entity.Execution,
 	status entity.RuntimeStatus,
 ) (entity.PVCDeletionProof, error) {
-	if status.PVCDeleted {
+	if execution.CleanupAuthorizationState != "ACTIVE" ||
+		execution.CleanupAuthorizationID == "" || execution.CleanupAuthorizationGeneration == 0 {
+		return entity.PVCDeletionProof{}, errs.ErrCleanupUnauthorized
+	}
+	if status.PVCDeleted &&
+		status.PVCDeletionAuthorizationID == execution.CleanupAuthorizationID &&
+		status.PVCDeletionAuthorizationGeneration == execution.CleanupAuthorizationGeneration {
 		return pvcDeletionProof(status)
 	}
 	if !status.RetentionOwner || status.PVCName == "" || status.PVCUID == "" || status.PVCResourceVersion == "" {
@@ -1604,7 +1683,7 @@ func (adapter *Adapter) DeletePVC(
 	uid := types.UID(status.PVCUID)
 	resourceVersion := status.PVCResourceVersion
 	if !status.PVCDeletionStarted {
-		if _, err := adapter.recordPVCDeletion(ctx, status, false); err != nil {
+		if _, err := adapter.recordPVCDeletion(ctx, execution, status, false); err != nil {
 			return entity.PVCDeletionProof{}, err
 		}
 	}
@@ -1612,7 +1691,7 @@ func (adapter *Adapter) DeletePVC(
 		ctx, status.PVCName, metav1.GetOptions{},
 	)
 	if apierrors.IsNotFound(readErr) {
-		return adapter.recordPVCDeletion(ctx, status, true)
+		return adapter.recordPVCDeletion(ctx, execution, status, true)
 	}
 	if readErr != nil {
 		return entity.PVCDeletionProof{}, errors.New("read runtime PVC before guarded deletion")
@@ -1647,11 +1726,12 @@ func (adapter *Adapter) DeletePVC(
 	if !apierrors.IsNotFound(readErr) {
 		return entity.PVCDeletionProof{}, errors.New("read back deleted runtime PVC")
 	}
-	return adapter.recordPVCDeletion(ctx, status, true)
+	return adapter.recordPVCDeletion(ctx, execution, status, true)
 }
 
 func (adapter *Adapter) recordPVCDeletion(
 	ctx context.Context,
+	execution entity.Execution,
 	status entity.RuntimeStatus,
 	deleted bool,
 ) (entity.PVCDeletionProof, error) {
@@ -1673,10 +1753,16 @@ func (adapter *Adapter) recordPVCDeletion(
 	document.PVCResourceVersion = status.PVCResourceVersion
 	document.PVCDeletionOwner = true
 	document.PVCDeleted = deleted
-	if deleted && document.PVCNotFoundAt.IsZero() {
+	if deleted && (document.PVCNotFoundAt.IsZero() ||
+		document.PVCDeletionAuthorizationID != execution.CleanupAuthorizationID ||
+		document.PVCDeletionGeneration != execution.CleanupAuthorizationGeneration) {
 		document.PVCNotFoundAt = adapter.now().UTC().Truncate(time.Microsecond)
+		document.PVCDeletionAuthorizationID = execution.CleanupAuthorizationID
+		document.PVCDeletionGeneration = execution.CleanupAuthorizationGeneration
 		document.PVCDeletionProofSHA256 = deletionProofSHA256(
-			document.PVCName, document.PVCUID, document.PVCResourceVersion, document.PVCNotFoundAt,
+			document.PVCName, document.PVCUID, document.PVCResourceVersion,
+			document.PVCDeletionAuthorizationID, document.PVCDeletionGeneration,
+			document.PVCNotFoundAt,
 		)
 	}
 	raw, err := marshalJournal(document)
@@ -1695,12 +1781,15 @@ func (adapter *Adapter) recordPVCDeletion(
 	}
 	return entity.PVCDeletionProof{PVCName: document.PVCName, PVCUID: document.PVCUID,
 		PVCResourceVersion: document.PVCResourceVersion, ObservedNotFoundAt: document.PVCNotFoundAt,
-		SHA256: document.PVCDeletionProofSHA256}, nil
+		SHA256:                         document.PVCDeletionProofSHA256,
+		CleanupAuthorizationID:         document.PVCDeletionAuthorizationID,
+		CleanupAuthorizationGeneration: document.PVCDeletionGeneration}, nil
 }
 
-func deletionProofSHA256(name, uid, resourceVersion string, observedAt time.Time) string {
+func deletionProofSHA256(name, uid, resourceVersion, authorizationID string, generation uint64, observedAt time.Time) string {
 	digest := sha256.Sum256([]byte(strings.Join([]string{
-		"runtime-pvc-not-found-v1", name, uid, resourceVersion, observedAt.Format(time.RFC3339Nano),
+		"runtime-pvc-not-found-v2", name, uid, resourceVersion, authorizationID,
+		strconv.FormatUint(generation, 10), observedAt.Format(time.RFC3339Nano),
 	}, "\n")))
 	return hex.EncodeToString(digest[:])
 }
@@ -1708,9 +1797,12 @@ func deletionProofSHA256(name, uid, resourceVersion string, observedAt time.Time
 func pvcDeletionProof(status entity.RuntimeStatus) (entity.PVCDeletionProof, error) {
 	proof := entity.PVCDeletionProof{PVCName: status.PVCName, PVCUID: status.PVCUID,
 		PVCResourceVersion: status.PVCResourceVersion, ObservedNotFoundAt: status.PVCNotFoundAt,
-		SHA256: status.PVCDeletionProofSHA256}
+		SHA256:                         status.PVCDeletionProofSHA256,
+		CleanupAuthorizationID:         status.PVCDeletionAuthorizationID,
+		CleanupAuthorizationGeneration: status.PVCDeletionAuthorizationGeneration}
 	if proof.ObservedNotFoundAt.IsZero() || proof.SHA256 != deletionProofSHA256(
-		proof.PVCName, proof.PVCUID, proof.PVCResourceVersion, proof.ObservedNotFoundAt,
+		proof.PVCName, proof.PVCUID, proof.PVCResourceVersion,
+		proof.CleanupAuthorizationID, proof.CleanupAuthorizationGeneration, proof.ObservedNotFoundAt,
 	) {
 		return entity.PVCDeletionProof{}, errs.ErrStateConflict
 	}
@@ -1722,7 +1814,64 @@ func (adapter *Adapter) EnsureArchiveJob(
 	execution entity.Execution,
 	status entity.RuntimeStatus,
 ) error {
+	ready, snapshotUID, err := adapter.ensureArchiveSnapshotPVC(ctx, execution, status)
+	if err != nil || !ready {
+		return err
+	}
+	status.ArchiveSnapshotPVCUID = snapshotUID
 	return adapter.ensureWorkerJob(ctx, execution, status, archiveComponent)
+}
+
+func (adapter *Adapter) ensureArchiveSnapshotPVC(
+	ctx context.Context,
+	execution entity.Execution,
+	status entity.RuntimeStatus,
+) (bool, string, error) {
+	if status.Handoff == nil || validateSnapshotSource(status) != nil {
+		return false, "", errs.ErrStateConflict
+	}
+	source, err := adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace).Get(
+		ctx, status.PVCName, metav1.GetOptions{},
+	)
+	if err != nil || string(source.UID) != status.PVCUID || source.ResourceVersion != status.PVCResourceVersion {
+		return false, "", errs.ErrStateConflict
+	}
+	name := archiveSnapshotPVCName(execution)
+	claims := adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace)
+	desired := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{
+		Name: name, Labels: labels(execution, "archive-snapshot"), Annotations: map[string]string{
+			"runtime.mattercodex.dev/execution-id":                execution.ID,
+			"runtime.mattercodex.dev/source-pvc-name":             status.PVCName,
+			"runtime.mattercodex.dev/source-pvc-uid":              status.PVCUID,
+			"runtime.mattercodex.dev/source-pvc-resource-version": status.PVCResourceVersion,
+			"runtime.mattercodex.dev/created-at":                  adapter.now().UTC().Format(time.RFC3339Nano),
+		},
+	}, Spec: corev1.PersistentVolumeClaimSpec{
+		AccessModes: source.Spec.AccessModes, Resources: source.Spec.Resources,
+		StorageClassName: source.Spec.StorageClassName, VolumeMode: source.Spec.VolumeMode,
+		DataSource: &corev1.TypedLocalObjectReference{Kind: "PersistentVolumeClaim", Name: status.PVCName},
+	}}
+	current, err := claims.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		if _, err := claims.Create(ctx, desired, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return false, "", errors.New("create immutable runtime archive PVC clone")
+		}
+		return false, "", nil
+	}
+	if err != nil || current.Annotations["runtime.mattercodex.dev/source-pvc-uid"] != status.PVCUID ||
+		current.Annotations["runtime.mattercodex.dev/source-pvc-resource-version"] != status.PVCResourceVersion ||
+		current.Spec.DataSource == nil || current.Spec.DataSource.Kind != "PersistentVolumeClaim" ||
+		current.Spec.DataSource.Name != status.PVCName {
+		return false, "", errs.ErrStateConflict
+	}
+	return current.Status.Phase == corev1.ClaimBound && current.UID != "", string(current.UID), nil
+}
+
+func validateSnapshotSource(status entity.RuntimeStatus) error {
+	if status.PVCName == "" || uuid.Validate(status.PVCUID) != nil || status.PVCResourceVersion == "" {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (adapter *Adapter) EnsureRestoreVerifierJob(
@@ -1765,6 +1914,217 @@ func (adapter *Adapter) OpenArchiveGate(ctx context.Context, execution entity.Ex
 	return nil
 }
 
+func (adapter *Adapter) ensureCredentialBroker(
+	ctx context.Context,
+	execution entity.Execution,
+) (bool, error) {
+	name := credentialBrokerJobName(execution)
+	desired := adapter.credentialBrokerJob(execution)
+	existing, err := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Get(
+		ctx, name, metav1.GetOptions{},
+	)
+	if err == nil {
+		if existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+			existing.Annotations["runtime.mattercodex.dev/version"] != strconv.FormatUint(execution.Version, 10) ||
+			existing.Annotations["runtime.mattercodex.dev/fence"] != strconv.FormatUint(execution.Fence, 10) ||
+			existing.Annotations["runtime.mattercodex.dev/workload-ticket"] != execution.WorkloadTicket ||
+			existing.Annotations["runtime.mattercodex.dev/credential-snapshot-sha256"] != execution.CredentialSnapshotSHA256 ||
+			existing.Spec.Template.Spec.ServiceAccountName != adapter.config.CredentialBrokerServiceAccount ||
+			len(existing.Spec.Template.Spec.Containers) != 1 ||
+			len(existing.Spec.Template.Spec.Containers[0].Command) != 1 ||
+			existing.Spec.Template.Spec.Containers[0].Command[0] != "/usr/local/bin/runtime-credential-broker" {
+			return false, errs.ErrStateConflict
+		}
+		if existing.Status.Failed > 0 && existing.Status.Active == 0 {
+			return false, errors.New("runtime credential broker failed")
+		}
+		return existing.Status.Succeeded == 1, nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return false, errors.New("read runtime credential broker job")
+	}
+	if _, err := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Create(
+		ctx, desired, metav1.CreateOptions{},
+	); err != nil && !apierrors.IsAlreadyExists(err) {
+		return false, errors.New("create runtime credential broker job")
+	}
+	return false, nil
+}
+
+func (adapter *Adapter) credentialBrokerJob(execution entity.Execution) *batchv1.Job {
+	backoff, ttl, deadline := int32(2), int32(adapter.config.JobTTL/time.Second), int64(300)
+	annotations := map[string]string{
+		"runtime.mattercodex.dev/execution-id":               execution.ID,
+		"runtime.mattercodex.dev/version":                    strconv.FormatUint(execution.Version, 10),
+		"runtime.mattercodex.dev/fence":                      strconv.FormatUint(execution.Fence, 10),
+		"runtime.mattercodex.dev/grant-generation":           strconv.FormatUint(execution.GrantGeneration, 10),
+		"runtime.mattercodex.dev/revision-sha256":            execution.RuntimeRevisionSHA256,
+		"runtime.mattercodex.dev/input-sha256":               execution.ImmutableInputSHA256,
+		"runtime.mattercodex.dev/workload-ticket-sha256":     execution.WorkloadTicketSHA256,
+		"runtime.mattercodex.dev/workload-ticket":            execution.WorkloadTicket,
+		"runtime.mattercodex.dev/credential-snapshot-sha256": execution.CredentialSnapshotSHA256,
+		"runtime.mattercodex.dev/runtime-config-name":        configName(execution),
+	}
+	jobLabels := labels(execution, credentialComponent)
+	jobLabels["mattercodex.dev/environment"] = adapter.config.Environment
+	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+		Name: credentialBrokerJobName(execution), Labels: jobLabels, Annotations: annotations,
+	}, Spec: batchv1.JobSpec{
+		BackoffLimit: &backoff, TTLSecondsAfterFinished: &ttl, ActiveDeadlineSeconds: &deadline,
+		Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: jobLabels, Annotations: annotations},
+			Spec: corev1.PodSpec{
+				ServiceAccountName:           adapter.config.CredentialBrokerServiceAccount,
+				AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false),
+				RestartPolicy: corev1.RestartPolicyOnFailure,
+				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true),
+					FSGroup: int64Pointer(10001), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+				Containers: []corev1.Container{{
+					Name: "credential-broker", Image: adapter.config.ControllerImage,
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"/usr/local/bin/runtime-credential-broker"}, Args: []string{"snapshot"},
+					Env: []corev1.EnvVar{
+						{Name: "RUNTIME_EXECUTION_ID", Value: execution.ID},
+						{Name: "RUNTIME_NAMESPACE", Value: adapter.config.Namespace},
+					},
+					SecurityContext: restrictedSecurityContext(10001),
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("25m"), corev1.ResourceMemory: resource.MustParse("32Mi")},
+						Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true},
+						{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
+						{Name: "workload-ticket-key", MountPath: "/var/run/secrets/mattercodex/runtime-credential-broker/workload-ticket", ReadOnly: true},
+					},
+				}},
+				Volumes: []corev1.Volume{
+					{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+						DefaultMode: int32Pointer(0o440),
+						Sources: []corev1.VolumeProjection{
+							{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: int64Pointer(600), Path: "token"}},
+							{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
+							{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}}}},
+						},
+					}}},
+					{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: int32Pointer(0o440)}}},
+					{Name: "workload-ticket-key", VolumeSource: csiVolume("runtime-credential-broker-workload-ticket")},
+				},
+			},
+		},
+	}}
+}
+
+func (adapter *Adapter) ensureS3CredentialBroker(
+	ctx context.Context,
+	execution entity.Execution,
+	action string,
+) (bool, error) {
+	if action != "archive" && action != "restore" {
+		return false, errs.ErrInvalidInput
+	}
+	name := s3CredentialBrokerJobName(execution, action)
+	desired := adapter.s3CredentialBrokerJob(execution, action)
+	existing, err := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		container := existing.Spec.Template.Spec.Containers
+		if existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+			existing.Annotations["runtime.mattercodex.dev/version"] != strconv.FormatUint(execution.Version, 10) ||
+			existing.Annotations["runtime.mattercodex.dev/fence"] != strconv.FormatUint(execution.Fence, 10) ||
+			existing.Annotations["runtime.mattercodex.dev/workload-ticket"] != execution.WorkloadTicket ||
+			existing.Annotations["runtime.mattercodex.dev/action"] != action ||
+			existing.Spec.Template.Spec.ServiceAccountName != adapter.s3BrokerServiceAccount(action) ||
+			len(container) != 1 || len(container[0].Command) != 1 || len(container[0].Args) != 1 ||
+			container[0].Command[0] != "/usr/local/bin/runtime-credential-broker" || container[0].Args[0] != "s3-"+action {
+			return false, errs.ErrStateConflict
+		}
+		if existing.Status.Failed > 0 && existing.Status.Active == 0 {
+			return false, errors.New("runtime S3 credential broker failed")
+		}
+		return existing.Status.Succeeded == 1, nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return false, errors.New("read runtime S3 credential broker job")
+	}
+	if _, err := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Create(ctx, desired, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return false, errors.New("create runtime S3 credential broker job")
+	}
+	return false, nil
+}
+
+func (adapter *Adapter) s3BrokerServiceAccount(action string) string {
+	if action == "archive" {
+		return adapter.config.S3ArchiveBrokerServiceAccount
+	}
+	return adapter.config.S3RestoreBrokerServiceAccount
+}
+
+func (adapter *Adapter) s3CredentialBrokerJob(execution entity.Execution, action string) *batchv1.Job {
+	backoff, ttl, deadline := int32(2), int32(adapter.config.JobTTL/time.Second), int64(300)
+	annotations := map[string]string{
+		"runtime.mattercodex.dev/execution-id":           execution.ID,
+		"runtime.mattercodex.dev/version":                strconv.FormatUint(execution.Version, 10),
+		"runtime.mattercodex.dev/fence":                  strconv.FormatUint(execution.Fence, 10),
+		"runtime.mattercodex.dev/grant-generation":       strconv.FormatUint(execution.GrantGeneration, 10),
+		"runtime.mattercodex.dev/revision-sha256":        execution.RuntimeRevisionSHA256,
+		"runtime.mattercodex.dev/input-sha256":           execution.ImmutableInputSHA256,
+		"runtime.mattercodex.dev/workload-ticket-sha256": execution.WorkloadTicketSHA256,
+		"runtime.mattercodex.dev/workload-ticket":        execution.WorkloadTicket,
+		"runtime.mattercodex.dev/action":                 action,
+		"runtime.mattercodex.dev/runtime-config-name":    configName(execution),
+	}
+	jobLabels := labels(execution, credentialComponent)
+	jobLabels["mattercodex.dev/environment"] = adapter.config.Environment
+	jobLabels["runtime.mattercodex.dev/credential-action"] = action
+	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: s3CredentialBrokerJobName(execution, action), Labels: jobLabels, Annotations: annotations},
+		Spec: batchv1.JobSpec{BackoffLimit: &backoff, TTLSecondsAfterFinished: &ttl, ActiveDeadlineSeconds: &deadline,
+			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: jobLabels, Annotations: annotations}, Spec: corev1.PodSpec{
+				ServiceAccountName: adapter.s3BrokerServiceAccount(action), AutomountServiceAccountToken: boolPointer(false),
+				EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyOnFailure,
+				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(10001),
+					SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+				Containers: []corev1.Container{{
+					Name: "s3-credential-broker", Image: adapter.config.ControllerImage, ImagePullPolicy: corev1.PullIfNotPresent,
+					Command: []string{"/usr/local/bin/runtime-credential-broker"}, Args: []string{"s3-" + action},
+					Env: []corev1.EnvVar{
+						{Name: "RUNTIME_EXECUTION_ID", Value: execution.ID}, {Name: "RUNTIME_NAMESPACE", Value: adapter.config.Namespace},
+						{Name: "RUNTIME_S3_BUCKET", Value: adapter.config.S3Bucket},
+						{Name: "RUNTIME_S3_ENDPOINT", Value: adapter.config.S3Endpoint},
+						{Name: "RUNTIME_S3_TLS_SERVER_NAME", Value: adapter.config.S3TLSServerName},
+						{Name: "RUNTIME_S3_REGION", Value: adapter.config.S3Region},
+						{Name: "RUNTIME_S3_CA_FILE", Value: "/var/run/config/mattercodex/runtime-credential-broker/s3/ca.pem"},
+						{Name: "RUNTIME_VAULT_ADDRESS", Value: "https://vault.mattercodex-system.svc:8200"},
+						{Name: "RUNTIME_VAULT_TLS_SERVER_NAME", Value: "vault.mattercodex-system.svc.cluster.local"},
+						{Name: "RUNTIME_VAULT_CA_FILE", Value: "/var/run/config/mattercodex/vault/ca.pem"},
+					},
+					SecurityContext: restrictedSecurityContext(10001),
+					Resources:       corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("25m"), corev1.ResourceMemory: resource.MustParse("32Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")}},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true},
+						{Name: "vault-token", MountPath: "/var/run/secrets/tokens", ReadOnly: true},
+						{Name: "vault-ca", MountPath: "/var/run/config/mattercodex/vault", ReadOnly: true},
+						{Name: "s3-ca", MountPath: "/var/run/config/mattercodex/runtime-credential-broker/s3", ReadOnly: true},
+						{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
+						{Name: "workload-ticket-key", MountPath: "/var/run/secrets/mattercodex/runtime-credential-broker/workload-ticket", ReadOnly: true},
+						{Name: "s3-broker-config", MountPath: "/var/run/secrets/mattercodex/runtime-credential-broker/s3", ReadOnly: true},
+					},
+				}},
+				Volumes: []corev1.Volume{
+					{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{DefaultMode: int32Pointer(0o440), Sources: []corev1.VolumeProjection{
+						{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: int64Pointer(600), Path: "token"}},
+						{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
+						{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}}}},
+					}}}},
+					{Name: "vault-token", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{DefaultMode: int32Pointer(0o400), Sources: []corev1.VolumeProjection{{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "vault", ExpirationSeconds: int64Pointer(600), Path: "vault"}}}}}},
+					{Name: "vault-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "internal-rpc-authority-vault-ca"}, Items: []corev1.KeyToPath{{Key: "ca.pem", Path: "ca.pem"}}, DefaultMode: int32Pointer(0o440)}}},
+					{Name: "s3-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "mattercodex-s3-ca"}, Items: []corev1.KeyToPath{{Key: "ca.pem", Path: "ca.pem"}}, DefaultMode: int32Pointer(0o440)}}},
+					{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: int32Pointer(0o440)}}},
+					{Name: "workload-ticket-key", VolumeSource: csiVolume("runtime-s3-" + action + "-workload-ticket")},
+					{Name: "s3-broker-config", VolumeSource: csiVolume("runtime-s3-broker-config")},
+				},
+			}}},
+	}
+}
+
 func (adapter *Adapter) ensureWorkerJob(
 	ctx context.Context,
 	execution entity.Execution,
@@ -1776,12 +2136,36 @@ func (adapter *Adapter) ensureWorkerJob(
 		return errs.ErrStateConflict
 	}
 	name := workerJobName(component, execution)
+	credentialSnapshotSHA256 := ""
+	if component == archiveComponent || component == restoreComponent || component == rehydrateComponent {
+		action := "archive"
+		if component != archiveComponent {
+			action = "restore"
+		}
+		ready, brokerErr := adapter.ensureS3CredentialBroker(ctx, execution, action)
+		if brokerErr != nil {
+			return brokerErr
+		}
+		if !ready {
+			return errs.ErrDependency
+		}
+		var credentialErr error
+		credentialSnapshotSHA256, credentialErr = adapter.readS3CredentialSnapshot(ctx, execution, action)
+		if credentialErr != nil {
+			return credentialErr
+		}
+	}
 	existing, err := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Get(
 		ctx, name, metav1.GetOptions{},
 	)
 	if err == nil {
 		if existing.Labels[executionLabel] != shortID(execution.ID) ||
-			existing.Annotations["runtime.mattercodex.dev/fence"] != strconv.FormatUint(execution.Fence, 10) {
+			existing.Annotations["runtime.mattercodex.dev/fence"] != strconv.FormatUint(execution.Fence, 10) ||
+			existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+			existing.Annotations["runtime.mattercodex.dev/workload-ticket-sha256"] != execution.WorkloadTicketSHA256 ||
+			existing.Annotations["runtime.mattercodex.dev/revision-sha256"] != execution.RuntimeRevisionSHA256 ||
+			existing.Annotations["runtime.mattercodex.dev/input-sha256"] != execution.ImmutableInputSHA256 ||
+			existing.Annotations["runtime.mattercodex.dev/s3-credential-snapshot-sha256"] != credentialSnapshotSHA256 {
 			return errs.ErrStateConflict
 		}
 		if existing.Status.Failed > 0 && existing.Status.Active == 0 && component == cleanupComponent {
@@ -1801,7 +2185,7 @@ func (adapter *Adapter) ensureWorkerJob(
 	if !apierrors.IsNotFound(err) {
 		return errors.New("read runtime worker job")
 	}
-	job, err := adapter.workerJob(execution, status, component)
+	job, err := adapter.workerJob(execution, status, component, credentialSnapshotSHA256)
 	if err != nil {
 		return err
 	}
@@ -1827,22 +2211,16 @@ func (adapter *Adapter) ensureWorkerJournalRBAC(
 			ResourceNames: []string{journalName(execution.ID)}, Verbs: []string{"get", "update"}}}}
 	roles := adapter.client.RbacV1().Roles(adapter.config.Namespace)
 	role, err := roles.Get(ctx, name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		role, err = roles.Create(ctx, desired, metav1.CreateOptions{})
-	}
 	if err != nil || !reflect.DeepEqual(role.Rules, desired.Rules) {
-		return errors.New("ensure exact worker journal role")
+		return errors.New("read broker-owned worker journal role")
 	}
 	bindingDesired := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: desired.Labels},
 		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: serviceAccount, Namespace: adapter.config.Namespace}},
 		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
 	bindings := adapter.client.RbacV1().RoleBindings(adapter.config.Namespace)
 	binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		binding, err = bindings.Create(ctx, bindingDesired, metav1.CreateOptions{})
-	}
 	if err != nil || !reflect.DeepEqual(binding.Subjects, bindingDesired.Subjects) || binding.RoleRef != bindingDesired.RoleRef {
-		return errors.New("ensure exact worker journal binding")
+		return errors.New("read broker-owned worker journal binding")
 	}
 	return nil
 }
@@ -1851,7 +2229,11 @@ func (adapter *Adapter) workerJob(
 	execution entity.Execution,
 	status entity.RuntimeStatus,
 	component string,
+	credentialSnapshotSHA256 string,
 ) (*batchv1.Job, error) {
+	if !validWorkloadTicket(execution.WorkloadTicket) {
+		return nil, errs.ErrStateConflict
+	}
 	command, serviceAccount, workload, spiffe := "", "", "", ""
 	switch component {
 	case archiveComponent:
@@ -1890,6 +2272,7 @@ func (adapter *Adapter) workerJob(
 		{Name: "RUNTIME_PVC_NAME", Value: status.PVCName},
 		{Name: "RUNTIME_PVC_UID", Value: status.PVCUID},
 		{Name: "RUNTIME_PVC_RESOURCE_VERSION", Value: status.PVCResourceVersion},
+		{Name: "RUNTIME_ARCHIVE_SNAPSHOT_PVC_UID", Value: status.ArchiveSnapshotPVCUID},
 	}
 	mainResources := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("50m"), corev1.ResourceMemory: resource.MustParse("64Mi")},
@@ -1900,10 +2283,21 @@ func (adapter *Adapter) workerJob(
 		mainResources.Requests[corev1.ResourceEphemeralStorage] = scratch
 		mainResources.Limits[corev1.ResourceEphemeralStorage] = scratch
 	}
+	annotations := map[string]string{
+		"runtime.mattercodex.dev/fence":                  strconv.FormatUint(execution.Fence, 10),
+		"runtime.mattercodex.dev/execution-id":           execution.ID,
+		"runtime.mattercodex.dev/workload-ticket-sha256": execution.WorkloadTicketSHA256,
+		"runtime.mattercodex.dev/workload-ticket":        execution.WorkloadTicket,
+		"runtime.mattercodex.dev/revision-sha256":        execution.RuntimeRevisionSHA256,
+		"runtime.mattercodex.dev/input-sha256":           execution.ImmutableInputSHA256,
+	}
+	if credentialSnapshotSHA256 != "" {
+		annotations["runtime.mattercodex.dev/s3-credential-snapshot-sha256"] = credentialSnapshotSHA256
+	}
 	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: workerJobName(component, execution), Labels: labels,
-		Annotations: map[string]string{"runtime.mattercodex.dev/fence": strconv.FormatUint(execution.Fence, 10)}},
+		Annotations: annotations},
 		Spec: batchv1.JobSpec{BackoffLimit: &backoff, TTLSecondsAfterFinished: &ttl,
-			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: labels}, Spec: corev1.PodSpec{
+			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: labels, Annotations: annotations}, Spec: corev1.PodSpec{
 				ServiceAccountName: serviceAccount, AutomountServiceAccountToken: boolPointer(false),
 				EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyOnFailure,
 				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000),
@@ -1945,6 +2339,79 @@ func (adapter *Adapter) workerJob(
 	}, nil
 }
 
+func (adapter *Adapter) readS3CredentialSnapshot(
+	ctx context.Context,
+	execution entity.Execution,
+	action string,
+) (string, error) {
+	if action != "archive" && action != "restore" {
+		return "", errs.ErrInvalidInput
+	}
+	secret, err := adapter.client.CoreV1().Secrets(adapter.config.Namespace).Get(
+		ctx, s3CredentialSecretName(execution, action), metav1.GetOptions{},
+	)
+	if err != nil || secret.Immutable == nil || !*secret.Immutable ||
+		secret.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+		secret.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
+		secret.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
+		secret.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
+		secret.Annotations["runtime.mattercodex.dev/action"] != action ||
+		secret.Annotations["runtime.mattercodex.dev/bucket"] != adapter.config.S3Bucket ||
+		secret.Annotations["runtime.mattercodex.dev/workload-ticket-sha256"] != execution.WorkloadTicketSHA256 ||
+		!validSHA256Text(secret.Annotations["runtime.mattercodex.dev/inline-policy-sha256"]) ||
+		!validSHA256Text(secret.Annotations["runtime.mattercodex.dev/readback-sha256"]) ||
+		len(secret.Data) != 3 || len(secret.Data["access-key-id"]) == 0 ||
+		len(secret.Data["secret-access-key"]) == 0 || len(secret.Data["session-token"]) == 0 {
+		return "", errors.New("read exact runtime S3 credential snapshot")
+	}
+	expiresAt, err := time.Parse(time.RFC3339, secret.Annotations["runtime.mattercodex.dev/expires-at"])
+	now := adapter.now().UTC()
+	if err != nil || !expiresAt.After(now.Add(time.Minute)) || expiresAt.After(now.Add(15*time.Minute)) {
+		return "", errors.New("runtime S3 credential lifetime is invalid")
+	}
+	sourceExecutionID := execution.ID
+	if action == "restore" {
+		sourceExecutionID = execution.RestoreSourceExecutionID
+		if sourceExecutionID == "" {
+			sourceExecutionID = execution.ID
+		}
+	}
+	if secret.Annotations["runtime.mattercodex.dev/source-execution-id"] != sourceExecutionID ||
+		secret.Annotations["runtime.mattercodex.dev/sts-session-name"] !=
+			"mcx-"+shortID(execution.ID)+"-"+action ||
+		!strings.HasPrefix(secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"], "arn:") ||
+		!strings.Contains(secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"],
+			":assumed-role/mattercodex-runtime-"+action+"-execution/") {
+		return "", errs.ErrStateConflict
+	}
+	payload, err := json.Marshal(struct {
+		UID, ResourceVersion, ExecutionID, Action, SourceExecutionID, ExpiresAt string
+		AssumedRoleARN, PolicySHA256, ReadbackSHA256, SecretDataSHA256          string
+	}{string(secret.UID), secret.ResourceVersion, execution.ID, action, sourceExecutionID,
+		expiresAt.UTC().Format(time.RFC3339),
+		secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"],
+		secret.Annotations["runtime.mattercodex.dev/inline-policy-sha256"],
+		secret.Annotations["runtime.mattercodex.dev/readback-sha256"], secretDataSHA256(secret.Data)})
+	if err != nil {
+		return "", errors.New("encode runtime S3 credential snapshot")
+	}
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func validSHA256Text(value string) bool {
+	return len(value) == 64 && value == strings.ToLower(value) &&
+		strings.Trim(value, "0123456789abcdef") == ""
+}
+
+func validWorkloadTicket(value string) bool {
+	if len(value) < 80 || len(value) > 4096 || strings.ContainsAny(value, "\x00\r\n") {
+		return false
+	}
+	parts := strings.Split(value, ".")
+	return len(parts) == 2 && len(parts[0]) > 20 && len(parts[1]) == 43
+}
+
 func (adapter *Adapter) workerVolumes(
 	component string,
 	execution entity.Execution,
@@ -1983,14 +2450,13 @@ func (adapter *Adapter) workerVolumes(
 		{Name: "application-grant", MountPath: "/var/run/secrets/mattercodex/runtime-worker/application-grant", ReadOnly: true},
 	}
 	if component == archiveComponent || component == restoreComponent || component == rehydrateComponent {
-		s3CredentialProfile := "runtime-archive-s3"
+		action := "archive"
 		if component == restoreComponent || component == rehydrateComponent {
-			s3CredentialProfile = "runtime-restore-verifier-s3"
+			action = "restore"
 		}
 		volumes = append(volumes,
-			corev1.Volume{Name: "s3-credential", VolumeSource: corev1.VolumeSource{CSI: &corev1.CSIVolumeSource{
-				Driver: "secrets-store.csi.k8s.io", ReadOnly: boolPointer(true),
-				VolumeAttributes: map[string]string{"secretProviderClass": s3CredentialProfile},
+			corev1.Volume{Name: "s3-credential", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+				SecretName: s3CredentialSecretName(execution, action), DefaultMode: int32Pointer(0o400),
 			}}},
 			corev1.Volume{Name: "s3-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "mattercodex-s3-ca"}, DefaultMode: int32Pointer(0o440),
@@ -2003,9 +2469,9 @@ func (adapter *Adapter) workerVolumes(
 	}
 	if component == archiveComponent {
 		volumes = append(volumes, corev1.Volume{Name: "session", VolumeSource: corev1.VolumeSource{
-			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: status.PVCName, ReadOnly: true},
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: archiveSnapshotPVCName(execution), ReadOnly: true},
 		}})
-		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/archive-source", ReadOnly: true})
+		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/archive-source", SubPath: "session", ReadOnly: true})
 	}
 	if component == rehydrateComponent {
 		volumes = append(volumes, corev1.Volume{Name: "session", VolumeSource: corev1.VolumeSource{
@@ -2153,6 +2619,35 @@ func (adapter *Adapter) CleanupTemporary(ctx context.Context, before time.Time) 
 		}
 		deleted++
 	}
+	snapshots, err := adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace).List(
+		ctx, metav1.ListOptions{LabelSelector: managedLabel + "=true," + componentLabel + "=archive-snapshot", Limit: 1000},
+	)
+	if err != nil {
+		return deleted, errors.New("list temporary runtime archive snapshots")
+	}
+	for index := range snapshots.Items {
+		snapshot := &snapshots.Items[index]
+		createdAt, parseErr := time.Parse(time.RFC3339Nano, snapshot.Annotations["runtime.mattercodex.dev/created-at"])
+		executionID := snapshot.Annotations["runtime.mattercodex.dev/execution-id"]
+		if parseErr != nil || !createdAt.Before(before) || uuid.Validate(executionID) != nil {
+			continue
+		}
+		journal, journalErr := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(
+			ctx, journalName(executionID), metav1.GetOptions{},
+		)
+		var document journalDocument
+		if journalErr != nil || decodeJournal([]byte(journal.Data[journalDataKey]), &document) != nil ||
+			document.Execution.ID != executionID || document.Execution.ArchiveSHA256 == "" {
+			continue
+		}
+		uid, resourceVersion := snapshot.UID, snapshot.ResourceVersion
+		if err := adapter.client.CoreV1().PersistentVolumeClaims(adapter.config.Namespace).Delete(
+			ctx, snapshot.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion}},
+		); err != nil && !apierrors.IsNotFound(err) {
+			return deleted, errors.New("delete exact runtime archive snapshot")
+		}
+		deleted++
+	}
 	return deleted, nil
 }
 
@@ -2166,6 +2661,21 @@ func labels(execution entity.Execution, component string) map[string]string {
 }
 
 func journalName(executionID string) string { return "runtime-journal-" + shortID(executionID) }
+func archiveSnapshotPVCName(execution entity.Execution) string {
+	return "runtime-archive-snapshot-" + shortID(execution.ID)
+}
+func s3CredentialSecretName(execution entity.Execution, action string) string {
+	return "runtime-s3-" + shortID(execution.ID) + "-" + action
+}
+func executionCredentialSecretName(execution entity.Execution, index int) string {
+	return "runtime-credential-" + shortID(execution.ID) + "-" + strconv.Itoa(index)
+}
+func credentialBrokerJobName(execution entity.Execution) string {
+	return "runtime-credential-broker-" + shortID(execution.ID) + "-f" + strconv.FormatUint(execution.Fence, 10)
+}
+func s3CredentialBrokerJobName(execution entity.Execution, action string) string {
+	return "runtime-s3-" + action + "-broker-" + shortID(execution.ID) + "-f" + strconv.FormatUint(execution.Fence, 10)
+}
 func configName(execution entity.Execution) string {
 	return "runtime-config-" + shortID(execution.ID) + "-v" + strconv.FormatUint(execution.RuntimeRevisionVersion, 10)
 }
@@ -2227,8 +2737,10 @@ func marshalJournal(document journalDocument) ([]byte, error) {
 		!validRehydrateJournal(document) ||
 		!validCapacityJournal(document) ||
 		document.PVCDeleted && (!document.PVCDeletionOwner || document.PVCUID == "" || document.PVCResourceVersion == "" ||
+			document.PVCDeletionAuthorizationID == "" || document.PVCDeletionGeneration == 0 ||
 			document.PVCNotFoundAt.IsZero() || document.PVCDeletionProofSHA256 != deletionProofSHA256(
-			document.PVCName, document.PVCUID, document.PVCResourceVersion, document.PVCNotFoundAt,
+			document.PVCName, document.PVCUID, document.PVCResourceVersion,
+			document.PVCDeletionAuthorizationID, document.PVCDeletionGeneration, document.PVCNotFoundAt,
 		)) {
 		return nil, errs.ErrStateConflict
 	}
@@ -2259,8 +2771,10 @@ func decodeJournal(raw []byte, document *journalDocument) error {
 		!validCapacityJournal(*document) ||
 		document.PVCDeletionOwner && !pvcEvidencePresent ||
 		document.PVCDeleted && (!document.PVCDeletionOwner || document.PVCNotFoundAt.IsZero() ||
+			document.PVCDeletionAuthorizationID == "" || document.PVCDeletionGeneration == 0 ||
 			document.PVCDeletionProofSHA256 != deletionProofSHA256(
-				document.PVCName, document.PVCUID, document.PVCResourceVersion, document.PVCNotFoundAt,
+				document.PVCName, document.PVCUID, document.PVCResourceVersion,
+				document.PVCDeletionAuthorizationID, document.PVCDeletionGeneration, document.PVCNotFoundAt,
 			)) {
 		return errs.ErrStateConflict
 	}
@@ -2319,18 +2833,6 @@ func terminalLabel(value string) bool {
 	default:
 		return false
 	}
-}
-
-func validDNSLabel(value string) bool {
-	if len(value) < 1 || len(value) > 63 || value[0] == '-' || value[len(value)-1] == '-' {
-		return false
-	}
-	for _, symbol := range value {
-		if (symbol < 'a' || symbol > 'z') && (symbol < '0' || symbol > '9') && symbol != '-' {
-			return false
-		}
-	}
-	return true
 }
 
 func sameBinding(subjects []rbacv1.Subject, expected rbacv1.Subject) bool {

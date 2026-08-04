@@ -1,3 +1,4 @@
+-- name: RuntimeExecutionLatestSessionArchiveForRestore :one
 SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        role_id, turn_id, attempt, runtime_revision_id,
        runtime_revision_version, runtime_revision_sha256,
@@ -28,6 +29,16 @@ SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        coalesce(restore_source_runtime_revision_sha256, ''),
        coalesce(restore_source_immutable_input_sha256, ''),
        coalesce(restore_source_proof_sha256, ''),
+       effective_runtime_sha256, agent_session_key, agent_session_id,
+       agent_session_turn_id, agent_run_id, agent_binding_sha256,
+       retention_policy_id, retention_policy_version, pvc_retention_seconds,
+       archive_retention_seconds, coalesce(archive_retain_until, 'epoch'::timestamptz), pvc_cleanup_eligible_at,
+       capacity_observation_expires_at, reschedule_after,
+       restore_assignment_state, restore_assignment_generation,
+       coalesce(restore_target_pvc_name, ''), coalesce(restore_target_pvc_uid::text, ''),
+       coalesce(restore_target_pvc_resource_version, ''),
+       coalesce(rehydrate_proof_reference, ''), coalesce(rehydrate_proof_sha256, ''),
+       credential_snapshot_sha256, workload_ticket_sha256,
        created_at, updated_at
 FROM control_plane.runtime_executions
 WHERE organization_id = @organization_id
@@ -38,5 +49,14 @@ WHERE organization_id = @organization_id
   AND archive_sha256 IS NOT NULL
   AND restore_proof_sha256 IS NOT NULL
   AND cleanup_deletion_proof_sha256 IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM control_plane.runtime_executions AS target
+      WHERE target.organization_id = runtime_executions.organization_id
+        AND target.project_id = runtime_executions.project_id
+        AND target.restore_source_execution_id = runtime_executions.id
+        AND (target.restore_assignment_state = 'CONSUMED'
+             OR target.state NOT IN ('RETRIED', 'CANCELLED', 'EXPIRED'))
+  )
 ORDER BY cleanup_consumed_at DESC, id DESC
 LIMIT 1;

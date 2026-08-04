@@ -132,6 +132,12 @@ var sqlRuntimeExecutionGetByTurnForUpdate string
 //go:embed sql/runtime_execution__get_by_turn.sql
 var sqlRuntimeExecutionGetByTurn string
 
+//go:embed sql/runtime_agent_binding__get_for_update.sql
+var sqlRuntimeAgentBindingGetForUpdate string
+
+//go:embed sql/runtime_agent_binding__insert.sql
+var sqlRuntimeAgentBindingInsert string
+
 //go:embed sql/runtime_execution__session_has_live.sql
 var sqlRuntimeExecutionSessionHasLive string
 

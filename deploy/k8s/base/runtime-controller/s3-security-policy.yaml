@@ -6,14 +6,24 @@ metadata:
     app.kubernetes.io/name: runtime-controller
     mattercodex.dev/policy-kind: s3-iam-source
 data:
+  broker-bootstrap-policy.json: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {"Sid":"AssumeArchiveExecutionRole","Effect":"Allow","Action":["sts:AssumeRole","sts:TagSession"],"Resource":"arn:aws:iam::*:role/mattercodex-runtime-archive-execution"},
+        {"Sid":"AssumeRestoreExecutionRole","Effect":"Allow","Action":["sts:AssumeRole","sts:TagSession"],"Resource":"arn:aws:iam::*:role/mattercodex-runtime-restore-execution"},
+        {"Sid":"DenyAnyOtherRole","Effect":"Deny","Action":["sts:AssumeRole","sts:TagSession"],"NotResource":["arn:aws:iam::*:role/mattercodex-runtime-archive-execution","arn:aws:iam::*:role/mattercodex-runtime-restore-execution"]}
+      ]
+    }
   archive-policy.json: |
     {
       "Version": "2012-10-17",
       "Statement": [
         {"Sid":"BucketReadback","Effect":"Allow","Action":["s3:GetBucketVersioning","s3:GetObjectLockConfiguration","s3:GetEncryptionConfiguration","s3:GetBucketPublicAccessBlock"],"Resource":"arn:aws:s3:::mattercodex-runtime"},
-        {"Sid":"ReadExactArchiveKey","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/*","Condition":{"Bool":{"aws:SecureTransport":"true"}}},
-        {"Sid":"WriteExactArchiveKey","Effect":"Allow","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/*","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEquals":{"s3:x-amz-server-side-encryption":"aws:kms","s3:object-lock-mode":"COMPLIANCE"}}},
+        {"Sid":"ReadExactArchiveKey","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:GetObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/archive.tar.gz","Condition":{"Bool":{"aws:SecureTransport":"true"}}},
+        {"Sid":"WriteExactArchiveKey","Effect":"Allow","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/archive.tar.gz","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEquals":{"s3:x-amz-server-side-encryption":"aws:kms","s3:object-lock-mode":"COMPLIANCE"}}},
         {"Sid":"ArchiveKMS","Effect":"Allow","Action":["kms:Decrypt","kms:Encrypt","kms:GenerateDataKey"],"Resource":"${aws:PrincipalTag/kms_key_arn}"},
+        {"Sid":"DenyShortRetention","Effect":"Deny","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/archive.tar.gz","Condition":{"NumericLessThan":{"s3:object-lock-remaining-retention-days":"90"}}},
         {"Sid":"DenyListDeleteCrossTenant","Effect":"Deny","Action":["s3:ListBucket","s3:DeleteObject","s3:DeleteObjectVersion","s3:BypassGovernanceRetention"],"Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"]},
         {"Sid":"DenyInsecureTransport","Effect":"Deny","Action":"s3:*","Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"],"Condition":{"Bool":{"aws:SecureTransport":"false"}}}
       ]
@@ -23,21 +33,26 @@ data:
       "Version": "2012-10-17",
       "Statement": [
         {"Sid":"BucketReadback","Effect":"Allow","Action":["s3:GetBucketVersioning","s3:GetObjectLockConfiguration","s3:GetEncryptionConfiguration","s3:GetBucketPublicAccessBlock"],"Resource":"arn:aws:s3:::mattercodex-runtime"},
-        {"Sid":"ExactArchiveVersion","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/*","Condition":{"Bool":{"aws:SecureTransport":"true"}}},
-        {"Sid":"ReadExactRestoreProof","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/*","Condition":{"Bool":{"aws:SecureTransport":"true"}}},
-        {"Sid":"WriteExactRestoreProof","Effect":"Allow","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/*","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEquals":{"s3:x-amz-server-side-encryption":"aws:kms","s3:object-lock-mode":"COMPLIANCE"}}},
+        {"Sid":"ExactArchiveVersion","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:GetObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/archive.tar.gz","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEqualsIfExists":{"s3:VersionId":"${aws:PrincipalTag/archive_version_id}"}}},
+        {"Sid":"ReadExactRestoreProof","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:GetObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/restore-proof.json","Condition":{"Bool":{"aws:SecureTransport":"true"}}},
+        {"Sid":"WriteExactRestoreProof","Effect":"Allow","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/restore-proof.json","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEquals":{"s3:x-amz-server-side-encryption":"aws:kms","s3:object-lock-mode":"COMPLIANCE"}}},
         {"Sid":"RestoreKMS","Effect":"Allow","Action":["kms:Decrypt","kms:Encrypt","kms:GenerateDataKey"],"Resource":"${aws:PrincipalTag/kms_key_arn}"},
+        {"Sid":"DenyShortRetention","Effect":"Deny","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/restore-proof.json","Condition":{"NumericLessThan":{"s3:object-lock-remaining-retention-days":"90"}}},
         {"Sid":"DenyListDeleteCrossTenant","Effect":"Deny","Action":["s3:ListBucket","s3:DeleteObject","s3:DeleteObjectVersion","s3:BypassGovernanceRetention"],"Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"]},
         {"Sid":"DenyInsecureTransport","Effect":"Deny","Action":"s3:*","Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"],"Condition":{"Bool":{"aws:SecureTransport":"false"}}}
       ]
     }
   requirements.yaml: |
     credential_ttl_max_seconds: 900
-    identity_source: vault_aws_sts
-    required_session_tags: [organization_id, project_id, session_id, execution_id, source_execution_id, kms_key_arn]
+    identity_source: vault_broker_sts_then_execution_assume_role
+    vault_broker_roles: [runtime-archive-broker, runtime-restore-broker]
+    execution_roles: [mattercodex-runtime-archive-execution, mattercodex-runtime-restore-execution]
+    execution_policy_source: signed_workload_ticket_and_inline_session_policy
+    required_session_tags: [organization_id, project_id, session_id, execution_id, source_execution_id, archive_version_id]
     bucket_versioning: Enabled
     object_lock: Enabled
     object_lock_mode: COMPLIANCE
+    object_lock_minimum_days: 90
     encryption: aws:kms
     public_access_block: required
     forbidden_actions: [s3:ListBucket, s3:DeleteObject, s3:DeleteObjectVersion, s3:BypassGovernanceRetention]

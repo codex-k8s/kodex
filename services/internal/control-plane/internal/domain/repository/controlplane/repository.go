@@ -278,8 +278,55 @@ type RuntimeExecution struct {
 	RestoreSourceRuntimeRevisionSHA256 string
 	RestoreSourceImmutableInputSHA256  string
 	RestoreSourceProofSHA256           string
+	EffectiveRuntimeSHA256             string
+	AgentSessionKey                    string
+	AgentSessionID                     int64
+	AgentSessionTurnID                 int64
+	AgentRunID                         string
+	AgentBindingSHA256                 string
+	RetentionPolicyID                  string
+	RetentionPolicyVersion             uint64
+	PVCRetentionSeconds                uint64
+	ArchiveRetentionSeconds            uint64
+	ArchiveRetainUntil                 time.Time
+	PVCCleanupEligibleAt               time.Time
+	CapacityObservationExpiresAt       time.Time
+	RescheduleAfter                    time.Time
+	RestoreAssignmentState             string
+	RestoreAssignmentGeneration        uint64
+	RestoreTargetPVCName               string
+	RestoreTargetPVCUID                string
+	RestoreTargetPVCResourceVersion    string
+	RehydrateProofReference            string
+	RehydrateProofSHA256               string
+	CredentialSnapshotSHA256           string
+	WorkloadTicketSHA256               string
+	WorkloadTicket                     string `json:"-"`
 	CreatedAt                          time.Time
 	UpdatedAt                          time.Time
+}
+
+// RuntimeAgentBinding — неизменяемая связь двух owner aggregate. Поля bot
+// принимаются только от bot-service, а digest вычисляет control-plane.
+type RuntimeAgentBinding struct {
+	OrganizationID            string
+	ProjectID                 string
+	SessionID                 string
+	TurnID                    string
+	Attempt                   uint32
+	InputSHA256               string
+	RuntimeRevisionID         string
+	RuntimeRevisionVersion    uint64
+	RuntimeRevisionSHA256     string
+	AgentSessionKey           string
+	AgentSessionID            int64
+	AgentSessionVersion       uint64
+	AgentSessionBindingSHA256 string
+	AgentSessionTurnID        int64
+	AgentRunID                string
+	AgentSessionTurnVersion   uint64
+	AgentTurnBindingSHA256    string
+	CreatedAt                 time.Time
 }
 
 // PinnedIntegrationResource хранит exact owner version/projection без secret value.
@@ -458,6 +505,8 @@ type Transaction interface {
 	GetRuntimeExecutionForUpdate(context.Context, string) (RuntimeExecution, error)
 	GetRuntimeExecutionByTurn(context.Context, string, uint32) (RuntimeExecution, error)
 	GetRuntimeExecutionByTurnForUpdate(context.Context, string, uint32) (RuntimeExecution, error)
+	GetRuntimeAgentBindingForUpdate(context.Context, string, uint32) (RuntimeAgentBinding, error)
+	InsertRuntimeAgentBinding(context.Context, RuntimeAgentBinding) error
 	InsertRuntimeExecution(context.Context, RuntimeExecution) error
 	UpdateRuntimeExecution(context.Context, RuntimeExecution, uint64, uint64) error
 	NextExpiredRuntimeExecution(

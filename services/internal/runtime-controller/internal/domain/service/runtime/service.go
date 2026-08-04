@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/errs"
@@ -19,6 +20,7 @@ import (
 const (
 	terminalSucceeded = "SUCCEEDED"
 	terminalFailed    = "FAILED"
+	terminalBlocked   = "BLOCKED"
 )
 
 type Observer interface {
@@ -26,12 +28,11 @@ type Observer interface {
 }
 
 type Service struct {
-	controlPlane    runtimerepo.ControlPlane
-	cluster         runtimerepo.Cluster
-	observer        Observer
-	warmTTL         time.Duration
-	pvcRetentionTTL time.Duration
-	watchdog        time.Duration
+	controlPlane runtimerepo.ControlPlane
+	cluster      runtimerepo.Cluster
+	observer     Observer
+	warmTTL      time.Duration
+	watchdog     time.Duration
 }
 
 func New(
@@ -39,21 +40,18 @@ func New(
 	cluster runtimerepo.Cluster,
 	observer Observer,
 	warmTTL time.Duration,
-	pvcRetentionTTL time.Duration,
 	watchdog time.Duration,
 ) (*Service, error) {
 	if controlPlane == nil || cluster == nil || observer == nil ||
-		warmTTL != 4*time.Hour || pvcRetentionTTL < 7*24*time.Hour ||
-		pvcRetentionTTL < warmTTL || watchdog < 30*time.Second || watchdog > 10*time.Minute {
+		warmTTL != 4*time.Hour || watchdog < 30*time.Second || watchdog > 10*time.Minute {
 		return nil, errs.ErrInvalidInput
 	}
 	return &Service{
-		controlPlane:    controlPlane,
-		cluster:         cluster,
-		observer:        observer,
-		warmTTL:         warmTTL,
-		pvcRetentionTTL: pvcRetentionTTL,
-		watchdog:        watchdog,
+		controlPlane: controlPlane,
+		cluster:      cluster,
+		observer:     observer,
+		warmTTL:      warmTTL,
+		watchdog:     watchdog,
 	}, nil
 }
 
@@ -111,6 +109,14 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 		}
 	}
 	if !decision.Admitted {
+		if decision.Reason == "quota_stale" && !time.Now().UTC().Before(execution.RescheduleAfter) {
+			previous, err := service.controlPlane.Reschedule(ctx,
+				uuid.NewSHA1(uuid.NameSpaceOID, []byte("runtime-reschedule:"+execution.ID+":"+strconv.FormatUint(execution.Version, 10))).String(), execution)
+			if err != nil {
+				return err
+			}
+			return service.cluster.UpdateJournal(ctx, previous, "")
+		}
 		service.observer.Observe("capacity", "deferred")
 		return errs.ErrCapacityDeferred
 	}
@@ -334,7 +340,13 @@ func sameExecutionLineage(left, right entity.Execution) bool {
 		left.RuntimeRevisionID == right.RuntimeRevisionID &&
 		left.RuntimeRevisionVersion == right.RuntimeRevisionVersion &&
 		left.RuntimeRevisionSHA256 == right.RuntimeRevisionSHA256 &&
+		left.EffectiveRuntimeSHA256 == right.EffectiveRuntimeSHA256 &&
 		left.ImmutableInputSHA256 == right.ImmutableInputSHA256 &&
+		left.AgentSessionKey == right.AgentSessionKey && left.AgentSessionID == right.AgentSessionID &&
+		left.AgentSessionTurnID == right.AgentSessionTurnID && left.AgentRunID == right.AgentRunID &&
+		left.AgentBindingSHA256 == right.AgentBindingSHA256 &&
+		left.CredentialSnapshotSHA256 == right.CredentialSnapshotSHA256 &&
+		left.WorkloadTicketSHA256 == right.WorkloadTicketSHA256 &&
 		left.ResourceClass == right.ResourceClass && left.AccessProfile == right.AccessProfile &&
 		left.WorkloadID == right.WorkloadID && left.WorkloadSPIFFEID == right.WorkloadSPIFFEID &&
 		left.GrantGeneration == right.GrantGeneration
@@ -367,6 +379,14 @@ func (service *Service) resumeAdmission(
 		}
 	}
 	if !decision.Admitted {
+		if decision.Reason == "quota_stale" && !time.Now().UTC().Before(journal.Execution.RescheduleAfter) {
+			previous, err := service.controlPlane.Reschedule(ctx,
+				uuid.NewSHA1(uuid.NameSpaceOID, []byte("runtime-reschedule:"+journal.Execution.ID+":"+strconv.FormatUint(journal.Execution.Version, 10))).String(), journal.Execution)
+			if err != nil {
+				return err
+			}
+			return service.cluster.UpdateJournal(ctx, previous, "")
+		}
 		service.observer.Observe("capacity", "deferred")
 		return errs.ErrCapacityDeferred
 	}
@@ -443,10 +463,16 @@ func validateHandoff(execution entity.Execution, handoff entity.RuntimeHandoff) 
 	if handoff.Schema != "mattercodex.runtime-turn-handoff.v1" || handoff.ExecutionID != execution.ID ||
 		handoff.ExecutionVersion == 0 || handoff.Fence == 0 || handoff.GrantGeneration != execution.GrantGeneration ||
 		handoff.RuntimeRevisionSHA256 != execution.RuntimeRevisionSHA256 ||
+		handoff.EffectiveRuntimeSHA256 != execution.EffectiveRuntimeSHA256 ||
 		handoff.ImmutableInputSHA256 != execution.ImmutableInputSHA256 ||
+		handoff.AgentSessionID != execution.AgentSessionID ||
+		handoff.AgentSessionTurnID != execution.AgentSessionTurnID ||
+		handoff.AgentRunID != execution.AgentRunID ||
+		handoff.AgentBindingSHA256 != execution.AgentBindingSHA256 ||
 		handoff.ExecutionVersion > execution.Version || handoff.Fence > execution.Fence ||
 		execution.Version-handoff.ExecutionVersion != execution.Fence-handoff.Fence ||
-		(handoff.Outcome != terminalSucceeded && handoff.Outcome != terminalFailed) ||
+		(handoff.Outcome != terminalSucceeded && handoff.Outcome != terminalFailed &&
+			handoff.Outcome != terminalBlocked) ||
 		handoff.TerminalReference == "" || !sha256PatternString(handoff.TerminalSHA256) ||
 		handoff.ObservedAt.IsZero() || handoff.ObservedAt.After(time.Now().UTC().Add(time.Minute)) {
 		return errs.ErrStateConflict
@@ -537,7 +563,7 @@ func (service *Service) reconcileRetention(
 			execution.CleanupPVCResourceVersion != status.PVCResourceVersion {
 			return errs.ErrCleanupUnauthorized
 		}
-		proof, err := service.cluster.DeletePVC(ctx, status)
+		proof, err := service.cluster.DeletePVC(ctx, execution, status)
 		if err != nil {
 			return err
 		}

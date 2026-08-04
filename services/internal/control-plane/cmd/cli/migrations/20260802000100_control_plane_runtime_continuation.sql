@@ -36,7 +36,7 @@ CREATE TABLE control_plane.runtime_executions (
     lease_token_sha256 text CHECK (lease_token_sha256 IS NULL OR lease_token_sha256 ~ '^[a-f0-9]{64}$'),
     lease_expires_at timestamptz,
     terminal_outcome text CHECK (terminal_outcome IS NULL OR terminal_outcome IN (
-        'SUCCEEDED', 'FAILED', 'SUSPENDED', 'CANCELLED', 'EXPIRED'
+        'SUCCEEDED', 'FAILED', 'SUSPENDED', 'CANCELLED', 'EXPIRED', 'BLOCKED'
     )),
     terminal_reference text,
     terminal_sha256 text CHECK (terminal_sha256 IS NULL OR terminal_sha256 ~ '^[a-f0-9]{64}$'),
@@ -114,7 +114,7 @@ CREATE TABLE control_plane.runtime_executions (
     CHECK (
         (state = 'SUCCEEDED' AND terminal_outcome = 'SUCCEEDED')
         OR (state = 'FAILED' AND terminal_outcome = 'FAILED')
-        OR (state = 'SUSPENDED' AND terminal_outcome = 'SUSPENDED')
+        OR (state = 'SUSPENDED' AND terminal_outcome IN ('SUSPENDED', 'BLOCKED'))
         OR (state = 'CANCELLED' AND terminal_outcome = 'CANCELLED')
         OR (state = 'EXPIRED' AND terminal_outcome = 'EXPIRED')
         OR (state = 'RETRIED' AND terminal_outcome IN ('FAILED', 'EXPIRED'))

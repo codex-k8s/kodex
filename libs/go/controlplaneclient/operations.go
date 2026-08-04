@@ -42,8 +42,18 @@ func RuntimeControllerOperations() map[string]string {
 		"control.runtime-execution.heartbeat":       controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
 		"control.runtime-execution.incident":        controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
 		"control.runtime-execution.complete":        controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
+		"control.runtime-execution.reschedule":      controlplanev1.ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
 		"control.runtime-execution.expire":          controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
 		"control.runtime-execution.cleanup.consume": controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
+	}
+}
+
+// BotServiceRuntimeBindingOperations выдаёт legacy owner только закрытую
+// materialization-команду и readiness; generic mutation в профиль не входит.
+func BotServiceRuntimeBindingOperations() map[string]string {
+	return map[string]string{
+		"control.bot-service.readiness":        controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-execution.agent.bind": controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
 	}
 }
 
@@ -66,8 +76,10 @@ func RuntimeArchiveOperations() map[string]string {
 // RuntimeRestoreVerifierOperations отделяет independent proof от owner/cleanup.
 func RuntimeRestoreVerifierOperations() map[string]string {
 	return map[string]string{
-		"control.runtime-restore-verifier.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-execution.restore.verify":   controlplanev1.ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
+		"control.runtime-restore-verifier.readiness":   controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-execution.restore.verify":     controlplanev1.ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
+		"control.runtime-execution.restore.bind":       controlplanev1.ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName,
+		"control.runtime-execution.rehydrate.complete": controlplanev1.ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName,
 	}
 }
 

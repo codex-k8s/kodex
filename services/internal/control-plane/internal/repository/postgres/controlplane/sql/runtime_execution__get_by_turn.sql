@@ -1,3 +1,4 @@
+-- name: RuntimeExecutionGetByTurn :one
 SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        role_id, turn_id, attempt, runtime_revision_id,
        runtime_revision_version, runtime_revision_sha256,
@@ -28,6 +29,16 @@ SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        coalesce(restore_source_runtime_revision_sha256, ''),
        coalesce(restore_source_immutable_input_sha256, ''),
        coalesce(restore_source_proof_sha256, ''),
+       effective_runtime_sha256, agent_session_key, agent_session_id,
+       agent_session_turn_id, agent_run_id, agent_binding_sha256,
+       retention_policy_id, retention_policy_version, pvc_retention_seconds,
+       archive_retention_seconds, coalesce(archive_retain_until, 'epoch'::timestamptz), pvc_cleanup_eligible_at,
+       capacity_observation_expires_at, reschedule_after,
+       restore_assignment_state, restore_assignment_generation,
+       coalesce(restore_target_pvc_name, ''), coalesce(restore_target_pvc_uid::text, ''),
+       coalesce(restore_target_pvc_resource_version, ''),
+       coalesce(rehydrate_proof_reference, ''), coalesce(rehydrate_proof_sha256, ''),
+       credential_snapshot_sha256, workload_ticket_sha256,
        created_at, updated_at
 FROM control_plane.runtime_executions
 WHERE turn_id = @turn_id AND attempt = @attempt;

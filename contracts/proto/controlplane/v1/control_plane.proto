@@ -115,6 +115,9 @@ service ControlPlaneService {
   // ClaimRuntimeExecution материализует server-owned immutable snapshot для
   // точной попытки из проверенного runtime grant; request не принимает IDs.
   rpc ClaimRuntimeExecution(ClaimRuntimeExecutionRequest) returns (ClaimRuntimeExecutionResponse);
+  // BindRuntimeAgentSession принимает bot-owned identifiers только от
+  // авторитетного bot-service и атомарно связывает их с exact owner graph до claim.
+  rpc BindRuntimeAgentSession(BindRuntimeAgentSessionRequest) returns (BindRuntimeAgentSessionResponse);
   // GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
   rpc GetRuntimeExecution(GetRuntimeExecutionRequest) returns (GetRuntimeExecutionResponse);
   // AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
@@ -129,12 +132,20 @@ service ControlPlaneService {
   rpc CancelRuntimeExecution(CancelRuntimeExecutionRequest) returns (CancelRuntimeExecutionResponse);
   // RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
   rpc RetryRuntimeExecution(RetryRuntimeExecutionRequest) returns (RetryRuntimeExecutionResponse);
+  // RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
+  // attempt/RuntimeRevision/provider observation без мутации старого snapshot.
+  rpc RescheduleRuntimeExecution(RescheduleRuntimeExecutionRequest) returns (RescheduleRuntimeExecutionResponse);
   // ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
   rpc ExpireRuntimeExecution(ExpireRuntimeExecutionRequest) returns (ExpireRuntimeExecutionResponse);
   // RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
   rpc RecordRuntimeArchive(RecordRuntimeArchiveRequest) returns (RecordRuntimeArchiveResponse);
   // VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
   rpc VerifyRuntimeRestore(VerifyRuntimeRestoreRequest) returns (VerifyRuntimeRestoreResponse);
+  // BindRuntimeRestoreTarget одноразово связывает restore с exact новой PVC.
+  rpc BindRuntimeRestoreTarget(BindRuntimeRestoreTargetRequest) returns (BindRuntimeRestoreTargetResponse);
+  // CompleteRuntimeRehydrate потребляет restore assignment после durable proof
+  // и до запуска role Pod.
+  rpc CompleteRuntimeRehydrate(CompleteRuntimeRehydrateRequest) returns (CompleteRuntimeRehydrateResponse);
   // AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
   rpc AuthorizeRuntimeCleanup(AuthorizeRuntimeCleanupRequest) returns (AuthorizeRuntimeCleanupResponse);
   // ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
@@ -566,6 +577,9 @@ message CredentialBindingSpec {
   ConfigurationOwnership ownership = 10;
   uint64 provider_observation_revision = 11;
   google.protobuf.Timestamp provider_observed_at = 12;
+  string immutable_secret_ref = 13;
+  string provider_content_version = 14;
+  string content_sha256 = 15;
 }
 
 // RepositoryWorkspaceSpec описывает версионированное сообщение контракта control-plane.
@@ -605,6 +619,7 @@ message RuntimeRevisionSpec {
   string role_id = 13;
   string chat_id = 14;
   string provider_credential_binding_id = 15;
+  string effective_runtime_sha256 = 16;
 }
 
 // EffectiveResourceRef описывает версионированное сообщение контракта control-plane.
@@ -622,6 +637,10 @@ message SessionSpec {
   string conversation_id = 3;
   string archive_ref = 4;
   uint64 last_turn_sequence = 5;
+  string agent_session_key = 6;
+  int64 agent_session_id = 7;
+  uint64 agent_session_binding_version = 8;
+  string agent_session_binding_sha256 = 9;
 }
 
 // TurnSpec описывает версионированное сообщение контракта control-plane.
@@ -641,6 +660,10 @@ message TurnSpec {
   string owner_feedback_gate_id = 13;
   uint64 owner_feedback_gate_version = 14;
   string owner_feedback_sha256 = 15;
+  int64 agent_session_turn_id = 16;
+  string agent_run_id = 17;
+  uint64 agent_turn_binding_version = 18;
+  string agent_turn_binding_sha256 = 19;
 }
 
 // ProcessRunSpec описывает версионированное сообщение контракта control-plane.
@@ -1581,6 +1604,8 @@ enum RuntimeTerminalOutcome {
   RUNTIME_TERMINAL_OUTCOME_SUSPENDED = 3;
   RUNTIME_TERMINAL_OUTCOME_CANCELLED = 4;
   RUNTIME_TERMINAL_OUTCOME_EXPIRED = 5;
+  // RUNTIME_TERMINAL_OUTCOME_BLOCKED сохраняет authoritative blocked handoff bot-service.
+  RUNTIME_TERMINAL_OUTCOME_BLOCKED = 6;
 }
 
 // RuntimeCleanupAuthorizationState — crash-safe lifecycle destructive authorization.
@@ -1655,6 +1680,32 @@ message RuntimeExecution {
   string restore_source_runtime_revision_sha256 = 51;
   string restore_source_immutable_input_sha256 = 52;
   string restore_source_proof_sha256 = 53;
+  string effective_runtime_sha256 = 54;
+  string agent_session_key = 55;
+  int64 agent_session_id = 56;
+  int64 agent_session_turn_id = 57;
+  string agent_run_id = 58;
+  string agent_binding_sha256 = 59;
+  string retention_policy_id = 60;
+  uint64 retention_policy_version = 61;
+  google.protobuf.Duration pvc_retention = 62;
+  google.protobuf.Duration archive_retention = 63;
+  google.protobuf.Timestamp pvc_cleanup_eligible_at = 64;
+  google.protobuf.Timestamp capacity_observation_expires_at = 65;
+  google.protobuf.Timestamp reschedule_after = 66;
+  string restore_assignment_state = 67;
+  uint64 restore_assignment_generation = 68;
+  string restore_target_pvc_name = 69;
+  string restore_target_pvc_uid = 70;
+  string restore_target_pvc_resource_version = 71;
+  string rehydrate_proof_reference = 72;
+  string rehydrate_proof_sha256 = 73;
+  string credential_snapshot_sha256 = 74;
+  string workload_ticket_sha256 = 75;
+  google.protobuf.Timestamp archive_retain_until = 76;
+  // workload_ticket — подписанный current version/fence admission ticket;
+  // он не сохраняется controller-ом в journal и проверяется owner readback.
+  string workload_ticket = 77;
 }
 
 message ClaimRuntimeExecutionRequest {
@@ -1663,6 +1714,35 @@ message ClaimRuntimeExecutionRequest {
 
 message ClaimRuntimeExecutionResponse {
   RuntimeExecution execution = 1;
+}
+
+// BindRuntimeAgentSessionRequest — закрытая owner-команда, а не универсальный update.
+message BindRuntimeAgentSessionRequest {
+  string idempotency_key = 1;
+  string session_id = 2;
+  uint64 expected_session_version = 3;
+  string turn_id = 4;
+  uint64 expected_turn_version = 5;
+  uint32 expected_attempt = 6;
+  string expected_input_sha256 = 7;
+  string runtime_revision_id = 8;
+  uint64 runtime_revision_version = 9;
+  string runtime_revision_sha256 = 10;
+  string agent_session_key = 11;
+  int64 agent_session_id = 12;
+  uint64 agent_session_version = 13;
+  int64 agent_session_turn_id = 14;
+  string agent_run_id = 15;
+  uint64 agent_session_turn_version = 16;
+}
+
+message BindRuntimeAgentSessionResponse {
+  string session_id = 1;
+  uint64 session_version = 2;
+  string turn_id = 3;
+  uint64 turn_version = 4;
+  string agent_session_binding_sha256 = 5;
+  string agent_turn_binding_sha256 = 6;
 }
 
 message GetRuntimeExecutionRequest {
@@ -1754,6 +1834,18 @@ message RetryRuntimeExecutionResponse {
   Resource turn = 2;
 }
 
+message RescheduleRuntimeExecutionRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+}
+
+message RescheduleRuntimeExecutionResponse {
+  RuntimeExecution previous_execution = 1;
+  Resource turn = 2;
+}
+
 message ExpireRuntimeExecutionRequest {
   string idempotency_key = 1;
 }
@@ -1786,6 +1878,38 @@ message VerifyRuntimeRestoreRequest {
 }
 
 message VerifyRuntimeRestoreResponse {
+  RuntimeExecution execution = 1;
+}
+
+message BindRuntimeRestoreTargetRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  uint64 expected_assignment_generation = 5;
+  string pvc_name = 6;
+  string pvc_uid = 7;
+  string pvc_resource_version = 8;
+}
+
+message BindRuntimeRestoreTargetResponse {
+  RuntimeExecution execution = 1;
+}
+
+message CompleteRuntimeRehydrateRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  uint64 assignment_generation = 5;
+  string pvc_name = 6;
+  string pvc_uid = 7;
+  string pvc_resource_version = 8;
+  string proof_reference = 9;
+  string proof_sha256 = 10;
+}
+
+message CompleteRuntimeRehydrateResponse {
   RuntimeExecution execution = 1;
 }
 

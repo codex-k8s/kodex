@@ -101,7 +101,9 @@ unit прежний `runtime prune` остаётся строго `inventory-onl
 - controller использует terminal journal и не выводит eligibility из
   Kubernetes labels;
 - четырёхчасовой TTL относится только к Pod, а eligibility PVC выводится из
-  authoritative `session.updated_at + 7d`, а не timestamp journal/Pod;
+  закреплённых owner-ом `ResourceRetentionPolicy` id/version и
+  `pvc_cleanup_eligible_at`; ни controller config, ни timestamp journal/Pod не
+  являются источником срока;
 - versioned archive, checksum readback и независимый restore proof должны
   совпасть с authoritative execution;
 - отдельный authorizer повторно проверяет отсутствие queued/running work,

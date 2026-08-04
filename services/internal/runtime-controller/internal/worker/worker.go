@@ -29,6 +29,7 @@ type journalDocument = entity.RuntimeJournal
 type Config struct {
 	ExecutionID, JournalName, Namespace string
 	PVCName, PVCUID, PVCResourceVersion string
+	SnapshotPVCUID                      string
 	ExpectedVersion, ExpectedFence      uint64
 	ControlPlane                        controlplane.Config
 	Archive                             archive.Config
@@ -49,7 +50,10 @@ func RunArchive(ctx context.Context) error {
 		!execution.State.Terminal() || execution.ArchiveSHA256 != "" {
 		return errs.ErrStateConflict
 	}
-	result, err := store.Archive(ctx, "/archive-source", execution)
+	result, err := store.Archive(ctx, "/archive-source", execution, archive.SnapshotProvenance{
+		SnapshotPVCUID: config.SnapshotPVCUID, SourcePVCUID: config.PVCUID,
+		SourcePVCResourceVersion: config.PVCResourceVersion,
+	})
 	if err != nil {
 		return err
 	}
@@ -102,8 +106,15 @@ func RunRehydrate(ctx context.Context) error {
 	target := document.Execution
 	if err := exactExecution(config, document.Execution, target); err != nil ||
 		target.RestoreSourceExecutionID == "" || document.RehydratePhase != "PENDING" ||
-		config.PVCUID == "" {
+		target.RestoreAssignmentState != "ASSIGNED" || config.PVCUID == "" ||
+		config.PVCName == "" || config.PVCResourceVersion == "" {
 		return errs.ErrStateConflict
+	}
+	bindKey := uuid.NewSHA1(uuid.NameSpaceOID, []byte("runtime-rehydrate-bind:"+document.RestoreKey)).String()
+	target, err = client.BindRestoreTarget(ctx, bindKey, target,
+		config.PVCName, config.PVCUID, config.PVCResourceVersion)
+	if err != nil {
+		return err
 	}
 	source := target
 	source.ID = target.RestoreSourceExecutionID
@@ -115,12 +126,21 @@ func RunRehydrate(ctx context.Context) error {
 	source.RestoreSourceExecutionID, source.RestoreSourceArchiveReference = "", ""
 	source.RestoreSourceArchiveSHA256, source.RestoreSourceRuntimeRevisionSHA256 = "", ""
 	source.RestoreSourceImmutableInputSHA256, source.RestoreSourceProofSHA256 = "", ""
+	source.RestoreAssignmentState, source.RestoreAssignmentGeneration = "NONE", 0
+	source.RestoreTargetPVCName, source.RestoreTargetPVCUID, source.RestoreTargetPVCResourceVersion = "", "", ""
+	source.RehydrateProofReference, source.RehydrateProofSHA256 = "", ""
 	proof, err := store.RestoreToAndProve(ctx, source, target, "/restore-target", config.PVCUID)
 	if err != nil {
 		return err
 	}
+	completeKey := uuid.NewSHA1(uuid.NameSpaceOID, []byte("runtime-rehydrate-complete:"+document.RestoreKey)).String()
+	target, err = client.CompleteRehydrate(ctx, completeKey, target,
+		config.PVCName, config.PVCUID, config.PVCResourceVersion, proof.Reference, proof.SHA256)
+	if err != nil {
+		return err
+	}
 	return kubeadapter.PatchWorkerRehydration(
-		ctx, config.Namespace, config.JournalName, target.ID, config.PVCUID,
+		ctx, config.Namespace, config.JournalName, target, config.PVCUID,
 		proof.Reference, proof.SHA256,
 	)
 }
@@ -252,6 +272,7 @@ func loadConfig(mode controlplane.Mode) (Config, error) {
 		Namespace: strings.TrimSpace(string(namespaceRaw)), ExpectedVersion: version, ExpectedFence: fence,
 		PVCName: os.Getenv("RUNTIME_PVC_NAME"), PVCUID: os.Getenv("RUNTIME_PVC_UID"),
 		PVCResourceVersion: os.Getenv("RUNTIME_PVC_RESOURCE_VERSION"),
+		SnapshotPVCUID:     os.Getenv("RUNTIME_ARCHIVE_SNAPSHOT_PVC_UID"),
 		ControlPlane: controlplane.Config{Mode: mode,
 			Target:                "control-plane.mattercodex-system.svc:8443",
 			TLSServerName:         "control-plane.mattercodex-system.svc.cluster.local",
@@ -276,6 +297,10 @@ func loadConfig(mode controlplane.Mode) (Config, error) {
 	if mode == controlplane.ModeCleanupAuthorizer && (config.PVCName == "" ||
 		uuid.Validate(config.PVCUID) != nil || config.PVCResourceVersion == "") {
 		return Config{}, errors.New("runtime cleanup PVC tuple is invalid")
+	}
+	if mode == controlplane.ModeArchive && (config.SnapshotPVCUID == "" ||
+		uuid.Validate(config.PVCUID) != nil || config.PVCResourceVersion == "") {
+		return Config{}, errors.New("runtime archive snapshot provenance is invalid")
 	}
 	return config, nil
 }

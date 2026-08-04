@@ -1,3 +1,4 @@
+-- name: RuntimeExecutionSessionHasActiveCleanup :one
 -- PostgreSQL owner transaction использует тот же session graph lock до вызова.
 SELECT EXISTS (
     SELECT 1

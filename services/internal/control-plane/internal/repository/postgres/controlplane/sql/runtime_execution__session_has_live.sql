@@ -1,4 +1,4 @@
--- name: RuntimeExecutionSessionHasLive
+-- name: RuntimeExecutionSessionHasLive :one
 SELECT EXISTS (
     SELECT 1
     FROM control_plane.runtime_executions

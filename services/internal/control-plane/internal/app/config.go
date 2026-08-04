@@ -48,6 +48,11 @@ type Config struct {
 	ProofSignerGeneration       uint64        `env:"CONTROL_PLANE_PROOF_SIGNER_GENERATION"`
 	LeaseSigningKeyFile         string        `env:"CONTROL_PLANE_LEASE_SIGNING_KEY_FILE"`
 	RuntimeImageDigest          string        `env:"CONTROL_PLANE_RUNTIME_IMAGE_DIGEST"`
+	RetentionPolicyID           string        `env:"CONTROL_PLANE_RETENTION_POLICY_ID"`
+	RetentionPolicyVersion      uint64        `env:"CONTROL_PLANE_RETENTION_POLICY_VERSION"`
+	PVCRetention                time.Duration `env:"CONTROL_PLANE_PVC_RETENTION"`
+	ArchiveRetention            time.Duration `env:"CONTROL_PLANE_ARCHIVE_RETENTION"`
+	PendingRescheduleDelay      time.Duration `env:"CONTROL_PLANE_PENDING_RESCHEDULE_DELAY"`
 	OIDCTLSServerName           string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
 	OIDCCAFile                  string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
 	ApplicationGrantTrustDir    string        `env:"CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR"`
@@ -100,6 +105,11 @@ func loadConfig() (Config, error) {
 		ProofTrustFile:              "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust/jwks.json",
 		ProofSignerGeneration:       1,
 		LeaseSigningKeyFile:         "/var/run/secrets/mattercodex/control-plane/lease-signing/key",
+		RetentionPolicyID:           "runtime-retention-default",
+		RetentionPolicyVersion:      1,
+		PVCRetention:                7 * 24 * time.Hour,
+		ArchiveRetention:            90 * 24 * time.Hour,
+		PendingRescheduleDelay:      30 * time.Second,
 		OIDCTLSServerName:           "sso.mattercodex.local",
 		OIDCCAFile:                  "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
 		ApplicationGrantTrustDir:    "/var/run/config/mattercodex/control-plane/application-grants",
@@ -196,7 +206,11 @@ func (config Config) validate() error {
 		config.CacheTimeout < 10*time.Millisecond ||
 		config.CacheTimeout > time.Second ||
 		config.TurnLeaseDuration < 5*time.Second ||
-		config.TurnLeaseDuration > 5*time.Minute {
+		config.TurnLeaseDuration > 5*time.Minute ||
+		config.RetentionPolicyID == "" || config.RetentionPolicyVersion == 0 ||
+		config.PVCRetention < 24*time.Hour || config.PVCRetention > 30*24*time.Hour ||
+		config.ArchiveRetention < 90*24*time.Hour || config.ArchiveRetention > 10*365*24*time.Hour ||
+		config.PendingRescheduleDelay < 5*time.Second || config.PendingRescheduleDelay > 5*time.Minute {
 		return errors.New("control-plane duration is invalid")
 	}
 	return nil
@@ -271,6 +285,7 @@ func expectedOperations() map[string]string {
 		"control.memory.index":                         controlplanev1.ControlPlaneService_RecordMemoryEmbedding_FullMethodName,
 		"control.memory-indexer.readiness":             controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.runtime-execution.claim":              controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
+		"control.runtime-execution.agent.bind":         controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
 		"control.runtime-execution.get":                controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
 		"control.runtime-execution.admit":              controlplanev1.ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
 		"control.runtime-execution.heartbeat":          controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
@@ -278,9 +293,12 @@ func expectedOperations() map[string]string {
 		"control.runtime-execution.complete":           controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
 		"control.runtime-execution.cancel":             controlplanev1.ControlPlaneService_CancelRuntimeExecution_FullMethodName,
 		"control.runtime-execution.retry":              controlplanev1.ControlPlaneService_RetryRuntimeExecution_FullMethodName,
+		"control.runtime-execution.reschedule":         controlplanev1.ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
 		"control.runtime-execution.expire":             controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
 		"control.runtime-execution.archive":            controlplanev1.ControlPlaneService_RecordRuntimeArchive_FullMethodName,
 		"control.runtime-execution.restore.verify":     controlplanev1.ControlPlaneService_VerifyRuntimeRestore_FullMethodName,
+		"control.runtime-execution.restore.bind":       controlplanev1.ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName,
+		"control.runtime-execution.rehydrate.complete": controlplanev1.ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName,
 		"control.runtime-execution.cleanup.authorize":  controlplanev1.ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName,
 		"control.runtime-execution.cleanup.consume":    controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
 		"control.runtime-execution.cleanup.expire":     controlplanev1.ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName,

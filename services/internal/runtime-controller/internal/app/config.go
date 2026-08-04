@@ -14,59 +14,61 @@ import (
 const serviceName = "runtime-controller"
 
 type Config struct {
-	Environment                   string        `env:"DEPLOYMENT_ENVIRONMENT"`
-	TechnicalListen               string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
-	Namespace                     string        `env:"POD_NAMESPACE"`
-	PodUID                        string        `env:"POD_UID"`
-	ControlPlaneTarget            string        `env:"RUNTIME_CONTROL_PLANE_TARGET"`
-	ControlPlaneTLSServerName     string        `env:"RUNTIME_CONTROL_PLANE_TLS_SERVER_NAME"`
-	ControlPlaneCAFile            string        `env:"RUNTIME_CONTROL_PLANE_CA_FILE"`
-	ControlPlaneCertificateFile   string        `env:"RUNTIME_CONTROL_PLANE_CERTIFICATE_FILE"`
-	ControlPlanePrivateKeyFile    string        `env:"RUNTIME_CONTROL_PLANE_PRIVATE_KEY_FILE"`
-	ApplicationGrantFile          string        `env:"RUNTIME_APPLICATION_GRANT_FILE"`
-	RoleImageRepository           string        `env:"RUNTIME_ROLE_IMAGE_REPOSITORY"`
-	AgentGatewayURL               string        `env:"RUNTIME_AGENT_GATEWAY_URL"`
-	MCPGatewayURL                 string        `env:"RUNTIME_MCP_GATEWAY_URL"`
-	ControllerImage               string        `env:"RUNTIME_CONTROLLER_IMAGE"`
-	AuthorityImage                string        `env:"RUNTIME_AUTHORITY_IMAGE"`
-	StorageClass                  string        `env:"RUNTIME_STORAGE_CLASS"`
-	PVCSize                       string        `env:"RUNTIME_PVC_SIZE"`
-	ReadClusterRole               string        `env:"RUNTIME_READ_CLUSTER_ROLE"`
-	AdminClusterRole              string        `env:"RUNTIME_ADMIN_CLUSTER_ROLE"`
-	ArchiveServiceAccount         string        `env:"RUNTIME_ARCHIVE_SERVICE_ACCOUNT"`
-	RestoreServiceAccount         string        `env:"RUNTIME_RESTORE_SERVICE_ACCOUNT"`
-	CleanupServiceAccount         string        `env:"RUNTIME_CLEANUP_SERVICE_ACCOUNT"`
-	MaximumPods                   int           `env:"RUNTIME_MAXIMUM_PODS"`
-	MaximumOrganizationExecutions int           `env:"RUNTIME_MAXIMUM_ORGANIZATION_EXECUTIONS"`
-	MaximumCPUMilli               int64         `env:"RUNTIME_MAXIMUM_CPU_MILLI"`
-	MaximumMemoryBytes            int64         `env:"RUNTIME_MAXIMUM_MEMORY_BYTES"`
-	S3Endpoint                    string        `env:"RUNTIME_S3_ENDPOINT"`
-	S3TLSServerName               string        `env:"RUNTIME_S3_TLS_SERVER_NAME"`
-	S3Bucket                      string        `env:"RUNTIME_S3_BUCKET"`
-	S3Region                      string        `env:"RUNTIME_S3_REGION"`
-	NATSURL                       string        `env:"RUNTIME_NATS_URL"`
-	NATSTLSServerName             string        `env:"RUNTIME_NATS_TLS_SERVER_NAME"`
-	NATSCAFile                    string        `env:"RUNTIME_NATS_CA_FILE"`
-	NATSCertificateFile           string        `env:"RUNTIME_NATS_CERTIFICATE_FILE"`
-	NATSPrivateKeyFile            string        `env:"RUNTIME_NATS_PRIVATE_KEY_FILE"`
-	NATSCredentialsFile           string        `env:"RUNTIME_NATS_CREDENTIALS_FILE"`
-	NATSStream                    string        `env:"RUNTIME_NATS_STREAM"`
-	NATSDurable                   string        `env:"RUNTIME_NATS_DURABLE"`
-	NATSReplicas                  int           `env:"RUNTIME_NATS_REPLICAS"`
-	PostgresDSNFile               string        `env:"RUNTIME_POSTGRES_DSN_FILE"`
-	PostgresTLSServerName         string        `env:"RUNTIME_POSTGRES_TLS_SERVER_NAME"`
-	PostgresCAFile                string        `env:"RUNTIME_POSTGRES_CA_FILE"`
-	PostgresPrincipal             string        `env:"RUNTIME_POSTGRES_PRINCIPAL"`
-	StartupTimeout                time.Duration `env:"RUNTIME_STARTUP_TIMEOUT"`
-	ShutdownTimeout               time.Duration `env:"RUNTIME_SHUTDOWN_TIMEOUT"`
-	ReconcileInterval             time.Duration `env:"RUNTIME_RECONCILE_INTERVAL"`
-	ClaimInterval                 time.Duration `env:"RUNTIME_CLAIM_INTERVAL"`
-	ExpiryInterval                time.Duration `env:"RUNTIME_EXPIRY_INTERVAL"`
-	ReadinessInterval             time.Duration `env:"RUNTIME_READINESS_INTERVAL"`
-	Watchdog                      time.Duration `env:"RUNTIME_WATCHDOG"`
-	WarmTTL                       time.Duration `env:"RUNTIME_WARM_TTL"`
-	PVCRetentionTTL               time.Duration `env:"RUNTIME_PVC_RETENTION_TTL"`
-	JobTTL                        time.Duration `env:"RUNTIME_JOB_TTL"`
+	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
+	TechnicalListen                string        `env:"RUNTIME_CONTROLLER_TECHNICAL_LISTEN"`
+	Namespace                      string        `env:"POD_NAMESPACE"`
+	PodUID                         string        `env:"POD_UID"`
+	ControlPlaneTarget             string        `env:"RUNTIME_CONTROL_PLANE_TARGET"`
+	ControlPlaneTLSServerName      string        `env:"RUNTIME_CONTROL_PLANE_TLS_SERVER_NAME"`
+	ControlPlaneCAFile             string        `env:"RUNTIME_CONTROL_PLANE_CA_FILE"`
+	ControlPlaneCertificateFile    string        `env:"RUNTIME_CONTROL_PLANE_CERTIFICATE_FILE"`
+	ControlPlanePrivateKeyFile     string        `env:"RUNTIME_CONTROL_PLANE_PRIVATE_KEY_FILE"`
+	ApplicationGrantFile           string        `env:"RUNTIME_APPLICATION_GRANT_FILE"`
+	RoleImageRepository            string        `env:"RUNTIME_ROLE_IMAGE_REPOSITORY"`
+	AgentGatewayURL                string        `env:"RUNTIME_AGENT_GATEWAY_URL"`
+	MCPGatewayURL                  string        `env:"RUNTIME_MCP_GATEWAY_URL"`
+	ControllerImage                string        `env:"RUNTIME_CONTROLLER_IMAGE"`
+	AuthorityImage                 string        `env:"RUNTIME_AUTHORITY_IMAGE"`
+	StorageClass                   string        `env:"RUNTIME_STORAGE_CLASS"`
+	PVCSize                        string        `env:"RUNTIME_PVC_SIZE"`
+	ReadClusterRole                string        `env:"RUNTIME_READ_CLUSTER_ROLE"`
+	AdminClusterRole               string        `env:"RUNTIME_ADMIN_CLUSTER_ROLE"`
+	ArchiveServiceAccount          string        `env:"RUNTIME_ARCHIVE_SERVICE_ACCOUNT"`
+	RestoreServiceAccount          string        `env:"RUNTIME_RESTORE_SERVICE_ACCOUNT"`
+	CleanupServiceAccount          string        `env:"RUNTIME_CLEANUP_SERVICE_ACCOUNT"`
+	CredentialBrokerServiceAccount string        `env:"RUNTIME_CREDENTIAL_BROKER_SERVICE_ACCOUNT"`
+	S3ArchiveBrokerServiceAccount  string        `env:"RUNTIME_S3_ARCHIVE_BROKER_SERVICE_ACCOUNT"`
+	S3RestoreBrokerServiceAccount  string        `env:"RUNTIME_S3_RESTORE_BROKER_SERVICE_ACCOUNT"`
+	MaximumPods                    int           `env:"RUNTIME_MAXIMUM_PODS"`
+	MaximumOrganizationExecutions  int           `env:"RUNTIME_MAXIMUM_ORGANIZATION_EXECUTIONS"`
+	MaximumCPUMilli                int64         `env:"RUNTIME_MAXIMUM_CPU_MILLI"`
+	MaximumMemoryBytes             int64         `env:"RUNTIME_MAXIMUM_MEMORY_BYTES"`
+	S3Endpoint                     string        `env:"RUNTIME_S3_ENDPOINT"`
+	S3TLSServerName                string        `env:"RUNTIME_S3_TLS_SERVER_NAME"`
+	S3Bucket                       string        `env:"RUNTIME_S3_BUCKET"`
+	S3Region                       string        `env:"RUNTIME_S3_REGION"`
+	NATSURL                        string        `env:"RUNTIME_NATS_URL"`
+	NATSTLSServerName              string        `env:"RUNTIME_NATS_TLS_SERVER_NAME"`
+	NATSCAFile                     string        `env:"RUNTIME_NATS_CA_FILE"`
+	NATSCertificateFile            string        `env:"RUNTIME_NATS_CERTIFICATE_FILE"`
+	NATSPrivateKeyFile             string        `env:"RUNTIME_NATS_PRIVATE_KEY_FILE"`
+	NATSCredentialsFile            string        `env:"RUNTIME_NATS_CREDENTIALS_FILE"`
+	NATSStream                     string        `env:"RUNTIME_NATS_STREAM"`
+	NATSDurable                    string        `env:"RUNTIME_NATS_DURABLE"`
+	NATSReplicas                   int           `env:"RUNTIME_NATS_REPLICAS"`
+	PostgresDSNFile                string        `env:"RUNTIME_POSTGRES_DSN_FILE"`
+	PostgresTLSServerName          string        `env:"RUNTIME_POSTGRES_TLS_SERVER_NAME"`
+	PostgresCAFile                 string        `env:"RUNTIME_POSTGRES_CA_FILE"`
+	PostgresPrincipal              string        `env:"RUNTIME_POSTGRES_PRINCIPAL"`
+	StartupTimeout                 time.Duration `env:"RUNTIME_STARTUP_TIMEOUT"`
+	ShutdownTimeout                time.Duration `env:"RUNTIME_SHUTDOWN_TIMEOUT"`
+	ReconcileInterval              time.Duration `env:"RUNTIME_RECONCILE_INTERVAL"`
+	ClaimInterval                  time.Duration `env:"RUNTIME_CLAIM_INTERVAL"`
+	ExpiryInterval                 time.Duration `env:"RUNTIME_EXPIRY_INTERVAL"`
+	ReadinessInterval              time.Duration `env:"RUNTIME_READINESS_INTERVAL"`
+	Watchdog                       time.Duration `env:"RUNTIME_WATCHDOG"`
+	WarmTTL                        time.Duration `env:"RUNTIME_WARM_TTL"`
+	JobTTL                         time.Duration `env:"RUNTIME_JOB_TTL"`
 }
 
 func loadConfig() (Config, error) {
@@ -78,13 +80,16 @@ func loadConfig() (Config, error) {
 		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
 		ApplicationGrantFile:        "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
 		RoleImageRepository:         "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runtime",
-		AgentGatewayURL:             "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
-		MCPGatewayURL:               "http://matter-codex-bot-service.mattermost.svc.cluster.local:8080",
+		AgentGatewayURL:             "https://matter-codex-bot-service.mattermost.svc.cluster.local:8443",
+		MCPGatewayURL:               "https://matter-codex-bot-service.mattermost.svc.cluster.local:8443",
 		StorageClass:                "runtime-session", PVCSize: "20Gi",
 		ReadClusterRole:  "runtime-role-project-read",
 		AdminClusterRole: "cluster-admin", ArchiveServiceAccount: "runtime-archive",
 		RestoreServiceAccount: "runtime-restore-verifier", CleanupServiceAccount: "runtime-cleanup-authorizer",
-		MaximumPods: 100, MaximumOrganizationExecutions: 16,
+		CredentialBrokerServiceAccount: "runtime-credential-broker",
+		S3ArchiveBrokerServiceAccount:  "runtime-s3-archive-broker",
+		S3RestoreBrokerServiceAccount:  "runtime-s3-restore-broker",
+		MaximumPods:                    100, MaximumOrganizationExecutions: 16,
 		MaximumCPUMilli: 100_000, MaximumMemoryBytes: 400 << 30,
 		S3Endpoint:      "https://runtime-archive-s3.mattercodex-system.svc:9000",
 		S3TLSServerName: "runtime-archive-s3.mattercodex-system.svc.cluster.local",
@@ -103,7 +108,7 @@ func loadConfig() (Config, error) {
 		StartupTimeout:        30 * time.Second, ShutdownTimeout: 20 * time.Second,
 		ReconcileInterval: 5 * time.Second, ClaimInterval: time.Second, ExpiryInterval: 15 * time.Second,
 		ReadinessInterval: 10 * time.Second, Watchdog: 2 * time.Minute,
-		WarmTTL: 4 * time.Hour, PVCRetentionTTL: 7 * 24 * time.Hour, JobTTL: time.Hour,
+		WarmTTL: 4 * time.Hour, JobTTL: time.Hour,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
@@ -128,7 +133,7 @@ func (config Config) validate() error {
 	}
 	for _, raw := range []string{config.AgentGatewayURL, config.MCPGatewayURL} {
 		endpoint, parseErr := url.Parse(raw)
-		if parseErr != nil || endpoint.Scheme != "http" || endpoint.Host == "" || endpoint.Path != "" ||
+		if parseErr != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.Path != "" ||
 			endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.User != nil ||
 			!strings.HasSuffix(endpoint.Hostname(), ".svc.cluster.local") {
 			return errors.New("runtime agent gateway endpoint is invalid")
@@ -161,8 +166,7 @@ func (config Config) validate() error {
 		strings.Contains(config.RoleImageRepository, "@") {
 		return errors.New("runtime-controller bounded configuration is invalid")
 	}
-	if config.WarmTTL != 4*time.Hour || config.PVCRetentionTTL < 7*24*time.Hour ||
-		config.PVCRetentionTTL < config.WarmTTL ||
+	if config.WarmTTL != 4*time.Hour ||
 		config.StartupTimeout < 5*time.Second || config.StartupTimeout > time.Minute ||
 		config.ShutdownTimeout < 5*time.Second || config.ShutdownTimeout > time.Minute ||
 		config.ReconcileInterval < time.Second || config.ReconcileInterval > time.Minute ||

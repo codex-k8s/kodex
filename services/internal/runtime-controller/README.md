@@ -4,7 +4,7 @@ title: Runtime controller
 type: service
 status: approved
 owner: backend
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-03
 ---
 
@@ -25,12 +25,19 @@ role-image Pod. Он не запускает Codex, не меняет домен
 - `runtime-rehydrate` — fail-closed восстановление очищенной session в новый
   PVC до создания Pod;
 - `runtime-cleanup-authorizer` — owner-locked bounded cleanup claim;
+- `runtime-credential-broker snapshot|s3-archive|s3-restore` — проверка
+  signed workload ticket, execution-owned credentials/RBAC/Pod и раздельные
+  Vault bootstrap leases с последующим exact execution `AssumeRole`;
 - `runtime-controller-cli migrate up|status|version` — forward-only схема
   durable inbox/projection.
 
 Каждый worker имеет отдельные ServiceAccount, SPIFFE/application grant и
-per-job `Role` только на exact journal. Controller не читает Secret и не
-создаёт/не bind-ит `cluster-admin` authority.
+per-job `Role` только на exact journal. Controller не читает Secret, не
+создаёт role Pod/ServiceAccount/RoleBinding и не создаёт/не bind-ит
+`cluster-admin` authority. Vault выдаёт broker только ключи с именами `key`
+(workload-ticket verification), `kms-key-arn`, `archive-role-arn` и
+`restore-role-arn`; значения в manifests,
+документацию и диагностику не выводятся.
 
 ## Reconcile и recovery
 
@@ -52,38 +59,58 @@ organization limit, server-owned provider binding и свежую observation,
 
 Role image запускает `agent-runner runtime-session`. Источник
 `mattercodex.agent-runner-input.v1` содержит exact execution/revision/input
-tuple, session, profile, существующий bot-service/MCP route и пути immutable
-credentials. Terminal Pod phase не завершает turn: runner обязан записать
+tuple, отдельные control-plane session/turn и server-owned bot
+`AgentSession`/`AgentSessionTurn`/`RunID`, profile, HTTPS bot-service/MCP routes
+с exact SNI/CA/client identity и пути immutable execution credential
+snapshots. Control-plane UUID никогда не используется как bot `session_key`.
+Terminal Pod phase не завершает turn: runner обязан записать
 exact handoff в собственный Pod. Exit без handoff создаёт incident.
 
-Warm Pod допускается только `Running`+`Ready`, с тем же RuntimeRevision
-SHA-256 и открытым archive gate. Successor получает новый immutable ConfigMap;
-runner проверяет tuple и закрывает gate. Несовместимый Pod заменяется.
+Warm Pod допускается только `Running`+`Ready`, с тем же server-owned
+`effective_runtime_sha256` и открытым archive gate. Successor получает свежие
+immutable RuntimeRevision, ConfigMap и authority/credential snapshots; runner
+через exact handoff Role читает новые execution-owned Secret в `0700` tmp
+staging, проверяет tuple/snapshot/purpose и закрывает gate. Старые mounted
+credentials не становятся authority successor. Несовместимый Pod заменяется.
 `CLUSTER_ADMIN` Pod не прогревается.
 
 ## Session archive и cleanup
 
-Archive использует KMS encryption, COMPLIANCE Object Lock, SHA-256 и ненулевой
-S3 `VersionId`; exact `HeadObject` подтверждает version/checksum/provenance.
-Restore verifier скачивает эту же версию и безопасно извлекает дерево.
-Archive и restore используют разные short-lived Vault AWS STS credentials с
-exact session tags. IAM source запрещает List/Delete/Bypass, cross-tenant
-prefix и insecure transport; startup проверяет versioning, Object Lock, KMS,
-public-access block и фактический запрет List.
+Archive замораживает quiesced PVC в неизменяемый CSI clone, открывает дерево
+fd-relative с `openat2` `BENEATH|NO_SYMLINKS`, отклоняет symlink, hardlink и
+device и только затем строит deterministic tar. S3 использует KMS encryption,
+COMPLIANCE Object Lock не менее 90 суток, exact execution key
+`archive.tar.gz`, SHA-256 и ненулевой `VersionId`;
+exact `HeadObject` и `GetObjectRetention` подтверждают version/checksum/
+provenance/mode/retain-until на новом и idempotent existing path.
+Archive, restore и rehydrate используют разные short-lived execution/action
+STS Secrets, выдаваемые после проверки подписанного workload ticket: immutable
+Secret UID/resourceVersion, exact session tags, inline
+policy/readback digests и срок не более 15 минут входят в credential snapshot.
+Vault bootstrap role может только вызвать `AssumeRole`/`TagSession` для
+закреплённой archive либо restore execution role; inline policy и session tags
+передаются уже в exact STS `AssumeRole` через TLS endpoint S3 boundary.
+IAM source запрещает List/Delete/Bypass, cross-tenant prefix и insecure
+transport; startup проверяет versioning, Object Lock, KMS, public-access block
+и фактический запрет List.
 
-PVC cleanup не использует journal `LastTransition`. Authoritative owner
-transaction под session/full graph lock проверяет `session.updated_at + 7d`,
-terminal graph, archive/proof и отсутствие work/hold, после чего pin-ит
+PVC cleanup не использует journal `LastTransition` и не имеет собственного
+TTL. Authoritative owner transaction pin-ит `ResourceRetentionPolicy` id,
+version, durations, `pvc_cleanup_eligible_at` и `archive_retain_until` при
+terminal transition. Authorizer под session/full graph lock проверяет именно
+этот снимок, terminal graph, archive/proof и отсутствие work/hold, затем pin-ит
 `ACTIVE` claim к exact PVC name/UID/resourceVersion на 15 минут и блокирует
 новый claim. Controller удаляет PVC с UID/resourceVersion preconditions,
 подтверждает `NotFound` и idempotent finalize передаёт exact timestamp и proof
 digest. Client grace и delete-before-claim отсутствуют.
 
-Следующий turn после `CONSUMED` cleanup получает owner-pinned source archive.
-`runtime-rehydrate` требует новый пустой PVC, exact S3 version/checksum/
-provenance и сохраняет proof, связанный с UID PVC; role Pod до этого не
-создаётся. Legacy PVC без server-owned execution/journal остаётся
-`inventory-only`.
+Следующий turn после `CONSUMED` cleanup получает одноразовое owner assignment
+к exact source archive. `runtime-rehydrate` bind-ит assignment к новой пустой
+PVC generation/name/UID/resourceVersion, восстанавливает во временное дерево
+на том же filesystem, fsync-ит и атомарно публикует `session/`, после чего
+owner переводит assignment в `CONSUMED`. Повтор для live наполненной PVC или
+другого UID закрыто отклоняется; crash оставляет только удаляемый staging, но
+не частичное final tree. Role Pod до proof не создаётся.
 
 ## Быстрые проверки Prototype
 

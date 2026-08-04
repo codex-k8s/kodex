@@ -2255,6 +2255,54 @@ func (wrapped *transaction) GetRuntimeExecutionByTurn(
 	))
 }
 
+func (wrapped *transaction) GetRuntimeAgentBindingForUpdate(
+	ctx context.Context,
+	turnID string,
+	attempt uint32,
+) (domainrepo.RuntimeAgentBinding, error) {
+	return scanRuntimeAgentBinding(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeAgentBindingGetForUpdate, pgx.StrictNamedArgs{
+			"organization_id": wrapped.organizationID,
+			"project_id":      wrapped.projectID,
+			"turn_id":         turnID,
+			"attempt":         attempt,
+		},
+	))
+}
+
+func (wrapped *transaction) InsertRuntimeAgentBinding(
+	ctx context.Context,
+	binding domainrepo.RuntimeAgentBinding,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeAgentBindingInsert, pgx.StrictNamedArgs{
+		"organization_id":              binding.OrganizationID,
+		"project_id":                   binding.ProjectID,
+		"session_id":                   binding.SessionID,
+		"turn_id":                      binding.TurnID,
+		"attempt":                      binding.Attempt,
+		"input_sha256":                 binding.InputSHA256,
+		"runtime_revision_id":          binding.RuntimeRevisionID,
+		"runtime_revision_version":     binding.RuntimeRevisionVersion,
+		"runtime_revision_sha256":      binding.RuntimeRevisionSHA256,
+		"agent_session_key":            binding.AgentSessionKey,
+		"agent_session_id":             binding.AgentSessionID,
+		"agent_session_version":        binding.AgentSessionVersion,
+		"agent_session_binding_sha256": binding.AgentSessionBindingSHA256,
+		"agent_session_turn_id":        binding.AgentSessionTurnID,
+		"agent_run_id":                 binding.AgentRunID,
+		"agent_session_turn_version":   binding.AgentSessionTurnVersion,
+		"agent_turn_binding_sha256":    binding.AgentTurnBindingSHA256,
+		"created_at":                   binding.CreatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
 func (wrapped *transaction) InsertRuntimeExecution(
 	ctx context.Context,
 	execution domainrepo.RuntimeExecution,
@@ -2467,6 +2515,29 @@ func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamed
 		"restore_source_runtime_revision_sha256": execution.RestoreSourceRuntimeRevisionSHA256,
 		"restore_source_immutable_input_sha256":  execution.RestoreSourceImmutableInputSHA256,
 		"restore_source_proof_sha256":            execution.RestoreSourceProofSHA256,
+		"effective_runtime_sha256":               execution.EffectiveRuntimeSHA256,
+		"agent_session_key":                      execution.AgentSessionKey,
+		"agent_session_id":                       execution.AgentSessionID,
+		"agent_session_turn_id":                  execution.AgentSessionTurnID,
+		"agent_run_id":                           execution.AgentRunID,
+		"agent_binding_sha256":                   execution.AgentBindingSHA256,
+		"retention_policy_id":                    execution.RetentionPolicyID,
+		"retention_policy_version":               execution.RetentionPolicyVersion,
+		"pvc_retention_seconds":                  execution.PVCRetentionSeconds,
+		"archive_retention_seconds":              execution.ArchiveRetentionSeconds,
+		"archive_retain_until":                   execution.ArchiveRetainUntil,
+		"pvc_cleanup_eligible_at":                execution.PVCCleanupEligibleAt,
+		"capacity_observation_expires_at":        execution.CapacityObservationExpiresAt,
+		"reschedule_after":                       execution.RescheduleAfter,
+		"restore_assignment_state":               execution.RestoreAssignmentState,
+		"restore_assignment_generation":          execution.RestoreAssignmentGeneration,
+		"restore_target_pvc_name":                execution.RestoreTargetPVCName,
+		"restore_target_pvc_uid":                 execution.RestoreTargetPVCUID,
+		"restore_target_pvc_resource_version":    execution.RestoreTargetPVCResourceVersion,
+		"rehydrate_proof_reference":              execution.RehydrateProofReference,
+		"rehydrate_proof_sha256":                 execution.RehydrateProofSHA256,
+		"credential_snapshot_sha256":             execution.CredentialSnapshotSHA256,
+		"workload_ticket_sha256":                 execution.WorkloadTicketSHA256,
 		"created_at":                             execution.CreatedAt, "updated_at": execution.UpdatedAt,
 	}
 }
@@ -2478,32 +2549,40 @@ func runtimeExecutionUpdateArgs(
 	return pgx.StrictNamedArgs{
 		"id": execution.ID, "version": execution.Version, "fence": execution.Fence,
 		"state": execution.State, "lease_id": execution.LeaseID,
-		"lease_token_sha256":               execution.LeaseTokenSHA256,
-		"lease_expires_at":                 execution.LeaseExpiresAt,
-		"terminal_outcome":                 execution.TerminalOutcome,
-		"terminal_reference":               execution.TerminalReference,
-		"terminal_sha256":                  execution.TerminalSHA256,
-		"archive_reference":                execution.ArchiveReference,
-		"archive_sha256":                   execution.ArchiveSHA256,
-		"restore_proof_reference":          execution.RestoreProofReference,
-		"restore_proof_sha256":             execution.RestoreProofSHA256,
-		"restore_verifier_workload_id":     execution.RestoreVerifierWorkload,
-		"restore_verifier_spiffe_id":       execution.RestoreVerifierSPIFFEID,
-		"restore_verifier_generation":      execution.RestoreVerifierGeneration,
-		"cleanup_authorization_id":         execution.CleanupAuthorizationID,
-		"cleanup_authorization_expires_at": execution.CleanupAuthorizationExpiresAt,
-		"cleanup_authorization_state":      execution.CleanupAuthorizationState,
-		"cleanup_authorization_generation": execution.CleanupAuthorizationGeneration,
-		"cleanup_consumed_at":              execution.CleanupConsumedAt,
-		"cleanup_pvc_name":                 execution.CleanupPVCName,
-		"cleanup_pvc_uid":                  execution.CleanupPVCUID,
-		"cleanup_pvc_resource_version":     execution.CleanupPVCResourceVersion,
-		"cleanup_claimed_at":               execution.CleanupClaimedAt,
-		"cleanup_eligible_at":              execution.CleanupEligibleAt,
-		"cleanup_not_found_at":             execution.CleanupNotFoundAt,
-		"cleanup_deletion_proof_sha256":    execution.CleanupDeletionProofSHA256,
-		"updated_at":                       execution.UpdatedAt,
-		"expected_version":                 expectedVersion, "expected_fence": expectedFence,
+		"lease_token_sha256":                  execution.LeaseTokenSHA256,
+		"lease_expires_at":                    execution.LeaseExpiresAt,
+		"terminal_outcome":                    execution.TerminalOutcome,
+		"terminal_reference":                  execution.TerminalReference,
+		"terminal_sha256":                     execution.TerminalSHA256,
+		"archive_reference":                   execution.ArchiveReference,
+		"archive_sha256":                      execution.ArchiveSHA256,
+		"restore_proof_reference":             execution.RestoreProofReference,
+		"restore_proof_sha256":                execution.RestoreProofSHA256,
+		"restore_verifier_workload_id":        execution.RestoreVerifierWorkload,
+		"restore_verifier_spiffe_id":          execution.RestoreVerifierSPIFFEID,
+		"restore_verifier_generation":         execution.RestoreVerifierGeneration,
+		"cleanup_authorization_id":            execution.CleanupAuthorizationID,
+		"cleanup_authorization_expires_at":    execution.CleanupAuthorizationExpiresAt,
+		"cleanup_authorization_state":         execution.CleanupAuthorizationState,
+		"cleanup_authorization_generation":    execution.CleanupAuthorizationGeneration,
+		"cleanup_consumed_at":                 execution.CleanupConsumedAt,
+		"cleanup_pvc_name":                    execution.CleanupPVCName,
+		"cleanup_pvc_uid":                     execution.CleanupPVCUID,
+		"cleanup_pvc_resource_version":        execution.CleanupPVCResourceVersion,
+		"cleanup_claimed_at":                  execution.CleanupClaimedAt,
+		"cleanup_eligible_at":                 execution.CleanupEligibleAt,
+		"cleanup_not_found_at":                execution.CleanupNotFoundAt,
+		"cleanup_deletion_proof_sha256":       execution.CleanupDeletionProofSHA256,
+		"restore_assignment_state":            execution.RestoreAssignmentState,
+		"restore_assignment_generation":       execution.RestoreAssignmentGeneration,
+		"restore_target_pvc_name":             execution.RestoreTargetPVCName,
+		"restore_target_pvc_uid":              execution.RestoreTargetPVCUID,
+		"restore_target_pvc_resource_version": execution.RestoreTargetPVCResourceVersion,
+		"rehydrate_proof_reference":           execution.RehydrateProofReference,
+		"rehydrate_proof_sha256":              execution.RehydrateProofSHA256,
+		"pvc_cleanup_eligible_at":             execution.PVCCleanupEligibleAt,
+		"updated_at":                          execution.UpdatedAt,
+		"expected_version":                    expectedVersion, "expected_fence": expectedFence,
 	}
 }
 
@@ -2618,12 +2697,42 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 		&execution.RestoreSourceExecutionID, &execution.RestoreSourceArchiveReference,
 		&execution.RestoreSourceArchiveSHA256, &execution.RestoreSourceRuntimeRevisionSHA256,
 		&execution.RestoreSourceImmutableInputSHA256, &execution.RestoreSourceProofSHA256,
+		&execution.EffectiveRuntimeSHA256, &execution.AgentSessionKey,
+		&execution.AgentSessionID, &execution.AgentSessionTurnID,
+		&execution.AgentRunID, &execution.AgentBindingSHA256,
+		&execution.RetentionPolicyID, &execution.RetentionPolicyVersion,
+		&execution.PVCRetentionSeconds, &execution.ArchiveRetentionSeconds,
+		&execution.ArchiveRetainUntil,
+		&execution.PVCCleanupEligibleAt, &execution.CapacityObservationExpiresAt,
+		&execution.RescheduleAfter, &execution.RestoreAssignmentState,
+		&execution.RestoreAssignmentGeneration, &execution.RestoreTargetPVCName,
+		&execution.RestoreTargetPVCUID, &execution.RestoreTargetPVCResourceVersion,
+		&execution.RehydrateProofReference, &execution.RehydrateProofSHA256,
+		&execution.CredentialSnapshotSHA256, &execution.WorkloadTicketSHA256,
 		&execution.CreatedAt, &execution.UpdatedAt,
 	)
 	if err != nil {
 		return domainrepo.RuntimeExecution{}, mapError(err)
 	}
 	return execution, nil
+}
+
+func scanRuntimeAgentBinding(row rowScanner) (domainrepo.RuntimeAgentBinding, error) {
+	var binding domainrepo.RuntimeAgentBinding
+	err := row.Scan(
+		&binding.OrganizationID, &binding.ProjectID, &binding.SessionID,
+		&binding.TurnID, &binding.Attempt, &binding.InputSHA256,
+		&binding.RuntimeRevisionID, &binding.RuntimeRevisionVersion,
+		&binding.RuntimeRevisionSHA256, &binding.AgentSessionKey,
+		&binding.AgentSessionID, &binding.AgentSessionVersion,
+		&binding.AgentSessionBindingSHA256, &binding.AgentSessionTurnID,
+		&binding.AgentRunID, &binding.AgentSessionTurnVersion,
+		&binding.AgentTurnBindingSHA256, &binding.CreatedAt,
+	)
+	if err != nil {
+		return domainrepo.RuntimeAgentBinding{}, mapError(err)
+	}
+	return binding, nil
 }
 
 func scanIntegrationContinuation(

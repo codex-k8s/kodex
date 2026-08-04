@@ -2,6 +2,8 @@ package kubernetes
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -32,17 +34,33 @@ func TestCommandKeyIsStableAndVersionFenced(t *testing.T) {
 	}
 }
 
-func TestCredentialVolumeRejectsUnregisteredReference(t *testing.T) {
-	_, _, err := credentialVolume("credential-0", entity.CredentialRef{Reference: "https://vault.example/secret"})
-	if err == nil {
-		t.Fatal("unregistered credential reference was accepted")
+func TestCredentialVolumeUsesExecutionOwnedImmutableSnapshot(t *testing.T) {
+	execution := testExecution()
+	volume, mount := executionCredentialVolume(execution, "credential-0", 3)
+	if volume.Secret == nil || volume.Secret.SecretName != executionCredentialSecretName(execution, 3) ||
+		!mount.ReadOnly || mount.MountPath != "/var/run/secrets/mattercodex/runtime/credential-0" {
+		t.Fatal("credential volume is not bound to the execution-owned immutable snapshot")
 	}
 }
 
 func TestDeletePVCRetriesCrashAfterDeletionEvidence(t *testing.T) {
 	execution := testExecution()
+	admission := execution
 	execution.State = enum.ExecutionSucceeded
+	execution.CleanupAuthorizationState = "ACTIVE"
+	execution.CleanupAuthorizationID = uuid.NewString()
+	execution.CleanupAuthorizationGeneration = 1
 	pvcUID := types.UID(uuid.NewString())
+	execution.ArchiveReference = "s3://bucket/archive?versionId=v1"
+	execution.ArchiveSHA256 = strings.Repeat("c", 64)
+	execution.RestoreProofReference = "s3://bucket/proof?versionId=v1"
+	execution.RestoreProofSHA256 = strings.Repeat("d", 64)
+	execution.CleanupAuthorizationExpiresAt = time.Now().UTC().Add(time.Hour)
+	execution.CleanupPVCName = "session"
+	execution.CleanupPVCUID = string(pvcUID)
+	execution.CleanupPVCResourceVersion = "7"
+	execution.CleanupClaimedAt = time.Now().UTC()
+	execution.CleanupEligibleAt = execution.CleanupClaimedAt
 	document := journalDocument{
 		Execution: execution, AdmitKey: uuid.NewString(), HeartbeatKey: uuid.NewString(),
 		CompleteKey: uuid.NewString(), IncidentKey: uuid.NewString(), ArchiveKey: uuid.NewString(),
@@ -50,8 +68,7 @@ func TestDeletePVCRetriesCrashAfterDeletionEvidence(t *testing.T) {
 		PodName: "pod", PVCName: "session", CreatedAt: time.Now().UTC(), LastTransition: time.Now().UTC(),
 		PVCUID: string(pvcUID), PVCResourceVersion: "7",
 	}
-	document.AdmissionRequest = execution
-	document.AdmissionRequest.State = enum.ExecutionPending
+	document.AdmissionRequest = admission
 	raw, err := marshalJournal(document)
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +83,7 @@ func TestDeletePVCRetriesCrashAfterDeletionEvidence(t *testing.T) {
 	adapter := &Adapter{client: client, config: Config{Namespace: "test"}, now: time.Now}
 	status := entity.RuntimeStatus{ExecutionID: execution.ID, PVCName: "session", PVCUID: string(pvcUID),
 		PVCResourceVersion: "7", PVCDeletionStarted: true, RetentionOwner: true}
-	if _, err := adapter.DeletePVC(context.Background(), status); err != nil {
+	if _, err := adapter.DeletePVC(context.Background(), execution, status); err != nil {
 		t.Fatalf("guarded retry failed: %v", err)
 	}
 	if _, err := client.CoreV1().PersistentVolumeClaims("test").Get(context.Background(), "session", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
@@ -166,12 +183,26 @@ func TestListSelectsAnnotatedJournalAsSingleRetentionOwner(t *testing.T) {
 }
 
 func testExecution() entity.Execution {
-	return entity.Execution{ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),
+	execution := entity.Execution{ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),
 		ProcessID: uuid.NewString(), SessionID: uuid.NewString(), ThreadID: "thread", RoleID: uuid.NewString(),
 		TurnID: uuid.NewString(), Attempt: 1, RuntimeRevisionID: uuid.NewString(), RuntimeRevisionVersion: 1,
-		RuntimeRevisionSHA256: strings.Repeat("a", 64), ImmutableInputSHA256: strings.Repeat("b", 64),
+		RuntimeRevisionSHA256: strings.Repeat("a", 64), EffectiveRuntimeSHA256: strings.Repeat("f", 64),
+		ImmutableInputSHA256: strings.Repeat("b", 64), AgentSessionKey: "agent-session", AgentSessionID: 1,
+		AgentSessionTurnID: 1, AgentRunID: "run-1", AgentBindingSHA256: strings.Repeat("8", 64),
 		ResourceClass: enum.ResourceStandard, AccessProfile: enum.AccessNone, WorkloadID: "runtime-controller",
 		WorkloadSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
 		GrantGeneration:  1, Version: 1, Fence: 1, State: enum.ExecutionPending,
+		RetentionPolicyID: "default", RetentionPolicyVersion: 1, PVCRetentionSeconds: 86400,
+		ArchiveRetentionSeconds: 7776000, PVCCleanupEligibleAt: time.Now().UTC().Add(24 * time.Hour),
+		ArchiveRetainUntil:           time.Now().UTC().Add(90 * 24 * time.Hour),
+		CapacityObservationExpiresAt: time.Now().UTC().Add(time.Hour), RescheduleAfter: time.Now().UTC().Add(time.Minute),
+		RestoreAssignmentState: "NONE", WorkloadTicketSHA256: strings.Repeat("9", 64),
 		CleanupAuthorizationState: "NONE"}
+	raw, _ := json.Marshal(struct {
+		ExecutionID string
+		Credentials []struct{}
+	}{execution.ID, []struct{}{}})
+	digest := sha256.Sum256(raw)
+	execution.CredentialSnapshotSHA256 = hex.EncodeToString(digest[:])
+	return execution
 }

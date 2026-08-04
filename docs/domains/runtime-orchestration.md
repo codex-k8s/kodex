@@ -4,8 +4,8 @@ title: Оркестрация среды выполнения
 type: domain
 status: approved
 owner: architect
-version: 0.4.0
-updated: 2026-07-23
+version: 0.5.0
+updated: 2026-08-03
 ---
 
 # Оркестрация среды выполнения
@@ -63,6 +63,25 @@ Mattermost `pending_post_id` используется только как кра
 ## Адаптер Kubernetes
 
 Адаптер создает ресурсы из типизированных спецификаций. Бизнес-код не формирует YAML или shell. Контроллер среды выполнения идемпотентно сверяет состояние `Pod`, `PVC`, `Secret` и `ServiceAccount` и записывает условие состояния.
+
+Control-plane и bot-service сохраняют разные идентификаторы сессии и хода.
+Закрытая owner-команда связывает exact control-plane session/turn/attempt/
+input/revision с bot `AgentSession`/`AgentSessionTurn`/`RunID` и их версиями;
+digest вычисляет control-plane. Ни control-plane UUID в роли `session_key`, ни
+идентификаторы из payload не доказывают bot ownership. Terminal handoff
+сохраняет `BLOCKED`, `WAITING_OWNER` и `CHANGES_REQUESTED` как разные owner
+семантики.
+
+Каждый turn/retry/reschedule создаёт новый immutable `RuntimeRevision` и
+capacity observation. Отдельный `effective_runtime_sha256` описывает только
+совместимость warm Pod; reuse всё равно получает свежие authority и credential
+snapshots. Stale observation не допускает execution, но bounded owner
+reschedule переводит очередь на новую attempt без мутации старого снимка.
+
+Terminal transition pin-ит versioned `ResourceRetentionPolicy`, eligibility и
+S3 retain-until. PVC cleanup выполняется двухфазным exact claim/NotFound proof/
+finalize; после cleanup restore source назначается один раз на новую пустую PVC
+generation и публикуется через same-filesystem staging до запуска role Pod.
 
 ## Критерии приемки
 

@@ -190,6 +190,12 @@ func main() {
 	if len(os.Args) < 2 {
 		r.fail(errors.New("mode is required"), nil)
 	}
+	if os.Args[1] == "runtime-init-workspace" {
+		if err := os.Mkdir("/workspace-root/session", 0o750); err != nil && !errors.Is(err, os.ErrExist) {
+			r.fail(errors.New("initialize runtime workspace"), nil)
+		}
+		return
+	}
 	ctx := context.Background()
 	prepareRuntime := r.prepareEphemeralRuntime
 	if len(os.Args) >= 2 && os.Args[1] == "runtime-session" {
@@ -495,6 +501,13 @@ func (r *runner) runSession(ctx context.Context) error {
 		return err
 	}
 	client := &http.Client{Timeout: 60 * time.Second}
+	if r.runtimeContract != nil {
+		transport, err := runtimeMTLSTransport(r.runtimeContract.BotServiceTLS)
+		if err != nil {
+			return err
+		}
+		client.Transport = transport
+	}
 	snapshot, err := r.fetchSessionSnapshot(ctx, client, botServiceURL, sessionKey, sessionToken)
 	if err != nil {
 		return err
@@ -546,6 +559,11 @@ func (r *runner) runSessionTurns(
 		if !claim.HasTurn {
 			time.Sleep(10 * time.Second)
 			continue
+		}
+		if r.runtimeContract != nil &&
+			(claim.TurnID != r.runtimeContract.AgentSessionTurnID ||
+				claim.RunID != r.runtimeContract.AgentRunID) {
+			return errors.New("bot-service turn does not match immutable runtime binding")
 		}
 		if strings.TrimSpace(claim.CodexSessionID) != "" {
 			codexSessionID = strings.TrimSpace(claim.CodexSessionID)
@@ -718,6 +736,9 @@ func (r *runner) runSessionTurns(
 			next, err := r.waitRuntimeSuccessor(ctx)
 			if err != nil {
 				return err
+			}
+			if r.runtimeContract.credentialRoot != "" {
+				_ = os.RemoveAll(r.runtimeContract.credentialRoot)
 			}
 			r.runtimeContract = next
 			sessionToken = next.sessionToken

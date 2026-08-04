@@ -4,7 +4,7 @@ title: Диагностика и восстановление runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-03
 ---
 
@@ -86,51 +86,68 @@ runner logs без credential values и owner lease/expiry. Не вызыват�
 
 После корректного handoff gate остаётся `CLOSED`, пока archive и restore proof
 не подтверждены. Только затем controller открывает `OPEN`. Successor допустим
-на том же Running/Ready Pod лишь при том же RuntimeRevision SHA-256; он получает
-новый immutable input и сам переводит `SUCCESSOR_READY` обратно в `CLOSED`.
+на том же Running/Ready Pod лишь при том же `effective_runtime_sha256`; он
+получает fresh RuntimeRevision, authority/credential snapshots и сам переводит
+`SUCCESSOR_READY` обратно в `CLOSED`.
 Застрявший или несовместимый gate требует устранить причину и дать controller
 выполнить guarded replacement, не patch Pod вручную.
 
 ## Archive, restore и rehydrate
 
 Проверить Job identity: `runtime-archive` не равна controller, restore и
-rehydrate используют отдельную restore identity. У STS credential должны быть
-bounded TTL и exact organization/project/session/execution/source tags;
-значения не показывать.
+rehydrate используют отдельную restore identity. У execution/action STS
+credential должны быть TTL не более 15 минут, exact organization/project/
+session/execution/source tags, inline policy/readback digests и immutable
+Secret UID/resourceVersion; значения не показывать.
+Проверить, что Vault action role выдаёт только bootstrap lease для
+`AssumeRole`/`TagSession` закреплённой execution role, а final credential
+получен по exact TLS S3/STS endpoint с `archive-role-arn` либо
+`restore-role-arn`; передавать inline policy/session tags в Vault generate
+endpoint запрещено, потому что этот endpoint их не принимает.
 
-Для archive нужны exact S3 `VersionId`, checksum, size, KMS, COMPLIANCE Object
-Lock и metadata provenance. Restore proof обязан относиться к той же версии.
+Для archive нужны quiesced CSI snapshot/clone, exact S3 `VersionId`, checksum,
+size, KMS, COMPLIANCE Object Lock не менее 90 суток, exact retain-until
+`HeadObject`+`GetObjectRetention` и metadata provenance. Restore proof обязан
+относиться к той же версии.
 При новом turn после очищенного PVC `runtime-rehydrate` должен монтировать
-новый empty PVC и завершить journal proof с exact PVC UID до появления role
-Pod. Любой version/checksum/metadata/tree/PVC mismatch сохраняет Pod
-отсутствующим. Запрещены ручной `aws s3 cp`, выбор latest object без version и
-копирование workspace в обход proof.
+новый empty PVC, bind одноразового assignment к generation/name/UID/
+resourceVersion и завершить owner `CONSUMED` proof до появления role Pod.
+Staging находится на том же filesystem и публикуется atomic rename; после
+crash его можно удалить/повторить, но partial final tree недопустим. Любой
+version/checksum/metadata/tree/PVC mismatch сохраняет Pod отсутствующим.
 
 ## Двухфазный cleanup
 
 Четыре часа простоя удаляют только warm Pod. Eligibility PVC определяет
-`control-plane` по authoritative `session.updated_at + 7d`, а не Pod/journal
-timestamp. Сначала authorizer под session graph lock создаёт `ACTIVE` claim с
+`control-plane` по pinned `ResourceRetentionPolicy` id/version и
+`pvc_cleanup_eligible_at`, а не текущей конфигурации, Pod/journal timestamp.
+Сначала authorizer под session graph lock создаёт `ACTIVE` claim с
 exact PVC name/UID/resourceVersion и expiry; это блокирует новый work той же
 session. Только затем controller может Delete с preconditions.
 
 После Delete controller обязан получить `NotFound` и передать exact observed
 timestamp + deletion proof в `ConsumeRuntimeCleanupAuthorization`. Если claim
 истёк, graph изменился, tuple отличается или readback неизвестен, finalize
-fail-closed; новая попытка начинается с новой authorizer generation. Client
+fail-closed. Для уже удалённой PVC durable NotFound proof под полным owner lock
+переносится в новую generation и немедленно finalize-ится; permanent wedge не
+допускается. Client
 grace, delete-before-claim и признание произвольного NotFound отсутствуют.
 
 Backfill автоматически проходит ту же archive/proof/claim/delete/consume
 цепочку. Legacy PVC без server-owned execution/journal остаётся
-`inventory-only`. Disk pressure не сокращает 7 суток и не обходит proof.
+`inventory-only`. Disk pressure не меняет pinned eligibility и не обходит proof.
 
 ## Access profile incident
 
-Routine controller не имеет Secret access и права создавать/bind-ить
-`cluster-admin`. `PROJECT_READ_ONLY` binding должен соответствовать exact
-project namespace и session identity. `CLUSTER_ADMIN` использует только
-предустановленную ServiceAccount/ClusterRoleBinding; admission policy разрешает
-controller создать с ней лишь exact role Pod, который удаляется после terminal.
+Routine controller не имеет Secret access, права создавать role Pod/
+ServiceAccount/RoleBinding и права создавать/bind-ить `cluster-admin`.
+Проверьте успешный `runtime-credential-broker`: он обязан подтвердить HMAC
+full-tuple ticket, immutable credential readback и exact desired Pod до create.
+`PROJECT_READ_ONLY` binding должен соответствовать exact project namespace и
+session identity. `CLUSTER_ADMIN` использует только
+предустановленную ServiceAccount/ClusterRoleBinding; admission требует
+server-owned одноразовый ticket и exact image/command/securityContext/volumes/
+token audience/subject/full tuple. Annotation controller-а не является ticket.
 Не исправлять отказ добавлением broad RBAC либо wildcard NetworkPolicy.
 
 ## Rollback

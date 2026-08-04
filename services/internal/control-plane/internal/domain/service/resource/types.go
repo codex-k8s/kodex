@@ -120,6 +120,35 @@ type ClaimTurnResult struct {
 	AuthorityGeneration uint64
 }
 
+type RuntimeAgentSessionBindingInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	SessionID               string
+	ExpectedSessionVersion  uint64
+	TurnID                  string
+	ExpectedTurnVersion     uint64
+	ExpectedAttempt         uint32
+	ExpectedInputSHA256     string
+	RuntimeRevisionID       string
+	RuntimeRevisionVersion  uint64
+	RuntimeRevisionSHA256   string
+	AgentSessionKey         string
+	AgentSessionID          int64
+	AgentSessionVersion     uint64
+	AgentSessionTurnID      int64
+	AgentRunID              string
+	AgentSessionTurnVersion uint64
+}
+
+type RuntimeAgentSessionBinding struct {
+	SessionID                 string
+	SessionVersion            uint64
+	TurnID                    string
+	TurnVersion               uint64
+	AgentSessionBindingSHA256 string
+	AgentTurnBindingSHA256    string
+}
+
 type RenewTurnInput struct {
 	Principal           value.Principal
 	IdempotencyKey      string
@@ -471,6 +500,24 @@ type RuntimeRestoreInput struct {
 	ArchiveSHA256         string
 	RestoreProofReference string
 	RestoreProofSHA256    string
+}
+
+type RuntimeRestoreTargetInput struct {
+	RuntimeExecutionInput
+	ExpectedAssignmentGeneration uint64
+	PVCName                      string
+	PVCUID                       string
+	PVCResourceVersion           string
+}
+
+type RuntimeRehydrateInput struct {
+	RuntimeExecutionInput
+	AssignmentGeneration uint64
+	PVCName              string
+	PVCUID               string
+	PVCResourceVersion   string
+	ProofReference       string
+	ProofSHA256          string
 }
 
 type RuntimeCleanupInput struct {

@@ -4,7 +4,7 @@ title: Runtime controller и жизненный цикл ресурсов сес
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-03
 ---
 
@@ -29,6 +29,7 @@ Controller не запускает Codex: role image запускает `agent-r
 | guarded PVC delete/finalize | controller может только `ConsumeRuntimeCleanupAuthorization` | active generation, тот же PVC tuple, observed NotFound и deletion proof digest | idempotent `CONSUMED` | controller |
 | cancel/retry/continuation | только owner workload | полный session/turn/process graph | atomic terminal/retry/new revision/grant | не controller |
 | role runtime | exact ServiceAccount profile; bearer остаётся обязательным на application path | immutable runner input и projected credentials | runner handoff exact execution/revision/input tuple | `agent-runner` |
+| bot execution binding | bot-service owner через отдельную закрытую команду и mTLS+bearer | control-plane session/turn/attempt/input/revision + bot AgentSession/Turn/Run versions | server-computed binding digest, immutable в execution | control-plane owner transaction |
 
 mTLS подтверждает peer и не заменяет bearer, application authority, owner
 resolution, idempotency или replay protection. Payload, labels и NATS envelope
@@ -76,8 +77,11 @@ effect. Если controller упал до успешного Create journal, н�
 claim key заново обнаруживает только exact `PENDING` того же
 session/turn/attempt/grant/revision/input и сохраняет recovery receipt без
 второго state transition. Capacity defer, dependency error или crash поэтому
-оставляют повторяемый `PENDING`. Recovery повторно читает exact revision, перепроверяет свежесть
-capacity snapshot и тем же idempotency key получает admission receipt вместе
+оставляют повторяемый `PENDING`. По `reschedule_after` либо expiry observation
+owner атомарно terminal-ит старый PENDING как `RETRIED`, отзывает старые
+authority/claim и создаёт новую attempt с fresh RuntimeRevision и observation;
+старый immutable snapshot не мутируется. Recovery повторно читает exact
+revision, перепроверяет свежесть capacity snapshot и тем же idempotency key получает admission receipt вместе
 с lease token. Lease token не хранится в Kubernetes Secret, ConfigMap,
 annotation, log или metric; после crash он восстанавливается только replay
 того же owner receipt.
@@ -92,11 +96,14 @@ pressure. Unknown, stale, неполная binding либо pagination пере�
 ### Agent runner, terminal handoff и warm Pod
 
 Immutable `mattercodex.agent-runner-input.v1` содержит exact execution
-version/fence/grant, RuntimeRevision id/version/SHA-256, input SHA-256, session,
-agent profile, пути credential snapshot и фактический bot-service/MCP route.
-Контейнер получает только команду `runtime-session`, session PVC и projected
-credential volumes. Bot-service и MCP доступны через существующий exact
-Kubernetes Service и bearer, а NetworkPolicy не содержит wildcard egress.
+version/fence/grant, RuntimeRevision id/version/SHA-256, input SHA-256,
+control-plane session/turn и отдельные bot `AgentSession`/`AgentSessionTurn`/
+`RunID` с server-computed binding digest. Control-plane ID не подставляется в
+bot `session_key`. Контейнер получает только команду `runtime-session`, session
+PVC и immutable execution credential artifacts; каждый artifact связан с
+provider content version, Secret UID/resourceVersion и digest. Bot-service и
+MCP доступны только по HTTPS/mTLS с exact hostname/SNI, доверенной CA, client
+identity и bearer; NetworkPolicy не заменяет peer/application authorization.
 
 `Succeeded`/`Failed` фаза Pod не завершает turn. После фактического результата
 runner публикует `mattercodex.runtime-turn-handoff.v1` в собственный Pod:
@@ -108,40 +115,57 @@ owner expiry/cancel/retry.
 После terminal controller сначала архивирует PVC и получает restore proof,
 затем открывает `archive-gate=OPEN`. Новый claim той же session запрещён owner
 query, пока у любого predecessor нет archive+proof. Running/Ready warm Pod
-используется повторно только при том же RuntimeRevision SHA-256 и открытом
-gate: controller публикует новый immutable ConfigMap, переводит gate в
-`SUCCESSOR_READY`, runner сам проверяет новый tuple и закрывает gate. Любое
+используется повторно только при том же server-owned
+`effective_runtime_sha256` и открытом gate: controller публикует новый
+immutable RuntimeRevision/ConfigMap и fresh authority/credential snapshots.
+Broker обновляет handoff Role точным множеством новых immutable Secret names,
+а runner читает их через Kubernetes API в собственный `0700` tmp staging,
+сверяет execution/snapshot/purpose и только затем меняет клиенты; старые mounted
+Secret не переиспользуются. После `SUCCESSOR_READY` runner сам проверяет новый
+tuple и закрывает gate. Любое
 несовпадение ведёт к guarded Pod replacement. `CLUSTER_ADMIN` Pod не прогревается
 и удаляется после terminal.
 
 ### Archive, restore и rehydrate
 
-Archive Job монтирует exact PVC read-only, создаёт детерминированный tar,
-загружает content-addressed object с SHA-256, KMS encryption и COMPLIANCE
-Object Lock, требует ненулевой `VersionId` и выполняет exact `HeadObject`
-readback. Restore verifier независимо скачивает ту же версию, проверяет
-checksum/provenance, безопасно извлекает дерево и записывает proof.
+После runner handoff writer quiesced; Archive Job читает неизменяемый CSI clone
+exact PVC read-only. Traversal выполняется fd-relative через `openat2` с
+`BENEATH|NO_SYMLINKS`, отклоняет symlink/hardlink/device и изменение inode,
+затем загружает deterministic tar в exact execution key `archive.tar.gz` с
+SHA-256, KMS encryption
+и COMPLIANCE Object Lock. Ненулевой `VersionId`, exact `HeadObject` и
+`GetObjectRetention` readback обязаны подтвердить checksum, provenance, mode и
+owner-pinned retain-until как на create, так и на idempotent existing path.
 
-S3 identities разделены на archive и restore/rehydrate. Vault выдаёт
-short-lived STS credential с session tags exact organization/project/session/
-execution/source execution. IAM source запрещает List/Delete/Bypass,
+S3 identities разделены на archive и restore/rehydrate. Узкий broker выдаёт
+на execution/action отдельный immutable Secret с STS credential не дольше 15
+минут, trusted server-side session tags exact organization/project/session/
+execution/source execution, inline key/version/action/KMS policy и readback
+digest. Сначала action-specific Vault role выдаёт bootstrap credential,
+ограниченный только `AssumeRole`/`TagSession` закреплённой execution role;
+затем broker через exact TLS S3/STS boundary вызывает `AssumeRole` с inline
+policy и server-owned tags. Job сверяет immutable Secret UID/resourceVersion, expiry, tags,
+policy/readback и data digest до монтирования. IAM source запрещает List/Delete/Bypass,
 cross-tenant prefixes и insecure transport; startup дополнительно проверяет
 versioning, Object Lock, KMS, public-access block и фактический запрет List.
 
 Если session PVC уже был очищен, новый owner claim атомарно pin-ит последний
 `CONSUMED` archive source: source execution, S3 reference/version/checksum,
-revision/input provenance и deletion proof. Controller создаёт новый PVC и до
-старта Pod запускает `runtime-rehydrate`; worker требует пустой volume,
-скачивает только pinned version, проверяет checksum/metadata, извлекает дерево
-и сохраняет journal proof, связанный с UID нового PVC. Unknown, partial или
-mismatch сохраняет Pod отсутствующим.
+revision/input provenance и deletion proof. Controller создаёт новый PVC и
+owner bind-ит одноразовое assignment к exact generation/name/UID/
+resourceVersion. До старта Pod `runtime-rehydrate` требует пустой volume,
+скачивает только pinned version, проверяет checksum/metadata, строит
+execution-owned staging на том же filesystem, fsync-ит и атомарно
+переименовывает его в final `session/`. Owner `CONSUMED` proof фиксируется до
+Pod. Crash допускает повтор/очистку staging, но не partial final tree; live PVC
+повторно не восстанавливается.
 
 ### Двухфазная cleanup transaction
 
 ```text
 terminal + archive + restore proof
   -> authorizer lock session/full execution graph
-  -> authoritative eligibility = session.updated_at + 7d и отсутствие work/hold
+  -> authoritative pinned policy/version/eligible_at и отсутствие work/hold
   -> ACTIVE generation с exact PVC name/UID/resourceVersion, claimed_at, expiry
   -> новые ClaimRuntimeExecution той же session запрещены
   -> controller reread ACTIVE exact tuple
@@ -154,8 +178,11 @@ terminal + archive + restore proof
 Client grace отсутствует. `LastTransition` journal/Pod не определяет PVC
 eligibility. `NotFound` без заранее сохранённого exact tuple, активной lease и
 proof не считается успехом. Ошибка после Delete повторяется через тот же
-durable journal и idempotency key; finalize допустим только до server-side
-expiry, иначе создаётся новая owner claim после повторной проверки graph.
+durable journal и idempotency key. Если PVC уже NotFound, proof прежней
+generation сохраняется в immutable runtime journal. После новой full-graph
+owner authorization controller связывает тот же NotFound readback с новой
+generation и сразу завершает её. Новый work блокируется только до этого
+гарантированного finalize, а не навсегда.
 Backfill проходит тот же путь. Legacy PVC без server-owned execution/journal
 остаётся `inventory-only`.
 
@@ -164,7 +191,7 @@ Backfill проходит тот же путь. Legacy PVC без server-owned e
 | Переход | Закрытая проверка | Owner transaction | Runtime effect/recovery |
 | --- | --- | --- | --- |
 | claim | current session/turn/attempt/workload/grant/revision/input; нет active cleanup и unverified predecessor | новый PostgreSQL `PENDING`, version/fence, receipt/audit; новый claim key может получить только тот же exact `PENDING` | journal создаётся первым Kubernetes effect и восстанавливается из owner state |
-| capacity defer/error | exact revision; immutable quota/account observation; durable pending accounting | authority не меняется | journal остаётся для retry |
+| capacity defer/error | exact revision; immutable quota/account observation; durable pending accounting | до reschedule authority не меняется | journal остаётся; bounded expiry создаёт fresh attempt/revision/observation |
 | admit | current owner graph и expected PENDING tuple | `ADMITTED`, новый fence/lease, receipt/audit | `ADMITTED_RECOVERABLE`; receipt replay восстанавливает lease |
 | materialize/rehydrate | exact PVC/revision/input/credential tuple; restore source при новом PVC | authority не меняется | Pod появляется только после rehydrate proof |
 | start/heartbeat | Ready UID и exact lease/fence/generation | `RUNNING`, renewed leases/version/fence | readback, journal patch |
@@ -174,8 +201,8 @@ Backfill проходит тот же путь. Legacy PVC без server-owned e
 | retry/continuation | terminal predecessor и policy | новая attempt, fresh RuntimeRevision/grant | новый admission; warm reuse только совместимый |
 | archive | terminal retention owner и exact PVC | immutable archive provenance | versioned S3 + readback |
 | restore proof | separate verifier, exact archive version/checksum | immutable proof | safe temporary extraction |
-| rehydrate | source только из `CONSUMED` cleanup snapshot | immutable restore source уже pin-нут claim | новый empty PVC, proof UID до Pod |
-| cleanup authorize | session lock, `updated_at+7d`, terminal graph, proof, no work/hold | `ACTIVE` generation + exact PVC tuple/expiry | новые work claims блокируются |
+| rehydrate | source только из `CONSUMED` cleanup snapshot; assignment только один раз на новую PVC generation | bind/consume exact PVC UID и immutable proof | same-FS staging, atomic publish, proof до Pod |
+| cleanup authorize | session lock, pinned policy/version/eligible_at, terminal graph, proof, no work/hold | `ACTIVE` generation + exact PVC tuple/expiry | новые work claims блокируются |
 | PVC delete/finalize | ACTIVE tuple, Kubernetes preconditions, NotFound proof, expiry и повторный graph lock | idempotent `CONSUMED` | partial/unknown fail-closed |
 | idle eviction | terminal readback, LRU, не admin | authority не меняется | удаляется только Pod |
 
@@ -185,14 +212,20 @@ Backfill проходит тот же путь. Legacy PVC без server-owned e
 
 ## Access profiles и deploy boundary
 
-Controller credential не может создавать или bind-ить `cluster-admin`
-ClusterRoleBinding и не читает Secret. `PROJECT_READ_ONLY` создаёт узкий
-session ServiceAccount/RoleBinding только после authoritative organization/
+Controller credential не может создавать role Pod, ServiceAccount или
+RoleBinding, создавать/bind-ить `cluster-admin` ClusterRoleBinding и не читает
+исходные mutable credentials. Узкий `runtime-credential-broker` сначала
+проверяет HMAC workload ticket полного tuple, затем материализует immutable
+credential snapshots, exact Pod и grants. `PROJECT_READ_ONLY` broker создаёт
+узкий session ServiceAccount/RoleBinding только после authoritative organization/
 project namespace readback; terminal отзывает binding. `CLUSTER_ADMIN`
 использует заранее установленную отдельную ServiceAccount/ClusterRoleBinding,
-которую controller может только прочитать. Fail-closed
-`ValidatingAdmissionPolicy` разрешает controller использовать её исключительно
-для exact role Pod с полным tuple; runner получает bounded projected token, а
+которую controller может только прочитать. Fail-closed admission проверяет
+server-owned workload ticket и exact spec: image digest, `runtime-session`,
+securityContext, volumes, token audience, ServiceAccount subject,
+execution/session/turn/attempt/revision/input/fence и credential snapshot.
+Ticket нельзя назначить annotation-ом controller-а; неверный, повторный или
+непрочитанный ticket отклоняется. Runner получает bounded projected token, а
 Pod удаляется сразу после terminal.
 
 Archive, restore, rehydrate и cleanup Jobs имеют отдельные ServiceAccount,

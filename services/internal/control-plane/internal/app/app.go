@@ -198,6 +198,8 @@ func Run(
 		MemoryIndexerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
 		RuntimeControllerWorkload:  "runtime-controller",
 		RuntimeControllerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		BotServiceWorkload:         "matter-codex-bot-service",
+		BotServiceSPIFFEID:         "spiffe://mattercodex.local/ns/mattermost/sa/matter-codex-bot-service",
 		ArchiveWorkload:            "runtime-archive",
 		ArchiveSPIFFEID:            "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
 		IntegrationGatewayWorkload: "integration-gateway",
@@ -206,6 +208,11 @@ func Run(
 		RestoreVerifierSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
 		CleanupAuthorizerWorkload:  "runtime-cleanup-authorizer",
 		CleanupAuthorizerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+		RetentionPolicyID:          config.RetentionPolicyID,
+		RetentionPolicyVersion:     config.RetentionPolicyVersion,
+		PVCRetention:               config.PVCRetention,
+		ArchiveRetention:           config.ArchiveRetention,
+		PendingRescheduleDelay:     config.PendingRescheduleDelay,
 		Observer:                   businessMetrics,
 	})
 	if err != nil {

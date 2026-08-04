@@ -95,7 +95,10 @@ func Run(
 		ReadClusterRole:  config.ReadClusterRole,
 		AdminClusterRole: config.AdminClusterRole, ArchiveServiceAccount: config.ArchiveServiceAccount,
 		RestoreServiceAccount: config.RestoreServiceAccount, CleanupServiceAccount: config.CleanupServiceAccount,
-		MaximumPods: config.MaximumPods, MaximumOrganizationExecutions: config.MaximumOrganizationExecutions,
+		CredentialBrokerServiceAccount: config.CredentialBrokerServiceAccount,
+		S3ArchiveBrokerServiceAccount:  config.S3ArchiveBrokerServiceAccount,
+		S3RestoreBrokerServiceAccount:  config.S3RestoreBrokerServiceAccount,
+		MaximumPods:                    config.MaximumPods, MaximumOrganizationExecutions: config.MaximumOrganizationExecutions,
 		MaximumCPU:         config.MaximumCPUMilli,
 		MaximumMemoryBytes: config.MaximumMemoryBytes, JobTTL: config.JobTTL,
 		S3Endpoint: config.S3Endpoint, S3TLSServerName: config.S3TLSServerName,
@@ -106,7 +109,7 @@ func Run(
 	}
 	service, err := runtimeservice.New(
 		state.controlPlane, cluster, businessMetrics, config.WarmTTL,
-		config.PVCRetentionTTL, config.Watchdog,
+		config.Watchdog,
 	)
 	if err != nil {
 		return err

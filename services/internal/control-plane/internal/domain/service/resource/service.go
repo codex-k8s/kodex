@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,37 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 )
+
+func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) error {
+	if execution == nil || !validSHA256Text(execution.WorkloadTicketSHA256) {
+		return errs.ErrStateConflict
+	}
+	payload, err := json.Marshal(struct {
+		ExecutionID, OrganizationID, ProjectID, SessionID, TurnID string
+		Attempt                                                   uint32
+		RuntimeRevisionID, RuntimeRevisionSHA256                  string
+		RuntimeRevisionVersion, Version, Fence, GrantGeneration   uint64
+		ImmutableInputSHA256, EffectiveRuntimeSHA256              string
+		AgentBindingSHA256, CredentialSnapshotSHA256              string
+		WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
+		State                                                     string
+	}{execution.ID, execution.OrganizationID, execution.ProjectID,
+		execution.SessionID, execution.TurnID, execution.Attempt,
+		execution.RuntimeRevisionID, execution.RuntimeRevisionSHA256,
+		execution.RuntimeRevisionVersion, execution.Version, execution.Fence,
+		execution.GrantGeneration, execution.ImmutableInputSHA256,
+		execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
+		execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
+		execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
+	if err != nil {
+		return errs.ErrInternal
+	}
+	mac := hmac.New(sha256.New, service.leaseSigningKey)
+	_, _ = mac.Write(payload)
+	execution.WorkloadTicket = base64.RawURLEncoding.EncodeToString(payload) + "." +
+		base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return nil
+}
 
 const (
 	auditKindScheduleOccurrence = "SCHEDULE_OCCURRENCE"
@@ -62,6 +94,7 @@ const (
 	permissionApplyGitConfiguration  = "controlplane.configuration.git.apply"
 	permissionDetachConfiguration    = "controlplane.configuration.detach"
 	permissionRuntimeClaim           = "controlplane.runtime_execution.claim"
+	permissionRuntimeAgentBind       = "controlplane.runtime_execution.agent.bind"
 	permissionRuntimeRead            = "controlplane.runtime_execution.read"
 	permissionRuntimeAdmit           = "controlplane.runtime_execution.admit"
 	permissionRuntimeHeartbeat       = "controlplane.runtime_execution.heartbeat"
@@ -69,9 +102,12 @@ const (
 	permissionRuntimeComplete        = "controlplane.runtime_execution.complete"
 	permissionRuntimeCancel          = "controlplane.runtime_execution.cancel"
 	permissionRuntimeRetry           = "controlplane.runtime_execution.retry"
+	permissionRuntimeReschedule      = "controlplane.runtime_execution.reschedule"
 	permissionRuntimeExpire          = "controlplane.runtime_execution.expire"
 	permissionRuntimeArchive         = "controlplane.runtime_execution.archive"
 	permissionRuntimeRestore         = "controlplane.runtime_execution.restore.verify"
+	permissionRuntimeRestoreBind     = "controlplane.runtime_execution.restore.bind"
+	permissionRuntimeRehydrate       = "controlplane.runtime_execution.rehydrate.complete"
 	permissionRuntimeCleanup         = "controlplane.runtime_execution.cleanup.authorize"
 	permissionRuntimeCleanupConsume  = "controlplane.runtime_execution.cleanup.consume"
 	permissionRuntimeCleanupExpire   = "controlplane.runtime_execution.cleanup.expire"
@@ -105,6 +141,8 @@ type Config struct {
 	MemoryIndexerSPIFFEID      string
 	RuntimeControllerWorkload  string
 	RuntimeControllerSPIFFEID  string
+	BotServiceWorkload         string
+	BotServiceSPIFFEID         string
 	ArchiveWorkload            string
 	ArchiveSPIFFEID            string
 	IntegrationGatewayWorkload string
@@ -113,6 +151,11 @@ type Config struct {
 	RestoreVerifierSPIFFEID    string
 	CleanupAuthorizerWorkload  string
 	CleanupAuthorizerSPIFFEID  string
+	RetentionPolicyID          string
+	RetentionPolicyVersion     uint64
+	PVCRetention               time.Duration
+	ArchiveRetention           time.Duration
+	PendingRescheduleDelay     time.Duration
 	Observer                   Observer
 }
 
@@ -135,6 +178,8 @@ type Service struct {
 	memoryIndexerSPIFFEID      string
 	runtimeControllerWorkload  string
 	runtimeControllerSPIFFEID  string
+	botServiceWorkload         string
+	botServiceSPIFFEID         string
 	archiveWorkload            string
 	archiveSPIFFEID            string
 	integrationGatewayWorkload string
@@ -143,6 +188,11 @@ type Service struct {
 	restoreVerifierSPIFFEID    string
 	cleanupAuthorizerWorkload  string
 	cleanupAuthorizerSPIFFEID  string
+	retentionPolicyID          string
+	retentionPolicyVersion     uint64
+	pvcRetention               time.Duration
+	archiveRetention           time.Duration
+	pendingRescheduleDelay     time.Duration
 	observer                   Observer
 	now                        func() time.Time
 }
@@ -167,6 +217,10 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.MemoryIndexerSPIFFEID) ||
 		value.ValidateStableKey(config.RuntimeControllerWorkload) != nil ||
 		!validSPIFFEID(config.RuntimeControllerSPIFFEID) ||
+		value.ValidateStableKey(config.BotServiceWorkload) != nil ||
+		!validSPIFFEID(config.BotServiceSPIFFEID) ||
+		config.BotServiceWorkload == config.RuntimeControllerWorkload ||
+		config.BotServiceSPIFFEID == config.RuntimeControllerSPIFFEID ||
 		config.RuntimeControllerWorkload == agentRunnerWorkload ||
 		config.RuntimeControllerSPIFFEID == agentRunnerSPIFFEID ||
 		value.ValidateStableKey(config.ArchiveWorkload) != nil ||
@@ -193,6 +247,11 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		config.CleanupAuthorizerSPIFFEID == config.IntegrationGatewaySPIFFEID ||
 		config.CleanupAuthorizerWorkload == controlAPIGatewayWorkload ||
 		config.CleanupAuthorizerSPIFFEID == controlAPIGatewaySPIFFEID ||
+		value.ValidateStableKey(config.RetentionPolicyID) != nil ||
+		config.RetentionPolicyVersion == 0 ||
+		config.PVCRetention < 24*time.Hour || config.PVCRetention > 30*24*time.Hour ||
+		config.ArchiveRetention < 90*24*time.Hour || config.ArchiveRetention > 10*365*24*time.Hour ||
+		config.PendingRescheduleDelay < 5*time.Second || config.PendingRescheduleDelay > 5*time.Minute ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
@@ -214,6 +273,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		memoryIndexerSPIFFEID:      config.MemoryIndexerSPIFFEID,
 		runtimeControllerWorkload:  config.RuntimeControllerWorkload,
 		runtimeControllerSPIFFEID:  config.RuntimeControllerSPIFFEID,
+		botServiceWorkload:         config.BotServiceWorkload,
+		botServiceSPIFFEID:         config.BotServiceSPIFFEID,
 		archiveWorkload:            config.ArchiveWorkload,
 		archiveSPIFFEID:            config.ArchiveSPIFFEID,
 		integrationGatewayWorkload: config.IntegrationGatewayWorkload,
@@ -222,6 +283,11 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		restoreVerifierSPIFFEID:    config.RestoreVerifierSPIFFEID,
 		cleanupAuthorizerWorkload:  config.CleanupAuthorizerWorkload,
 		cleanupAuthorizerSPIFFEID:  config.CleanupAuthorizerSPIFFEID,
+		retentionPolicyID:          config.RetentionPolicyID,
+		retentionPolicyVersion:     config.RetentionPolicyVersion,
+		pvcRetention:               config.PVCRetention,
+		archiveRetention:           config.ArchiveRetention,
+		pendingRescheduleDelay:     config.PendingRescheduleDelay,
 		observer:                   config.Observer,
 		now:                        time.Now,
 	}, nil

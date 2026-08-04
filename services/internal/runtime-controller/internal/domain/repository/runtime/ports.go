@@ -20,6 +20,7 @@ type ControlPlane interface {
 	GetExecution(context.Context, string, uint64) (entity.Execution, error)
 	GetRevision(context.Context, string, uint64) (entity.Revision, error)
 	Admit(context.Context, string, entity.Execution) (AdmitResult, error)
+	Reschedule(context.Context, string, entity.Execution) (entity.Execution, error)
 	Heartbeat(context.Context, string, entity.Execution, string) (entity.Execution, error)
 	Complete(context.Context, string, entity.Execution, string, string, string, string) (entity.Execution, error)
 	Incident(context.Context, string, entity.Execution, enum.IncidentKind, string, string) (entity.Execution, error)
@@ -56,7 +57,7 @@ type Cluster interface {
 	UpdateJournal(context.Context, entity.Execution, string) error
 	RevokeAccess(context.Context, entity.Execution) error
 	DeletePod(context.Context, entity.RuntimeStatus) error
-	DeletePVC(context.Context, entity.RuntimeStatus) (entity.PVCDeletionProof, error)
+	DeletePVC(context.Context, entity.Execution, entity.RuntimeStatus) (entity.PVCDeletionProof, error)
 	EnsureArchiveJob(context.Context, entity.Execution, entity.RuntimeStatus) error
 	EnsureRestoreVerifierJob(context.Context, entity.Execution, entity.RuntimeStatus) error
 	EnsureCleanupAuthorizerJob(context.Context, entity.Execution, entity.RuntimeStatus) error

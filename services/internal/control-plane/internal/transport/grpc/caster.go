@@ -260,6 +260,9 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProviderObservedLimit:       value.CredentialBinding.GetProviderObservedLimit(),
 			ProviderObservationRevision: value.CredentialBinding.GetProviderObservationRevision(),
 			ProviderObservedAt:          observedAt,
+			ImmutableSecretRef:          value.CredentialBinding.GetImmutableSecretRef(),
+			ProviderContentVersion:      value.CredentialBinding.GetProviderContentVersion(),
+			ContentSHA256:               value.CredentialBinding.GetContentSha256(),
 			Ownership:                   configurationOwnershipFromProto(value.CredentialBinding.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_RepositoryWorkspace:
@@ -304,6 +307,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			RoleID:                      value.RuntimeRevision.GetRoleId(),
 			ChatID:                      value.RuntimeRevision.GetChatId(),
 			ProviderCredentialBindingID: value.RuntimeRevision.GetProviderCredentialBindingId(),
+			EffectiveRuntimeSHA256:      value.RuntimeRevision.GetEffectiveRuntimeSha256(),
 			PromptProfileID:             value.RuntimeRevision.GetPromptProfileId(),
 			PromptRevision:              value.RuntimeRevision.GetPromptRevision(),
 			CredentialBindingIDs:        value.RuntimeRevision.GetCredentialBindingIds(),
@@ -316,29 +320,37 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		}, nil
 	case *controlplanev1.ResourceSpec_Session:
 		return entity.SessionSpec{
-			AgentID:                  value.Session.GetAgentId(),
-			ProviderAccountBindingID: value.Session.GetProviderAccountBindingId(),
-			ConversationID:           value.Session.GetConversationId(),
-			ArchiveRef:               value.Session.GetArchiveRef(),
-			LastTurnSequence:         value.Session.GetLastTurnSequence(),
+			AgentID:                    value.Session.GetAgentId(),
+			ProviderAccountBindingID:   value.Session.GetProviderAccountBindingId(),
+			ConversationID:             value.Session.GetConversationId(),
+			ArchiveRef:                 value.Session.GetArchiveRef(),
+			LastTurnSequence:           value.Session.GetLastTurnSequence(),
+			AgentSessionKey:            value.Session.GetAgentSessionKey(),
+			AgentSessionID:             value.Session.GetAgentSessionId(),
+			AgentSessionBindingVersion: value.Session.GetAgentSessionBindingVersion(),
+			AgentSessionBindingSHA256:  value.Session.GetAgentSessionBindingSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Turn:
 		return entity.TurnSpec{
-			SessionID:            value.Turn.GetSessionId(),
-			Sequence:             value.Turn.GetSequence(),
-			SourceRef:            value.Turn.GetSourceRef(),
-			PromptArtifactID:     value.Turn.GetPromptArtifactId(),
-			RuntimeRevisionID:    value.Turn.GetRuntimeRevisionId(),
-			ProcessRunID:         value.Turn.GetProcessRunId(),
-			Attempt:              value.Turn.GetAttempt(),
-			Outcome:              value.Turn.GetOutcome(),
-			ResultArtifactID:     value.Turn.GetResultArtifactId(),
-			EffectiveInputSHA256: value.Turn.GetEffectiveInputSha256(),
-			PredecessorTurnID:    value.Turn.GetPredecessorTurnId(),
-			OwnerFeedback:        value.Turn.GetOwnerFeedback(),
-			OwnerFeedbackGateID:  value.Turn.GetOwnerFeedbackGateId(),
-			OwnerFeedbackVersion: value.Turn.GetOwnerFeedbackGateVersion(),
-			OwnerFeedbackSHA256:  value.Turn.GetOwnerFeedbackSha256(),
+			SessionID:               value.Turn.GetSessionId(),
+			Sequence:                value.Turn.GetSequence(),
+			SourceRef:               value.Turn.GetSourceRef(),
+			PromptArtifactID:        value.Turn.GetPromptArtifactId(),
+			RuntimeRevisionID:       value.Turn.GetRuntimeRevisionId(),
+			ProcessRunID:            value.Turn.GetProcessRunId(),
+			Attempt:                 value.Turn.GetAttempt(),
+			Outcome:                 value.Turn.GetOutcome(),
+			ResultArtifactID:        value.Turn.GetResultArtifactId(),
+			EffectiveInputSHA256:    value.Turn.GetEffectiveInputSha256(),
+			PredecessorTurnID:       value.Turn.GetPredecessorTurnId(),
+			OwnerFeedback:           value.Turn.GetOwnerFeedback(),
+			OwnerFeedbackGateID:     value.Turn.GetOwnerFeedbackGateId(),
+			OwnerFeedbackVersion:    value.Turn.GetOwnerFeedbackGateVersion(),
+			OwnerFeedbackSHA256:     value.Turn.GetOwnerFeedbackSha256(),
+			AgentSessionTurnID:      value.Turn.GetAgentSessionTurnId(),
+			AgentRunID:              value.Turn.GetAgentRunId(),
+			AgentTurnBindingVersion: value.Turn.GetAgentTurnBindingVersion(),
+			AgentTurnBindingSHA256:  value.Turn.GetAgentTurnBindingSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_ProcessRun:
 		return entity.ProcessRunSpec{
@@ -669,6 +681,9 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ProviderObservedLimit:       value.ProviderObservedLimit,
 				ProviderObservationRevision: value.ProviderObservationRevision,
 				ProviderObservedAt:          optionalTimestamp(value.ProviderObservedAt),
+				ImmutableSecretRef:          value.ImmutableSecretRef,
+				ProviderContentVersion:      value.ProviderContentVersion,
+				ContentSha256:               value.ContentSHA256,
 				Ownership:                   configurationOwnershipToProto(value.Ownership),
 			},
 		}
@@ -715,6 +730,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				RoleId:                      value.RoleID,
 				ChatId:                      value.ChatID,
 				ProviderCredentialBindingId: value.ProviderCredentialBindingID,
+				EffectiveRuntimeSha256:      value.EffectiveRuntimeSHA256,
 				PromptProfileId:             value.PromptProfileID,
 				PromptRevision:              value.PromptRevision,
 				CredentialBindingIds:        value.CredentialBindingIDs,
@@ -729,11 +745,15 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.SessionSpec:
 		result.Value = &controlplanev1.ResourceSpec_Session{
 			Session: &controlplanev1.SessionSpec{
-				AgentId:                  value.AgentID,
-				ProviderAccountBindingId: value.ProviderAccountBindingID,
-				ConversationId:           value.ConversationID,
-				ArchiveRef:               value.ArchiveRef,
-				LastTurnSequence:         value.LastTurnSequence,
+				AgentId:                    value.AgentID,
+				ProviderAccountBindingId:   value.ProviderAccountBindingID,
+				ConversationId:             value.ConversationID,
+				ArchiveRef:                 value.ArchiveRef,
+				LastTurnSequence:           value.LastTurnSequence,
+				AgentSessionKey:            value.AgentSessionKey,
+				AgentSessionId:             value.AgentSessionID,
+				AgentSessionBindingVersion: value.AgentSessionBindingVersion,
+				AgentSessionBindingSha256:  value.AgentSessionBindingSHA256,
 			},
 		}
 	case entity.TurnSpec:
@@ -754,6 +774,10 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				OwnerFeedbackGateId:      value.OwnerFeedbackGateID,
 				OwnerFeedbackGateVersion: value.OwnerFeedbackVersion,
 				OwnerFeedbackSha256:      value.OwnerFeedbackSHA256,
+				AgentSessionTurnId:       value.AgentSessionTurnID,
+				AgentRunId:               value.AgentRunID,
+				AgentTurnBindingVersion:  value.AgentTurnBindingVersion,
+				AgentTurnBindingSha256:   value.AgentTurnBindingSHA256,
 			},
 		}
 	case entity.ProcessRunSpec:

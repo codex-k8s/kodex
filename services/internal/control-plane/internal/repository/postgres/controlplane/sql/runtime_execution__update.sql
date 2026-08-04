@@ -1,3 +1,4 @@
+-- name: RuntimeExecutionUpdate :exec
 UPDATE control_plane.runtime_executions
 SET version = @version,
     fence = @fence,
@@ -28,6 +29,15 @@ SET version = @version,
     cleanup_eligible_at = nullif(@cleanup_eligible_at, 'epoch'::timestamptz),
     cleanup_not_found_at = nullif(@cleanup_not_found_at, 'epoch'::timestamptz),
     cleanup_deletion_proof_sha256 = nullif(@cleanup_deletion_proof_sha256, ''),
+    restore_assignment_state = @restore_assignment_state,
+    restore_assignment_generation = @restore_assignment_generation,
+    restore_target_pvc_name = nullif(@restore_target_pvc_name, ''),
+    restore_target_pvc_uid = nullif(@restore_target_pvc_uid, '')::uuid,
+    restore_target_pvc_resource_version = nullif(@restore_target_pvc_resource_version, ''),
+    rehydrate_proof_reference = nullif(@rehydrate_proof_reference, ''),
+    rehydrate_proof_sha256 = nullif(@rehydrate_proof_sha256, ''),
+    archive_retain_until = nullif(@archive_retain_until, 'epoch'::timestamptz),
+    pvc_cleanup_eligible_at = @pvc_cleanup_eligible_at,
     updated_at = @updated_at
 WHERE id = @id
   AND version = @expected_version

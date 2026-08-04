@@ -2,8 +2,12 @@
 package entity
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,7 +24,10 @@ type Execution struct {
 	RuntimeRevisionID                                                             string
 	RuntimeRevisionVersion                                                        uint64
 	RuntimeRevisionSHA256                                                         string
+	EffectiveRuntimeSHA256                                                        string
 	ImmutableInputSHA256                                                          string
+	AgentSessionKey, AgentRunID, AgentBindingSHA256                               string
+	AgentSessionID, AgentSessionTurnID                                            int64
 	ResourceClass                                                                 enum.ResourceClass
 	AccessProfile                                                                 enum.AccessProfile
 	WorkloadID, WorkloadSPIFFEID                                                  string
@@ -40,6 +47,16 @@ type Execution struct {
 	RestoreSourceExecutionID, RestoreSourceArchiveReference                       string
 	RestoreSourceArchiveSHA256, RestoreSourceRuntimeRevisionSHA256                string
 	RestoreSourceImmutableInputSHA256, RestoreSourceProofSHA256                   string
+	RetentionPolicyID                                                             string
+	RetentionPolicyVersion, PVCRetentionSeconds, ArchiveRetentionSeconds          uint64
+	ArchiveRetainUntil                                                            time.Time
+	PVCCleanupEligibleAt, CapacityObservationExpiresAt, RescheduleAfter           time.Time
+	RestoreAssignmentState                                                        string
+	RestoreAssignmentGeneration                                                   uint64
+	RestoreTargetPVCName, RestoreTargetPVCUID, RestoreTargetPVCResourceVersion    string
+	RehydrateProofReference, RehydrateProofSHA256                                 string
+	CredentialSnapshotSHA256, WorkloadTicketSHA256                                string
+	WorkloadTicket                                                                string `json:"-"`
 }
 
 func (execution Execution) Validate() error {
@@ -57,7 +74,17 @@ func (execution Execution) Validate() error {
 	}
 	if execution.Attempt == 0 || execution.RuntimeRevisionVersion == 0 ||
 		!sha256Pattern.MatchString(execution.RuntimeRevisionSHA256) ||
+		!sha256Pattern.MatchString(execution.EffectiveRuntimeSHA256) ||
 		!sha256Pattern.MatchString(execution.ImmutableInputSHA256) ||
+		execution.AgentSessionKey == "" || len(execution.AgentSessionKey) > 256 ||
+		execution.AgentSessionID <= 0 || execution.AgentSessionTurnID <= 0 || execution.AgentRunID == "" ||
+		!sha256Pattern.MatchString(execution.AgentBindingSHA256) ||
+		execution.RetentionPolicyID == "" || execution.RetentionPolicyVersion == 0 ||
+		execution.PVCRetentionSeconds < 86400 || execution.ArchiveRetentionSeconds < 7776000 ||
+		execution.PVCCleanupEligibleAt.IsZero() || execution.CapacityObservationExpiresAt.IsZero() ||
+		execution.RescheduleAfter.IsZero() ||
+		!sha256Pattern.MatchString(execution.CredentialSnapshotSHA256) ||
+		!sha256Pattern.MatchString(execution.WorkloadTicketSHA256) ||
 		execution.GrantGeneration == 0 || execution.Version == 0 || execution.Fence == 0 ||
 		execution.WorkloadID == "" || execution.WorkloadSPIFFEID == "" {
 		return errors.New("runtime execution binding is invalid")
@@ -80,10 +107,38 @@ func (execution Execution) Validate() error {
 		return errors.New("runtime execution state is invalid")
 	}
 	if !strings.HasPrefix(execution.WorkloadSPIFFEID, "spiffe://") ||
-		!validArchiveState(execution) || !validCleanupState(execution) || !validRestoreSource(execution) {
+		!validArchiveState(execution) || !validCleanupState(execution) ||
+		!validRestoreSource(execution) || !validRestoreAssignment(execution) {
 		return errors.New("runtime execution lifecycle evidence is invalid")
 	}
 	return nil
+}
+
+func validRestoreAssignment(execution Execution) bool {
+	switch execution.RestoreAssignmentState {
+	case "NONE":
+		return execution.RestoreAssignmentGeneration == 0 &&
+			execution.RestoreSourceExecutionID == "" && execution.RestoreTargetPVCName == "" &&
+			execution.RestoreTargetPVCUID == "" && execution.RestoreTargetPVCResourceVersion == "" &&
+			execution.RehydrateProofReference == "" && execution.RehydrateProofSHA256 == ""
+	case "ASSIGNED":
+		return execution.RestoreAssignmentGeneration > 0 && execution.RestoreSourceExecutionID != "" &&
+			execution.RestoreTargetPVCName == "" && execution.RestoreTargetPVCUID == "" &&
+			execution.RehydrateProofReference == "" && execution.RehydrateProofSHA256 == ""
+	case "BOUND":
+		return execution.RestoreAssignmentGeneration > 0 && validRestoreTarget(execution) &&
+			execution.RehydrateProofReference == "" && execution.RehydrateProofSHA256 == ""
+	case "CONSUMED":
+		return execution.RestoreAssignmentGeneration > 0 && validRestoreTarget(execution) &&
+			execution.RehydrateProofReference != "" && sha256Pattern.MatchString(execution.RehydrateProofSHA256)
+	default:
+		return false
+	}
+}
+
+func validRestoreTarget(execution Execution) bool {
+	return execution.RestoreTargetPVCName != "" && uuid.Validate(execution.RestoreTargetPVCUID) == nil &&
+		execution.RestoreTargetPVCResourceVersion != ""
 }
 
 func validRestoreSource(execution Execution) bool {
@@ -104,7 +159,8 @@ func validArchiveState(execution Execution) bool {
 	archivePresent := execution.ArchiveReference != "" && sha256Pattern.MatchString(execution.ArchiveSHA256)
 	restoreEmpty := execution.RestoreProofReference == "" && execution.RestoreProofSHA256 == ""
 	restorePresent := execution.RestoreProofReference != "" && sha256Pattern.MatchString(execution.RestoreProofSHA256)
-	return (archiveEmpty || archivePresent) && (restoreEmpty || restorePresent) &&
+	retentionReady := !execution.State.Terminal() || !execution.ArchiveRetainUntil.IsZero()
+	return retentionReady && (archiveEmpty || archivePresent) && (restoreEmpty || restorePresent) &&
 		(!restorePresent || archivePresent) && (archiveEmpty || execution.State.Terminal())
 }
 
@@ -155,6 +211,7 @@ type Revision struct {
 	ID                          string
 	Version                     uint64
 	ManifestSHA256              string
+	EffectiveRuntimeSHA256      string
 	ImageDigest                 string
 	SessionID, RoleID, ChatID   string
 	ProviderCredentialBindingID string
@@ -175,10 +232,12 @@ type Revision struct {
 }
 
 type CredentialRef struct {
-	ResourceID string
-	Purpose    string
-	Reference  string
-	Version    uint64
+	ResourceID             string
+	Purpose                string
+	Reference              string
+	Version                uint64
+	ProviderContentVersion string
+	ContentSHA256          string
 }
 
 func (revision Revision) ValidateFor(execution Execution) error {
@@ -190,6 +249,8 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		uuid.Validate(revision.ProviderCredentialBindingID) != nil ||
 		(revision.ChatID != "" && uuid.Validate(revision.ChatID) != nil) ||
 		!sha256Pattern.MatchString(revision.ManifestSHA256) ||
+		revision.EffectiveRuntimeSHA256 != execution.EffectiveRuntimeSHA256 ||
+		!sha256Pattern.MatchString(revision.EffectiveRuntimeSHA256) ||
 		!sha256Pattern.MatchString(execution.RuntimeRevisionSHA256) ||
 		!sha256Pattern.MatchString(revision.AuthorityPolicySHA256) ||
 		revision.PromptRevision == 0 || revision.AuthorityPolicyRevision == 0 ||
@@ -232,7 +293,9 @@ func (revision Revision) ValidateFor(execution Execution) error {
 	for _, credential := range revision.Credentials {
 		component, exists := credentialComponents[credential.ResourceID]
 		if !exists || credential.Version != component.Version || credential.Purpose == "" ||
-			len(credential.Purpose) > 128 || credential.Reference == "" || len(credential.Reference) > 1024 {
+			len(credential.Purpose) > 128 || credential.Reference == "" || len(credential.Reference) > 1024 ||
+			credential.ProviderContentVersion == "" || len(credential.ProviderContentVersion) > 256 ||
+			!sha256Pattern.MatchString(credential.ContentSHA256) {
 			return errors.New("runtime credential reference is invalid")
 		}
 		if _, duplicate := credentialRefs[credential.ResourceID]; duplicate {
@@ -252,6 +315,31 @@ func (revision Revision) ValidateFor(execution Execution) error {
 	}
 	if _, exists := seenBindings[revision.ProviderCredentialBindingID]; !exists {
 		return errors.New("runtime provider credential binding is missing")
+	}
+	type credentialSnapshotEntry struct {
+		ID, Purpose, ImmutableSecretRef, ProviderContentVersion, ContentSHA256 string
+		Version                                                                uint64
+	}
+	snapshot := make([]credentialSnapshotEntry, 0, len(revision.Credentials))
+	for _, credential := range revision.Credentials {
+		snapshot = append(snapshot, credentialSnapshotEntry{ID: credential.ResourceID,
+			Purpose: credential.Purpose, ImmutableSecretRef: credential.Reference,
+			ProviderContentVersion: credential.ProviderContentVersion,
+			ContentSHA256:          credential.ContentSHA256, Version: credential.Version})
+	}
+	slices.SortFunc(snapshot, func(left, right credentialSnapshotEntry) int {
+		return strings.Compare(left.ID, right.ID)
+	})
+	raw, err := json.Marshal(struct {
+		ExecutionID string
+		Credentials []credentialSnapshotEntry
+	}{execution.ID, snapshot})
+	if err != nil {
+		return errors.New("runtime credential snapshot is invalid")
+	}
+	digest := sha256.Sum256(raw)
+	if hex.EncodeToString(digest[:]) != execution.CredentialSnapshotSHA256 {
+		return errors.New("runtime credential snapshot digest mismatch")
 	}
 	seenIntegrations := make(map[string]struct{}, len(revision.IntegrationIDs))
 	for _, identifier := range revision.IntegrationIDs {
@@ -306,6 +394,9 @@ type RuntimeStatus struct {
 	PVCDeletionStarted                                                       bool
 	PVCNotFoundAt                                                            time.Time
 	PVCDeletionProofSHA256                                                   string
+	PVCDeletionAuthorizationID                                               string
+	PVCDeletionAuthorizationGeneration                                       uint64
+	ArchiveSnapshotPVCUID                                                    string
 	RetentionOwner                                                           bool
 	RuntimeRevisionSHA256                                                    string
 	Handoff                                                                  *RuntimeHandoff
@@ -313,7 +404,9 @@ type RuntimeStatus struct {
 
 type RuntimeHandoff struct {
 	Schema, ExecutionID, RuntimeRevisionSHA256, ImmutableInputSHA256 string
+	EffectiveRuntimeSHA256, AgentRunID, AgentBindingSHA256           string
 	ExecutionVersion, Fence, GrantGeneration                         uint64
+	AgentSessionID, AgentSessionTurnID                               int64
 	Outcome, TerminalReference, TerminalSHA256                       string
 	ObservedAt                                                       time.Time
 }
@@ -321,6 +414,8 @@ type RuntimeHandoff struct {
 type PVCDeletionProof struct {
 	PVCName, PVCUID, PVCResourceVersion, SHA256 string
 	ObservedNotFoundAt                          time.Time
+	CleanupAuthorizationID                      string
+	CleanupAuthorizationGeneration              uint64
 }
 
 type RuntimeJournal struct {
@@ -344,6 +439,8 @@ type RuntimeJournal struct {
 	PVCDeleted                  bool      `json:"pvc_deleted,omitempty"`
 	PVCNotFoundAt               time.Time `json:"pvc_not_found_at,omitempty"`
 	PVCDeletionProofSHA256      string    `json:"pvc_deletion_proof_sha256,omitempty"`
+	PVCDeletionAuthorizationID  string    `json:"pvc_deletion_authorization_id,omitempty"`
+	PVCDeletionGeneration       uint64    `json:"pvc_deletion_authorization_generation,omitempty"`
 	RehydratePhase              string    `json:"rehydrate_phase"`
 	RehydratePVCUID             string    `json:"rehydrate_pvc_uid,omitempty"`
 	RehydrateProofReference     string    `json:"rehydrate_proof_reference,omitempty"`

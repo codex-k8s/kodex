@@ -120,8 +120,9 @@ func (client *Client) GetRevision(
 	}
 	revision := entity.Revision{
 		ID: resource.GetId(), Version: resource.GetVersion(),
-		ManifestSHA256: spec.GetManifestSha256(), ImageDigest: spec.GetImageDigest(),
-		SessionID: spec.GetSessionId(), RoleID: spec.GetRoleId(), ChatID: spec.GetChatId(),
+		ManifestSHA256: spec.GetManifestSha256(), EffectiveRuntimeSHA256: spec.GetEffectiveRuntimeSha256(),
+		ImageDigest: spec.GetImageDigest(),
+		SessionID:   spec.GetSessionId(), RoleID: spec.GetRoleId(), ChatID: spec.GetChatId(),
 		ProviderCredentialBindingID: spec.GetProviderCredentialBindingId(),
 		PromptProfileID:             spec.GetPromptProfileId(), PromptRevision: spec.GetPromptRevision(),
 		AuthorityPolicyRevision: spec.GetAuthorityPolicyRevision(),
@@ -157,7 +158,9 @@ func (client *Client) GetRevision(
 			}
 			revision.Credentials = append(revision.Credentials, entity.CredentialRef{
 				ResourceID: credential.GetId(), Purpose: credentialSpec.GetPurpose(),
-				Reference: credentialSpec.GetSecretRef(), Version: credential.GetVersion(),
+				Reference: credentialSpec.GetImmutableSecretRef(), Version: credential.GetVersion(),
+				ProviderContentVersion: credentialSpec.GetProviderContentVersion(),
+				ContentSHA256:          credentialSpec.GetContentSha256(),
 			})
 			if credential.GetId() == revision.ProviderCredentialBindingID {
 				revision.ProviderObservedUsage = credentialSpec.GetProviderObservedUsage()
@@ -236,6 +239,18 @@ func (client *Client) Admit(
 	return runtimerepo.AdmitResult{Execution: updated, LeaseToken: response.GetLeaseToken()}, err
 }
 
+func (client *Client) Reschedule(
+	ctx context.Context, key string, execution entity.Execution,
+) (entity.Execution, error) {
+	response, err := client.shared.ControlPlane.RescheduleRuntimeExecution(ctx,
+		&controlplanev1.RescheduleRuntimeExecutionRequest{IdempotencyKey: key, ExecutionId: execution.ID,
+			ExpectedVersion: execution.Version, ExpectedFence: execution.Fence})
+	if err != nil {
+		return entity.Execution{}, mapError(err)
+	}
+	return castExecution(response.GetPreviousExecution())
+}
+
 func (client *Client) Heartbeat(
 	ctx context.Context, key string, execution entity.Execution, leaseToken string,
 ) (entity.Execution, error) {
@@ -259,6 +274,8 @@ func (client *Client) Complete(
 	terminal := controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_FAILED
 	if outcome == "SUCCEEDED" {
 		terminal = controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_SUCCEEDED
+	} else if outcome == "BLOCKED" {
+		terminal = controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_BLOCKED
 	}
 	response, err := client.shared.ControlPlane.CompleteRuntimeExecution(
 		ctx, &controlplanev1.CompleteRuntimeExecutionRequest{
@@ -342,6 +359,37 @@ func (client *Client) VerifyRestore(
 	return castExecution(response.GetExecution())
 }
 
+func (client *Client) BindRestoreTarget(
+	ctx context.Context, key string, execution entity.Execution,
+	pvcName, pvcUID, pvcResourceVersion string,
+) (entity.Execution, error) {
+	response, err := client.shared.ControlPlane.BindRuntimeRestoreTarget(ctx,
+		&controlplanev1.BindRuntimeRestoreTargetRequest{IdempotencyKey: key, ExecutionId: execution.ID,
+			ExpectedVersion: execution.Version, ExpectedFence: execution.Fence,
+			ExpectedAssignmentGeneration: execution.RestoreAssignmentGeneration,
+			PvcName:                      pvcName, PvcUid: pvcUID, PvcResourceVersion: pvcResourceVersion})
+	if err != nil {
+		return entity.Execution{}, mapError(err)
+	}
+	return castExecution(response.GetExecution())
+}
+
+func (client *Client) CompleteRehydrate(
+	ctx context.Context, key string, execution entity.Execution,
+	pvcName, pvcUID, pvcResourceVersion, proofReference, proofSHA256 string,
+) (entity.Execution, error) {
+	response, err := client.shared.ControlPlane.CompleteRuntimeRehydrate(ctx,
+		&controlplanev1.CompleteRuntimeRehydrateRequest{IdempotencyKey: key, ExecutionId: execution.ID,
+			ExpectedVersion: execution.Version, ExpectedFence: execution.Fence,
+			AssignmentGeneration: execution.RestoreAssignmentGeneration,
+			PvcName:              pvcName, PvcUid: pvcUID, PvcResourceVersion: pvcResourceVersion,
+			ProofReference: proofReference, ProofSha256: proofSHA256})
+	if err != nil {
+		return entity.Execution{}, mapError(err)
+	}
+	return castExecution(response.GetExecution())
+}
+
 func (client *Client) AuthorizeCleanup(
 	ctx context.Context, key string, execution entity.Execution, generation uint64,
 	pvcName, pvcUID, pvcResourceVersion string,
@@ -365,6 +413,10 @@ func (client *Client) AuthorizeCleanup(
 func (client *Client) ConsumeCleanup(
 	ctx context.Context, key string, execution entity.Execution, proof entity.PVCDeletionProof,
 ) (entity.Execution, error) {
+	if proof.CleanupAuthorizationID != execution.CleanupAuthorizationID ||
+		proof.CleanupAuthorizationGeneration != execution.CleanupAuthorizationGeneration {
+		return entity.Execution{}, errs.ErrStateConflict
+	}
 	response, err := client.shared.ControlPlane.ConsumeRuntimeCleanupAuthorization(
 		ctx, &controlplanev1.ConsumeRuntimeCleanupAuthorizationRequest{
 			IdempotencyKey: key, ExecutionId: execution.ID,
@@ -415,10 +467,22 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		RuntimeRevisionID:      source.GetRuntimeRevisionId(),
 		RuntimeRevisionVersion: source.GetRuntimeRevisionVersion(),
 		RuntimeRevisionSHA256:  source.GetRuntimeRevisionSha256(),
+		EffectiveRuntimeSHA256: source.GetEffectiveRuntimeSha256(),
 		ImmutableInputSHA256:   source.GetImmutableInputSha256(),
-		ResourceClass:          enum.ResourceClass(trimEnum(source.GetResourceClass().String(), "RUNTIME_RESOURCE_CLASS_")),
-		AccessProfile:          enum.AccessProfile(trimEnum(source.GetClusterAccessProfile().String(), "CLUSTER_ACCESS_PROFILE_")),
-		WorkloadID:             source.GetWorkloadId(), WorkloadSPIFFEID: source.GetWorkloadSpiffeId(),
+		AgentSessionKey:        source.GetAgentSessionKey(), AgentSessionID: source.GetAgentSessionId(),
+		AgentSessionTurnID: source.GetAgentSessionTurnId(), AgentRunID: source.GetAgentRunId(),
+		AgentBindingSHA256: source.GetAgentBindingSha256(),
+		RetentionPolicyID:  source.GetRetentionPolicyId(), RetentionPolicyVersion: source.GetRetentionPolicyVersion(),
+		RestoreAssignmentState:      source.GetRestoreAssignmentState(),
+		RestoreAssignmentGeneration: source.GetRestoreAssignmentGeneration(),
+		RestoreTargetPVCName:        source.GetRestoreTargetPvcName(), RestoreTargetPVCUID: source.GetRestoreTargetPvcUid(),
+		RestoreTargetPVCResourceVersion: source.GetRestoreTargetPvcResourceVersion(),
+		RehydrateProofReference:         source.GetRehydrateProofReference(), RehydrateProofSHA256: source.GetRehydrateProofSha256(),
+		CredentialSnapshotSHA256: source.GetCredentialSnapshotSha256(), WorkloadTicketSHA256: source.GetWorkloadTicketSha256(),
+		WorkloadTicket: source.GetWorkloadTicket(),
+		ResourceClass:  enum.ResourceClass(trimEnum(source.GetResourceClass().String(), "RUNTIME_RESOURCE_CLASS_")),
+		AccessProfile:  enum.AccessProfile(trimEnum(source.GetClusterAccessProfile().String(), "CLUSTER_ACCESS_PROFILE_")),
+		WorkloadID:     source.GetWorkloadId(), WorkloadSPIFFEID: source.GetWorkloadSpiffeId(),
 		GrantGeneration: source.GetGrantGeneration(), Version: source.GetVersion(), Fence: source.GetFence(),
 		State:   enum.ExecutionState(trimEnum(source.GetState().String(), "RUNTIME_EXECUTION_STATE_")),
 		LeaseID: source.GetLeaseId(), ArchiveReference: source.GetArchiveReference(),
@@ -440,6 +504,24 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 	}
 	if source.GetLeaseExpiresAt() != nil {
 		execution.LeaseExpiresAt = source.GetLeaseExpiresAt().AsTime()
+	}
+	if source.GetPvcRetention() != nil {
+		execution.PVCRetentionSeconds = uint64(source.GetPvcRetention().AsDuration() / time.Second)
+	}
+	if source.GetArchiveRetention() != nil {
+		execution.ArchiveRetentionSeconds = uint64(source.GetArchiveRetention().AsDuration() / time.Second)
+	}
+	if source.GetArchiveRetainUntil() != nil {
+		execution.ArchiveRetainUntil = source.GetArchiveRetainUntil().AsTime()
+	}
+	if source.GetPvcCleanupEligibleAt() != nil {
+		execution.PVCCleanupEligibleAt = source.GetPvcCleanupEligibleAt().AsTime()
+	}
+	if source.GetCapacityObservationExpiresAt() != nil {
+		execution.CapacityObservationExpiresAt = source.GetCapacityObservationExpiresAt().AsTime()
+	}
+	if source.GetRescheduleAfter() != nil {
+		execution.RescheduleAfter = source.GetRescheduleAfter().AsTime()
 	}
 	if source.GetCleanupAuthorizationExpiresAt() != nil {
 		execution.CleanupAuthorizationExpiresAt = source.GetCleanupAuthorizationExpiresAt().AsTime()
