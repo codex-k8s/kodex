@@ -144,6 +144,7 @@ func (service *Service) Resolve(
 		SubjectDigest               string
 		CredentialDigest            string
 		SessionJTI                  string
+		SessionID                   string
 		SessionRevision             uint64
 		OrganizationID              string
 		ProjectID                   string
@@ -165,6 +166,7 @@ func (service *Service) Resolve(
 		input.Identity.SubjectDigest,
 		input.Identity.CredentialDigest,
 		input.Identity.SessionJTI,
+		input.Identity.SessionID,
 		input.Identity.SessionRevision,
 		input.Identity.OrganizationID,
 		input.Identity.ProjectID,
@@ -196,6 +198,26 @@ func (service *Service) Resolve(
 			ActorID:        input.Identity.ActorID,
 		},
 		func(tx domainrepo.Transaction) error {
+			if input.Identity.CallerWorkload == "control-api-gateway" {
+				session := domainrepo.OwnerSessionState{
+					OrganizationID:         input.Identity.OrganizationID,
+					ActorID:                input.Identity.ActorID,
+					SessionID:              input.Identity.SessionID,
+					CredentialDigestSHA256: input.Identity.CredentialDigest,
+					CurrentRevision:        input.Identity.SessionRevision,
+				}
+				switch input.OperationID {
+				case "control.owner-session.admit", "control.readiness.check", "control.gateway-public-tls.admit":
+				case "control.owner-session.revoke":
+					if err := tx.RequireOwnerSession(ctx, session, true); err != nil {
+						return errs.ErrPermissionDenied
+					}
+				default:
+					if err := tx.RequireOwnerSession(ctx, session, false); err != nil {
+						return errs.ErrPermissionDenied
+					}
+				}
+			}
 			receipt, receiptErr := tx.GetReceipt(
 				ctx,
 				input.Identity.OrganizationID,
@@ -298,6 +320,9 @@ func (service *Service) Resolve(
 				Revision:     input.Identity.SessionRevision,
 				DigestSHA256: input.Identity.CredentialDigest,
 			}
+			if input.Identity.CallerWorkload == "control-api-gateway" {
+				provenance.Reference = input.Identity.SessionID
+			}
 			if input.Identity.BoundTurnID != "" {
 				provenance.Reference = fmt.Sprintf(
 					"%s/%d/%d",
@@ -399,6 +424,7 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 		value.ValidateID(identity.OrganizationID) != nil ||
 		(identity.ProjectID != "" && value.ValidateID(identity.ProjectID) != nil) ||
 		value.ValidateID(identity.SessionJTI) != nil ||
+		(identity.CallerWorkload == "control-api-gateway" && value.ValidateID(identity.SessionID) != nil) ||
 		identity.SessionRevision == 0 ||
 		len(identity.SubjectDigest) != 64 ||
 		len(identity.CredentialDigest) != 64 {

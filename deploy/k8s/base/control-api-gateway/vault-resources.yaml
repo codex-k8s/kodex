@@ -62,6 +62,30 @@ spec:
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultStaticSecret
 metadata:
+  name: control-api-gateway-public-tls-state
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/control-api-gateway/public-tls-state
+  refreshAfter: 1m
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-api-gateway}
+  destination:
+    create: true
+    name: control-api-gateway-public-tls-state
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        state.json:
+          text: >-
+            {"generation":{{ get .Secrets "generation" }},"predecessorGeneration":{{ get .Secrets "predecessor-generation" }},"predecessorCertificateSha256":"{{ get .Secrets "predecessor-certificate-sha256" }}"}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
   name: control-api-gateway-session-keys
   annotations: {argocd.argoproj.io/sync-wave: "-6"}
 spec:

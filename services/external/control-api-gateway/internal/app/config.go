@@ -22,6 +22,8 @@ type Config struct {
 	TechnicalListen                   string        `env:"CONTROL_API_GATEWAY_TECHNICAL_LISTEN"`
 	TLSCertificateFile                string        `env:"CONTROL_API_GATEWAY_TLS_CERTIFICATE_FILE"`
 	TLSPrivateKeyFile                 string        `env:"CONTROL_API_GATEWAY_TLS_PRIVATE_KEY_FILE"`
+	PublicTLSCAFile                   string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_CA_FILE"`
+	PublicTLSStateFile                string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_STATE_FILE"`
 	PublicTLSServerName               string        `env:"CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME"`
 	OIDCIssuer                        string        `env:"CONTROL_API_GATEWAY_OIDC_ISSUER"`
 	OIDCAudience                      string        `env:"CONTROL_API_GATEWAY_OIDC_AUDIENCE"`
@@ -46,7 +48,11 @@ type Config struct {
 	RateWindow                        time.Duration `env:"CONTROL_API_GATEWAY_RATE_WINDOW"`
 	RateLimit                         uint32        `env:"CONTROL_API_GATEWAY_RATE_LIMIT"`
 	MaximumRateKeys                   int           `env:"CONTROL_API_GATEWAY_MAXIMUM_RATE_KEYS"`
-	MaximumConcurrency                int           `env:"CONTROL_API_GATEWAY_MAXIMUM_CONCURRENCY"`
+	PreAuthConcurrency                int           `env:"CONTROL_API_GATEWAY_PREAUTH_CONCURRENCY"`
+	MaximumHTTPConcurrency            int           `env:"CONTROL_API_GATEWAY_MAXIMUM_HTTP_CONCURRENCY"`
+	PerSubjectHTTPConcurrency         int           `env:"CONTROL_API_GATEWAY_PER_SUBJECT_HTTP_CONCURRENCY"`
+	MaximumWebSocketConcurrency       int           `env:"CONTROL_API_GATEWAY_MAXIMUM_WEBSOCKET_CONCURRENCY"`
+	PerSubjectWebSocketConcurrency    int           `env:"CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY"`
 }
 
 func loadConfig() (Config, error) {
@@ -54,6 +60,8 @@ func loadConfig() (Config, error) {
 		HTTPListen: ":8443", TechnicalListen: ":9090",
 		TLSCertificateFile:  "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.crt",
 		TLSPrivateKeyFile:   "/var/run/secrets/mattercodex/control-api-gateway/public-tls/tls.key",
+		PublicTLSCAFile:     "/var/run/secrets/mattercodex/control-api-gateway/public-tls/ca.crt",
+		PublicTLSStateFile:  "/var/run/secrets/mattercodex/control-api-gateway/public-tls-state/state.json",
 		PublicTLSServerName: "control-api.mattercodex.local",
 		OIDCIssuer:          "https://sso.mattercodex.local/realms/mattercodex", OIDCAudience: "mattercodex-control-api",
 		OIDCTLSServerName: "sso.mattercodex.local", OIDCCAFile: "/var/run/config/mattercodex/control-api-gateway/oidc/ca.pem",
@@ -67,8 +75,10 @@ func loadConfig() (Config, error) {
 		ControlPlaneClientPrivateKeyFile:  "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.key",
 		ControlPlaneApplicationGrantFile:  "/var/run/secrets/mattercodex/control-api-gateway/application-grant/readiness.jwt",
 		RequestTimeout:                    15 * time.Second, RPCTimeout: 5 * time.Second, StartupTimeout: 20 * time.Second,
-		ShutdownTimeout: 10 * time.Second, ReadinessInterval: 10 * time.Second, RealtimePollInterval: 3 * time.Second,
-		RateWindow: time.Minute, RateLimit: 120, MaximumRateKeys: 10000, MaximumConcurrency: 256,
+		ShutdownTimeout: 20 * time.Second, ReadinessInterval: 10 * time.Second, RealtimePollInterval: 3 * time.Second,
+		RateWindow: time.Minute, RateLimit: 120, MaximumRateKeys: 10000,
+		PreAuthConcurrency: 32, MaximumHTTPConcurrency: 256, PerSubjectHTTPConcurrency: 16,
+		MaximumWebSocketConcurrency: 128, PerSubjectWebSocketConcurrency: 4,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
@@ -85,7 +95,7 @@ func (config Config) validate() error {
 	if config.HTTPListen == config.TechnicalListen {
 		return errors.New("control API listeners must be separate")
 	}
-	for _, path := range []string{config.TLSCertificateFile, config.TLSPrivateKeyFile, config.OIDCCAFile, config.SessionCurrentKeyFile, config.ControlPlaneCAFile, config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile, config.ControlPlaneApplicationGrantFile} {
+	for _, path := range []string{config.TLSCertificateFile, config.TLSPrivateKeyFile, config.PublicTLSCAFile, config.PublicTLSStateFile, config.OIDCCAFile, config.SessionCurrentKeyFile, config.ControlPlaneCAFile, config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile, config.ControlPlaneApplicationGrantFile} {
 		if !filepath.IsAbs(path) {
 			return errors.New("control API runtime path is invalid")
 		}
@@ -115,7 +125,11 @@ func (config Config) validate() error {
 		config.RPCTimeout < time.Second || config.RPCTimeout > 10*time.Second || config.StartupTimeout < time.Second || config.StartupTimeout > time.Minute ||
 		config.ShutdownTimeout < time.Second || config.ShutdownTimeout > time.Minute || config.ReadinessInterval < time.Second || config.RealtimePollInterval < time.Second ||
 		config.RateWindow < time.Second || config.RateWindow > time.Hour || config.RateLimit == 0 || config.RateLimit > 10000 ||
-		config.MaximumRateKeys < 100 || config.MaximumRateKeys > 100000 || config.MaximumConcurrency < 1 || config.MaximumConcurrency > 2048 {
+		config.ShutdownTimeout < config.RequestTimeout || config.MaximumRateKeys < 100 || config.MaximumRateKeys > 100000 ||
+		config.PreAuthConcurrency < 1 || config.PreAuthConcurrency > 256 || config.MaximumHTTPConcurrency < 1 || config.MaximumHTTPConcurrency > 2048 ||
+		config.PerSubjectHTTPConcurrency < 1 || config.PerSubjectHTTPConcurrency >= config.MaximumHTTPConcurrency ||
+		config.MaximumWebSocketConcurrency < 1 || config.MaximumWebSocketConcurrency > 1024 ||
+		config.PerSubjectWebSocketConcurrency < 1 || config.PerSubjectWebSocketConcurrency >= config.MaximumWebSocketConcurrency {
 		return errors.New("control API bounded configuration is invalid")
 	}
 	return nil

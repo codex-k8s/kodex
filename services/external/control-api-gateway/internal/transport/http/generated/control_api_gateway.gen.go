@@ -42,24 +42,150 @@ func (e AccessResourceKind) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactProjectionScanStatus.
+const (
+	ArtifactProjectionScanStatusCLEAN       ArtifactProjectionScanStatus = "CLEAN"
+	ArtifactProjectionScanStatusFAILED      ArtifactProjectionScanStatus = "FAILED"
+	ArtifactProjectionScanStatusPENDING     ArtifactProjectionScanStatus = "PENDING"
+	ArtifactProjectionScanStatusQUARANTINED ArtifactProjectionScanStatus = "QUARANTINED"
+	ArtifactProjectionScanStatusSCANNING    ArtifactProjectionScanStatus = "SCANNING"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactProjectionScanStatus enum.
+func (e ArtifactProjectionScanStatus) Valid() bool {
+	switch e {
+	case ArtifactProjectionScanStatusCLEAN:
+		return true
+	case ArtifactProjectionScanStatusFAILED:
+		return true
+	case ArtifactProjectionScanStatusPENDING:
+		return true
+	case ArtifactProjectionScanStatusQUARANTINED:
+		return true
+	case ArtifactProjectionScanStatusSCANNING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChatProjectionRoomType.
+const (
+	ChatProjectionRoomTypeCOORDINATION ChatProjectionRoomType = "COORDINATION"
+	ChatProjectionRoomTypeRUNS         ChatProjectionRoomType = "RUNS"
+	ChatProjectionRoomTypeUSER         ChatProjectionRoomType = "USER"
+	ChatProjectionRoomTypeWORKCONTROL  ChatProjectionRoomType = "WORK_CONTROL"
+)
+
+// Valid indicates whether the value is a known member of the ChatProjectionRoomType enum.
+func (e ChatProjectionRoomType) Valid() bool {
+	switch e {
+	case ChatProjectionRoomTypeCOORDINATION:
+		return true
+	case ChatProjectionRoomTypeRUNS:
+		return true
+	case ChatProjectionRoomTypeUSER:
+		return true
+	case ChatProjectionRoomTypeWORKCONTROL:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatSpecRoomType.
 const (
-	COORDINATION ChatSpecRoomType = "COORDINATION"
-	RUNS         ChatSpecRoomType = "RUNS"
-	USER         ChatSpecRoomType = "USER"
-	WORKCONTROL  ChatSpecRoomType = "WORK_CONTROL"
+	ChatSpecRoomTypeCOORDINATION ChatSpecRoomType = "COORDINATION"
+	ChatSpecRoomTypeRUNS         ChatSpecRoomType = "RUNS"
+	ChatSpecRoomTypeUSER         ChatSpecRoomType = "USER"
+	ChatSpecRoomTypeWORKCONTROL  ChatSpecRoomType = "WORK_CONTROL"
 )
 
 // Valid indicates whether the value is a known member of the ChatSpecRoomType enum.
 func (e ChatSpecRoomType) Valid() bool {
 	switch e {
-	case COORDINATION:
+	case ChatSpecRoomTypeCOORDINATION:
 		return true
-	case RUNS:
+	case ChatSpecRoomTypeRUNS:
 		return true
-	case USER:
+	case ChatSpecRoomTypeUSER:
 		return true
-	case WORKCONTROL:
+	case ChatSpecRoomTypeWORKCONTROL:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigurationChangeAction.
+const (
+	Create                 ConfigurationChangeAction = "create"
+	CreateSchedule         ConfigurationChangeAction = "create_schedule"
+	Delete                 ConfigurationChangeAction = "delete"
+	ManageScheduleACTIVATE ConfigurationChangeAction = "manage_schedule_ACTIVATE"
+	ManageScheduleARCHIVE  ConfigurationChangeAction = "manage_schedule_ARCHIVE"
+	ManageScheduleDELETE   ConfigurationChangeAction = "manage_schedule_DELETE"
+	ManageSchedulePAUSE    ConfigurationChangeAction = "manage_schedule_PAUSE"
+	ManageScheduleUPDATE   ConfigurationChangeAction = "manage_schedule_UPDATE"
+	Transition             ConfigurationChangeAction = "transition"
+	Update                 ConfigurationChangeAction = "update"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationChangeAction enum.
+func (e ConfigurationChangeAction) Valid() bool {
+	switch e {
+	case Create:
+		return true
+	case CreateSchedule:
+		return true
+	case Delete:
+		return true
+	case ManageScheduleACTIVATE:
+		return true
+	case ManageScheduleARCHIVE:
+		return true
+	case ManageScheduleDELETE:
+		return true
+	case ManageSchedulePAUSE:
+		return true
+	case ManageScheduleUPDATE:
+		return true
+	case Transition:
+		return true
+	case Update:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigurationChangeOutcome.
+const (
+	Succeeded ConfigurationChangeOutcome = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationChangeOutcome enum.
+func (e ConfigurationChangeOutcome) Valid() bool {
+	switch e {
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigurationOwnershipProjectionManagedBy.
+const (
+	Git ConfigurationOwnershipProjectionManagedBy = "git"
+	Ui  ConfigurationOwnershipProjectionManagedBy = "ui"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationOwnershipProjectionManagedBy enum.
+func (e ConfigurationOwnershipProjectionManagedBy) Valid() bool {
+	switch e {
+	case Git:
+		return true
+	case Ui:
 		return true
 	default:
 		return false
@@ -68,55 +194,55 @@ func (e ChatSpecRoomType) Valid() bool {
 
 // Defines values for LifecycleState.
 const (
-	ACTIVE          LifecycleState = "ACTIVE"
-	ARCHIVED        LifecycleState = "ARCHIVED"
-	BLOCKED         LifecycleState = "BLOCKED"
-	CANCELLED       LifecycleState = "CANCELLED"
-	CLAIMED         LifecycleState = "CLAIMED"
-	DELETED         LifecycleState = "DELETED"
-	DELETIONPENDING LifecycleState = "DELETION_PENDING"
-	EXPIRED         LifecycleState = "EXPIRED"
-	FAILED          LifecycleState = "FAILED"
-	PAUSED          LifecycleState = "PAUSED"
-	QUEUED          LifecycleState = "QUEUED"
-	RUNNING         LifecycleState = "RUNNING"
-	SUCCEEDED       LifecycleState = "SUCCEEDED"
-	WAITINGEXTERNAL LifecycleState = "WAITING_EXTERNAL"
-	WAITINGOWNER    LifecycleState = "WAITING_OWNER"
+	LifecycleStateACTIVE          LifecycleState = "ACTIVE"
+	LifecycleStateARCHIVED        LifecycleState = "ARCHIVED"
+	LifecycleStateBLOCKED         LifecycleState = "BLOCKED"
+	LifecycleStateCANCELLED       LifecycleState = "CANCELLED"
+	LifecycleStateCLAIMED         LifecycleState = "CLAIMED"
+	LifecycleStateDELETED         LifecycleState = "DELETED"
+	LifecycleStateDELETIONPENDING LifecycleState = "DELETION_PENDING"
+	LifecycleStateEXPIRED         LifecycleState = "EXPIRED"
+	LifecycleStateFAILED          LifecycleState = "FAILED"
+	LifecycleStatePAUSED          LifecycleState = "PAUSED"
+	LifecycleStateQUEUED          LifecycleState = "QUEUED"
+	LifecycleStateRUNNING         LifecycleState = "RUNNING"
+	LifecycleStateSUCCEEDED       LifecycleState = "SUCCEEDED"
+	LifecycleStateWAITINGEXTERNAL LifecycleState = "WAITING_EXTERNAL"
+	LifecycleStateWAITINGOWNER    LifecycleState = "WAITING_OWNER"
 )
 
 // Valid indicates whether the value is a known member of the LifecycleState enum.
 func (e LifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case LifecycleStateACTIVE:
 		return true
-	case ARCHIVED:
+	case LifecycleStateARCHIVED:
 		return true
-	case BLOCKED:
+	case LifecycleStateBLOCKED:
 		return true
-	case CANCELLED:
+	case LifecycleStateCANCELLED:
 		return true
-	case CLAIMED:
+	case LifecycleStateCLAIMED:
 		return true
-	case DELETED:
+	case LifecycleStateDELETED:
 		return true
-	case DELETIONPENDING:
+	case LifecycleStateDELETIONPENDING:
 		return true
-	case EXPIRED:
+	case LifecycleStateEXPIRED:
 		return true
-	case FAILED:
+	case LifecycleStateFAILED:
 		return true
-	case PAUSED:
+	case LifecycleStatePAUSED:
 		return true
-	case QUEUED:
+	case LifecycleStateQUEUED:
 		return true
-	case RUNNING:
+	case LifecycleStateRUNNING:
 		return true
-	case SUCCEEDED:
+	case LifecycleStateSUCCEEDED:
 		return true
-	case WAITINGEXTERNAL:
+	case LifecycleStateWAITINGEXTERNAL:
 		return true
-	case WAITINGOWNER:
+	case LifecycleStateWAITINGOWNER:
 		return true
 	default:
 		return false
@@ -171,6 +297,69 @@ func (e MutableResourceKind) Valid() bool {
 	case INTEGRATION:
 		return true
 	case REPOSITORYWORKSPACE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerGateProjectionDecision.
+const (
+	APPROVED         OwnerGateProjectionDecision = "APPROVED"
+	CANCELLED        OwnerGateProjectionDecision = "CANCELLED"
+	CHANGESREQUESTED OwnerGateProjectionDecision = "CHANGES_REQUESTED"
+	PENDING          OwnerGateProjectionDecision = "PENDING"
+	REJECTED         OwnerGateProjectionDecision = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateProjectionDecision enum.
+func (e OwnerGateProjectionDecision) Valid() bool {
+	switch e {
+	case APPROVED:
+		return true
+	case CANCELLED:
+		return true
+	case CHANGESREQUESTED:
+		return true
+	case PENDING:
+		return true
+	case REJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectProjectionLocale.
+const (
+	En ProjectProjectionLocale = "en"
+	Ru ProjectProjectionLocale = "ru"
+)
+
+// Valid indicates whether the value is a known member of the ProjectProjectionLocale enum.
+func (e ProjectProjectionLocale) Valid() bool {
+	switch e {
+	case En:
+		return true
+	case Ru:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderPoolProjectionPolicy.
+const (
+	LeastUsed ProviderPoolProjectionPolicy = "least_used"
+	Weighted  ProviderPoolProjectionPolicy = "weighted"
+)
+
+// Valid indicates whether the value is a known member of the ProviderPoolProjectionPolicy enum.
+func (e ProviderPoolProjectionPolicy) Valid() bool {
+	switch e {
+	case LeastUsed:
+		return true
+	case Weighted:
 		return true
 	default:
 		return false
@@ -240,6 +429,27 @@ func (e ResourceKind) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeIncidentKind.
+const (
+	HEARTBEATMISSED     RuntimeIncidentKind = "HEARTBEAT_MISSED"
+	RECONCILEFAILED     RuntimeIncidentKind = "RECONCILE_FAILED"
+	WORKLOADUNAVAILABLE RuntimeIncidentKind = "WORKLOAD_UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeIncidentKind enum.
+func (e RuntimeIncidentKind) Valid() bool {
+	switch e {
+	case HEARTBEATMISSED:
+		return true
+	case RECONCILEFAILED:
+		return true
+	case WORKLOADUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
 // AccessResourceKind defines model for AccessResourceKind.
 type AccessResourceKind string
 
@@ -249,6 +459,22 @@ type AccessSpecInput struct {
 	Role          *RoleSpec          `json:"role,omitempty"`
 	Team          *TeamSpec          `json:"team,omitempty"`
 }
+
+// ArtifactProjection defines model for ArtifactProjection.
+type ArtifactProjection struct {
+	ArtifactKind       string                       `json:"artifactKind"`
+	Direction          string                       `json:"direction"`
+	MediaType          string                       `json:"mediaType"`
+	ScanEvidenceSha256 *string                      `json:"scanEvidenceSha256,omitempty"`
+	ScanPolicyRevision int64                        `json:"scanPolicyRevision"`
+	ScanStatus         ArtifactProjectionScanStatus `json:"scanStatus"`
+	ScannedAt          *time.Time                   `json:"scannedAt,omitempty"`
+	Sha256             string                       `json:"sha256"`
+	SizeBytes          int64                        `json:"sizeBytes"`
+}
+
+// ArtifactProjectionScanStatus defines model for ArtifactProjection.ScanStatus.
+type ArtifactProjectionScanStatus string
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
@@ -270,6 +496,19 @@ type AuditPage struct {
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
 
+// ChatProjection defines model for ChatProjection.
+type ChatProjection struct {
+	DefaultAgentId     *openapi_types.UUID              `json:"defaultAgentId,omitempty"`
+	ExternalChannelRef string                           `json:"externalChannelRef"`
+	Ownership          ConfigurationOwnershipProjection `json:"ownership"`
+	RoomType           ChatProjectionRoomType           `json:"roomType"`
+	StableKey          string                           `json:"stableKey"`
+	WorkPolicy         string                           `json:"workPolicy"`
+}
+
+// ChatProjectionRoomType defines model for ChatProjection.RoomType.
+type ChatProjectionRoomType string
+
 // ChatSpec defines model for ChatSpec.
 type ChatSpec struct {
 	DefaultAgentId     *openapi_types.UUID `json:"defaultAgentId,omitempty"`
@@ -281,6 +520,48 @@ type ChatSpec struct {
 
 // ChatSpecRoomType defines model for ChatSpec.RoomType.
 type ChatSpecRoomType string
+
+// ConfigurationChange defines model for ConfigurationChange.
+type ConfigurationChange struct {
+	Action          ConfigurationChangeAction  `json:"action"`
+	ActorId         openapi_types.UUID         `json:"actorId"`
+	CorrelationId   openapi_types.UUID         `json:"correlationId"`
+	Id              openapi_types.UUID         `json:"id"`
+	OccurredAt      time.Time                  `json:"occurredAt"`
+	Outcome         ConfigurationChangeOutcome `json:"outcome"`
+	PolicyRevision  int64                      `json:"policyRevision"`
+	ResourceId      openapi_types.UUID         `json:"resourceId"`
+	ResourceKind    ResourceKind               `json:"resourceKind"`
+	ResourceVersion int64                      `json:"resourceVersion"`
+}
+
+// ConfigurationChangeAction defines model for ConfigurationChangeAction.
+type ConfigurationChangeAction string
+
+// ConfigurationChangeOutcome defines model for ConfigurationChangeOutcome.
+type ConfigurationChangeOutcome string
+
+// ConfigurationChangePage defines model for ConfigurationChangePage.
+type ConfigurationChangePage struct {
+	Changes       []ConfigurationChange `json:"changes"`
+	NextPageToken *string               `json:"nextPageToken,omitempty"`
+}
+
+// ConfigurationOwnershipProjection defines model for ConfigurationOwnershipProjection.
+type ConfigurationOwnershipProjection struct {
+	ManagedBy ConfigurationOwnershipProjectionManagedBy `json:"managedBy"`
+	Revision  int64                                     `json:"revision"`
+	Source    string                                    `json:"source"`
+}
+
+// ConfigurationOwnershipProjectionManagedBy defines model for ConfigurationOwnershipProjection.ManagedBy.
+type ConfigurationOwnershipProjectionManagedBy string
+
+// CopyAccessResource defines model for CopyAccessResource.
+type CopyAccessResource struct {
+	Kind AccessResourceKind `json:"kind"`
+	Name string             `json:"name"`
+}
 
 // CreateProject defines model for CreateProject.
 type CreateProject struct {
@@ -296,12 +577,32 @@ type CreateResource struct {
 	Spec     ResourceSpecInput   `json:"spec"`
 }
 
+// CredentialBindingProjection defines model for CredentialBindingProjection.
+type CredentialBindingProjection struct {
+	ContentSha256               string                           `json:"contentSha256"`
+	ExpiresAt                   *time.Time                       `json:"expiresAt,omitempty"`
+	ImmutableSecretRef          string                           `json:"immutableSecretRef"`
+	Ownership                   ConfigurationOwnershipProjection `json:"ownership"`
+	PrincipalRef                string                           `json:"principalRef"`
+	ProviderCapabilities        []string                         `json:"providerCapabilities"`
+	ProviderEligible            bool                             `json:"providerEligible"`
+	ProviderObservationRevision int64                            `json:"providerObservationRevision"`
+	ProviderObservedAt          *time.Time                       `json:"providerObservedAt,omitempty"`
+	Purpose                     string                           `json:"purpose"`
+	Revision                    int64                            `json:"revision"`
+}
+
 // CredentialBindingSpec Содержит только URI/metadata Secret; secret value запрещён.
 type CredentialBindingSpec struct {
 	ImmutableSecretRef string `json:"immutableSecretRef"`
 	PrincipalRef       string `json:"principalRef"`
 	Purpose            string `json:"purpose"`
 	Revision           int64  `json:"revision"`
+}
+
+// DetachAccessResource defines model for DetachAccessResource.
+type DetachAccessResource struct {
+	Kind AccessResourceKind `json:"kind"`
 }
 
 // Diagnostics defines model for Diagnostics.
@@ -314,6 +615,22 @@ type Diagnostics struct {
 	RuntimePrincipalStatus     string  `json:"runtimePrincipalStatus"`
 	SchemaVersion              int64   `json:"schemaVersion"`
 	TerminalOutboxEvents       int64   `json:"terminalOutboxEvents"`
+}
+
+// IncidentPage defines model for IncidentPage.
+type IncidentPage struct {
+	Incidents     []RuntimeIncident `json:"incidents"`
+	NextPageToken *string           `json:"nextPageToken,omitempty"`
+}
+
+// IntegrationProjection defines model for IntegrationProjection.
+type IntegrationProjection struct {
+	Capabilities         []string                         `json:"capabilities"`
+	CredentialBindingIds []openapi_types.UUID             `json:"credentialBindingIds"`
+	DefinitionRef        string                           `json:"definitionRef"`
+	DefinitionVersion    int64                            `json:"definitionVersion"`
+	EndpointRef          string                           `json:"endpointRef"`
+	Ownership            ConfigurationOwnershipProjection `json:"ownership"`
 }
 
 // IntegrationSpec defines model for IntegrationSpec.
@@ -340,8 +657,33 @@ type ManageAccessResource struct {
 // ManageAccessResourceAction defines model for ManageAccessResource.Action.
 type ManageAccessResourceAction string
 
+// MemoryRecordProjection defines model for MemoryRecordProjection.
+type MemoryRecordProjection struct {
+	ContentSha256 string              `json:"contentSha256"`
+	Importance    int                 `json:"importance"`
+	Provenance    string              `json:"provenance"`
+	RoleId        *openapi_types.UUID `json:"roleId,omitempty"`
+	Scope         string              `json:"scope"`
+	Title         string              `json:"title"`
+}
+
 // MutableResourceKind defines model for MutableResourceKind.
 type MutableResourceKind string
+
+// OwnerGateProjection defines model for OwnerGateProjection.
+type OwnerGateProjection struct {
+	Attempt              int                         `json:"attempt"`
+	Decision             OwnerGateProjectionDecision `json:"decision"`
+	ExpiresAt            time.Time                   `json:"expiresAt"`
+	ImmutableInputSha256 string                      `json:"immutableInputSha256"`
+	ProcessRunId         openapi_types.UUID          `json:"processRunId"`
+	ResultSha256         string                      `json:"resultSha256"`
+	SessionId            openapi_types.UUID          `json:"sessionId"`
+	TurnId               openapi_types.UUID          `json:"turnId"`
+}
+
+// OwnerGateProjectionDecision defines model for OwnerGateProjection.Decision.
+type OwnerGateProjectionDecision string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -353,11 +695,47 @@ type Problem struct {
 	Type          string             `json:"type"`
 }
 
+// ProcessRunProjection defines model for ProcessRunProjection.
+type ProcessRunProjection struct {
+	CurrentAttempt       *int                `json:"currentAttempt,omitempty"`
+	CurrentSessionId     *openapi_types.UUID `json:"currentSessionId,omitempty"`
+	CurrentTurnId        *openapi_types.UUID `json:"currentTurnId,omitempty"`
+	ImmutableInputSha256 string              `json:"immutableInputSha256"`
+	ParentProcessRunId   *openapi_types.UUID `json:"parentProcessRunId,omitempty"`
+	PlaybookRef          string              `json:"playbookRef"`
+	PolicyRevision       int64               `json:"policyRevision"`
+	RootAttempt          int                 `json:"rootAttempt"`
+	RootSessionId        openapi_types.UUID  `json:"rootSessionId"`
+	RootTriggerRef       string              `json:"rootTriggerRef"`
+	RootTurnId           openapi_types.UUID  `json:"rootTurnId"`
+	RuntimeRevisionId    openapi_types.UUID  `json:"runtimeRevisionId"`
+}
+
+// ProjectProjection defines model for ProjectProjection.
+type ProjectProjection struct {
+	Description string                           `json:"description"`
+	Locale      ProjectProjectionLocale          `json:"locale"`
+	Ownership   ConfigurationOwnershipProjection `json:"ownership"`
+	Slug        string                           `json:"slug"`
+}
+
+// ProjectProjectionLocale defines model for ProjectProjection.Locale.
+type ProjectProjectionLocale string
+
 // ProjectSpec defines model for ProjectSpec.
 type ProjectSpec struct {
 	Description *string `json:"description,omitempty"`
 	Locale      string  `json:"locale"`
 	Slug        string  `json:"slug"`
+}
+
+// PromptProfileProjection defines model for PromptProfileProjection.
+type PromptProfileProjection struct {
+	ContentSha256 string                           `json:"contentSha256"`
+	Locale        string                           `json:"locale"`
+	Ownership     ConfigurationOwnershipProjection `json:"ownership"`
+	Revision      int64                            `json:"revision"`
+	SourceRef     string                           `json:"sourceRef"`
 }
 
 // PromptProfileSpec defines model for PromptProfileSpec.
@@ -366,6 +744,32 @@ type PromptProfileSpec struct {
 	Locale        string `json:"locale"`
 	Revision      int64  `json:"revision"`
 	SourceRef     string `json:"sourceRef"`
+}
+
+// ProviderPoolBindingProjection defines model for ProviderPoolBindingProjection.
+type ProviderPoolBindingProjection struct {
+	CredentialBindingId openapi_types.UUID `json:"credentialBindingId"`
+	Weight              int                `json:"weight"`
+}
+
+// ProviderPoolProjection defines model for ProviderPoolProjection.
+type ProviderPoolProjection struct {
+	Bindings                 []ProviderPoolBindingProjection `json:"bindings"`
+	ObservationMaxAgeSeconds int64                           `json:"observationMaxAgeSeconds"`
+	Policy                   ProviderPoolProjectionPolicy    `json:"policy"`
+	PolicyRevision           int64                           `json:"policyRevision"`
+}
+
+// ProviderPoolProjectionPolicy defines model for ProviderPoolProjection.Policy.
+type ProviderPoolProjectionPolicy string
+
+// RepositoryWorkspaceProjection defines model for RepositoryWorkspaceProjection.
+type RepositoryWorkspaceProjection struct {
+	CredentialBindingId *openapi_types.UUID              `json:"credentialBindingId,omitempty"`
+	DefaultBranch       string                           `json:"defaultBranch"`
+	Ownership           ConfigurationOwnershipProjection `json:"ownership"`
+	RepositoryRef       string                           `json:"repositoryRef"`
+	WorkspaceMode       string                           `json:"workspaceMode"`
 }
 
 // RepositoryWorkspaceSpec defines model for RepositoryWorkspaceSpec.
@@ -378,15 +782,13 @@ type RepositoryWorkspaceSpec struct {
 
 // Resource defines model for Resource.
 type Resource struct {
-	CreatedAt time.Time           `json:"createdAt"`
-	Id        openapi_types.UUID  `json:"id"`
-	Kind      ResourceKind        `json:"kind"`
-	Name      string              `json:"name"`
-	ParentId  *openapi_types.UUID `json:"parentId,omitempty"`
-	ProjectId *openapi_types.UUID `json:"projectId,omitempty"`
-
-	// Spec Безопасная protobuf JSON-проекция; credential values отсутствуют.
-	Spec      map[string]interface{} `json:"spec"`
+	CreatedAt time.Time              `json:"createdAt"`
+	Id        openapi_types.UUID     `json:"id"`
+	Kind      ResourceKind           `json:"kind"`
+	Name      string                 `json:"name"`
+	ParentId  *openapi_types.UUID    `json:"parentId,omitempty"`
+	ProjectId *openapi_types.UUID    `json:"projectId,omitempty"`
+	Spec      ResourceSpecProjection `json:"spec"`
 	State     LifecycleState         `json:"state"`
 	UpdatedAt time.Time              `json:"updatedAt"`
 	Version   int64                  `json:"version"`
@@ -411,6 +813,40 @@ type ResourceSpecInput struct {
 	RepositoryWorkspace *RepositoryWorkspaceSpec `json:"repositoryWorkspace,omitempty"`
 }
 
+// ResourceSpecProjection defines model for ResourceSpecProjection.
+type ResourceSpecProjection struct {
+	Artifact            *ArtifactProjection            `json:"artifact,omitempty"`
+	Chat                *ChatProjection                `json:"chat,omitempty"`
+	CredentialBinding   *CredentialBindingProjection   `json:"credentialBinding,omitempty"`
+	Integration         *IntegrationProjection         `json:"integration,omitempty"`
+	MemoryRecord        *MemoryRecordProjection        `json:"memoryRecord,omitempty"`
+	OwnerGate           *OwnerGateProjection           `json:"ownerGate,omitempty"`
+	ProcessRun          *ProcessRunProjection          `json:"processRun,omitempty"`
+	Project             *ProjectProjection             `json:"project,omitempty"`
+	PromptProfile       *PromptProfileProjection       `json:"promptProfile,omitempty"`
+	RepositoryWorkspace *RepositoryWorkspaceProjection `json:"repositoryWorkspace,omitempty"`
+	Role                *RoleProjection                `json:"role,omitempty"`
+	RuntimeRevision     *RuntimeRevisionProjection     `json:"runtimeRevision,omitempty"`
+	Schedule            *ScheduleProjection            `json:"schedule,omitempty"`
+	Session             *SessionProjection             `json:"session,omitempty"`
+	Team                *TeamProjection                `json:"team,omitempty"`
+	Turn                *TurnProjection                `json:"turn,omitempty"`
+	WorkClaim           *WorkClaimProjection           `json:"workClaim,omitempty"`
+}
+
+// RoleProjection defines model for RoleProjection.
+type RoleProjection struct {
+	AllowedTargetRoleIds         []openapi_types.UUID             `json:"allowedTargetRoleIds"`
+	Capabilities                 []string                         `json:"capabilities"`
+	IntegrationIds               []openapi_types.UUID             `json:"integrationIds"`
+	Ownership                    ConfigurationOwnershipProjection `json:"ownership"`
+	PromptProfileId              openapi_types.UUID               `json:"promptProfileId"`
+	ProviderAccountPool          ProviderPoolProjection           `json:"providerAccountPool"`
+	ProviderCredentialBindingIds []openapi_types.UUID             `json:"providerCredentialBindingIds"`
+	RepositoryWorkspaceIds       []openapi_types.UUID             `json:"repositoryWorkspaceIds"`
+	StableKey                    string                           `json:"stableKey"`
+}
+
 // RoleSpec defines model for RoleSpec.
 type RoleSpec struct {
 	AllowedTargetRoleIds         []openapi_types.UUID `json:"allowedTargetRoleIds"`
@@ -420,6 +856,63 @@ type RoleSpec struct {
 	ProviderCredentialBindingIds []openapi_types.UUID `json:"providerCredentialBindingIds"`
 	RepositoryWorkspaceIds       []openapi_types.UUID `json:"repositoryWorkspaceIds"`
 	StableKey                    string               `json:"stableKey"`
+}
+
+// RuntimeIncident defines model for RuntimeIncident.
+type RuntimeIncident struct {
+	EvidenceSha256 string              `json:"evidenceSha256"`
+	ExecutionFence int64               `json:"executionFence"`
+	ExecutionId    openapi_types.UUID  `json:"executionId"`
+	IncidentId     openapi_types.UUID  `json:"incidentId"`
+	Kind           RuntimeIncidentKind `json:"kind"`
+	OccurredAt     time.Time           `json:"occurredAt"`
+	WorkloadId     string              `json:"workloadId"`
+}
+
+// RuntimeIncidentKind defines model for RuntimeIncidentKind.
+type RuntimeIncidentKind string
+
+// RuntimeRevisionProjection defines model for RuntimeRevisionProjection.
+type RuntimeRevisionProjection struct {
+	AuthorityPolicyRevision int64               `json:"authorityPolicyRevision"`
+	ChatId                  *openapi_types.UUID `json:"chatId,omitempty"`
+	EffectiveRuntimeSha256  string              `json:"effectiveRuntimeSha256"`
+	ImageDigest             string              `json:"imageDigest"`
+	ManifestSha256          string              `json:"manifestSha256"`
+	PromptProfileId         openapi_types.UUID  `json:"promptProfileId"`
+	PromptRevision          int64               `json:"promptRevision"`
+	RoleId                  openapi_types.UUID  `json:"roleId"`
+	SessionId               openapi_types.UUID  `json:"sessionId"`
+}
+
+// ScheduleProjection defines model for ScheduleProjection.
+type ScheduleProjection struct {
+	Cron             *string                          `json:"cron,omitempty"`
+	MaximumAttempts  int                              `json:"maximumAttempts"`
+	NextRunAt        time.Time                        `json:"nextRunAt"`
+	Ownership        ConfigurationOwnershipProjection `json:"ownership"`
+	TargetKind       ResourceKind                     `json:"targetKind"`
+	TargetResourceId openapi_types.UUID               `json:"targetResourceId"`
+	TargetVersion    int64                            `json:"targetVersion"`
+	Timezone         string                           `json:"timezone"`
+}
+
+// SessionProjection defines model for SessionProjection.
+type SessionProjection struct {
+	AgentId                  openapi_types.UUID  `json:"agentId"`
+	ArchiveRef               *string             `json:"archiveRef,omitempty"`
+	ConversationId           *openapi_types.UUID `json:"conversationId,omitempty"`
+	LastTurnSequence         int64               `json:"lastTurnSequence"`
+	ProviderAccountBindingId openapi_types.UUID  `json:"providerAccountBindingId"`
+}
+
+// TeamProjection defines model for TeamProjection.
+type TeamProjection struct {
+	ExternalTeamRef string                           `json:"externalTeamRef"`
+	MemberActorIds  []openapi_types.UUID             `json:"memberActorIds"`
+	Ownership       ConfigurationOwnershipProjection `json:"ownership"`
+	RoleIds         []openapi_types.UUID             `json:"roleIds"`
+	StableKey       string                           `json:"stableKey"`
 }
 
 // TeamSpec defines model for TeamSpec.
@@ -436,12 +929,36 @@ type TransitionResource struct {
 	TargetState LifecycleState `json:"targetState"`
 }
 
+// TurnProjection defines model for TurnProjection.
+type TurnProjection struct {
+	Attempt              int                 `json:"attempt"`
+	EffectiveInputSha256 string              `json:"effectiveInputSha256"`
+	ProcessRunId         *openapi_types.UUID `json:"processRunId,omitempty"`
+	ResultArtifactId     *openapi_types.UUID `json:"resultArtifactId,omitempty"`
+	RuntimeRevisionId    openapi_types.UUID  `json:"runtimeRevisionId"`
+	Sequence             int64               `json:"sequence"`
+	SessionId            openapi_types.UUID  `json:"sessionId"`
+	SourceRef            string              `json:"sourceRef"`
+}
+
 // UpdateResource defines model for UpdateResource.
 type UpdateResource struct {
-	DetachGitManagement *bool               `json:"detachGitManagement,omitempty"`
-	Kind                MutableResourceKind `json:"kind"`
-	Name                string              `json:"name"`
-	Spec                ResourceSpecInput   `json:"spec"`
+	Kind MutableResourceKind `json:"kind"`
+	Name string              `json:"name"`
+	Spec ResourceSpecInput   `json:"spec"`
+}
+
+// WorkClaimProjection defines model for WorkClaimProjection.
+type WorkClaimProjection struct {
+	Attempt             int                `json:"attempt"`
+	AuthorityGeneration int64              `json:"authorityGeneration"`
+	Domains             []string           `json:"domains"`
+	ExpiresAt           time.Time          `json:"expiresAt"`
+	ProcessRunId        openapi_types.UUID `json:"processRunId"`
+	ResourceKeys        []string           `json:"resourceKeys"`
+	SessionId           openapi_types.UUID `json:"sessionId"`
+	TurnId              openapi_types.UUID `json:"turnId"`
+	WorkloadId          string             `json:"workloadId"`
 }
 
 // CSRFToken defines model for CSRFToken.
@@ -508,6 +1025,20 @@ type ManageAccessResourceParams struct {
 	IfMatch        *string        `json:"If-Match,omitempty"`
 }
 
+// CopyAccessResourceParams defines parameters for CopyAccessResource.
+type CopyAccessResourceParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// DetachAccessResourceParams defines parameters for DetachAccessResource.
+type DetachAccessResourceParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // ListAuditEventsParams defines parameters for ListAuditEvents.
 type ListAuditEventsParams struct {
 	ResourceKind *ResourceKind       `form:"resourceKind,omitempty" json:"resourceKind,omitempty"`
@@ -556,6 +1087,15 @@ type CreateResourceParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// SearchResourcesParams defines parameters for SearchResources.
+type SearchResourcesParams struct {
+	Kind      ResourceKindQuery `form:"kind" json:"kind"`
+	Query     string            `form:"query" json:"query"`
+	State     *[]LifecycleState `form:"state,omitempty" json:"state,omitempty"`
+	PageSize  *PageSize         `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken        `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // DeleteResourceParams defines parameters for DeleteResource.
 type DeleteResourceParams struct {
 	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
@@ -591,11 +1131,24 @@ type ListRunsParams struct {
 
 // DeleteOwnerSessionParams defines parameters for DeleteOwnerSession.
 type DeleteOwnerSessionParams struct {
-	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// CreateOwnerSessionParams defines parameters for CreateOwnerSession.
+type CreateOwnerSessionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ManageAccessResourceJSONRequestBody defines body for ManageAccessResource for application/json ContentType.
 type ManageAccessResourceJSONRequestBody = ManageAccessResource
+
+// CopyAccessResourceJSONRequestBody defines body for CopyAccessResource for application/json ContentType.
+type CopyAccessResourceJSONRequestBody = CopyAccessResource
+
+// DetachAccessResourceJSONRequestBody defines body for DetachAccessResource for application/json ContentType.
+type DetachAccessResourceJSONRequestBody = DetachAccessResource
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProject
@@ -614,6 +1167,12 @@ type ServerInterface interface {
 	// Выполнить специализированную access command
 	// (POST /access-resources)
 	ManageAccessResource(w http.ResponseWriter, r *http.Request, params ManageAccessResourceParams)
+	// Создать UI-owned копию exact Git-owned access resource version
+	// (POST /access-resources/{resourceId}/copy)
+	CopyAccessResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params CopyAccessResourceParams)
+	// Явно перевести Git-owned access resource в UI ownership
+	// (POST /access-resources/{resourceId}/detach)
+	DetachAccessResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params DetachAccessResourceParams)
 	// Получить audit metadata
 	// (GET /audit)
 	ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams)
@@ -638,6 +1197,9 @@ type ServerInterface interface {
 	// Создать ресурс допустимого вида
 	// (POST /resources)
 	CreateResource(w http.ResponseWriter, r *http.Request, params CreateResourceParams)
+	// Выполнить авторитетный owner search одного закрытого resource kind
+	// (GET /resources/search)
+	SearchResources(w http.ResponseWriter, r *http.Request, params SearchResourcesParams)
 	// Удалить ресурс с optimistic concurrency
 	// (DELETE /resources/{resourceId})
 	DeleteResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params DeleteResourceParams)
@@ -658,7 +1220,7 @@ type ServerInterface interface {
 	DeleteOwnerSession(w http.ResponseWriter, r *http.Request, params DeleteOwnerSessionParams)
 	// Создать защищённую owner-сессию
 	// (POST /session)
-	CreateOwnerSession(w http.ResponseWriter, r *http.Request)
+	CreateOwnerSession(w http.ResponseWriter, r *http.Request, params CreateOwnerSessionParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -754,6 +1316,218 @@ func (siw *ServerInterfaceWrapper) ManageAccessResource(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ManageAccessResource(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CopyAccessResource operation middleware
+func (siw *ServerInterfaceWrapper) CopyAccessResource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "resourceId" -------------
+	var resourceId ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CopyAccessResourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CopyAccessResource(w, r, resourceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DetachAccessResource operation middleware
+func (siw *ServerInterfaceWrapper) DetachAccessResource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "resourceId" -------------
+	var resourceId ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "resourceId", r.PathValue("resourceId"), &resourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DetachAccessResourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DetachAccessResource(w, r, resourceId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1269,6 +2043,97 @@ func (siw *ServerInterfaceWrapper) CreateResource(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// SearchResources operation middleware
+func (siw *ServerInterfaceWrapper) SearchResources(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchResourcesParams
+
+	// ------------- Required query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchResources(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteResource operation middleware
 func (siw *ServerInterfaceWrapper) DeleteResource(w http.ResponseWriter, r *http.Request) {
 
@@ -1740,6 +2605,52 @@ func (siw *ServerInterfaceWrapper) DeleteOwnerSession(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteOwnerSession(w, r, params)
 	}))
@@ -1754,14 +2665,45 @@ func (siw *ServerInterfaceWrapper) DeleteOwnerSession(w http.ResponseWriter, r *
 // CreateOwnerSession operation middleware
 func (siw *ServerInterfaceWrapper) CreateOwnerSession(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, OidcBearerScopes, []string{})
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateOwnerSessionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateOwnerSession(w, r)
+		siw.Handler.CreateOwnerSession(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1892,6 +2834,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources", wrapper.ManageAccessResource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources/{resourceId}/copy", wrapper.CopyAccessResource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources/{resourceId}/detach", wrapper.DetachAccessResource)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAuditEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/configuration-changes", wrapper.ListConfigurationChanges)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
@@ -1900,6 +2844,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/projects", wrapper.CreateProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources", wrapper.ListResources)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources", wrapper.CreateResource)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/search", wrapper.SearchResources)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/resources/{resourceId}", wrapper.DeleteResource)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/{resourceId}", wrapper.GetResource)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/resources/{resourceId}", wrapper.UpdateResource)

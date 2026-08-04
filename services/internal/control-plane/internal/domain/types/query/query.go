@@ -61,6 +61,22 @@ type AuditFilter struct {
 	Limit          int
 }
 
+// RuntimeIncidentFilter задаёт устойчивый owner-scoped cursor append-only evidence.
+type RuntimeIncidentFilter struct {
+	OrganizationID string
+	ProjectID      string
+	AfterID        string
+	Limit          int
+}
+
+func (filter RuntimeIncidentFilter) Validate() error {
+	if filter.Limit < 1 || filter.Limit > MaximumPageSize ||
+		(filter.AfterID != "" && value.ValidateID(filter.AfterID) != nil) {
+		return errors.New("runtime incident filter is invalid")
+	}
+	return nil
+}
+
 func (filter AuditFilter) Validate() error {
 	if filter.Limit < 1 || filter.Limit > MaximumPageSize ||
 		(filter.ResourceKind != "" && !filter.ResourceKind.Valid()) ||

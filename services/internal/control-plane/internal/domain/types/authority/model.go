@@ -10,6 +10,7 @@ type ApplicationIdentity struct {
 	OrganizationID              string
 	ProjectID                   string
 	SessionJTI                  string
+	SessionID                   string
 	SessionRevision             uint64
 	SubjectDigest               string
 	CredentialDigest            string

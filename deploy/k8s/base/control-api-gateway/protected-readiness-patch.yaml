@@ -7,11 +7,13 @@ spec:
       containers:
         - name: control-api-gateway
           startupProbe:
+            $patch: replace
             httpGet: {path: /readyz, port: metrics}
             timeoutSeconds: 2
             periodSeconds: 2
             failureThreshold: 30
           readinessProbe:
+            $patch: replace
             httpGet: {path: /readyz, port: metrics}
             timeoutSeconds: 2
             periodSeconds: 5

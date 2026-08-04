@@ -68,9 +68,48 @@ type SearchInput struct {
 	Filter    query.ResourceSearch
 }
 
+type DetachAccessResourceInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ResourceID      string
+	ExpectedVersion uint64
+	ExpectedKind    enum.Kind
+}
+
+type CopyAccessResourceInput struct {
+	Principal             value.Principal
+	IdempotencyKey        string
+	SourceResourceID      string
+	ExpectedSourceVersion uint64
+	ExpectedKind          enum.Kind
+	Name                  string
+}
+
 type ListAuditInput struct {
 	Principal value.Principal
 	Filter    query.AuditFilter
+}
+
+type ListRuntimeIncidentsInput struct {
+	Principal value.Principal
+	Filter    query.RuntimeIncidentFilter
+}
+
+type OwnerSessionInput struct {
+	Principal        value.Principal
+	IdempotencyKey   string
+	ExpectedRevision uint64
+}
+
+type GatewayPublicTLSInput struct {
+	Principal                    value.Principal
+	IdempotencyKey               string
+	Generation                   uint64
+	CertificateSHA256            string
+	PredecessorGeneration        uint64
+	PredecessorCertificateSHA256 string
+	NotBefore                    time.Time
+	NotAfter                     time.Time
 }
 
 type ListTombstonesInput struct {

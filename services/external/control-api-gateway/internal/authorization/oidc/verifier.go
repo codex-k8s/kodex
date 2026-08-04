@@ -28,6 +28,7 @@ type Config struct {
 
 type Principal struct {
 	Subject         string
+	OrganizationID  string
 	SessionID       string
 	SessionRevision uint64
 	ExpiresAt       time.Time
@@ -55,6 +56,7 @@ func (transport exactTransport) RoundTrip(request *http.Request) (*http.Response
 
 type claims struct {
 	SessionID       string `json:"sid"`
+	OrganizationID  string `json:"organization_id"`
 	SessionRevision uint64 `json:"session_revision"`
 	TokenID         string `json:"jti"`
 }
@@ -127,12 +129,12 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 		return Principal{}, errors.New("OIDC bearer is invalid")
 	}
 	var values claims
-	if token.Claims(&values) != nil || uuid.Validate(values.SessionID) != nil ||
+	if token.Claims(&values) != nil || uuid.Validate(values.SessionID) != nil || uuid.Validate(values.OrganizationID) != nil ||
 		uuid.Validate(values.TokenID) != nil || values.SessionRevision == 0 {
 		return Principal{}, errors.New("OIDC session claims are invalid")
 	}
 	return Principal{
-		Subject: token.Subject, SessionID: values.SessionID,
+		Subject: token.Subject, OrganizationID: values.OrganizationID, SessionID: values.SessionID,
 		SessionRevision: values.SessionRevision, ExpiresAt: token.Expiry,
 	}, nil
 }

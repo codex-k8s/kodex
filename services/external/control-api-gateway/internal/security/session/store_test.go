@@ -22,7 +22,7 @@ func TestSessionRotationAndCSRF(t *testing.T) {
 		t.Fatalf("new original store: %v", err)
 	}
 	original.now = func() time.Time { return now }
-	claims, encoded, csrf, err := original.Issue(uuid.NewString(), uuid.NewString(), 7, "header.payload.signature", now.Add(time.Hour))
+	claims, encoded, csrf, err := original.Issue(uuid.NewString(), uuid.NewString(), uuid.NewString(), 7, "header.payload.signature", now.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestSessionExpiryIsClosed(t *testing.T) {
 		t.Fatalf("new: %v", err)
 	}
 	store.now = func() time.Time { return now }
-	_, encoded, _, err := store.Issue(uuid.NewString(), uuid.NewString(), 1, "header.payload.signature", now.Add(time.Hour))
+	_, encoded, _, err := store.Issue(uuid.NewString(), uuid.NewString(), uuid.NewString(), 1, "header.payload.signature", now.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}

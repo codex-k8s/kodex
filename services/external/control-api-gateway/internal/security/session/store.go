@@ -43,6 +43,7 @@ type Store struct {
 
 type Claims struct {
 	Subject         string `json:"sub"`
+	OrganizationID  string `json:"organization_id"`
 	OIDCSessionID   string `json:"oidc_session_id"`
 	SessionRevision uint64 `json:"session_revision"`
 	SessionID       string `json:"session_id"`
@@ -73,8 +74,8 @@ func New(config Config) (*Store, error) {
 	return &Store{current: current, previous: previous, ttl: config.TTL, now: time.Now}, nil
 }
 
-func (store *Store) Issue(subject, oidcSessionID string, revision uint64, bearer string, tokenExpiry time.Time) (Claims, string, string, error) {
-	if store == nil || uuid.Validate(subject) != nil || uuid.Validate(oidcSessionID) != nil || revision == 0 ||
+func (store *Store) Issue(subject, organizationID, oidcSessionID string, revision uint64, bearer string, tokenExpiry time.Time) (Claims, string, string, error) {
+	if store == nil || uuid.Validate(subject) != nil || uuid.Validate(organizationID) != nil || uuid.Validate(oidcSessionID) != nil || revision == 0 ||
 		bearer == "" || len(bearer) > maximumBearer || strings.TrimSpace(bearer) != bearer {
 		return Claims{}, "", "", errors.New("session input is invalid")
 	}
@@ -93,7 +94,7 @@ func (store *Store) Issue(subject, oidcSessionID string, revision uint64, bearer
 	csrf := base64.RawURLEncoding.EncodeToString(csrfRaw)
 	csrfDigest := sha256.Sum256([]byte(csrf))
 	claims := Claims{
-		Subject: subject, OIDCSessionID: oidcSessionID, SessionRevision: revision,
+		Subject: subject, OrganizationID: organizationID, OIDCSessionID: oidcSessionID, SessionRevision: revision,
 		SessionID: uuid.NewString(), Bearer: bearer, CSRFHash: hex.EncodeToString(csrfDigest[:]),
 		IssuedAt: now.Unix(), ExpiresAt: expires.Unix(),
 	}
@@ -127,7 +128,7 @@ func (store *Store) Open(encoded string) (Claims, error) {
 	decoder.DisallowUnknownFields()
 	var claims Claims
 	if decoder.Decode(&claims) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
-		uuid.Validate(claims.Subject) != nil || uuid.Validate(claims.OIDCSessionID) != nil ||
+		uuid.Validate(claims.Subject) != nil || uuid.Validate(claims.OrganizationID) != nil || uuid.Validate(claims.OIDCSessionID) != nil ||
 		uuid.Validate(claims.SessionID) != nil || claims.SessionRevision == 0 ||
 		claims.Bearer == "" || len(claims.Bearer) > maximumBearer ||
 		len(claims.CSRFHash) != sha256.Size*2 || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt ||

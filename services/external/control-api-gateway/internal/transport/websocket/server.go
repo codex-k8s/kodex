@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/observability"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/projection"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
@@ -24,22 +26,24 @@ import (
 	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/websocket/generated"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc/status"
 )
 
 const (
 	protocol         = "mattercodex.control.v1"
 	maximumReadBytes = 16 << 10
-	maximumItems     = 100
-	incidentAction   = "record_runtime_incident"
+	maximumItems     = 500
+	rpcPageSize      = 100
 	readTimeout      = 10 * time.Second
 	writeTimeout     = 5 * time.Second
 )
 
+var errSnapshotLimit = errors.New("snapshot limit exceeded")
+
 type ControlPlane interface {
 	ListResources(context.Context, *controlplanev1.ListResourcesRequest, ...grpc.CallOption) (*controlplanev1.ListResourcesResponse, error)
 	ListAuditEvents(context.Context, *controlplanev1.ListAuditEventsRequest, ...grpc.CallOption) (*controlplanev1.ListAuditEventsResponse, error)
+	ListRuntimeIncidents(context.Context, *controlplanev1.ListRuntimeIncidentsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeIncidentsResponse, error)
 }
 
 type Server struct {
@@ -51,6 +55,10 @@ type Server struct {
 	pollInterval   time.Duration
 	rpcTimeout     time.Duration
 	connections    atomic.Int64
+	connectionMu   sync.Mutex
+	active         map[*websocket.Conn]struct{}
+	connectionWG   sync.WaitGroup
+	stopping       bool
 }
 
 func New(control ControlPlane, security *boundary.Boundary, metrics *internalobservability.Metrics, logger *slog.Logger, origins []string, pollInterval, rpcTimeout time.Duration) (*Server, error) {
@@ -66,7 +74,7 @@ func New(control ControlPlane, security *boundary.Boundary, metrics *internalobs
 		}
 		patterns = append(patterns, parsed.Hostname())
 	}
-	return &Server{control: control, security: security, metrics: metrics, logger: logger, originPatterns: patterns, pollInterval: pollInterval, rpcTimeout: rpcTimeout}, nil
+	return &Server{control: control, security: security, metrics: metrics, logger: logger, originPatterns: patterns, pollInterval: pollInterval, rpcTimeout: rpcTimeout, active: make(map[*websocket.Conn]struct{})}, nil
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -98,6 +106,21 @@ func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Reques
 		_ = connection.Close(websocket.StatusPolicyViolation, "required subprotocol is unavailable")
 		return
 	}
+	server.connectionMu.Lock()
+	if server.stopping {
+		server.connectionMu.Unlock()
+		_ = connection.Close(websocket.StatusGoingAway, "gateway stopping")
+		return
+	}
+	server.active[connection] = struct{}{}
+	server.connectionWG.Add(1)
+	server.connectionMu.Unlock()
+	defer func() {
+		server.connectionMu.Lock()
+		delete(server.active, connection)
+		server.connectionMu.Unlock()
+		server.connectionWG.Done()
+	}()
 	current := server.connections.Add(1)
 	server.metrics.SetWebSockets(int(current))
 	defer func() { server.metrics.SetWebSockets(int(server.connections.Add(-1))) }()
@@ -202,7 +225,7 @@ func (server *Server) publish(ctx context.Context, connection *websocket.Conn, s
 		}
 		*sequence++
 		outChannel := generated.ValuesToAnonymousSchema_9[name]
-		message := generated.Snapshot{ReservedType: "SNAPSHOT", RequestId: subscribe.RequestId, Channel: &outChannel, Sequence: int(*sequence), ServerTime: time.Now().UTC().Format(time.RFC3339Nano), Items: items}
+		message := generated.Snapshot{ReservedType: "SNAPSHOT", RequestId: subscribe.RequestId, Channel: &outChannel, Sequence: int(*sequence), SnapshotId: uuid.NewString(), Complete: true, ServerTime: time.Now().UTC().Format(time.RFC3339Nano), Items: items}
 		writeContext, cancel := context.WithTimeout(ctx, writeTimeout)
 		err = wsjsonWrite(writeContext, connection, message)
 		cancel()
@@ -214,82 +237,197 @@ func (server *Server) publish(ctx context.Context, connection *websocket.Conn, s
 	return nil
 }
 
-func (server *Server) snapshot(ctx context.Context, channel string, kinds []generated.AnonymousSchema_6) ([]map[string]any, error) {
+func (server *Server) snapshot(ctx context.Context, channel string, kinds []generated.AnonymousSchema_6) (*generated.SnapshotItems, error) {
 	rpcContext, cancel := context.WithTimeout(ctx, server.rpcTimeout)
 	defer cancel()
 	switch channel {
 	case "RUNS":
-		response, err := server.control.ListResources(rpcContext, &controlplanev1.ListResourcesRequest{Kind: controlplanev1.ResourceKind_RESOURCE_KIND_PROCESS_RUN, PageSize: maximumItems})
-		if err != nil {
-			return nil, err
-		}
-		return protoItems(response.GetResources())
+		items, err := server.allResources(rpcContext, controlplanev1.ResourceKind_RESOURCE_KIND_PROCESS_RUN)
+		return &generated.SnapshotItems{Resources: items}, err
 	case "RESOURCES":
-		items := make([]map[string]any, 0)
+		items := make([]generated.AnonymousSchema_15, 0)
 		for _, kind := range kinds {
 			name, _ := kind.Value().(string)
 			protoKind := controlplanev1.ResourceKind(controlplanev1.ResourceKind_value["RESOURCE_KIND_"+name])
 			if protoKind == controlplanev1.ResourceKind_RESOURCE_KIND_UNSPECIFIED {
 				return nil, errors.New("resource kind is invalid")
 			}
-			response, err := server.control.ListResources(rpcContext, &controlplanev1.ListResourcesRequest{Kind: protoKind, PageSize: maximumItems})
+			converted, err := server.allResources(rpcContext, protoKind)
 			if err != nil {
 				return nil, err
 			}
-			converted, err := protoItems(response.GetResources())
-			if err != nil {
-				return nil, err
+			if len(items)+len(converted) > maximumItems {
+				return nil, errSnapshotLimit
 			}
 			items = append(items, converted...)
-			if len(items) >= maximumItems {
-				return items[:maximumItems], nil
-			}
 		}
-		return items, nil
+		return &generated.SnapshotItems{Resources: items}, nil
 	case "INCIDENTS":
-		response, err := server.control.ListAuditEvents(rpcContext, &controlplanev1.ListAuditEventsRequest{Action: incidentAction, PageSize: maximumItems})
-		if err != nil {
-			return nil, err
-		}
-		return protoItems(response.GetEvents())
+		items, err := server.allIncidents(rpcContext)
+		return &generated.SnapshotItems{Incidents: items}, err
 	case "CONFIGURATION_CHANGES":
-		response, err := server.control.ListAuditEvents(rpcContext, &controlplanev1.ListAuditEventsRequest{PageSize: maximumItems})
-		if err != nil {
-			return nil, err
-		}
-		items := make([]proto.Message, 0, len(response.GetEvents()))
-		for _, event := range response.GetEvents() {
-			if projection.IsConfigurationAction(event.GetAction()) {
-				items = append(items, event)
-			}
-		}
-		return protoItems(items)
+		items, err := server.allConfigurationChanges(rpcContext)
+		return &generated.SnapshotItems{ConfigurationChanges: items}, err
 	default:
 		return nil, errors.New("subscription channel is invalid")
 	}
 }
 
-func protoItems[T proto.Message](values []T) ([]map[string]any, error) {
-	items := make([]map[string]any, 0, len(values))
-	for _, value := range values {
-		raw, err := protojson.MarshalOptions{UseProtoNames: false}.Marshal(value)
+func (server *Server) allResources(ctx context.Context, kind controlplanev1.ResourceKind) ([]generated.AnonymousSchema_15, error) {
+	items := make([]generated.AnonymousSchema_15, 0)
+	token := ""
+	for {
+		response, err := server.control.ListResources(ctx, &controlplanev1.ListResourcesRequest{Kind: kind, PageSize: rpcPageSize, PageToken: token})
 		if err != nil {
 			return nil, err
 		}
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.UseNumber()
-		var item map[string]any
-		if decoder.Decode(&item) != nil || decoder.Decode(&struct{}{}) != io.EOF {
-			return nil, errors.New("snapshot item is invalid")
+		for _, item := range response.GetResources() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			external, err := httptransport.ConvertResource(item)
+			if err != nil {
+				return nil, err
+			}
+			converted, err := convertExternal[generated.AnonymousSchema_15](external)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, converted)
 		}
-		items = append(items, item)
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetResources()) == 0 || next == token) {
+			return nil, errors.New("resource pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+		if len(items) >= maximumItems {
+			return nil, errSnapshotLimit
+		}
 	}
-	return items, nil
+}
+
+func (server *Server) allIncidents(ctx context.Context) ([]generated.AnonymousSchema_182, error) {
+	items := make([]generated.AnonymousSchema_182, 0)
+	token := ""
+	for {
+		response, err := server.control.ListRuntimeIncidents(ctx, &controlplanev1.ListRuntimeIncidentsRequest{PageSize: rpcPageSize, PageToken: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetIncidents() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			external, err := httptransport.ConvertRuntimeIncident(item)
+			if err != nil {
+				return nil, err
+			}
+			converted, err := convertExternal[generated.AnonymousSchema_182](external)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, converted)
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetIncidents()) == 0 || next == token) {
+			return nil, errors.New("incident pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+		if len(items) >= maximumItems {
+			return nil, errSnapshotLimit
+		}
+	}
+}
+
+func (server *Server) allConfigurationChanges(ctx context.Context) ([]generated.AnonymousSchema_191, error) {
+	items := make([]generated.AnonymousSchema_191, 0)
+	token := ""
+	scanned := 0
+	for {
+		response, err := server.control.ListAuditEvents(ctx, &controlplanev1.ListAuditEventsRequest{PageSize: rpcPageSize, PageToken: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetEvents() {
+			scanned++
+			if scanned > maximumItems {
+				return nil, errSnapshotLimit
+			}
+			if !projection.IsConfigurationAction(item.GetAction()) {
+				continue
+			}
+			external, err := httptransport.ConvertAuditEvent(item)
+			if err != nil {
+				return nil, err
+			}
+			converted, err := convertExternal[generated.AnonymousSchema_191](external)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, converted)
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetEvents()) == 0 || next == token) {
+			return nil, errors.New("configuration pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+		if scanned >= maximumItems {
+			return nil, errSnapshotLimit
+		}
+	}
+}
+
+func convertExternal[T any](input any) (T, error) {
+	var output T
+	raw, err := json.Marshal(input)
+	if err != nil {
+		return output, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&output) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return output, errors.New("typed external projection is invalid")
+	}
+	return output, nil
+}
+
+func (server *Server) Shutdown(ctx context.Context) error {
+	server.connectionMu.Lock()
+	server.stopping = true
+	connections := make([]*websocket.Conn, 0, len(server.active))
+	for connection := range server.active {
+		connections = append(connections, connection)
+	}
+	server.connectionMu.Unlock()
+	for _, connection := range connections {
+		_ = connection.Close(websocket.StatusGoingAway, "gateway stopping")
+	}
+	done := make(chan struct{})
+	go func() { server.connectionWG.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (server *Server) sendProblem(ctx context.Context, connection *websocket.Conn, requestID string, err error) {
 	code, retryable, expected := httptransport.MapRPCProblem(err)
-	if !expected {
+	if errors.Is(err, errSnapshotLimit) {
+		code, retryable, expected = "UNAVAILABLE", true, true
+	}
+	grpcStatus, isGRPC := status.FromError(err)
+	if !expected && (!isGRPC || !grpcserver.IsUnexpectedCode(grpcStatus.Code())) {
 		server.logger.ErrorContext(ctx, "unexpected realtime RPC outcome", "error_class", "rpc_contract")
 	}
 	writeContext, cancel := context.WithTimeout(ctx, writeTimeout)

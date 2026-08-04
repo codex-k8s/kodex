@@ -25,6 +25,12 @@ service ControlPlaneService {
   rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse);
   // ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
   rpc ManageAccessResource(ManageAccessResourceRequest) returns (ManageAccessResourceResponse);
+  // DetachAccessResource атомарно переводит Git-owned TEAM/ROLE/PROMPT_PROFILE
+  // в UI ownership без принятия spec или source от вызывающего.
+  rpc DetachAccessResource(DetachAccessResourceRequest) returns (DetachAccessResourceResponse);
+  // CopyAccessResource создаёт UI-owned копию Git-owned TEAM/ROLE/PROMPT_PROFILE
+  // из авторитетной закреплённой версии источника.
+  rpc CopyAccessResource(CopyAccessResourceRequest) returns (CopyAccessResourceResponse);
   // GetResource выполняет версионированную операцию ControlPlaneService.
   rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
   // ListResources выполняет версионированную операцию ControlPlaneService.
@@ -35,6 +41,8 @@ service ControlPlaneService {
   rpc SearchMemoryRecords(SearchMemoryRecordsRequest) returns (SearchMemoryRecordsResponse);
   // ListAuditEvents выполняет версионированную операцию ControlPlaneService.
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+  // ListRuntimeIncidents возвращает typed watchdog evidence в owner boundary.
+  rpc ListRuntimeIncidents(ListRuntimeIncidentsRequest) returns (ListRuntimeIncidentsResponse);
   // ListTombstones выполняет версионированную операцию ControlPlaneService.
   rpc ListTombstones(ListTombstonesRequest) returns (ListTombstonesResponse);
   // GetDiagnostics выполняет версионированную операцию ControlPlaneService.
@@ -43,6 +51,15 @@ service ControlPlaneService {
   rpc ListOutboxFailures(ListOutboxFailuresRequest) returns (ListOutboxFailuresResponse);
   // RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
   rpc RepairOutboxEvent(RepairOutboxEventRequest) returns (RepairOutboxEventResponse);
+
+  // AdmitOwnerSession фиксирует current OIDC session revision и credential digest
+  // после специализированного proof, не принимая actor/tenant/session из payload.
+  rpc AdmitOwnerSession(AdmitOwnerSessionRequest) returns (AdmitOwnerSessionResponse);
+  // RevokeOwnerSession закрывает только exact current browser session.
+  rpc RevokeOwnerSession(RevokeOwnerSessionRequest) returns (RevokeOwnerSessionResponse);
+  // AdmitGatewayPublicTLS фиксирует forward-only generation после exact served
+  // peer readback gateway и возвращает durable authoritative state.
+  rpc AdmitGatewayPublicTLS(AdmitGatewayPublicTLSRequest) returns (AdmitGatewayPublicTLSResponse);
 
   // EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
   rpc EnqueueTurn(EnqueueTurnRequest) returns (EnqueueTurnResponse);
@@ -956,6 +973,31 @@ message ManageAccessResourceResponse {
   Resource resource = 1;
 }
 
+// DetachAccessResourceRequest не принимает spec/source: они разрешаются после owner lock.
+message DetachAccessResourceRequest {
+  string idempotency_key = 1;
+  string resource_id = 2;
+  uint64 expected_version = 3;
+  ResourceKind expected_kind = 4;
+}
+
+message DetachAccessResourceResponse {
+  Resource resource = 1;
+}
+
+// CopyAccessResourceRequest закрепляет source version, но не принимает его spec/owner.
+message CopyAccessResourceRequest {
+  string idempotency_key = 1;
+  string source_resource_id = 2;
+  uint64 expected_source_version = 3;
+  ResourceKind expected_kind = 4;
+  string name = 5;
+}
+
+message CopyAccessResourceResponse {
+  Resource resource = 1;
+}
+
 // GetResourceRequest описывает версионированное сообщение контракта control-plane.
 message GetResourceRequest {
   string resource_id = 1;
@@ -998,6 +1040,74 @@ message SearchResourcesRequest {
 message SearchResourcesResponse {
   repeated Resource resources = 1;
   string next_page_token = 2;
+}
+
+// RuntimeIncident — безопасная typed проекция append-only watchdog evidence.
+message RuntimeIncident {
+  string incident_id = 1;
+  string execution_id = 2;
+  uint64 execution_fence = 3;
+  RuntimeIncidentKind kind = 4;
+  string evidence_sha256 = 5;
+  string workload_id = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+}
+
+message ListRuntimeIncidentsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListRuntimeIncidentsResponse {
+  repeated RuntimeIncident incidents = 1;
+  string next_page_token = 2;
+}
+
+// AdmitOwnerSessionRequest связывается только с verified OIDC provenance.
+message AdmitOwnerSessionRequest {
+  string idempotency_key = 1;
+}
+
+message OwnerSessionState {
+  string session_id = 1;
+  uint64 current_revision = 2;
+  bool active = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+message AdmitOwnerSessionResponse {
+  OwnerSessionState session = 1;
+}
+
+message RevokeOwnerSessionRequest {
+  string idempotency_key = 1;
+  uint64 expected_revision = 2;
+}
+
+message RevokeOwnerSessionResponse {
+  OwnerSessionState session = 1;
+}
+
+message GatewayPublicTLSState {
+  uint64 generation = 1;
+  string certificate_sha256 = 2;
+  google.protobuf.Timestamp not_before = 3;
+  google.protobuf.Timestamp not_after = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message AdmitGatewayPublicTLSRequest {
+  string idempotency_key = 1;
+  uint64 generation = 2;
+  string certificate_sha256 = 3;
+  uint64 predecessor_generation = 4;
+  string predecessor_certificate_sha256 = 5;
+  google.protobuf.Timestamp not_before = 6;
+  google.protobuf.Timestamp not_after = 7;
+}
+
+message AdmitGatewayPublicTLSResponse {
+  GatewayPublicTLSState state = 1;
 }
 
 // SearchMemoryRecordsRequest описывает версионированное сообщение контракта control-plane.

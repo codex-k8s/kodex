@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-api-gatewa
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-04
 ---
 
@@ -37,7 +37,8 @@ kubectl kustomize deploy/k8s/overlays/staging/control-api-gateway \
    PrometheusRule, VaultConnection/VaultAuth/VaultPKISecret/VaultStaticSecret,
    issuer-owned SecretProviderClass, deny-all и exact-path NetworkPolicy.
 4. В Deployment должна быть ровно одна application container и один issuer,
-   `/readyz` application container, TLS-only `8443`, технический `9090`,
+   а каждый `startupProbe`/`readinessProbe` — ровно один handler `httpGet` на
+   `/readyz`; TLS-only `8443`, технический `9090`,
    non-root/read-only filesystem, отсутствующий Kubernetes API token.
 5. Egress destination обязаны быть точными: DNS, control-plane, identity SSO,
    Vault, issuer persistence/readback, OTel и Sentry. Правило только по порту,
@@ -50,8 +51,8 @@ kubectl kustomize deploy/k8s/overlays/staging/control-api-gateway \
 
 Startup fail-closed до обслуживания `8443`. Проверять по порядку:
 
-- public certificate/key — regular files безопасного mode, соответствуют друг
-  другу и обслуживают exact external hostname;
+- public certificate/key/CA и versioned state — regular files безопасного
+  mode; candidate соответствует exact hostname и имеет остаток TTL >5 минут;
 - OIDC issuer — HTTPS exact hostname/SNI/CA, audience
   `mattercodex-control-api`, discovery/JWKS без redirect/proxy;
 - current и previous session keys — два обязательных 32-byte hex файла в
@@ -61,6 +62,8 @@ Startup fail-closed до обслуживания `8443`. Проверять п�
 - readiness application grant доступен как файл безопасного mode;
 - local issuer UDS проверил peer UID/GID, snapshot, proof trust, durable replay
   и served-state readback;
+- `AdmitGatewayPublicTLS` подтверждает exact DER SHA-256/generation в durable
+  control-plane watermark; loopback TLS readback использует exact SNI/CA;
 - `controlplaneclient.Check` последовательно проходит resolver, local issuer и
   защищённый `CheckReadiness` тем же путём, что рабочие RPC;
 - OTLP TLS и Sentry file/expected host настроены.
@@ -77,8 +80,10 @@ RPC. Liveness `/livez` подтверждает только живой проц
 - `403 CSRF_REJECTED`: client должен отправить double-submit CSRF cookie/header,
   а WebSocket — cookie и `csrf.<token>` subprotocol вместе с
   `mattercodex.control.v1`; значения не логировать;
-- session expiry или OIDC revocation требует нового `POST /session`; gateway не
-  продлевает bearer и не создаёт refresh token;
+- session create сначала выполняет durable `AdmitOwnerSession`; каждый REST/WS
+  RPC сверяет current sid/revision/bearer digest и revocation в control-plane;
+- logout выполняет `RevokeOwnerSession` с exact revision до очистки cookies;
+  restart, stale bearer и пропущенное уведомление не обходят fence;
 - rotation выполняется forward-only в три фазы: сначала доставить новый key в
   `previous`, сохранив старый `current`, и дождаться restart/readiness всех
   реплик; затем атомарно поменять их местами (`current=new`, `previous=old`) и
@@ -103,6 +108,27 @@ idempotency key только после owner decision. Для `409 IDEMPOTENCY_
 не менять semantic request под прежним key. `mTLS` не заменяет bearer,
 resolver, permission и domain owner check.
 
+## Forward-only public TLS rotation
+
+1. Read-only получить текущие generation и certificate SHA-256 из
+   control-plane served-state readback, не читая private key.
+2. Выпустить candidate через существующий `VaultPKISecret`; определить его
+   DER SHA-256 локальным безопасным инструментом без вывода certificate body.
+3. Записать в owner-managed Vault metadata только `generation=current+1`,
+   `predecessor-generation=current` и exact predecessor SHA-256. VSO выполняет
+   rollout restart; gateway сам вычисляет candidate SHA-256.
+4. Каждый pod до traffic вызывает `AdmitGatewayPublicTLS`. Control-plane
+   принимает только exact replay текущего состояния либо `+1` с exact
+   predecessor. Skipped generation, rollback и другой certificate той же
+   generation закрыто отклоняются.
+5. `/readyz` становится ready только после protected RPC и loopback TLS peer
+   readback exact SNI/CA/SHA-256/expiry. Сверить все replicas и authoritative
+   generation до удаления overlap CA.
+
+После crash используется тот же exact replay. При частичном rollout старые
+pods после продвижения watermark становятся not ready; откатывать metadata
+нельзя — следует выпустить следующую generation с текущим predecessor.
+
 ## WebSocket snapshots
 
 WebSocket хранит только connection-local sequence. При reconnect client
@@ -110,20 +136,25 @@ WebSocket хранит только connection-local sequence. При reconnect 
 
 - `RUNS` — `ListResources(PROCESS_RUN)`;
 - `RESOURCES` — `ListResources` для каждого из ≤8 закрытых kind;
-- `INCIDENTS` — `ListAuditEvents(record_runtime_incident)`;
-- `CONFIGURATION_CHANGES` — `ListAuditEvents` с закрытым action filter.
+- `INCIDENTS` — все страницы typed `ListRuntimeIncidents`;
+- `CONFIGURATION_CHANGES` — все страницы `ListAuditEvents` с закрытыми
+  external action/outcome enums и общим scan cap.
 
 Нет NATS subscription, durable cursor или локальной БД. Gap/duplicate лечится
-полной заменой channel snapshot, а не воспроизведением промежуточного состояния.
+одним `complete=true` snapshot до 500 items. При следующей странице сверх cap
+gateway отправляет problem и закрывает connection без client replace; частичный
+snapshot и синтетические удаления запрещены.
 Frame >16 KiB, неизвестный channel/kind, повтор enum или отсутствие CSRF
 закрывает connection policy violation. Не увеличивать предел без отдельного
 Issue и threat review.
 
 ## Rate limits и observability
 
-`429 RATE_LIMITED` означает fixed-window limit проверенного subject либо общий
-concurrency bound. Реестр subject keys ограничен и удаляет самый давно видимый
-key; actor/session/resource ID не является Prometheus label.
+`429 RATE_LIMITED` означает fixed-window limit проверенного
+organization+subject либо отдельный pre-auth/global/per-subject HTTP/WS bound.
+Долгий WS не занимает HTTP quota; close/reconnect освобождает slot. Реестр keys
+удаляет только неактивные истёкшие записи детерминированно; при заполнении
+активными/current entries новый key закрыто отклоняется.
 
 Проверять только закрытые labels:
 

@@ -427,6 +427,36 @@ func (repository *Repository) ListAudit(
 	return events, err
 }
 
+func (repository *Repository) ListRuntimeIncidents(
+	ctx context.Context,
+	filter domainquery.RuntimeIncidentFilter,
+) ([]domainrepo.RuntimeIncident, error) {
+	var incidents []domainrepo.RuntimeIncident
+	err := repository.read(ctx, filter.OrganizationID, filter.ProjectID, nullActorID,
+		func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, sqlRuntimeIncidentList, pgx.StrictNamedArgs{
+				"organization_id": filter.OrganizationID, "project_id": filter.ProjectID,
+				"after_id": filter.AfterID, "limit": filter.Limit,
+			})
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var incident domainrepo.RuntimeIncident
+				if err := rows.Scan(&incident.ID, &incident.OrganizationID, &incident.ProjectID,
+					&incident.ExecutionID, &incident.ExecutionFence, &incident.Kind,
+					&incident.EvidenceSHA256, &incident.WorkloadID, &incident.OccurredAt); err != nil {
+					return err
+				}
+				incident.OccurredAt = incident.OccurredAt.UTC()
+				incidents = append(incidents, incident)
+			}
+			return rows.Err()
+		})
+	return incidents, err
+}
+
 func (repository *Repository) ListTombstones(
 	ctx context.Context,
 	filter domainquery.TombstoneFilter,
@@ -2613,6 +2643,104 @@ func (wrapped *transaction) InsertRuntimeIncident(
 		"occurred_at":     incident.OccurredAt,
 	})
 	return mapError(err)
+}
+
+func (wrapped *transaction) AdmitOwnerSession(
+	ctx context.Context,
+	state domainrepo.OwnerSessionState,
+) (domainrepo.OwnerSessionState, error) {
+	result, err := scanOwnerSession(wrapped.tx.QueryRow(ctx, sqlOwnerSessionAdmit, pgx.StrictNamedArgs{
+		"organization_id": state.OrganizationID, "actor_id": state.ActorID,
+		"session_id": state.SessionID, "credential_digest_sha256": state.CredentialDigestSHA256,
+		"current_revision": state.CurrentRevision, "updated_at": state.UpdatedAt,
+	}))
+	if errors.Is(err, errs.ErrNotFound) {
+		return domainrepo.OwnerSessionState{}, errs.ErrPermissionDenied
+	}
+	return result, err
+}
+
+func (wrapped *transaction) RequireOwnerSession(
+	ctx context.Context,
+	state domainrepo.OwnerSessionState,
+	allowRevoked bool,
+) error {
+	var admitted bool
+	err := wrapped.tx.QueryRow(ctx, sqlOwnerSessionRequire, pgx.StrictNamedArgs{
+		"organization_id": state.OrganizationID, "actor_id": state.ActorID,
+		"session_id": state.SessionID, "credential_digest_sha256": state.CredentialDigestSHA256,
+		"current_revision": state.CurrentRevision, "allow_revoked": allowRevoked,
+	}).Scan(&admitted)
+	if err != nil {
+		return mapError(err)
+	}
+	if !admitted {
+		return errs.ErrPermissionDenied
+	}
+	return nil
+}
+
+func (wrapped *transaction) RevokeOwnerSession(
+	ctx context.Context,
+	state domainrepo.OwnerSessionState,
+) (domainrepo.OwnerSessionState, error) {
+	result, err := scanOwnerSession(wrapped.tx.QueryRow(ctx, sqlOwnerSessionRevoke, pgx.StrictNamedArgs{
+		"organization_id": state.OrganizationID, "actor_id": state.ActorID,
+		"session_id": state.SessionID, "credential_digest_sha256": state.CredentialDigestSHA256,
+		"current_revision": state.CurrentRevision, "updated_at": state.UpdatedAt,
+	}))
+	if errors.Is(err, errs.ErrNotFound) {
+		return domainrepo.OwnerSessionState{}, errs.ErrPermissionDenied
+	}
+	return result, err
+}
+
+func scanOwnerSession(row pgx.Row) (domainrepo.OwnerSessionState, error) {
+	var result domainrepo.OwnerSessionState
+	var revokedAt *time.Time
+	if err := row.Scan(&result.OrganizationID, &result.ActorID, &result.SessionID,
+		&result.CredentialDigestSHA256, &result.CurrentRevision, &revokedAt,
+		&result.UpdatedAt); err != nil {
+		return domainrepo.OwnerSessionState{}, mapError(err)
+	}
+	if revokedAt != nil {
+		result.RevokedAt = revokedAt.UTC()
+	}
+	result.UpdatedAt = result.UpdatedAt.UTC()
+	return result, nil
+}
+
+func (wrapped *transaction) AdmitGatewayPublicTLS(
+	ctx context.Context,
+	state domainrepo.GatewayPublicTLSState,
+	predecessorGeneration uint64,
+	predecessorSHA256 string,
+) (domainrepo.GatewayPublicTLSState, error) {
+	result, err := scanGatewayPublicTLS(wrapped.tx.QueryRow(ctx, sqlGatewayPublicTLSAdmit, pgx.StrictNamedArgs{
+		"organization_id": state.OrganizationID, "project_id": state.ProjectID,
+		"workload_id": state.WorkloadID, "generation": state.Generation,
+		"certificate_sha256": state.CertificateSHA256, "not_before": state.NotBefore,
+		"not_after": state.NotAfter, "updated_at": state.UpdatedAt,
+		"predecessor_generation":         predecessorGeneration,
+		"predecessor_certificate_sha256": predecessorSHA256,
+	}))
+	if errors.Is(err, errs.ErrNotFound) {
+		return domainrepo.GatewayPublicTLSState{}, errs.ErrPermissionDenied
+	}
+	return result, err
+}
+
+func scanGatewayPublicTLS(row pgx.Row) (domainrepo.GatewayPublicTLSState, error) {
+	var result domainrepo.GatewayPublicTLSState
+	if err := row.Scan(&result.OrganizationID, &result.ProjectID, &result.WorkloadID,
+		&result.Generation, &result.CertificateSHA256, &result.NotBefore,
+		&result.NotAfter, &result.UpdatedAt); err != nil {
+		return domainrepo.GatewayPublicTLSState{}, mapError(err)
+	}
+	result.NotBefore = result.NotBefore.UTC()
+	result.NotAfter = result.NotAfter.UTC()
+	result.UpdatedAt = result.UpdatedAt.UTC()
+	return result, nil
 }
 
 func (wrapped *transaction) GetIntegrationContinuationForUpdate(

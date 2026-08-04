@@ -55,6 +55,7 @@ type Verifier struct {
 
 type claims struct {
 	JTI             string `json:"jti"`
+	SessionID       string `json:"sid"`
 	OrganizationID  string `json:"organization_id"`
 	ProjectID       string `json:"project_id"`
 	SessionRevision uint64 `json:"session_revision"`
@@ -213,6 +214,7 @@ func (verifier *Verifier) Authenticate(
 		token.Expiry.Before(time.Unix(custom.NotBefore, 0)) ||
 		value.ValidateID(token.Subject) != nil ||
 		value.ValidateID(custom.JTI) != nil ||
+		value.ValidateID(custom.SessionID) != nil ||
 		value.ValidateID(custom.OrganizationID) != nil ||
 		(custom.ProjectID != "" && value.ValidateID(custom.ProjectID) != nil) ||
 		custom.SessionRevision == 0 {
@@ -223,6 +225,7 @@ func (verifier *Verifier) Authenticate(
 		OrganizationID:   custom.OrganizationID,
 		ProjectID:        custom.ProjectID,
 		SessionJTI:       custom.JTI,
+		SessionID:        custom.SessionID,
 		SessionRevision:  custom.SessionRevision,
 		SubjectDigest:    digest("OIDC_SUBJECT:" + token.Subject),
 		CredentialDigest: digest(raw),

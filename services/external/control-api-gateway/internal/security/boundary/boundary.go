@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
@@ -28,12 +29,20 @@ var (
 )
 
 type identityContextKey struct{}
+type verifiedAuthorizationContextKey struct{}
+
+type verifiedAuthorization struct {
+	principal oidcauth.Principal
+	bearer    string
+}
 
 type Identity struct {
-	Subject   string
-	SessionID string
-	CSRFHash  string
-	ExpiresAt time.Time
+	Subject         string
+	OrganizationID  string
+	SessionID       string
+	SessionRevision uint64
+	CSRFHash        string
+	ExpiresAt       time.Time
 }
 
 type Config struct {
@@ -50,6 +59,7 @@ type Boundary struct {
 	sessions *session.Store
 	limiter  *ratelimit.Limiter
 	timeout  time.Duration
+	stopping atomic.Bool
 }
 
 func New(config Config) (*Boundary, error) {
@@ -71,6 +81,10 @@ func New(config Config) (*Boundary, error) {
 
 func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if boundary.stopping.Load() {
+			writeProblem(writer, http.StatusServiceUnavailable, "STOPPING", true)
+			return
+		}
 		origin := request.Header.Get("Origin")
 		if origin != "" {
 			if !boundary.AllowsOrigin(origin) {
@@ -79,7 +93,8 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 			}
 			writer.Header().Set("Access-Control-Allow-Origin", origin)
 			writer.Header().Set("Access-Control-Allow-Credentials", "true")
-			writer.Header().Set("Vary", "Origin")
+			writer.Header().Set("Access-Control-Expose-Headers", "ETag, Retry-After")
+			writer.Header().Add("Vary", "Origin")
 		}
 		if request.Method == http.MethodOptions {
 			if origin == "" || !allowedPreflight(request) {
@@ -87,31 +102,69 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				return
 			}
 			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, If-Match, X-CSRF-Token")
+			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token")
+			writer.Header().Add("Vary", "Access-Control-Request-Method")
+			writer.Header().Add("Vary", "Access-Control-Request-Headers")
 			writer.Header().Set("Access-Control-Max-Age", "300")
 			writer.WriteHeader(http.StatusNoContent)
 			return
 		}
+		releasePreAuth, admitted := boundary.limiter.AcquirePreAuth()
+		if !admitted {
+			writeProblem(writer, http.StatusTooManyRequests, "RATE_LIMITED", true)
+			return
+		}
 		if request.Method == http.MethodPost && request.URL.Path == "/api/v1/session" {
-			release, ok := boundary.limiter.Acquire()
+			deadline, cancel := context.WithTimeout(request.Context(), boundary.timeout)
+			defer cancel()
+			principal, bearer, err := func() (oidcauth.Principal, string, error) {
+				defer releasePreAuth()
+				return boundary.verifier.VerifyAuthorization(deadline, request.Header.Get("Authorization"))
+			}()
+			if err != nil {
+				writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+				return
+			}
+			subjectKey := principal.OrganizationID + ":" + principal.Subject
+			if !boundary.limiter.Allow(subjectKey) {
+				writeProblem(writer, http.StatusTooManyRequests, "RATE_LIMITED", true)
+				return
+			}
+			release, ok := boundary.limiter.AcquireHTTP(subjectKey)
 			if !ok {
 				writeProblem(writer, http.StatusTooManyRequests, "RATE_LIMITED", true)
 				return
 			}
 			defer release()
-			next.ServeHTTP(writer, request)
+			ctx, err := controlplaneclient.WithApplicationGrant(deadline, bearer)
+			if err != nil {
+				writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+				return
+			}
+			ctx = context.WithValue(ctx, verifiedAuthorizationContextKey{}, verifiedAuthorization{principal: principal, bearer: bearer})
+			next.ServeHTTP(writer, request.WithContext(ctx))
 			return
 		}
-		identity, claims, err := boundary.authenticate(request)
+		identity, claims, err := func() (Identity, session.Claims, error) {
+			defer releasePreAuth()
+			return boundary.authenticate(request)
+		}()
 		if err != nil {
 			writeProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 			return
 		}
-		if !boundary.limiter.Allow(identity.Subject) {
+		subjectKey := identity.OrganizationID + ":" + identity.Subject
+		if !boundary.limiter.Allow(subjectKey) {
 			writeProblem(writer, http.StatusTooManyRequests, "RATE_LIMITED", true)
 			return
 		}
-		release, ok := boundary.limiter.Acquire()
+		var release func()
+		var ok bool
+		if request.URL.Path == "/api/v1/realtime" {
+			release, ok = boundary.limiter.AcquireWebSocket(subjectKey)
+		} else {
+			release, ok = boundary.limiter.AcquireHTTP(subjectKey)
+		}
 		if !ok {
 			writeProblem(writer, http.StatusTooManyRequests, "RATE_LIMITED", true)
 			return
@@ -145,7 +198,7 @@ func allowedPreflight(request *http.Request) bool {
 	default:
 		return false
 	}
-	allowedHeaders := map[string]struct{}{"content-type": {}, "idempotency-key": {}, "if-match": {}, "x-csrf-token": {}}
+	allowedHeaders := map[string]struct{}{"authorization": {}, "content-type": {}, "idempotency-key": {}, "if-match": {}, "x-csrf-token": {}}
 	rawHeaders := request.Header.Get("Access-Control-Request-Headers")
 	if rawHeaders == "" {
 		return true
@@ -168,14 +221,16 @@ func (boundary *Boundary) VerifyAuthorization(ctx context.Context, authorization
 }
 
 func (boundary *Boundary) IssueSession(principal oidcauth.Principal, bearer string) (session.Claims, string, string, error) {
-	if !boundary.limiter.Allow(principal.Subject) {
+	if !boundary.limiter.Allow(principal.OrganizationID + ":" + principal.Subject) {
 		return session.Claims{}, "", "", ErrRateLimited
 	}
 	if !principal.ExpiresAt.After(time.Now().UTC().Add(time.Minute)) {
 		return session.Claims{}, "", "", ErrUnauthenticated
 	}
-	return boundary.sessions.Issue(principal.Subject, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt)
+	return boundary.sessions.Issue(principal.Subject, principal.OrganizationID, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt)
 }
+
+func (boundary *Boundary) StopAdmission() { boundary.stopping.Store(true) }
 
 func (boundary *Boundary) AllowsOrigin(origin string) bool {
 	_, ok := boundary.origins[origin]
@@ -185,6 +240,11 @@ func (boundary *Boundary) AllowsOrigin(origin string) bool {
 func IdentityFromContext(ctx context.Context) (Identity, bool) {
 	identity, ok := ctx.Value(identityContextKey{}).(Identity)
 	return identity, ok
+}
+
+func VerifiedAuthorizationFromContext(ctx context.Context) (oidcauth.Principal, string, bool) {
+	verified, ok := ctx.Value(verifiedAuthorizationContextKey{}).(verifiedAuthorization)
+	return verified.principal, verified.bearer, ok
 }
 
 func VerifyCSRFToken(identity Identity, token string) bool {
@@ -202,12 +262,13 @@ func (boundary *Boundary) authenticate(request *http.Request) (Identity, session
 		return Identity{}, session.Claims{}, err
 	}
 	principal, err := boundary.verifier.VerifyToken(request.Context(), claims.Bearer)
-	if err != nil || principal.Subject != claims.Subject || principal.SessionID != claims.OIDCSessionID ||
+	if err != nil || principal.Subject != claims.Subject || principal.OrganizationID != claims.OrganizationID || principal.SessionID != claims.OIDCSessionID ||
 		principal.SessionRevision != claims.SessionRevision {
 		return Identity{}, session.Claims{}, errors.New("owner session binding is invalid")
 	}
 	return Identity{
-		Subject: claims.Subject, SessionID: claims.SessionID, CSRFHash: claims.CSRFHash,
+		Subject: claims.Subject, OrganizationID: claims.OrganizationID, SessionID: claims.OIDCSessionID,
+		SessionRevision: claims.SessionRevision, CSRFHash: claims.CSRFHash,
 		ExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
 	}, claims, nil
 }

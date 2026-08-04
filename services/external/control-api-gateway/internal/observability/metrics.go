@@ -1,10 +1,6 @@
 package observability
 
 import (
-	"bufio"
-	"errors"
-	"net"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -19,63 +15,13 @@ type Metrics struct {
 	snapshots    *prometheus.CounterVec
 }
 
-type statusWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (writer *statusWriter) WriteHeader(status int) {
-	if writer.status != 0 {
-		return
-	}
-	writer.status = status
-	writer.ResponseWriter.WriteHeader(status)
-}
-
-func (writer *statusWriter) Write(raw []byte) (int, error) {
-	if writer.status == 0 {
-		writer.WriteHeader(http.StatusOK)
-	}
-	return writer.ResponseWriter.Write(raw)
-}
-
-func (writer *statusWriter) Unwrap() http.ResponseWriter { return writer.ResponseWriter }
-
-func (writer *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	hijacker, ok := writer.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, errors.New("HTTP connection does not support hijacking")
-	}
-	writer.status = http.StatusSwitchingProtocols
-	return hijacker.Hijack()
-}
-
-func (writer *statusWriter) Flush() {
-	if flusher, ok := writer.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
-}
-
-func (metrics *Metrics) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		started := time.Now()
-		captured := &statusWriter{ResponseWriter: writer}
-		next.ServeHTTP(captured, request)
-		status := captured.status
-		if status == 0 {
-			status = http.StatusOK
-		}
-		metrics.ObserveHTTP(route(request.URL.Path), status, started)
-	})
-}
-
-func route(path string) string {
+func Route(path string) string {
 	switch {
 	case path == "/api/v1/session":
 		return "session"
 	case path == "/api/v1/projects":
 		return "projects"
-	case path == "/api/v1/access-resources":
+	case path == "/api/v1/access-resources" || strings.HasPrefix(path, "/api/v1/access-resources/"):
 		return "access"
 	case path == "/api/v1/runs":
 		return "runs"

@@ -3,10 +3,9 @@ package app
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -17,6 +16,7 @@ import (
 	oidcauth "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/authorization/oidc"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/observability"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
+	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/publictls"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/session"
 	httptransport "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http"
@@ -39,6 +39,9 @@ type runtimeState struct {
 	public    *http.Server
 	technical *http.Server
 	workers   *serviceruntime.WorkerGroup
+	security  *boundary.Boundary
+	realtime  *websockettransport.Server
+	publicTLS *publictls.Manager
 }
 
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
@@ -73,7 +76,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	limiter := ratelimit.New(ratelimit.Config{Window: config.RateWindow, Limit: config.RateLimit, MaximumKeys: config.MaximumRateKeys, Concurrency: config.MaximumConcurrency})
+	limiter := ratelimit.New(ratelimit.Config{
+		Window: config.RateWindow, Limit: config.RateLimit, MaximumKeys: config.MaximumRateKeys,
+		PreAuthConcurrency: config.PreAuthConcurrency, GlobalHTTPConcurrency: config.MaximumHTTPConcurrency,
+		PerSubjectHTTPConcurrency: config.PerSubjectHTTPConcurrency, GlobalWebSocketConcurrency: config.MaximumWebSocketConcurrency,
+		PerSubjectWebSocketConcurrency: config.PerSubjectWebSocketConcurrency,
+	})
 	security, err := boundary.New(boundary.Config{Origins: config.origins(), Verifier: state.oidc, Sessions: sessions, Limiter: limiter, Timeout: config.RequestTimeout})
 	if err != nil {
 		return err
@@ -83,29 +91,35 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile,
 		ApplicationGrantFile: config.ControlPlaneApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
 		DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(),
+		UnaryClientInterceptor: state.telemetry.UnaryClientInterceptor(controlPlaneMethodOperations()),
 	})
 	if err != nil {
+		return err
+	}
+	state.publicTLS, err = publictls.New(publictls.Config{CertificateFile: config.TLSCertificateFile, PrivateKeyFile: config.TLSPrivateKeyFile, CAFile: config.PublicTLSCAFile, StateFile: config.PublicTLSStateFile, ServerName: config.PublicTLSServerName})
+	if err != nil {
+		return err
+	}
+	if err := state.publicTLS.Admit(startup, state.control.ControlPlane); err != nil {
 		return err
 	}
 	if err := state.control.Check(startup); err != nil {
 		return err
 	}
-	state.readiness.Set(true, "ready")
-	state.metrics.SetReady(true)
+	state.readiness.Set(false, "listener_starting")
+	state.metrics.SetReady(false)
+	state.security = security
 	httpAPI, err := httptransport.New(state.control.ControlPlane, security, state.logger)
 	if err != nil {
 		return err
 	}
-	realtime, err := websockettransport.New(state.control.ControlPlane, security, businessMetrics, state.logger, config.origins(), config.RealtimePollInterval, config.RPCTimeout)
+	state.realtime, err = websockettransport.New(state.control.ControlPlane, security, businessMetrics, state.logger, config.origins(), config.RealtimePollInterval, config.RPCTimeout)
 	if err != nil {
 		return err
 	}
-	httpAPI.AttachRealtime(realtime)
-	publicTLS, err := loadPublicTLS(config)
-	if err != nil {
-		return err
-	}
-	state.public = &http.Server{Addr: config.HTTPListen, Handler: secureHeaders(businessMetrics.Middleware(httpAPI.Handler())), TLSConfig: publicTLS, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	httpAPI.AttachRealtime(state.realtime)
+	baseContext := func(net.Listener) context.Context { return lifecycle }
+	state.public = &http.Server{Addr: config.HTTPListen, Handler: secureHeaders(state.telemetry.HTTPMiddleware(internalobservability.Route, businessMetrics.ObserveHTTP, httpAPI.Handler())), TLSConfig: state.publicTLS.TLSConfig(), BaseContext: baseContext, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	technicalMux := http.NewServeMux()
 	technicalMux.HandleFunc("/livez", func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusNoContent) })
 	technicalMux.HandleFunc("/readyz", func(writer http.ResponseWriter, _ *http.Request) {
@@ -117,11 +131,13 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		writer.WriteHeader(http.StatusNoContent)
 	})
 	technicalMux.Handle("/metrics", state.metrics.PrometheusHandler())
-	state.technical = &http.Server{Addr: config.TechnicalListen, Handler: businessMetrics.Middleware(technicalMux), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
-	state.workers = serviceruntime.StartWorkers(lifecycle,
+	state.technical = &http.Server{Addr: config.TechnicalListen, Handler: state.telemetry.HTTPMiddleware(internalobservability.Route, businessMetrics.ObserveHTTP, technicalMux), BaseContext: baseContext, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	state.workers = serviceruntime.StartWorkers(
+		lifecycle,
 		httpWorker(state.public, true, config.ShutdownTimeout),
 		httpWorker(state.technical, false, config.ShutdownTimeout),
-		readinessWorker(state.control, state.readiness, state.metrics, state.logger, config.ReadinessInterval, config.RPCTimeout),
+		readinessWorker(state.control, state.publicTLS, config.HTTPListen, state.readiness, state.metrics, state.logger, config.ReadinessInterval, config.RPCTimeout),
+		admissionWorker(security, state.realtime, config.ShutdownTimeout),
 	)
 	if err := state.workers.Wait(context.WithoutCancel(lifecycle)); err != nil {
 		return err
@@ -158,51 +174,51 @@ func httpWorker(server *http.Server, tlsEnabled bool, shutdownTimeout time.Durat
 	}
 }
 
-func readinessWorker(control *controlplaneclient.Client, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
+func readinessWorker(control *controlplaneclient.Client, publicTLS *publictls.Manager, listen string, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
+			check, cancel := context.WithTimeout(ctx, timeout)
+			err := errors.Join(
+				publicTLS.Admit(check, control.ControlPlane),
+				control.Check(check),
+				publicTLS.VerifyServed(check, listen),
+			)
+			cancel()
+			if err != nil {
+				readiness.Set(false, "protected_path_unavailable")
+				metrics.SetReady(false)
+				logger.WarnContext(ctx, "control API protected readiness path is unavailable", "error_class", "dependency")
+			} else {
+				readiness.Set(true, "ready")
+				metrics.SetReady(true)
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-ticker.C:
-				check, cancel := context.WithTimeout(ctx, timeout)
-				err := control.Check(check)
-				cancel()
-				if err != nil {
-					readiness.Set(false, "protected_path_unavailable")
-					metrics.SetReady(false)
-					logger.WarnContext(ctx, "control API protected readiness path is unavailable", "error_class", "dependency")
-					continue
-				}
-				readiness.Set(true, "ready")
-				metrics.SetReady(true)
 			}
 		}
 	}
 }
 
-func loadPublicTLS(config Config) (*tls.Config, error) {
-	for _, path := range []string{config.TLSCertificateFile, config.TLSPrivateKeyFile} {
-		info, err := os.Stat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 1<<20 || info.Mode().Perm()&0o007 != 0 {
-			return nil, errors.New("public TLS file is unsafe")
-		}
+func admissionWorker(security *boundary.Boundary, realtime *websockettransport.Server, timeout time.Duration) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		<-ctx.Done()
+		security.StopAdmission()
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+		defer cancel()
+		return realtime.Shutdown(shutdown)
 	}
-	certificate, err := tls.LoadX509KeyPair(config.TLSCertificateFile, config.TLSPrivateKeyFile)
-	if err != nil {
-		return nil, errors.New("load public TLS identity")
+}
+
+func controlPlaneMethodOperations() map[string]string {
+	result := make(map[string]string)
+	for operation, method := range controlplaneclient.ControlAPIGatewayOperations() {
+		result[method] = operation
 	}
-	if len(certificate.Certificate) == 0 {
-		return nil, errors.New("public TLS certificate chain is empty")
-	}
-	leaf, err := x509.ParseCertificate(certificate.Certificate[0])
-	if err != nil || leaf.VerifyHostname(config.PublicTLSServerName) != nil || time.Now().Before(leaf.NotBefore) || !time.Now().Before(leaf.NotAfter) {
-		return nil, errors.New("public TLS served identity is invalid")
-	}
-	certificate.Leaf = leaf
-	return &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate}}, nil
+	return result
 }
 
 func secureHeaders(next http.Handler) http.Handler {
@@ -222,10 +238,16 @@ func (state *runtimeState) shutdown(base context.Context) error {
 	if state.metrics != nil {
 		state.metrics.SetReady(false)
 	}
+	if state.security != nil {
+		state.security.StopAdmission()
+	}
 	if state.workers != nil {
 		state.workers.Stop()
 	}
 	var result error
+	if state.workers != nil {
+		result = errors.Join(result, serviceruntime.RunShutdown(base, serviceruntime.ShutdownOperation{Name: "workers", Timeout: state.config.ShutdownTimeout, Run: state.workers.Wait}))
+	}
 	if state.control != nil {
 		result = errors.Join(result, state.control.Close())
 	}
@@ -233,7 +255,8 @@ func (state *runtimeState) shutdown(base context.Context) error {
 		state.oidc.Close()
 	}
 	if state.telemetry != nil {
-		result = errors.Join(result, serviceruntime.RunShutdown(base,
+		result = errors.Join(result, serviceruntime.RunShutdown(
+			base,
 			serviceruntime.ShutdownOperation{Name: "tracing", Timeout: state.config.ShutdownTimeout, Run: state.telemetry.ShutdownTracing},
 			serviceruntime.ShutdownOperation{Name: "sentry", Timeout: state.config.ShutdownTimeout, Run: state.telemetry.FlushSentry},
 		))

@@ -218,6 +218,13 @@ func (repository *Repository) ListTombstones(
 	return repository.source.ListTombstones(ctx, filter)
 }
 
+func (repository *Repository) ListRuntimeIncidents(
+	ctx context.Context,
+	filter query.RuntimeIncidentFilter,
+) ([]domainrepo.RuntimeIncident, error) {
+	return repository.source.ListRuntimeIncidents(ctx, filter)
+}
+
 func (repository *Repository) ListScheduleOccurrences(
 	ctx context.Context,
 	filter query.ScheduleOccurrenceFilter,

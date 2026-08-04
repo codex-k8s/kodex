@@ -21,24 +21,37 @@ paths:
       summary: Создать защищённую owner-сессию
       operationId: createOwnerSession
       security: [{ oidcBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
-        '204': { description: Защищённая owner-сессия и CSRF cookie созданы. }
+        '204':
+          description: Защищённая owner-сессия и CSRF cookie созданы.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
     delete:
       tags: [session]
       summary: Завершить локальную owner-сессию
       operationId: deleteOwnerSession
       security: [{ ownerSession: [] }]
-      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
       responses:
         '204': { description: Локальная сессия закрыта. }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /projects:
     get:
       tags: [projects]
@@ -52,6 +65,7 @@ paths:
         '200':
           description: Проекты, видимые проверенному owner.
           content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -198,6 +212,28 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /resources/search:
+    get:
+      tags: [resources]
+      summary: Выполнить авторитетный owner search одного закрытого resource kind
+      operationId: searchResources
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ResourceKindQuery' }
+        - { name: query, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 128 } }
+        - { name: state, in: query, schema: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/LifecycleState' } }, style: form, explode: true }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Страница search results той же owner eligibility boundary.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /resources/{resourceId}/transition:
     post:
       tags: [resources]
@@ -258,6 +294,64 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /access-resources/{resourceId}/detach:
+    post:
+      tags: [resources]
+      summary: Явно перевести Git-owned access resource в UI ownership
+      operationId: detachAccessResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ResourceID' }
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DetachAccessResource' } } }
+      responses:
+        '200':
+          description: Тот же resource с новой server-owned UI revision.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /access-resources/{resourceId}/copy:
+    post:
+      tags: [resources]
+      summary: Создать UI-owned копию exact Git-owned access resource version
+      operationId: copyAccessResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ResourceID' }
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CopyAccessResource' } } }
+      responses:
+        '201':
+          description: Новая server-assigned UI-owned сущность.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /runs:
     get:
       tags: [projections]
@@ -272,6 +366,7 @@ paths:
         '200':
           description: Авторитетные PROCESS_RUN resources.
           content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -310,8 +405,9 @@ paths:
         - { $ref: '#/components/parameters/PageToken' }
       responses:
         '200':
-          description: Авторитетный audit read path действия record_runtime_incident.
-          content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } }
+          description: Авторитетная typed watchdog incident projection.
+          content: { application/json: { schema: { $ref: '#/components/schemas/IncidentPage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -329,7 +425,8 @@ paths:
       responses:
         '200':
           description: Audit projection закрытого набора configuration mutation actions.
-          content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ConfigurationChangePage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -494,7 +591,6 @@ components:
         kind: { $ref: '#/components/schemas/MutableResourceKind' }
         name: { type: string, minLength: 1, maxLength: 160 }
         spec: { $ref: '#/components/schemas/ResourceSpecInput' }
-        detachGitManagement: { type: boolean, default: false }
       required: [kind, name, spec]
     TransitionResource:
       type: object
@@ -514,6 +610,276 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         spec: { $ref: '#/components/schemas/AccessSpecInput' }
       required: [kind, action]
+    DetachAccessResource:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { $ref: '#/components/schemas/AccessResourceKind' }
+      required: [kind]
+    CopyAccessResource:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { $ref: '#/components/schemas/AccessResourceKind' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+      required: [kind, name]
+    ConfigurationOwnershipProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        managedBy: { type: string, enum: [ui, git] }
+        source: { type: string, minLength: 1, maxLength: 512 }
+        revision: { type: integer, format: int64, minimum: 1 }
+      required: [managedBy, source, revision]
+    ProjectProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        slug: { type: string }
+        description: { type: string }
+        locale: { type: string, enum: [ru, en] }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [slug, description, locale, ownership]
+    TeamProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string }
+        externalTeamRef: { type: string }
+        memberActorIds: { type: array, items: { type: string, format: uuid } }
+        roleIds: { type: array, items: { type: string, format: uuid } }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [stableKey, externalTeamRef, memberActorIds, roleIds, ownership]
+    ChatProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string }
+        roomType: { type: string, enum: [USER, COORDINATION, WORK_CONTROL, RUNS] }
+        defaultAgentId: { type: string, format: uuid }
+        externalChannelRef: { type: string }
+        workPolicy: { type: string }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [stableKey, roomType, externalChannelRef, workPolicy, ownership]
+    ProviderPoolBindingProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        credentialBindingId: { type: string, format: uuid }
+        weight: { type: integer, minimum: 1, maximum: 10000 }
+      required: [credentialBindingId, weight]
+    ProviderPoolProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        policy: { type: string, enum: [least_used, weighted] }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        observationMaxAgeSeconds: { type: integer, format: int64, minimum: 60 }
+        bindings: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/ProviderPoolBindingProjection' } }
+      required: [policy, policyRevision, observationMaxAgeSeconds, bindings]
+    RoleProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string }
+        capabilities: { type: array, items: { type: string } }
+        allowedTargetRoleIds: { type: array, items: { type: string, format: uuid } }
+        promptProfileId: { type: string, format: uuid }
+        providerCredentialBindingIds: { type: array, items: { type: string, format: uuid } }
+        repositoryWorkspaceIds: { type: array, items: { type: string, format: uuid } }
+        integrationIds: { type: array, items: { type: string, format: uuid } }
+        providerAccountPool: { $ref: '#/components/schemas/ProviderPoolProjection' }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [stableKey, capabilities, allowedTargetRoleIds, promptProfileId, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds, providerAccountPool, ownership]
+    PromptProfileProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        revision: { type: integer, format: int64, minimum: 1 }
+        contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sourceRef: { type: string }
+        locale: { type: string }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [revision, contentSha256, sourceRef, locale, ownership]
+    CredentialBindingProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        purpose: { type: string }
+        immutableSecretRef: { type: string }
+        principalRef: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        expiresAt: { type: string, format: date-time }
+        providerEligible: { type: boolean }
+        providerCapabilities: { type: array, items: { type: string } }
+        providerObservationRevision: { type: integer, format: int64, minimum: 0 }
+        providerObservedAt: { type: string, format: date-time }
+        contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [purpose, immutableSecretRef, principalRef, revision, providerEligible, providerCapabilities, providerObservationRevision, contentSha256, ownership]
+    RepositoryWorkspaceProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        repositoryRef: { type: string }
+        workspaceMode: { type: string }
+        defaultBranch: { type: string }
+        credentialBindingId: { type: string, format: uuid }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [repositoryRef, workspaceMode, defaultBranch, ownership]
+    IntegrationProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        definitionRef: { type: string }
+        definitionVersion: { type: integer, format: int64, minimum: 1 }
+        capabilities: { type: array, items: { type: string } }
+        credentialBindingIds: { type: array, items: { type: string, format: uuid } }
+        endpointRef: { type: string }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [definitionRef, definitionVersion, capabilities, credentialBindingIds, endpointRef, ownership]
+    RuntimeRevisionProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        manifestSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        imageDigest: { type: string }
+        promptProfileId: { type: string, format: uuid }
+        promptRevision: { type: integer, format: int64, minimum: 1 }
+        sessionId: { type: string, format: uuid }
+        roleId: { type: string, format: uuid }
+        chatId: { type: string, format: uuid }
+        effectiveRuntimeSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        authorityPolicyRevision: { type: integer, format: int64, minimum: 1 }
+      required: [manifestSha256, imageDigest, promptProfileId, promptRevision, sessionId, roleId, effectiveRuntimeSha256, authorityPolicyRevision]
+    SessionProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        agentId: { type: string, format: uuid }
+        providerAccountBindingId: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        archiveRef: { type: string }
+        lastTurnSequence: { type: integer, format: int64, minimum: 0 }
+      required: [agentId, providerAccountBindingId, lastTurnSequence]
+    TurnProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        sessionId: { type: string, format: uuid }
+        sequence: { type: integer, format: int64, minimum: 1 }
+        sourceRef: { type: string }
+        runtimeRevisionId: { type: string, format: uuid }
+        processRunId: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        resultArtifactId: { type: string, format: uuid }
+        effectiveInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [sessionId, sequence, sourceRef, runtimeRevisionId, attempt, effectiveInputSha256]
+    ProcessRunProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        parentProcessRunId: { type: string, format: uuid }
+        playbookRef: { type: string }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        rootTriggerRef: { type: string }
+        rootSessionId: { type: string, format: uuid }
+        rootTurnId: { type: string, format: uuid }
+        rootAttempt: { type: integer, minimum: 1 }
+        immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        runtimeRevisionId: { type: string, format: uuid }
+        currentSessionId: { type: string, format: uuid }
+        currentTurnId: { type: string, format: uuid }
+        currentAttempt: { type: integer, minimum: 1 }
+      required: [playbookRef, policyRevision, rootTriggerRef, rootSessionId, rootTurnId, rootAttempt, immutableInputSha256, runtimeRevisionId]
+    ScheduleProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        targetResourceId: { type: string, format: uuid }
+        targetKind: { $ref: '#/components/schemas/ResourceKind' }
+        targetVersion: { type: integer, format: int64, minimum: 1 }
+        cron: { type: string }
+        timezone: { type: string }
+        nextRunAt: { type: string, format: date-time }
+        maximumAttempts: { type: integer, minimum: 1 }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [targetResourceId, targetKind, targetVersion, timezone, nextRunAt, maximumAttempts, ownership]
+    OwnerGateProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        processRunId: { type: string, format: uuid }
+        resultSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        expiresAt: { type: string, format: date-time }
+        decision: { type: string, enum: [PENDING, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED] }
+        sessionId: { type: string, format: uuid }
+        turnId: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [processRunId, resultSha256, expiresAt, decision, sessionId, turnId, attempt, immutableInputSha256]
+    MemoryRecordProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        scope: { type: string }
+        roleId: { type: string, format: uuid }
+        title: { type: string }
+        contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        provenance: { type: string }
+        importance: { type: integer, minimum: 0 }
+      required: [scope, title, contentSha256, provenance, importance]
+    WorkClaimProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        processRunId: { type: string, format: uuid }
+        turnId: { type: string, format: uuid }
+        domains: { type: array, items: { type: string } }
+        resourceKeys: { type: array, items: { type: string } }
+        workloadId: { type: string }
+        sessionId: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        expiresAt: { type: string, format: date-time }
+        authorityGeneration: { type: integer, format: int64, minimum: 1 }
+      required: [processRunId, turnId, domains, resourceKeys, workloadId, sessionId, attempt, expiresAt, authorityGeneration]
+    ArtifactProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        artifactKind: { type: string }
+        direction: { type: string }
+        sizeBytes: { type: integer, format: int64, minimum: 0 }
+        mediaType: { type: string }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        scanStatus: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
+        scanPolicyRevision: { type: integer, format: int64, minimum: 0 }
+        scanEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        scannedAt: { type: string, format: date-time }
+      required: [artifactKind, direction, sizeBytes, mediaType, sha256, scanStatus, scanPolicyRevision]
+    ResourceSpecProjection:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      maxProperties: 1
+      properties:
+        project: { $ref: '#/components/schemas/ProjectProjection' }
+        team: { $ref: '#/components/schemas/TeamProjection' }
+        chat: { $ref: '#/components/schemas/ChatProjection' }
+        role: { $ref: '#/components/schemas/RoleProjection' }
+        promptProfile: { $ref: '#/components/schemas/PromptProfileProjection' }
+        credentialBinding: { $ref: '#/components/schemas/CredentialBindingProjection' }
+        repositoryWorkspace: { $ref: '#/components/schemas/RepositoryWorkspaceProjection' }
+        integration: { $ref: '#/components/schemas/IntegrationProjection' }
+        runtimeRevision: { $ref: '#/components/schemas/RuntimeRevisionProjection' }
+        session: { $ref: '#/components/schemas/SessionProjection' }
+        turn: { $ref: '#/components/schemas/TurnProjection' }
+        processRun: { $ref: '#/components/schemas/ProcessRunProjection' }
+        schedule: { $ref: '#/components/schemas/ScheduleProjection' }
+        ownerGate: { $ref: '#/components/schemas/OwnerGateProjection' }
+        memoryRecord: { $ref: '#/components/schemas/MemoryRecordProjection' }
+        workClaim: { $ref: '#/components/schemas/WorkClaimProjection' }
+        artifact: { $ref: '#/components/schemas/ArtifactProjection' }
     Resource:
       type: object
       additionalProperties: false
@@ -525,7 +891,7 @@ components:
         version: { type: integer, format: int64, minimum: 1 }
         projectId: { type: string, format: uuid }
         parentId: { type: string, format: uuid }
-        spec: { type: object, description: Безопасная protobuf JSON-проекция; credential values отсутствуют. }
+        spec: { $ref: '#/components/schemas/ResourceSpecProjection' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required: [id, kind, name, state, version, spec, createdAt, updatedAt]
@@ -558,6 +924,56 @@ components:
         events: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AuditEvent' } }
         nextPageToken: { type: string }
       required: [events]
+    ConfigurationChangeAction:
+      type: string
+      enum: [create, update, transition, delete, create_schedule, manage_schedule_UPDATE, manage_schedule_ACTIVATE, manage_schedule_PAUSE, manage_schedule_ARCHIVE, manage_schedule_DELETE]
+    ConfigurationChangeOutcome:
+      type: string
+      enum: [succeeded]
+    ConfigurationChange:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        action: { $ref: '#/components/schemas/ConfigurationChangeAction' }
+        resourceId: { type: string, format: uuid }
+        resourceKind: { $ref: '#/components/schemas/ResourceKind' }
+        resourceVersion: { type: integer, format: int64, minimum: 1 }
+        outcome: { $ref: '#/components/schemas/ConfigurationChangeOutcome' }
+        actorId: { type: string, format: uuid }
+        correlationId: { type: string, format: uuid }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        occurredAt: { type: string, format: date-time }
+      required: [id, action, resourceId, resourceKind, resourceVersion, outcome, actorId, correlationId, policyRevision, occurredAt]
+    ConfigurationChangePage:
+      type: object
+      additionalProperties: false
+      properties:
+        changes: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ConfigurationChange' } }
+        nextPageToken: { type: string }
+      required: [changes]
+    RuntimeIncidentKind:
+      type: string
+      enum: [HEARTBEAT_MISSED, RECONCILE_FAILED, WORKLOAD_UNAVAILABLE]
+    RuntimeIncident:
+      type: object
+      additionalProperties: false
+      properties:
+        incidentId: { type: string, format: uuid }
+        executionId: { type: string, format: uuid }
+        executionFence: { type: integer, format: int64, minimum: 1 }
+        kind: { $ref: '#/components/schemas/RuntimeIncidentKind' }
+        evidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        workloadId: { type: string, maxLength: 128 }
+        occurredAt: { type: string, format: date-time }
+      required: [incidentId, executionId, executionFence, kind, evidenceSha256, workloadId, occurredAt]
+    IncidentPage:
+      type: object
+      additionalProperties: false
+      properties:
+        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeIncident' } }
+        nextPageToken: { type: string }
+      required: [incidents]
     Diagnostics:
       type: object
       additionalProperties: false

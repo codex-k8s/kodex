@@ -40,6 +40,8 @@ spec:
             - {name: CONTROL_API_GATEWAY_HTTP_LISTEN, value: ":8443"}
             - {name: CONTROL_API_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
             - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_SERVER_NAME, value: control-api.mattercodex.local}
+            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_CA_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls/ca.crt}
+            - {name: CONTROL_API_GATEWAY_PUBLIC_TLS_STATE_FILE, value: /var/run/secrets/mattercodex/control-api-gateway/public-tls-state/state.json}
             - {name: CONTROL_API_GATEWAY_OIDC_ISSUER, value: "https://sso.mattercodex.local/realms/mattercodex"}
             - {name: CONTROL_API_GATEWAY_OIDC_AUDIENCE, value: mattercodex-control-api}
             - {name: CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME, value: sso.mattercodex.local}
@@ -49,13 +51,17 @@ spec:
             - {name: CONTROL_API_GATEWAY_REQUEST_TIMEOUT, value: 15s}
             - {name: CONTROL_API_GATEWAY_RPC_TIMEOUT, value: 5s}
             - {name: CONTROL_API_GATEWAY_STARTUP_TIMEOUT, value: 20s}
-            - {name: CONTROL_API_GATEWAY_SHUTDOWN_TIMEOUT, value: 10s}
+            - {name: CONTROL_API_GATEWAY_SHUTDOWN_TIMEOUT, value: 20s}
             - {name: CONTROL_API_GATEWAY_READINESS_INTERVAL, value: 10s}
             - {name: CONTROL_API_GATEWAY_REALTIME_POLL_INTERVAL, value: 3s}
             - {name: CONTROL_API_GATEWAY_RATE_WINDOW, value: 1m}
             - {name: CONTROL_API_GATEWAY_RATE_LIMIT, value: "120"}
             - {name: CONTROL_API_GATEWAY_MAXIMUM_RATE_KEYS, value: "10000"}
-            - {name: CONTROL_API_GATEWAY_MAXIMUM_CONCURRENCY, value: "256"}
+            - {name: CONTROL_API_GATEWAY_PREAUTH_CONCURRENCY, value: "32"}
+            - {name: CONTROL_API_GATEWAY_MAXIMUM_HTTP_CONCURRENCY, value: "256"}
+            - {name: CONTROL_API_GATEWAY_PER_SUBJECT_HTTP_CONCURRENCY, value: "16"}
+            - {name: CONTROL_API_GATEWAY_MAXIMUM_WEBSOCKET_CONCURRENCY, value: "128"}
+            - {name: CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY, value: "4"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TARGET, value: "dns:///control-plane.mattercodex-system.svc:8443"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.mattercodex-system.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
@@ -94,6 +100,7 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: public-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/public-tls, readOnly: true}
+            - {name: public-tls-state, mountPath: /var/run/secrets/mattercodex/control-api-gateway/public-tls-state, readOnly: true}
             - {name: oidc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/oidc, readOnly: true}
             - {name: session-keys, mountPath: /var/run/secrets/mattercodex/control-api-gateway/session, readOnly: true}
             - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/control-plane-client, readOnly: true}
@@ -105,6 +112,8 @@ spec:
       volumes:
         - name: public-tls
           secret: {secretName: control-api-gateway-public-tls, defaultMode: 0440}
+        - name: public-tls-state
+          secret: {secretName: control-api-gateway-public-tls-state, defaultMode: 0440, items: [{key: state.json, path: state.json}]}
         - name: oidc-ca
           configMap: {name: mattercodex-oidc-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: session-keys

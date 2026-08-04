@@ -1,7 +1,6 @@
 package httptransport
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,12 +14,13 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/projection"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -28,8 +28,13 @@ const (
 	maximumBodyBytes    = 256 << 10
 	maximumPageSize     = 100
 	defaultPageSize     = 50
-	incidentAction      = "record_runtime_incident"
 	sessionCookieMaxAge = 3600
+	maximumAuditScan    = 500
+)
+
+var (
+	errAuditScanLimit  = errors.New("audit projection scan limit exceeded")
+	errAuditPagination = errors.New("audit pagination did not advance")
 )
 
 type ControlPlane interface {
@@ -40,9 +45,15 @@ type ControlPlane interface {
 	TransitionResource(context.Context, *controlplanev1.TransitionResourceRequest, ...grpc.CallOption) (*controlplanev1.TransitionResourceResponse, error)
 	DeleteResource(context.Context, *controlplanev1.DeleteResourceRequest, ...grpc.CallOption) (*controlplanev1.DeleteResourceResponse, error)
 	ManageAccessResource(context.Context, *controlplanev1.ManageAccessResourceRequest, ...grpc.CallOption) (*controlplanev1.ManageAccessResourceResponse, error)
+	DetachAccessResource(context.Context, *controlplanev1.DetachAccessResourceRequest, ...grpc.CallOption) (*controlplanev1.DetachAccessResourceResponse, error)
+	CopyAccessResource(context.Context, *controlplanev1.CopyAccessResourceRequest, ...grpc.CallOption) (*controlplanev1.CopyAccessResourceResponse, error)
 	GetResource(context.Context, *controlplanev1.GetResourceRequest, ...grpc.CallOption) (*controlplanev1.GetResourceResponse, error)
 	ListResources(context.Context, *controlplanev1.ListResourcesRequest, ...grpc.CallOption) (*controlplanev1.ListResourcesResponse, error)
+	SearchResources(context.Context, *controlplanev1.SearchResourcesRequest, ...grpc.CallOption) (*controlplanev1.SearchResourcesResponse, error)
 	ListAuditEvents(context.Context, *controlplanev1.ListAuditEventsRequest, ...grpc.CallOption) (*controlplanev1.ListAuditEventsResponse, error)
+	ListRuntimeIncidents(context.Context, *controlplanev1.ListRuntimeIncidentsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeIncidentsResponse, error)
+	AdmitOwnerSession(context.Context, *controlplanev1.AdmitOwnerSessionRequest, ...grpc.CallOption) (*controlplanev1.AdmitOwnerSessionResponse, error)
+	RevokeOwnerSession(context.Context, *controlplanev1.RevokeOwnerSessionRequest, ...grpc.CallOption) (*controlplanev1.RevokeOwnerSessionResponse, error)
 	GetDiagnostics(context.Context, *controlplanev1.GetDiagnosticsRequest, ...grpc.CallOption) (*controlplanev1.GetDiagnosticsResponse, error)
 }
 
@@ -78,10 +89,19 @@ func (server *Server) Handler() http.Handler {
 	return server.boundary.Middleware(mux)
 }
 
-func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *http.Request) {
-	principal, bearer, err := server.boundary.VerifyAuthorization(request.Context(), request.Header.Get("Authorization"))
-	if err != nil {
+func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *http.Request, params generated.CreateOwnerSessionParams) {
+	principal, bearer, ok := boundary.VerifiedAuthorizationFromContext(request.Context())
+	if !ok {
 		writeProblem(writer, localProblem(http.StatusUnauthorized, "UNAUTHENTICATED", false))
+		return
+	}
+	admitted, err := server.control.AdmitOwnerSession(request.Context(), &controlplanev1.AdmitOwnerSessionRequest{IdempotencyKey: params.IdempotencyKey.String()})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, true)
+		return
+	}
+	if admitted.GetSession() == nil || !admitted.GetSession().GetActive() || admitted.GetSession().GetSessionId() != principal.SessionID || admitted.GetSession().GetCurrentRevision() != principal.SessionRevision {
+		server.writeInternal(writer, request.Context(), errors.New("owner session admission response is invalid"))
 		return
 	}
 	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer)
@@ -103,11 +123,31 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 	}
 	http.SetCookie(writer, &http.Cookie{Name: boundary.SessionCookieName, Value: encoded, Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
 	http.SetCookie(writer, &http.Cookie{Name: boundary.CSRFCookieName, Value: csrf, Path: "/", Secure: true, HttpOnly: false, SameSite: http.SameSiteStrictMode, MaxAge: maxAge})
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", claims.SessionRevision))
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.WriteHeader(http.StatusNoContent)
 }
 
-func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, _ *http.Request, _ generated.DeleteOwnerSessionParams) {
+func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *http.Request, params generated.DeleteOwnerSessionParams) {
+	revision, ok := parseETag(params.IfMatch)
+	identity, identityOK := boundary.IdentityFromContext(request.Context())
+	if !ok || !identityOK {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	if revision != identity.SessionRevision {
+		writeProblem(writer, localProblem(http.StatusPreconditionFailed, "VERSION_MISMATCH", false))
+		return
+	}
+	response, err := server.control.RevokeOwnerSession(request.Context(), &controlplanev1.RevokeOwnerSessionRequest{IdempotencyKey: params.IdempotencyKey.String(), ExpectedRevision: revision})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, true)
+		return
+	}
+	if response.GetSession() == nil || response.GetSession().GetActive() || response.GetSession().GetSessionId() != identity.SessionID {
+		server.writeInternal(writer, request.Context(), errors.New("owner session revocation response is invalid"))
+		return
+	}
 	clearCookie(writer, boundary.SessionCookieName, true)
 	clearCookie(writer, boundary.CSRFCookieName, false)
 	writer.Header().Set("Cache-Control", "no-store")
@@ -223,9 +263,32 @@ func (server *Server) UpdateResource(writer http.ResponseWriter, request *http.R
 	}
 	response, rpcErr := server.control.UpdateResource(request.Context(), &controlplanev1.UpdateResourceRequest{
 		IdempotencyKey: params.IdempotencyKey.String(), ResourceId: resourceID.String(), ExpectedVersion: version,
-		Name: body.Name, Spec: spec, DetachGitManagement: body.DetachGitManagement != nil && *body.DetachGitManagement,
+		Name: body.Name, Spec: spec,
 	})
 	server.writeResourceResponse(writer, request.Context(), http.StatusOK, response.GetResource(), rpcErr, true)
+}
+
+func (server *Server) SearchResources(writer http.ResponseWriter, request *http.Request, params generated.SearchResourcesParams) {
+	pageLimit, pageOK := pageSize(params.PageSize)
+	kind, kindOK := resourceKind(params.Kind)
+	states, statesOK := lifecycleStates(params.State)
+	if !pageOK || !kindOK || !statesOK || strings.TrimSpace(params.Query) != params.Query || params.Query == "" {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.SearchResources(request.Context(), &controlplanev1.SearchResourcesRequest{
+		Kind: kind, Query: params.Query, States: states, PageSize: pageLimit, PageToken: value(params.PageToken),
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	page, err := resourcePage(response.GetResources(), response.GetNextPageToken())
+	if err != nil {
+		server.writeInternal(writer, request.Context(), err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, page)
 }
 
 func (server *Server) DeleteResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.DeleteResourceParams) {
@@ -317,6 +380,40 @@ func (server *Server) ManageAccessResource(writer http.ResponseWriter, request *
 	server.writeResourceResponse(writer, request.Context(), http.StatusOK, response.GetResource(), err, true)
 }
 
+func (server *Server) DetachAccessResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.DetachAccessResourceParams) {
+	version, ok := parseETag(params.IfMatch)
+	var body generated.DetachAccessResource
+	if !ok || !decodeJSON(writer, request, &body) {
+		return
+	}
+	kind, ok := accessKind(body.Kind)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.DetachAccessResource(request.Context(), &controlplanev1.DetachAccessResourceRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), ResourceId: resourceID.String(), ExpectedVersion: version, ExpectedKind: kind,
+	})
+	server.writeResourceResponse(writer, request.Context(), http.StatusOK, response.GetResource(), err, true)
+}
+
+func (server *Server) CopyAccessResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.CopyAccessResourceParams) {
+	version, ok := parseETag(params.IfMatch)
+	var body generated.CopyAccessResource
+	if !ok || !decodeJSON(writer, request, &body) {
+		return
+	}
+	kind, ok := accessKind(body.Kind)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.CopyAccessResource(request.Context(), &controlplanev1.CopyAccessResourceRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), SourceResourceId: resourceID.String(), ExpectedSourceVersion: version, ExpectedKind: kind, Name: body.Name,
+	})
+	server.writeResourceResponse(writer, request.Context(), http.StatusCreated, response.GetResource(), err, true)
+}
+
 func (server *Server) ListRuns(writer http.ResponseWriter, request *http.Request, params generated.ListRunsParams) {
 	pageLimit, pageOK := pageSize(params.PageSize)
 	if !pageOK {
@@ -359,10 +456,28 @@ func (server *Server) ListAuditEvents(writer http.ResponseWriter, request *http.
 			return
 		}
 	}
-	server.listAudit(writer, request, &controlplanev1.ListAuditEventsRequest{
+	selected, token, err := server.scanAudit(request.Context(), &controlplanev1.ListAuditEventsRequest{
 		ResourceKind: kind, ResourceId: uuidValue(params.ResourceId), Action: value(params.Action),
 		PageSize: pageLimit, PageToken: value(params.PageToken),
 	}, nil)
+	if err != nil {
+		server.writeAuditScanError(writer, request.Context(), err)
+		return
+	}
+	events := make([]generated.AuditEvent, 0, len(selected))
+	for _, item := range selected {
+		converted, convertErr := ConvertAuditEvent(item)
+		if convertErr != nil {
+			server.writeInternal(writer, request.Context(), convertErr)
+			return
+		}
+		events = append(events, converted)
+	}
+	page := generated.AuditPage{Events: events}
+	if token != "" {
+		page.NextPageToken = stringPointer(token)
+	}
+	writeJSON(writer, http.StatusOK, page)
 }
 
 func (server *Server) ListIncidents(writer http.ResponseWriter, request *http.Request, params generated.ListIncidentsParams) {
@@ -371,9 +486,25 @@ func (server *Server) ListIncidents(writer http.ResponseWriter, request *http.Re
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
-	server.listAudit(writer, request, &controlplanev1.ListAuditEventsRequest{
-		Action: incidentAction, PageSize: pageLimit, PageToken: value(params.PageToken),
-	}, nil)
+	response, err := server.control.ListRuntimeIncidents(request.Context(), &controlplanev1.ListRuntimeIncidentsRequest{PageSize: pageLimit, PageToken: value(params.PageToken)})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	incidents := make([]generated.RuntimeIncident, 0, len(response.GetIncidents()))
+	for _, item := range response.GetIncidents() {
+		converted, convertErr := ConvertRuntimeIncident(item)
+		if convertErr != nil {
+			server.writeInternal(writer, request.Context(), convertErr)
+			return
+		}
+		incidents = append(incidents, converted)
+	}
+	page := generated.IncidentPage{Incidents: incidents}
+	if response.GetNextPageToken() != "" {
+		page.NextPageToken = stringPointer(response.GetNextPageToken())
+	}
+	writeJSON(writer, http.StatusOK, page)
 }
 
 func (server *Server) ListConfigurationChanges(writer http.ResponseWriter, request *http.Request, params generated.ListConfigurationChangesParams) {
@@ -382,9 +513,27 @@ func (server *Server) ListConfigurationChanges(writer http.ResponseWriter, reque
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
-	server.listAudit(writer, request, &controlplanev1.ListAuditEventsRequest{
+	selected, token, err := server.scanAudit(request.Context(), &controlplanev1.ListAuditEventsRequest{
 		PageSize: pageLimit, PageToken: value(params.PageToken),
 	}, projection.IsConfigurationAction)
+	if err != nil {
+		server.writeAuditScanError(writer, request.Context(), err)
+		return
+	}
+	changes := make([]generated.ConfigurationChange, 0, len(selected))
+	for _, item := range selected {
+		converted, convertErr := ConvertConfigurationChange(item)
+		if convertErr != nil {
+			server.writeInternal(writer, request.Context(), convertErr)
+			return
+		}
+		changes = append(changes, converted)
+	}
+	page := generated.ConfigurationChangePage{Changes: changes}
+	if token != "" {
+		page.NextPageToken = stringPointer(token)
+	}
+	writeJSON(writer, http.StatusOK, page)
 }
 
 func (server *Server) GetDiagnostics(writer http.ResponseWriter, request *http.Request) {
@@ -401,29 +550,65 @@ func (server *Server) GetDiagnostics(writer http.ResponseWriter, request *http.R
 	})
 }
 
-func (server *Server) listAudit(writer http.ResponseWriter, request *http.Request, rpcRequest *controlplanev1.ListAuditEventsRequest, filter func(string) bool) {
-	response, err := server.control.ListAuditEvents(request.Context(), rpcRequest)
-	if err != nil {
-		server.writeRPCError(writer, request.Context(), err, false)
+func (server *Server) scanAudit(ctx context.Context, rpcRequest *controlplanev1.ListAuditEventsRequest, filter func(string) bool) ([]*controlplanev1.AuditEvent, string, error) {
+	target := int(rpcRequest.GetPageSize())
+	events := make([]*controlplanev1.AuditEvent, 0, target)
+	token := rpcRequest.GetPageToken()
+	scanned := 0
+	for len(events) < target {
+		remaining := maximumAuditScan - scanned
+		if remaining <= 0 {
+			return nil, "", errAuditScanLimit
+		}
+		size := uint32(maximumPageSize)
+		if remaining < int(size) {
+			size = uint32(remaining)
+		}
+		requestedToken := token
+		response, err := server.control.ListAuditEvents(ctx, &controlplanev1.ListAuditEventsRequest{ResourceKind: rpcRequest.GetResourceKind(), ResourceId: rpcRequest.GetResourceId(), Action: rpcRequest.GetAction(), PageSize: size, PageToken: token})
+		if err != nil {
+			return nil, "", err
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetEvents()) == 0 || next == requestedToken) {
+			return nil, "", errAuditPagination
+		}
+		for index, item := range response.GetEvents() {
+			scanned++
+			token = item.GetId()
+			if filter != nil && !filter(item.GetAction()) {
+				continue
+			}
+			events = append(events, item)
+			if len(events) == target {
+				if index == len(response.GetEvents())-1 && next == "" {
+					token = ""
+				}
+				break
+			}
+		}
+		if len(events) == target {
+			break
+		}
+		if next == "" {
+			token = ""
+			break
+		}
+		token = next
+	}
+	return events, token, nil
+}
+
+func (server *Server) writeAuditScanError(writer http.ResponseWriter, ctx context.Context, err error) {
+	if errors.Is(err, errAuditScanLimit) {
+		writeProblem(writer, localProblem(http.StatusServiceUnavailable, "UNAVAILABLE", true))
 		return
 	}
-	events := make([]generated.AuditEvent, 0, len(response.GetEvents()))
-	for _, item := range response.GetEvents() {
-		if filter != nil && !filter(item.GetAction()) {
-			continue
-		}
-		converted, convertErr := auditEvent(item)
-		if convertErr != nil {
-			server.writeInternal(writer, request.Context(), convertErr)
-			return
-		}
-		events = append(events, converted)
+	if errors.Is(err, errAuditPagination) {
+		server.writeInternal(writer, ctx, err)
+		return
 	}
-	page := generated.AuditPage{Events: events}
-	if response.GetNextPageToken() != "" {
-		page.NextPageToken = stringPointer(response.GetNextPageToken())
-	}
-	writeJSON(writer, http.StatusOK, page)
+	server.writeRPCError(writer, ctx, err, false)
 }
 
 func (server *Server) writeResourceResponse(writer http.ResponseWriter, ctx context.Context, statusCode int, resource *controlplanev1.Resource, err error, mutation bool) {
@@ -431,7 +616,7 @@ func (server *Server) writeResourceResponse(writer http.ResponseWriter, ctx cont
 		server.writeRPCError(writer, ctx, err, mutation)
 		return
 	}
-	converted, convertErr := convertResource(resource)
+	converted, convertErr := ConvertResource(resource)
 	if convertErr != nil {
 		server.writeInternal(writer, ctx, convertErr)
 		return
@@ -442,7 +627,8 @@ func (server *Server) writeResourceResponse(writer http.ResponseWriter, ctx cont
 
 func (server *Server) writeRPCError(writer http.ResponseWriter, ctx context.Context, err error, mutation bool) {
 	problem, expected := mapRPCError(err, mutation)
-	if !expected {
+	grpcStatus, isGRPC := status.FromError(err)
+	if !expected && (!isGRPC || !grpcserver.IsUnexpectedCode(grpcStatus.Code())) {
 		server.logger.ErrorContext(ctx, "unexpected control-plane RPC outcome", "error_class", "rpc_contract")
 	}
 	writeProblem(writer, problem)
@@ -531,7 +717,7 @@ func mutableSpec(kind generated.MutableResourceKind, input generated.ResourceSpe
 		if input.Chat == nil {
 			break
 		}
-		room := map[generated.ChatSpecRoomType]controlplanev1.RoomType{generated.USER: controlplanev1.RoomType_ROOM_TYPE_USER, generated.COORDINATION: controlplanev1.RoomType_ROOM_TYPE_COORDINATION, generated.WORKCONTROL: controlplanev1.RoomType_ROOM_TYPE_WORK_CONTROL, generated.RUNS: controlplanev1.RoomType_ROOM_TYPE_RUNS}[input.Chat.RoomType]
+		room := map[generated.ChatSpecRoomType]controlplanev1.RoomType{generated.ChatSpecRoomTypeUSER: controlplanev1.RoomType_ROOM_TYPE_USER, generated.ChatSpecRoomTypeCOORDINATION: controlplanev1.RoomType_ROOM_TYPE_COORDINATION, generated.ChatSpecRoomTypeWORKCONTROL: controlplanev1.RoomType_ROOM_TYPE_WORK_CONTROL, generated.ChatSpecRoomTypeRUNS: controlplanev1.RoomType_ROOM_TYPE_RUNS}[input.Chat.RoomType]
 		if room == 0 {
 			break
 		}
@@ -639,7 +825,7 @@ func lifecycleStates(input *[]generated.LifecycleState) ([]controlplanev1.Lifecy
 func resourcePage(resources []*controlplanev1.Resource, next string) (generated.ResourcePage, error) {
 	result := generated.ResourcePage{Resources: make([]generated.Resource, 0, len(resources))}
 	for _, item := range resources {
-		converted, err := convertResource(item)
+		converted, err := ConvertResource(item)
 		if err != nil {
 			return generated.ResourcePage{}, err
 		}
@@ -651,7 +837,7 @@ func resourcePage(resources []*controlplanev1.Resource, next string) (generated.
 	return result, nil
 }
 
-func convertResource(input *controlplanev1.Resource) (generated.Resource, error) {
+func ConvertResource(input *controlplanev1.Resource) (generated.Resource, error) {
 	if input == nil || input.GetVersion() == 0 || input.GetCreatedAt() == nil || input.GetUpdatedAt() == nil || input.GetSpec() == nil {
 		return generated.Resource{}, errors.New("resource response is incomplete")
 	}
@@ -666,15 +852,9 @@ func convertResource(input *controlplanev1.Resource) (generated.Resource, error)
 	if !kind.Valid() || !state.Valid() {
 		return generated.Resource{}, errors.New("resource enum is invalid")
 	}
-	raw, err := protojson.MarshalOptions{UseProtoNames: false}.Marshal(input.GetSpec())
+	spec, err := resourceProjection(input)
 	if err != nil {
 		return generated.Resource{}, err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var spec map[string]any
-	if decoder.Decode(&spec) != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		return generated.Resource{}, errors.New("resource spec JSON is invalid")
 	}
 	result := generated.Resource{Id: id, Kind: kind, Name: input.GetName(), State: state, Version: int64(input.GetVersion()), Spec: spec, CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime()}
 	if input.GetProjectId() != "" {
@@ -694,7 +874,7 @@ func convertResource(input *controlplanev1.Resource) (generated.Resource, error)
 	return result, nil
 }
 
-func auditEvent(input *controlplanev1.AuditEvent) (generated.AuditEvent, error) {
+func ConvertAuditEvent(input *controlplanev1.AuditEvent) (generated.AuditEvent, error) {
 	if input == nil || input.GetOccurredAt() == nil || input.GetResourceVersion() == 0 || input.GetPolicyRevision() == 0 {
 		return generated.AuditEvent{}, errors.New("audit response is incomplete")
 	}
@@ -719,6 +899,24 @@ func auditEvent(input *controlplanev1.AuditEvent) (generated.AuditEvent, error) 
 		return generated.AuditEvent{}, errors.New("audit kind is invalid")
 	}
 	return generated.AuditEvent{Id: id, Action: input.GetAction(), ResourceId: resourceID, ResourceKind: kind, ResourceVersion: int64(input.GetResourceVersion()), Outcome: input.GetOutcome(), ActorId: actorID, CorrelationId: correlationID, PolicyRevision: int64(input.GetPolicyRevision()), OccurredAt: input.GetOccurredAt().AsTime()}, nil
+}
+
+func ConvertConfigurationChange(input *controlplanev1.AuditEvent) (generated.ConfigurationChange, error) {
+	audit, err := ConvertAuditEvent(input)
+	if err != nil {
+		return generated.ConfigurationChange{}, err
+	}
+	action := generated.ConfigurationChangeAction(audit.Action)
+	outcome := generated.ConfigurationChangeOutcome(audit.Outcome)
+	if !action.Valid() || !outcome.Valid() {
+		return generated.ConfigurationChange{}, errors.New("configuration change enum is invalid")
+	}
+	return generated.ConfigurationChange{
+		Id: audit.Id, Action: action, ResourceId: audit.ResourceId,
+		ResourceKind: audit.ResourceKind, ResourceVersion: audit.ResourceVersion,
+		Outcome: outcome, ActorId: audit.ActorId, CorrelationId: audit.CorrelationId,
+		PolicyRevision: audit.PolicyRevision, OccurredAt: audit.OccurredAt,
+	}, nil
 }
 
 func uuidStrings(values []uuid.UUID) []string {
