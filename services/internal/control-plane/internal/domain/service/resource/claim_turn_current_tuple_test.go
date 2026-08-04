@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -948,8 +949,11 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	const runtimeWorker = "runtime-controller"
 	const runtimeSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller"
 	service, err := New(repository, Config{
-		LeaseSigningKey:   []byte("0123456789abcdef0123456789abcdef"),
-		TurnLeaseDuration: time.Minute, MaximumScheduleClaims: 10,
+		LeaseSigningKey:            []byte("0123456789abcdef0123456789abcdef"),
+		RuntimeAdmissionSigningKey: ed25519.NewKeyFromSeed([]byte("runtime-admission-signing-test!!")),
+		RuntimeArchiveSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-archive-signing-test-key")),
+		RuntimeRestoreSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-restore-signing-test-key")),
+		TurnLeaseDuration:          time.Minute, MaximumScheduleClaims: 10,
 		RuntimeImageDigest:      "sha256:" + digest,
 		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: digest,
 		OwnerGateDeliveryWorkload:  "interaction-gateway",

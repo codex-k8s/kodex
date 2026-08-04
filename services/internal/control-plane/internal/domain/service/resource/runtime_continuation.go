@@ -22,7 +22,6 @@ const (
 	minimumApprovalLifetime       = time.Minute
 	maximumApprovalLifetime       = 7 * 24 * time.Hour
 	cleanupAuthorizationLifetime  = 15 * time.Minute
-	archiveRetentionSafetyWindow  = 24 * time.Hour
 	integrationPredecessorOutcome = "integration_continuation_materialized"
 )
 
@@ -641,11 +640,26 @@ func (service *Service) ClaimRuntimeExecution(
 			if restoreErr == nil && (restoreSource.CleanupAuthorizationState != "CONSUMED" ||
 				!validSHA256Text(restoreSource.ArchiveSHA256) ||
 				!validSHA256Text(restoreSource.RestoreProofSHA256) ||
-				!validSHA256Text(restoreSource.CleanupDeletionProofSHA256)) {
+				!validSHA256Text(restoreSource.CleanupDeletionProofSHA256) ||
+				restoreSource.ArchiveObjectKey == "" || restoreSource.ArchiveVersionID == "" ||
+				!strings.HasPrefix(restoreSource.ArchiveKMSKeyARN, "arn:") ||
+				restoreSource.ArchiveObjectLockMode != "COMPLIANCE" ||
+				restoreSource.ArchiveRetainUntil.IsZero() ||
+				!validSHA256Text(restoreSource.ArchiveProvenanceSHA256) ||
+				restoreSource.RetentionPolicyID == "" || restoreSource.RetentionPolicyVersion == 0) {
 				return errs.ErrStateConflict
 			}
 			resourceClass, clusterProfile := runtimeResourcePolicy(resolved.RoleSpec)
-			now := service.now().UTC().Truncate(time.Microsecond)
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			retentionPolicy, err := tx.GetCurrentResourceRetentionPolicy(
+				ctx, principal.OrganizationID, principal.ProjectID,
+			)
+			if err != nil || !validRuntimeRetentionPolicy(retentionPolicy, now) {
+				return errs.ErrStateConflict
+			}
 			agentBinding, err := tx.GetRuntimeAgentBindingForUpdate(
 				ctx, resolved.Turn.ID, resolved.TurnSpec.Attempt,
 			)
@@ -747,16 +761,18 @@ func (service *Service) ClaimRuntimeExecution(
 				WorkloadSPIFFEID: principal.CallerSPIFFEID,
 				GrantGeneration:  principal.AuthorityGrantGeneration,
 				Version:          1, Fence: 1, State: "PENDING",
-				AgentSessionKey:              agentBinding.AgentSessionKey,
-				AgentSessionID:               agentBinding.AgentSessionID,
-				AgentSessionTurnID:           agentBinding.AgentSessionTurnID,
-				AgentRunID:                   agentBinding.AgentRunID,
-				AgentBindingSHA256:           agentBindingSHA256,
-				RetentionPolicyID:            service.retentionPolicyID,
-				RetentionPolicyVersion:       service.retentionPolicyVersion,
-				PVCRetentionSeconds:          uint64(service.pvcRetention / time.Second),
-				ArchiveRetentionSeconds:      uint64(service.archiveRetention / time.Second),
-				PVCCleanupEligibleAt:         resolved.Session.UpdatedAt.Add(service.pvcRetention),
+				AgentSessionKey:         agentBinding.AgentSessionKey,
+				AgentSessionID:          agentBinding.AgentSessionID,
+				AgentSessionTurnID:      agentBinding.AgentSessionTurnID,
+				AgentRunID:              agentBinding.AgentRunID,
+				AgentBindingSHA256:      agentBindingSHA256,
+				RetentionPolicyID:       retentionPolicy.ID,
+				RetentionPolicyVersion:  retentionPolicy.Version,
+				PVCRetentionSeconds:     retentionPolicy.PVCRetentionSeconds,
+				ArchiveRetentionSeconds: retentionPolicy.ArchiveRetentionSeconds,
+				PVCCleanupEligibleAt: resolved.Session.UpdatedAt.Add(
+					time.Duration(retentionPolicy.PVCRetentionSeconds) * time.Second,
+				),
 				CapacityObservationExpiresAt: providerSpec.ProviderObservedAt.Add(resolved.RoleSpec.ProviderAccountPool.ObservationMaxAge),
 				RescheduleAfter:              now.Add(service.pendingRescheduleDelay),
 				CredentialSnapshotSHA256:     credentialSnapshotSHA256,
@@ -770,6 +786,15 @@ func (service *Service) ClaimRuntimeExecution(
 				result.RestoreSourceRuntimeRevisionSHA256 = restoreSource.RuntimeRevisionSHA256
 				result.RestoreSourceImmutableInputSHA256 = restoreSource.ImmutableInputSHA256
 				result.RestoreSourceProofSHA256 = restoreSource.RestoreProofSHA256
+				result.RestoreSourceVersion = restoreSource.Version
+				result.RestoreSourceArchiveObjectKey = restoreSource.ArchiveObjectKey
+				result.RestoreSourceArchiveVersionID = restoreSource.ArchiveVersionID
+				result.RestoreSourceArchiveKMSKeyARN = restoreSource.ArchiveKMSKeyARN
+				result.RestoreSourceArchiveObjectLockMode = restoreSource.ArchiveObjectLockMode
+				result.RestoreSourceArchiveRetainUntil = restoreSource.ArchiveRetainUntil
+				result.RestoreSourceRetentionPolicyID = restoreSource.RetentionPolicyID
+				result.RestoreSourceRetentionPolicyVersion = restoreSource.RetentionPolicyVersion
+				result.RestoreSourceProvenanceSHA256 = restoreSource.ArchiveProvenanceSHA256
 				result.RestoreAssignmentState = "ASSIGNED"
 				result.RestoreAssignmentGeneration = 1
 			}
@@ -798,6 +823,34 @@ func (service *Service) ClaimRuntimeExecution(
 		err = service.issueRuntimeWorkloadTicket(&result)
 	}
 	return result, err
+}
+
+func validRuntimeRetentionPolicy(
+	policy domainrepo.ResourceRetentionPolicy,
+	now time.Time,
+) bool {
+	return value.ValidateStableKey(policy.ID) == nil && policy.Version > 0 &&
+		!policy.EffectiveFrom.IsZero() && !policy.EffectiveFrom.After(now) &&
+		policy.PVCRetentionSeconds >= uint64((24*time.Hour)/time.Second) &&
+		policy.PVCRetentionSeconds <= uint64((30*24*time.Hour)/time.Second) &&
+		policy.ArchiveRetentionSeconds >= uint64((90*24*time.Hour)/time.Second) &&
+		policy.ArchiveRetentionSeconds <= uint64((10*365*24*time.Hour)/time.Second)
+}
+
+func pinRuntimeRetention(execution *RuntimeExecution, transitionedAt time.Time) error {
+	if execution == nil || execution.RetentionPolicyID == "" ||
+		execution.RetentionPolicyVersion == 0 ||
+		execution.PVCRetentionSeconds < uint64((24*time.Hour)/time.Second) ||
+		execution.ArchiveRetentionSeconds < uint64((90*24*time.Hour)/time.Second) {
+		return errs.ErrStateConflict
+	}
+	execution.PVCCleanupEligibleAt = transitionedAt.Add(
+		time.Duration(execution.PVCRetentionSeconds) * time.Second,
+	)
+	execution.ArchiveRetainUntil = transitionedAt.Add(
+		time.Duration(execution.ArchiveRetentionSeconds) * time.Second,
+	)
+	return nil
 }
 
 func recoverablePendingRuntime(
@@ -1436,8 +1489,9 @@ func (service *Service) CompleteRuntimeExecution(
 			if input.Outcome == "BLOCKED" {
 				execution.State = "SUSPENDED"
 			}
-			execution.PVCCleanupEligibleAt = now.Add(service.pvcRetention)
-			execution.ArchiveRetainUntil = now.Add(service.archiveRetention + archiveRetentionSafetyWindow)
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.TerminalOutcome = input.Outcome
 			execution.TerminalReference = input.TerminalReference
 			execution.TerminalSHA256 = input.TerminalSHA256
@@ -1553,8 +1607,9 @@ func (service *Service) CancelRuntimeExecution(
 			execution.Version++
 			execution.Fence++
 			execution.State = "CANCELLED"
-			execution.PVCCleanupEligibleAt = now.Add(service.pvcRetention)
-			execution.ArchiveRetainUntil = now.Add(service.archiveRetention + archiveRetentionSafetyWindow)
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.TerminalOutcome = "CANCELLED"
 			execution.TerminalReference = input.ReasonCode
 			execution.TerminalSHA256 = hashString(input.ReasonCode)
@@ -1748,8 +1803,9 @@ func (service *Service) RetryRuntimeExecution(
 			execution.Version++
 			execution.Fence++
 			execution.State = "RETRIED"
-			execution.PVCCleanupEligibleAt = now.Add(service.pvcRetention)
-			execution.ArchiveRetainUntil = now.Add(service.archiveRetention + archiveRetentionSafetyWindow)
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.LeaseID = ""
 			execution.LeaseTokenSHA256 = ""
 			execution.LeaseExpiresAt = time.Time{}
@@ -1793,11 +1849,23 @@ func (service *Service) RescheduleRuntimeExecution(
 		if err != nil {
 			return err
 		}
-		if err := matchRuntimeMutation(execution, input); err != nil || execution.State != "PENDING" ||
-			(now.Before(execution.RescheduleAfter) && now.Before(execution.CapacityObservationExpiresAt)) {
-			return errs.ErrStateConflict
+		if err := requireExactRuntimeApplicationAuthority(execution, input.Principal); err != nil {
+			return err
 		}
-		return requireExactRuntimeApplicationAuthority(execution, input.Principal)
+		if execution.Version == input.ExpectedVersion && execution.Fence == input.ExpectedFence {
+			if execution.State != "PENDING" ||
+				(now.Before(execution.RescheduleAfter) && now.Before(execution.CapacityObservationExpiresAt)) {
+				return errs.ErrStateConflict
+			}
+			return nil
+		}
+		// Lost response обязан дойти до receipt replay RetryRuntimeExecution:
+		// stale precondition не должен заслонять уже атомарно созданного successor.
+		if execution.Version == input.ExpectedVersion+1 &&
+			execution.Fence == input.ExpectedFence+1 && execution.State == "RETRIED" {
+			return nil
+		}
+		return errs.ErrVersionMismatch
 	})
 	if err != nil {
 		return RetryRuntimeExecutionResult{}, err
@@ -1911,8 +1979,9 @@ func (service *Service) ExpireRuntimeExecution(
 			execution.Version++
 			execution.Fence++
 			execution.State = "EXPIRED"
-			execution.PVCCleanupEligibleAt = now.Add(service.pvcRetention)
-			execution.ArchiveRetainUntil = now.Add(service.archiveRetention + archiveRetentionSafetyWindow)
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.TerminalOutcome = "EXPIRED"
 			execution.TerminalReference = "database-clock:" + now.Format(time.RFC3339Nano)
 			execution.TerminalSHA256 = hashString(execution.TerminalReference)
@@ -1946,15 +2015,24 @@ func (service *Service) RecordRuntimeArchive(
 		input.Principal.CallerSPIFFEID != service.archiveSPIFFEID ||
 		input.ExpectedGrantGeneration == 0 ||
 		!validBoundedReference(input.ArchiveReference) ||
-		!validSHA256Text(input.ArchiveSHA256) {
+		!validSHA256Text(input.ArchiveSHA256) ||
+		!validBoundedReference(input.ArchiveObjectKey) ||
+		!validOpaqueRuntimeIdentifier(input.ArchiveVersionID) ||
+		!strings.HasPrefix(input.ArchiveKMSKeyARN, "arn:") ||
+		input.ArchiveObjectLockMode != "COMPLIANCE" || input.ArchiveRetainUntil.IsZero() ||
+		!validSHA256Text(input.ArchiveProvenanceSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
-		Runtime          runtimeExecutionIntent
-		ArchiveReference string
-		ArchiveSHA256    string
+		Runtime                                    runtimeExecutionIntent
+		ArchiveReference, ArchiveSHA256, ObjectKey string
+		VersionID, KMSKeyARN, ObjectLockMode       string
+		RetainUntil                                time.Time
+		ProvenanceSHA256                           string
 	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveReference,
-		input.ArchiveSHA256})
+		input.ArchiveSHA256, input.ArchiveObjectKey, input.ArchiveVersionID,
+		input.ArchiveKMSKeyARN, input.ArchiveObjectLockMode,
+		input.ArchiveRetainUntil, input.ArchiveProvenanceSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1987,6 +2065,12 @@ func (service *Service) RecordRuntimeArchive(
 				execution.Fence == input.ExpectedFence+1 &&
 				execution.ArchiveReference == input.ArchiveReference &&
 				execution.ArchiveSHA256 == input.ArchiveSHA256 &&
+				execution.ArchiveObjectKey == input.ArchiveObjectKey &&
+				execution.ArchiveVersionID == input.ArchiveVersionID &&
+				execution.ArchiveKMSKeyARN == input.ArchiveKMSKeyARN &&
+				execution.ArchiveObjectLockMode == input.ArchiveObjectLockMode &&
+				execution.ArchiveRetainUntil.Equal(input.ArchiveRetainUntil) &&
+				execution.ArchiveProvenanceSHA256 == input.ArchiveProvenanceSHA256 &&
 				execution.RestoreProofSHA256 == "" &&
 				execution.CleanupAuthorizationState == "NONE":
 				disposition = lifecycleReceiptReplay
@@ -2004,6 +2088,7 @@ func (service *Service) RecordRuntimeArchive(
 			}
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
 				!runtimeTerminal(execution.State) || execution.ArchiveSHA256 != "" ||
+				!execution.ArchiveRetainUntil.Equal(input.ArchiveRetainUntil) ||
 				requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil {
 				return errs.ErrStateConflict
 			}
@@ -2016,6 +2101,11 @@ func (service *Service) RecordRuntimeArchive(
 			execution.Fence++
 			execution.ArchiveReference = input.ArchiveReference
 			execution.ArchiveSHA256 = input.ArchiveSHA256
+			execution.ArchiveObjectKey = input.ArchiveObjectKey
+			execution.ArchiveVersionID = input.ArchiveVersionID
+			execution.ArchiveKMSKeyARN = input.ArchiveKMSKeyARN
+			execution.ArchiveObjectLockMode = input.ArchiveObjectLockMode
+			execution.ArchiveProvenanceSHA256 = input.ArchiveProvenanceSHA256
 			execution.UpdatedAt = now
 			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
@@ -2356,7 +2446,7 @@ func (service *Service) AuthorizeRuntimeCleanup(
 				execution.RestoreVerifierGeneration != execution.GrantGeneration {
 				return 0, errs.ErrStateConflict
 			}
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -2413,7 +2503,7 @@ func (service *Service) AuthorizeRuntimeCleanup(
 			}
 			now := locked.Now
 			session := locked.Graph.Session
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -2580,7 +2670,7 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 				execution.CleanupPVCResourceVersion != input.PVCResourceVersion {
 				return 0, errs.ErrStateConflict
 			}
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -2637,7 +2727,7 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 				input.ObservedNotFoundAt.After(now) {
 				return errs.ErrStateConflict
 			}
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -3538,8 +3628,9 @@ func (service *Service) suspendRuntimeExecutionForIntegration(
 	execution.Version++
 	execution.Fence++
 	execution.State = "SUSPENDED"
-	execution.PVCCleanupEligibleAt = now.Add(service.pvcRetention)
-	execution.ArchiveRetainUntil = now.Add(service.archiveRetention + archiveRetentionSafetyWindow)
+	if err := pinRuntimeRetention(&execution, now); err != nil {
+		return err
+	}
 	execution.TerminalOutcome = "SUSPENDED"
 	execution.TerminalReference = invocationID
 	execution.TerminalSHA256 = requestSHA256
@@ -3588,8 +3679,9 @@ func (service *Service) suspendRuntimeExecutionForOwnerGate(
 	execution.Version++
 	execution.Fence++
 	execution.State = "SUSPENDED"
-	execution.PVCCleanupEligibleAt = now.Add(service.pvcRetention)
-	execution.ArchiveRetainUntil = now.Add(service.archiveRetention + archiveRetentionSafetyWindow)
+	if err := pinRuntimeRetention(&execution, now); err != nil {
+		return err
+	}
 	execution.TerminalOutcome = "SUSPENDED"
 	execution.TerminalReference = gateID
 	execution.TerminalSHA256 = requestSHA256

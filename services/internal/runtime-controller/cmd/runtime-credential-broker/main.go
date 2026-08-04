@@ -3,11 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -28,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	ststypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/security/workloadticket"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -41,7 +40,7 @@ const runtimeConfigFile = "/var/run/config/mattercodex/runtime/runtime.json"
 
 const (
 	vaultTokenFile        = "/var/run/secrets/tokens/vault"
-	workloadTicketKeyFile = "/var/run/secrets/mattercodex/runtime-credential-broker/workload-ticket/key"
+	workloadTicketKeyFile = "/var/run/config/mattercodex/runtime-workload-ticket/public-key.hex"
 	s3KMSKeyARNFile       = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/kms-key-arn"
 	s3ArchiveRoleARNFile  = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/archive-role-arn"
 	s3RestoreRoleARNFile  = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/restore-role-arn"
@@ -49,11 +48,13 @@ const (
 )
 
 type runtimeSnapshot struct {
-	Execution      entity.Execution `json:"execution"`
-	Revision       entity.Revision  `json:"runtime_revision"`
-	Runner         json.RawMessage  `json:"runner_input"`
-	WorkloadTicket string           `json:"workload_ticket"`
-	DesiredPod     *corev1.Pod      `json:"desired_pod"`
+	Execution             entity.Execution `json:"execution"`
+	Revision              entity.Revision  `json:"runtime_revision"`
+	Runner                json.RawMessage  `json:"runner_input"`
+	WorkloadTicket        string           `json:"workload_ticket"`
+	ArchiveWorkloadTicket string           `json:"archive_workload_ticket"`
+	RestoreWorkloadTicket string           `json:"restore_workload_ticket"`
+	DesiredPod            *corev1.Pod      `json:"desired_pod"`
 }
 
 type credentialSnapshotEntry struct {
@@ -71,17 +72,6 @@ type vaultResponse struct {
 type vaultAuth struct {
 	ClientToken string `json:"client_token"`
 	Accessor    string `json:"accessor"`
-}
-
-type workloadTicketPayload struct {
-	ExecutionID, OrganizationID, ProjectID, SessionID, TurnID string
-	Attempt                                                   uint32
-	RuntimeRevisionID, RuntimeRevisionSHA256                  string
-	RuntimeRevisionVersion, Version, Fence, GrantGeneration   uint64
-	ImmutableInputSHA256, EffectiveRuntimeSHA256              string
-	AgentBindingSHA256, CredentialSnapshotSHA256              string
-	WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
-	State                                                     string
 }
 
 func main() {
@@ -112,7 +102,7 @@ func run(ctx context.Context) error {
 	if decoder.Decode(&snapshot) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
 		snapshot.Execution.ID != executionID ||
 		snapshot.Execution.Validate() != nil || snapshot.Revision.ValidateFor(snapshot.Execution) != nil ||
-		!credentialSnapshotMatches(snapshot.Execution, snapshot.Revision) || verifyWorkloadTicket(snapshot) != nil {
+		!credentialSnapshotMatches(snapshot.Execution, snapshot.Revision) || verifyWorkloadTicket(snapshot, os.Args[1]) != nil {
 		return errors.New("immutable runtime credential input is invalid")
 	}
 	config, err := rest.InClusterConfig()
@@ -588,7 +578,8 @@ func materializeS3Credential(
 
 func exactS3Policy(execution entity.Execution, action string) (map[string]any, string, error) {
 	bucket, kmsKeyARN := requiredEnv("RUNTIME_S3_BUCKET"), requiredEnvOrFile("RUNTIME_S3_KMS_KEY_ARN", s3KMSKeyARNFile)
-	if bucket == "" || kmsKeyARN == "" || !strings.HasPrefix(kmsKeyARN, "arn:") {
+	region := requiredEnv("RUNTIME_S3_REGION")
+	if bucket == "" || region == "" || kmsKeyARN == "" || !strings.HasPrefix(kmsKeyARN, "arn:") {
 		return nil, "", errors.New("runtime S3 policy configuration is invalid")
 	}
 	sourceExecutionID := execution.ID
@@ -626,7 +617,11 @@ func exactS3Policy(execution entity.Execution, action string) (map[string]any, s
 	statements = append(statements,
 		map[string]any{"Effect": "Allow", "Action": []string{"s3:PutObject", "s3:PutObjectRetention"}, "Resource": writeARN,
 			"Condition": map[string]any{"Bool": map[string]string{"aws:SecureTransport": "true"}, "StringEquals": map[string]string{"s3:x-amz-server-side-encryption": "aws:kms", "s3:object-lock-mode": "COMPLIANCE"}}},
-		map[string]any{"Effect": "Allow", "Action": []string{"kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"}, "Resource": kmsKeyARN},
+		map[string]any{"Effect": "Allow", "Action": []string{"kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"}, "Resource": kmsKeyARN,
+			"Condition": map[string]any{"StringEquals": map[string]any{
+				"kms:ViaService":                   "s3." + region + ".amazonaws.com",
+				"kms:EncryptionContext:aws:s3:arn": []string{archiveARN, writeARN},
+			}}},
 		map[string]any{"Effect": "Deny", "Action": []string{"s3:PutObject", "s3:PutObjectRetention"}, "Resource": writeARN,
 			"Condition": map[string]any{"NumericLessThan": map[string]string{"s3:object-lock-remaining-retention-days": "90"}}},
 		map[string]any{"Effect": "Deny", "Action": []string{"s3:ListBucket", "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:BypassGovernanceRetention"}, "Resource": []string{"arn:aws:s3:::" + bucket, "arn:aws:s3:::" + bucket + "/*"}},
@@ -799,47 +794,20 @@ func materializeCredential(
 	return nil
 }
 
-func verifyWorkloadTicket(snapshot runtimeSnapshot) error {
-	parts := strings.Split(snapshot.WorkloadTicket, ".")
-	if len(parts) != 2 {
-		return errors.New("runtime workload ticket is invalid")
-	}
-	payloadRaw, payloadErr := base64.RawURLEncoding.DecodeString(parts[0])
-	signature, signatureErr := base64.RawURLEncoding.DecodeString(parts[1])
-	key, keyErr := os.ReadFile(workloadTicketKeyFile)
-	if payloadErr != nil || signatureErr != nil || keyErr != nil || len(key) < 32 || len(signature) != sha256.Size {
+func verifyWorkloadTicket(snapshot runtimeSnapshot, mode string) error {
+	keyRaw, keyErr := os.ReadFile(workloadTicketKeyFile)
+	publicKey, decodeKeyErr := workloadticket.DecodePublicKey(keyRaw)
+	if keyErr != nil || decodeKeyErr != nil {
 		return errors.New("read runtime workload ticket verification material")
 	}
-	mac := hmac.New(sha256.New, key)
-	_, _ = mac.Write(payloadRaw)
-	if !hmac.Equal(signature, mac.Sum(nil)) {
-		return errors.New("runtime workload ticket signature is invalid")
+	ticket, audience := snapshot.WorkloadTicket, "mattercodex-runtime-workload-admission"
+	if mode == "s3-archive" {
+		ticket, audience = snapshot.ArchiveWorkloadTicket, "mattercodex-runtime-s3-archive"
+	} else if mode == "s3-restore" {
+		ticket, audience = snapshot.RestoreWorkloadTicket, "mattercodex-runtime-s3-restore"
 	}
-	var payload workloadTicketPayload
-	decoder := json.NewDecoder(bytes.NewReader(payloadRaw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&payload) != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		return errors.New("runtime workload ticket payload is invalid")
-	}
-	execution := snapshot.Execution
-	if payload.ExecutionID != execution.ID || payload.OrganizationID != execution.OrganizationID ||
-		payload.ProjectID != execution.ProjectID || payload.SessionID != execution.SessionID ||
-		payload.TurnID != execution.TurnID || payload.Attempt != execution.Attempt ||
-		payload.RuntimeRevisionID != execution.RuntimeRevisionID ||
-		payload.RuntimeRevisionVersion != execution.RuntimeRevisionVersion ||
-		payload.RuntimeRevisionSHA256 != execution.RuntimeRevisionSHA256 ||
-		payload.Version != execution.Version || payload.Fence != execution.Fence ||
-		payload.GrantGeneration != execution.GrantGeneration ||
-		payload.ImmutableInputSHA256 != execution.ImmutableInputSHA256 ||
-		payload.EffectiveRuntimeSHA256 != execution.EffectiveRuntimeSHA256 ||
-		payload.AgentBindingSHA256 != execution.AgentBindingSHA256 ||
-		payload.CredentialSnapshotSHA256 != execution.CredentialSnapshotSHA256 ||
-		payload.WorkloadTicketSHA256 != execution.WorkloadTicketSHA256 ||
-		payload.ResourceClass != string(execution.ResourceClass) ||
-		payload.ClusterAccessProfile != string(execution.AccessProfile) || payload.State != string(execution.State) {
-		return errors.New("runtime workload ticket tuple mismatch")
-	}
-	return nil
+	_, err := workloadticket.VerifyForAudience(ticket, publicKey, snapshot.Execution, audience, time.Now())
+	return err
 }
 
 func credentialSnapshotMatches(execution entity.Execution, revision entity.Revision) bool {

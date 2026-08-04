@@ -138,6 +138,9 @@ var sqlRuntimeAgentBindingGetForUpdate string
 //go:embed sql/runtime_agent_binding__insert.sql
 var sqlRuntimeAgentBindingInsert string
 
+//go:embed sql/resource_retention_policy__current.sql
+var sqlResourceRetentionPolicyCurrent string
+
 //go:embed sql/runtime_execution__session_has_live.sql
 var sqlRuntimeExecutionSessionHasLive string
 
@@ -248,6 +251,9 @@ var sqlScheduledRunFinish string
 
 //go:embed sql/session__open_turns.sql
 var sqlSessionOpenTurns string
+
+//go:embed sql/session__blocks_runtime_cleanup.sql
+var sqlSessionBlocksRuntimeCleanup string
 
 //go:embed sql/transaction__set_scope.sql
 var sqlTransactionSetScope string

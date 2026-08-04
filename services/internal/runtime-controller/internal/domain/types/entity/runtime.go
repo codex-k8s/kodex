@@ -36,6 +36,8 @@ type Execution struct {
 	LeaseID                                                                       string
 	LeaseExpiresAt                                                                time.Time
 	ArchiveReference, ArchiveSHA256                                               string
+	ArchiveObjectKey, ArchiveVersionID, ArchiveKMSKeyARN, ArchiveObjectLockMode   string
+	ArchiveProvenanceSHA256                                                       string
 	RestoreProofReference, RestoreProofSHA256                                     string
 	CleanupAuthorizationID                                                        string
 	CleanupAuthorizationGeneration                                                uint64
@@ -47,6 +49,12 @@ type Execution struct {
 	RestoreSourceExecutionID, RestoreSourceArchiveReference                       string
 	RestoreSourceArchiveSHA256, RestoreSourceRuntimeRevisionSHA256                string
 	RestoreSourceImmutableInputSHA256, RestoreSourceProofSHA256                   string
+	RestoreSourceVersion                                                          uint64
+	RestoreSourceArchiveObjectKey, RestoreSourceArchiveVersionID                  string
+	RestoreSourceArchiveKMSKeyARN, RestoreSourceArchiveObjectLockMode             string
+	RestoreSourceArchiveRetainUntil                                               time.Time
+	RestoreSourceRetentionPolicyID, RestoreSourceProvenanceSHA256                 string
+	RestoreSourceRetentionPolicyVersion                                           uint64
 	RetentionPolicyID                                                             string
 	RetentionPolicyVersion, PVCRetentionSeconds, ArchiveRetentionSeconds          uint64
 	ArchiveRetainUntil                                                            time.Time
@@ -57,6 +65,16 @@ type Execution struct {
 	RehydrateProofReference, RehydrateProofSHA256                                 string
 	CredentialSnapshotSHA256, WorkloadTicketSHA256                                string
 	WorkloadTicket                                                                string `json:"-"`
+	ArchiveWorkloadTicket                                                         string `json:"-"`
+	RestoreWorkloadTicket                                                         string `json:"-"`
+}
+
+// ArchiveEvidence — exact owner-bound S3 readback, а не вычисленные target поля.
+type ArchiveEvidence struct {
+	Reference, SHA256, ObjectKey, VersionID string
+	KMSKeyARN, ObjectLockMode               string
+	RetainUntil                             time.Time
+	ProvenanceSHA256                        string
 }
 
 func (execution Execution) Validate() error {
@@ -144,19 +162,37 @@ func validRestoreTarget(execution Execution) bool {
 func validRestoreSource(execution Execution) bool {
 	empty := execution.RestoreSourceExecutionID == "" && execution.RestoreSourceArchiveReference == "" &&
 		execution.RestoreSourceArchiveSHA256 == "" && execution.RestoreSourceRuntimeRevisionSHA256 == "" &&
-		execution.RestoreSourceImmutableInputSHA256 == "" && execution.RestoreSourceProofSHA256 == ""
+		execution.RestoreSourceImmutableInputSHA256 == "" && execution.RestoreSourceProofSHA256 == "" &&
+		execution.RestoreSourceVersion == 0 && execution.RestoreSourceArchiveObjectKey == "" &&
+		execution.RestoreSourceArchiveVersionID == "" && execution.RestoreSourceArchiveKMSKeyARN == "" &&
+		execution.RestoreSourceArchiveObjectLockMode == "" && execution.RestoreSourceArchiveRetainUntil.IsZero() &&
+		execution.RestoreSourceRetentionPolicyID == "" && execution.RestoreSourceRetentionPolicyVersion == 0 &&
+		execution.RestoreSourceProvenanceSHA256 == ""
 	present := uuid.Validate(execution.RestoreSourceExecutionID) == nil &&
 		execution.RestoreSourceArchiveReference != "" &&
 		sha256Pattern.MatchString(execution.RestoreSourceArchiveSHA256) &&
 		sha256Pattern.MatchString(execution.RestoreSourceRuntimeRevisionSHA256) &&
 		sha256Pattern.MatchString(execution.RestoreSourceImmutableInputSHA256) &&
-		sha256Pattern.MatchString(execution.RestoreSourceProofSHA256)
+		sha256Pattern.MatchString(execution.RestoreSourceProofSHA256) && execution.RestoreSourceVersion > 0 &&
+		execution.RestoreSourceArchiveObjectKey != "" && execution.RestoreSourceArchiveVersionID != "" &&
+		strings.HasPrefix(execution.RestoreSourceArchiveKMSKeyARN, "arn:") &&
+		execution.RestoreSourceArchiveObjectLockMode == "COMPLIANCE" &&
+		!execution.RestoreSourceArchiveRetainUntil.IsZero() &&
+		execution.RestoreSourceRetentionPolicyID != "" && execution.RestoreSourceRetentionPolicyVersion > 0 &&
+		sha256Pattern.MatchString(execution.RestoreSourceProvenanceSHA256)
 	return empty || present
 }
 
 func validArchiveState(execution Execution) bool {
-	archiveEmpty := execution.ArchiveReference == "" && execution.ArchiveSHA256 == ""
-	archivePresent := execution.ArchiveReference != "" && sha256Pattern.MatchString(execution.ArchiveSHA256)
+	archiveEmpty := execution.ArchiveReference == "" && execution.ArchiveSHA256 == "" &&
+		execution.ArchiveObjectKey == "" && execution.ArchiveVersionID == "" &&
+		execution.ArchiveKMSKeyARN == "" && execution.ArchiveObjectLockMode == "" &&
+		execution.ArchiveProvenanceSHA256 == ""
+	archivePresent := execution.ArchiveReference != "" && sha256Pattern.MatchString(execution.ArchiveSHA256) &&
+		execution.ArchiveObjectKey != "" && execution.ArchiveVersionID != "" &&
+		strings.HasPrefix(execution.ArchiveKMSKeyARN, "arn:") &&
+		execution.ArchiveObjectLockMode == "COMPLIANCE" &&
+		sha256Pattern.MatchString(execution.ArchiveProvenanceSHA256)
 	restoreEmpty := execution.RestoreProofReference == "" && execution.RestoreProofSHA256 == ""
 	restorePresent := execution.RestoreProofReference != "" && sha256Pattern.MatchString(execution.RestoreProofSHA256)
 	retentionReady := !execution.State.Terminal() || !execution.ArchiveRetainUntil.IsZero()

@@ -2,7 +2,9 @@
 package resource
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -27,7 +29,10 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 	if execution == nil || !validSHA256Text(execution.WorkloadTicketSHA256) {
 		return errs.ErrStateConflict
 	}
-	payload, err := json.Marshal(struct {
+	issuedAt := service.now().UTC().Truncate(time.Microsecond)
+	type ticketPayload struct {
+		Issuer, Audience, TicketID                                string
+		IssuedAt, ExpiresAt                                       time.Time
 		ExecutionID, OrganizationID, ProjectID, SessionID, TurnID string
 		Attempt                                                   uint32
 		RuntimeRevisionID, RuntimeRevisionSHA256                  string
@@ -36,21 +41,37 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 		AgentBindingSHA256, CredentialSnapshotSHA256              string
 		WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
 		State                                                     string
-	}{execution.ID, execution.OrganizationID, execution.ProjectID,
-		execution.SessionID, execution.TurnID, execution.Attempt,
-		execution.RuntimeRevisionID, execution.RuntimeRevisionSHA256,
-		execution.RuntimeRevisionVersion, execution.Version, execution.Fence,
-		execution.GrantGeneration, execution.ImmutableInputSHA256,
-		execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
-		execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
-		execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
+	}
+	issue := func(issuer, audience string, privateKey ed25519.PrivateKey) (string, error) {
+		payload, marshalErr := json.Marshal(ticketPayload{issuer, audience,
+			hashString(execution.ID + "\x00" + fmt.Sprint(execution.Version) + "\x00" + fmt.Sprint(execution.Fence) + "\x00" + audience),
+			issuedAt, issuedAt.Add(5 * time.Minute),
+			execution.ID, execution.OrganizationID, execution.ProjectID,
+			execution.SessionID, execution.TurnID, execution.Attempt,
+			execution.RuntimeRevisionID, execution.RuntimeRevisionSHA256,
+			execution.RuntimeRevisionVersion, execution.Version, execution.Fence,
+			execution.GrantGeneration, execution.ImmutableInputSHA256,
+			execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
+			execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
+			execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
+		if marshalErr != nil {
+			return "", marshalErr
+		}
+		signature := ed25519.Sign(privateKey, payload)
+		return base64.RawURLEncoding.EncodeToString(payload) + "." +
+			base64.RawURLEncoding.EncodeToString(signature), nil
+	}
+	var err error
+	execution.WorkloadTicket, err = issue("mattercodex-control-plane-workload-admission", "mattercodex-runtime-workload-admission", service.runtimeAdmissionSigningKey)
+	if err == nil {
+		execution.ArchiveWorkloadTicket, err = issue("mattercodex-control-plane-s3-archive", "mattercodex-runtime-s3-archive", service.runtimeArchiveSigningKey)
+	}
+	if err == nil {
+		execution.RestoreWorkloadTicket, err = issue("mattercodex-control-plane-s3-restore", "mattercodex-runtime-s3-restore", service.runtimeRestoreSigningKey)
+	}
 	if err != nil {
 		return errs.ErrInternal
 	}
-	mac := hmac.New(sha256.New, service.leaseSigningKey)
-	_, _ = mac.Write(payload)
-	execution.WorkloadTicket = base64.RawURLEncoding.EncodeToString(payload) + "." +
-		base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	return nil
 }
 
@@ -126,6 +147,9 @@ const (
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
 type Config struct {
 	LeaseSigningKey            []byte
+	RuntimeAdmissionSigningKey ed25519.PrivateKey
+	RuntimeArchiveSigningKey   ed25519.PrivateKey
+	RuntimeRestoreSigningKey   ed25519.PrivateKey
 	TurnLeaseDuration          time.Duration
 	MaximumScheduleClaims      int
 	RuntimeImageDigest         string
@@ -151,10 +175,6 @@ type Config struct {
 	RestoreVerifierSPIFFEID    string
 	CleanupAuthorizerWorkload  string
 	CleanupAuthorizerSPIFFEID  string
-	RetentionPolicyID          string
-	RetentionPolicyVersion     uint64
-	PVCRetention               time.Duration
-	ArchiveRetention           time.Duration
 	PendingRescheduleDelay     time.Duration
 	Observer                   Observer
 }
@@ -163,6 +183,9 @@ type Config struct {
 type Service struct {
 	repository                 domainrepo.Repository
 	leaseSigningKey            []byte
+	runtimeAdmissionSigningKey ed25519.PrivateKey
+	runtimeArchiveSigningKey   ed25519.PrivateKey
+	runtimeRestoreSigningKey   ed25519.PrivateKey
 	turnLeaseDuration          time.Duration
 	maximumScheduleClaims      int
 	runtimeImageDigest         string
@@ -188,10 +211,6 @@ type Service struct {
 	restoreVerifierSPIFFEID    string
 	cleanupAuthorizerWorkload  string
 	cleanupAuthorizerSPIFFEID  string
-	retentionPolicyID          string
-	retentionPolicyVersion     uint64
-	pvcRetention               time.Duration
-	archiveRetention           time.Duration
 	pendingRescheduleDelay     time.Duration
 	observer                   Observer
 	now                        func() time.Time
@@ -200,6 +219,12 @@ type Service struct {
 // New создаёт сервис только с полноценными устойчивыми границами.
 func New(repository domainrepo.Repository, config Config) (*Service, error) {
 	if repository == nil || len(config.LeaseSigningKey) < 32 ||
+		len(config.RuntimeAdmissionSigningKey) != ed25519.PrivateKeySize ||
+		len(config.RuntimeArchiveSigningKey) != ed25519.PrivateKeySize ||
+		len(config.RuntimeRestoreSigningKey) != ed25519.PrivateKeySize ||
+		bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeArchiveSigningKey) ||
+		bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeRestoreSigningKey) ||
+		bytes.Equal(config.RuntimeArchiveSigningKey, config.RuntimeRestoreSigningKey) ||
 		config.TurnLeaseDuration < 30*time.Second ||
 		config.TurnLeaseDuration > 30*time.Minute ||
 		config.MaximumScheduleClaims < 1 ||
@@ -247,10 +272,6 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		config.CleanupAuthorizerSPIFFEID == config.IntegrationGatewaySPIFFEID ||
 		config.CleanupAuthorizerWorkload == controlAPIGatewayWorkload ||
 		config.CleanupAuthorizerSPIFFEID == controlAPIGatewaySPIFFEID ||
-		value.ValidateStableKey(config.RetentionPolicyID) != nil ||
-		config.RetentionPolicyVersion == 0 ||
-		config.PVCRetention < 24*time.Hour || config.PVCRetention > 30*24*time.Hour ||
-		config.ArchiveRetention < 90*24*time.Hour || config.ArchiveRetention > 10*365*24*time.Hour ||
 		config.PendingRescheduleDelay < 5*time.Second || config.PendingRescheduleDelay > 5*time.Minute ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
@@ -258,6 +279,9 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 	return &Service{
 		repository:                 repository,
 		leaseSigningKey:            slices.Clone(config.LeaseSigningKey),
+		runtimeAdmissionSigningKey: slices.Clone(config.RuntimeAdmissionSigningKey),
+		runtimeArchiveSigningKey:   slices.Clone(config.RuntimeArchiveSigningKey),
+		runtimeRestoreSigningKey:   slices.Clone(config.RuntimeRestoreSigningKey),
 		turnLeaseDuration:          config.TurnLeaseDuration,
 		maximumScheduleClaims:      config.MaximumScheduleClaims,
 		runtimeImageDigest:         config.RuntimeImageDigest,
@@ -283,10 +307,6 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		restoreVerifierSPIFFEID:    config.RestoreVerifierSPIFFEID,
 		cleanupAuthorizerWorkload:  config.CleanupAuthorizerWorkload,
 		cleanupAuthorizerSPIFFEID:  config.CleanupAuthorizerSPIFFEID,
-		retentionPolicyID:          config.RetentionPolicyID,
-		retentionPolicyVersion:     config.RetentionPolicyVersion,
-		pvcRetention:               config.PVCRetention,
-		archiveRetention:           config.ArchiveRetention,
 		pendingRescheduleDelay:     config.PendingRescheduleDelay,
 		observer:                   config.Observer,
 		now:                        time.Now,

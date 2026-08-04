@@ -4,8 +4,8 @@ title: Runtime controller и жизненный цикл ресурсов сес
 type: architecture
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-08-03
+version: 1.3.0
+updated: 2026-08-04
 ---
 
 # Runtime controller и жизненный цикл ресурсов сессии
@@ -29,7 +29,7 @@ Controller не запускает Codex: role image запускает `agent-r
 | guarded PVC delete/finalize | controller может только `ConsumeRuntimeCleanupAuthorization` | active generation, тот же PVC tuple, observed NotFound и deletion proof digest | idempotent `CONSUMED` | controller |
 | cancel/retry/continuation | только owner workload | полный session/turn/process graph | atomic terminal/retry/new revision/grant | не controller |
 | role runtime | exact ServiceAccount profile; bearer остаётся обязательным на application path | immutable runner input и projected credentials | runner handoff exact execution/revision/input tuple | `agent-runner` |
-| bot execution binding | bot-service owner через отдельную закрытую команду и mTLS+bearer | control-plane session/turn/attempt/input/revision + bot AgentSession/Turn/Run versions | server-computed binding digest, immutable в execution | control-plane owner transaction |
+| bot execution binding | bot-service owner через TLS 1.3/mTLS + bearer и generated control-plane client | control-plane precondition + локально разрешённые по `RunID` bot AgentSession/Turn/Run и их версии | durable bot outbox receipt, затем server-computed binding digest в owner transaction | bounded bot delivery worker |
 
 mTLS подтверждает peer и не заменяет bearer, application authority, owner
 resolution, idempotency или replay protection. Payload, labels и NATS envelope
@@ -104,6 +104,12 @@ PVC и immutable execution credential artifacts; каждый artifact связ�
 provider content version, Secret UID/resourceVersion и digest. Bot-service и
 MCP доступны только по HTTPS/mTLS с exact hostname/SNI, доверенной CA, client
 identity и bearer; NetworkPolicy не заменяет peer/application authorization.
+Bot-service принимает регистрацию только на отдельном `:8443` TLS 1.3/mTLS
+listener с exact client CA и bearer. PostgreSQL outbox атомарно разрешает
+`RunID` в bot-owned `AgentSession`/Turn и их монотонные версии; redelivery
+повторяет один `BindRuntimeAgentSession` idempotency intent. Статусы `BLOCKED`,
+`WAITING_OWNER` и `CHANGES_REQUESTED` остаются разными owner outcomes и не
+схлопываются в terminal Pod phase.
 
 `Succeeded`/`Failed` фаза Pod не завершает turn. После фактического результата
 runner публикует `mattercodex.runtime-turn-handoff.v1` в собственный Pod:
@@ -156,7 +162,10 @@ owner bind-ит одноразовое assignment к exact generation/name/UID/
 resourceVersion. До старта Pod `runtime-rehydrate` требует пустой volume,
 скачивает только pinned version, проверяет checksum/metadata, строит
 execution-owned staging на том же filesystem, fsync-ит и атомарно
-переименовывает его в final `session/`. Owner `CONSUMED` proof фиксируется до
+переименовывает его в final `session/`: сначала sync каждого regular file и
+marker, затем directories снизу вверх и parent до/после rename. Retry удаляет
+только принадлежащую exact execution/PVC generation незавершённую публикацию;
+чужое или неоднозначное final tree закрыто отклоняется. Owner `CONSUMED` proof фиксируется до
 Pod. Crash допускает повтор/очистку staging, но не partial final tree; live PVC
 повторно не восстанавливается.
 
@@ -210,23 +219,44 @@ Backfill проходит тот же путь. Legacy PVC без server-owned e
 `control-plane`: они блокируют claim/cleanup и не получают локального
 обобщённого transition.
 
+Cleanup использует один session/full-graph predicate: любой queued/PENDING/
+admitted/running successor, capacity delay, owner callback/gate, manual/legal
+hold либо non-rejoined continuation блокирует authorization и finalize.
+Terminal predecessor никогда не делает PVC живого successor eligible.
+
+Схема расширяется только forward migrations. Уже применённая
+`20260802000100_control_plane_runtime_continuation.sql` остаётся byte-identical
+ревизии `main`; binding/retention/restore/cleanup добавлены последующими
+`20260803000100` и `20260803000200`, а admission replay — отдельной migration
+runtime-controller.
+
 ## Access profiles и deploy boundary
 
 Controller credential не может создавать role Pod, ServiceAccount или
 RoleBinding, создавать/bind-ить `cluster-admin` ClusterRoleBinding и не читает
 исходные mutable credentials. Узкий `runtime-credential-broker` сначала
-проверяет HMAC workload ticket полного tuple, затем материализует immutable
+проверяет Ed25519 workload ticket полного tuple, затем материализует immutable
 credential snapshots, exact Pod и grants. `PROJECT_READ_ONLY` broker создаёт
 узкий session ServiceAccount/RoleBinding только после authoritative organization/
 project namespace readback; terminal отзывает binding. `CLUSTER_ADMIN`
 использует заранее установленную отдельную ServiceAccount/ClusterRoleBinding,
-которую controller может только прочитать. Fail-closed admission проверяет
-server-owned workload ticket и exact spec: image digest, `runtime-session`,
+которую controller может только прочитать. Admission private key доступен
+только control-plane owner; broker и webhook получают только public verifier.
+Fail-closed webhook проверяет issuer/audience/expiry, durable one-time receipt
+по Admission UID и ticket ID и полное равенство server-owned immutable desired
+Pod: image digest, `runtime-session`,
 securityContext, volumes, token audience, ServiceAccount subject,
 execution/session/turn/attempt/revision/input/fence и credential snapshot.
 Ticket нельзя назначить annotation-ом controller-а; неверный, повторный или
 непрочитанный ticket отклоняется. Runner получает bounded projected token, а
 Pod удаляется сразу после terminal.
+
+Pod admission, S3 archive и S3 restore имеют три независимые Ed25519 keypair,
+issuer/audience и Vault trust path. Routine, project-read и cluster-admin
+broker identities разделены; компрометация одного broker не позволяет выбрать
+другой subject, image, command, volume или token audience. Admission webhook
+имеет только ConfigMap readback и отдельную PostgreSQL identity для replay
+receipts, а не namespace mutation.
 
 Archive, restore, rehydrate и cleanup Jobs имеют отдельные ServiceAccount,
 application grants и per-job Role с `resourceNames` только своего journal.

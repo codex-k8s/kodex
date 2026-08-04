@@ -57,7 +57,12 @@ func RunArchive(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	updated, err := client.RecordArchive(ctx, document.ArchiveKey, execution, result.Reference, result.SHA256)
+	updated, err := client.RecordArchive(ctx, document.ArchiveKey, execution, entity.ArchiveEvidence{
+		Reference: result.Reference, SHA256: result.SHA256, ObjectKey: result.ObjectKey,
+		VersionID: result.VersionID, KMSKeyARN: result.KMSKeyARN,
+		ObjectLockMode: result.ObjectLockMode, RetainUntil: result.RetainUntil,
+		ProvenanceSHA256: result.ProvenanceSHA256,
+	})
 	if err != nil {
 		return err
 	}
@@ -118,14 +123,29 @@ func RunRehydrate(ctx context.Context) error {
 	}
 	source := target
 	source.ID = target.RestoreSourceExecutionID
+	source.Version = target.RestoreSourceVersion
 	source.RuntimeRevisionSHA256 = target.RestoreSourceRuntimeRevisionSHA256
 	source.ImmutableInputSHA256 = target.RestoreSourceImmutableInputSHA256
 	source.ArchiveReference = target.RestoreSourceArchiveReference
 	source.ArchiveSHA256 = target.RestoreSourceArchiveSHA256
+	source.ArchiveObjectKey = target.RestoreSourceArchiveObjectKey
+	source.ArchiveVersionID = target.RestoreSourceArchiveVersionID
+	source.ArchiveKMSKeyARN = target.RestoreSourceArchiveKMSKeyARN
+	source.ArchiveObjectLockMode = target.RestoreSourceArchiveObjectLockMode
+	source.ArchiveRetainUntil = target.RestoreSourceArchiveRetainUntil
+	source.ArchiveProvenanceSHA256 = target.RestoreSourceProvenanceSHA256
+	source.RetentionPolicyID = target.RestoreSourceRetentionPolicyID
+	source.RetentionPolicyVersion = target.RestoreSourceRetentionPolicyVersion
 	source.State = enum.ExecutionSucceeded
 	source.RestoreSourceExecutionID, source.RestoreSourceArchiveReference = "", ""
 	source.RestoreSourceArchiveSHA256, source.RestoreSourceRuntimeRevisionSHA256 = "", ""
 	source.RestoreSourceImmutableInputSHA256, source.RestoreSourceProofSHA256 = "", ""
+	source.RestoreSourceVersion = 0
+	source.RestoreSourceArchiveObjectKey, source.RestoreSourceArchiveVersionID = "", ""
+	source.RestoreSourceArchiveKMSKeyARN, source.RestoreSourceArchiveObjectLockMode = "", ""
+	source.RestoreSourceArchiveRetainUntil = time.Time{}
+	source.RestoreSourceRetentionPolicyID, source.RestoreSourceProvenanceSHA256 = "", ""
+	source.RestoreSourceRetentionPolicyVersion = 0
 	source.RestoreAssignmentState, source.RestoreAssignmentGeneration = "NONE", 0
 	source.RestoreTargetPVCName, source.RestoreTargetPVCUID, source.RestoreTargetPVCResourceVersion = "", "", ""
 	source.RehydrateProofReference, source.RehydrateProofSHA256 = "", ""

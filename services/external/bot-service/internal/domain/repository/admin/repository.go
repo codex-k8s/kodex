@@ -11,7 +11,39 @@ import (
 var (
 	ErrNotFound                    = errors.New("admin repository item not found")
 	ErrClusterAdminAdmissionDenied = errors.New("cluster-admin assignment is not present in the server-side profile")
+	ErrRuntimeAgentBindingConflict = errors.New("runtime agent binding intent conflicts with durable state")
 )
+
+// RuntimeAgentBindingIntent содержит control-plane tuple только как данные
+// проверки. Bot-owned identifiers и версии repository разрешает из собственных
+// AgentSession/Turn/Run строк по AgentRunID.
+type RuntimeAgentBindingIntent struct {
+	IdempotencyKey, RequestSHA256                                     string
+	ControlSessionID, ControlTurnID, InputSHA256                      string
+	RuntimeRevisionID, RuntimeRevisionSHA256, AgentRunID              string
+	ControlSessionVersion, ControlTurnVersion, RuntimeRevisionVersion uint64
+	Attempt                                                           uint32
+}
+
+type RuntimeAgentBindingDelivery struct {
+	ID, AgentSessionID, AgentSessionTurnID                                int64
+	IdempotencyKey, RequestSHA256, LeaseToken                             string
+	ControlSessionID, ControlTurnID, InputSHA256                          string
+	RuntimeRevisionID, RuntimeRevisionSHA256, AgentSessionKey, AgentRunID string
+	ControlSessionVersion, ControlTurnVersion, RuntimeRevisionVersion     uint64
+	AgentSessionVersion, AgentSessionTurnVersion                          uint64
+	Attempt                                                               uint32
+}
+
+// RuntimeAgentBindingOutboxRepository — узкий durable effect port. Регистрация,
+// claim и подтверждение не расширяют общий Repository и поэтому не позволяют
+// transport обходить domain service.
+type RuntimeAgentBindingOutboxRepository interface {
+	EnqueueRuntimeAgentBinding(context.Context, RuntimeAgentBindingIntent) (RuntimeAgentBindingDelivery, error)
+	ClaimRuntimeAgentBinding(context.Context, string, time.Time) (RuntimeAgentBindingDelivery, error)
+	CompleteRuntimeAgentBinding(context.Context, int64, string, string, string) error
+	RetryRuntimeAgentBinding(context.Context, int64, string, time.Time, string) error
+}
 
 type UpsertRepositoryInput struct {
 	Provider          string

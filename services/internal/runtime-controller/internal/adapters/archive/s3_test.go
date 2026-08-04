@@ -90,6 +90,9 @@ func TestRestoredTreeDigestExcludesProofAndDetectsMutation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, rehydrateMarkerName), []byte(`{"schema":"proof"}`), 0o400); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, rehydrateOwnerName), []byte(`{"schema":"owner"}`), 0o400); err != nil {
+		t.Fatal(err)
+	}
 	actual, err := restoredTreeSHA256(root)
 	if err != nil || actual != expected {
 		t.Fatalf("proof marker changed restored digest: %s %s %v", actual, expected, err)
@@ -103,6 +106,22 @@ func TestRestoredTreeDigestExcludesProofAndDetectsMutation(t *testing.T) {
 	mutated, err := restoredTreeSHA256(root)
 	if err != nil || mutated == expected {
 		t.Fatalf("tree mutation was not detected: %s %v", mutated, err)
+	}
+}
+
+func TestSyncTreeRejectsSymlinkBeforeDurablePublish(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "state"), []byte("durable"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTree(t.Context(), root); err != nil {
+		t.Fatalf("sync regular tree: %v", err)
+	}
+	if err := os.Symlink("state", filepath.Join(root, "alias")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syncTree(t.Context(), root); err == nil {
+		t.Fatal("symlink reached durable publication")
 	}
 }
 

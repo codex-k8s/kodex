@@ -17,6 +17,8 @@ data:
   RUNTIME_RESTORE_SERVICE_ACCOUNT: "runtime-restore-verifier"
   RUNTIME_CLEANUP_SERVICE_ACCOUNT: "runtime-cleanup-authorizer"
   RUNTIME_CREDENTIAL_BROKER_SERVICE_ACCOUNT: "runtime-credential-broker"
+  RUNTIME_PROJECT_READ_BROKER_SERVICE_ACCOUNT: "runtime-project-read-broker"
+  RUNTIME_CLUSTER_ADMIN_BROKER_SERVICE_ACCOUNT: "runtime-cluster-admin-broker"
   RUNTIME_S3_ARCHIVE_BROKER_SERVICE_ACCOUNT: "runtime-s3-archive-broker"
   RUNTIME_S3_RESTORE_BROKER_SERVICE_ACCOUNT: "runtime-s3-restore-broker"
   RUNTIME_MAXIMUM_PODS: "100"

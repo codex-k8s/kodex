@@ -38,6 +38,7 @@ var _ adminrepo.Repository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsRuntimeGuardRepository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsPublishGuardRepository = (*Repository)(nil)
 var _ adminrepo.ExactAgentSessionsPublishFenceRepository = (*Repository)(nil)
+var _ adminrepo.RuntimeAgentBindingOutboxRepository = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool, db: pool}
@@ -1903,6 +1904,98 @@ func scanAgentPromptTemplateWithCreated(row pgx.Row, created *bool) (entity.Agen
 		return entity.AgentPromptTemplate{}, err
 	}
 	return item, nil
+}
+
+func (repo *Repository) EnqueueRuntimeAgentBinding(
+	ctx context.Context,
+	input adminrepo.RuntimeAgentBindingIntent,
+) (adminrepo.RuntimeAgentBindingDelivery, error) {
+	delivery, err := scanRuntimeAgentBindingDelivery(repo.db.QueryRow(
+		ctx, query("runtime_agent_binding__enqueue.sql"),
+		input.IdempotencyKey, input.RequestSHA256,
+		input.ControlSessionID, input.ControlSessionVersion,
+		input.ControlTurnID, input.ControlTurnVersion, input.Attempt,
+		input.InputSHA256, input.RuntimeRevisionID, input.RuntimeRevisionVersion,
+		input.RuntimeRevisionSHA256, input.AgentRunID,
+	))
+	if err == nil {
+		return delivery, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return adminrepo.RuntimeAgentBindingDelivery{}, adminrepo.ErrNotFound
+	}
+	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+		return adminrepo.RuntimeAgentBindingDelivery{}, adminrepo.ErrRuntimeAgentBindingConflict
+	}
+	return adminrepo.RuntimeAgentBindingDelivery{}, fmt.Errorf("enqueue runtime agent binding: %w", err)
+}
+
+func (repo *Repository) ClaimRuntimeAgentBinding(
+	ctx context.Context,
+	leaseToken string,
+	leaseExpiresAt time.Time,
+) (adminrepo.RuntimeAgentBindingDelivery, error) {
+	delivery, err := scanRuntimeAgentBindingDelivery(repo.db.QueryRow(
+		ctx, query("runtime_agent_binding__claim.sql"), leaseToken, leaseExpiresAt,
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return adminrepo.RuntimeAgentBindingDelivery{}, adminrepo.ErrNotFound
+	}
+	if err != nil {
+		return adminrepo.RuntimeAgentBindingDelivery{}, fmt.Errorf("claim runtime agent binding: %w", err)
+	}
+	return delivery, nil
+}
+
+func (repo *Repository) CompleteRuntimeAgentBinding(
+	ctx context.Context,
+	id int64,
+	leaseToken, agentSessionBindingSHA256, agentTurnBindingSHA256 string,
+) error {
+	tag, err := repo.db.Exec(ctx, query("runtime_agent_binding__complete.sql"),
+		id, leaseToken, agentSessionBindingSHA256, agentTurnBindingSHA256)
+	if err != nil {
+		return fmt.Errorf("complete runtime agent binding: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return adminrepo.ErrRuntimeAgentBindingConflict
+	}
+	return nil
+}
+
+func (repo *Repository) RetryRuntimeAgentBinding(
+	ctx context.Context,
+	id int64,
+	leaseToken string,
+	nextAttemptAt time.Time,
+	errorCode string,
+) error {
+	tag, err := repo.db.Exec(ctx, query("runtime_agent_binding__retry.sql"),
+		id, leaseToken, nextAttemptAt, errorCode)
+	if err != nil {
+		return fmt.Errorf("retry runtime agent binding: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return adminrepo.ErrRuntimeAgentBindingConflict
+	}
+	return nil
+}
+
+func scanRuntimeAgentBindingDelivery(row pgx.Row) (adminrepo.RuntimeAgentBindingDelivery, error) {
+	var delivery adminrepo.RuntimeAgentBindingDelivery
+	err := row.Scan(
+		&delivery.ID, &delivery.IdempotencyKey, &delivery.RequestSHA256,
+		&delivery.ControlSessionID, &delivery.ControlSessionVersion,
+		&delivery.ControlTurnID, &delivery.ControlTurnVersion, &delivery.Attempt,
+		&delivery.InputSHA256, &delivery.RuntimeRevisionID,
+		&delivery.RuntimeRevisionVersion, &delivery.RuntimeRevisionSHA256,
+		&delivery.AgentSessionID, &delivery.AgentSessionKey,
+		&delivery.AgentSessionVersion, &delivery.AgentSessionTurnID,
+		&delivery.AgentRunID, &delivery.AgentSessionTurnVersion,
+		&delivery.LeaseToken,
+	)
+	return delivery, err
 }
 
 func query(name string) string {

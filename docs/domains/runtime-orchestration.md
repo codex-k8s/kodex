@@ -71,6 +71,11 @@ digest вычисляет control-plane. Ни control-plane UUID в роли `se
 идентификаторы из payload не доказывают bot ownership. Terminal handoff
 сохраняет `BLOCKED`, `WAITING_OWNER` и `CHANGES_REQUESTED` как разные owner
 семантики.
+Producer path принадлежит bot-service: TLS 1.3/mTLS+bearer endpoint принимает
+только control-plane precondition, локальная transaction разрешает exact
+`RunID` в bot-owned AgentSession/Turn и их монотонные версии и создаёт durable
+outbox. Bounded worker вызывает generated `BindRuntimeAgentSession`; replay
+lost response использует один semantic idempotency receipt.
 
 Каждый turn/retry/reschedule создаёт новый immutable `RuntimeRevision` и
 capacity observation. Отдельный `effective_runtime_sha256` описывает только
@@ -82,6 +87,9 @@ Terminal transition pin-ит versioned `ResourceRetentionPolicy`, eligibility и
 S3 retain-until. PVC cleanup выполняется двухфазным exact claim/NotFound proof/
 finalize; после cleanup restore source назначается один раз на новую пустую PVC
 generation и публикуется через same-filesystem staging до запуска role Pod.
+Retention берётся из owner-managed `ResourceRetentionPolicy` aggregate со
+stable ID/version/effective values; claim pin-ит snapshot, а все последующие
+terminal/archive/cleanup переходы используют только его.
 
 ## Критерии приемки
 

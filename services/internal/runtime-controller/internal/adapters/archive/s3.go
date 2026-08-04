@@ -55,12 +55,16 @@ type Store struct {
 }
 
 type Result struct {
-	Reference   string
-	SHA256      string
-	VersionID   string
-	Size        int64
-	Metadata    map[string]string
-	RetainUntil time.Time
+	Reference        string
+	SHA256           string
+	VersionID        string
+	ObjectKey        string
+	KMSKeyARN        string
+	ObjectLockMode   string
+	ProvenanceSHA256 string
+	Size             int64
+	Metadata         map[string]string
+	RetainUntil      time.Time
 }
 
 type SnapshotProvenance struct {
@@ -83,6 +87,15 @@ type rehydrateProof struct {
 }
 
 const rehydrateMarkerName = ".mattercodex-rehydrate-proof.json"
+const rehydrateOwnerName = ".mattercodex-rehydrate-owner.json"
+
+type rehydrateOwner struct {
+	Schema               string `json:"schema"`
+	SourceExecutionID    string `json:"source_execution_id"`
+	TargetExecutionID    string `json:"target_execution_id"`
+	PVCUID               string `json:"pvc_uid"`
+	AssignmentGeneration uint64 `json:"assignment_generation"`
+}
 
 func Open(ctx context.Context, config Config) (*Store, error) {
 	if config.Endpoint == "" || config.Bucket == "" || config.Region == "" ||
@@ -253,7 +266,8 @@ func (store *Store) Archive(
 	}
 	result.VersionID = *put.VersionId
 	result.Reference = buildReference(store.bucket, key, result.VersionID)
-	if err := store.verifyHead(ctx, result); err != nil {
+	result.ObjectKey = key
+	if err := store.verifyHead(ctx, &result); err != nil {
 		return Result{}, err
 	}
 	return result, nil
@@ -324,7 +338,8 @@ func (store *Store) RestoreAndProve(
 	}
 	result.VersionID = *put.VersionId
 	result.Reference = buildReference(store.bucket, proofKey, result.VersionID)
-	if err := store.verifyHead(ctx, result); err != nil {
+	result.ObjectKey = proofKey
+	if err := store.verifyHead(ctx, &result); err != nil {
 		return Result{}, err
 	}
 	return result, nil
@@ -341,7 +356,16 @@ func (store *Store) RestoreToAndProve(
 		target.RestoreAssignmentState != "BOUND" || pvcUID == "" ||
 		pvcUID != target.RestoreTargetPVCUID || target.RestoreSourceExecutionID != source.ID ||
 		target.RestoreSourceArchiveReference != source.ArchiveReference ||
-		target.RestoreSourceArchiveSHA256 != source.ArchiveSHA256 {
+		target.RestoreSourceArchiveSHA256 != source.ArchiveSHA256 ||
+		target.RestoreSourceVersion != source.Version ||
+		target.RestoreSourceArchiveObjectKey != source.ArchiveObjectKey ||
+		target.RestoreSourceArchiveVersionID != source.ArchiveVersionID ||
+		target.RestoreSourceArchiveKMSKeyARN != source.ArchiveKMSKeyARN ||
+		target.RestoreSourceArchiveObjectLockMode != source.ArchiveObjectLockMode ||
+		!target.RestoreSourceArchiveRetainUntil.Equal(source.ArchiveRetainUntil) ||
+		target.RestoreSourceRetentionPolicyID != source.RetentionPolicyID ||
+		target.RestoreSourceRetentionPolicyVersion != source.RetentionPolicyVersion ||
+		target.RestoreSourceProvenanceSHA256 != source.ArchiveProvenanceSHA256 {
 		return Result{}, errs.ErrInvalidInput
 	}
 	entries, err := os.ReadDir(destination)
@@ -369,6 +393,20 @@ func (store *Store) RestoreToAndProve(
 			return Result{}, errs.ErrArchiveUnverified
 		}
 		return rehydrateProofResult(existing)
+	} else if finalInfo, statErr := os.Lstat(final); statErr == nil {
+		owner, ownerErr := readRehydrateOwner(final)
+		if ownerErr != nil || !finalInfo.IsDir() || finalInfo.Mode()&os.ModeSymlink != 0 ||
+			owner.SourceExecutionID != source.ID || owner.TargetExecutionID != target.ID ||
+			owner.PVCUID != pvcUID || owner.AssignmentGeneration != target.RestoreAssignmentGeneration {
+			return Result{}, errs.ErrArchiveUnverified
+		}
+		// Только exact-owned incomplete generation можно удалить. Чужая либо
+		// недоказанная final tree всегда вызывает закрытый отказ.
+		if err := os.RemoveAll(final); err != nil || syncDirectory(destination) != nil {
+			return Result{}, errors.New("remove incomplete rehydrate generation")
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return Result{}, errors.New("inspect rehydrate publication")
 	} else if !errors.Is(markerErr, os.ErrNotExist) {
 		return Result{}, markerErr
 	}
@@ -376,6 +414,14 @@ func (store *Store) RestoreToAndProve(
 		return Result{}, errors.New("prepare rehydrate staging")
 	}
 	defer func() { _ = os.RemoveAll(staging) }()
+	ownerRaw, err := json.Marshal(rehydrateOwner{
+		Schema: "mattercodex.runtime-rehydrate-owner.v1", SourceExecutionID: source.ID,
+		TargetExecutionID: target.ID, PVCUID: pvcUID,
+		AssignmentGeneration: target.RestoreAssignmentGeneration,
+	})
+	if err != nil || os.WriteFile(filepath.Join(staging, rehydrateOwnerName), ownerRaw, 0o400) != nil {
+		return Result{}, errors.New("write rehydrate owner")
+	}
 	archivePath, err := store.downloadExactArchive(
 		ctx, source, source.ArchiveReference, source.ArchiveSHA256,
 	)
@@ -406,18 +452,91 @@ func (store *Store) RestoreToAndProve(
 	if err := os.WriteFile(filepath.Join(staging, rehydrateMarkerName), raw, 0o400); err != nil {
 		return Result{}, errors.New("write rehydrate marker")
 	}
-	directory, err := os.Open(staging)
-	if err != nil || directory.Sync() != nil || directory.Close() != nil {
+	if err := syncTree(ctx, staging); err != nil {
 		return Result{}, errors.New("sync rehydrate staging")
+	}
+	if err := syncDirectory(destination); err != nil {
+		return Result{}, errors.New("sync rehydrate parent before publication")
 	}
 	if err := os.Rename(staging, final); err != nil {
 		return Result{}, errors.New("publish rehydrate tree")
 	}
-	parent, err := os.Open(destination)
-	if err != nil || parent.Sync() != nil || parent.Close() != nil {
+	if err := syncDirectory(destination); err != nil {
 		return Result{}, errors.New("sync rehydrate publication")
 	}
 	return rehydrateProofResult(proof)
+}
+
+func readRehydrateOwner(final string) (rehydrateOwner, error) {
+	raw, err := os.ReadFile(filepath.Join(final, rehydrateOwnerName))
+	if err != nil || len(raw) == 0 || len(raw) > 4096 {
+		return rehydrateOwner{}, errs.ErrArchiveUnverified
+	}
+	var owner rehydrateOwner
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&owner) != nil || !errors.Is(decoder.Decode(&struct{}{}), io.EOF) ||
+		owner.Schema != "mattercodex.runtime-rehydrate-owner.v1" ||
+		owner.SourceExecutionID == "" || owner.TargetExecutionID == "" || owner.PVCUID == "" ||
+		owner.AssignmentGeneration == 0 {
+		return rehydrateOwner{}, errs.ErrArchiveUnverified
+	}
+	return owner, nil
+}
+
+func syncTree(ctx context.Context, root string) error {
+	directories := make([]string, 0)
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return errs.ErrArchiveUnverified
+		}
+		if entry.IsDir() {
+			directories = append(directories, path)
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return errs.ErrArchiveUnverified
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		syncErr := file.Sync()
+		closeErr := file.Close()
+		if syncErr != nil {
+			return syncErr
+		}
+		return closeErr
+	})
+	if err != nil {
+		return err
+	}
+	for index := len(directories) - 1; index >= 0; index-- {
+		if err := syncDirectory(directories[index]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	syncErr := directory.Sync()
+	closeErr := directory.Close()
+	if syncErr != nil {
+		return syncErr
+	}
+	return closeErr
 }
 
 func readRehydrateMarker(final string) (rehydrateProof, error) {
@@ -490,13 +609,26 @@ func (store *Store) downloadExactArchive(
 	if copyErr != nil || closeBodyErr != nil || closeFileErr != nil || written > maximumArchiveBytes {
 		return "", errors.New("read exact runtime archive")
 	}
-	if hex.EncodeToString(digest.Sum(nil)) != expectedSHA256 || object.VersionId == nil ||
+	if key != execution.ArchiveObjectKey || versionID != execution.ArchiveVersionID ||
+		execution.ArchiveObjectLockMode != "COMPLIANCE" ||
+		hex.EncodeToString(digest.Sum(nil)) != expectedSHA256 || object.VersionId == nil ||
 		!validVersionID(*object.VersionId) || *object.VersionId != versionID ||
 		object.ChecksumSHA256 == nil || *object.ChecksumSHA256 != base64.StdEncoding.EncodeToString(digest.Sum(nil)) ||
-		!metadataMatches(object.Metadata, map[string]string{
+		object.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
+		object.SSEKMSKeyId == nil || *object.SSEKMSKeyId != execution.ArchiveKMSKeyARN ||
+		object.ObjectLockMode != types.ObjectLockModeCompliance || object.ObjectLockRetainUntilDate == nil ||
+		!object.ObjectLockRetainUntilDate.Equal(execution.ArchiveRetainUntil) ||
+		!metadataContains(object.Metadata, map[string]string{
 			"execution-id": execution.ID, "runtime-revision-sha256": execution.RuntimeRevisionSHA256,
 			"immutable-input-sha256": execution.ImmutableInputSHA256,
 		}) {
+		return "", errs.ErrArchiveUnverified
+	}
+	if archiveProvenanceSHA256(Result{
+		Reference: reference, SHA256: expectedSHA256, VersionID: versionID,
+		ObjectKey: key, KMSKeyARN: *object.SSEKMSKeyId, ObjectLockMode: "COMPLIANCE",
+		RetainUntil: execution.ArchiveRetainUntil, Metadata: object.Metadata,
+	}) != execution.ArchiveProvenanceSHA256 {
 		return "", errs.ErrArchiveUnverified
 	}
 	if err := store.verifyRetention(ctx, bucket, key, versionID, execution.ArchiveRetainUntil); err != nil {
@@ -527,20 +659,28 @@ func (store *Store) existingObject(
 		*head.ContentLength != expected.Size || head.ChecksumSHA256 == nil ||
 		*head.ChecksumSHA256 != base64Digest(expected.SHA256) ||
 		head.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
+		head.SSEKMSKeyId == nil || !strings.HasPrefix(*head.SSEKMSKeyId, "arn:") ||
 		head.ObjectLockMode != types.ObjectLockModeCompliance ||
 		head.ObjectLockRetainUntilDate == nil || !head.ObjectLockRetainUntilDate.Equal(expected.RetainUntil) ||
 		!metadataMatches(head.Metadata, expected.Metadata) {
 		return Result{}, false, errs.ErrArchiveUnverified
 	}
 	expected.VersionID = *head.VersionId
+	expected.ObjectKey = key
+	expected.KMSKeyARN = *head.SSEKMSKeyId
+	expected.ObjectLockMode = "COMPLIANCE"
 	expected.Reference = buildReference(store.bucket, key, expected.VersionID)
+	expected.ProvenanceSHA256 = archiveProvenanceSHA256(expected)
 	if err := store.verifyRetention(ctx, store.bucket, key, expected.VersionID, expected.RetainUntil); err != nil {
 		return Result{}, false, err
 	}
 	return expected, true, nil
 }
 
-func (store *Store) verifyHead(ctx context.Context, result Result) error {
+func (store *Store) verifyHead(ctx context.Context, result *Result) error {
+	if result == nil {
+		return errs.ErrArchiveUnverified
+	}
 	bucket, key, versionID, err := parseReference(result.Reference)
 	if err != nil || bucket != store.bucket || versionID != result.VersionID {
 		return errs.ErrArchiveUnverified
@@ -554,12 +694,31 @@ func (store *Store) verifyHead(ctx context.Context, result Result) error {
 		head.ContentLength == nil || *head.ContentLength != result.Size ||
 		head.ChecksumSHA256 == nil || *head.ChecksumSHA256 != base64Digest(result.SHA256) ||
 		head.ServerSideEncryption != types.ServerSideEncryptionAwsKms ||
+		head.SSEKMSKeyId == nil || !strings.HasPrefix(*head.SSEKMSKeyId, "arn:") ||
 		head.ObjectLockMode != types.ObjectLockModeCompliance ||
 		head.ObjectLockRetainUntilDate == nil || !head.ObjectLockRetainUntilDate.Equal(result.RetainUntil) ||
 		!metadataMatches(head.Metadata, result.Metadata) {
 		return errs.ErrArchiveUnverified
 	}
+	result.ObjectKey = key
+	result.KMSKeyARN = *head.SSEKMSKeyId
+	result.ObjectLockMode = "COMPLIANCE"
+	result.ProvenanceSHA256 = archiveProvenanceSHA256(*result)
 	return store.verifyRetention(ctx, bucket, key, versionID, result.RetainUntil)
+}
+
+func archiveProvenanceSHA256(result Result) string {
+	raw, err := json.Marshal(struct {
+		Reference, SHA256, VersionID, ObjectKey, KMSKeyARN, ObjectLockMode string
+		RetainUntil                                                        time.Time
+		Metadata                                                           map[string]string
+	}{result.Reference, result.SHA256, result.VersionID, result.ObjectKey,
+		result.KMSKeyARN, result.ObjectLockMode, result.RetainUntil, result.Metadata})
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:])
 }
 
 func (store *Store) verifyRetention(
@@ -612,16 +771,25 @@ func metadataMatches(actual, expected map[string]string) bool {
 	return true
 }
 
+func metadataContains(actual, expected map[string]string) bool {
+	for key, value := range expected {
+		if actual[strings.ToLower(key)] != value {
+			return false
+		}
+	}
+	return true
+}
+
 type archiveEntry struct {
 	name string
 	stat unix.Stat_t
 }
 
 func writeDeterministicArchive(destination io.Writer, root string) (int64, error) {
-	return writeDeterministicArchiveExcept(destination, root, "")
+	return writeDeterministicArchiveExcept(destination, root)
 }
 
-func writeDeterministicArchiveExcept(destination io.Writer, root, ignoredRootEntry string) (int64, error) {
+func writeDeterministicArchiveExcept(destination io.Writer, root string, ignoredRootEntries ...string) (int64, error) {
 	rootFD, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return 0, errors.New("open immutable runtime archive root")
@@ -631,7 +799,11 @@ func writeDeterministicArchiveExcept(destination io.Writer, root, ignoredRootEnt
 	if unix.Fstat(rootFD, &rootStat) != nil || rootStat.Mode&unix.S_IFMT != unix.S_IFDIR {
 		return 0, errors.New("runtime archive root is unsafe")
 	}
-	entries, totalInputBytes, err := collectArchiveEntries(rootFD, "", ignoredRootEntry, nil, 0)
+	ignored := make(map[string]struct{}, len(ignoredRootEntries))
+	for _, entry := range ignoredRootEntries {
+		ignored[entry] = struct{}{}
+	}
+	entries, totalInputBytes, err := collectArchiveEntries(rootFD, "", ignored, nil, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -698,7 +870,7 @@ func writeDeterministicArchiveExcept(destination io.Writer, root, ignoredRootEnt
 func collectArchiveEntries(
 	directoryFD int,
 	prefix string,
-	ignoredRootEntry string,
+	ignoredRootEntries map[string]struct{},
 	entries []archiveEntry,
 	total int64,
 ) ([]archiveEntry, int64, error) {
@@ -714,8 +886,10 @@ func collectArchiveEntries(
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if prefix == "" && ignoredRootEntry != "" && name == ignoredRootEntry {
-			continue
+		if prefix == "" {
+			if _, ignored := ignoredRootEntries[name]; ignored {
+				continue
+			}
 		}
 		if name == "" || name == "." || name == ".." || strings.Contains(name, "/") {
 			return nil, 0, errors.New("runtime archive path is unsafe")
@@ -739,7 +913,7 @@ func collectArchiveEntries(
 		switch stat.Mode & unix.S_IFMT {
 		case unix.S_IFDIR:
 			entries = append(entries, archiveEntry{name: relative, stat: stat})
-			entries, total, err = collectArchiveEntries(fd, relative, ignoredRootEntry, entries, total)
+			entries, total, err = collectArchiveEntries(fd, relative, ignoredRootEntries, entries, total)
 		case unix.S_IFREG:
 			if stat.Nlink != 1 || stat.Size < 0 || stat.Size > maximumArchiveBytes-total {
 				err = errors.New("runtime archive file is unsafe")
@@ -843,7 +1017,7 @@ func treeSHA256(root string) (string, error) {
 
 func restoredTreeSHA256(root string) (string, error) {
 	hash := sha256.New()
-	_, err := writeDeterministicArchiveExcept(hash, root, rehydrateMarkerName)
+	_, err := writeDeterministicArchiveExcept(hash, root, rehydrateMarkerName, rehydrateOwnerName)
 	if err != nil {
 		return "", err
 	}

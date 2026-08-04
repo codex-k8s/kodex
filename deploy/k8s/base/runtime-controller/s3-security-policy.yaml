@@ -6,13 +6,20 @@ metadata:
     app.kubernetes.io/name: runtime-controller
     mattercodex.dev/policy-kind: s3-iam-source
 data:
-  broker-bootstrap-policy.json: |
+  archive-broker-bootstrap-policy.json: |
     {
       "Version": "2012-10-17",
       "Statement": [
         {"Sid":"AssumeArchiveExecutionRole","Effect":"Allow","Action":["sts:AssumeRole","sts:TagSession"],"Resource":"arn:aws:iam::*:role/mattercodex-runtime-archive-execution"},
+        {"Sid":"DenyAnyOtherRole","Effect":"Deny","Action":["sts:AssumeRole","sts:TagSession"],"NotResource":"arn:aws:iam::*:role/mattercodex-runtime-archive-execution"}
+      ]
+    }
+  restore-broker-bootstrap-policy.json: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
         {"Sid":"AssumeRestoreExecutionRole","Effect":"Allow","Action":["sts:AssumeRole","sts:TagSession"],"Resource":"arn:aws:iam::*:role/mattercodex-runtime-restore-execution"},
-        {"Sid":"DenyAnyOtherRole","Effect":"Deny","Action":["sts:AssumeRole","sts:TagSession"],"NotResource":["arn:aws:iam::*:role/mattercodex-runtime-archive-execution","arn:aws:iam::*:role/mattercodex-runtime-restore-execution"]}
+        {"Sid":"DenyAnyOtherRole","Effect":"Deny","Action":["sts:AssumeRole","sts:TagSession"],"NotResource":"arn:aws:iam::*:role/mattercodex-runtime-restore-execution"}
       ]
     }
   archive-policy.json: |
@@ -22,7 +29,7 @@ data:
         {"Sid":"BucketReadback","Effect":"Allow","Action":["s3:GetBucketVersioning","s3:GetObjectLockConfiguration","s3:GetEncryptionConfiguration","s3:GetBucketPublicAccessBlock"],"Resource":"arn:aws:s3:::mattercodex-runtime"},
         {"Sid":"ReadExactArchiveKey","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:GetObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/archive.tar.gz","Condition":{"Bool":{"aws:SecureTransport":"true"}}},
         {"Sid":"WriteExactArchiveKey","Effect":"Allow","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/archive.tar.gz","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEquals":{"s3:x-amz-server-side-encryption":"aws:kms","s3:object-lock-mode":"COMPLIANCE"}}},
-        {"Sid":"ArchiveKMS","Effect":"Allow","Action":["kms:Decrypt","kms:Encrypt","kms:GenerateDataKey"],"Resource":"${aws:PrincipalTag/kms_key_arn}"},
+        {"Sid":"ArchiveKMS","Effect":"Allow","Action":["kms:Decrypt","kms:Encrypt","kms:GenerateDataKey"],"Resource":"arn:aws:kms:*:*:key/mattercodex-runtime","Condition":{"StringEquals":{"kms:ViaService":"s3.mattercodex-1.amazonaws.com","kms:EncryptionContext:aws:s3:arn":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/archive.tar.gz"}}},
         {"Sid":"DenyShortRetention","Effect":"Deny","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/execution_id}/archive.tar.gz","Condition":{"NumericLessThan":{"s3:object-lock-remaining-retention-days":"90"}}},
         {"Sid":"DenyListDeleteCrossTenant","Effect":"Deny","Action":["s3:ListBucket","s3:DeleteObject","s3:DeleteObjectVersion","s3:BypassGovernanceRetention"],"Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"]},
         {"Sid":"DenyInsecureTransport","Effect":"Deny","Action":"s3:*","Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"],"Condition":{"Bool":{"aws:SecureTransport":"false"}}}
@@ -33,10 +40,10 @@ data:
       "Version": "2012-10-17",
       "Statement": [
         {"Sid":"BucketReadback","Effect":"Allow","Action":["s3:GetBucketVersioning","s3:GetObjectLockConfiguration","s3:GetEncryptionConfiguration","s3:GetBucketPublicAccessBlock"],"Resource":"arn:aws:s3:::mattercodex-runtime"},
-        {"Sid":"ExactArchiveVersion","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:GetObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/archive.tar.gz","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEqualsIfExists":{"s3:VersionId":"${aws:PrincipalTag/archive_version_id}"}}},
+        {"Sid":"ExactArchiveVersion","Effect":"Allow","Action":["s3:GetObjectVersion","s3:GetObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/archive.tar.gz","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEquals":{"s3:VersionId":"${aws:PrincipalTag/archive_version_id}"}}},
         {"Sid":"ReadExactRestoreProof","Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:GetObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/restore-proof.json","Condition":{"Bool":{"aws:SecureTransport":"true"}}},
         {"Sid":"WriteExactRestoreProof","Effect":"Allow","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/restore-proof.json","Condition":{"Bool":{"aws:SecureTransport":"true"},"StringEquals":{"s3:x-amz-server-side-encryption":"aws:kms","s3:object-lock-mode":"COMPLIANCE"}}},
-        {"Sid":"RestoreKMS","Effect":"Allow","Action":["kms:Decrypt","kms:Encrypt","kms:GenerateDataKey"],"Resource":"${aws:PrincipalTag/kms_key_arn}"},
+        {"Sid":"RestoreKMS","Effect":"Allow","Action":["kms:Decrypt","kms:Encrypt","kms:GenerateDataKey"],"Resource":"arn:aws:kms:*:*:key/mattercodex-runtime","Condition":{"StringEquals":{"kms:ViaService":"s3.mattercodex-1.amazonaws.com","kms:EncryptionContext:aws:s3:arn":["arn:aws:s3:::mattercodex-runtime/runtime/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/archive.tar.gz","arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/restore-proof.json"]}}},
         {"Sid":"DenyShortRetention","Effect":"Deny","Action":["s3:PutObject","s3:PutObjectRetention"],"Resource":"arn:aws:s3:::mattercodex-runtime/runtime-restore-proof/${aws:PrincipalTag/organization_id}/${aws:PrincipalTag/project_id}/${aws:PrincipalTag/session_id}/${aws:PrincipalTag/source_execution_id}/restore-proof.json","Condition":{"NumericLessThan":{"s3:object-lock-remaining-retention-days":"90"}}},
         {"Sid":"DenyListDeleteCrossTenant","Effect":"Deny","Action":["s3:ListBucket","s3:DeleteObject","s3:DeleteObjectVersion","s3:BypassGovernanceRetention"],"Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"]},
         {"Sid":"DenyInsecureTransport","Effect":"Deny","Action":"s3:*","Resource":["arn:aws:s3:::mattercodex-runtime","arn:aws:s3:::mattercodex-runtime/*"],"Condition":{"Bool":{"aws:SecureTransport":"false"}}}

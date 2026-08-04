@@ -4,8 +4,8 @@ title: Диагностика и восстановление runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-03
+version: 1.3.0
+updated: 2026-08-04
 ---
 
 # Диагностика и восстановление runtime-controller
@@ -113,7 +113,9 @@ size, KMS, COMPLIANCE Object Lock не менее 90 суток, exact retain-un
 новый empty PVC, bind одноразового assignment к generation/name/UID/
 resourceVersion и завершить owner `CONSUMED` proof до появления role Pod.
 Staging находится на том же filesystem и публикуется atomic rename; после
-crash его можно удалить/повторить, но partial final tree недопустим. Любой
+crash exact-owned incomplete generation можно удалить/повторить только после
+проверки marker; regular files, marker, все directories и parent вокруг rename
+обязаны быть fsync. Чужой final tree не удалять. Любой
 version/checksum/metadata/tree/PVC mismatch сохраняет Pod отсутствующим.
 
 ## Двухфазный cleanup
@@ -141,13 +143,17 @@ Backfill автоматически проходит ту же archive/proof/cla
 
 Routine controller не имеет Secret access, права создавать role Pod/
 ServiceAccount/RoleBinding и права создавать/bind-ить `cluster-admin`.
-Проверьте успешный `runtime-credential-broker`: он обязан подтвердить HMAC
-full-tuple ticket, immutable credential readback и exact desired Pod до create.
+Проверьте успешный `runtime-credential-broker`: он обязан подтвердить
+action-specific Ed25519 full-tuple ticket, immutable credential readback и
+exact desired Pod до create. Admission, archive и restore должны читать три
+разных public verifier path; private keys существуют только у control-plane.
 `PROJECT_READ_ONLY` binding должен соответствовать exact project namespace и
 session identity. `CLUSTER_ADMIN` использует только
 предустановленную ServiceAccount/ClusterRoleBinding; admission требует
 server-owned одноразовый ticket и exact image/command/securityContext/volumes/
 token audience/subject/full tuple. Annotation controller-а не является ticket.
+Проверить PostgreSQL one-time receipt по ticket/Admission UID и что webhook
+имеет только immutable ConfigMap readback, но не Pod/RoleBinding mutation.
 Не исправлять отказ добавлением broad RBAC либо wildcard NetworkPolicy.
 
 ## Rollback

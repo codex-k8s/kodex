@@ -14,3 +14,6 @@ spec:
     - name: http
       port: ${MATTERCODEX_BOT_SERVICE_PORT}
       targetPort: http
+    - name: runtime-mtls
+      port: 8443
+      targetPort: runtime-mtls

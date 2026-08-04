@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/errs"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
@@ -57,32 +58,34 @@ const (
 )
 
 type Config struct {
-	Environment                    string
-	Namespace                      string
-	RoleImageRepository            string
-	AgentGatewayURL                string
-	MCPGatewayURL                  string
-	ControllerImage                string
-	AuthorityImage                 string
-	StorageClass                   string
-	PVCSize                        string
-	ReadClusterRole                string
-	AdminClusterRole               string
-	ArchiveServiceAccount          string
-	RestoreServiceAccount          string
-	CleanupServiceAccount          string
-	CredentialBrokerServiceAccount string
-	S3ArchiveBrokerServiceAccount  string
-	S3RestoreBrokerServiceAccount  string
-	MaximumPods                    int
-	MaximumOrganizationExecutions  int
-	MaximumCPU                     int64
-	MaximumMemoryBytes             int64
-	JobTTL                         time.Duration
-	S3Endpoint                     string
-	S3TLSServerName                string
-	S3Bucket                       string
-	S3Region                       string
+	Environment                      string
+	Namespace                        string
+	RoleImageRepository              string
+	AgentGatewayURL                  string
+	MCPGatewayURL                    string
+	ControllerImage                  string
+	AuthorityImage                   string
+	StorageClass                     string
+	PVCSize                          string
+	ReadClusterRole                  string
+	AdminClusterRole                 string
+	ArchiveServiceAccount            string
+	RestoreServiceAccount            string
+	CleanupServiceAccount            string
+	CredentialBrokerServiceAccount   string
+	ProjectReadBrokerServiceAccount  string
+	ClusterAdminBrokerServiceAccount string
+	S3ArchiveBrokerServiceAccount    string
+	S3RestoreBrokerServiceAccount    string
+	MaximumPods                      int
+	MaximumOrganizationExecutions    int
+	MaximumCPU                       int64
+	MaximumMemoryBytes               int64
+	JobTTL                           time.Duration
+	S3Endpoint                       string
+	S3TLSServerName                  string
+	S3Bucket                         string
+	S3Region                         string
 }
 
 type Adapter struct {
@@ -124,7 +127,8 @@ func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 		config.ReadClusterRole, config.AdminClusterRole,
 		config.ArchiveServiceAccount, config.RestoreServiceAccount, config.CleanupServiceAccount,
 		config.CredentialBrokerServiceAccount, config.S3ArchiveBrokerServiceAccount,
-		config.S3RestoreBrokerServiceAccount,
+		config.S3RestoreBrokerServiceAccount, config.ProjectReadBrokerServiceAccount,
+		config.ClusterAdminBrokerServiceAccount,
 	} {
 		if serviceAccount == "" {
 			return nil, errors.New("runtime service account configuration is invalid")
@@ -875,13 +879,16 @@ func (adapter *Adapter) ensureExecutionConfig(
 		return err
 	}
 	snapshot := struct {
-		Execution      entity.Execution `json:"execution"`
-		Revision       entity.Revision  `json:"runtime_revision"`
-		RunnerInput    runnerInput      `json:"runner_input"`
-		WorkloadTicket string           `json:"workload_ticket"`
-		DesiredPod     *corev1.Pod      `json:"desired_pod"`
+		Execution             entity.Execution `json:"execution"`
+		Revision              entity.Revision  `json:"runtime_revision"`
+		RunnerInput           runnerInput      `json:"runner_input"`
+		WorkloadTicket        string           `json:"workload_ticket"`
+		ArchiveWorkloadTicket string           `json:"archive_workload_ticket"`
+		RestoreWorkloadTicket string           `json:"restore_workload_ticket"`
+		DesiredPod            *corev1.Pod      `json:"desired_pod"`
 	}{Execution: execution, Revision: revision, RunnerInput: runtimeInput,
-		WorkloadTicket: execution.WorkloadTicket, DesiredPod: desiredPod}
+		WorkloadTicket: execution.WorkloadTicket, ArchiveWorkloadTicket: execution.ArchiveWorkloadTicket,
+		RestoreWorkloadTicket: execution.RestoreWorkloadTicket, DesiredPod: desiredPod}
 	raw, err := json.Marshal(snapshot)
 	if err != nil || len(raw) > maximumJournalSize {
 		return errs.ErrStateConflict
@@ -1447,25 +1454,14 @@ func castStatus(pod *corev1.Pod, pvc *corev1.PersistentVolumeClaim) entity.Runti
 	status.ExecutionID = pod.Annotations["runtime.mattercodex.dev/execution-id"]
 	status.RuntimeRevisionSHA256 = pod.Annotations["runtime.mattercodex.dev/revision-sha256"]
 	if raw := pod.Annotations["runtime.mattercodex.dev/turn-handoff"]; raw != "" {
-		var handoff struct {
-			Schema                string    `json:"schema"`
-			ExecutionID           string    `json:"execution_id"`
-			ExecutionVersion      uint64    `json:"execution_version"`
-			Fence                 uint64    `json:"fence"`
-			GrantGeneration       uint64    `json:"grant_generation"`
-			RuntimeRevisionSHA256 string    `json:"runtime_revision_sha256"`
-			ImmutableInputSHA256  string    `json:"immutable_input_sha256"`
-			Outcome               string    `json:"outcome"`
-			TerminalReference     string    `json:"terminal_reference"`
-			TerminalSHA256        string    `json:"terminal_sha256"`
-			ObservedAt            time.Time `json:"observed_at"`
-		}
-		decoder := json.NewDecoder(strings.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&handoff) == nil && errors.Is(decoder.Decode(&struct{}{}), io.EOF) {
+		if handoff, err := runtimecontract.DecodeHandoff([]byte(raw)); err == nil {
 			status.Handoff = &entity.RuntimeHandoff{Schema: handoff.Schema, ExecutionID: handoff.ExecutionID,
 				ExecutionVersion: handoff.ExecutionVersion, Fence: handoff.Fence, GrantGeneration: handoff.GrantGeneration,
-				RuntimeRevisionSHA256: handoff.RuntimeRevisionSHA256, ImmutableInputSHA256: handoff.ImmutableInputSHA256,
+				RuntimeRevisionSHA256:  handoff.RuntimeRevisionSHA256,
+				EffectiveRuntimeSHA256: handoff.EffectiveRuntimeSHA256,
+				ImmutableInputSHA256:   handoff.ImmutableInputSHA256,
+				AgentSessionID:         handoff.AgentSessionID, AgentSessionTurnID: handoff.AgentSessionTurnID,
+				AgentRunID: handoff.AgentRunID, AgentBindingSHA256: handoff.AgentBindingSHA256,
 				Outcome: handoff.Outcome, TerminalReference: handoff.TerminalReference,
 				TerminalSHA256: handoff.TerminalSHA256, ObservedAt: handoff.ObservedAt}
 		}
@@ -1929,7 +1925,7 @@ func (adapter *Adapter) ensureCredentialBroker(
 			existing.Annotations["runtime.mattercodex.dev/fence"] != strconv.FormatUint(execution.Fence, 10) ||
 			existing.Annotations["runtime.mattercodex.dev/workload-ticket"] != execution.WorkloadTicket ||
 			existing.Annotations["runtime.mattercodex.dev/credential-snapshot-sha256"] != execution.CredentialSnapshotSHA256 ||
-			existing.Spec.Template.Spec.ServiceAccountName != adapter.config.CredentialBrokerServiceAccount ||
+			existing.Spec.Template.Spec.ServiceAccountName != desired.Spec.Template.Spec.ServiceAccountName ||
 			len(existing.Spec.Template.Spec.Containers) != 1 ||
 			len(existing.Spec.Template.Spec.Containers[0].Command) != 1 ||
 			existing.Spec.Template.Spec.Containers[0].Command[0] != "/usr/local/bin/runtime-credential-broker" {
@@ -1967,13 +1963,20 @@ func (adapter *Adapter) credentialBrokerJob(execution entity.Execution) *batchv1
 	}
 	jobLabels := labels(execution, credentialComponent)
 	jobLabels["mattercodex.dev/environment"] = adapter.config.Environment
+	brokerServiceAccount := adapter.config.CredentialBrokerServiceAccount
+	switch execution.AccessProfile {
+	case enum.AccessProjectRead:
+		brokerServiceAccount = adapter.config.ProjectReadBrokerServiceAccount
+	case enum.AccessClusterAdmin:
+		brokerServiceAccount = adapter.config.ClusterAdminBrokerServiceAccount
+	}
 	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
 		Name: credentialBrokerJobName(execution), Labels: jobLabels, Annotations: annotations,
 	}, Spec: batchv1.JobSpec{
 		BackoffLimit: &backoff, TTLSecondsAfterFinished: &ttl, ActiveDeadlineSeconds: &deadline,
 		Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: jobLabels, Annotations: annotations},
 			Spec: corev1.PodSpec{
-				ServiceAccountName:           adapter.config.CredentialBrokerServiceAccount,
+				ServiceAccountName:           brokerServiceAccount,
 				AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false),
 				RestartPolicy: corev1.RestartPolicyOnFailure,
 				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true),
@@ -1994,7 +1997,7 @@ func (adapter *Adapter) credentialBrokerJob(execution entity.Execution) *batchv1
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true},
 						{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
-						{Name: "workload-ticket-key", MountPath: "/var/run/secrets/mattercodex/runtime-credential-broker/workload-ticket", ReadOnly: true},
+						{Name: "workload-ticket-trust", MountPath: "/var/run/config/mattercodex/runtime-workload-ticket", ReadOnly: true},
 					},
 				}},
 				Volumes: []corev1.Volume{
@@ -2007,7 +2010,7 @@ func (adapter *Adapter) credentialBrokerJob(execution entity.Execution) *batchv1
 						},
 					}}},
 					{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: int32Pointer(0o440)}}},
-					{Name: "workload-ticket-key", VolumeSource: csiVolume("runtime-credential-broker-workload-ticket")},
+					{Name: "workload-ticket-trust", VolumeSource: csiVolume("runtime-credential-broker-workload-ticket-trust")},
 				},
 			},
 		},
@@ -2024,13 +2027,20 @@ func (adapter *Adapter) ensureS3CredentialBroker(
 	}
 	name := s3CredentialBrokerJobName(execution, action)
 	desired := adapter.s3CredentialBrokerJob(execution, action)
+	expectedTicket := execution.RestoreWorkloadTicket
+	if action == "archive" {
+		expectedTicket = execution.ArchiveWorkloadTicket
+	}
+	if !validWorkloadTicket(expectedTicket) {
+		return false, errs.ErrStateConflict
+	}
 	existing, err := adapter.client.BatchV1().Jobs(adapter.config.Namespace).Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
 		container := existing.Spec.Template.Spec.Containers
 		if existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
 			existing.Annotations["runtime.mattercodex.dev/version"] != strconv.FormatUint(execution.Version, 10) ||
 			existing.Annotations["runtime.mattercodex.dev/fence"] != strconv.FormatUint(execution.Fence, 10) ||
-			existing.Annotations["runtime.mattercodex.dev/workload-ticket"] != execution.WorkloadTicket ||
+			existing.Annotations["runtime.mattercodex.dev/workload-ticket"] != expectedTicket ||
 			existing.Annotations["runtime.mattercodex.dev/action"] != action ||
 			existing.Spec.Template.Spec.ServiceAccountName != adapter.s3BrokerServiceAccount(action) ||
 			len(container) != 1 || len(container[0].Command) != 1 || len(container[0].Args) != 1 ||
@@ -2060,6 +2070,10 @@ func (adapter *Adapter) s3BrokerServiceAccount(action string) string {
 
 func (adapter *Adapter) s3CredentialBrokerJob(execution entity.Execution, action string) *batchv1.Job {
 	backoff, ttl, deadline := int32(2), int32(adapter.config.JobTTL/time.Second), int64(300)
+	workloadTicket := execution.RestoreWorkloadTicket
+	if action == "archive" {
+		workloadTicket = execution.ArchiveWorkloadTicket
+	}
 	annotations := map[string]string{
 		"runtime.mattercodex.dev/execution-id":           execution.ID,
 		"runtime.mattercodex.dev/version":                strconv.FormatUint(execution.Version, 10),
@@ -2068,7 +2082,7 @@ func (adapter *Adapter) s3CredentialBrokerJob(execution entity.Execution, action
 		"runtime.mattercodex.dev/revision-sha256":        execution.RuntimeRevisionSHA256,
 		"runtime.mattercodex.dev/input-sha256":           execution.ImmutableInputSHA256,
 		"runtime.mattercodex.dev/workload-ticket-sha256": execution.WorkloadTicketSHA256,
-		"runtime.mattercodex.dev/workload-ticket":        execution.WorkloadTicket,
+		"runtime.mattercodex.dev/workload-ticket":        workloadTicket,
 		"runtime.mattercodex.dev/action":                 action,
 		"runtime.mattercodex.dev/runtime-config-name":    configName(execution),
 	}
@@ -2104,7 +2118,7 @@ func (adapter *Adapter) s3CredentialBrokerJob(execution entity.Execution, action
 						{Name: "vault-ca", MountPath: "/var/run/config/mattercodex/vault", ReadOnly: true},
 						{Name: "s3-ca", MountPath: "/var/run/config/mattercodex/runtime-credential-broker/s3", ReadOnly: true},
 						{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
-						{Name: "workload-ticket-key", MountPath: "/var/run/secrets/mattercodex/runtime-credential-broker/workload-ticket", ReadOnly: true},
+						{Name: "workload-ticket-trust", MountPath: "/var/run/config/mattercodex/runtime-workload-ticket", ReadOnly: true},
 						{Name: "s3-broker-config", MountPath: "/var/run/secrets/mattercodex/runtime-credential-broker/s3", ReadOnly: true},
 					},
 				}},
@@ -2118,8 +2132,8 @@ func (adapter *Adapter) s3CredentialBrokerJob(execution entity.Execution, action
 					{Name: "vault-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "internal-rpc-authority-vault-ca"}, Items: []corev1.KeyToPath{{Key: "ca.pem", Path: "ca.pem"}}, DefaultMode: int32Pointer(0o440)}}},
 					{Name: "s3-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "mattercodex-s3-ca"}, Items: []corev1.KeyToPath{{Key: "ca.pem", Path: "ca.pem"}}, DefaultMode: int32Pointer(0o440)}}},
 					{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: int32Pointer(0o440)}}},
-					{Name: "workload-ticket-key", VolumeSource: csiVolume("runtime-s3-" + action + "-workload-ticket")},
-					{Name: "s3-broker-config", VolumeSource: csiVolume("runtime-s3-broker-config")},
+					{Name: "workload-ticket-trust", VolumeSource: csiVolume("runtime-s3-" + action + "-workload-ticket-trust")},
+					{Name: "s3-broker-config", VolumeSource: csiVolume("runtime-s3-" + action + "-broker-config")},
 				},
 			}}},
 	}

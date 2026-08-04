@@ -25,7 +25,7 @@ type ControlPlane interface {
 	Complete(context.Context, string, entity.Execution, string, string, string, string) (entity.Execution, error)
 	Incident(context.Context, string, entity.Execution, enum.IncidentKind, string, string) (entity.Execution, error)
 	Expire(context.Context, string) (entity.Execution, error)
-	RecordArchive(context.Context, string, entity.Execution, string, string) (entity.Execution, error)
+	RecordArchive(context.Context, string, entity.Execution, entity.ArchiveEvidence) (entity.Execution, error)
 	VerifyRestore(context.Context, string, entity.Execution, string, string, string) (entity.Execution, error)
 	AuthorizeCleanup(context.Context, string, entity.Execution, uint64, string, string, string) (entity.Execution, error)
 	ExpireCleanup(context.Context, string, entity.Execution) (entity.Execution, error)

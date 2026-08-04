@@ -53,6 +53,11 @@ func TestDeletePVCRetriesCrashAfterDeletionEvidence(t *testing.T) {
 	pvcUID := types.UID(uuid.NewString())
 	execution.ArchiveReference = "s3://bucket/archive?versionId=v1"
 	execution.ArchiveSHA256 = strings.Repeat("c", 64)
+	execution.ArchiveObjectKey = "archive"
+	execution.ArchiveVersionID = "v1"
+	execution.ArchiveKMSKeyARN = "arn:aws:kms:region:account:key/exact"
+	execution.ArchiveObjectLockMode = "COMPLIANCE"
+	execution.ArchiveProvenanceSHA256 = strings.Repeat("e", 64)
 	execution.RestoreProofReference = "s3://bucket/proof?versionId=v1"
 	execution.RestoreProofSHA256 = strings.Repeat("d", 64)
 	execution.CleanupAuthorizationExpiresAt = time.Now().UTC().Add(time.Hour)

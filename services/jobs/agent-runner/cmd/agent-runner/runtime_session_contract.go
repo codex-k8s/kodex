@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -97,24 +98,7 @@ type runtimeCredentialSnapshot struct {
 	ContentSHA256          string `json:"ContentSHA256"`
 }
 
-type runtimeHandoff struct {
-	Schema                 string    `json:"schema"`
-	ExecutionID            string    `json:"execution_id"`
-	ExecutionVersion       uint64    `json:"execution_version"`
-	Fence                  uint64    `json:"fence"`
-	GrantGeneration        uint64    `json:"grant_generation"`
-	RuntimeRevisionSHA256  string    `json:"runtime_revision_sha256"`
-	EffectiveRuntimeSHA256 string    `json:"effective_runtime_sha256"`
-	ImmutableInputSHA256   string    `json:"immutable_input_sha256"`
-	AgentSessionID         int64     `json:"agent_session_id"`
-	AgentSessionTurnID     int64     `json:"agent_session_turn_id"`
-	AgentRunID             string    `json:"agent_run_id"`
-	AgentBindingSHA256     string    `json:"agent_binding_sha256"`
-	Outcome                string    `json:"outcome"`
-	TerminalReference      string    `json:"terminal_reference"`
-	TerminalSHA256         string    `json:"terminal_sha256"`
-	ObservedAt             time.Time `json:"observed_at"`
-}
+type runtimeHandoff = runtimecontract.HandoffV1
 
 func (r *runner) runRuntimeSession(ctx context.Context) error {
 	contract, err := loadRuntimeSessionContract(os.Getenv("MATTERCODEX_RUNTIME_REVISION_FILE"))
@@ -552,7 +536,7 @@ func (r *runner) publishRuntimeHandoff(ctx context.Context, status, runID, final
 	}
 	digest := sha256.Sum256([]byte(runID + "\x00" + status + "\x00" + finalMessage + "\x00" + errorMessage + "\x00" + archive))
 	handoff := runtimeHandoff{
-		Schema: "mattercodex.runtime-turn-handoff.v1", ExecutionID: contract.ExecutionID,
+		Schema: runtimecontract.HandoffSchemaV1, ExecutionID: contract.ExecutionID,
 		ExecutionVersion: contract.ExecutionVersion, Fence: contract.Fence,
 		GrantGeneration: contract.GrantGeneration, RuntimeRevisionSHA256: contract.RuntimeRevisionSHA256,
 		EffectiveRuntimeSHA256: contract.EffectiveRuntimeSHA256,
@@ -562,7 +546,7 @@ func (r *runner) publishRuntimeHandoff(ctx context.Context, status, runID, final
 		TerminalReference: "agent-runner:" + runID, TerminalSHA256: hex.EncodeToString(digest[:]),
 		ObservedAt: time.Now().UTC(),
 	}
-	raw, err := json.Marshal(handoff)
+	raw, err := runtimecontract.EncodeHandoff(handoff)
 	if err != nil {
 		return errors.New("encode runtime turn handoff")
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -26,20 +27,21 @@ import (
 )
 
 const (
-	pathHealthz           = "/healthz"
-	pathHealthLivez       = "/health/livez"
-	pathHealthReady       = "/health/readyz"
-	pathReadyz            = "/readyz"
-	pathMetrics           = "/metrics"
-	pathAgentsSlash       = "/mattermost/slash/agents"
-	pathAgentsAction      = "/mattermost/actions/agents"
-	pathAgentsDialog      = "/mattermost/dialogs/agents"
-	pathGitHubWebhook     = "/github/webhook"
-	pathAgentSessions     = "/internal/agent-sessions/"
-	pathMCPSessions       = "/mcp/sessions/"
-	pathControlCenter     = "/control-center/"
-	pathAutomationHistory = "/api/control-center/v1/automation-runs"
-	dialogCallbackResult  = "agents_dialog_result"
+	pathHealthz              = "/healthz"
+	pathHealthLivez          = "/health/livez"
+	pathHealthReady          = "/health/readyz"
+	pathReadyz               = "/readyz"
+	pathMetrics              = "/metrics"
+	pathAgentsSlash          = "/mattermost/slash/agents"
+	pathAgentsAction         = "/mattermost/actions/agents"
+	pathAgentsDialog         = "/mattermost/dialogs/agents"
+	pathGitHubWebhook        = "/github/webhook"
+	pathAgentSessions        = "/internal/agent-sessions/"
+	pathRuntimeAgentBindings = "/internal/runtime-agent-bindings"
+	pathMCPSessions          = "/mcp/sessions/"
+	pathControlCenter        = "/control-center/"
+	pathAutomationHistory    = "/api/control-center/v1/automation-runs"
+	dialogCallbackResult     = "agents_dialog_result"
 )
 
 type RouteBoundary string
@@ -80,6 +82,8 @@ type RouterConfig struct {
 	MattermostResolver     mattermostDNSResolver
 	MattermostDialer       mattermostContextDialer
 	Logger                 *slog.Logger
+	RuntimeAgentBindings   *statusservice.RuntimeAgentBindingService
+	RuntimeBindingBearer   string
 }
 
 type Router struct {
@@ -100,6 +104,10 @@ type Router struct {
 	controlCenterConfigured    bool
 	logger                     *slog.Logger
 	mcpHandler                 http.Handler
+	runtimeAgentBindings       *statusservice.RuntimeAgentBindingService
+	runtimeBindingBearerHash   [sha256.Size]byte
+	runtimeBindingConfigured   bool
+	maxRuntimeBindingBodyBytes int64
 	mux                        *http.ServeMux
 	registeredRoutes           []RegisteredRoute
 }
@@ -108,25 +116,31 @@ var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
-		statusService:         cfg.StatusService,
-		slashService:          cfg.SlashService,
-		sessionService:        cfg.SessionService,
-		dialogOpener:          cfg.DialogOpener,
-		localizer:             cfg.Localizer,
-		slashToken:            cfg.SlashToken,
-		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
-		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
-		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
-		interactionSecurity:   cfg.InteractionSecurity,
-		mattermostResponses:   newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
-		threadPublisher:       cfg.ThreadPublisher,
-		automations:           cfg.Automations,
-		logger:                cfg.Logger,
-		mux:                   http.NewServeMux(),
+		statusService:              cfg.StatusService,
+		slashService:               cfg.SlashService,
+		sessionService:             cfg.SessionService,
+		dialogOpener:               cfg.DialogOpener,
+		localizer:                  cfg.Localizer,
+		slashToken:                 cfg.SlashToken,
+		gitHubWebhookSecret:        cfg.GitHubWebhookSecret,
+		maxSlashFormBytes:          cfg.MaxSlashFormBytes,
+		maxGitHubWebhookBytes:      cfg.MaxGitHubWebhookBytes,
+		interactionSecurity:        cfg.InteractionSecurity,
+		mattermostResponses:        newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
+		threadPublisher:            cfg.ThreadPublisher,
+		automations:                cfg.Automations,
+		logger:                     cfg.Logger,
+		runtimeAgentBindings:       cfg.RuntimeAgentBindings,
+		maxRuntimeBindingBodyBytes: min(cfg.MaxMCPRequestBodyBytes, 64*1024),
+		mux:                        http.NewServeMux(),
 	}
 	if token := strings.TrimSpace(cfg.ControlCenterReadToken); token != "" {
 		router.controlCenterReadTokenHash = sha256.Sum256([]byte(token))
 		router.controlCenterConfigured = true
+	}
+	if token := strings.TrimSpace(cfg.RuntimeBindingBearer); token != "" && cfg.RuntimeAgentBindings != nil {
+		router.runtimeBindingBearerHash = sha256.Sum256([]byte(token))
+		router.runtimeBindingConfigured = true
 	}
 	if cfg.SessionService != nil {
 		router.mcpHandler = newMCPHandler(cfg.SessionService, cfg.MaxMCPRequestBodyBytes)
@@ -145,6 +159,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.register(pathAgentsDialog, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentsDialog))
 	router.register(pathGitHubWebhook, RouteBoundaryPublic, http.HandlerFunc(router.handleGitHubWebhook))
 	router.register(pathAgentSessions, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentSessionInternal))
+	router.register(pathRuntimeAgentBindings, RouteBoundaryCluster, http.HandlerFunc(router.handleRuntimeAgentBinding))
 	if router.mcpHandler != nil {
 		router.register(pathMCPSessions, RouteBoundaryCluster, router.mcpHandler)
 	}
@@ -156,6 +171,46 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.register(strings.TrimSuffix(pathControlCenter, "/"), RouteBoundaryPublic, http.RedirectHandler(pathControlCenter, http.StatusTemporaryRedirect))
 	router.register(pathControlCenter, RouteBoundaryPublic, assets)
 	return router
+}
+
+func (router *Router) handleRuntimeAgentBinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+		return
+	}
+	if !router.runtimeBindingConfigured || router.runtimeAgentBindings == nil {
+		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "runtime_agent_binding_not_configured"})
+		return
+	}
+	if r.TLS == nil || len(r.TLS.VerifiedChains) == 0 {
+		writeJSON(w, http.StatusForbidden, transportmodels.ErrorResponse{Error: "runtime_agent_binding_mtls_required"})
+		return
+	}
+	tokenHash := sha256.Sum256([]byte(bearerToken(r.Header.Get("Authorization"))))
+	if subtle.ConstantTimeCompare(tokenHash[:], router.runtimeBindingBearerHash[:]) != 1 {
+		writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "runtime_agent_binding_bearer_invalid"})
+		return
+	}
+	reader := http.MaxBytesReader(w, r.Body, router.maxRuntimeBindingBodyBytes)
+	decoder := json.NewDecoder(reader)
+	decoder.DisallowUnknownFields()
+	var command statusservice.RegisterRuntimeAgentBindingCommand
+	if err := decoder.Decode(&command); err != nil {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "runtime_agent_binding_payload_invalid"})
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "runtime_agent_binding_payload_invalid"})
+		return
+	}
+	result, err := router.runtimeAgentBindings.Register(r.Context(), command)
+	if err != nil {
+		router.logWarn("runtime agent binding registration failed", "error", err)
+		writeJSON(w, http.StatusConflict, transportmodels.ErrorResponse{Error: "runtime_agent_binding_rejected"})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result)
 }
 
 func (router *Router) register(path string, boundary RouteBoundary, handler http.Handler) {

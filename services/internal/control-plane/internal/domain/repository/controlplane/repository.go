@@ -226,84 +226,100 @@ type TurnAttempt struct {
 
 // RuntimeExecution хранит immutable execution tuple и monotonic owner fence.
 type RuntimeExecution struct {
-	ID                                 string
-	OrganizationID                     string
-	ProjectID                          string
-	ProcessID                          string
-	SessionID                          string
-	ThreadID                           string
-	RoleID                             string
-	TurnID                             string
-	Attempt                            uint32
-	RuntimeRevisionID                  string
-	RuntimeRevisionVersion             uint64
-	RuntimeRevisionSHA256              string
-	ImmutableInputSHA256               string
-	ResourceClass                      string
-	ClusterAccessProfile               string
-	WorkloadID                         string
-	WorkloadSPIFFEID                   string
-	GrantGeneration                    uint64
-	Version                            uint64
-	Fence                              uint64
-	State                              string
-	LeaseID                            string
-	LeaseTokenSHA256                   string
-	LeaseExpiresAt                     time.Time
-	TerminalOutcome                    string
-	TerminalReference                  string
-	TerminalSHA256                     string
-	ArchiveReference                   string
-	ArchiveSHA256                      string
-	RestoreProofReference              string
-	RestoreProofSHA256                 string
-	RestoreVerifierWorkload            string
-	RestoreVerifierSPIFFEID            string
-	RestoreVerifierGeneration          uint64
-	CleanupAuthorizationID             string
-	CleanupAuthorizationExpiresAt      time.Time
-	CleanupAuthorizationState          string
-	CleanupAuthorizationGeneration     uint64
-	CleanupConsumedAt                  time.Time
-	CleanupPVCName                     string
-	CleanupPVCUID                      string
-	CleanupPVCResourceVersion          string
-	CleanupClaimedAt                   time.Time
-	CleanupEligibleAt                  time.Time
-	CleanupNotFoundAt                  time.Time
-	CleanupDeletionProofSHA256         string
-	RestoreSourceExecutionID           string
-	RestoreSourceArchiveReference      string
-	RestoreSourceArchiveSHA256         string
-	RestoreSourceRuntimeRevisionSHA256 string
-	RestoreSourceImmutableInputSHA256  string
-	RestoreSourceProofSHA256           string
-	EffectiveRuntimeSHA256             string
-	AgentSessionKey                    string
-	AgentSessionID                     int64
-	AgentSessionTurnID                 int64
-	AgentRunID                         string
-	AgentBindingSHA256                 string
-	RetentionPolicyID                  string
-	RetentionPolicyVersion             uint64
-	PVCRetentionSeconds                uint64
-	ArchiveRetentionSeconds            uint64
-	ArchiveRetainUntil                 time.Time
-	PVCCleanupEligibleAt               time.Time
-	CapacityObservationExpiresAt       time.Time
-	RescheduleAfter                    time.Time
-	RestoreAssignmentState             string
-	RestoreAssignmentGeneration        uint64
-	RestoreTargetPVCName               string
-	RestoreTargetPVCUID                string
-	RestoreTargetPVCResourceVersion    string
-	RehydrateProofReference            string
-	RehydrateProofSHA256               string
-	CredentialSnapshotSHA256           string
-	WorkloadTicketSHA256               string
-	WorkloadTicket                     string `json:"-"`
-	CreatedAt                          time.Time
-	UpdatedAt                          time.Time
+	ID                                  string
+	OrganizationID                      string
+	ProjectID                           string
+	ProcessID                           string
+	SessionID                           string
+	ThreadID                            string
+	RoleID                              string
+	TurnID                              string
+	Attempt                             uint32
+	RuntimeRevisionID                   string
+	RuntimeRevisionVersion              uint64
+	RuntimeRevisionSHA256               string
+	ImmutableInputSHA256                string
+	ResourceClass                       string
+	ClusterAccessProfile                string
+	WorkloadID                          string
+	WorkloadSPIFFEID                    string
+	GrantGeneration                     uint64
+	Version                             uint64
+	Fence                               uint64
+	State                               string
+	LeaseID                             string
+	LeaseTokenSHA256                    string
+	LeaseExpiresAt                      time.Time
+	TerminalOutcome                     string
+	TerminalReference                   string
+	TerminalSHA256                      string
+	ArchiveReference                    string
+	ArchiveSHA256                       string
+	ArchiveObjectKey                    string
+	ArchiveVersionID                    string
+	ArchiveKMSKeyARN                    string
+	ArchiveObjectLockMode               string
+	ArchiveProvenanceSHA256             string
+	RestoreProofReference               string
+	RestoreProofSHA256                  string
+	RestoreVerifierWorkload             string
+	RestoreVerifierSPIFFEID             string
+	RestoreVerifierGeneration           uint64
+	CleanupAuthorizationID              string
+	CleanupAuthorizationExpiresAt       time.Time
+	CleanupAuthorizationState           string
+	CleanupAuthorizationGeneration      uint64
+	CleanupConsumedAt                   time.Time
+	CleanupPVCName                      string
+	CleanupPVCUID                       string
+	CleanupPVCResourceVersion           string
+	CleanupClaimedAt                    time.Time
+	CleanupEligibleAt                   time.Time
+	CleanupNotFoundAt                   time.Time
+	CleanupDeletionProofSHA256          string
+	RestoreSourceExecutionID            string
+	RestoreSourceArchiveReference       string
+	RestoreSourceArchiveSHA256          string
+	RestoreSourceRuntimeRevisionSHA256  string
+	RestoreSourceImmutableInputSHA256   string
+	RestoreSourceProofSHA256            string
+	RestoreSourceVersion                uint64
+	RestoreSourceArchiveObjectKey       string
+	RestoreSourceArchiveVersionID       string
+	RestoreSourceArchiveKMSKeyARN       string
+	RestoreSourceArchiveObjectLockMode  string
+	RestoreSourceArchiveRetainUntil     time.Time
+	RestoreSourceRetentionPolicyID      string
+	RestoreSourceRetentionPolicyVersion uint64
+	RestoreSourceProvenanceSHA256       string
+	EffectiveRuntimeSHA256              string
+	AgentSessionKey                     string
+	AgentSessionID                      int64
+	AgentSessionTurnID                  int64
+	AgentRunID                          string
+	AgentBindingSHA256                  string
+	RetentionPolicyID                   string
+	RetentionPolicyVersion              uint64
+	PVCRetentionSeconds                 uint64
+	ArchiveRetentionSeconds             uint64
+	ArchiveRetainUntil                  time.Time
+	PVCCleanupEligibleAt                time.Time
+	CapacityObservationExpiresAt        time.Time
+	RescheduleAfter                     time.Time
+	RestoreAssignmentState              string
+	RestoreAssignmentGeneration         uint64
+	RestoreTargetPVCName                string
+	RestoreTargetPVCUID                 string
+	RestoreTargetPVCResourceVersion     string
+	RehydrateProofReference             string
+	RehydrateProofSHA256                string
+	CredentialSnapshotSHA256            string
+	WorkloadTicketSHA256                string
+	WorkloadTicket                      string `json:"-"`
+	ArchiveWorkloadTicket               string `json:"-"`
+	RestoreWorkloadTicket               string `json:"-"`
+	CreatedAt                           time.Time
+	UpdatedAt                           time.Time
 }
 
 // RuntimeAgentBinding — неизменяемая связь двух owner aggregate. Поля bot
@@ -327,6 +343,17 @@ type RuntimeAgentBinding struct {
 	AgentSessionTurnVersion   uint64
 	AgentTurnBindingSHA256    string
 	CreatedAt                 time.Time
+}
+
+// ResourceRetentionPolicy — owner-managed и versioned политика, которую claim
+// копирует в immutable execution snapshot. Последующие переходы не читают
+// текущую конфигурацию процесса.
+type ResourceRetentionPolicy struct {
+	ID                      string
+	Version                 uint64
+	PVCRetentionSeconds     uint64
+	ArchiveRetentionSeconds uint64
+	EffectiveFrom           time.Time
 }
 
 // PinnedIntegrationResource хранит exact owner version/projection без secret value.
@@ -484,6 +511,7 @@ type Transaction interface {
 	SessionHasLiveRuntimeExecution(context.Context, string, string, string) (bool, error)
 	SessionHasUnverifiedRuntimeArchive(context.Context, string, string, string) (bool, error)
 	SessionHasActiveRuntimeCleanup(context.Context, string, string, string) (bool, error)
+	SessionBlocksRuntimeCleanup(context.Context, string, string, string) (bool, error)
 	LatestSessionRuntimeArchiveForRestore(context.Context, string, string, string) (RuntimeExecution, error)
 	NextQueuedTurn(context.Context, string, string, string) (entity.Resource, error)
 	SaveTurnLease(context.Context, TurnLease) error
@@ -506,6 +534,7 @@ type Transaction interface {
 	GetRuntimeExecutionByTurn(context.Context, string, uint32) (RuntimeExecution, error)
 	GetRuntimeExecutionByTurnForUpdate(context.Context, string, uint32) (RuntimeExecution, error)
 	GetRuntimeAgentBindingForUpdate(context.Context, string, uint32) (RuntimeAgentBinding, error)
+	GetCurrentResourceRetentionPolicy(context.Context, string, string) (ResourceRetentionPolicy, error)
 	InsertRuntimeAgentBinding(context.Context, RuntimeAgentBinding) error
 	InsertRuntimeExecution(context.Context, RuntimeExecution) error
 	UpdateRuntimeExecution(context.Context, RuntimeExecution, uint64, uint64) error

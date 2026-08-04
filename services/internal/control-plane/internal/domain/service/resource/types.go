@@ -491,8 +491,14 @@ type CancelRuntimeExecutionInput struct {
 
 type RuntimeArchiveInput struct {
 	RuntimeExecutionInput
-	ArchiveReference string
-	ArchiveSHA256    string
+	ArchiveReference        string
+	ArchiveSHA256           string
+	ArchiveObjectKey        string
+	ArchiveVersionID        string
+	ArchiveKMSKeyARN        string
+	ArchiveObjectLockMode   string
+	ArchiveRetainUntil      time.Time
+	ArchiveProvenanceSHA256 string
 }
 
 type RuntimeRestoreInput struct {

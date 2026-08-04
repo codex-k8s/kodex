@@ -1706,6 +1706,23 @@ message RuntimeExecution {
   // workload_ticket — подписанный current version/fence admission ticket;
   // он не сохраняется controller-ом в journal и проверяется owner readback.
   string workload_ticket = 77;
+  string archive_object_key = 78;
+  string archive_version_id = 79;
+  string archive_kms_key_arn = 80;
+  string archive_object_lock_mode = 81;
+  string archive_provenance_sha256 = 82;
+  uint64 restore_source_version = 83;
+  string restore_source_archive_object_key = 84;
+  string restore_source_archive_version_id = 85;
+  string restore_source_archive_kms_key_arn = 86;
+  string restore_source_archive_object_lock_mode = 87;
+  google.protobuf.Timestamp restore_source_archive_retain_until = 88;
+  string restore_source_retention_policy_id = 89;
+  uint64 restore_source_retention_policy_version = 90;
+  string restore_source_provenance_sha256 = 91;
+  // Раздельные one-time tickets доступны только action-specific broker.
+  string archive_workload_ticket = 92;
+  string restore_workload_ticket = 93;
 }
 
 message ClaimRuntimeExecutionRequest {
@@ -1861,6 +1878,12 @@ message RecordRuntimeArchiveRequest {
   uint64 expected_fence = 4;
   string archive_reference = 5;
   string archive_sha256 = 6;
+  string archive_object_key = 7;
+  string archive_version_id = 8;
+  string archive_kms_key_arn = 9;
+  string archive_object_lock_mode = 10;
+  google.protobuf.Timestamp archive_retain_until = 11;
+  string archive_provenance_sha256 = 12;
 }
 
 message RecordRuntimeArchiveResponse {

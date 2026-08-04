@@ -326,13 +326,17 @@ func (client *Client) Expire(ctx context.Context, key string) (entity.Execution,
 }
 
 func (client *Client) RecordArchive(
-	ctx context.Context, key string, execution entity.Execution, reference, digest string,
+	ctx context.Context, key string, execution entity.Execution, evidence entity.ArchiveEvidence,
 ) (entity.Execution, error) {
 	response, err := client.shared.ControlPlane.RecordRuntimeArchive(
 		ctx, &controlplanev1.RecordRuntimeArchiveRequest{
 			IdempotencyKey: key, ExecutionId: execution.ID,
 			ExpectedVersion: execution.Version, ExpectedFence: execution.Fence,
-			ArchiveReference: reference, ArchiveSha256: digest,
+			ArchiveReference: evidence.Reference, ArchiveSha256: evidence.SHA256,
+			ArchiveObjectKey: evidence.ObjectKey, ArchiveVersionId: evidence.VersionID,
+			ArchiveKmsKeyArn: evidence.KMSKeyARN, ArchiveObjectLockMode: evidence.ObjectLockMode,
+			ArchiveRetainUntil:      timestamppb.New(evidence.RetainUntil),
+			ArchiveProvenanceSha256: evidence.ProvenanceSHA256,
 		},
 	)
 	if err != nil {
@@ -479,28 +483,41 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		RestoreTargetPVCResourceVersion: source.GetRestoreTargetPvcResourceVersion(),
 		RehydrateProofReference:         source.GetRehydrateProofReference(), RehydrateProofSHA256: source.GetRehydrateProofSha256(),
 		CredentialSnapshotSHA256: source.GetCredentialSnapshotSha256(), WorkloadTicketSHA256: source.GetWorkloadTicketSha256(),
-		WorkloadTicket: source.GetWorkloadTicket(),
-		ResourceClass:  enum.ResourceClass(trimEnum(source.GetResourceClass().String(), "RUNTIME_RESOURCE_CLASS_")),
-		AccessProfile:  enum.AccessProfile(trimEnum(source.GetClusterAccessProfile().String(), "CLUSTER_ACCESS_PROFILE_")),
-		WorkloadID:     source.GetWorkloadId(), WorkloadSPIFFEID: source.GetWorkloadSpiffeId(),
+		WorkloadTicket: source.GetWorkloadTicket(), ArchiveWorkloadTicket: source.GetArchiveWorkloadTicket(),
+		RestoreWorkloadTicket: source.GetRestoreWorkloadTicket(),
+		ResourceClass:         enum.ResourceClass(trimEnum(source.GetResourceClass().String(), "RUNTIME_RESOURCE_CLASS_")),
+		AccessProfile:         enum.AccessProfile(trimEnum(source.GetClusterAccessProfile().String(), "CLUSTER_ACCESS_PROFILE_")),
+		WorkloadID:            source.GetWorkloadId(), WorkloadSPIFFEID: source.GetWorkloadSpiffeId(),
 		GrantGeneration: source.GetGrantGeneration(), Version: source.GetVersion(), Fence: source.GetFence(),
 		State:   enum.ExecutionState(trimEnum(source.GetState().String(), "RUNTIME_EXECUTION_STATE_")),
 		LeaseID: source.GetLeaseId(), ArchiveReference: source.GetArchiveReference(),
 		ArchiveSHA256: source.GetArchiveSha256(), RestoreProofReference: source.GetRestoreProofReference(),
-		RestoreProofSHA256:                 source.GetRestoreProofSha256(),
-		CleanupAuthorizationID:             source.GetCleanupAuthorizationId(),
-		CleanupAuthorizationGeneration:     source.GetCleanupAuthorizationGeneration(),
-		CleanupAuthorizationState:          trimEnum(source.GetCleanupAuthorizationState().String(), "RUNTIME_CLEANUP_AUTHORIZATION_STATE_"),
-		CleanupPVCName:                     source.GetCleanupPvcName(),
-		CleanupPVCUID:                      source.GetCleanupPvcUid(),
-		CleanupPVCResourceVersion:          source.GetCleanupPvcResourceVersion(),
-		CleanupDeletionProofSHA256:         source.GetCleanupDeletionProofSha256(),
-		RestoreSourceExecutionID:           source.GetRestoreSourceExecutionId(),
-		RestoreSourceArchiveReference:      source.GetRestoreSourceArchiveReference(),
-		RestoreSourceArchiveSHA256:         source.GetRestoreSourceArchiveSha256(),
-		RestoreSourceRuntimeRevisionSHA256: source.GetRestoreSourceRuntimeRevisionSha256(),
-		RestoreSourceImmutableInputSHA256:  source.GetRestoreSourceImmutableInputSha256(),
-		RestoreSourceProofSHA256:           source.GetRestoreSourceProofSha256(),
+		RestoreProofSHA256:                  source.GetRestoreProofSha256(),
+		CleanupAuthorizationID:              source.GetCleanupAuthorizationId(),
+		CleanupAuthorizationGeneration:      source.GetCleanupAuthorizationGeneration(),
+		CleanupAuthorizationState:           trimEnum(source.GetCleanupAuthorizationState().String(), "RUNTIME_CLEANUP_AUTHORIZATION_STATE_"),
+		CleanupPVCName:                      source.GetCleanupPvcName(),
+		CleanupPVCUID:                       source.GetCleanupPvcUid(),
+		CleanupPVCResourceVersion:           source.GetCleanupPvcResourceVersion(),
+		CleanupDeletionProofSHA256:          source.GetCleanupDeletionProofSha256(),
+		RestoreSourceExecutionID:            source.GetRestoreSourceExecutionId(),
+		RestoreSourceArchiveReference:       source.GetRestoreSourceArchiveReference(),
+		RestoreSourceArchiveSHA256:          source.GetRestoreSourceArchiveSha256(),
+		RestoreSourceRuntimeRevisionSHA256:  source.GetRestoreSourceRuntimeRevisionSha256(),
+		RestoreSourceImmutableInputSHA256:   source.GetRestoreSourceImmutableInputSha256(),
+		RestoreSourceProofSHA256:            source.GetRestoreSourceProofSha256(),
+		RestoreSourceVersion:                source.GetRestoreSourceVersion(),
+		RestoreSourceArchiveObjectKey:       source.GetRestoreSourceArchiveObjectKey(),
+		RestoreSourceArchiveVersionID:       source.GetRestoreSourceArchiveVersionId(),
+		RestoreSourceArchiveKMSKeyARN:       source.GetRestoreSourceArchiveKmsKeyArn(),
+		RestoreSourceArchiveObjectLockMode:  source.GetRestoreSourceArchiveObjectLockMode(),
+		RestoreSourceRetentionPolicyID:      source.GetRestoreSourceRetentionPolicyId(),
+		RestoreSourceRetentionPolicyVersion: source.GetRestoreSourceRetentionPolicyVersion(),
+		RestoreSourceProvenanceSHA256:       source.GetRestoreSourceProvenanceSha256(),
+		ArchiveObjectKey:                    source.GetArchiveObjectKey(), ArchiveVersionID: source.GetArchiveVersionId(),
+		ArchiveKMSKeyARN:        source.GetArchiveKmsKeyArn(),
+		ArchiveObjectLockMode:   source.GetArchiveObjectLockMode(),
+		ArchiveProvenanceSHA256: source.GetArchiveProvenanceSha256(),
 	}
 	if source.GetLeaseExpiresAt() != nil {
 		execution.LeaseExpiresAt = source.GetLeaseExpiresAt().AsTime()
@@ -513,6 +530,9 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 	}
 	if source.GetArchiveRetainUntil() != nil {
 		execution.ArchiveRetainUntil = source.GetArchiveRetainUntil().AsTime()
+	}
+	if source.GetRestoreSourceArchiveRetainUntil() != nil {
+		execution.RestoreSourceArchiveRetainUntil = source.GetRestoreSourceArchiveRetainUntil().AsTime()
 	}
 	if source.GetPvcCleanupEligibleAt() != nil {
 		execution.PVCCleanupEligibleAt = source.GetPvcCleanupEligibleAt().AsTime()

@@ -4,8 +4,8 @@ title: Runtime controller
 type: service
 status: approved
 owner: backend
-version: 1.2.0
-updated: 2026-08-03
+version: 1.3.0
+updated: 2026-08-04
 ---
 
 # Runtime controller
@@ -28,14 +28,18 @@ role-image Pod. Он не запускает Codex, не меняет домен
 - `runtime-credential-broker snapshot|s3-archive|s3-restore` — проверка
   signed workload ticket, execution-owned credentials/RBAC/Pod и раздельные
   Vault bootstrap leases с последующим exact execution `AssumeRole`;
+- `runtime-workload-admission` — fail-closed TLS admission webhook с
+  Ed25519 full-tuple verification, exact immutable Pod spec readback и
+  PostgreSQL one-time replay receipt;
 - `runtime-controller-cli migrate up|status|version` — forward-only схема
   durable inbox/projection.
 
 Каждый worker имеет отдельные ServiceAccount, SPIFFE/application grant и
 per-job `Role` только на exact journal. Controller не читает Secret, не
 создаёт role Pod/ServiceAccount/RoleBinding и не создаёт/не bind-ит
-`cluster-admin` authority. Vault выдаёт broker только ключи с именами `key`
-(workload-ticket verification), `kms-key-arn`, `archive-role-arn` и
+`cluster-admin` authority. Vault выдаёт broker только public keys с именем
+`public-key.hex` (раздельные admission/archive/restore verifier),
+`kms-key-arn`, `archive-role-arn` и
 `restore-role-arn`; значения в manifests,
 документацию и диагностику не выводятся.
 
@@ -63,6 +67,10 @@ tuple, отдельные control-plane session/turn и server-owned bot
 `AgentSession`/`AgentSessionTurn`/`RunID`, profile, HTTPS bot-service/MCP routes
 с exact SNI/CA/client identity и пути immutable execution credential
 snapshots. Control-plane UUID никогда не используется как bot `session_key`.
+Bot-service сам разрешает `RunID` в локальные AgentSession/Turn и версии,
+сохраняет durable binding outbox и доставляет generated
+`BindRuntimeAgentSession` через mTLS+bearer; lost response повторяет тот же
+idempotency intent.
 Terminal Pod phase не завершает turn: runner обязан записать
 exact handoff в собственный Pod. Exit без handoff создаёт incident.
 
@@ -93,6 +101,9 @@ Vault bootstrap role может только вызвать `AssumeRole`/`TagSes
 IAM source запрещает List/Delete/Bypass, cross-tenant prefix и insecure
 transport; startup проверяет versioning, Object Lock, KMS, public-access block
 и фактический запрет List.
+Archive и restore используют независимые Ed25519 issuer/audience/public trust,
+ServiceAccount, Vault bootstrap role/config и разрешённый target role ARN;
+bootstrap identity одной операции не может assume role другой.
 
 PVC cleanup не использует journal `LastTransition` и не имеет собственного
 TTL. Authoritative owner transaction pin-ит `ResourceRetentionPolicy` id,
@@ -107,7 +118,8 @@ digest. Client grace и delete-before-claim отсутствуют.
 Следующий turn после `CONSUMED` cleanup получает одноразовое owner assignment
 к exact source archive. `runtime-rehydrate` bind-ит assignment к новой пустой
 PVC generation/name/UID/resourceVersion, восстанавливает во временное дерево
-на том же filesystem, fsync-ит и атомарно публикует `session/`, после чего
+на том же filesystem, sync-ит regular files/marker/directories снизу вверх и
+parent вокруг atomic rename `session/`, после чего
 owner переводит assignment в `CONSUMED`. Повтор для live наполненной PVC или
 другого UID закрыто отклоняется; crash оставляет только удаляемый staging, но
 не частичное final tree. Role Pod до proof не создаётся.
