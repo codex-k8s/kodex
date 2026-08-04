@@ -133,7 +133,7 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			!supportedCredential(candidate.Credential) ||
 			candidate.ProofIssuer != candidate.OwnerSPIFFEID ||
 			candidate.ProofAudience == "" {
-			return Loaded{}, errors.New("control-plane proof producer is invalid")
+			return Loaded{}, fmt.Errorf("control-plane proof producer %q is invalid", candidate.ID)
 		}
 		if _, duplicate := producers[candidate.ID]; duplicate {
 			return Loaded{}, errors.New("control-plane proof producer is duplicated")
@@ -180,7 +180,7 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			candidate.Audience == "" ||
 			candidate.CallerWorkload != producer.CallerWorkload ||
 			candidate.CallerSPIFFEID != producer.CallerSPIFFEID || !validTarget(candidate) {
-			return Loaded{}, errors.New("control-plane operation binding is invalid")
+			return Loaded{}, fmt.Errorf("control-plane operation binding %q is invalid", candidate.OperationID)
 		}
 		if _, duplicate := operations[candidate.OperationID]; duplicate {
 			return Loaded{}, errors.New("control-plane operation binding is ambiguous")
@@ -256,6 +256,7 @@ func supportedCredential(credential string) bool {
 		"PROCESS_RUN_GRANT",
 		"OWNER_GATE_DELIVERY_GRANT",
 		"RUNTIME_REVISION_GRANT",
+		"RUNTIME_ARCHIVE_GRANT",
 		"RUNTIME_RESTORE_VERIFIER_GRANT",
 		"RUNTIME_CLEANUP_AUTHORIZER_GRANT",
 		"MEMORY_INDEX_GRANT":

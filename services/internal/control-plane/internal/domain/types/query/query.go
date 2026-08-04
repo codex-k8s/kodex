@@ -19,6 +19,7 @@ var auditActionPattern = regexp.MustCompile(`^[a-z][a-z0-9_:]{0,95}$`)
 type ResourceFilter struct {
 	OrganizationID string
 	ProjectID      string
+	ActorID        string
 	ParentID       string
 	Kind           enum.Kind
 	States         []enum.State
@@ -30,6 +31,7 @@ type ResourceFilter struct {
 type ResourceSearch struct {
 	OrganizationID string
 	ProjectID      string
+	ActorID        string
 	Kind           enum.Kind
 	States         []enum.State
 	Query          string
@@ -43,6 +45,7 @@ func (filter ResourceSearch) Validate() error {
 		return errors.New("resource search query is invalid")
 	}
 	return ResourceFilter{
+		ActorID: filter.ActorID,
 		Kind:    filter.Kind,
 		States:  filter.States,
 		AfterID: filter.AfterID,
@@ -59,6 +62,24 @@ type AuditFilter struct {
 	Action         string
 	AfterID        string
 	Limit          int
+}
+
+// RuntimeIncidentFilter задаёт устойчивый owner-scoped cursor append-only evidence.
+type RuntimeIncidentFilter struct {
+	OrganizationID string
+	ProjectID      string
+	ActorID        string
+	AfterID        string
+	Limit          int
+}
+
+func (filter RuntimeIncidentFilter) Validate() error {
+	if value.ValidateID(filter.ActorID) != nil ||
+		filter.Limit < 1 || filter.Limit > MaximumPageSize ||
+		(filter.AfterID != "" && value.ValidateID(filter.AfterID) != nil) {
+		return errors.New("runtime incident filter is invalid")
+	}
+	return nil
 }
 
 func (filter AuditFilter) Validate() error {
@@ -122,7 +143,8 @@ func (filter ScheduleOccurrenceFilter) Validate() error {
 
 // Validate проверяет ограниченную фильтрацию.
 func (filter ResourceFilter) Validate() error {
-	if !filter.Kind.Valid() || filter.Limit < 1 || filter.Limit > MaximumPageSize {
+	if value.ValidateID(filter.ActorID) != nil ||
+		!filter.Kind.Valid() || filter.Limit < 1 || filter.Limit > MaximumPageSize {
 		return errors.New("resource filter is invalid")
 	}
 	if len(filter.States) > 8 {

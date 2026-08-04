@@ -195,6 +195,27 @@ var sqlRuntimeExecutionNextExpired string
 //go:embed sql/runtime_incident__insert.sql
 var sqlRuntimeIncidentInsert string
 
+//go:embed sql/runtime_incident__list.sql
+var sqlRuntimeIncidentList string
+
+//go:embed sql/owner_session__admit.sql
+var sqlOwnerSessionAdmit string
+
+//go:embed sql/owner_session__require.sql
+var sqlOwnerSessionRequire string
+
+//go:embed sql/owner_session__revoke.sql
+var sqlOwnerSessionRevoke string
+
+//go:embed sql/gateway_public_tls__prepare.sql
+var sqlGatewayPublicTLSPrepare string
+
+//go:embed sql/gateway_public_tls__confirm.sql
+var sqlGatewayPublicTLSConfirm string
+
+//go:embed sql/gateway_public_tls__check.sql
+var sqlGatewayPublicTLSCheck string
+
 //go:embed sql/integration_continuation__get_for_update.sql
 var sqlIntegrationContinuationGetForUpdate string
 

@@ -4,7 +4,7 @@ title: AsyncAPI, доменные события и NATS
 type: contract-guide
 status: approved
 owner: architect
-version: 1.0.0
+version: 1.1.0
 updated: 2026-07-28
 ---
 
@@ -157,3 +157,27 @@ Duplicate/stale не повторяют effect. Sequence gap и conflicting payl
 - использование aggregate version как sequence другого ordering key.
 
 Подробные runtime-инварианты задают `GO-DOC-004` и `GO-DOC-005`.
+
+WebSocket snapshot contract `control-api-gateway` находится в
+[`control-api-gateway/v1/asyncapi.yaml`](control-api-gateway/v1/asyncapi.yaml).
+Он использует `wss`, а не broker: consumer заменяет channel snapshot, а
+gateway каждый раз читает авторитетное состояние через защищённый
+`control-plane` RPC. Модели генерируются командой
+`make gen-control-api-gateway-asyncapi`.
+
+Для этого contract каждый используемый envelope, payload, closed enum,
+projection alias и list wrapper обязан быть named component со стабильными
+`title` и `$id`. Имена generated Go models выводятся только из source
+component, а не из порядка обхода schema. Target удаляет принадлежащий gateway
+generated directory и напрямую запускает AsyncAPI CLI; после generation
+fail-only check запрещает `anonymous_schema_*.go`, `AnonymousSchema` symbols и
+generated JSON codecs. Скрипты, которые выбирают numeric anonymous type и
+переписывают generated output, а также ручные правки generated files
+запрещены.
+
+Generated models служат воспроизводимым structural contract. Строгая JSON
+граница расположена вне generated directory: входные closed enums и все
+external projection enums проверяются до использования или отправки;
+unknown/empty/null и out-of-range значения закрыто отклоняются. Канонический
+тип projection задаёт OpenAPI, поэтому WebSocket не копирует доменную модель и
+не сериализует внутренние Proto oneof/enum names.

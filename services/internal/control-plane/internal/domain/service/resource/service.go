@@ -43,7 +43,8 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 		State                                                     string
 	}
 	issue := func(issuer, audience string, privateKey ed25519.PrivateKey) (string, error) {
-		payload, marshalErr := json.Marshal(ticketPayload{issuer, audience,
+		payload, marshalErr := json.Marshal(ticketPayload{
+			issuer, audience,
 			hashString(execution.ID + "\x00" + fmt.Sprint(execution.Version) + "\x00" + fmt.Sprint(execution.Fence) + "\x00" + audience),
 			issuedAt, issuedAt.Add(5 * time.Minute),
 			execution.ID, execution.OrganizationID, execution.ProjectID,
@@ -53,7 +54,8 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 			execution.GrantGeneration, execution.ImmutableInputSHA256,
 			execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
 			execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
-			execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
+			execution.ResourceClass, execution.ClusterAccessProfile, execution.State,
+		})
 		if marshalErr != nil {
 			return "", marshalErr
 		}
@@ -79,71 +81,79 @@ const (
 	auditKindScheduleOccurrence = "SCHEDULE_OCCURRENCE"
 	auditKindTurnLease          = "TURN_LEASE"
 
-	permissionCreate                 = "controlplane.resource.create"
-	permissionUpdate                 = "controlplane.resource.update"
-	permissionTransition             = "controlplane.resource.transition"
-	permissionDelete                 = "controlplane.resource.delete"
-	permissionAccessManage           = "controlplane.access.manage"
-	permissionRead                   = "controlplane.resource.read"
-	permissionList                   = "controlplane.resource.list"
-	permissionEnqueueTurn            = "controlplane.turn.enqueue"
-	permissionClaimTurn              = "controlplane.turn.claim"
-	permissionRenewTurn              = "controlplane.turn.renew"
-	permissionCompleteTurn           = "controlplane.turn.complete"
-	permissionRetryTurn              = "controlplane.turn.retry"
-	permissionCancelTurn             = "controlplane.turn.cancel"
-	permissionClaimSchedule          = "controlplane.schedule.claim"
-	permissionManageSchedule         = "controlplane.schedule.manage"
-	permissionExecuteSchedule        = "controlplane.schedule.execute"
-	permissionStartProcess           = "controlplane.process.start"
-	permissionCancelProcess          = "controlplane.process.cancel"
-	permissionCompleteProcess        = "controlplane.process.complete"
-	permissionRequestGate            = "controlplane.owner_gate.request"
-	permissionResolveGate            = "controlplane.owner_gate.resolve"
-	permissionRegisterArtifact       = "controlplane.artifact.register"
-	permissionScanArtifact           = "controlplane.artifact.scan"
-	permissionManageSession          = "controlplane.session.manage"
-	permissionWriteMemory            = "controlplane.memory.write"
-	permissionWriteProjectMemory     = "controlplane.memory.project.write"
-	permissionManageWorkClaim        = "controlplane.work_claim.manage"
-	permissionDeliverGate            = "controlplane.owner_gate.deliver"
-	permissionExpireGate             = "controlplane.owner_gate.expire"
-	permissionReadRuntimeRevision    = "controlplane.runtime_revision.read"
-	permissionIndexMemory            = "controlplane.memory.index"
-	permissionRepairOutbox           = "controlplane.outbox.repair"
-	permissionReadOutbox             = "controlplane.outbox.read"
-	permissionApplyGitConfiguration  = "controlplane.configuration.git.apply"
-	permissionDetachConfiguration    = "controlplane.configuration.detach"
-	permissionRuntimeClaim           = "controlplane.runtime_execution.claim"
-	permissionRuntimeAgentBind       = "controlplane.runtime_execution.agent.bind"
-	permissionRuntimeRead            = "controlplane.runtime_execution.read"
-	permissionRuntimeAdmit           = "controlplane.runtime_execution.admit"
-	permissionRuntimeHeartbeat       = "controlplane.runtime_execution.heartbeat"
-	permissionRuntimeIncident        = "controlplane.runtime_execution.incident"
-	permissionRuntimeComplete        = "controlplane.runtime_execution.complete"
-	permissionRuntimeCancel          = "controlplane.runtime_execution.cancel"
-	permissionRuntimeRetry           = "controlplane.runtime_execution.retry"
-	permissionRuntimeReschedule      = "controlplane.runtime_execution.reschedule"
-	permissionRuntimeExpire          = "controlplane.runtime_execution.expire"
-	permissionRuntimeArchive         = "controlplane.runtime_execution.archive"
-	permissionRuntimeRestore         = "controlplane.runtime_execution.restore.verify"
-	permissionRuntimeRestoreBind     = "controlplane.runtime_execution.restore.bind"
-	permissionRuntimeRehydrate       = "controlplane.runtime_execution.rehydrate.complete"
-	permissionRuntimeCleanup         = "controlplane.runtime_execution.cleanup.authorize"
-	permissionRuntimeCleanupConsume  = "controlplane.runtime_execution.cleanup.consume"
-	permissionRuntimeCleanupExpire   = "controlplane.runtime_execution.cleanup.expire"
-	permissionRuntimeRetentionManage = "controlplane.runtime_retention.manage"
-	permissionRuntimeRetentionRead   = "controlplane.runtime_retention.read"
-	permissionIntegrationResolve     = "controlplane.integration_session.read"
-	permissionIntegrationSuspend     = "controlplane.integration_continuation.suspend"
-	permissionIntegrationDecide      = "controlplane.integration_continuation.decide"
-	permissionIntegrationExecute     = "controlplane.integration_continuation.execute"
-	permissionIntegrationRead        = "controlplane.integration_continuation.read"
-	permissionIntegrationAcknowledge = "controlplane.integration_continuation.acknowledge"
-	agentRunnerWorkload              = "agent-runner"
-	agentRunnerSPIFFEID              = "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
-	controlAPIGatewayWorkload        = "control-api-gateway"
-	controlAPIGatewaySPIFFEID        = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
+	permissionCreate                  = "controlplane.resource.create"
+	permissionUpdate                  = "controlplane.resource.update"
+	permissionTransition              = "controlplane.resource.transition"
+	permissionDelete                  = "controlplane.resource.delete"
+	permissionAccessManage            = "controlplane.access.manage"
+	permissionAccessDetach            = "controlplane.access.detach"
+	permissionAccessCopy              = "controlplane.access.copy"
+	permissionRead                    = "controlplane.resource.read"
+	permissionList                    = "controlplane.resource.list"
+	permissionEnqueueTurn             = "controlplane.turn.enqueue"
+	permissionClaimTurn               = "controlplane.turn.claim"
+	permissionRenewTurn               = "controlplane.turn.renew"
+	permissionCompleteTurn            = "controlplane.turn.complete"
+	permissionRetryTurn               = "controlplane.turn.retry"
+	permissionCancelTurn              = "controlplane.turn.cancel"
+	permissionClaimSchedule           = "controlplane.schedule.claim"
+	permissionManageSchedule          = "controlplane.schedule.manage"
+	permissionExecuteSchedule         = "controlplane.schedule.execute"
+	permissionStartProcess            = "controlplane.process.start"
+	permissionCancelProcess           = "controlplane.process.cancel"
+	permissionCompleteProcess         = "controlplane.process.complete"
+	permissionRequestGate             = "controlplane.owner_gate.request"
+	permissionResolveGate             = "controlplane.owner_gate.resolve"
+	permissionRegisterArtifact        = "controlplane.artifact.register"
+	permissionScanArtifact            = "controlplane.artifact.scan"
+	permissionManageSession           = "controlplane.session.manage"
+	permissionWriteMemory             = "controlplane.memory.write"
+	permissionWriteProjectMemory      = "controlplane.memory.project.write"
+	permissionManageWorkClaim         = "controlplane.work_claim.manage"
+	permissionDeliverGate             = "controlplane.owner_gate.deliver"
+	permissionExpireGate              = "controlplane.owner_gate.expire"
+	permissionReadRuntimeRevision     = "controlplane.runtime_revision.read"
+	permissionIndexMemory             = "controlplane.memory.index"
+	permissionRepairOutbox            = "controlplane.outbox.repair"
+	permissionReadOutbox              = "controlplane.outbox.read"
+	permissionApplyGitConfiguration   = "controlplane.configuration.git.apply"
+	permissionDetachConfiguration     = "controlplane.configuration.detach"
+	permissionRuntimeClaim            = "controlplane.runtime_execution.claim"
+	permissionRuntimeAgentBind        = "controlplane.runtime_execution.agent.bind"
+	permissionRuntimeRead             = "controlplane.runtime_execution.read"
+	permissionRuntimeAdmit            = "controlplane.runtime_execution.admit"
+	permissionRuntimeHeartbeat        = "controlplane.runtime_execution.heartbeat"
+	permissionRuntimeIncident         = "controlplane.runtime_execution.incident"
+	permissionRuntimeIncidentRead     = "controlplane.runtime_execution.incident.read"
+	permissionOwnerSessionAdmit       = "controlplane.owner_session.admit"
+	permissionOwnerSessionRevoke      = "controlplane.owner_session.revoke"
+	permissionGatewayPublicTLSPrepare = "controlplane.gateway_public_tls.prepare"
+	permissionGatewayPublicTLSConfirm = "controlplane.gateway_public_tls.confirm"
+	permissionGatewayPublicTLSCheck   = "controlplane.gateway_public_tls.check"
+	permissionRuntimeComplete         = "controlplane.runtime_execution.complete"
+	permissionRuntimeCancel           = "controlplane.runtime_execution.cancel"
+	permissionRuntimeRetry            = "controlplane.runtime_execution.retry"
+	permissionRuntimeReschedule       = "controlplane.runtime_execution.reschedule"
+	permissionRuntimeExpire           = "controlplane.runtime_execution.expire"
+	permissionRuntimeArchive          = "controlplane.runtime_execution.archive"
+	permissionRuntimeRestore          = "controlplane.runtime_execution.restore.verify"
+	permissionRuntimeRestoreBind      = "controlplane.runtime_execution.restore.bind"
+	permissionRuntimeRehydrate        = "controlplane.runtime_execution.rehydrate.complete"
+	permissionRuntimeCleanup          = "controlplane.runtime_execution.cleanup.authorize"
+	permissionRuntimeCleanupConsume   = "controlplane.runtime_execution.cleanup.consume"
+	permissionRuntimeCleanupExpire    = "controlplane.runtime_execution.cleanup.expire"
+	permissionRuntimeRetentionManage  = "controlplane.runtime_retention.manage"
+	permissionRuntimeRetentionRead    = "controlplane.runtime_retention.read"
+	permissionIntegrationResolve      = "controlplane.integration_session.read"
+	permissionIntegrationSuspend      = "controlplane.integration_continuation.suspend"
+	permissionIntegrationDecide       = "controlplane.integration_continuation.decide"
+	permissionIntegrationExecute      = "controlplane.integration_continuation.execute"
+	permissionIntegrationRead         = "controlplane.integration_continuation.read"
+	permissionIntegrationAcknowledge  = "controlplane.integration_continuation.acknowledge"
+	agentRunnerWorkload               = "agent-runner"
+	agentRunnerSPIFFEID               = "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
+	controlAPIGatewayWorkload         = "control-api-gateway"
+	controlAPIGatewaySPIFFEID         = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
 )
 
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
@@ -764,6 +774,7 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 	}
 	input.Filter.OrganizationID = input.Principal.OrganizationID
 	input.Filter.ProjectID = input.Principal.ProjectID
+	input.Filter.ActorID = input.Principal.ActorID
 	if err := input.Filter.Validate(); err != nil {
 		return nil, errs.ErrInvalidInput
 	}
@@ -803,11 +814,7 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 		}
 		return resources, nil
 	}
-	resources, err := service.repository.List(ctx, input.Filter)
-	if err != nil {
-		return nil, err
-	}
-	return filterOwnerBoundResources(resources, input.Principal.ActorID), nil
+	return service.repository.List(ctx, input.Filter)
 }
 
 type resourceMutation func(domainrepo.Transaction) (entity.Resource, error)
@@ -1274,20 +1281,6 @@ func ownerBoundLifecycleKind(kind enum.Kind) bool {
 	}
 }
 
-func filterOwnerBoundResources(
-	resources []entity.Resource,
-	actorID string,
-) []entity.Resource {
-	filtered := resources[:0]
-	for _, resource := range resources {
-		if !ownerBoundLifecycleKind(resource.Kind) ||
-			resource.OwnerActorID == actorID {
-			filtered = append(filtered, resource)
-		}
-	}
-	return filtered
-}
-
 func kindAdminPermission(kind enum.Kind) string {
 	switch kind {
 	case enum.KindTeam:
@@ -1705,7 +1698,21 @@ func configurationUpdateSpec(
 	switch currentOwnership.ManagedBy {
 	case "UI":
 		if nextOwnership.ManagedBy == "UI" {
-			return next, nil
+			if currentOwnership.SourceRef == "" {
+				if nextOwnership.SourceRef != "" || nextOwnership.SourceRevision != 0 {
+					return nil, errs.ErrStateConflict
+				}
+				return next, nil
+			}
+			if nextOwnership.SourceRef != "" &&
+				(nextOwnership.SourceRef != currentOwnership.SourceRef || nextOwnership.SourceRevision != currentOwnership.SourceRevision) {
+				return nil, errs.ErrStateConflict
+			}
+			preserved, err := entity.WithConfigurationOwnership(next, currentOwnership)
+			if err != nil {
+				return nil, errs.ErrStateConflict
+			}
+			return preserved, nil
 		}
 		if nextOwnership.ManagedBy != "GIT" {
 			return nil, errs.ErrStateConflict

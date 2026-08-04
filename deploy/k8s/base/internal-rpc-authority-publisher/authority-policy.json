@@ -4,6 +4,8 @@
     "authority_proof_producers": [
       {
         "allowed_operation_ids": [
+          "control.owner-session.admit",
+          "control.owner-session.revoke",
           "control.project.create",
           "control.project.list",
           "control.resource.create",
@@ -11,38 +13,18 @@
           "control.resource.transition",
           "control.resource.delete",
           "control.access.manage",
+          "control.access.detach",
+          "control.access.copy",
           "control.resource.get",
           "control.resource.list",
           "control.resource.search",
           "control.audit.list",
-          "control.tombstone.list",
+          "control.runtime-incident.list",
           "control.diagnostics.get",
-          "control.readiness.check",
-          "control.turn.enqueue",
-          "control.turn.retry",
-          "control.turn.cancel",
-          "control.schedule.manage",
-          "control.schedule.cancel-occurrence",
-          "control.schedule.list-occurrences",
-          "control.process.start",
-          "control.process.cancel",
-          "control.owner-gate.request",
-          "control.owner-gate.resolve",
-          "control.artifact.register",
-          "control.session.manage",
-          "control.memory.manage",
-          "control.memory.search",
-          "control.work-claim.manage",
-          "control.process.complete",
-          "control.outbox.read",
-          "control.outbox.repair",
-          "control.runtime-execution.cancel",
-          "control.runtime-execution.retry",
-          "control.runtime-retention.set",
-          "control.runtime-retention.retire",
-          "control.runtime-retention.get",
-          "control.runtime-retention.hold",
-          "control.runtime-retention.release"
+          "control.gateway-public-tls.prepare",
+          "control.gateway-public-tls.confirm",
+          "control.gateway-public-tls.check",
+          "control.readiness.check"
         ],
         "application_credential": "OIDC_BEARER",
         "application_credential_audience": "mattercodex-control-api",
@@ -719,6 +701,64 @@
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/AdmitOwnerSession",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.owner-session.admit",
+        "permission": "controlplane.owner_session.admit",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/RevokeOwnerSession",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.owner-session.revoke",
+        "permission": "controlplane.owner_session.revoke",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/CreateProject",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
@@ -737,66 +777,6 @@
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/SetResourceRetentionPolicy",
-        "operation_id": "control.runtime-retention.set",
-        "permission": "controlplane.runtime_retention.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/RetireResourceRetentionPolicy",
-        "operation_id": "control.runtime-retention.retire",
-        "permission": "controlplane.runtime_retention.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/GetResourceRetentionPolicy",
-        "operation_id": "control.runtime-retention.get",
-        "permission": "controlplane.runtime_retention.read",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/HoldRuntimeRetention",
-        "operation_id": "control.runtime-retention.hold",
-        "permission": "controlplane.runtime_retention.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ReleaseRuntimeRetention",
-        "operation_id": "control.runtime-retention.release",
-        "permission": "controlplane.runtime_retention.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_workload_id": "control-plane"
       },
       {
@@ -982,6 +962,64 @@
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/DetachAccessResource",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.access.detach",
+        "permission": "controlplane.access.detach",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/CopyAccessResource",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "control.access.copy",
+        "permission": "controlplane.access.copy",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
         "full_method": "/controlplane.v1.ControlPlaneService/GetResource",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
@@ -1098,7 +1136,7 @@
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ListTombstones",
+        "full_method": "/controlplane.v1.ControlPlaneService/ListRuntimeIncidents",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
           "primary_gid": 10001,
@@ -1110,8 +1148,8 @@
           "shared_fs_gid": 29000,
           "uid": 10001
         },
-        "operation_id": "control.tombstone.list",
-        "permission": "controlplane.tombstone.read",
+        "operation_id": "control.runtime-incident.list",
+        "permission": "controlplane.runtime_execution.incident.read",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -1156,7 +1194,7 @@
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/EnqueueTurn",
+        "full_method": "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
           "primary_gid": 10001,
@@ -1168,8 +1206,8 @@
           "shared_fs_gid": 29000,
           "uid": 10001
         },
-        "operation_id": "control.turn.enqueue",
-        "permission": "controlplane.turn.enqueue",
+        "operation_id": "control.gateway-public-tls.prepare",
+        "permission": "controlplane.gateway_public_tls.prepare",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -1185,7 +1223,7 @@
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/RetryTurn",
+        "full_method": "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
           "primary_gid": 10001,
@@ -1197,8 +1235,8 @@
           "shared_fs_gid": 29000,
           "uid": 10001
         },
-        "operation_id": "control.turn.retry",
-        "permission": "controlplane.turn.retry",
+        "operation_id": "control.gateway-public-tls.confirm",
+        "permission": "controlplane.gateway_public_tls.confirm",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -1214,7 +1252,7 @@
         ],
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
         "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/CancelTurn",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS",
         "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "local_caller": {
           "primary_gid": 10001,
@@ -1226,240 +1264,8 @@
           "shared_fs_gid": 29000,
           "uid": 10001
         },
-        "operation_id": "control.turn.cancel",
-        "permission": "controlplane.turn.cancel",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ManageSchedule",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.schedule.manage",
-        "permission": "controlplane.schedule.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/CancelScheduleOccurrence",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.schedule.cancel-occurrence",
-        "permission": "controlplane.schedule.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.schedule.list-occurrences",
-        "permission": "controlplane.schedule.read",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/StartProcess",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.process.start",
-        "permission": "controlplane.process.start",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/CancelProcess",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.process.cancel",
-        "permission": "controlplane.process.cancel",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/RequestOwnerGate",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.owner-gate.request",
-        "permission": "controlplane.owner_gate.request",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ResolveOwnerGate",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.owner-gate.resolve",
-        "permission": "controlplane.owner_gate.resolve",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/RegisterArtifact",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.artifact.register",
-        "permission": "controlplane.artifact.register",
+        "operation_id": "control.gateway-public-tls.check",
+        "permission": "controlplane.gateway_public_tls.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -1729,54 +1535,6 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ManageSession",
-        "operation_id": "control.session.manage",
-        "permission": "controlplane.session.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ManageMemoryRecord",
-        "operation_id": "control.memory.manage",
-        "permission": "controlplane.memory.write",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/SearchMemoryRecords",
-        "operation_id": "control.memory.search",
-        "permission": "controlplane.resource.read",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ManageWorkClaim",
-        "operation_id": "control.work-claim.manage",
-        "permission": "controlplane.work_claim.manage",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
         "authority_proof_producer_id": "control-plane.owner-gate-delivery",
         "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "caller_workload_id": "interaction-gateway",
@@ -1998,93 +1756,6 @@
         "permission": "controlplane.readiness.check",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/CompleteProcess",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.process.complete",
-        "permission": "controlplane.process.complete",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/ListOutboxFailures",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.outbox.read",
-        "permission": "controlplane.outbox.read",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/RepairOutboxEvent",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.outbox.repair",
-        "permission": "controlplane.outbox.repair",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
         "target_workload_id": "control-plane"
       },
       {
@@ -2313,64 +1984,6 @@
         },
         "operation_id": "control.runtime-execution.cleanup.consume",
         "permission": "controlplane.runtime_execution.cleanup.consume",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.runtime-execution.cancel",
-        "permission": "controlplane.runtime_execution.cancel",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.oidc",
-        "authority_sources": [
-          "OIDC_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-        "caller_workload_id": "control-api-gateway",
-        "full_method": "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.runtime-execution.retry",
-        "permission": "controlplane.runtime_execution.retry",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -2997,6 +2610,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 11,
+  "policy_revision": 13,
   "v": 1
 }

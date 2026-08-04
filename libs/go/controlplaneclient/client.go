@@ -35,16 +35,17 @@ func WithApplicationGrant(ctx context.Context, grant string) (context.Context, e
 }
 
 type Config struct {
-	Target                string
-	TLSServerName         string
-	CAFile                string
-	ClientCertificateFile string
-	ClientPrivateKeyFile  string
-	ApplicationGrantFile  string
-	ExpectedIssuerUID     uint32
-	ExpectedIssuerGID     uint32
-	DialTimeout           time.Duration
-	Operations            map[string]string
+	Target                 string
+	TLSServerName          string
+	CAFile                 string
+	ClientCertificateFile  string
+	ClientPrivateKeyFile   string
+	ApplicationGrantFile   string
+	ExpectedIssuerUID      uint32
+	ExpectedIssuerGID      uint32
+	DialTimeout            time.Duration
+	Operations             map[string]string
+	UnaryClientInterceptor grpc.UnaryClientInterceptor
 }
 
 type Client struct {
@@ -89,14 +90,17 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	raw, err := grpc.NewClient(
-		config.Target,
+	rawOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(transport),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(1<<20),
 			grpc.MaxCallSendMsgSize(1<<20),
 		),
-	)
+	}
+	if config.UnaryClientInterceptor != nil {
+		rawOptions = append(rawOptions, grpc.WithUnaryInterceptor(config.UnaryClientInterceptor))
+	}
+	raw, err := grpc.NewClient(config.Target, rawOptions...)
 	if err != nil {
 		return nil, errors.New("create control-plane resolver connection")
 	}
@@ -117,14 +121,18 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 		operations: operations,
 		grantFile:  config.ApplicationGrantFile,
 	}
+	interceptors := []grpc.UnaryClientInterceptor{authorityclient.IssuerUnaryClientInterceptor(
+		issuer.Issuer(),
+		operations,
+		client,
+	)}
+	if config.UnaryClientInterceptor != nil {
+		interceptors = append(interceptors, config.UnaryClientInterceptor)
+	}
 	protected, err := grpc.NewClient(
 		config.Target,
 		grpc.WithTransportCredentials(transport),
-		grpc.WithUnaryInterceptor(authorityclient.IssuerUnaryClientInterceptor(
-			issuer.Issuer(),
-			operations,
-			client,
-		)),
+		grpc.WithChainUnaryInterceptor(interceptors...),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(1<<20),
 			grpc.MaxCallSendMsgSize(1<<20),

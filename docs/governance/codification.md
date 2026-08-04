@@ -127,5 +127,7 @@ updated: 2026-07-28
 | `SVC-DOC-001`      | `services/README.md`                                        |
 | `SVC-MC-003`       | `services/internal/internal-rpc-authority/README.md`        |
 | `RUN-MC-006`       | `docs/runbooks/internal-rpc-authority.md`                   |
+| `SVC-MC-013`       | `services/external/control-api-gateway/README.md`           |
+| `RUN-MC-013`       | `docs/runbooks/control-api-gateway.md`                      |
 
 При добавлении управляемого документа реестр обновляется в том же PR.

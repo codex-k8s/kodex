@@ -26,15 +26,23 @@ const (
 	ControlPlaneService_TransitionResource_FullMethodName                 = "/controlplane.v1.ControlPlaneService/TransitionResource"
 	ControlPlaneService_DeleteResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/DeleteResource"
 	ControlPlaneService_ManageAccessResource_FullMethodName               = "/controlplane.v1.ControlPlaneService/ManageAccessResource"
+	ControlPlaneService_DetachAccessResource_FullMethodName               = "/controlplane.v1.ControlPlaneService/DetachAccessResource"
+	ControlPlaneService_CopyAccessResource_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CopyAccessResource"
 	ControlPlaneService_GetResource_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetResource"
 	ControlPlaneService_ListResources_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ListResources"
 	ControlPlaneService_SearchResources_FullMethodName                    = "/controlplane.v1.ControlPlaneService/SearchResources"
 	ControlPlaneService_SearchMemoryRecords_FullMethodName                = "/controlplane.v1.ControlPlaneService/SearchMemoryRecords"
 	ControlPlaneService_ListAuditEvents_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
+	ControlPlaneService_ListRuntimeIncidents_FullMethodName               = "/controlplane.v1.ControlPlaneService/ListRuntimeIncidents"
 	ControlPlaneService_ListTombstones_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ListTombstones"
 	ControlPlaneService_GetDiagnostics_FullMethodName                     = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
 	ControlPlaneService_ListOutboxFailures_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ListOutboxFailures"
 	ControlPlaneService_RepairOutboxEvent_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
+	ControlPlaneService_AdmitOwnerSession_FullMethodName                  = "/controlplane.v1.ControlPlaneService/AdmitOwnerSession"
+	ControlPlaneService_RevokeOwnerSession_FullMethodName                 = "/controlplane.v1.ControlPlaneService/RevokeOwnerSession"
+	ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName            = "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS"
+	ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName            = "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS"
+	ControlPlaneService_CheckGatewayPublicTLS_FullMethodName              = "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS"
 	ControlPlaneService_EnqueueTurn_FullMethodName                        = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
 	ControlPlaneService_ClaimTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ClaimTurn"
 	ControlPlaneService_RenewTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RenewTurn"
@@ -124,6 +132,12 @@ type ControlPlaneServiceClient interface {
 	DeleteResource(ctx context.Context, in *DeleteResourceRequest, opts ...grpc.CallOption) (*DeleteResourceResponse, error)
 	// ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
 	ManageAccessResource(ctx context.Context, in *ManageAccessResourceRequest, opts ...grpc.CallOption) (*ManageAccessResourceResponse, error)
+	// DetachAccessResource атомарно переводит Git-owned TEAM/ROLE/PROMPT_PROFILE
+	// в UI ownership без принятия spec или source от вызывающего.
+	DetachAccessResource(ctx context.Context, in *DetachAccessResourceRequest, opts ...grpc.CallOption) (*DetachAccessResourceResponse, error)
+	// CopyAccessResource создаёт UI-owned копию Git-owned TEAM/ROLE/PROMPT_PROFILE
+	// из авторитетной закреплённой версии источника.
+	CopyAccessResource(ctx context.Context, in *CopyAccessResourceRequest, opts ...grpc.CallOption) (*CopyAccessResourceResponse, error)
 	// GetResource выполняет версионированную операцию ControlPlaneService.
 	GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error)
 	// ListResources выполняет версионированную операцию ControlPlaneService.
@@ -134,6 +148,8 @@ type ControlPlaneServiceClient interface {
 	SearchMemoryRecords(ctx context.Context, in *SearchMemoryRecordsRequest, opts ...grpc.CallOption) (*SearchMemoryRecordsResponse, error)
 	// ListAuditEvents выполняет версионированную операцию ControlPlaneService.
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
+	// ListRuntimeIncidents возвращает typed watchdog evidence в owner boundary.
+	ListRuntimeIncidents(ctx context.Context, in *ListRuntimeIncidentsRequest, opts ...grpc.CallOption) (*ListRuntimeIncidentsResponse, error)
 	// ListTombstones выполняет версионированную операцию ControlPlaneService.
 	ListTombstones(ctx context.Context, in *ListTombstonesRequest, opts ...grpc.CallOption) (*ListTombstonesResponse, error)
 	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
@@ -142,6 +158,19 @@ type ControlPlaneServiceClient interface {
 	ListOutboxFailures(ctx context.Context, in *ListOutboxFailuresRequest, opts ...grpc.CallOption) (*ListOutboxFailuresResponse, error)
 	// RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
 	RepairOutboxEvent(ctx context.Context, in *RepairOutboxEventRequest, opts ...grpc.CallOption) (*RepairOutboxEventResponse, error)
+	// AdmitOwnerSession фиксирует current OIDC session revision и credential digest
+	// после специализированного proof, не принимая actor/tenant/session из payload.
+	AdmitOwnerSession(ctx context.Context, in *AdmitOwnerSessionRequest, opts ...grpc.CallOption) (*AdmitOwnerSessionResponse, error)
+	// RevokeOwnerSession закрывает только exact current browser session.
+	RevokeOwnerSession(ctx context.Context, in *RevokeOwnerSessionRequest, opts ...grpc.CallOption) (*RevokeOwnerSessionResponse, error)
+	// PrepareGatewayPublicTLS сохраняет candidate как PENDING, не продвигая
+	// обслуживаемое APPLIED generation.
+	PrepareGatewayPublicTLS(ctx context.Context, in *PrepareGatewayPublicTLSRequest, opts ...grpc.CallOption) (*PrepareGatewayPublicTLSResponse, error)
+	// ConfirmGatewayPublicTLS продвигает только exact PENDING после local served
+	// peer readback и оставляет predecessor в bounded PREVIOUS overlap.
+	ConfirmGatewayPublicTLS(ctx context.Context, in *ConfirmGatewayPublicTLSRequest, opts ...grpc.CallOption) (*ConfirmGatewayPublicTLSResponse, error)
+	// CheckGatewayPublicTLS выполняет read-only exact served-state readback.
+	CheckGatewayPublicTLS(ctx context.Context, in *CheckGatewayPublicTLSRequest, opts ...grpc.CallOption) (*CheckGatewayPublicTLSResponse, error)
 	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(ctx context.Context, in *EnqueueTurnRequest, opts ...grpc.CallOption) (*EnqueueTurnResponse, error)
 	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
@@ -370,6 +399,26 @@ func (c *controlPlaneServiceClient) ManageAccessResource(ctx context.Context, in
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) DetachAccessResource(ctx context.Context, in *DetachAccessResourceRequest, opts ...grpc.CallOption) (*DetachAccessResourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachAccessResourceResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_DetachAccessResource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CopyAccessResource(ctx context.Context, in *CopyAccessResourceRequest, opts ...grpc.CallOption) (*CopyAccessResourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CopyAccessResourceResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CopyAccessResource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetResourceResponse)
@@ -420,6 +469,16 @@ func (c *controlPlaneServiceClient) ListAuditEvents(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ListRuntimeIncidents(ctx context.Context, in *ListRuntimeIncidentsRequest, opts ...grpc.CallOption) (*ListRuntimeIncidentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeIncidentsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListRuntimeIncidents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ListTombstones(ctx context.Context, in *ListTombstonesRequest, opts ...grpc.CallOption) (*ListTombstonesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListTombstonesResponse)
@@ -454,6 +513,56 @@ func (c *controlPlaneServiceClient) RepairOutboxEvent(ctx context.Context, in *R
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RepairOutboxEventResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_RepairOutboxEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AdmitOwnerSession(ctx context.Context, in *AdmitOwnerSessionRequest, opts ...grpc.CallOption) (*AdmitOwnerSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdmitOwnerSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AdmitOwnerSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RevokeOwnerSession(ctx context.Context, in *RevokeOwnerSessionRequest, opts ...grpc.CallOption) (*RevokeOwnerSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeOwnerSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RevokeOwnerSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) PrepareGatewayPublicTLS(ctx context.Context, in *PrepareGatewayPublicTLSRequest, opts ...grpc.CallOption) (*PrepareGatewayPublicTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareGatewayPublicTLSResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ConfirmGatewayPublicTLS(ctx context.Context, in *ConfirmGatewayPublicTLSRequest, opts ...grpc.CallOption) (*ConfirmGatewayPublicTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmGatewayPublicTLSResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CheckGatewayPublicTLS(ctx context.Context, in *CheckGatewayPublicTLSRequest, opts ...grpc.CallOption) (*CheckGatewayPublicTLSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckGatewayPublicTLSResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CheckGatewayPublicTLS_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1132,6 +1241,12 @@ type ControlPlaneServiceServer interface {
 	DeleteResource(context.Context, *DeleteResourceRequest) (*DeleteResourceResponse, error)
 	// ManageAccessResource — закрытая административная команда для TEAM/ROLE/PROMPT_PROFILE.
 	ManageAccessResource(context.Context, *ManageAccessResourceRequest) (*ManageAccessResourceResponse, error)
+	// DetachAccessResource атомарно переводит Git-owned TEAM/ROLE/PROMPT_PROFILE
+	// в UI ownership без принятия spec или source от вызывающего.
+	DetachAccessResource(context.Context, *DetachAccessResourceRequest) (*DetachAccessResourceResponse, error)
+	// CopyAccessResource создаёт UI-owned копию Git-owned TEAM/ROLE/PROMPT_PROFILE
+	// из авторитетной закреплённой версии источника.
+	CopyAccessResource(context.Context, *CopyAccessResourceRequest) (*CopyAccessResourceResponse, error)
 	// GetResource выполняет версионированную операцию ControlPlaneService.
 	GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error)
 	// ListResources выполняет версионированную операцию ControlPlaneService.
@@ -1142,6 +1257,8 @@ type ControlPlaneServiceServer interface {
 	SearchMemoryRecords(context.Context, *SearchMemoryRecordsRequest) (*SearchMemoryRecordsResponse, error)
 	// ListAuditEvents выполняет версионированную операцию ControlPlaneService.
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
+	// ListRuntimeIncidents возвращает typed watchdog evidence в owner boundary.
+	ListRuntimeIncidents(context.Context, *ListRuntimeIncidentsRequest) (*ListRuntimeIncidentsResponse, error)
 	// ListTombstones выполняет версионированную операцию ControlPlaneService.
 	ListTombstones(context.Context, *ListTombstonesRequest) (*ListTombstonesResponse, error)
 	// GetDiagnostics выполняет версионированную операцию ControlPlaneService.
@@ -1150,6 +1267,19 @@ type ControlPlaneServiceServer interface {
 	ListOutboxFailures(context.Context, *ListOutboxFailuresRequest) (*ListOutboxFailuresResponse, error)
 	// RepairOutboxEvent повторно открывает только exact заблокировавший predecessor.
 	RepairOutboxEvent(context.Context, *RepairOutboxEventRequest) (*RepairOutboxEventResponse, error)
+	// AdmitOwnerSession фиксирует current OIDC session revision и credential digest
+	// после специализированного proof, не принимая actor/tenant/session из payload.
+	AdmitOwnerSession(context.Context, *AdmitOwnerSessionRequest) (*AdmitOwnerSessionResponse, error)
+	// RevokeOwnerSession закрывает только exact current browser session.
+	RevokeOwnerSession(context.Context, *RevokeOwnerSessionRequest) (*RevokeOwnerSessionResponse, error)
+	// PrepareGatewayPublicTLS сохраняет candidate как PENDING, не продвигая
+	// обслуживаемое APPLIED generation.
+	PrepareGatewayPublicTLS(context.Context, *PrepareGatewayPublicTLSRequest) (*PrepareGatewayPublicTLSResponse, error)
+	// ConfirmGatewayPublicTLS продвигает только exact PENDING после local served
+	// peer readback и оставляет predecessor в bounded PREVIOUS overlap.
+	ConfirmGatewayPublicTLS(context.Context, *ConfirmGatewayPublicTLSRequest) (*ConfirmGatewayPublicTLSResponse, error)
+	// CheckGatewayPublicTLS выполняет read-only exact served-state readback.
+	CheckGatewayPublicTLS(context.Context, *CheckGatewayPublicTLSRequest) (*CheckGatewayPublicTLSResponse, error)
 	// EnqueueTurn атомарно резервирует следующий порядковый номер FIFO сессии.
 	EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error)
 	// ClaimTurn выдаёт одну попытку точной рабочей нагрузке и использует
@@ -1329,6 +1459,12 @@ func (UnimplementedControlPlaneServiceServer) DeleteResource(context.Context, *D
 func (UnimplementedControlPlaneServiceServer) ManageAccessResource(context.Context, *ManageAccessResourceRequest) (*ManageAccessResourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageAccessResource not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) DetachAccessResource(context.Context, *DetachAccessResourceRequest) (*DetachAccessResourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetachAccessResource not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CopyAccessResource(context.Context, *CopyAccessResourceRequest) (*CopyAccessResourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CopyAccessResource not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetResource not implemented")
 }
@@ -1344,6 +1480,9 @@ func (UnimplementedControlPlaneServiceServer) SearchMemoryRecords(context.Contex
 func (UnimplementedControlPlaneServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAuditEvents not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) ListRuntimeIncidents(context.Context, *ListRuntimeIncidentsRequest) (*ListRuntimeIncidentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeIncidents not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ListTombstones(context.Context, *ListTombstonesRequest) (*ListTombstonesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTombstones not implemented")
 }
@@ -1355,6 +1494,21 @@ func (UnimplementedControlPlaneServiceServer) ListOutboxFailures(context.Context
 }
 func (UnimplementedControlPlaneServiceServer) RepairOutboxEvent(context.Context, *RepairOutboxEventRequest) (*RepairOutboxEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RepairOutboxEvent not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AdmitOwnerSession(context.Context, *AdmitOwnerSessionRequest) (*AdmitOwnerSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdmitOwnerSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RevokeOwnerSession(context.Context, *RevokeOwnerSessionRequest) (*RevokeOwnerSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeOwnerSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) PrepareGatewayPublicTLS(context.Context, *PrepareGatewayPublicTLSRequest) (*PrepareGatewayPublicTLSResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareGatewayPublicTLS not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ConfirmGatewayPublicTLS(context.Context, *ConfirmGatewayPublicTLSRequest) (*ConfirmGatewayPublicTLSResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmGatewayPublicTLS not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CheckGatewayPublicTLS(context.Context, *CheckGatewayPublicTLSRequest) (*CheckGatewayPublicTLSResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckGatewayPublicTLS not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) EnqueueTurn(context.Context, *EnqueueTurnRequest) (*EnqueueTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnqueueTurn not implemented")
@@ -1698,6 +1852,42 @@ func _ControlPlaneService_ManageAccessResource_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_DetachAccessResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachAccessResourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).DetachAccessResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_DetachAccessResource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).DetachAccessResource(ctx, req.(*DetachAccessResourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CopyAccessResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopyAccessResourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CopyAccessResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CopyAccessResource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CopyAccessResource(ctx, req.(*CopyAccessResourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetResourceRequest)
 	if err := dec(in); err != nil {
@@ -1788,6 +1978,24 @@ func _ControlPlaneService_ListAuditEvents_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ListRuntimeIncidents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeIncidentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListRuntimeIncidents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListRuntimeIncidents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListRuntimeIncidents(ctx, req.(*ListRuntimeIncidentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ListTombstones_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListTombstonesRequest)
 	if err := dec(in); err != nil {
@@ -1856,6 +2064,96 @@ func _ControlPlaneService_RepairOutboxEvent_Handler(srv interface{}, ctx context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).RepairOutboxEvent(ctx, req.(*RepairOutboxEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AdmitOwnerSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdmitOwnerSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AdmitOwnerSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AdmitOwnerSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AdmitOwnerSession(ctx, req.(*AdmitOwnerSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RevokeOwnerSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeOwnerSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RevokeOwnerSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RevokeOwnerSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RevokeOwnerSession(ctx, req.(*RevokeOwnerSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_PrepareGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareGatewayPublicTLSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).PrepareGatewayPublicTLS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).PrepareGatewayPublicTLS(ctx, req.(*PrepareGatewayPublicTLSRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ConfirmGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmGatewayPublicTLSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ConfirmGatewayPublicTLS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ConfirmGatewayPublicTLS(ctx, req.(*ConfirmGatewayPublicTLSRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CheckGatewayPublicTLS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckGatewayPublicTLSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CheckGatewayPublicTLS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CheckGatewayPublicTLS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CheckGatewayPublicTLS(ctx, req.(*CheckGatewayPublicTLSRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3066,6 +3364,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ManageAccessResource_Handler,
 		},
 		{
+			MethodName: "DetachAccessResource",
+			Handler:    _ControlPlaneService_DetachAccessResource_Handler,
+		},
+		{
+			MethodName: "CopyAccessResource",
+			Handler:    _ControlPlaneService_CopyAccessResource_Handler,
+		},
+		{
 			MethodName: "GetResource",
 			Handler:    _ControlPlaneService_GetResource_Handler,
 		},
@@ -3086,6 +3392,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ListAuditEvents_Handler,
 		},
 		{
+			MethodName: "ListRuntimeIncidents",
+			Handler:    _ControlPlaneService_ListRuntimeIncidents_Handler,
+		},
+		{
 			MethodName: "ListTombstones",
 			Handler:    _ControlPlaneService_ListTombstones_Handler,
 		},
@@ -3100,6 +3410,26 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RepairOutboxEvent",
 			Handler:    _ControlPlaneService_RepairOutboxEvent_Handler,
+		},
+		{
+			MethodName: "AdmitOwnerSession",
+			Handler:    _ControlPlaneService_AdmitOwnerSession_Handler,
+		},
+		{
+			MethodName: "RevokeOwnerSession",
+			Handler:    _ControlPlaneService_RevokeOwnerSession_Handler,
+		},
+		{
+			MethodName: "PrepareGatewayPublicTLS",
+			Handler:    _ControlPlaneService_PrepareGatewayPublicTLS_Handler,
+		},
+		{
+			MethodName: "ConfirmGatewayPublicTLS",
+			Handler:    _ControlPlaneService_ConfirmGatewayPublicTLS_Handler,
+		},
+		{
+			MethodName: "CheckGatewayPublicTLS",
+			Handler:    _ControlPlaneService_CheckGatewayPublicTLS_Handler,
 		},
 		{
 			MethodName: "EnqueueTurn",

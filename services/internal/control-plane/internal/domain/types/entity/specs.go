@@ -34,7 +34,8 @@ type ConfigurationOwnership struct {
 func (ownership ConfigurationOwnership) Validate() error {
 	switch ownership.ManagedBy {
 	case "UI":
-		if ownership.SourceRef != "" || ownership.SourceRevision != 0 {
+		if (ownership.SourceRef == "") != (ownership.SourceRevision == 0) ||
+			(ownership.SourceRef != "" && (!validExternalRef(ownership.SourceRef) || ownership.SourceRevision == 0)) {
 			return errors.New("UI configuration ownership is invalid")
 		}
 	case "GIT":
@@ -106,6 +107,7 @@ func (ProjectSpec) Kind() enum.Kind { return enum.KindProject }
 func (spec ProjectSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec ProjectSpec) Validate() error {
 	if value.ValidateStableKey(spec.Slug) != nil ||
 		len(spec.Description) > 4096 ||
@@ -128,6 +130,7 @@ func (TeamSpec) Kind() enum.Kind { return enum.KindTeam }
 func (spec TeamSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec TeamSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		!validExternalRef(spec.ExternalTeamRef) ||
@@ -155,6 +158,7 @@ func (ChatSpec) Kind() enum.Kind { return enum.KindChat }
 func (spec ChatSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec ChatSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		(spec.RoomType != "USER" && spec.RoomType != "COORDINATION" &&
@@ -223,6 +227,7 @@ func (RoleSpec) Kind() enum.Kind { return enum.KindRole }
 func (spec RoleSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec RoleSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		value.ValidateID(spec.PromptProfileID) != nil ||
@@ -261,6 +266,7 @@ func (PromptProfileSpec) Kind() enum.Kind { return enum.KindPromptProfile }
 func (spec PromptProfileSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec PromptProfileSpec) Validate() error {
 	if spec.Revision == 0 || !validSHA256(spec.ContentSHA256) ||
 		!validExternalRef(spec.SourceRef) ||
@@ -293,6 +299,7 @@ func (CredentialBindingSpec) Kind() enum.Kind { return enum.KindCredentialBindin
 func (spec CredentialBindingSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec CredentialBindingSpec) Validate() error {
 	if value.ValidateStableKey(spec.Purpose) != nil ||
 		!validSecretRef(spec.SecretRef) ||
@@ -332,6 +339,7 @@ func (RepositoryWorkspaceSpec) Kind() enum.Kind { return enum.KindRepositoryWork
 func (spec RepositoryWorkspaceSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec RepositoryWorkspaceSpec) Validate() error {
 	if (spec.WorkspaceMode != "NONE" && spec.WorkspaceMode != "GIT") ||
 		spec.Ownership.Validate() != nil {
@@ -365,6 +373,7 @@ func (IntegrationSpec) Kind() enum.Kind { return enum.KindIntegration }
 func (spec IntegrationSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec IntegrationSpec) Validate() error {
 	if !validExternalRef(spec.DefinitionRef) || spec.DefinitionVersion == 0 ||
 		!validBoundedKeys(spec.Capabilities, 128) ||
@@ -841,6 +850,7 @@ func (ScheduleSpec) Kind() enum.Kind { return enum.KindSchedule }
 func (spec ScheduleSpec) ConfigurationOwnership() ConfigurationOwnership {
 	return spec.Ownership
 }
+
 func (spec ScheduleSpec) Validate() error {
 	if value.ValidateID(spec.TargetResourceID) != nil ||
 		spec.TargetKind != enum.KindRole ||

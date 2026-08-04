@@ -1,0 +1,107 @@
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: control-api-gateway-vault-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources:
+    - secret: {name: mattercodex-vault-ca-source, key: ca.crt}
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    secret: {key: ca.crt}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: control-api-gateway
+  annotations: {argocd.argoproj.io/sync-wave: "-8"}
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: control-api-gateway-vault-ca
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: control-api-gateway
+  annotations: {argocd.argoproj.io/sync-wave: "-7"}
+spec:
+  vaultConnectionRef: control-api-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: control-api-gateway
+    serviceAccount: control-api-gateway
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: control-api-gateway-public-tls-material
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/control-api-gateway/public-tls-material
+  refreshAfter: 1m
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-api-gateway}
+  destination:
+    create: true
+    name: control-api-gateway-public-tls-material
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        tls.crt: {text: '{{ get .Secrets "tls-crt" }}'}
+        tls.key: {text: '{{ get .Secrets "tls-key" }}'}
+        ca.crt: {text: '{{ get .Secrets "ca-crt" }}'}
+        material.json:
+          text: >-
+            {"generation":{{ get .Secrets "generation" }},"certificateSha256":"{{ get .Secrets "certificate-sha256" }}","predecessorGeneration":{{ get .Secrets "predecessor-generation" }},"predecessorCertificateSha256":"{{ get .Secrets "predecessor-certificate-sha256" }}"}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: control-api-gateway-session-keys
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/control-api-gateway/session
+  refreshAfter: 5m
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-api-gateway}
+  destination:
+    create: true
+    name: control-api-gateway-session-keys
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        current.hex: {text: '{{ get .Secrets "current-hex" }}'}
+        previous.hex: {text: '{{ get .Secrets "previous-hex" }}'}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: control-api-gateway-application-grant
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/control-plane/application-grants/control-api-gateway
+  refreshAfter: 5m
+  destination:
+    create: true
+    name: control-api-gateway-application-grant
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        readiness.jwt: {text: '{{ get .Secrets "readiness-jwt" }}'}

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - poddisruptionbudget.yaml
+  - networkpolicy.yaml
+  - vault-resources.yaml
+  - servicemonitor.yaml
+  - prometheusrule.yaml
+  - dashboard.yaml
+components:
+  - ../../components/internal-rpc-authority-control-api-gateway-issuer
+patches:
+  - path: protected-readiness-patch.yaml
+transformers:
+  - bundle-cluster-scope-transformer.yaml

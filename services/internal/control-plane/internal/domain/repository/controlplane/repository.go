@@ -393,6 +393,37 @@ type RuntimeIncident struct {
 	OccurredAt     time.Time
 }
 
+// OwnerSessionState — verifying-side durable current OIDC session fence.
+type OwnerSessionState struct {
+	OrganizationID         string
+	ActorID                string
+	SessionID              string
+	CredentialDigestSHA256 string
+	CurrentRevision        uint64
+	RevokedAt              time.Time
+	UpdatedAt              time.Time
+}
+
+// GatewayPublicTLSMaterial — публичные метаданные exact leaf без private key.
+type GatewayPublicTLSMaterial struct {
+	Generation        uint64
+	CertificateSHA256 string
+	NotBefore         time.Time
+	NotAfter          time.Time
+}
+
+// GatewayPublicTLSState — durable APPLIED/PENDING/PREVIOUS served protocol.
+type GatewayPublicTLSState struct {
+	OrganizationID   string
+	ProjectID        string
+	WorkloadID       string
+	Applied          GatewayPublicTLSMaterial
+	Pending          GatewayPublicTLSMaterial
+	Previous         GatewayPublicTLSMaterial
+	OverlapExpiresAt time.Time
+	UpdatedAt        time.Time
+}
+
 // IntegrationContinuation хранит typed approval, execution result и rejoin tuple.
 type IntegrationContinuation struct {
 	ID                                 string
@@ -559,6 +590,12 @@ type Transaction interface {
 		context.Context, string, string, string, uint32,
 	) (RuntimeExecution, error)
 	InsertRuntimeIncident(context.Context, RuntimeIncident) error
+	AdmitOwnerSession(context.Context, OwnerSessionState) (OwnerSessionState, error)
+	RequireOwnerSession(context.Context, OwnerSessionState, bool) error
+	RevokeOwnerSession(context.Context, OwnerSessionState) (OwnerSessionState, error)
+	PrepareGatewayPublicTLS(context.Context, GatewayPublicTLSState, GatewayPublicTLSMaterial, uint64, string, time.Time) (GatewayPublicTLSState, error)
+	ConfirmGatewayPublicTLS(context.Context, GatewayPublicTLSState, uint64, string, time.Time, time.Time) (GatewayPublicTLSState, error)
+	CheckGatewayPublicTLS(context.Context, GatewayPublicTLSState, uint64, string, time.Time) (GatewayPublicTLSState, error)
 	GetIntegrationContinuationForUpdate(context.Context, string) (IntegrationContinuation, error)
 	AdmitContinuationGrantVerifierState(context.Context, uint64, uint64, uint64, string, uint64) error
 	GetIntegrationContinuation(context.Context, string) (IntegrationContinuation, error)
@@ -633,6 +670,7 @@ type Repository interface {
 	Search(context.Context, query.ResourceSearch) ([]entity.Resource, error)
 	ListEligibleProjects(context.Context, string, string, string, int) ([]entity.Resource, error)
 	ListAudit(context.Context, query.AuditFilter) ([]Audit, error)
+	ListRuntimeIncidents(context.Context, query.RuntimeIncidentFilter) ([]RuntimeIncident, error)
 	ListTombstones(context.Context, query.TombstoneFilter) ([]Tombstone, error)
 	ListScheduleOccurrences(context.Context, query.ScheduleOccurrenceFilter) ([]ScheduleOccurrence, error)
 	Diagnostics(context.Context, Scope) (Diagnostics, error)
