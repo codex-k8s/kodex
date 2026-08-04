@@ -213,6 +213,15 @@ func (service *Service) Resolve(
 				return receiptErr
 			}
 			if input.Identity.BoundContinuationID != "" {
+				if err := tx.AdmitContinuationGrantVerifierState(ctx,
+					input.Identity.BoundSignerKeysetRevision,
+					input.Identity.BoundSignerHighWatermark,
+					input.Identity.BoundSignerServedGeneration,
+					input.Identity.BoundSignerKeysetSHA256,
+					input.Identity.BoundSignerGeneration,
+				); err != nil {
+					return errs.ErrPermissionDenied
+				}
 				continuation, err := tx.GetIntegrationContinuationForUpdate(ctx, input.Identity.BoundContinuationID)
 				if err != nil || continuation.OrganizationID != input.Identity.OrganizationID ||
 					continuation.ProjectID != input.Identity.ProjectID ||
@@ -411,7 +420,10 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 		(value.ValidateID(identity.BoundContinuationID) != nil || identity.BoundContinuationVersion == 0 ||
 			identity.BoundContinuationFence == 0 || value.ValidateID(identity.BoundInvocationID) != nil ||
 			value.ValidateID(identity.BoundRuntimeRevisionID) != nil || identity.BoundRuntimeRevisionVersion == 0 ||
-			!validDigest(identity.BoundRuntimeRevisionSHA256) || len(identity.AllowedOperationIDs) == 0) {
+			!validDigest(identity.BoundRuntimeRevisionSHA256) || len(identity.AllowedOperationIDs) == 0 ||
+			identity.BoundSignerKeysetRevision == 0 || identity.BoundSignerHighWatermark == 0 ||
+			identity.BoundSignerServedGeneration != identity.BoundSignerHighWatermark ||
+			!validDigest(identity.BoundSignerKeysetSHA256) || identity.BoundSignerGeneration == 0) {
 		return errors.New("integration continuation grant binding is invalid")
 	}
 	return nil

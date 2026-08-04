@@ -34,7 +34,7 @@ SELECT invocation.payload, connection.payload, grant.payload, definition.payload
        OR (invocation.status = 'EXECUTING' AND effect.execution_state = 'EXECUTING'
            AND attempt.payload IS NOT NULL))
    AND connection.status = 'VALID' AND connection.generation = invocation.connection_generation
-   AND grant.status = 'ACTIVE' AND grant.expires_at > clock_timestamp()
+   AND grant.status = 'ACTIVE'
    AND grant.generation = invocation.grant_generation
  ORDER BY invocation.created_at, invocation.invocation_id
  LIMIT 1

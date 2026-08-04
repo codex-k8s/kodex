@@ -4,7 +4,7 @@ title: Диагностика и восстановление integration-gatewa
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-03
 ---
 
@@ -26,8 +26,10 @@ timestamps, generation и opaque UUID/digest.
 
 1. Зафиксировать Git SHA и immutable image digest.
 2. Проверить metadata Deployment, CNPG `Cluster`, migration Job, Service,
-   ServiceAccount, SecretProviderClass и NetworkPolicy без чтения Secret.
-3. Проверить, что runtime Pod имеет только gateway credential CSI volume, а
+   ServiceAccount, `Bundle`, `VaultConnection`, `VaultAuth`,
+   `VaultStaticSecret|VaultPKISecret`, SecretProviderClass и NetworkPolicy без
+   чтения Secret.
+3. Проверить, что runtime Pod имеет только gateway credential volume, а
    agent Pod не имеет provider credential, payload keyset или gateway DSN.
 4. Проверить не менее двух ready Pod CNPG, primary Service
    `integration-gateway-postgresql-rw` и exact destinations: PostgreSQL,
@@ -37,9 +39,15 @@ timestamps, generation и opaque UUID/digest.
 5. Проверить, что authority publisher target имеет workload
    `integration-gateway`, а issuer/verifier используют только собственные
    Vault/readback/restore paths. Не читать key material.
-6. Проверить две готовые реплики `integration-egress-proxy`, client-mTLS SAN
-   gateway и exact закрытый `/health` route. Проверить, что Pod не имеет прямого provider egress: рабочий и readiness
-   path должны идти через exact `integration-egress-proxy` destination.
+6. Проверить две готовые реплики `integration-egress-proxy` и
+   `provider-health-adapter`, downstream client-mTLS SAN gateway, upstream
+   client identity proxy и exact закрытые `/readyz|/validate|/health` routes.
+   `direct_response` отсутствует; proxy имеет egress только к adapter, adapter
+   не имеет egress.
+7. Проверить status/readback `integration-gateway-vault-ca`,
+   `integration-egress-proxy-ca`, `provider-health-adapter-ca`, затем status
+   `VaultConnection -> VaultAuth -> VaultStaticSecret|VaultPKISecret` и только
+   после них generated Secret/workload. Значения Secret не читать.
 
 ## Startup и readiness
 
@@ -56,7 +64,8 @@ Startup barrier должен пройти до обслуживания MCP/API:
 - continuation worker может выполнить тот же специализированный control-plane
   RPC path, что `SUSPEND`, decision, `BEGIN` и terminal команды;
 - OIDC discovery/JWKS доступны по pinned HTTPS identity destination;
-- egress proxy CA и exact SNI совпадают.
+- egress proxy downstream/upstream CA и exact SNI совпадают, а active upstream
+  health check достигает provider adapter;
 - payload keyset повторно читается readiness path и содержит active key вместе
   со всеми ключами, нужными незавершённым invocation/continuation.
 
@@ -65,10 +74,15 @@ readiness. Не подменять provider proxy прямым HTTPS egress.
 
 Входящий `IntegrationResultService` доступен только на `9443`: mTLS peer должен
 быть exact `agent-runner`, workload-local verifier обязан подтвердить signed
-authorization context, а отдельный control-plane result-access grant — exact
-invocation/attempt/result digest и разрешённую операцию. `Resolve` не принимает
+authorization context с `INTEGRATION_CONTINUATION` provenance, а отдельный
+control-plane result-access grant — exact invocation/attempt/result digest и
+разрешённую операцию. Result grant передаётся local issuer только через
+`x-mattercodex-integration-result-grant`; он не заменяет transport application
+grant gateway при live-проверке control-plane. `Resolve` не принимает
 resource ID, `Acknowledge` атомарно фиксирует idempotency receipt и exact
-delivery version/fence. Отсутствующий, истёкший либо mismatched grant нельзя
+delivery version/fence. Одинаково защищены success `ResultReference` и
+failed/unknown `ErrorReference`; после ACK старый bearer больше не разрешает
+resolve. Отсутствующий, истёкший либо mismatched grant нельзя
 заменять ручным чтением БД.
 
 ## PostgreSQL и миграция
@@ -155,10 +169,11 @@ attempt count и timestamps; encrypted application grant не читать.
 
 Mismatch invocation/request digest, stale version/fence либо неизвестное
 состояние — закрытая ошибка; вручную менять continuation row или пропускать
-команду запрещено. Пока effect не доставлен или его application grant близок к
-истечению, readiness должна быть отрицательной. Сначала восстановить
-control-plane/issuer path в пределах исходного grant; не выдавать новый grant
-и не перепривязывать invocation вручную.
+команду запрещено. Исходный `AGENT_SESSION_GRANT` допускает только admission и
+первый `SUSPEND`. После сохранённого `continuation_id` его expiry не завершает
+business approval: control-plane на каждый decision/BEGIN/terminal выдаёт
+свежий узкий grant до server-owned deadline. Если initial handoff исчерпал 32
+попытки, он закрывается terminal/dead-letter без ручного перевыпуска bearer.
 
 Provider не должен вызываться до подтверждённого `BEGIN`. Если
 `provider_dispatched_at` уже установлен, повторный dispatch запрещён даже при
@@ -179,6 +194,38 @@ Gateway отправляет credentials только exact mTLS egress proxy op
 `ENDPOINT_UNAVAILABLE`, `TIMEOUT`, `PROTOCOL_ERROR` и timestamp. Raw body,
 headers, target path и credential value не сохраняются и не логируются.
 
+Envoy не отвечает локально: `/validate` и `/health` достигают exact
+`provider-health-adapter` по upstream mTLS. `VALID` допустим только после
+сравнения фактического credential adapter; неверный credential возвращает
+`UNAUTHORIZED`. `/readyz` использует тот же upstream cluster/CA/SNI и
+становится отрицательным, если adapter или его credential недоступны.
+
+## Vault CA и Kubernetes API egress
+
+Единственный source Vault CA находится в trust-manager trust namespace.
+Namespace `mattercodex-system` заранее создаёт environment bootstrap; этот
+deployable не владеет и не дублирует cluster Namespace.
+`deploy/k8s/base/vault-ca-delivery` доставляет overlap bundle в Secret
+`integration-gateway-vault-ca`; `VaultConnection` обязан показать ready
+status с exact address/SNI и `skipTLSVerify: false` до `VaultAuth` и secret CR.
+В итоговом render все `Bundle` обязаны быть cluster-scoped без
+`metadata.namespace`, а их target ограничен namespace selector
+`mattercodex-system`.
+CA values не копировать и не создавать вручную. При ротации сначала обновить
+source overlap bundle, дождаться readback target digest/status, затем менять
+server leaf и удалять прежнюю CA только после полного overlap window.
+
+CNPG instance manager получает Kubernetes API egress только через
+`tools/deploy/kubernetes-api-egress.sh`. Сначала выполнить `discover`, затем
+`render` и `validate` с exact `--context`, namespace `mattercodex-system`,
+policy name и selector `cnpg.io/cluster=integration-gateway-postgresql`.
+Скрипт читает `Service/default/kubernetes` и ready IPv4 EndpointSlice и строит
+две additive `/32` policy. `apply` разрешён только после отдельного owner OK и
+`MATTERCODEX_OWNER_APPROVED=true`; в этом runbook автоматическое применение не
+разрешается. После owner-approved apply обязательны `readback` и отсутствие
+diff. Статический `component=kube-apiserver`, широкий CIDR и перенос policy
+между kube contexts запрещены.
+
 ## Ротация payload keyset и TLS credential
 
 Ротация выполняется только вперёд с overlap. Сначала доставить новый key ID или
@@ -191,6 +238,16 @@ payload key удаляется лишь после завершения всех
 Если keyset не читается либо active key отсутствует, readiness обязана стать
 отрицательной. Не менять `EncryptedApplicationGrant` или result payload вручную
 и не переиздавать grant для обхода старого key ID.
+
+Continuation/result grant keyset имеет `revision`, `high_watermark`,
+`served_generation`, `kid` и ровно один `CURRENT`; допускается только соседний
+`PREVIOUS` до `accept_until` и подготовленный `NEXT`. Сначала доставить
+`CURRENT+NEXT`, затем атомарно переключить signer и verifier на новое поколение,
+оставив прежний ключ `PREVIOUS` не меньше максимального срока уже выданных
+grant. PostgreSQL verifier fence подтверждает exact served keyset digest.
+Unknown, `NEXT`, `RETIRED`, пропущенное или rollback generation закрыто
+отклоняются. После crash повторяется тот же revision/digest; старый snapshot
+или та же revision с другим digest запрещены.
 
 ## Alerts
 

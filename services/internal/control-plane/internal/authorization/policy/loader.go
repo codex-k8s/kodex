@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
 )
@@ -126,7 +127,7 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			candidate.OwnerSPIFFEID != "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane" ||
 			candidate.FullMethod != resolverFullMethod ||
 			candidate.CallerWorkload == "" || candidate.CallerSPIFFEID == "" ||
-			candidate.CredentialMetadata != "authorization" ||
+			!supportedCredentialMetadata(candidate.Credential, candidate.CredentialMetadata) ||
 			candidate.CredentialIssuer == "" ||
 			candidate.CredentialAudience == "" ||
 			!supportedCredential(candidate.Credential) ||
@@ -240,7 +241,7 @@ func producerAuthoritySource(producer Producer) string {
 		return "AGENT_SESSION"
 	case "AUTOMATION_OCCURRENCE_GRANT":
 		return "AUTOMATION_OCCURRENCE"
-	case "INTEGRATION_CONTINUATION_GRANT":
+	case "INTEGRATION_CONTINUATION_GRANT", "INTEGRATION_RESULT_ACCESS_GRANT":
 		return "INTEGRATION_CONTINUATION"
 	default:
 		return "PROCESS_RUN"
@@ -260,11 +261,18 @@ func supportedCredential(credential string) bool {
 		"MEMORY_INDEX_GRANT":
 		// server-owned capability следующего exact integration transition.
 		return true
-	case "INTEGRATION_CONTINUATION_GRANT":
+	case "INTEGRATION_CONTINUATION_GRANT", "INTEGRATION_RESULT_ACCESS_GRANT":
 		return true
 	default:
 		return false
 	}
+}
+
+func supportedCredentialMetadata(credential, metadata string) bool {
+	if credential == "INTEGRATION_RESULT_ACCESS_GRANT" {
+		return metadata == integrationgatewayauth.ResultAccessGrantMetadata
+	}
+	return metadata == "authorization"
 }
 
 func readBounded(path string) ([]byte, error) {

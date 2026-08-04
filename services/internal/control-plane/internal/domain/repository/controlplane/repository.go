@@ -560,6 +560,7 @@ type Transaction interface {
 	) (RuntimeExecution, error)
 	InsertRuntimeIncident(context.Context, RuntimeIncident) error
 	GetIntegrationContinuationForUpdate(context.Context, string) (IntegrationContinuation, error)
+	AdmitContinuationGrantVerifierState(context.Context, uint64, uint64, uint64, string, uint64) error
 	GetIntegrationContinuation(context.Context, string) (IntegrationContinuation, error)
 	GetIntegrationContinuationByContinuationTurn(context.Context, string) (IntegrationContinuation, error)
 	IntegrationContinuationBlocksCleanup(context.Context, string, string, string) (bool, error)

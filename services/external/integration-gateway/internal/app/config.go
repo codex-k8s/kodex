@@ -69,7 +69,7 @@ func loadConfig() (Config, error) {
 		TLSClientCAFile:    "/var/run/config/mattercodex/integration-gateway/client-ca/ca.pem",
 		TLSAllowedClientSPIFFEIDs: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner," +
 			"spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-		ResultGrantPublicJWKFile:    "/var/run/config/mattercodex/integration-gateway/result-grant/continuation.public.jwk",
+		ResultGrantPublicJWKFile:    "/var/run/config/mattercodex/integration-gateway/result-grant/continuation.public-keyset.json",
 		ResultGrantIssuer:           "https://control-plane.mattercodex-system.svc.cluster.local/authority/integration-continuation",
 		ResultGrantSignerGeneration: 1, AuthorityVerifierUID: 29001, AuthorityVerifierGID: 29000,
 		PostgresDSNFile:        "/var/run/secrets/mattercodex/integration-gateway/postgres-runtime/dsn",

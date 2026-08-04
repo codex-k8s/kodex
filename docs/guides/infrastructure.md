@@ -4,8 +4,8 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 1.1.0
-updated: 2026-07-31
+version: 1.2.0
+updated: 2026-08-03
 ---
 
 # Infrastructure Guide
@@ -239,6 +239,23 @@ component.
 Обновление certificate Secret требует runtime reload/rollout и exact readback
 фактически обслуживаемого leaf. CA меняется через заранее доставленный overlap
 bundle. Полный protocol задан `GUIDE-DOC-003`.
+
+Нормативный общий capability namespace-local Vault CA delivery находится в
+`deploy/k8s/base/vault-ca-delivery`. Он не хранит CA value: trust-manager
+`Bundle` читает только именованный Secret в настроенном trust namespace и
+доставляет target Secret/ConfigMap в точный namespace selector. Источник CA и
+overlap принадлежат PKI/Vault owner, component base владеет только
+`VaultConnection`, `VaultAuth`, secret CR и workload ordering. Повторять Bundle
+или копировать CA в base компонента запрещено; новый unit переиспользует общий
+capability отдельным target manifest и доказывает status/digest readback.
+`Bundle` остаётся cluster-scoped в итоговом render: namespace назначается
+namespaced ресурсам во внутреннем base, после чего штатный `PatchTransformer`
+удаляет `metadata.namespace` только у CRD `Bundle`. Overlay не вводит второй
+namespace transformer поверх уже собранного base.
+Сам Namespace `mattercodex-system` принадлежит environment bootstrap, а не
+component PR; CA target создаётся только после появления его стандартного
+label `kubernetes.io/metadata.name`. Отсутствующий Namespace закрыто оставляет
+CA/Vault resources неготовыми и не разрешает запуск workload.
 
 ## Доступ workload к Kubernetes API
 

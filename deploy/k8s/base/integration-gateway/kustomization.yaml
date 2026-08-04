@@ -2,6 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: mattercodex-system
 resources:
+  - ../vault-ca-delivery
   - ../image-supply-chain
   - serviceaccount.yaml
   - deployment.yaml
@@ -12,9 +13,12 @@ resources:
   - egress-proxy.yaml
   - networkpolicy.yaml
   - vault-secret-provider-classes.yaml
+  - vault-resources.yaml
   - servicemonitor.yaml
   - prometheusrule.yaml
   - dashboard.yaml
+transformers:
+  - bundle-cluster-scope-transformer.yaml
 configMapGenerator:
   - name: integration-gateway-runtime
     literals:

@@ -78,6 +78,42 @@ func TestParseRejectsTrailingDocumentData(t *testing.T) {
 	}
 }
 
+func TestParseRejectsExposedNameCollisionsAndReservedNamespace(t *testing.T) {
+	t.Parallel()
+	secondVersion := strings.Replace(validDefinition, "    - name: list-payments", `    - name: list-payments
+      version: 1
+      description: List payments duplicate
+      capability: payments
+      risk: READ
+      permission: integrations.payments.read
+      approval: NEVER
+      idempotency: NONE
+      inputSchema:
+        type: object
+        additionalProperties: false
+        properties: {}
+      outputSchema:
+        type: object
+        additionalProperties: false
+        properties: {}
+      redactionPointers: []
+      http:
+        method: GET
+        path: /v1/payments-duplicate
+        timeout: 2s
+        idempotencyHeader: ""
+        credentialHeaders: {}
+    - name: list-payments`, 1)
+	secondVersion = strings.Replace(secondVersion, "    - name: list-payments\n      version: 1", "    - name: list-payments\n      version: 2", 1)
+	if _, err := Parse([]byte(secondVersion)); err == nil {
+		t.Fatal("same exposed name with another tool version was accepted")
+	}
+	reserved := strings.Replace(validDefinition, "name: list-payments", "name: mattercodex-session", 1)
+	if _, err := Parse([]byte(reserved)); err == nil {
+		t.Fatal("reserved mattercodex-* tool name was accepted")
+	}
+}
+
 func TestParseAcceptsOnlySafeDirectDeliveryDescriptors(t *testing.T) {
 	t.Parallel()
 	direct := strings.Replace(validDefinition, "      http:\n", `      direct:

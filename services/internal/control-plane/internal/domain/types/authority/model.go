@@ -28,6 +28,11 @@ type ApplicationIdentity struct {
 	BoundContinuationVersion    uint64
 	BoundContinuationFence      uint64
 	BoundInvocationID           string
+	BoundSignerKeysetRevision   uint64
+	BoundSignerHighWatermark    uint64
+	BoundSignerServedGeneration uint64
+	BoundSignerKeysetSHA256     string
+	BoundSignerGeneration       uint64
 	AllowedOperationIDs         []string
 }
 

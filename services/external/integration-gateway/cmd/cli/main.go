@@ -19,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/definition"
 )
 
 //go:embed migrations/*.sql
@@ -53,7 +55,7 @@ type principal struct {
 	Status     string    `json:"status"`
 	NotBefore  time.Time `json:"not_before"`
 	NotAfter   time.Time `json:"not_after"`
-	Password   string    `json:"-"`
+	Password   string    `json:"password"`
 }
 
 func main() {
@@ -67,6 +69,18 @@ func main() {
 }
 
 func run(ctx, cleanupBase context.Context, arguments []string) error {
+	if len(arguments) == 3 && arguments[0] == "definition" && arguments[1] == "validate" {
+		raw, err := readFile(arguments[2], definition.MaximumDefinitionBytes)
+		if err != nil {
+			return errors.New("read integration definition")
+		}
+		parsed, err := definition.Parse(raw)
+		if err != nil {
+			return fmt.Errorf("validate integration definition: %w", err)
+		}
+		_, err = fmt.Fprintf(os.Stdout, "definition %s@%d sha256=%s is valid\n", parsed.ID, parsed.Version, parsed.Digest)
+		return err
+	}
 	if len(arguments) == 1 && arguments[0] == "image-readback" {
 		if _, err := fmt.Fprintln(os.Stdout, "integration-gateway image pull verified"); err != nil {
 			return err
@@ -76,7 +90,7 @@ func run(ctx, cleanupBase context.Context, arguments []string) error {
 	}
 	if len(arguments) != 2 || arguments[0] != "migrate" ||
 		(arguments[1] != "up" && arguments[1] != "status" && arguments[1] != "version") {
-		return errors.New("usage: integration-gateway-cli image-readback|migrate up|status|version")
+		return errors.New("usage: integration-gateway-cli image-readback|definition validate FILE|migrate up|status|version")
 	}
 	configuration, err := loadConfig()
 	if err != nil {
@@ -193,24 +207,24 @@ func reconcile(ctx, cleanupBase context.Context, configuration config, migration
 	}()
 	stateSQL, _ := operationalSQL.ReadFile("sql/runtime__state.sql")
 	var highWatermark uint64
+	var durableServedGeneration uint64
 	var requestedCurrentStatus string
 	if err := connection.QueryRow(ctx, string(stateSQL), pgx.StrictNamedArgs{
 		"current_generation": configuration.CurrentGeneration,
-	}).Scan(&highWatermark, &requestedCurrentStatus); err != nil {
+	}).Scan(&highWatermark, &durableServedGeneration, &requestedCurrentStatus); err != nil {
 		return errors.New("read runtime credential high-watermark")
 	}
-	servedGeneration := highWatermark
 	if highWatermark > 0 {
 		if configuration.CurrentGeneration < highWatermark ||
 			(requestedCurrentStatus != "CURRENT" && requestedCurrentStatus != "NEXT") {
 			return errors.New("runtime credential rollback is forbidden")
 		}
-		if err := readbackRuntimeIdentity(ctx, configuration, fmt.Sprintf(
+		if _, err := readbackRuntimeIdentity(ctx, cleanupBase, configuration, fmt.Sprintf(
 			"integration_gateway_runtime_g%d", configuration.CurrentGeneration,
-		)); err != nil {
+		), requestedCurrentStatus == "CURRENT" && configuration.CurrentGeneration == highWatermark &&
+			durableServedGeneration == highWatermark); err != nil {
 			return err
 		}
-		servedGeneration = configuration.CurrentGeneration
 	}
 	tx, err := connection.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
@@ -223,38 +237,6 @@ func reconcile(ctx, cleanupBase context.Context, configuration config, migration
 			resultErr = errors.Join(resultErr, fmt.Errorf("rollback PostgreSQL reconciliation: %w", err))
 		}
 	}()
-	registeredSQL, _ := operationalSQL.ReadFile("sql/runtime__registered.sql")
-	rows, err := tx.Query(ctx, string(registeredSQL))
-	if err != nil {
-		return err
-	}
-	var registered []string
-	for rows.Next() {
-		var name string
-		if rows.Scan(&name) != nil {
-			rows.Close()
-			return errors.New("read registered runtime principal")
-		}
-		registered = append(registered, name)
-	}
-	rows.Close()
-	desired := make(map[string]struct{}, len(principals))
-	bootstrapSQL, _ := operationalSQL.ReadFile("sql/runtime__bootstrap.sql")
-	for _, value := range principals {
-		desired[value.Name] = struct{}{}
-		if _, err := tx.Exec(ctx, string(bootstrapSQL), value.Name, value.Generation, value.Password); err != nil {
-			return errors.New("bootstrap runtime database role")
-		}
-	}
-	retireSQL, _ := operationalSQL.ReadFile("sql/runtime__retire.sql")
-	for _, name := range registered {
-		if _, keep := desired[name]; keep {
-			continue
-		}
-		if _, err := tx.Exec(ctx, string(retireSQL), name); err != nil {
-			return errors.New("retire runtime database role")
-		}
-	}
 	payload, err := json.Marshal(principals)
 	if err != nil {
 		return errors.New("encode runtime principals")
@@ -263,36 +245,59 @@ func reconcile(ctx, cleanupBase context.Context, configuration config, migration
 	var reconciledPrincipals, reconciledKeys, reconciledFences int
 	if err := tx.QueryRow(ctx, string(reconcileSQL), pgx.StrictNamedArgs{
 		"principals": payload, "context_key_id": configuration.ContextKeyID, "context_key": key,
-		"current_generation": configuration.CurrentGeneration, "served_generation": servedGeneration,
+		"current_generation": configuration.CurrentGeneration, "served_generation": durableServedGeneration,
 	}).Scan(&reconciledPrincipals, &reconciledKeys, &reconciledFences); err != nil {
 		return errors.New("reconcile runtime database identities")
 	}
 	if reconciledPrincipals != len(principals) || reconciledKeys != 1 || reconciledFences != 1 {
 		return errors.New("runtime database identity reconciliation is not forward-only")
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	if durableServedGeneration < configuration.CurrentGeneration {
+		expectedName := fmt.Sprintf("integration_gateway_runtime_g%d", configuration.CurrentGeneration)
+		sessionUser, err := readbackRuntimeIdentity(ctx, cleanupBase, configuration, expectedName, false)
+		if err != nil {
+			return err
+		}
+		confirmSQL, _ := operationalSQL.ReadFile("sql/runtime__confirm.sql")
+		if _, err := connection.Exec(ctx, string(confirmSQL), configuration.CurrentGeneration, sessionUser); err != nil {
+			return errors.New("confirm runtime identity served generation")
+		}
+	}
+	return nil
 }
 
-func readbackRuntimeIdentity(ctx context.Context, configuration config, expectedName string) error {
+func readbackRuntimeIdentity(
+	ctx context.Context,
+	cleanupBase context.Context,
+	configuration config,
+	expectedName string,
+	expectedReady bool,
+) (sessionUser string, resultErr error) {
 	runtimeConfig, _, err := parseDSN(configuration.CurrentDSNFile, configuration.PostgresCAFile,
 		configuration.PostgresTLSServerName)
 	if err != nil {
-		return err
+		return "", err
 	}
 	readback, err := pgx.ConnectConfig(ctx, runtimeConfig)
 	if err != nil {
-		return errors.New("open runtime identity readback connection")
+		return "", errors.New("open runtime identity readback connection")
 	}
-	defer readback.Close(ctx)
-	var sessionUser string
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(cleanupBase), 5*time.Second)
+		defer cancel()
+		resultErr = errors.Join(resultErr, readback.Close(cleanup))
+	}()
 	var ready bool
 	if err := readback.QueryRow(
 		ctx,
 		"SELECT session_user::text, integration_gateway.runtime_identity_ready()",
-	).Scan(&sessionUser, &ready); err != nil || sessionUser != expectedName || !ready {
-		return errors.New("runtime identity exact served-state readback failed")
+	).Scan(&sessionUser, &ready); err != nil || sessionUser != expectedName || ready != expectedReady {
+		return "", errors.New("runtime identity exact served-state readback failed")
 	}
-	return nil
+	return sessionUser, nil
 }
 
 func parseDSN(path, caFile, serverName string) (*pgx.ConnConfig, *x509.CertPool, error) {

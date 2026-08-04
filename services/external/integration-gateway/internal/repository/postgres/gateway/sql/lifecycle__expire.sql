@@ -18,12 +18,15 @@ WITH authority_changed AS (
         ON grant.grant_id = invocation.grant_id
        AND grant.tenant_id = invocation.tenant_id
        AND grant.project_id = invocation.project_id
+      JOIN integration_gateway.continuation_effects AS effect
+        ON effect.invocation_id = invocation.invocation_id
      WHERE invocation.status IN ('PENDING_APPROVAL', 'APPROVED', 'EXECUTING')
        AND (connection.status <> 'VALID'
          OR connection.generation <> invocation.connection_generation
          OR grant.status <> 'ACTIVE'
          OR grant.generation <> invocation.grant_generation
-         OR grant.expires_at <= clock_timestamp()
+         OR (effect.continuation_id = '' AND grant.expires_at <= clock_timestamp())
+         OR (effect.continuation_id = '' AND effect.attempts >= 32)
          OR EXISTS (
              SELECT 1
                FROM jsonb_array_elements(invocation.payload->'PinnedConnection'->'CredentialBindingRefs') AS binding
@@ -32,7 +35,7 @@ WITH authority_changed AS (
          ))
      ORDER BY invocation.updated_at, invocation.invocation_id
      LIMIT @limit
-     FOR UPDATE OF invocation, connection, grant SKIP LOCKED
+     FOR UPDATE OF invocation, connection, grant, effect SKIP LOCKED
 ), authority_terminal_invocations AS (
     UPDATE integration_gateway.invocations AS invocation SET
         status = CASE WHEN changed.provider_dispatched THEN 'UNKNOWN' ELSE 'CANCELLED' END,
@@ -51,14 +54,16 @@ WITH authority_changed AS (
     RETURNING approval.invocation_id
 ), authority_terminal_attempts AS (
     UPDATE integration_gateway.execution_attempts AS attempt SET
-        outcome = 'UNKNOWN', finished_at = clock_timestamp(),
+        outcome = CASE WHEN changed.provider_dispatched THEN 'UNKNOWN' ELSE 'CANCELLED' END,
+        finished_at = clock_timestamp(),
         payload = jsonb_set(
-            jsonb_set(attempt.payload, '{Outcome}', '"UNKNOWN"'::jsonb, false),
+            jsonb_set(attempt.payload, '{Outcome}',
+                to_jsonb(CASE WHEN changed.provider_dispatched THEN 'UNKNOWN' ELSE 'CANCELLED' END::text), false),
             '{FinishedAt}', to_jsonb(clock_timestamp()), false
         )
       FROM authority_changed AS changed
      WHERE attempt.invocation_id = changed.invocation_id
-       AND changed.provider_dispatched AND attempt.finished_at IS NULL
+       AND attempt.finished_at IS NULL
     RETURNING attempt.invocation_id, attempt.attempt_id, attempt.tenant_id,
               attempt.project_id, attempt.finished_at
 ), authority_terminal_results AS (
@@ -81,13 +86,16 @@ WITH authority_changed AS (
                'CompletedAt', attempt.finished_at
            ), attempt.finished_at
       FROM authority_terminal_attempts AS attempt
+      JOIN authority_changed AS changed ON changed.invocation_id = attempt.invocation_id
+     WHERE changed.provider_dispatched
     ON CONFLICT (invocation_id) DO NOTHING
     RETURNING invocation_id
 ), authority_terminal_continuations AS (
     UPDATE integration_gateway.continuation_effects AS effect SET
-        desired_action = CASE WHEN changed.provider_dispatched THEN 'FAIL' ELSE 'CANCEL' END,
+        desired_action = CASE WHEN effect.continuation_id = '' THEN 'NONE'
+            WHEN changed.provider_dispatched THEN 'FAIL' ELSE 'CANCEL' END,
         action = CASE
-            WHEN effect.continuation_id = '' THEN 'SUSPEND'
+            WHEN effect.continuation_id = '' THEN 'NONE'
             WHEN changed.provider_dispatched THEN 'FAIL'
             ELSE 'CANCEL'
         END,
@@ -167,6 +175,9 @@ WITH authority_changed AS (
                    'UNKNOWN'
                ),
                'ProviderReceipt', '',
+               'DeliveryVersion', 1,
+               'DeliveryFence', 1,
+               'AcknowledgedAt', NULL,
                'CompletedAt', attempt.finished_at
            ), attempt.finished_at
       FROM abandoned_attempts AS attempt
@@ -206,7 +217,9 @@ WITH authority_changed AS (
            'system:integration-gateway-lifecycle', 'authority.revoke',
            'TOOL_INVOCATION', invocation_id, canonical_request_hash,
            CASE WHEN provider_dispatched THEN 'UNKNOWN' ELSE 'CANCELLED' END,
-           'AUTHORITY_CHANGED', clock_timestamp()
+           CASE WHEN previous_status IN ('PENDING_APPROVAL', 'APPROVED')
+                AND NOT provider_dispatched THEN 'AUTHORITY_OR_HANDOFF_REVOKED'
+                ELSE 'AUTHORITY_CHANGED' END, clock_timestamp()
       FROM authority_changed
     UNION ALL
     SELECT integration_gateway_extensions.gen_random_uuid()::text, tenant_id, project_id,

@@ -14,9 +14,18 @@ type CredentialSource interface {
 
 type Result struct {
 	Status          enum.InvocationStatus
+	Effect          EffectOutcome
 	Payload         json.RawMessage
 	ProviderReceipt string
 }
+
+type EffectOutcome string
+
+const (
+	EffectNoEffect  EffectOutcome = "NO_EFFECT"
+	EffectCommitted EffectOutcome = "COMMITTED"
+	EffectAmbiguous EffectOutcome = "AMBIGUOUS"
+)
 
 type Client interface {
 	Execute(context.Context, entity.Connection, entity.Tool, json.RawMessage, map[string]string, string) (Result, error)

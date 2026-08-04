@@ -2625,6 +2625,26 @@ func (wrapped *transaction) GetIntegrationContinuationForUpdate(
 	))
 }
 
+func (wrapped *transaction) AdmitContinuationGrantVerifierState(
+	ctx context.Context,
+	keysetRevision, highWatermark, servedGeneration uint64,
+	keysetSHA256 string,
+	signerGeneration uint64,
+) error {
+	var admitted bool
+	if err := wrapped.tx.QueryRow(ctx, sqlContinuationGrantKeysetAdmit, pgx.StrictNamedArgs{
+		"keyset_revision": keysetRevision, "high_watermark": highWatermark,
+		"served_generation": servedGeneration, "keyset_sha256": keysetSHA256,
+		"signer_generation": signerGeneration,
+	}).Scan(&admitted); err != nil {
+		return mapError(err)
+	}
+	if !admitted {
+		return errs.ErrPermissionDenied
+	}
+	return nil
+}
+
 func (wrapped *transaction) GetIntegrationContinuation(
 	ctx context.Context,
 	continuationID string,

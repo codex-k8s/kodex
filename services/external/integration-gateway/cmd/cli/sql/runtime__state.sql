@@ -1,5 +1,5 @@
 -- name: RuntimeCredentialState
-SELECT fence.current_high_watermark,
+SELECT fence.current_high_watermark, fence.served_readback_generation,
        coalesce((
            SELECT principal.status
              FROM integration_gateway.runtime_principals AS principal

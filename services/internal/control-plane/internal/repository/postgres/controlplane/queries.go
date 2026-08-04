@@ -2,6 +2,9 @@ package controlplane
 
 import _ "embed"
 
+//go:embed sql/continuation_grant_keyset__admit.sql
+var sqlContinuationGrantKeysetAdmit string
+
 //go:embed sql/clock__get.sql
 var sqlClockGet string
 

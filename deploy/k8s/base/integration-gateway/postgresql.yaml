@@ -11,6 +11,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-4"
 spec:
+  vaultConnectionRef: integration-gateway
   method: kubernetes
   mount: kubernetes
   kubernetes:
@@ -113,6 +114,15 @@ spec:
       ports:
         - {protocol: TCP, port: 5432}
         - {protocol: TCP, port: 8000}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - {protocol: TCP, port: 8000}
   egress:
     - to:
         - podSelector:
@@ -131,12 +141,3 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              component: kube-apiserver
-      ports:
-        - {protocol: TCP, port: 6443}

@@ -4,7 +4,8 @@ WITH candidate AS (
       FROM integration_gateway.continuation_effects AS effect
      WHERE effect.tenant_id = @tenant_id AND effect.project_id = @project_id
        AND effect.action <> 'NONE' AND effect.available_at <= clock_timestamp()
-       AND effect.application_grant_expires_at > clock_timestamp()
+       AND (effect.continuation_id <> '' OR effect.application_grant_expires_at > clock_timestamp())
+       AND effect.attempts < 32
        AND (effect.lease_expires_at IS NULL OR effect.lease_expires_at <= clock_timestamp())
      ORDER BY effect.available_at, effect.invocation_id
      LIMIT 1

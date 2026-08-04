@@ -55,7 +55,8 @@ func TestRuntimeAndIntegrationProfilesMatchAuthorityPolicy(t *testing.T) {
 	integrationActual := make(map[string]string)
 	for _, binding := range document.Policy.Bindings {
 		if (binding.ProducerID == "control-plane.integration-gateway" ||
-			binding.ProducerID == "control-plane.integration-continuation") &&
+			binding.ProducerID == "control-plane.integration-continuation" ||
+			binding.ProducerID == "control-plane.integration-result-access") &&
 			binding.TargetWorkload == "control-plane" {
 			integrationActual[binding.OperationID] = binding.FullMethod
 		}

@@ -4,14 +4,18 @@ package result
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/errs"
+	domainrepo "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/repository/gateway"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/service/gateway"
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/enum"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -19,7 +23,6 @@ import (
 )
 
 const (
-	GrantMetadata        = "x-mattercodex-integration-result-grant"
 	resolveOperation     = "integration.result.resolve"
 	acknowledgeOperation = "integration.result.acknowledge"
 	readinessOperation   = "integration.result.readiness"
@@ -29,20 +32,29 @@ const (
 	targetSPIFFEID       = "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway"
 )
 
-type checker interface{ Check(context.Context) error }
+type resultStore interface {
+	Check(context.Context) error
+	AdmitResultGrantVerifierState(context.Context, domainrepo.ResultGrantVerifierState) error
+}
+
+type accessValidator interface {
+	ValidateResultAccess(context.Context, string) (*controlplanev1.ValidateIntegrationResultAccessResponse, error)
+	Check(context.Context) error
+}
 
 type Server struct {
 	integrationgatewayv1.UnimplementedIntegrationResultServiceServer
 	service  *domainservice.Service
 	grant    *integrationgatewayauth.Verifier
-	postgres checker
+	postgres resultStore
+	control  accessValidator
 }
 
-func New(service *domainservice.Service, grant *integrationgatewayauth.Verifier, postgres checker) (*Server, error) {
-	if service == nil || grant == nil || postgres == nil {
+func New(service *domainservice.Service, grant *integrationgatewayauth.Verifier, postgres resultStore, control accessValidator) (*Server, error) {
+	if service == nil || grant == nil || postgres == nil || control == nil {
 		return nil, errors.New("integration result server dependencies are required")
 	}
-	return &Server{service: service, grant: grant, postgres: postgres}, nil
+	return &Server{service: service, grant: grant, postgres: postgres, control: control}, nil
 }
 
 func (server *Server) ResolveIntegrationResult(
@@ -59,7 +71,8 @@ func (server *Server) ResolveIntegrationResult(
 	}
 	return &integrationgatewayv1.ResolveIntegrationResultResponse{
 		InvocationId: resolved.InvocationID, AttemptId: resolved.AttemptID,
-		ResultSha256: resolved.ResultSHA256, StructuredResultJson: resolved.StructuredJSON,
+		Outcome: outcomeProto(resolved.Outcome), Reference: resolved.Reference,
+		ReferenceSha256: resolved.ReferenceSHA256, StructuredOutcomeJson: resolved.StructuredJSON,
 		DeliveryVersion: resolved.DeliveryVersion, DeliveryFence: resolved.DeliveryFence,
 		CompletedAt: timestamppb.New(resolved.CompletedAt),
 	}, nil
@@ -73,7 +86,7 @@ func (server *Server) AcknowledgeIntegrationResult(
 	if err != nil {
 		return nil, err
 	}
-	if request.GetExpectedResultSha256() != binding.ResultSHA256 {
+	if request.GetExpectedReferenceSha256() != binding.ReferenceSHA256 {
 		return nil, status.Error(codes.FailedPrecondition, "result acknowledgement binding mismatch")
 	}
 	acknowledged, err := server.service.AcknowledgeResult(ctx, domainservice.ResultAcknowledgement{
@@ -88,7 +101,8 @@ func (server *Server) AcknowledgeIntegrationResult(
 	}
 	return &integrationgatewayv1.AcknowledgeIntegrationResultResponse{
 		InvocationId: acknowledged.InvocationID, AttemptId: acknowledged.AttemptID,
-		ResultSha256: acknowledged.ResultSHA256, DeliveryVersion: acknowledged.DeliveryVersion,
+		Outcome: outcomeProto(acknowledged.Outcome), Reference: acknowledged.Reference,
+		ReferenceSha256: acknowledged.ReferenceSHA256, DeliveryVersion: acknowledged.DeliveryVersion,
 		DeliveryFence: acknowledged.DeliveryFence, AcknowledgedAt: timestamppb.New(*acknowledged.AcknowledgedAt),
 	}, nil
 }
@@ -102,6 +116,17 @@ func (server *Server) CheckReadiness(
 	}
 	if err := server.postgres.Check(ctx); err != nil {
 		return nil, status.Error(codes.Unavailable, "integration result dependency unavailable")
+	}
+	state := server.grant.State()
+	if err := server.postgres.AdmitResultGrantVerifierState(ctx, domainrepo.ResultGrantVerifierState{
+		KeysetRevision: state.Revision, HighWatermark: state.HighWatermark,
+		ServedGeneration: state.ServedGeneration, KeysetSHA256: state.KeysetSHA256,
+		SignerGeneration: state.ServedGeneration,
+	}); err != nil {
+		return nil, status.Error(codes.Unavailable, "integration result verifier state unavailable")
+	}
+	if err := server.control.Check(ctx); err != nil {
+		return nil, status.Error(codes.Unavailable, "integration result owner validation unavailable")
 	}
 	return &integrationgatewayv1.IntegrationResultServiceCheckReadinessResponse{
 		Ready: true, SchemaVersion: 1, AuthorityReady: true, PostgresReady: true,
@@ -117,11 +142,12 @@ func (server *Server) binding(ctx context.Context, operation string) (domainserv
 	if !ok {
 		return domainservice.ResultAccessBinding{}, status.Error(codes.Unauthenticated, "result access grant required")
 	}
-	values := incoming.Get(GrantMetadata)
+	values := incoming.Get(integrationgatewayauth.ResultAccessGrantMetadata)
 	if len(values) != 1 {
 		return domainservice.ResultAccessBinding{}, status.Error(codes.Unauthenticated, "result access grant required")
 	}
-	claims, err := server.grant.Verify(ctx, values[0])
+	compact := values[0]
+	claims, err := server.grant.Verify(ctx, compact)
 	if err != nil || claims.Purpose != integrationgatewayauth.PurposeResultAccess ||
 		claims.Subject != verified.GetSubject() || claims.WorkloadID != callerWorkload ||
 		claims.CallerSPIFFEID != callerSPIFFEID || !slices.Contains(claims.AllowedOperationIDs, operation) {
@@ -130,14 +156,56 @@ func (server *Server) binding(ctx context.Context, operation string) (domainserv
 	authority := verified.GetAuthority()
 	if authority == nil || authority.GetActor() == nil || authority.GetTenant() == nil || authority.GetProject() == nil ||
 		authority.GetActor().GetId() != claims.Subject || authority.GetTenant().GetId() != claims.OrganizationID ||
-		authority.GetProject().GetId() != claims.ProjectID {
+		authority.GetProject().GetId() != claims.ProjectID ||
+		!matchesResultAuthorityProvenance(authority.GetActor(), claims) ||
+		!matchesResultAuthorityProvenance(authority.GetTenant(), claims) ||
+		!matchesResultAuthorityProvenance(authority.GetProject(), claims) {
 		return domainservice.ResultAccessBinding{}, status.Error(codes.PermissionDenied, "result authority binding mismatch")
+	}
+	served := server.grant.State()
+	if err := server.postgres.AdmitResultGrantVerifierState(ctx, domainrepo.ResultGrantVerifierState{
+		KeysetRevision: served.Revision, HighWatermark: served.HighWatermark,
+		ServedGeneration: served.ServedGeneration, KeysetSHA256: served.KeysetSHA256,
+		SignerGeneration: claims.SignerGeneration,
+	}); err != nil {
+		return domainservice.ResultAccessBinding{}, status.Error(codes.PermissionDenied, "result signer generation rejected")
+	}
+	validated, err := server.control.ValidateResultAccess(ctx, compact)
+	if err != nil || validated.GetContinuation().GetContinuationId() != claims.ContinuationID ||
+		validated.GetContinuation().GetVersion() != claims.ContinuationVersion ||
+		validated.GetContinuation().GetFence() != claims.ContinuationFence ||
+		validated.GetOutcome() != claims.Outcome || validated.GetReference() != claims.Reference ||
+		validated.GetReferenceSha256() != claims.ReferenceSHA256 ||
+		validated.GetResultAttemptId() != claims.ResultAttemptID ||
+		validated.GetSignerGeneration() != claims.SignerGeneration {
+		return domainservice.ResultAccessBinding{}, status.Error(codes.PermissionDenied, "current result owner state rejected")
 	}
 	return domainservice.ResultAccessBinding{
 		TenantID: claims.OrganizationID, ProjectID: claims.ProjectID,
 		ActorID: claims.Subject, InvocationID: claims.InvocationID, AttemptID: claims.ResultAttemptID,
-		ResultSHA256: claims.ResultSHA256,
+		Outcome: enum.InvocationStatus(claims.Outcome), Reference: claims.Reference,
+		ReferenceSHA256: claims.ReferenceSHA256, ContinuationID: claims.ContinuationID,
+		ContinuationVersion: claims.ContinuationVersion, ContinuationFence: claims.ContinuationFence,
 	}, nil
+}
+
+func matchesResultAuthorityProvenance(
+	identity *internalrpcauthorityv1.AuthorityIdentity,
+	claims integrationgatewayauth.Claims,
+) bool {
+	provenance := identity.GetProvenance()
+	return provenance != nil &&
+		provenance.GetSource() == internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_INTEGRATION_CONTINUATION &&
+		provenance.GetReference() == fmt.Sprintf("%s/%d/%d", claims.TurnID, claims.Attempt, claims.GrantGeneration) &&
+		provenance.GetRevision() == claims.GrantGeneration && provenance.GetDigestSha256() == claims.InputSHA256
+}
+
+func outcomeProto(outcome enum.InvocationStatus) integrationgatewayv1.IntegrationOutcome {
+	return map[enum.InvocationStatus]integrationgatewayv1.IntegrationOutcome{
+		enum.InvocationSucceeded: integrationgatewayv1.IntegrationOutcome_INTEGRATION_OUTCOME_SUCCEEDED,
+		enum.InvocationFailed:    integrationgatewayv1.IntegrationOutcome_INTEGRATION_OUTCOME_FAILED,
+		enum.InvocationUnknown:   integrationgatewayv1.IntegrationOutcome_INTEGRATION_OUTCOME_UNKNOWN,
+	}[outcome]
 }
 
 func verifiedContext(ctx context.Context, operation string) (*internalrpcauthorityv1.VerifiedAuthorizationContext, error) {

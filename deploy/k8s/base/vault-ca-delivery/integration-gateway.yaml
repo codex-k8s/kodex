@@ -1,0 +1,53 @@
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: integration-gateway-vault-ca
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  sources:
+    - secret:
+        name: mattercodex-vault-ca-source
+        key: ca.crt
+  target:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system
+    secret:
+      key: ca.crt
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: integration-egress-proxy-ca
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  sources:
+    - secret:
+        name: mattercodex-internal-ca-source
+        key: ca.crt
+  target:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system
+    configMap:
+      key: ca.pem
+---
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: provider-health-adapter-ca
+  annotations:
+    argocd.argoproj.io/sync-wave: "-9"
+spec:
+  sources:
+    - secret:
+        name: mattercodex-internal-ca-source
+        key: ca.crt
+  target:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system
+    configMap:
+      key: ca.pem

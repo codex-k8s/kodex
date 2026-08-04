@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package integrationgateway.v1;
 
-option go_package = "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1;integrationgatewayv1";
-
 import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1;integrationgatewayv1";
 
 // IntegrationResultService предоставляет producer-owned version-pinned read
 // для результата integration invocation. Actor и result binding выводятся из
@@ -23,27 +23,38 @@ message ResolveIntegrationResultRequest {}
 message ResolveIntegrationResultResponse {
   string invocation_id = 1;
   string attempt_id = 2;
-  string result_sha256 = 3;
-  bytes structured_result_json = 4;
-  uint64 delivery_version = 5;
-  uint64 delivery_fence = 6;
-  google.protobuf.Timestamp completed_at = 7;
+  IntegrationOutcome outcome = 3;
+  string reference = 4;
+  string reference_sha256 = 5;
+  bytes structured_outcome_json = 6;
+  uint64 delivery_version = 7;
+  uint64 delivery_fence = 8;
+  google.protobuf.Timestamp completed_at = 9;
+}
+
+enum IntegrationOutcome {
+  INTEGRATION_OUTCOME_UNSPECIFIED = 0;
+  INTEGRATION_OUTCOME_SUCCEEDED = 1;
+  INTEGRATION_OUTCOME_FAILED = 2;
+  INTEGRATION_OUTCOME_UNKNOWN = 3;
 }
 
 message AcknowledgeIntegrationResultRequest {
   string idempotency_key = 1;
   uint64 expected_delivery_version = 2;
   uint64 expected_delivery_fence = 3;
-  string expected_result_sha256 = 4;
+  string expected_reference_sha256 = 4;
 }
 
 message AcknowledgeIntegrationResultResponse {
   string invocation_id = 1;
   string attempt_id = 2;
-  string result_sha256 = 3;
-  uint64 delivery_version = 4;
-  uint64 delivery_fence = 5;
-  google.protobuf.Timestamp acknowledged_at = 6;
+  IntegrationOutcome outcome = 3;
+  string reference = 4;
+  string reference_sha256 = 5;
+  uint64 delivery_version = 6;
+  uint64 delivery_fence = 7;
+  google.protobuf.Timestamp acknowledged_at = 8;
 }
 
 message IntegrationResultServiceCheckReadinessRequest {}

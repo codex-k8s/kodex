@@ -160,13 +160,20 @@ Worker использует только специализированные RP
 полученные `continuation_id/version/fence`. `SUSPEND`, решение, `BEGIN` и
 terminal переходы имеют отдельные детерминированные idempotency keys и lease
 fence. Caller не выбирает authority tuple. Application grant зашифрован
-payload keyset; TTL transport session, grant, approval и invocation ограничен
-его сроком с safety window. Истечение либо отзыв закрывают выполнение.
+payload keyset и используется только для исходного admission и первого
+`SUSPEND`. После появления `continuation_id` business approval живёт до
+server-owned `approval/invocation` deadline независимо от пятиминутного bearer:
+каждый следующий переход использует новый узкий `INTEGRATION_CONTINUATION_GRANT`
+с exact version/fence. Caller не может продлить этот срок.
 
 После `SUCCEEDED|FAILED|UNKNOWN|REJECTED|CANCELLED|EXPIRED` control-plane
 переводит continuation в `READY`. Agent-runner использует защищённые
 `GetIntegrationContinuation` и `AcknowledgeIntegrationContinuation` с exact
-version, session, turn и runtime revision binding. Consumer adapter и durable
+version, session, turn и runtime revision binding. Для `SUCCEEDED` gateway
+разрешает `ResultReference`, для `FAILED|UNKNOWN` — `ErrorReference`; оба пути
+используют один producer-owned `Resolve/Acknowledge`, live control-plane
+validation и локальную delivery fence. ACK немедленно делает bearer
+непригодным для нового resolve. Consumer adapter и durable
 inbox agent-runner принадлежат отдельному owner unit #192 и не копируются в
 gateway; AsyncAPI event для этого сценария намеренно отсутствует, потому что
 авторитетным является version-pinned read/rejoin path.
@@ -178,7 +185,9 @@ Deployment запускает workload-local `internal-rpc-authority-issuer` и
 control-plane, verifier — только входящий `IntegrationResultService`; оба
 проверяют exact SPIFFE workload ID, snapshot/readback и собственную устойчивую
 replay БД. Private keys не копируются в gateway container: result resolver
-получает лишь публичный JWK server-owned grant через отдельный CSI volume.
+получает только публичный versioned keyset с `kid`, generation,
+`CURRENT|PREVIOUS|NEXT|RETIRED`, overlap deadline и verifier-owned durable
+high-watermark. Signer и verifier сверяют exact served generation/digest.
 
 Gateway-owned manifests включают ServiceAccount, Service, Deployment,
 migration Job, PDB, CSI/Vault delivery, default-deny/exact-destination
@@ -188,13 +197,27 @@ NetworkPolicy, ServiceMonitor/PodMonitor, dashboard и alerts. Migration Job
 `integration-egress-proxy` path, что рабочий вызов. Unit материализует CNPG
 `Cluster` с тремя экземплярами и точным `-rw` TLS endpoint, а также
 двухрепличный Envoy egress proxy с client-mTLS, закрытым route registry и без
-прямого внешнего egress. Базовый `provider-health` adapter обслуживается
-локальным exact `/health` route; добавление реального provider upstream требует
-отдельного утверждённого route и exact NetworkPolicy destination.
+прямого внешнего egress. Envoy не имеет `direct_response`: `/readyz`,
+`/validate` и `/health` проходят upstream TLS/SNI/CA к отдельному
+`provider-health-adapter`; validation и рабочий GET проверяют один Vault-owned
+credential. Серверный cert/key proxy выдаются одним `VaultPKISecret` request.
+
+Общий `deploy/k8s/base/vault-ca-delivery` принадлежит инфраструктурному
+capability и из единственного trust-manager source доставляет namespace-local
+overlap bundles `integration-gateway-vault-ca`,
+`integration-egress-proxy-ca` и `provider-health-adapter-ca` без копирования CA
+values. `Bundle` остаются cluster-scoped без `metadata.namespace`, а exact
+namespace задаётся только их target selector; сам `mattercodex-system`
+принадлежит environment bootstrap. Gateway base владеет цепочкой
+`VaultConnection -> VaultAuth ->
+VaultStaticSecret|VaultPKISecret -> generated Secret -> workload`. Общий
+`tools/deploy/kubernetes-api-egress.sh` по `INFRA-DOC-001` является единственным
+code-first владельцем фактических Service/default/kubernetes и ready IPv4
+EndpointSlice destinations; manifests не содержат фиктивный apiserver selector.
 
 ### Проверенные документы внешних библиотек
 
-Через Context7 проверены актуальные документы:
+В исходной реализации через Context7 проверены актуальные документы:
 
 - `/modelcontextprotocol/go-sdk/v1.2.0`: `StreamableHTTPHandler`, lifecycle
   сессий, tool registration и защита session binding;
@@ -205,11 +228,17 @@ NetworkPolicy, ServiceMonitor/PodMonitor, dashboard и alerts. Migration Job
   Kubernetes ServiceAccount, bounded token audience/TTL и связка
   `VaultStaticSecret.vaultAuthRef`.
 
+В review cycle 2 квота Context7 была исчерпана. Поэтому дополнительно проверены
+официальные HashiCorp VSO API (`VaultConnection.caCertSecretRef`,
+`VaultPKISecret`, destination transformation/rollout restart), Vault CSI
+`vaultCACertPath`/exact SNI, cert-manager trust-manager `Bundle`, CloudNativePG
+operator→instance-manager TCP/8000 и Envoy upstream TLS/active health check.
+
 Реализация сохраняет внешний MCP SDK за admission boundary, строго разбирает
 YAML до семантического использования и поднимает mTLS gRPC listener до запуска
 workers.
 
-## Contract map исправлений review cycle 1
+## Contract map исправлений review cycles 1–2
 
 Эта карта задаёт целевую границу до изменения runtime-кода. Ни один ID из
 request не является authority: transport peer подтверждается mTLS, actor и
@@ -218,25 +247,29 @@ lineage приходят из проверенного signed context либо �
 
 | Finding / сценарий | Actor и источник authority | Transport / команда | Авторитетный owner и transaction | Version, idempotency и result | Terminal / revoke / readiness |
 | --- | --- | --- | --- | --- | --- |
-| 1. Первичный suspend | `integration-gateway` с исходным `AGENT_SESSION_GRANT`, exact source session/turn/attempt/input/runtime revision | `SuspendForIntegrationApproval` | control-plane блокирует полный runtime graph и создаёт continuation | invocation/request/bindings pinned; receipt сохраняется с transition | ответ содержит свежий server-owned continuation grant; исходный bearer больше не используется |
+| 1. Первичный suspend | `integration-gateway`: короткий `AGENT_SESSION_GRANT` служит только application credential, а workload-local issuer выпускает свежий exact-method authority proof на каждую попытку | `SuspendForIntegrationApproval` | control-plane повторно разрешает source session/turn/attempt/input/runtime revision, блокирует полный runtime graph и создаёт continuation | invocation/request/bindings pinned; receipt сохраняется с transition; handoff имеет 32 попытки и terminal dead-letter | ответ содержит свежий server-owned continuation grant; истёкший source bearer не вызывается повторно и не ограничивает business approval после handoff |
 | 1. Решение, execution и terminal | `INTEGRATION_CONTINUATION_GRANT`, подписанный control-plane и связанный с continuation/version/fence/source lineage/разрешёнными следующими методами | только специализированные `Approve|Reject|Cancel|Expire|Begin|Complete|Fail` | control-plane повторно разрешает continuation и owner graph до receipt | каждый успешный переход увеличивает version/fence и выдаёт новый узкий grant; старый grant становится replay-only для того же receipt | READY/REJOINED, cancel, expiry и retry отзывают прежний grant; readiness проверяет signer/trust и отсутствие stranded delivery |
-| 2. Result read | будущий `agent-runner` с exact internal-RPC signed context плюс control-plane-owned result access grant для нового continuation turn | `IntegrationResultService.ResolveIntegrationResult` | integration-gateway владеет invocation/attempt/result и durable delivery row | request pin-ит invocation, attempt, result digest, continuation version/fence; response несёт immutable structured JSON и те же pins | чужой/stale turn/runtime revision/grant закрыто отклоняется; endpoint readiness проходит тот же mTLS/verifier/read path |
-| 2. Result ack | тот же continuation actor и result access grant | `AcknowledgeIntegrationResult` | gateway одной transaction сохраняет receipt и ACK version | stable idempotency key + expected delivery version/fence/digest | повтор возвращает тот же ACK; terminal/revoke закрывает access grant, но не удаляет result |
+| 2. Result/error read | будущий `agent-runner`: outcome-specific `INTEGRATION_RESULT_ACCESS_GRANT` передаётся local issuer в отдельном `x-mattercodex-integration-result-grant`, а issuer выпускает exact-method context с `INTEGRATION_CONTINUATION` provenance | `IntegrationResultService.ResolveIntegrationResult` | integration-gateway владеет invocation/attempt/result и durable delivery row; gateway при live-проверке использует собственный короткий application grant, не подменяя его result bearer | grant pin-ит outcome, invocation, attempt, result/error digest, continuation version/fence; request не выбирает resource | чужой/stale/acked turn/runtime revision/grant закрыто отклоняется; endpoint readiness проходит тот же mTLS/verifier/read path |
+| 2. Result ack | тот же continuation actor и result access grant | `AcknowledgeIntegrationResult` | gateway одной transaction сохраняет receipt и ACK version | stable idempotency key + expected delivery version/fence/digest | после ACK тот же bearer закрыто отклоняется; result не удаляется |
 | 3. Входной HTTPS | закрытый registry peer SPIFFE: `agent-runner|control-api-gateway` для MCP и утверждённые owner API peers | TLS 1.3 + `RequireAndVerifyClientCert` + bearer/OIDC | gateway transport admission до handler | certificate chain и exact URI проверяются независимо от bearer | client CA/SPIFFE mismatch закрывает запрос; startup до workers загружает TLS profile и pre-bind-ит рабочий listener, а защищённый result readiness проходит отдельный mTLS/verifier/PostgreSQL path |
 | 4. Provider outcome | gateway execution worker после durable dispatch marker | exact mTLS egress-proxy adapter operation | gateway attempt/result transaction | `FAILED` только для доказанного adapter `NO_EFFECT`; 5xx, protocol/schema mismatch, timeout и ambiguous response → `UNKNOWN` | UNKNOWN не повторяет provider effect и даёт terminal FAIL с safe digest; метрика учитывает состоявшийся dispatch |
 | 5. PostgreSQL credential rotation | migration controller identity; intent не является источником current state | forward-only CLI reconcile/readback | PostgreSQL verifier-owned lifecycle state + principal rows в одной transaction | durable high-watermark; только `NEXT -> CURRENT -> PREVIOUS -> RETIRED`, promotion после exact NEXT LOGIN/readback | stale/skip/backward intent отклоняется; retire закрывает login/membership/backends; readiness сверяет served generation |
 | 6. Immutable execution pins | source invocation, созданная из control-plane snapshot | локальный claim/dispatch | gateway versioned connection snapshot + pinned definition/grant/credential tuple | join по exact connection ID/revision/generation и immutable payload digest; current eligibility проверяется отдельно | mismatch до dispatch атомарно terminalizes graph без provider call |
 | 7. Authority change | server-derived newer connection/grant state | reconciliation transaction | gateway блокирует connection/grant, open invocation, approval, attempt и continuation effect | один winner сохраняет audit и exact `CANCEL|EXPIRE|FAIL` effect; lease/fence сбрасывается монотонно | work scopes/claims закрываются; effect остаётся claimable до CP READY, crash recovery идемпотентен |
 | 8. Environment render | repository-owned definition source внутри base load root | обычный `kubectl kustomize` | integration-gateway base и два overlays | один канонический source, без unsafe load restrictor и копии | staging/production render обязаны собираться до review |
-| 9. Data/provider deployables | отдельные service accounts и workload identities | PostgreSQL Service/workload TLS; egress-proxy mTLS ingress + закрытый exact route registry | каждый component имеет собственные manifests/config/secret names/readiness/failure policy | pinned image, exact SNI/CA/destination и code-first apply/readback metadata; базовый adapter не имеет внешнего egress | gateway readiness закрыта до обоих paths; overlays включают их ownership, rollback сохраняет data; реальный provider upstream добавляется только отдельным approved route |
+| 9. Data/provider deployables | отдельные service accounts и workload identities | PostgreSQL Service/workload TLS; egress-proxy mTLS ingress/upstream + закрытый exact route registry | каждый component имеет собственные manifests/config/secret names/readiness/failure policy | pinned image, exact SNI/CA/destination; provider-health adapter проверяет credential и не имеет egress | gateway readiness закрыта до Envoy active upstream health; overlays включают полный ownership |
 | 10. Startup | composition root | pre-bound public/technical/internal listeners | gateway владеет listener lifecycle и worker group | bind всех sockets завершается до readiness и polling | partial bind закрывает уже созданные listeners; workers join до DB/client/telemetry shutdown |
 | 11. Rollback | repository cleanup base передан из `main` через composition root | bounded independent rollback context | pgx transaction connection | rollback error объединяется с исходной ошибкой; successful commit не откатывается | отменённый request context не используется; cleanup timeout закрыт и наблюдаем |
+| 12. Tool collision | server-owned startup loader | strict YAML parser + staged catalog | gateway materializes definitions только после проверки полного набора | exposed name уникален между всеми versions/definitions и не может иметь namespace `mattercodex-*` | любой collision закрывает startup до session/tool registry |
+| 13. Result/error rejoin | `RESULT_ACCESS` capability exact READY continuation turn; отдельный producer `control-plane.agent-result-access` принимает её только как application credential agent-runner local issuer | gateway Resolve/ACK + control-plane `ValidateIntegrationResultAccess`; вызов gateway→CP аутентифицируется gateway application grant, а result grant идёт отдельным metadata | CP проверяет current continuation; gateway проверяет current effect/result row | outcome/reference/digest/session/turn/attempt/runtime revision/generation/version/fence совпадают | ACK/retry/revoke/stale version закрывают прежний bearer до его `exp` |
+| 14. Signer rotation | server-owned signer + verifier-delivered public keyset | ES256 `kid`/generation | verifier PostgreSQL fence | revision/high-watermark/served digest только вперёд; PREVIOUS имеет bounded overlap | NEXT/RETIRED/unknown/rollback закрыто отвергаются; readiness проходит durable readback |
+| 15. Vault/API trust path | VSO/trust-manager/CNPG owners, не application caller | exact TLS SNI/CA и generated exact NetworkPolicy | CA source, VaultConnection status и discovered Kubernetes API endpoints | CA overlap bundle и Service/EndpointSlice readback | отсутствие CA, Vault Secret, ready endpoint либо server validation блокирует rollout/apply |
 
 Полный граф continuation закрыт:
 
 | Состояние | Допустимая authority | Следующие команды | Отзыв прежнего состояния |
 | --- | --- | --- | --- |
-| invocation создана, CP ещё не suspended | исходный source grant только для `SUSPEND` | `SUSPEND` | локальный cancel/expiry сохраняет desired terminal и сначала завершает SUSPEND |
+| invocation создана, CP ещё не suspended | свежий workload-local exact-method proof, построенный из ещё действующего source application credential, только для `SUSPEND` | `SUSPEND` | expiry/32 неудачные попытки атомарно terminalize локальный graph; истёкший bearer не используется |
 | `PENDING / NOT_STARTED / SUSPENDED` | свежий grant exact version/fence с `APPROVE|REJECT|CANCEL|EXPIRE` | одна terminal decision либо approve | успешный переход делает предыдущий grant stale; reject/cancel/expire → READY |
 | `APPROVED / NOT_STARTED / SUSPENDED` | свежий grant с `BEGIN|CANCEL|EXPIRE` | один winner | begin закрывает decision grant; cancel/expiry закрывают attempt и scopes |
 | `APPROVED / EXECUTING / SUSPENDED` | свежий grant с `COMPLETE|FAIL` | ровно один terminal | provider dispatch marker не откатывается; ambiguity → FAIL/UNKNOWN без repeat |
@@ -251,7 +284,7 @@ lineage приходят из проверенного signed context либо �
 | Connection resolve | exact control-plane session snapshot and definition version | server-derived snapshot ID over runtime/integration/credential pins | resolved/changed | session discovery/read | new revision creates isolated PENDING snapshot |
 | Connection validate | exact snapshot read; OIDC operator or bound MCP session | generation-checked OCC update after bounded probe | bounded validation code | owner API либо MCP validation result | expired/revoked snapshot rejects probe |
 | Grant create | server derives project/role/session/runtime scope | unique capability tuple + generation | granted | session tool discovery | revoke/expiry closes new invocation |
-| Grant revoke/expiry | control-plane state and exact local generation/TTL | CP version/fence + PostgreSQL clock | rejected/expired | grant/session/continuation read | `BEGIN` blocks stale pins; local new claims stop |
+| Grant revoke/expiry | control-plane state and exact local transport generation/TTL | CP version/fence + PostgreSQL clock | rejected/expired | grant/session/continuation read | expiry закрывает initial handoff/new invocation; после SUSPEND durable continuation grant, а не source bearer, владеет переходом |
 | Transport initialize | verified bearer + control-plane exact context | token digest/JTI reservation | initialized | MCP session/readiness | expiry/revoke closes transport |
 | Transport close/expire | same credential binding or PostgreSQL clock | single terminal update | closed/expired | MCP 404/read | releases quota leases only |
 | Invocation create + suspend | locked transport session + connection + exact authority/grant tuple | semantic key + exact canonical request hash; one local transaction | invoked/pending | MCP response/owner GetInvocation + CP continuation | revoked grant fails closed |
@@ -259,9 +292,9 @@ lineage приходят из проверенного signed context либо �
 | approve / `CHANGES_REQUESTED` | approval+invocation `FOR UPDATE`; verified OIDC actor | decision receipt + CP version/fence | exact outcome | get approval/invocation + CP read | reject maps to READY without execution; changed input requires new invocation |
 | reject/expire/cancel | exact row locks; verified actor либо PostgreSQL clock | single-winner local transition + specialized CP command | terminal outcome | CP READY + protected rejoin | all paths close claims/grants |
 | Execution begin | approved invocation + current connection/grant generation | attempt fence, then CP BEGIN version/fence | executing | CP SUSPENDED until result | provider blocked before CP confirmation |
-| Provider dispatch | exact unfinished attempt and `provider_dispatched_at IS NULL` | one-winner dispatch marker + provider key | external effect/result | get invocation | crash after dispatch never repeats effect |
+| Provider dispatch | exact unfinished attempt and `provider_dispatched_at IS NULL` после local decrypt/credential resolution | one-winner dispatch marker + provider key | external effect/result | get invocation | pre-dispatch failure terminal `FAILED/NO_EFFECT`; crash/ambiguity после marker → `UNKNOWN` без repeat |
 | transport retry | exact semantic key and request hash | возвращает тот же invocation/receipt; второго provider attempt нет | replayed receipt | invocation/read | иной hash конфликтует, terminal не открывается повторно |
-| succeed/fail/unknown | exact active attempt token/fence | immutable result digest and receipt | terminal outcome | get invocation/result | terminal closes claims |
+| succeed/fail/unknown | exact active attempt token/fence | immutable result/error digest and delivery version/fence | terminal outcome | producer-owned Resolve/ACK | terminal closes claims; stale/acked access grant rejected |
 | continuation succeed/fail | exact attempt/result + CP version/fence | deterministic terminal command receipt | terminal outcome | CP READY, agent-runner Get/Ack read/rejoin | stale version/fence rejected |
 
 PostgreSQL time is authoritative for expiry. Every unknown state/version/risk,

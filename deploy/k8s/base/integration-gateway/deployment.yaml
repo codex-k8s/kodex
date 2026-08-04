@@ -291,7 +291,7 @@ spec:
         - name: definitions
           configMap: {name: integration-gateway-definitions, defaultMode: 0440}
         - name: credentials
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-credentials}}
+          secret: {secretName: integration-gateway-provider-health-credential, defaultMode: 0440}
         - name: payload-keyset
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-payload-keyset}}
         - name: control-plane-client

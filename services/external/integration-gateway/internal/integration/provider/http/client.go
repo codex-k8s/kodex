@@ -123,11 +123,11 @@ func loadClientCertificate(certificatePath, keyPath string) (tls.Certificate, er
 func (client *Client) Execute(ctx context.Context, connection entity.Connection, tool entity.Tool, arguments json.RawMessage, credentials map[string]string, idempotencyKey string) (providerport.Result, error) {
 	endpoint, err := endpointURL(client.proxyURL.String(), tool.HTTP.Path)
 	if err != nil {
-		return providerport.Result{Status: enum.InvocationFailed}, err
+		return providerport.Result{Status: enum.InvocationFailed, Effect: providerport.EffectNoEffect}, err
 	}
 	request, err := http.NewRequestWithContext(ctx, tool.HTTP.Method, endpoint.String(), bytes.NewReader(arguments))
 	if err != nil {
-		return providerport.Result{Status: enum.InvocationFailed}, errors.New("create provider request")
+		return providerport.Result{Status: enum.InvocationFailed, Effect: providerport.EffectNoEffect}, errors.New("create provider request")
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
@@ -138,7 +138,7 @@ func (client *Client) Execute(ctx context.Context, connection entity.Connection,
 	for header, purpose := range tool.HTTP.CredentialHeaders {
 		value, ok := credentials[purpose]
 		if !ok || value == "" {
-			return providerport.Result{Status: enum.InvocationFailed}, errors.New("provider credential is unavailable")
+			return providerport.Result{Status: enum.InvocationFailed, Effect: providerport.EffectNoEffect}, errors.New("provider credential is unavailable")
 		}
 		request.Header.Set(header, value)
 	}
@@ -148,29 +148,26 @@ func (client *Client) Execute(ctx context.Context, connection entity.Connection,
 	response, err := client.http.Do(request)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return providerport.Result{Status: enum.InvocationUnknown}, errors.New("provider request deadline exceeded")
+			return providerport.Result{Status: enum.InvocationUnknown, Effect: providerport.EffectAmbiguous}, errors.New("provider request deadline exceeded")
 		}
-		return providerport.Result{Status: enum.InvocationUnknown}, errors.New("provider request failed")
+		return providerport.Result{Status: enum.InvocationUnknown, Effect: providerport.EffectAmbiguous}, errors.New("provider request failed")
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, maximumResponseBytes+1))
 	if err != nil || len(body) > maximumResponseBytes {
-		return providerport.Result{Status: enum.InvocationUnknown}, errors.New("provider response is invalid")
+		return providerport.Result{Status: enum.InvocationUnknown, Effect: providerport.EffectAmbiguous}, errors.New("provider response is invalid")
 	}
-	status := enum.InvocationSucceeded
-	if response.StatusCode >= 500 {
-		status = enum.InvocationUnknown
+	status, effect := classifyHTTPOutcome(response.StatusCode, response.Header.Get("X-MatterCodex-Effect-Outcome"))
+	if status == enum.InvocationFailed {
+		body = []byte(`{"status":"provider_rejected_no_effect","code":` + strconv.Itoa(response.StatusCode) + `}`)
+	} else if status == enum.InvocationUnknown {
 		body = []byte(`{"status":"provider_outcome_unknown","code":` + strconv.Itoa(response.StatusCode) + `}`)
-	} else if response.StatusCode < 200 || response.StatusCode >= 300 {
-		// Только явный 4xx считается авторитетным terminal rejection после dispatch.
-		// Любой неоднозначный 5xx выше остаётся UNKNOWN и не допускает auto retry.
-		status = enum.InvocationFailed
-		body = []byte(`{"status":"provider_rejected","code":` + strconv.Itoa(response.StatusCode) + `}`)
 	}
 	if !json.Valid(body) {
 		body = []byte(`{"status":"provider_response_not_json"}`)
 		if status == enum.InvocationSucceeded {
 			status = enum.InvocationUnknown
+			effect = providerport.EffectAmbiguous
 		}
 	}
 	receipt := response.Header.Get("X-Request-Id")
@@ -180,7 +177,17 @@ func (client *Client) Execute(ctx context.Context, connection entity.Connection,
 		digest := sha256.Sum256([]byte(receipt))
 		receipt = hex.EncodeToString(digest[:])
 	}
-	return providerport.Result{Status: status, Payload: body, ProviderReceipt: receipt}, nil
+	return providerport.Result{Status: status, Effect: effect, Payload: body, ProviderReceipt: receipt}, nil
+}
+
+func classifyHTTPOutcome(statusCode int, proof string) (enum.InvocationStatus, providerport.EffectOutcome) {
+	if statusCode >= 200 && statusCode < 300 {
+		return enum.InvocationSucceeded, providerport.EffectCommitted
+	}
+	if proof == string(providerport.EffectNoEffect) {
+		return enum.InvocationFailed, providerport.EffectNoEffect
+	}
+	return enum.InvocationUnknown, providerport.EffectAmbiguous
 }
 
 func (client *Client) Validate(ctx context.Context, connection entity.Connection, credentials map[string]string) enum.ValidationCode {

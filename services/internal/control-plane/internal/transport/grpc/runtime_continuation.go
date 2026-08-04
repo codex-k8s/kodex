@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -993,6 +995,76 @@ func (server *Server) AcknowledgeIntegrationContinuation(
 	}, nil
 }
 
+func (server *Server) ValidateIntegrationResultAccess(
+	ctx context.Context,
+	_ *controlplanev1.ValidateIntegrationResultAccessRequest,
+) (*controlplanev1.ValidateIntegrationResultAccessResponse, error) {
+	transportPrincipal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	incoming, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrUnauthenticated)
+	}
+	values := incoming.Get(integrationgatewayauth.ResultAccessGrantMetadata)
+	if len(values) != 1 || values[0] == "" || strings.TrimSpace(values[0]) != values[0] {
+		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrUnauthenticated)
+	}
+	claims, err := server.resultVerifier.Verify(ctx, values[0])
+	if err != nil || claims.Purpose != integrationgatewayauth.PurposeResultAccess ||
+		!slices.Contains(claims.AllowedOperationIDs, "integration.result.resolve") ||
+		!slices.Contains(claims.AllowedOperationIDs, "integration.result.acknowledge") {
+		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrPermissionDenied)
+	}
+	boundPrincipal := value.Principal{
+		ActorID: claims.Subject, OrganizationID: claims.OrganizationID, ProjectID: claims.ProjectID,
+		Permission: "controlplane.integration_continuation.read", CorrelationID: transportPrincipal.CorrelationID,
+		PolicyRevision: transportPrincipal.PolicyRevision, AuthorityGeneration: claims.SignerGeneration,
+		CallerWorkload: claims.WorkloadID, CallerSPIFFEID: claims.CallerSPIFFEID,
+		AuthoritySource: "INTEGRATION_CONTINUATION", AuthorityReference: claims.ContinuationID,
+		AuthorityRevision: claims.ContinuationVersion, AuthorityDigest: claims.InputSHA256,
+		AuthorityGrantGeneration: claims.GrantGeneration,
+	}
+	continuation, err := server.service.GetIntegrationContinuation(ctx, resource.GetIntegrationContinuationInput{Principal: boundPrincipal})
+	if err != nil {
+		return nil, rpcError(transportPrincipal.CorrelationID, err)
+	}
+	revisionSHA256, err := server.service.IntegrationContinuationRuntimeRevisionSHA256(ctx, boundPrincipal, continuation)
+	if err != nil {
+		return nil, rpcError(transportPrincipal.CorrelationID, err)
+	}
+	outcome, reference, referenceSHA256 := "", "", ""
+	if continuation.ExecutionState == "SUCCEEDED" {
+		outcome, reference, referenceSHA256 = "SUCCEEDED", continuation.ResultReference, continuation.ResultSHA256
+	} else if continuation.ExecutionState == "FAILED" {
+		outcome, reference, referenceSHA256 = "FAILED", continuation.ErrorReference, continuation.ErrorSHA256
+		if continuation.ErrorCode == "PROVIDER_OUTCOME_UNKNOWN" {
+			outcome = "UNKNOWN"
+		}
+	}
+	if continuation.ID != claims.ContinuationID || continuation.Version != claims.ContinuationVersion ||
+		continuation.Fence != claims.ContinuationFence || continuation.InvocationID != claims.InvocationID ||
+		continuation.SessionID != claims.SessionID || continuation.ContinuationTurnID != claims.TurnID ||
+		continuation.ContinuationAttempt != claims.Attempt ||
+		continuation.ContinuationRuntimeRevisionID != claims.RuntimeRevisionID ||
+		continuation.ContinuationRuntimeRevisionVersion != claims.RuntimeRevisionVersion ||
+		revisionSHA256 != claims.RuntimeRevisionSHA256 ||
+		continuation.ContinuationInputSHA256 != claims.InputSHA256 ||
+		continuation.GrantGeneration != claims.GrantGeneration || outcome != claims.Outcome ||
+		reference != claims.Reference || referenceSHA256 != claims.ReferenceSHA256 || reference == "" {
+		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrStateConflict)
+	}
+	encoded := toProtoIntegrationContinuation(continuation)
+	return &controlplanev1.ValidateIntegrationResultAccessResponse{
+		Continuation: encoded, Outcome: outcome, Reference: reference,
+		ReferenceSha256: referenceSHA256, ResultAttemptId: claims.ResultAttemptID,
+		SignerGeneration: claims.SignerGeneration,
+	}, nil
+}
+
 func toProtoIntegrationExecutionBinding(
 	binding resource.IntegrationExecutionBinding,
 ) *controlplanev1.IntegrationExecutionBinding {
@@ -1188,8 +1260,15 @@ func (server *Server) toProtoIntegrationContinuation(
 		encoded.TransitionGrant = compact
 		encoded.TransitionGrantExpiresAt = timestamppb.New(time.Unix(base.ExpiresAt, 0).UTC())
 	}
-	resultReference, resultDigest := continuation.ResultReference, continuation.ResultSHA256
-	if continuation.ContinuationState == "READY" && resultReference != "" && resultDigest != "" {
+	resultReference, resultDigest, outcome := continuation.ResultReference, continuation.ResultSHA256, "SUCCEEDED"
+	if continuation.ExecutionState == "FAILED" {
+		resultReference, resultDigest, outcome = continuation.ErrorReference, continuation.ErrorSHA256, "FAILED"
+		if continuation.ErrorCode == "PROVIDER_OUTCOME_UNKNOWN" {
+			outcome = "UNKNOWN"
+		}
+	}
+	if continuation.ContinuationState == "READY" && resultReference != "" && resultDigest != "" &&
+		(outcome == "SUCCEEDED" || outcome == "FAILED" || outcome == "UNKNOWN") {
 		const resultPrefix = "integration-gateway://invocations/"
 		reference, found := strings.CutPrefix(resultReference, resultPrefix)
 		parts := strings.Split(reference, "/results/")
@@ -1214,7 +1293,9 @@ func (server *Server) toProtoIntegrationContinuation(
 		base.RuntimeRevisionVersion = continuation.ContinuationRuntimeRevisionVersion
 		base.RuntimeRevisionSHA256 = revisionSHA256
 		base.ResultAttemptID = parts[1]
-		base.ResultSHA256 = resultDigest
+		base.Outcome = outcome
+		base.Reference = resultReference
+		base.ReferenceSHA256 = resultDigest
 		base.AllowedOperationIDs = []string{"integration.result.resolve", "integration.result.acknowledge"}
 		base.JTI = uuid.NewString()
 		base.ExpiresAt = now.Add(continuationGrantTTL).Unix()

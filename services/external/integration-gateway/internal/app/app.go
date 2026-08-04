@@ -23,6 +23,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/authorization/oidc"
 	controlclient "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/clients/controlplane"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/service/gateway"
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/credential"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/definition"
@@ -156,7 +157,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err := authorityChecker.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)
 	}
-	resultTransport, err := resultgrpc.New(service, resultGrantVerifier, repository)
+	resultTransport, err := resultgrpc.New(service, resultGrantVerifier, repository, control)
 	if err != nil {
 		return err
 	}
@@ -272,6 +273,7 @@ func loadDefinitions(ctx context.Context, directory string, service *domainservi
 	if err != nil || len(entries) == 0 || len(entries) > 64 {
 		return errors.New("integration definition directory is invalid")
 	}
+	parsedDefinitions := make([]entity.Definition, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || (filepath.Ext(entry.Name()) != ".yaml" && filepath.Ext(entry.Name()) != ".yml") {
 			return errors.New("integration definition entry is invalid")
@@ -284,10 +286,16 @@ func loadDefinitions(ctx context.Context, directory string, service *domainservi
 		if err != nil {
 			return err
 		}
-		if err := service.StoreDefinition(ctx, parsed); err != nil {
+		parsedDefinitions = append(parsedDefinitions, parsed)
+	}
+	// Полный закрытый registry проверяется до первой materialization в БД.
+	for _, parsed := range parsedDefinitions {
+		if err := catalog.Store(parsed); err != nil {
 			return err
 		}
-		if err := catalog.Store(parsed); err != nil {
+	}
+	for _, parsed := range parsedDefinitions {
+		if err := service.StoreDefinition(ctx, parsed); err != nil {
 			return err
 		}
 	}

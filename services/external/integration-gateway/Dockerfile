@@ -25,7 +25,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -o /out/integration-gateway ./cmd/integration-gateway \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
-    -o /out/integration-gateway-cli ./cmd/cli
+    -o /out/integration-gateway-cli ./cmd/cli \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/provider-health-adapter ./cmd/provider-health-adapter
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS runtime
 

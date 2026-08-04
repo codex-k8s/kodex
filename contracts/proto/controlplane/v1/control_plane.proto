@@ -192,6 +192,9 @@ service ControlPlaneService {
   rpc GetIntegrationContinuation(GetIntegrationContinuationRequest) returns (GetIntegrationContinuationResponse);
   // AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
   rpc AcknowledgeIntegrationContinuation(AcknowledgeIntegrationContinuationRequest) returns (AcknowledgeIntegrationContinuationResponse);
+  // ValidateIntegrationResultAccess проверяет capability против current owner
+  // continuation state; request не принимает caller-selected resource IDs.
+  rpc ValidateIntegrationResultAccess(ValidateIntegrationResultAccessRequest) returns (ValidateIntegrationResultAccessResponse);
 
   // CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
@@ -2403,6 +2406,17 @@ message AcknowledgeIntegrationContinuationRequest {
 
 message AcknowledgeIntegrationContinuationResponse {
   IntegrationContinuation continuation = 1;
+}
+
+message ValidateIntegrationResultAccessRequest {}
+
+message ValidateIntegrationResultAccessResponse {
+  IntegrationContinuation continuation = 1;
+  string outcome = 2;
+  string reference = 3;
+  string reference_sha256 = 4;
+  string result_attempt_id = 5;
+  uint64 signer_generation = 6;
 }
 
 // CheckReadinessRequest описывает версионированное сообщение контракта control-plane.

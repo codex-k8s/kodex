@@ -101,18 +101,25 @@ type InvocationReceipt struct {
 }
 
 type ResultAccessBinding struct {
-	TenantID     string
-	ProjectID    string
-	ActorID      string
-	InvocationID string
-	AttemptID    string
-	ResultSHA256 string
+	TenantID            string
+	ProjectID           string
+	ActorID             string
+	InvocationID        string
+	AttemptID           string
+	Outcome             enum.InvocationStatus
+	Reference           string
+	ReferenceSHA256     string
+	ContinuationID      string
+	ContinuationVersion uint64
+	ContinuationFence   uint64
 }
 
 type ResolvedResult struct {
 	InvocationID    string
 	AttemptID       string
-	ResultSHA256    string
+	Outcome         enum.InvocationStatus
+	Reference       string
+	ReferenceSHA256 string
 	StructuredJSON  json.RawMessage
 	DeliveryVersion uint64
 	DeliveryFence   uint64
@@ -134,22 +141,31 @@ func (service *Service) ResolveResult(ctx context.Context, binding ResultAccessB
 	result, err := service.repository.ResolveResult(ctx, domainrepo.Scope{
 		TenantID: binding.TenantID, ProjectID: binding.ProjectID, ActorID: binding.ActorID,
 	}, domainrepo.ResultBinding{
-		InvocationID: binding.InvocationID, AttemptID: binding.AttemptID, ResultSHA256: binding.ResultSHA256,
+		InvocationID: binding.InvocationID, AttemptID: binding.AttemptID, Outcome: binding.Outcome,
+		Reference: binding.Reference, ReferenceSHA256: binding.ReferenceSHA256,
+		ContinuationID: binding.ContinuationID, ContinuationVersion: binding.ContinuationVersion,
+		ContinuationFence: binding.ContinuationFence,
 	})
 	if err != nil {
 		return ResolvedResult{}, err
 	}
-	payload, err := service.cipher.Decrypt(ctx, result.EncryptedPayload)
-	if err != nil {
-		return ResolvedResult{}, errors.New("decrypt integration result")
-	}
-	digest := sha256.Sum256(payload)
-	if hex.EncodeToString(digest[:]) != binding.ResultSHA256 || !json.Valid(payload) {
+	var payload json.RawMessage
+	if len(result.EncryptedPayload) > 0 {
+		payload, err = service.cipher.Decrypt(ctx, result.EncryptedPayload)
+		if err != nil {
+			return ResolvedResult{}, errors.New("decrypt integration outcome")
+		}
+		digest := sha256.Sum256(payload)
+		if hex.EncodeToString(digest[:]) != binding.ReferenceSHA256 || !json.Valid(payload) {
+			return ResolvedResult{}, errs.ErrConflict
+		}
+	} else if binding.Outcome != enum.InvocationUnknown {
 		return ResolvedResult{}, errs.ErrConflict
 	}
 	return ResolvedResult{
 		InvocationID: result.InvocationID, AttemptID: result.AttemptID,
-		ResultSHA256: result.PayloadDigest, StructuredJSON: payload,
+		Outcome: result.Status, Reference: binding.Reference, ReferenceSHA256: result.PayloadDigest,
+		StructuredJSON:  payload,
 		DeliveryVersion: result.DeliveryVersion, DeliveryFence: result.DeliveryFence,
 		CompletedAt: result.CompletedAt, AcknowledgedAt: result.AcknowledgedAt,
 	}, nil
@@ -164,8 +180,8 @@ func (service *Service) AcknowledgeResult(
 		return ResolvedResult{}, errs.ErrInvalid
 	}
 	idempotencyDigest := sha256.Sum256([]byte(input.IdempotencyKey))
-	requestDigest := sha256.Sum256([]byte(fmt.Sprintf("v1\x00%s\x00%s\x00%s\x00%d\x00%d",
-		input.Binding.InvocationID, input.Binding.AttemptID, input.Binding.ResultSHA256,
+	requestDigest := sha256.Sum256([]byte(fmt.Sprintf("v1\x00%s\x00%s\x00%s\x00%s\x00%d\x00%d",
+		input.Binding.InvocationID, input.Binding.AttemptID, input.Binding.Outcome, input.Binding.ReferenceSHA256,
 		input.DeliveryVersion, input.DeliveryFence)))
 	now := service.now().UTC()
 	var acknowledged entity.Result
@@ -176,7 +192,11 @@ func (service *Service) AcknowledgeResult(
 		acknowledged, err = tx.AcknowledgeResult(ctx, domainrepo.ResultAcknowledgement{
 			Binding: domainrepo.ResultBinding{
 				InvocationID: input.Binding.InvocationID,
-				AttemptID:    input.Binding.AttemptID, ResultSHA256: input.Binding.ResultSHA256,
+				AttemptID:    input.Binding.AttemptID, Outcome: input.Binding.Outcome,
+				Reference: input.Binding.Reference, ReferenceSHA256: input.Binding.ReferenceSHA256,
+				ContinuationID:      input.Binding.ContinuationID,
+				ContinuationVersion: input.Binding.ContinuationVersion,
+				ContinuationFence:   input.Binding.ContinuationFence,
 			},
 			DeliveryVersion: input.DeliveryVersion, DeliveryFence: input.DeliveryFence,
 			IdempotencyHash: hex.EncodeToString(idempotencyDigest[:]), RequestHash: hex.EncodeToString(requestDigest[:]),
@@ -194,7 +214,8 @@ func (service *Service) AcknowledgeResult(
 	}
 	return ResolvedResult{
 		InvocationID: acknowledged.InvocationID, AttemptID: acknowledged.AttemptID,
-		ResultSHA256: acknowledged.PayloadDigest, DeliveryVersion: acknowledged.DeliveryVersion,
+		Outcome: acknowledged.Status, Reference: input.Binding.Reference,
+		ReferenceSHA256: acknowledged.PayloadDigest, DeliveryVersion: acknowledged.DeliveryVersion,
 		DeliveryFence: acknowledged.DeliveryFence, CompletedAt: acknowledged.CompletedAt,
 		AcknowledgedAt: acknowledged.AcknowledgedAt,
 	}, nil
@@ -202,7 +223,11 @@ func (service *Service) AcknowledgeResult(
 
 func validResultAccessBinding(binding ResultAccessBinding) bool {
 	return binding.TenantID != "" && binding.ProjectID != "" && binding.ActorID != "" &&
-		binding.InvocationID != "" && binding.AttemptID != "" && validDigestText(binding.ResultSHA256)
+		binding.InvocationID != "" && binding.AttemptID != "" && binding.ContinuationID != "" &&
+		binding.ContinuationVersion > 0 && binding.ContinuationFence > 0 &&
+		(binding.Outcome == enum.InvocationSucceeded || binding.Outcome == enum.InvocationFailed || binding.Outcome == enum.InvocationUnknown) &&
+		binding.Reference == "integration-gateway://invocations/"+binding.InvocationID+"/results/"+binding.AttemptID &&
+		validDigestText(binding.ReferenceSHA256)
 }
 
 type InvocationView struct {
@@ -684,15 +709,34 @@ func (service *Service) ExecuteOne(ctx context.Context, finalizationBase context
 	if err != nil {
 		return true, enum.InvocationFailed, service.finishBounded(finalizationBase, claim, enum.InvocationFailed, nil, "CREDENTIAL_UNAVAILABLE")
 	}
+	dispatchedAt := service.now().UTC()
+	err = service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
+		return tx.MarkProviderDispatched(ctx, claim.Invocation.ID, claim.Attempt.ID, dispatchedAt)
+	})
+	if err != nil {
+		return true, "", err
+	}
+	claim.Attempt.ProviderDispatchedAt = &dispatchedAt
 	providerResult, providerErr := service.provider.Execute(ctx, claim.Connection, claim.Tool, arguments, credentials, claim.Attempt.ProviderIdempotencyKey)
 	if providerErr != nil && providerResult.Status == "" {
 		providerResult.Status = enum.InvocationUnknown
+		providerResult.Effect = provider.EffectAmbiguous
+	}
+	if providerResult.Status == enum.InvocationFailed && providerResult.Effect != provider.EffectNoEffect {
+		providerResult.Status = enum.InvocationUnknown
+		providerResult.Effect = provider.EffectAmbiguous
+	}
+	if providerResult.Status == enum.InvocationSucceeded && providerResult.Effect != provider.EffectCommitted {
+		providerResult.Status = enum.InvocationUnknown
+		providerResult.Effect = provider.EffectAmbiguous
 	}
 	if providerResult.Status != enum.InvocationSucceeded && providerResult.Status != enum.InvocationFailed && providerResult.Status != enum.InvocationUnknown {
 		providerResult.Status = enum.InvocationUnknown
+		providerResult.Effect = provider.EffectAmbiguous
 	}
 	if providerResult.Status == enum.InvocationSucceeded && service.validator.Validate(claim.Tool.OutputSchema, providerResult.Payload) != nil {
 		providerResult.Status = enum.InvocationUnknown
+		providerResult.Effect = provider.EffectAmbiguous
 		providerResult.Payload = json.RawMessage(`{"status":"provider_output_schema_mismatch"}`)
 	}
 	encryptedResult, encryptErr := service.cipher.Encrypt(ctx, providerResult.Payload)
@@ -912,9 +956,22 @@ func (service *Service) finishBounded(base context.Context, claim domainrepo.Exe
 	defer cancel()
 	now := service.now().UTC()
 	if result == nil {
+		payload, err := json.Marshal(struct {
+			Status string `json:"status"`
+			Reason string `json:"reason"`
+		}{Status: strings.ToLower(string(status)), Reason: reason})
+		if err != nil {
+			return err
+		}
+		encrypted, err := service.cipher.Encrypt(ctx, payload)
+		if err != nil {
+			return err
+		}
+		payloadDigest := sha256.Sum256(payload)
 		result = &entity.Result{
 			InvocationID: claim.Invocation.ID, AttemptID: claim.Attempt.ID,
-			Status: status, PayloadDigest: digestText(string(status) + "\x00" + reason), CompletedAt: now,
+			Status: status, EncryptedPayload: encrypted,
+			PayloadDigest: hex.EncodeToString(payloadDigest[:]), CompletedAt: now,
 		}
 	} else if !validDigestText(result.PayloadDigest) {
 		result.PayloadDigest = digestText(string(status) + "\x00" + reason)

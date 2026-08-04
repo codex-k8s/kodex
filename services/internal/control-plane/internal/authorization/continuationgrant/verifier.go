@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"strings"
 	"time"
 
@@ -18,13 +19,15 @@ import (
 )
 
 type Config struct {
-	Issuer         string
-	Audience       string
-	WorkloadID     string
-	CallerSPIFFEID string
-	PublicJWKFile  string
-	Generation     uint64
-	MaximumTTL     time.Duration
+	Issuer             string
+	Audience           string
+	WorkloadID         string
+	CallerSPIFFEID     string
+	PublicJWKFile      string
+	Generation         uint64
+	MaximumTTL         time.Duration
+	ExpectedPurpose    string
+	CredentialMetadata string
 }
 
 type Verifier struct {
@@ -33,6 +36,14 @@ type Verifier struct {
 }
 
 func New(config Config) (*Verifier, error) {
+	if config.ExpectedPurpose != integrationgatewayauth.PurposeTransition &&
+		config.ExpectedPurpose != integrationgatewayauth.PurposeResultAccess {
+		return nil, errors.New("continuation grant purpose is invalid")
+	}
+	if (config.ExpectedPurpose == integrationgatewayauth.PurposeTransition && config.CredentialMetadata != "authorization") ||
+		(config.ExpectedPurpose == integrationgatewayauth.PurposeResultAccess && config.CredentialMetadata != integrationgatewayauth.ResultAccessGrantMetadata) {
+		return nil, errors.New("continuation grant credential metadata is invalid")
+	}
 	grant, err := integrationgatewayauth.NewVerifier(integrationgatewayauth.Config{
 		Issuer: config.Issuer, Audience: config.Audience, WorkloadID: config.WorkloadID,
 		CallerSPIFFEID: config.CallerSPIFFEID, Generation: config.Generation, MaximumTTL: config.MaximumTTL,
@@ -67,15 +78,25 @@ func (verifier *Verifier) Authenticate(ctx context.Context) (authoritytype.Appli
 	if !ok {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
-	values := incoming.Get("authorization")
-	if len(values) != 1 || !strings.HasPrefix(values[0], "Bearer ") {
+	values := incoming.Get(verifier.config.CredentialMetadata)
+	if len(values) != 1 {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
-	compact := strings.TrimPrefix(values[0], "Bearer ")
+	compact := values[0]
+	if verifier.config.CredentialMetadata == "authorization" {
+		if !strings.HasPrefix(compact, "Bearer ") {
+			return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+		}
+		compact = strings.TrimPrefix(compact, "Bearer ")
+	}
+	if compact == "" || strings.TrimSpace(compact) != compact {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
 	claims, err := verifier.grant.Verify(ctx, compact)
-	if err != nil || claims.Purpose != integrationgatewayauth.PurposeTransition {
+	if err != nil || claims.Purpose != verifier.config.ExpectedPurpose {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
+	state := verifier.grant.State()
 	return authoritytype.ApplicationIdentity{
 		ActorID: claims.Subject, OrganizationID: claims.OrganizationID, ProjectID: claims.ProjectID,
 		SessionJTI: claims.JTI, SessionRevision: claims.ContinuationVersion,
@@ -88,7 +109,10 @@ func (verifier *Verifier) Authenticate(ctx context.Context) (authoritytype.Appli
 		BoundRuntimeRevisionSHA256:  claims.RuntimeRevisionSHA256,
 		BoundContinuationID:         claims.ContinuationID, BoundContinuationVersion: claims.ContinuationVersion,
 		BoundContinuationFence: claims.ContinuationFence, BoundInvocationID: claims.InvocationID,
-		AllowedOperationIDs: claims.AllowedOperationIDs,
+		BoundSignerKeysetRevision: state.Revision, BoundSignerHighWatermark: state.HighWatermark,
+		BoundSignerServedGeneration: state.ServedGeneration, BoundSignerKeysetSHA256: state.KeysetSHA256,
+		BoundSignerGeneration: claims.SignerGeneration,
+		AllowedOperationIDs:   claims.AllowedOperationIDs,
 	}, nil
 }
 

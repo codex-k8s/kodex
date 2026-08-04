@@ -137,7 +137,7 @@ func Parse(source []byte) (entity.Definition, error) {
 		if err != nil {
 			return entity.Definition{}, fmt.Errorf("tool %q: %w", candidate.Name, err)
 		}
-		key := parsed.Name + "@" + fmt.Sprint(parsed.Version)
+		key := parsed.Name
 		if _, duplicate := seen[key]; duplicate {
 			return entity.Definition{}, errors.New("integration tool is duplicated")
 		}
@@ -217,8 +217,10 @@ func parseTool(value tool) (entity.Tool, error) {
 		OutputSchema:      append(json.RawMessage(nil), value.OutputSchema.value...),
 		RedactionPointers: append([]string(nil), value.RedactionPointers...),
 		DirectDelivery:    direct,
-		HTTP: entity.HTTPAdapter{Method: method, Path: value.HTTP.Path, Timeout: timeout,
-			IdempotencyHeader: value.HTTP.IdempotencyHeader, CredentialHeaders: credentialHeaders},
+		HTTP: entity.HTTPAdapter{
+			Method: method, Path: value.HTTP.Path, Timeout: timeout,
+			IdempotencyHeader: value.HTTP.IdempotencyHeader, CredentialHeaders: credentialHeaders,
+		},
 	}, nil
 }
 

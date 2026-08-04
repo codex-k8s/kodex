@@ -327,6 +327,7 @@ func expectedOperations() map[string]string {
 		"control.integration-execution.fail":           controlplanev1.ControlPlaneService_FailIntegrationExecution_FullMethodName,
 		"control.integration-continuation.get":         controlplanev1.ControlPlaneService_GetIntegrationContinuation_FullMethodName,
 		"control.integration-continuation.acknowledge": controlplanev1.ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName,
+		"control.integration-result.validate":          controlplanev1.ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
 		"integration.result.resolve":                   integrationgatewayv1.IntegrationResultService_ResolveIntegrationResult_FullMethodName,
 		"integration.result.acknowledge":               integrationgatewayv1.IntegrationResultService_AcknowledgeIntegrationResult_FullMethodName,
 		"integration.result.readiness":                 integrationgatewayv1.IntegrationResultService_CheckReadiness_FullMethodName,

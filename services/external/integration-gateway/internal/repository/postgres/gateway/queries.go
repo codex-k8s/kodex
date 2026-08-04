@@ -98,6 +98,9 @@ var sqlInvocationMarkExecuting string
 //go:embed sql/execution__dispatch.sql
 var sqlExecutionDispatch string
 
+//go:embed sql/execution__attempt_lock.sql
+var sqlExecutionAttemptLock string
+
 //go:embed sql/execution_work_scope__delete.sql
 var sqlExecutionWorkScopeDelete string
 
@@ -115,6 +118,9 @@ var sqlResultResolve string
 
 //go:embed sql/result__acknowledge.sql
 var sqlResultAcknowledge string
+
+//go:embed sql/result_grant_keyset__admit.sql
+var sqlResultGrantKeysetAdmit string
 
 //go:embed sql/invocation__complete.sql
 var sqlInvocationComplete string

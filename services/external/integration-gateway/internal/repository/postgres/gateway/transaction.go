@@ -463,19 +463,6 @@ func (transaction *transaction) ClaimExecution(ctx context.Context, now time.Tim
 			attempt.ProviderDispatchedAt != nil {
 			return domainrepo.ExecutionClaim{}, false, errs.ErrConflict
 		}
-		dispatchedAt := now
-		attempt.ProviderDispatchedAt = &dispatchedAt
-		attemptPayload, marshalErr := marshal(attempt)
-		if marshalErr != nil {
-			return domainrepo.ExecutionClaim{}, false, marshalErr
-		}
-		var identifier string
-		if err := transaction.tx.QueryRow(ctx, sqlExecutionDispatch, pgx.StrictNamedArgs{
-			"attempt_id": attempt.ID, "invocation_id": invocation.ID,
-			"dispatched_at": dispatchedAt, "payload": attemptPayload,
-		}).Scan(&identifier); err != nil {
-			return domainrepo.ExecutionClaim{}, false, err
-		}
 		if _, err := transaction.tx.Exec(ctx, sqlExecutionWorkScopeDelete,
 			pgx.StrictNamedArgs{"invocation_id": invocation.ID}); err != nil {
 			return domainrepo.ExecutionClaim{}, false, err
@@ -530,6 +517,38 @@ func (transaction *transaction) ClaimExecution(ctx context.Context, now time.Tim
 		return domainrepo.ExecutionClaim{}, false, err
 	}
 	return domainrepo.ExecutionClaim{Invocation: invocation, Attempt: attempt, Tool: tool, Connection: connection}, true, nil
+}
+
+func (transaction *transaction) MarkProviderDispatched(
+	ctx context.Context,
+	invocationID string,
+	attemptID string,
+	dispatchedAt time.Time,
+) error {
+	if invocationID == "" || attemptID == "" || dispatchedAt.IsZero() {
+		return errs.ErrInvalid
+	}
+	var raw []byte
+	if err := transaction.tx.QueryRow(ctx, sqlExecutionAttemptLock, pgx.StrictNamedArgs{
+		"invocation_id": invocationID, "attempt_id": attemptID,
+		"tenant_id": transaction.tenantID, "project_id": transaction.projectID,
+	}).Scan(&raw); err != nil {
+		return err
+	}
+	var attempt entity.ExecutionAttempt
+	if json.Unmarshal(raw, &attempt) != nil || attempt.FinishedAt != nil || attempt.ProviderDispatchedAt != nil {
+		return errs.ErrConflict
+	}
+	attempt.ProviderDispatchedAt = &dispatchedAt
+	payload, err := marshal(attempt)
+	if err != nil {
+		return err
+	}
+	var identifier string
+	return transaction.tx.QueryRow(ctx, sqlExecutionDispatch, pgx.StrictNamedArgs{
+		"attempt_id": attemptID, "invocation_id": invocationID,
+		"dispatched_at": dispatchedAt, "payload": payload,
+	}).Scan(&identifier)
 }
 
 func (transaction *transaction) CompleteExecution(ctx context.Context, completion domainrepo.ExecutionCompletion) error {
@@ -622,23 +641,28 @@ func (transaction *transaction) AcknowledgeResult(
 	var result entity.Result
 	var raw []byte
 	if err := transaction.tx.QueryRow(ctx, sqlResultAcknowledge, pgx.StrictNamedArgs{
-		"invocation_id":    acknowledgement.Binding.InvocationID,
-		"attempt_id":       acknowledgement.Binding.AttemptID,
-		"tenant_id":        transaction.tenantID,
-		"project_id":       transaction.projectID,
-		"delivery_version": acknowledgement.DeliveryVersion,
-		"delivery_fence":   acknowledgement.DeliveryFence,
-		"idempotency_hash": acknowledgement.IdempotencyHash,
-		"request_hash":     acknowledgement.RequestHash,
-		"acknowledged_at":  acknowledgement.AcknowledgedAt,
+		"invocation_id":        acknowledgement.Binding.InvocationID,
+		"attempt_id":           acknowledgement.Binding.AttemptID,
+		"tenant_id":            transaction.tenantID,
+		"project_id":           transaction.projectID,
+		"outcome":              acknowledgement.Binding.Outcome,
+		"reference_sha256":     acknowledgement.Binding.ReferenceSHA256,
+		"continuation_id":      acknowledgement.Binding.ContinuationID,
+		"continuation_version": acknowledgement.Binding.ContinuationVersion,
+		"continuation_fence":   acknowledgement.Binding.ContinuationFence,
+		"delivery_version":     acknowledgement.DeliveryVersion,
+		"delivery_fence":       acknowledgement.DeliveryFence,
+		"idempotency_hash":     acknowledgement.IdempotencyHash,
+		"request_hash":         acknowledgement.RequestHash,
+		"acknowledged_at":      acknowledgement.AcknowledgedAt,
 	}).Scan(&raw, &result.DeliveryVersion, &result.DeliveryFence,
 		&result.AcknowledgedAt, &result.CompletedAt); err != nil {
 		return entity.Result{}, err
 	}
 	if json.Unmarshal(raw, &result) != nil || result.InvocationID != acknowledgement.Binding.InvocationID ||
 		result.AttemptID != acknowledgement.Binding.AttemptID ||
-		result.PayloadDigest != acknowledgement.Binding.ResultSHA256 ||
-		result.Status != enum.InvocationSucceeded || result.AcknowledgedAt == nil {
+		result.PayloadDigest != acknowledgement.Binding.ReferenceSHA256 ||
+		result.Status != acknowledgement.Binding.Outcome || result.AcknowledgedAt == nil {
 		return entity.Result{}, errs.ErrConflict
 	}
 	if err := transaction.appendAudit(ctx, acknowledgement.Audit); err != nil {

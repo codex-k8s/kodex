@@ -1,4 +1,4 @@
-+apiVersion: mattercodex.io/v1
+apiVersion: mattercodex.io/v1
 kind: IntegrationDefinition
 metadata:
   name: provider-health
@@ -26,15 +26,10 @@ spec:
         required:
           - status
       redactionPointers: []
-      direct:
-        reference: provider-health.readonly
-        cliNames:
-          - provider-health
-        environmentNames:
-          - PROVIDER_HEALTH_REFERENCE
       http:
         method: GET
         path: /health
         timeout: 2s
         idempotencyHeader: ""
-        credentialHeaders: {}
+        credentialHeaders:
+          X-Provider-Token: provider-health
