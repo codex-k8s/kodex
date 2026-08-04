@@ -27,6 +27,19 @@ func TestResolveAssignmentRequiresExactMattermostIdentity(t *testing.T) {
 	}
 }
 
+func TestOnlyAssignedMentionIsAgentSelector(t *testing.T) {
+	current := &index{assignments: map[string]AgentAssignment{
+		"team\x00channel\x00agent-b": {MentionUsername: "agent-b", MattermostUserID: "user-b"},
+	}}
+	if _, assigned := current.assigned("team", "channel", "human-a"); assigned {
+		t.Fatal("human mention was treated as agent selector")
+	}
+	assignment, assigned := current.assigned("team", "channel", "Agent-B")
+	if !assigned || assignment.MattermostUserID != "user-b" {
+		t.Fatal("server-owned agent selector was not found")
+	}
+}
+
 func TestChannelBoundariesPreserveProviderAndDomainIDs(t *testing.T) {
 	current := &index{channels: map[string]ChannelBinding{
 		"team\x00channel": {TeamID: "team", ChannelID: "channel", OrganizationID: "organization",

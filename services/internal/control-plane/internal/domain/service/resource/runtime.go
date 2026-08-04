@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -643,6 +644,10 @@ func (service *Service) ClaimTurn(
 			); err != nil {
 				return err
 			}
+			if err := service.enqueueInteractionStateDeliveries(ctx, tx, authorityGraph.Session, claimed,
+				turnSpec, "claim:"+strconv.FormatUint(claimed.Version, 10), "PROGRESS", "STATUS", "RUN_CARD"); err != nil {
+				return err
+			}
 			payload, err := json.Marshal(claimTurnReceipt{
 				LeaseExpiresAt:      expiresAt,
 				Attempt:             turnSpec.Attempt,
@@ -1080,6 +1085,9 @@ func (service *Service) CompleteTurn(
 				"complete_turn",
 				updated,
 			); err != nil {
+				return entity.Resource{}, err
+			}
+			if err := service.enqueueInteractionTerminalDelivery(ctx, tx, graph.Session, updated, spec, nil); err != nil {
 				return entity.Resource{}, err
 			}
 			if err := service.completeProcessFromTurn(

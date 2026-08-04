@@ -30,6 +30,7 @@ import (
 	mattermosteventauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/mattermostevent"
 	oidcauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/oidc"
 	authoritypolicy "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/policy"
+	readbackgrantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/readbackgrant"
 	proofsignerfile "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/proofsigner/file"
 	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
@@ -209,6 +210,19 @@ func Run(
 	if err != nil {
 		return errors.New("runtime restore signing key is unavailable")
 	}
+	interactionReadbackSigner, err := readbackgrantauth.New(startup, readbackgrantauth.Config{
+		Issuer:     "https://control-plane.mattercodex-system.svc.cluster.local/authority/interaction-delivery-readback",
+		Audience:   "urn:mattercodex:interaction-delivery-readback",
+		ProducerID: "control-plane.interaction-delivery-readback", Purpose: "INTERACTION_DELIVERY_READBACK_GRANT",
+		WorkloadID: "control-plane", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+		Operation: "interaction.delivery.read", Permission: "interaction.delivery.read",
+		PrivateJWKFile:   config.InteractionReadbackPrivateJWKFile,
+		PublicKeysetFile: config.InteractionReadbackPublicKeysetFile,
+		Generation:       config.InteractionReadbackSignerGeneration, MaximumTTL: 15 * time.Minute,
+	}, postgresRepository)
+	if err != nil {
+		return err
+	}
 	resourceService, err := resource.New(cachedRepository, resource.Config{
 		LeaseSigningKey:            leaseKey,
 		RuntimeAdmissionSigningKey: admissionSigningKey,
@@ -240,6 +254,7 @@ func Run(
 		CleanupAuthorizerWorkload:  "runtime-cleanup-authorizer",
 		CleanupAuthorizerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
 		PendingRescheduleDelay:     config.PendingRescheduleDelay,
+		InteractionReadbackIssuer:  interactionReadbackIssuer{signer: interactionReadbackSigner},
 		Observer:                   businessMetrics,
 	})
 	if err != nil {

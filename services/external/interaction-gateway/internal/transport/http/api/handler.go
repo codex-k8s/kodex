@@ -10,7 +10,9 @@ import (
 	"errors"
 	"io"
 	"math"
+	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	domainmattermost "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/mattermost"
@@ -193,6 +195,15 @@ func (handler *Handler) GetInteractionDelivery(response http.ResponseWriter, req
 		writeError(response, http.StatusForbidden, "delivery readback credential is not allowed")
 		return
 	}
+	if err := handler.service.ValidateDeliveryReadback(request.Context(), claims.JTI, claims.DeliveryID,
+		claims.OrganizationID, claims.ProjectID, claims.CredentialSHA256, claims.Generation); err != nil {
+		if errors.Is(err, domainerrs.ErrUnauthorized) {
+			writeError(response, http.StatusForbidden, "delivery readback credential is not allowed")
+		} else {
+			writeError(response, http.StatusServiceUnavailable, "delivery readback authorization is unavailable")
+		}
+		return
+	}
 	delivery, err := handler.service.GetDeliveryScoped(request.Context(), claims.OrganizationID, claims.ProjectID, deliveryID.String())
 	if err != nil {
 		if errors.Is(err, domainerrs.ErrNotFound) {
@@ -271,6 +282,38 @@ func (handler *Handler) GetInteractionDelivery(response http.ResponseWriter, req
 		view.LastErrorCode = &delivery.LastErrorCode
 	}
 	writeJSON(response, http.StatusOK, view)
+}
+
+func (handler *Handler) DownloadInteractionArtifact(response http.ResponseWriter, request *http.Request,
+	grantID openapi_types.UUID) {
+	binding, raw, err := handler.service.DownloadArtifact(request.Context(), grantID.String(), request.Header.Get("Authorization"))
+	if err != nil {
+		switch {
+		case errors.Is(err, domainerrs.ErrUnauthorized):
+			writeError(response, http.StatusUnauthorized, "Mattermost artifact credential is invalid")
+		case errors.Is(err, domainerrs.ErrConflict):
+			writeError(response, http.StatusConflict, "artifact download grant was already consumed")
+		case errors.Is(err, domainerrs.ErrUnavailable):
+			writeError(response, http.StatusServiceUnavailable, "artifact content is temporarily unavailable")
+		default:
+			writeError(response, http.StatusNotFound, "artifact download grant not found")
+		}
+		return
+	}
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": binding.Name})
+	if disposition == "" {
+		writeError(response, http.StatusInternalServerError, "artifact filename is invalid")
+		return
+	}
+	response.Header().Set("Content-Type", binding.MediaType)
+	response.Header().Set("Content-Disposition", disposition)
+	response.Header().Set("X-Content-SHA256", binding.SHA256)
+	response.Header().Set("Content-Length", strconv.Itoa(len(raw)))
+	response.Header().Set("Cache-Control", "no-store")
+	response.Header().Set("Referrer-Policy", "no-referrer")
+	response.Header().Set("X-Content-Type-Options", "nosniff")
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(raw)
 }
 
 func (handler *Handler) requireMattermost(response http.ResponseWriter, request *http.Request) bool {

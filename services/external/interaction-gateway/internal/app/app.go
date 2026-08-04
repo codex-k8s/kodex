@@ -28,6 +28,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/readbackgrant"
 	apihttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/api"
 	generatedhttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/generated"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -84,20 +85,6 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil || len(key) != 32 {
 		return errors.New("delivery encryption key is unavailable")
 	}
-	contextKey, err := readRuntimeFile(config.Gateway.PostgresContextKeyFile, 128)
-	if err != nil || len(contextKey) < 32 {
-		return errors.New("postgresql runtime context key is unavailable")
-	}
-	repository, err := postgresgateway.New(current.pool, postgresgateway.Config{
-		EncryptionKey: key, PrincipalName: config.Gateway.PostgresExpectedUser,
-		PrincipalGeneration: config.Gateway.PostgresPrincipalGeneration,
-		ContextKeyID:        config.Gateway.PostgresContextKeyID, ContextSigningKey: contextKey,
-		ContextTTL: config.Gateway.PostgresContextTTL, CleanupBase: shutdownBase,
-		CleanupTimeout: config.Gateway.ShutdownTimeout,
-	})
-	if err != nil {
-		return err
-	}
 	current.control, err = controlplaneclient.Dial(startup, controlplaneclient.Config{
 		Target: config.Control.Target, TLSServerName: config.Control.TLSServerName, CAFile: config.Control.CAFile,
 		ClientCertificateFile: config.Control.ClientCertificateFile, ClientPrivateKeyFile: config.Control.ClientPrivateKeyFile,
@@ -116,13 +103,40 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		SiteURL: config.Mattermost.SiteURL, TLSServerName: config.Mattermost.TLSServerName, CAFile: config.Mattermost.CAFile,
 		ClientCertificateFile: config.Mattermost.ClientCertificateFile, ClientPrivateKeyFile: config.Mattermost.ClientPrivateKeyFile,
 		MappingManifestFile: config.Mattermost.MappingManifestFile, RequestTimeout: config.Mattermost.RequestTimeout,
+		MappingExpectedRevision: config.Mattermost.MappingExpectedRevision,
+		MappingSHA256File:       config.Mattermost.MappingSHA256File, MappingVaultKVVersion: config.Mattermost.MappingVaultKVVersion,
 		MaximumFileBytes: config.Mattermost.MaximumFileBytes, CatchUpWindow: config.Mattermost.CatchUpWindow,
 	})
 	if err != nil {
 		return err
 	}
+	boundaries := mattermost.ChannelBoundaries()
+	organizationID, projectSet := "", map[string]struct{}{}
+	for _, boundary := range boundaries {
+		if organizationID == "" {
+			organizationID = boundary.OrganizationID
+		}
+		if boundary.OrganizationID != organizationID {
+			return errors.New("Mattermost mapping spans multiple PostgreSQL tenant principals")
+		}
+		projectSet[boundary.ProjectID] = struct{}{}
+	}
+	projectIDs := make([]string, 0, len(projectSet))
+	for projectID := range projectSet {
+		projectIDs = append(projectIDs, projectID)
+	}
+	slices.Sort(projectIDs)
+	repository, err := postgresgateway.New(current.pool, postgresgateway.Config{
+		EncryptionKey: key, PrincipalName: config.Gateway.PostgresExpectedUser,
+		PrincipalGeneration: config.Gateway.PostgresPrincipalGeneration,
+		OrganizationID:      organizationID, AllowedProjectIDs: projectIDs,
+		CleanupBase: shutdownBase, CleanupTimeout: config.Gateway.ShutdownTimeout,
+	})
+	if err != nil {
+		return err
+	}
 	objects, err := objectclient.New(objectclient.Config{
-		Endpoint: config.Object.Endpoint, PublicDownloadEndpoint: config.Object.PublicDownloadEndpoint,
+		Endpoint:      config.Object.Endpoint,
 		TLSServerName: config.Object.TLSServerName, CAFile: config.Object.CAFile,
 		ClientCertificateFile: config.Object.ClientCertificateFile, ClientPrivateKeyFile: config.Object.ClientPrivateKeyFile,
 		AccessKeyFile: config.Object.AccessKeyFile, SecretKeyFile: config.Object.SecretKeyFile,
@@ -141,18 +155,19 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	readbackVerifier, err := readbackgrant.New(readbackgrant.Config{
+	readbackVerifier, err := readbackgrant.New(startup, readbackgrant.Config{
 		Issuer: config.Gateway.ReadbackIssuer, Audience: config.Gateway.ReadbackAudience,
 		ProducerID: "control-plane.interaction-delivery-readback", Purpose: "INTERACTION_DELIVERY_READBACK_GRANT",
 		Operation: "interaction.delivery.read", Permission: "interaction.delivery.read",
-		PublicJWKFile: config.Gateway.ReadbackPublicJWKFile, Generation: config.Gateway.ReadbackGeneration,
+		PublicKeysetFile: config.Gateway.ReadbackPublicKeysetFile, Generation: config.Gateway.ReadbackGeneration,
 		MaximumTTL: 15 * time.Minute,
-	})
+	}, repository)
 	if err != nil {
 		return err
 	}
 	service, err := domainservice.New(repository, mattermost, objects, control, authority, current.business, domainservice.Config{
 		ActionCallbackURL: config.Gateway.ActionCallbackURL, DialogCallbackURL: config.Gateway.DialogCallbackURL,
+		ArtifactDownloadBaseURL: config.Gateway.ArtifactDownloadBaseURL, ArtifactDownloadTTL: config.Gateway.ArtifactDownloadTTL,
 		RetentionRef: config.Gateway.RetentionRef, MaximumPromptBytes: config.Gateway.MaximumPromptBytes,
 		MaximumFiles: config.Gateway.MaximumFiles, MaximumAttempts: config.Gateway.MaximumAttempts,
 		MaximumMattermostFileBytes: config.Mattermost.MaximumFileBytes,
@@ -175,12 +190,19 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		return err
 	}
 	readbackCheck := func(ctx context.Context) error {
-		credential, credentialErr := readbackgrant.ReadinessCredential(config.Gateway.ReadbackReadinessGrantFile)
+		deliveryID, key := uuid.NewString(), uuid.NewString()
+		credential, expiresAt, credentialErr := control.IssueInteractionDeliveryReadback(ctx, key, deliveryID, true)
 		if credentialErr != nil {
 			return credentialErr
 		}
-		claims, verifyErr := readbackVerifier.Verify(ctx, credential)
-		if verifyErr != nil || !claims.Readiness || !slices.Contains(config.Gateway.ReadbackClientSPIFFEIDs, claims.CallerSPIFFEID) {
+		claims, verifyErr := readbackVerifier.Verify(ctx, "Bearer "+credential)
+		if verifyErr != nil || !claims.Readiness || claims.DeliveryID != deliveryID ||
+			!expiresAt.Equal(time.Unix(claims.ExpiresAt, 0)) ||
+			!slices.Contains(config.Gateway.ReadbackClientSPIFFEIDs, claims.CallerSPIFFEID) {
+			return errors.New("interaction delivery readback working path is not ready")
+		}
+		if validateErr := service.ValidateDeliveryReadback(ctx, claims.JTI, claims.DeliveryID,
+			claims.OrganizationID, claims.ProjectID, claims.CredentialSHA256, claims.Generation); validateErr != nil {
 			return errors.New("interaction delivery readback working path is not ready")
 		}
 		_, readErr := service.GetDeliveryScoped(ctx, claims.OrganizationID, claims.ProjectID, claims.DeliveryID)
@@ -192,10 +214,16 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	for _, check := range []struct {
 		name string
 		run  func(context.Context) error
-	}{{"PostgreSQL", repository.Check}, {"control-plane", control.Check}, {"Mattermost event", service.CheckInteraction}, {"Mattermost", mattermost.Check}, {"S3", objects.Check}, {"delivery readback", readbackCheck}} {
+	}{{"PostgreSQL", repository.Check}, {"control-plane", control.Check}, {"Mattermost event", service.CheckInteraction}, {"S3", objects.Check}, {"delivery readback", readbackCheck}} {
 		if err := check.run(startup); err != nil {
 			return errors.New("startup barrier: " + check.name + " working path is not ready")
 		}
+	}
+	if err := service.ReconcileLifecycle(startup); err != nil {
+		return errors.New("startup barrier: Mattermost lifecycle reconciliation failed")
+	}
+	if err := mattermost.Check(startup); err != nil {
+		return errors.New("startup barrier: Mattermost mapping readback failed")
 	}
 	if err := service.CatchUp(startup); err != nil {
 		return errors.New("startup barrier: Mattermost catch-up failed")
@@ -241,12 +269,10 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 			func(ctx context.Context) (bool, error) {
 				return service.ProcessDelivery(ctx, config.Gateway.InstanceID)
 			}),
-		periodicWorker("turn_delivery", config.Gateway.WorkerInterval, config.Gateway.OperationTimeout, current.business, current.logger,
-			func(ctx context.Context) (bool, error) {
-				return service.ProcessTurnDelivery(ctx, config.Gateway.InstanceID)
-			}),
 		periodicWorker("owner_gate", config.Gateway.OwnerGateInterval, config.Gateway.OperationTimeout, current.business, current.logger,
 			func(ctx context.Context) (bool, error) { return service.ClaimOwnerGate(ctx) }),
+		periodicWorker("owner_delivery", config.Gateway.OwnerGateInterval, config.Gateway.OperationTimeout, current.business, current.logger,
+			func(ctx context.Context) (bool, error) { return service.ClaimInteractionDelivery(ctx) }),
 		periodicWorker("expiry", config.Gateway.ExpiryInterval, config.Gateway.OperationTimeout, current.business, current.logger,
 			func(ctx context.Context) (bool, error) { return true, service.ExpireOwnerGate(ctx) }),
 		readinessWorker(repository.Check, control.Check, service.CheckInteraction, mattermost.Check, objects.Check, readbackCheck,

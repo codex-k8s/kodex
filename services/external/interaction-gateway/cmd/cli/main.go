@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -22,13 +25,18 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+//go:embed sql/*.sql
+var operationalSQL embed.FS
+
 type config struct {
-	DSNFile             string `env:"INTERACTION_GATEWAY_MIGRATION_POSTGRES_DSN_FILE,required"`
-	CAFile              string `env:"INTERACTION_GATEWAY_POSTGRES_CA_FILE,required"`
-	TLSServerName       string `env:"INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME,required"`
-	PrincipalGeneration int64  `env:"INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION,required"`
-	ContextKeyID        string `env:"INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_ID,required"`
-	ContextKeyFile      string `env:"INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_FILE,required"`
+	DSNFile                     string `env:"INTERACTION_GATEWAY_MIGRATION_POSTGRES_DSN_FILE,required"`
+	CAFile                      string `env:"INTERACTION_GATEWAY_POSTGRES_CA_FILE,required"`
+	TLSServerName               string `env:"INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME,required"`
+	PrincipalGeneration         int64  `env:"INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION,required"`
+	PreviousPrincipalGeneration int64  `env:"INTERACTION_GATEWAY_POSTGRES_PREVIOUS_PRINCIPAL_GENERATION"`
+	MappingManifestFile         string `env:"INTERACTION_GATEWAY_MATTERMOST_MAPPING_MANIFEST_FILE,required"`
+	KeysetGenesisEnabled        bool   `env:"INTERACTION_GATEWAY_KEYSET_GENESIS_ENABLED"`
+	ReadbackPublicKeysetFile    string `env:"INTERACTION_GATEWAY_READBACK_PUBLIC_KEYSET_FILE"`
 }
 
 func main() {
@@ -81,23 +89,10 @@ func run(ctx context.Context, arguments []string) error {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return err
 		}
-		contextKey, err := readFile(value.ContextKeyFile, 128)
-		if err != nil || len(contextKey) < 32 || value.PrincipalGeneration <= 0 || value.ContextKeyID == "" {
-			return errors.New("postgresql runtime identity material is invalid")
+		if err := reconcileTenantPrincipal(ctx, database, value); err != nil {
+			return err
 		}
-		if _, err := database.ExecContext(ctx,
-			"SELECT interaction_gateway_reconcile_runtime_identity($1, $2, $3::bytea)",
-			value.PrincipalGeneration, value.ContextKeyID, contextKey); err != nil {
-			return errors.New("reconcile PostgreSQL runtime identity")
-		}
-		var generation int64
-		var keyID string
-		if err := database.QueryRowContext(ctx,
-			"SELECT served_generation, context_key_id FROM interaction_gateway_runtime_credential_fence WHERE singleton",
-		).Scan(&generation, &keyID); err != nil || generation != value.PrincipalGeneration || keyID != value.ContextKeyID {
-			return errors.New("read back PostgreSQL runtime identity")
-		}
-		return nil
+		return reconcileReadbackKeysetGenesis(ctx, database, value)
 	case "status":
 		return goose.StatusContext(ctx, database, "migrations")
 	case "version":
@@ -110,6 +105,127 @@ func run(ctx context.Context, arguments []string) error {
 	default:
 		return errors.New("unsupported migration command")
 	}
+}
+
+func reconcileTenantPrincipal(ctx context.Context, database *sql.DB, value config) error {
+	raw, err := readFile(value.MappingManifestFile, 1<<20)
+	if err != nil {
+		return errors.New("read Mattermost mapping for PostgreSQL principal")
+	}
+	var manifest struct {
+		Channels []struct {
+			OrganizationID string `json:"organization_id"`
+			ProjectID      string `json:"project_id"`
+		} `json:"channels"`
+	}
+	if json.Unmarshal(raw, &manifest) != nil || len(manifest.Channels) == 0 || value.PrincipalGeneration <= 0 {
+		return errors.New("PostgreSQL principal mapping is invalid")
+	}
+	organizationID := manifest.Channels[0].OrganizationID
+	projects := map[string]struct{}{}
+	for _, channel := range manifest.Channels {
+		if channel.OrganizationID != organizationID || channel.ProjectID == "" {
+			return errors.New("PostgreSQL principal must own exactly one organization")
+		}
+		projects[channel.ProjectID] = struct{}{}
+	}
+	projectIDs := make([]string, 0, len(projects))
+	for projectID := range projects {
+		projectIDs = append(projectIDs, projectID)
+	}
+	slices.Sort(projectIDs)
+	projectJSON, err := json.Marshal(projectIDs)
+	if err != nil {
+		return errors.New("encode PostgreSQL principal project mapping")
+	}
+	var currentGeneration int64
+	highWatermarkSQL, err := operationalSQL.ReadFile("sql/tenant_principal__high_watermark.sql")
+	if err != nil {
+		return errors.New("load PostgreSQL principal high-watermark query")
+	}
+	currentErr := database.QueryRowContext(ctx, string(highWatermarkSQL)).Scan(&currentGeneration)
+	if currentErr == nil && currentGeneration == value.PrincipalGeneration {
+		if readbackTenantPrincipal(ctx, database, value.PrincipalGeneration, organizationID, projectIDs) == nil {
+			return reconcileRetiredTenantPrincipal(ctx, database, value)
+		}
+	}
+	if currentErr != nil && !errors.Is(currentErr, sql.ErrNoRows) {
+		return errors.New("read PostgreSQL principal high-watermark")
+	}
+	stageSQL, err := operationalSQL.ReadFile("sql/tenant_principal__stage.sql")
+	if err != nil {
+		return errors.New("load PostgreSQL principal stage command")
+	}
+	if _, err := database.ExecContext(ctx, string(stageSQL),
+		value.PrincipalGeneration, organizationID, projectJSON); err != nil {
+		return errors.New("stage PostgreSQL tenant principal")
+	}
+	promoteSQL, err := operationalSQL.ReadFile("sql/tenant_principal__promote.sql")
+	if err != nil {
+		return errors.New("load PostgreSQL principal promote command")
+	}
+	if currentErr != nil || currentGeneration != value.PrincipalGeneration {
+		if _, err := database.ExecContext(ctx, string(promoteSQL), value.PrincipalGeneration); err != nil {
+			return errors.New("promote PostgreSQL tenant principal")
+		}
+	}
+	if err := readbackTenantPrincipal(ctx, database, value.PrincipalGeneration, organizationID, projectIDs); err != nil {
+		return err
+	}
+	return reconcileRetiredTenantPrincipal(ctx, database, value)
+}
+
+func reconcileRetiredTenantPrincipal(ctx context.Context, database *sql.DB, value config) error {
+	if value.PreviousPrincipalGeneration == 0 {
+		return nil
+	}
+	if value.PreviousPrincipalGeneration < 0 || value.PreviousPrincipalGeneration >= value.PrincipalGeneration {
+		return errors.New("PostgreSQL previous principal generation is invalid")
+	}
+	statement, err := operationalSQL.ReadFile("sql/tenant_principal__retire.sql")
+	if err != nil {
+		return errors.New("load PostgreSQL principal retire command")
+	}
+	if _, err := database.ExecContext(ctx, string(statement), value.PreviousPrincipalGeneration); err != nil {
+		return errors.New("retire PostgreSQL tenant principal")
+	}
+	readback, err := operationalSQL.ReadFile("sql/tenant_principal__retire_readback.sql")
+	if err != nil {
+		return errors.New("load PostgreSQL principal retire readback")
+	}
+	var status string
+	var canLogin, member bool
+	var activeSessions int64
+	if err := database.QueryRowContext(ctx, string(readback), value.PreviousPrincipalGeneration).Scan(
+		&status, &canLogin, &member, &activeSessions); err != nil || status != "RETIRED" || canLogin || member || activeSessions != 0 {
+		return errors.New("PostgreSQL tenant principal retirement readback failed")
+	}
+	return nil
+}
+
+func readbackTenantPrincipal(ctx context.Context, database *sql.DB, generation int64,
+	organizationID string, projectIDs []string) error {
+	readbackSQL, err := operationalSQL.ReadFile("sql/tenant_principal__readback.sql")
+	if err != nil {
+		return errors.New("load PostgreSQL tenant principal readback query")
+	}
+	rows, err := database.QueryContext(ctx, string(readbackSQL), generation)
+	if err != nil {
+		return errors.New("read back PostgreSQL tenant principal")
+	}
+	defer rows.Close()
+	readProjects := make([]string, 0, len(projectIDs))
+	for rows.Next() {
+		var readOrganizationID, projectID string
+		if rows.Scan(&readOrganizationID, &projectID) != nil || readOrganizationID != organizationID {
+			return errors.New("PostgreSQL tenant principal readback mismatch")
+		}
+		readProjects = append(readProjects, projectID)
+	}
+	if err := rows.Err(); err != nil || !slices.Equal(readProjects, projectIDs) {
+		return errors.New("PostgreSQL tenant principal project readback mismatch")
+	}
+	return nil
 }
 
 func readFile(path string, maximum int64) ([]byte, error) {

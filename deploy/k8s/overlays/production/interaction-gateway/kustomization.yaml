@@ -6,7 +6,8 @@ configMapGenerator:
   - name: interaction-gateway-runtime
     behavior: merge
     literals:
-      - INTERACTION_GATEWAY_S3_PUBLIC_DOWNLOAD_ENDPOINT=https://artifacts.mattercodex.dev
+      - INTERACTION_GATEWAY_ARTIFACT_DOWNLOAD_BASE_URL=https://interaction-artifacts.mattercodex.dev
+      - INTERACTION_GATEWAY_MATTERMOST_MAPPING_EXPECTED_REVISION=production-r1
 patches:
   - path: deployment-patch.yaml
   - path: poddisruptionbudget-patch.yaml

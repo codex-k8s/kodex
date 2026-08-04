@@ -99,19 +99,25 @@ func run(ctx context.Context, arguments []string) error {
 	}
 	switch action {
 	case "expand":
-		return migrateExpand(
+		if err := migrateExpand(
 			ctx,
 			database,
 			config.TLSServerName,
 			roots,
-		)
+		); err != nil {
+			return err
+		}
+		return reconcileKeysetGeneses(ctx, database, config)
 	case "up":
-		return migrateUp(
+		if err := migrateUp(
 			ctx,
 			database,
 			config.TLSServerName,
 			roots,
-		)
+		); err != nil {
+			return err
+		}
+		return reconcileKeysetGeneses(ctx, database, config)
 	case "status":
 		return goose.StatusContext(ctx, database, "migrations")
 	case "version":

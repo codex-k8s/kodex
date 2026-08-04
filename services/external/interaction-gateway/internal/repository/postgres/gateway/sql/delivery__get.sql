@@ -6,5 +6,7 @@ SELECT id, kind, state, organization_id, project_id, session_id, turn_id,
        COALESCE(owner_gate_version, 0), process_run_id, COALESCE(process_version, 0),
        owner_gate_claim_token_ciphertext, COALESCE(owner_gate_claim_fence, 0),
        owner_gate_claim_expires_at, recipient_actor_id, owner_gate_payload_sha256, delivery_recorded_at,
-       created_at, updated_at
+       created_at, updated_at, COALESCE(owner_delivery_fence, 0), owner_delivery_token_ciphertext,
+       owner_delivery_expires_at, COALESCE(owner_turn_version, 0), owner_runtime_revision_id,
+       COALESCE(owner_runtime_revision_version, 0), owner_delivery_recorded_at
 FROM interaction_gateway_deliveries WHERE id = $1;

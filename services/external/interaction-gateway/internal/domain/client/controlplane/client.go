@@ -4,6 +4,7 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 )
@@ -80,6 +81,29 @@ type RecordDeliveryInput struct {
 	RootPostID     string
 }
 
+type InteractionDeliveryWork struct {
+	DeliveryID, OrganizationID, ProjectID, ActorID      string
+	SessionID                                           string
+	SessionVersion                                      uint64
+	TurnID                                              string
+	TurnVersion                                         uint64
+	Attempt                                             uint32
+	RuntimeRevisionID                                   string
+	RuntimeRevisionVersion                              uint64
+	ImmutableInputSHA256                                string
+	Kind, LifecycleState, Outcome                       string
+	ArtifactID                                          string
+	ArtifactVersion                                     uint64
+	ArtifactSHA256                                      string
+	ArtifactName, ArtifactStorageRef, ArtifactMediaType string
+	ArtifactSizeBytes                                   uint64
+	Fence                                               uint64
+	LeaseToken                                          string
+	LeaseExpiresAt                                      time.Time
+	ReadbackCredential                                  string
+	InlinePayload                                       []byte
+}
+
 type Client interface {
 	Check(context.Context) error
 	CheckInteraction(context.Context, string, string) error
@@ -93,4 +117,8 @@ type Client interface {
 	RecordOwnerGateDelivery(context.Context, string, RecordDeliveryInput) error
 	ResolveOwnerGate(context.Context, string, ResolveGateInput) error
 	ExpireOwnerGate(context.Context, string) error
+	ClaimInteractionDelivery(context.Context, string) (InteractionDeliveryWork, error)
+	RecordInteractionDelivery(context.Context, string, InteractionDeliveryWork, string) error
+	IssueInteractionDeliveryReadback(context.Context, string, string, bool) (string, time.Time, error)
+	ValidateInteractionDeliveryReadback(context.Context, string, string, string, string, string, string, uint64) (bool, error)
 }

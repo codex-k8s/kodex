@@ -161,6 +161,12 @@ spec:
             - name: integration-continuation-grant-signer
               mountPath: /var/run/secrets/mattercodex/control-plane/continuation-grant
               readOnly: true
+            - name: interaction-readback-signer
+              mountPath: /var/run/secrets/mattercodex/control-plane/interaction-readback
+              readOnly: true
+            - name: interaction-readback-trust
+              mountPath: /var/run/config/mattercodex/control-plane/interaction-readback
+              readOnly: true
             - name: otel-ca
               mountPath: /var/run/config/mattercodex/control-plane/observability
               readOnly: true
@@ -270,6 +276,18 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-integration-continuation-grant-signer
+        - name: interaction-readback-signer
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-interaction-readback-signer
+        - name: interaction-readback-trust
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-interaction-readback-trust
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

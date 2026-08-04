@@ -35,12 +35,16 @@ var (
 	inboundCancelDeletionSQL string
 	//go:embed sql/inbound__thread_session.sql
 	inboundThreadSessionSQL string
+	//go:embed sql/inbound__known_threads.sql
+	inboundKnownThreadsSQL string
 	//go:embed sql/cursor__load.sql
 	cursorLoadSQL string
 	//go:embed sql/cursor__advance.sql
 	cursorAdvanceSQL string
 	//go:embed sql/delivery__insert.sql
 	deliveryInsertSQL string
+	//go:embed sql/delivery__owner_rebind.sql
+	deliveryOwnerRebindSQL string
 	//go:embed sql/delivery__get.sql
 	deliveryGetSQL string
 	//go:embed sql/delivery__get_scoped.sql
@@ -67,16 +71,22 @@ var (
 	uploadReceiptListSQL string
 	//go:embed sql/upload_receipt__save.sql
 	uploadReceiptSaveSQL string
-	//go:embed sql/turn_watch__save.sql
-	turnWatchSaveSQL string
-	//go:embed sql/turn_watch__claim.sql
-	turnWatchClaimSQL string
-	//go:embed sql/turn_watch__advance.sql
-	turnWatchAdvanceSQL string
 	//go:embed sql/gate_claim__pending.sql
 	gateClaimPendingSQL string
 	//go:embed sql/gate_claim__bind.sql
 	gateClaimBindSQL string
 	//go:embed sql/gate_claim__complete.sql
 	gateClaimCompleteSQL string
+	//go:embed sql/download_grant__insert.sql
+	downloadGrantInsertSQL string
+	//go:embed sql/download_grant__scope.sql
+	downloadGrantScopeSQL string
+	//go:embed sql/download_grant__get.sql
+	downloadGrantGetSQL string
+	//go:embed sql/download_grant__consume.sql
+	downloadGrantConsumeSQL string
+	//go:embed sql/download_grant__revoke.sql
+	downloadGrantRevokeSQL string
+	//go:embed sql/delivery_readback_keyset__admit.sql
+	deliveryReadbackKeysetAdmitSQL string
 )

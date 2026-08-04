@@ -42,15 +42,16 @@ type Config struct {
 }
 
 type Verifier struct {
-	config    Config
-	fence     KeysetFence
-	refreshMu sync.Mutex
-	mu        sync.RWMutex
-	keys      map[uint64]verificationKey
-	state     servedState
-	retired   []int64
-	active    []int64
-	now       func() time.Time
+	config     Config
+	fence      KeysetFence
+	refreshMu  sync.Mutex
+	mu         sync.RWMutex
+	keys       map[uint64]verificationKey
+	state      servedState
+	retired    []int64
+	active     []int64
+	identities []KeyIdentity
+	now        func() time.Time
 }
 
 type verificationKey struct {
@@ -80,9 +81,16 @@ type publicKeyRef struct {
 	JWK         json.RawMessage `json:"jwk"`
 }
 
+type KeyIdentity struct {
+	Generation uint64 `json:"generation"`
+	Status     string `json:"status"`
+	KeyID      string `json:"kid"`
+	Thumbprint string `json:"thumbprint_sha256"`
+}
+
 // KeysetFence хранит verifier-owned high-watermark независимо от pod lifecycle.
 type KeysetFence interface {
-	AdmitMattermostEventKeyset(context.Context, string, uint64, uint64, uint64, string, []int64, []int64) error
+	AdmitMattermostEventKeyset(context.Context, string, uint64, uint64, uint64, string, []int64, []int64, []KeyIdentity) error
 }
 
 type claims struct {
@@ -121,16 +129,18 @@ func New(ctx context.Context, config Config, fence KeysetFence) (*Verifier, erro
 	if err != nil {
 		return nil, err
 	}
-	keys, state, retired, active, err := parsePublicKeyset(config, raw, time.Now().UTC())
+	keys, state, retired, active, identities, err := parsePublicKeyset(config, raw, time.Now().UTC())
 	if err != nil {
 		return nil, errors.New("parse Mattermost event trust")
 	}
 	if err := fence.AdmitMattermostEventKeyset(ctx, config.ProducerID, state.revision,
-		state.highWatermark, state.servedGeneration, state.digest, retired, active); err != nil {
+		state.highWatermark, state.servedGeneration, state.digest, retired, active, identities); err != nil {
 		return nil, err
 	}
-	return &Verifier{config: config, fence: fence, keys: keys, state: state,
-		retired: slices.Clone(retired), active: slices.Clone(active), now: time.Now}, nil
+	result := &Verifier{config: config, fence: fence, keys: keys, state: state,
+		retired: slices.Clone(retired), active: slices.Clone(active), now: time.Now}
+	result.identities = slices.Clone(identities)
+	return result, nil
 }
 
 func (verifier *Verifier) VerifyPeer(ctx context.Context) error {
@@ -231,22 +241,25 @@ func (verifier *Verifier) refresh(ctx context.Context) error {
 	unchanged := digest == verifier.state.digest
 	currentState := verifier.state
 	currentRetired, currentActive := slices.Clone(verifier.retired), slices.Clone(verifier.active)
+	currentIdentities := slices.Clone(verifier.identities)
 	verifier.mu.RUnlock()
 	if unchanged {
 		return verifier.fence.AdmitMattermostEventKeyset(ctx, verifier.config.ProducerID, currentState.revision,
-			currentState.highWatermark, currentState.servedGeneration, currentState.digest, currentRetired, currentActive)
+			currentState.highWatermark, currentState.servedGeneration, currentState.digest, currentRetired, currentActive,
+			currentIdentities)
 	}
-	keys, state, retired, active, err := parsePublicKeyset(verifier.config, raw, verifier.now().UTC())
+	keys, state, retired, active, identities, err := parsePublicKeyset(verifier.config, raw, verifier.now().UTC())
 	if err != nil {
 		return err
 	}
 	if err := verifier.fence.AdmitMattermostEventKeyset(ctx, verifier.config.ProducerID, state.revision,
-		state.highWatermark, state.servedGeneration, state.digest, retired, active); err != nil {
+		state.highWatermark, state.servedGeneration, state.digest, retired, active, identities); err != nil {
 		return err
 	}
 	verifier.mu.Lock()
 	verifier.keys, verifier.state = keys, state
 	verifier.retired, verifier.active = slices.Clone(retired), slices.Clone(active)
+	verifier.identities = slices.Clone(identities)
 	verifier.mu.Unlock()
 	return nil
 }
@@ -265,40 +278,52 @@ func readPublicKeysetFile(path string) ([]byte, error) {
 }
 
 func parsePublicKeyset(config Config, raw []byte, now time.Time) (
-	map[uint64]verificationKey, servedState, []int64, []int64, error,
+	map[uint64]verificationKey, servedState, []int64, []int64, []KeyIdentity, error,
 ) {
 	var document publicKeySet
 	if internalrpcauth.DecodeCanonicalJSON(raw, &document) != nil || document.Version != 1 ||
 		document.Revision == 0 || document.HighWatermark == 0 || document.ServedGeneration == 0 ||
 		document.HighWatermark != document.ServedGeneration || len(document.Keys) == 0 || len(document.Keys) > 4 {
-		return nil, servedState{}, nil, nil, errors.New("mattermost event verifier keyset is invalid")
+		return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier keyset is invalid")
 	}
 	keys := make(map[uint64]verificationKey, 2)
 	seenGenerations := make(map[uint64]struct{}, len(document.Keys))
 	seenKeyIDs := make(map[string]struct{}, len(document.Keys))
 	retired := make([]int64, 0, len(document.Keys))
 	active := make([]int64, 0, len(document.Keys))
+	identities := make([]KeyIdentity, 0, len(document.Keys))
+	seenThumbprints := make(map[string]struct{}, len(document.Keys))
 	current := 0
 	for _, reference := range document.Keys {
 		if reference.Generation == 0 || len(reference.JWK) == 0 {
-			return nil, servedState{}, nil, nil, errors.New("mattermost event verifier keyset entry is invalid")
+			return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier keyset entry is invalid")
 		}
 		if _, exists := seenGenerations[reference.Generation]; exists {
-			return nil, servedState{}, nil, nil, errors.New("mattermost event verifier keyset has duplicate generation")
+			return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier keyset has duplicate generation")
 		}
 		seenGenerations[reference.Generation] = struct{}{}
 		key, err := internalrpcauth.ParsePublicJWK(reference.JWK)
 		if err != nil || key.KeyID == "" {
-			return nil, servedState{}, nil, nil, errors.New("parse Mattermost event verifier public JWK")
+			return nil, servedState{}, nil, nil, nil, errors.New("parse Mattermost event verifier public JWK")
 		}
 		if _, exists := seenKeyIDs[key.KeyID]; exists {
-			return nil, servedState{}, nil, nil, errors.New("mattermost event verifier keyset has duplicate kid")
+			return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier keyset has duplicate kid")
 		}
 		seenKeyIDs[key.KeyID] = struct{}{}
+		thumbprint, thumbprintErr := internalrpcauth.PublicJWKThumbprintSHA256(key)
+		if thumbprintErr != nil {
+			return nil, servedState{}, nil, nil, nil, errors.New("compute Mattermost event verifier JWK thumbprint")
+		}
+		if _, exists := seenThumbprints[thumbprint]; exists {
+			return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier keyset has duplicate public key")
+		}
+		seenThumbprints[thumbprint] = struct{}{}
+		identities = append(identities, KeyIdentity{Generation: reference.Generation, Status: reference.Status,
+			KeyID: key.KeyID, Thumbprint: thumbprint})
 		switch reference.Status {
 		case "CURRENT":
 			if reference.Generation != document.ServedGeneration || reference.AcceptUntil != 0 {
-				return nil, servedState{}, nil, nil, errors.New("mattermost event verifier CURRENT key is invalid")
+				return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier CURRENT key is invalid")
 			}
 			active = append(active, int64(reference.Generation))
 			keys[reference.Generation] = verificationKey{key: key}
@@ -307,32 +332,32 @@ func parsePublicKeyset(config Config, raw []byte, now time.Time) (
 			acceptUntil := time.Unix(reference.AcceptUntil, 0).UTC()
 			if reference.Generation+1 != document.ServedGeneration || reference.AcceptUntil <= 0 ||
 				!now.Before(acceptUntil) || acceptUntil.After(now.Add(config.MaximumTTL)) {
-				return nil, servedState{}, nil, nil, errors.New("mattermost event verifier PREVIOUS overlap is invalid")
+				return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier PREVIOUS overlap is invalid")
 			}
 			active = append(active, int64(reference.Generation))
 			keys[reference.Generation] = verificationKey{key: key, acceptUntil: acceptUntil}
 		case "NEXT":
 			if reference.Generation != document.ServedGeneration+1 || reference.AcceptUntil != 0 {
-				return nil, servedState{}, nil, nil, errors.New("mattermost event verifier NEXT key is invalid")
+				return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier NEXT key is invalid")
 			}
 			active = append(active, int64(reference.Generation))
 		case "RETIRED":
 			if reference.Generation >= document.ServedGeneration || reference.AcceptUntil != 0 {
-				return nil, servedState{}, nil, nil, errors.New("mattermost event verifier RETIRED key is invalid")
+				return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier RETIRED key is invalid")
 			}
 			retired = append(retired, int64(reference.Generation))
 		default:
-			return nil, servedState{}, nil, nil, errors.New("mattermost event verifier key status is invalid")
+			return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier key status is invalid")
 		}
 	}
 	if current != 1 {
-		return nil, servedState{}, nil, nil, errors.New("mattermost event verifier keyset must contain one CURRENT key")
+		return nil, servedState{}, nil, nil, nil, errors.New("mattermost event verifier keyset must contain one CURRENT key")
 	}
 	slices.Sort(retired)
 	slices.Sort(active)
 	sum := sha256.Sum256(raw)
 	return keys, servedState{revision: document.Revision, highWatermark: document.HighWatermark,
-		servedGeneration: document.ServedGeneration, digest: hex.EncodeToString(sum[:])}, retired, active, nil
+		servedGeneration: document.ServedGeneration, digest: hex.EncodeToString(sum[:])}, retired, active, identities, nil
 }
 
 func digest(value string) string {

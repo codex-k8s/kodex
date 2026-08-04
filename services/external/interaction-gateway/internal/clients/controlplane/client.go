@@ -4,6 +4,7 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -277,6 +278,72 @@ func (client *Client) ExpireOwnerGate(ctx context.Context, idempotencyKey string
 		return errors.New("expire control-plane owner gate")
 	}
 	return nil
+}
+
+func (client *Client) ClaimInteractionDelivery(ctx context.Context, idempotencyKey string) (domaincontrol.InteractionDeliveryWork, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	response, err := client.client.ControlPlane.ClaimInteractionDelivery(bounded,
+		&controlplanev1.ClaimInteractionDeliveryRequest{IdempotencyKey: idempotencyKey})
+	if status.Code(err) == codes.NotFound || response.GetDeliveryId() == "" {
+		return domaincontrol.InteractionDeliveryWork{}, nil
+	}
+	if err != nil || response.GetDeliveryLeaseExpiresAt() == nil {
+		return domaincontrol.InteractionDeliveryWork{}, errors.New("claim control-plane interaction delivery")
+	}
+	return domaincontrol.InteractionDeliveryWork{DeliveryID: response.GetDeliveryId(),
+		OrganizationID: response.GetOrganizationId(), ProjectID: response.GetProjectId(), ActorID: response.GetActorId(),
+		SessionID: response.GetSessionId(), SessionVersion: response.GetSessionVersion(), TurnID: response.GetTurnId(),
+		TurnVersion: response.GetTurnVersion(), Attempt: response.GetAttempt(), RuntimeRevisionID: response.GetRuntimeRevisionId(),
+		RuntimeRevisionVersion: response.GetRuntimeRevisionVersion(), ImmutableInputSHA256: response.GetImmutableInputSha256(),
+		Kind: response.GetKind(), LifecycleState: stringWithoutPrefix(response.GetLifecycleState().String(), "RESOURCE_STATE_"),
+		Outcome: response.GetOutcome(), ArtifactID: response.GetArtifactId(), ArtifactVersion: response.GetArtifactVersion(),
+		ArtifactSHA256: response.GetArtifactSha256(), ArtifactName: response.GetArtifactName(),
+		ArtifactStorageRef: response.GetArtifactStorageRef(), ArtifactSizeBytes: response.GetArtifactSizeBytes(),
+		ArtifactMediaType: response.GetArtifactMediaType(), Fence: response.GetDeliveryFence(),
+		LeaseToken: response.GetDeliveryLeaseToken(), LeaseExpiresAt: response.GetDeliveryLeaseExpiresAt().AsTime(),
+		ReadbackCredential: response.GetDeliveryReadbackCredential(), InlinePayload: slices.Clone(response.GetInlinePayload())}, nil
+}
+
+func (client *Client) RecordInteractionDelivery(ctx context.Context, idempotencyKey string,
+	work domaincontrol.InteractionDeliveryWork, providerReceiptSHA256 string) error {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	response, err := client.client.ControlPlane.RecordInteractionDelivery(bounded,
+		&controlplanev1.RecordInteractionDeliveryRequest{IdempotencyKey: idempotencyKey,
+			DeliveryId: work.DeliveryID, DeliveryFence: work.Fence, DeliveryLeaseToken: work.LeaseToken,
+			ProviderReceiptSha256: providerReceiptSHA256})
+	if err != nil || response.GetDeliveryId() != work.DeliveryID || response.GetProviderReceiptSha256() != providerReceiptSHA256 {
+		return errors.New("record control-plane interaction delivery")
+	}
+	return nil
+}
+
+func (client *Client) IssueInteractionDeliveryReadback(ctx context.Context, idempotencyKey, deliveryID string,
+	readiness bool) (string, time.Time, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	response, err := client.client.ControlPlane.IssueInteractionDeliveryReadbackGrant(bounded,
+		&controlplanev1.IssueInteractionDeliveryReadbackGrantRequest{IdempotencyKey: idempotencyKey,
+			DeliveryId: deliveryID, Readiness: readiness})
+	if err != nil || response.GetDeliveryId() != deliveryID || response.GetCredential() == "" || response.GetExpiresAt() == nil {
+		return "", time.Time{}, errors.New("issue interaction delivery readback credential")
+	}
+	return response.GetCredential(), response.GetExpiresAt().AsTime(), nil
+}
+
+func (client *Client) ValidateInteractionDeliveryReadback(ctx context.Context, idempotencyKey, grantID, deliveryID,
+	organizationID, projectID, credentialSHA256 string, generation uint64) (bool, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	response, err := client.client.ControlPlane.ValidateInteractionDeliveryReadbackGrant(bounded,
+		&controlplanev1.ValidateInteractionDeliveryReadbackGrantRequest{IdempotencyKey: idempotencyKey,
+			GrantId: grantID, DeliveryId: deliveryID, OrganizationId: organizationID, ProjectId: projectID,
+			CredentialSha256: credentialSHA256, Generation: generation})
+	if err != nil || response.GetGrantId() != grantID || response.GetDeliveryId() != deliveryID {
+		return false, errors.New("validate interaction delivery readback credential")
+	}
+	return response.GetActive(), nil
 }
 
 func scanState(resource *controlplanev1.Resource) string {

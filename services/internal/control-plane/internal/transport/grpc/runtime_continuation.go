@@ -190,6 +190,10 @@ func (server *Server) CompleteRuntimeExecution(
 		Outcome:           runtimeTerminalOutcome(request.GetOutcome()),
 		TerminalReference: request.GetTerminalReference(),
 		TerminalSHA256:    request.GetTerminalSha256(),
+		ResultArtifactID:  request.GetResultArtifactId(), ResultArtifactVersion: request.GetResultArtifactVersion(),
+		ResultArtifactSHA256: request.GetResultArtifactSha256(), ResultArtifactName: request.GetResultArtifactName(),
+		ResultArtifactMediaType: request.GetResultArtifactMediaType(),
+		ResultArtifactPayload:   slices.Clone(request.GetResultArtifactPayload()),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

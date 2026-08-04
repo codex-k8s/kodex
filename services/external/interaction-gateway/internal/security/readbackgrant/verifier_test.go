@@ -2,8 +2,14 @@ package readbackgrant
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,15 +25,23 @@ func TestVerifierBindsProducerWorkloadAndDeliveryScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal public key: %v", err)
 	}
-	publicFile := filepath.Join(t.TempDir(), "public.jwk")
-	if err := os.WriteFile(publicFile, publicRaw, 0o600); err != nil {
+	keyset, err := internalrpcauth.CanonicalJSON(map[string]any{"version": 1, "revision": 1,
+		"high_watermark": 1, "served_generation": 1, "keys": []map[string]any{{
+			"generation": 1, "status": "CURRENT", "jwk": json.RawMessage(publicRaw),
+		}}})
+	if err != nil {
+		t.Fatalf("marshal public keyset: %v", err)
+	}
+	publicFile := filepath.Join(t.TempDir(), "public-keyset.json")
+	if err := os.WriteFile(publicFile, keyset, 0o600); err != nil {
 		t.Fatalf("write public key: %v", err)
 	}
 	config := Config{Issuer: "https://control-plane.test/readback", Audience: "urn:test:readback",
 		ProducerID: "control-plane.interaction-delivery-readback", Purpose: "INTERACTION_DELIVERY_READBACK_GRANT",
-		Operation: "interaction.delivery.read", Permission: "interaction.delivery.read", PublicJWKFile: publicFile,
+		Operation: "interaction.delivery.read", Permission: "interaction.delivery.read", PublicKeysetFile: publicFile,
 		Generation: 1, MaximumTTL: 5 * time.Minute}
-	verifier, err := New(config)
+	fence := &memoryFence{}
+	verifier, err := New(context.Background(), config, fence)
 	if err != nil {
 		t.Fatalf("create verifier: %v", err)
 	}
@@ -49,11 +63,37 @@ func TestVerifierBindsProducerWorkloadAndDeliveryScope(t *testing.T) {
 		}
 		return "Bearer " + compact
 	}
-	if _, err := verifier.Verify(context.Background(), sign(base)); err != nil {
+	credential := sign(base)
+	verified, err := verifier.Verify(context.Background(), credential)
+	if err != nil {
 		t.Fatalf("verify exact credential: %v", err)
+	}
+	digest := sha256.Sum256([]byte(strings.TrimPrefix(credential, "Bearer ")))
+	if verified.CredentialSHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatal("verified credential digest does not bind durable issuer receipt")
+	}
+	if fence.revision != 1 || fence.highWatermark != 1 || fence.generation != 1 || len(fence.identities) != 1 {
+		t.Fatal("durable keyset fence did not receive exact served identity")
 	}
 	base.ProducerID = "control-plane.other-producer"
 	if _, err := verifier.Verify(context.Background(), sign(base)); err == nil {
 		t.Fatal("credential from another producer accepted")
 	}
+}
+
+type memoryFence struct {
+	revision, highWatermark, generation uint64
+	digest                              string
+	identities                          []KeyIdentity
+}
+
+func (fence *memoryFence) AdmitDeliveryReadbackKeyset(_ context.Context, revision, highWatermark,
+	generation uint64, digest string, identities []KeyIdentity) error {
+	if fence.revision > revision || fence.highWatermark > highWatermark ||
+		(fence.revision == revision && fence.digest != "" && fence.digest != digest) {
+		return errors.New("rollback")
+	}
+	fence.revision, fence.highWatermark, fence.generation, fence.digest = revision, highWatermark, generation, digest
+	fence.identities = slices.Clone(identities)
+	return nil
 }

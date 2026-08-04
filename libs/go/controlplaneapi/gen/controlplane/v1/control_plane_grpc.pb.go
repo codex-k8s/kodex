@@ -19,96 +19,100 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlPlaneService_CreateProject_FullMethodName                      = "/controlplane.v1.ControlPlaneService/CreateProject"
-	ControlPlaneService_ListProjects_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ListProjects"
-	ControlPlaneService_CreateResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/CreateResource"
-	ControlPlaneService_UpdateResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/UpdateResource"
-	ControlPlaneService_TransitionResource_FullMethodName                 = "/controlplane.v1.ControlPlaneService/TransitionResource"
-	ControlPlaneService_DeleteResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/DeleteResource"
-	ControlPlaneService_ManageAccessResource_FullMethodName               = "/controlplane.v1.ControlPlaneService/ManageAccessResource"
-	ControlPlaneService_DetachAccessResource_FullMethodName               = "/controlplane.v1.ControlPlaneService/DetachAccessResource"
-	ControlPlaneService_CopyAccessResource_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CopyAccessResource"
-	ControlPlaneService_GetResource_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetResource"
-	ControlPlaneService_ListResources_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ListResources"
-	ControlPlaneService_SearchResources_FullMethodName                    = "/controlplane.v1.ControlPlaneService/SearchResources"
-	ControlPlaneService_SearchMemoryRecords_FullMethodName                = "/controlplane.v1.ControlPlaneService/SearchMemoryRecords"
-	ControlPlaneService_ListAuditEvents_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
-	ControlPlaneService_ListRuntimeIncidents_FullMethodName               = "/controlplane.v1.ControlPlaneService/ListRuntimeIncidents"
-	ControlPlaneService_ListTombstones_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ListTombstones"
-	ControlPlaneService_GetDiagnostics_FullMethodName                     = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
-	ControlPlaneService_ListOutboxFailures_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ListOutboxFailures"
-	ControlPlaneService_RepairOutboxEvent_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
-	ControlPlaneService_AdmitOwnerSession_FullMethodName                  = "/controlplane.v1.ControlPlaneService/AdmitOwnerSession"
-	ControlPlaneService_RevokeOwnerSession_FullMethodName                 = "/controlplane.v1.ControlPlaneService/RevokeOwnerSession"
-	ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName            = "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS"
-	ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName            = "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS"
-	ControlPlaneService_CheckGatewayPublicTLS_FullMethodName              = "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS"
-	ControlPlaneService_EnqueueTurn_FullMethodName                        = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
-	ControlPlaneService_ClaimTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ClaimTurn"
-	ControlPlaneService_RenewTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RenewTurn"
-	ControlPlaneService_CompleteTurn_FullMethodName                       = "/controlplane.v1.ControlPlaneService/CompleteTurn"
-	ControlPlaneService_RetryTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RetryTurn"
-	ControlPlaneService_CancelTurn_FullMethodName                         = "/controlplane.v1.ControlPlaneService/CancelTurn"
-	ControlPlaneService_ManageSession_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ManageSession"
-	ControlPlaneService_ManageConversationLifecycle_FullMethodName        = "/controlplane.v1.ControlPlaneService/ManageConversationLifecycle"
-	ControlPlaneService_ManageMemoryRecord_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
-	ControlPlaneService_ManageWorkClaim_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
-	ControlPlaneService_ManageSchedule_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageSchedule"
-	ControlPlaneService_ClaimDueSchedules_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
-	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName            = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
-	ControlPlaneService_CompleteScheduleOccurrence_FullMethodName         = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
-	ControlPlaneService_CancelScheduleOccurrence_FullMethodName           = "/controlplane.v1.ControlPlaneService/CancelScheduleOccurrence"
-	ControlPlaneService_ListScheduleOccurrences_FullMethodName            = "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences"
-	ControlPlaneService_StartProcess_FullMethodName                       = "/controlplane.v1.ControlPlaneService/StartProcess"
-	ControlPlaneService_CancelProcess_FullMethodName                      = "/controlplane.v1.ControlPlaneService/CancelProcess"
-	ControlPlaneService_CompleteProcess_FullMethodName                    = "/controlplane.v1.ControlPlaneService/CompleteProcess"
-	ControlPlaneService_RequestOwnerGate_FullMethodName                   = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
-	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName             = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
-	ControlPlaneService_ExpireOwnerGate_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ExpireOwnerGate"
-	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName            = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
-	ControlPlaneService_ResolveOwnerGate_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
-	ControlPlaneService_RegisterArtifact_FullMethodName                   = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
-	ControlPlaneService_RecordArtifactScan_FullMethodName                 = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
-	ControlPlaneService_GetRuntimeRevision_FullMethodName                 = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
-	ControlPlaneService_RecordMemoryEmbedding_FullMethodName              = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
-	ControlPlaneService_ClaimRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution"
-	ControlPlaneService_BindRuntimeAgentSession_FullMethodName            = "/controlplane.v1.ControlPlaneService/BindRuntimeAgentSession"
-	ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName   = "/controlplane.v1.ControlPlaneService/ResolveRuntimeAgentBindingIntent"
-	ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName        = "/controlplane.v1.ControlPlaneService/MaterializeRuntimeAgentTurn"
-	ControlPlaneService_SetResourceRetentionPolicy_FullMethodName         = "/controlplane.v1.ControlPlaneService/SetResourceRetentionPolicy"
-	ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName      = "/controlplane.v1.ControlPlaneService/RetireResourceRetentionPolicy"
-	ControlPlaneService_GetResourceRetentionPolicy_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetResourceRetentionPolicy"
-	ControlPlaneService_HoldRuntimeRetention_FullMethodName               = "/controlplane.v1.ControlPlaneService/HoldRuntimeRetention"
-	ControlPlaneService_ReleaseRuntimeRetention_FullMethodName            = "/controlplane.v1.ControlPlaneService/ReleaseRuntimeRetention"
-	ControlPlaneService_GetRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/GetRuntimeExecution"
-	ControlPlaneService_AdmitRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
-	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName          = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
-	ControlPlaneService_RecordRuntimeIncident_FullMethodName              = "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident"
-	ControlPlaneService_CompleteRuntimeExecution_FullMethodName           = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
-	ControlPlaneService_CancelRuntimeExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution"
-	ControlPlaneService_RetryRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution"
-	ControlPlaneService_RescheduleRuntimeExecution_FullMethodName         = "/controlplane.v1.ControlPlaneService/RescheduleRuntimeExecution"
-	ControlPlaneService_ExpireRuntimeExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution"
-	ControlPlaneService_RecordRuntimeArchive_FullMethodName               = "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive"
-	ControlPlaneService_VerifyRuntimeRestore_FullMethodName               = "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore"
-	ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName           = "/controlplane.v1.ControlPlaneService/BindRuntimeRestoreTarget"
-	ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName           = "/controlplane.v1.ControlPlaneService/CompleteRuntimeRehydrate"
-	ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName            = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup"
-	ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName = "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization"
-	ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName  = "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization"
-	ControlPlaneService_ResolveIntegrationSession_FullMethodName          = "/controlplane.v1.ControlPlaneService/ResolveIntegrationSession"
-	ControlPlaneService_SuspendForIntegrationApproval_FullMethodName      = "/controlplane.v1.ControlPlaneService/SuspendForIntegrationApproval"
-	ControlPlaneService_ApproveIntegrationInvocation_FullMethodName       = "/controlplane.v1.ControlPlaneService/ApproveIntegrationInvocation"
-	ControlPlaneService_RejectIntegrationInvocation_FullMethodName        = "/controlplane.v1.ControlPlaneService/RejectIntegrationInvocation"
-	ControlPlaneService_ExpireIntegrationInvocation_FullMethodName        = "/controlplane.v1.ControlPlaneService/ExpireIntegrationInvocation"
-	ControlPlaneService_CancelIntegrationInvocation_FullMethodName        = "/controlplane.v1.ControlPlaneService/CancelIntegrationInvocation"
-	ControlPlaneService_BeginIntegrationExecution_FullMethodName          = "/controlplane.v1.ControlPlaneService/BeginIntegrationExecution"
-	ControlPlaneService_CompleteIntegrationExecution_FullMethodName       = "/controlplane.v1.ControlPlaneService/CompleteIntegrationExecution"
-	ControlPlaneService_FailIntegrationExecution_FullMethodName           = "/controlplane.v1.ControlPlaneService/FailIntegrationExecution"
-	ControlPlaneService_GetIntegrationContinuation_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation"
-	ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName = "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation"
-	ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName    = "/controlplane.v1.ControlPlaneService/ValidateIntegrationResultAccess"
-	ControlPlaneService_CheckReadiness_FullMethodName                     = "/controlplane.v1.ControlPlaneService/CheckReadiness"
+	ControlPlaneService_CreateProject_FullMethodName                            = "/controlplane.v1.ControlPlaneService/CreateProject"
+	ControlPlaneService_ListProjects_FullMethodName                             = "/controlplane.v1.ControlPlaneService/ListProjects"
+	ControlPlaneService_CreateResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/CreateResource"
+	ControlPlaneService_UpdateResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/UpdateResource"
+	ControlPlaneService_TransitionResource_FullMethodName                       = "/controlplane.v1.ControlPlaneService/TransitionResource"
+	ControlPlaneService_DeleteResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/DeleteResource"
+	ControlPlaneService_ManageAccessResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageAccessResource"
+	ControlPlaneService_DetachAccessResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/DetachAccessResource"
+	ControlPlaneService_CopyAccessResource_FullMethodName                       = "/controlplane.v1.ControlPlaneService/CopyAccessResource"
+	ControlPlaneService_GetResource_FullMethodName                              = "/controlplane.v1.ControlPlaneService/GetResource"
+	ControlPlaneService_ListResources_FullMethodName                            = "/controlplane.v1.ControlPlaneService/ListResources"
+	ControlPlaneService_SearchResources_FullMethodName                          = "/controlplane.v1.ControlPlaneService/SearchResources"
+	ControlPlaneService_SearchMemoryRecords_FullMethodName                      = "/controlplane.v1.ControlPlaneService/SearchMemoryRecords"
+	ControlPlaneService_ListAuditEvents_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ListAuditEvents"
+	ControlPlaneService_ListRuntimeIncidents_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ListRuntimeIncidents"
+	ControlPlaneService_ListTombstones_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ListTombstones"
+	ControlPlaneService_GetDiagnostics_FullMethodName                           = "/controlplane.v1.ControlPlaneService/GetDiagnostics"
+	ControlPlaneService_ListOutboxFailures_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ListOutboxFailures"
+	ControlPlaneService_RepairOutboxEvent_FullMethodName                        = "/controlplane.v1.ControlPlaneService/RepairOutboxEvent"
+	ControlPlaneService_AdmitOwnerSession_FullMethodName                        = "/controlplane.v1.ControlPlaneService/AdmitOwnerSession"
+	ControlPlaneService_RevokeOwnerSession_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RevokeOwnerSession"
+	ControlPlaneService_PrepareGatewayPublicTLS_FullMethodName                  = "/controlplane.v1.ControlPlaneService/PrepareGatewayPublicTLS"
+	ControlPlaneService_ConfirmGatewayPublicTLS_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ConfirmGatewayPublicTLS"
+	ControlPlaneService_CheckGatewayPublicTLS_FullMethodName                    = "/controlplane.v1.ControlPlaneService/CheckGatewayPublicTLS"
+	ControlPlaneService_EnqueueTurn_FullMethodName                              = "/controlplane.v1.ControlPlaneService/EnqueueTurn"
+	ControlPlaneService_ClaimTurn_FullMethodName                                = "/controlplane.v1.ControlPlaneService/ClaimTurn"
+	ControlPlaneService_RenewTurn_FullMethodName                                = "/controlplane.v1.ControlPlaneService/RenewTurn"
+	ControlPlaneService_CompleteTurn_FullMethodName                             = "/controlplane.v1.ControlPlaneService/CompleteTurn"
+	ControlPlaneService_RetryTurn_FullMethodName                                = "/controlplane.v1.ControlPlaneService/RetryTurn"
+	ControlPlaneService_CancelTurn_FullMethodName                               = "/controlplane.v1.ControlPlaneService/CancelTurn"
+	ControlPlaneService_ManageSession_FullMethodName                            = "/controlplane.v1.ControlPlaneService/ManageSession"
+	ControlPlaneService_ManageConversationLifecycle_FullMethodName              = "/controlplane.v1.ControlPlaneService/ManageConversationLifecycle"
+	ControlPlaneService_ManageMemoryRecord_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
+	ControlPlaneService_ManageWorkClaim_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
+	ControlPlaneService_ManageSchedule_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ManageSchedule"
+	ControlPlaneService_ClaimDueSchedules_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
+	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
+	ControlPlaneService_CompleteScheduleOccurrence_FullMethodName               = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
+	ControlPlaneService_CancelScheduleOccurrence_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CancelScheduleOccurrence"
+	ControlPlaneService_ListScheduleOccurrences_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences"
+	ControlPlaneService_StartProcess_FullMethodName                             = "/controlplane.v1.ControlPlaneService/StartProcess"
+	ControlPlaneService_CancelProcess_FullMethodName                            = "/controlplane.v1.ControlPlaneService/CancelProcess"
+	ControlPlaneService_CompleteProcess_FullMethodName                          = "/controlplane.v1.ControlPlaneService/CompleteProcess"
+	ControlPlaneService_RequestOwnerGate_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RequestOwnerGate"
+	ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ClaimOwnerGateDelivery"
+	ControlPlaneService_ExpireOwnerGate_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ExpireOwnerGate"
+	ControlPlaneService_RecordOwnerGateDelivery_FullMethodName                  = "/controlplane.v1.ControlPlaneService/RecordOwnerGateDelivery"
+	ControlPlaneService_ClaimInteractionDelivery_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ClaimInteractionDelivery"
+	ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName    = "/controlplane.v1.ControlPlaneService/IssueInteractionDeliveryReadbackGrant"
+	ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName = "/controlplane.v1.ControlPlaneService/ValidateInteractionDeliveryReadbackGrant"
+	ControlPlaneService_RecordInteractionDelivery_FullMethodName                = "/controlplane.v1.ControlPlaneService/RecordInteractionDelivery"
+	ControlPlaneService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
+	ControlPlaneService_RegisterArtifact_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
+	ControlPlaneService_RecordArtifactScan_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
+	ControlPlaneService_GetRuntimeRevision_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
+	ControlPlaneService_RecordMemoryEmbedding_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
+	ControlPlaneService_ClaimRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution"
+	ControlPlaneService_BindRuntimeAgentSession_FullMethodName                  = "/controlplane.v1.ControlPlaneService/BindRuntimeAgentSession"
+	ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName         = "/controlplane.v1.ControlPlaneService/ResolveRuntimeAgentBindingIntent"
+	ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName              = "/controlplane.v1.ControlPlaneService/MaterializeRuntimeAgentTurn"
+	ControlPlaneService_SetResourceRetentionPolicy_FullMethodName               = "/controlplane.v1.ControlPlaneService/SetResourceRetentionPolicy"
+	ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName            = "/controlplane.v1.ControlPlaneService/RetireResourceRetentionPolicy"
+	ControlPlaneService_GetResourceRetentionPolicy_FullMethodName               = "/controlplane.v1.ControlPlaneService/GetResourceRetentionPolicy"
+	ControlPlaneService_HoldRuntimeRetention_FullMethodName                     = "/controlplane.v1.ControlPlaneService/HoldRuntimeRetention"
+	ControlPlaneService_ReleaseRuntimeRetention_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ReleaseRuntimeRetention"
+	ControlPlaneService_GetRuntimeExecution_FullMethodName                      = "/controlplane.v1.ControlPlaneService/GetRuntimeExecution"
+	ControlPlaneService_AdmitRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
+	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
+	ControlPlaneService_RecordRuntimeIncident_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident"
+	ControlPlaneService_CompleteRuntimeExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
+	ControlPlaneService_CancelRuntimeExecution_FullMethodName                   = "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution"
+	ControlPlaneService_RetryRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution"
+	ControlPlaneService_RescheduleRuntimeExecution_FullMethodName               = "/controlplane.v1.ControlPlaneService/RescheduleRuntimeExecution"
+	ControlPlaneService_ExpireRuntimeExecution_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution"
+	ControlPlaneService_RecordRuntimeArchive_FullMethodName                     = "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive"
+	ControlPlaneService_VerifyRuntimeRestore_FullMethodName                     = "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore"
+	ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName                 = "/controlplane.v1.ControlPlaneService/BindRuntimeRestoreTarget"
+	ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CompleteRuntimeRehydrate"
+	ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName                  = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup"
+	ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName       = "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization"
+	ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName        = "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization"
+	ControlPlaneService_ResolveIntegrationSession_FullMethodName                = "/controlplane.v1.ControlPlaneService/ResolveIntegrationSession"
+	ControlPlaneService_SuspendForIntegrationApproval_FullMethodName            = "/controlplane.v1.ControlPlaneService/SuspendForIntegrationApproval"
+	ControlPlaneService_ApproveIntegrationInvocation_FullMethodName             = "/controlplane.v1.ControlPlaneService/ApproveIntegrationInvocation"
+	ControlPlaneService_RejectIntegrationInvocation_FullMethodName              = "/controlplane.v1.ControlPlaneService/RejectIntegrationInvocation"
+	ControlPlaneService_ExpireIntegrationInvocation_FullMethodName              = "/controlplane.v1.ControlPlaneService/ExpireIntegrationInvocation"
+	ControlPlaneService_CancelIntegrationInvocation_FullMethodName              = "/controlplane.v1.ControlPlaneService/CancelIntegrationInvocation"
+	ControlPlaneService_BeginIntegrationExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/BeginIntegrationExecution"
+	ControlPlaneService_CompleteIntegrationExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/CompleteIntegrationExecution"
+	ControlPlaneService_FailIntegrationExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/FailIntegrationExecution"
+	ControlPlaneService_GetIntegrationContinuation_FullMethodName               = "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation"
+	ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName       = "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation"
+	ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName          = "/controlplane.v1.ControlPlaneService/ValidateIntegrationResultAccess"
+	ControlPlaneService_CheckReadiness_FullMethodName                           = "/controlplane.v1.ControlPlaneService/CheckReadiness"
 )
 
 // ControlPlaneServiceClient is the client API for ControlPlaneService service.
@@ -226,6 +230,14 @@ type ControlPlaneServiceClient interface {
 	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
 	// принадлежащей серверу.
 	RecordOwnerGateDelivery(ctx context.Context, in *RecordOwnerGateDeliveryRequest, opts ...grpc.CallOption) (*RecordOwnerGateDeliveryResponse, error)
+	// ClaimInteractionDelivery потребляет owner-produced durable work final/status/artifact path.
+	ClaimInteractionDelivery(ctx context.Context, in *ClaimInteractionDeliveryRequest, opts ...grpc.CallOption) (*ClaimInteractionDeliveryResponse, error)
+	// IssueInteractionDeliveryReadbackGrant выдаёт и сохраняет exact delivery-scoped application credential.
+	IssueInteractionDeliveryReadbackGrant(ctx context.Context, in *IssueInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*IssueInteractionDeliveryReadbackGrantResponse, error)
+	// ValidateInteractionDeliveryReadbackGrant проверяет durable issue/revocation state тем же owner path.
+	ValidateInteractionDeliveryReadbackGrant(ctx context.Context, in *ValidateInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*ValidateInteractionDeliveryReadbackGrantResponse, error)
+	// RecordInteractionDelivery фиксирует exact provider receipt под lease/fence.
+	RecordInteractionDelivery(ctx context.Context, in *RecordInteractionDeliveryRequest, opts ...grpc.CallOption) (*RecordInteractionDeliveryResponse, error)
 	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
 	// ходом и попыткой.
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
@@ -803,6 +815,46 @@ func (c *controlPlaneServiceClient) RecordOwnerGateDelivery(ctx context.Context,
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ClaimInteractionDelivery(ctx context.Context, in *ClaimInteractionDeliveryRequest, opts ...grpc.CallOption) (*ClaimInteractionDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimInteractionDeliveryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimInteractionDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) IssueInteractionDeliveryReadbackGrant(ctx context.Context, in *IssueInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*IssueInteractionDeliveryReadbackGrantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssueInteractionDeliveryReadbackGrantResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ValidateInteractionDeliveryReadbackGrant(ctx context.Context, in *ValidateInteractionDeliveryReadbackGrantRequest, opts ...grpc.CallOption) (*ValidateInteractionDeliveryReadbackGrantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateInteractionDeliveryReadbackGrantResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RecordInteractionDelivery(ctx context.Context, in *RecordInteractionDeliveryRequest, opts ...grpc.CallOption) (*RecordInteractionDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordInteractionDeliveryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordInteractionDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveOwnerGateResponse)
@@ -1348,6 +1400,14 @@ type ControlPlaneServiceServer interface {
 	// RecordOwnerGateDelivery фиксирует устойчивое подтверждение точной карточки,
 	// принадлежащей серверу.
 	RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error)
+	// ClaimInteractionDelivery потребляет owner-produced durable work final/status/artifact path.
+	ClaimInteractionDelivery(context.Context, *ClaimInteractionDeliveryRequest) (*ClaimInteractionDeliveryResponse, error)
+	// IssueInteractionDeliveryReadbackGrant выдаёт и сохраняет exact delivery-scoped application credential.
+	IssueInteractionDeliveryReadbackGrant(context.Context, *IssueInteractionDeliveryReadbackGrantRequest) (*IssueInteractionDeliveryReadbackGrantResponse, error)
+	// ValidateInteractionDeliveryReadbackGrant проверяет durable issue/revocation state тем же owner path.
+	ValidateInteractionDeliveryReadbackGrant(context.Context, *ValidateInteractionDeliveryReadbackGrantRequest) (*ValidateInteractionDeliveryReadbackGrantResponse, error)
+	// RecordInteractionDelivery фиксирует exact provider receipt под lease/fence.
+	RecordInteractionDelivery(context.Context, *RecordInteractionDeliveryRequest) (*RecordInteractionDeliveryResponse, error)
 	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
 	// ходом и попыткой.
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
@@ -1595,6 +1655,18 @@ func (UnimplementedControlPlaneServiceServer) ExpireOwnerGate(context.Context, *
 }
 func (UnimplementedControlPlaneServiceServer) RecordOwnerGateDelivery(context.Context, *RecordOwnerGateDeliveryRequest) (*RecordOwnerGateDeliveryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordOwnerGateDelivery not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ClaimInteractionDelivery(context.Context, *ClaimInteractionDeliveryRequest) (*ClaimInteractionDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimInteractionDelivery not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) IssueInteractionDeliveryReadbackGrant(context.Context, *IssueInteractionDeliveryReadbackGrantRequest) (*IssueInteractionDeliveryReadbackGrantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IssueInteractionDeliveryReadbackGrant not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ValidateInteractionDeliveryReadbackGrant(context.Context, *ValidateInteractionDeliveryReadbackGrantRequest) (*ValidateInteractionDeliveryReadbackGrantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateInteractionDeliveryReadbackGrant not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordInteractionDelivery(context.Context, *RecordInteractionDeliveryRequest) (*RecordInteractionDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordInteractionDelivery not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveOwnerGate not implemented")
@@ -2592,6 +2664,78 @@ func _ControlPlaneService_RecordOwnerGateDelivery_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ClaimInteractionDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimInteractionDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ClaimInteractionDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ClaimInteractionDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ClaimInteractionDelivery(ctx, req.(*ClaimInteractionDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_IssueInteractionDeliveryReadbackGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueInteractionDeliveryReadbackGrantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).IssueInteractionDeliveryReadbackGrant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).IssueInteractionDeliveryReadbackGrant(ctx, req.(*IssueInteractionDeliveryReadbackGrantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateInteractionDeliveryReadbackGrantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ValidateInteractionDeliveryReadbackGrant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ValidateInteractionDeliveryReadbackGrant(ctx, req.(*ValidateInteractionDeliveryReadbackGrantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RecordInteractionDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordInteractionDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordInteractionDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordInteractionDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordInteractionDelivery(ctx, req.(*RecordInteractionDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ResolveOwnerGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResolveOwnerGateRequest)
 	if err := dec(in); err != nil {
@@ -3560,6 +3704,22 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordOwnerGateDelivery",
 			Handler:    _ControlPlaneService_RecordOwnerGateDelivery_Handler,
+		},
+		{
+			MethodName: "ClaimInteractionDelivery",
+			Handler:    _ControlPlaneService_ClaimInteractionDelivery_Handler,
+		},
+		{
+			MethodName: "IssueInteractionDeliveryReadbackGrant",
+			Handler:    _ControlPlaneService_IssueInteractionDeliveryReadbackGrant_Handler,
+		},
+		{
+			MethodName: "ValidateInteractionDeliveryReadbackGrant",
+			Handler:    _ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_Handler,
+		},
+		{
+			MethodName: "RecordInteractionDelivery",
+			Handler:    _ControlPlaneService_RecordInteractionDelivery_Handler,
 		},
 		{
 			MethodName: "ResolveOwnerGate",

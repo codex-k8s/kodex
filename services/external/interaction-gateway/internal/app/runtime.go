@@ -68,7 +68,7 @@ func publicTLS(config GatewayConfig) (*tls.Config, error) {
 	}
 	return &tls.Config{
 		MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate},
-		ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: roots,
+		ClientAuth: tls.VerifyClientCertIfGiven, ClientCAs: roots,
 	}, nil
 }
 

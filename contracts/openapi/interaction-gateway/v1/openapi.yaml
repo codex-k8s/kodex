@@ -110,6 +110,36 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
+  /mattermost/v1/artifacts/{grant_id}/content:
+    get:
+      operationId: downloadInteractionArtifact
+      description: >-
+        Одноразово проксирует private S3 object только exact Mattermost actor,
+        повторно подтверждённому через REST readback и server-owned
+        Team/Channel/project/session/turn/artifact binding. grant_id не является
+        bearer secret и не даёт доступа без пользовательской Mattermost сессии.
+      security:
+        - mattermostUserBearer: []
+      parameters:
+        - name: grant_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Проверенное содержимое точной версии artifact.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Content-SHA256:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
 components:
   securitySchemes:
     workloadMTLS:
@@ -118,6 +148,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWS
+    mattermostUserBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Mattermost session token
   schemas:
     SlashCommand:
       type: object

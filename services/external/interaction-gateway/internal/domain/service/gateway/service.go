@@ -53,6 +53,8 @@ type Config struct {
 	MaximumFiles               int
 	MaximumAttempts            uint32
 	MaximumMattermostFileBytes int64
+	ArtifactDownloadBaseURL    string
+	ArtifactDownloadTTL        time.Duration
 	InboundLease               time.Duration
 	DeliveryLease              time.Duration
 	ScanPollInterval           time.Duration
@@ -81,11 +83,15 @@ func New(repository domainrepo.Repository, mattermost domainmattermost.Client, o
 	control domaincontrol.Client, authority Authority, observer Observer, config Config) (*Service, error) {
 	callback, err := url.Parse(config.ActionCallbackURL)
 	dialogCallback, dialogErr := url.Parse(config.DialogCallbackURL)
+	downloadBase, downloadErr := url.Parse(config.ArtifactDownloadBaseURL)
 	if repository == nil || mattermost == nil || objects == nil || control == nil || authority == nil || observer == nil ||
 		err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil ||
 		callback.RawQuery != "" || callback.Fragment != "" || config.RetentionRef == "" ||
 		dialogErr != nil || dialogCallback.Scheme != "https" || dialogCallback.Host == "" || dialogCallback.User != nil ||
 		dialogCallback.RawQuery != "" || dialogCallback.Fragment != "" ||
+		downloadErr != nil || downloadBase.Scheme != "https" || downloadBase.Host == "" || downloadBase.User != nil ||
+		downloadBase.RawQuery != "" || downloadBase.Fragment != "" || downloadBase.Path != "" ||
+		config.ArtifactDownloadTTL < time.Minute || config.ArtifactDownloadTTL > 15*time.Minute ||
 		config.MaximumPromptBytes < 1024 || config.MaximumPromptBytes > 1<<20 ||
 		config.MaximumFiles < 1 || config.MaximumFiles > 32 || config.MaximumAttempts < 1 || config.MaximumAttempts > 32 ||
 		config.MaximumMattermostFileBytes < 1<<20 || config.MaximumMattermostFileBytes > 256<<20 ||
@@ -355,6 +361,10 @@ func (service *Service) handleConversationLifecycle(ctx context.Context, raw dom
 	}
 	messageID := "conversation.deletion_pending"
 	if action == "DELETE" {
+		if err := service.repository.RevokeDownloadGrants(ctx, stored.OrganizationID, stored.ProjectID,
+			stored.ChannelID, mapLifecycleScope(kind, stored.SessionID)); err != nil {
+			return Result{}, err
+		}
 		stored.State, stored.NextAttemptAt = enum.InboundWaitingCleanup, service.now().Add(24*time.Hour)
 		stored.SemanticOutcome = "SUCCESS"
 		stored.ResponseMessage = service.text(stored.Locale, messageID, nil)
@@ -435,58 +445,25 @@ func (service *Service) ProcessDelivery(ctx context.Context, instanceID string) 
 		}
 		return true, nil
 	}
-	providerFileIDs := make([]string, 0, len(delivery.Attachments))
-	for _, binding := range delivery.Attachments {
-		if binding.ScanState != "CLEAN" {
-			outcome = "dead_letter"
-			return true, service.failDelivery(ctx, delivery, "ARTIFACT_NOT_CLEAN")
-		}
-		receipt, exists, receiptErr := service.repository.GetUploadReceipt(ctx, delivery, binding.ArtifactID)
-		if receiptErr != nil {
-			outcome = "failure"
-			return true, receiptErr
-		}
-		if exists {
-			if receipt.ChannelID != delivery.ChannelID || receipt.Name != binding.Name ||
-				receipt.SizeBytes != binding.SizeBytes || receipt.MediaType != binding.MediaType ||
-				receipt.SHA256 != binding.SHA256 {
-				outcome = "dead_letter"
-				return true, service.failDelivery(ctx, delivery, "UPLOAD_RECEIPT_MISMATCH")
-			}
-			providerFileIDs = append(providerFileIDs, receipt.ProviderFileID)
-			continue
-		}
-		raw, readErr := service.objects.Get(ctx, delivery.ProjectID, binding.StorageRef, binding.SizeBytes, binding.SHA256)
-		if readErr != nil {
-			outcome = "retry"
-			if delivery.Attempts >= service.config.MaximumAttempts {
-				outcome = "dead_letter"
-			}
-			return true, service.retryDelivery(ctx, delivery, "OBJECT_READ_FAILED")
-		}
-		providerFileID, uploadErr := service.mattermost.UploadFile(ctx, delivery, binding, raw)
-		if uploadErr != nil {
-			service.observer.ObserveExternalEffect("upload_file", "failure")
-			outcome = "retry"
-			return true, service.retryDelivery(ctx, delivery, "MATTERMOST_UPLOAD_FAILED")
-		}
-		service.observer.ObserveExternalEffect("upload_file", "success")
-		receipt = entity.UploadReceipt{DeliveryID: delivery.ID, ArtifactID: binding.ArtifactID,
-			ProviderFileID: providerFileID, ChannelID: delivery.ChannelID, Name: binding.Name,
-			SizeBytes: binding.SizeBytes, MediaType: binding.MediaType, SHA256: binding.SHA256}
-		if err := service.repository.SaveUploadReceipt(ctx, delivery, receipt); err != nil {
-			outcome = "failure"
-			return true, err
-		}
-		providerFileIDs = append(providerFileIDs, providerFileID)
+	// Mattermost UploadFile не имеет документированного readback, который
+	// восстанавливает file_id после потери финального ответа. Такой effect не
+	// повторяется: все исходящие artifacts заранее превращаются в одноразовые
+	// gateway-mediated links, а private S3 object никогда не покидает boundary.
+	if len(delivery.Attachments) != 0 {
+		outcome = "dead_letter"
+		return true, service.failDelivery(ctx, delivery, "AMBIGUOUS_UPLOAD_REQUIRES_REPAIR")
 	}
-	published, err := service.mattermost.Publish(ctx, delivery, providerFileIDs)
+	published, err := service.mattermost.Publish(ctx, delivery, nil)
 	effect := "create_post"
 	if delivery.UpdatePostID != "" {
 		effect = "update_post"
 	}
 	if err != nil {
 		service.observer.ObserveExternalEffect(effect, "failure")
+		if errors.Is(err, domainmattermost.ErrAmbiguousEffect) {
+			outcome = "dead_letter"
+			return true, service.failDelivery(ctx, delivery, "AMBIGUOUS_PROVIDER_EFFECT_REQUIRES_RECONCILIATION")
+		}
 		outcome = "retry"
 		if delivery.Attempts >= service.config.MaximumAttempts {
 			outcome = "dead_letter"
@@ -560,16 +537,14 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 		return true, err
 	}
 	protectedURL := ""
-	if publishResult && resultObject.Size <= uint64(service.config.MaximumMattermostFileBytes) {
-		delivery.Attachments = []entity.ArtifactBinding{{
-			ArtifactID: stableID(claim.GateID, "result-delivery"),
-			Name:       safeName(resultObject.Name, 0), Path: "results/" + safeName(resultObject.Name, 0),
+	if publishResult {
+		binding := entity.ArtifactBinding{
+			ArtifactID: stableID(claim.GateID, "result-delivery"), Version: claim.GateVersion,
+			Name: safeName(resultObject.Name, 0), Path: "results/" + safeName(resultObject.Name, 0),
 			StorageRef: resultObject.Reference, SizeBytes: resultObject.Size, MediaType: resultObject.MediaType,
 			SHA256: resultObject.SHA256, Provenance: "control-plane-owner-gate:" + claim.GateID, ScanState: "CLEAN",
-		}}
-	} else if publishResult {
-		protectedURL, err = service.objects.ProtectedURL(ctx, claim.ProjectID, resultObject.Reference,
-			resultObject.Size, resultObject.SHA256, safeName(resultObject.Name, 0), 15*time.Minute)
+		}
+		protectedURL, err = service.issueArtifactDownload(ctx, delivery, boundary, binding)
 		if err != nil {
 			return true, err
 		}
@@ -594,6 +569,101 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, error) {
+	work, err := service.control.ClaimInteractionDelivery(ctx, uuid.NewString())
+	if err != nil || work.DeliveryID == "" {
+		return work.DeliveryID != "", err
+	}
+	if uuid.Validate(work.DeliveryID) != nil || uuid.Validate(work.OrganizationID) != nil ||
+		uuid.Validate(work.ProjectID) != nil || uuid.Validate(work.ActorID) != nil ||
+		uuid.Validate(work.SessionID) != nil || uuid.Validate(work.TurnID) != nil ||
+		uuid.Validate(work.RuntimeRevisionID) != nil || work.SessionVersion == 0 || work.TurnVersion == 0 ||
+		work.RuntimeRevisionVersion == 0 || work.Attempt == 0 || work.Fence == 0 || len(work.LeaseToken) != 64 ||
+		!work.LeaseExpiresAt.After(service.now()) || !validSHA256Text(work.ImmutableInputSHA256) {
+		return true, errors.New("control-plane interaction delivery lineage is invalid")
+	}
+	boundary, err := service.mattermost.ResolveDelivery(work.ProjectID, work.ActorID)
+	if err != nil || boundary.OrganizationID != work.OrganizationID {
+		return true, errors.New("control-plane interaction delivery route is invalid")
+	}
+	deliveryKind := enum.DeliveryStatus
+	if work.Kind == "RUN_CARD" || work.Kind == "FINAL_MARKDOWN" {
+		deliveryKind = enum.DeliveryRun
+	} else if work.Kind == "INCIDENT" {
+		deliveryKind = enum.DeliveryIncident
+	} else if work.Kind == "PUBLISH_ARTIFACT" {
+		deliveryKind = enum.DeliveryArtifact
+	}
+	delivery := entity.Delivery{ID: work.DeliveryID, Kind: deliveryKind, State: enum.DeliveryPending,
+		OrganizationID: work.OrganizationID, ProjectID: work.ProjectID, SessionID: work.SessionID,
+		TurnID: work.TurnID, Attempt: work.Attempt, ImmutableInputSHA256: work.ImmutableInputSHA256,
+		TeamID: boundary.TeamID, ChannelID: boundary.ChannelID, BotStableKey: boundary.BotStableKey,
+		Locale: boundary.Locale, CreatedAt: service.now().UTC(), UpdatedAt: service.now().UTC(),
+		OwnerDelivery: &entity.OwnerDeliveryBinding{Fence: work.Fence, LeaseToken: work.LeaseToken,
+			LeaseExpiresAt: work.LeaseExpiresAt, TurnVersion: work.TurnVersion,
+			RuntimeRevisionID: work.RuntimeRevisionID, RuntimeRevisionVersion: work.RuntimeRevisionVersion}}
+	message := service.text(delivery.Locale, "card.run.progress", map[string]any{"State": work.LifecycleState,
+		"Outcome": work.Outcome, "SessionID": work.SessionID, "TurnID": work.TurnID,
+		"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256})
+	if work.LifecycleState == "SUCCEEDED" || work.LifecycleState == "FAILED" || work.LifecycleState == "CANCELLED" {
+		message = service.text(delivery.Locale, "card.run.terminal", map[string]any{"State": work.LifecycleState,
+			"Outcome": work.Outcome, "SessionID": work.SessionID, "TurnID": work.TurnID,
+			"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256})
+	}
+	if work.ArtifactID != "" {
+		if uuid.Validate(work.ArtifactID) != nil || work.ArtifactVersion == 0 || !validSHA256Text(work.ArtifactSHA256) ||
+			work.ArtifactStorageRef == "" || work.ArtifactSizeBytes == 0 || work.ArtifactMediaType == "" {
+			return true, errors.New("control-plane interaction artifact lineage is invalid")
+		}
+		artifactRaw := work.InlinePayload
+		if strings.HasPrefix(work.ArtifactStorageRef, "control-plane-inline:") {
+			if len(artifactRaw) == 0 || uint64(len(artifactRaw)) != work.ArtifactSizeBytes ||
+				digestBytes(artifactRaw) != work.ArtifactSHA256 {
+				return true, errors.New("control-plane inline artifact readback is invalid")
+			}
+			stored, storeErr := service.objects.Put(ctx, work.ProjectID,
+				fmt.Sprintf("owner-deliveries/%s/v%d/%s/%s", work.ArtifactID, work.ArtifactVersion,
+					work.ArtifactSHA256, safeName(work.ArtifactName, 0)), artifactRaw,
+				work.ArtifactMediaType, work.ArtifactSHA256)
+			if storeErr != nil {
+				return true, storeErr
+			}
+			work.ArtifactStorageRef = stored.Reference
+		} else if len(artifactRaw) != 0 {
+			return true, errors.New("unexpected control-plane inline artifact payload")
+		}
+		binding := entity.ArtifactBinding{ArtifactID: work.ArtifactID, Version: work.ArtifactVersion,
+			Name: safeName(work.ArtifactName, 0), Path: "results/" + safeName(work.ArtifactName, 0),
+			StorageRef: work.ArtifactStorageRef, SizeBytes: work.ArtifactSizeBytes, MediaType: work.ArtifactMediaType,
+			SHA256: work.ArtifactSHA256, Provenance: "control-plane-owner:" + work.TurnID, ScanState: "CLEAN"}
+		link, linkErr := service.issueArtifactDownload(ctx, delivery, boundary, binding)
+		if linkErr != nil {
+			return true, linkErr
+		}
+		if work.Kind == "FINAL_MARKDOWN" && work.ArtifactMediaType == "text/markdown" &&
+			work.ArtifactSizeBytes <= uint64(service.config.MaximumPromptBytes) {
+			raw := artifactRaw
+			if len(raw) == 0 {
+				var readErr error
+				raw, readErr = service.objects.Get(ctx, work.ProjectID, work.ArtifactStorageRef,
+					work.ArtifactSizeBytes, work.ArtifactSHA256)
+				if readErr != nil {
+					return true, readErr
+				}
+			}
+			message += "\n\n" + string(raw)
+		}
+		message += "\n\n" + service.text(delivery.Locale, "card.artifact.protected_link",
+			map[string]any{"URL": link, "Name": binding.Name, "Size": binding.SizeBytes, "SHA256": binding.SHA256})
+	}
+	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, map[string]any{"message": message})
+	if err != nil {
+		return true, err
+	}
+	_, _, err = service.repository.EnqueueDelivery(ctx, delivery)
+	return true, err
+}
+
 func (service *Service) ExpireOwnerGate(ctx context.Context) error {
 	return service.control.ExpireOwnerGate(ctx, uuid.NewString())
 }
@@ -608,6 +678,35 @@ func (service *Service) CatchUp(ctx context.Context) error {
 		return err
 	}
 	return service.mattermost.CatchUp(ctx, cursors, reactionPosts, func(eventContext context.Context, raw domainmattermost.RawEvent) error {
+		return service.consumeStreamEvent(eventContext, raw)
+	})
+}
+
+func (service *Service) ReconcileLifecycle(ctx context.Context) error {
+	knownThreads, err := service.repository.ListKnownThreads(ctx, service.mattermost.ChannelBoundaries(), 4096)
+	if err != nil {
+		return err
+	}
+	return service.mattermost.ReconcileLifecycle(ctx, knownThreads, func(eventContext context.Context, raw domainmattermost.RawEvent) error {
+		if raw.Kind == "CHANNEL_RESTORE" || raw.Kind == "THREAD_RESTORE" {
+			boundary, verified, resolveErr := service.mattermost.ResolveInbound(eventContext, raw)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			sessionID := boundary.SessionID
+			if raw.Kind == "THREAD_RESTORE" {
+				sessionID, resolveErr = service.repository.ResolveThreadSession(eventContext, boundary.OrganizationID,
+					boundary.ProjectID, verified.ChannelID, verified.RootPostID)
+				if resolveErr != nil {
+					return resolveErr
+				}
+			}
+			pending, pendingErr := service.repository.HasDeletionPending(eventContext, boundary.OrganizationID,
+				boundary.ProjectID, boundary.ChatID, sessionID)
+			if pendingErr != nil || !pending {
+				return pendingErr
+			}
+		}
 		return service.consumeStreamEvent(eventContext, raw)
 	})
 }
@@ -651,6 +750,78 @@ func (service *Service) GetDeliveryScoped(ctx context.Context, organizationID, p
 		return entity.Delivery{}, err
 	}
 	return delivery, nil
+}
+
+func (service *Service) ValidateDeliveryReadback(ctx context.Context, grantID, deliveryID, organizationID,
+	projectID, credentialSHA256 string, generation uint64) error {
+	if uuid.Validate(grantID) != nil || uuid.Validate(deliveryID) != nil || uuid.Validate(organizationID) != nil ||
+		uuid.Validate(projectID) != nil || !validSHA256Text(credentialSHA256) || generation == 0 {
+		return domainerrs.ErrUnauthorized
+	}
+	active, err := service.control.ValidateInteractionDeliveryReadback(ctx,
+		stableID(grantID, "interaction-delivery-readback:"+credentialSHA256), grantID, deliveryID,
+		organizationID, projectID, credentialSHA256, generation)
+	if err != nil {
+		return domainerrs.ErrUnavailable
+	}
+	if !active {
+		return domainerrs.ErrUnauthorized
+	}
+	return nil
+}
+
+func (service *Service) issueArtifactDownload(ctx context.Context, delivery entity.Delivery,
+	boundary entity.Boundary, artifact entity.ArtifactBinding) (string, error) {
+	if artifact.ScanState != "CLEAN" || boundary.ActorID == "" || boundary.MattermostUserID == "" ||
+		delivery.SessionID == "" || delivery.TurnID == "" || artifact.ArtifactID == "" || artifact.Version == 0 ||
+		!validSHA256Text(artifact.SHA256) {
+		return "", errors.New("artifact download lineage is invalid")
+	}
+	generation := uint64(1)
+	grantID := stableID(delivery.ID, fmt.Sprintf("artifact-download:%s:%d:%s", artifact.ArtifactID, artifact.Version, artifact.SHA256))
+	issuedDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
+		Version, Generation                                                       uint64
+		GrantID, DeliveryID, OrganizationID, ProjectID, ActorID, MattermostUserID string
+		TeamID, ChannelID, SessionID, TurnID, ArtifactID, ArtifactSHA256          string
+		ArtifactVersion                                                           uint64
+	}{1, generation, grantID, delivery.ID, delivery.OrganizationID, delivery.ProjectID, boundary.ActorID,
+		boundary.MattermostUserID, delivery.TeamID, delivery.ChannelID, delivery.SessionID, delivery.TurnID,
+		artifact.ArtifactID, artifact.SHA256, artifact.Version})
+	if err != nil {
+		return "", errors.New("encode artifact download lineage")
+	}
+	grant := entity.DownloadGrant{ID: grantID, Generation: generation, OrganizationID: delivery.OrganizationID,
+		ProjectID: delivery.ProjectID, ActorID: boundary.ActorID, MattermostUserID: boundary.MattermostUserID,
+		TeamID: delivery.TeamID, ChannelID: delivery.ChannelID, SessionID: delivery.SessionID,
+		TurnID: delivery.TurnID, Artifact: artifact, ExpiresAt: service.now().UTC().Add(service.config.ArtifactDownloadTTL),
+		IssuedPayloadSHA256: issuedDigest}
+	if err := service.repository.SaveDownloadGrant(ctx, grant); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(service.config.ArtifactDownloadBaseURL, "/") + "/mattermost/v1/artifacts/" + grant.ID + "/content", nil
+}
+
+func (service *Service) DownloadArtifact(ctx context.Context, grantID, authorization string) (entity.ArtifactBinding, []byte, error) {
+	if uuid.Validate(grantID) != nil {
+		return entity.ArtifactBinding{}, nil, domainerrs.ErrNotFound
+	}
+	grant, err := service.repository.GetDownloadGrant(ctx, grantID)
+	if err != nil || !grant.ConsumedAt.IsZero() || !grant.RevokedAt.IsZero() ||
+		!grant.ExpiresAt.After(service.now().UTC()) || grant.Artifact.ScanState != "CLEAN" {
+		return entity.ArtifactBinding{}, nil, domainerrs.ErrNotFound
+	}
+	if err := service.mattermost.AuthenticateArtifactDownload(ctx, authorization, grant); err != nil {
+		return entity.ArtifactBinding{}, nil, domainerrs.ErrUnauthorized
+	}
+	raw, err := service.objects.Get(ctx, grant.ProjectID, grant.Artifact.StorageRef,
+		grant.Artifact.SizeBytes, grant.Artifact.SHA256)
+	if err != nil {
+		return entity.ArtifactBinding{}, nil, domainerrs.ErrUnavailable
+	}
+	if err := service.repository.ConsumeDownloadGrant(ctx, grant, grant.MattermostUserID); err != nil {
+		return entity.ArtifactBinding{}, nil, domainerrs.ErrConflict
+	}
+	return grant.Artifact, raw, nil
 }
 
 func (service *Service) CheckInteraction(ctx context.Context) error {
@@ -808,120 +979,11 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 	if err := service.enqueueRunCard(ctx, inbound, turn.ID); err != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "RUN_DELIVERY_ENQUEUE_FAILED")
 	}
-	if err := service.repository.SaveTurnWatch(ctx, inbound, turn.ID); err != nil {
-		return Result{}, service.retryInbound(ctx, inbound, "TURN_WATCH_SAVE_FAILED")
-	}
 	message := service.text(inbound.Locale, "command.accepted", map[string]any{"SessionID": inbound.SessionID})
 	if err := service.repository.CompleteInbound(ctx, inbound, inbound.SessionID, turn.ID, message); err != nil {
 		return Result{}, err
 	}
 	return Result{Message: message}, nil
-}
-
-// ProcessTurnDelivery читает только авторитетную версию Turn и превращает её
-// в один fenced delivery effect. Gateway не выводит terminal outcome из
-// локального состояния EnqueueTurn.
-func (service *Service) ProcessTurnDelivery(ctx context.Context, instanceID string) (bool, error) {
-	leaseToken, err := randomToken()
-	if err != nil {
-		return false, err
-	}
-	watch, ok, err := service.repository.ClaimTurnWatch(ctx, instanceID, leaseToken, service.config.DeliveryLease)
-	if err != nil || !ok {
-		return ok, err
-	}
-	grant, err := service.authority.Sign(watch.Inbound)
-	if err != nil {
-		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
-			service.now().Add(service.config.RetryBase))
-	}
-	turn, err := service.control.GetTurn(ctx, grant, watch.TurnID)
-	if err != nil || turn.ID != watch.TurnID || turn.SessionID != watch.Inbound.SessionID ||
-		turn.Attempt == 0 || !validSHA256Text(turn.ImmutableInputSHA256) {
-		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
-			service.now().Add(service.config.RetryBase))
-	}
-	terminal := turn.State == "SUCCEEDED" || turn.State == "FAILED" || turn.State == "CANCELLED" || turn.State == "EXPIRED"
-	if turn.Version <= watch.LastVersion {
-		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, terminal,
-			service.now().Add(service.config.ScanPollInterval))
-	}
-	if watch.LastVersion > 0 {
-		predecessor, predecessorErr := service.repository.GetDelivery(ctx,
-			stableID(turn.ID, fmt.Sprintf("owner-turn-version:%d", watch.LastVersion)))
-		if predecessorErr != nil || predecessor.State != enum.DeliveryDelivered {
-			return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
-				service.now().Add(service.config.RetryBase))
-		}
-	}
-	runDelivery, err := service.repository.GetDelivery(ctx, stableID(watch.Inbound.ID, "card:"+string(enum.DeliveryRun)))
-	if err != nil || runDelivery.State != enum.DeliveryDelivered || runDelivery.ProviderPostID == "" {
-		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
-			service.now().Add(service.config.RetryBase))
-	}
-	delivery := entity.Delivery{
-		ID: stableID(turn.ID, fmt.Sprintf("owner-turn-version:%d", turn.Version)), Kind: enum.DeliveryStatus,
-		State: enum.DeliveryPending, OrganizationID: watch.Inbound.OrganizationID, ProjectID: watch.Inbound.ProjectID,
-		SessionID: turn.SessionID, TurnID: turn.ID, Attempt: turn.Attempt,
-		ImmutableInputSHA256: turn.ImmutableInputSHA256, TeamID: watch.Inbound.TeamID,
-		ChannelID: watch.Inbound.ChannelID, RootPostID: watch.Inbound.RootPostID,
-		BotStableKey: watch.Inbound.BotStableKey, Locale: watch.Inbound.Locale,
-		UpdatePostID: runDelivery.ProviderPostID, CreatedAt: service.now(), UpdatedAt: service.now(),
-	}
-	messageID := "card.run.progress"
-	if terminal {
-		messageID = "card.run.terminal"
-		delivery.Kind = enum.DeliveryRun
-	}
-	card := map[string]any{"message": service.text(delivery.Locale, messageID, map[string]any{
-		"State": turn.State, "Outcome": turn.Outcome, "SessionID": turn.SessionID,
-		"TurnID": turn.ID, "Attempt": turn.Attempt, "InputSHA256": turn.ImmutableInputSHA256,
-	})}
-	if turn.ResultArtifactID != "" {
-		artifact, artifactErr := service.control.GetArtifact(ctx, grant, turn.ResultArtifactID,
-			turn.ResultArtifactVersion)
-		if artifactErr != nil || artifact.ID != turn.ResultArtifactID || artifact.Direction != "OUTPUT" ||
-			artifact.Version != turn.ResultArtifactVersion || artifact.SHA256 != turn.ResultArtifactSHA256 {
-			return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
-				service.now().Add(service.config.RetryBase))
-		}
-		if artifact.ScanState == "CLEAN" {
-			binding := entity.ArtifactBinding{ArtifactID: artifact.ID, Version: artifact.Version,
-				Name: safeName(artifact.Name, 0), Path: "results/" + safeName(artifact.Name, 0),
-				StorageRef: artifact.StorageRef, SizeBytes: artifact.SizeBytes, MediaType: artifact.MediaType,
-				SHA256: artifact.SHA256, Provenance: "control-plane-turn:" + turn.ID,
-				ScanState: artifact.ScanState}
-			if artifact.SizeBytes <= uint64(service.config.MaximumMattermostFileBytes) {
-				delivery.Attachments = []entity.ArtifactBinding{binding}
-			} else {
-				protected, linkErr := service.objects.ProtectedURL(ctx, delivery.ProjectID, artifact.StorageRef,
-					artifact.SizeBytes, artifact.SHA256, binding.Name, 15*time.Minute)
-				if linkErr != nil {
-					return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
-						service.now().Add(service.config.RetryBase))
-				}
-				card["message"] = fmt.Sprintf("%s\n\n%s", card["message"], service.text(delivery.Locale,
-					"card.artifact.protected_link", map[string]any{"URL": protected, "Name": binding.Name,
-						"Size": binding.SizeBytes, "SHA256": binding.SHA256}))
-			}
-		} else if terminal && (artifact.ScanState == "QUARANTINED" || artifact.ScanState == "FAILED") {
-			delivery.Kind = enum.DeliveryIncident
-			card["message"] = service.text(delivery.Locale, "card.incident.body", map[string]any{
-				"Code": "ARTIFACT_SCAN_REJECTED", "NextAction": service.text(delivery.Locale, "card.incident.next_action", nil)})
-		} else {
-			return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
-				service.now().Add(service.config.ScanPollInterval))
-		}
-	}
-	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, card)
-	if err != nil {
-		return true, err
-	}
-	if _, _, err := service.repository.EnqueueDelivery(ctx, delivery); err != nil {
-		return true, err
-	}
-	return true, service.repository.AdvanceTurnWatch(ctx, watch, turn.Version, terminal,
-		service.now().Add(service.config.ScanPollInterval))
 }
 
 func hasArtifactForFile(bindings []entity.ArtifactBinding, fileID string) bool {
@@ -1027,6 +1089,14 @@ func (service *Service) acknowledgeDelivery(ctx context.Context, delivery entity
 			ClaimToken: gate.ClaimToken, ClaimFence: gate.ClaimFence, PostID: delivery.ProviderPostID,
 			ChannelID: delivery.ChannelID, RootPostID: delivery.RootPostID,
 		}); err != nil {
+			return err
+		}
+	}
+	if delivery.OwnerDelivery != nil {
+		work := domaincontrol.InteractionDeliveryWork{DeliveryID: delivery.ID, Fence: delivery.OwnerDelivery.Fence,
+			LeaseToken: delivery.OwnerDelivery.LeaseToken}
+		if err := service.control.RecordInteractionDelivery(ctx, stableID(delivery.ID, "record-owner-delivery"),
+			work, delivery.ProviderReceiptSHA256); err != nil {
 			return err
 		}
 	}

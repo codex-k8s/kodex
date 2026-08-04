@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1447,7 +1448,10 @@ func castStatus(pod *corev1.Pod, pvc *corev1.PersistentVolumeClaim) entity.Runti
 				AgentSessionID:         handoff.AgentSessionID, AgentSessionTurnID: handoff.AgentSessionTurnID,
 				AgentRunID: handoff.AgentRunID, AgentBindingSHA256: handoff.AgentBindingSHA256,
 				Outcome: handoff.Outcome, TerminalReference: handoff.TerminalReference,
-				TerminalSHA256: handoff.TerminalSHA256, ObservedAt: handoff.ObservedAt}
+				TerminalSHA256: handoff.TerminalSHA256, ResultArtifactID: handoff.ResultArtifactID,
+				ResultArtifactVersion: handoff.ResultArtifactVersion, ResultArtifactSHA256: handoff.ResultArtifactSHA256,
+				ResultArtifactName: handoff.ResultArtifactName, ResultArtifactMediaType: handoff.ResultArtifactMediaType,
+				ResultArtifactPayload: slices.Clone(handoff.ResultArtifactPayload), ObservedAt: handoff.ObservedAt}
 		}
 	}
 	status.Version, _ = strconv.ParseUint(pod.Annotations["runtime.mattercodex.dev/version"], 10, 64)

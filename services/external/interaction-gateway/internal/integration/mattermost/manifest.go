@@ -1,6 +1,8 @@
 package mattermost
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -69,7 +71,7 @@ type index struct {
 	assignments map[string]AgentAssignment
 }
 
-func loadManifest(path string) (Manifest, *index, error) {
+func loadManifest(path, expectedRevision, digestFile string, vaultKVVersion uint64) (Manifest, *index, error) {
 	if !filepath.IsAbs(path) {
 		return Manifest{}, nil, errors.New("mattermost mapping manifest path is not absolute")
 	}
@@ -81,12 +83,20 @@ func loadManifest(path string) (Manifest, *index, error) {
 	if err != nil {
 		return Manifest{}, nil, errors.New("read Mattermost mapping manifest")
 	}
+	digestRaw, digestErr := os.ReadFile(digestFile)
+	expectedDigest := strings.TrimSpace(string(digestRaw))
+	sum := sha256.Sum256(raw)
+	if digestErr != nil || vaultKVVersion == 0 || len(expectedDigest) != 64 ||
+		hex.EncodeToString(sum[:]) != expectedDigest {
+		return Manifest{}, nil, errors.New("mattermost mapping immutable digest mismatch")
+	}
 	var manifest Manifest
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&manifest) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
 		manifest.Version != 1 || !strings.HasPrefix(manifest.Source, "vault://") ||
 		len(manifest.Revision) < 8 || len(manifest.Revision) > 128 || strings.TrimSpace(manifest.Revision) != manifest.Revision ||
+		manifest.Revision != expectedRevision ||
 		len(manifest.Channels) == 0 || len(manifest.Actors) == 0 || len(manifest.Bots) == 0 {
 		return Manifest{}, nil, errors.New("mattermost mapping manifest is invalid")
 	}
@@ -179,6 +189,7 @@ func loadManifest(path string) (Manifest, *index, error) {
 				ChatID: channel.ChatID, ActorID: actor.ActorID, RoleID: channel.RoleID,
 				Locale: channel.Locale, BotStableKey: channel.BotStableKey,
 				TeamID: channel.TeamID, ChannelID: channel.ChannelID, SessionID: channel.SessionID,
+				MattermostUserID: actor.MattermostUserID,
 			}
 		}
 	}
@@ -211,7 +222,7 @@ func (current *index) resolve(teamID, channelID, userID string, isBot bool) (ent
 	if !ok {
 		return boundary, errors.New("mattermost actor is outside the server-owned mapping")
 	}
-	boundary.ActorID = actor.ActorID
+	boundary.ActorID, boundary.MattermostUserID = actor.ActorID, userID
 	return boundary, nil
 }
 
@@ -221,6 +232,11 @@ func (current *index) resolveAssignment(teamID, channelID, username, userID stri
 		return AgentAssignment{}, errors.New("mattermost agent assignment is unauthorized")
 	}
 	return assignment, nil
+}
+
+func (current *index) assigned(teamID, channelID, username string) (AgentAssignment, bool) {
+	assignment, ok := current.assignments[teamID+"\x00"+channelID+"\x00"+strings.ToLower(username)]
+	return assignment, ok
 }
 
 func (current *index) channelBoundaries() []entity.Boundary {

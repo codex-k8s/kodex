@@ -4,6 +4,7 @@ package controlplane
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -269,7 +270,7 @@ func (client *Client) Heartbeat(
 
 func (client *Client) Complete(
 	ctx context.Context, key string, execution entity.Execution,
-	leaseToken, outcome, reference, digest string,
+	leaseToken, outcome, reference, digest string, handoff *entity.RuntimeHandoff,
 ) (entity.Execution, error) {
 	terminal := controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_FAILED
 	if outcome == "SUCCEEDED" {
@@ -277,14 +278,18 @@ func (client *Client) Complete(
 	} else if outcome == "BLOCKED" {
 		terminal = controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_BLOCKED
 	}
-	response, err := client.shared.ControlPlane.CompleteRuntimeExecution(
-		ctx, &controlplanev1.CompleteRuntimeExecutionRequest{
-			IdempotencyKey: key, ExecutionId: execution.ID,
-			ExpectedVersion: execution.Version, ExpectedFence: execution.Fence,
-			ExpectedGrantGeneration: execution.GrantGeneration, LeaseToken: leaseToken,
-			Outcome: terminal, TerminalReference: reference, TerminalSha256: digest,
-		},
-	)
+	request := &controlplanev1.CompleteRuntimeExecutionRequest{
+		IdempotencyKey: key, ExecutionId: execution.ID,
+		ExpectedVersion: execution.Version, ExpectedFence: execution.Fence,
+		ExpectedGrantGeneration: execution.GrantGeneration, LeaseToken: leaseToken,
+		Outcome: terminal, TerminalReference: reference, TerminalSha256: digest}
+	if handoff != nil {
+		request.ResultArtifactId, request.ResultArtifactVersion = handoff.ResultArtifactID, handoff.ResultArtifactVersion
+		request.ResultArtifactSha256, request.ResultArtifactName = handoff.ResultArtifactSHA256, handoff.ResultArtifactName
+		request.ResultArtifactMediaType = handoff.ResultArtifactMediaType
+		request.ResultArtifactPayload = slices.Clone(handoff.ResultArtifactPayload)
+	}
+	response, err := client.shared.ControlPlane.CompleteRuntimeExecution(ctx, request)
 	if err != nil {
 		return entity.Execution{}, mapError(err)
 	}

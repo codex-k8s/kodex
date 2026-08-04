@@ -33,9 +33,6 @@ type GatewayConfig struct {
 	PostgresTLSServerName       string        `env:"POSTGRES_TLS_SERVER_NAME,required"`
 	PostgresExpectedUser        string        `env:"POSTGRES_EXPECTED_SESSION_USER,required"`
 	PostgresPrincipalGeneration uint64        `env:"POSTGRES_PRINCIPAL_GENERATION,required"`
-	PostgresContextKeyID        string        `env:"POSTGRES_CONTEXT_KEY_ID,required"`
-	PostgresContextKeyFile      string        `env:"POSTGRES_CONTEXT_KEY_FILE,required"`
-	PostgresContextTTL          time.Duration `env:"POSTGRES_CONTEXT_TTL" envDefault:"5s"`
 	PostgresMaxConnections      int32         `env:"POSTGRES_MAX_CONNECTIONS" envDefault:"16"`
 	DeliveryKeyFile             string        `env:"DELIVERY_KEY_FILE,required"`
 	EventIssuer                 string        `env:"EVENT_ISSUER,required"`
@@ -46,11 +43,12 @@ type GatewayConfig struct {
 	CallbackKeyFile             string        `env:"CALLBACK_KEY_FILE,required"`
 	ReadbackIssuer              string        `env:"READBACK_ISSUER,required"`
 	ReadbackAudience            string        `env:"READBACK_AUDIENCE,required"`
-	ReadbackPublicJWKFile       string        `env:"READBACK_PUBLIC_JWK_FILE,required"`
-	ReadbackReadinessGrantFile  string        `env:"READBACK_READINESS_GRANT_FILE,required"`
+	ReadbackPublicKeysetFile    string        `env:"READBACK_PUBLIC_KEYSET_FILE,required"`
 	ReadbackGeneration          uint64        `env:"READBACK_GENERATION,required"`
 	ActionCallbackURL           string        `env:"ACTION_CALLBACK_URL,required"`
 	DialogCallbackURL           string        `env:"DIALOG_CALLBACK_URL,required"`
+	ArtifactDownloadBaseURL     string        `env:"ARTIFACT_DOWNLOAD_BASE_URL,required"`
+	ArtifactDownloadTTL         time.Duration `env:"ARTIFACT_DOWNLOAD_TTL" envDefault:"5m"`
 	RetentionRef                string        `env:"RETENTION_REF,required"`
 	InstanceID                  string        `env:"INSTANCE_ID,required"`
 	MaximumBodyBytes            int64         `env:"MAXIMUM_BODY_BYTES" envDefault:"1048576"`
@@ -72,30 +70,32 @@ type GatewayConfig struct {
 }
 
 type MattermostConfig struct {
-	SiteURL               string        `env:"SITE_URL,required"`
+	SiteURL                 string        `env:"SITE_URL,required"`
+	TLSServerName           string        `env:"TLS_SERVER_NAME,required"`
+	CAFile                  string        `env:"CA_FILE,required"`
+	ClientCertificateFile   string        `env:"CLIENT_CERTIFICATE_FILE,required"`
+	ClientPrivateKeyFile    string        `env:"CLIENT_PRIVATE_KEY_FILE,required"`
+	MappingManifestFile     string        `env:"MAPPING_MANIFEST_FILE,required"`
+	MappingExpectedRevision string        `env:"MAPPING_EXPECTED_REVISION,required"`
+	MappingSHA256File       string        `env:"MAPPING_SHA256_FILE,required"`
+	MappingVaultKVVersion   uint64        `env:"MAPPING_VAULT_KV_VERSION,required"`
+	RequestTimeout          time.Duration `env:"REQUEST_TIMEOUT" envDefault:"10s"`
+	MaximumFileBytes        int64         `env:"MAXIMUM_FILE_BYTES" envDefault:"67108864"`
+	CatchUpWindow           time.Duration `env:"CATCH_UP_WINDOW" envDefault:"1h"`
+}
+
+type ObjectConfig struct {
+	Endpoint              string        `env:"ENDPOINT,required"`
 	TLSServerName         string        `env:"TLS_SERVER_NAME,required"`
 	CAFile                string        `env:"CA_FILE,required"`
 	ClientCertificateFile string        `env:"CLIENT_CERTIFICATE_FILE,required"`
 	ClientPrivateKeyFile  string        `env:"CLIENT_PRIVATE_KEY_FILE,required"`
-	MappingManifestFile   string        `env:"MAPPING_MANIFEST_FILE,required"`
-	RequestTimeout        time.Duration `env:"REQUEST_TIMEOUT" envDefault:"10s"`
-	MaximumFileBytes      int64         `env:"MAXIMUM_FILE_BYTES" envDefault:"67108864"`
-	CatchUpWindow         time.Duration `env:"CATCH_UP_WINDOW" envDefault:"1h"`
-}
-
-type ObjectConfig struct {
-	Endpoint               string        `env:"ENDPOINT,required"`
-	PublicDownloadEndpoint string        `env:"PUBLIC_DOWNLOAD_ENDPOINT,required"`
-	TLSServerName          string        `env:"TLS_SERVER_NAME,required"`
-	CAFile                 string        `env:"CA_FILE,required"`
-	ClientCertificateFile  string        `env:"CLIENT_CERTIFICATE_FILE,required"`
-	ClientPrivateKeyFile   string        `env:"CLIENT_PRIVATE_KEY_FILE,required"`
-	AccessKeyFile          string        `env:"ACCESS_KEY_FILE,required"`
-	SecretKeyFile          string        `env:"SECRET_KEY_FILE,required"`
-	SessionTokenFile       string        `env:"SESSION_TOKEN_FILE"`
-	Bucket                 string        `env:"BUCKET,required"`
-	MaximumObjectBytes     int64         `env:"MAXIMUM_OBJECT_BYTES" envDefault:"268435456"`
-	Timeout                time.Duration `env:"TIMEOUT" envDefault:"15s"`
+	AccessKeyFile         string        `env:"ACCESS_KEY_FILE,required"`
+	SecretKeyFile         string        `env:"SECRET_KEY_FILE,required"`
+	SessionTokenFile      string        `env:"SESSION_TOKEN_FILE"`
+	Bucket                string        `env:"BUCKET,required"`
+	MaximumObjectBytes    int64         `env:"MAXIMUM_OBJECT_BYTES" envDefault:"268435456"`
+	Timeout               time.Duration `env:"TIMEOUT" envDefault:"15s"`
 }
 
 type ControlConfig struct {
@@ -135,11 +135,11 @@ func (config Config) validate() error {
 	for _, path := range []string{
 		gateway.TLSCertificateFile, gateway.TLSPrivateKeyFile, gateway.TLSClientCAFile,
 		gateway.SlashTokenFile, gateway.PostgresDSNFile, gateway.PostgresCAFile,
-		gateway.PostgresContextKeyFile,
 		gateway.DeliveryKeyFile, gateway.EventPrivateJWKFile, gateway.CallbackKeyFile,
-		gateway.ReadbackPublicJWKFile, gateway.ReadbackReadinessGrantFile,
+		gateway.ReadbackPublicKeysetFile,
 		config.Mattermost.CAFile, config.Mattermost.ClientCertificateFile,
 		config.Mattermost.ClientPrivateKeyFile, config.Mattermost.MappingManifestFile,
+		config.Mattermost.MappingSHA256File,
 		config.Object.CAFile, config.Object.ClientCertificateFile, config.Object.ClientPrivateKeyFile,
 		config.Object.AccessKeyFile, config.Object.SecretKeyFile, config.Control.CAFile,
 		config.Control.ClientCertificateFile, config.Control.ClientPrivateKeyFile,
@@ -152,8 +152,8 @@ func (config Config) validate() error {
 	if config.Object.SessionTokenFile != "" && !filepath.IsAbs(config.Object.SessionTokenFile) {
 		return errors.New("interaction gateway session token path is invalid")
 	}
-	for _, raw := range []string{gateway.ActionCallbackURL, gateway.DialogCallbackURL,
-		config.Mattermost.SiteURL, config.Object.Endpoint, config.Object.PublicDownloadEndpoint} {
+	for _, raw := range []string{gateway.ActionCallbackURL, gateway.DialogCallbackURL, gateway.ArtifactDownloadBaseURL,
+		config.Mattermost.SiteURL, config.Object.Endpoint} {
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 			return errors.New("interaction gateway HTTPS URL is invalid")
@@ -164,8 +164,6 @@ func (config Config) validate() error {
 		len(gateway.ReadbackClientSPIFFEIDs) == 0 || len(gateway.ReadbackClientSPIFFEIDs) > 8 ||
 		gateway.InstanceID == "" || gateway.RetentionRef == "" || gateway.EventIssuer == "" || gateway.EventAudience == "" ||
 		gateway.PostgresPrincipalGeneration == 0 || gateway.PostgresExpectedUser != expectedPostgresUser ||
-		gateway.PostgresContextKeyID == "" ||
-		gateway.PostgresContextTTL < time.Second || gateway.PostgresContextTTL > 10*time.Second ||
 		gateway.PostgresMaxConnections < 2 || gateway.PostgresMaxConnections > 64 ||
 		gateway.MaximumConnections < 16 || gateway.MaximumConnections > 1024 ||
 		gateway.WorkerInterval < 50*time.Millisecond || gateway.OwnerGateInterval < 100*time.Millisecond ||

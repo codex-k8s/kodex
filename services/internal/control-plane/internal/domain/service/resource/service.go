@@ -43,8 +43,7 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 		State                                                     string
 	}
 	issue := func(issuer, audience string, privateKey ed25519.PrivateKey) (string, error) {
-		payload, marshalErr := json.Marshal(ticketPayload{
-			issuer, audience,
+		payload, marshalErr := json.Marshal(ticketPayload{issuer, audience,
 			hashString(execution.ID + "\x00" + fmt.Sprint(execution.Version) + "\x00" + fmt.Sprint(execution.Fence) + "\x00" + audience),
 			issuedAt, issuedAt.Add(5 * time.Minute),
 			execution.ID, execution.OrganizationID, execution.ProjectID,
@@ -54,8 +53,7 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 			execution.GrantGeneration, execution.ImmutableInputSHA256,
 			execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
 			execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
-			execution.ResourceClass, execution.ClusterAccessProfile, execution.State,
-		})
+			execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
 		if marshalErr != nil {
 			return "", marshalErr
 		}
@@ -113,6 +111,7 @@ const (
 	permissionManageWorkClaim         = "controlplane.work_claim.manage"
 	permissionDeliverGate             = "controlplane.owner_gate.deliver"
 	permissionExpireGate              = "controlplane.owner_gate.expire"
+	permissionDeliverInteraction      = "controlplane.interaction.delivery"
 	permissionReadRuntimeRevision     = "controlplane.runtime_revision.read"
 	permissionIndexMemory             = "controlplane.memory.index"
 	permissionRepairOutbox            = "controlplane.outbox.repair"
@@ -189,7 +188,25 @@ type Config struct {
 	CleanupAuthorizerWorkload  string
 	CleanupAuthorizerSPIFFEID  string
 	PendingRescheduleDelay     time.Duration
+	InteractionReadbackIssuer  InteractionReadbackIssuer
 	Observer                   Observer
+}
+
+type InteractionReadbackClaims struct {
+	Subject, OrganizationID, ProjectID, DeliveryID, JTI string
+	Readiness                                           bool
+	IssuedAt, ExpiresAt                                 time.Time
+}
+
+type InteractionReadbackCredential struct {
+	Compact, SHA256, ProducerID, Purpose, WorkloadID, CallerSPIFFEID string
+	Operation, Permission, KeysetSHA256                              string
+	Generation, KeysetRevision, KeysetHighWatermark                  uint64
+}
+
+type InteractionReadbackIssuer interface {
+	Issue(context.Context, InteractionReadbackClaims) (InteractionReadbackCredential, error)
+	Check(context.Context) error
 }
 
 // Service владеет прикладными переходами; адаптер только сохраняет намерение.
@@ -226,6 +243,7 @@ type Service struct {
 	cleanupAuthorizerSPIFFEID  string
 	pendingRescheduleDelay     time.Duration
 	observer                   Observer
+	interactionReadbackIssuer  InteractionReadbackIssuer
 	now                        func() time.Time
 }
 
@@ -286,7 +304,7 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		config.CleanupAuthorizerWorkload == controlAPIGatewayWorkload ||
 		config.CleanupAuthorizerSPIFFEID == controlAPIGatewaySPIFFEID ||
 		config.PendingRescheduleDelay < 5*time.Second || config.PendingRescheduleDelay > 5*time.Minute ||
-		config.Observer == nil {
+		config.InteractionReadbackIssuer == nil || config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
 	return &Service{
@@ -322,6 +340,7 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		cleanupAuthorizerSPIFFEID:  config.CleanupAuthorizerSPIFFEID,
 		pendingRescheduleDelay:     config.PendingRescheduleDelay,
 		observer:                   config.Observer,
+		interactionReadbackIssuer:  config.InteractionReadbackIssuer,
 		now:                        time.Now,
 	}, nil
 }
@@ -775,7 +794,6 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 	}
 	input.Filter.OrganizationID = input.Principal.OrganizationID
 	input.Filter.ProjectID = input.Principal.ProjectID
-	input.Filter.ActorID = input.Principal.ActorID
 	if err := input.Filter.Validate(); err != nil {
 		return nil, errs.ErrInvalidInput
 	}
@@ -815,7 +833,11 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 		}
 		return resources, nil
 	}
-	return service.repository.List(ctx, input.Filter)
+	resources, err := service.repository.List(ctx, input.Filter)
+	if err != nil {
+		return nil, err
+	}
+	return filterOwnerBoundResources(resources, input.Principal.ActorID), nil
 }
 
 type resourceMutation func(domainrepo.Transaction) (entity.Resource, error)
@@ -1083,6 +1105,8 @@ func (service *Service) transitionResource(
 		spec.Attempt++
 		spec.Outcome = ""
 		spec.ResultArtifactID = ""
+		spec.ResultArtifactVersion = 0
+		spec.ResultArtifactSHA256 = ""
 		updated, err := current.ReplaceAndTransition(spec, target, service.now())
 		if err != nil {
 			return entity.Resource{}, errs.ErrStateConflict
@@ -1280,6 +1304,20 @@ func ownerBoundLifecycleKind(kind enum.Kind) bool {
 	default:
 		return false
 	}
+}
+
+func filterOwnerBoundResources(
+	resources []entity.Resource,
+	actorID string,
+) []entity.Resource {
+	filtered := resources[:0]
+	for _, resource := range resources {
+		if !ownerBoundLifecycleKind(resource.Kind) ||
+			resource.OwnerActorID == actorID {
+			filtered = append(filtered, resource)
+		}
+	}
+	return filtered
 }
 
 func kindAdminPermission(kind enum.Kind) string {
@@ -1699,21 +1737,7 @@ func configurationUpdateSpec(
 	switch currentOwnership.ManagedBy {
 	case "UI":
 		if nextOwnership.ManagedBy == "UI" {
-			if currentOwnership.SourceRef == "" {
-				if nextOwnership.SourceRef != "" || nextOwnership.SourceRevision != 0 {
-					return nil, errs.ErrStateConflict
-				}
-				return next, nil
-			}
-			if nextOwnership.SourceRef != "" &&
-				(nextOwnership.SourceRef != currentOwnership.SourceRef || nextOwnership.SourceRevision != currentOwnership.SourceRevision) {
-				return nil, errs.ErrStateConflict
-			}
-			preserved, err := entity.WithConfigurationOwnership(next, currentOwnership)
-			if err != nil {
-				return nil, errs.ErrStateConflict
-			}
-			return preserved, nil
+			return next, nil
 		}
 		if nextOwnership.ManagedBy != "GIT" {
 			return nil, errs.ErrStateConflict

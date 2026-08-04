@@ -330,6 +330,24 @@ var sqlTurnAttemptGetForUpdate string
 //go:embed sql/turn_attempt__save.sql
 var sqlTurnAttemptSave string
 
+//go:embed sql/interaction_delivery__enqueue.sql
+var sqlInteractionDeliveryEnqueue string
+
+//go:embed sql/interaction_delivery__claim.sql
+var sqlInteractionDeliveryClaim string
+
+//go:embed sql/interaction_delivery__complete.sql
+var sqlInteractionDeliveryComplete string
+
+//go:embed sql/interaction_delivery_readback__insert.sql
+var sqlInteractionDeliveryReadbackInsert string
+
+//go:embed sql/interaction_delivery_readback__validate.sql
+var sqlInteractionDeliveryReadbackValidate string
+
+//go:embed sql/interaction_delivery_readback_keyset__admit.sql
+var sqlInteractionDeliveryReadbackKeysetAdmit string
+
 //go:embed sql/turn_lease__delete.sql
 var sqlTurnLeaseDelete string
 

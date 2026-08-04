@@ -66,6 +66,28 @@ type ArtifactBinding struct {
 	ScanState  string `json:"scan_state,omitempty"`
 }
 
+// DownloadGrant — одноразовое gateway-owned право на проксированное чтение
+// private S3 object после повторной Mattermost actor-проверки.
+type DownloadGrant struct {
+	ID                  string
+	Generation          uint64
+	OrganizationID      string
+	ProjectID           string
+	ActorID             string
+	MattermostUserID    string
+	TeamID              string
+	ChannelID           string
+	SessionID           string
+	TurnID              string
+	Artifact            ArtifactBinding
+	ExpiresAt           time.Time
+	ConsumedAt          time.Time
+	RevokedAt           time.Time
+	IssuedPayloadSHA256 string
+	AuthenticatedUserID string
+	AuthenticationAt    time.Time
+}
+
 // UploadReceipt фиксирует подтверждённый Mattermost effect до следующего
 // внешнего действия delivery worker.
 type UploadReceipt struct {
@@ -81,46 +103,47 @@ type UploadReceipt struct {
 }
 
 type Delivery struct {
-	ID                    string             `json:"delivery_id"`
-	Kind                  enum.DeliveryKind  `json:"kind"`
-	State                 enum.DeliveryState `json:"state"`
-	OrganizationID        string             `json:"organization_id"`
-	ProjectID             string             `json:"project_id"`
-	SessionID             string             `json:"session_id,omitempty"`
-	TurnID                string             `json:"turn_id,omitempty"`
-	Attempt               uint32             `json:"attempt,omitempty"`
-	ImmutableInputSHA256  string             `json:"input_sha256,omitempty"`
-	TeamID                string             `json:"team_id"`
-	ChannelID             string             `json:"channel_id"`
-	RootPostID            string             `json:"root_post_id,omitempty"`
-	BotStableKey          string             `json:"bot_stable_key"`
-	Locale                string             `json:"locale"`
-	Payload               json.RawMessage    `json:"payload"`
-	PayloadSHA256         string             `json:"payload_sha256"`
-	Attachments           []ArtifactBinding  `json:"attachments,omitempty"`
-	UploadReceipts        []UploadReceipt    `json:"upload_receipts,omitempty"`
-	ProviderPostID        string             `json:"provider_post_id,omitempty"`
-	ProviderReceiptSHA256 string             `json:"provider_receipt_sha256,omitempty"`
-	UpdatePostID          string             `json:"update_post_id,omitempty"`
-	Attempts              uint32             `json:"attempts"`
-	AckAttempts           uint32             `json:"ack_attempts"`
-	Fence                 uint64             `json:"fence"`
-	LeaseToken            string             `json:"-"`
-	LeaseExpiresAt        time.Time          `json:"lease_expires_at,omitempty"`
-	NextAttemptAt         time.Time          `json:"next_attempt_at"`
-	LastErrorCode         string             `json:"last_error_code,omitempty"`
-	OwnerGate             *OwnerGateBinding  `json:"owner_gate,omitempty"`
-	CreatedAt             time.Time          `json:"created_at"`
-	UpdatedAt             time.Time          `json:"updated_at"`
+	ID                    string                `json:"delivery_id"`
+	Kind                  enum.DeliveryKind     `json:"kind"`
+	State                 enum.DeliveryState    `json:"state"`
+	OrganizationID        string                `json:"organization_id"`
+	ProjectID             string                `json:"project_id"`
+	SessionID             string                `json:"session_id,omitempty"`
+	TurnID                string                `json:"turn_id,omitempty"`
+	Attempt               uint32                `json:"attempt,omitempty"`
+	ImmutableInputSHA256  string                `json:"input_sha256,omitempty"`
+	TeamID                string                `json:"team_id"`
+	ChannelID             string                `json:"channel_id"`
+	RootPostID            string                `json:"root_post_id,omitempty"`
+	BotStableKey          string                `json:"bot_stable_key"`
+	Locale                string                `json:"locale"`
+	Payload               json.RawMessage       `json:"payload"`
+	PayloadSHA256         string                `json:"payload_sha256"`
+	Attachments           []ArtifactBinding     `json:"attachments,omitempty"`
+	UploadReceipts        []UploadReceipt       `json:"upload_receipts,omitempty"`
+	ProviderPostID        string                `json:"provider_post_id,omitempty"`
+	ProviderReceiptSHA256 string                `json:"provider_receipt_sha256,omitempty"`
+	UpdatePostID          string                `json:"update_post_id,omitempty"`
+	Attempts              uint32                `json:"attempts"`
+	AckAttempts           uint32                `json:"ack_attempts"`
+	Fence                 uint64                `json:"fence"`
+	LeaseToken            string                `json:"-"`
+	LeaseExpiresAt        time.Time             `json:"lease_expires_at,omitempty"`
+	NextAttemptAt         time.Time             `json:"next_attempt_at"`
+	LastErrorCode         string                `json:"last_error_code,omitempty"`
+	OwnerGate             *OwnerGateBinding     `json:"owner_gate,omitempty"`
+	OwnerDelivery         *OwnerDeliveryBinding `json:"owner_delivery,omitempty"`
+	CreatedAt             time.Time             `json:"created_at"`
+	UpdatedAt             time.Time             `json:"updated_at"`
 }
 
-type TurnWatch struct {
-	TurnID         string
-	Inbound        InboundEvent
-	LastVersion    uint64
-	Fence          uint64
-	LeaseToken     string
-	LeaseExpiresAt time.Time
+type OwnerDeliveryBinding struct {
+	Fence                  uint64    `json:"fence"`
+	LeaseToken             string    `json:"-"`
+	LeaseExpiresAt         time.Time `json:"lease_expires_at"`
+	TurnVersion            uint64    `json:"turn_version"`
+	RuntimeRevisionID      string    `json:"runtime_revision_id"`
+	RuntimeRevisionVersion uint64    `json:"runtime_revision_version"`
 }
 
 type OwnerGateBinding struct {
@@ -137,17 +160,18 @@ type OwnerGateBinding struct {
 }
 
 type Boundary struct {
-	OrganizationID string
-	ProjectID      string
-	ChatID         string
-	ActorID        string
-	RoleID         string
-	Locale         string
-	BotStableKey   string
-	TeamID         string
-	ChannelID      string
-	SessionID      string
-	IgnoredBot     bool
+	OrganizationID   string
+	ProjectID        string
+	ChatID           string
+	ActorID          string
+	RoleID           string
+	Locale           string
+	BotStableKey     string
+	TeamID           string
+	ChannelID        string
+	SessionID        string
+	MattermostUserID string
+	IgnoredBot       bool
 }
 
 type OwnerGateClaim struct {

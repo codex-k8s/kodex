@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -15,12 +14,13 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"strconv"
+	"slices"
 	"time"
 
 	domainrepo "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/repository/gateway"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/readbackgrant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -32,13 +32,37 @@ type Repository struct {
 	config Config
 }
 
+// AdmitDeliveryReadbackKeyset фиксирует verifier-owned high-watermark до
+// проверки любого bearer credential, включая повторный readback того же файла.
+func (repository *Repository) AdmitDeliveryReadbackKeyset(ctx context.Context, revision, highWatermark,
+	servedGeneration uint64, digest string, identities []readbackgrant.KeyIdentity) error {
+	encoded, err := json.Marshal(identities)
+	if err != nil {
+		return errors.New("encode delivery readback key identities")
+	}
+	var storedRevision, storedHighWatermark, storedServed uint64
+	var storedDigest string
+	var retired []int64
+	if err := repository.pool.QueryRow(ctx, deliveryReadbackKeysetAdmitSQL, revision, highWatermark,
+		servedGeneration, digest, encoded).Scan(&storedRevision, &storedHighWatermark, &storedServed,
+		&storedDigest, &retired); err != nil || storedRevision != revision ||
+		storedHighWatermark != highWatermark || storedServed != servedGeneration || storedDigest != digest {
+		return errors.New("admit delivery readback keyset")
+	}
+	for _, identity := range identities {
+		if identity.Status == "RETIRED" && !slices.Contains(retired, int64(identity.Generation)) {
+			return errors.New("admit delivery readback retired key identity")
+		}
+	}
+	return nil
+}
+
 type Config struct {
 	EncryptionKey       []byte
 	PrincipalName       string
 	PrincipalGeneration uint64
-	ContextKeyID        string
-	ContextSigningKey   []byte
-	ContextTTL          time.Duration
+	OrganizationID      string
+	AllowedProjectIDs   []string
 	CleanupBase         context.Context
 	CleanupTimeout      time.Duration
 }
@@ -55,10 +79,15 @@ type rowScanner interface {
 
 func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 	if pool == nil || len(config.EncryptionKey) != 32 || config.PrincipalName == "" ||
-		config.PrincipalGeneration == 0 || config.ContextKeyID == "" || len(config.ContextSigningKey) < 32 ||
-		config.ContextTTL < time.Second || config.ContextTTL > 10*time.Second ||
+		config.PrincipalGeneration == 0 || uuid.Validate(config.OrganizationID) != nil ||
+		len(config.AllowedProjectIDs) == 0 ||
 		config.CleanupBase == nil || config.CleanupTimeout < time.Second || config.CleanupTimeout > time.Minute {
 		return nil, errors.New("interaction repository configuration is invalid")
+	}
+	for _, projectID := range config.AllowedProjectIDs {
+		if uuid.Validate(projectID) != nil {
+			return nil, errors.New("interaction repository project scope is invalid")
+		}
 	}
 	block, err := aes.NewCipher(config.EncryptionKey)
 	if err != nil {
@@ -74,12 +103,17 @@ func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 func (repository *Repository) Check(ctx context.Context) error {
 	var version uint64
 	var identityReady bool
+	projects, err := json.Marshal(repository.config.AllowedProjectIDs)
+	if err != nil {
+		return errors.New("encode interaction repository project scope")
+	}
 	if err := repository.pool.QueryRow(ctx, readinessCheckSQL, repository.config.PrincipalGeneration,
-		repository.config.ContextKeyID, digest(repository.config.ContextSigningKey)).Scan(&version, &identityReady); err != nil ||
+		repository.config.OrganizationID, projects).Scan(&version, &identityReady); err != nil ||
 		version != 1 || !identityReady {
 		return errors.New("interaction repository is not ready")
 	}
-	organizationID, projectID, otherOrganizationID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	organizationID, projectID := repository.config.OrganizationID, repository.config.AllowedProjectIDs[0]
+	otherOrganizationID := uuid.NewString()
 	channelID := uuid.NewString()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
 	if err != nil {
@@ -330,6 +364,47 @@ func (repository *Repository) ResolveThreadSession(ctx context.Context, organiza
 	return sessionID, nil
 }
 
+func (repository *Repository) ListKnownThreads(ctx context.Context, boundaries []entity.Boundary, limit int) (map[string]string, error) {
+	if limit < 1 || limit > 4096 {
+		return nil, errors.New("known thread reconciliation limit is invalid")
+	}
+	result := make(map[string]string, limit)
+	seenProjects := map[string]struct{}{}
+	for _, boundary := range boundaries {
+		scopeKey := boundary.OrganizationID + "\x00" + boundary.ProjectID
+		if _, seen := seenProjects[scopeKey]; seen {
+			continue
+		}
+		seenProjects[scopeKey] = struct{}{}
+		err := repository.withScope(ctx, scope{OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
+			ActorID: "system:interaction-lifecycle-reconciliation"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+			rows, queryErr := tx.Query(ctx, inboundKnownThreadsSQL, boundary.ProjectID, limit+1)
+			if queryErr != nil {
+				return queryErr
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var rootPostID, channelID string
+				if err := rows.Scan(&rootPostID, &channelID); err != nil {
+					return err
+				}
+				if existing, exists := result[rootPostID]; exists && existing != channelID {
+					return errors.New("known Mattermost thread mapping is ambiguous")
+				}
+				if len(result) >= limit {
+					return errors.New("known Mattermost thread reconciliation limit exceeded")
+				}
+				result[rootPostID] = channelID
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			return nil, errors.New("list known Mattermost threads")
+		}
+	}
+	return result, nil
+}
+
 func (repository *Repository) EnqueueDelivery(ctx context.Context, delivery entity.Delivery) (entity.Delivery, bool, error) {
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
@@ -342,6 +417,18 @@ func (repository *Repository) EnqueueDelivery(ctx context.Context, delivery enti
 	inserted, err := repository.insertDelivery(ctx, tx, delivery)
 	if err != nil {
 		return entity.Delivery{}, false, err
+	}
+	if !inserted && delivery.OwnerDelivery != nil {
+		ownerCipher, encryptErr := repository.encrypt([]byte(delivery.OwnerDelivery.LeaseToken), []byte(delivery.ID+":owner-delivery"))
+		if encryptErr != nil {
+			return entity.Delivery{}, false, encryptErr
+		}
+		if _, rebindErr := tx.Exec(ctx, deliveryOwnerRebindSQL, delivery.ID, delivery.OwnerDelivery.Fence,
+			ownerCipher, delivery.OwnerDelivery.LeaseExpiresAt, delivery.OrganizationID, delivery.ProjectID,
+			delivery.TurnID, delivery.OwnerDelivery.TurnVersion, delivery.OwnerDelivery.RuntimeRevisionID,
+			delivery.OwnerDelivery.RuntimeRevisionVersion, delivery.PayloadSHA256); rebindErr != nil {
+			return entity.Delivery{}, false, errors.New("rebind control-plane delivery claim")
+		}
 	}
 	stored, err := repository.getDelivery(ctx, tx, delivery.ID)
 	if err != nil || stored.PayloadSHA256 != delivery.PayloadSHA256 || stored.OrganizationID != delivery.OrganizationID ||
@@ -575,48 +662,87 @@ func (repository *Repository) MarkOwnerGateDecided(ctx context.Context, delivery
 	})
 }
 
-func (repository *Repository) SaveTurnWatch(ctx context.Context, inbound entity.InboundEvent, turnID string) error {
-	return repository.withScope(ctx, eventScope(inbound, "system:interaction-turn-watch"), pgx.ReadWrite, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, turnWatchSaveSQL, inbound.ID, turnID, inbound.Fence,
-			digest([]byte(inbound.LeaseToken)))
-		if err != nil || tag.RowsAffected() != 1 {
-			return errors.New("save control-plane turn watch")
+func (repository *Repository) SaveDownloadGrant(ctx context.Context, grant entity.DownloadGrant) error {
+	artifact, err := json.Marshal(grant.Artifact)
+	if err != nil {
+		return errors.New("encode artifact download grant")
+	}
+	return repository.withScope(ctx, scope{OrganizationID: grant.OrganizationID, ProjectID: grant.ProjectID,
+		ActorID: grant.ActorID}, pgx.ReadWrite, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, downloadGrantInsertSQL, grant.ID, grant.Generation, grant.OrganizationID,
+			grant.ProjectID, grant.ActorID, grant.MattermostUserID, grant.TeamID, grant.ChannelID,
+			grant.SessionID, grant.TurnID, artifact, grant.IssuedPayloadSHA256, grant.ExpiresAt); err != nil {
+			return errors.New("save artifact download grant")
+		}
+		stored, err := repository.scanDownloadGrant(tx.QueryRow(ctx, downloadGrantGetSQL, grant.ID))
+		if err != nil || stored.Generation != grant.Generation || stored.IssuedPayloadSHA256 != grant.IssuedPayloadSHA256 ||
+			!reflect.DeepEqual(stored.Artifact, grant.Artifact) {
+			return errors.New("artifact download grant readback mismatch")
 		}
 		return nil
 	})
 }
 
-func (repository *Repository) ClaimTurnWatch(ctx context.Context, instanceID, token string, lease time.Duration) (entity.TurnWatch, bool, error) {
-	var watch entity.TurnWatch
-	var inboundPayload []byte
-	workScope, ok, err := repository.nextWorkScope(ctx, "TURN_WATCH")
-	if err != nil || !ok {
-		return entity.TurnWatch{}, false, err
+func (repository *Repository) GetDownloadGrant(ctx context.Context, grantID string) (entity.DownloadGrant, error) {
+	var value scope
+	if err := repository.pool.QueryRow(ctx, downloadGrantScopeSQL, grantID).Scan(&value.OrganizationID, &value.ProjectID); err != nil {
+		return entity.DownloadGrant{}, domainrepo.ErrNotFound
 	}
-	err = repository.withScope(ctx, workScope, pgx.ReadWrite, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, turnWatchClaimSQL, instanceID, digest([]byte(token)), interval(lease)).Scan(
-			&watch.TurnID, &watch.LastVersion, &watch.Fence, &watch.LeaseExpiresAt, &inboundPayload,
-		)
+	value.ActorID = "system:interaction-download-readback"
+	var grant entity.DownloadGrant
+	err := repository.withScope(ctx, value, pgx.ReadOnly, func(tx pgx.Tx) error {
+		var scanErr error
+		grant, scanErr = repository.scanDownloadGrant(tx.QueryRow(ctx, downloadGrantGetSQL, grantID))
+		return scanErr
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.TurnWatch{}, false, nil
+	if err != nil {
+		return entity.DownloadGrant{}, domainrepo.ErrNotFound
 	}
-	if err != nil || json.Unmarshal(inboundPayload, &watch.Inbound) != nil || watch.Inbound.ID == "" {
-		return entity.TurnWatch{}, false, errors.New("claim control-plane turn watch")
-	}
-	watch.LeaseToken = token
-	return watch, true, nil
+	return grant, nil
 }
 
-func (repository *Repository) AdvanceTurnWatch(ctx context.Context, watch entity.TurnWatch, version uint64, terminal bool, next time.Time) error {
-	return repository.withScope(ctx, eventScope(watch.Inbound, "system:interaction-turn-watch"), pgx.ReadWrite, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, turnWatchAdvanceSQL, watch.TurnID, watch.Fence,
-			digest([]byte(watch.LeaseToken)), version, terminal, next)
-		if err != nil || tag.RowsAffected() != 1 {
-			return errors.New("advance control-plane turn watch")
+func (repository *Repository) ConsumeDownloadGrant(ctx context.Context, grant entity.DownloadGrant, userID string) error {
+	return repository.withScope(ctx, scope{OrganizationID: grant.OrganizationID, ProjectID: grant.ProjectID,
+		ActorID: grant.ActorID}, pgx.ReadWrite, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, downloadGrantConsumeSQL, grant.ID, grant.Generation, userID).Scan(
+			&grant.ConsumedAt, &grant.AuthenticationAt); err != nil {
+			return errors.New("consume artifact download grant")
 		}
 		return nil
 	})
+}
+
+func (repository *Repository) RevokeDownloadGrants(ctx context.Context, organizationID, projectID,
+	channelID, sessionID string) error {
+	return repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-lifecycle"}, pgx.ReadWrite, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, downloadGrantRevokeSQL, organizationID, projectID, channelID, sessionID); err != nil {
+			return errors.New("revoke artifact download grants")
+		}
+		return nil
+	})
+}
+
+func (repository *Repository) scanDownloadGrant(row rowScanner) (entity.DownloadGrant, error) {
+	var grant entity.DownloadGrant
+	var artifact []byte
+	var consumedAt, revokedAt, authenticatedAt *time.Time
+	if err := row.Scan(&grant.ID, &grant.Generation, &grant.OrganizationID, &grant.ProjectID, &grant.ActorID,
+		&grant.MattermostUserID, &grant.TeamID, &grant.ChannelID, &grant.SessionID, &grant.TurnID,
+		&artifact, &grant.ExpiresAt, &consumedAt, &revokedAt, &grant.IssuedPayloadSHA256,
+		&grant.AuthenticatedUserID, &authenticatedAt); err != nil || json.Unmarshal(artifact, &grant.Artifact) != nil {
+		return entity.DownloadGrant{}, errors.New("scan artifact download grant")
+	}
+	if consumedAt != nil {
+		grant.ConsumedAt = *consumedAt
+	}
+	if revokedAt != nil {
+		grant.RevokedAt = *revokedAt
+	}
+	if authenticatedAt != nil {
+		grant.AuthenticationAt = *authenticatedAt
+	}
+	return grant, nil
 }
 
 func (repository *Repository) ClaimOwnerGateRequest(ctx context.Context) (string, bool, error) {
@@ -698,6 +824,10 @@ func (repository *Repository) insertDelivery(ctx context.Context, tx pgx.Tx, del
 	var gateVersion, processVersion, claimFence uint64
 	var claimCipher []byte
 	var claimExpires *time.Time
+	var ownerFence, ownerTurnVersion, ownerRevisionVersion uint64
+	var ownerCipher []byte
+	var ownerExpires *time.Time
+	var ownerRevisionID string
 	if delivery.OwnerGate != nil {
 		gateID, gateVersion = delivery.OwnerGate.GateID, delivery.OwnerGate.GateVersion
 		processID, processVersion = delivery.OwnerGate.ProcessRunID, delivery.OwnerGate.ProcessVersion
@@ -709,13 +839,22 @@ func (repository *Repository) insertDelivery(ctx context.Context, tx pgx.Tx, del
 			return false, err
 		}
 	}
+	if delivery.OwnerDelivery != nil {
+		ownerFence, ownerTurnVersion = delivery.OwnerDelivery.Fence, delivery.OwnerDelivery.TurnVersion
+		ownerRevisionID, ownerRevisionVersion = delivery.OwnerDelivery.RuntimeRevisionID, delivery.OwnerDelivery.RuntimeRevisionVersion
+		ownerExpires = &delivery.OwnerDelivery.LeaseExpiresAt
+		ownerCipher, err = repository.encrypt([]byte(delivery.OwnerDelivery.LeaseToken), []byte(delivery.ID+":owner-delivery"))
+		if err != nil {
+			return false, err
+		}
+	}
 	tag, err := tx.Exec(ctx, deliveryInsertSQL,
 		delivery.ID, delivery.Kind, delivery.OrganizationID, delivery.ProjectID,
 		delivery.SessionID, delivery.TurnID, delivery.Attempt, delivery.ImmutableInputSHA256,
 		delivery.TeamID, delivery.ChannelID, delivery.RootPostID, delivery.BotStableKey,
 		delivery.Locale, payload, delivery.PayloadSHA256, attachments,
 		gateID, gateVersion, processID, processVersion, claimCipher, claimFence, claimExpires, recipient, gatePayloadDigest,
-		delivery.UpdatePostID,
+		delivery.UpdatePostID, ownerFence, ownerCipher, ownerExpires, ownerTurnVersion, ownerRevisionID, ownerRevisionVersion,
 	)
 	if err != nil {
 		return false, errors.New("insert interaction delivery")
@@ -735,6 +874,10 @@ func (repository *Repository) getDeliveryWithSQL(ctx context.Context, source que
 	var payload, attachments, claimCipher []byte
 	var gatePayloadDigest string
 	var gateVersion, processVersion, claimFence uint64
+	var ownerFence, ownerTurnVersion, ownerRevisionVersion uint64
+	var ownerCipher []byte
+	var ownerExpires, ownerRecordedAt sql.NullTime
+	var ownerRevisionID sql.NullString
 	err := source.QueryRow(ctx, statement, arguments...).Scan(
 		&delivery.ID, &kind, &state, &delivery.OrganizationID, &delivery.ProjectID,
 		&sessionID, &turnID, &delivery.Attempt, &delivery.ImmutableInputSHA256,
@@ -744,11 +887,30 @@ func (repository *Repository) getDeliveryWithSQL(ctx context.Context, source que
 		&delivery.Fence, &leaseExpires, &delivery.NextAttemptAt, &delivery.LastErrorCode,
 		&gateID, &gateVersion, &processID, &processVersion, &claimCipher, &claimFence,
 		&claimExpires, &recipient, &gatePayloadDigest, &recordedAt, &delivery.CreatedAt, &delivery.UpdatedAt,
+		&ownerFence, &ownerCipher, &ownerExpires, &ownerTurnVersion, &ownerRevisionID, &ownerRevisionVersion, &ownerRecordedAt,
 	)
 	if err != nil {
 		return entity.Delivery{}, err
 	}
 	delivery.Kind, delivery.State, delivery.Payload = enum.DeliveryKind(kind), enum.DeliveryState(state), payload
+	if ownerFence > 0 {
+		if !ownerExpires.Valid || !ownerRevisionID.Valid || ownerTurnVersion == 0 || ownerRevisionVersion == 0 {
+			return entity.Delivery{}, errors.New("owner interaction delivery claim is invalid")
+		}
+		var leaseToken []byte
+		if len(ownerCipher) > 0 {
+			var decryptErr error
+			leaseToken, decryptErr = repository.decrypt(ownerCipher, []byte(delivery.ID+":owner-delivery"))
+			if decryptErr != nil {
+				return entity.Delivery{}, errors.New("decrypt owner interaction delivery claim")
+			}
+		} else if delivery.State != enum.DeliveryDelivered {
+			return entity.Delivery{}, errors.New("owner interaction delivery claim is unavailable")
+		}
+		delivery.OwnerDelivery = &entity.OwnerDeliveryBinding{Fence: ownerFence, LeaseToken: string(leaseToken),
+			LeaseExpiresAt: ownerExpires.Time, TurnVersion: ownerTurnVersion,
+			RuntimeRevisionID: ownerRevisionID.String, RuntimeRevisionVersion: ownerRevisionVersion}
+	}
 	delivery.SessionID, delivery.TurnID = sessionID.String, turnID.String
 	if leaseExpires.Valid {
 		delivery.LeaseExpiresAt = leaseExpires.Time
@@ -869,17 +1031,8 @@ func (repository *Repository) withScope(
 }
 
 func (repository *Repository) activateScope(ctx context.Context, tx pgx.Tx, value scope) error {
-	nonce := uuid.NewString()
-	expires := time.Now().UTC().Add(repository.config.ContextTTL).UnixMicro()
-	canonical := "v1\n" + repository.config.PrincipalName + "\n" +
-		strconv.FormatUint(repository.config.PrincipalGeneration, 10) + "\n" + value.OrganizationID + "\n" +
-		value.ProjectID + "\n" + value.ActorID + "\n" + nonce + "\n" + strconv.FormatInt(expires, 10)
-	mac := hmac.New(sha256.New, repository.config.ContextSigningKey)
-	_, _ = mac.Write([]byte(canonical))
-	if _, err := tx.Exec(ctx, transactionActivateScopeSQL, value.OrganizationID, value.ProjectID, value.ActorID,
-		repository.config.PrincipalName, repository.config.PrincipalGeneration, repository.config.ContextKeyID,
-		nonce, expires, mac.Sum(nil)); err != nil {
-		return errors.New("activate signed interaction transaction scope")
+	if _, err := tx.Exec(ctx, transactionActivateScopeSQL, value.OrganizationID, value.ProjectID, value.ActorID); err != nil {
+		return errors.New("activate server-owned interaction transaction scope")
 	}
 	return nil
 }

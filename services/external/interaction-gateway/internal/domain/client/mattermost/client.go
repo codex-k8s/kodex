@@ -3,9 +3,12 @@ package mattermost
 
 import (
 	"context"
+	"errors"
 
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 )
+
+var ErrAmbiguousEffect = errors.New("Mattermost effect outcome is ambiguous")
 
 type RawEvent struct {
 	ProviderEventID string
@@ -35,11 +38,12 @@ type Client interface {
 	ResolveInbound(context.Context, RawEvent) (entity.Boundary, RawEvent, error)
 	ResolveDelivery(string, string) (entity.Boundary, error)
 	DownloadFile(context.Context, string, string) ([]byte, string, string, error)
-	UploadFile(context.Context, entity.Delivery, entity.ArtifactBinding, []byte) (string, error)
 	Publish(context.Context, entity.Delivery, []string) (Published, error)
 	OpenDecisionDialog(context.Context, string, string, string, string, string) error
+	ReconcileLifecycle(context.Context, map[string]string, func(context.Context, RawEvent) error) error
 	CatchUp(context.Context, map[string]int64, map[string]string, func(context.Context, RawEvent) error) error
 	Listen(context.Context, func(context.Context, RawEvent) error) error
 	ChannelBoundaries() []entity.Boundary
 	ReadinessBoundary() (entity.Boundary, error)
+	AuthenticateArtifactDownload(context.Context, string, entity.DownloadGrant) error
 }

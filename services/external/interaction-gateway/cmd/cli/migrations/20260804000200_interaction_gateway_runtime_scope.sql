@@ -180,7 +180,7 @@ DECLARE
     requested_principal name := ('interaction_gateway_runtime_g' || requested_generation::text)::name;
     current_high_watermark bigint;
 BEGIN
-    IF NOT pg_has_role(session_user, 'interaction_gateway_owner', 'member') THEN
+    IF session_user <> 'interaction_gateway_migrator' THEN
         RAISE EXCEPTION 'runtime identity retirement is forbidden' USING ERRCODE = '28000';
     END IF;
     SELECT high_watermark_generation INTO STRICT current_high_watermark
@@ -625,7 +625,7 @@ GRANT EXECUTE ON FUNCTION interaction_gateway_claim_owner_gate_request() TO inte
 GRANT EXECUTE ON FUNCTION interaction_gateway_bind_owner_gate_request(uuid, uuid, uuid) TO interaction_gateway_runtime;
 GRANT EXECUTE ON FUNCTION interaction_gateway_complete_owner_gate_request(uuid) TO interaction_gateway_runtime;
 ALTER FUNCTION interaction_gateway_retire_runtime_identity(bigint) OWNER TO interaction_gateway_role_controller;
-GRANT EXECUTE ON FUNCTION interaction_gateway_retire_runtime_identity(bigint) TO interaction_gateway_owner;
+GRANT EXECUTE ON FUNCTION interaction_gateway_retire_runtime_identity(bigint) TO interaction_gateway_migrator;
 
 -- +goose Down
 -- Forward-only: credential high-watermark, retired identities и durable receipts не откатываются.

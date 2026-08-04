@@ -27,8 +27,9 @@ spec:
             - {name: INTERACTION_GATEWAY_POSTGRES_CA_FILE, value: /var/run/config/mattercodex/interaction-gateway/postgres/ca.pem}
             - {name: INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME, value: interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local}
             - {name: INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION, value: "1"}
-            - {name: INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_ID, value: interaction-gateway-context-v1}
-            - {name: INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_FILE, value: /var/run/secrets/mattercodex/interaction-gateway/migration/context-key}
+            - {name: INTERACTION_GATEWAY_MATTERMOST_MAPPING_MANIFEST_FILE, value: /var/run/config/mattercodex/interaction-gateway/mapping/manifest.yaml}
+            - {name: INTERACTION_GATEWAY_KEYSET_GENESIS_ENABLED, value: "true"}
+            - {name: INTERACTION_GATEWAY_READBACK_PUBLIC_KEYSET_FILE, value: /var/run/secrets/mattercodex/interaction-gateway/migration/delivery-readback.public-keyset.json}
           resources:
             requests: {cpu: 25m, memory: 32Mi}
             limits: {cpu: 250m, memory: 128Mi}
@@ -36,8 +37,10 @@ spec:
           volumeMounts:
             - {name: migration, mountPath: /var/run/secrets/mattercodex/interaction-gateway/migration, readOnly: true}
             - {name: postgres-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/postgres, readOnly: true}
+            - {name: mapping, mountPath: /var/run/config/mattercodex/interaction-gateway/mapping, readOnly: true}
       volumes:
         - name: migration
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: interaction-gateway-postgres-migrator}}
         - name: postgres-ca
           secret: {secretName: interaction-gateway-postgresql-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}
+        - {name: mapping, secret: {secretName: interaction-gateway-mapping, defaultMode: 0440, items: [{key: manifest.yaml, path: manifest.yaml}, {key: manifest.sha256, path: manifest.sha256}, {key: revision, path: revision}]}}

@@ -230,6 +230,7 @@ func (verifier *Verifier) Authenticate(
 		OrganizationID:       custom.OrganizationID,
 		ProjectID:            custom.ProjectID,
 		SessionJTI:           custom.JTI,
+		SessionID:            custom.SessionID,
 		SessionRevision:      custom.SessionRevision,
 		SubjectDigest:        digest("OIDC_SUBJECT:" + token.Subject),
 		CredentialDigest:     digest(raw),

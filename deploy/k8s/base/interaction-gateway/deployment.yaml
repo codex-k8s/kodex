@@ -128,7 +128,7 @@ spec:
         - {name: postgres-ca, secret: {secretName: interaction-gateway-postgresql-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}}
         - {name: mattermost-ca, configMap: {name: mattermost-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}}
         - {name: object-store-ca, configMap: {name: object-store-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}}
-        - {name: mapping, secret: {secretName: interaction-gateway-mapping, defaultMode: 0440, items: [{key: manifest.yaml, path: manifest.yaml}]}}
+        - {name: mapping, secret: {secretName: interaction-gateway-mapping, defaultMode: 0440, items: [{key: manifest.yaml, path: manifest.yaml}, {key: manifest.sha256, path: manifest.sha256}, {key: revision, path: revision}]}}
         - {name: runtime, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: interaction-gateway-runtime}}}
         - {name: bot-tokens, secret: {secretName: interaction-gateway-bot-tokens, defaultMode: 0440}}
         - {name: observability-ca, configMap: {name: mattercodex-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}}

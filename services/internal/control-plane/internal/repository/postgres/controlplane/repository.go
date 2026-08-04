@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/mattermostevent"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/readbackgrant"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/event"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -63,14 +65,20 @@ func (repository *Repository) AdmitMattermostEventKeyset(
 	revision, highWatermark, servedGeneration uint64,
 	digest string,
 	retired, active []int64,
+	identities []mattermostevent.KeyIdentity,
 ) error {
+	identityJSON, err := json.Marshal(identities)
+	if err != nil {
+		return errors.New("encode Mattermost event key identities")
+	}
 	var storedRevision, storedHighWatermark, storedServedGeneration uint64
 	var storedDigest string
 	var storedRetired []int64
-	err := repository.pool.QueryRow(ctx, sqlMattermostEventKeysetAdmit, pgx.StrictNamedArgs{
+	err = repository.pool.QueryRow(ctx, sqlMattermostEventKeysetAdmit, pgx.StrictNamedArgs{
 		"producer_id": producerID, "keyset_revision": revision,
 		"high_watermark": highWatermark, "served_generation": servedGeneration,
 		"keyset_sha256": digest, "retired_generations": retired, "active_generations": active,
+		"key_identities": identityJSON,
 	}).Scan(&storedRevision, &storedHighWatermark, &storedServedGeneration, &storedDigest, &storedRetired)
 	if err != nil || storedRevision != revision || storedHighWatermark != highWatermark ||
 		storedServedGeneration != servedGeneration || storedDigest != digest ||
@@ -87,6 +95,27 @@ func sliceContainsAll(values, required []int64) bool {
 		}
 	}
 	return true
+}
+
+// AdmitInteractionReadbackKeyset фиксирует issuer-owned served state и
+// immutable key identities до выдачи первого credential.
+func (repository *Repository) AdmitInteractionReadbackKeyset(ctx context.Context, revision, highWatermark,
+	servedGeneration uint64, digest string, identities []readbackgrant.KeyIdentity) error {
+	encoded, err := json.Marshal(identities)
+	if err != nil {
+		return errors.New("encode interaction readback key identities")
+	}
+	var storedRevision, storedHighWatermark, storedServed uint64
+	var storedDigest string
+	if err := repository.pool.QueryRow(ctx, sqlInteractionDeliveryReadbackKeysetAdmit, pgx.StrictNamedArgs{
+		"keyset_revision": revision, "high_watermark": highWatermark,
+		"served_generation": servedGeneration, "keyset_sha256": digest, "key_identities": encoded,
+	}).Scan(&storedRevision, &storedHighWatermark, &storedServed, &storedDigest); err != nil ||
+		storedRevision != revision || storedHighWatermark != highWatermark ||
+		storedServed != servedGeneration || storedDigest != digest {
+		return errors.New("admit interaction delivery readback keyset")
+	}
+	return nil
 }
 
 func (wrapped *transaction) CurrentTime(ctx context.Context) (time.Time, error) {
@@ -1478,6 +1507,93 @@ func (wrapped *transaction) FinishTurnAttempt(
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+func (wrapped *transaction) EnqueueInteractionDelivery(
+	ctx context.Context,
+	work domainrepo.InteractionDeliveryWork,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlInteractionDeliveryEnqueue, pgx.StrictNamedArgs{
+		"id": work.ID, "organization_id": work.OrganizationID, "project_id": work.ProjectID,
+		"actor_id": work.ActorID, "session_id": work.SessionID, "session_version": work.SessionVersion,
+		"turn_id": work.TurnID, "turn_version": work.TurnVersion, "attempt": work.Attempt,
+		"runtime_revision_id": work.RuntimeRevisionID, "runtime_revision_version": work.RuntimeRevisionVersion,
+		"immutable_input_sha256": work.ImmutableInputSHA256, "kind": work.Kind,
+		"lifecycle_state": work.LifecycleState, "outcome": work.Outcome,
+		"artifact_id": work.ArtifactID, "artifact_version": work.ArtifactVersion,
+		"artifact_sha256": work.ArtifactSHA256, "artifact_name": work.ArtifactName,
+		"artifact_storage_ref": work.ArtifactStorageRef, "artifact_size_bytes": work.ArtifactSizeBytes,
+		"artifact_media_type": work.ArtifactMediaType,
+		"inline_payload":      work.InlinePayload,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() > 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) ClaimInteractionDelivery(ctx context.Context, organizationID, projectID,
+	leaseOwner, leaseTokenSHA256 string, leaseDuration time.Duration) (domainrepo.InteractionDeliveryWork, error) {
+	var work domainrepo.InteractionDeliveryWork
+	err := wrapped.tx.QueryRow(ctx, sqlInteractionDeliveryClaim, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID, "lease_owner": leaseOwner,
+		"lease_token_sha256": leaseTokenSHA256, "lease_duration": leaseDuration.String(),
+	}).Scan(&work.ID, &work.OrganizationID, &work.ProjectID, &work.ActorID, &work.SessionID,
+		&work.SessionVersion, &work.TurnID, &work.TurnVersion, &work.Attempt, &work.RuntimeRevisionID,
+		&work.RuntimeRevisionVersion, &work.ImmutableInputSHA256, &work.Kind, &work.LifecycleState,
+		&work.Outcome, &work.ArtifactID, &work.ArtifactVersion, &work.ArtifactSHA256,
+		&work.ArtifactName, &work.ArtifactStorageRef, &work.ArtifactSizeBytes, &work.ArtifactMediaType,
+		&work.InlinePayload,
+		&work.Fence, &work.LeaseExpiresAt)
+	return work, mapError(err)
+}
+
+func (wrapped *transaction) CompleteInteractionDelivery(ctx context.Context, organizationID, projectID,
+	id string, fence uint64, leaseTokenSHA256, providerReceiptSHA256 string) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlInteractionDeliveryComplete, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID, "id": id, "fence": fence,
+		"lease_token_sha256": leaseTokenSHA256, "provider_receipt_sha256": providerReceiptSHA256,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) SaveInteractionDeliveryReadbackGrant(ctx context.Context,
+	grant domainrepo.InteractionDeliveryReadbackGrant) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlInteractionDeliveryReadbackInsert, pgx.StrictNamedArgs{
+		"id": grant.ID, "organization_id": grant.OrganizationID, "project_id": grant.ProjectID,
+		"actor_id": grant.ActorID, "delivery_id": grant.DeliveryID, "producer_id": grant.ProducerID,
+		"purpose": grant.Purpose, "workload_id": grant.WorkloadID, "caller_spiffe_id": grant.CallerSPIFFEID,
+		"operation": grant.Operation, "permission": grant.Permission, "credential_sha256": grant.CredentialSHA256,
+		"generation": grant.Generation, "keyset_revision": grant.KeysetRevision,
+		"keyset_high_watermark": grant.KeysetHighWatermark, "keyset_sha256": grant.KeysetSHA256,
+		"issued_at": grant.IssuedAt, "expires_at": grant.ExpiresAt, "readiness": grant.Readiness,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) ValidateInteractionDeliveryReadbackGrant(ctx context.Context,
+	id, deliveryID, organizationID, projectID, credentialSHA256 string, generation uint64) (bool, error) {
+	var active bool
+	err := wrapped.tx.QueryRow(ctx, sqlInteractionDeliveryReadbackValidate, pgx.StrictNamedArgs{
+		"id": id, "delivery_id": deliveryID, "organization_id": organizationID, "project_id": projectID,
+		"credential_sha256": credentialSHA256, "generation": generation,
+	}).Scan(&active)
+	return active, mapError(err)
 }
 
 func (wrapped *transaction) GetTurnAttemptForUpdate(

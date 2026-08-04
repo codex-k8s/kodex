@@ -4,7 +4,7 @@ title: Interaction gateway
 type: runbook
 status: approved
 owner: manager
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-04
 ---
 
@@ -29,11 +29,13 @@ updated: 2026-08-04
 3. Для delivery прочитать защищённый
    `/internal/v1/deliveries/{deliveryId}`: сверить state, payload digest,
    attempts и provider receipt. Помимо mTLS обязателен producer-specific bearer
-   credential с exact organization/project/delivery. Claim token в readback не
-   возвращается.
+   credential с exact organization/project/delivery; gateway должен получить
+   положительный online readback durable issue/digest/revocation у control-plane.
+   Claim token в readback не возвращается.
 4. При ambiguous Mattermost POST проверять exact `PendingPostId`, client-owned
-   `matter_codex_*` props, bot/channel/root, текст и digest каждого файла;
-   ручной повтор публикации запрещён.
+   `matter_codex_*` props, bot/channel/root и payload digest. Если exact
+   readback отсутствует, outcome `AMBIGUOUS_PROVIDER_EFFECT_REQUIRES_RECONCILIATION`
+   terminal: автоматический или ручной повтор effect запрещён.
 5. При owner decision сверить Gate version, claim fence/expiry, recipient,
    Mattermost post/channel и process/session/turn/attempt/input lineage.
 6. `DEAD_LETTER` не объявлять успешным и не изменять SQL вручную; recovery
@@ -44,8 +46,9 @@ updated: 2026-08-04
 8. При `DELETION_PENDING` проверить исходный delete event, Chat/Session version,
    24-часовой cleanup и отсутствие новых Turn/callback. Restore обязан отменить
    тот же cleanup receipt; SQL-переход вручную запрещён.
-9. Для result больше Mattermost upload limit сверить `CLEAN`, exact S3 metadata,
-   project prefix и срок presigned HTTPS link 15 минут.
+9. Для result больше Mattermost upload limit сверить `CLEAN`, exact private S3
+   metadata/project prefix и одноразовый download audit. Direct S3 URL быть не
+   должно; gateway повторно проверяет Mattermost User/channel membership.
 
 ## Ротация ключей и PostgreSQL identity
 
@@ -53,7 +56,13 @@ updated: 2026-08-04
   `CURRENT`, старый ограниченно обслуживается как `PREVIOUS`, после overlap —
   только `RETIRED`. Control-plane admission readback должен показать тот же
   high-watermark; откат и повторный ввод retired generation запрещены.
-- PostgreSQL migration job сверяет context-key digest и served high-watermark.
+- Первый запуск не трактует пустую таблицу как доверие: migration job с
+  `KEYSET_GENESIS_ENABLED=true` выполняет single-winner genesis, затем сверяет
+  exact revision/digest и каждую пару generation/kid/RFC7638 thumbprint. Такой
+  же lifecycle применяется к delivery-readback signer и verifier; отсутствие
+  genesis audit закрывает startup.
+- PostgreSQL migration job сверяет served high-watermark и immutable
+  principal→organization/projects mapping.
   Следующее поколение вводится отдельным code-first изменением с overlap;
   `POSTGRES_EXPECTED_SESSION_USER` при этом обязан быть ровно
   `interaction_gateway_runtime_g<N>` для выбранного generation. До следующей
@@ -70,8 +79,9 @@ updated: 2026-08-04
    новой версии Pod.
 3. Не удалять gateway PostgreSQL, S3 objects, provider receipts, cursors и
    delivery rows: они нужны для dedup/recovery.
-4. Если изменился mapping, вернуть его предыдущую Git revision вместе с
-   соответствующими bot identities; не создавать dual write в legacy bot.
+4. Если изменился mapping, вернуть одновременно предыдущие Git-pinned Vault
+   revision path, KV version, expected revision и digest. Mutable alias не
+   использовать; опубликованный CAS=0 revision не перезаписывать.
 5. Восстановить readiness и только затем возобновить входящие callbacks.
 
 Production-действия требуют отдельного подтверждения владельца.

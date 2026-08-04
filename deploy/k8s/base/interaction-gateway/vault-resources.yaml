@@ -47,8 +47,9 @@ spec:
   vaultAuthRef: interaction-gateway
   mount: kv
   type: kv-v2
-  path: mattercodex/interaction-gateway/mapping/production
-  refreshAfter: 5m
+  path: mattercodex/interaction-gateway/mapping/production/revisions/production-r1
+  version: 1
+  refreshAfter: 1h
   destination:
     create: true
     name: interaction-gateway-mapping
@@ -58,6 +59,10 @@ spec:
       templates:
         manifest.yaml:
           text: '{{ get .Secrets "manifest.yaml" }}'
+        manifest.sha256:
+          text: '{{ get .Secrets "manifest.sha256" }}'
+        revision:
+          text: '{{ get .Secrets "revision" }}'
 ---
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultStaticSecret

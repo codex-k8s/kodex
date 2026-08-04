@@ -224,6 +224,38 @@ type TurnAttempt struct {
 	Outcome             string
 }
 
+type InteractionDeliveryWork struct {
+	ID, OrganizationID, ProjectID, ActorID              string
+	SessionID                                           string
+	SessionVersion                                      uint64
+	TurnID                                              string
+	TurnVersion                                         uint64
+	Attempt                                             uint32
+	RuntimeRevisionID                                   string
+	RuntimeRevisionVersion                              uint64
+	ImmutableInputSHA256                                string
+	Kind, LifecycleState, Outcome                       string
+	ArtifactID                                          string
+	ArtifactVersion                                     uint64
+	ArtifactSHA256                                      string
+	ArtifactName, ArtifactStorageRef, ArtifactMediaType string
+	ArtifactSizeBytes                                   uint64
+	InlinePayload                                       []byte
+	Fence                                               uint64
+	LeaseExpiresAt                                      time.Time
+}
+
+// InteractionDeliveryReadbackGrant — durable owner receipt выданной capability.
+type InteractionDeliveryReadbackGrant struct {
+	ID, OrganizationID, ProjectID, ActorID, DeliveryID string
+	ProducerID, Purpose, WorkloadID, CallerSPIFFEID    string
+	Operation, Permission, CredentialSHA256            string
+	Generation, KeysetRevision, KeysetHighWatermark    uint64
+	KeysetSHA256                                       string
+	IssuedAt, ExpiresAt                                time.Time
+	Readiness                                          bool
+}
+
 // RuntimeExecution хранит immutable execution tuple и monotonic owner fence.
 type RuntimeExecution struct {
 	ID                                  string
@@ -577,6 +609,11 @@ type Transaction interface {
 	DeleteTurnLease(context.Context, string, uint64) error
 	SaveTurnAttempt(context.Context, TurnAttempt) error
 	FinishTurnAttempt(context.Context, TurnAttempt) error
+	EnqueueInteractionDelivery(context.Context, InteractionDeliveryWork) error
+	ClaimInteractionDelivery(context.Context, string, string, string, string, time.Duration) (InteractionDeliveryWork, error)
+	CompleteInteractionDelivery(context.Context, string, string, string, uint64, string, string) error
+	SaveInteractionDeliveryReadbackGrant(context.Context, InteractionDeliveryReadbackGrant) error
+	ValidateInteractionDeliveryReadbackGrant(context.Context, string, string, string, string, string, uint64) (bool, error)
 	GetTurnAttemptForUpdate(context.Context, string, uint32) (TurnAttempt, error)
 	GetRuntimeExecutionForUpdate(context.Context, string) (RuntimeExecution, error)
 	GetRuntimeExecutionByTurn(context.Context, string, uint32) (RuntimeExecution, error)

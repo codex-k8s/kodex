@@ -17,6 +17,7 @@ import (
 
 const (
 	DeliveryReadbackBearerScopes deliveryReadbackBearerContextKey = "deliveryReadbackBearer.Scopes"
+	MattermostUserBearerScopes   mattermostUserBearerContextKey   = "mattermostUserBearer.Scopes"
 	WorkloadMTLSScopes           workloadMTLSContextKey           = "workloadMTLS.Scopes"
 )
 
@@ -323,6 +324,9 @@ type Unavailable = Error
 // deliveryReadbackBearerContextKey is the context key for deliveryReadbackBearer security scheme
 type deliveryReadbackBearerContextKey string
 
+// mattermostUserBearerContextKey is the context key for mattermostUserBearer security scheme
+type mattermostUserBearerContextKey string
+
 // workloadMTLSContextKey is the context key for workloadMTLS security scheme
 type workloadMTLSContextKey string
 
@@ -343,6 +347,9 @@ type ServerInterface interface {
 
 	// (POST /mattermost/v1/actions)
 	AcceptMattermostAction(w http.ResponseWriter, r *http.Request)
+
+	// (GET /mattermost/v1/artifacts/{grant_id}/content)
+	DownloadInteractionArtifact(w http.ResponseWriter, r *http.Request, grantId openapi_types.UUID)
 
 	// (POST /mattermost/v1/commands/codex)
 	AcceptMattermostSlashCommand(w http.ResponseWriter, r *http.Request)
@@ -405,6 +412,38 @@ func (siw *ServerInterfaceWrapper) AcceptMattermostAction(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AcceptMattermostAction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadInteractionArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DownloadInteractionArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "grant_id" -------------
+	var grantId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "grant_id", r.PathValue("grant_id"), &grantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "grant_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, MattermostUserBearerScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadInteractionArtifact(w, r, grantId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -576,6 +615,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/deliveries/{delivery_id}", wrapper.GetInteractionDelivery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/v1/actions", wrapper.AcceptMattermostAction)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/v1/artifacts/{grant_id}/content", wrapper.DownloadInteractionArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/v1/commands/codex", wrapper.AcceptMattermostSlashCommand)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/v1/dialogs", wrapper.AcceptMattermostDialog)
 

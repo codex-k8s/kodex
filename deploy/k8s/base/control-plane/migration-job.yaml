@@ -45,6 +45,12 @@ spec:
               value: /var/run/config/mattercodex/control-plane/postgres/ca.pem
             - name: CONTROL_PLANE_POSTGRES_CONTEXT_KEY_FILE
               value: /var/run/secrets/mattercodex/control-plane/postgres-context/key
+            - name: CONTROL_PLANE_KEYSET_GENESIS_ENABLED
+              value: "true"
+            - name: CONTROL_PLANE_MATTERMOST_EVENT_PUBLIC_KEYSET_FILE
+              value: /var/run/config/mattercodex/control-plane/keyset-genesis/mattermost-event.public-keyset.json
+            - name: CONTROL_PLANE_INTERACTION_READBACK_PUBLIC_KEYSET_FILE
+              value: /var/run/config/mattercodex/control-plane/keyset-genesis/interaction-readback.public-keyset.json
           envFrom:
             - configMapRef:
                 name: control-plane-db-principals
@@ -74,6 +80,9 @@ spec:
             - name: postgres-context
               mountPath: /var/run/secrets/mattercodex/control-plane/postgres-context
               readOnly: true
+            - name: keyset-genesis
+              mountPath: /var/run/config/mattercodex/control-plane/keyset-genesis
+              readOnly: true
       volumes:
         - name: postgres-migration
           csi:
@@ -94,3 +103,9 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-postgres-context-migration
+        - name: keyset-genesis
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-keyset-genesis

@@ -15,7 +15,7 @@ import (
 type countingFence struct{ admissions int }
 
 func (fence *countingFence) AdmitMattermostEventKeyset(
-	context.Context, string, uint64, uint64, uint64, string, []int64, []int64,
+	context.Context, string, uint64, uint64, uint64, string, []int64, []int64, []KeyIdentity,
 ) error {
 	fence.admissions++
 	return nil
@@ -33,13 +33,13 @@ func TestParsePublicKeysetClosedLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode keyset: %v", err)
 	}
-	keys, state, retired, active, err := parsePublicKeyset(Config{MaximumTTL: 2 * time.Minute}, raw, now)
+	keys, state, retired, active, identities, err := parsePublicKeyset(Config{MaximumTTL: 2 * time.Minute}, raw, now)
 	if err != nil {
 		t.Fatalf("parse valid keyset: %v", err)
 	}
 	if len(keys) != 2 || keys[1].key.KeyID != "g1" || keys[2].key.KeyID != "g2" ||
 		state.revision != 7 || state.highWatermark != 2 || state.servedGeneration != 2 || len(retired) != 0 ||
-		!slices.Equal(active, []int64{1, 2, 3}) {
+		!slices.Equal(active, []int64{1, 2, 3}) || len(identities) != 3 || identities[1].Thumbprint == "" {
 		t.Fatal("served keyset projection mismatch")
 	}
 
@@ -48,7 +48,7 @@ func TestParsePublicKeysetClosedLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode duplicate keyset: %v", err)
 	}
-	if _, _, _, _, err := parsePublicKeyset(Config{MaximumTTL: 2 * time.Minute}, raw, now); err == nil {
+	if _, _, _, _, _, err := parsePublicKeyset(Config{MaximumTTL: 2 * time.Minute}, raw, now); err == nil {
 		t.Fatal("duplicate generation accepted")
 	}
 
@@ -60,7 +60,7 @@ func TestParsePublicKeysetClosedLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode expired keyset: %v", err)
 	}
-	if _, _, _, _, err := parsePublicKeyset(Config{MaximumTTL: 2 * time.Minute}, raw, now); err == nil {
+	if _, _, _, _, _, err := parsePublicKeyset(Config{MaximumTTL: 2 * time.Minute}, raw, now); err == nil {
 		t.Fatal("expired PREVIOUS key accepted")
 	}
 }
@@ -80,8 +80,8 @@ func TestRefreshReadsDurableFenceForUnchangedKeyset(t *testing.T) {
 	verifier, err := New(context.Background(), Config{
 		ProducerID: "control-plane.interaction-gateway", Purpose: "MATTERMOST_SIGNED_EVENT",
 		Issuer: "https://interaction.test/events", Audience: "urn:test:mattermost-event",
-		WorkloadID: "interaction-gateway",
-		CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		WorkloadID:       "interaction-gateway",
+		CallerSPIFFEID:   "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
 		PublicKeysetFile: path, MaximumTTL: time.Minute,
 	}, fence)
 	if err != nil {

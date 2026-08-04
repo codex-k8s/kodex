@@ -1709,6 +1709,19 @@ func (service *Service) RecordRuntimeIncident(
 			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
 			}
+			graph, graphErr := service.lockOwnerGraphByTurn(ctx, tx, input.Principal, execution.TurnID)
+			if graphErr != nil {
+				return graphErr
+			}
+			turnSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
+			if !ok || graph.Session.ID != execution.SessionID || turnSpec.Attempt != execution.Attempt {
+				return errs.ErrStateConflict
+			}
+			turnSpec.Outcome = "incident_" + strings.ToLower(input.Kind)
+			if err := service.enqueueInteractionStateDeliveries(ctx, tx, graph.Session, graph.Turn, turnSpec,
+				"incident:"+input.IncidentID, "INCIDENT"); err != nil {
+				return err
+			}
 			result = execution
 			return service.appendLifecycleAudit(
 				ctx, tx, input.Principal, "record_runtime_incident", execution.ID,
@@ -1919,14 +1932,33 @@ func (service *Service) CompleteRuntimeExecution(
 		!validSHA256Text(input.TerminalSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
+	artifactProvided := input.ResultArtifactID != "" || input.ResultArtifactVersion != 0 ||
+		input.ResultArtifactSHA256 != "" || input.ResultArtifactName != "" ||
+		input.ResultArtifactMediaType != "" || len(input.ResultArtifactPayload) != 0
+	if artifactProvided {
+		payloadDigest := sha256.Sum256(input.ResultArtifactPayload)
+		if value.ValidateID(input.ResultArtifactID) != nil || input.ResultArtifactVersion == 0 ||
+			!validSHA256Text(input.ResultArtifactSHA256) ||
+			hex.EncodeToString(payloadDigest[:]) != input.ResultArtifactSHA256 ||
+			input.ResultArtifactName != "result.md" || input.ResultArtifactMediaType != "text/markdown" ||
+			len(input.ResultArtifactPayload) == 0 || len(input.ResultArtifactPayload) > 160<<10 ||
+			!utf8.Valid(input.ResultArtifactPayload) {
+			return RuntimeExecution{}, errs.ErrInvalidInput
+		}
+	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
-		Runtime           runtimeExecutionIntent
-		Outcome           string
-		TerminalReference string
-		TerminalSHA256    string
+		Runtime                                                                             runtimeExecutionIntent
+		Outcome                                                                             string
+		TerminalReference                                                                   string
+		TerminalSHA256                                                                      string
+		ResultArtifactID, ResultArtifactSHA256, ResultArtifactName, ResultArtifactMediaType string
+		ResultArtifactVersion                                                               uint64
+		ResultArtifactPayloadSHA256                                                         string
 	}{
 		runtimeIntent(input.RuntimeExecutionInput), input.Outcome,
-		input.TerminalReference, input.TerminalSHA256,
+		input.TerminalReference, input.TerminalSHA256, input.ResultArtifactID,
+		input.ResultArtifactSHA256, input.ResultArtifactName, input.ResultArtifactMediaType,
+		input.ResultArtifactVersion, hashString(string(input.ResultArtifactPayload)),
 	})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
@@ -2000,6 +2032,13 @@ func (service *Service) CompleteRuntimeExecution(
 				!execution.LeaseExpiresAt.After(now) {
 				return errs.ErrStateConflict
 			}
+			if input.ResultArtifactID != "" {
+				expectedArtifactID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:runtime-result:"+
+					execution.ID+":"+execution.AgentRunID+":"+input.ResultArtifactSHA256)).String()
+				if input.ResultArtifactID != expectedArtifactID {
+					return errs.ErrStateConflict
+				}
+			}
 			turnState := enum.StateSucceeded
 			if input.Outcome == "FAILED" {
 				turnState = enum.StateFailed
@@ -2008,7 +2047,10 @@ func (service *Service) CompleteRuntimeExecution(
 			}
 			closedTurn, err := service.closeRuntimeGraph(
 				ctx, tx, input.Principal, execution, turnState,
-				strings.ToLower(input.Outcome), now,
+				strings.ToLower(input.Outcome), now, &runtimeResultArtifact{ID: input.ResultArtifactID,
+					Version: input.ResultArtifactVersion, SHA256: input.ResultArtifactSHA256,
+					Name: input.ResultArtifactName, MediaType: input.ResultArtifactMediaType,
+					Payload: slices.Clone(input.ResultArtifactPayload)},
 			)
 			if err != nil {
 				return err
@@ -2016,6 +2058,16 @@ func (service *Service) CompleteRuntimeExecution(
 			if err := service.completeRuntimeProcessFromTurn(
 				ctx, tx, input.Principal, closedTurn,
 			); err != nil {
+				return err
+			}
+			closedSpec, ok := closedTurn.Spec.(entity.TurnSpec)
+			if !ok {
+				return errs.ErrStateConflict
+			}
+			if err := service.enqueueInteractionTerminalDelivery(ctx, tx, graph.Session, closedTurn, closedSpec,
+				&runtimeResultArtifact{ID: input.ResultArtifactID, Version: input.ResultArtifactVersion,
+					SHA256: input.ResultArtifactSHA256, Name: input.ResultArtifactName,
+					MediaType: input.ResultArtifactMediaType, Payload: slices.Clone(input.ResultArtifactPayload)}); err != nil {
 				return err
 			}
 			expectedVersion, expectedFence := execution.Version, execution.Fence
@@ -2129,7 +2181,7 @@ func (service *Service) CancelRuntimeExecution(
 			}
 			closedTurn, err := service.closeRuntimeGraph(
 				ctx, tx, input.Principal, execution, enum.StateCancelled,
-				input.ReasonCode, now,
+				input.ReasonCode, now, nil,
 			)
 			if err != nil {
 				return err
@@ -2284,7 +2336,7 @@ func (service *Service) RetryRuntimeExecution(
 			case "PENDING", "ADMITTED", "RUNNING":
 				turn, err = service.closeRuntimeGraph(
 					ctx, tx, input.Principal, execution, enum.StateFailed,
-					"runtime_retry", now,
+					"runtime_retry", now, nil,
 				)
 				if execution.TerminalOutcome == "" {
 					execution.TerminalOutcome = "FAILED"
@@ -2501,7 +2553,7 @@ func (service *Service) ExpireRuntimeExecution(
 			}
 			closedTurn, err := service.closeRuntimeGraph(
 				ctx, tx, principal, execution, enum.StateExpired,
-				"runtime_lease_expired", now,
+				"runtime_lease_expired", now, nil,
 			)
 			if err != nil {
 				return err
@@ -3547,6 +3599,7 @@ func (service *Service) closeRuntimeGraph(
 	target enum.State,
 	outcome string,
 	now time.Time,
+	resultArtifact *runtimeResultArtifact,
 ) (entity.Resource, error) {
 	turn, err := tx.GetForUpdate(
 		ctx, principal.OrganizationID, principal.ProjectID, execution.TurnID,
@@ -3589,6 +3642,29 @@ func (service *Service) closeRuntimeGraph(
 		return entity.Resource{}, err
 	}
 	spec.Outcome = outcome
+	if resultArtifact != nil && resultArtifact.ID != "" {
+		evidence := sha256.Sum256([]byte(strings.Join([]string{execution.ID, execution.AgentRunID,
+			resultArtifact.SHA256, execution.ImmutableInputSHA256}, "\x00")))
+		artifact, artifactErr := entity.New(resultArtifact.ID, principal.OrganizationID, principal.ProjectID,
+			execution.SessionID, principal.ActorID, enum.KindArtifact, resultArtifact.Name,
+			entity.ArtifactSpec{ArtifactKind: "runtime-result", Direction: "OUTPUT",
+				StorageRef: "control-plane-inline:" + resultArtifact.ID, SizeBytes: uint64(len(resultArtifact.Payload)),
+				MediaType: resultArtifact.MediaType, SHA256: resultArtifact.SHA256, ScanStatus: "CLEAN",
+				RetentionPolicyRef: "policy://runtime-result", ScanPolicyRevision: 1,
+				ScanEvidenceSHA256: hex.EncodeToString(evidence[:]), ScannerWorkloadID: "agent-runner",
+				ScannedAt: now}, now)
+		if artifactErr != nil {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		if err := tx.Insert(ctx, artifact); err != nil {
+			return entity.Resource{}, err
+		}
+		if err := service.appendMutationRecords(ctx, tx, principal, "materialize_runtime_result", artifact); err != nil {
+			return entity.Resource{}, err
+		}
+		spec.ResultArtifactID, spec.ResultArtifactVersion, spec.ResultArtifactSHA256 =
+			resultArtifact.ID, resultArtifact.Version, resultArtifact.SHA256
+	}
 	updated, err := turn.ReplaceAndTransition(spec, target, now)
 	if err != nil {
 		return entity.Resource{}, errs.ErrStateConflict
