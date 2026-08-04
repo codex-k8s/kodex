@@ -66,6 +66,7 @@ spec:
             - {name: object-store-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/object-store, readOnly: true}
             - {name: mapping, mountPath: /var/run/config/mattercodex/interaction-gateway/mapping, readOnly: true}
             - {name: runtime, mountPath: /var/run/secrets/mattercodex/interaction-gateway/runtime, readOnly: true}
+            - {name: bot-tokens, mountPath: /var/run/secrets/mattercodex/interaction-gateway/bots, readOnly: true}
             - {name: observability-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/interaction-gateway/observability, readOnly: true}
             - {name: tmp, mountPath: /tmp}
@@ -127,8 +128,9 @@ spec:
         - {name: postgres-ca, secret: {secretName: interaction-gateway-postgresql-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}}
         - {name: mattermost-ca, configMap: {name: mattermost-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}}
         - {name: object-store-ca, configMap: {name: object-store-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}}
-        - {name: mapping, configMap: {name: interaction-gateway-mapping, defaultMode: 0440}}
+        - {name: mapping, secret: {secretName: interaction-gateway-mapping, defaultMode: 0440, items: [{key: manifest.yaml, path: manifest.yaml}]}}
         - {name: runtime, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: interaction-gateway-runtime}}}
+        - {name: bot-tokens, secret: {secretName: interaction-gateway-bot-tokens, defaultMode: 0440}}
         - {name: observability-ca, configMap: {name: mattercodex-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}}
         - {name: sentry-dsn, secret: {secretName: mattercodex-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}}
         - {name: authority-snapshot, secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}}

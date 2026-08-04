@@ -25,30 +25,35 @@ import (
 )
 
 type Config struct {
-	Endpoint              string
-	TLSServerName         string
-	CAFile                string
-	ClientCertificateFile string
-	ClientPrivateKeyFile  string
-	AccessKeyFile         string
-	SecretKeyFile         string
-	SessionTokenFile      string
-	Bucket                string
-	MaximumObjectBytes    int64
-	Timeout               time.Duration
+	Endpoint               string
+	PublicDownloadEndpoint string
+	TLSServerName          string
+	CAFile                 string
+	ClientCertificateFile  string
+	ClientPrivateKeyFile   string
+	AccessKeyFile          string
+	SecretKeyFile          string
+	SessionTokenFile       string
+	Bucket                 string
+	MaximumObjectBytes     int64
+	Timeout                time.Duration
 }
 
 type Client struct {
-	config Config
-	client *minio.Client
+	config         Config
+	client         *minio.Client
+	downloadClient *minio.Client
 }
 
 func New(config Config) (*Client, error) {
 	parsed, err := url.Parse(config.Endpoint)
+	publicEndpoint, publicErr := url.Parse(config.PublicDownloadEndpoint)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() != config.TLSServerName ||
 		parsed.Path != "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 		invalidBucket(config.Bucket) || config.MaximumObjectBytes < 1<<20 ||
-		config.MaximumObjectBytes > 1<<30 || config.Timeout < time.Second || config.Timeout > time.Minute {
+		config.MaximumObjectBytes > 1<<30 || config.Timeout < time.Second || config.Timeout > time.Minute ||
+		publicErr != nil || publicEndpoint.Scheme != "https" || publicEndpoint.Host == "" ||
+		publicEndpoint.User != nil || publicEndpoint.RawQuery != "" || publicEndpoint.Fragment != "" || publicEndpoint.Path != "" {
 		return nil, errors.New("S3 object store configuration is invalid")
 	}
 	accessKey, err := readCredential(config.AccessKeyFile)
@@ -93,7 +98,13 @@ func New(config Config) (*Client, error) {
 	if err != nil {
 		return nil, errors.New("create S3 object store client")
 	}
-	return &Client{config: config, client: configured}, nil
+	downloadClient, err := minio.New(publicEndpoint.Host, &minio.Options{
+		Creds: credentials.NewStaticV4(accessKey, secretKey, sessionToken), Secure: true,
+	})
+	if err != nil {
+		return nil, errors.New("create protected S3 download signer")
+	}
+	return &Client{config: config, client: configured, downloadClient: downloadClient}, nil
 }
 
 func (client *Client) Check(ctx context.Context) error {
@@ -203,6 +214,32 @@ func (client *Client) Get(ctx context.Context, projectID, reference string, expe
 		return nil, errors.New("S3 object readback mismatch")
 	}
 	return raw, nil
+}
+
+func (client *Client) ProtectedURL(ctx context.Context, projectID, reference string, expectedSize uint64,
+	expectedSHA256, name string, ttl time.Duration) (string, error) {
+	bucket, objectKey, versionID, err := parseReference(reference)
+	if err != nil || bucket != client.config.Bucket || invalidSegment(projectID) ||
+		!strings.HasPrefix(objectKey, "projects/"+projectID+"/") || expectedSize == 0 ||
+		expectedSize > uint64(client.config.MaximumObjectBytes) || len(expectedSHA256) != 64 ||
+		ttl < time.Minute || ttl > time.Hour || filepath.Base(name) != name {
+		return "", errors.New("protected S3 download input is invalid")
+	}
+	inspected, found, err := client.Inspect(ctx, projectID, reference, expectedSHA256)
+	if err != nil || !found || inspected.Size != expectedSize {
+		return "", errors.New("protected S3 download metadata mismatch")
+	}
+	parameters := url.Values{
+		"response-content-disposition": {"attachment; filename=\"" + strings.ReplaceAll(name, "\"", "") + "\""},
+	}
+	if versionID != "" {
+		parameters.Set("versionId", versionID)
+	}
+	protected, err := client.downloadClient.PresignedGetObject(ctx, bucket, objectKey, ttl, parameters)
+	if err != nil || protected.Scheme != "https" {
+		return "", errors.New("create protected S3 download URL")
+	}
+	return protected.String(), nil
 }
 
 func parseReference(reference string) (string, string, string, error) {

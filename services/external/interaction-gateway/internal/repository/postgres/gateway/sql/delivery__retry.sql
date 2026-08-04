@@ -5,5 +5,6 @@ SET state = CASE
         ELSE 'PENDING'
     END,
     last_error_code = $3, next_attempt_at = $4,
-    lease_owner = '', lease_expires_at = NULL, lease_token_sha256 = '', updated_at = now()
-WHERE id = $1 AND fence = $2 AND state IN ('DELIVERING', 'PROVIDER_ACCEPTED');
+    lease_owner = '', lease_expires_at = NULL, lease_token_sha256 = '', updated_at = clock_timestamp()
+WHERE id = $1 AND fence = $2 AND lease_token_sha256 = $6
+  AND state IN ('DELIVERING', 'PROVIDER_ACCEPTED');

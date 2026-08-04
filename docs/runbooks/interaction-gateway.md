@@ -4,7 +4,7 @@ title: Interaction gateway
 type: runbook
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-04
 ---
 
@@ -28,7 +28,9 @@ updated: 2026-08-04
    bucket по тем же TLS identities, которые использует рабочий путь.
 3. Для delivery прочитать защищённый
    `/internal/v1/deliveries/{deliveryId}`: сверить state, payload digest,
-   attempts и provider receipt. Claim token в readback не возвращается.
+   attempts и provider receipt. Помимо mTLS обязателен producer-specific bearer
+   credential с exact organization/project/delivery. Claim token в readback не
+   возвращается.
 4. При ambiguous Mattermost POST проверять exact `PendingPostId`, client-owned
    `matter_codex_*` props, bot/channel/root, текст и digest каждого файла;
    ручной повтор публикации запрещён.
@@ -36,6 +38,29 @@ updated: 2026-08-04
    Mattermost post/channel и process/session/turn/attempt/input lineage.
 6. `DEAD_LETTER` не объявлять успешным и не изменять SQL вручную; recovery
    оформляется отдельным owner-approved repair Issue.
+7. При зависшем inbound проверить DB-time lease/fence/token: expired
+   `PROCESSING` reclaim-ится worker, а `WAITING_SCAN` poll не уменьшает terminal
+   retry budget. Запись stale worker должна иметь нулевую cardinality.
+8. При `DELETION_PENDING` проверить исходный delete event, Chat/Session version,
+   24-часовой cleanup и отсутствие новых Turn/callback. Restore обязан отменить
+   тот же cleanup receipt; SQL-переход вручную запрещён.
+9. Для result больше Mattermost upload limit сверить `CLEAN`, exact S3 metadata,
+   project prefix и срок presigned HTTPS link 15 минут.
+
+## Ротация ключей и PostgreSQL identity
+
+- Mattermost JWK публикуется как `NEXT`, затем новый generation становится
+  `CURRENT`, старый ограниченно обслуживается как `PREVIOUS`, после overlap —
+  только `RETIRED`. Control-plane admission readback должен показать тот же
+  high-watermark; откат и повторный ввод retired generation запрещены.
+- PostgreSQL migration job сверяет context-key digest и served high-watermark.
+  Следующее поколение вводится отдельным code-first изменением с overlap;
+  `POSTGRES_EXPECTED_SESSION_USER` при этом обязан быть ровно
+  `interaction_gateway_runtime_g<N>` для выбранного generation. До следующей
+  ротации единственный `PREVIOUS` principal должен быть retired;
+  retire выполняется `interaction_gateway_retire_runtime_identity` минимальной
+  controller identity, делает `NOLOGIN`, revoke membership, завершает backend
+  и не имеет rollback.
 
 ## Rollback
 

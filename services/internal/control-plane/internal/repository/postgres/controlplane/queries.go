@@ -2,6 +2,9 @@ package controlplane
 
 import _ "embed"
 
+//go:embed sql/mattermost_event_keyset__admit.sql
+var sqlMattermostEventKeysetAdmit string
+
 //go:embed sql/continuation_grant_keyset__admit.sql
 var sqlContinuationGrantKeysetAdmit string
 
@@ -101,6 +104,9 @@ var sqlReceiptSave string
 
 //go:embed sql/resource__get.sql
 var sqlResourceGet string
+
+//go:embed sql/resource__get_including_deleted.sql
+var sqlResourceGetIncludingDeleted string
 
 //go:embed sql/resource__get_for_update.sql
 var sqlResourceGetForUpdate string

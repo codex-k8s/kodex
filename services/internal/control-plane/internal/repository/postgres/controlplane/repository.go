@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -52,6 +53,40 @@ type transaction struct {
 	tx             pgx.Tx
 	organizationID string
 	projectID      string
+}
+
+// AdmitMattermostEventKeyset фиксирует verifier-owned monotonic fence до
+// открытия рабочего MATTERMOST_SIGNED_EVENT пути.
+func (repository *Repository) AdmitMattermostEventKeyset(
+	ctx context.Context,
+	producerID string,
+	revision, highWatermark, servedGeneration uint64,
+	digest string,
+	retired, active []int64,
+) error {
+	var storedRevision, storedHighWatermark, storedServedGeneration uint64
+	var storedDigest string
+	var storedRetired []int64
+	err := repository.pool.QueryRow(ctx, sqlMattermostEventKeysetAdmit, pgx.StrictNamedArgs{
+		"producer_id": producerID, "keyset_revision": revision,
+		"high_watermark": highWatermark, "served_generation": servedGeneration,
+		"keyset_sha256": digest, "retired_generations": retired, "active_generations": active,
+	}).Scan(&storedRevision, &storedHighWatermark, &storedServedGeneration, &storedDigest, &storedRetired)
+	if err != nil || storedRevision != revision || storedHighWatermark != highWatermark ||
+		storedServedGeneration != servedGeneration || storedDigest != digest ||
+		!sliceContainsAll(storedRetired, retired) {
+		return errors.New("admit Mattermost event keyset")
+	}
+	return nil
+}
+
+func sliceContainsAll(values, required []int64) bool {
+	for _, candidate := range required {
+		if !slices.Contains(values, candidate) {
+			return false
+		}
+	}
+	return true
 }
 
 func (wrapped *transaction) CurrentTime(ctx context.Context) (time.Time, error) {
@@ -137,6 +172,27 @@ func (repository *Repository) Get(
 				"resource_id":     resourceID,
 			},
 		))
+		if scanErr == nil && resource.Kind != expectedKind {
+			return errs.ErrNotFound
+		}
+		return scanErr
+	})
+	return resource, err
+}
+
+// GetIncludingDeleted доступен специализированному lifecycle path для
+// idempotency readback уже завершённого delete.
+func (repository *Repository) GetIncludingDeleted(
+	ctx context.Context,
+	organizationID, projectID, resourceID string,
+	expectedKind enum.Kind,
+) (entity.Resource, error) {
+	var resource entity.Resource
+	err := repository.read(ctx, organizationID, projectID, nullActorID, func(tx pgx.Tx) error {
+		var scanErr error
+		resource, scanErr = scanResource(tx.QueryRow(ctx, sqlResourceGetIncludingDeleted, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID, "resource_id": resourceID,
+		}))
 		if scanErr == nil && resource.Kind != expectedKind {
 			return errs.ErrNotFound
 		}

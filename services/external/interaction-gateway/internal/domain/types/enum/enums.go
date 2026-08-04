@@ -4,16 +4,21 @@ package enum
 type InboundKind string
 
 const (
-	InboundPost     InboundKind = "POST"
-	InboundSlash    InboundKind = "SLASH"
-	InboundAction   InboundKind = "ACTION"
-	InboundDialog   InboundKind = "DIALOG"
-	InboundReaction InboundKind = "REACTION"
+	InboundPost           InboundKind = "POST"
+	InboundSlash          InboundKind = "SLASH"
+	InboundAction         InboundKind = "ACTION"
+	InboundDialog         InboundKind = "DIALOG"
+	InboundReaction       InboundKind = "REACTION"
+	InboundChannelDelete  InboundKind = "CHANNEL_DELETE"
+	InboundChannelRestore InboundKind = "CHANNEL_RESTORE"
+	InboundThreadDelete   InboundKind = "THREAD_DELETE"
+	InboundThreadRestore  InboundKind = "THREAD_RESTORE"
 )
 
 func (kind InboundKind) Valid() bool {
 	switch kind {
-	case InboundPost, InboundSlash, InboundAction, InboundDialog, InboundReaction:
+	case InboundPost, InboundSlash, InboundAction, InboundDialog, InboundReaction,
+		InboundChannelDelete, InboundChannelRestore, InboundThreadDelete, InboundThreadRestore:
 		return true
 	default:
 		return false
@@ -23,12 +28,13 @@ func (kind InboundKind) Valid() bool {
 type InboundState string
 
 const (
-	InboundPending     InboundState = "PENDING"
-	InboundProcessing  InboundState = "PROCESSING"
-	InboundWaitingScan InboundState = "WAITING_SCAN"
-	InboundCompleted   InboundState = "COMPLETED"
-	InboundIgnored     InboundState = "IGNORED"
-	InboundFailed      InboundState = "FAILED"
+	InboundPending        InboundState = "PENDING"
+	InboundProcessing     InboundState = "PROCESSING"
+	InboundWaitingScan    InboundState = "WAITING_SCAN"
+	InboundCompleted      InboundState = "COMPLETED"
+	InboundIgnored        InboundState = "IGNORED"
+	InboundFailed         InboundState = "FAILED"
+	InboundWaitingCleanup InboundState = "WAITING_CLEANUP"
 )
 
 type DeliveryKind string

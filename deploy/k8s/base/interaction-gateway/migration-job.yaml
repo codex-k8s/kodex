@@ -26,6 +26,9 @@ spec:
             - {name: INTERACTION_GATEWAY_MIGRATION_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/interaction-gateway/migration/dsn}
             - {name: INTERACTION_GATEWAY_POSTGRES_CA_FILE, value: /var/run/config/mattercodex/interaction-gateway/postgres/ca.pem}
             - {name: INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME, value: interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local}
+            - {name: INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION, value: "1"}
+            - {name: INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_ID, value: interaction-gateway-context-v1}
+            - {name: INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_FILE, value: /var/run/secrets/mattercodex/interaction-gateway/migration/context-key}
           resources:
             requests: {cpu: 25m, memory: 32Mi}
             limits: {cpu: 250m, memory: 128Mi}

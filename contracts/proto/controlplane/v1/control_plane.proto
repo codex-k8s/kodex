@@ -82,6 +82,9 @@ service ControlPlaneService {
   // ManageSession — единственный путь жизненного цикла SESSION; привязку
   // провайдера выбирает сервер.
   rpc ManageSession(ManageSessionRequest) returns (ManageSessionResponse);
+  // ManageConversationLifecycle — закрытый Mattermost Channel/Thread
+  // delete/restore/finalize path без доступа gateway к generic transition.
+  rpc ManageConversationLifecycle(ManageConversationLifecycleRequest) returns (ManageConversationLifecycleResponse);
   // ManageMemoryRecord связывает область и владельца с проверенным actor.
   rpc ManageMemoryRecord(ManageMemoryRecordRequest) returns (ManageMemoryRecordResponse);
   // ManageWorkClaim связывает получение работы с точными процессом, сессией,
@@ -459,6 +462,8 @@ enum SessionAction {
   SESSION_ACTION_CANCEL = 4;
   // SESSION_ACTION_CLEANUP — значение закрытого перечисления SessionAction.
   SESSION_ACTION_CLEANUP = 5;
+  // SESSION_ACTION_RESTORE отменяет delayed cleanup до terminal delete.
+  SESSION_ACTION_RESTORE = 6;
 }
 
 // MemoryAction задаёт закрытое перечисление контракта control-plane.
@@ -705,6 +710,10 @@ message TurnSpec {
   string agent_run_id = 17;
   uint64 agent_turn_binding_version = 18;
   string agent_turn_binding_sha256 = 19;
+  // result_artifact_version фиксирует версию результата в owner-транзакции завершения.
+  uint64 result_artifact_version = 20;
+  // result_artifact_sha256 фиксирует digest той же версии результата.
+  string result_artifact_sha256 = 21;
 }
 
 // ProcessRunSpec описывает версионированное сообщение контракта control-plane.
@@ -1344,6 +1353,30 @@ message ManageSessionRequest {
 // ManageSessionResponse описывает версионированное сообщение контракта control-plane.
 message ManageSessionResponse {
   Resource session = 1;
+}
+
+enum ConversationLifecycleKind {
+  CONVERSATION_LIFECYCLE_KIND_UNSPECIFIED = 0;
+  CONVERSATION_LIFECYCLE_KIND_CHANNEL = 1;
+  CONVERSATION_LIFECYCLE_KIND_THREAD = 2;
+}
+
+enum ConversationLifecycleAction {
+  CONVERSATION_LIFECYCLE_ACTION_UNSPECIFIED = 0;
+  CONVERSATION_LIFECYCLE_ACTION_DELETE = 1;
+  CONVERSATION_LIFECYCLE_ACTION_RESTORE = 2;
+  CONVERSATION_LIFECYCLE_ACTION_FINALIZE = 3;
+}
+
+message ManageConversationLifecycleRequest {
+  string idempotency_key = 1;
+  ConversationLifecycleKind kind = 2;
+  ConversationLifecycleAction action = 3;
+  string resource_id = 4;
+}
+
+message ManageConversationLifecycleResponse {
+  Resource resource = 1;
 }
 
 // ManageMemoryRecordRequest описывает версионированное сообщение контракта control-plane.

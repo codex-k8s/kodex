@@ -37,3 +37,40 @@ spec:
     serviceAccount: interaction-gateway-migrator
     audiences: [vault]
     tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: interaction-gateway-mapping
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: interaction-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/interaction-gateway/mapping/production
+  refreshAfter: 5m
+  destination:
+    create: true
+    name: interaction-gateway-mapping
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        manifest.yaml:
+          text: '{{ get .Secrets "manifest.yaml" }}'
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: interaction-gateway-bot-tokens
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: interaction-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/interaction-gateway/bot-tokens/production
+  refreshAfter: 5m
+  destination:
+    create: true
+    name: interaction-gateway-bot-tokens
+    overwrite: false

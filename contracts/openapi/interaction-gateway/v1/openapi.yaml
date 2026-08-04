@@ -89,7 +89,11 @@ paths:
       operationId: getInteractionDelivery
       description: >-
         Возвращает полный неизменяемый payload и provider receipt только
-        разрешённой workload через exact mTLS boundary.
+        разрешённой workload через exact mTLS boundary и короткоживущий
+        application credential, связанный с organization/project/delivery.
+      security:
+        - workloadMTLS: []
+          deliveryReadbackBearer: []
       parameters:
         - name: delivery_id
           in: path
@@ -110,6 +114,10 @@ components:
   securitySchemes:
     workloadMTLS:
       type: mutualTLS
+    deliveryReadbackBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWS
   schemas:
     SlashCommand:
       type: object
@@ -197,6 +205,16 @@ components:
         provider_post_id: { type: string, maxLength: 64 }
         provider_receipt_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         attempts: { type: integer, minimum: 0, maximum: 32 }
+        ack_attempts: { type: integer, minimum: 0, maximum: 32 }
+        last_error_code: { type: string, maxLength: 64 }
+        attachments:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/ArtifactBindingReadback' }
+        upload_receipts:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/UploadReceiptReadback' }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
       required:
@@ -209,8 +227,39 @@ components:
         - payload
         - payload_sha256
         - attempts
+        - ack_attempts
+        - attachments
+        - upload_receipts
         - created_at
         - updated_at
+    ArtifactBindingReadback:
+      type: object
+      additionalProperties: false
+      properties:
+        artifact_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        path: { type: string, minLength: 1, maxLength: 512 }
+        storage_ref: { type: string, minLength: 1, maxLength: 2048 }
+        size_bytes: { type: integer, format: int64, minimum: 1, maximum: 268435456 }
+        media_type: { type: string, minLength: 3, maxLength: 255 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        provenance: { type: string, minLength: 1, maxLength: 512 }
+        scan_state: { type: string, enum: [CLEAN] }
+      required: [artifact_id, name, path, storage_ref, size_bytes, media_type, sha256, provenance, scan_state]
+    UploadReceiptReadback:
+      type: object
+      additionalProperties: false
+      properties:
+        artifact_id: { type: string, format: uuid }
+        provider_file_id: { type: string, minLength: 1, maxLength: 64 }
+        channel_id: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size_bytes: { type: integer, format: int64, minimum: 1, maximum: 268435456 }
+        media_type: { type: string, minLength: 3, maxLength: 255 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+      required: [artifact_id, provider_file_id, channel_id, name, size_bytes, media_type, sha256, created_at]
     Error:
       type: object
       additionalProperties: false

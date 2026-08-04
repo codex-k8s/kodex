@@ -303,6 +303,14 @@ type ManageSessionInput struct {
 	PreferredProviderCredentialBindingID string
 }
 
+type ManageConversationLifecycleInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+	Kind           string
+	Action         string
+	ResourceID     string
+}
+
 type ManageMemoryRecordInput struct {
 	Principal       value.Principal
 	IdempotencyKey  string

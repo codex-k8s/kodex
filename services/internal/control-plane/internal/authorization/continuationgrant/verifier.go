@@ -19,6 +19,8 @@ import (
 )
 
 type Config struct {
+	ProducerID         string
+	Purpose            string
 	Issuer             string
 	Audience           string
 	WorkloadID         string
@@ -36,6 +38,9 @@ type Verifier struct {
 }
 
 func New(config Config) (*Verifier, error) {
+	if config.ProducerID == "" || config.Purpose == "" {
+		return nil, errors.New("continuation grant producer is invalid")
+	}
 	if config.ExpectedPurpose != integrationgatewayauth.PurposeTransition &&
 		config.ExpectedPurpose != integrationgatewayauth.PurposeResultAccess {
 		return nil, errors.New("continuation grant purpose is invalid")
@@ -98,7 +103,9 @@ func (verifier *Verifier) Authenticate(ctx context.Context) (authoritytype.Appli
 	}
 	state := verifier.grant.State()
 	return authoritytype.ApplicationIdentity{
-		ActorID: claims.Subject, OrganizationID: claims.OrganizationID, ProjectID: claims.ProjectID,
+		ProducerID: verifier.config.ProducerID, CredentialPurpose: verifier.config.Purpose,
+		CredentialGeneration: claims.SignerGeneration,
+		ActorID:              claims.Subject, OrganizationID: claims.OrganizationID, ProjectID: claims.ProjectID,
 		SessionJTI: claims.JTI, SessionRevision: claims.ContinuationVersion,
 		SubjectDigest: digest("WORKLOAD_SUBJECT:" + claims.Subject), CredentialDigest: digest(compact),
 		CallerWorkload: claims.WorkloadID, CallerSPIFFEID: claims.CallerSPIFFEID,

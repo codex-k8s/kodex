@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-07-31
 ---
 
@@ -92,6 +92,14 @@ Client adapter явно собирает все принятые слои:
 Credential не передается по незашифрованному соединению. Для gRPC
 `PerRPCCredentials` требует transport security. Health/готовность проверяют тот
 же auth path, который используют рабочие RPC, а не упрощенный обход.
+
+После криптографической проверки credential сохраняет и передаёт в доменное
+решение его неизменяемые `purpose`, `producer_id`, workload/SPIFFE, полный
+метод/operation и generation. Operation profile сравнивает каждое из этих
+полей с закрытым реестром: совпадение workload не позволяет использовать
+credential другого producer или purpose. Обобщение нескольких producer/purpose
+в один «доверенный workload» запрещено; readiness проверяет тот же
+producer-specific путь.
 
 Worker/application grant не может быть разрешением на claim для всего проекта.
 Он неизменяемо связывает точные workload/SPIFFE, audience, полный метод,

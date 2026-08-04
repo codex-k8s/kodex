@@ -2802,7 +2802,7 @@ func (service *Service) RequestOwnerGate(
 			); err != nil {
 				return err
 			}
-			artifact, err := service.requireCleanArtifact(
+			artifactResource, artifact, err := service.requireCleanArtifactResource(
 				ctx,
 				tx,
 				input.Principal,
@@ -2837,6 +2837,8 @@ func (service *Service) RequestOwnerGate(
 				return err
 			}
 			gateTurnSpec.ResultArtifactID = input.ResultArtifactID
+			gateTurnSpec.ResultArtifactVersion = artifactResource.Version
+			gateTurnSpec.ResultArtifactSHA256 = artifact.SHA256
 			gateTurnSpec.Outcome = "owner_gate_pending"
 			waitingTurn, err := gateTurn.ReplaceAndTransition(
 				gateTurnSpec, enum.StateWaitingOwner, now,

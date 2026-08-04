@@ -524,6 +524,8 @@ func (service *Service) expireOwnerGateGraph(
 	}
 	turnSpec.Outcome = "owner_gate_expired"
 	turnSpec.ResultArtifactID = ""
+	turnSpec.ResultArtifactVersion = 0
+	turnSpec.ResultArtifactSHA256 = ""
 	failedTurn, err := turn.ReplaceAndTransition(turnSpec, enum.StateFailed, now)
 	if err != nil {
 		return OwnerGateResult{}, errs.ErrStateConflict

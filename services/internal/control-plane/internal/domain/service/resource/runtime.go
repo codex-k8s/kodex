@@ -1015,18 +1015,28 @@ func (service *Service) CompleteTurn(
 				spec.EffectiveInputSHA256 != input.Principal.AuthorityDigest {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
+			var resultArtifact entity.Resource
+			var resultArtifactSpec entity.ArtifactSpec
 			if input.ResultArtifactID != "" {
-				if _, err := service.requireCleanArtifact(
+				resultArtifact, resultArtifactSpec, err = service.requireCleanArtifactResource(
 					ctx,
 					tx,
 					input.Principal,
 					input.ResultArtifactID,
-				); err != nil {
+				)
+				if err != nil {
 					return entity.Resource{}, err
 				}
 			}
 			spec.Outcome = input.Outcome
 			spec.ResultArtifactID = input.ResultArtifactID
+			if input.ResultArtifactID != "" {
+				spec.ResultArtifactVersion = resultArtifact.Version
+				spec.ResultArtifactSHA256 = resultArtifactSpec.SHA256
+			} else {
+				spec.ResultArtifactVersion = 0
+				spec.ResultArtifactSHA256 = ""
+			}
 			updated, err := current.ReplaceAndTransition(
 				spec,
 				input.TerminalState,
@@ -1892,6 +1902,8 @@ func (service *Service) ResolveOwnerGate(
 			}
 			if turnTarget != enum.StateSucceeded {
 				gateTurnSpec.ResultArtifactID = ""
+				gateTurnSpec.ResultArtifactVersion = 0
+				gateTurnSpec.ResultArtifactSHA256 = ""
 			}
 			updatedTurn, err := gateTurn.ReplaceAndTransition(
 				gateTurnSpec, turnTarget, now,
@@ -2133,6 +2145,16 @@ func (service *Service) requireCleanArtifact(
 	principal value.Principal,
 	artifactID string,
 ) (entity.ArtifactSpec, error) {
+	_, spec, err := service.requireCleanArtifactResource(ctx, tx, principal, artifactID)
+	return spec, err
+}
+
+func (service *Service) requireCleanArtifactResource(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	artifactID string,
+) (entity.Resource, entity.ArtifactSpec, error) {
 	artifact, err := tx.GetForUpdate(
 		ctx,
 		principal.OrganizationID,
@@ -2140,7 +2162,7 @@ func (service *Service) requireCleanArtifact(
 		artifactID,
 	)
 	if err != nil {
-		return entity.ArtifactSpec{}, err
+		return entity.Resource{}, entity.ArtifactSpec{}, err
 	}
 	spec, ok := artifact.Spec.(entity.ArtifactSpec)
 	if !ok || artifact.Kind != enum.KindArtifact ||
@@ -2148,9 +2170,9 @@ func (service *Service) requireCleanArtifact(
 		spec.ScanStatus != "CLEAN" ||
 		spec.ScanPolicyRevision == 0 ||
 		!validSHA256Text(spec.ScanEvidenceSHA256) {
-		return entity.ArtifactSpec{}, errs.ErrStateConflict
+		return entity.Resource{}, entity.ArtifactSpec{}, errs.ErrStateConflict
 	}
-	return spec, nil
+	return artifact, spec, nil
 }
 
 func (service *Service) createRuntimeRevision(

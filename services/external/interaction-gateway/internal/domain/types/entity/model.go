@@ -24,6 +24,7 @@ type InboundEvent struct {
 	ActionReason        string             `json:"action_reason,omitempty"`
 	DeliveryID          string             `json:"delivery_id,omitempty"`
 	CallbackToken       string             `json:"callback_token,omitempty"`
+	TriggerID           string             `json:"trigger_id,omitempty"`
 	OrganizationID      string             `json:"organization_id"`
 	ProjectID           string             `json:"project_id"`
 	ChatID              string             `json:"chat_id"`
@@ -37,6 +38,15 @@ type InboundEvent struct {
 	AttachmentArtifacts []ArtifactBinding  `json:"attachment_artifacts,omitempty"`
 	State               enum.InboundState  `json:"state"`
 	Attempts            uint32             `json:"attempts"`
+	ScanPolls           uint32             `json:"scan_polls"`
+	Fence               uint64             `json:"fence"`
+	LeaseToken          string             `json:"-"`
+	LeaseExpiresAt      time.Time          `json:"lease_expires_at,omitempty"`
+	SemanticOutcome     string             `json:"semantic_outcome,omitempty"`
+	ResponseMessage     string             `json:"response_message,omitempty"`
+	TerminalErrorCode   string             `json:"terminal_error_code,omitempty"`
+	NextAction          string             `json:"next_action,omitempty"`
+	LifecycleResourceID string             `json:"lifecycle_resource_id,omitempty"`
 	NextAttemptAt       time.Time          `json:"next_attempt_at"`
 	CreatedAt           time.Time          `json:"created_at"`
 	UpdatedAt           time.Time          `json:"updated_at"`
@@ -54,6 +64,20 @@ type ArtifactBinding struct {
 	SHA256     string `json:"sha256"`
 	Provenance string `json:"provenance"`
 	ScanState  string `json:"scan_state,omitempty"`
+}
+
+// UploadReceipt фиксирует подтверждённый Mattermost effect до следующего
+// внешнего действия delivery worker.
+type UploadReceipt struct {
+	DeliveryID     string    `json:"delivery_id"`
+	ArtifactID     string    `json:"artifact_id"`
+	ProviderFileID string    `json:"provider_file_id"`
+	ChannelID      string    `json:"channel_id"`
+	Name           string    `json:"name"`
+	SizeBytes      uint64    `json:"size_bytes"`
+	MediaType      string    `json:"media_type"`
+	SHA256         string    `json:"sha256"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type Delivery struct {
@@ -74,9 +98,12 @@ type Delivery struct {
 	Payload               json.RawMessage    `json:"payload"`
 	PayloadSHA256         string             `json:"payload_sha256"`
 	Attachments           []ArtifactBinding  `json:"attachments,omitempty"`
+	UploadReceipts        []UploadReceipt    `json:"upload_receipts,omitempty"`
 	ProviderPostID        string             `json:"provider_post_id,omitempty"`
 	ProviderReceiptSHA256 string             `json:"provider_receipt_sha256,omitempty"`
+	UpdatePostID          string             `json:"update_post_id,omitempty"`
 	Attempts              uint32             `json:"attempts"`
+	AckAttempts           uint32             `json:"ack_attempts"`
 	Fence                 uint64             `json:"fence"`
 	LeaseToken            string             `json:"-"`
 	LeaseExpiresAt        time.Time          `json:"lease_expires_at,omitempty"`
@@ -85,6 +112,15 @@ type Delivery struct {
 	OwnerGate             *OwnerGateBinding  `json:"owner_gate,omitempty"`
 	CreatedAt             time.Time          `json:"created_at"`
 	UpdatedAt             time.Time          `json:"updated_at"`
+}
+
+type TurnWatch struct {
+	TurnID         string
+	Inbound        InboundEvent
+	LastVersion    uint64
+	Fence          uint64
+	LeaseToken     string
+	LeaseExpiresAt time.Time
 }
 
 type OwnerGateBinding struct {

@@ -1,0 +1,53 @@
+package mattermost
+
+import (
+	"slices"
+	"testing"
+)
+
+func TestExplicitMentionsClosedResolution(t *testing.T) {
+	mentions := explicitMentions("@agent-b inspect https://example.test/@ignored, mail@ignored.test and @Agent-A, then @agent-b")
+	if !slices.Equal(mentions, []string{"agent-a", "agent-b"}) {
+		t.Fatalf("mentions = %v", mentions)
+	}
+}
+
+func TestResolveAssignmentRequiresExactMattermostIdentity(t *testing.T) {
+	current := &index{assignments: map[string]AgentAssignment{
+		"team\x00channel\x00agent-b": {
+			MentionUsername: "agent-b", MattermostUserID: "user-b", RoleID: "role-b", BotStableKey: "bot-b",
+		},
+	}}
+	if _, err := current.resolveAssignment("team", "channel", "agent-b", "user-a"); err == nil {
+		t.Fatal("assignment accepted mismatched Mattermost user")
+	}
+	assignment, err := current.resolveAssignment("team", "channel", "agent-b", "user-b")
+	if err != nil || assignment.RoleID != "role-b" || assignment.BotStableKey != "bot-b" {
+		t.Fatal("exact assignment was not resolved")
+	}
+}
+
+func TestChannelBoundariesPreserveProviderAndDomainIDs(t *testing.T) {
+	current := &index{channels: map[string]ChannelBinding{
+		"team\x00channel": {TeamID: "team", ChannelID: "channel", OrganizationID: "organization",
+			ProjectID: "project", ChatID: "chat"},
+	}}
+	boundaries := current.channelBoundaries()
+	if len(boundaries) != 1 || boundaries[0].TeamID != "team" || boundaries[0].ChannelID != "channel" ||
+		boundaries[0].ChatID != "chat" || boundaries[0].OrganizationID != "organization" ||
+		boundaries[0].ProjectID != "project" {
+		t.Fatalf("channel boundary projection mismatch: %+v", boundaries)
+	}
+}
+
+func TestIgnoredBotKeepsCursorAuthorityBoundary(t *testing.T) {
+	current := &index{channels: map[string]ChannelBinding{
+		"team\x00channel": {TeamID: "team", ChannelID: "channel", OrganizationID: "organization",
+			ProjectID: "project", ChatID: "chat", RoleID: "role", BotStableKey: "bot", Locale: "ru"},
+	}, botUsers: map[string]struct{}{"bot-user": {}}}
+	boundary, err := current.resolve("team", "channel", "bot-user", true)
+	if err != nil || !boundary.IgnoredBot || boundary.OrganizationID != "organization" ||
+		boundary.ProjectID != "project" || boundary.ChannelID != "channel" {
+		t.Fatalf("ignored bot lost server-owned boundary: %+v, %v", boundary, err)
+	}
+}

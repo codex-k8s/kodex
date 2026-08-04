@@ -16,22 +16,35 @@ import (
 
 type Manifest struct {
 	Version  int              `json:"version"`
+	Source   string           `json:"source"`
+	Revision string           `json:"revision"`
 	Channels []ChannelBinding `json:"channels"`
 	Actors   []ActorBinding   `json:"actors"`
 	Bots     []BotIdentity    `json:"bots"`
 }
 
 type ChannelBinding struct {
-	TeamID         string `json:"team_id"`
-	ChannelID      string `json:"channel_id"`
-	OrganizationID string `json:"organization_id"`
-	ProjectID      string `json:"project_id"`
-	ChatID         string `json:"chat_id"`
-	RoleID         string `json:"role_id"`
-	SessionID      string `json:"session_id,omitempty"`
-	Locale         string `json:"locale"`
-	BotStableKey   string `json:"bot_stable_key"`
-	OwnerDelivery  bool   `json:"owner_delivery"`
+	TeamID           string            `json:"team_id"`
+	ChannelID        string            `json:"channel_id"`
+	OrganizationID   string            `json:"organization_id"`
+	ProjectID        string            `json:"project_id"`
+	ChatID           string            `json:"chat_id"`
+	RoleID           string            `json:"role_id"`
+	SessionID        string            `json:"session_id,omitempty"`
+	Locale           string            `json:"locale"`
+	BotStableKey     string            `json:"bot_stable_key"`
+	OwnerDelivery    bool              `json:"owner_delivery"`
+	LifecycleActorID string            `json:"lifecycle_actor_id"`
+	Assignments      []AgentAssignment `json:"assignments,omitempty"`
+}
+
+// AgentAssignment разделяет server-owned default route и точное разрешённое
+// назначение, выбранное только по проверенному Mattermost user readback.
+type AgentAssignment struct {
+	MentionUsername  string `json:"mention_username"`
+	MattermostUserID string `json:"mattermost_user_id"`
+	RoleID           string `json:"role_id"`
+	BotStableKey     string `json:"bot_stable_key"`
 }
 
 type ActorBinding struct {
@@ -48,20 +61,21 @@ type BotIdentity struct {
 }
 
 type index struct {
-	channels   map[string]ChannelBinding
-	actors     map[string]ActorBinding
-	bots       map[string]BotIdentity
-	botUsers   map[string]struct{}
-	deliveries map[string]entity.Boundary
+	channels    map[string]ChannelBinding
+	actors      map[string]ActorBinding
+	bots        map[string]BotIdentity
+	botUsers    map[string]struct{}
+	deliveries  map[string]entity.Boundary
+	assignments map[string]AgentAssignment
 }
 
 func loadManifest(path string) (Manifest, *index, error) {
 	if !filepath.IsAbs(path) {
-		return Manifest{}, nil, errors.New("Mattermost mapping manifest path is not absolute")
+		return Manifest{}, nil, errors.New("mattermost mapping manifest path is not absolute")
 	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 1<<20 || info.Mode().Perm()&0o022 != 0 {
-		return Manifest{}, nil, errors.New("Mattermost mapping manifest is unsafe")
+		return Manifest{}, nil, errors.New("mattermost mapping manifest is unsafe")
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -71,19 +85,21 @@ func loadManifest(path string) (Manifest, *index, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&manifest) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
-		manifest.Version != 1 || len(manifest.Channels) == 0 || len(manifest.Actors) == 0 || len(manifest.Bots) == 0 {
-		return Manifest{}, nil, errors.New("Mattermost mapping manifest is invalid")
+		manifest.Version != 1 || !strings.HasPrefix(manifest.Source, "vault://") ||
+		len(manifest.Revision) < 8 || len(manifest.Revision) > 128 || strings.TrimSpace(manifest.Revision) != manifest.Revision ||
+		len(manifest.Channels) == 0 || len(manifest.Actors) == 0 || len(manifest.Bots) == 0 {
+		return Manifest{}, nil, errors.New("mattermost mapping manifest is invalid")
 	}
 	result := &index{
 		channels: map[string]ChannelBinding{}, actors: map[string]ActorBinding{}, bots: map[string]BotIdentity{},
-		botUsers: map[string]struct{}{}, deliveries: map[string]entity.Boundary{},
+		botUsers: map[string]struct{}{}, deliveries: map[string]entity.Boundary{}, assignments: map[string]AgentAssignment{},
 	}
 	for _, bot := range manifest.Bots {
 		if invalidProviderID(bot.UserID) || invalidStableKey(bot.StableKey) || !filepath.IsAbs(bot.TokenFile) {
-			return Manifest{}, nil, errors.New("Mattermost bot identity is invalid")
+			return Manifest{}, nil, errors.New("mattermost bot identity is invalid")
 		}
 		if _, exists := result.bots[bot.StableKey]; exists {
-			return Manifest{}, nil, errors.New("Mattermost bot identity is duplicated")
+			return Manifest{}, nil, errors.New("mattermost bot identity is duplicated")
 		}
 		result.bots[bot.StableKey] = bot
 		result.botUsers[bot.UserID] = struct{}{}
@@ -96,40 +112,53 @@ func loadManifest(path string) (Manifest, *index, error) {
 		if invalidProviderID(channel.TeamID) || invalidProviderID(channel.ChannelID) ||
 			uuid.Validate(channel.OrganizationID) != nil || uuid.Validate(channel.ProjectID) != nil ||
 			uuid.Validate(channel.ChatID) != nil || uuid.Validate(channel.RoleID) != nil ||
+			uuid.Validate(channel.LifecycleActorID) != nil ||
 			(channel.SessionID != "" && uuid.Validate(channel.SessionID) != nil) || !localeOK || !botOK {
-			return Manifest{}, nil, errors.New("Mattermost channel mapping is invalid")
+			return Manifest{}, nil, errors.New("mattermost channel mapping is invalid")
 		}
 		channel.Locale = locale
 		key := channel.TeamID + "\x00" + channel.ChannelID
 		if _, exists := result.channels[key]; exists {
-			return Manifest{}, nil, errors.New("Mattermost channel mapping is duplicated")
+			return Manifest{}, nil, errors.New("mattermost channel mapping is duplicated")
 		}
 		projectScope := channel.OrganizationID + "\x00" + channel.ProjectID
 		if existing, exists := teamProjects[channel.TeamID]; exists && existing != projectScope {
-			return Manifest{}, nil, errors.New("Mattermost team mapping is ambiguous")
+			return Manifest{}, nil, errors.New("mattermost team mapping is ambiguous")
 		}
 		if existing, exists := projectTeams[projectScope]; exists && existing != channel.TeamID {
-			return Manifest{}, nil, errors.New("Mattermost project mapping is ambiguous")
+			return Manifest{}, nil, errors.New("mattermost project mapping is ambiguous")
 		}
 		chatScope := projectScope + "\x00" + channel.ChatID
 		if existing, exists := channelChats[channel.ChannelID]; exists && existing != chatScope {
-			return Manifest{}, nil, errors.New("Mattermost channel chat mapping is ambiguous")
+			return Manifest{}, nil, errors.New("mattermost channel chat mapping is ambiguous")
 		}
 		if existing, exists := chatChannels[chatScope]; exists && existing != channel.ChannelID {
-			return Manifest{}, nil, errors.New("Mattermost chat mapping is ambiguous")
+			return Manifest{}, nil, errors.New("mattermost chat mapping is ambiguous")
 		}
 		teamProjects[channel.TeamID], projectTeams[projectScope] = projectScope, channel.TeamID
 		channelChats[channel.ChannelID], chatChannels[chatScope] = chatScope, channel.ChannelID
 		result.channels[key] = channel
+		for _, assignment := range channel.Assignments {
+			_, assignmentBotOK := result.bots[assignment.BotStableKey]
+			if invalidUsername(assignment.MentionUsername) || invalidProviderID(assignment.MattermostUserID) ||
+				uuid.Validate(assignment.RoleID) != nil || !assignmentBotOK {
+				return Manifest{}, nil, errors.New("mattermost agent assignment is invalid")
+			}
+			assignmentKey := key + "\x00" + strings.ToLower(assignment.MentionUsername)
+			if _, exists := result.assignments[assignmentKey]; exists {
+				return Manifest{}, nil, errors.New("mattermost agent assignment is ambiguous")
+			}
+			result.assignments[assignmentKey] = assignment
+		}
 	}
 	for _, actor := range manifest.Actors {
 		if invalidProviderID(actor.MattermostUserID) || uuid.Validate(actor.ActorID) != nil ||
 			uuid.Validate(actor.OrganizationID) != nil || uuid.Validate(actor.ProjectID) != nil {
-			return Manifest{}, nil, errors.New("Mattermost actor mapping is invalid")
+			return Manifest{}, nil, errors.New("mattermost actor mapping is invalid")
 		}
 		key := actor.MattermostUserID + "\x00" + actor.OrganizationID + "\x00" + actor.ProjectID
 		if _, exists := result.actors[key]; exists {
-			return Manifest{}, nil, errors.New("Mattermost actor mapping is duplicated")
+			return Manifest{}, nil, errors.New("mattermost actor mapping is duplicated")
 		}
 		result.actors[key] = actor
 	}
@@ -143,7 +172,7 @@ func loadManifest(path string) (Manifest, *index, error) {
 			}
 			key := channel.ProjectID + "\x00" + actor.ActorID
 			if _, exists := result.deliveries[key]; exists {
-				return Manifest{}, nil, errors.New("Mattermost owner delivery route is ambiguous")
+				return Manifest{}, nil, errors.New("mattermost owner delivery route is ambiguous")
 			}
 			result.deliveries[key] = entity.Boundary{
 				OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
@@ -154,7 +183,7 @@ func loadManifest(path string) (Manifest, *index, error) {
 		}
 	}
 	if len(result.deliveries) == 0 {
-		return Manifest{}, nil, errors.New("Mattermost owner delivery route is missing")
+		return Manifest{}, nil, errors.New("mattermost owner delivery route is missing")
 	}
 	return manifest, result, nil
 }
@@ -162,33 +191,46 @@ func loadManifest(path string) (Manifest, *index, error) {
 func (current *index) resolve(teamID, channelID, userID string, isBot bool) (entity.Boundary, error) {
 	channel, ok := current.channels[teamID+"\x00"+channelID]
 	if !ok {
-		return entity.Boundary{}, errors.New("Mattermost channel is outside the server-owned mapping")
+		return entity.Boundary{}, errors.New("mattermost channel is outside the server-owned mapping")
+	}
+	boundary := entity.Boundary{
+		OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
+		ChatID: channel.ChatID, RoleID: channel.RoleID, Locale: channel.Locale,
+		BotStableKey: channel.BotStableKey, TeamID: teamID, ChannelID: channelID,
+		SessionID: channel.SessionID,
 	}
 	if isBot {
-		return entity.Boundary{IgnoredBot: true}, nil
+		boundary.IgnoredBot = true
+		return boundary, nil
 	}
 	if _, ignored := current.botUsers[userID]; ignored {
-		return entity.Boundary{IgnoredBot: true}, nil
+		boundary.IgnoredBot = true
+		return boundary, nil
 	}
 	actor, ok := current.actors[userID+"\x00"+channel.OrganizationID+"\x00"+channel.ProjectID]
 	if !ok {
-		return entity.Boundary{}, errors.New("Mattermost actor is outside the server-owned mapping")
+		return boundary, errors.New("mattermost actor is outside the server-owned mapping")
 	}
-	return entity.Boundary{
-		OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
-		ChatID: channel.ChatID, ActorID: actor.ActorID, RoleID: channel.RoleID,
-		Locale: channel.Locale, BotStableKey: channel.BotStableKey,
-		TeamID: teamID, ChannelID: channelID, SessionID: channel.SessionID,
-	}, nil
+	boundary.ActorID = actor.ActorID
+	return boundary, nil
 }
 
-func (current *index) channelIDs() []string {
-	values := make([]string, 0, len(current.channels))
-	for _, binding := range current.channels {
-		values = append(values, binding.ChannelID)
+func (current *index) resolveAssignment(teamID, channelID, username, userID string) (AgentAssignment, error) {
+	assignment, ok := current.assignments[teamID+"\x00"+channelID+"\x00"+strings.ToLower(username)]
+	if !ok || assignment.MattermostUserID != userID {
+		return AgentAssignment{}, errors.New("mattermost agent assignment is unauthorized")
 	}
-	slices.Sort(values)
-	return slices.Compact(values)
+	return assignment, nil
+}
+
+func (current *index) channelBoundaries() []entity.Boundary {
+	values := make([]entity.Boundary, 0, len(current.channels))
+	for _, binding := range current.channels {
+		values = append(values, entity.Boundary{OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
+			ChatID: binding.ChatID, TeamID: binding.TeamID, ChannelID: binding.ChannelID})
+	}
+	slices.SortFunc(values, func(left, right entity.Boundary) int { return strings.Compare(left.ChannelID, right.ChannelID) })
+	return values
 }
 
 func (current *index) resolveDelivery(projectID, actorID string) (entity.Boundary, error) {
@@ -196,7 +238,7 @@ func (current *index) resolveDelivery(projectID, actorID string) (entity.Boundar
 	if ok {
 		return boundary, nil
 	}
-	return entity.Boundary{}, errors.New("Mattermost delivery target is outside the server-owned mapping")
+	return entity.Boundary{}, errors.New("mattermost delivery target is outside the server-owned mapping")
 }
 
 func invalidProviderID(value string) bool {
@@ -209,6 +251,18 @@ func invalidStableKey(value string) bool {
 	}
 	for _, symbol := range value {
 		if (symbol < 'a' || symbol > 'z') && (symbol < '0' || symbol > '9') && symbol != '-' {
+			return true
+		}
+	}
+	return false
+}
+
+func invalidUsername(value string) bool {
+	if len(value) < 1 || len(value) > 64 || value != strings.ToLower(value) {
+		return true
+	}
+	for _, symbol := range value {
+		if (symbol < 'a' || symbol > 'z') && (symbol < '0' || symbol > '9') && symbol != '.' && symbol != '_' && symbol != '-' {
 			return true
 		}
 	}

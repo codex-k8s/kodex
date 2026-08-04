@@ -3,10 +3,13 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 )
+
+var ErrNotFound = errors.New("gateway repository record not found")
 
 type InboundDisposition uint8
 
@@ -20,21 +23,30 @@ type Repository interface {
 	Check(context.Context) error
 	ClaimInbound(context.Context, entity.InboundEvent, time.Duration) (entity.InboundEvent, InboundDisposition, error)
 	SaveInboundProgress(context.Context, entity.InboundEvent) error
-	CompleteInbound(context.Context, string, string, string) error
-	RetryInbound(context.Context, string, string, time.Time, bool) error
+	CompleteInbound(context.Context, entity.InboundEvent, string, string, string) error
+	RetryInbound(context.Context, entity.InboundEvent, string, string, string, time.Time, bool) error
 	ClaimWaitingInbound(context.Context, time.Duration) (entity.InboundEvent, bool, error)
-	LoadCursors(context.Context, []string) (map[string]int64, error)
-	AdvanceCursor(context.Context, string, int64) error
+	LoadCursors(context.Context, []entity.Boundary) (map[string]int64, error)
+	AdvanceCursor(context.Context, entity.Boundary, string, int64) error
+	HasDeletionPending(context.Context, string, string, string, string) (bool, error)
+	CancelDeletion(context.Context, string, string, string, string, string) error
+	ResolveThreadSession(context.Context, string, string, string, string) (string, error)
 
 	EnqueueDelivery(context.Context, entity.Delivery) (entity.Delivery, bool, error)
 	ClaimDelivery(context.Context, string, string, time.Duration) (entity.Delivery, bool, error)
-	MarkProviderAccepted(context.Context, string, uint64, string, string, string, string) error
-	CompleteDelivery(context.Context, string, uint64) error
-	RetryDelivery(context.Context, string, uint64, string, time.Time, bool) error
+	GetUploadReceipt(context.Context, entity.Delivery, string) (entity.UploadReceipt, bool, error)
+	SaveUploadReceipt(context.Context, entity.Delivery, entity.UploadReceipt) error
+	MarkProviderAccepted(context.Context, entity.Delivery, string, string, string) error
+	CompleteDelivery(context.Context, entity.Delivery) error
+	RetryDelivery(context.Context, entity.Delivery, string, time.Time, bool) error
 	GetDelivery(context.Context, string) (entity.Delivery, error)
+	GetDeliveryScoped(context.Context, string, string, string) (entity.Delivery, error)
 	GetDeliveryByProviderPost(context.Context, string) (entity.Delivery, error)
-	ListPendingReactionPosts(context.Context, int) (map[string]string, error)
-	MarkOwnerGateDecided(context.Context, string) error
+	ListPendingReactionPosts(context.Context, []entity.Boundary, int) (map[string]string, error)
+	MarkOwnerGateDecided(context.Context, entity.Delivery) error
+	SaveTurnWatch(context.Context, entity.InboundEvent, string) error
+	ClaimTurnWatch(context.Context, string, string, time.Duration) (entity.TurnWatch, bool, error)
+	AdvanceTurnWatch(context.Context, entity.TurnWatch, uint64, bool, time.Time) error
 
 	ClaimOwnerGateRequest(context.Context) (string, bool, error)
 	SaveOwnerGateClaim(context.Context, string, entity.Delivery) error

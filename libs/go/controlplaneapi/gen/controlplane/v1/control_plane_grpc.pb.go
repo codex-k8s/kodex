@@ -50,6 +50,7 @@ const (
 	ControlPlaneService_RetryTurn_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RetryTurn"
 	ControlPlaneService_CancelTurn_FullMethodName                         = "/controlplane.v1.ControlPlaneService/CancelTurn"
 	ControlPlaneService_ManageSession_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ManageSession"
+	ControlPlaneService_ManageConversationLifecycle_FullMethodName        = "/controlplane.v1.ControlPlaneService/ManageConversationLifecycle"
 	ControlPlaneService_ManageMemoryRecord_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
 	ControlPlaneService_ManageWorkClaim_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
 	ControlPlaneService_ManageSchedule_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageSchedule"
@@ -187,6 +188,9 @@ type ControlPlaneServiceClient interface {
 	// ManageSession — единственный путь жизненного цикла SESSION; привязку
 	// провайдера выбирает сервер.
 	ManageSession(ctx context.Context, in *ManageSessionRequest, opts ...grpc.CallOption) (*ManageSessionResponse, error)
+	// ManageConversationLifecycle — закрытый Mattermost Channel/Thread
+	// delete/restore/finalize path без доступа gateway к generic transition.
+	ManageConversationLifecycle(ctx context.Context, in *ManageConversationLifecycleRequest, opts ...grpc.CallOption) (*ManageConversationLifecycleResponse, error)
 	// ManageMemoryRecord связывает область и владельца с проверенным actor.
 	ManageMemoryRecord(ctx context.Context, in *ManageMemoryRecordRequest, opts ...grpc.CallOption) (*ManageMemoryRecordResponse, error)
 	// ManageWorkClaim связывает получение работы с точными процессом, сессией,
@@ -633,6 +637,16 @@ func (c *controlPlaneServiceClient) ManageSession(ctx context.Context, in *Manag
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageSessionResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ManageConversationLifecycle(ctx context.Context, in *ManageConversationLifecycleRequest, opts ...grpc.CallOption) (*ManageConversationLifecycleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageConversationLifecycleResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageConversationLifecycle_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1296,6 +1310,9 @@ type ControlPlaneServiceServer interface {
 	// ManageSession — единственный путь жизненного цикла SESSION; привязку
 	// провайдера выбирает сервер.
 	ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error)
+	// ManageConversationLifecycle — закрытый Mattermost Channel/Thread
+	// delete/restore/finalize path без доступа gateway к generic transition.
+	ManageConversationLifecycle(context.Context, *ManageConversationLifecycleRequest) (*ManageConversationLifecycleResponse, error)
 	// ManageMemoryRecord связывает область и владельца с проверенным actor.
 	ManageMemoryRecord(context.Context, *ManageMemoryRecordRequest) (*ManageMemoryRecordResponse, error)
 	// ManageWorkClaim связывает получение работы с точными процессом, сессией,
@@ -1530,6 +1547,9 @@ func (UnimplementedControlPlaneServiceServer) CancelTurn(context.Context, *Cance
 }
 func (UnimplementedControlPlaneServiceServer) ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageConversationLifecycle(context.Context, *ManageConversationLifecycleRequest) (*ManageConversationLifecycleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageConversationLifecycle not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ManageMemoryRecord(context.Context, *ManageMemoryRecordRequest) (*ManageMemoryRecordResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageMemoryRecord not implemented")
@@ -2280,6 +2300,24 @@ func _ControlPlaneService_ManageSession_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ManageSession(ctx, req.(*ManageSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ManageConversationLifecycle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageConversationLifecycleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageConversationLifecycle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageConversationLifecycle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageConversationLifecycle(ctx, req.(*ManageConversationLifecycleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3458,6 +3496,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ManageSession",
 			Handler:    _ControlPlaneService_ManageSession_Handler,
+		},
+		{
+			MethodName: "ManageConversationLifecycle",
+			Handler:    _ControlPlaneService_ManageConversationLifecycle_Handler,
 		},
 		{
 			MethodName: "ManageMemoryRecord",

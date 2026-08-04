@@ -55,6 +55,32 @@ func (server *Server) ManageSession(
 	return &controlplanev1.ManageSessionResponse{Session: encoded}, nil
 }
 
+func (server *Server) ManageConversationLifecycle(
+	ctx context.Context,
+	request *controlplanev1.ManageConversationLifecycleRequest,
+) (*controlplanev1.ManageConversationLifecycleResponse, error) {
+	principal, err := authorization.Principal(
+		ctx,
+		controlplanev1.ControlPlaneService_ManageConversationLifecycle_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	changed, err := server.service.ManageConversationLifecycle(ctx, resource.ManageConversationLifecycleInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), ResourceID: request.GetResourceId(),
+		Kind:   trimEnum(request.GetKind().String(), "CONVERSATION_LIFECYCLE_KIND_"),
+		Action: trimEnum(request.GetAction().String(), "CONVERSATION_LIFECYCLE_ACTION_"),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	encoded, err := toProtoResource(changed)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.ManageConversationLifecycleResponse{Resource: encoded}, nil
+}
+
 func (server *Server) ManageMemoryRecord(
 	ctx context.Context,
 	request *controlplanev1.ManageMemoryRecordRequest,

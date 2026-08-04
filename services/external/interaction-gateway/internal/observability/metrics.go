@@ -8,11 +8,12 @@ import (
 )
 
 type Metrics struct {
-	httpRequests *prometheus.CounterVec
-	httpDuration *prometheus.HistogramVec
-	workerCycles *prometheus.CounterVec
-	inbound      *prometheus.CounterVec
-	deliveries   *prometheus.CounterVec
+	httpRequests    *prometheus.CounterVec
+	httpDuration    *prometheus.HistogramVec
+	workerCycles    *prometheus.CounterVec
+	inbound         *prometheus.CounterVec
+	deliveries      *prometheus.CounterVec
+	externalEffects *prometheus.CounterVec
 }
 
 func New(register func(...prometheus.Collector) error) (*Metrics, error) {
@@ -37,11 +38,28 @@ func New(register func(...prometheus.Collector) error) (*Metrics, error) {
 			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "deliveries_total",
 			Help: "Total number of durable Mattermost delivery outcomes.",
 		}, []string{"kind", "outcome"}),
+		externalEffects: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "external_effects_total",
+			Help: "Total number of confirmed external Mattermost effects.",
+		}, []string{"effect", "outcome"}),
 	}
-	if err := register(metrics.httpRequests, metrics.httpDuration, metrics.workerCycles, metrics.inbound, metrics.deliveries); err != nil {
+	if err := register(metrics.httpRequests, metrics.httpDuration, metrics.workerCycles, metrics.inbound, metrics.deliveries, metrics.externalEffects); err != nil {
 		return nil, err
 	}
 	return metrics, nil
+}
+
+func (metrics *Metrics) ObserveExternalEffect(effect, outcome string) {
+	metrics.externalEffects.WithLabelValues(normalizeEffect(effect), normalizeOutcome(outcome)).Inc()
+}
+
+func normalizeEffect(value string) string {
+	switch value {
+	case "upload_file", "create_post", "update_post":
+		return value
+	default:
+		return "unknown"
+	}
 }
 
 func (metrics *Metrics) ObserveHTTP(route, outcome string, started time.Time) {
@@ -73,7 +91,7 @@ func normalizeRoute(value string) string {
 
 func normalizeWorker(value string) string {
 	switch value {
-	case "websocket", "inbound", "delivery", "owner_gate", "expiry", "readiness":
+	case "websocket", "inbound", "delivery", "turn_delivery", "owner_gate", "expiry", "readiness":
 		return value
 	default:
 		return "unknown"
@@ -82,7 +100,8 @@ func normalizeWorker(value string) string {
 
 func normalizeInbound(value string) string {
 	switch value {
-	case "POST", "SLASH", "ACTION", "DIALOG", "REACTION":
+	case "POST", "SLASH", "ACTION", "DIALOG", "REACTION",
+		"CHANNEL_DELETE", "CHANNEL_RESTORE", "THREAD_DELETE", "THREAD_RESTORE":
 		return value
 	default:
 		return "unknown"

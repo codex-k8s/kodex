@@ -186,6 +186,8 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			return Loaded{}, errors.New("control-plane operation binding is ambiguous")
 		}
 		operations[candidate.OperationID] = authorityservice.Operation{
+			ProducerID:                   producer.ID,
+			CredentialPurpose:            producer.Credential,
 			FullMethod:                   candidate.FullMethod,
 			Permission:                   candidate.Permission,
 			ProjectRequired:              candidate.ProjectRequired,

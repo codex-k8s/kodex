@@ -1,3 +1,1 @@
-UPDATE interaction_gateway_owner_gate_claim_requests
-SET state = 'CLAIMED', owner_gate_id = $2::uuid, delivery_id = $3::uuid, updated_at = now()
-WHERE idempotency_key = $1 AND state = 'PENDING';
+SELECT interaction_gateway_bind_owner_gate_request($1::uuid, $2::uuid, $3::uuid);

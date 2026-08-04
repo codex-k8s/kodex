@@ -6,6 +6,9 @@ import "time"
 
 // ApplicationIdentity — результат точных mTLS- и OIDC-проверок, а не поле запроса.
 type ApplicationIdentity struct {
+	ProducerID                  string
+	CredentialPurpose           string
+	CredentialGeneration        uint64
 	ActorID                     string
 	OrganizationID              string
 	ProjectID                   string

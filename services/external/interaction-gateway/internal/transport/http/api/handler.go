@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	domainerrs "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/errs"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/gateway"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/readbackgrant"
 	generated "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -32,12 +34,13 @@ type Handler struct {
 	service        *domainservice.Service
 	config         Config
 	readbackSPIFFE map[string]struct{}
+	readbackGrant  *readbackgrant.Verifier
 }
 
-func New(service *domainservice.Service, config Config) (*Handler, error) {
+func New(service *domainservice.Service, readbackGrant *readbackgrant.Verifier, config Config) (*Handler, error) {
 	if service == nil || len(config.SlashToken) < 16 || config.MaximumBodyBytes < 1024 ||
 		config.MaximumBodyBytes > 1<<20 || !strings.HasPrefix(config.MattermostClientSPIFFE, "spiffe://") ||
-		len(config.ReadbackClientSPIFFEIDs) == 0 || len(config.ReadbackClientSPIFFEIDs) > 8 {
+		len(config.ReadbackClientSPIFFEIDs) == 0 || len(config.ReadbackClientSPIFFEIDs) > 8 || readbackGrant == nil {
 		return nil, errors.New("interaction HTTP handler configuration is invalid")
 	}
 	readback := make(map[string]struct{}, len(config.ReadbackClientSPIFFEIDs))
@@ -47,7 +50,7 @@ func New(service *domainservice.Service, config Config) (*Handler, error) {
 		}
 		readback[identity] = struct{}{}
 	}
-	return &Handler{service: service, config: config, readbackSPIFFE: readback}, nil
+	return &Handler{service: service, config: config, readbackSPIFFE: readback, readbackGrant: readbackGrant}, nil
 }
 
 func (handler *Handler) AcceptMattermostSlashCommand(response http.ResponseWriter, request *http.Request) {
@@ -185,9 +188,18 @@ func (handler *Handler) GetInteractionDelivery(response http.ResponseWriter, req
 		writeError(response, http.StatusForbidden, "workload identity is not allowed")
 		return
 	}
-	delivery, err := handler.service.GetDelivery(request.Context(), deliveryID.String())
+	claims, err := handler.readbackGrant.Verify(request.Context(), request.Header.Get("Authorization"))
+	if err != nil || claims.Readiness || claims.CallerSPIFFEID != identity || claims.DeliveryID != deliveryID.String() {
+		writeError(response, http.StatusForbidden, "delivery readback credential is not allowed")
+		return
+	}
+	delivery, err := handler.service.GetDeliveryScoped(request.Context(), claims.OrganizationID, claims.ProjectID, deliveryID.String())
 	if err != nil {
-		writeError(response, http.StatusNotFound, "interaction delivery not found")
+		if errors.Is(err, domainerrs.ErrNotFound) {
+			writeError(response, http.StatusNotFound, "interaction delivery not found")
+		} else {
+			writeError(response, http.StatusInternalServerError, "interaction delivery readback failed")
+		}
 		return
 	}
 	var payload map[string]any
@@ -200,7 +212,38 @@ func (handler *Handler) GetInteractionDelivery(response http.ResponseWriter, req
 		State: generated.DeliveryReadbackState(delivery.State), OrganizationId: uuid.MustParse(delivery.OrganizationID),
 		ProjectId: uuid.MustParse(delivery.ProjectID), ChannelId: delivery.ChannelID,
 		Payload: payload, PayloadSha256: delivery.PayloadSHA256, Attempts: int(delivery.Attempts),
-		CreatedAt: delivery.CreatedAt, UpdatedAt: delivery.UpdatedAt,
+		AckAttempts:    int(delivery.AckAttempts),
+		Attachments:    make([]generated.ArtifactBindingReadback, 0, len(delivery.Attachments)),
+		UploadReceipts: make([]generated.UploadReceiptReadback, 0, len(delivery.UploadReceipts)),
+		CreatedAt:      delivery.CreatedAt, UpdatedAt: delivery.UpdatedAt,
+	}
+	for _, binding := range delivery.Attachments {
+		artifactID, parseErr := uuid.Parse(binding.ArtifactID)
+		if parseErr != nil || binding.SizeBytes > math.MaxInt64 || binding.Version > math.MaxInt {
+			writeError(response, http.StatusInternalServerError, "delivery attachment readback is invalid")
+			return
+		}
+		attachment := generated.ArtifactBindingReadback{ArtifactId: artifactID,
+			Name: binding.Name, Path: binding.Path, StorageRef: binding.StorageRef,
+			SizeBytes: int64(binding.SizeBytes), MediaType: binding.MediaType, Sha256: binding.SHA256,
+			Provenance: binding.Provenance, ScanState: generated.CLEAN}
+		if binding.Version > 0 {
+			version := int(binding.Version)
+			attachment.Version = &version
+		}
+		view.Attachments = append(view.Attachments, attachment)
+	}
+	for _, receipt := range delivery.UploadReceipts {
+		artifactID, parseErr := uuid.Parse(receipt.ArtifactID)
+		if parseErr != nil || receipt.SizeBytes > math.MaxInt64 {
+			writeError(response, http.StatusInternalServerError, "delivery upload receipt readback is invalid")
+			return
+		}
+		view.UploadReceipts = append(view.UploadReceipts, generated.UploadReceiptReadback{
+			ArtifactId: artifactID, ProviderFileId: receipt.ProviderFileID,
+			ChannelId: receipt.ChannelID, Name: receipt.Name, SizeBytes: int64(receipt.SizeBytes),
+			MediaType: receipt.MediaType, Sha256: receipt.SHA256, CreatedAt: receipt.CreatedAt,
+		})
 	}
 	if delivery.SessionID != "" {
 		value := uuid.MustParse(delivery.SessionID)
@@ -223,6 +266,9 @@ func (handler *Handler) GetInteractionDelivery(response http.ResponseWriter, req
 	if delivery.ProviderPostID != "" {
 		view.ProviderPostId = &delivery.ProviderPostID
 		view.ProviderReceiptSha256 = &delivery.ProviderReceiptSHA256
+	}
+	if delivery.LastErrorCode != "" {
+		view.LastErrorCode = &delivery.LastErrorCode
 	}
 	writeJSON(response, http.StatusOK, view)
 }
@@ -269,7 +315,15 @@ func writeResult(response http.ResponseWriter, result domainservice.Result, err 
 	case errors.Is(err, domainerrs.ErrBusy), errors.Is(err, domainerrs.ErrUnavailable):
 		status = http.StatusServiceUnavailable
 	}
-	writeError(response, status, err.Error())
+	message := result.Message
+	var semantic interface{ ResponseMessage() string }
+	if message == "" && errors.As(err, &semantic) {
+		message = semantic.ResponseMessage()
+	}
+	if message == "" {
+		message = err.Error()
+	}
+	writeError(response, status, message)
 }
 
 func writeError(response http.ResponseWriter, status int, message string) {

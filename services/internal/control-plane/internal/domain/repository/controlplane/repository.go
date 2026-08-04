@@ -666,6 +666,7 @@ type Transaction interface {
 type Repository interface {
 	Transact(context.Context, Scope, func(Transaction) error) error
 	Get(context.Context, string, string, string, enum.Kind) (entity.Resource, error)
+	GetIncludingDeleted(context.Context, string, string, string, enum.Kind) (entity.Resource, error)
 	List(context.Context, query.ResourceFilter) ([]entity.Resource, error)
 	Search(context.Context, query.ResourceSearch) ([]entity.Resource, error)
 	ListEligibleProjects(context.Context, string, string, string, int) ([]entity.Resource, error)

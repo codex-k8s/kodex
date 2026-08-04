@@ -23,9 +23,12 @@ import (
 var migrations embed.FS
 
 type config struct {
-	DSNFile       string `env:"INTERACTION_GATEWAY_MIGRATION_POSTGRES_DSN_FILE,required"`
-	CAFile        string `env:"INTERACTION_GATEWAY_POSTGRES_CA_FILE,required"`
-	TLSServerName string `env:"INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME,required"`
+	DSNFile             string `env:"INTERACTION_GATEWAY_MIGRATION_POSTGRES_DSN_FILE,required"`
+	CAFile              string `env:"INTERACTION_GATEWAY_POSTGRES_CA_FILE,required"`
+	TLSServerName       string `env:"INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME,required"`
+	PrincipalGeneration int64  `env:"INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION,required"`
+	ContextKeyID        string `env:"INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_ID,required"`
+	ContextKeyFile      string `env:"INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_FILE,required"`
 }
 
 func main() {
@@ -53,7 +56,7 @@ func run(ctx context.Context, arguments []string) error {
 	parsed, err := pgx.ParseConfig(strings.TrimSpace(string(dsn)))
 	if err != nil || len(parsed.Fallbacks) != 0 || parsed.Host != value.TLSServerName ||
 		parsed.TLSConfig == nil || parsed.TLSConfig.ServerName != value.TLSServerName || parsed.TLSConfig.InsecureSkipVerify {
-		return errors.New("PostgreSQL migration DSN must use exact verify-full TLS")
+		return errors.New("postgresql migration DSN must use exact verify-full TLS")
 	}
 	caRaw, err := readFile(value.CAFile, 1<<20)
 	if err != nil {
@@ -75,7 +78,26 @@ func run(ctx context.Context, arguments []string) error {
 	}
 	switch arguments[1] {
 	case "expand", "up":
-		return goose.UpContext(ctx, database, "migrations")
+		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
+			return err
+		}
+		contextKey, err := readFile(value.ContextKeyFile, 128)
+		if err != nil || len(contextKey) < 32 || value.PrincipalGeneration <= 0 || value.ContextKeyID == "" {
+			return errors.New("postgresql runtime identity material is invalid")
+		}
+		if _, err := database.ExecContext(ctx,
+			"SELECT interaction_gateway_reconcile_runtime_identity($1, $2, $3::bytea)",
+			value.PrincipalGeneration, value.ContextKeyID, contextKey); err != nil {
+			return errors.New("reconcile PostgreSQL runtime identity")
+		}
+		var generation int64
+		var keyID string
+		if err := database.QueryRowContext(ctx,
+			"SELECT served_generation, context_key_id FROM interaction_gateway_runtime_credential_fence WHERE singleton",
+		).Scan(&generation, &keyID); err != nil || generation != value.PrincipalGeneration || keyID != value.ContextKeyID {
+			return errors.New("read back PostgreSQL runtime identity")
+		}
+		return nil
 	case "status":
 		return goose.StatusContext(ctx, database, "migrations")
 	case "version":

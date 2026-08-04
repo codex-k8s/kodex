@@ -42,19 +42,21 @@ type Authority interface {
 type Observer interface {
 	ObserveInbound(string, string)
 	ObserveDelivery(string, string)
+	ObserveExternalEffect(string, string)
 }
 
 type Config struct {
-	ActionCallbackURL  string
-	DialogCallbackURL  string
-	RetentionRef       string
-	MaximumPromptBytes int
-	MaximumFiles       int
-	MaximumAttempts    uint32
-	InboundLease       time.Duration
-	DeliveryLease      time.Duration
-	ScanPollInterval   time.Duration
-	RetryBase          time.Duration
+	ActionCallbackURL          string
+	DialogCallbackURL          string
+	RetentionRef               string
+	MaximumPromptBytes         int
+	MaximumFiles               int
+	MaximumAttempts            uint32
+	MaximumMattermostFileBytes int64
+	InboundLease               time.Duration
+	DeliveryLease              time.Duration
+	ScanPollInterval           time.Duration
+	RetryBase                  time.Duration
 }
 
 type Service struct {
@@ -86,6 +88,7 @@ func New(repository domainrepo.Repository, mattermost domainmattermost.Client, o
 		dialogCallback.RawQuery != "" || dialogCallback.Fragment != "" ||
 		config.MaximumPromptBytes < 1024 || config.MaximumPromptBytes > 1<<20 ||
 		config.MaximumFiles < 1 || config.MaximumFiles > 32 || config.MaximumAttempts < 1 || config.MaximumAttempts > 32 ||
+		config.MaximumMattermostFileBytes < 1<<20 || config.MaximumMattermostFileBytes > 256<<20 ||
 		config.InboundLease < 5*time.Second || config.InboundLease > 5*time.Minute ||
 		config.DeliveryLease < 5*time.Second || config.DeliveryLease > 5*time.Minute ||
 		config.ScanPollInterval < time.Second || config.ScanPollInterval > time.Minute ||
@@ -111,20 +114,58 @@ func (service *Service) HandleRaw(ctx context.Context, raw domainmattermost.RawE
 	defer func() { service.observeInbound(raw.Kind, result, resultErr) }()
 	boundary, verified, err := service.mattermost.ResolveInbound(ctx, raw)
 	if err != nil {
-		if verified.Verified && verified.Kind == "POST" && verified.Cursor > 0 {
-			if cursorErr := service.repository.AdvanceCursor(ctx, verified.ChannelID, verified.Cursor); cursorErr != nil {
+		if verified.Verified && verified.Kind == "POST" && verified.Cursor > 0 &&
+			boundary.OrganizationID != "" && boundary.ProjectID != "" {
+			if cursorErr := service.repository.AdvanceCursor(ctx, boundary, verified.ChannelID, verified.Cursor); cursorErr != nil {
 				return Result{}, cursorErr
 			}
 		}
 		return Result{}, domainerrs.ErrUnauthorized
 	}
+	if verified.Kind == "THREAD_RESTORE_CANDIDATE" {
+		sessionID, resolveErr := service.repository.ResolveThreadSession(ctx, boundary.OrganizationID,
+			boundary.ProjectID, verified.ChannelID, verified.RootPostID)
+		if resolveErr == nil {
+			pending, pendingErr := service.repository.HasDeletionPending(ctx, boundary.OrganizationID,
+				boundary.ProjectID, boundary.ChatID, sessionID)
+			if pendingErr != nil {
+				return Result{}, pendingErr
+			}
+			if pending {
+				verified.Kind = "THREAD_RESTORE"
+				verified.ProviderEventID = fmt.Sprintf("thread_restore:%s:%d", verified.RootPostID, verified.Revision)
+			}
+		}
+		if verified.Kind == "THREAD_RESTORE_CANDIDATE" {
+			verified.Kind = "POST"
+			boundary, verified, err = service.mattermost.ResolveInbound(ctx, verified)
+			if err != nil {
+				return Result{}, domainerrs.ErrUnauthorized
+			}
+		}
+	}
+	if isLifecycleKind(verified.Kind) {
+		return service.handleConversationLifecycle(ctx, verified, boundary)
+	}
 	if boundary.IgnoredBot || hasNoTrigger(verified.Text) {
 		if verified.Kind == "POST" && verified.ChannelID != "" && verified.Cursor > 0 {
-			if err := service.repository.AdvanceCursor(ctx, verified.ChannelID, verified.Cursor); err != nil {
+			if err := service.repository.AdvanceCursor(ctx, boundary, verified.ChannelID, verified.Cursor); err != nil {
 				return Result{}, err
 			}
 		}
 		return Result{Ignored: true}, domainerrs.ErrIgnored
+	}
+	sessionID := boundary.SessionID
+	threadRoot := verified.RootPostID
+	if threadRoot == "" {
+		threadRoot = verified.PostID
+	}
+	if sessionID == "" && threadRoot != "" {
+		sessionID, _ = service.repository.ResolveThreadSession(ctx, boundary.OrganizationID, boundary.ProjectID, verified.ChannelID, threadRoot)
+	}
+	pending, err := service.repository.HasDeletionPending(ctx, boundary.OrganizationID, boundary.ProjectID, boundary.ChatID, sessionID)
+	if err != nil || pending {
+		return Result{}, domainerrs.ErrConflict
 	}
 	inbound, err := buildInbound(verified, boundary)
 	if err != nil {
@@ -138,13 +179,13 @@ func (service *Service) HandleRaw(ctx context.Context, raw domainmattermost.RawE
 		return Result{}, domainerrs.ErrConflict
 	}
 	if inbound.Kind == enum.InboundPost && verified.Cursor > 0 {
-		if err := service.repository.AdvanceCursor(ctx, inbound.ChannelID, verified.Cursor); err != nil {
+		if err := service.repository.AdvanceCursor(ctx, boundary, inbound.ChannelID, verified.Cursor); err != nil {
 			return Result{}, err
 		}
 	}
 	switch disposition {
 	case domainrepo.InboundReplay:
-		return Result{Message: service.text(inbound.Locale, "command.accepted", map[string]any{"SessionID": stored.SessionID}), Replay: true}, nil
+		return service.replayInbound(stored)
 	case domainrepo.InboundBusy:
 		return Result{}, domainerrs.ErrBusy
 	}
@@ -179,20 +220,12 @@ func (service *Service) HandleDecision(ctx context.Context, raw domainmattermost
 		return Result{}, domainerrs.ErrConflict
 	}
 	if disposition == domainrepo.InboundReplay {
-		return Result{Message: service.text(inbound.Locale, "decision.recorded", nil), Replay: true}, nil
+		return service.replayInbound(stored)
 	}
 	if disposition == domainrepo.InboundBusy {
 		return Result{}, domainerrs.ErrBusy
 	}
-	delivery, err := service.repository.GetDelivery(ctx, deliveryID)
-	if err != nil || delivery.OwnerGate == nil || delivery.ProviderPostID != inbound.PostID ||
-		delivery.ChannelID != inbound.ChannelID || delivery.TeamID != inbound.TeamID ||
-		delivery.OwnerGate.RecipientActorID != inbound.ActorID ||
-		!service.authority.VerifyCallback(delivery, inbound.ActorID, callbackToken) {
-		_ = service.repository.RetryInbound(ctx, inbound.ID, "CALLBACK_LINEAGE_MISMATCH", service.now(), true)
-		return Result{}, domainerrs.ErrNotFound
-	}
-	return service.resolveDecision(ctx, stored, delivery)
+	return service.resumeOwnerCallback(ctx, stored)
 }
 
 func (service *Service) OpenDecisionDialog(ctx context.Context, raw domainmattermost.RawEvent,
@@ -201,24 +234,66 @@ func (service *Service) OpenDecisionDialog(ctx context.Context, raw domainmatter
 	if err != nil || boundary.IgnoredBot || triggerID == "" {
 		return Result{}, domainerrs.ErrUnauthorized
 	}
-	delivery, err := service.repository.GetDelivery(ctx, deliveryID)
-	if err != nil || delivery.OwnerGate == nil || delivery.ProviderPostID != verified.PostID ||
-		delivery.ChannelID != verified.ChannelID || delivery.OwnerGate.RecipientActorID != boundary.ActorID ||
-		!service.authority.VerifyCallback(delivery, boundary.ActorID, callbackToken) {
-		return Result{}, domainerrs.ErrNotFound
+	inbound, err := buildInbound(verified, boundary)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	inbound.Kind, inbound.DeliveryID, inbound.CallbackToken, inbound.TriggerID = enum.InboundAction, deliveryID, callbackToken, triggerID
+	inbound.DigestSHA256, err = eventDigest(inbound)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	stored, disposition, err := service.repository.ClaimInbound(ctx, inbound, service.config.InboundLease)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	if disposition == domainrepo.InboundReplay {
+		return service.replayInbound(stored)
+	}
+	if disposition == domainrepo.InboundBusy {
+		return Result{}, domainerrs.ErrBusy
+	}
+	return service.resumeOwnerCallback(ctx, stored)
+}
+
+func (service *Service) resumeOwnerCallback(ctx context.Context, inbound entity.InboundEvent) (Result, error) {
+	delivery, err := service.repository.GetDelivery(ctx, inbound.DeliveryID)
+	if err != nil || delivery.OwnerGate == nil || delivery.ProviderPostID != inbound.PostID ||
+		delivery.ChannelID != inbound.ChannelID || delivery.TeamID != inbound.TeamID ||
+		delivery.OwnerGate.RecipientActorID != inbound.ActorID ||
+		!service.authority.VerifyCallback(delivery, inbound.ActorID, inbound.CallbackToken) {
+		return Result{}, service.failInbound(ctx, inbound, "CALLBACK_LINEAGE_MISMATCH")
+	}
+	pending, pendingErr := service.repository.HasDeletionPending(ctx, inbound.OrganizationID, inbound.ProjectID,
+		inbound.ChatID, delivery.SessionID)
+	if pendingErr != nil {
+		return Result{}, pendingErr
+	}
+	if pending {
+		return Result{}, service.failInbound(ctx, inbound, "CONVERSATION_DELETION_PENDING")
+	}
+	if inbound.Action.Valid() {
+		return service.resolveDecision(ctx, inbound, delivery)
+	}
+	if inbound.TriggerID == "" {
+		return Result{}, service.failInbound(ctx, inbound, "DIALOG_TRIGGER_UNAVAILABLE")
 	}
 	stateRaw, err := internalrpcauth.CanonicalJSON(map[string]string{
-		"delivery_id": deliveryID, "callback_token": callbackToken, "post_id": delivery.ProviderPostID,
+		"delivery_id": delivery.ID, "callback_token": inbound.CallbackToken, "post_id": delivery.ProviderPostID,
 	})
 	if err != nil {
 		return Result{}, domainerrs.ErrConflict
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateRaw)
-	if err := service.mattermost.OpenDecisionDialog(ctx, delivery.BotStableKey, triggerID,
+	if err := service.mattermost.OpenDecisionDialog(ctx, delivery.BotStableKey, inbound.TriggerID,
 		service.config.DialogCallbackURL, state, delivery.Locale); err != nil {
-		return Result{}, domainerrs.ErrUnavailable
+		return Result{}, service.retryInbound(ctx, inbound, "MATTERMOST_DIALOG_FAILED")
 	}
-	return Result{Message: service.text(delivery.Locale, "decision.recorded", nil)}, nil
+	message := service.text(delivery.Locale, "decision.dialog_opened", nil)
+	if err := service.repository.CompleteInbound(ctx, inbound, delivery.SessionID, delivery.TurnID, message); err != nil {
+		return Result{}, err
+	}
+	return Result{Message: message}, nil
 }
 
 func (service *Service) ProcessWaiting(ctx context.Context) (bool, error) {
@@ -226,8 +301,116 @@ func (service *Service) ProcessWaiting(ctx context.Context) (bool, error) {
 	if err != nil || !ok {
 		return ok, err
 	}
-	_, err = service.processPrompt(ctx, inbound)
+	if inbound.Kind == enum.InboundChannelDelete || inbound.Kind == enum.InboundThreadDelete {
+		_, err = service.finalizeConversationCleanup(ctx, inbound)
+	} else if (inbound.Kind == enum.InboundAction || inbound.Kind == enum.InboundDialog) && inbound.DeliveryID != "" {
+		_, err = service.resumeOwnerCallback(ctx, inbound)
+	} else {
+		_, err = service.processPrompt(ctx, inbound)
+	}
 	return true, err
+}
+
+func (service *Service) handleConversationLifecycle(ctx context.Context, raw domainmattermost.RawEvent,
+	boundary entity.Boundary) (Result, error) {
+	inbound, err := buildInbound(raw, boundary)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	kind, action, resourceID := "CHANNEL", "DELETE", boundary.ChatID
+	if inbound.Kind == enum.InboundChannelRestore || inbound.Kind == enum.InboundThreadRestore {
+		action = "RESTORE"
+	}
+	if inbound.Kind == enum.InboundThreadDelete || inbound.Kind == enum.InboundThreadRestore {
+		kind = "THREAD"
+		inbound.SessionID, err = service.repository.ResolveThreadSession(ctx, boundary.OrganizationID, boundary.ProjectID,
+			raw.ChannelID, raw.RootPostID)
+		if err != nil {
+			return Result{}, domainerrs.ErrNotFound
+		}
+		resourceID = inbound.SessionID
+	}
+	inbound.LifecycleResourceID = resourceID
+	inbound.DigestSHA256, err = eventDigest(inbound)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	stored, disposition, err := service.repository.ClaimInbound(ctx, inbound, service.config.InboundLease)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	if disposition == domainrepo.InboundReplay {
+		return service.replayInbound(stored)
+	}
+	if disposition == domainrepo.InboundBusy {
+		return Result{}, domainerrs.ErrBusy
+	}
+	grant, err := service.authority.Sign(stored)
+	if err != nil {
+		return Result{}, service.retryInbound(ctx, stored, "AUTHORITY_SIGN_FAILED")
+	}
+	if err := service.control.ManageConversationLifecycle(ctx, grant,
+		stableID(stored.ID, "conversation-lifecycle:"+action), kind, resourceID, action); err != nil {
+		return Result{}, service.retryInbound(ctx, stored, "CONVERSATION_LIFECYCLE_FAILED")
+	}
+	messageID := "conversation.deletion_pending"
+	if action == "DELETE" {
+		stored.State, stored.NextAttemptAt = enum.InboundWaitingCleanup, service.now().Add(24*time.Hour)
+		stored.SemanticOutcome = "SUCCESS"
+		stored.ResponseMessage = service.text(stored.Locale, messageID, nil)
+		stored.NextAction = "RESTORE_BEFORE_CLEANUP"
+		if err := service.repository.SaveInboundProgress(ctx, stored); err != nil {
+			return Result{}, err
+		}
+		return Result{Message: stored.ResponseMessage}, nil
+	}
+	messageID = "conversation.restored"
+	if err := service.repository.CancelDeletion(ctx, stored.OrganizationID, stored.ProjectID,
+		mapLifecycleScope(kind, stored.ChatID), mapLifecycleScope(kind, stored.SessionID),
+		service.text(stored.Locale, "conversation.cleanup_cancelled", nil)); err != nil {
+		return Result{}, err
+	}
+	message := service.text(stored.Locale, messageID, nil)
+	if err := service.repository.CompleteInbound(ctx, stored, stored.SessionID, "", message); err != nil {
+		return Result{}, err
+	}
+	return Result{Message: message}, nil
+}
+
+func (service *Service) finalizeConversationCleanup(ctx context.Context, inbound entity.InboundEvent) (Result, error) {
+	kind := "CHANNEL"
+	if inbound.Kind == enum.InboundThreadDelete {
+		kind = "THREAD"
+	}
+	grant, err := service.authority.Sign(inbound)
+	if err != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "AUTHORITY_SIGN_FAILED")
+	}
+	if err := service.control.ManageConversationLifecycle(ctx, grant,
+		stableID(inbound.ID, "conversation-lifecycle:finalize"), kind, inbound.LifecycleResourceID, "FINALIZE"); err != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "CONVERSATION_CLEANUP_FAILED")
+	}
+	message := service.text(inbound.Locale, "conversation.deleted", nil)
+	if err := service.repository.CompleteInbound(ctx, inbound, inbound.SessionID, "", message); err != nil {
+		return Result{}, err
+	}
+	return Result{Message: message}, nil
+}
+
+func isLifecycleKind(kind string) bool {
+	switch enum.InboundKind(kind) {
+	case enum.InboundChannelDelete, enum.InboundChannelRestore, enum.InboundThreadDelete, enum.InboundThreadRestore:
+		return true
+	default:
+		return false
+	}
+}
+
+func mapLifecycleScope(kind, value string) string {
+	if (kind == "CHANNEL" && value != "") || (kind == "THREAD" && value != "") {
+		return value
+	}
+	return ""
 }
 
 func (service *Service) ProcessDelivery(ctx context.Context, instanceID string) (bool, error) {
@@ -245,18 +428,33 @@ func (service *Service) ProcessDelivery(ctx context.Context, instanceID string) 
 		err = service.acknowledgeDelivery(ctx, delivery)
 		if err != nil {
 			outcome = "retry"
-			if delivery.Attempts >= service.config.MaximumAttempts {
+			if delivery.AckAttempts >= service.config.MaximumAttempts {
 				outcome = "dead_letter"
 			}
 			return true, service.retryDelivery(ctx, delivery, "DOMAIN_ACKNOWLEDGEMENT_FAILED")
 		}
 		return true, nil
 	}
-	attachments := make(map[string][]byte, len(delivery.Attachments))
+	providerFileIDs := make([]string, 0, len(delivery.Attachments))
 	for _, binding := range delivery.Attachments {
 		if binding.ScanState != "CLEAN" {
 			outcome = "dead_letter"
 			return true, service.failDelivery(ctx, delivery, "ARTIFACT_NOT_CLEAN")
+		}
+		receipt, exists, receiptErr := service.repository.GetUploadReceipt(ctx, delivery, binding.ArtifactID)
+		if receiptErr != nil {
+			outcome = "failure"
+			return true, receiptErr
+		}
+		if exists {
+			if receipt.ChannelID != delivery.ChannelID || receipt.Name != binding.Name ||
+				receipt.SizeBytes != binding.SizeBytes || receipt.MediaType != binding.MediaType ||
+				receipt.SHA256 != binding.SHA256 {
+				outcome = "dead_letter"
+				return true, service.failDelivery(ctx, delivery, "UPLOAD_RECEIPT_MISMATCH")
+			}
+			providerFileIDs = append(providerFileIDs, receipt.ProviderFileID)
+			continue
 		}
 		raw, readErr := service.objects.Get(ctx, delivery.ProjectID, binding.StorageRef, binding.SizeBytes, binding.SHA256)
 		if readErr != nil {
@@ -266,27 +464,49 @@ func (service *Service) ProcessDelivery(ctx context.Context, instanceID string) 
 			}
 			return true, service.retryDelivery(ctx, delivery, "OBJECT_READ_FAILED")
 		}
-		attachments[binding.ArtifactID] = raw
+		providerFileID, uploadErr := service.mattermost.UploadFile(ctx, delivery, binding, raw)
+		if uploadErr != nil {
+			service.observer.ObserveExternalEffect("upload_file", "failure")
+			outcome = "retry"
+			return true, service.retryDelivery(ctx, delivery, "MATTERMOST_UPLOAD_FAILED")
+		}
+		service.observer.ObserveExternalEffect("upload_file", "success")
+		receipt = entity.UploadReceipt{DeliveryID: delivery.ID, ArtifactID: binding.ArtifactID,
+			ProviderFileID: providerFileID, ChannelID: delivery.ChannelID, Name: binding.Name,
+			SizeBytes: binding.SizeBytes, MediaType: binding.MediaType, SHA256: binding.SHA256}
+		if err := service.repository.SaveUploadReceipt(ctx, delivery, receipt); err != nil {
+			outcome = "failure"
+			return true, err
+		}
+		providerFileIDs = append(providerFileIDs, providerFileID)
 	}
-	published, err := service.mattermost.Publish(ctx, delivery, attachments)
+	published, err := service.mattermost.Publish(ctx, delivery, providerFileIDs)
+	effect := "create_post"
+	if delivery.UpdatePostID != "" {
+		effect = "update_post"
+	}
 	if err != nil {
+		service.observer.ObserveExternalEffect(effect, "failure")
 		outcome = "retry"
 		if delivery.Attempts >= service.config.MaximumAttempts {
 			outcome = "dead_letter"
 		}
 		return true, service.retryDelivery(ctx, delivery, "MATTERMOST_DELIVERY_FAILED")
 	}
-	if err := service.repository.MarkProviderAccepted(ctx, delivery.ID, delivery.Fence, delivery.LeaseToken,
+	service.observer.ObserveExternalEffect(effect, "success")
+	if err := service.repository.MarkProviderAccepted(ctx, delivery,
 		published.PostID, published.ReceiptSHA256, published.RootPostID); err != nil {
 		outcome = "failure"
 		return true, err
 	}
+	delivery.State = enum.DeliveryProviderAccepted
+	delivery.AckAttempts++
 	delivery.ProviderPostID, delivery.ProviderReceiptSHA256, delivery.RootPostID = published.PostID, published.ReceiptSHA256, published.RootPostID
 	delivery.State = enum.DeliveryProviderAccepted
 	err = service.acknowledgeDelivery(ctx, delivery)
 	if err != nil {
 		outcome = "retry"
-		if delivery.Attempts >= service.config.MaximumAttempts {
+		if delivery.AckAttempts >= service.config.MaximumAttempts {
 			outcome = "dead_letter"
 		}
 		return true, service.retryDelivery(ctx, delivery, "DOMAIN_ACKNOWLEDGEMENT_FAILED")
@@ -339,19 +559,31 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	if publishResult {
+	protectedURL := ""
+	if publishResult && resultObject.Size <= uint64(service.config.MaximumMattermostFileBytes) {
 		delivery.Attachments = []entity.ArtifactBinding{{
 			ArtifactID: stableID(claim.GateID, "result-delivery"),
 			Name:       safeName(resultObject.Name, 0), Path: "results/" + safeName(resultObject.Name, 0),
 			StorageRef: resultObject.Reference, SizeBytes: resultObject.Size, MediaType: resultObject.MediaType,
 			SHA256: resultObject.SHA256, Provenance: "control-plane-owner-gate:" + claim.GateID, ScanState: "CLEAN",
 		}}
+	} else if publishResult {
+		protectedURL, err = service.objects.ProtectedURL(ctx, claim.ProjectID, resultObject.Reference,
+			resultObject.Size, resultObject.SHA256, safeName(resultObject.Name, 0), 15*time.Minute)
+		if err != nil {
+			return true, err
+		}
 	}
 	token, err := service.authority.CallbackToken(delivery, claim.RecipientActorID)
 	if err != nil {
 		return true, err
 	}
 	payload := service.ownerGateCard(delivery, claim, token)
+	if protectedURL != "" {
+		payload["message"] = fmt.Sprintf("%s\n\n%s", payload["message"], service.text(delivery.Locale,
+			"card.artifact.protected_link", map[string]any{"URL": protectedURL, "Name": resultObject.Name,
+				"Size": resultObject.Size, "SHA256": resultObject.SHA256}))
+	}
 	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, payload)
 	if err != nil {
 		return true, err
@@ -367,11 +599,11 @@ func (service *Service) ExpireOwnerGate(ctx context.Context) error {
 }
 
 func (service *Service) CatchUp(ctx context.Context) error {
-	cursors, err := service.repository.LoadCursors(ctx, service.mattermost.ChannelIDs())
+	cursors, err := service.repository.LoadCursors(ctx, service.mattermost.ChannelBoundaries())
 	if err != nil {
 		return err
 	}
-	reactionPosts, err := service.repository.ListPendingReactionPosts(ctx, 1024)
+	reactionPosts, err := service.repository.ListPendingReactionPosts(ctx, service.mattermost.ChannelBoundaries(), 1024)
 	if err != nil {
 		return err
 	}
@@ -405,6 +637,41 @@ func (service *Service) GetDelivery(ctx context.Context, deliveryID string) (ent
 		return entity.Delivery{}, domainerrs.ErrNotFound
 	}
 	return delivery, nil
+}
+
+func (service *Service) GetDeliveryScoped(ctx context.Context, organizationID, projectID, deliveryID string) (entity.Delivery, error) {
+	if uuid.Validate(organizationID) != nil || uuid.Validate(projectID) != nil || uuid.Validate(deliveryID) != nil {
+		return entity.Delivery{}, domainerrs.ErrNotFound
+	}
+	delivery, err := service.repository.GetDeliveryScoped(ctx, organizationID, projectID, deliveryID)
+	if err != nil {
+		if errors.Is(err, domainrepo.ErrNotFound) {
+			return entity.Delivery{}, domainerrs.ErrNotFound
+		}
+		return entity.Delivery{}, err
+	}
+	return delivery, nil
+}
+
+func (service *Service) CheckInteraction(ctx context.Context) error {
+	boundary, err := service.mattermost.ReadinessBoundary()
+	if err != nil {
+		return err
+	}
+	inbound := entity.InboundEvent{ID: uuid.NewString(), ProviderEventID: "readiness:" + uuid.NewString(),
+		Kind: enum.InboundPost, Revision: 1, TeamID: boundary.TeamID, ChannelID: boundary.ChannelID,
+		UserID: boundary.BotStableKey, OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
+		ChatID: boundary.ChatID, ActorID: boundary.ActorID, RoleID: boundary.RoleID,
+		Locale: boundary.Locale, BotStableKey: boundary.BotStableKey, Text: "readiness"}
+	inbound.DigestSHA256, err = eventDigest(inbound)
+	if err != nil {
+		return err
+	}
+	grant, err := service.authority.Sign(inbound)
+	if err != nil {
+		return err
+	}
+	return service.control.CheckInteraction(ctx, grant, boundary.ProjectID)
 }
 
 func (service *Service) processPrompt(ctx context.Context, inbound entity.InboundEvent) (Result, error) {
@@ -521,10 +788,13 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 			return Result{}, service.retryInbound(ctx, inbound, "ARTIFACT_DELIVERY_ENQUEUE_FAILED")
 		}
 		inbound.State, inbound.NextAttemptAt = enum.InboundWaitingScan, service.now().Add(service.config.ScanPollInterval)
+		inbound.SemanticOutcome = "SUCCESS"
+		inbound.ResponseMessage = service.text(inbound.Locale, "command.waiting_scan", nil)
+		inbound.NextAction = "WAIT_FOR_SCAN"
 		if err := service.repository.SaveInboundProgress(ctx, inbound); err != nil {
 			return Result{}, err
 		}
-		return Result{Message: service.text(inbound.Locale, "command.waiting_scan", nil)}, nil
+		return Result{Message: inbound.ResponseMessage}, nil
 	}
 	sourceReference := "mattermost://" + inbound.TeamID + "/" + inbound.ChannelID + "/posts/" + inbound.PostID
 	if inbound.PostID == "" {
@@ -538,10 +808,120 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 	if err := service.enqueueRunCard(ctx, inbound, turn.ID); err != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "RUN_DELIVERY_ENQUEUE_FAILED")
 	}
-	if err := service.repository.CompleteInbound(ctx, inbound.ID, inbound.SessionID, turn.ID); err != nil {
+	if err := service.repository.SaveTurnWatch(ctx, inbound, turn.ID); err != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "TURN_WATCH_SAVE_FAILED")
+	}
+	message := service.text(inbound.Locale, "command.accepted", map[string]any{"SessionID": inbound.SessionID})
+	if err := service.repository.CompleteInbound(ctx, inbound, inbound.SessionID, turn.ID, message); err != nil {
 		return Result{}, err
 	}
-	return Result{Message: service.text(inbound.Locale, "command.accepted", map[string]any{"SessionID": inbound.SessionID})}, nil
+	return Result{Message: message}, nil
+}
+
+// ProcessTurnDelivery читает только авторитетную версию Turn и превращает её
+// в один fenced delivery effect. Gateway не выводит terminal outcome из
+// локального состояния EnqueueTurn.
+func (service *Service) ProcessTurnDelivery(ctx context.Context, instanceID string) (bool, error) {
+	leaseToken, err := randomToken()
+	if err != nil {
+		return false, err
+	}
+	watch, ok, err := service.repository.ClaimTurnWatch(ctx, instanceID, leaseToken, service.config.DeliveryLease)
+	if err != nil || !ok {
+		return ok, err
+	}
+	grant, err := service.authority.Sign(watch.Inbound)
+	if err != nil {
+		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
+			service.now().Add(service.config.RetryBase))
+	}
+	turn, err := service.control.GetTurn(ctx, grant, watch.TurnID)
+	if err != nil || turn.ID != watch.TurnID || turn.SessionID != watch.Inbound.SessionID ||
+		turn.Attempt == 0 || !validSHA256Text(turn.ImmutableInputSHA256) {
+		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
+			service.now().Add(service.config.RetryBase))
+	}
+	terminal := turn.State == "SUCCEEDED" || turn.State == "FAILED" || turn.State == "CANCELLED" || turn.State == "EXPIRED"
+	if turn.Version <= watch.LastVersion {
+		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, terminal,
+			service.now().Add(service.config.ScanPollInterval))
+	}
+	if watch.LastVersion > 0 {
+		predecessor, predecessorErr := service.repository.GetDelivery(ctx,
+			stableID(turn.ID, fmt.Sprintf("owner-turn-version:%d", watch.LastVersion)))
+		if predecessorErr != nil || predecessor.State != enum.DeliveryDelivered {
+			return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
+				service.now().Add(service.config.RetryBase))
+		}
+	}
+	runDelivery, err := service.repository.GetDelivery(ctx, stableID(watch.Inbound.ID, "card:"+string(enum.DeliveryRun)))
+	if err != nil || runDelivery.State != enum.DeliveryDelivered || runDelivery.ProviderPostID == "" {
+		return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
+			service.now().Add(service.config.RetryBase))
+	}
+	delivery := entity.Delivery{
+		ID: stableID(turn.ID, fmt.Sprintf("owner-turn-version:%d", turn.Version)), Kind: enum.DeliveryStatus,
+		State: enum.DeliveryPending, OrganizationID: watch.Inbound.OrganizationID, ProjectID: watch.Inbound.ProjectID,
+		SessionID: turn.SessionID, TurnID: turn.ID, Attempt: turn.Attempt,
+		ImmutableInputSHA256: turn.ImmutableInputSHA256, TeamID: watch.Inbound.TeamID,
+		ChannelID: watch.Inbound.ChannelID, RootPostID: watch.Inbound.RootPostID,
+		BotStableKey: watch.Inbound.BotStableKey, Locale: watch.Inbound.Locale,
+		UpdatePostID: runDelivery.ProviderPostID, CreatedAt: service.now(), UpdatedAt: service.now(),
+	}
+	messageID := "card.run.progress"
+	if terminal {
+		messageID = "card.run.terminal"
+		delivery.Kind = enum.DeliveryRun
+	}
+	card := map[string]any{"message": service.text(delivery.Locale, messageID, map[string]any{
+		"State": turn.State, "Outcome": turn.Outcome, "SessionID": turn.SessionID,
+		"TurnID": turn.ID, "Attempt": turn.Attempt, "InputSHA256": turn.ImmutableInputSHA256,
+	})}
+	if turn.ResultArtifactID != "" {
+		artifact, artifactErr := service.control.GetArtifact(ctx, grant, turn.ResultArtifactID,
+			turn.ResultArtifactVersion)
+		if artifactErr != nil || artifact.ID != turn.ResultArtifactID || artifact.Direction != "OUTPUT" ||
+			artifact.Version != turn.ResultArtifactVersion || artifact.SHA256 != turn.ResultArtifactSHA256 {
+			return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
+				service.now().Add(service.config.RetryBase))
+		}
+		if artifact.ScanState == "CLEAN" {
+			binding := entity.ArtifactBinding{ArtifactID: artifact.ID, Version: artifact.Version,
+				Name: safeName(artifact.Name, 0), Path: "results/" + safeName(artifact.Name, 0),
+				StorageRef: artifact.StorageRef, SizeBytes: artifact.SizeBytes, MediaType: artifact.MediaType,
+				SHA256: artifact.SHA256, Provenance: "control-plane-turn:" + turn.ID,
+				ScanState: artifact.ScanState}
+			if artifact.SizeBytes <= uint64(service.config.MaximumMattermostFileBytes) {
+				delivery.Attachments = []entity.ArtifactBinding{binding}
+			} else {
+				protected, linkErr := service.objects.ProtectedURL(ctx, delivery.ProjectID, artifact.StorageRef,
+					artifact.SizeBytes, artifact.SHA256, binding.Name, 15*time.Minute)
+				if linkErr != nil {
+					return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
+						service.now().Add(service.config.RetryBase))
+				}
+				card["message"] = fmt.Sprintf("%s\n\n%s", card["message"], service.text(delivery.Locale,
+					"card.artifact.protected_link", map[string]any{"URL": protected, "Name": binding.Name,
+						"Size": binding.SizeBytes, "SHA256": binding.SHA256}))
+			}
+		} else if terminal && (artifact.ScanState == "QUARANTINED" || artifact.ScanState == "FAILED") {
+			delivery.Kind = enum.DeliveryIncident
+			card["message"] = service.text(delivery.Locale, "card.incident.body", map[string]any{
+				"Code": "ARTIFACT_SCAN_REJECTED", "NextAction": service.text(delivery.Locale, "card.incident.next_action", nil)})
+		} else {
+			return true, service.repository.AdvanceTurnWatch(ctx, watch, watch.LastVersion, false,
+				service.now().Add(service.config.ScanPollInterval))
+		}
+	}
+	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, card)
+	if err != nil {
+		return true, err
+	}
+	if _, _, err := service.repository.EnqueueDelivery(ctx, delivery); err != nil {
+		return true, err
+	}
+	return true, service.repository.AdvanceTurnWatch(ctx, watch, turn.Version, terminal,
+		service.now().Add(service.config.ScanPollInterval))
 }
 
 func hasArtifactForFile(bindings []entity.ArtifactBinding, fileID string) bool {
@@ -601,7 +981,7 @@ func (service *Service) handleReaction(ctx context.Context, inbound entity.Inbou
 		return Result{}, domainerrs.ErrConflict
 	}
 	if disposition == domainrepo.InboundReplay {
-		return Result{Message: service.text(inbound.Locale, "decision.recorded", nil), Replay: true}, nil
+		return service.replayInbound(stored)
 	}
 	if disposition == domainrepo.InboundBusy {
 		return Result{}, domainerrs.ErrBusy
@@ -628,13 +1008,14 @@ func (service *Service) resolveDecision(ctx context.Context, inbound entity.Inbo
 		}
 		return Result{}, service.retryInbound(ctx, inbound, "OWNER_DECISION_FAILED")
 	}
-	if err := service.repository.MarkOwnerGateDecided(ctx, delivery.ID); err != nil {
+	if err := service.repository.MarkOwnerGateDecided(ctx, delivery); err != nil {
 		return Result{}, err
 	}
-	if err := service.repository.CompleteInbound(ctx, inbound.ID, delivery.SessionID, delivery.TurnID); err != nil {
+	message := service.text(inbound.Locale, "decision.recorded", nil)
+	if err := service.repository.CompleteInbound(ctx, inbound, delivery.SessionID, delivery.TurnID, message); err != nil {
 		return Result{}, err
 	}
-	return Result{Message: service.text(inbound.Locale, "decision.recorded", nil)}, nil
+	return Result{Message: message}, nil
 }
 
 func (service *Service) acknowledgeDelivery(ctx context.Context, delivery entity.Delivery) error {
@@ -649,7 +1030,7 @@ func (service *Service) acknowledgeDelivery(ctx context.Context, delivery entity
 			return err
 		}
 	}
-	return service.repository.CompleteDelivery(ctx, delivery.ID, delivery.Fence)
+	return service.repository.CompleteDelivery(ctx, delivery)
 }
 
 func (service *Service) ownerGateCard(delivery entity.Delivery, claim entity.OwnerGateClaim, token string) map[string]any {
@@ -713,34 +1094,70 @@ func (service *Service) retryInbound(ctx context.Context, inbound entity.Inbound
 	terminal := inbound.Attempts >= service.config.MaximumAttempts
 	next := service.now().Add(backoff(service.config.RetryBase, inbound.Attempts))
 	if terminal {
-		if err := service.enqueueInformational(ctx, inbound, enum.DeliveryIncident, "card.incident.body", map[string]any{"Code": code}); err != nil {
+		if err := service.enqueueInformational(ctx, inbound, enum.DeliveryIncident, "card.incident.body", map[string]any{
+			"Code": code, "NextAction": service.text(inbound.Locale, "card.incident.next_action", nil),
+		}); err != nil {
 			return err
 		}
 	}
-	if err := service.repository.RetryInbound(ctx, inbound.ID, code, next, terminal); err != nil {
+	message := ""
+	if terminal {
+		message = service.text(inbound.Locale, "command.failed", map[string]any{"Code": code})
+	}
+	if err := service.repository.RetryInbound(ctx, inbound, code, message, "RETRY_AFTER_RECOVERY", next, terminal); err != nil {
 		return err
+	}
+	if terminal {
+		return domainerrs.WithResponse(domainerrs.ErrUnavailable, message)
 	}
 	return domainerrs.ErrUnavailable
 }
 
 func (service *Service) failInbound(ctx context.Context, inbound entity.InboundEvent, code string) error {
-	if err := service.enqueueInformational(ctx, inbound, enum.DeliveryIncident, "card.incident.body", map[string]any{"Code": code}); err != nil {
+	if err := service.enqueueInformational(ctx, inbound, enum.DeliveryIncident, "card.incident.body", map[string]any{
+		"Code": code, "NextAction": service.text(inbound.Locale, "card.incident.next_action", nil),
+	}); err != nil {
 		return err
 	}
-	if err := service.repository.RetryInbound(ctx, inbound.ID, code, service.now(), true); err != nil {
+	message := service.text(inbound.Locale, "command.failed", map[string]any{"Code": code})
+	if err := service.repository.RetryInbound(ctx, inbound, code,
+		message,
+		"REVIEW_INCIDENT", service.now(), true); err != nil {
 		return err
 	}
-	return domainerrs.ErrConflict
+	return domainerrs.WithResponse(domainerrs.ErrConflict, message)
 }
 
 func (service *Service) retryDelivery(ctx context.Context, delivery entity.Delivery, code string) error {
-	terminal := delivery.Attempts >= service.config.MaximumAttempts
-	return service.repository.RetryDelivery(ctx, delivery.ID, delivery.Fence, code,
-		service.now().Add(backoff(service.config.RetryBase, delivery.Attempts)), terminal)
+	attempt := delivery.Attempts
+	if delivery.State == enum.DeliveryProviderAccepted {
+		attempt = delivery.AckAttempts
+	}
+	terminal := attempt >= service.config.MaximumAttempts
+	return service.repository.RetryDelivery(ctx, delivery, code,
+		service.now().Add(backoff(service.config.RetryBase, attempt)), terminal)
 }
 
 func (service *Service) failDelivery(ctx context.Context, delivery entity.Delivery, code string) error {
-	return service.repository.RetryDelivery(ctx, delivery.ID, delivery.Fence, code, service.now(), true)
+	return service.repository.RetryDelivery(ctx, delivery, code, service.now(), true)
+}
+
+func (service *Service) replayInbound(inbound entity.InboundEvent) (Result, error) {
+	result := Result{Message: inbound.ResponseMessage, Replay: true}
+	switch inbound.SemanticOutcome {
+	case "SUCCESS":
+		return result, nil
+	case "IGNORED":
+		result.Ignored = true
+		return result, domainerrs.ErrIgnored
+	case "ERROR":
+		if inbound.NextAction == "RETRY_AFTER_RECOVERY" {
+			return result, domainerrs.ErrUnavailable
+		}
+		return result, domainerrs.ErrConflict
+	default:
+		return Result{}, domainerrs.ErrConflict
+	}
 }
 
 func (service *Service) text(locale, messageID string, data map[string]any) string {

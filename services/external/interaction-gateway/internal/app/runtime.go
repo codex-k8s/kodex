@@ -29,7 +29,7 @@ func openPostgres(ctx context.Context, config GatewayConfig) (*pgxpool.Pool, err
 	if err != nil || len(parsed.ConnConfig.Fallbacks) != 0 || parsed.ConnConfig.Host != config.PostgresTLSServerName ||
 		parsed.ConnConfig.TLSConfig == nil || parsed.ConnConfig.TLSConfig.ServerName != config.PostgresTLSServerName ||
 		parsed.ConnConfig.TLSConfig.InsecureSkipVerify {
-		return nil, errors.New("PostgreSQL DSN must use exact verify-full TLS")
+		return nil, errors.New("postgresql DSN must use exact verify-full TLS")
 	}
 	roots, err := loadCertPool(config.PostgresCAFile)
 	if err != nil {
@@ -52,7 +52,7 @@ func openPostgres(ctx context.Context, config GatewayConfig) (*pgxpool.Pool, err
 		"SELECT session_user::text, pg_has_role(session_user, 'interaction_gateway_runtime', 'member')",
 	).Scan(&sessionUser, &runtimeMember); err != nil || sessionUser != config.PostgresExpectedUser || !runtimeMember {
 		pool.Close()
-		return nil, errors.New("PostgreSQL runtime identity readback failed")
+		return nil, errors.New("postgresql runtime identity readback failed")
 	}
 	return pool, nil
 }

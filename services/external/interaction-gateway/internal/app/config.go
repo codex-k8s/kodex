@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,46 +20,55 @@ type Config struct {
 }
 
 type GatewayConfig struct {
-	HTTPListen              string        `env:"HTTP_LISTEN" envDefault:":8443"`
-	TechnicalListen         string        `env:"TECHNICAL_LISTEN" envDefault:":9090"`
-	TLSCertificateFile      string        `env:"TLS_CERTIFICATE_FILE,required"`
-	TLSPrivateKeyFile       string        `env:"TLS_PRIVATE_KEY_FILE,required"`
-	TLSClientCAFile         string        `env:"TLS_CLIENT_CA_FILE,required"`
-	MattermostClientSPIFFE  string        `env:"MATTERMOST_CLIENT_SPIFFE_ID,required"`
-	ReadbackClientSPIFFEIDs []string      `env:"READBACK_CLIENT_SPIFFE_IDS,required" envSeparator:","`
-	SlashTokenFile          string        `env:"SLASH_TOKEN_FILE,required"`
-	PostgresDSNFile         string        `env:"POSTGRES_DSN_FILE,required"`
-	PostgresCAFile          string        `env:"POSTGRES_CA_FILE,required"`
-	PostgresTLSServerName   string        `env:"POSTGRES_TLS_SERVER_NAME,required"`
-	PostgresExpectedUser    string        `env:"POSTGRES_EXPECTED_SESSION_USER,required"`
-	PostgresMaxConnections  int32         `env:"POSTGRES_MAX_CONNECTIONS" envDefault:"16"`
-	DeliveryKeyFile         string        `env:"DELIVERY_KEY_FILE,required"`
-	EventIssuer             string        `env:"EVENT_ISSUER,required"`
-	EventAudience           string        `env:"EVENT_AUDIENCE,required"`
-	EventPrivateJWKFile     string        `env:"EVENT_PRIVATE_JWK_FILE,required"`
-	EventGeneration         uint64        `env:"EVENT_GENERATION" envDefault:"1"`
-	EventTTL                time.Duration `env:"EVENT_TTL" envDefault:"2m"`
-	CallbackKeyFile         string        `env:"CALLBACK_KEY_FILE,required"`
-	ActionCallbackURL       string        `env:"ACTION_CALLBACK_URL,required"`
-	DialogCallbackURL       string        `env:"DIALOG_CALLBACK_URL,required"`
-	RetentionRef            string        `env:"RETENTION_REF,required"`
-	InstanceID              string        `env:"INSTANCE_ID,required"`
-	MaximumBodyBytes        int64         `env:"MAXIMUM_BODY_BYTES" envDefault:"1048576"`
-	MaximumPromptBytes      int           `env:"MAXIMUM_PROMPT_BYTES" envDefault:"262144"`
-	MaximumFiles            int           `env:"MAXIMUM_FILES" envDefault:"16"`
-	MaximumAttempts         uint32        `env:"MAXIMUM_ATTEMPTS" envDefault:"8"`
-	MaximumConnections      int           `env:"MAXIMUM_CONNECTIONS" envDefault:"128"`
-	InboundLease            time.Duration `env:"INBOUND_LEASE" envDefault:"30s"`
-	DeliveryLease           time.Duration `env:"DELIVERY_LEASE" envDefault:"30s"`
-	ScanPollInterval        time.Duration `env:"SCAN_POLL_INTERVAL" envDefault:"5s"`
-	RetryBase               time.Duration `env:"RETRY_BASE" envDefault:"2s"`
-	WorkerInterval          time.Duration `env:"WORKER_INTERVAL" envDefault:"500ms"`
-	OwnerGateInterval       time.Duration `env:"OWNER_GATE_INTERVAL" envDefault:"2s"`
-	ExpiryInterval          time.Duration `env:"EXPIRY_INTERVAL" envDefault:"30s"`
-	ReadinessInterval       time.Duration `env:"READINESS_INTERVAL" envDefault:"10s"`
-	OperationTimeout        time.Duration `env:"OPERATION_TIMEOUT" envDefault:"8s"`
-	StartupTimeout          time.Duration `env:"STARTUP_TIMEOUT" envDefault:"30s"`
-	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	HTTPListen                  string        `env:"HTTP_LISTEN" envDefault:":8443"`
+	TechnicalListen             string        `env:"TECHNICAL_LISTEN" envDefault:":9090"`
+	TLSCertificateFile          string        `env:"TLS_CERTIFICATE_FILE,required"`
+	TLSPrivateKeyFile           string        `env:"TLS_PRIVATE_KEY_FILE,required"`
+	TLSClientCAFile             string        `env:"TLS_CLIENT_CA_FILE,required"`
+	MattermostClientSPIFFE      string        `env:"MATTERMOST_CLIENT_SPIFFE_ID,required"`
+	ReadbackClientSPIFFEIDs     []string      `env:"READBACK_CLIENT_SPIFFE_IDS,required" envSeparator:","`
+	SlashTokenFile              string        `env:"SLASH_TOKEN_FILE,required"`
+	PostgresDSNFile             string        `env:"POSTGRES_DSN_FILE,required"`
+	PostgresCAFile              string        `env:"POSTGRES_CA_FILE,required"`
+	PostgresTLSServerName       string        `env:"POSTGRES_TLS_SERVER_NAME,required"`
+	PostgresExpectedUser        string        `env:"POSTGRES_EXPECTED_SESSION_USER,required"`
+	PostgresPrincipalGeneration uint64        `env:"POSTGRES_PRINCIPAL_GENERATION,required"`
+	PostgresContextKeyID        string        `env:"POSTGRES_CONTEXT_KEY_ID,required"`
+	PostgresContextKeyFile      string        `env:"POSTGRES_CONTEXT_KEY_FILE,required"`
+	PostgresContextTTL          time.Duration `env:"POSTGRES_CONTEXT_TTL" envDefault:"5s"`
+	PostgresMaxConnections      int32         `env:"POSTGRES_MAX_CONNECTIONS" envDefault:"16"`
+	DeliveryKeyFile             string        `env:"DELIVERY_KEY_FILE,required"`
+	EventIssuer                 string        `env:"EVENT_ISSUER,required"`
+	EventAudience               string        `env:"EVENT_AUDIENCE,required"`
+	EventPrivateJWKFile         string        `env:"EVENT_PRIVATE_JWK_FILE,required"`
+	EventGeneration             uint64        `env:"EVENT_GENERATION,required"`
+	EventTTL                    time.Duration `env:"EVENT_TTL" envDefault:"2m"`
+	CallbackKeyFile             string        `env:"CALLBACK_KEY_FILE,required"`
+	ReadbackIssuer              string        `env:"READBACK_ISSUER,required"`
+	ReadbackAudience            string        `env:"READBACK_AUDIENCE,required"`
+	ReadbackPublicJWKFile       string        `env:"READBACK_PUBLIC_JWK_FILE,required"`
+	ReadbackReadinessGrantFile  string        `env:"READBACK_READINESS_GRANT_FILE,required"`
+	ReadbackGeneration          uint64        `env:"READBACK_GENERATION,required"`
+	ActionCallbackURL           string        `env:"ACTION_CALLBACK_URL,required"`
+	DialogCallbackURL           string        `env:"DIALOG_CALLBACK_URL,required"`
+	RetentionRef                string        `env:"RETENTION_REF,required"`
+	InstanceID                  string        `env:"INSTANCE_ID,required"`
+	MaximumBodyBytes            int64         `env:"MAXIMUM_BODY_BYTES" envDefault:"1048576"`
+	MaximumPromptBytes          int           `env:"MAXIMUM_PROMPT_BYTES" envDefault:"262144"`
+	MaximumFiles                int           `env:"MAXIMUM_FILES" envDefault:"16"`
+	MaximumAttempts             uint32        `env:"MAXIMUM_ATTEMPTS" envDefault:"8"`
+	MaximumConnections          int           `env:"MAXIMUM_CONNECTIONS" envDefault:"128"`
+	InboundLease                time.Duration `env:"INBOUND_LEASE" envDefault:"30s"`
+	DeliveryLease               time.Duration `env:"DELIVERY_LEASE" envDefault:"30s"`
+	ScanPollInterval            time.Duration `env:"SCAN_POLL_INTERVAL" envDefault:"5s"`
+	RetryBase                   time.Duration `env:"RETRY_BASE" envDefault:"2s"`
+	WorkerInterval              time.Duration `env:"WORKER_INTERVAL" envDefault:"500ms"`
+	OwnerGateInterval           time.Duration `env:"OWNER_GATE_INTERVAL" envDefault:"2s"`
+	ExpiryInterval              time.Duration `env:"EXPIRY_INTERVAL" envDefault:"30s"`
+	ReadinessInterval           time.Duration `env:"READINESS_INTERVAL" envDefault:"10s"`
+	OperationTimeout            time.Duration `env:"OPERATION_TIMEOUT" envDefault:"8s"`
+	StartupTimeout              time.Duration `env:"STARTUP_TIMEOUT" envDefault:"30s"`
+	ShutdownTimeout             time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
 }
 
 type MattermostConfig struct {
@@ -74,17 +84,18 @@ type MattermostConfig struct {
 }
 
 type ObjectConfig struct {
-	Endpoint              string        `env:"ENDPOINT,required"`
-	TLSServerName         string        `env:"TLS_SERVER_NAME,required"`
-	CAFile                string        `env:"CA_FILE,required"`
-	ClientCertificateFile string        `env:"CLIENT_CERTIFICATE_FILE,required"`
-	ClientPrivateKeyFile  string        `env:"CLIENT_PRIVATE_KEY_FILE,required"`
-	AccessKeyFile         string        `env:"ACCESS_KEY_FILE,required"`
-	SecretKeyFile         string        `env:"SECRET_KEY_FILE,required"`
-	SessionTokenFile      string        `env:"SESSION_TOKEN_FILE"`
-	Bucket                string        `env:"BUCKET,required"`
-	MaximumObjectBytes    int64         `env:"MAXIMUM_OBJECT_BYTES" envDefault:"268435456"`
-	Timeout               time.Duration `env:"TIMEOUT" envDefault:"15s"`
+	Endpoint               string        `env:"ENDPOINT,required"`
+	PublicDownloadEndpoint string        `env:"PUBLIC_DOWNLOAD_ENDPOINT,required"`
+	TLSServerName          string        `env:"TLS_SERVER_NAME,required"`
+	CAFile                 string        `env:"CA_FILE,required"`
+	ClientCertificateFile  string        `env:"CLIENT_CERTIFICATE_FILE,required"`
+	ClientPrivateKeyFile   string        `env:"CLIENT_PRIVATE_KEY_FILE,required"`
+	AccessKeyFile          string        `env:"ACCESS_KEY_FILE,required"`
+	SecretKeyFile          string        `env:"SECRET_KEY_FILE,required"`
+	SessionTokenFile       string        `env:"SESSION_TOKEN_FILE"`
+	Bucket                 string        `env:"BUCKET,required"`
+	MaximumObjectBytes     int64         `env:"MAXIMUM_OBJECT_BYTES" envDefault:"268435456"`
+	Timeout                time.Duration `env:"TIMEOUT" envDefault:"15s"`
 }
 
 type ControlConfig struct {
@@ -124,7 +135,9 @@ func (config Config) validate() error {
 	for _, path := range []string{
 		gateway.TLSCertificateFile, gateway.TLSPrivateKeyFile, gateway.TLSClientCAFile,
 		gateway.SlashTokenFile, gateway.PostgresDSNFile, gateway.PostgresCAFile,
+		gateway.PostgresContextKeyFile,
 		gateway.DeliveryKeyFile, gateway.EventPrivateJWKFile, gateway.CallbackKeyFile,
+		gateway.ReadbackPublicJWKFile, gateway.ReadbackReadinessGrantFile,
 		config.Mattermost.CAFile, config.Mattermost.ClientCertificateFile,
 		config.Mattermost.ClientPrivateKeyFile, config.Mattermost.MappingManifestFile,
 		config.Object.CAFile, config.Object.ClientCertificateFile, config.Object.ClientPrivateKeyFile,
@@ -140,21 +153,25 @@ func (config Config) validate() error {
 		return errors.New("interaction gateway session token path is invalid")
 	}
 	for _, raw := range []string{gateway.ActionCallbackURL, gateway.DialogCallbackURL,
-		config.Mattermost.SiteURL, config.Object.Endpoint} {
+		config.Mattermost.SiteURL, config.Object.Endpoint, config.Object.PublicDownloadEndpoint} {
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 			return errors.New("interaction gateway HTTPS URL is invalid")
 		}
 	}
+	expectedPostgresUser := "interaction_gateway_runtime_g" + strconv.FormatUint(gateway.PostgresPrincipalGeneration, 10)
 	if !strings.HasPrefix(gateway.MattermostClientSPIFFE, "spiffe://") ||
 		len(gateway.ReadbackClientSPIFFEIDs) == 0 || len(gateway.ReadbackClientSPIFFEIDs) > 8 ||
 		gateway.InstanceID == "" || gateway.RetentionRef == "" || gateway.EventIssuer == "" || gateway.EventAudience == "" ||
-		gateway.PostgresExpectedUser != "interaction_gateway_runtime_g1" ||
+		gateway.PostgresPrincipalGeneration == 0 || gateway.PostgresExpectedUser != expectedPostgresUser ||
+		gateway.PostgresContextKeyID == "" ||
+		gateway.PostgresContextTTL < time.Second || gateway.PostgresContextTTL > 10*time.Second ||
 		gateway.PostgresMaxConnections < 2 || gateway.PostgresMaxConnections > 64 ||
 		gateway.MaximumConnections < 16 || gateway.MaximumConnections > 1024 ||
 		gateway.WorkerInterval < 50*time.Millisecond || gateway.OwnerGateInterval < 100*time.Millisecond ||
 		gateway.ExpiryInterval < time.Second || gateway.ReadinessInterval < time.Second ||
 		gateway.OperationTimeout < time.Second || gateway.OperationTimeout > time.Minute ||
+		gateway.InboundLease <= gateway.OperationTimeout || gateway.DeliveryLease <= gateway.OperationTimeout ||
 		gateway.StartupTimeout < 5*time.Second || gateway.StartupTimeout > 2*time.Minute ||
 		gateway.ShutdownTimeout < time.Second || gateway.ShutdownTimeout > time.Minute {
 		return errors.New("interaction gateway bounded configuration is invalid")

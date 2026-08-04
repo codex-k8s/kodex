@@ -32,6 +32,22 @@ func (client *Client) Check(ctx context.Context) error {
 	return client.client.Check(bounded)
 }
 
+func (client *Client) CheckInteraction(ctx context.Context, grant, projectID string) error {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return err
+	}
+	response, err := client.client.ControlPlane.GetResource(protected, &controlplanev1.GetResourceRequest{
+		ResourceId: projectID, ExpectedKind: controlplanev1.ResourceKind_RESOURCE_KIND_PROJECT,
+	})
+	if err != nil || response.GetResource() == nil || response.GetResource().GetId() != projectID {
+		return errors.New("control-plane Mattermost event working path is not ready")
+	}
+	return nil
+}
+
 func (client *Client) RegisterArtifact(ctx context.Context, grant string, input domaincontrol.ArtifactInput) (domaincontrol.Artifact, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
@@ -51,7 +67,7 @@ func (client *Client) RegisterArtifact(ctx context.Context, grant string, input 
 		return domaincontrol.Artifact{}, errors.New("register control-plane artifact")
 	}
 	resource := response.GetArtifact()
-	return domaincontrol.Artifact{ID: resource.GetId(), Version: resource.GetVersion(), ScanState: scanState(resource)}, nil
+	return projectArtifact(resource), nil
 }
 
 func (client *Client) GetArtifact(ctx context.Context, grant, artifactID string, expectedVersion uint64) (domaincontrol.Artifact, error) {
@@ -69,7 +85,61 @@ func (client *Client) GetArtifact(ctx context.Context, grant, artifactID string,
 		return domaincontrol.Artifact{}, errors.New("read control-plane artifact")
 	}
 	resource := response.GetResource()
-	return domaincontrol.Artifact{ID: resource.GetId(), Version: resource.GetVersion(), ScanState: scanState(resource)}, nil
+	return projectArtifact(resource), nil
+}
+
+func (client *Client) GetTurn(ctx context.Context, grant, turnID string) (domaincontrol.Turn, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return domaincontrol.Turn{}, err
+	}
+	response, err := client.client.ControlPlane.GetResource(protected, &controlplanev1.GetResourceRequest{
+		ResourceId: turnID, ExpectedKind: controlplanev1.ResourceKind_RESOURCE_KIND_TURN,
+	})
+	resource := response.GetResource()
+	if err != nil || resource == nil || resource.GetSpec().GetTurn() == nil {
+		return domaincontrol.Turn{}, errors.New("read control-plane turn")
+	}
+	spec := resource.GetSpec().GetTurn()
+	return domaincontrol.Turn{ID: resource.GetId(), Version: resource.GetVersion(),
+		State:     stringWithoutPrefix(resource.GetState().String(), "RESOURCE_STATE_"),
+		SessionID: spec.GetSessionId(), Attempt: spec.GetAttempt(), Outcome: spec.GetOutcome(),
+		ResultArtifactID: spec.GetResultArtifactId(), ResultArtifactVersion: spec.GetResultArtifactVersion(),
+		ResultArtifactSHA256: spec.GetResultArtifactSha256(), ImmutableInputSHA256: spec.GetEffectiveInputSha256()}, nil
+}
+
+func (client *Client) ManageConversationLifecycle(ctx context.Context, grant, idempotencyKey, kind, resourceID, action string) error {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return err
+	}
+	kindValue := controlplanev1.ConversationLifecycleKind_CONVERSATION_LIFECYCLE_KIND_CHANNEL
+	if kind == "THREAD" {
+		kindValue = controlplanev1.ConversationLifecycleKind_CONVERSATION_LIFECYCLE_KIND_THREAD
+	} else if kind != "CHANNEL" {
+		return errors.New("conversation lifecycle kind is invalid")
+	}
+	actionValue := controlplanev1.ConversationLifecycleAction_CONVERSATION_LIFECYCLE_ACTION_DELETE
+	switch action {
+	case "RESTORE":
+		actionValue = controlplanev1.ConversationLifecycleAction_CONVERSATION_LIFECYCLE_ACTION_RESTORE
+	case "FINALIZE":
+		actionValue = controlplanev1.ConversationLifecycleAction_CONVERSATION_LIFECYCLE_ACTION_FINALIZE
+	case "DELETE":
+	default:
+		return errors.New("conversation lifecycle action is invalid")
+	}
+	response, err := client.client.ControlPlane.ManageConversationLifecycle(protected,
+		&controlplanev1.ManageConversationLifecycleRequest{IdempotencyKey: idempotencyKey,
+			Kind: kindValue, Action: actionValue, ResourceId: resourceID})
+	if err != nil || response.GetResource() == nil || response.GetResource().GetId() != resourceID {
+		return errors.New("manage control-plane conversation lifecycle")
+	}
+	return nil
 }
 
 func (client *Client) CreateSession(ctx context.Context, grant, idempotencyKey, name, roleID, conversationID string) (domaincontrol.Session, error) {
@@ -214,6 +284,16 @@ func scanState(resource *controlplanev1.Resource) string {
 		return ""
 	}
 	return stringWithoutPrefix(resource.GetSpec().GetArtifact().GetScanStatus().String(), "ARTIFACT_SCAN_STATE_")
+}
+
+func projectArtifact(resource *controlplanev1.Resource) domaincontrol.Artifact {
+	if resource == nil || resource.GetSpec().GetArtifact() == nil {
+		return domaincontrol.Artifact{}
+	}
+	spec := resource.GetSpec().GetArtifact()
+	return domaincontrol.Artifact{ID: resource.GetId(), Version: resource.GetVersion(), Name: resource.GetName(),
+		ScanState: scanState(resource), Direction: spec.GetDirection(),
+		StorageRef: spec.GetStorageRef(), SizeBytes: spec.GetSizeBytes(), MediaType: spec.GetMediaType(), SHA256: spec.GetSha256()}
 }
 
 func ownerDecision(value string) (controlplanev1.OwnerGateDecision, bool) {

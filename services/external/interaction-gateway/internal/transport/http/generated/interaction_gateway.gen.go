@@ -16,8 +16,24 @@ import (
 )
 
 const (
-	WorkloadMTLSScopes workloadMTLSContextKey = "workloadMTLS.Scopes"
+	DeliveryReadbackBearerScopes deliveryReadbackBearerContextKey = "deliveryReadbackBearer.Scopes"
+	WorkloadMTLSScopes           workloadMTLSContextKey           = "workloadMTLS.Scopes"
 )
+
+// Defines values for ArtifactBindingReadbackScanState.
+const (
+	CLEAN ArtifactBindingReadbackScanState = "CLEAN"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactBindingReadbackScanState enum.
+func (e ArtifactBindingReadbackScanState) Valid() bool {
+	switch e {
+	case CLEAN:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for CallbackContextAction.
 const (
@@ -159,6 +175,23 @@ type ActionCallback struct {
 	UserName  *string         `json:"user_name,omitempty"`
 }
 
+// ArtifactBindingReadback defines model for ArtifactBindingReadback.
+type ArtifactBindingReadback struct {
+	ArtifactId openapi_types.UUID               `json:"artifact_id"`
+	MediaType  string                           `json:"media_type"`
+	Name       string                           `json:"name"`
+	Path       string                           `json:"path"`
+	Provenance string                           `json:"provenance"`
+	ScanState  ArtifactBindingReadbackScanState `json:"scan_state"`
+	Sha256     string                           `json:"sha256"`
+	SizeBytes  int64                            `json:"size_bytes"`
+	StorageRef string                           `json:"storage_ref"`
+	Version    *int                             `json:"version,omitempty"`
+}
+
+// ArtifactBindingReadbackScanState defines model for ArtifactBindingReadback.ScanState.
+type ArtifactBindingReadbackScanState string
+
 // CallbackContext defines model for CallbackContext.
 type CallbackContext struct {
 	Action        CallbackContextAction `json:"action"`
@@ -172,24 +205,28 @@ type CallbackContextAction string
 
 // DeliveryReadback defines model for DeliveryReadback.
 type DeliveryReadback struct {
-	Attempt               *int                   `json:"attempt,omitempty"`
-	Attempts              int                    `json:"attempts"`
-	ChannelId             string                 `json:"channel_id"`
-	CreatedAt             time.Time              `json:"created_at"`
-	DeliveryId            openapi_types.UUID     `json:"delivery_id"`
-	InputSha256           *string                `json:"input_sha256,omitempty"`
-	Kind                  DeliveryReadbackKind   `json:"kind"`
-	OrganizationId        openapi_types.UUID     `json:"organization_id"`
-	Payload               map[string]interface{} `json:"payload"`
-	PayloadSha256         string                 `json:"payload_sha256"`
-	ProjectId             openapi_types.UUID     `json:"project_id"`
-	ProviderPostId        *string                `json:"provider_post_id,omitempty"`
-	ProviderReceiptSha256 *string                `json:"provider_receipt_sha256,omitempty"`
-	RootPostId            *string                `json:"root_post_id,omitempty"`
-	SessionId             *openapi_types.UUID    `json:"session_id,omitempty"`
-	State                 DeliveryReadbackState  `json:"state"`
-	TurnId                *openapi_types.UUID    `json:"turn_id,omitempty"`
-	UpdatedAt             time.Time              `json:"updated_at"`
+	AckAttempts           int                       `json:"ack_attempts"`
+	Attachments           []ArtifactBindingReadback `json:"attachments"`
+	Attempt               *int                      `json:"attempt,omitempty"`
+	Attempts              int                       `json:"attempts"`
+	ChannelId             string                    `json:"channel_id"`
+	CreatedAt             time.Time                 `json:"created_at"`
+	DeliveryId            openapi_types.UUID        `json:"delivery_id"`
+	InputSha256           *string                   `json:"input_sha256,omitempty"`
+	Kind                  DeliveryReadbackKind      `json:"kind"`
+	LastErrorCode         *string                   `json:"last_error_code,omitempty"`
+	OrganizationId        openapi_types.UUID        `json:"organization_id"`
+	Payload               map[string]interface{}    `json:"payload"`
+	PayloadSha256         string                    `json:"payload_sha256"`
+	ProjectId             openapi_types.UUID        `json:"project_id"`
+	ProviderPostId        *string                   `json:"provider_post_id,omitempty"`
+	ProviderReceiptSha256 *string                   `json:"provider_receipt_sha256,omitempty"`
+	RootPostId            *string                   `json:"root_post_id,omitempty"`
+	SessionId             *openapi_types.UUID       `json:"session_id,omitempty"`
+	State                 DeliveryReadbackState     `json:"state"`
+	TurnId                *openapi_types.UUID       `json:"turn_id,omitempty"`
+	UpdatedAt             time.Time                 `json:"updated_at"`
+	UploadReceipts        []UploadReceiptReadback   `json:"upload_receipts"`
 }
 
 // DeliveryReadbackKind defines model for DeliveryReadback.Kind.
@@ -247,6 +284,18 @@ type SlashCommand struct {
 // SlashCommandCommand defines model for SlashCommand.Command.
 type SlashCommandCommand string
 
+// UploadReceiptReadback defines model for UploadReceiptReadback.
+type UploadReceiptReadback struct {
+	ArtifactId     openapi_types.UUID `json:"artifact_id"`
+	ChannelId      string             `json:"channel_id"`
+	CreatedAt      time.Time          `json:"created_at"`
+	MediaType      string             `json:"media_type"`
+	Name           string             `json:"name"`
+	ProviderFileId string             `json:"provider_file_id"`
+	Sha256         string             `json:"sha256"`
+	SizeBytes      int64              `json:"size_bytes"`
+}
+
 // BadRequest defines model for BadRequest.
 type BadRequest = Error
 
@@ -270,6 +319,9 @@ type Unauthorized = Error
 
 // Unavailable defines model for Unavailable.
 type Unavailable = Error
+
+// deliveryReadbackBearerContextKey is the context key for deliveryReadbackBearer security scheme
+type deliveryReadbackBearerContextKey string
 
 // workloadMTLSContextKey is the context key for workloadMTLS security scheme
 type workloadMTLSContextKey string
@@ -324,6 +376,8 @@ func (siw *ServerInterfaceWrapper) GetInteractionDelivery(w http.ResponseWriter,
 	}
 
 	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, DeliveryReadbackBearerScopes, []string{})
 
 	ctx = context.WithValue(ctx, WorkloadMTLSScopes, []string{})
 

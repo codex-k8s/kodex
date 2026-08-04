@@ -5,6 +5,16 @@ import _ "embed"
 var (
 	//go:embed sql/readiness__check.sql
 	readinessCheckSQL string
+	//go:embed sql/readiness__probe_cursor.sql
+	readinessProbeCursorSQL string
+	//go:embed sql/transaction__activate_scope.sql
+	transactionActivateScopeSQL string
+	//go:embed sql/work_scope__next.sql
+	nextWorkScopeSQL string
+	//go:embed sql/delivery__scope.sql
+	deliveryScopeSQL string
+	//go:embed sql/delivery__scope_by_post.sql
+	deliveryScopeByPostSQL string
 	//go:embed sql/inbound__insert.sql
 	inboundInsertSQL string
 	//go:embed sql/inbound__lock.sql
@@ -19,6 +29,12 @@ var (
 	inboundRetrySQL string
 	//go:embed sql/inbound__claim_waiting.sql
 	inboundClaimWaitingSQL string
+	//go:embed sql/inbound__deletion_pending.sql
+	inboundDeletionPendingSQL string
+	//go:embed sql/inbound__cancel_deletion.sql
+	inboundCancelDeletionSQL string
+	//go:embed sql/inbound__thread_session.sql
+	inboundThreadSessionSQL string
 	//go:embed sql/cursor__load.sql
 	cursorLoadSQL string
 	//go:embed sql/cursor__advance.sql
@@ -27,6 +43,8 @@ var (
 	deliveryInsertSQL string
 	//go:embed sql/delivery__get.sql
 	deliveryGetSQL string
+	//go:embed sql/delivery__get_scoped.sql
+	deliveryGetScopedSQL string
 	//go:embed sql/delivery__get_by_post.sql
 	deliveryGetByPostSQL string
 	//go:embed sql/gate_delivery__reaction_posts.sql
@@ -35,8 +53,6 @@ var (
 	gateDeliveryDecidedSQL string
 	//go:embed sql/gate_delivery__rebind.sql
 	gateDeliveryRebindSQL string
-	//go:embed sql/gate_delivery__active.sql
-	gateDeliveryActiveSQL string
 	//go:embed sql/delivery__claim.sql
 	deliveryClaimSQL string
 	//go:embed sql/delivery__accepted.sql
@@ -45,10 +61,20 @@ var (
 	deliveryCompleteSQL string
 	//go:embed sql/delivery__retry.sql
 	deliveryRetrySQL string
+	//go:embed sql/upload_receipt__get.sql
+	uploadReceiptGetSQL string
+	//go:embed sql/upload_receipt__list.sql
+	uploadReceiptListSQL string
+	//go:embed sql/upload_receipt__save.sql
+	uploadReceiptSaveSQL string
+	//go:embed sql/turn_watch__save.sql
+	turnWatchSaveSQL string
+	//go:embed sql/turn_watch__claim.sql
+	turnWatchClaimSQL string
+	//go:embed sql/turn_watch__advance.sql
+	turnWatchAdvanceSQL string
 	//go:embed sql/gate_claim__pending.sql
 	gateClaimPendingSQL string
-	//go:embed sql/gate_claim__insert.sql
-	gateClaimInsertSQL string
 	//go:embed sql/gate_claim__bind.sql
 	gateClaimBindSQL string
 	//go:embed sql/gate_claim__complete.sql

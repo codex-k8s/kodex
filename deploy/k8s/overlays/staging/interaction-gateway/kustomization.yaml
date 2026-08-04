@@ -2,8 +2,23 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base/interaction-gateway
+configMapGenerator:
+  - name: interaction-gateway-runtime
+    behavior: merge
+    literals:
+      - INTERACTION_GATEWAY_S3_PUBLIC_DOWNLOAD_ENDPOINT=https://artifacts.staging.mattercodex.dev
 patches:
   - path: deployment-patch.yaml
+  - target: {group: secrets.hashicorp.com, version: v1beta1, kind: VaultStaticSecret, name: interaction-gateway-mapping}
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: mattercodex/interaction-gateway/mapping/staging
+  - target: {group: secrets.hashicorp.com, version: v1beta1, kind: VaultStaticSecret, name: interaction-gateway-bot-tokens}
+    patch: |-
+      - op: replace
+        path: /spec/path
+        value: mattercodex/interaction-gateway/bot-tokens/staging
 labels:
   - pairs: {mattercodex.dev/environment: staging}
     includeSelectors: false

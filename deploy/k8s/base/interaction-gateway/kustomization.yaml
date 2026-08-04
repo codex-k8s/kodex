@@ -29,11 +29,20 @@ configMapGenerator:
       - INTERACTION_GATEWAY_POSTGRES_CA_FILE=/var/run/config/mattercodex/interaction-gateway/postgres/ca.pem
       - INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME=interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local
       - INTERACTION_GATEWAY_POSTGRES_EXPECTED_SESSION_USER=interaction_gateway_runtime_g1
+      - INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION=1
+      - INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_ID=interaction-gateway-context-v1
+      - INTERACTION_GATEWAY_POSTGRES_CONTEXT_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/postgres-context-key
       - INTERACTION_GATEWAY_DELIVERY_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/delivery-key
       - INTERACTION_GATEWAY_EVENT_ISSUER=https://interaction-gateway.mattercodex-system.svc.cluster.local/authority/mattermost-event
       - INTERACTION_GATEWAY_EVENT_AUDIENCE=urn:mattercodex:mattermost-event
       - INTERACTION_GATEWAY_EVENT_PRIVATE_JWK_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/mattermost-event.private.jwk
+      - INTERACTION_GATEWAY_EVENT_GENERATION=1
       - INTERACTION_GATEWAY_CALLBACK_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/callback-key
+      - INTERACTION_GATEWAY_READBACK_ISSUER=https://control-plane.mattercodex-system.svc.cluster.local/authority/interaction-delivery-readback
+      - INTERACTION_GATEWAY_READBACK_AUDIENCE=urn:mattercodex:interaction-delivery-readback
+      - INTERACTION_GATEWAY_READBACK_PUBLIC_JWK_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/delivery-readback.public.jwk
+      - INTERACTION_GATEWAY_READBACK_READINESS_GRANT_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/delivery-readback-readiness.jwt
+      - INTERACTION_GATEWAY_READBACK_GENERATION=1
       - INTERACTION_GATEWAY_ACTION_CALLBACK_URL=https://interaction-gateway.mattercodex-system.svc.cluster.local:8443/mattermost/v1/actions
       - INTERACTION_GATEWAY_DIALOG_CALLBACK_URL=https://interaction-gateway.mattercodex-system.svc.cluster.local:8443/mattermost/v1/dialogs
       - INTERACTION_GATEWAY_RETENTION_REF=interaction-input-30d
@@ -44,6 +53,7 @@ configMapGenerator:
       - INTERACTION_GATEWAY_MATTERMOST_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
       - INTERACTION_GATEWAY_MATTERMOST_MAPPING_MANIFEST_FILE=/var/run/config/mattercodex/interaction-gateway/mapping/manifest.yaml
       - INTERACTION_GATEWAY_S3_ENDPOINT=https://object-store.storage.svc.cluster.local
+      - INTERACTION_GATEWAY_S3_PUBLIC_DOWNLOAD_ENDPOINT=https://artifacts.mattercodex.dev
       - INTERACTION_GATEWAY_S3_TLS_SERVER_NAME=object-store.storage.svc.cluster.local
       - INTERACTION_GATEWAY_S3_CA_FILE=/var/run/config/mattercodex/interaction-gateway/object-store/ca.pem
       - INTERACTION_GATEWAY_S3_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
@@ -57,8 +67,5 @@ configMapGenerator:
       - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
       - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
       - INTERACTION_GATEWAY_CONTROL_PLANE_APPLICATION_GRANT_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/owner-gate-delivery.jwt
-  - name: interaction-gateway-mapping
-    files:
-      - manifest.yaml=mapping/manifest.yaml
 generatorOptions:
   disableNameSuffixHash: true

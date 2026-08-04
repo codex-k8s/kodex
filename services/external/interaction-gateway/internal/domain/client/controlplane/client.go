@@ -11,9 +11,15 @@ import (
 var ErrConflict = errors.New("control-plane command conflict")
 
 type Artifact struct {
-	ID        string
-	Version   uint64
-	ScanState string
+	ID         string
+	Version    uint64
+	ScanState  string
+	Name       string
+	Direction  string
+	StorageRef string
+	SizeBytes  uint64
+	MediaType  string
+	SHA256     string
 }
 
 type Session struct {
@@ -22,8 +28,16 @@ type Session struct {
 }
 
 type Turn struct {
-	ID      string
-	Version uint64
+	ID                    string
+	Version               uint64
+	State                 string
+	SessionID             string
+	Attempt               uint32
+	Outcome               string
+	ResultArtifactID      string
+	ResultArtifactVersion uint64
+	ResultArtifactSHA256  string
+	ImmutableInputSHA256  string
 }
 
 type ArtifactInput struct {
@@ -68,10 +82,13 @@ type RecordDeliveryInput struct {
 
 type Client interface {
 	Check(context.Context) error
+	CheckInteraction(context.Context, string, string) error
 	RegisterArtifact(context.Context, string, ArtifactInput) (Artifact, error)
 	GetArtifact(context.Context, string, string, uint64) (Artifact, error)
 	CreateSession(context.Context, string, string, string, string, string) (Session, error)
 	EnqueueTurn(context.Context, string, string, string, string, string) (Turn, error)
+	GetTurn(context.Context, string, string) (Turn, error)
+	ManageConversationLifecycle(context.Context, string, string, string, string, string) error
 	ClaimOwnerGate(context.Context, string) (entity.OwnerGateClaim, error)
 	RecordOwnerGateDelivery(context.Context, string, RecordDeliveryInput) error
 	ResolveOwnerGate(context.Context, string, ResolveGateInput) error

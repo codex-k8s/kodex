@@ -57,7 +57,7 @@ func (service *Service) ManageSession(
 	}
 	if input.Action != "CREATE" && input.Action != "CLOSE" &&
 		input.Action != "ARCHIVE" && input.Action != "CANCEL" &&
-		input.Action != "CLEANUP" {
+		input.Action != "CLEANUP" && input.Action != "RESTORE" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	if input.Action == "ARCHIVE" && !validRuntimeReference(input.ArchiveRef) {
@@ -269,6 +269,102 @@ func (service *Service) ManageSession(
 	)
 }
 
+// ManageConversationLifecycle материализует единственный transport-specific
+// delete/restore/finalize path для server-owned Chat/Session.
+func (service *Service) ManageConversationLifecycle(
+	ctx context.Context,
+	input ManageConversationLifecycleInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionConversationLifecycle); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.ResourceID) != nil ||
+		(input.Kind != "CHANNEL" && input.Kind != "THREAD") ||
+		(input.Action != "DELETE" && input.Action != "RESTORE" && input.Action != "FINALIZE") {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	resourceKind := enum.KindChat
+	if input.Kind == "THREAD" {
+		resourceKind = enum.KindSession
+	}
+	current, err := service.repository.GetIncludingDeleted(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, input.ResourceID, resourceKind)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if ownerBoundLifecycleKind(current.Kind) && current.OwnerActorID != input.Principal.ActorID {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	if input.Kind == "CHANNEL" {
+		target := enum.StateDeletionPending
+		switch input.Action {
+		case "RESTORE":
+			target = enum.StateActive
+		case "FINALIZE":
+			target = enum.StateDeleted
+		}
+		transitionPrincipal := input.Principal
+		transitionPrincipal.Permission = permissionTransition
+		expectedVersion := current.Version
+		if current.State == target {
+			if expectedVersion <= 1 {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			expectedVersion--
+		}
+		return service.Transition(ctx, TransitionInput{Principal: transitionPrincipal,
+			IdempotencyKey: input.IdempotencyKey, ResourceID: input.ResourceID,
+			ExpectedVersion: expectedVersion, Target: target, ReasonCode: "mattermost-transport-lifecycle"})
+	}
+	managePrincipal := input.Principal
+	managePrincipal.Permission = permissionManageSession
+	manage := func(key, action string, version uint64) (entity.Resource, error) {
+		return service.ManageSession(ctx, ManageSessionInput{Principal: managePrincipal,
+			IdempotencyKey: key, Action: action, SessionID: input.ResourceID,
+			ExpectedVersion: version, ReasonCode: "mattermost-transport-lifecycle"})
+	}
+	switch input.Action {
+	case "DELETE":
+		archived := current
+		if current.State == enum.StateActive {
+			archived, err = manage(uuid.NewSHA1(uuid.NameSpaceURL, []byte(input.IdempotencyKey+"\x00close")).String(),
+				"CLOSE", current.Version)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+		}
+		expectedVersion := archived.Version
+		if archived.State == enum.StateDeletionPending {
+			if expectedVersion <= 1 {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			expectedVersion--
+		}
+		return manage(uuid.NewSHA1(uuid.NameSpaceURL, []byte(input.IdempotencyKey+"\x00pending")).String(),
+			"CLEANUP", expectedVersion)
+	case "RESTORE":
+		expectedVersion := current.Version
+		if current.State == enum.StateActive {
+			if expectedVersion <= 1 {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			expectedVersion--
+		}
+		return manage(input.IdempotencyKey, "RESTORE", expectedVersion)
+	case "FINALIZE":
+		expectedVersion := current.Version
+		if current.State == enum.StateDeleted {
+			if expectedVersion <= 1 {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			expectedVersion--
+		}
+		return manage(input.IdempotencyKey, "CLEANUP", expectedVersion)
+	default:
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+}
+
 func sessionLifecycleTarget(
 	current entity.Resource,
 	input ManageSessionInput,
@@ -291,6 +387,10 @@ func sessionLifecycleTarget(
 		if current.State == enum.StateDeletionPending {
 			return enum.StateDeleted, nil
 		}
+	case "RESTORE":
+		if current.State == enum.StateArchived || current.State == enum.StateDeletionPending {
+			return enum.StateActive, nil
+		}
 	}
 	return "", errs.ErrStateConflict
 }
@@ -306,6 +406,8 @@ func sessionLifecycleResultMatches(current entity.Resource, input ManageSessionI
 		return current.State == enum.StateCancelled
 	case "CLEANUP":
 		return current.State == enum.StateDeletionPending || current.State == enum.StateDeleted
+	case "RESTORE":
+		return current.State == enum.StateActive
 	}
 	return false
 }

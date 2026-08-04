@@ -23,6 +23,8 @@ const (
 )
 
 type Config struct {
+	ProducerID      string
+	Purpose         string
 	Issuer          string
 	Audience        string
 	PrivateJWKFile  string
@@ -40,6 +42,8 @@ type Signer struct {
 
 type claims struct {
 	Version        int    `json:"v"`
+	ProducerID     string `json:"producer_id"`
+	Purpose        string `json:"purpose"`
 	Issuer         string `json:"iss"`
 	Audience       string `json:"aud"`
 	Subject        string `json:"sub"`
@@ -61,10 +65,11 @@ type claims struct {
 }
 
 func New(config Config) (*Signer, error) {
-	if config.Issuer == "" || config.Audience == "" || config.Generation == 0 ||
+	if config.ProducerID != "control-plane.interaction-gateway" || config.Purpose != "MATTERMOST_SIGNED_EVENT" ||
+		config.Issuer == "" || config.Audience == "" || config.Generation == 0 ||
 		config.MaximumTTL < 30*time.Second || config.MaximumTTL > 5*time.Minute ||
 		!filepath.IsAbs(config.PrivateJWKFile) || !filepath.IsAbs(config.CallbackKeyFile) {
-		return nil, errors.New("Mattermost event signer configuration is invalid")
+		return nil, errors.New("mattermost event signer configuration is invalid")
 	}
 	privateRaw, err := readSafe(config.PrivateJWKFile, maximumKeyBytes)
 	if err != nil {
@@ -86,11 +91,12 @@ func (signer *Signer) Sign(event entity.InboundEvent) (string, error) {
 		uuid.Validate(event.OrganizationID) != nil || uuid.Validate(event.ProjectID) != nil ||
 		event.Revision == 0 || !validDigest(event.DigestSHA256) ||
 		event.TeamID == "" || event.ChannelID == "" || event.UserID == "" {
-		return "", errors.New("Mattermost event authority is invalid")
+		return "", errors.New("mattermost event authority is invalid")
 	}
 	now := signer.now().UTC().Truncate(time.Second)
 	payload := claims{
-		Version: 1, Issuer: signer.config.Issuer, Audience: signer.config.Audience,
+		Version: 1, ProducerID: signer.config.ProducerID, Purpose: signer.config.Purpose,
+		Issuer: signer.config.Issuer, Audience: signer.config.Audience,
 		Subject: event.ActorID, OrganizationID: event.OrganizationID, ProjectID: event.ProjectID,
 		JTI: event.ID, Revision: event.Revision, WorkloadID: "interaction-gateway",
 		CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",

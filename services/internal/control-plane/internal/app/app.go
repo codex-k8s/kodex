@@ -272,6 +272,8 @@ func Run(
 		return err
 	}
 	state.oidc, err = oidcauth.New(startup, oidcauth.Config{
+		ProducerID:           loadedPolicy.OIDC.ID,
+		Purpose:              loadedPolicy.OIDC.Credential,
 		Issuer:               loadedPolicy.OIDC.CredentialIssuer,
 		Audience:             loadedPolicy.OIDC.CredentialAudience,
 		TLSServerName:        config.OIDCTLSServerName,
@@ -291,11 +293,13 @@ func Run(
 			continue
 		}
 		if producer.Credential == "MATTERMOST_SIGNED_EVENT" {
-			verifier, verifyErr := mattermosteventauth.New(mattermosteventauth.Config{
+			verifier, verifyErr := mattermosteventauth.New(startup, mattermosteventauth.Config{
+				ProducerID: producer.ID, Purpose: producer.Credential,
 				Issuer: producer.CredentialIssuer, Audience: producer.CredentialAudience,
 				WorkloadID: producer.CallerWorkload, CallerSPIFFEID: producer.CallerSPIFFEID,
-				PublicJWKFile: filepath.Join(config.ApplicationGrantTrustDir, producerID+".public.jwk"),
-			})
+				PublicKeysetFile: filepath.Join(config.ApplicationGrantTrustDir, producerID+".public-keyset.json"),
+				MaximumTTL:       5 * time.Minute,
+			}, postgresRepository)
 			if verifyErr != nil {
 				return verifyErr
 			}
@@ -312,6 +316,7 @@ func Run(
 				continuationProducer = producer
 			}
 			verifier, verifyErr := continuationgrantauth.New(continuationgrantauth.Config{
+				ProducerID: producer.ID, Purpose: producer.Credential,
 				Issuer: producer.CredentialIssuer, Audience: producer.CredentialAudience,
 				WorkloadID: producer.CallerWorkload, CallerSPIFFEID: producer.CallerSPIFFEID,
 				PublicJWKFile: publicKeysetFile, Generation: config.ContinuationGrantSignerGeneration,
@@ -325,6 +330,8 @@ func Run(
 			continue
 		}
 		verifier, err := grantauth.New(grantauth.Config{
+			ProducerID:     producer.ID,
+			Purpose:        producer.Credential,
 			Issuer:         producer.CredentialIssuer,
 			Audience:       producer.CredentialAudience,
 			WorkloadID:     producer.CallerWorkload,

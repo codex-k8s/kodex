@@ -1,7 +1,10 @@
 // Package objectstore задаёт узкий S3-compatible порт gateway.
 package objectstore
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Object struct {
 	Reference string
@@ -17,4 +20,5 @@ type Client interface {
 	Put(context.Context, string, string, []byte, string, string) (Object, error)
 	Inspect(context.Context, string, string, string) (Object, bool, error)
 	Get(context.Context, string, string, uint64, string) ([]byte, error)
+	ProtectedURL(context.Context, string, string, uint64, string, string, time.Duration) (string, error)
 }

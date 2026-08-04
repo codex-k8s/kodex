@@ -153,15 +153,16 @@ func OwnerGateDeliveryOperations() map[string]string {
 // server-owned owner-gate delivery и короткоживущий Mattermost event.
 func InteractionGatewayOperations() map[string]string {
 	return map[string]string{
-		"control.owner-gate-delivery.readiness":  controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.owner-gate.claim-delivery":      controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
-		"control.owner-gate.deliver":             controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
-		"control.owner-gate.expire":              controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
-		"control.interaction.session.create":     controlplanev1.ControlPlaneService_ManageSession_FullMethodName,
-		"control.interaction.turn.enqueue":       controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
-		"control.interaction.artifact.register":  controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
-		"control.interaction.resource.read":      controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-		"control.interaction.owner-gate.resolve": controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
+		"control.owner-gate-delivery.readiness":      controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.owner-gate.claim-delivery":          controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,
+		"control.owner-gate.deliver":                 controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
+		"control.owner-gate.expire":                  controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
+		"control.interaction.session.create":         controlplanev1.ControlPlaneService_ManageSession_FullMethodName,
+		"control.interaction.turn.enqueue":           controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
+		"control.interaction.artifact.register":      controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
+		"control.interaction.resource.read":          controlplanev1.ControlPlaneService_GetResource_FullMethodName,
+		"control.interaction.conversation.lifecycle": controlplanev1.ControlPlaneService_ManageConversationLifecycle_FullMethodName,
+		"control.interaction.owner-gate.resolve":     controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
 	}
 }
 

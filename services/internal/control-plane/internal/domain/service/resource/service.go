@@ -107,6 +107,7 @@ const (
 	permissionRegisterArtifact        = "controlplane.artifact.register"
 	permissionScanArtifact            = "controlplane.artifact.scan"
 	permissionManageSession           = "controlplane.session.manage"
+	permissionConversationLifecycle   = "controlplane.conversation.lifecycle"
 	permissionWriteMemory             = "controlplane.memory.write"
 	permissionWriteProjectMemory      = "controlplane.memory.project.write"
 	permissionManageWorkClaim         = "controlplane.work_claim.manage"
