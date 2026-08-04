@@ -4,8 +4,8 @@ title: Диагностика и восстановление integration-gatewa
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-03
+version: 1.3.0
+updated: 2026-08-04
 ---
 
 # Диагностика и восстановление integration-gateway
@@ -72,18 +72,13 @@ Startup barrier должен пройти до обслуживания MCP/API:
 Не отключать issuer, OIDC, RLS, TLS verify, schema validation или dependency
 readiness. Не подменять provider proxy прямым HTTPS egress.
 
-Входящий `IntegrationResultService` доступен только на `9443`: mTLS peer должен
-быть exact `agent-runner`, workload-local verifier обязан подтвердить signed
-authorization context с `INTEGRATION_CONTINUATION` provenance, а отдельный
-control-plane result-access grant — exact invocation/attempt/result digest и
-разрешённую операцию. Result grant передаётся local issuer только через
-`x-mattercodex-integration-result-grant`; он не заменяет transport application
-grant gateway при live-проверке control-plane. `Resolve` не принимает
-resource ID, `Acknowledge` атомарно фиксирует idempotency receipt и exact
-delivery version/fence. Одинаково защищены success `ResultReference` и
-failed/unknown `ErrorReference`; после ACK старый bearer больше не разрешает
-resolve. Отсутствующий, истёкший либо mismatched grant нельзя
-заменять ручным чтением БД.
+Входящий `IntegrationResultService` на `9443` сохраняет только защищённый
+`CheckReadiness`: mTLS peer должен быть exact `agent-runner`, а workload-local
+verifier — подтвердить exact readiness operation. Result resolve/ack методы,
+result bearer и result-access keyset удалены; их нельзя восстанавливать ручным
+чтением БД или универсальным RPC. Structured result остаётся в существующем
+session-scoped MCP invocation read, а continuation/rejoin принадлежит
+control-plane.
 
 ## PostgreSQL и миграция
 
@@ -180,11 +175,12 @@ Provider не должен вызываться до подтверждённо�
 отсутствии terminal result: lifecycle фиксирует `UNKNOWN`, затем отправляет
 `FAIL` с безопасным reference/digest.
 
-После terminal `READY` agent-runner читает continuation только через
-`GetIntegrationContinuation` с exact server-owned binding и подтверждает ту же
-version через `AcknowledgeIntegrationContinuation`. AsyncAPI/NATS replay для
-этого пути отсутствует намеренно. При stale Ack повторно прочитать текущую
-версию; не изменять inbox/cursor напрямую.
+После terminal `READY` control-plane материализует server-owned continuation
+turn. Structured invocation result читается через существующий session-scoped
+MCP operation; отдельные gateway `ResolveIntegrationResult`,
+`AcknowledgeIntegrationResult`, result bearer и caller-selected continuation
+ID отсутствуют. AsyncAPI/NATS replay для этого пути отсутствует намеренно. При
+stale session/grant нельзя изменять owner state или cursor вручную.
 
 ## Connection validation
 
@@ -239,15 +235,16 @@ payload key удаляется лишь после завершения всех
 отрицательной. Не менять `EncryptedApplicationGrant` или result payload вручную
 и не переиздавать grant для обхода старого key ID.
 
-Continuation/result grant keyset имеет `revision`, `high_watermark`,
+Continuation transition keyset имеет `revision`, `high_watermark`,
 `served_generation`, `kid` и ровно один `CURRENT`; допускается только соседний
 `PREVIOUS` до `accept_until` и подготовленный `NEXT`. Сначала доставить
 `CURRENT+NEXT`, затем атомарно переключить signer и verifier на новое поколение,
 оставив прежний ключ `PREVIOUS` не меньше максимального срока уже выданных
-grant. PostgreSQL verifier fence подтверждает exact served keyset digest.
-Unknown, `NEXT`, `RETIRED`, пропущенное или rollback generation закрыто
-отклоняются. После crash повторяется тот же revision/digest; старый snapshot
-или та же revision с другим digest запрещены.
+transition grants. PostgreSQL verifier fence подтверждает exact served keyset
+digest. Отдельный result-access keyset удалён. Unknown, `NEXT`, `RETIRED`,
+пропущенное или rollback generation закрыто отклоняются. После crash
+повторяется тот же revision/digest; старый snapshot или та же revision с другим
+digest запрещены.
 
 ## Alerts
 

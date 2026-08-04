@@ -49,6 +49,7 @@ type Repository interface {
 	GetDelivery(context.Context, string) (entity.Delivery, error)
 	GetDeliveryScoped(context.Context, string, string, string) (entity.Delivery, error)
 	GetDeliveryByProviderPost(context.Context, string) (entity.Delivery, error)
+	GetRunDeliveryByTurn(context.Context, string, string, string, string) (entity.Delivery, error)
 	ListPendingReactionPosts(context.Context, []entity.Boundary, int) (map[string]string, error)
 	MarkOwnerGateDecided(context.Context, entity.Delivery) error
 	ClaimOwnerGateRequest(context.Context) (string, bool, error)

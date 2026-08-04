@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
 )
@@ -245,7 +244,7 @@ func producerAuthoritySource(producer Producer) string {
 		return "AGENT_SESSION"
 	case "AUTOMATION_OCCURRENCE_GRANT":
 		return "AUTOMATION_OCCURRENCE"
-	case "INTEGRATION_CONTINUATION_GRANT", "INTEGRATION_RESULT_ACCESS_GRANT":
+	case "INTEGRATION_CONTINUATION_GRANT":
 		return "INTEGRATION_CONTINUATION"
 	case "RUNTIME_MATERIALIZATION_GRANT":
 		return "RUNTIME_EXECUTION"
@@ -270,17 +269,14 @@ func supportedCredential(credential string) bool {
 		"RUNTIME_MATERIALIZATION_GRANT":
 		// server-owned capability следующего exact integration transition.
 		return true
-	case "INTEGRATION_CONTINUATION_GRANT", "INTEGRATION_RESULT_ACCESS_GRANT":
+	case "INTEGRATION_CONTINUATION_GRANT":
 		return true
 	default:
 		return false
 	}
 }
 
-func supportedCredentialMetadata(credential, metadata string) bool {
-	if credential == "INTEGRATION_RESULT_ACCESS_GRANT" {
-		return metadata == integrationgatewayauth.ResultAccessGrantMetadata
-	}
+func supportedCredentialMetadata(_ string, metadata string) bool {
 	return metadata == "authorization"
 }
 

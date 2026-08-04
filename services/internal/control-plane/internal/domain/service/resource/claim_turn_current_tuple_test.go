@@ -55,46 +55,20 @@ func (repository *currentTupleTestRepository) Transact(
 	return nil
 }
 
-func (repository *currentTupleTestRepository) ResolveRuntimeAgentBindingIntent(
-	_ context.Context,
-	organizationID, projectID, actorID, sourceRef string,
-) (entity.Resource, entity.Resource, entity.Resource, error) {
-	var session, turn, revision entity.Resource
-	for _, candidate := range repository.tx.resources {
-		spec, ok := candidate.Spec.(entity.TurnSpec)
-		if !ok || candidate.OrganizationID != organizationID || candidate.ProjectID != projectID ||
-			candidate.OwnerActorID != actorID || candidate.State != enum.StateQueued ||
-			spec.SourceRef != sourceRef {
-			continue
-		}
-		if turn.ID != "" {
-			return entity.Resource{}, entity.Resource{}, entity.Resource{}, errs.ErrStateConflict
-		}
-		turn = candidate
-		session = repository.tx.resources[spec.SessionID]
-		revision = repository.tx.resources[spec.RuntimeRevisionID]
-	}
-	if turn.ID == "" || session.ID == "" || revision.ID == "" {
-		return entity.Resource{}, entity.Resource{}, entity.Resource{}, errs.ErrNotFound
-	}
-	return session, turn, revision, nil
-}
-
 type currentTupleTestTransaction struct {
 	domainrepo.Transaction
-	now           time.Time
-	resources     map[string]entity.Resource
-	receipts      map[string]domainrepo.Receipt
-	runtimes      map[string]RuntimeExecution
-	occurrences   map[string]domainrepo.ScheduleOccurrence
-	runs          map[string]domainrepo.ScheduledRun
-	leases        map[string]domainrepo.TurnLease
-	attempts      map[string]domainrepo.TurnAttempt
-	agentBindings map[string]domainrepo.RuntimeAgentBinding
-	retention     domainrepo.ResourceRetentionPolicy
-	audits        []domainrepo.Audit
-	events        []event.Change
-	deliveries    []domainrepo.InteractionDeliveryWork
+	now         time.Time
+	resources   map[string]entity.Resource
+	receipts    map[string]domainrepo.Receipt
+	runtimes    map[string]RuntimeExecution
+	occurrences map[string]domainrepo.ScheduleOccurrence
+	runs        map[string]domainrepo.ScheduledRun
+	leases      map[string]domainrepo.TurnLease
+	attempts    map[string]domainrepo.TurnAttempt
+	retention   domainrepo.ResourceRetentionPolicy
+	audits      []domainrepo.Audit
+	events      []event.Change
+	deliveries  []domainrepo.InteractionDeliveryWork
 }
 
 func (tx *currentTupleTestTransaction) CurrentTime(context.Context) (time.Time, error) {
@@ -125,18 +99,6 @@ func (tx *currentTupleTestTransaction) LatestSessionRuntimeArchiveForRestore(
 	context.Context, string, string, string,
 ) (domainrepo.RuntimeExecution, error) {
 	return domainrepo.RuntimeExecution{}, errs.ErrNotFound
-}
-
-func (tx *currentTupleTestTransaction) GetRuntimeAgentBindingForUpdate(
-	_ context.Context,
-	turnID string,
-	attempt uint32,
-) (domainrepo.RuntimeAgentBinding, error) {
-	binding, ok := tx.agentBindings[turnAttemptMapKey(turnID, attempt)]
-	if !ok {
-		return domainrepo.RuntimeAgentBinding{}, errs.ErrNotFound
-	}
-	return binding, nil
 }
 
 func (tx *currentTupleTestTransaction) GetCurrentResourceRetentionPolicy(
@@ -1059,10 +1021,6 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	if err != nil {
 		t.Fatalf("create instruction artifact: %v", err)
 	}
-	revisionSHA256, err := entity.ProjectionSHA256(revision)
-	if err != nil {
-		t.Fatalf("hash runtime revision: %v", err)
-	}
 	tx := &currentTupleTestTransaction{
 		now: now,
 		resources: map[string]entity.Resource{
@@ -1080,19 +1038,6 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 				TurnID: turn.ID, Attempt: 1, WorkloadID: "unassigned",
 				AuthorityGeneration: 1, State: "QUEUED", InputSHA256: digest,
 				LeaseFence: turn.Version, StartedAt: now,
-			},
-		},
-		agentBindings: map[string]domainrepo.RuntimeAgentBinding{
-			turnAttemptMapKey(turn.ID, 1): {
-				OrganizationID: organization, ProjectID: project, SessionID: sessionID,
-				TurnID: turnID, Attempt: 1, InputSHA256: digest,
-				RuntimeRevisionID: revisionID, RuntimeRevisionVersion: revision.Version,
-				RuntimeRevisionSHA256: revisionSHA256,
-				AgentSessionKey:       "agent-session-test", AgentSessionID: 101,
-				AgentSessionVersion: 1, AgentSessionBindingSHA256: digest,
-				AgentSessionTurnID: 201, AgentRunID: "agent-run-test",
-				AgentSessionTurnVersion: 1, AgentTurnBindingSHA256: digest,
-				CreatedAt: now,
 			},
 		},
 		retention: domainrepo.ResourceRetentionPolicy{
@@ -1126,8 +1071,6 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		MemoryIndexerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
 		RuntimeControllerWorkload:  runtimeWorker,
 		RuntimeControllerSPIFFEID:  runtimeSPIFFE,
-		BotServiceWorkload:         "bot-service",
-		BotServiceSPIFFEID:         "spiffe://mattercodex.local/ns/mattercodex-system/sa/bot-service",
 		ArchiveWorkload:            "runtime-archive",
 		ArchiveSPIFFEID:            "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
 		IntegrationGatewayWorkload: "integration-gateway",
@@ -1711,26 +1654,6 @@ func TestProductionClaimTurnPropagatesUnscheduledCurrentTuple(t *testing.T) {
 	if err != nil || replaced.State != enum.StateCancelled ||
 		replaced.Version != suspendedTurn.Version+1 {
 		t.Fatalf("integration predecessor replacement became unreachable: %v %+v", err, replaced)
-	}
-}
-
-func TestResolveRuntimeAgentBindingIntentPrecedesFirstClaim(t *testing.T) {
-	fixture := newCurrentTupleFixture(t)
-	principal := fixture.principal(
-		permissionRuntimeAgentBind,
-		"bot-service",
-		"spiffe://mattercodex.local/ns/mattercodex-system/sa/bot-service",
-	)
-	intent, err := fixture.service.ResolveRuntimeAgentBindingIntent(
-		t.Context(), principal, "test:turn",
-	)
-	if err != nil {
-		t.Fatalf("resolve first bot turn owner tuple: %v", err)
-	}
-	if intent.SessionID != fixture.sessionID || intent.TurnID != fixture.turnID ||
-		intent.RuntimeRevisionID != fixture.revisionID || intent.Attempt != 1 ||
-		intent.InputSHA256 != fixture.inputSHA256 || intent.RuntimeRevisionSHA256 == "" {
-		t.Fatalf("resolved intent lost exact owner tuple: %+v", intent)
 	}
 }
 

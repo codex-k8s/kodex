@@ -205,6 +205,16 @@ type MattermostBotTokenSecret struct {
 	Integrity  SecretIntegrity
 }
 
+type RuntimeMCPTokenBinding struct {
+	Namespace  string
+	SecretName string
+	Integrity  SecretIntegrity
+}
+
+type RuntimeMCPTokenPreparer interface {
+	EnsureRuntimeMCPToken(ctx context.Context, sessionKey string) (RuntimeMCPTokenBinding, error)
+}
+
 type CodexAuthSessionInput struct {
 	AccountName string
 	SecretName  string

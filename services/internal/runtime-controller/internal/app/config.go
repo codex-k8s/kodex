@@ -28,7 +28,7 @@ type Config struct {
 	RunnerControlPlaneTarget         string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TARGET"`
 	RunnerControlPlaneTLSServerName  string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TLS_SERVER_NAME"`
 	InteractionGatewayURL            string        `env:"RUNTIME_INTERACTION_GATEWAY_URL"`
-	MCPGatewayURL                    string        `env:"RUNTIME_MCP_GATEWAY_URL"`
+	SessionMCPURL                    string        `env:"RUNTIME_SESSION_MCP_URL"`
 	ControllerImage                  string        `env:"RUNTIME_CONTROLLER_IMAGE"`
 	AuthorityImage                   string        `env:"RUNTIME_AUTHORITY_IMAGE"`
 	StorageClass                     string        `env:"RUNTIME_STORAGE_CLASS"`
@@ -87,7 +87,7 @@ func loadConfig() (Config, error) {
 		RunnerControlPlaneTarget:        "control-plane.mattercodex-system.svc:8443",
 		RunnerControlPlaneTLSServerName: "control-plane.mattercodex-system.svc.cluster.local",
 		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
-		MCPGatewayURL:                   "https://mcp-gateway.mattercodex-system.svc.cluster.local:8443",
+		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
 		StorageClass:                    "runtime-session", PVCSize: "20Gi",
 		ReadClusterRole:  "runtime-role-project-read",
 		AdminClusterRole: "cluster-admin", ArchiveServiceAccount: "runtime-archive",
@@ -143,7 +143,7 @@ func (config Config) validate() error {
 		config.RunnerControlPlaneTLSServerName == "" || net.ParseIP(config.RunnerControlPlaneTLSServerName) != nil {
 		return errors.New("runtime runner control-plane endpoint is invalid")
 	}
-	for _, raw := range []string{config.InteractionGatewayURL, config.MCPGatewayURL} {
+	for _, raw := range []string{config.InteractionGatewayURL, config.SessionMCPURL} {
 		endpoint, parseErr := url.Parse(raw)
 		if parseErr != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.Path != "" ||
 			endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.User != nil ||

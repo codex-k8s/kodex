@@ -110,20 +110,40 @@ func (client *Client) Put(ctx context.Context, projectID, key string, raw []byte
 		len(mediaType) < 3 || len(mediaType) > 255 {
 		return domainobjectstore.Object{}, errors.New("S3 object input is invalid")
 	}
+	return client.PutStream(ctx, projectID, key, bytes.NewReader(raw), int64(len(raw)), mediaType, expectedSHA256)
+}
+
+func (client *Client) PutStream(ctx context.Context, projectID, key string, raw io.ReadSeeker, size int64,
+	mediaType, expectedSHA256 string) (domainobjectstore.Object, error) {
+	if invalidSegment(projectID) || invalidObjectKey(key) || raw == nil || size < 1 ||
+		size > client.config.MaximumObjectBytes || len(mediaType) < 3 || len(mediaType) > 255 {
+		return domainobjectstore.Object{}, errors.New("S3 object stream input is invalid")
+	}
+	if _, err := raw.Seek(0, io.SeekStart); err != nil {
+		return domainobjectstore.Object{}, errors.New("seek S3 object stream")
+	}
+	hasher := sha256.New()
+	written, err := io.Copy(hasher, io.LimitReader(raw, size+1))
+	if err != nil || written != size || hex.EncodeToString(hasher.Sum(nil)) != expectedSHA256 {
+		return domainobjectstore.Object{}, errors.New("S3 object stream digest is invalid")
+	}
+	if _, err := raw.Seek(0, io.SeekStart); err != nil {
+		return domainobjectstore.Object{}, errors.New("rewind S3 object stream")
+	}
 	objectKey := path.Join("projects", projectID, key)
-	if existing, found, err := client.stat(ctx, objectKey, int64(len(raw)), mediaType, expectedSHA256); err != nil {
+	if existing, found, err := client.stat(ctx, objectKey, size, mediaType, expectedSHA256); err != nil {
 		return domainobjectstore.Object{}, err
 	} else if found {
 		return existing, nil
 	}
-	result, err := client.client.PutObject(ctx, client.config.Bucket, objectKey, bytes.NewReader(raw), int64(len(raw)), minio.PutObjectOptions{
+	result, err := client.client.PutObject(ctx, client.config.Bucket, objectKey, raw, size, minio.PutObjectOptions{
 		ContentType: mediaType, UserMetadata: map[string]string{"mattercodex-sha256": expectedSHA256},
-		DisableMultipart: int64(len(raw)) <= client.config.MaximumObjectBytes,
+		DisableMultipart: size <= client.config.MaximumObjectBytes,
 	})
-	if err != nil || result.Key != objectKey || result.Size != int64(len(raw)) {
+	if err != nil || result.Key != objectKey || result.Size != size {
 		return domainobjectstore.Object{}, errors.New("S3 object write failed")
 	}
-	readback, found, statErr := client.stat(ctx, objectKey, int64(len(raw)), mediaType, expectedSHA256)
+	readback, found, statErr := client.stat(ctx, objectKey, size, mediaType, expectedSHA256)
 	if statErr != nil || !found {
 		return domainobjectstore.Object{}, errors.New("S3 object write readback failed")
 	}

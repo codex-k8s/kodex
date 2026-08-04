@@ -67,24 +67,6 @@ func (client *Client) Claim(ctx context.Context) (TurnLease, error) {
 		Attempt: response.GetAttempt(), Token: response.GetLeaseToken(), ExpiresAt: response.GetLeaseExpiresAt().AsTime()}, nil
 }
 
-func (client *Client) Renew(ctx context.Context, lease TurnLease) (TurnLease, error) {
-	response, err := client.shared.ControlPlane.RenewTurn(ctx, &controlplanev1.RenewTurnRequest{
-		IdempotencyKey: uuid.NewSHA1(uuid.NameSpaceURL, []byte("agent-runner:renew:"+client.input.TurnID+":"+
-			fmt.Sprint(lease.Version)+":"+fmt.Sprint(lease.Generation))).String(), TurnId: client.input.TurnID, LeaseToken: lease.Token,
-		ExpectedVersion: lease.Version, Attempt: lease.Attempt, AuthorityGeneration: lease.Generation})
-	if err != nil {
-		return TurnLease{}, err
-	}
-	if response.GetTurn() == nil || response.GetTurn().GetId() != client.input.TurnID ||
-		response.GetLeaseToken() == "" || response.GetLeaseExpiresAt() == nil ||
-		response.GetAttempt() != lease.Attempt || response.GetAuthorityGeneration() != lease.Generation {
-		return TurnLease{}, errors.New("renewed turn lease is invalid")
-	}
-	return TurnLease{Version: response.GetTurn().GetVersion(), Token: response.GetLeaseToken(),
-		ExpiresAt: response.GetLeaseExpiresAt().AsTime(), Attempt: response.GetAttempt(),
-		Generation: response.GetAuthorityGeneration()}, nil
-}
-
 func (client *Client) GetExecution(ctx context.Context) (Execution, error) {
 	response, err := client.shared.ControlPlane.GetRuntimeExecution(ctx, &controlplanev1.GetRuntimeExecutionRequest{
 		ExecutionId: client.input.ExecutionID, ExpectedVersion: client.input.ExecutionVersion})
@@ -107,8 +89,12 @@ func (client *Client) GetExecution(ctx context.Context) (Execution, error) {
 		Generation: execution.GetGrantGeneration(), State: execution.GetState()}, nil
 }
 
-func (client *Client) Progress(ctx context.Context, lease TurnLease, execution Execution,
+func (client *Client) Progress(ctx context.Context, lease TurnLease,
 	kind controlplanev1.RuntimeProgressKind, sequence uint32, markdown string) error {
+	execution, err := client.GetExecution(ctx)
+	if err != nil {
+		return err
+	}
 	response, err := client.shared.ControlPlane.ReportRuntimeProgress(ctx, &controlplanev1.ReportRuntimeProgressRequest{
 		IdempotencyKey: uuid.NewSHA1(uuid.NameSpaceURL, []byte("agent-runner:progress:"+client.input.ExecutionID+":"+
 			kind.String()+":"+fmt.Sprint(sequence))).String(), TurnId: client.input.TurnID,

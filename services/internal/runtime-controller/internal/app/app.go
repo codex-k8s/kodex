@@ -91,7 +91,7 @@ func Run(
 		RoleImageRepository:             config.RoleImageRepository,
 		RunnerControlPlaneTarget:        config.RunnerControlPlaneTarget,
 		RunnerControlPlaneTLSServerName: config.RunnerControlPlaneTLSServerName,
-		InteractionGatewayURL:           config.InteractionGatewayURL, MCPGatewayURL: config.MCPGatewayURL,
+		InteractionGatewayURL:           config.InteractionGatewayURL, SessionMCPURL: config.SessionMCPURL,
 		ControllerImage: config.ControllerImage, AuthorityImage: config.AuthorityImage,
 		StorageClass: config.StorageClass, PVCSize: config.PVCSize,
 		ReadClusterRole:  config.ReadClusterRole,

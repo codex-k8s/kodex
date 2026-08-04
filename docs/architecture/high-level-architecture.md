@@ -30,10 +30,11 @@ flowchart LR
     RC --> K8S[Kubernetes API]
     K8S --> AR[Pod агента]
     AR --> AI[Поставщик среды выполнения ИИ]
-    AR --> MG[Шлюз интеграций MCP]
+    AR --> BMCP[Bot Service MCP transport]
+    BMCP --> MG[Шлюз интеграций MCP]
     MG --> EXT[Внешние системы]
     MG --> AP[Ручное согласование]
-    AR --> S3[(S3)]
+    AR --> IG
     IG --> S3
     IG --> MM
     RIB[Role Image Builder] --> REG[(OCI Registry)]

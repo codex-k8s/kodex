@@ -20,6 +20,7 @@ import (
 	controlclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/clients/controlplane"
 	domainerrs "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/errs"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/gateway"
+	botclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/botservice"
 	mattermostclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/mattermost"
 	objectclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/objectstore"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/observability"
@@ -146,6 +147,12 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
+	bot, err := botclient.New(botclient.Config{URL: config.Bot.URL, TLSServerName: config.Bot.TLSServerName,
+		CAFile: config.Bot.CAFile, ClientCertificateFile: config.Bot.ClientCertificateFile,
+		ClientPrivateKeyFile: config.Bot.ClientPrivateKeyFile, Timeout: config.Bot.Timeout})
+	if err != nil {
+		return err
+	}
 	authority, err := mattermostevent.New(mattermostevent.Config{
 		ProducerID: "control-plane.interaction-gateway", Purpose: "MATTERMOST_SIGNED_EVENT",
 		Issuer: config.Gateway.EventIssuer, Audience: config.Gateway.EventAudience,
@@ -165,7 +172,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	service, err := domainservice.New(repository, mattermost, objects, control, authority, current.business, domainservice.Config{
+	service, err := domainservice.New(repository, mattermost, objects, control, bot, authority, current.business, domainservice.Config{
 		ActionCallbackURL: config.Gateway.ActionCallbackURL, DialogCallbackURL: config.Gateway.DialogCallbackURL,
 		ArtifactDownloadBaseURL: config.Gateway.ArtifactDownloadBaseURL, ArtifactDownloadTTL: config.Gateway.ArtifactDownloadTTL,
 		RetentionRef: config.Gateway.RetentionRef, MaximumPromptBytes: config.Gateway.MaximumPromptBytes,
@@ -183,6 +190,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	}
 	handler, err := apihttp.New(service, readbackVerifier, apihttp.Config{
 		SlashToken: strings.TrimSpace(string(slashTokenRaw)), MaximumBodyBytes: config.Gateway.MaximumBodyBytes,
+		MaximumRuntimeOutputBytes:   config.Object.MaximumObjectBytes,
 		MattermostClientSPIFFE:      config.Gateway.MattermostClientSPIFFE,
 		ReadbackClientSPIFFEIDs:     config.Gateway.ReadbackClientSPIFFEIDs,
 		MaterializationClientSPIFFE: config.Gateway.MaterializationClientSPIFFE,
@@ -215,7 +223,8 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	for _, check := range []struct {
 		name string
 		run  func(context.Context) error
-	}{{"PostgreSQL", repository.Check}, {"control-plane", control.Check}, {"Mattermost event", service.CheckInteraction}, {"S3", objects.Check}, {"delivery readback", readbackCheck}} {
+	}{{"PostgreSQL", repository.Check}, {"control-plane", control.Check}, {"Mattermost event", service.CheckInteraction},
+		{"bot-service runtime transport", bot.Check}, {"S3", objects.Check}, {"delivery readback", readbackCheck}} {
 		if err := check.run(startup); err != nil {
 			return errors.New("startup barrier: " + check.name + " working path is not ready")
 		}
@@ -276,7 +285,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 			func(ctx context.Context) (bool, error) { return service.ClaimInteractionDelivery(ctx) }),
 		periodicWorker("expiry", config.Gateway.ExpiryInterval, config.Gateway.OperationTimeout, current.business, current.logger,
 			func(ctx context.Context) (bool, error) { return true, service.ExpireOwnerGate(ctx) }),
-		readinessWorker(repository.Check, control.Check, service.CheckInteraction, mattermost.Check, objects.Check, readbackCheck,
+		readinessWorker(repository.Check, control.Check, service.CheckInteraction, mattermost.Check, bot.Check, objects.Check, readbackCheck,
 			current.readiness, current.metrics, current.business, current.logger,
 			config.Gateway.ReadinessInterval, config.Gateway.OperationTimeout),
 	)
@@ -306,6 +315,8 @@ func observeHTTP(metrics *internalobservability.Metrics, next http.Handler) http
 				route = "readback"
 			} else if strings.HasPrefix(request.URL.Path, "/internal/v1/runtime-materializations/") {
 				route = "materialization"
+			} else if strings.HasPrefix(request.URL.Path, "/internal/v1/runtime-outputs/") {
+				route = "runtime_output"
 			}
 		}
 		recorder := &statusRecorder{ResponseWriter: response, status: http.StatusOK}
@@ -422,6 +433,7 @@ func readinessWorker(
 	controlCheck func(context.Context) error,
 	interactionCheck func(context.Context) error,
 	mattermostCheck func(context.Context) error,
+	botCheck func(context.Context) error,
 	objectCheck func(context.Context) error,
 	readbackCheck func(context.Context) error,
 	readiness *serviceruntime.Readiness,
@@ -431,7 +443,8 @@ func readinessWorker(
 	interval time.Duration,
 	timeout time.Duration,
 ) serviceruntime.Worker {
-	checkFunctions := []func(context.Context) error{repositoryCheck, controlCheck, interactionCheck, mattermostCheck, objectCheck, readbackCheck}
+	checkFunctions := []func(context.Context) error{repositoryCheck, controlCheck, interactionCheck, mattermostCheck,
+		botCheck, objectCheck, readbackCheck}
 	return periodicWorker("readiness", interval, timeout, business, logger, func(ctx context.Context) (bool, error) {
 		for _, check := range checkFunctions {
 			if err := check(ctx); err != nil {

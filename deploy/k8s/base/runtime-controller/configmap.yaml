@@ -10,7 +10,7 @@ data:
   RUNTIME_RUNNER_CONTROL_PLANE_TARGET: "control-plane.mattercodex-system.svc:8443"
   RUNTIME_RUNNER_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.mattercodex-system.svc.cluster.local"
   RUNTIME_INTERACTION_GATEWAY_URL: "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443"
-  RUNTIME_MCP_GATEWAY_URL: "https://mcp-gateway.mattercodex-system.svc.cluster.local:8443"
+  RUNTIME_SESSION_MCP_URL: "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443"
   RUNTIME_STORAGE_CLASS: "runtime-session"
   RUNTIME_PVC_SIZE: "20Gi"
   RUNTIME_READ_CLUSTER_ROLE: "runtime-role-project-read"

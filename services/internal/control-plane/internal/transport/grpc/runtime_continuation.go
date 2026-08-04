@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"slices"
-	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -13,7 +12,6 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -109,6 +107,49 @@ func (server *Server) GetRuntimeMaterialization(ctx context.Context,
 			MediaType: item.MediaType, StorageRef: item.StorageRef}}, nil
 }
 
+func (server *Server) AuthorizeRuntimeOutput(ctx context.Context,
+	request *controlplanev1.AuthorizeRuntimeOutputRequest) (*controlplanev1.AuthorizeRuntimeOutputResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	output := request.GetOutput()
+	result, err := server.service.AuthorizeRuntimeOutput(ctx, principal, request.GetExecutionId(),
+		resource.RuntimeOutputMetadata{Kind: output.GetKind(), Name: output.GetName(), MediaType: output.GetMediaType(),
+			SizeBytes: output.GetSizeBytes(), SHA256: output.GetSha256(), Sequence: output.GetSequence(), Total: output.GetTotal()})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.AuthorizeRuntimeOutputResponse{OrganizationId: result.OrganizationID,
+		ProjectId: result.ProjectID, ExecutionVersion: result.ExecutionVersion,
+		ExecutionFence: result.Fence, GrantGeneration: result.GrantGeneration}, nil
+}
+
+func (server *Server) RegisterRuntimeOutput(ctx context.Context,
+	request *controlplanev1.RegisterRuntimeOutputRequest) (*controlplanev1.RegisterRuntimeOutputResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_RegisterRuntimeOutput_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	output := request.GetOutput()
+	artifact, err := server.service.RegisterRuntimeOutput(ctx, resource.RegisterRuntimeOutputInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), ExecutionID: request.GetExecutionId(),
+		ExpectedExecutionVersion: request.GetExpectedExecutionVersion(),
+		ExpectedExecutionFence:   request.GetExpectedExecutionFence(), ExpectedGrantGeneration: request.GetExpectedGrantGeneration(),
+		Output: resource.RuntimeOutputMetadata{Kind: output.GetKind(), Name: output.GetName(), MediaType: output.GetMediaType(),
+			SizeBytes: output.GetSizeBytes(), SHA256: output.GetSha256(), Sequence: output.GetSequence(), Total: output.GetTotal()},
+		StorageRef: request.GetStorageRef(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	encoded, err := toProtoResource(artifact)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.RegisterRuntimeOutputResponse{Artifact: encoded}, nil
+}
+
 func (server *Server) AdmitRuntimeExecution(
 	ctx context.Context,
 	request *controlplanev1.AdmitRuntimeExecutionRequest,
@@ -201,7 +242,8 @@ func (server *Server) CompleteRuntimeExecution(
 		outputs = append(outputs, resource.RuntimeOutput{Kind: output.GetKind(), ArtifactID: output.GetArtifactId(),
 			ArtifactVersion: output.GetArtifactVersion(), ArtifactSHA256: output.GetArtifactSha256(),
 			ArtifactName: output.GetArtifactName(), ArtifactMediaType: output.GetArtifactMediaType(),
-			ArtifactPayload: slices.Clone(output.GetArtifactPayload()), Sequence: output.GetSequence(), Total: output.GetTotal()})
+			ArtifactPayload: slices.Clone(output.GetArtifactPayload()), ArtifactStorageRef: output.GetArtifactStorageRef(),
+			ArtifactSizeBytes: output.GetArtifactSizeBytes(), Sequence: output.GetSequence(), Total: output.GetTotal()})
 	}
 	execution, err := server.service.CompleteRuntimeExecution(ctx, resource.CompleteRuntimeExecutionInput{
 		RuntimeExecutionInput: resource.RuntimeExecutionInput{
@@ -276,6 +318,41 @@ func (server *Server) RetryRuntimeExecution(
 	return &controlplanev1.RetryRuntimeExecutionResponse{
 		PreviousExecution: toProtoRuntimeExecution(result.Previous), Turn: turn,
 	}, nil
+}
+
+func (server *Server) ManageRuntimeAction(
+	ctx context.Context,
+	request *controlplanev1.ManageRuntimeActionRequest,
+) (*controlplanev1.ManageRuntimeActionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ManageRuntimeAction_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	action := ""
+	switch request.GetAction() {
+	case controlplanev1.RuntimeAction_RUNTIME_ACTION_STOP:
+		action = "STOP"
+	case controlplanev1.RuntimeAction_RUNTIME_ACTION_RETRY:
+		action = "RETRY"
+	}
+	result, err := server.service.ManageRuntimeAction(ctx, resource.ManageRuntimeActionInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		SessionID: request.GetSessionId(), TurnID: request.GetTurnId(), Action: action,
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	turn, err := toProtoResource(result.Turn)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	response := &controlplanev1.ManageRuntimeActionResponse{Turn: turn}
+	if result.Execution != nil {
+		response.Execution = toProtoRuntimeExecution(*result.Execution)
+	}
+	return response, nil
 }
 
 func (server *Server) RescheduleRuntimeExecution(
@@ -1033,76 +1110,6 @@ func (server *Server) AcknowledgeIntegrationContinuation(
 	}, nil
 }
 
-func (server *Server) ValidateIntegrationResultAccess(
-	ctx context.Context,
-	_ *controlplanev1.ValidateIntegrationResultAccessRequest,
-) (*controlplanev1.ValidateIntegrationResultAccessResponse, error) {
-	transportPrincipal, err := authorization.Principal(
-		ctx, controlplanev1.ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	incoming, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrUnauthenticated)
-	}
-	values := incoming.Get(integrationgatewayauth.ResultAccessGrantMetadata)
-	if len(values) != 1 || values[0] == "" || strings.TrimSpace(values[0]) != values[0] {
-		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrUnauthenticated)
-	}
-	claims, err := server.resultVerifier.Verify(ctx, values[0])
-	if err != nil || claims.Purpose != integrationgatewayauth.PurposeResultAccess ||
-		!slices.Contains(claims.AllowedOperationIDs, "integration.result.resolve") ||
-		!slices.Contains(claims.AllowedOperationIDs, "integration.result.acknowledge") {
-		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrPermissionDenied)
-	}
-	boundPrincipal := value.Principal{
-		ActorID: claims.Subject, OrganizationID: claims.OrganizationID, ProjectID: claims.ProjectID,
-		Permission: "controlplane.integration_continuation.read", CorrelationID: transportPrincipal.CorrelationID,
-		PolicyRevision: transportPrincipal.PolicyRevision, AuthorityGeneration: claims.SignerGeneration,
-		CallerWorkload: claims.WorkloadID, CallerSPIFFEID: claims.CallerSPIFFEID,
-		AuthoritySource: "INTEGRATION_CONTINUATION", AuthorityReference: claims.ContinuationID,
-		AuthorityRevision: claims.ContinuationVersion, AuthorityDigest: claims.InputSHA256,
-		AuthorityGrantGeneration: claims.GrantGeneration,
-	}
-	continuation, err := server.service.GetIntegrationContinuation(ctx, resource.GetIntegrationContinuationInput{Principal: boundPrincipal})
-	if err != nil {
-		return nil, rpcError(transportPrincipal.CorrelationID, err)
-	}
-	revisionSHA256, err := server.service.IntegrationContinuationRuntimeRevisionSHA256(ctx, boundPrincipal, continuation)
-	if err != nil {
-		return nil, rpcError(transportPrincipal.CorrelationID, err)
-	}
-	outcome, reference, referenceSHA256 := "", "", ""
-	if continuation.ExecutionState == "SUCCEEDED" {
-		outcome, reference, referenceSHA256 = "SUCCEEDED", continuation.ResultReference, continuation.ResultSHA256
-	} else if continuation.ExecutionState == "FAILED" {
-		outcome, reference, referenceSHA256 = "FAILED", continuation.ErrorReference, continuation.ErrorSHA256
-		if continuation.ErrorCode == "PROVIDER_OUTCOME_UNKNOWN" {
-			outcome = "UNKNOWN"
-		}
-	}
-	if continuation.ID != claims.ContinuationID || continuation.Version != claims.ContinuationVersion ||
-		continuation.Fence != claims.ContinuationFence || continuation.InvocationID != claims.InvocationID ||
-		continuation.SessionID != claims.SessionID || continuation.ContinuationTurnID != claims.TurnID ||
-		continuation.ContinuationAttempt != claims.Attempt ||
-		continuation.ContinuationRuntimeRevisionID != claims.RuntimeRevisionID ||
-		continuation.ContinuationRuntimeRevisionVersion != claims.RuntimeRevisionVersion ||
-		revisionSHA256 != claims.RuntimeRevisionSHA256 ||
-		continuation.ContinuationInputSHA256 != claims.InputSHA256 ||
-		continuation.GrantGeneration != claims.GrantGeneration || outcome != claims.Outcome ||
-		reference != claims.Reference || referenceSHA256 != claims.ReferenceSHA256 || reference == "" {
-		return nil, rpcError(transportPrincipal.CorrelationID, errs.ErrStateConflict)
-	}
-	encoded := toProtoIntegrationContinuation(continuation)
-	return &controlplanev1.ValidateIntegrationResultAccessResponse{
-		Continuation: encoded, Outcome: outcome, Reference: reference,
-		ReferenceSha256: referenceSHA256, ResultAttemptId: claims.ResultAttemptID,
-		SignerGeneration: claims.SignerGeneration,
-	}, nil
-}
-
 func toProtoIntegrationExecutionBinding(
 	binding resource.IntegrationExecutionBinding,
 ) *controlplanev1.IntegrationExecutionBinding {
@@ -1297,52 +1304,6 @@ func (server *Server) toProtoIntegrationContinuation(
 		}
 		encoded.TransitionGrant = compact
 		encoded.TransitionGrantExpiresAt = timestamppb.New(time.Unix(base.ExpiresAt, 0).UTC())
-	}
-	resultReference, resultDigest, outcome := continuation.ResultReference, continuation.ResultSHA256, "SUCCEEDED"
-	if continuation.ExecutionState == "FAILED" {
-		resultReference, resultDigest, outcome = continuation.ErrorReference, continuation.ErrorSHA256, "FAILED"
-		if continuation.ErrorCode == "PROVIDER_OUTCOME_UNKNOWN" {
-			outcome = "UNKNOWN"
-		}
-	}
-	if continuation.ContinuationState == "READY" && resultReference != "" && resultDigest != "" &&
-		(outcome == "SUCCEEDED" || outcome == "FAILED" || outcome == "UNKNOWN") {
-		const resultPrefix = "integration-gateway://invocations/"
-		reference, found := strings.CutPrefix(resultReference, resultPrefix)
-		parts := strings.Split(reference, "/results/")
-		if !found || len(parts) != 2 || parts[0] != continuation.InvocationID ||
-			value.ValidateID(parts[1]) != nil {
-			return nil, errs.ErrInternal
-		}
-		revisionSHA256, err := server.service.IntegrationContinuationRuntimeRevisionSHA256(
-			ctx, principal, continuation,
-		)
-		if err != nil {
-			return nil, err
-		}
-		base.Purpose = integrationgatewayauth.PurposeResultAccess
-		base.Audience = "urn:mattercodex:integration-result-access"
-		base.WorkloadID = "agent-runner"
-		base.CallerSPIFFEID = "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
-		base.TurnID = continuation.ContinuationTurnID
-		base.Attempt = continuation.ContinuationAttempt
-		base.InputSHA256 = continuation.ContinuationInputSHA256
-		base.RuntimeRevisionID = continuation.ContinuationRuntimeRevisionID
-		base.RuntimeRevisionVersion = continuation.ContinuationRuntimeRevisionVersion
-		base.RuntimeRevisionSHA256 = revisionSHA256
-		base.ResultAttemptID = parts[1]
-		base.Outcome = outcome
-		base.Reference = resultReference
-		base.ReferenceSHA256 = resultDigest
-		base.AllowedOperationIDs = []string{"integration.result.resolve", "integration.result.acknowledge"}
-		base.JTI = uuid.NewString()
-		base.ExpiresAt = now.Add(continuationGrantTTL).Unix()
-		compact, err := server.resultSigner.Sign(ctx, base)
-		if err != nil {
-			return nil, err
-		}
-		encoded.ResultAccessGrant = compact
-		encoded.ResultAccessGrantExpiresAt = timestamppb.New(time.Unix(base.ExpiresAt, 0).UTC())
 	}
 	return encoded, nil
 }

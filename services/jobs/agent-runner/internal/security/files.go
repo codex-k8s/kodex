@@ -53,6 +53,14 @@ func verifyParents(path string) error {
 }
 
 func EnsureWorkspaceDirectory(relative string) error {
+	return ensureWorkspaceDirectory(relative, 0o700, false)
+}
+
+func EnsureSharedWorkspaceDirectory(relative string) error {
+	return ensureWorkspaceDirectory(relative, 0o2770, true)
+}
+
+func ensureWorkspaceDirectory(relative string, mode uint32, shared bool) error {
 	clean := filepath.Clean(relative)
 	if clean != relative || filepath.IsAbs(clean) || clean == "." || clean == ".." ||
 		strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
@@ -67,7 +75,7 @@ func EnsureWorkspaceDirectory(relative string) error {
 		if part == "" || part == "." || part == ".." {
 			return errors.New("workspace directory component is invalid")
 		}
-		if err := unix.Mkdirat(current, part, 0o700); err != nil && !errors.Is(err, syscall.EEXIST) {
+		if err := unix.Mkdirat(current, part, mode); err != nil && !errors.Is(err, syscall.EEXIST) {
 			return errors.New("create workspace directory")
 		}
 		next, err := unix.Openat(current, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
@@ -75,8 +83,16 @@ func EnsureWorkspaceDirectory(relative string) error {
 			return errors.New("open workspace directory component")
 		}
 		var stat unix.Stat_t
-		if unix.Fstat(next, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR ||
-			stat.Uid != uint32(os.Geteuid()) || stat.Mode&0o077 != 0 {
+		if unix.Fstat(next, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR || stat.Uid != uint32(os.Geteuid()) {
+			unix.Close(next)
+			return errors.New("workspace directory component is unsafe")
+		}
+		if shared {
+			if err := unix.Fchown(next, -1, 29000); err != nil || unix.Fchmod(next, mode) != nil {
+				unix.Close(next)
+				return errors.New("protect shared workspace directory")
+			}
+		} else if stat.Mode&0o077 != 0 {
 			unix.Close(next)
 			return errors.New("workspace directory component is unsafe")
 		}

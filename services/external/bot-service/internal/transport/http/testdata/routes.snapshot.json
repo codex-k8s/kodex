@@ -40,6 +40,10 @@
     "boundary": "cluster"
   },
   {
+    "path": "/internal/runtime-mcp-bindings",
+    "boundary": "cluster"
+  },
+  {
     "path": "/mcp/sessions/",
     "boundary": "cluster"
   },

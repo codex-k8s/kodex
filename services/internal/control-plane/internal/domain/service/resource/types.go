@@ -194,68 +194,6 @@ type RuntimeMaterializationResult struct {
 	Materialization                          domainrepo.RuntimeMaterialization
 }
 
-type RuntimeAgentSessionBindingInput struct {
-	Principal               value.Principal
-	IdempotencyKey          string
-	SessionID               string
-	ExpectedSessionVersion  uint64
-	TurnID                  string
-	ExpectedTurnVersion     uint64
-	ExpectedAttempt         uint32
-	ExpectedInputSHA256     string
-	RuntimeRevisionID       string
-	RuntimeRevisionVersion  uint64
-	RuntimeRevisionSHA256   string
-	AgentSessionKey         string
-	AgentSessionID          int64
-	AgentSessionVersion     uint64
-	AgentSessionTurnID      int64
-	AgentRunID              string
-	AgentSessionTurnVersion uint64
-}
-
-type RuntimeAgentSessionBinding struct {
-	SessionID                 string
-	SessionVersion            uint64
-	TurnID                    string
-	TurnVersion               uint64
-	AgentSessionBindingSHA256 string
-	AgentTurnBindingSHA256    string
-}
-
-type RuntimeAgentBindingIntent struct {
-	SessionID              string
-	SessionVersion         uint64
-	TurnID                 string
-	TurnVersion            uint64
-	Attempt                uint32
-	InputSHA256            string
-	RuntimeRevisionID      string
-	RuntimeRevisionVersion uint64
-	RuntimeRevisionSHA256  string
-}
-
-type MaterializeRuntimeAgentTurnInput struct {
-	Principal               value.Principal
-	IdempotencyKey          string
-	SourceRef               string
-	RoleStableKey           string
-	ExternalChannelRef      string
-	PromptText              string
-	AgentSessionKey         string
-	AgentSessionID          int64
-	AgentSessionVersion     uint64
-	AgentSessionTurnID      int64
-	AgentSessionTurnVersion uint64
-	AgentRunID              string
-}
-
-type MaterializedRuntimeAgentTurn struct {
-	RuntimeAgentBindingIntent
-	AgentSessionBindingSHA256 string
-	AgentTurnBindingSHA256    string
-}
-
 type ResourceRetentionPolicyInput struct {
 	Principal               value.Principal
 	IdempotencyKey          string
@@ -323,6 +261,19 @@ type ManageSessionInput struct {
 	ArchiveRef                           string
 	ReasonCode                           string
 	PreferredProviderCredentialBindingID string
+}
+
+type BindSessionMCPInput struct {
+	Principal                 value.Principal
+	IdempotencyKey            string
+	SessionID                 string
+	AgentSessionKey           string
+	AgentSessionID            int64
+	AgentSessionVersion       uint64
+	AgentSessionBindingSHA256 string
+	ImmutableSecretRef        string
+	ProviderContentVersion    string
+	ContentSHA256             string
 }
 
 type ManageConversationLifecycleInput struct {
@@ -669,7 +620,32 @@ type RuntimeOutput struct {
 	Kind, ArtifactID, ArtifactSHA256, ArtifactName, ArtifactMediaType string
 	ArtifactVersion                                                   uint64
 	ArtifactPayload                                                   []byte
+	ArtifactStorageRef                                                string
+	ArtifactSizeBytes                                                 uint64
 	Sequence, Total                                                   uint32
+}
+
+type RuntimeOutputMetadata struct {
+	Kind, Name, MediaType, SHA256 string
+	SizeBytes                     uint64
+	Sequence, Total               uint32
+}
+
+type RuntimeOutputAuthorization struct {
+	OrganizationID, ProjectID string
+	ExecutionVersion, Fence   uint64
+	GrantGeneration           uint64
+}
+
+type RegisterRuntimeOutputInput struct {
+	Principal                value.Principal
+	IdempotencyKey           string
+	ExecutionID              string
+	ExpectedExecutionVersion uint64
+	ExpectedExecutionFence   uint64
+	ExpectedGrantGeneration  uint64
+	Output                   RuntimeOutputMetadata
+	StorageRef               string
 }
 
 type CancelRuntimeExecutionInput struct {
@@ -747,6 +723,19 @@ type AdmitRuntimeExecutionResult struct {
 type RetryRuntimeExecutionResult struct {
 	Previous RuntimeExecution
 	Turn     entity.Resource
+}
+
+type ManageRuntimeActionInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+	SessionID      string
+	TurnID         string
+	Action         string
+}
+
+type ManageRuntimeActionResult struct {
+	Turn      entity.Resource
+	Execution *RuntimeExecution
 }
 
 type IntegrationExecutionBinding struct {

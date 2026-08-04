@@ -101,35 +101,44 @@ func DecodeHandoff(raw []byte) (HandoffV1, error) {
 	return handoff, nil
 }
 
-// OutputV2 описывает один owner-deliverable результат. Payload переносится
-// только внутри bounded ConfigMap handoff и никогда не является transport
-// командой Mattermost.
+// OutputV2 описывает один owner-deliverable результат. Малый Markdown может
+// быть inline; file/image и крупный Markdown передаются только immutable ref.
 type OutputV2 struct {
-	Kind      string `json:"kind"`
-	ID        string `json:"id"`
-	Version   uint64 `json:"version"`
-	SHA256    string `json:"sha256"`
-	Name      string `json:"name"`
-	MediaType string `json:"media_type"`
-	Payload   []byte `json:"payload"`
-	Sequence  uint32 `json:"sequence"`
-	Total     uint32 `json:"total"`
+	Kind       string `json:"kind"`
+	ID         string `json:"id"`
+	Version    uint64 `json:"version"`
+	SHA256     string `json:"sha256"`
+	Name       string `json:"name"`
+	MediaType  string `json:"media_type"`
+	Payload    []byte `json:"payload"`
+	StorageRef string `json:"storage_ref,omitempty"`
+	SizeBytes  uint64 `json:"size_bytes"`
+	Sequence   uint32 `json:"sequence"`
+	Total      uint32 `json:"total"`
 }
 
 func (output OutputV2) validate() error {
 	if output.Kind != "FINAL_MARKDOWN" && output.Kind != "FILE" && output.Kind != "IMAGE" {
 		return errors.New("runtime output kind is invalid")
 	}
-	digest := sha256.Sum256(output.Payload)
 	if output.ID == "" || output.Version == 0 || output.Name == "" || len(output.Name) > 255 ||
 		strings.ContainsAny(output.Name, "/\\\x00\r\n") || output.MediaType == "" || len(output.MediaType) > 255 ||
-		!sha256Pattern.MatchString(output.SHA256) || output.SHA256 != hex.EncodeToString(digest[:]) ||
-		len(output.Payload) == 0 || len(output.Payload) > MaximumOutputBytes ||
+		!sha256Pattern.MatchString(output.SHA256) || output.SizeBytes == 0 || output.SizeBytes > 256<<20 ||
 		output.Sequence == 0 || output.Total == 0 || output.Sequence > output.Total {
 		return errors.New("runtime output is invalid")
 	}
+	if len(output.Payload) != 0 {
+		digest := sha256.Sum256(output.Payload)
+		if output.StorageRef != "" || output.SizeBytes != uint64(len(output.Payload)) ||
+			len(output.Payload) > MaximumOutputBytes || output.SHA256 != hex.EncodeToString(digest[:]) {
+			return errors.New("runtime inline output is invalid")
+		}
+	} else if !strings.HasPrefix(output.StorageRef, "s3://") || len(output.StorageRef) > 2048 ||
+		strings.ContainsAny(output.StorageRef, "\x00\r\n") {
+		return errors.New("runtime referenced output is invalid")
+	}
 	if output.Kind == "FINAL_MARKDOWN" &&
-		(output.MediaType != "text/markdown" || !utf8.Valid(output.Payload)) {
+		(output.MediaType != "text/markdown" || len(output.Payload) != 0 && !utf8.Valid(output.Payload)) {
 		return errors.New("runtime markdown output is invalid")
 	}
 	if output.Kind == "IMAGE" && !strings.HasPrefix(output.MediaType, "image/") {
@@ -178,10 +187,7 @@ func (handoff HandoffV2) Validate() error {
 		(handoff.Outcome != "SUCCEEDED" && handoff.Outcome != "FAILED" && handoff.Outcome != "BLOCKED") ||
 		handoff.TerminalReference == "" || len(handoff.TerminalReference) > 1024 ||
 		!sha256Pattern.MatchString(handoff.TerminalSHA256) || len(handoff.Outputs) == 0 ||
-		len(handoff.Outputs) > MaximumOutputs || !uuidPattern.MatchString(handoff.CodexSessionID) ||
-		!validArchiveRelativePath(handoff.ArchiveRelativePath) ||
-		!sha256Pattern.MatchString(handoff.ArchiveSHA256) || handoff.ArchiveProvenance == "" ||
-		!validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256) ||
+		len(handoff.Outputs) > MaximumOutputs || !validCodexTerminalBinding(handoff) ||
 		len(handoff.ArchiveProvenance) > 1024 || handoff.ObservedAt.IsZero() {
 		return errors.New("runtime handoff is invalid")
 	}
@@ -216,6 +222,15 @@ func (handoff HandoffV2) Validate() error {
 		return errors.New("runtime handoff output budget exceeded")
 	}
 	return nil
+}
+
+func validCodexTerminalBinding(handoff HandoffV2) bool {
+	if handoff.CodexSessionID == "" && handoff.ArchiveRelativePath == "" && handoff.ArchiveSHA256 == "" && handoff.ArchiveProvenance == "" {
+		return handoff.Outcome == "BLOCKED" && strings.HasPrefix(handoff.TerminalReference, "preflight://")
+	}
+	return uuidPattern.MatchString(handoff.CodexSessionID) && validArchiveRelativePath(handoff.ArchiveRelativePath) &&
+		sha256Pattern.MatchString(handoff.ArchiveSHA256) && handoff.ArchiveProvenance != "" &&
+		validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256)
 }
 
 func validCodexArchiveProvenance(value, path, digest string) bool {

@@ -15,13 +15,11 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
-	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	continuationclient "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/client/continuation"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/service/gateway"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/enum"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -377,30 +375,6 @@ func (client *Client) Apply(ctx context.Context, command continuationclient.Comm
 
 func (client *Client) Check(ctx context.Context) error {
 	return client.client.Check(ctx)
-}
-
-func (client *Client) ValidateResultAccess(
-	ctx context.Context,
-	compact string,
-) (*controlplanev1.ValidateIntegrationResultAccessResponse, error) {
-	if compact == "" || len(compact) > 16<<10 || strings.TrimSpace(compact) != compact {
-		return nil, errors.New("result access grant is invalid")
-	}
-	requestContext := metadata.AppendToOutgoingContext(
-		ctx, integrationgatewayauth.ResultAccessGrantMetadata, compact,
-	)
-	response, err := client.client.ControlPlane.ValidateIntegrationResultAccess(
-		requestContext, &controlplanev1.ValidateIntegrationResultAccessRequest{},
-	)
-	if err != nil {
-		return nil, err
-	}
-	if response.GetContinuation() == nil || response.GetOutcome() == "" ||
-		response.GetReference() == "" || !validDigest(response.GetReferenceSha256()) ||
-		response.GetResultAttemptId() == "" || response.GetSignerGeneration() == 0 {
-		return nil, errors.New("control-plane result access validation is invalid")
-	}
-	return response, nil
 }
 
 func applicationGrantExpiry(compact string) (time.Time, error) {

@@ -149,7 +149,7 @@ func (input Input) Validate() error {
 		input.ProviderBindingVersion == 0 || input.SessionKey == "" || len(input.SessionKey) > 256 ||
 		!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(input.AgentProfile) ||
 		!regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`).MatchString(input.CodexModel) ||
-		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write" && input.CodexSandbox != "danger-full-access") ||
+		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write") ||
 		(input.CodexApprovalPolicy != "untrusted" && input.CodexApprovalPolicy != "on-request" &&
 			input.CodexApprovalPolicy != "never") ||
 		(input.CodexSessionID != "" && uuid.Validate(input.CodexSessionID) != nil) ||

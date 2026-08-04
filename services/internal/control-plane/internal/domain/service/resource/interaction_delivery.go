@@ -33,21 +33,34 @@ func validateRuntimeOutputs(outputs []RuntimeOutput) error {
 	kindTotals := make(map[string]uint32, 3)
 	kindCounts := make(map[string]uint32, 3)
 	totalBytes := 0
-	for _, output := range outputs {
-		digest := sha256.Sum256(output.ArtifactPayload)
+	for index, output := range outputs {
 		if output.Kind != "FINAL_MARKDOWN" && output.Kind != "FILE" && output.Kind != "IMAGE" {
 			return errs.ErrInvalidInput
 		}
 		if value.ValidateID(output.ArtifactID) != nil || output.ArtifactVersion != 1 ||
-			output.ArtifactSHA256 != hex.EncodeToString(digest[:]) || output.ArtifactName == "" ||
+			len(output.ArtifactSHA256) != sha256.Size*2 || output.ArtifactName == "" ||
 			len(output.ArtifactName) > 255 || strings.ContainsAny(output.ArtifactName, "/\\\x00\r\n") ||
 			output.ArtifactMediaType == "" || len(output.ArtifactMediaType) > 255 ||
-			len(output.ArtifactPayload) == 0 || len(output.ArtifactPayload) > 512<<10 ||
+			output.ArtifactSizeBytes == 0 || output.ArtifactSizeBytes > 256<<20 ||
 			output.Sequence == 0 || output.Total == 0 || output.Sequence > output.Total {
 			return errs.ErrInvalidInput
 		}
+		if len(output.ArtifactPayload) != 0 {
+			digest := sha256.Sum256(output.ArtifactPayload)
+			if output.ArtifactStorageRef != "" || output.ArtifactSizeBytes != uint64(len(output.ArtifactPayload)) ||
+				len(output.ArtifactPayload) > 512<<10 || output.ArtifactSHA256 != hex.EncodeToString(digest[:]) {
+				return errs.ErrInvalidInput
+			}
+			totalBytes += len(output.ArtifactPayload)
+		} else if !strings.HasPrefix(output.ArtifactStorageRef, "s3://") || len(output.ArtifactStorageRef) > 2048 ||
+			strings.ContainsAny(output.ArtifactStorageRef, "\x00\r\n") {
+			return errs.ErrInvalidInput
+		}
+		if index == 0 && (len(output.ArtifactPayload) == 0 || output.ArtifactStorageRef != "") {
+			return errs.ErrInvalidInput
+		}
 		if output.Kind == "FINAL_MARKDOWN" && (output.ArtifactMediaType != "text/markdown" ||
-			len(output.ArtifactPayload) > 60<<10 || !utf8.Valid(output.ArtifactPayload)) {
+			len(output.ArtifactPayload) > 60<<10 || len(output.ArtifactPayload) != 0 && !utf8.Valid(output.ArtifactPayload)) {
 			return errs.ErrInvalidInput
 		}
 		if output.Kind == "IMAGE" && !strings.HasPrefix(output.ArtifactMediaType, "image/") {
@@ -62,7 +75,6 @@ func validateRuntimeOutputs(outputs []RuntimeOutput) error {
 			return errs.ErrInvalidInput
 		}
 		kindTotals[output.Kind], kindCounts[output.Kind] = output.Total, kindCounts[output.Kind]+1
-		totalBytes += len(output.ArtifactPayload)
 	}
 	for kind, total := range kindTotals {
 		if kindCounts[kind] != total {
@@ -86,23 +98,18 @@ func (service *Service) materializeRuntimeOutputs(ctx context.Context, tx domain
 		return err
 	}
 	for _, output := range outputs[1:] {
-		evidence := sha256.Sum256([]byte(strings.Join([]string{execution.ID, execution.TurnID,
-			output.ArtifactSHA256, execution.ImmutableInputSHA256}, "\x00")))
-		artifact, err := entity.New(output.ArtifactID, principal.OrganizationID, principal.ProjectID,
-			execution.SessionID, principal.ActorID, enum.KindArtifact, output.ArtifactName,
-			entity.ArtifactSpec{ArtifactKind: "runtime-output", Direction: "OUTPUT",
-				StorageRef: "control-plane-inline:" + output.ArtifactID, SizeBytes: uint64(len(output.ArtifactPayload)),
-				MediaType: output.ArtifactMediaType, SHA256: output.ArtifactSHA256, ScanStatus: "CLEAN",
-				RetentionPolicyRef: "policy://runtime-result", ScanPolicyRevision: 1,
-				ScanEvidenceSHA256: hex.EncodeToString(evidence[:]), ScannerWorkloadID: "agent-runner", ScannedAt: now}, now)
+		artifact, err := tx.Get(ctx, turn.OrganizationID, turn.ProjectID, output.ArtifactID)
 		if err != nil {
+			return err
+		}
+		artifactSpec, ok := artifact.Spec.(entity.ArtifactSpec)
+		if !ok || artifact.Kind != enum.KindArtifact || artifact.ParentID != execution.TurnID ||
+			artifact.OwnerActorID != turn.OwnerActorID || artifact.Version != output.ArtifactVersion ||
+			artifact.Name != output.ArtifactName || artifactSpec.ArtifactKind != "runtime-output-"+strings.ToLower(output.Kind) ||
+			artifactSpec.Direction != "OUTPUT" || artifactSpec.StorageRef != output.ArtifactStorageRef ||
+			artifactSpec.SizeBytes != output.ArtifactSizeBytes || artifactSpec.MediaType != output.ArtifactMediaType ||
+			artifactSpec.SHA256 != output.ArtifactSHA256 || artifactSpec.ScanStatus != "CLEAN" {
 			return errs.ErrStateConflict
-		}
-		if err := tx.Insert(ctx, artifact); err != nil {
-			return err
-		}
-		if err := service.appendMutationRecords(ctx, tx, principal, "materialize_runtime_output", artifact); err != nil {
-			return err
 		}
 		kinds := []string{"PUBLISH_ARTIFACT"}
 		if output.Kind == "FINAL_MARKDOWN" {
@@ -118,9 +125,8 @@ func (service *Service) materializeRuntimeOutputs(ctx context.Context, tx domain
 				ImmutableInputSHA256: execution.ImmutableInputSHA256, Kind: kind,
 				LifecycleState: string(turn.State), Outcome: spec.Outcome, ArtifactID: output.ArtifactID,
 				ArtifactVersion: output.ArtifactVersion, ArtifactSHA256: output.ArtifactSHA256,
-				ArtifactName: output.ArtifactName, ArtifactStorageRef: "control-plane-inline:" + output.ArtifactID,
-				ArtifactSizeBytes: uint64(len(output.ArtifactPayload)), ArtifactMediaType: output.ArtifactMediaType,
-				InlinePayload: slices.Clone(output.ArtifactPayload)}
+				ArtifactName: output.ArtifactName, ArtifactStorageRef: output.ArtifactStorageRef,
+				ArtifactSizeBytes: output.ArtifactSizeBytes, ArtifactMediaType: output.ArtifactMediaType}
 			if err := tx.EnqueueInteractionDelivery(ctx, work); err != nil {
 				return err
 			}

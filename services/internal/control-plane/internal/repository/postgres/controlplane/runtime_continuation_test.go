@@ -160,23 +160,6 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 			name: "retention policy lookup", sql: sqlResourceRetentionPolicyCurrent,
 			args: pgx.StrictNamedArgs{"organization_id": "", "project_id": ""},
 		},
-		{
-			name: "runtime agent binding read", sql: sqlRuntimeAgentBindingGetForUpdate,
-			args: pgx.StrictNamedArgs{
-				"organization_id": "", "project_id": "", "turn_id": "", "attempt": uint32(1),
-			},
-		},
-		{
-			name: "runtime agent binding insert", sql: sqlRuntimeAgentBindingInsert,
-			args: pgx.StrictNamedArgs{
-				"organization_id": "", "project_id": "", "session_id": "", "turn_id": "", "attempt": uint32(1),
-				"input_sha256": "", "runtime_revision_id": "", "runtime_revision_version": uint64(1),
-				"runtime_revision_sha256": "", "agent_session_key": "", "agent_session_id": int64(1),
-				"agent_session_version": uint64(1), "agent_session_binding_sha256": "",
-				"agent_session_turn_id": int64(1), "agent_run_id": "", "agent_session_turn_version": uint64(1),
-				"agent_turn_binding_sha256": "", "created_at": time.Time{},
-			},
-		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

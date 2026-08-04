@@ -29,7 +29,8 @@ Controller не запускает Codex: role image запускает `agent-r
 | guarded PVC delete/finalize | controller может только `ConsumeRuntimeCleanupAuthorization` | active generation, тот же PVC tuple, observed NotFound и deletion proof digest | idempotent `CONSUMED` | controller |
 | cancel/retry/continuation | только owner workload | полный session/turn/process graph | atomic terminal/retry/new revision/grant | не controller |
 | role runtime | exact ServiceAccount profile; bearer остаётся обязательным на application path | immutable runner input и projected credentials | runner handoff exact execution/revision/input tuple | `agent-runner` |
-| bot execution binding | bot-service owner через TLS 1.3/mTLS + bearer и generated control-plane client | repository-разрешённые source post, role/channel, prompt и bot AgentSession/Turn/Run с версиями | одна owner transaction создаёт либо rejoin-ит control Session/Turn/attempt/fresh RuntimeRevision, binding digests и receipt | bounded bot discovery worker |
+| Mattermost Stop/Retry | `interaction-gateway` как transport producer: verified actor, callback/card lineage и signed event | server-resolved Session/Turn/RuntimeExecution | `ManageRuntimeAction` атомарно закрывает текущий graph либо создаёт новую attempt/RuntimeRevision/grant | controller наблюдает cancel и останавливает Pod; новая attempt проходит обычный reconcile |
+| session MCP credential | bot-service только как transport credential producer, вызванный `interaction-gateway` по TLS 1.3/mTLS | exact channel/root card/bot identity и control-plane Session | immutable `AgentSession.TokenSecretRef`, revision/digest и `BindSessionMCP` receipt | credential broker копирует только exact Secret в trusted runner container |
 
 mTLS подтверждает peer и не заменяет bearer, application authority, owner
 resolution, idempotency или replay protection. Payload, labels и NATS envelope
@@ -102,7 +103,12 @@ versioned materializations, TLS bindings и только пути immutable cred
 Control-plane остаётся единственным владельцем Session/Turn/Process и FIFO;
 bot-service session API не является authority. Контейнер получает только
 `runtime-init-workspace` либо `runtime-session`, session PVC и exact
-execution artifacts. Каждый artifact связан с owner id/version/SHA-256 и
+execution artifacts. Недоверенный `provider-runtime` запускается отдельным UID
+без Kubernetes token, application grants, runtime mTLS, MCP bearer, handoff key
+и authority socket; provider broker принимает bounded запросы только от trusted
+runner UID 10001, а обратный MCP authority UDS — только от provider UID 10002
+либо trusted readiness UID 10001 по `SO_PEERCRED` и локальной capability.
+Каждый artifact связан с owner id/version/SHA-256 и
 читается через `interaction-gateway` по TLS 1.3/mTLS/SNI/CA + bearer без прямого
 чтения чужой БД либо broad object-store credential.
 
@@ -130,8 +136,11 @@ UID/resourceVersion preconditions, поэтому параллельные execu
 runner публикует подписанный `mattercodex.runtime-turn-handoff.v2` в отдельный
 controller-owned ConfigMap: exact execution/revision/input/provider tuple,
 закрытый outcome, terminal digest, Codex thread/rollout provenance и bounded
-множество Markdown chunks, files и images. Controller проверяет Ed25519 trust,
-lease/fence/generation, каждый payload digest и только затем вызывает
+inline Markdown плюс immutable Artifact refs для files, images и крупного
+Markdown. До handoff trusted runner отправляет bounded stream в
+`interaction-gateway`; gateway владеет private S3 put/readback и регистрирует
+Artifact в control-plane. Controller проверяет Ed25519 trust,
+lease/fence/generation, каждый inline/ref digest и только затем вызывает
 `CompleteRuntimeExecution`. Одна owner transaction закрывает execution,
 Turn/Process/leases/grants и создаёт durable interaction deliveries. Выход Pod
 без handoff создаёт incident и оставляет owner recovery выбрать
@@ -144,6 +153,9 @@ client; старый процесс и mounted secrets не переисполь
 сохраняет `CODEX_HOME`, а resume разрешён только для того же provider account и
 проверенного rollout. Если PVC уже удалён, owner назначает exact archive source,
 rehydrate восстанавливает новый PVC и только после proof разрешает role Pod.
+Codex thread lineage при этом читается независимо от cleanup/archive state из
+последнего проверенного terminal execution той же Session; reauth той же
+logical provider binding допускает свежие credential version/digest.
 
 ### Archive, restore и rehydrate
 

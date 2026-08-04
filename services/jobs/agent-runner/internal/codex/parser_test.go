@@ -126,6 +126,24 @@ func TestNotificationSchemasCoverExactClosedMethodSet(t *testing.T) {
 	}
 }
 
+func TestTerminalPresentationKeepsCapacityQuotaAndPolicySeparate(t *testing.T) {
+	tests := []struct {
+		code, outcome, action string
+	}{
+		{"server_overloaded", "FAILED", "RETRY_LATER"},
+		{"usage_limit_exceeded", "BLOCKED", "CHECK_PROVIDER_QUOTA"},
+		{"unauthorized", "BLOCKED", "REAUTH_DEVICE_CODE"},
+		{"cyber_policy", "BLOCKED", "REVIEW_POLICY"},
+		{"provider_error_info_invalid", "FAILED", "RETRY_FRESH_TURN"},
+	}
+	for _, test := range tests {
+		outcome, markdown, action := TerminalPresentation(test.code)
+		if outcome != test.outcome || action != test.action || markdown == "" {
+			t.Fatalf("unexpected terminal mapping for %q: %q %q %q", test.code, outcome, action, markdown)
+		}
+	}
+}
+
 func raw(value string) json.RawMessage {
 	return json.RawMessage(value)
 }

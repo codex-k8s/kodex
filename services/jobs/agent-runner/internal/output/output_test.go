@@ -19,19 +19,19 @@ func TestReadOutputRejectsLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unix.Close(descriptor)
-	if raw, err := readOutput(descriptor, "result.txt"); err != nil || string(raw) != "result" {
+	if raw, err := readOutput(descriptor, "result.txt", maximumAggregateBytes); err != nil || string(raw) != "result" {
 		t.Fatalf("readOutput() = %q, %v", raw, err)
 	}
 	if err := os.Link(path, filepath.Join(directory, "hardlink.txt")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readOutput(descriptor, "result.txt"); err == nil {
+	if _, err := readOutput(descriptor, "result.txt", maximumAggregateBytes); err == nil {
 		t.Fatal("readOutput() accepted a hard-linked artifact")
 	}
 	if err := os.Symlink(path, filepath.Join(directory, "symlink.txt")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readOutput(descriptor, "symlink.txt"); err == nil {
+	if _, err := readOutput(descriptor, "symlink.txt", maximumAggregateBytes); err == nil {
 		t.Fatal("readOutput() accepted a symlink artifact")
 	}
 }

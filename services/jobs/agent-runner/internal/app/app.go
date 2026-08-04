@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -40,40 +39,19 @@ type health struct {
 	retries     *prometheus.CounterVec
 }
 
-type liveTurnLease struct {
-	mu    sync.Mutex
-	value controlplane.TurnLease
-}
-
-func (lease *liveTurnLease) progress(ctx context.Context, client *controlplane.Client,
-	execution controlplane.Execution, kind controlplanev1.RuntimeProgressKind, sequence uint32, markdown string,
-) error {
-	lease.mu.Lock()
-	defer lease.mu.Unlock()
-	return client.Progress(ctx, lease.value, execution, kind, sequence, markdown)
-}
-
-func (lease *liveTurnLease) renew(ctx context.Context, client *controlplane.Client) error {
-	lease.mu.Lock()
-	defer lease.mu.Unlock()
-	renewed, err := client.Renew(ctx, lease.value)
-	if err != nil {
-		return err
-	}
-	lease.value = renewed
-	return nil
-}
-
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
 	if len(args) != 2 {
 		return errors.New("agent-runner mode is required")
 	}
 	mode := args[1]
-	if mode != "runtime-init-workspace" && mode != "runtime-session" {
+	if mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-provider" {
 		return errors.New("agent-runner mode is invalid")
 	}
 	if err := security.VerifyInvocation(args, mode); err != nil {
 		return err
+	}
+	if mode == "runtime-provider" {
+		return codex.ServeProviderBroker(lifecycleContext)
 	}
 	startupContext, startupCancel := context.WithTimeout(lifecycleContext, 10*time.Second)
 	defer startupCancel()
@@ -101,7 +79,10 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return err
 	}
 	if mode == "runtime-init-workspace" {
-		return materialize.Run(lifecycleContext, input)
+		if err := materialize.Run(lifecycleContext, input); err != nil {
+			return err
+		}
+		return security.EnsureSharedWorkspaceDirectory(".matter-codex/state/codex-home")
 	}
 	if os.Geteuid() == 0 {
 		return errors.New("agent-runner runtime must not run as root")
@@ -139,9 +120,9 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	if err := materialize.Run(ctx, input); err != nil {
 		return err
 	}
-	if err := security.EnsureWorkspaceDirectory(".matter-codex/state/codex-home"); err != nil {
-		return err
-	}
+	// Проверка выполняется до ClaimTurn, но terminal фиксируется только после
+	// admission через signed handoff и owner transaction.
+	providerAuthenticationErr := codex.ValidateProviderAuthentication(input)
 	mcpToken, err := codex.ReadCredential(input.CredentialFiles.MCPToken)
 	if err != nil {
 		return err
@@ -155,9 +136,6 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		defer cancel()
 		_ = mcpProxy.Close(shutdownContext)
 	}()
-	if err := codex.PrepareHome(input, mcpProxy.URL()); err != nil {
-		return err
-	}
 	client, err := controlplane.Dial(ctx, input)
 	if err != nil {
 		return err
@@ -177,31 +155,41 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	if err != nil {
 		return err
 	}
-	liveLease := &liveTurnLease{value: lease}
 	state.ready.Store(true)
-	if err := liveLease.progress(ctx, client, execution,
-		controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_STATUS, 1, "Выполнение хода начато."); err != nil {
+	if err := client.Progress(ctx, lease,
+		controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_STATUS, 1, "Turn execution started."); err != nil {
 		return errors.New("publish runtime start status")
 	}
-	if err := liveLease.progress(ctx, client, execution,
-		controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS, 1, "Codex выполняет задачу."); err != nil {
-		return errors.New("publish runtime progress")
+	if providerAuthenticationErr == nil {
+		if err := client.Progress(ctx, lease,
+			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS, 1, "Codex is executing the turn."); err != nil {
+			return errors.New("publish runtime progress")
+		}
 	}
 	runContext, stopRun := context.WithCancel(ctx)
 	defer stopRun()
-	heartbeatErrors := make(chan error, 1)
-	go heartbeat(runContext, stopRun, client, liveLease, heartbeatErrors)
-	prompt, err := os.ReadFile(filepath.Join(input.WorkspaceRoot, input.PromptPath))
-	if err != nil || len(prompt) == 0 || len(prompt) > 1<<20 || !utf8.Valid(prompt) {
-		return errors.New("read immutable turn prompt")
-	}
-	result, err := executeWithCapacityRetry(runContext, input, prompt, client, liveLease, execution, state)
-	if err != nil {
-		return err
+	watchErrors := make(chan error, 1)
+	watchDone := make(chan struct{})
+	go watchExecution(runContext, stopRun, client, watchErrors, watchDone)
+	defer func() {
+		stopRun()
+		<-watchDone
+	}()
+	result := codex.Result{Outcome: "FAILED", FailureCode: "authentication_required"}
+	if providerAuthenticationErr == nil {
+		prompt, readErr := os.ReadFile(filepath.Join(input.WorkspaceRoot, input.PromptPath))
+		if readErr != nil || len(prompt) == 0 || len(prompt) > 1<<20 || !utf8.Valid(prompt) {
+			return errors.New("read immutable turn prompt")
+		}
+		result, err = executeWithCapacityRetry(runContext, input, prompt, mcpProxy.SocketPath(),
+			mcpProxy.LocalBearerToken(), client, lease, state)
+		if err != nil {
+			return err
+		}
 	}
 	select {
-	case heartbeatErr := <-heartbeatErrors:
-		return heartbeatErr
+	case watchErr := <-watchErrors:
+		return watchErr
 	default:
 	}
 	execution, err = client.GetExecution(ctx)
@@ -209,19 +197,28 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		return err
 	}
 	terminalMarkdown := result.FinalMessage
-	if terminalMarkdown == "" {
-		terminalMarkdown = "Выполнение завершилось без итогового сообщения; код результата: `" + result.FailureCode + "`."
+	outcome := result.Outcome
+	if result.Outcome == "FAILED" {
+		var nextAction string
+		outcome, terminalMarkdown, nextAction = codex.TerminalPresentation(result.FailureCode)
+		if nextAction == "REAUTH_DEVICE_CODE" {
+			terminalMarkdown += "\n\nКоманда: `/codex openai auth " + input.ProviderBindingID + "`."
+		}
+	} else if terminalMarkdown == "" {
+		terminalMarkdown = "Выполнение завершилось без итогового сообщения."
 	}
-	outputs, err := output.Build(input, terminalMarkdown, result.ArchivePath)
+	outputs, err := output.Build(ctx, input, terminalMarkdown, result.ArchivePath)
 	if err != nil || len(outputs) == 0 {
 		return errors.New("build terminal runtime outputs")
 	}
-	outcome := result.Outcome
-	if codex.BlockedFailure(result.FailureCode) {
-		outcome = "BLOCKED"
-	}
 	terminalDigest := sha256.Sum256([]byte(outcome + "\x00" + result.SessionID + "\x00" +
 		result.ArchiveSHA256 + "\x00" + outputs[0].SHA256))
+	terminalReference := "codex://sessions/" + result.SessionID + "/executions/" + input.ExecutionID
+	archiveProvenance := "codex-app-server-rollout-v1:" + input.ExecutionID + ":" + result.ArchiveRelativePath + ":" + result.ArchiveSHA256
+	if result.SessionID == "" && outcome == "BLOCKED" {
+		terminalReference = "preflight://provider-auth/" + input.ExecutionID
+		archiveProvenance = ""
+	}
 	handoffValue := runtimecontract.HandoffV2{Schema: runtimecontract.HandoffSchemaV2,
 		ExecutionID: input.ExecutionID, ExecutionVersion: execution.Version, Fence: execution.Fence,
 		GrantGeneration: input.GrantGeneration, RuntimeRevisionSHA256: input.RuntimeRevisionSHA256,
@@ -229,11 +226,11 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		SessionID: input.SessionID, TurnID: input.TurnID, Attempt: input.Attempt,
 		ProviderBindingID: input.ProviderBindingID, ProviderBindingVersion: input.ProviderBindingVersion,
 		ProviderBindingSHA256: input.ProviderBindingSHA256, Outcome: outcome,
-		TerminalReference: "codex://sessions/" + result.SessionID + "/executions/" + input.ExecutionID,
+		TerminalReference: terminalReference,
 		TerminalSHA256:    hex.EncodeToString(terminalDigest[:]), Outputs: outputs, CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath,
 		ArchiveSHA256:       result.ArchiveSHA256,
-		ArchiveProvenance:   "codex-app-server-rollout-v1:" + input.ExecutionID + ":" + result.ArchiveRelativePath + ":" + result.ArchiveSHA256,
+		ArchiveProvenance:   archiveProvenance,
 		ObservedAt:          time.Now().UTC()}
 	state.ready.Store(false)
 	return handoff.Publish(ctx, input, handoffValue)
@@ -263,17 +260,28 @@ func waitForAdmission(ctx context.Context, client *controlplane.Client) (control
 	}
 }
 
-func heartbeat(ctx context.Context, cancel context.CancelFunc, client *controlplane.Client, lease *liveTurnLease,
-	failures chan<- error) {
-	ticker := time.NewTicker(10 * time.Second)
+func watchExecution(ctx context.Context, cancel context.CancelFunc, client *controlplane.Client,
+	failures chan<- error, done chan<- struct{}) {
+	defer close(done)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := lease.renew(ctx, client); err != nil {
-				failures <- errors.New("renew exact turn lease")
+			execution, err := client.GetExecution(ctx)
+			if err != nil {
+				continue
+			}
+			switch execution.State {
+			case controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_CANCELLED,
+				controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_EXPIRED,
+				controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_RETRIED:
+				select {
+				case failures <- errors.New("runtime execution was closed by owner"):
+				default:
+				}
 				cancel()
 				return
 			}
@@ -281,13 +289,16 @@ func heartbeat(ctx context.Context, cancel context.CancelFunc, client *controlpl
 	}
 }
 
-func executeWithCapacityRetry(ctx context.Context, input model.Input, prompt []byte,
-	client *controlplane.Client, lease *liveTurnLease, execution controlplane.Execution, state *health,
+func executeWithCapacityRetry(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string,
+	client *controlplane.Client, lease controlplane.TurnLease, state *health,
 ) (codex.Result, error) {
 	currentInput := input
 	for retry := 0; ; retry++ {
-		result, err := codex.Execute(ctx, currentInput, prompt)
+		result, err := codex.ExecuteViaBroker(ctx, currentInput, prompt, mcpSocket, mcpProxyToken)
 		if err != nil {
+			if errors.Is(err, codex.ErrProviderAuthentication) {
+				return codex.Result{Outcome: "FAILED", FailureCode: "authentication_required"}, nil
+			}
 			return codex.Result{}, err
 		}
 		if result.Outcome != "FAILED" || !codex.CapacityFailure(result.FailureCode) || retry == len(retryDelays) {
@@ -300,9 +311,9 @@ func executeWithCapacityRetry(ctx context.Context, input model.Input, prompt []b
 			result.ArchiveRelativePath + ":" + result.ArchiveSHA256
 		delay := retryDelays[retry]
 		state.retries.WithLabelValues("capacity").Inc()
-		if err := lease.progress(ctx, client, execution,
+		if err := client.Progress(ctx, lease,
 			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_STATUS, uint32(retry+2),
-			fmt.Sprintf("Провайдер временно перегружен; повтор через %s.", delay)); err != nil {
+			fmt.Sprintf("Provider capacity is temporarily unavailable; retrying in %s.", delay)); err != nil {
 			return codex.Result{}, errors.New("publish capacity retry status")
 		}
 		timer := time.NewTimer(delay)
@@ -319,7 +330,7 @@ func executeWithCapacityRetry(ctx context.Context, input model.Input, prompt []b
 
 func verifyRuntimeFiles(input model.Input) error {
 	paths := []string{inputPath, input.CredentialFiles.ControlPlaneGrant, input.CredentialFiles.MCPToken,
-		input.CredentialFiles.MaterializationToken, input.CredentialFiles.CodexAuth,
+		input.CredentialFiles.MaterializationToken,
 		input.CredentialFiles.HandoffPrivateKey, input.ControlPlane.TLS.CAFile,
 		input.ControlPlane.TLS.CertificateFile, input.ControlPlane.TLS.PrivateKeyFile,
 		input.MCP.TLS.CAFile, input.MCP.TLS.CertificateFile, input.MCP.TLS.PrivateKeyFile,

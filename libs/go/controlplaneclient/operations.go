@@ -94,7 +94,6 @@ func IntegrationGatewayOperations() map[string]string {
 		"control.integration-execution.begin":      controlplanev1.ControlPlaneService_BeginIntegrationExecution_FullMethodName,
 		"control.integration-execution.complete":   controlplanev1.ControlPlaneService_CompleteIntegrationExecution_FullMethodName,
 		"control.integration-execution.fail":       controlplanev1.ControlPlaneService_FailIntegrationExecution_FullMethodName,
-		"control.integration-result.validate":      controlplanev1.ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
 	}
 }
 
@@ -145,16 +144,20 @@ func InteractionGatewayOperations() map[string]string {
 		"control.owner-gate.deliver":                     controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
 		"control.owner-gate.expire":                      controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
 		"control.interaction.session.create":             controlplanev1.ControlPlaneService_ManageSession_FullMethodName,
+		"control.interaction.session.mcp.bind":           controlplanev1.ControlPlaneService_BindSessionMCP_FullMethodName,
 		"control.interaction.turn.enqueue":               controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
 		"control.interaction.artifact.register":          controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
 		"control.interaction.resource.read":              controlplanev1.ControlPlaneService_GetResource_FullMethodName,
 		"control.interaction.conversation.lifecycle":     controlplanev1.ControlPlaneService_ManageConversationLifecycle_FullMethodName,
 		"control.interaction.owner-gate.resolve":         controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
+		"control.interaction.runtime-action.manage":      controlplanev1.ControlPlaneService_ManageRuntimeAction_FullMethodName,
 		"control.interaction.delivery.claim":             controlplanev1.ControlPlaneService_ClaimInteractionDelivery_FullMethodName,
 		"control.interaction.delivery.readback.issue":    controlplanev1.ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName,
 		"control.interaction.delivery.readback.validate": controlplanev1.ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName,
 		"control.interaction.delivery.record":            controlplanev1.ControlPlaneService_RecordInteractionDelivery_FullMethodName,
 		"control.runtime-materialization.get":            controlplanev1.ControlPlaneService_GetRuntimeMaterialization_FullMethodName,
+		"control.runtime-output.authorize":               controlplanev1.ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName,
+		"control.runtime-output.register":                controlplanev1.ControlPlaneService_RegisterRuntimeOutput_FullMethodName,
 	}
 }
 

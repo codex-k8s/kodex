@@ -4,8 +4,11 @@ package readiness
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -20,17 +23,24 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
+	"golang.org/x/sys/unix"
 )
 
-const maximumMCPBodyBytes = 1 << 20
+const (
+	maximumMCPBodyBytes  = 1 << 20
+	mcpAuthoritySocket   = "/run/mattercodex/provider/mcp-authority.sock"
+	mcpAuthorityHostName = "mattercodex-mcp-authority"
+)
 
-// MCPProxy — loopback-only adapter, который применяет к каждому рабочему
-// запросу Codex тот же exact TLS 1.3/mTLS/bearer path, что и readiness.
+// MCPProxy — trusted UDS adapter, который проверяет SO_PEERCRED и применяет к
+// каждому рабочему запросу тот же exact TLS 1.3/mTLS/bearer path, что и readiness.
 type MCPProxy struct {
-	server    *http.Server
-	transport *http.Transport
-	done      chan error
-	url       string
+	server     *http.Server
+	transport  *http.Transport
+	local      *http.Transport
+	done       chan error
+	socketPath string
+	localToken string
 }
 
 func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPProxy, error) {
@@ -42,15 +52,23 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: 15 * time.Second, Transport: transport}
-	if err := checkMCP(ctx, client, upstream, token); err != nil {
+	localRaw := make([]byte, 32)
+	if _, err := rand.Read(localRaw); err != nil {
 		transport.CloseIdleConnections()
-		return nil, err
+		return nil, errors.New("generate MCP proxy capability")
 	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	localToken := hex.EncodeToString(localRaw)
+	_ = os.Remove(mcpAuthoritySocket)
+	listener, err := net.Listen("unix", mcpAuthoritySocket)
 	if err != nil {
 		transport.CloseIdleConnections()
-		return nil, errors.New("listen on MCP loopback proxy")
+		return nil, errors.New("listen on MCP authority socket")
+	}
+	if os.Chown(mcpAuthoritySocket, -1, 29000) != nil || os.Chmod(mcpAuthoritySocket, 0o660) != nil {
+		_ = listener.Close()
+		_ = os.Remove(mcpAuthoritySocket)
+		transport.CloseIdleConnections()
+		return nil, errors.New("protect MCP authority socket")
 	}
 	reverse := &httputil.ReverseProxy{
 		Director: func(request *http.Request) {
@@ -76,7 +94,8 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 	}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/mcp" || request.URL.RawQuery != "" ||
-			(request.Method != http.MethodPost && request.Method != http.MethodGet && request.Method != http.MethodDelete) {
+			(request.Method != http.MethodPost && request.Method != http.MethodGet && request.Method != http.MethodDelete) ||
+			subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) != 1 {
 			http.Error(writer, "invalid MCP proxy request", http.StatusNotFound)
 			return
 		}
@@ -86,33 +105,82 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 3 * time.Second,
 		IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16 << 10,
 		BaseContext: func(net.Listener) context.Context { return ctx }}
-	proxy := &MCPProxy{server: server, transport: transport, done: done,
-		url: "http://" + listener.Addr().String() + "/mcp"}
-	go func() { done <- server.Serve(listener) }()
+	secured := &peerCredentialListener{Listener: listener}
+	localTransport := &http.Transport{DisableCompression: true, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", mcpAuthoritySocket)
+	}}
+	proxy := &MCPProxy{server: server, transport: transport, local: localTransport, done: done,
+		socketPath: mcpAuthoritySocket, localToken: localToken}
+	go func() { done <- server.Serve(secured) }()
+	localEndpoint, _ := url.Parse("http://" + mcpAuthorityHostName + "/mcp")
+	if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, localEndpoint, localToken); err != nil {
+		_ = server.Close()
+		localTransport.CloseIdleConnections()
+		transport.CloseIdleConnections()
+		_ = os.Remove(mcpAuthoritySocket)
+		return nil, err
+	}
 	return proxy, nil
 }
 
-func (proxy *MCPProxy) URL() string { return proxy.url }
+func (proxy *MCPProxy) SocketPath() string       { return proxy.socketPath }
+func (proxy *MCPProxy) LocalBearerToken() string { return proxy.localToken }
 
 func (proxy *MCPProxy) Close(ctx context.Context) error {
 	err := proxy.server.Shutdown(ctx)
 	if err != nil {
 		_ = proxy.server.Close()
 	}
+	proxy.local.CloseIdleConnections()
 	proxy.transport.CloseIdleConnections()
+	_ = os.Remove(proxy.socketPath)
 	var serveErr error
 	select {
 	case serveErr = <-proxy.done:
 	case <-ctx.Done():
-		return errors.New("shutdown MCP loopback proxy")
+		return errors.New("shutdown MCP authority proxy")
 	}
 	if err != nil {
-		return errors.New("shutdown MCP loopback proxy")
+		return errors.New("shutdown MCP authority proxy")
 	}
 	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-		return errors.New("MCP loopback proxy failed")
+		return errors.New("MCP authority proxy failed")
 	}
 	return nil
+}
+
+type peerCredentialListener struct {
+	net.Listener
+}
+
+func (listener *peerCredentialListener) Accept() (net.Conn, error) {
+	for {
+		connection, err := listener.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		unixConnection, ok := connection.(*net.UnixConn)
+		if !ok || !allowedMCPPeer(unixConnection) {
+			_ = connection.Close()
+			continue
+		}
+		return connection, nil
+	}
+}
+
+func allowedMCPPeer(connection *net.UnixConn) bool {
+	raw, err := connection.SyscallConn()
+	if err != nil {
+		return false
+	}
+	var credential *unix.Ucred
+	var controlErr error
+	if err := raw.Control(func(fd uintptr) {
+		credential, controlErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}); err != nil || controlErr != nil || credential == nil {
+		return false
+	}
+	return credential.Uid == 10001 || credential.Uid == 10002
 }
 
 func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {

@@ -362,32 +362,15 @@ type RuntimeExecution struct {
 	UpdatedAt                           time.Time
 }
 
+// CodexLineage — последняя подтверждённая control-plane terminal lineage.
+// Credential revision намеренно не является частью logical account identity.
+type CodexLineage struct {
+	ExecutionID, ProviderBindingID, SessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
+}
+
 type RuntimeMaterialization struct {
 	Kind, ArtifactID, SHA256, RelativePath, MediaType, StorageRef string
 	ArtifactVersion, SizeBytes                                    uint64
-}
-
-// RuntimeAgentBinding — неизменяемая связь двух owner aggregate. Поля bot
-// принимаются только от bot-service, а digest вычисляет control-plane.
-type RuntimeAgentBinding struct {
-	OrganizationID            string
-	ProjectID                 string
-	SessionID                 string
-	TurnID                    string
-	Attempt                   uint32
-	InputSHA256               string
-	RuntimeRevisionID         string
-	RuntimeRevisionVersion    uint64
-	RuntimeRevisionSHA256     string
-	AgentSessionKey           string
-	AgentSessionID            int64
-	AgentSessionVersion       uint64
-	AgentSessionBindingSHA256 string
-	AgentSessionTurnID        int64
-	AgentRunID                string
-	AgentSessionTurnVersion   uint64
-	AgentTurnBindingSHA256    string
-	CreatedAt                 time.Time
 }
 
 // ResourceRetentionPolicy — owner-managed и versioned политика, которую claim
@@ -631,9 +614,7 @@ type Transaction interface {
 	GetRuntimeExecutionForUpdate(context.Context, string) (RuntimeExecution, error)
 	GetRuntimeExecutionByTurn(context.Context, string, uint32) (RuntimeExecution, error)
 	GetRuntimeExecutionByTurnForUpdate(context.Context, string, uint32) (RuntimeExecution, error)
-	GetRuntimeAgentBindingForUpdate(context.Context, string, uint32) (RuntimeAgentBinding, error)
 	GetCurrentResourceRetentionPolicy(context.Context, string, string) (ResourceRetentionPolicy, error)
-	InsertRuntimeAgentBinding(context.Context, RuntimeAgentBinding) error
 	InsertRuntimeExecution(context.Context, RuntimeExecution) error
 	UpdateRuntimeExecution(context.Context, RuntimeExecution, uint64, uint64) error
 	NextExpiredRuntimeExecution(

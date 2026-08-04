@@ -292,6 +292,7 @@ func (client *Client) Complete(
 				ArtifactId: output.ArtifactID, ArtifactVersion: output.ArtifactVersion,
 				ArtifactSha256: output.ArtifactSHA256, ArtifactName: output.ArtifactName,
 				ArtifactMediaType: output.ArtifactMediaType, ArtifactPayload: append([]byte(nil), output.ArtifactPayload...),
+				ArtifactStorageRef: output.ArtifactStorageRef, ArtifactSizeBytes: output.ArtifactSizeBytes,
 				Sequence: output.Sequence, Total: output.Total})
 		}
 	}

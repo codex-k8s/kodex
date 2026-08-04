@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -38,11 +39,10 @@ func (service *Service) ReportRuntimeProgress(
 		return ReportRuntimeProgressResult{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
-		TurnID, ExecutionID, Kind, MarkdownSHA256, LeaseTokenSHA256 string
-		TurnVersion, ExecutionVersion, Fence, Generation            uint64
-		Attempt, Sequence                                           uint32
-	}{input.TurnID, input.ExecutionID, input.Kind, hashString(input.Markdown), hashString(input.LeaseToken),
-		input.ExpectedTurnVersion, input.ExpectedExecutionVersion, input.ExpectedFence,
+		TurnID, ExecutionID, Kind, MarkdownSHA256 string
+		Generation                                uint64
+		Attempt, Sequence                         uint32
+	}{input.TurnID, input.ExecutionID, input.Kind, hashString(input.Markdown),
 		input.AuthorityGeneration, input.Attempt, input.Sequence})
 	if err != nil {
 		return ReportRuntimeProgressResult{}, errs.ErrInvalidInput
@@ -113,8 +113,9 @@ func (service *Service) liveRunnerGraph(ctx context.Context, tx domainrepo.Trans
 	if err != nil {
 		return RuntimeExecution{}, lockedOwnerGraph{}, err
 	}
-	if execution.ID != input.ExecutionID || execution.Version != input.ExpectedExecutionVersion ||
-		execution.Fence != input.ExpectedFence || execution.GrantGeneration != input.AuthorityGeneration ||
+	if execution.ID != input.ExecutionID || execution.Version < input.ExpectedExecutionVersion ||
+		execution.Fence < input.ExpectedFence || execution.Version-input.ExpectedExecutionVersion != execution.Fence-input.ExpectedFence ||
+		execution.GrantGeneration != input.AuthorityGeneration ||
 		(execution.State != "ADMITTED" && execution.State != "RUNNING") ||
 		graph.Turn.Version != input.ExpectedTurnVersion || graph.Turn.State != enum.StateClaimed ||
 		lease.Attempt != input.Attempt || lease.AuthorityGeneration != input.AuthorityGeneration ||
@@ -131,8 +132,8 @@ func (service *Service) GetRuntimeMaterialization(ctx context.Context, principal
 	if err := authorize(principal, permissionRuntimeRead); err != nil {
 		return RuntimeMaterializationResult{}, err
 	}
-	if principal.CallerWorkload != service.integrationGatewayWorkload ||
-		principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
+	if principal.CallerWorkload != service.ownerGateDeliveryWorkload ||
+		principal.CallerSPIFFEID != service.ownerGateDeliverySPIFFEID ||
 		value.ValidateID(executionID) != nil || value.ValidateID(artifactID) != nil || artifactVersion == 0 ||
 		!validSHA256Text(artifactSHA256) || value.ValidateID(principal.AuthorityReference) != nil ||
 		principal.AuthorityRevision == 0 || principal.AuthorityGrantGeneration == 0 {
@@ -165,4 +166,157 @@ func (service *Service) GetRuntimeMaterialization(ctx context.Context, principal
 		return nil
 	})
 	return result, err
+}
+
+func (service *Service) AuthorizeRuntimeOutput(ctx context.Context, principal value.Principal,
+	executionID string, output RuntimeOutputMetadata) (RuntimeOutputAuthorization, error) {
+	if err := authorize(principal, permissionRuntimeOutputStage); err != nil {
+		return RuntimeOutputAuthorization{}, err
+	}
+	if !service.interactionGatewayPrincipal(principal) || value.ValidateID(executionID) != nil ||
+		validateStagedRuntimeOutput(output) != nil {
+		return RuntimeOutputAuthorization{}, errs.ErrPermissionDenied
+	}
+	var result RuntimeOutputAuthorization
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		execution, err := tx.GetRuntimeExecutionForUpdate(ctx, executionID)
+		if err != nil {
+			return err
+		}
+		if err := requireExactRuntimeApplicationAuthority(execution, principal); err != nil {
+			return err
+		}
+		if execution.State != "ADMITTED" && execution.State != "RUNNING" {
+			return errs.ErrStateConflict
+		}
+		if err := service.requireRuntimeOwner(ctx, tx, principal, execution); err != nil {
+			return err
+		}
+		result = RuntimeOutputAuthorization{OrganizationID: execution.OrganizationID,
+			ProjectID: execution.ProjectID, ExecutionVersion: execution.Version,
+			Fence: execution.Fence, GrantGeneration: execution.GrantGeneration}
+		return nil
+	})
+	return result, err
+}
+
+func (service *Service) RegisterRuntimeOutput(ctx context.Context,
+	input RegisterRuntimeOutputInput) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionRuntimeOutputStage); err != nil {
+		return entity.Resource{}, err
+	}
+	if !service.interactionGatewayPrincipal(input.Principal) ||
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.ExecutionID) != nil ||
+		input.ExpectedExecutionVersion == 0 || input.ExpectedExecutionFence == 0 ||
+		input.ExpectedGrantGeneration == 0 || validateStagedRuntimeOutput(input.Output) != nil ||
+		len(input.StorageRef) < 8 || len(input.StorageRef) > 2048 ||
+		!strings.HasPrefix(input.StorageRef, "s3://") || strings.ContainsAny(input.StorageRef, "\x00\r\n") {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	artifactID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:runtime-output:"+input.ExecutionID+":"+
+		input.Output.Kind+":"+strconv.FormatUint(uint64(input.Output.Sequence), 10)+":"+input.Output.SHA256)).String()
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		ExecutionID, StorageRef, Kind, Name, MediaType, SHA256 string
+		Version, Fence, Generation, SizeBytes                  uint64
+		Sequence, Total                                        uint32
+	}{input.ExecutionID, input.StorageRef, input.Output.Kind, input.Output.Name, input.Output.MediaType,
+		input.Output.SHA256, input.ExpectedExecutionVersion, input.ExpectedExecutionFence,
+		input.ExpectedGrantGeneration, input.Output.SizeBytes, input.Output.Sequence, input.Output.Total})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	var result, receipt entity.Resource
+	err = service.withLifecycleReceipt(ctx, input.Principal, input.IdempotencyKey,
+		"register_runtime_output", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, readErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, artifactID)
+			if errors.Is(readErr, errs.ErrNotFound) {
+				return lifecycleReceiptApply, nil
+			}
+			if readErr != nil {
+				return 0, readErr
+			}
+			if !runtimeOutputArtifactMatches(current, input) {
+				return 0, errs.ErrStateConflict
+			}
+			receipt = current
+			return lifecycleReceiptReplay, nil
+		},
+		func() error {
+			if result.ID != receipt.ID || result.Version != receipt.Version {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
+			execution, readErr := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			if readErr != nil {
+				return readErr
+			}
+			if requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil ||
+				execution.Version != input.ExpectedExecutionVersion || execution.Fence != input.ExpectedExecutionFence ||
+				execution.GrantGeneration != input.ExpectedGrantGeneration ||
+				(execution.State != "ADMITTED" && execution.State != "RUNNING") {
+				return errs.ErrStateConflict
+			}
+			if readErr = service.requireRuntimeOwner(ctx, tx, input.Principal, execution); readErr != nil {
+				return readErr
+			}
+			now, readErr := tx.CurrentTime(ctx)
+			if readErr != nil {
+				return readErr
+			}
+			evidence := hashString(strings.Join([]string{input.ExecutionID, input.Output.Kind,
+				input.Output.Name, input.Output.SHA256, input.StorageRef}, "\x00"))
+			artifact, createErr := entity.New(artifactID, execution.OrganizationID, execution.ProjectID,
+				execution.TurnID, input.Principal.ActorID, enum.KindArtifact, input.Output.Name,
+				entity.ArtifactSpec{ArtifactKind: "runtime-output-" + strings.ToLower(input.Output.Kind),
+					Direction: "OUTPUT", StorageRef: input.StorageRef, SizeBytes: input.Output.SizeBytes,
+					MediaType: input.Output.MediaType, SHA256: input.Output.SHA256, ScanStatus: "CLEAN",
+					RetentionPolicyRef: "policy://runtime-output", ScanPolicyRevision: 1,
+					ScanEvidenceSHA256: evidence, ScannerWorkloadID: service.ownerGateDeliveryWorkload,
+					ScannedAt: now}, now)
+			if createErr != nil {
+				return errs.ErrInvalidInput
+			}
+			if readErr = tx.Insert(ctx, artifact); readErr != nil {
+				return readErr
+			}
+			result = artifact
+			return service.appendMutationRecords(ctx, tx, input.Principal, "register_runtime_output", artifact)
+		},
+	)
+	return result, err
+}
+
+func (service *Service) interactionGatewayPrincipal(principal value.Principal) bool {
+	return principal.CallerWorkload == service.ownerGateDeliveryWorkload &&
+		principal.CallerSPIFFEID == service.ownerGateDeliverySPIFFEID
+}
+
+func validateStagedRuntimeOutput(output RuntimeOutputMetadata) error {
+	if output.Kind != "FINAL_MARKDOWN" && output.Kind != "FILE" && output.Kind != "IMAGE" {
+		return errs.ErrInvalidInput
+	}
+	if output.Name == "" || len(output.Name) > 255 || strings.ContainsAny(output.Name, "/\\\x00\r\n") ||
+		output.MediaType == "" || len(output.MediaType) > 255 || output.SizeBytes == 0 || output.SizeBytes > 256<<20 ||
+		!validSHA256Text(output.SHA256) || output.Sequence == 0 || output.Total == 0 ||
+		output.Sequence > output.Total || output.Total > 4096 {
+		return errs.ErrInvalidInput
+	}
+	if output.Kind == "FINAL_MARKDOWN" && output.MediaType != "text/markdown" ||
+		output.Kind == "IMAGE" && !strings.HasPrefix(output.MediaType, "image/") {
+		return errs.ErrInvalidInput
+	}
+	return nil
+}
+
+func runtimeOutputArtifactMatches(current entity.Resource, input RegisterRuntimeOutputInput) bool {
+	spec, ok := current.Spec.(entity.ArtifactSpec)
+	return ok && current.Kind == enum.KindArtifact && current.ParentID != "" &&
+		current.Name == input.Output.Name && spec.Direction == "OUTPUT" &&
+		spec.StorageRef == input.StorageRef && spec.SizeBytes == input.Output.SizeBytes &&
+		spec.MediaType == input.Output.MediaType && spec.SHA256 == input.Output.SHA256
 }

@@ -45,6 +45,8 @@ const (
 	CHANGESREQUESTED CallbackContextAction = "CHANGES_REQUESTED"
 	OPENDIALOG       CallbackContextAction = "OPEN_DIALOG"
 	REJECT           CallbackContextAction = "REJECT"
+	RETRY            CallbackContextAction = "RETRY"
+	STOP             CallbackContextAction = "STOP"
 )
 
 // Valid indicates whether the value is a known member of the CallbackContextAction enum.
@@ -59,6 +61,10 @@ func (e CallbackContextAction) Valid() bool {
 	case OPENDIALOG:
 		return true
 	case REJECT:
+		return true
+	case RETRY:
+		return true
+	case STOP:
 		return true
 	default:
 		return false
@@ -167,6 +173,27 @@ func (e SlashCommandCommand) Valid() bool {
 	}
 }
 
+// Defines values for PutRuntimeOutputParamsXMatterCodexOutputKind.
+const (
+	FILE          PutRuntimeOutputParamsXMatterCodexOutputKind = "FILE"
+	FINALMARKDOWN PutRuntimeOutputParamsXMatterCodexOutputKind = "FINAL_MARKDOWN"
+	IMAGE         PutRuntimeOutputParamsXMatterCodexOutputKind = "IMAGE"
+)
+
+// Valid indicates whether the value is a known member of the PutRuntimeOutputParamsXMatterCodexOutputKind enum.
+func (e PutRuntimeOutputParamsXMatterCodexOutputKind) Valid() bool {
+	switch e {
+	case FILE:
+		return true
+	case FINALMARKDOWN:
+		return true
+	case IMAGE:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActionCallback defines model for ActionCallback.
 type ActionCallback struct {
 	ChannelId string          `json:"channel_id"`
@@ -269,6 +296,17 @@ type MattermostResponse struct {
 // MattermostResponseResponseType defines model for MattermostResponse.ResponseType.
 type MattermostResponseResponseType string
 
+// RuntimeOutputReference defines model for RuntimeOutputReference.
+type RuntimeOutputReference struct {
+	ArtifactId      openapi_types.UUID `json:"artifact_id"`
+	ArtifactVersion int                `json:"artifact_version"`
+	MediaType       string             `json:"media_type"`
+	Name            string             `json:"name"`
+	Sha256          string             `json:"sha256"`
+	SizeBytes       int64              `json:"size_bytes"`
+	StorageRef      string             `json:"storage_ref"`
+}
+
 // SlashCommand defines model for SlashCommand.
 type SlashCommand struct {
 	ChannelId   string              `json:"channel_id"`
@@ -341,6 +379,19 @@ type GetRuntimeMaterializationParams struct {
 	Sha256  string `form:"sha256" json:"sha256"`
 }
 
+// PutRuntimeOutputParams defines parameters for PutRuntimeOutput.
+type PutRuntimeOutputParams struct {
+	XMatterCodexOutputKind      PutRuntimeOutputParamsXMatterCodexOutputKind `json:"X-MatterCodex-Output-Kind"`
+	XMatterCodexOutputName      string                                       `json:"X-MatterCodex-Output-Name"`
+	XMatterCodexOutputSHA256    string                                       `json:"X-MatterCodex-Output-SHA256"`
+	XMatterCodexOutputMediaType string                                       `json:"X-MatterCodex-Output-Media-Type"`
+	XMatterCodexOutputSequence  int                                          `json:"X-MatterCodex-Output-Sequence"`
+	XMatterCodexOutputTotal     int                                          `json:"X-MatterCodex-Output-Total"`
+}
+
+// PutRuntimeOutputParamsXMatterCodexOutputKind defines parameters for PutRuntimeOutput.
+type PutRuntimeOutputParamsXMatterCodexOutputKind string
+
 // AcceptMattermostActionJSONRequestBody defines body for AcceptMattermostAction for application/json ContentType.
 type AcceptMattermostActionJSONRequestBody = ActionCallback
 
@@ -358,6 +409,9 @@ type ServerInterface interface {
 
 	// (GET /internal/v1/runtime-materializations/{execution_id}/{artifact_id})
 	GetRuntimeMaterialization(w http.ResponseWriter, r *http.Request, executionId openapi_types.UUID, artifactId openapi_types.UUID, params GetRuntimeMaterializationParams)
+
+	// (PUT /internal/v1/runtime-outputs/{execution_id})
+	PutRuntimeOutput(w http.ResponseWriter, r *http.Request, executionId openapi_types.UUID, params PutRuntimeOutputParams)
 
 	// (POST /mattermost/v1/actions)
 	AcceptMattermostAction(w http.ResponseWriter, r *http.Request)
@@ -478,6 +532,183 @@ func (siw *ServerInterfaceWrapper) GetRuntimeMaterialization(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRuntimeMaterialization(w, r, executionId, artifactId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutRuntimeOutput operation middleware
+func (siw *ServerInterfaceWrapper) PutRuntimeOutput(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "execution_id" -------------
+	var executionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "execution_id", r.PathValue("execution_id"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "execution_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, RuntimeMaterializationBearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, WorkloadMTLSScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutRuntimeOutputParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-MatterCodex-Output-Kind" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-MatterCodex-Output-Kind")]; found {
+		var XMatterCodexOutputKind PutRuntimeOutputParamsXMatterCodexOutputKind
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-MatterCodex-Output-Kind", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-MatterCodex-Output-Kind", valueList[0], &XMatterCodexOutputKind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-MatterCodex-Output-Kind", Err: err})
+			return
+		}
+
+		params.XMatterCodexOutputKind = XMatterCodexOutputKind
+
+	} else {
+		err := fmt.Errorf("Header parameter X-MatterCodex-Output-Kind is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-MatterCodex-Output-Kind", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-MatterCodex-Output-Name" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-MatterCodex-Output-Name")]; found {
+		var XMatterCodexOutputName string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-MatterCodex-Output-Name", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-MatterCodex-Output-Name", valueList[0], &XMatterCodexOutputName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-MatterCodex-Output-Name", Err: err})
+			return
+		}
+
+		params.XMatterCodexOutputName = XMatterCodexOutputName
+
+	} else {
+		err := fmt.Errorf("Header parameter X-MatterCodex-Output-Name is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-MatterCodex-Output-Name", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-MatterCodex-Output-SHA256" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-MatterCodex-Output-SHA256")]; found {
+		var XMatterCodexOutputSHA256 string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-MatterCodex-Output-SHA256", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-MatterCodex-Output-SHA256", valueList[0], &XMatterCodexOutputSHA256, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-MatterCodex-Output-SHA256", Err: err})
+			return
+		}
+
+		params.XMatterCodexOutputSHA256 = XMatterCodexOutputSHA256
+
+	} else {
+		err := fmt.Errorf("Header parameter X-MatterCodex-Output-SHA256 is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-MatterCodex-Output-SHA256", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-MatterCodex-Output-Media-Type" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-MatterCodex-Output-Media-Type")]; found {
+		var XMatterCodexOutputMediaType string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-MatterCodex-Output-Media-Type", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-MatterCodex-Output-Media-Type", valueList[0], &XMatterCodexOutputMediaType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-MatterCodex-Output-Media-Type", Err: err})
+			return
+		}
+
+		params.XMatterCodexOutputMediaType = XMatterCodexOutputMediaType
+
+	} else {
+		err := fmt.Errorf("Header parameter X-MatterCodex-Output-Media-Type is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-MatterCodex-Output-Media-Type", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-MatterCodex-Output-Sequence" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-MatterCodex-Output-Sequence")]; found {
+		var XMatterCodexOutputSequence int
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-MatterCodex-Output-Sequence", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-MatterCodex-Output-Sequence", valueList[0], &XMatterCodexOutputSequence, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "integer", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-MatterCodex-Output-Sequence", Err: err})
+			return
+		}
+
+		params.XMatterCodexOutputSequence = XMatterCodexOutputSequence
+
+	} else {
+		err := fmt.Errorf("Header parameter X-MatterCodex-Output-Sequence is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-MatterCodex-Output-Sequence", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-MatterCodex-Output-Total" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-MatterCodex-Output-Total")]; found {
+		var XMatterCodexOutputTotal int
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-MatterCodex-Output-Total", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-MatterCodex-Output-Total", valueList[0], &XMatterCodexOutputTotal, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "integer", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-MatterCodex-Output-Total", Err: err})
+			return
+		}
+
+		params.XMatterCodexOutputTotal = XMatterCodexOutputTotal
+
+	} else {
+		err := fmt.Errorf("Header parameter X-MatterCodex-Output-Total is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-MatterCodex-Output-Total", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutRuntimeOutput(w, r, executionId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -701,6 +932,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/deliveries/{delivery_id}", wrapper.GetInteractionDelivery)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/runtime-materializations/{execution_id}/{artifact_id}", wrapper.GetRuntimeMaterialization)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/internal/v1/runtime-outputs/{execution_id}", wrapper.PutRuntimeOutput)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/v1/actions", wrapper.AcceptMattermostAction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/v1/artifacts/{grant_id}/content", wrapper.DownloadInteractionArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/v1/commands/codex", wrapper.AcceptMattermostSlashCommand)

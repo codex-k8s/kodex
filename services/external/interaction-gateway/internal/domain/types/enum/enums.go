@@ -77,11 +77,14 @@ const (
 	DecisionReject           OwnerDecision = "REJECT"
 	DecisionChangesRequested OwnerDecision = "CHANGES_REQUESTED"
 	DecisionCancel           OwnerDecision = "CANCEL"
+	DecisionStop             OwnerDecision = "STOP"
+	DecisionRetry            OwnerDecision = "RETRY"
 )
 
 func (decision OwnerDecision) Valid() bool {
 	switch decision {
-	case DecisionApprove, DecisionReject, DecisionChangesRequested, DecisionCancel:
+	case DecisionApprove, DecisionReject, DecisionChangesRequested, DecisionCancel,
+		DecisionStop, DecisionRetry:
 		return true
 	default:
 		return false

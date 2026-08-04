@@ -5,12 +5,14 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	domaincontrol "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/controlplane"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -113,6 +115,57 @@ func (client *Client) GetRuntimeMaterialization(ctx context.Context, grant, exec
 		SizeBytes: item.GetSizeBytes()}, nil
 }
 
+func (client *Client) AuthorizeRuntimeOutput(ctx context.Context, grant, executionID string,
+	output domaincontrol.RuntimeOutputMetadata) (domaincontrol.RuntimeOutputAuthorization, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return domaincontrol.RuntimeOutputAuthorization{}, err
+	}
+	response, err := client.client.ControlPlane.AuthorizeRuntimeOutput(protected,
+		&controlplanev1.AuthorizeRuntimeOutputRequest{ExecutionId: executionID,
+			Output: runtimeOutputMetadata(output)})
+	if err != nil || response.GetProjectId() == "" || response.GetExecutionVersion() == 0 ||
+		response.GetExecutionFence() == 0 || response.GetGrantGeneration() == 0 {
+		return domaincontrol.RuntimeOutputAuthorization{}, errors.New("authorize control-plane runtime output")
+	}
+	return domaincontrol.RuntimeOutputAuthorization{OrganizationID: response.GetOrganizationId(),
+		ProjectID: response.GetProjectId(), ExecutionVersion: response.GetExecutionVersion(),
+		Fence: response.GetExecutionFence(), GrantGeneration: response.GetGrantGeneration()}, nil
+}
+
+func (client *Client) RegisterRuntimeOutput(ctx context.Context, grant, executionID string,
+	authorization domaincontrol.RuntimeOutputAuthorization, output domaincontrol.RuntimeOutputMetadata,
+	storageRef string) (domaincontrol.Artifact, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return domaincontrol.Artifact{}, err
+	}
+	response, err := client.client.ControlPlane.RegisterRuntimeOutput(protected,
+		&controlplanev1.RegisterRuntimeOutputRequest{IdempotencyKey: stableRuntimeOutputID(executionID, output),
+			ExecutionId: executionID, ExpectedExecutionVersion: authorization.ExecutionVersion,
+			ExpectedExecutionFence: authorization.Fence, ExpectedGrantGeneration: authorization.GrantGeneration,
+			Output: runtimeOutputMetadata(output), StorageRef: storageRef})
+	if err != nil || response.GetArtifact() == nil || response.GetArtifact().GetSpec().GetArtifact() == nil {
+		return domaincontrol.Artifact{}, errors.New("register control-plane runtime output")
+	}
+	return projectArtifact(response.GetArtifact()), nil
+}
+
+func runtimeOutputMetadata(output domaincontrol.RuntimeOutputMetadata) *controlplanev1.RuntimeOutputMetadata {
+	return &controlplanev1.RuntimeOutputMetadata{Kind: output.Kind, Name: output.Name,
+		MediaType: output.MediaType, SizeBytes: output.SizeBytes, Sha256: output.SHA256,
+		Sequence: output.Sequence, Total: output.Total}
+}
+
+func stableRuntimeOutputID(executionID string, output domaincontrol.RuntimeOutputMetadata) string {
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte("interaction-gateway:runtime-output:"+executionID+":"+
+		output.Kind+":"+strconv.FormatUint(uint64(output.Sequence), 10)+":"+output.SHA256)).String()
+}
+
 func (client *Client) GetTurn(ctx context.Context, grant, turnID string) (domaincontrol.Turn, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
@@ -180,6 +233,27 @@ func (client *Client) CreateSession(ctx context.Context, grant, idempotencyKey, 
 	})
 	if err != nil || response.GetSession() == nil || response.GetSession().GetId() == "" {
 		return domaincontrol.Session{}, errors.New("create control-plane session")
+	}
+	return domaincontrol.Session{ID: response.GetSession().GetId(), Version: response.GetSession().GetVersion()}, nil
+}
+
+func (client *Client) BindSessionMCP(ctx context.Context, grant string,
+	input domaincontrol.SessionMCPBindingInput) (domaincontrol.Session, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return domaincontrol.Session{}, err
+	}
+	response, err := client.client.ControlPlane.BindSessionMCP(protected, &controlplanev1.BindSessionMCPRequest{
+		IdempotencyKey: input.IdempotencyKey, SessionId: input.SessionID,
+		AgentSessionKey: input.AgentSessionKey,
+		AgentSessionId:  input.AgentSessionID, AgentSessionVersion: input.AgentSessionVersion,
+		AgentSessionBindingSha256: input.AgentSessionBindingSHA256, ImmutableSecretRef: input.ImmutableSecretRef,
+		ProviderContentVersion: input.ProviderContentVersion, ContentSha256: input.ContentSHA256,
+	})
+	if err != nil || response.GetSession() == nil || response.GetSession().GetId() != input.SessionID {
+		return domaincontrol.Session{}, errors.New("bind control-plane session MCP credential")
 	}
 	return domaincontrol.Session{ID: response.GetSession().GetId(), Version: response.GetSession().GetVersion()}, nil
 }
@@ -289,6 +363,38 @@ func (client *Client) ResolveOwnerGate(ctx context.Context, grant string, input 
 		return errors.New("resolve control-plane owner gate")
 	}
 	return nil
+}
+
+func (client *Client) ManageRuntimeAction(ctx context.Context, grant string,
+	input domaincontrol.RuntimeActionInput) (domaincontrol.Turn, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return domaincontrol.Turn{}, err
+	}
+	action := controlplanev1.RuntimeAction_RUNTIME_ACTION_STOP
+	if input.Action == "RETRY" {
+		action = controlplanev1.RuntimeAction_RUNTIME_ACTION_RETRY
+	} else if input.Action != "STOP" {
+		return domaincontrol.Turn{}, errors.New("runtime action is invalid")
+	}
+	response, err := client.client.ControlPlane.ManageRuntimeAction(protected,
+		&controlplanev1.ManageRuntimeActionRequest{IdempotencyKey: input.IdempotencyKey,
+			SessionId: input.SessionID, TurnId: input.TurnID, Action: action})
+	if err != nil || response.GetTurn() == nil || response.GetTurn().GetSpec().GetTurn() == nil {
+		if status.Code(err) == codes.InvalidArgument || status.Code(err) == codes.PermissionDenied ||
+			status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition ||
+			status.Code(err) == codes.Aborted || status.Code(err) == codes.AlreadyExists {
+			return domaincontrol.Turn{}, domaincontrol.ErrConflict
+		}
+		return domaincontrol.Turn{}, errors.New("manage control-plane runtime action")
+	}
+	resource, spec := response.GetTurn(), response.GetTurn().GetSpec().GetTurn()
+	return domaincontrol.Turn{ID: resource.GetId(), Version: resource.GetVersion(),
+		State:     stringWithoutPrefix(resource.GetState().String(), "RESOURCE_STATE_"),
+		SessionID: spec.GetSessionId(), Attempt: spec.GetAttempt(), Outcome: spec.GetOutcome(),
+		ImmutableInputSHA256: spec.GetEffectiveInputSha256()}, nil
 }
 
 func (client *Client) ExpireOwnerGate(ctx context.Context, idempotencyKey string) error {

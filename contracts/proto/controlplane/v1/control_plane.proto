@@ -84,6 +84,9 @@ service ControlPlaneService {
   // ManageSession — единственный путь жизненного цикла SESSION; привязку
   // провайдера выбирает сервер.
   rpc ManageSession(ManageSessionRequest) returns (ManageSessionResponse);
+  // BindSessionMCP закрепляет bot-service-owned session token как свежую
+  // immutable credential binding exact control Session.
+  rpc BindSessionMCP(BindSessionMCPRequest) returns (BindSessionMCPResponse);
   // ManageConversationLifecycle — закрытый Mattermost Channel/Thread
   // delete/restore/finalize path без доступа gateway к generic transition.
   rpc ManageConversationLifecycle(ManageConversationLifecycleRequest) returns (ManageConversationLifecycleResponse);
@@ -165,6 +168,12 @@ service ControlPlaneService {
   // GetRuntimeMaterialization подтверждает один exact execution-bound object
   // для mediation через interaction-gateway без S3 credential у runner.
   rpc GetRuntimeMaterialization(GetRuntimeMaterializationRequest) returns (GetRuntimeMaterializationResponse);
+  // AuthorizeRuntimeOutput разрешает gateway один bounded content-addressed put
+  // для exact active execution до обращения к private object store.
+  rpc AuthorizeRuntimeOutput(AuthorizeRuntimeOutputRequest) returns (AuthorizeRuntimeOutputResponse);
+  // RegisterRuntimeOutput атомарно закрепляет проверенный object readback как
+  // server-owned Artifact exact execution; caller не назначает owner.
+  rpc RegisterRuntimeOutput(RegisterRuntimeOutputRequest) returns (RegisterRuntimeOutputResponse);
   // AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
   rpc AdmitRuntimeExecution(AdmitRuntimeExecutionRequest) returns (AdmitRuntimeExecutionResponse);
   // HeartbeatRuntimeExecution продлевает только текущую lease/fence.
@@ -177,6 +186,9 @@ service ControlPlaneService {
   rpc CancelRuntimeExecution(CancelRuntimeExecutionRequest) returns (CancelRuntimeExecutionResponse);
   // RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
   rpc RetryRuntimeExecution(RetryRuntimeExecutionRequest) returns (RetryRuntimeExecutionResponse);
+  // ManageRuntimeAction разрешает Stop/Retry только из проверенного interaction
+  // callback и сам выбирает current Turn/RuntimeExecution tuple внутри owner boundary.
+  rpc ManageRuntimeAction(ManageRuntimeActionRequest) returns (ManageRuntimeActionResponse);
   // RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
   // attempt/RuntimeRevision/provider observation без мутации старого snapshot.
   rpc RescheduleRuntimeExecution(RescheduleRuntimeExecutionRequest) returns (RescheduleRuntimeExecutionResponse);
@@ -221,10 +233,6 @@ service ControlPlaneService {
   rpc GetIntegrationContinuation(GetIntegrationContinuationRequest) returns (GetIntegrationContinuationResponse);
   // AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
   rpc AcknowledgeIntegrationContinuation(AcknowledgeIntegrationContinuationRequest) returns (AcknowledgeIntegrationContinuationResponse);
-  // ValidateIntegrationResultAccess проверяет capability против current owner
-  // continuation state; request не принимает caller-selected resource IDs.
-  rpc ValidateIntegrationResultAccess(ValidateIntegrationResultAccessRequest) returns (ValidateIntegrationResultAccessResponse);
-
   // CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
 }
@@ -1405,6 +1413,27 @@ message ManageSessionResponse {
   Resource session = 1;
 }
 
+// BindSessionMCPRequest не принимает значение token: interaction-gateway
+// передаёт только readback metadata immutable Secret, созданного bot-service.
+message BindSessionMCPRequest {
+  string idempotency_key = 1;
+  string session_id = 2;
+  // Session version разрешает и блокирует control-plane; transport producer не
+  // получает caller-selected OCC authority.
+  reserved 3;
+  string agent_session_key = 4;
+  int64 agent_session_id = 5;
+  uint64 agent_session_version = 6;
+  string agent_session_binding_sha256 = 7;
+  string immutable_secret_ref = 8;
+  string provider_content_version = 9;
+  string content_sha256 = 10;
+}
+
+message BindSessionMCPResponse {
+  Resource session = 1;
+}
+
 enum ConversationLifecycleKind {
   CONVERSATION_LIFECYCLE_KIND_UNSPECIFIED = 0;
   CONVERSATION_LIFECYCLE_KIND_CHANNEL = 1;
@@ -1922,7 +1951,7 @@ enum RuntimeTerminalOutcome {
   RUNTIME_TERMINAL_OUTCOME_SUSPENDED = 3;
   RUNTIME_TERMINAL_OUTCOME_CANCELLED = 4;
   RUNTIME_TERMINAL_OUTCOME_EXPIRED = 5;
-  // RUNTIME_TERMINAL_OUTCOME_BLOCKED сохраняет authoritative blocked handoff bot-service.
+  // RUNTIME_TERMINAL_OUTCOME_BLOCKED сохраняет authoritative blocked handoff control-plane owner graph.
   RUNTIME_TERMINAL_OUTCOME_BLOCKED = 6;
 }
 
@@ -2175,6 +2204,43 @@ message GetRuntimeMaterializationResponse {
   RuntimeMaterialization materialization = 6;
 }
 
+message RuntimeOutputMetadata {
+  string kind = 1;
+  string name = 2;
+  string media_type = 3;
+  uint64 size_bytes = 4;
+  string sha256 = 5;
+  uint32 sequence = 6;
+  uint32 total = 7;
+}
+
+message AuthorizeRuntimeOutputRequest {
+  string execution_id = 1;
+  RuntimeOutputMetadata output = 2;
+}
+
+message AuthorizeRuntimeOutputResponse {
+  string organization_id = 1;
+  string project_id = 2;
+  uint64 execution_version = 3;
+  uint64 execution_fence = 4;
+  uint64 grant_generation = 5;
+}
+
+message RegisterRuntimeOutputRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_execution_version = 3;
+  uint64 expected_execution_fence = 4;
+  uint64 expected_grant_generation = 5;
+  RuntimeOutputMetadata output = 6;
+  string storage_ref = 7;
+}
+
+message RegisterRuntimeOutputResponse {
+  Resource artifact = 1;
+}
+
 message AdmitRuntimeExecutionRequest {
   string idempotency_key = 1;
   string execution_id = 2;
@@ -2245,6 +2311,8 @@ message RuntimeOutput {
   bytes artifact_payload = 7;
   uint32 sequence = 8;
   uint32 total = 9;
+  string artifact_storage_ref = 10;
+  uint64 artifact_size_bytes = 11;
 }
 
 message CompleteRuntimeExecutionResponse {
@@ -2273,6 +2341,24 @@ message RetryRuntimeExecutionRequest {
 message RetryRuntimeExecutionResponse {
   RuntimeExecution previous_execution = 1;
   Resource turn = 2;
+}
+
+enum RuntimeAction {
+  RUNTIME_ACTION_UNSPECIFIED = 0;
+  RUNTIME_ACTION_STOP = 1;
+  RUNTIME_ACTION_RETRY = 2;
+}
+
+message ManageRuntimeActionRequest {
+  string idempotency_key = 1;
+  string session_id = 2;
+  string turn_id = 3;
+  RuntimeAction action = 4;
+}
+
+message ManageRuntimeActionResponse {
+  Resource turn = 1;
+  RuntimeExecution execution = 2;
 }
 
 message RescheduleRuntimeExecutionRequest {
@@ -2507,10 +2593,8 @@ message IntegrationContinuation {
   // transition_grant — свежая узкая authority для следующего gateway transition.
   string transition_grant = 28;
   google.protobuf.Timestamp transition_grant_expires_at = 29;
-  // result_access_grant выдаётся только READY continuation turn и позволяет
-  // producer-owned version-pinned read/ack в integration-gateway.
-  string result_access_grant = 30;
-  google.protobuf.Timestamp result_access_grant_expires_at = 31;
+  // Удалённый legacy result-access contract не может быть переиспользован.
+  reserved 30, 31;
 }
 
 message ResolveIntegrationSessionRequest {}
@@ -2687,17 +2771,6 @@ message AcknowledgeIntegrationContinuationRequest {
 
 message AcknowledgeIntegrationContinuationResponse {
   IntegrationContinuation continuation = 1;
-}
-
-message ValidateIntegrationResultAccessRequest {}
-
-message ValidateIntegrationResultAccessResponse {
-  IntegrationContinuation continuation = 1;
-  string outcome = 2;
-  string reference = 3;
-  string reference_sha256 = 4;
-  string result_attempt_id = 5;
-  uint64 signer_generation = 6;
 }
 
 // CheckReadinessRequest описывает версионированное сообщение контракта control-plane.

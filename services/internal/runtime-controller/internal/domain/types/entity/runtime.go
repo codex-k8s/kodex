@@ -535,6 +535,8 @@ type RuntimeOutput struct {
 	Kind, ArtifactID, ArtifactSHA256, ArtifactName, ArtifactMediaType string
 	ArtifactVersion                                                   uint64
 	ArtifactPayload                                                   []byte
+	ArtifactStorageRef                                                string
+	ArtifactSizeBytes                                                 uint64
 	Sequence, Total                                                   uint32
 }
 

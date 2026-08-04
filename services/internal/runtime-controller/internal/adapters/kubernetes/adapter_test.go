@@ -57,6 +57,55 @@ func TestCredentialBrokerJobsAreUnprivilegedAuthorityClients(t *testing.T) {
 	}
 }
 
+func TestRolePodProviderRuntimeCannotMountRunnerAuthority(t *testing.T) {
+	execution := testExecution()
+	execution.WorkloadTicket = strings.Repeat("a", 64) + "." + strings.Repeat("b", 43)
+	adapter := &Adapter{config: Config{
+		Namespace:                       "mattercodex-system",
+		Environment:                     "production",
+		RoleImageRepository:             "registry.example.test/agent-runner",
+		RunnerControlPlaneTarget:        "control-plane:8443",
+		RunnerControlPlaneTLSServerName: "control-plane.mattercodex-system.svc.cluster.local",
+		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
+		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
+		AuthorityImage:                  "registry.example.test/internal-rpc-authority@sha256:" + strings.Repeat("c", 64),
+	}}
+	revision := entity.Revision{ImageDigest: "sha256:" + strings.Repeat("d", 64)}
+	pod, err := adapter.rolePod(t.Context(), execution, revision)
+	if err != nil {
+		t.Fatalf("rolePod() error = %v", err)
+	}
+	if pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken {
+		t.Fatal("role Pod automatically mounts a Kubernetes token")
+	}
+	var provider *corev1.Container
+	for index := range pod.Spec.Containers {
+		if pod.Spec.Containers[index].Name == "provider-runtime" {
+			provider = &pod.Spec.Containers[index]
+			break
+		}
+	}
+	if provider == nil || provider.SecurityContext == nil || provider.SecurityContext.RunAsUser == nil ||
+		*provider.SecurityContext.RunAsUser != 10002 || provider.SecurityContext.RunAsGroup == nil ||
+		*provider.SecurityContext.RunAsGroup != 10002 {
+		t.Fatalf("provider runtime does not use its isolated UID: %#v", provider)
+	}
+	wantMounts := map[string]string{
+		"session": "/workspace", "provider-socket": "/run/mattercodex/provider", "provider-tmp": "/tmp",
+	}
+	if len(provider.VolumeMounts) != len(wantMounts) {
+		t.Fatalf("provider runtime mount count = %d, want %d", len(provider.VolumeMounts), len(wantMounts))
+	}
+	for _, mount := range provider.VolumeMounts {
+		if wantMounts[mount.Name] != mount.MountPath {
+			t.Fatalf("provider runtime received authority mount %q at %q", mount.Name, mount.MountPath)
+		}
+	}
+	if len(provider.Env) != 2 || provider.Env[0].Name != "HOME" || provider.Env[1].Name != "CODEX_HOME" {
+		t.Fatalf("provider runtime received unexpected environment: %#v", provider.Env)
+	}
+}
+
 func TestAdmissionAndRBACSelectOnlyExactRuntimeProfile(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..", "..", "deploy", "k8s", "base", "runtime-controller")
 	admission, err := os.ReadFile(filepath.Join(root, "workload-admission.yaml"))

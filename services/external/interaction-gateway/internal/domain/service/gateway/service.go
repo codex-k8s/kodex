@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"path"
 	"strings"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/i18n"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
+	domainbot "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/botservice"
 	domaincontrol "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/controlplane"
 	domainmattermost "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/mattermost"
 	domainobjectstore "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/objectstore"
@@ -68,6 +70,7 @@ type Service struct {
 	mattermost domainmattermost.Client
 	objects    domainobjectstore.Client
 	control    domaincontrol.Client
+	bot        domainbot.Client
 	authority  Authority
 	observer   Observer
 	config     Config
@@ -82,11 +85,11 @@ type Result struct {
 }
 
 func New(repository domainrepo.Repository, mattermost domainmattermost.Client, objects domainobjectstore.Client,
-	control domaincontrol.Client, authority Authority, observer Observer, config Config) (*Service, error) {
+	control domaincontrol.Client, bot domainbot.Client, authority Authority, observer Observer, config Config) (*Service, error) {
 	callback, err := url.Parse(config.ActionCallbackURL)
 	dialogCallback, dialogErr := url.Parse(config.DialogCallbackURL)
 	downloadBase, downloadErr := url.Parse(config.ArtifactDownloadBaseURL)
-	if repository == nil || mattermost == nil || objects == nil || control == nil || authority == nil || observer == nil ||
+	if repository == nil || mattermost == nil || objects == nil || control == nil || bot == nil || authority == nil || observer == nil ||
 		err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil ||
 		callback.RawQuery != "" || callback.Fragment != "" || config.RetentionRef == "" ||
 		dialogErr != nil || dialogCallback.Scheme != "https" || dialogCallback.Host == "" || dialogCallback.User != nil ||
@@ -115,7 +118,7 @@ func New(repository domainrepo.Repository, mattermost domainmattermost.Client, o
 		localizers[locale] = localizer
 	}
 	return &Service{repository: repository, mattermost: mattermost, objects: objects,
-		control: control, authority: authority, observer: observer, config: config, localizers: localizers, now: time.Now}, nil
+		control: control, bot: bot, authority: authority, observer: observer, config: config, localizers: localizers, now: time.Now}, nil
 }
 
 func (service *Service) HandleRaw(ctx context.Context, raw domainmattermost.RawEvent) (result Result, resultErr error) {
@@ -236,6 +239,39 @@ func (service *Service) HandleDecision(ctx context.Context, raw domainmattermost
 	return service.resumeOwnerCallback(ctx, stored)
 }
 
+func (service *Service) HandleRuntimeAction(ctx context.Context, raw domainmattermost.RawEvent,
+	deliveryID, callbackToken, action string) (result Result, resultErr error) {
+	defer func() { service.observeInbound(raw.Kind, result, resultErr) }()
+	if (action != "STOP" && action != "RETRY") || uuid.Validate(deliveryID) != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	boundary, verified, err := service.mattermost.ResolveInbound(ctx, raw)
+	if err != nil || boundary.IgnoredBot {
+		return Result{}, domainerrs.ErrUnauthorized
+	}
+	inbound, err := buildInbound(verified, boundary)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	inbound.Kind, inbound.DeliveryID, inbound.CallbackToken = enum.InboundAction, deliveryID, callbackToken
+	inbound.Action, inbound.ActionReason = enum.OwnerDecision(action), "Mattermost runtime action"
+	inbound.DigestSHA256, err = eventDigest(inbound)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	stored, disposition, err := service.repository.ClaimInbound(ctx, inbound, service.config.InboundLease)
+	if err != nil {
+		return Result{}, domainerrs.ErrConflict
+	}
+	if disposition == domainrepo.InboundReplay {
+		return service.replayInbound(stored)
+	}
+	if disposition == domainrepo.InboundBusy {
+		return Result{}, domainerrs.ErrBusy
+	}
+	return service.resumeOwnerCallback(ctx, stored)
+}
+
 func (service *Service) OpenDecisionDialog(ctx context.Context, raw domainmattermost.RawEvent,
 	deliveryID, callbackToken, triggerID string) (Result, error) {
 	boundary, verified, err := service.mattermost.ResolveInbound(ctx, raw)
@@ -266,10 +302,18 @@ func (service *Service) OpenDecisionDialog(ctx context.Context, raw domainmatter
 
 func (service *Service) resumeOwnerCallback(ctx context.Context, inbound entity.InboundEvent) (Result, error) {
 	delivery, err := service.repository.GetDelivery(ctx, inbound.DeliveryID)
-	if err != nil || delivery.OwnerGate == nil || delivery.ProviderPostID != inbound.PostID ||
+	if err != nil || delivery.ProviderPostID != inbound.PostID ||
 		delivery.ChannelID != inbound.ChannelID || delivery.TeamID != inbound.TeamID ||
-		delivery.OwnerGate.RecipientActorID != inbound.ActorID ||
 		!service.authority.VerifyCallback(delivery, inbound.ActorID, inbound.CallbackToken) {
+		return Result{}, service.failInbound(ctx, inbound, "CALLBACK_LINEAGE_MISMATCH")
+	}
+	if inbound.Action == enum.DecisionStop || inbound.Action == enum.DecisionRetry {
+		if delivery.Kind != enum.DeliveryRun || delivery.SessionID == "" || delivery.TurnID == "" {
+			return Result{}, service.failInbound(ctx, inbound, "CALLBACK_LINEAGE_MISMATCH")
+		}
+		return service.resolveRuntimeAction(ctx, inbound, delivery)
+	}
+	if delivery.OwnerGate == nil || delivery.OwnerGate.RecipientActorID != inbound.ActorID {
 		return Result{}, service.failInbound(ctx, inbound, "CALLBACK_LINEAGE_MISMATCH")
 	}
 	pending, pendingErr := service.repository.HasDeletionPending(ctx, inbound.OrganizationID, inbound.ProjectID,
@@ -299,6 +343,37 @@ func (service *Service) resumeOwnerCallback(ctx context.Context, inbound entity.
 	}
 	message := service.text(delivery.Locale, "decision.dialog_opened", nil)
 	if err := service.repository.CompleteInbound(ctx, inbound, delivery.SessionID, delivery.TurnID, message); err != nil {
+		return Result{}, err
+	}
+	return Result{Message: message}, nil
+}
+
+func (service *Service) resolveRuntimeAction(ctx context.Context, inbound entity.InboundEvent,
+	delivery entity.Delivery) (Result, error) {
+	grant, err := service.authority.Sign(inbound)
+	if err != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "AUTHORITY_SIGN_FAILED")
+	}
+	action := string(inbound.Action)
+	turn, err := service.control.ManageRuntimeAction(ctx, grant, domaincontrol.RuntimeActionInput{
+		IdempotencyKey: stableID(inbound.ID, "runtime-action:"+strings.ToLower(action)),
+		SessionID:      delivery.SessionID, TurnID: delivery.TurnID, Action: action,
+	})
+	if err != nil {
+		if errors.Is(err, domaincontrol.ErrConflict) {
+			return Result{}, service.failInbound(ctx, inbound, "RUNTIME_ACTION_CONFLICT")
+		}
+		return Result{}, service.retryInbound(ctx, inbound, "RUNTIME_ACTION_FAILED")
+	}
+	messageID := "card.run.stopped"
+	if action == "RETRY" {
+		messageID = "card.run.retried"
+	}
+	message := service.text(inbound.Locale, messageID, map[string]any{"Attempt": turn.Attempt})
+	if err := service.repository.CompleteInbound(ctx, inbound, delivery.SessionID, delivery.TurnID, message); err != nil {
+		return Result{}, err
+	}
+	if err := service.enqueueRuntimeActionCard(ctx, inbound, delivery, turn, action == "RETRY", message); err != nil {
 		return Result{}, err
 	}
 	return Result{Message: message}, nil
@@ -604,10 +679,17 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 		OwnerDelivery: &entity.OwnerDeliveryBinding{Fence: work.Fence, LeaseToken: work.LeaseToken,
 			LeaseExpiresAt: work.LeaseExpiresAt, TurnVersion: work.TurnVersion,
 			RuntimeRevisionID: work.RuntimeRevisionID, RuntimeRevisionVersion: work.RuntimeRevisionVersion}}
+	if original, originalErr := service.repository.GetRunDeliveryByTurn(ctx, work.OrganizationID,
+		work.ProjectID, work.SessionID, work.TurnID); originalErr == nil {
+		delivery.UpdatePostID = original.ProviderPostID
+	} else if !errors.Is(originalErr, domainrepo.ErrNotFound) {
+		return true, originalErr
+	}
 	message := service.text(delivery.Locale, "card.run.progress", map[string]any{"State": work.LifecycleState,
 		"Outcome": work.Outcome, "SessionID": work.SessionID, "TurnID": work.TurnID,
 		"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256})
-	if work.LifecycleState == "SUCCEEDED" || work.LifecycleState == "FAILED" || work.LifecycleState == "CANCELLED" {
+	if work.LifecycleState == "SUCCEEDED" || work.LifecycleState == "FAILED" ||
+		work.LifecycleState == "CANCELLED" || work.LifecycleState == "BLOCKED" {
 		message = service.text(delivery.Locale, "card.run.terminal", map[string]any{"State": work.LifecycleState,
 			"Outcome": work.Outcome, "SessionID": work.SessionID, "TurnID": work.TurnID,
 			"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256})
@@ -662,12 +744,61 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 	if !utf8.ValidString(message) || utf8.RuneCountInString(message) > mattermostmodel.PostMessageMaxRunesV2 {
 		return true, errors.New("Mattermost delivery message exceeds the provider limit")
 	}
-	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, map[string]any{"message": message})
+	payload := map[string]any{"message": message}
+	if delivery.Kind == enum.DeliveryRun {
+		token, tokenErr := service.authority.CallbackToken(delivery, work.ActorID)
+		if tokenErr != nil {
+			return true, tokenErr
+		}
+		attachment := map[string]any{"title": message, "text": service.text(delivery.Locale,
+			"card.run.body", map[string]any{"SessionID": delivery.SessionID, "TurnID": delivery.TurnID})}
+		switch work.LifecycleState {
+		case "QUEUED", "CLAIMED", "RUNNING", "ADMITTED":
+			attachment["actions"] = []map[string]any{service.runtimeActionButton(delivery, token, "STOP")}
+		case "FAILED", "EXPIRED":
+			attachment["actions"] = []map[string]any{service.runtimeActionButton(delivery, token, "RETRY")}
+		}
+		payload["props"] = map[string]any{"attachments": []map[string]any{attachment}}
+	}
+	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, payload)
 	if err != nil {
 		return true, err
 	}
 	_, _, err = service.repository.EnqueueDelivery(ctx, delivery)
 	return true, err
+}
+
+func (service *Service) StageRuntimeOutput(ctx context.Context, grant, executionID string,
+	output domaincontrol.RuntimeOutputMetadata, raw io.ReadSeeker) (domaincontrol.Artifact, error) {
+	if uuid.Validate(executionID) != nil || raw == nil || output.SizeBytes == 0 ||
+		output.Name == "" || len(output.Name) > 255 ||
+		strings.ContainsAny(output.Name, "/\\\x00\r\n") || output.MediaType == "" ||
+		output.Sequence == 0 || output.Total == 0 || output.Sequence > output.Total || output.Total > 4096 {
+		return domaincontrol.Artifact{}, domainerrs.ErrConflict
+	}
+	authorization, err := service.control.AuthorizeRuntimeOutput(ctx, grant, executionID, output)
+	if err != nil {
+		return domaincontrol.Artifact{}, err
+	}
+	key := fmt.Sprintf("runtime-outputs/%s/%s/%04d/%s/%s", executionID,
+		strings.ToLower(output.Kind), output.Sequence, output.SHA256, safeName(output.Name, 0))
+	stored, err := service.objects.PutStream(ctx, authorization.ProjectID, key, raw, int64(output.SizeBytes),
+		output.MediaType, output.SHA256)
+	if err != nil || stored.Reference == "" || stored.SHA256 != output.SHA256 || stored.Size != output.SizeBytes {
+		return domaincontrol.Artifact{}, errors.New("runtime output object readback failed")
+	}
+	// Upload может быть долгим: перед owner commit всегда читается fresh tuple.
+	fresh, err := service.control.AuthorizeRuntimeOutput(ctx, grant, executionID, output)
+	if err != nil || fresh.ProjectID != authorization.ProjectID ||
+		fresh.OrganizationID != authorization.OrganizationID || fresh.GrantGeneration != authorization.GrantGeneration {
+		return domaincontrol.Artifact{}, errors.New("runtime output authority changed")
+	}
+	artifact, err := service.control.RegisterRuntimeOutput(ctx, grant, executionID, fresh, output, stored.Reference)
+	if err != nil || artifact.ID == "" || artifact.Version == 0 || artifact.SHA256 != output.SHA256 ||
+		artifact.SizeBytes != output.SizeBytes || artifact.StorageRef != stored.Reference {
+		return domaincontrol.Artifact{}, errors.New("runtime output registration failed")
+	}
+	return artifact, nil
 }
 
 func (service *Service) ExpireOwnerGate(ctx context.Context) error {
@@ -871,16 +1002,17 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 	if err != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "AUTHORITY_SIGN_FAILED")
 	}
+	sessionScope := inbound.PostID
+	if inbound.RootPostID != "" {
+		sessionScope = inbound.RootPostID
+	}
+	if sessionScope == "" {
+		sessionScope = inbound.ID
+	}
+	createdSession := false
 	if inbound.SessionID == "" {
 		if inbound.ChatID == "" || inbound.RoleID == "" {
 			return Result{}, service.failInbound(ctx, inbound, "SESSION_MAPPING_MISSING")
-		}
-		sessionScope := inbound.PostID
-		if inbound.RootPostID != "" {
-			sessionScope = inbound.RootPostID
-		}
-		if sessionScope == "" {
-			sessionScope = inbound.ID
 		}
 		sessionKey := stableID(inbound.ProjectID, "mattermost-thread:"+inbound.TeamID+":"+inbound.ChannelID+":"+sessionScope)
 		session, createErr := service.control.CreateSession(ctx, grant, sessionKey,
@@ -889,6 +1021,30 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 			return Result{}, service.retryInbound(ctx, inbound, "SESSION_CREATE_FAILED")
 		}
 		inbound.SessionID = session.ID
+		createdSession = true
+	}
+	// Перед каждым turn bot-service заново подтверждает exact current Secret и
+	// выдаёт свежую owner binding revision. Rotation меняет также UID/version/digest.
+	binding, bindingErr := service.bot.EnsureRuntimeMCPBinding(ctx, domainbot.BindingRequest{
+		ControlSessionID: inbound.SessionID, ChannelID: inbound.ChannelID, RootPostID: sessionScope,
+		BotStableKey: inbound.BotStableKey,
+	})
+	if bindingErr != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "MCP_BINDING_CREATE_FAILED")
+	}
+	_, bindingErr = service.control.BindSessionMCP(ctx, grant, domaincontrol.SessionMCPBindingInput{
+		IdempotencyKey: stableID(inbound.ID, fmt.Sprintf("session-mcp-binding:%d:%s:%s",
+			binding.AgentSessionVersion, binding.ProviderContentVersion, binding.ContentSHA256)),
+		SessionID: inbound.SessionID, AgentSessionKey: binding.AgentSessionKey,
+		AgentSessionID: binding.AgentSessionID, AgentSessionVersion: binding.AgentSessionVersion,
+		AgentSessionBindingSHA256: binding.AgentSessionBindingSHA256,
+		ImmutableSecretRef:        binding.ImmutableSecretRef, ProviderContentVersion: binding.ProviderContentVersion,
+		ContentSHA256: binding.ContentSHA256,
+	})
+	if bindingErr != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "MCP_BINDING_REGISTER_FAILED")
+	}
+	if createdSession {
 		inbound.State = enum.InboundProcessing
 		inbound.NextAttemptAt = service.now()
 		if err := service.repository.SaveInboundProgress(ctx, inbound); err != nil {
@@ -1143,14 +1299,67 @@ func (service *Service) ownerGateCard(delivery entity.Delivery, claim entity.Own
 }
 
 func (service *Service) enqueueRunCard(ctx context.Context, inbound entity.InboundEvent, turnID string) error {
+	deliveryID := stableID(inbound.ID, "card:"+string(enum.DeliveryRun))
+	delivery := entity.Delivery{ID: deliveryID, Kind: enum.DeliveryRun, State: enum.DeliveryPending,
+		OrganizationID: inbound.OrganizationID, ProjectID: inbound.ProjectID,
+		SessionID: inbound.SessionID, TurnID: turnID, TeamID: inbound.TeamID,
+		ChannelID: inbound.ChannelID, RootPostID: inbound.RootPostID,
+		BotStableKey: inbound.BotStableKey, Locale: inbound.Locale,
+		CreatedAt: service.now(), UpdatedAt: service.now()}
+	token, err := service.authority.CallbackToken(delivery, inbound.ActorID)
+	if err != nil {
+		return err
+	}
 	payload := map[string]any{
 		"message": service.text(inbound.Locale, "card.run.queued", nil),
 		"props": map[string]any{"attachments": []map[string]any{{
-			"title": service.text(inbound.Locale, "card.run.queued", nil),
-			"text":  service.text(inbound.Locale, "card.run.body", map[string]any{"SessionID": inbound.SessionID, "TurnID": turnID}),
+			"title":   service.text(inbound.Locale, "card.run.queued", nil),
+			"text":    service.text(inbound.Locale, "card.run.body", map[string]any{"SessionID": inbound.SessionID, "TurnID": turnID}),
+			"actions": []map[string]any{service.runtimeActionButton(delivery, token, "STOP")},
 		}}},
 	}
-	return service.enqueueCard(ctx, inbound, turnID, enum.DeliveryRun, payload)
+	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, payload)
+	if err != nil {
+		return err
+	}
+	_, _, err = service.repository.EnqueueDelivery(ctx, delivery)
+	return err
+}
+
+func (service *Service) enqueueRuntimeActionCard(ctx context.Context, inbound entity.InboundEvent,
+	previous entity.Delivery, turn domaincontrol.Turn, stoppable bool, message string) error {
+	delivery := entity.Delivery{ID: stableID(inbound.ID, "runtime-action-card"), Kind: enum.DeliveryRun,
+		State: enum.DeliveryPending, OrganizationID: previous.OrganizationID, ProjectID: previous.ProjectID,
+		SessionID: previous.SessionID, TurnID: previous.TurnID, Attempt: turn.Attempt,
+		ImmutableInputSHA256: turn.ImmutableInputSHA256, TeamID: previous.TeamID, ChannelID: previous.ChannelID,
+		RootPostID: previous.RootPostID, BotStableKey: previous.BotStableKey, Locale: previous.Locale,
+		UpdatePostID: previous.ProviderPostID, CreatedAt: service.now(), UpdatedAt: service.now()}
+	token, err := service.authority.CallbackToken(delivery, inbound.ActorID)
+	if err != nil {
+		return err
+	}
+	attachment := map[string]any{"title": message, "text": service.text(inbound.Locale, "card.run.body",
+		map[string]any{"SessionID": delivery.SessionID, "TurnID": delivery.TurnID})}
+	if stoppable {
+		attachment["actions"] = []map[string]any{service.runtimeActionButton(delivery, token, "STOP")}
+	}
+	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID,
+		map[string]any{"message": message, "props": map[string]any{"attachments": []map[string]any{attachment}}})
+	if err != nil {
+		return err
+	}
+	_, _, err = service.repository.EnqueueDelivery(ctx, delivery)
+	return err
+}
+
+func (service *Service) runtimeActionButton(delivery entity.Delivery, token, action string) map[string]any {
+	label := service.text(delivery.Locale, "card.run.stop", nil)
+	if action == "RETRY" {
+		label = service.text(delivery.Locale, "card.run.retry", nil)
+	}
+	return map[string]any{"id": strings.ToLower(action), "name": label, "type": "button",
+		"integration": map[string]any{"url": service.config.ActionCallbackURL,
+			"context": map[string]any{"delivery_id": delivery.ID, "callback_token": token, "action": action}}}
 }
 
 func (service *Service) enqueueInformational(ctx context.Context, inbound entity.InboundEvent,

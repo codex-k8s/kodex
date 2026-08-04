@@ -70,5 +70,10 @@ configMapGenerator:
       - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
       - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
       - INTERACTION_GATEWAY_CONTROL_PLANE_APPLICATION_GRANT_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/owner-gate-delivery.jwt
+      - INTERACTION_GATEWAY_BOT_SERVICE_URL=https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443
+      - INTERACTION_GATEWAY_BOT_SERVICE_TLS_SERVER_NAME=matter-codex-bot-service.mattercodex-system.svc.cluster.local
+      - INTERACTION_GATEWAY_BOT_SERVICE_CA_FILE=/var/run/config/mattercodex/interaction-gateway/control-plane/ca.pem
+      - INTERACTION_GATEWAY_BOT_SERVICE_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
+      - INTERACTION_GATEWAY_BOT_SERVICE_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
 generatorOptions:
   disableNameSuffixHash: true

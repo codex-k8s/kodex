@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	controlcenterapi "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/generated"
 	transportmodels "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/models"
 	githubapi "github.com/google/go-github/v88/github"
+	"github.com/google/uuid"
 	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,6 +38,7 @@ const (
 	pathAgentsDialog      = "/mattermost/dialogs/agents"
 	pathGitHubWebhook     = "/github/webhook"
 	pathAgentSessions     = "/internal/agent-sessions/"
+	pathRuntimeMCPBinding = "/internal/runtime-mcp-bindings"
 	pathMCPSessions       = "/mcp/sessions/"
 	pathControlCenter     = "/control-center/"
 	pathAutomationHistory = "/api/control-center/v1/automation-runs"
@@ -59,70 +62,73 @@ type DialogOpener interface {
 }
 
 type RouterConfig struct {
-	StatusService          *statusservice.StatusService
-	SlashService           *statusservice.SlashCommandService
-	SessionService         *statusservice.AgentSessionService
-	DialogOpener           DialogOpener
-	InteractionSecurity    *statusservice.InteractionSecurityService
-	Localizer              *texti18n.Localizer
-	SlashToken             string
-	GitHubWebhookSecret    string
-	MaxSlashFormBytes      int64
-	MaxGitHubWebhookBytes  int64
-	MaxMCPRequestBodyBytes int64
-	PrometheusRegistry     *prometheus.Registry
-	MattermostSiteURL      string
-	MattermostInternalURL  string
-	ThreadPublisher        statusservice.MattermostThreadPublisher
-	Automations            *statusservice.AutomationService
-	ControlCenterReadToken string
-	ControlCenterAssetsDir string
-	MattermostResolver     mattermostDNSResolver
-	MattermostDialer       mattermostContextDialer
-	Logger                 *slog.Logger
+	StatusService                   *statusservice.StatusService
+	SlashService                    *statusservice.SlashCommandService
+	SessionService                  *statusservice.AgentSessionService
+	DialogOpener                    DialogOpener
+	InteractionSecurity             *statusservice.InteractionSecurityService
+	Localizer                       *texti18n.Localizer
+	SlashToken                      string
+	GitHubWebhookSecret             string
+	MaxSlashFormBytes               int64
+	MaxGitHubWebhookBytes           int64
+	MaxMCPRequestBodyBytes          int64
+	PrometheusRegistry              *prometheus.Registry
+	MattermostSiteURL               string
+	MattermostInternalURL           string
+	ThreadPublisher                 statusservice.MattermostThreadPublisher
+	Automations                     *statusservice.AutomationService
+	ControlCenterReadToken          string
+	ControlCenterAssetsDir          string
+	MattermostResolver              mattermostDNSResolver
+	MattermostDialer                mattermostContextDialer
+	Logger                          *slog.Logger
+	RuntimeMCPBindingClientSPIFFEID string
 }
 
 type Router struct {
-	statusService              *statusservice.StatusService
-	slashService               *statusservice.SlashCommandService
-	sessionService             *statusservice.AgentSessionService
-	dialogOpener               DialogOpener
-	localizer                  *texti18n.Localizer
-	slashToken                 string
-	gitHubWebhookSecret        string
-	maxSlashFormBytes          int64
-	maxGitHubWebhookBytes      int64
-	interactionSecurity        *statusservice.InteractionSecurityService
-	mattermostResponses        *mattermostResponseClient
-	threadPublisher            statusservice.MattermostThreadPublisher
-	automations                *statusservice.AutomationService
-	controlCenterReadTokenHash [sha256.Size]byte
-	controlCenterConfigured    bool
-	logger                     *slog.Logger
-	mcpHandler                 http.Handler
-	mux                        *http.ServeMux
-	registeredRoutes           []RegisteredRoute
+	statusService                   *statusservice.StatusService
+	slashService                    *statusservice.SlashCommandService
+	sessionService                  *statusservice.AgentSessionService
+	dialogOpener                    DialogOpener
+	localizer                       *texti18n.Localizer
+	slashToken                      string
+	gitHubWebhookSecret             string
+	maxSlashFormBytes               int64
+	maxGitHubWebhookBytes           int64
+	interactionSecurity             *statusservice.InteractionSecurityService
+	mattermostResponses             *mattermostResponseClient
+	threadPublisher                 statusservice.MattermostThreadPublisher
+	automations                     *statusservice.AutomationService
+	controlCenterReadTokenHash      [sha256.Size]byte
+	controlCenterConfigured         bool
+	logger                          *slog.Logger
+	runtimeMCPBindingClientSPIFFEID string
+	mcpHandler                      http.Handler
+	mux                             *http.ServeMux
+	registeredRoutes                []RegisteredRoute
 }
 
 var _ http.Handler = (*Router)(nil)
 
 func NewRouter(cfg RouterConfig) *Router {
 	router := &Router{
-		statusService:         cfg.StatusService,
-		slashService:          cfg.SlashService,
-		sessionService:        cfg.SessionService,
-		dialogOpener:          cfg.DialogOpener,
-		localizer:             cfg.Localizer,
-		slashToken:            cfg.SlashToken,
-		gitHubWebhookSecret:   cfg.GitHubWebhookSecret,
-		maxSlashFormBytes:     cfg.MaxSlashFormBytes,
-		maxGitHubWebhookBytes: cfg.MaxGitHubWebhookBytes,
-		interactionSecurity:   cfg.InteractionSecurity,
-		mattermostResponses:   newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
-		threadPublisher:       cfg.ThreadPublisher,
-		automations:           cfg.Automations,
-		logger:                cfg.Logger,
-		mux:                   http.NewServeMux(),
+		statusService:                   cfg.StatusService,
+		slashService:                    cfg.SlashService,
+		sessionService:                  cfg.SessionService,
+		dialogOpener:                    cfg.DialogOpener,
+		localizer:                       cfg.Localizer,
+		slashToken:                      cfg.SlashToken,
+		gitHubWebhookSecret:             cfg.GitHubWebhookSecret,
+		maxSlashFormBytes:               cfg.MaxSlashFormBytes,
+		maxGitHubWebhookBytes:           cfg.MaxGitHubWebhookBytes,
+		interactionSecurity:             cfg.InteractionSecurity,
+		mattermostResponses:             newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
+		threadPublisher:                 cfg.ThreadPublisher,
+		automations:                     cfg.Automations,
+		logger:                          cfg.Logger,
+		runtimeMCPBindingClientSPIFFEID: cfg.RuntimeMCPBindingClientSPIFFEID,
+		mux:                             http.NewServeMux(),
 	}
 	if token := strings.TrimSpace(cfg.ControlCenterReadToken); token != "" {
 		router.controlCenterReadTokenHash = sha256.Sum256([]byte(token))
@@ -145,6 +151,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.register(pathAgentsDialog, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentsDialog))
 	router.register(pathGitHubWebhook, RouteBoundaryPublic, http.HandlerFunc(router.handleGitHubWebhook))
 	router.register(pathAgentSessions, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentSessionInternal))
+	router.register(pathRuntimeMCPBinding, RouteBoundaryCluster, http.HandlerFunc(router.handleRuntimeMCPBinding))
 	if router.mcpHandler != nil {
 		router.register(pathMCPSessions, RouteBoundaryCluster, router.mcpHandler)
 	}
@@ -156,6 +163,39 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.register(strings.TrimSuffix(pathControlCenter, "/"), RouteBoundaryPublic, http.RedirectHandler(pathControlCenter, http.StatusTemporaryRedirect))
 	router.register(pathControlCenter, RouteBoundaryPublic, assets)
 	return router
+}
+
+func (router *Router) handleRuntimeMCPBinding(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost || router.sessionService == nil ||
+		!requestHasSPIFFE(r, router.runtimeMCPBindingClientSPIFFEID) {
+		writeJSON(w, http.StatusForbidden, transportmodels.ErrorResponse{Error: "runtime_mcp_binding_forbidden"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	var request statusservice.RuntimeMCPBindingRequest
+	decoder := json.NewDecoder(io.LimitReader(r.Body, (4<<10)+1))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&request) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		uuid.Validate(request.ControlSessionID) != nil {
+		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "runtime_mcp_binding_invalid"})
+		return
+	}
+	binding, err := router.sessionService.EnsureRuntimeMCPBinding(r.Context(), request)
+	if err != nil {
+		router.logWarn("runtime MCP binding failed", "error", err)
+		writeJSON(w, http.StatusConflict, transportmodels.ErrorResponse{Error: "runtime_mcp_binding_failed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, binding)
+}
+
+func requestHasSPIFFE(request *http.Request, expected string) bool {
+	if expected == "" || request.TLS == nil || len(request.TLS.VerifiedChains) != 1 ||
+		len(request.TLS.VerifiedChains[0]) == 0 {
+		return false
+	}
+	certificate := request.TLS.VerifiedChains[0][0]
+	return len(certificate.URIs) == 1 && certificate.URIs[0].String() == expected
 }
 
 func (router *Router) register(path string, boundary RouteBoundary, handler http.Handler) {

@@ -51,6 +51,7 @@ const (
 	ControlPlaneService_RetryTurn_FullMethodName                                = "/controlplane.v1.ControlPlaneService/RetryTurn"
 	ControlPlaneService_CancelTurn_FullMethodName                               = "/controlplane.v1.ControlPlaneService/CancelTurn"
 	ControlPlaneService_ManageSession_FullMethodName                            = "/controlplane.v1.ControlPlaneService/ManageSession"
+	ControlPlaneService_BindSessionMCP_FullMethodName                           = "/controlplane.v1.ControlPlaneService/BindSessionMCP"
 	ControlPlaneService_ManageConversationLifecycle_FullMethodName              = "/controlplane.v1.ControlPlaneService/ManageConversationLifecycle"
 	ControlPlaneService_ManageMemoryRecord_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
 	ControlPlaneService_ManageWorkClaim_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
@@ -84,12 +85,15 @@ const (
 	ControlPlaneService_ReleaseRuntimeRetention_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ReleaseRuntimeRetention"
 	ControlPlaneService_GetRuntimeExecution_FullMethodName                      = "/controlplane.v1.ControlPlaneService/GetRuntimeExecution"
 	ControlPlaneService_GetRuntimeMaterialization_FullMethodName                = "/controlplane.v1.ControlPlaneService/GetRuntimeMaterialization"
+	ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName                   = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeOutput"
+	ControlPlaneService_RegisterRuntimeOutput_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RegisterRuntimeOutput"
 	ControlPlaneService_AdmitRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
 	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
 	ControlPlaneService_RecordRuntimeIncident_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident"
 	ControlPlaneService_CompleteRuntimeExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
 	ControlPlaneService_CancelRuntimeExecution_FullMethodName                   = "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution"
 	ControlPlaneService_RetryRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution"
+	ControlPlaneService_ManageRuntimeAction_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ManageRuntimeAction"
 	ControlPlaneService_RescheduleRuntimeExecution_FullMethodName               = "/controlplane.v1.ControlPlaneService/RescheduleRuntimeExecution"
 	ControlPlaneService_ExpireRuntimeExecution_FullMethodName                   = "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution"
 	ControlPlaneService_RecordRuntimeArchive_FullMethodName                     = "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive"
@@ -110,7 +114,6 @@ const (
 	ControlPlaneService_FailIntegrationExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/FailIntegrationExecution"
 	ControlPlaneService_GetIntegrationContinuation_FullMethodName               = "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation"
 	ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName       = "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation"
-	ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName          = "/controlplane.v1.ControlPlaneService/ValidateIntegrationResultAccess"
 	ControlPlaneService_CheckReadiness_FullMethodName                           = "/controlplane.v1.ControlPlaneService/CheckReadiness"
 )
 
@@ -193,6 +196,9 @@ type ControlPlaneServiceClient interface {
 	// ManageSession — единственный путь жизненного цикла SESSION; привязку
 	// провайдера выбирает сервер.
 	ManageSession(ctx context.Context, in *ManageSessionRequest, opts ...grpc.CallOption) (*ManageSessionResponse, error)
+	// BindSessionMCP закрепляет bot-service-owned session token как свежую
+	// immutable credential binding exact control Session.
+	BindSessionMCP(ctx context.Context, in *BindSessionMCPRequest, opts ...grpc.CallOption) (*BindSessionMCPResponse, error)
 	// ManageConversationLifecycle — закрытый Mattermost Channel/Thread
 	// delete/restore/finalize path без доступа gateway к generic transition.
 	ManageConversationLifecycle(ctx context.Context, in *ManageConversationLifecycleRequest, opts ...grpc.CallOption) (*ManageConversationLifecycleResponse, error)
@@ -270,6 +276,12 @@ type ControlPlaneServiceClient interface {
 	// GetRuntimeMaterialization подтверждает один exact execution-bound object
 	// для mediation через interaction-gateway без S3 credential у runner.
 	GetRuntimeMaterialization(ctx context.Context, in *GetRuntimeMaterializationRequest, opts ...grpc.CallOption) (*GetRuntimeMaterializationResponse, error)
+	// AuthorizeRuntimeOutput разрешает gateway один bounded content-addressed put
+	// для exact active execution до обращения к private object store.
+	AuthorizeRuntimeOutput(ctx context.Context, in *AuthorizeRuntimeOutputRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeOutputResponse, error)
+	// RegisterRuntimeOutput атомарно закрепляет проверенный object readback как
+	// server-owned Artifact exact execution; caller не назначает owner.
+	RegisterRuntimeOutput(ctx context.Context, in *RegisterRuntimeOutputRequest, opts ...grpc.CallOption) (*RegisterRuntimeOutputResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
 	AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error)
 	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
@@ -282,6 +294,9 @@ type ControlPlaneServiceClient interface {
 	CancelRuntimeExecution(ctx context.Context, in *CancelRuntimeExecutionRequest, opts ...grpc.CallOption) (*CancelRuntimeExecutionResponse, error)
 	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
 	RetryRuntimeExecution(ctx context.Context, in *RetryRuntimeExecutionRequest, opts ...grpc.CallOption) (*RetryRuntimeExecutionResponse, error)
+	// ManageRuntimeAction разрешает Stop/Retry только из проверенного interaction
+	// callback и сам выбирает current Turn/RuntimeExecution tuple внутри owner boundary.
+	ManageRuntimeAction(ctx context.Context, in *ManageRuntimeActionRequest, opts ...grpc.CallOption) (*ManageRuntimeActionResponse, error)
 	// RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
 	// attempt/RuntimeRevision/provider observation без мутации старого snapshot.
 	RescheduleRuntimeExecution(ctx context.Context, in *RescheduleRuntimeExecutionRequest, opts ...grpc.CallOption) (*RescheduleRuntimeExecutionResponse, error)
@@ -325,9 +340,6 @@ type ControlPlaneServiceClient interface {
 	GetIntegrationContinuation(ctx context.Context, in *GetIntegrationContinuationRequest, opts ...grpc.CallOption) (*GetIntegrationContinuationResponse, error)
 	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
 	AcknowledgeIntegrationContinuation(ctx context.Context, in *AcknowledgeIntegrationContinuationRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationContinuationResponse, error)
-	// ValidateIntegrationResultAccess проверяет capability против current owner
-	// continuation state; request не принимает caller-selected resource IDs.
-	ValidateIntegrationResultAccess(ctx context.Context, in *ValidateIntegrationResultAccessRequest, opts ...grpc.CallOption) (*ValidateIntegrationResultAccessResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 }
@@ -654,6 +666,16 @@ func (c *controlPlaneServiceClient) ManageSession(ctx context.Context, in *Manag
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageSessionResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) BindSessionMCP(ctx context.Context, in *BindSessionMCPRequest, opts ...grpc.CallOption) (*BindSessionMCPResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindSessionMCPResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_BindSessionMCP_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -990,6 +1012,26 @@ func (c *controlPlaneServiceClient) GetRuntimeMaterialization(ctx context.Contex
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) AuthorizeRuntimeOutput(ctx context.Context, in *AuthorizeRuntimeOutputRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeOutputResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeRuntimeOutputResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RegisterRuntimeOutput(ctx context.Context, in *RegisterRuntimeOutputRequest, opts ...grpc.CallOption) (*RegisterRuntimeOutputResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterRuntimeOutputResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RegisterRuntimeOutput_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AdmitRuntimeExecutionResponse)
@@ -1044,6 +1086,16 @@ func (c *controlPlaneServiceClient) RetryRuntimeExecution(ctx context.Context, i
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RetryRuntimeExecutionResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_RetryRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ManageRuntimeAction(ctx context.Context, in *ManageRuntimeActionRequest, opts ...grpc.CallOption) (*ManageRuntimeActionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageRuntimeActionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRuntimeAction_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1250,16 +1302,6 @@ func (c *controlPlaneServiceClient) AcknowledgeIntegrationContinuation(ctx conte
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ValidateIntegrationResultAccess(ctx context.Context, in *ValidateIntegrationResultAccessRequest, opts ...grpc.CallOption) (*ValidateIntegrationResultAccessResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ValidateIntegrationResultAccessResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *controlPlaneServiceClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckReadinessResponse)
@@ -1349,6 +1391,9 @@ type ControlPlaneServiceServer interface {
 	// ManageSession — единственный путь жизненного цикла SESSION; привязку
 	// провайдера выбирает сервер.
 	ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error)
+	// BindSessionMCP закрепляет bot-service-owned session token как свежую
+	// immutable credential binding exact control Session.
+	BindSessionMCP(context.Context, *BindSessionMCPRequest) (*BindSessionMCPResponse, error)
 	// ManageConversationLifecycle — закрытый Mattermost Channel/Thread
 	// delete/restore/finalize path без доступа gateway к generic transition.
 	ManageConversationLifecycle(context.Context, *ManageConversationLifecycleRequest) (*ManageConversationLifecycleResponse, error)
@@ -1426,6 +1471,12 @@ type ControlPlaneServiceServer interface {
 	// GetRuntimeMaterialization подтверждает один exact execution-bound object
 	// для mediation через interaction-gateway без S3 credential у runner.
 	GetRuntimeMaterialization(context.Context, *GetRuntimeMaterializationRequest) (*GetRuntimeMaterializationResponse, error)
+	// AuthorizeRuntimeOutput разрешает gateway один bounded content-addressed put
+	// для exact active execution до обращения к private object store.
+	AuthorizeRuntimeOutput(context.Context, *AuthorizeRuntimeOutputRequest) (*AuthorizeRuntimeOutputResponse, error)
+	// RegisterRuntimeOutput атомарно закрепляет проверенный object readback как
+	// server-owned Artifact exact execution; caller не назначает owner.
+	RegisterRuntimeOutput(context.Context, *RegisterRuntimeOutputRequest) (*RegisterRuntimeOutputResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
 	AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error)
 	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
@@ -1438,6 +1489,9 @@ type ControlPlaneServiceServer interface {
 	CancelRuntimeExecution(context.Context, *CancelRuntimeExecutionRequest) (*CancelRuntimeExecutionResponse, error)
 	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
 	RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error)
+	// ManageRuntimeAction разрешает Stop/Retry только из проверенного interaction
+	// callback и сам выбирает current Turn/RuntimeExecution tuple внутри owner boundary.
+	ManageRuntimeAction(context.Context, *ManageRuntimeActionRequest) (*ManageRuntimeActionResponse, error)
 	// RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
 	// attempt/RuntimeRevision/provider observation без мутации старого snapshot.
 	RescheduleRuntimeExecution(context.Context, *RescheduleRuntimeExecutionRequest) (*RescheduleRuntimeExecutionResponse, error)
@@ -1481,9 +1535,6 @@ type ControlPlaneServiceServer interface {
 	GetIntegrationContinuation(context.Context, *GetIntegrationContinuationRequest) (*GetIntegrationContinuationResponse, error)
 	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
 	AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error)
-	// ValidateIntegrationResultAccess проверяет capability против current owner
-	// continuation state; request не принимает caller-selected resource IDs.
-	ValidateIntegrationResultAccess(context.Context, *ValidateIntegrationResultAccessRequest) (*ValidateIntegrationResultAccessResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
@@ -1592,6 +1643,9 @@ func (UnimplementedControlPlaneServiceServer) CancelTurn(context.Context, *Cance
 func (UnimplementedControlPlaneServiceServer) ManageSession(context.Context, *ManageSessionRequest) (*ManageSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageSession not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) BindSessionMCP(context.Context, *BindSessionMCPRequest) (*BindSessionMCPResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindSessionMCP not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ManageConversationLifecycle(context.Context, *ManageConversationLifecycleRequest) (*ManageConversationLifecycleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageConversationLifecycle not implemented")
 }
@@ -1691,6 +1745,12 @@ func (UnimplementedControlPlaneServiceServer) GetRuntimeExecution(context.Contex
 func (UnimplementedControlPlaneServiceServer) GetRuntimeMaterialization(context.Context, *GetRuntimeMaterializationRequest) (*GetRuntimeMaterializationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeMaterialization not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeOutput(context.Context, *AuthorizeRuntimeOutputRequest) (*AuthorizeRuntimeOutputResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeOutput not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RegisterRuntimeOutput(context.Context, *RegisterRuntimeOutputRequest) (*RegisterRuntimeOutputResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterRuntimeOutput not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdmitRuntimeExecution not implemented")
 }
@@ -1708,6 +1768,9 @@ func (UnimplementedControlPlaneServiceServer) CancelRuntimeExecution(context.Con
 }
 func (UnimplementedControlPlaneServiceServer) RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetryRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageRuntimeAction(context.Context, *ManageRuntimeActionRequest) (*ManageRuntimeActionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageRuntimeAction not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RescheduleRuntimeExecution(context.Context, *RescheduleRuntimeExecutionRequest) (*RescheduleRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RescheduleRuntimeExecution not implemented")
@@ -1768,9 +1831,6 @@ func (UnimplementedControlPlaneServiceServer) GetIntegrationContinuation(context
 }
 func (UnimplementedControlPlaneServiceServer) AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AcknowledgeIntegrationContinuation not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ValidateIntegrationResultAccess(context.Context, *ValidateIntegrationResultAccessRequest) (*ValidateIntegrationResultAccessResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ValidateIntegrationResultAccess not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
@@ -2372,6 +2432,24 @@ func _ControlPlaneService_ManageSession_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_BindSessionMCP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindSessionMCPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).BindSessionMCP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_BindSessionMCP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).BindSessionMCP(ctx, req.(*BindSessionMCPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ManageConversationLifecycle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ManageConversationLifecycleRequest)
 	if err := dec(in); err != nil {
@@ -2966,6 +3044,42 @@ func _ControlPlaneService_GetRuntimeMaterialization_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_AuthorizeRuntimeOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeRuntimeOutputRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeOutput(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeOutput(ctx, req.(*AuthorizeRuntimeOutputRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RegisterRuntimeOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterRuntimeOutputRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RegisterRuntimeOutput(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RegisterRuntimeOutput_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RegisterRuntimeOutput(ctx, req.(*RegisterRuntimeOutputRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_AdmitRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AdmitRuntimeExecutionRequest)
 	if err := dec(in); err != nil {
@@ -3070,6 +3184,24 @@ func _ControlPlaneService_RetryRuntimeExecution_Handler(srv interface{}, ctx con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).RetryRuntimeExecution(ctx, req.(*RetryRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ManageRuntimeAction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageRuntimeActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageRuntimeAction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageRuntimeAction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageRuntimeAction(ctx, req.(*ManageRuntimeActionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3434,24 +3566,6 @@ func _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler(srv interfa
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ValidateIntegrationResultAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ValidateIntegrationResultAccessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ValidateIntegrationResultAccess(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ValidateIntegrationResultAccess(ctx, req.(*ValidateIntegrationResultAccessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ControlPlaneService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckReadinessRequest)
 	if err := dec(in); err != nil {
@@ -3606,6 +3720,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ManageSession_Handler,
 		},
 		{
+			MethodName: "BindSessionMCP",
+			Handler:    _ControlPlaneService_BindSessionMCP_Handler,
+		},
+		{
 			MethodName: "ManageConversationLifecycle",
 			Handler:    _ControlPlaneService_ManageConversationLifecycle_Handler,
 		},
@@ -3738,6 +3856,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_GetRuntimeMaterialization_Handler,
 		},
 		{
+			MethodName: "AuthorizeRuntimeOutput",
+			Handler:    _ControlPlaneService_AuthorizeRuntimeOutput_Handler,
+		},
+		{
+			MethodName: "RegisterRuntimeOutput",
+			Handler:    _ControlPlaneService_RegisterRuntimeOutput_Handler,
+		},
+		{
 			MethodName: "AdmitRuntimeExecution",
 			Handler:    _ControlPlaneService_AdmitRuntimeExecution_Handler,
 		},
@@ -3760,6 +3886,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RetryRuntimeExecution",
 			Handler:    _ControlPlaneService_RetryRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "ManageRuntimeAction",
+			Handler:    _ControlPlaneService_ManageRuntimeAction_Handler,
 		},
 		{
 			MethodName: "RescheduleRuntimeExecution",
@@ -3840,10 +3970,6 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AcknowledgeIntegrationContinuation",
 			Handler:    _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler,
-		},
-		{
-			MethodName: "ValidateIntegrationResultAccess",
-			Handler:    _ControlPlaneService_ValidateIntegrationResultAccess_Handler,
 		},
 		{
 			MethodName: "CheckReadiness",

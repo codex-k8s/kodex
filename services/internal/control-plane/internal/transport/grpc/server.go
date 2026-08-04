@@ -41,8 +41,6 @@ type Server struct {
 	service          *resource.Service
 	readiness        Readiness
 	transitionSigner grantSigner
-	resultSigner     grantSigner
-	resultVerifier   *integrationgatewayauth.Verifier
 }
 
 type grantSigner interface {
@@ -50,11 +48,11 @@ type grantSigner interface {
 }
 
 // NewServer создаёт транспорт над доменным сервисом.
-func NewServer(service *resource.Service, readiness Readiness, transitionSigner, resultSigner grantSigner, resultVerifier *integrationgatewayauth.Verifier) (*Server, error) {
-	if service == nil || readiness == nil || transitionSigner == nil || resultSigner == nil || resultVerifier == nil {
+func NewServer(service *resource.Service, readiness Readiness, transitionSigner grantSigner) (*Server, error) {
+	if service == nil || readiness == nil || transitionSigner == nil {
 		return nil, errors.New("control-plane gRPC dependencies are required")
 	}
-	return &Server{service: service, readiness: readiness, transitionSigner: transitionSigner, resultSigner: resultSigner, resultVerifier: resultVerifier}, nil
+	return &Server{service: service, readiness: readiness, transitionSigner: transitionSigner}, nil
 }
 
 const continuationGrantTTL = 8 * 24 * time.Hour

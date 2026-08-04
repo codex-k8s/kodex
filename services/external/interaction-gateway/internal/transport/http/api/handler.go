@@ -12,9 +12,11 @@ import (
 	"math"
 	"mime"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
+	domaincontrol "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/controlplane"
 	domainmattermost "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/mattermost"
 	domainerrs "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/errs"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/gateway"
@@ -28,6 +30,7 @@ import (
 type Config struct {
 	SlashToken                  string
 	MaximumBodyBytes            int64
+	MaximumRuntimeOutputBytes   int64
 	MattermostClientSPIFFE      string
 	ReadbackClientSPIFFEIDs     []string
 	MaterializationClientSPIFFE string
@@ -42,7 +45,8 @@ type Handler struct {
 
 func New(service *domainservice.Service, readbackGrant *readbackgrant.Verifier, config Config) (*Handler, error) {
 	if service == nil || len(config.SlashToken) < 16 || config.MaximumBodyBytes < 1024 ||
-		config.MaximumBodyBytes > 1<<20 || !strings.HasPrefix(config.MattermostClientSPIFFE, "spiffe://") ||
+		config.MaximumBodyBytes > 1<<20 || config.MaximumRuntimeOutputBytes < 1<<20 ||
+		config.MaximumRuntimeOutputBytes > 256<<20 || !strings.HasPrefix(config.MattermostClientSPIFFE, "spiffe://") ||
 		len(config.ReadbackClientSPIFFEIDs) == 0 || len(config.ReadbackClientSPIFFEIDs) > 8 || readbackGrant == nil {
 		return nil, errors.New("interaction HTTP handler configuration is invalid")
 	}
@@ -86,6 +90,64 @@ func (handler *Handler) GetRuntimeMaterialization(response http.ResponseWriter, 
 	response.Header().Set("X-Content-Type-Options", "nosniff")
 	response.WriteHeader(http.StatusOK)
 	_, _ = response.Write(raw)
+}
+
+func (handler *Handler) PutRuntimeOutput(response http.ResponseWriter, request *http.Request,
+	executionID openapi_types.UUID, params generated.PutRuntimeOutputParams) {
+	identity, ok := peerSPIFFE(request)
+	if !ok || identity != handler.config.MaterializationClientSPIFFE {
+		writeError(response, http.StatusForbidden, "runtime output identity is not allowed")
+		return
+	}
+	authorization := request.Header.Get("Authorization")
+	grant := strings.TrimPrefix(authorization, "Bearer ")
+	if grant == "" || len(grant) > 16<<10 || strings.TrimSpace(grant) != grant || authorization != "Bearer "+grant ||
+		request.Header.Get("Content-Type") != "application/octet-stream" || request.ContentLength < 1 ||
+		request.ContentLength > handler.config.MaximumRuntimeOutputBytes || !params.XMatterCodexOutputKind.Valid() ||
+		params.XMatterCodexOutputSequence < 1 || params.XMatterCodexOutputTotal < 1 ||
+		params.XMatterCodexOutputSequence > params.XMatterCodexOutputTotal || params.XMatterCodexOutputTotal > 4096 ||
+		len(params.XMatterCodexOutputSHA256) != 64 {
+		writeError(response, http.StatusUnauthorized, "runtime output credential is not allowed")
+		return
+	}
+	request.Body = http.MaxBytesReader(response, request.Body, handler.config.MaximumRuntimeOutputBytes)
+	staged, err := os.CreateTemp("", "mattercodex-runtime-output-*")
+	if err != nil || staged.Chmod(0o600) != nil {
+		if staged != nil {
+			_ = staged.Close()
+			_ = os.Remove(staged.Name())
+		}
+		writeError(response, http.StatusServiceUnavailable, "runtime output staging is unavailable")
+		return
+	}
+	defer func() {
+		_ = staged.Close()
+		_ = os.Remove(staged.Name())
+	}()
+	hasher := sha256.New()
+	written, err := io.Copy(io.MultiWriter(staged, hasher), request.Body)
+	if err != nil || written != request.ContentLength || written > handler.config.MaximumRuntimeOutputBytes ||
+		hex.EncodeToString(hasher.Sum(nil)) != params.XMatterCodexOutputSHA256 || staged.Sync() != nil {
+		writeError(response, http.StatusBadRequest, "runtime output content is invalid")
+		return
+	}
+	if _, err := staged.Seek(0, io.SeekStart); err != nil {
+		writeError(response, http.StatusServiceUnavailable, "runtime output staging is unavailable")
+		return
+	}
+	artifact, err := handler.service.StageRuntimeOutput(request.Context(), grant, executionID.String(),
+		domaincontrol.RuntimeOutputMetadata{Kind: string(params.XMatterCodexOutputKind),
+			Name: params.XMatterCodexOutputName, MediaType: params.XMatterCodexOutputMediaType,
+			SizeBytes: uint64(written), SHA256: params.XMatterCodexOutputSHA256,
+			Sequence: uint32(params.XMatterCodexOutputSequence), Total: uint32(params.XMatterCodexOutputTotal)}, staged)
+	identifier, parseErr := uuid.Parse(artifact.ID)
+	if err != nil || parseErr != nil || artifact.Version > math.MaxInt || artifact.SizeBytes > math.MaxInt64 {
+		writeError(response, http.StatusServiceUnavailable, "runtime output staging is unavailable")
+		return
+	}
+	writeJSON(response, http.StatusCreated, generated.RuntimeOutputReference{ArtifactId: identifier,
+		ArtifactVersion: int(artifact.Version), Sha256: artifact.SHA256, SizeBytes: int64(artifact.SizeBytes),
+		Name: artifact.Name, MediaType: artifact.MediaType, StorageRef: artifact.StorageRef})
 }
 
 func (handler *Handler) AcceptMattermostSlashCommand(response http.ResponseWriter, request *http.Request) {
@@ -141,6 +203,13 @@ func (handler *Handler) AcceptMattermostAction(response http.ResponseWriter, req
 		}
 		result, err := handler.service.OpenDecisionDialog(request.Context(), raw,
 			callback.Context.DeliveryId.String(), callback.Context.CallbackToken, *callback.TriggerId)
+		writeResult(response, result, err)
+		return
+	}
+	if callback.Context.Action == generated.STOP || callback.Context.Action == generated.RETRY {
+		result, err := handler.service.HandleRuntimeAction(request.Context(), raw,
+			callback.Context.DeliveryId.String(), callback.Context.CallbackToken,
+			string(callback.Context.Action))
 		writeResult(response, result, err)
 		return
 	}

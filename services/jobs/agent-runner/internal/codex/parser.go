@@ -649,6 +649,27 @@ func CapacityFailure(code string) bool {
 	return code == "server_overloaded"
 }
 
+// TerminalPresentation is a closed mapping from typed app-server outcome.
+// Provider diagnostics never participate in a lifecycle transition or user text.
+func TerminalPresentation(code string) (outcome, markdown, nextAction string) {
+	switch code {
+	case "unauthorized", "authentication_required", "authentication_expired":
+		return "BLOCKED", "Учётная запись OpenAI требует повторной авторизации. Запустите device-code вход для этой же учётной записи и повторите ход.", "REAUTH_DEVICE_CODE"
+	case "usage_limit_exceeded":
+		return "BLOCKED", "Лимит использования учётной записи OpenAI исчерпан. Проверьте лимит или дождитесь его обновления.", "CHECK_PROVIDER_QUOTA"
+	case "server_overloaded":
+		return "FAILED", "Провайдер оставался перегружен после трёх ограниченных повторов. Ход можно повторить позднее.", "RETRY_LATER"
+	case "cyber_policy", "policy_denied":
+		return "BLOCKED", "Выполнение остановлено политикой безопасности. Автоматический повтор запрещён.", "REVIEW_POLICY"
+	case "invalid_configuration", "stale_grant":
+		return "BLOCKED", "Конфигурация выполнения устарела или недействительна. Требуется новый server-owned ход.", "CREATE_FRESH_TURN"
+	case "provider_error_info_invalid", "provider_interrupted", "":
+		return "FAILED", "Провайдер завершил выполнение с непроверяемым результатом. Диагностика скрыта; автоматический повтор не выполнялся.", "RETRY_FRESH_TURN"
+	default:
+		return "FAILED", "Провайдер завершил выполнение с неизвестным типизированным результатом. Автоматический повтор не выполнялся.", "RETRY_FRESH_TURN"
+	}
+}
+
 func BlockedFailure(code string) bool {
 	switch code {
 	case "unauthorized", "cyber_policy", "usage_limit_exceeded", "provider_error_info_invalid",

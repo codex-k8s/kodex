@@ -10,19 +10,26 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/BurntSushi/toml"
 	"github.com/codex-k8s/matter-codex/services/jobs/agent-runner/internal/model"
 )
 
 type runtimeConfig struct {
-	Model                  string                     `toml:"model"`
-	ApprovalPolicy         string                     `toml:"approval_policy"`
-	SandboxMode            string                     `toml:"sandbox_mode"`
-	CLIAuthCredentialStore string                     `toml:"cli_auth_credentials_store"`
-	History                historyConfig              `toml:"history"`
-	ShellEnvironmentPolicy shellEnvironmentPolicy     `toml:"shell_environment_policy"`
-	MCPServers             map[string]mcpServerConfig `toml:"mcp_servers"`
+	Model                  string                       `toml:"model"`
+	ApprovalPolicy         string                       `toml:"approval_policy"`
+	DefaultPermissions     string                       `toml:"default_permissions"`
+	CLIAuthCredentialStore string                       `toml:"cli_auth_credentials_store"`
+	History                historyConfig                `toml:"history"`
+	ShellEnvironmentPolicy shellEnvironmentPolicy       `toml:"shell_environment_policy"`
+	MCPServers             map[string]mcpServerConfig   `toml:"mcp_servers"`
+	Permissions            map[string]permissionProfile `toml:"permissions"`
+}
+
+type permissionProfile struct {
+	Extends    string            `toml:"extends"`
+	Filesystem map[string]string `toml:"filesystem"`
 }
 
 type historyConfig struct {
@@ -37,11 +44,20 @@ type shellEnvironmentPolicy struct {
 type mcpServerConfig struct {
 	URL                   string `toml:"url"`
 	Required              bool   `toml:"required"`
+	BearerTokenEnvVar     string `toml:"bearer_token_env_var"`
 	StartupTimeoutSeconds int    `toml:"startup_timeout_sec"`
 	ToolTimeoutSeconds    int    `toml:"tool_timeout_sec"`
 }
 
 func PrepareHome(input model.Input, mcpURL string) error {
+	auth, err := os.ReadFile(input.CredentialFiles.CodexAuth)
+	if err != nil {
+		return errors.New("read Codex authentication snapshot")
+	}
+	return PrepareHomeWithAuth(input, mcpURL, auth)
+}
+
+func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if filepath.Clean(input.CodexHome) != input.CodexHome ||
 		!strings.HasPrefix(input.CodexHome, input.WorkspaceRoot+string(os.PathSeparator)) {
 		return errors.New("CODEX_HOME path is invalid")
@@ -49,8 +65,7 @@ func PrepareHome(input model.Input, mcpURL string) error {
 	if err := secureDirectory(input.CodexHome); err != nil {
 		return err
 	}
-	auth, err := os.ReadFile(input.CredentialFiles.CodexAuth)
-	if err != nil || len(auth) == 0 || len(auth) > 1<<20 || !bytes.HasPrefix(bytes.TrimSpace(auth), []byte("{")) {
+	if len(auth) == 0 || len(auth) > 1<<20 || !bytes.HasPrefix(bytes.TrimSpace(auth), []byte("{")) {
 		return errors.New("Codex authentication snapshot is invalid; use codex login --device-auth outside the runtime")
 	}
 	authDigest := sha256.Sum256(auth)
@@ -60,13 +75,23 @@ func PrepareHome(input model.Input, mcpURL string) error {
 	if err := replacePrivateFile(filepath.Join(input.CodexHome, "auth.json"), auth); err != nil {
 		return err
 	}
+	const permissionProfileName = "mattercodex-runtime"
 	config := runtimeConfig{Model: input.CodexModel, ApprovalPolicy: input.CodexApprovalPolicy,
-		SandboxMode: input.CodexSandbox, CLIAuthCredentialStore: "file",
+		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: "save-all"},
+		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: ":workspace",
+			Filesystem: map[string]string{
+				input.CodexHome: "deny", filepath.Join(input.CodexHome, "**"): "deny",
+				"/var/run/secrets": "deny", "/var/run/secrets/**": "deny",
+				"/run/mattercodex/internal-rpc-authority":    "deny",
+				"/run/mattercodex/internal-rpc-authority/**": "deny",
+				"/proc": "deny", "/proc/**": "deny",
+			}}},
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "none", Set: map[string]string{
-			"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": input.CodexHome, "CODEX_HOME": input.CodexHome,
+			"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp",
 		}}, MCPServers: map[string]mcpServerConfig{"mattercodex": {URL: mcpURL,
-			Required: true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
+			BearerTokenEnvVar: "MATTERCODEX_MCP_PROXY_TOKEN",
+			Required:          true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
 	var raw bytes.Buffer
 	if err := toml.NewEncoder(&raw).Encode(config); err != nil {
 		return errors.New("encode Codex configuration")
@@ -74,22 +99,35 @@ func PrepareHome(input model.Input, mcpURL string) error {
 	var decoded runtimeConfig
 	metadata, err := toml.Decode(raw.String(), &decoded)
 	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.CodexModel ||
-		!decoded.MCPServers["mattercodex"].Required {
+		!decoded.MCPServers["mattercodex"].Required ||
+		decoded.MCPServers["mattercodex"].BearerTokenEnvVar != "MATTERCODEX_MCP_PROXY_TOKEN" ||
+		decoded.DefaultPermissions != permissionProfileName ||
+		decoded.Permissions[permissionProfileName].Filesystem[input.CodexHome] != "deny" {
 		return errors.New("validate Codex configuration")
 	}
 	return replacePrivateFile(filepath.Join(input.CodexHome, "config.toml"), raw.Bytes())
 }
 
 func secureDirectory(path string) error {
-	if err := os.MkdirAll(path, 0o700); err != nil {
+	if err := os.MkdirAll(path, 0o770); err != nil {
 		return errors.New("create Codex state directory")
 	}
-	if err := os.Chmod(path, 0o700); err != nil {
-		return errors.New("protect Codex state directory")
-	}
 	info, err := os.Lstat(path)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 {
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return errors.New("Codex state directory is unsafe")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("Codex state directory metadata is unavailable")
+	}
+	if os.Geteuid() == 10002 {
+		if stat.Uid != 10001 || stat.Gid != 29000 || info.Mode().Perm() != 0o770 || info.Mode()&os.ModeSetgid == 0 {
+			return errors.New("Codex state directory is outside the trusted shared boundary")
+		}
+		return nil
+	}
+	if stat.Uid != uint32(os.Geteuid()) || os.Chmod(path, 0o2770) != nil {
+		return errors.New("protect Codex state directory")
 	}
 	return nil
 }

@@ -25,19 +25,12 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		"control-plane.runtime-cleanup-authorizer",
 		"control-plane.integration-gateway",
 		"control-plane.integration-continuation",
-		"control-plane.agent-result-access",
 		"control-plane.agent-session",
 		"control-plane.oidc",
 	} {
 		if _, ok := loaded.Producers[producerID]; !ok {
 			t.Fatalf("required producer is absent: %s", producerID)
 		}
-	}
-	resultProducer := loaded.Producers["control-plane.agent-result-access"]
-	if resultProducer.Credential != "INTEGRATION_RESULT_ACCESS_GRANT" ||
-		resultProducer.CredentialMetadata != "x-mattercodex-integration-result-grant" ||
-		resultProducer.CallerWorkload != "agent-runner" {
-		t.Fatalf("result access producer is not outcome-bound: %+v", resultProducer)
 	}
 	securityBindings := map[string]string{
 		"control.runtime-execution.restore.verify":    "runtime-restore-verifier",

@@ -113,15 +113,6 @@ var sqlAttemptComplete string
 //go:embed sql/result__insert.sql
 var sqlResultInsert string
 
-//go:embed sql/result__resolve.sql
-var sqlResultResolve string
-
-//go:embed sql/result__acknowledge.sql
-var sqlResultAcknowledge string
-
-//go:embed sql/result_grant_keyset__admit.sql
-var sqlResultGrantKeysetAdmit string
-
 //go:embed sql/invocation__complete.sql
 var sqlInvocationComplete string
 

@@ -23,6 +23,7 @@ type Config struct {
 	RuntimeTLSCertificateFile           string        `env:"MATTERCODEX_BOT_SERVICE_RUNTIME_TLS_CERTIFICATE_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-runtime-tls/tls.crt"`
 	RuntimeTLSPrivateKeyFile            string        `env:"MATTERCODEX_BOT_SERVICE_RUNTIME_TLS_PRIVATE_KEY_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-runtime-tls/tls.key"`
 	RuntimeTLSClientCAFile              string        `env:"MATTERCODEX_BOT_SERVICE_RUNTIME_TLS_CLIENT_CA_FILE" envDefault:"/var/run/config/mattercodex/bot-service-runtime-client-ca/ca.pem"`
+	RuntimeMCPBindingClientSPIFFEID     string        `env:"MATTERCODEX_BOT_SERVICE_RUNTIME_MCP_BINDING_CLIENT_SPIFFE_ID" envDefault:"spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway"`
 	MattermostSiteURL                   string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
 	MattermostInternalURL               string        `env:"MATTERCODEX_MATTERMOST_INTERNAL_URL"`
 	BotServiceSiteURL                   string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
@@ -112,7 +113,8 @@ func (cfg *Config) Validate() error {
 	if cfg.RuntimeEnabled && (strings.TrimSpace(cfg.RuntimeTLSAddr) == "" ||
 		!strings.HasPrefix(cfg.RuntimeTLSCertificateFile, "/") ||
 		!strings.HasPrefix(cfg.RuntimeTLSPrivateKeyFile, "/") ||
-		!strings.HasPrefix(cfg.RuntimeTLSClientCAFile, "/")) {
+		!strings.HasPrefix(cfg.RuntimeTLSClientCAFile, "/") ||
+		!strings.HasPrefix(cfg.RuntimeMCPBindingClientSPIFFEID, "spiffe://")) {
 		return fmt.Errorf("bot-service runtime mTLS configuration is invalid")
 	}
 	if cfg.ReadHeaderTimeout <= 0 || cfg.ReadHeaderTimeout > 30*time.Second {

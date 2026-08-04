@@ -2302,11 +2302,29 @@ func (service *Service) createRuntimeRevision(
 	requiredRuntimeCredentials := map[string]string{
 		"control-plane-application-grant":           "",
 		"runtime-materialization-application-grant": "",
-		"mcp-token":                      "",
-		"handoff-private-key":            "",
-		"control-plane-client-tls":       "",
-		"interaction-gateway-client-tls": "",
-		"mcp-client-tls":                 "",
+		"handoff-private-key":                       "",
+		"control-plane-client-tls":                  "",
+		"interaction-gateway-client-tls":            "",
+		"mcp-client-tls":                            "",
+	}
+	// Только interaction-session имеет существующий owner transport для MCP.
+	// Неинтерактивные producers не получают generic token вместо AgentSession:
+	// их revision остаётся без MCP binding до реализации собственного owner path.
+	if sessionSpec.ConversationID != "" {
+		mcpBindingID := sessionMCPBindingID(session.ID)
+		mcpBinding, exists := byID[mcpBindingID]
+		if !exists || mcpBinding.Kind != enum.KindCredentialBinding || mcpBinding.State != enum.StateActive ||
+			mcpBinding.ParentID != session.ID || sessionSpec.AgentSessionKey == "" || sessionSpec.AgentSessionID <= 0 ||
+			sessionSpec.AgentSessionBindingVersion == 0 || !validSHA256Text(sessionSpec.AgentSessionBindingSHA256) {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		mcpSpec, ok := mcpBinding.Spec.(entity.CredentialBindingSpec)
+		if !ok || mcpSpec.Purpose != "mcp-token" || mcpSpec.Revision != sessionSpec.AgentSessionBindingVersion ||
+			mcpSpec.PrincipalRef != "bot-agent-session:"+sessionSpec.AgentSessionKey ||
+			mcpSpec.Ownership.SourceRevision != sessionSpec.AgentSessionBindingVersion {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		credentialIDs[mcpBindingID] = struct{}{}
 	}
 	for _, item := range byID {
 		if item.Kind != enum.KindCredentialBinding || item.State != enum.StateActive {

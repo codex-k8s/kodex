@@ -932,14 +932,10 @@ func materializeAccessProfile(ctx context.Context, client kubernetes.Interface, 
 
 func materializeHandoff(ctx context.Context, client kubernetes.Interface, namespace string, execution entity.Execution, serviceAccount string, credentialCount int) error {
 	name := "runtime-handoff-" + shortID(execution.ID)
-	credentialNames := make([]string, 0, credentialCount)
-	for index := 0; index < credentialCount; index++ {
-		credentialNames = append(credentialNames, executionCredentialSecretName(execution.ID, index))
-	}
+	_ = credentialCount
 	desired := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: executionLabels(execution, "runtime-handoff")}, Rules: []rbacv1.PolicyRule{
 		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{configName(execution)}, Verbs: []string{"get"}},
 		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{"runtime-handoff-" + shortID(execution.ID)}, Verbs: []string{"get", "update"}},
-		{APIGroups: []string{""}, Resources: []string{"secrets"}, ResourceNames: credentialNames, Verbs: []string{"get"}},
 	}}
 	roles := client.RbacV1().Roles(namespace)
 	actual, err := roles.Get(ctx, name, metav1.GetOptions{})

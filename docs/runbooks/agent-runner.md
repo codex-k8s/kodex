@@ -4,7 +4,7 @@ title: Agent runner runbook
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-04
 ---
 
@@ -35,10 +35,21 @@ updated: 2026-08-04
    закрытым кодам. Raw stderr/provider response не публиковать.
 5. Проверить наличие exact handoff ConfigMap и только факт валидности подписи,
    key generation и digest. Убедиться, что Pod использует собственный
-   `runtime-access-*` ServiceAccount, а RoleBinding ссылается только на handoff
-   и credential resources этого execution. Содержимое пользовательских files
-   не выводить.
-6. Проверить durable interaction delivery и provider receipt у owner readback.
+   `runtime-access-*` ServiceAccount, а Role разрешает только exact runtime
+   ConfigMap read и handoff ConfigMap read/update, без `secrets/get`. Убедиться,
+   что `provider-runtime` UID 10002 не имеет authority/credential/Kubernetes
+   mounts и общается с runner только через protected UDS. Он видит session PVC
+   для app-server, но model shell работает под OS-enforced `:workspace` profile
+   с deny на `CODEX_HOME`, `/proc`, authority paths и без inherited env/network.
+   Содержимое пользовательских files не выводить.
+6. Проверить, что Session MCP binding перед текущим Turn получил свежий
+   bot-service `TokenSecretRef` readback, вошёл в RuntimeRevision и был скопирован
+   credential broker только в trusted container. URL/SNI должны указывать на
+   `matter-codex-bot-service`, а readiness проходить через тот же UDS
+   `SO_PEERCRED` proxy и TLS 1.3/mTLS/bearer transport.
+7. Проверить durable interaction delivery и provider receipt у owner readback.
+   Для крупного результата сверить только Artifact ID/version/size/SHA-256 и
+   private storage ref; runner не должен иметь S3 credential.
 
 ## Диагностика
 
@@ -47,12 +58,15 @@ updated: 2026-08-04
 | init failed | materialization TLS/bearer/version/digest/path | сверить owner Artifact и gateway working path; не копировать object вручную |
 | authority issuer not ready | policy snapshot/Vault/PostgreSQL/readback | проверить exact sidecar readiness и mounted key names |
 | runner waiting admission | Turn lease ещё не видна controller либо reconcile задержан | проверить FIFO head и следующий reconcile; не подменять identity |
-| MCP unavailable | SNI/CA/certificate/bearer или required server | восстановить тот же рабочий endpoint; fallback запрещён |
+| MCP unavailable | exact `matter-codex-bot-service` SNI/CA/certificate/session bearer или required path | восстановить тот же рабочий endpoint; fallback запрещён |
+| provider broker unavailable | UDS peer UID, socket mode либо provider container | не переносить Codex обратно в trusted runner; проверить разделение mounts |
 | incident after exit | отсутствующий/invalid signed handoff | сохранить Pod/PVC, проверить key trust overlap и ConfigMap RBAC |
 | resume отклонён | app-server rollout path/type/link-count/digest/provenance или provider binding не совпал | сохранить PVC, проверить owner RuntimeExecution и restore evidence; не заменять archive вручную |
 | delivery pending | interaction-gateway временно недоступен | оставить owner row для reclaim; не публиковать в Mattermost вручную |
+| отдельный output не сохранён | owner staging, S3 readback или Artifact registration не завершены | terminal Markdown должен сохраниться с bounded per-artifact outcome; не загружать файл вручную |
 | capacity retries | exact `CodexErrorInfo=serverOverloaded` | дождаться 1/3/5; после исчерпания owner получит terminal result |
-| blocked без retry | `usageLimitExceeded`, `unauthorized`, `cyberPolicy` либо invalid/missing `codexErrorInfo` | проверить закреплённый provider account/policy; не классифицировать diagnostic `message` и не запускать retry вручную |
+| blocked без retry | `unauthorized`, `cyberPolicy` либо invalid/missing `codexErrorInfo` | для auth выполнить `/codex openai auth <logical-binding-id>` и device-code вход той же учётной записи; policy/unknown вручную не повторять |
+| quota без capacity retry | `usageLimitExceeded`, terminal `BLOCKED` | проверить лимит учётной записи; не смешивать с `serverOverloaded` и не использовать Retry до обновления account binding |
 | app-server request rejected | approval, user input, token refresh, attestation или dynamic tool request | сохранить incident evidence без payload; runner не должен отвечать approval и расширять authority |
 
 ## Recovery
@@ -63,6 +77,14 @@ handoff owner watchdog фиксирует incident и выбирает expiry/re
 после owner terminal transaction interaction delivery восстанавливается по
 durable row и provider receipt. Session PVC удаляется только после archive,
 retention и cleanup authorization.
+
+Stop допускается только из actor-verified текущей Mattermost run card для
+`QUEUED|CLAIMED|ADMITTED|RUNNING`; Retry — только для утверждённых
+`FAILED|EXPIRED`. Interaction-gateway проверяет card/channel/root/actor и
+callback replay, control-plane повторно разрешает owner graph, а
+runtime-controller останавливает Pod лишь после authoritative cancel readback.
+Terminal Pod удаляется сразу, но retained PVC сохраняется для нового successor
+Pod. Stale card и cancel/complete race не исправлять повторным прямым RPC.
 
 При cancel/SIGTERM runner отправляет `turn/interrupt` для exact
 `(threadId, turnId)`, ждёт bounded grace и затем завершает process group.

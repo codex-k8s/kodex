@@ -3,8 +3,10 @@ package kubernetes
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -1406,6 +1408,33 @@ func (runner *Runner) GetMattermostBotTokenSecret(ctx context.Context, secretNam
 		Token:      token,
 		Integrity:  secretIntegrity(secret, "token", secret.Data["token"]),
 	}, nil
+}
+
+func (runner *Runner) EnsureRuntimeMCPToken(ctx context.Context, sessionKey string) (runtimerepo.RuntimeMCPTokenBinding, error) {
+	digest := sha256.Sum256([]byte(sessionKey))
+	name := "matter-codex-mcp-" + hex.EncodeToString(digest[:12])
+	secrets := runner.client.CoreV1().Secrets(runner.namespace)
+	secret, err := secrets.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		tokenRaw := make([]byte, 32)
+		if _, err = cryptorand.Read(tokenRaw); err != nil {
+			return runtimerepo.RuntimeMCPTokenBinding{}, fmt.Errorf("generate runtime MCP token: %w", err)
+		}
+		immutable := true
+		secret, err = secrets.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name,
+			Labels: map[string]string{"app.kubernetes.io/name": "matter-codex-bot-service",
+				"app.kubernetes.io/component": "runtime-mcp-session-token"}}, Immutable: &immutable,
+			Type: corev1.SecretTypeOpaque, Data: map[string][]byte{"token": []byte(hex.EncodeToString(tokenRaw))}}, metav1.CreateOptions{})
+	}
+	if err != nil || secret.Immutable == nil || !*secret.Immutable || secret.Labels["app.kubernetes.io/component"] != "runtime-mcp-session-token" {
+		return runtimerepo.RuntimeMCPTokenBinding{}, errors.New("runtime MCP token secret is unavailable")
+	}
+	token := strings.TrimSpace(string(secret.Data["token"]))
+	if len(token) != 64 {
+		return runtimerepo.RuntimeMCPTokenBinding{}, errors.New("runtime MCP token secret is invalid")
+	}
+	integrity := secretIntegrity(secret, "token", secret.Data["token"])
+	return runtimerepo.RuntimeMCPTokenBinding{Namespace: runner.namespace, SecretName: name, Integrity: integrity}, nil
 }
 
 func (runner *Runner) GetRunStatus(ctx context.Context, runID string) (runtimerepo.RunStatus, error) {

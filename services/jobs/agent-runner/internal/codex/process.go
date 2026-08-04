@@ -45,14 +45,14 @@ type appServer struct {
 	nextID      int64
 }
 
-func Execute(ctx context.Context, input model.Input, prompt []byte) (Result, error) {
+func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (Result, error) {
 	if err := verifyAccountPin(input); err != nil {
 		return Result{}, err
 	}
 	if err := verifyRestoreArchive(input); err != nil {
 		return Result{}, err
 	}
-	server, err := startAppServer(input)
+	server, err := startAppServer(input, mcpProxyToken)
 	if err != nil {
 		return Result{}, err
 	}
@@ -71,8 +71,11 @@ func Execute(ctx context.Context, input model.Input, prompt []byte) (Result, err
 	if err := server.notifyInitialized(); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
+	if _, err := server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false}); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
 	threadParams := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot,
-		"model": input.CodexModel, "sandbox": input.CodexSandbox}
+		"model": input.CodexModel}
 	method := "thread/start"
 	if input.CodexSessionID == "" {
 		threadParams["ephemeral"] = false
@@ -124,10 +127,11 @@ func Execute(ctx context.Context, input model.Input, prompt []byte) (Result, err
 	return result, nil
 }
 
-func startAppServer(input model.Input) (*appServer, error) {
+func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error) {
 	command := exec.Command("/usr/local/bin/codex", "app-server", "--strict-config", "--listen", "stdio://")
 	command.Dir = input.WorkspaceRoot
-	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome, "CODEX_HOME=" + input.CodexHome}
+	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + input.CodexHome,
+		"CODEX_HOME=" + input.CodexHome, "MATTERCODEX_MCP_PROXY_TOKEN=" + mcpProxyToken}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	stdin, err := command.StdinPipe()
 	if err != nil {
@@ -409,8 +413,10 @@ func captureRollout(input model.Input, returnedPath string) (string, string, str
 		return "", "", "", errors.New("open Codex app-server rollout")
 	}
 	digest, hashErr := digestArchive(file, info)
+	groupErr := file.Chown(-1, 29000)
+	modeErr := file.Chmod(0o640)
 	closeErr := file.Close()
-	if hashErr != nil || closeErr != nil {
+	if hashErr != nil || groupErr != nil || modeErr != nil || closeErr != nil {
 		return "", "", "", errors.New("verify Codex app-server rollout")
 	}
 	return returnedPath, relativePath, digest, nil

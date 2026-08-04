@@ -323,61 +323,6 @@ func (repository *Repository) Search(
 	return resources, err
 }
 
-// ResolveRuntimeAgentBindingIntent разрешает source reference только внутри
-// подписанного tenant/actor context. Runtime-controller не получает этот read.
-func (repository *Repository) ResolveRuntimeAgentBindingIntent(
-	ctx context.Context,
-	organizationID, projectID, actorID, sourceRef string,
-) (entity.Resource, entity.Resource, entity.Resource, error) {
-	var session, turn, revision entity.Resource
-	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
-		row := tx.QueryRow(ctx, sqlRuntimeAgentBindingResolveIntent, pgx.StrictNamedArgs{
-			"organization_id": organizationID, "project_id": projectID,
-			"actor_id": actorID, "source_ref": sourceRef,
-		})
-		var sessionKind, sessionState, turnKind, turnState, revisionKind, revisionState string
-		var sessionSpec, turnSpec, revisionSpec []byte
-		var matchCount uint64
-		if err := row.Scan(
-			&session.ID, &session.OrganizationID, &session.ProjectID, &session.ParentID,
-			&session.OwnerActorID, &sessionKind, &session.Name, &sessionState,
-			&session.Version, &sessionSpec, &session.CreatedAt, &session.UpdatedAt,
-			&turn.ID, &turn.OrganizationID, &turn.ProjectID, &turn.ParentID,
-			&turn.OwnerActorID, &turnKind, &turn.Name, &turnState,
-			&turn.Version, &turnSpec, &turn.CreatedAt, &turn.UpdatedAt,
-			&revision.ID, &revision.OrganizationID, &revision.ProjectID, &revision.ParentID,
-			&revision.OwnerActorID, &revisionKind, &revision.Name, &revisionState,
-			&revision.Version, &revisionSpec, &revision.CreatedAt, &revision.UpdatedAt,
-			&matchCount,
-		); err != nil {
-			return mapError(err)
-		}
-		if matchCount != 1 {
-			return errs.ErrStateConflict
-		}
-		for _, item := range []struct {
-			resource *entity.Resource
-			kind     string
-			state    string
-			spec     []byte
-		}{
-			{&session, sessionKind, sessionState, sessionSpec},
-			{&turn, turnKind, turnState, turnSpec},
-			{&revision, revisionKind, revisionState, revisionSpec},
-		} {
-			item.resource.Kind = enum.Kind(item.kind)
-			item.resource.State = enum.State(item.state)
-			var err error
-			item.resource.Spec, err = unmarshalSpec(item.resource.Kind, item.spec)
-			if err != nil || item.resource.Validate() != nil {
-				return errs.ErrInternal
-			}
-		}
-		return nil
-	})
-	return session, turn, revision, err
-}
-
 func (wrapped *transaction) SearchMemory(
 	ctx context.Context,
 	search domainrepo.MemorySearch,
@@ -1335,6 +1280,20 @@ func (wrapped *transaction) LatestSessionRuntimeArchiveForRestore(
 			"session_id":      sessionID,
 		},
 	))
+}
+
+func (wrapped *transaction) LatestSessionCodexLineage(
+	ctx context.Context,
+	organizationID, projectID, sessionID string,
+) (domainrepo.CodexLineage, error) {
+	var lineage domainrepo.CodexLineage
+	err := wrapped.tx.QueryRow(ctx, sqlRuntimeExecutionLatestSessionCodexLineage, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"session_id":      sessionID,
+	}).Scan(&lineage.ExecutionID, &lineage.ProviderBindingID, &lineage.SessionID,
+		&lineage.ArchiveRelativePath, &lineage.ArchiveSHA256, &lineage.ArchiveProvenance)
+	return lineage, mapError(err)
 }
 
 func (wrapped *transaction) SaveTurnLease(
@@ -2711,54 +2670,6 @@ func (wrapped *transaction) ReleaseRuntimeRetentionHold(
 	return nil
 }
 
-func (wrapped *transaction) GetRuntimeAgentBindingForUpdate(
-	ctx context.Context,
-	turnID string,
-	attempt uint32,
-) (domainrepo.RuntimeAgentBinding, error) {
-	return scanRuntimeAgentBinding(wrapped.tx.QueryRow(
-		ctx, sqlRuntimeAgentBindingGetForUpdate, pgx.StrictNamedArgs{
-			"organization_id": wrapped.organizationID,
-			"project_id":      wrapped.projectID,
-			"turn_id":         turnID,
-			"attempt":         attempt,
-		},
-	))
-}
-
-func (wrapped *transaction) InsertRuntimeAgentBinding(
-	ctx context.Context,
-	binding domainrepo.RuntimeAgentBinding,
-) error {
-	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeAgentBindingInsert, pgx.StrictNamedArgs{
-		"organization_id":              binding.OrganizationID,
-		"project_id":                   binding.ProjectID,
-		"session_id":                   binding.SessionID,
-		"turn_id":                      binding.TurnID,
-		"attempt":                      binding.Attempt,
-		"input_sha256":                 binding.InputSHA256,
-		"runtime_revision_id":          binding.RuntimeRevisionID,
-		"runtime_revision_version":     binding.RuntimeRevisionVersion,
-		"runtime_revision_sha256":      binding.RuntimeRevisionSHA256,
-		"agent_session_key":            binding.AgentSessionKey,
-		"agent_session_id":             binding.AgentSessionID,
-		"agent_session_version":        binding.AgentSessionVersion,
-		"agent_session_binding_sha256": binding.AgentSessionBindingSHA256,
-		"agent_session_turn_id":        binding.AgentSessionTurnID,
-		"agent_run_id":                 binding.AgentRunID,
-		"agent_session_turn_version":   binding.AgentSessionTurnVersion,
-		"agent_turn_binding_sha256":    binding.AgentTurnBindingSHA256,
-		"created_at":                   binding.CreatedAt,
-	})
-	if err != nil {
-		return mapError(err)
-	}
-	if tag.RowsAffected() != 1 {
-		return errs.ErrStateConflict
-	}
-	return nil
-}
-
 func (wrapped *transaction) InsertRuntimeExecution(
 	ctx context.Context,
 	execution domainrepo.RuntimeExecution,
@@ -3400,24 +3311,6 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 		return domainrepo.RuntimeExecution{}, errs.ErrInternal
 	}
 	return execution, nil
-}
-
-func scanRuntimeAgentBinding(row rowScanner) (domainrepo.RuntimeAgentBinding, error) {
-	var binding domainrepo.RuntimeAgentBinding
-	err := row.Scan(
-		&binding.OrganizationID, &binding.ProjectID, &binding.SessionID,
-		&binding.TurnID, &binding.Attempt, &binding.InputSHA256,
-		&binding.RuntimeRevisionID, &binding.RuntimeRevisionVersion,
-		&binding.RuntimeRevisionSHA256, &binding.AgentSessionKey,
-		&binding.AgentSessionID, &binding.AgentSessionVersion,
-		&binding.AgentSessionBindingSHA256, &binding.AgentSessionTurnID,
-		&binding.AgentRunID, &binding.AgentSessionTurnVersion,
-		&binding.AgentTurnBindingSHA256, &binding.CreatedAt,
-	)
-	if err != nil {
-		return domainrepo.RuntimeAgentBinding{}, mapError(err)
-	}
-	return binding, nil
 }
 
 func scanIntegrationContinuation(

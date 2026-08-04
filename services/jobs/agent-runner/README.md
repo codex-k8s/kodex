@@ -4,7 +4,7 @@ title: Agent runner
 type: service
 status: approved
 owner: backend
-version: 2.1.0
+version: 2.2.0
 updated: 2026-08-04
 ---
 
@@ -19,14 +19,14 @@ Turn, provider account, retry attempt, cancel или transport route и не х�
 
 | Вид | Авторитетный владелец | Доказательство runner | Эффект |
 |---|---|---|---|
-| Session, Turn, FIFO, attempt | `control-plane` | exact `SessionID`, `TurnID`, attempt, input digest и Turn lease | `ClaimTurn`, `RenewTurn`, status/progress |
+| Session, Turn, FIFO, attempt | `control-plane` | exact `SessionID`, `TurnID`, attempt, input digest и Turn lease | `ClaimTurn`, status/progress; обе lease продлевает heartbeat controller |
 | RuntimeExecution | `control-plane` | execution version/fence/generation и agent-runner authority | только readback; terminal пишет `runtime-controller` |
 | Kubernetes Pod/PVC/journal | `runtime-controller` | immutable v2 input, execution-scoped ServiceAccount и controller-owned ConfigMap | init materialization и signed terminal handoff |
 | Provider account | `control-plane` RuntimeRevision | ID/version/SHA-256 и exact Codex auth digest | свежий `CODEX_HOME`; иной account закрыто отклоняется |
 | Materialized bytes | Artifact owner + `interaction-gateway` object store | artifact ID/version/SHA-256, mTLS и bearer owner readback | запись только через `openat(O_NOFOLLOW)` в `/workspace` |
 | Mattermost delivery | `interaction-gateway` | durable `interaction_delivery_work` из owner transaction | runner никогда не получает Mattermost token |
 
-Защищённые RPC runner: `CheckReadiness`, `ClaimTurn`, `RenewTurn`,
+Защищённые RPC runner: `CheckReadiness`, `ClaimTurn`,
 `GetRuntimeExecution` и `ReportRuntimeProgress`. `CompleteTurn`, generic work
 claims и integration continuation RPC отсутствуют в профиле. Защищённые RPC
 gateway materialization: `GetRuntimeMaterialization`. Terminal становится
@@ -48,15 +48,28 @@ gateway materialization: `GetRuntimeMaterialization`. Terminal становит�
    путём, которым будет пользоваться Codex, затем захватывает Turn lease.
 5. Повторный reconcile runtime-controller теперь допускает execution и выдаёт
    RuntimeExecution lease. Runner видит `ADMITTED/RUNNING` readback.
-6. Runner заново создаёт `config.toml`, `auth.json`, env allowlist и required
-   loopback MCP binding. Локальный proxy добавляет bearer и для readiness, и
-   для рабочих запросов применяет один exact upstream TLS 1.3/mTLS/SNI/CA path,
-   запускает exact `codex app-server --strict-config --listen stdio://`,
-   выполняет `initialize/initialized`, затем `thread/start` или
+6. Trusted runner создаёт required MCP authority proxy на protected UDS с
+   `SO_PEERCRED`, но не запускает Codex. Provider-side loopback bridge не имеет
+   upstream bearer/mTLS и может обратиться только к этому UDS с локальной
+   capability; рабочий и readiness запросы проходят один TLS/bearer путь.
+   Отдельный `provider-runtime` UID 10002 не имеет mounts Kubernetes token,
+   application grants, mTLS keys, MCP bearer, handoff key и authority socket.
+   Он принимает один bounded запрос через UDS только от peer UID 10001,
+   создаёт свежий `config.toml`, загружает exact provider credential через
+   `account/read` и запускает exact
+   `codex app-server --strict-config --listen stdio://`. Custom permissions
+   запрещают model shell читать `CODEX_HOME`, `/proc`, projected secrets и
+   authority paths; shell env не наследует provider state. `auth.json`
+   удаляется после bounded завершения app-server.
+   Adapter выполняет `initialize/initialized`, затем `thread/start` или
    `thread/resume`, `turn/start` и строго разбирает newline-delimited JSON-RPC.
    Turn lease продлевается независимо от provider transport.
 7. Progress/status создают durable owner deliveries. Final Markdown chunks,
-   files и images собираются только из bounded outbox.
+   files и images собираются только из bounded outbox. Крупные значения до
+   256 MiB перед handoff уходят по exact execution grant в private
+   content-addressed store `interaction-gateway`; handoff несёт immutable
+   Artifact references, а ошибка отдельного файла остаётся bounded terminal
+   Markdown и не уничтожает итог.
 8. Runner подписывает один v2 envelope и атомарно обновляет exact handoff
    ConfigMap. Runtime-controller проверяет закрытый trust set, tuple, payload
    digests и живую RuntimeExecution lease.
@@ -72,10 +85,10 @@ gateway materialization: `GetRuntimeMaterialization`. Terminal становит�
 | materialize/bootstrap | runtime-controller | init only | object version+digest и immutable ConfigMap |
 | claim | control-plane | `ClaimTurn` | UUIDv5 execution key, exact FIFO head |
 | admit | control-plane + runtime-controller | ждёт readback | допустим только после живой Turn lease |
-| renew | control-plane | каждые 10 секунд | version/attempt/generation/token |
+| renew | control-plane + runtime-controller | runner не вызывает generic `RenewTurn` | controller heartbeat атомарно продлевает RuntimeExecution и TurnLease |
 | progress/status | control-plane | specialized RPC | execution+turn tuple и sequence |
 | capacity retry | runner, внутри той же допустимой attempt | 1/3/5 минут | только exact `CodexErrorInfo=serverOverloaded`; context отменяет ожидание |
-| auth/policy/config/cyber blocked | control-plane terminal owner | handoff `BLOCKED` | не классифицируется как capacity |
+| auth/quota/policy/config/cyber blocked | control-plane terminal owner | handoff `BLOCKED` | не классифицируется как capacity; quota не получает Retry до обновления account binding |
 | cancel/SIGTERM | control-plane/runtime-controller | останавливает process group, 10-секундная grace | runner не назначает cancel authority |
 | complete | runtime-controller + control-plane | только signed handoff | один winner; иной payload — conflict |
 | crash/expiry | owners | handoff отсутствует | incident/watchdog/expiry, без generic complete |
@@ -90,12 +103,25 @@ Absolute path, `..`, symlink, hardlink, special file, duplicate path и выхо
 workspace отклоняются. Запись выполняется через temporary regular file,
 `fsync`, digest readback и atomic rename. Пользовательские outputs разрешены
 только как top-level regular files в `.matter-codex/outbox`; directory,
-symlink/hardlink и общий payload больше 512 KiB отклоняются.
+symlink/hardlink, special file и выход за bounded 256 MiB на artifact
+отклоняются. Одновременно runner удерживает не более 256 MiB проверенных outbox
+bytes и не более 31 immutable refs; остальные per-artifact outcomes входят в
+bounded terminal Markdown. Inline handoff остаётся малым; крупный Markdown, file и image
+сначала проходят `AuthorizeRuntimeOutput`, private S3 put/readback и
+`RegisterRuntimeOutput`. Runner не получает S3 credential.
 
-`CODEX_HOME` всегда существует в session PVC. Перед каждым ходом создаются
-новые `config.toml` и secret `auth.json`; environment содержит только `PATH`,
-`HOME` и `CODEX_HOME`. MCP bearer остаётся в runner-owned loopback proxy и не
-передаётся процессу Codex. Структурированный thread ID принимается только из
+`CODEX_HOME` всегда существует в session PVC. Перед каждым ходом provider
+container создаёт новый `config.toml`, проверяет exact digest `auth.json` и
+держит его только для app-server до завершения turn. Custom permission profile
+на базе `:workspace` задаёт deny-read для `CODEX_HOME`, `/proc`, projected
+secrets и authority paths; shell env имеет только bounded `PATH` и `HOME`.
+Настоящий session MCP bearer и mTLS keys остаются в trusted runner-owned UDS
+authority proxy. Provider-side loopback bridge не содержит этих credentials;
+его соединение проверяется по `SO_PEERCRED` UID 10002. App-server получает
+только свежую локальную capability через `bearer_token_env_var`; model shell не
+наследует её и не имеет network allow.
+`danger-full-access` и caller sandbox override закрыто отклоняются.
+Структурированный thread ID принимается только из
 коррелированного `thread/start|resume` response и сверяется с server-owned ID.
 Stderr и provider `message` ограничиваются и отбрасываются: ни одно из них не
 становится authority. JSON-RPC ограничен 1 MiB на строку и 100000 сообщений;
@@ -107,13 +133,44 @@ owner-visible terminal без capacity retry. Любой server request, вкл�
 approval, user input, dynamic tool, token refresh и attestation, отклоняется:
 runner не выдаёт себе дополнительных полномочий.
 
-Resume разрешён только для `CodexSessionID`, связанного с тем же provider
-binding в RuntimeExecution. Для восстановленного session control-plane также
+Resume разрешён только для server-owned последней terminal Codex lineage той
+же Session и того же logical provider binding ID. Credential version/digest
+берутся из свежей RuntimeRevision и могут измениться при reauth той же logical
+учётной записи. Lineage не зависит от cleanup state; archive restore остаётся
+отдельной проверяемой границей. Для восстановленного session control-plane также
 закрепляет exact `.matter-codex/state/codex-home/sessions/YYYY/MM/DD/rollout-*.jsonl`,
 SHA-256 и `codex-app-server-rollout-v1` provenance исходного execution.
 Mismatch, symlink, hardlink, special file или oversized rollout останавливают
 запуск до `thread/resume`. Перед каждым turn повторно проверяется digest
-установленного `auth.json`; account snapshot не выводится.
+`auth.json`; эта проверка выполняется до `ClaimTurn`, а отрицательный результат
+после admission становится owner-visible signed `BLOCKED` handoff с device-code
+действием. Account snapshot не выводится.
+
+Mattermost run card создаётся durable owner delivery. Для `QUEUED`, `CLAIMED`,
+`ADMITTED` и `RUNNING` она содержит Stop, а для утверждённых `FAILED` и
+`EXPIRED` — Retry.
+`interaction-gateway` повторно проверяет Mattermost actor, channel/root card,
+callback token и replay receipt, затем вызывает специализированный
+`ManageRuntimeAction`. Control-plane сам разрешает exact owner graph: Stop
+закрывает queued либо active execution, Retry создаёт новую attempt,
+RuntimeRevision и grant. Stale card, duplicate terminal и cancel/complete race
+закрыто отклоняются; runtime-controller останавливает Pod только после owner
+cancel readback. Любой terminal execution сразу удаляет execution-specific Pod
+с provider sidecar; retained PVC остаётся единственным warm state, а successor
+всегда получает новый Pod и свежие mounts.
+
+Перед каждым `EnqueueTurn` и созданием свежей RuntimeRevision
+`interaction-gateway` вызывает существующий
+bot-service transport producer по TLS 1.3/mTLS. Тот разрешает exact
+channel/root/bot `AgentSession`, создаёт immutable `TokenSecretRef` и возвращает
+только revision/digests. Readback повторяется перед каждым Turn: новый Secret
+создаёт новую binding revision, а exact равный readback идемпотентен.
+`BindSessionMCP` закрепляет server-owned credential
+binding; credential broker копирует exact Secret только в trusted container.
+Required proxy обращается к
+`matter-codex-bot-service.mattercodex-system.svc:8443/mcp/sessions/<session>`
+с exact SNI/CA/client certificate и настоящим session bearer. Stale secret или
+чужая Session закрывают readiness до `ClaimTurn`.
 
 ## Проверенная документация Codex
 

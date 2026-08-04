@@ -27,7 +27,7 @@ spec:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
           podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway}}
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
-          podSelector: {matchLabels: {app.kubernetes.io/name: mcp-gateway}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: matter-codex-bot-service}}
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
           podSelector: {matchLabels: {app.kubernetes.io/name: internal-rpc-authority-readback-attestor}}
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}

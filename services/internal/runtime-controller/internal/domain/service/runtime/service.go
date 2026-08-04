@@ -474,22 +474,38 @@ func validateHandoff(execution entity.Execution, handoff entity.RuntimeHandoff) 
 		(handoff.Outcome != terminalSucceeded && handoff.Outcome != terminalFailed &&
 			handoff.Outcome != terminalBlocked) ||
 		handoff.TerminalReference == "" || !sha256PatternString(handoff.TerminalSHA256) || len(handoff.Outputs) == 0 ||
-		len(handoff.Outputs) > 32 || handoff.CodexSessionID == "" ||
-		!validCodexArchivePath(handoff.ArchiveRelativePath) ||
-		!sha256PatternString(handoff.ArchiveSHA256) || handoff.ArchiveProvenance == "" ||
-		!validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256) ||
+		len(handoff.Outputs) > 32 || !validCodexTerminalBinding(handoff) ||
 		handoff.ObservedAt.IsZero() || handoff.ObservedAt.After(time.Now().UTC().Add(time.Minute)) {
 		return errs.ErrStateConflict
 	}
 	for _, output := range handoff.Outputs {
-		resultDigest := sha256.Sum256(output.ArtifactPayload)
 		if output.ArtifactID == "" || output.ArtifactVersion == 0 || output.ArtifactName == "" ||
-			!sha256PatternString(output.ArtifactSHA256) || hex.EncodeToString(resultDigest[:]) != output.ArtifactSHA256 ||
-			len(output.ArtifactPayload) == 0 || output.Sequence == 0 || output.Total == 0 || output.Sequence > output.Total {
+			!sha256PatternString(output.ArtifactSHA256) || output.ArtifactSizeBytes == 0 ||
+			output.ArtifactSizeBytes > 256<<20 || output.Sequence == 0 || output.Total == 0 || output.Sequence > output.Total {
+			return errs.ErrStateConflict
+		}
+		if len(output.ArtifactPayload) != 0 {
+			resultDigest := sha256.Sum256(output.ArtifactPayload)
+			if output.ArtifactStorageRef != "" || output.ArtifactSizeBytes != uint64(len(output.ArtifactPayload)) ||
+				hex.EncodeToString(resultDigest[:]) != output.ArtifactSHA256 {
+				return errs.ErrStateConflict
+			}
+		} else if !strings.HasPrefix(output.ArtifactStorageRef, "s3://") ||
+			len(output.ArtifactStorageRef) > 2048 || strings.ContainsAny(output.ArtifactStorageRef, "\x00\r\n") {
 			return errs.ErrStateConflict
 		}
 	}
 	return nil
+}
+
+func validCodexTerminalBinding(handoff entity.RuntimeHandoff) bool {
+	if handoff.CodexSessionID == "" && handoff.ArchiveRelativePath == "" &&
+		handoff.ArchiveSHA256 == "" && handoff.ArchiveProvenance == "" {
+		return handoff.Outcome == terminalBlocked && strings.HasPrefix(handoff.TerminalReference, "preflight://")
+	}
+	return uuid.Validate(handoff.CodexSessionID) == nil && validCodexArchivePath(handoff.ArchiveRelativePath) &&
+		sha256PatternString(handoff.ArchiveSHA256) && handoff.ArchiveProvenance != "" &&
+		validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256)
 }
 
 func validCodexArchiveProvenance(value, path, digest string) bool {
@@ -545,19 +561,16 @@ func (service *Service) reconcileRetention(
 	if err := service.cluster.RevokeAccess(ctx, execution); err != nil {
 		return err
 	}
-	idle := time.Since(status.LastTransition)
-	if execution.AccessProfile == enum.AccessClusterAdmin && status.PodName != "" {
+	// Execution-specific Pod нельзя сохранять как warm authority: его immutable
+	// revision, grants и credential mounts уже terminal. Successor получает новый
+	// Pod поверх retained PVC; cancel/expiry тем самым останавливают provider
+	// sidecar сразу после authoritative owner readback.
+	if status.PodName != "" {
 		if err := service.cluster.DeletePod(ctx, status); err != nil {
 			return err
 		}
 		status.PodName = ""
-		service.observer.Observe("idle_eviction", "deleted")
-	}
-	if idle >= service.warmTTL && status.PodName != "" {
-		if err := service.cluster.DeletePod(ctx, status); err != nil {
-			return err
-		}
-		service.observer.Observe("idle_eviction", "deleted")
+		service.observer.Observe("terminal_eviction", "deleted")
 	}
 	if !status.RetentionOwner {
 		return nil
