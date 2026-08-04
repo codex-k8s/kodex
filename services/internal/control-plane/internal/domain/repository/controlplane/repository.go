@@ -354,6 +354,23 @@ type ResourceRetentionPolicy struct {
 	PVCRetentionSeconds     uint64
 	ArchiveRetentionSeconds uint64
 	EffectiveFrom           time.Time
+	RetiredAt               time.Time
+}
+
+// RuntimeRetentionHold — owner-managed запрет необратимого cleanup.
+type RuntimeRetentionHold struct {
+	ID             string
+	OrganizationID string
+	ProjectID      string
+	SessionID      string
+	Kind           string
+	State          string
+	Version        uint64
+	ActorID        string
+	ReasonCode     string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	ReleasedAt     time.Time
 }
 
 // PinnedIntegrationResource хранит exact owner version/projection без secret value.

@@ -355,6 +355,60 @@ func runtimeResourcePolicy(role entity.RoleSpec) (string, string) {
 	return resourceClass, clusterProfile
 }
 
+// ResolveRuntimeAgentBindingIntent разрешает единственный QUEUED Turn по
+// server-owned source reference. Bot identifiers в этот read не входят.
+func (service *Service) ResolveRuntimeAgentBindingIntent(
+	ctx context.Context,
+	principal value.Principal,
+	sourceRef string,
+) (RuntimeAgentBindingIntent, error) {
+	if err := authorize(principal, permissionRuntimeAgentBind); err != nil {
+		return RuntimeAgentBindingIntent{}, err
+	}
+	if principal.CallerWorkload != service.botServiceWorkload ||
+		principal.CallerSPIFFEID != service.botServiceSPIFFEID ||
+		!validRuntimeReference(sourceRef) {
+		return RuntimeAgentBindingIntent{}, errs.ErrPermissionDenied
+	}
+	reader, ok := service.repository.(interface {
+		ResolveRuntimeAgentBindingIntent(
+			context.Context, string, string, string, string,
+		) (entity.Resource, entity.Resource, entity.Resource, error)
+	})
+	if !ok {
+		return RuntimeAgentBindingIntent{}, errs.ErrInternal
+	}
+	session, turn, revision, err := reader.ResolveRuntimeAgentBindingIntent(
+		ctx, principal.OrganizationID, principal.ProjectID, principal.ActorID, sourceRef,
+	)
+	if err != nil {
+		return RuntimeAgentBindingIntent{}, err
+	}
+	_, sessionOK := session.Spec.(entity.SessionSpec)
+	turnSpec, turnOK := turn.Spec.(entity.TurnSpec)
+	_, revisionOK := revision.Spec.(entity.RuntimeRevisionSpec)
+	if !sessionOK || !turnOK || !revisionOK || session.Kind != enum.KindSession ||
+		turn.Kind != enum.KindTurn || revision.Kind != enum.KindRuntimeRevision ||
+		session.State != enum.StateActive || turn.State != enum.StateQueued ||
+		revision.State != enum.StateActive || session.OwnerActorID != principal.ActorID ||
+		turn.OwnerActorID != principal.ActorID || turnSpec.SourceRef != sourceRef ||
+		turnSpec.SessionID != session.ID || turnSpec.RuntimeRevisionID != revision.ID ||
+		turnSpec.Attempt == 0 {
+		return RuntimeAgentBindingIntent{}, errs.ErrStateConflict
+	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil {
+		return RuntimeAgentBindingIntent{}, errs.ErrInternal
+	}
+	return RuntimeAgentBindingIntent{
+		SessionID: session.ID, SessionVersion: session.Version,
+		TurnID: turn.ID, TurnVersion: turn.Version, Attempt: turnSpec.Attempt,
+		InputSHA256:       turnSpec.EffectiveInputSHA256,
+		RuntimeRevisionID: revision.ID, RuntimeRevisionVersion: revision.Version,
+		RuntimeRevisionSHA256: revisionSHA256,
+	}, nil
+}
+
 // BindRuntimeAgentSession материализует неизменяемую связь двух owner aggregate.
 // Bot identifiers являются authority только потому, что команда допускает exact
 // bot-service workload; runtime-controller эту команду вызвать не может.

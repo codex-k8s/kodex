@@ -234,6 +234,59 @@ func (repository *Repository) Search(
 	return resources, err
 }
 
+// ResolveRuntimeAgentBindingIntent разрешает source reference только внутри
+// подписанного tenant/actor context. Runtime-controller не получает этот read.
+func (repository *Repository) ResolveRuntimeAgentBindingIntent(
+	ctx context.Context,
+	organizationID, projectID, actorID, sourceRef string,
+) (entity.Resource, entity.Resource, entity.Resource, error) {
+	var session, turn, revision entity.Resource
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, sqlRuntimeAgentBindingResolveIntent, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID,
+			"actor_id": actorID, "source_ref": sourceRef,
+		})
+		var sessionKind, sessionState, turnKind, turnState, revisionKind, revisionState string
+		var sessionSpec, turnSpec, revisionSpec []byte
+		var matchCount uint64
+		if err := row.Scan(
+			&session.ID, &session.OrganizationID, &session.ProjectID, &session.ParentID,
+			&session.OwnerActorID, &sessionKind, &session.Name, &sessionState,
+			&session.Version, &sessionSpec, &session.CreatedAt, &session.UpdatedAt,
+			&turn.ID, &turn.OrganizationID, &turn.ProjectID, &turn.ParentID,
+			&turn.OwnerActorID, &turnKind, &turn.Name, &turnState,
+			&turn.Version, &turnSpec, &turn.CreatedAt, &turn.UpdatedAt,
+			&revision.ID, &revision.OrganizationID, &revision.ProjectID, &revision.ParentID,
+			&revision.OwnerActorID, &revisionKind, &revision.Name, &revisionState,
+			&revision.Version, &revisionSpec, &revision.CreatedAt, &revision.UpdatedAt,
+			&matchCount,
+		); err != nil {
+			return mapError(err)
+		}
+		if matchCount != 1 {
+			return errs.ErrStateConflict
+		}
+		for _, item := range []struct {
+			resource *entity.Resource
+			kind     string
+			state    string
+			spec     []byte
+		}{{&session, sessionKind, sessionState, sessionSpec},
+			{&turn, turnKind, turnState, turnSpec},
+			{&revision, revisionKind, revisionState, revisionSpec}} {
+			item.resource.Kind = enum.Kind(item.kind)
+			item.resource.State = enum.State(item.state)
+			var err error
+			item.resource.Spec, err = unmarshalSpec(item.resource.Kind, item.spec)
+			if err != nil || item.resource.Validate() != nil {
+				return errs.ErrInternal
+			}
+		}
+		return nil
+	})
+	return session, turn, revision, err
+}
+
 func (wrapped *transaction) SearchMemory(
 	ctx context.Context,
 	search domainrepo.MemorySearch,
@@ -2292,7 +2345,162 @@ func (wrapped *transaction) GetCurrentResourceRetentionPolicy(
 	if err != nil {
 		return domainrepo.ResourceRetentionPolicy{}, mapError(err)
 	}
+	if policy.RetiredAt.Equal(time.Unix(0, 0).UTC()) {
+		policy.RetiredAt = time.Time{}
+	}
 	return policy, nil
+}
+
+func (wrapped *transaction) GetResourceRetentionPolicyForUpdate(
+	ctx context.Context,
+	organizationID, projectID string,
+) (domainrepo.ResourceRetentionPolicy, error) {
+	var policy domainrepo.ResourceRetentionPolicy
+	err := wrapped.tx.QueryRow(ctx, sqlResourceRetentionPolicyGetForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+	}).Scan(
+		&policy.ID, &policy.Version, &policy.PVCRetentionSeconds,
+		&policy.ArchiveRetentionSeconds, &policy.EffectiveFrom, &policy.RetiredAt,
+	)
+	if err != nil {
+		return domainrepo.ResourceRetentionPolicy{}, mapError(err)
+	}
+	if policy.RetiredAt.Equal(time.Unix(0, 0).UTC()) {
+		policy.RetiredAt = time.Time{}
+	}
+	return policy, nil
+}
+
+func (wrapped *transaction) GetResourceRetentionPolicyVersionForUpdate(
+	ctx context.Context,
+	organizationID, projectID, policyID string,
+	version uint64,
+) (domainrepo.ResourceRetentionPolicy, error) {
+	var policy domainrepo.ResourceRetentionPolicy
+	err := wrapped.tx.QueryRow(ctx, sqlResourceRetentionPolicyGetVersionForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID,
+		"policy_id": policyID, "version": version,
+	}).Scan(
+		&policy.ID, &policy.Version, &policy.PVCRetentionSeconds,
+		&policy.ArchiveRetentionSeconds, &policy.EffectiveFrom, &policy.RetiredAt,
+	)
+	if err != nil {
+		return domainrepo.ResourceRetentionPolicy{}, mapError(err)
+	}
+	if policy.RetiredAt.Equal(time.Unix(0, 0).UTC()) {
+		policy.RetiredAt = time.Time{}
+	}
+	return policy, nil
+}
+
+func (wrapped *transaction) InsertResourceRetentionPolicy(
+	ctx context.Context,
+	policy domainrepo.ResourceRetentionPolicy,
+	actorID, reasonCode, idempotencyKeySHA256, requestSHA256 string,
+) error {
+	_, err := wrapped.tx.Exec(ctx, sqlResourceRetentionPolicyInsert, pgx.StrictNamedArgs{
+		"organization_id": wrapped.organizationID,
+		"project_id":      wrapped.projectID, "policy_id": policy.ID,
+		"version": policy.Version, "pvc_retention_seconds": policy.PVCRetentionSeconds,
+		"archive_retention_seconds": policy.ArchiveRetentionSeconds,
+		"effective_at":              policy.EffectiveFrom, "actor_id": actorID,
+		"reason_code": reasonCode, "idempotency_key_sha256": idempotencyKeySHA256,
+		"request_sha256": requestSHA256, "supersedes_version": policy.Version - 1,
+		"created_at": policy.EffectiveFrom,
+	})
+	return mapError(err)
+}
+
+func (wrapped *transaction) RetireResourceRetentionPolicy(
+	ctx context.Context,
+	policy domainrepo.ResourceRetentionPolicy,
+	retiredAt time.Time,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlResourceRetentionPolicyRetire, pgx.StrictNamedArgs{
+		"organization_id": wrapped.organizationID, "project_id": wrapped.projectID,
+		"policy_id": policy.ID, "version": policy.Version, "retired_at": retiredAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func scanRuntimeRetentionHold(row pgx.Row) (domainrepo.RuntimeRetentionHold, error) {
+	var hold domainrepo.RuntimeRetentionHold
+	err := row.Scan(
+		&hold.ID, &hold.OrganizationID, &hold.ProjectID, &hold.SessionID,
+		&hold.Kind, &hold.State, &hold.Version, &hold.ActorID, &hold.ReasonCode,
+		&hold.CreatedAt, &hold.UpdatedAt, &hold.ReleasedAt,
+	)
+	if err != nil {
+		return domainrepo.RuntimeRetentionHold{}, mapError(err)
+	}
+	return hold, nil
+}
+
+func (wrapped *transaction) GetActiveRuntimeRetentionHoldForUpdate(
+	ctx context.Context,
+	sessionID, kind string,
+) (domainrepo.RuntimeRetentionHold, error) {
+	return scanRuntimeRetentionHold(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeRetentionHoldActiveForUpdate, pgx.StrictNamedArgs{
+			"organization_id": wrapped.organizationID, "project_id": wrapped.projectID,
+			"session_id": sessionID, "kind": kind,
+		},
+	))
+}
+
+func (wrapped *transaction) GetRuntimeRetentionHoldForUpdate(
+	ctx context.Context,
+	holdID string,
+) (domainrepo.RuntimeRetentionHold, error) {
+	return scanRuntimeRetentionHold(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeRetentionHoldGetForUpdate, pgx.StrictNamedArgs{
+			"organization_id": wrapped.organizationID, "project_id": wrapped.projectID,
+			"hold_id": holdID,
+		},
+	))
+}
+
+func (wrapped *transaction) InsertRuntimeRetentionHold(
+	ctx context.Context,
+	hold domainrepo.RuntimeRetentionHold,
+	idempotencyKeySHA256, requestSHA256 string,
+) error {
+	_, err := wrapped.tx.Exec(ctx, sqlRuntimeRetentionHoldInsert, pgx.StrictNamedArgs{
+		"organization_id": hold.OrganizationID, "project_id": hold.ProjectID,
+		"session_id": hold.SessionID, "hold_id": hold.ID, "kind": hold.Kind,
+		"actor_id": hold.ActorID, "reason_code": hold.ReasonCode,
+		"idempotency_key_sha256": idempotencyKeySHA256, "request_sha256": requestSHA256,
+		"created_at": hold.CreatedAt,
+	})
+	return mapError(err)
+}
+
+func (wrapped *transaction) ReleaseRuntimeRetentionHold(
+	ctx context.Context,
+	hold domainrepo.RuntimeRetentionHold,
+	reasonCode string,
+	releasedAt time.Time,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRetentionHoldRelease, pgx.StrictNamedArgs{
+		"organization_id": hold.OrganizationID, "project_id": hold.ProjectID,
+		"hold_id": hold.ID, "session_id": hold.SessionID,
+		"expected_version": hold.Version, "reason_code": reasonCode,
+		"released_at": releasedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (wrapped *transaction) GetRuntimeAgentBindingForUpdate(

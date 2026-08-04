@@ -787,6 +787,16 @@ func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.
 		return
 	}
 	switch action {
+	case "readiness":
+		if r.Method != http.MethodPost {
+			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
+			return
+		}
+		if _, err := router.sessionService.Snapshot(r.Context(), sessionKey, token); err != nil {
+			writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "agent_session_readiness_failed"})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case "snapshot":
 		if r.Method != http.MethodGet {
 			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})

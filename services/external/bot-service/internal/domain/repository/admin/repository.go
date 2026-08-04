@@ -35,10 +35,18 @@ type RuntimeAgentBindingDelivery struct {
 	Attempt                                                               uint32
 }
 
+type RuntimeAgentBindingDiscovery struct {
+	ID, AgentSessionTurnID            int64
+	AgentRunID, SourceRef, LeaseToken string
+}
+
 // RuntimeAgentBindingOutboxRepository — узкий durable effect port. Регистрация,
 // claim и подтверждение не расширяют общий Repository и поэтому не позволяют
 // transport обходить domain service.
 type RuntimeAgentBindingOutboxRepository interface {
+	ClaimRuntimeAgentBindingDiscovery(context.Context, string, time.Time) (RuntimeAgentBindingDiscovery, error)
+	CompleteRuntimeAgentBindingDiscovery(context.Context, int64, string) error
+	RetryRuntimeAgentBindingDiscovery(context.Context, int64, string, time.Time, string) error
 	EnqueueRuntimeAgentBinding(context.Context, RuntimeAgentBindingIntent) (RuntimeAgentBindingDelivery, error)
 	ClaimRuntimeAgentBinding(context.Context, string, time.Time) (RuntimeAgentBindingDelivery, error)
 	CompleteRuntimeAgentBinding(context.Context, int64, string, string, string) error

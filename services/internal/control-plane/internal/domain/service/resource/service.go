@@ -132,6 +132,8 @@ const (
 	permissionRuntimeCleanup         = "controlplane.runtime_execution.cleanup.authorize"
 	permissionRuntimeCleanupConsume  = "controlplane.runtime_execution.cleanup.consume"
 	permissionRuntimeCleanupExpire   = "controlplane.runtime_execution.cleanup.expire"
+	permissionRuntimeRetentionManage = "controlplane.runtime_retention.manage"
+	permissionRuntimeRetentionRead   = "controlplane.runtime_retention.read"
 	permissionIntegrationResolve     = "controlplane.integration_session.read"
 	permissionIntegrationSuspend     = "controlplane.integration_continuation.suspend"
 	permissionIntegrationDecide      = "controlplane.integration_continuation.decide"

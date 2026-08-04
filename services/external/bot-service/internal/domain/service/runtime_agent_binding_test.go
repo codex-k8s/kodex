@@ -12,14 +12,37 @@ import (
 )
 
 type runtimeBindingTestRepository struct {
-	delivery adminrepo.RuntimeAgentBindingDelivery
-	intent   adminrepo.RuntimeAgentBindingIntent
-	complete bool
+	delivery                  adminrepo.RuntimeAgentBindingDelivery
+	discovery                 adminrepo.RuntimeAgentBindingDiscovery
+	intent                    adminrepo.RuntimeAgentBindingIntent
+	complete                  bool
+	discoveryCompleteFailures int
+	enqueueCount              int
 }
 
 func (repository *runtimeBindingTestRepository) EnqueueRuntimeAgentBinding(_ context.Context, intent adminrepo.RuntimeAgentBindingIntent) (adminrepo.RuntimeAgentBindingDelivery, error) {
 	repository.intent = intent
+	repository.enqueueCount++
 	return repository.delivery, nil
+}
+
+func (repository *runtimeBindingTestRepository) ClaimRuntimeAgentBindingDiscovery(context.Context, string, time.Time) (adminrepo.RuntimeAgentBindingDiscovery, error) {
+	if repository.discovery.ID == 0 {
+		return adminrepo.RuntimeAgentBindingDiscovery{}, adminrepo.ErrNotFound
+	}
+	return repository.discovery, nil
+}
+
+func (repository *runtimeBindingTestRepository) CompleteRuntimeAgentBindingDiscovery(context.Context, int64, string) error {
+	if repository.discoveryCompleteFailures > 0 {
+		repository.discoveryCompleteFailures--
+		return adminrepo.ErrRuntimeAgentBindingConflict
+	}
+	return nil
+}
+
+func (*runtimeBindingTestRepository) RetryRuntimeAgentBindingDiscovery(context.Context, int64, string, time.Time, string) error {
+	return nil
 }
 
 func (repository *runtimeBindingTestRepository) ClaimRuntimeAgentBinding(context.Context, string, time.Time) (adminrepo.RuntimeAgentBindingDelivery, error) {
@@ -38,6 +61,11 @@ func (*runtimeBindingTestRepository) RetryRuntimeAgentBinding(context.Context, i
 
 type runtimeBindingTestClient struct {
 	request *controlplanev1.BindRuntimeAgentSessionRequest
+	intent  *controlplanev1.ResolveRuntimeAgentBindingIntentResponse
+}
+
+func (client *runtimeBindingTestClient) ResolveRuntimeAgentBindingIntent(_ context.Context, _ *controlplanev1.ResolveRuntimeAgentBindingIntentRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveRuntimeAgentBindingIntentResponse, error) {
+	return client.intent, nil
 }
 
 func (client *runtimeBindingTestClient) BindRuntimeAgentSession(_ context.Context, request *controlplanev1.BindRuntimeAgentSessionRequest, _ ...grpc.CallOption) (*controlplanev1.BindRuntimeAgentSessionResponse, error) {
@@ -47,6 +75,36 @@ func (client *runtimeBindingTestClient) BindRuntimeAgentSession(_ context.Contex
 		TurnId: request.GetTurnId(), TurnVersion: request.GetExpectedTurnVersion(),
 		AgentSessionBindingSha256: strings.Repeat("a", 64), AgentTurnBindingSha256: strings.Repeat("b", 64),
 	}, nil
+}
+
+func TestRuntimeAgentBindingDiscoveryRejoinsAfterLostCompletionResponse(t *testing.T) {
+	intent := &controlplanev1.ResolveRuntimeAgentBindingIntentResponse{
+		SessionId: "control-session", SessionVersion: 7,
+		TurnId: "control-turn", TurnVersion: 8, Attempt: 1,
+		InputSha256: strings.Repeat("1", 64), RuntimeRevisionId: "revision",
+		RuntimeRevisionVersion: 3, RuntimeRevisionSha256: strings.Repeat("2", 64),
+	}
+	repository := &runtimeBindingTestRepository{
+		discovery: adminrepo.RuntimeAgentBindingDiscovery{
+			ID: 71, AgentSessionTurnID: 61, AgentRunID: "bot-run", SourceRef: "mattermost-post",
+			LeaseToken: "discovery-lease",
+		},
+		delivery: adminrepo.RuntimeAgentBindingDelivery{
+			ID: 41, AgentSessionID: 51, AgentSessionTurnID: 61,
+		},
+		discoveryCompleteFailures: 1,
+	}
+	service := NewRuntimeAgentBindingService(repository, &runtimeBindingTestClient{intent: intent})
+	if worked, err := service.DiscoverOne(t.Context()); !worked || err == nil {
+		t.Fatalf("lost completion response was not surfaced: worked=%v err=%v", worked, err)
+	}
+	if worked, err := service.DiscoverOne(t.Context()); !worked || err != nil {
+		t.Fatalf("discovery retry did not rejoin: worked=%v err=%v", worked, err)
+	}
+	if repository.enqueueCount != 2 || repository.intent.AgentRunID != "bot-run" ||
+		repository.intent.ControlTurnID != intent.GetTurnId() {
+		t.Fatalf("retry changed exact bot/control tuple: count=%d intent=%+v", repository.enqueueCount, repository.intent)
+	}
 }
 
 func TestRuntimeAgentBindingUsesRepositoryOwnedBotTupleAndExactReplayIntent(t *testing.T) {
@@ -68,7 +126,7 @@ func TestRuntimeAgentBindingUsesRepositoryOwnedBotTupleAndExactReplayIntent(t *t
 		ControlTurnVersion: delivery.ControlTurnVersion, Attempt: delivery.Attempt,
 		InputSHA256: delivery.InputSHA256, RuntimeRevisionID: delivery.RuntimeRevisionID,
 		RuntimeRevisionVersion: delivery.RuntimeRevisionVersion,
-		RuntimeRevisionSHA256: delivery.RuntimeRevisionSHA256, AgentRunID: delivery.AgentRunID,
+		RuntimeRevisionSHA256:  delivery.RuntimeRevisionSHA256, AgentRunID: delivery.AgentRunID,
 	})
 	if err != nil || registration.AgentSessionID != delivery.AgentSessionID || repository.intent.AgentRunID != delivery.AgentRunID {
 		t.Fatalf("register exact bot tuple: registration=%+v intent=%+v err=%v", registration, repository.intent, err)

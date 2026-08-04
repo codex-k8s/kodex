@@ -109,3 +109,5 @@ webhooks:
         scope: Namespaced
     namespaceSelector:
       matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+    objectSelector:
+      matchLabels: {app.kubernetes.io/component: role-runtime}

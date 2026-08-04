@@ -2,8 +2,10 @@ package archive
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,6 +108,60 @@ func TestRestoredTreeDigestExcludesProofAndDetectsMutation(t *testing.T) {
 	mutated, err := restoredTreeSHA256(root)
 	if err != nil || mutated == expected {
 		t.Fatalf("tree mutation was not detected: %s %v", mutated, err)
+	}
+}
+
+func TestRehydratePublishLostResponseRejoinsExactGeneration(t *testing.T) {
+	final := t.TempDir()
+	if err := os.WriteFile(filepath.Join(final, "state"), []byte("published"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := restoredTreeSHA256(final)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := entity.Execution{
+		ID: "source", ArchiveReference: "s3://runtime/archive?versionId=v1",
+		ArchiveSHA256: strings.Repeat("a", 64),
+	}
+	target := entity.Execution{ID: "target", RestoreAssignmentGeneration: 7}
+	proof := rehydrateProof{
+		Schema: "mattercodex.runtime-rehydrate-proof.v1", SourceExecutionID: source.ID,
+		TargetExecutionID: target.ID, ArchiveReference: source.ArchiveReference,
+		ArchiveSHA256: source.ArchiveSHA256, ArchiveVersionID: "v1",
+		RestoredTreeSHA256: digest, PVCUID: "pvc-uid", AssignmentGeneration: 7,
+	}
+	owner := rehydrateOwner{
+		Schema: "mattercodex.runtime-rehydrate-owner.v1", SourceExecutionID: source.ID,
+		TargetExecutionID: target.ID, PVCUID: "pvc-uid", AssignmentGeneration: 7,
+	}
+	proofRaw, err := json.Marshal(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerRaw, err := json.Marshal(owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(final, rehydrateOwnerName), ownerRaw, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(final, rehydrateMarkerName), proofRaw, 0o400); err != nil {
+		t.Fatal(err)
+	}
+
+	// Имитируется потеря ответа сразу после atomic rename: retry читает proof и
+	// получает тот же результат, не удаляя опубликованное дерево.
+	expected, err := rehydrateProofResult(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejoined, err := rejoinRehydrateProof(source, target, "pvc-uid", final, proof)
+	if err != nil || rejoined.Reference != expected.Reference || rejoined.SHA256 != expected.SHA256 || rejoined.Size != expected.Size {
+		t.Fatalf("rehydrate retry did not rejoin exact generation: %+v %v", rejoined, err)
+	}
+	if _, err := os.Stat(filepath.Join(final, "state")); err != nil {
+		t.Fatalf("published tree was replaced during rejoin: %v", err)
 	}
 }
 

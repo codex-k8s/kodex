@@ -37,7 +37,12 @@
           "control.outbox.read",
           "control.outbox.repair",
           "control.runtime-execution.cancel",
-          "control.runtime-execution.retry"
+          "control.runtime-execution.retry",
+          "control.runtime-retention.set",
+          "control.runtime-retention.retire",
+          "control.runtime-retention.get",
+          "control.runtime-retention.hold",
+          "control.runtime-retention.release"
         ],
         "application_credential": "OIDC_BEARER",
         "application_credential_audience": "mattercodex-control-api",
@@ -261,6 +266,7 @@
       },
       {
         "allowed_operation_ids": [
+          "control.runtime-execution.agent.resolve",
           "control.runtime-execution.agent.bind"
         ],
         "application_credential": "AGENT_SESSION_GRANT",
@@ -621,6 +627,66 @@
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/SetResourceRetentionPolicy",
+        "operation_id": "control.runtime-retention.set",
+        "permission": "controlplane.runtime_retention.manage",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/RetireResourceRetentionPolicy",
+        "operation_id": "control.runtime-retention.retire",
+        "permission": "controlplane.runtime_retention.manage",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/GetResourceRetentionPolicy",
+        "operation_id": "control.runtime-retention.get",
+        "permission": "controlplane.runtime_retention.read",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/HoldRuntimeRetention",
+        "operation_id": "control.runtime-retention.hold",
+        "permission": "controlplane.runtime_retention.manage",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ReleaseRuntimeRetention",
+        "operation_id": "control.runtime-retention.release",
+        "permission": "controlplane.runtime_retention.manage",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_workload_id": "control-plane"
       },
       {
@@ -1604,6 +1670,25 @@
         "permission": "controlplane.owner_gate.deliver",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.bot-service",
+        "authority_sources": [
+          "AGENT_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattermost/sa/matter-codex-bot-service",
+        "caller_workload_id": "matter-codex-bot-service",
+        "full_method": "/controlplane.v1.ControlPlaneService/ResolveRuntimeAgentBindingIntent",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "operation_id": "control.runtime-execution.agent.resolve",
+        "permission": "controlplane.runtime_execution.agent.bind",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
         "target_workload_id": "control-plane"
       },
       {

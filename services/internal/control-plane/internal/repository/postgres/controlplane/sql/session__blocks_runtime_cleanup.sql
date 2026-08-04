@@ -29,6 +29,13 @@ SELECT EXISTS (
       AND continuation.continuation_state <> 'REJOINED'
     UNION ALL
     SELECT 1
+    FROM control_plane.runtime_retention_holds AS hold
+    WHERE hold.organization_id = @organization_id::uuid
+      AND hold.project_id = @project_id::uuid
+      AND hold.session_id = @session_id::uuid
+      AND hold.state = 'ACTIVE'
+    UNION ALL
+    SELECT 1
     FROM control_plane.resources AS gate
     WHERE gate.organization_id = @organization_id::uuid
       AND gate.project_id = @project_id::uuid

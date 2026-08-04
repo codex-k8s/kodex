@@ -219,16 +219,14 @@ func exactRuntimePod(username string, pod *corev1.Pod, snapshot runtimeSnapshot)
 		!reflect.DeepEqual(pod.Spec, desired.Spec) {
 		return false
 	}
-	expectedBroker, expectedAccount := "", ""
+	expectedBroker := "system:serviceaccount:mattercodex-system:runtime-workload-materializer"
+	expectedAccount := ""
 	switch execution.AccessProfile {
 	case "NONE":
-		expectedBroker = "system:serviceaccount:mattercodex-system:runtime-credential-broker"
 		expectedAccount = "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID, 24)
 	case "PROJECT_READ_ONLY":
-		expectedBroker = "system:serviceaccount:mattercodex-system:runtime-project-read-broker"
 		expectedAccount = "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID, 24)
 	case "CLUSTER_ADMIN":
-		expectedBroker = "system:serviceaccount:mattercodex-system:runtime-cluster-admin-broker"
 		expectedAccount = "runtime-role-cluster-admin"
 	default:
 		return false

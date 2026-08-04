@@ -4,8 +4,8 @@ title: Хранение и очистка ресурсов сессий
 type: operations
 status: approved
 owner: sre
-version: 0.4.0
-updated: 2026-08-03
+version: 0.5.0
+updated: 2026-08-04
 ---
 
 # Хранение и очистка ресурсов сессий
@@ -25,6 +25,14 @@ updated: 2026-08-03
 | Метаданные PostgreSQL и аудит | Очередь, связи, решения и доказательства | Хранятся по политике аудита; удаление не связано с TTL pod/PVC. |
 
 Значения задаются версионируемой `ResourceRetentionPolicy` на уровне организации или рабочей области. Более короткий срок для PVC не может обходить обязательную проверку архива и защиту активной работы.
+
+Новый Project получает approved default `prototype-testing-v1` version 1 в
+той же owner transaction, что и сам aggregate. Дальше только закрытые
+`SetResourceRetentionPolicy`, `GetResourceRetentionPolicy` и
+`RetireResourceRetentionPolicy` принимают exact operator SPIFFE/permission,
+expected version, idempotency key и reason. Set атомарно retires current и
+создаёт монотонную next version; уже созданные execution сохраняют собственный
+pin. Missing current, unknown scope или version mismatch всегда fail-closed.
 
 ## Что считается активностью
 
@@ -84,6 +92,14 @@ deletion proof.
 - очистка по верхнему порогу использования диска только среди уже eligible PVC по LRU.
 
 При давлении на ресурсы сначала удаляются прогретые idle pod, затем уже eligible PVC. Минимальная отсрочка PVC не сокращается автоматически; аварийное принудительное удаление требует явного действия владельца и успешного архива.
+
+Ручная и юридическая блокировки являются owner state, а не payload flag:
+`HoldRuntimeRetention` server-side назначает `hold_id` exact Session scope и
+фиксирует `MANUAL|LEGAL`, version, actor, reason, idempotency receipt и audit;
+`ReleaseRuntimeRetention` требует exact hold/version и ту же owner boundary.
+Active hold проверяется под full Session graph lock при issue, consume,
+reissue и expiry cleanup authorization. Удаление строки или обход через
+process-local config запрещены.
 
 ## Переход с текущей среды выполнения
 

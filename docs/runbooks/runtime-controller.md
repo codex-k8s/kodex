@@ -4,7 +4,7 @@ title: Диагностика и восстановление runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 1.3.0
+version: 1.4.0
 updated: 2026-08-04
 ---
 
@@ -92,14 +92,26 @@ runner logs без credential values и owner lease/expiry. Не вызыват�
 Застрявший или несовместимый gate требует устранить причину и дать controller
 выполнить guarded replacement, не patch Pod вручную.
 
+До первого claim и после каждого warm successor `/readyz` должен оставаться
+503, пока runner не выполнит bot-session readiness read и MCP `initialize` по
+рабочему TLS 1.3/mTLS exact SNI/CA/client certificate + bearer пути. Ошибка
+CA/certificate/bearer обязана сделать Pod NotReady до claim. Plaintext
+localhost probe не считается peer/application проверкой; после восстановления
+owner-issued immutable snapshot тот же readback должен вернуть 204.
+
 ## Archive, restore и rehydrate
 
 Проверить Job identity: `runtime-archive` не равна controller, restore и
-rehydrate используют отдельную restore identity. У execution/action STS
+rehydrate используют отдельную restore identity. `runtime-s3-*-broker` Jobs не
+должны иметь RoleBinding, Kubernetes/Vault token, broker config либо прямой S3
+egress; они могут обратиться только к action-specific mTLS exchanger. У execution/action STS
 credential должны быть TTL не более 15 минут, exact organization/project/
 session/execution/source tags, inline policy/readback digests и immutable
 Secret UID/resourceVersion; значения не показывать.
-Проверить, что Vault action role выдаёт только bootstrap lease для
+Проверить, что только `runtime-s3-archive-exchanger` либо
+`runtime-s3-restore-exchanger` имеет соответствующий Vault action role,
+server-side выводит tags/inline policy из owner-signed ticket и создаёт
+immutable one-time receipt. Vault action role выдаёт только bootstrap lease для
 `AssumeRole`/`TagSession` закреплённой execution role, а final credential
 получен по exact TLS S3/STS endpoint с `archive-role-arn` либо
 `restore-role-arn`; передавать inline policy/session tags в Vault generate
@@ -139,13 +151,26 @@ Backfill автоматически проходит ту же archive/proof/cla
 цепочку. Legacy PVC без server-owned execution/journal остаётся
 `inventory-only`. Disk pressure не меняет pinned eligibility и не обходит proof.
 
+Перед ручной/юридической приостановкой получить current Session version и
+вызвать специализированный `HoldRuntimeRetention` через утверждённый
+control-api identity с `MANUAL` либо `LEGAL`, новым idempotency key и reason.
+Сохранить server-assigned `hold_id` и version без bearer/token values. Для
+снятия использовать `ReleaseRuntimeRetention` с exact hold/version. До и после
+операции `GetResourceRetentionPolicy` должен вернуть current monotonic policy;
+active execution продолжает ссылаться на прежний pin. Hold обязан блокировать
+issue/consume/reissue/expiry cleanup; SQL update/delete и payload flag не
+являются допустимым обходом.
+
 ## Access profile incident
 
-Routine controller не имеет Secret access, права создавать role Pod/
+Routine controller и `runtime-credential-broker`, `runtime-project-read-broker`,
+`runtime-cluster-admin-broker`, `runtime-s3-archive-broker`,
+`runtime-s3-restore-broker` не имеют Secret access либо права создавать role Pod/
 ServiceAccount/RoleBinding и права создавать/bind-ить `cluster-admin`.
-Проверьте успешный `runtime-credential-broker`: он обязан подтвердить
-action-specific Ed25519 full-tuple ticket, immutable credential readback и
-exact desired Pod до create. Admission, archive и restore должны читать три
+Проверить успешный `runtime-workload-materializer`: только он после
+action-specific Ed25519 full-tuple ticket, exact mTLS caller, bearer equality и
+one-time receipt выполняет immutable credential readback и exact desired Pod
+create. Admission, archive и restore должны читать три
 разных public verifier path; private keys существуют только у control-plane.
 `PROJECT_READ_ONLY` binding должен соответствовать exact project namespace и
 session identity. `CLUSTER_ADMIN` использует только

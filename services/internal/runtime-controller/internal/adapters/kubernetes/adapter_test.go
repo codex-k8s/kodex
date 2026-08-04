@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/enum"
 	"github.com/google/uuid"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +24,73 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 )
+
+func TestCredentialBrokerJobsAreUnprivilegedAuthorityClients(t *testing.T) {
+	execution := testExecution()
+	execution.WorkloadTicket = "ticket"
+	execution.ArchiveWorkloadTicket = "archive-ticket"
+	execution.RestoreWorkloadTicket = "restore-ticket"
+	adapter := &Adapter{config: Config{
+		Namespace: "mattercodex-system", Environment: "test",
+		ControllerImage:                  "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:" + strings.Repeat("a", 64),
+		CredentialBrokerServiceAccount:   "runtime-credential-broker",
+		ProjectReadBrokerServiceAccount:  "runtime-project-read-broker",
+		ClusterAdminBrokerServiceAccount: "runtime-cluster-admin-broker",
+		S3ArchiveBrokerServiceAccount:    "runtime-s3-archive-broker",
+		S3RestoreBrokerServiceAccount:    "runtime-s3-restore-broker",
+		JobTTL:                           time.Hour,
+	}}
+	for name, job := range map[string]*batchv1.Job{
+		"snapshot": adapter.credentialBrokerJob(execution),
+		"archive":  adapter.s3CredentialBrokerJob(execution, "archive"),
+		"restore":  adapter.s3CredentialBrokerJob(execution, "restore"),
+	} {
+		container := job.Spec.Template.Spec.Containers[0]
+		if !envHasPrefix(container.Env, "RUNTIME_CREDENTIAL_AUTHORITY_URL", "https://runtime-") {
+			t.Fatalf("%s broker misses exact HTTPS authority endpoint", name)
+		}
+		for _, volume := range job.Spec.Template.Spec.Volumes {
+			if volume.Name == "kube-api-access" || volume.Name == "vault-token" || volume.Name == "s3-broker-config" {
+				t.Fatalf("%s broker retained privileged volume %s", name, volume.Name)
+			}
+		}
+	}
+}
+
+func TestAdmissionAndRBACSelectOnlyExactRuntimeProfile(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..", "..", "..", "deploy", "k8s", "base", "runtime-controller")
+	admission, err := os.ReadFile(filepath.Join(root, "workload-admission.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(admission), "objectSelector:\n      matchLabels: {app.kubernetes.io/component: role-runtime}") {
+		t.Fatal("webhook is not limited to the exact role-runtime profile")
+	}
+	rbac, err := os.ReadFile(filepath.Join(root, "serviceaccounts-rbac.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(rbac)
+	for _, routine := range []string{"runtime-credential-broker", "runtime-project-read-broker", "runtime-cluster-admin-broker", "runtime-s3-archive-broker", "runtime-s3-restore-broker"} {
+		if strings.Contains(text, "subjects:\n  - {kind: ServiceAccount, name: "+routine+"}") {
+			t.Fatalf("routine broker %s still has namespace mutation RBAC", routine)
+		}
+	}
+	if !strings.Contains(text, "runtime-workload-materializer") ||
+		!strings.Contains(text, "runtime-s3-archive-exchanger") ||
+		!strings.Contains(text, "runtime-s3-restore-exchanger") {
+		t.Fatal("trusted materializer/exchanger identities are absent")
+	}
+}
+
+func envHasPrefix(values []corev1.EnvVar, name, prefix string) bool {
+	for _, value := range values {
+		if value.Name == name && strings.HasPrefix(value.Value, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 func TestCommandKeyIsStableAndVersionFenced(t *testing.T) {
 	execution := testExecution()

@@ -138,8 +138,35 @@ var sqlRuntimeAgentBindingGetForUpdate string
 //go:embed sql/runtime_agent_binding__insert.sql
 var sqlRuntimeAgentBindingInsert string
 
+//go:embed sql/runtime_agent_binding__resolve_intent.sql
+var sqlRuntimeAgentBindingResolveIntent string
+
 //go:embed sql/resource_retention_policy__current.sql
 var sqlResourceRetentionPolicyCurrent string
+
+//go:embed sql/resource_retention_policy__get_for_update.sql
+var sqlResourceRetentionPolicyGetForUpdate string
+
+//go:embed sql/resource_retention_policy__get_version_for_update.sql
+var sqlResourceRetentionPolicyGetVersionForUpdate string
+
+//go:embed sql/resource_retention_policy__insert.sql
+var sqlResourceRetentionPolicyInsert string
+
+//go:embed sql/resource_retention_policy__retire.sql
+var sqlResourceRetentionPolicyRetire string
+
+//go:embed sql/runtime_retention_hold__active_for_update.sql
+var sqlRuntimeRetentionHoldActiveForUpdate string
+
+//go:embed sql/runtime_retention_hold__get_for_update.sql
+var sqlRuntimeRetentionHoldGetForUpdate string
+
+//go:embed sql/runtime_retention_hold__insert.sql
+var sqlRuntimeRetentionHoldInsert string
+
+//go:embed sql/runtime_retention_hold__release.sql
+var sqlRuntimeRetentionHoldRelease string
 
 //go:embed sql/runtime_execution__session_has_live.sql
 var sqlRuntimeExecutionSessionHasLive string

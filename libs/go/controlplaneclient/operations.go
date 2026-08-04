@@ -52,8 +52,9 @@ func RuntimeControllerOperations() map[string]string {
 // materialization-команду и readiness; generic mutation в профиль не входит.
 func BotServiceRuntimeBindingOperations() map[string]string {
 	return map[string]string{
-		"control.bot-service.readiness":        controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-execution.agent.bind": controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
+		"control.bot-service.readiness":           controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-execution.agent.resolve": controlplanev1.ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName,
+		"control.runtime-execution.agent.bind":    controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
 	}
 }
 

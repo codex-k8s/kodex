@@ -118,6 +118,19 @@ service ControlPlaneService {
   // BindRuntimeAgentSession принимает bot-owned identifiers только от
   // авторитетного bot-service и атомарно связывает их с exact owner graph до claim.
   rpc BindRuntimeAgentSession(BindRuntimeAgentSessionRequest) returns (BindRuntimeAgentSessionResponse);
+  // ResolveRuntimeAgentBindingIntent разрешает Mattermost source reference в
+  // exact owner tuple только для bot-service до runtime claim.
+  rpc ResolveRuntimeAgentBindingIntent(ResolveRuntimeAgentBindingIntentRequest) returns (ResolveRuntimeAgentBindingIntentResponse);
+  // SetResourceRetentionPolicy атомарно создаёт следующую owner version.
+  rpc SetResourceRetentionPolicy(SetResourceRetentionPolicyRequest) returns (SetResourceRetentionPolicyResponse);
+  // RetireResourceRetentionPolicy закрывает exact current policy version.
+  rpc RetireResourceRetentionPolicy(RetireResourceRetentionPolicyRequest) returns (RetireResourceRetentionPolicyResponse);
+  // GetResourceRetentionPolicy читает current owner policy без local default.
+  rpc GetResourceRetentionPolicy(GetResourceRetentionPolicyRequest) returns (GetResourceRetentionPolicyResponse);
+  // HoldRuntimeRetention устанавливает server-owned manual/legal hold сессии.
+  rpc HoldRuntimeRetention(HoldRuntimeRetentionRequest) returns (HoldRuntimeRetentionResponse);
+  // ReleaseRuntimeRetention снимает exact versioned hold.
+  rpc ReleaseRuntimeRetention(ReleaseRuntimeRetentionRequest) returns (ReleaseRuntimeRetentionResponse);
   // GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
   rpc GetRuntimeExecution(GetRuntimeExecutionRequest) returns (GetRuntimeExecutionResponse);
   // AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
@@ -1760,6 +1773,102 @@ message BindRuntimeAgentSessionResponse {
   uint64 turn_version = 4;
   string agent_session_binding_sha256 = 5;
   string agent_turn_binding_sha256 = 6;
+}
+
+message ResolveRuntimeAgentBindingIntentRequest {
+  string source_ref = 1;
+}
+
+message ResolveRuntimeAgentBindingIntentResponse {
+  string session_id = 1;
+  uint64 session_version = 2;
+  string turn_id = 3;
+  uint64 turn_version = 4;
+  uint32 attempt = 5;
+  string input_sha256 = 6;
+  string runtime_revision_id = 7;
+  uint64 runtime_revision_version = 8;
+  string runtime_revision_sha256 = 9;
+}
+
+message ResourceRetentionPolicy {
+  string policy_id = 1;
+  uint64 version = 2;
+  uint64 pvc_retention_seconds = 3;
+  uint64 archive_retention_seconds = 4;
+  google.protobuf.Timestamp effective_at = 5;
+  google.protobuf.Timestamp retired_at = 6;
+}
+
+message SetResourceRetentionPolicyRequest {
+  string idempotency_key = 1;
+  uint64 expected_version = 2;
+  uint64 pvc_retention_seconds = 3;
+  uint64 archive_retention_seconds = 4;
+  string reason_code = 5;
+}
+
+message SetResourceRetentionPolicyResponse {
+  ResourceRetentionPolicy policy = 1;
+}
+
+message RetireResourceRetentionPolicyRequest {
+  string idempotency_key = 1;
+  uint64 expected_version = 2;
+  string reason_code = 3;
+}
+
+message RetireResourceRetentionPolicyResponse {
+  ResourceRetentionPolicy policy = 1;
+}
+
+message GetResourceRetentionPolicyRequest {}
+
+message GetResourceRetentionPolicyResponse {
+  ResourceRetentionPolicy policy = 1;
+}
+
+enum RuntimeRetentionHoldKind {
+  RUNTIME_RETENTION_HOLD_KIND_UNSPECIFIED = 0;
+  RUNTIME_RETENTION_HOLD_KIND_MANUAL = 1;
+  RUNTIME_RETENTION_HOLD_KIND_LEGAL = 2;
+}
+
+message RuntimeRetentionHold {
+  string hold_id = 1;
+  string session_id = 2;
+  RuntimeRetentionHoldKind kind = 3;
+  string state = 4;
+  uint64 version = 5;
+  string reason_code = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  google.protobuf.Timestamp released_at = 9;
+}
+
+message HoldRuntimeRetentionRequest {
+  string idempotency_key = 1;
+  string session_id = 2;
+  uint64 expected_session_version = 3;
+  RuntimeRetentionHoldKind kind = 4;
+  string reason_code = 5;
+}
+
+message HoldRuntimeRetentionResponse {
+  RuntimeRetentionHold hold = 1;
+}
+
+message ReleaseRuntimeRetentionRequest {
+  string idempotency_key = 1;
+  string session_id = 2;
+  uint64 expected_session_version = 3;
+  string hold_id = 4;
+  uint64 expected_hold_version = 5;
+  string reason_code = 6;
+}
+
+message ReleaseRuntimeRetentionResponse {
+  RuntimeRetentionHold hold = 1;
 }
 
 message GetRuntimeExecutionRequest {

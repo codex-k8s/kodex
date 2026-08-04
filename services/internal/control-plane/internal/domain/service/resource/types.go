@@ -149,6 +149,38 @@ type RuntimeAgentSessionBinding struct {
 	AgentTurnBindingSHA256    string
 }
 
+type RuntimeAgentBindingIntent struct {
+	SessionID              string
+	SessionVersion         uint64
+	TurnID                 string
+	TurnVersion            uint64
+	Attempt                uint32
+	InputSHA256            string
+	RuntimeRevisionID      string
+	RuntimeRevisionVersion uint64
+	RuntimeRevisionSHA256  string
+}
+
+type ResourceRetentionPolicyInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	ExpectedVersion         uint64
+	PVCRetentionSeconds     uint64
+	ArchiveRetentionSeconds uint64
+	ReasonCode              string
+}
+
+type RuntimeRetentionHoldInput struct {
+	Principal              value.Principal
+	IdempotencyKey         string
+	SessionID              string
+	ExpectedSessionVersion uint64
+	HoldID                 string
+	ExpectedHoldVersion    uint64
+	Kind                   string
+	ReasonCode             string
+}
+
 type RenewTurnInput struct {
 	Principal           value.Principal
 	IdempotencyKey      string

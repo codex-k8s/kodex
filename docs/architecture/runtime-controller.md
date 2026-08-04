@@ -111,6 +111,15 @@ listener с exact client CA и bearer. PostgreSQL outbox атомарно раз
 `WAITING_OWNER` и `CHANGES_REQUESTED` остаются разными owner outcomes и не
 схлопываются в terminal Pod phase.
 
+Production producer начинается не в controller: `AFTER INSERT` фактического
+`matter_codex_agent_session_turns` атомарно создаёт durable discovery по
+bot-owned `RunID` и исходному Mattermost post reference. Bounded bot worker до
+control-plane claim вызывает закрытый `ResolveRuntimeAgentBindingIntent`,
+который разрешает единственный `QUEUED` Turn и его fresh RuntimeRevision из
+owner state, затем фиксирует локальный outbox и доставляет
+`BindRuntimeAgentSession`. Потеря ответа на resolve, enqueue, bind или local
+complete повторяет тот же tuple; controller не знает и не синтезирует bot ID.
+
 `Succeeded`/`Failed` фаза Pod не завершает turn. После фактического результата
 runner публикует `mattercodex.runtime-turn-handoff.v1` в собственный Pod:
 exact execution version/fence/generation/revision/input, закрытый outcome,
@@ -147,10 +156,13 @@ S3 identities разделены на archive и restore/rehydrate. Узкий b
 на execution/action отдельный immutable Secret с STS credential не дольше 15
 минут, trusted server-side session tags exact organization/project/session/
 execution/source execution, inline key/version/action/KMS policy и readback
-digest. Сначала action-specific Vault role выдаёт bootstrap credential,
-ограниченный только `AssumeRole`/`TagSession` закреплённой execution role;
-затем broker через exact TLS S3/STS boundary вызывает `AssumeRole` с inline
-policy и server-owned tags. Job сверяет immutable Secret UID/resourceVersion, expiry, tags,
+digest. Unprivileged archive/restore broker Job не имеет Kubernetes, Vault,
+STS или S3 authority и передаёт owner-signed one-time ticket по mTLS отдельному
+`runtime-s3-archive-exchanger` либо `runtime-s3-restore-exchanger`. Только
+соответствующий trusted exchanger выводит tags/policy из проверенного snapshot,
+получает action-specific Vault bootstrap credential и вызывает закреплённую
+execution role; immutable Kubernetes receipt обеспечивает exact replay после
+потерянного ответа. Job сверяет immutable Secret UID/resourceVersion, expiry, tags,
 policy/readback и data digest до монтирования. IAM source запрещает List/Delete/Bypass,
 cross-tenant prefixes и insecure transport; startup дополнительно проверяет
 versioning, Object Lock, KMS, public-access block и фактический запрет List.
@@ -214,6 +226,8 @@ Backfill проходит тот же путь. Legacy PVC без server-owned e
 | cleanup authorize | session lock, pinned policy/version/eligible_at, terminal graph, proof, no work/hold | `ACTIVE` generation + exact PVC tuple/expiry | новые work claims блокируются |
 | PVC delete/finalize | ACTIVE tuple, Kubernetes preconditions, NotFound proof, expiry и повторный graph lock | idempotent `CONSUMED` | partial/unknown fail-closed |
 | idle eviction | terminal readback, LRU, не admin | authority не меняется | удаляется только Pod |
+| retention policy set/retire/read | exact operator SPIFFE/permission и current version | retire current + insert monotonic next либо exact retire, receipt/audit | active execution сохраняет pinned version; missing/mismatch fail-closed |
+| manual/legal hold/release | exact operator authority, server-resolved Session owner/version и hold version | specialized hold/release, receipt/audit под Session lock | active hold входит в authorize/consume/reissue/expiry cleanup predicate |
 
 `WAITING_OWNER`, `CHANGES_REQUESTED` и integration continuation принадлежат
 `control-plane`: они блокируют claim/cleanup и не получают локального
@@ -227,16 +241,21 @@ Terminal predecessor никогда не делает PVC живого successor
 Схема расширяется только forward migrations. Уже применённая
 `20260802000100_control_plane_runtime_continuation.sql` остаётся byte-identical
 ревизии `main`; binding/retention/restore/cleanup добавлены последующими
-`20260803000100` и `20260803000200`, а admission replay — отдельной migration
-runtime-controller.
+`20260803000100`, `20260803000200` и forward-only `20260804000300`: последняя
+по exact catalog identity снимает legacy terminal CHECK, канонизирует все
+restore-source columns и добавляет policy/hold lifecycle. Admission replay —
+отдельная migration runtime-controller.
 
 ## Access profiles и deploy boundary
 
 Controller credential не может создавать role Pod, ServiceAccount или
 RoleBinding, создавать/bind-ить `cluster-admin` ClusterRoleBinding и не читает
-исходные mutable credentials. Узкий `runtime-credential-broker` сначала
-проверяет Ed25519 workload ticket полного tuple, затем материализует immutable
-credential snapshots, exact Pod и grants. `PROJECT_READ_ONLY` broker создаёт
+исходные mutable credentials. Routine `runtime-credential-broker` identities
+не имеют namespace RBAC и только передают Ed25519 full-tuple ticket по
+TLS 1.3/mTLS узкому `runtime-workload-materializer`. Trusted materializer
+проверяет bearer=ticket, exact SPIFFE caller и one-time immutable receipt,
+затем материализует immutable credential snapshots, exact Pod и grants.
+`PROJECT_READ_ONLY` materializer создаёт
 узкий session ServiceAccount/RoleBinding только после authoritative organization/
 project namespace readback; terminal отзывает binding. `CLUSTER_ADMIN`
 использует заранее установленную отдельную ServiceAccount/ClusterRoleBinding,
@@ -253,10 +272,20 @@ Pod удаляется сразу после terminal.
 
 Pod admission, S3 archive и S3 restore имеют три независимые Ed25519 keypair,
 issuer/audience и Vault trust path. Routine, project-read и cluster-admin
-broker identities разделены; компрометация одного broker не позволяет выбрать
-другой subject, image, command, volume или token audience. Admission webhook
+broker identities разделены и не имеют Secret/Pod/SA/RBAC mutation;
+компрометация одного broker не позволяет прочитать snapshot другого execution
+либо выбрать другой subject, image, command, volume или token audience.
+Admission webhook
 имеет только ConfigMap readback и отдельную PostgreSQL identity для replay
 receipts, а не namespace mutation.
+
+Role Pod `/readyz` становится успешным только после bounded рабочего
+bot-session read и MCP initialize через тот же TLS 1.3/mTLS exact SNI/CA/client
+certificate и bearer, которые использует turn. Digest readback выполняется до
+claim и периодически; mismatch снимает readiness. Warm successor сначала
+переключает immutable credential snapshot и повторяет тот же barrier, затем
+может получить следующий turn. Local plaintext endpoint является только
+Kubernetes probe surface и сам не создаёт transport authority.
 
 Archive, restore, rehydrate и cleanup Jobs имеют отдельные ServiceAccount,
 application grants и per-job Role с `resourceNames` только своего journal.

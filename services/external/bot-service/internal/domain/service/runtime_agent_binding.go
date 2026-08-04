@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ type RuntimeAgentBindingRegistration struct {
 }
 
 type runtimeAgentBindingClient interface {
+	ResolveRuntimeAgentBindingIntent(context.Context, *controlplanev1.ResolveRuntimeAgentBindingIntentRequest, ...grpc.CallOption) (*controlplanev1.ResolveRuntimeAgentBindingIntentResponse, error)
 	BindRuntimeAgentSession(context.Context, *controlplanev1.BindRuntimeAgentSessionRequest, ...grpc.CallOption) (*controlplanev1.BindRuntimeAgentSessionResponse, error)
 }
 
@@ -140,6 +142,56 @@ func (service *RuntimeAgentBindingService) DeliverOne(ctx context.Context) (bool
 	return true, nil
 }
 
+// DiscoverOne связывает фактически созданный bot turn с exact control-plane
+// owner tuple до claim. Потерянный ответ безопасно повторяет тот же intent.
+func (service *RuntimeAgentBindingService) DiscoverOne(ctx context.Context) (bool, error) {
+	if service == nil || service.repository == nil || service.client == nil {
+		return false, errors.New("runtime agent binding service is not configured")
+	}
+	leaseToken := uuid.NewString()
+	discovery, err := service.repository.ClaimRuntimeAgentBindingDiscovery(
+		ctx, leaseToken, time.Now().Add(30*time.Second),
+	)
+	if errors.Is(err, adminrepo.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	intent, callErr := service.client.ResolveRuntimeAgentBindingIntent(ctx,
+		&controlplanev1.ResolveRuntimeAgentBindingIntentRequest{SourceRef: discovery.SourceRef})
+	if callErr != nil {
+		return true, service.repository.RetryRuntimeAgentBindingDiscovery(
+			ctx, discovery.ID, discovery.LeaseToken, time.Now().Add(5*time.Second),
+			"owner_intent_unavailable",
+		)
+	}
+	idempotencyKey := "runtime-binding:" + intent.GetTurnId() + ":" +
+		strconv.FormatUint(uint64(intent.GetAttempt()), 10)
+	_, err = service.Register(ctx, RegisterRuntimeAgentBindingCommand{
+		IdempotencyKey:   idempotencyKey,
+		ControlSessionID: intent.GetSessionId(), ControlSessionVersion: intent.GetSessionVersion(),
+		ControlTurnID: intent.GetTurnId(), ControlTurnVersion: intent.GetTurnVersion(),
+		Attempt: intent.GetAttempt(), InputSHA256: intent.GetInputSha256(),
+		RuntimeRevisionID:      intent.GetRuntimeRevisionId(),
+		RuntimeRevisionVersion: intent.GetRuntimeRevisionVersion(),
+		RuntimeRevisionSHA256:  intent.GetRuntimeRevisionSha256(),
+		AgentRunID:             discovery.AgentRunID,
+	})
+	if err != nil {
+		return true, service.repository.RetryRuntimeAgentBindingDiscovery(
+			ctx, discovery.ID, discovery.LeaseToken, time.Now().Add(5*time.Second),
+			"binding_intent_conflict",
+		)
+	}
+	if err := service.repository.CompleteRuntimeAgentBindingDiscovery(
+		ctx, discovery.ID, discovery.LeaseToken,
+	); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
 func (service *RuntimeAgentBindingService) retry(
 	ctx context.Context,
 	delivery adminrepo.RuntimeAgentBindingDelivery,
@@ -158,6 +210,18 @@ func (service *RuntimeAgentBindingService) Run(ctx context.Context, logger *slog
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			for index := 0; index < 32; index++ {
+				worked, err := service.DiscoverOne(ctx)
+				if err != nil {
+					if logger != nil {
+						logger.Error("runtime agent binding discovery failed", "error", err)
+					}
+					break
+				}
+				if !worked {
+					break
+				}
+			}
 			for index := 0; index < 32; index++ {
 				worked, err := service.DeliverOne(ctx)
 				if err != nil {

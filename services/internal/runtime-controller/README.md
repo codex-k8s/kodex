@@ -25,9 +25,11 @@ role-image Pod. Он не запускает Codex, не меняет домен
 - `runtime-rehydrate` — fail-closed восстановление очищенной session в новый
   PVC до создания Pod;
 - `runtime-cleanup-authorizer` — owner-locked bounded cleanup claim;
-- `runtime-credential-broker snapshot|s3-archive|s3-restore` — проверка
-  signed workload ticket, execution-owned credentials/RBAC/Pod и раздельные
-  Vault bootstrap leases с последующим exact execution `AssumeRole`;
+- `runtime-credential-broker snapshot|s3-archive|s3-restore` — unprivileged
+  mTLS client, передающий signed workload ticket отдельной authority;
+- `runtime-credential-broker serve-snapshot|serve-s3-archive|serve-s3-restore`
+  — раздельные trusted materializer/exchangers с server-derived spec,
+  STS tags/policy, immutable one-time receipt и exact readback;
 - `runtime-workload-admission` — fail-closed TLS admission webhook с
   Ed25519 full-tuple verification, exact immutable Pod spec readback и
   PostgreSQL one-time replay receipt;
@@ -35,13 +37,20 @@ role-image Pod. Он не запускает Codex, не меняет домен
   durable inbox/projection.
 
 Каждый worker имеет отдельные ServiceAccount, SPIFFE/application grant и
-per-job `Role` только на exact journal. Controller не читает Secret, не
-создаёт role Pod/ServiceAccount/RoleBinding и не создаёт/не bind-ит
-`cluster-admin` authority. Vault выдаёт broker только public keys с именем
+per-job `Role` только на exact journal. Controller и routine broker Jobs не
+читают Secret, не создают role Pod/ServiceAccount/RoleBinding и не создают/не
+bind-ят `cluster-admin` authority. Namespace mutation принадлежит только
+trusted `runtime-workload-materializer`; Vault/STS разделены между
+archive/restore exchangers. Vault выдаёт broker только public keys с именем
 `public-key.hex` (раздельные admission/archive/restore verifier),
 `kms-key-arn`, `archive-role-arn` и
 `restore-role-arn`; значения в manifests,
 документацию и диагностику не выводятся.
+Authority server Secrets `runtime-workload-materializer-tls`,
+`runtime-s3-archive-exchanger-tls`, `runtime-s3-restore-exchanger-tls` и
+client Secrets `<broker-service-account>-mtls` содержат только ключи
+`ca.pem`, `tls.crt`, `tls.key`; server/client certificates имеют раздельные
+SPIFFE identities и не переиспользуются между archive и restore.
 
 ## Reconcile и recovery
 
@@ -68,11 +77,16 @@ tuple, отдельные control-plane session/turn и server-owned bot
 с exact SNI/CA/client identity и пути immutable execution credential
 snapshots. Control-plane UUID никогда не используется как bot `session_key`.
 Bot-service сам разрешает `RunID` в локальные AgentSession/Turn и версии,
-сохраняет durable binding outbox и доставляет generated
+начиная с transaction trigger фактически созданного bot turn, сохраняет
+durable discovery/binding outbox до control-plane claim и доставляет generated
 `BindRuntimeAgentSession` через mTLS+bearer; lost response повторяет тот же
 idempotency intent.
 Terminal Pod phase не завершает turn: runner обязан записать
 exact handoff в собственный Pod. Exit без handoff создаёт incident.
+Role Pod становится Ready только после bot-session read и MCP initialize по
+тому же TLS 1.3/mTLS exact SNI/CA/client certificate + bearer пути, который
+использует turn. Периодический readback и каждый warm successor повторяют
+barrier; credential digest либо peer mismatch снимает readiness до claim.
 
 Warm Pod допускается только `Running`+`Ready`, с тем же server-owned
 `effective_runtime_sha256` и открытым archive gate. Successor получает свежие
@@ -96,8 +110,10 @@ STS Secrets, выдаваемые после проверки подписанн
 Secret UID/resourceVersion, exact session tags, inline
 policy/readback digests и срок не более 15 минут входят в credential snapshot.
 Vault bootstrap role может только вызвать `AssumeRole`/`TagSession` для
-закреплённой archive либо restore execution role; inline policy и session tags
-передаются уже в exact STS `AssumeRole` через TLS endpoint S3 boundary.
+закреплённой archive либо restore execution role. Только trusted action
+exchanger выводит inline policy и session tags из owner-signed ticket и
+передаёт их в exact STS `AssumeRole` через TLS endpoint S3 boundary;
+unprivileged broker не получает generic STS authority.
 IAM source запрещает List/Delete/Bypass, cross-tenant prefix и insecure
 transport; startup проверяет versioning, Object Lock, KMS, public-access block
 и фактический запрет List.

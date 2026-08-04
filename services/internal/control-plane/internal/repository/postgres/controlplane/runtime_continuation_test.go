@@ -1,6 +1,8 @@
 package controlplane
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -11,6 +13,63 @@ import (
 )
 
 var namedPlaceholderPattern = regexp.MustCompile(`@([a-z][a-z0-9_]*)`)
+
+func TestRuntimeResidualMigrationUsesExactCatalogIdentityAndCanonicalRestoreColumns(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "..", "cmd", "cli", "migrations", "20260804000300_control_plane_runtime_residuals.sql")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migration := string(raw)
+	for _, required := range []string{
+		"conname = 'runtime_executions_terminal_outcome_check'",
+		"conkey <> ARRAY[terminal_attnum]",
+		"DROP CONSTRAINT IF EXISTS runtime_executions_check3",
+		"DROP CONSTRAINT IF EXISTS runtime_executions_terminal_outcome_v2_ck",
+		"'SUSPENDED', 'CANCELLED', 'EXPIRED', 'BLOCKED'",
+		"(state = 'SUSPENDED' AND terminal_outcome IN ('SUSPENDED', 'BLOCKED'))",
+		"restore_source_archive_object_key",
+		"DROP COLUMN restore_source_archive_key",
+		"CREATE TRIGGER resources_default_retention_policy",
+		"CREATE TABLE control_plane.runtime_retention_holds",
+	} {
+		if !strings.Contains(migration, required) {
+			t.Fatalf("residual migration misses exact invariant %q", required)
+		}
+	}
+	if strings.Contains(migration, "pg_get_constraintdef(") {
+		t.Fatal("residual migration identifies applied constraints by rendered DDL")
+	}
+	dropOld := strings.Index(migration, "DROP CONSTRAINT IF EXISTS runtime_executions_terminal_outcome_check")
+	addCanonical := strings.Index(migration, "ADD CONSTRAINT runtime_executions_terminal_outcome_v3_ck")
+	if dropOld < 0 || addCanonical < 0 || dropOld >= addCanonical ||
+		strings.Contains(migration[addCanonical:], "ADD CONSTRAINT runtime_executions_terminal_outcome_check") {
+		t.Fatal("terminal constraint upgrade can leave old and canonical checks active together")
+	}
+	for name, query := range map[string]string{
+		"insert":                 sqlRuntimeExecutionInsert,
+		"get_by_turn":            sqlRuntimeExecutionGetByTurn,
+		"get_for_update":         sqlRuntimeExecutionGetForUpdate,
+		"get_by_turn_for_update": sqlRuntimeExecutionGetByTurnForUpdate,
+		"next_expired":           sqlRuntimeExecutionNextExpired,
+		"latest_session_restore": sqlRuntimeExecutionLatestSessionArchiveForRestore,
+	} {
+		for _, canonical := range []string{"restore_source_version", "restore_source_archive_object_key", "restore_source_archive_kms_key_arn", "restore_source_archive_object_lock_mode"} {
+			if !strings.Contains(query, canonical) {
+				t.Fatalf("%s misses canonical restore column %s", name, canonical)
+			}
+		}
+		for _, transition := range []string{"restore_source_execution_version", "restore_source_archive_key", "restore_source_kms_key_arn", "restore_source_object_lock_mode"} {
+			if strings.Contains(query, transition) {
+				t.Fatalf("%s still uses transition restore column %s", name, transition)
+			}
+		}
+	}
+	if !strings.Contains(sqlSessionBlocksRuntimeCleanup, "runtime_retention_holds") ||
+		!strings.Contains(sqlSessionBlocksRuntimeCleanup, "hold.state = 'ACTIVE'") {
+		t.Fatal("full cleanup graph does not include active owner retention holds")
+	}
+}
 
 func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 	integrationArgs, err := integrationContinuationArgs(domainrepo.IntegrationContinuation{})

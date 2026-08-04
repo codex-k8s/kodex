@@ -15,5 +15,6 @@ resources:
   - vault-secret-provider-classes.yaml
   - s3-security-policy.yaml
   - workload-admission.yaml
+  - credential-authorities.yaml
 components:
   - ../../components/internal-rpc-authority-runtime-controller-issuer

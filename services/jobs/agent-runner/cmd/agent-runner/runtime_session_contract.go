@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
@@ -67,6 +68,7 @@ type runtimeSessionContract struct {
 		CodexAuth    string `json:"codex_auth"`
 	} `json:"credential_files"`
 	sessionToken   string
+	mcpToken       string
 	credentialRoot string
 }
 
@@ -106,6 +108,7 @@ func (r *runner) runRuntimeSession(ctx context.Context) error {
 		return err
 	}
 	r.runtimeContract = contract
+	r.runtimeContractReadback.Store(contract)
 	r.codexAuthFile = contract.CredentialFiles.CodexAuth
 	return r.serveRuntimeSession(ctx)
 }
@@ -116,19 +119,19 @@ func (r *runner) serveRuntimeSession(ctx context.Context) error {
 		response.WriteHeader(http.StatusOK)
 	})
 	handler.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
-		response.WriteHeader(http.StatusOK)
+		if !r.runtimeReady.Load() {
+			http.Error(response, "runtime dependencies are not ready", http.StatusServiceUnavailable)
+			return
+		}
+		response.WriteHeader(http.StatusNoContent)
 	})
 	mcpTarget, err := url.Parse(r.runtimeContract.MCPURL)
 	if err != nil {
 		return errors.New("runtime MCP endpoint is invalid")
 	}
 	mcpTarget.Path, mcpTarget.RawPath = "", ""
-	mcpTransport, err := runtimeMTLSTransport(r.runtimeContract.MCPTLS)
-	if err != nil {
-		return err
-	}
 	proxy := httputil.NewSingleHostReverseProxy(mcpTarget)
-	proxy.Transport = mcpTransport
+	proxy.Transport = runtimeMCPRoundTripper{contract: &r.runtimeContractReadback}
 	proxy.ErrorHandler = func(response http.ResponseWriter, _ *http.Request, _ error) {
 		http.Error(response, "runtime MCP upstream unavailable", http.StatusBadGateway)
 	}
@@ -145,7 +148,31 @@ func (r *runner) serveRuntimeSession(ctx context.Context) error {
 		}
 		serveErrors <- err
 	}()
-	go func() { runErrors <- r.runSession(runCtx) }()
+	go func() {
+		if err := r.awaitRuntimeDependencies(runCtx); err != nil {
+			runErrors <- err
+			return
+		}
+		r.runtimeReady.Store(true)
+		sessionErrors := make(chan error, 1)
+		go func() { sessionErrors <- r.runSession(runCtx) }()
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case err := <-sessionErrors:
+				runErrors <- err
+				return
+			case <-ticker.C:
+				if err := r.probeRuntimeDependencies(runCtx); err != nil {
+					r.runtimeReady.Store(false)
+					cancel()
+					runErrors <- errors.New("runtime mTLS and bearer readback failed")
+					return
+				}
+			}
+		}
+	}()
 	var result error
 	runCompleted, serverCompleted := false, false
 	select {
@@ -158,6 +185,7 @@ func (r *runner) serveRuntimeSession(ctx context.Context) error {
 		runCompleted = true
 	}
 	cancel()
+	r.runtimeReady.Store(false)
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	if shutdownErr := server.Shutdown(shutdownCtx); shutdownErr != nil {
 		result = errors.Join(result, errors.New("shutdown runtime health server"))
@@ -218,6 +246,7 @@ func loadRuntimeSessionContract(path string) (*runtimeSessionContract, error) {
 		return nil, err
 	}
 	contract.sessionToken = sessionToken
+	contract.mcpToken = mcpToken
 	for name, value := range map[string]string{
 		"MATTERCODEX_SESSION_KEY":     contract.SessionKey,
 		"MATTERCODEX_AGENT_PROFILE":   contract.AgentProfile,
@@ -486,6 +515,99 @@ func runtimeMTLSTransport(binding runtimeTLSBinding) (*http.Transport, error) {
 	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13, ServerName: binding.ServerName,
 		RootCAs: roots, Certificates: []tls.Certificate{certificate}}
 	return transport, nil
+}
+
+type runtimeMCPRoundTripper struct {
+	contract *atomic.Pointer[runtimeSessionContract]
+}
+
+func (roundTripper runtimeMCPRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	contract := roundTripper.contract.Load()
+	if contract == nil {
+		return nil, errors.New("runtime MCP authority is unavailable")
+	}
+	transport, err := runtimeMTLSTransport(contract.MCPTLS)
+	if err != nil {
+		return nil, err
+	}
+	// Каждый запрос использует текущий immutable credential snapshot; connection
+	// reuse через смену binding мог бы сохранить прежнюю mTLS identity.
+	transport.DisableKeepAlives = true
+	request = request.Clone(request.Context())
+	request.Header.Set("Authorization", "Bearer "+contract.mcpToken)
+	response, err := transport.RoundTrip(request)
+	if err != nil {
+		transport.CloseIdleConnections()
+	}
+	return response, err
+}
+
+func (r *runner) awaitRuntimeDependencies(ctx context.Context) error {
+	delay := time.Second
+	for attempt := 0; attempt < 30; attempt++ {
+		if err := r.probeRuntimeDependencies(ctx); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+		if delay < 10*time.Second {
+			delay *= 2
+		}
+	}
+	return errors.New("runtime mTLS and bearer startup barrier failed")
+}
+
+func (r *runner) probeRuntimeDependencies(ctx context.Context) error {
+	contract := r.runtimeContractReadback.Load()
+	if contract == nil {
+		return errors.New("runtime dependency contract is unavailable")
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	botTransport, err := runtimeMTLSTransport(contract.BotServiceTLS)
+	if err != nil {
+		return err
+	}
+	botEndpoint := strings.TrimRight(contract.BotServiceURL, "/") + "/internal/agent-sessions/" + url.PathEscape(contract.SessionKey) + "/readiness"
+	botRequest, err := http.NewRequestWithContext(probeCtx, http.MethodPost, botEndpoint, nil)
+	if err != nil {
+		return errors.New("create runtime bot readiness request")
+	}
+	botRequest.Header.Set("Authorization", "Bearer "+contract.sessionToken)
+	botResponse, err := (&http.Client{Transport: botTransport, Timeout: 10 * time.Second}).Do(botRequest)
+	if err != nil {
+		return errors.New("runtime bot mTLS readiness failed")
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(botResponse.Body, 4096))
+	botResponse.Body.Close()
+	if botResponse.StatusCode != http.StatusNoContent {
+		return errors.New("runtime bot bearer readiness failed")
+	}
+	mcpTransport, err := runtimeMTLSTransport(contract.MCPTLS)
+	if err != nil {
+		return err
+	}
+	mcpRequest, err := http.NewRequestWithContext(probeCtx, http.MethodPost, contract.MCPURL,
+		strings.NewReader(`{"jsonrpc":"2.0","id":"runtime-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mattercodex-runtime-readiness","version":"1"}}}`))
+	if err != nil {
+		return errors.New("create runtime MCP readiness request")
+	}
+	mcpRequest.Header.Set("Authorization", "Bearer "+contract.mcpToken)
+	mcpRequest.Header.Set("Content-Type", "application/json")
+	mcpRequest.Header.Set("Accept", "application/json, text/event-stream")
+	mcpResponse, err := (&http.Client{Transport: mcpTransport, Timeout: 10 * time.Second}).Do(mcpRequest)
+	if err != nil {
+		return errors.New("runtime MCP mTLS readiness failed")
+	}
+	body, readErr := io.ReadAll(io.LimitReader(mcpResponse.Body, 64<<10))
+	mcpResponse.Body.Close()
+	if readErr != nil || mcpResponse.StatusCode < http.StatusOK || mcpResponse.StatusCode >= http.StatusMultipleChoices || len(body) == 0 {
+		return errors.New("runtime MCP bearer readiness failed")
+	}
+	return nil
 }
 
 func readRuntimeCredential(path string, maximum int64) (string, error) {

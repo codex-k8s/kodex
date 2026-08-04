@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: runtime-controller
     mattercodex.dev/policy-kind: s3-iam-source
 data:
-  archive-broker-bootstrap-policy.json: |
+  archive-exchanger-bootstrap-policy.json: |
     {
       "Version": "2012-10-17",
       "Statement": [
@@ -14,7 +14,7 @@ data:
         {"Sid":"DenyAnyOtherRole","Effect":"Deny","Action":["sts:AssumeRole","sts:TagSession"],"NotResource":"arn:aws:iam::*:role/mattercodex-runtime-archive-execution"}
       ]
     }
-  restore-broker-bootstrap-policy.json: |
+  restore-exchanger-bootstrap-policy.json: |
     {
       "Version": "2012-10-17",
       "Statement": [
@@ -51,10 +51,11 @@ data:
     }
   requirements.yaml: |
     credential_ttl_max_seconds: 900
-    identity_source: vault_broker_sts_then_execution_assume_role
-    vault_broker_roles: [runtime-archive-broker, runtime-restore-broker]
+    identity_source: signed_ticket_mtls_exchange_then_vault_sts
+    unprivileged_workload_brokers: [runtime-s3-archive-broker, runtime-s3-restore-broker]
+    trusted_exchanger_roles: [runtime-s3-archive-exchanger, runtime-s3-restore-exchanger]
     execution_roles: [mattercodex-runtime-archive-execution, mattercodex-runtime-restore-execution]
-    execution_policy_source: signed_workload_ticket_and_inline_session_policy
+    execution_policy_source: trusted_exchanger_from_server_signed_workload_ticket
     required_session_tags: [organization_id, project_id, session_id, execution_id, source_execution_id, archive_version_id]
     bucket_versioning: Enabled
     object_lock: Enabled

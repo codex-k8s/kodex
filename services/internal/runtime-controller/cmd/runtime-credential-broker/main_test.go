@@ -1,16 +1,48 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
 	"github.com/google/uuid"
+	"k8s.io/client-go/kubernetes/fake"
 )
+
+func TestAuthorityReceiptRejectsCrossExecutionReplay(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	execution := entity.Execution{ID: uuid.NewString(), Version: 7, Fence: 11}
+	if err := recordAuthorityReceipt(ctx, client, "runtime-test", execution, "snapshot", strings.Repeat("a", 64)); err != nil {
+		t.Fatalf("record exact receipt: %v", err)
+	}
+	rejoined, err := rejoinAuthorityReceipt(
+		ctx, client, "runtime-test", execution, "snapshot", strings.Repeat("a", 64),
+	)
+	if err != nil || !rejoined {
+		t.Fatalf("rejoin exact receipt: rejoined=%v err=%v", rejoined, err)
+	}
+	if _, err := rejoinAuthorityReceipt(
+		ctx, client, "runtime-test", execution, "snapshot", strings.Repeat("b", 64),
+	); err == nil {
+		t.Fatal("changed request digest reused an execution receipt")
+	}
+	other := execution
+	other.ID = uuid.NewString()
+	rejoined, err = rejoinAuthorityReceipt(
+		ctx, client, "runtime-test", other, "snapshot", strings.Repeat("a", 64),
+	)
+	if err != nil || rejoined {
+		t.Fatalf("another execution observed a foreign receipt: rejoined=%v err=%v", rejoined, err)
+	}
+}
 
 func TestExactS3PolicyBindsRestoreVersionAndForbidsBroadActions(t *testing.T) {
 	t.Setenv("RUNTIME_S3_BUCKET", "runtime-bucket")
+	t.Setenv("RUNTIME_S3_REGION", "region")
 	t.Setenv("RUNTIME_S3_KMS_KEY_ARN", "arn:aws:kms:region:account:key/key-id")
 	execution := entity.Execution{
 		ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),
@@ -38,6 +70,7 @@ func TestExactS3PolicyBindsRestoreVersionAndForbidsBroadActions(t *testing.T) {
 
 func TestExactS3PolicyUsesCurrentArchiveForInitialRestoreProof(t *testing.T) {
 	t.Setenv("RUNTIME_S3_BUCKET", "runtime-bucket")
+	t.Setenv("RUNTIME_S3_REGION", "region")
 	t.Setenv("RUNTIME_S3_KMS_KEY_ARN", "arn:aws:kms:region:account:key/key-id")
 	execution := entity.Execution{
 		ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),

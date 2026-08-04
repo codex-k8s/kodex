@@ -1931,6 +1931,59 @@ func (repo *Repository) EnqueueRuntimeAgentBinding(
 	return adminrepo.RuntimeAgentBindingDelivery{}, fmt.Errorf("enqueue runtime agent binding: %w", err)
 }
 
+func (repo *Repository) ClaimRuntimeAgentBindingDiscovery(
+	ctx context.Context,
+	leaseToken string,
+	leaseExpiresAt time.Time,
+) (adminrepo.RuntimeAgentBindingDiscovery, error) {
+	var discovery adminrepo.RuntimeAgentBindingDiscovery
+	err := repo.db.QueryRow(ctx, query("runtime_agent_binding_discovery__claim.sql"),
+		leaseToken, leaseExpiresAt).Scan(
+		&discovery.ID, &discovery.AgentSessionTurnID, &discovery.AgentRunID,
+		&discovery.SourceRef, &discovery.LeaseToken,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return adminrepo.RuntimeAgentBindingDiscovery{}, adminrepo.ErrNotFound
+	}
+	if err != nil {
+		return adminrepo.RuntimeAgentBindingDiscovery{}, fmt.Errorf("claim runtime agent binding discovery: %w", err)
+	}
+	return discovery, nil
+}
+
+func (repo *Repository) CompleteRuntimeAgentBindingDiscovery(
+	ctx context.Context,
+	id int64,
+	leaseToken string,
+) error {
+	tag, err := repo.db.Exec(ctx, query("runtime_agent_binding_discovery__complete.sql"), id, leaseToken)
+	if err != nil {
+		return fmt.Errorf("complete runtime agent binding discovery: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return adminrepo.ErrRuntimeAgentBindingConflict
+	}
+	return nil
+}
+
+func (repo *Repository) RetryRuntimeAgentBindingDiscovery(
+	ctx context.Context,
+	id int64,
+	leaseToken string,
+	nextAttemptAt time.Time,
+	errorCode string,
+) error {
+	tag, err := repo.db.Exec(ctx, query("runtime_agent_binding_discovery__retry.sql"),
+		id, leaseToken, nextAttemptAt, errorCode)
+	if err != nil {
+		return fmt.Errorf("retry runtime agent binding discovery: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return adminrepo.ErrRuntimeAgentBindingConflict
+	}
+	return nil
+}
+
 func (repo *Repository) ClaimRuntimeAgentBinding(
 	ctx context.Context,
 	leaseToken string,

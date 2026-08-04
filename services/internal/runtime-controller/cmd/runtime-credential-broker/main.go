@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,6 +42,9 @@ const runtimeConfigFile = "/var/run/config/mattercodex/runtime/runtime.json"
 const (
 	vaultTokenFile        = "/var/run/secrets/tokens/vault"
 	workloadTicketKeyFile = "/var/run/config/mattercodex/runtime-workload-ticket/public-key.hex"
+	brokerTLSCAFile       = "/var/run/config/mattercodex/runtime-credential-authority/ca.pem"
+	brokerTLSCertFile     = "/var/run/config/mattercodex/runtime-credential-authority/tls.crt"
+	brokerTLSKeyFile      = "/var/run/config/mattercodex/runtime-credential-authority/tls.key"
 	s3KMSKeyARNFile       = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/kms-key-arn"
 	s3ArchiveRoleARNFile  = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/archive-role-arn"
 	s3RestoreRoleARNFile  = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/restore-role-arn"
@@ -85,7 +89,13 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	if len(os.Args) != 2 || (os.Args[1] != "snapshot" && os.Args[1] != "s3-archive" && os.Args[1] != "s3-restore") {
+	if len(os.Args) != 2 {
+		return errors.New("runtime credential broker mode is invalid")
+	}
+	if strings.HasPrefix(os.Args[1], "serve-") {
+		return runAuthority(ctx, strings.TrimPrefix(os.Args[1], "serve-"))
+	}
+	if os.Args[1] != "snapshot" && os.Args[1] != "s3-archive" && os.Args[1] != "s3-restore" {
 		return errors.New("runtime credential broker mode is invalid")
 	}
 	executionID, namespace := os.Getenv("RUNTIME_EXECUTION_ID"), os.Getenv("RUNTIME_NAMESPACE")
@@ -105,16 +115,11 @@ func run(ctx context.Context) error {
 		!credentialSnapshotMatches(snapshot.Execution, snapshot.Revision) || verifyWorkloadTicket(snapshot, os.Args[1]) != nil {
 		return errors.New("immutable runtime credential input is invalid")
 	}
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return errors.New("load credential broker Kubernetes configuration")
-	}
-	config.Timeout = 5 * time.Second
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return errors.New("create credential broker Kubernetes client")
-	}
-	if os.Args[1] == "snapshot" {
+	return requestMaterialization(ctx, raw, snapshot, os.Args[1])
+}
+
+func materialize(ctx context.Context, client kubernetes.Interface, namespace string, snapshot runtimeSnapshot, mode string) error {
+	if mode == "snapshot" {
 		for index, credential := range snapshot.Revision.Credentials {
 			if err := materializeCredential(ctx, client, namespace, snapshot.Execution, credential, index); err != nil {
 				return err
@@ -128,8 +133,265 @@ func run(ctx context.Context) error {
 		}
 		return materializeRolePod(ctx, client, namespace, snapshot)
 	}
-	action := strings.TrimPrefix(os.Args[1], "s3-")
+	action := strings.TrimPrefix(mode, "s3-")
 	return materializeS3Credential(ctx, client, namespace, snapshot.Execution, action)
+}
+
+func requestMaterialization(ctx context.Context, raw []byte, snapshot runtimeSnapshot, mode string) error {
+	endpoint := requiredEnv("RUNTIME_CREDENTIAL_AUTHORITY_URL")
+	serverName := requiredEnv("RUNTIME_CREDENTIAL_AUTHORITY_TLS_SERVER_NAME")
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.Path != "/v1/materialize" ||
+		parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Hostname() != serverName {
+		return errors.New("runtime credential authority endpoint is invalid")
+	}
+	client, err := exactMTLSClient(serverName, brokerTLSCAFile, brokerTLSCertFile, brokerTLSKeyFile)
+	if err != nil {
+		return err
+	}
+	ticket := snapshot.WorkloadTicket
+	if mode == "s3-archive" {
+		ticket = snapshot.ArchiveWorkloadTicket
+	} else if mode == "s3-restore" {
+		ticket = snapshot.RestoreWorkloadTicket
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
+	if err != nil {
+		return errors.New("create runtime credential authority request")
+	}
+	request.Header.Set("Authorization", "Bearer "+ticket)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := client.Do(request)
+	if err != nil {
+		return errors.New("call runtime credential authority")
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+	if response.StatusCode != http.StatusNoContent {
+		return errors.New("runtime credential authority rejected request")
+	}
+	return nil
+}
+
+func exactMTLSClient(serverName, caFile, certificateFile, privateKeyFile string) (*http.Client, error) {
+	if serverName == "" || net.ParseIP(serverName) != nil {
+		return nil, errors.New("runtime credential authority TLS identity is invalid")
+	}
+	caRaw, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, errors.New("read runtime credential authority CA")
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(caRaw) {
+		return nil, errors.New("parse runtime credential authority CA")
+	}
+	certificate, err := tls.LoadX509KeyPair(certificateFile, privateKeyFile)
+	if err != nil {
+		return nil, errors.New("load runtime credential authority client identity")
+	}
+	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		MinVersion: tls.VersionTLS13, ServerName: serverName, RootCAs: roots,
+		Certificates: []tls.Certificate{certificate},
+	}}, Timeout: 15 * time.Second}, nil
+}
+
+func runAuthority(ctx context.Context, mode string) error {
+	if mode != "snapshot" && mode != "s3-archive" && mode != "s3-restore" {
+		return errors.New("runtime credential authority mode is invalid")
+	}
+	namespace := requiredEnv("RUNTIME_NAMESPACE")
+	listen := requiredEnv("RUNTIME_CREDENTIAL_AUTHORITY_LISTEN")
+	if namespace == "" || listen == "" {
+		return errors.New("runtime credential authority configuration is invalid")
+	}
+	allowedClients := make(map[string]struct{})
+	for _, identity := range strings.Split(requiredEnv("RUNTIME_CREDENTIAL_AUTHORITY_CLIENT_SPIFFE_IDS"), ",") {
+		identity = strings.TrimSpace(identity)
+		if !strings.HasPrefix(identity, "spiffe://mattercodex.internal/ns/"+namespace+"/sa/") {
+			return errors.New("runtime credential authority client identity is invalid")
+		}
+		allowedClients[identity] = struct{}{}
+	}
+	if len(allowedClients) == 0 {
+		return errors.New("runtime credential authority client identity is invalid")
+	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return errors.New("load credential authority Kubernetes configuration")
+	}
+	config.Timeout = 5 * time.Second
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return errors.New("create credential authority Kubernetes client")
+	}
+	tlsConfig, err := exactMTLSServerConfig(brokerTLSCAFile, brokerTLSCertFile, brokerTLSKeyFile)
+	if err != nil {
+		return err
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/livez", func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/readyz", func(writer http.ResponseWriter, request *http.Request) {
+		probeCtx, cancel := context.WithTimeout(request.Context(), 3*time.Second)
+		defer cancel()
+		if _, probeErr := client.CoreV1().ConfigMaps(namespace).Get(probeCtx, "kube-root-ca.crt", metav1.GetOptions{}); probeErr != nil {
+			http.Error(writer, "credential authority dependency is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/v1/materialize", authorityHandler(client, namespace, mode, allowedClients))
+	server := &http.Server{Addr: listen, Handler: mux, TLSConfig: tlsConfig,
+		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 30 * time.Second}
+	errChannel := make(chan error, 1)
+	go func() { errChannel <- server.ListenAndServeTLS("", "") }()
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if shutdownErr := server.Shutdown(shutdownCtx); shutdownErr != nil {
+			return errors.New("shutdown runtime credential authority")
+		}
+		return nil
+	case serveErr := <-errChannel:
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			return nil
+		}
+		return errors.New("serve runtime credential authority")
+	}
+}
+
+func exactMTLSServerConfig(caFile, certificateFile, privateKeyFile string) (*tls.Config, error) {
+	caRaw, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, errors.New("read runtime credential authority client CA")
+	}
+	clients := x509.NewCertPool()
+	if !clients.AppendCertsFromPEM(caRaw) {
+		return nil, errors.New("parse runtime credential authority client CA")
+	}
+	certificate, err := tls.LoadX509KeyPair(certificateFile, privateKeyFile)
+	if err != nil {
+		return nil, errors.New("load runtime credential authority server identity")
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAndVerifyClientCert,
+		ClientCAs: clients, Certificates: []tls.Certificate{certificate}}, nil
+}
+
+func authorityHandler(
+	client kubernetes.Interface,
+	namespace, mode string,
+	allowedClients map[string]struct{},
+) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.TLS == nil || len(request.TLS.PeerCertificates) != 1 ||
+			!allowedPeer(request.TLS.PeerCertificates[0], allowedClients) {
+			http.Error(writer, "credential authority caller is forbidden", http.StatusForbidden)
+			return
+		}
+		raw, err := io.ReadAll(io.LimitReader(request.Body, (1<<20)+1))
+		if err != nil || len(raw) == 0 || len(raw) > 1<<20 {
+			http.Error(writer, "credential authority request is invalid", http.StatusBadRequest)
+			return
+		}
+		var snapshot runtimeSnapshot
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&snapshot) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+			snapshot.Execution.Validate() != nil || snapshot.Revision.ValidateFor(snapshot.Execution) != nil ||
+			!credentialSnapshotMatches(snapshot.Execution, snapshot.Revision) || verifyWorkloadTicket(snapshot, mode) != nil {
+			http.Error(writer, "credential authority request is invalid", http.StatusBadRequest)
+			return
+		}
+		ticket := snapshot.WorkloadTicket
+		if mode == "s3-archive" {
+			ticket = snapshot.ArchiveWorkloadTicket
+		} else if mode == "s3-restore" {
+			ticket = snapshot.RestoreWorkloadTicket
+		}
+		if request.Header.Get("Authorization") != "Bearer "+ticket {
+			http.Error(writer, "credential authority bearer is invalid", http.StatusForbidden)
+			return
+		}
+		requestDigest := sha256.Sum256(append([]byte(mode+"\x00"), raw...))
+		digest := hex.EncodeToString(requestDigest[:])
+		if rejoined, receiptErr := rejoinAuthorityReceipt(request.Context(), client, namespace, snapshot.Execution, mode, digest); receiptErr != nil {
+			http.Error(writer, "credential authority receipt is invalid", http.StatusConflict)
+			return
+		} else if rejoined {
+			writer.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if err := materialize(request.Context(), client, namespace, snapshot, mode); err != nil {
+			http.Error(writer, "credential materialization failed", http.StatusServiceUnavailable)
+			return
+		}
+		if err := recordAuthorityReceipt(request.Context(), client, namespace, snapshot.Execution, mode, digest); err != nil {
+			http.Error(writer, "credential authority receipt was not committed", http.StatusServiceUnavailable)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func allowedPeer(certificate *x509.Certificate, allowed map[string]struct{}) bool {
+	if certificate == nil || len(certificate.URIs) != 1 {
+		return false
+	}
+	_, ok := allowed[certificate.URIs[0].String()]
+	return ok
+}
+
+func authorityReceiptName(executionID, mode string) string {
+	return "runtime-authority-receipt-" + stableHash(executionID+":"+mode, 24)
+}
+
+func rejoinAuthorityReceipt(
+	ctx context.Context,
+	client kubernetes.Interface,
+	namespace string,
+	execution entity.Execution,
+	mode, digest string,
+) (bool, error) {
+	receipt, err := client.CoreV1().ConfigMaps(namespace).Get(ctx, authorityReceiptName(execution.ID, mode), metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil || receipt.Immutable == nil || !*receipt.Immutable || receipt.Data["request_sha256"] != digest ||
+		receipt.Data["execution_id"] != execution.ID || receipt.Data["mode"] != mode ||
+		receipt.Data["version"] != strconv.FormatUint(execution.Version, 10) ||
+		receipt.Data["fence"] != strconv.FormatUint(execution.Fence, 10) {
+		return false, errors.New("runtime credential authority receipt mismatch")
+	}
+	return true, nil
+}
+
+func recordAuthorityReceipt(
+	ctx context.Context,
+	client kubernetes.Interface,
+	namespace string,
+	execution entity.Execution,
+	mode, digest string,
+) error {
+	immutable := true
+	desired := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		Name:   authorityReceiptName(execution.ID, mode),
+		Labels: map[string]string{"runtime.mattercodex.dev/managed": "true", "app.kubernetes.io/component": "runtime-credential-authority-receipt"},
+	}, Immutable: &immutable, Data: map[string]string{
+		"request_sha256": digest, "execution_id": execution.ID, "mode": mode,
+		"version": strconv.FormatUint(execution.Version, 10), "fence": strconv.FormatUint(execution.Fence, 10),
+	}}
+	created, err := client.CoreV1().ConfigMaps(namespace).Create(ctx, desired, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		returnValue, readErr := rejoinAuthorityReceipt(ctx, client, namespace, execution, mode, digest)
+		if readErr == nil && returnValue {
+			return nil
+		}
+		return errors.New("runtime credential authority receipt conflict")
+	}
+	if err != nil || created.Immutable == nil || !*created.Immutable || created.Data["request_sha256"] != digest {
+		return errors.New("commit runtime credential authority receipt")
+	}
+	return nil
 }
 
 func materializeWorkerJournalGrants(ctx context.Context, client kubernetes.Interface, namespace string, execution entity.Execution) error {
@@ -448,6 +710,7 @@ func materializeS3Credential(
 	if action != "archive" && action != "restore" {
 		return errors.New("runtime S3 credential action is invalid")
 	}
+	secrets := client.CoreV1().Secrets(namespace)
 	policy, sourceExecutionID, err := exactS3Policy(execution, action)
 	if err != nil {
 		return err
@@ -466,7 +729,7 @@ func materializeS3Credential(
 	if err != nil || len(kubernetesJWT) < 20 || len(kubernetesJWT) > 1<<20 {
 		return errors.New("read runtime S3 broker identity")
 	}
-	vaultRole := "runtime-s3-" + action + "-broker"
+	vaultRole := "runtime-s3-" + action + "-exchanger"
 	login := vaultResponse{}
 	if err := vaultRequest(ctx, vaultClient, http.MethodPost, vaultAddress+"/v1/auth/kubernetes/login", "", map[string]any{
 		"role": vaultRole, "jwt": string(kubernetesJWT),
@@ -485,7 +748,7 @@ func materializeS3Credential(
 		tags["archive_version_id"] = exactVersionID(archiveReference)
 	}
 	bootstrap := vaultResponse{}
-	if err := vaultRequest(ctx, vaultClient, http.MethodPost, vaultAddress+"/v1/aws/sts/runtime-"+action+"-broker",
+	if err := vaultRequest(ctx, vaultClient, http.MethodPost, vaultAddress+"/v1/aws/sts/runtime-"+action+"-exchanger",
 		login.Auth.ClientToken, map[string]any{
 			"ttl": "15m", "role_session_name": "mcx-broker-" + shortID(execution.ID) + "-" + action,
 		}, &bootstrap); err != nil {
@@ -565,10 +828,13 @@ func materializeS3Credential(
 	if destination.Annotations["runtime.mattercodex.dev/bucket"] == "" {
 		return errors.New("runtime S3 bucket is invalid")
 	}
-	secrets := client.CoreV1().Secrets(namespace)
 	created, err := secrets.Create(ctx, destination, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
-		created, err = secrets.Get(ctx, destination.Name, metav1.GetOptions{})
+		// Secret immutable, deterministic by execution/action and only the
+		// trusted action exchanger can create this admitted profile. A crash
+		// after Create but before the receipt therefore rejoins without Secret
+		// read authority and commits the exact request receipt.
+		return nil
 	}
 	if err != nil || !credentialSnapshotSecretMatches(created, destination) || secretDataSHA256(created.Data) != secretDataSHA256(destination.Data) {
 		return errors.New("materialize immutable runtime S3 credential snapshot")

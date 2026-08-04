@@ -58,7 +58,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
-        values: [runtime-archive, runtime-restore-verifier, runtime-rehydrate, runtime-cleanup-authorizer, runtime-credential-broker]
+        values: [runtime-archive, runtime-restore-verifier, runtime-rehydrate, runtime-cleanup-authorizer]
   policyTypes: [Ingress, Egress]
   ingress: []
   egress:
@@ -117,8 +117,12 @@ spec:
       runtime.mattercodex.dev/credential-action: archive
   policyTypes: [Egress]
   egress:
-    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: runtime-archive-s3}}}]
-      ports: [{protocol: TCP, port: 9000}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: runtime-s3-archive-exchanger}}}]
+      ports: [{protocol: TCP, port: 8443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -131,6 +135,105 @@ spec:
       runtime.mattercodex.dev/credential-action: restore
   policyTypes: [Egress]
   egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: runtime-s3-restore-exchanger}}}]
+      ports: [{protocol: TCP, port: 8443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: runtime-workload-broker-exact-paths}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: runtime-controller, app.kubernetes.io/component: runtime-credential-broker}
+    matchExpressions: [{key: runtime.mattercodex.dev/credential-action, operator: DoesNotExist}]
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: runtime-workload-materializer}}}]
+      ports: [{protocol: TCP, port: 8443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: runtime-workload-materializer-exact-paths}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: runtime-workload-materializer, app.kubernetes.io/component: credential-authority}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: runtime-controller, app.kubernetes.io/component: runtime-credential-broker}
+            matchExpressions: [{key: runtime.mattercodex.dev/credential-action, operator: DoesNotExist}]
+      ports: [{protocol: TCP, port: 8443}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {component: kube-apiserver}}
+      ports: [{protocol: TCP, port: 6443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: runtime-s3-archive-exchanger-exact-paths}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: runtime-s3-archive-exchanger, app.kubernetes.io/component: credential-authority}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-controller
+              app.kubernetes.io/component: runtime-credential-broker
+              runtime.mattercodex.dev/credential-action: archive
+      ports: [{protocol: TCP, port: 8443}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {component: kube-apiserver}}
+      ports: [{protocol: TCP, port: 6443}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: vault}}}]
+      ports: [{protocol: TCP, port: 8200}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: runtime-archive-s3}}}]
+      ports: [{protocol: TCP, port: 9000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: runtime-s3-restore-exchanger-exact-paths}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: runtime-s3-restore-exchanger, app.kubernetes.io/component: credential-authority}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-controller
+              app.kubernetes.io/component: runtime-credential-broker
+              runtime.mattercodex.dev/credential-action: restore
+      ports: [{protocol: TCP, port: 8443}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {component: kube-apiserver}}
+      ports: [{protocol: TCP, port: 6443}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: vault}}}]
+      ports: [{protocol: TCP, port: 8200}]
     - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: runtime-archive-s3}}}]
       ports: [{protocol: TCP, port: 9000}]
 ---

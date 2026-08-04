@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -98,6 +99,8 @@ type runner struct {
 	credentialWatcherFactory func() (credentialEventWatcher, error)
 	sessionArchiveProof      map[string]sessionSourceProof
 	runtimeContract          *runtimeSessionContract
+	runtimeContractReadback  atomic.Pointer[runtimeSessionContract]
+	runtimeReady             atomic.Bool
 	persistentRuntime        bool
 	codexAuthFile            string
 }
@@ -740,8 +743,21 @@ func (r *runner) runSessionTurns(
 			if r.runtimeContract.credentialRoot != "" {
 				_ = os.RemoveAll(r.runtimeContract.credentialRoot)
 			}
+			r.runtimeReady.Store(false)
 			r.runtimeContract = next
+			r.runtimeContractReadback.Store(next)
+			if err := r.probeRuntimeDependencies(ctx); err != nil {
+				return errors.New("runtime successor mTLS and bearer barrier failed")
+			}
+			transport, err := runtimeMTLSTransport(next.BotServiceTLS)
+			if err != nil {
+				return err
+			}
+			client.Transport = transport
+			botServiceURL = strings.TrimRight(next.BotServiceURL, "/")
+			sessionKey = next.SessionKey
 			sessionToken = next.sessionToken
+			r.runtimeReady.Store(true)
 		}
 	}
 }

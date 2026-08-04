@@ -1988,6 +1988,8 @@ func (adapter *Adapter) credentialBrokerJob(execution entity.Execution) *batchv1
 					Env: []corev1.EnvVar{
 						{Name: "RUNTIME_EXECUTION_ID", Value: execution.ID},
 						{Name: "RUNTIME_NAMESPACE", Value: adapter.config.Namespace},
+						{Name: "RUNTIME_CREDENTIAL_AUTHORITY_URL", Value: "https://runtime-workload-materializer.mattercodex-system.svc:8443/v1/materialize"},
+						{Name: "RUNTIME_CREDENTIAL_AUTHORITY_TLS_SERVER_NAME", Value: "runtime-workload-materializer.mattercodex-system.svc.cluster.local"},
 					},
 					SecurityContext: restrictedSecurityContext(10001),
 					Resources: corev1.ResourceRequirements{
@@ -1995,22 +1997,15 @@ func (adapter *Adapter) credentialBrokerJob(execution entity.Execution) *batchv1
 						Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true},
 						{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
 						{Name: "workload-ticket-trust", MountPath: "/var/run/config/mattercodex/runtime-workload-ticket", ReadOnly: true},
+						{Name: "credential-authority-tls", MountPath: "/var/run/config/mattercodex/runtime-credential-authority", ReadOnly: true},
 					},
 				}},
 				Volumes: []corev1.Volume{
-					{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
-						DefaultMode: int32Pointer(0o440),
-						Sources: []corev1.VolumeProjection{
-							{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: int64Pointer(600), Path: "token"}},
-							{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
-							{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}}}},
-						},
-					}}},
 					{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: int32Pointer(0o440)}}},
 					{Name: "workload-ticket-trust", VolumeSource: csiVolume("runtime-credential-broker-workload-ticket-trust")},
+					{Name: "credential-authority-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: brokerServiceAccount + "-mtls", DefaultMode: int32Pointer(0o400)}}},
 				},
 			},
 		},
@@ -2071,8 +2066,10 @@ func (adapter *Adapter) s3BrokerServiceAccount(action string) string {
 func (adapter *Adapter) s3CredentialBrokerJob(execution entity.Execution, action string) *batchv1.Job {
 	backoff, ttl, deadline := int32(2), int32(adapter.config.JobTTL/time.Second), int64(300)
 	workloadTicket := execution.RestoreWorkloadTicket
+	authorityName := "runtime-s3-restore-exchanger"
 	if action == "archive" {
 		workloadTicket = execution.ArchiveWorkloadTicket
+		authorityName = "runtime-s3-archive-exchanger"
 	}
 	annotations := map[string]string{
 		"runtime.mattercodex.dev/execution-id":           execution.ID,
@@ -2101,39 +2098,21 @@ func (adapter *Adapter) s3CredentialBrokerJob(execution entity.Execution, action
 					Command: []string{"/usr/local/bin/runtime-credential-broker"}, Args: []string{"s3-" + action},
 					Env: []corev1.EnvVar{
 						{Name: "RUNTIME_EXECUTION_ID", Value: execution.ID}, {Name: "RUNTIME_NAMESPACE", Value: adapter.config.Namespace},
-						{Name: "RUNTIME_S3_BUCKET", Value: adapter.config.S3Bucket},
-						{Name: "RUNTIME_S3_ENDPOINT", Value: adapter.config.S3Endpoint},
-						{Name: "RUNTIME_S3_TLS_SERVER_NAME", Value: adapter.config.S3TLSServerName},
-						{Name: "RUNTIME_S3_REGION", Value: adapter.config.S3Region},
-						{Name: "RUNTIME_S3_CA_FILE", Value: "/var/run/config/mattercodex/runtime-credential-broker/s3/ca.pem"},
-						{Name: "RUNTIME_VAULT_ADDRESS", Value: "https://vault.mattercodex-system.svc:8200"},
-						{Name: "RUNTIME_VAULT_TLS_SERVER_NAME", Value: "vault.mattercodex-system.svc.cluster.local"},
-						{Name: "RUNTIME_VAULT_CA_FILE", Value: "/var/run/config/mattercodex/vault/ca.pem"},
+						{Name: "RUNTIME_CREDENTIAL_AUTHORITY_URL", Value: "https://" + authorityName + ".mattercodex-system.svc:8443/v1/materialize"},
+						{Name: "RUNTIME_CREDENTIAL_AUTHORITY_TLS_SERVER_NAME", Value: authorityName + ".mattercodex-system.svc.cluster.local"},
 					},
 					SecurityContext: restrictedSecurityContext(10001),
 					Resources:       corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("25m"), corev1.ResourceMemory: resource.MustParse("32Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")}},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true},
-						{Name: "vault-token", MountPath: "/var/run/secrets/tokens", ReadOnly: true},
-						{Name: "vault-ca", MountPath: "/var/run/config/mattercodex/vault", ReadOnly: true},
-						{Name: "s3-ca", MountPath: "/var/run/config/mattercodex/runtime-credential-broker/s3", ReadOnly: true},
 						{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
 						{Name: "workload-ticket-trust", MountPath: "/var/run/config/mattercodex/runtime-workload-ticket", ReadOnly: true},
-						{Name: "s3-broker-config", MountPath: "/var/run/secrets/mattercodex/runtime-credential-broker/s3", ReadOnly: true},
+						{Name: "credential-authority-tls", MountPath: "/var/run/config/mattercodex/runtime-credential-authority", ReadOnly: true},
 					},
 				}},
 				Volumes: []corev1.Volume{
-					{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{DefaultMode: int32Pointer(0o440), Sources: []corev1.VolumeProjection{
-						{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: int64Pointer(600), Path: "token"}},
-						{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
-						{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}}}},
-					}}}},
-					{Name: "vault-token", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{DefaultMode: int32Pointer(0o400), Sources: []corev1.VolumeProjection{{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "vault", ExpirationSeconds: int64Pointer(600), Path: "vault"}}}}}},
-					{Name: "vault-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "internal-rpc-authority-vault-ca"}, Items: []corev1.KeyToPath{{Key: "ca.pem", Path: "ca.pem"}}, DefaultMode: int32Pointer(0o440)}}},
-					{Name: "s3-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "mattercodex-s3-ca"}, Items: []corev1.KeyToPath{{Key: "ca.pem", Path: "ca.pem"}}, DefaultMode: int32Pointer(0o440)}}},
 					{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: int32Pointer(0o440)}}},
 					{Name: "workload-ticket-trust", VolumeSource: csiVolume("runtime-s3-" + action + "-workload-ticket-trust")},
-					{Name: "s3-broker-config", VolumeSource: csiVolume("runtime-s3-" + action + "-broker-config")},
+					{Name: "credential-authority-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "runtime-s3-" + action + "-broker-mtls", DefaultMode: int32Pointer(0o400)}}},
 				},
 			}}},
 	}

@@ -383,16 +383,7 @@ func (store *Store) RestoreToAndProve(
 	staging := filepath.Join(destination, stagingName)
 	final := filepath.Join(destination, finalName)
 	if existing, markerErr := readRehydrateMarker(final); markerErr == nil {
-		if existing.SourceExecutionID != source.ID || existing.TargetExecutionID != target.ID ||
-			existing.ArchiveReference != source.ArchiveReference || existing.ArchiveSHA256 != source.ArchiveSHA256 ||
-			existing.PVCUID != pvcUID || existing.AssignmentGeneration != target.RestoreAssignmentGeneration {
-			return Result{}, errs.ErrArchiveUnverified
-		}
-		actualTreeSHA256, digestErr := restoredTreeSHA256(final)
-		if digestErr != nil || actualTreeSHA256 != existing.RestoredTreeSHA256 {
-			return Result{}, errs.ErrArchiveUnverified
-		}
-		return rehydrateProofResult(existing)
+		return rejoinRehydrateProof(source, target, pvcUID, final, existing)
 	} else if finalInfo, statErr := os.Lstat(final); statErr == nil {
 		owner, ownerErr := readRehydrateOwner(final)
 		if ownerErr != nil || !finalInfo.IsDir() || finalInfo.Mode()&os.ModeSymlink != 0 ||
@@ -432,7 +423,9 @@ func (store *Store) RestoreToAndProve(
 	if err := extractArchive(archivePath, staging); err != nil {
 		return Result{}, err
 	}
-	treeDigest, err := treeSHA256(staging)
+	// Один canonical entry set используется до публикации и при rejoin после
+	// потерянного ответа: оба служебных marker-файла исключены.
+	treeDigest, err := restoredTreeSHA256(staging)
 	if err != nil {
 		return Result{}, err
 	}
@@ -465,6 +458,23 @@ func (store *Store) RestoreToAndProve(
 		return Result{}, errors.New("sync rehydrate publication")
 	}
 	return rehydrateProofResult(proof)
+}
+
+func rejoinRehydrateProof(
+	source, target entity.Execution,
+	pvcUID, final string,
+	existing rehydrateProof,
+) (Result, error) {
+	if existing.SourceExecutionID != source.ID || existing.TargetExecutionID != target.ID ||
+		existing.ArchiveReference != source.ArchiveReference || existing.ArchiveSHA256 != source.ArchiveSHA256 ||
+		existing.PVCUID != pvcUID || existing.AssignmentGeneration != target.RestoreAssignmentGeneration {
+		return Result{}, errs.ErrArchiveUnverified
+	}
+	actualTreeSHA256, digestErr := restoredTreeSHA256(final)
+	if digestErr != nil || actualTreeSHA256 != existing.RestoredTreeSHA256 {
+		return Result{}, errs.ErrArchiveUnverified
+	}
+	return rehydrateProofResult(existing)
 }
 
 func readRehydrateOwner(final string) (rehydrateOwner, error) {

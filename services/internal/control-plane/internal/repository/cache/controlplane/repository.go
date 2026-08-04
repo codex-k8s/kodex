@@ -173,6 +173,23 @@ func (repository *Repository) Search(
 	return repository.source.Search(ctx, filter)
 }
 
+func (repository *Repository) ResolveRuntimeAgentBindingIntent(
+	ctx context.Context,
+	organizationID, projectID, actorID, sourceRef string,
+) (entity.Resource, entity.Resource, entity.Resource, error) {
+	reader, ok := repository.source.(interface {
+		ResolveRuntimeAgentBindingIntent(
+			context.Context, string, string, string, string,
+		) (entity.Resource, entity.Resource, entity.Resource, error)
+	})
+	if !ok {
+		return entity.Resource{}, entity.Resource{}, entity.Resource{}, errors.New("runtime agent binding intent reader is unavailable")
+	}
+	return reader.ResolveRuntimeAgentBindingIntent(
+		ctx, organizationID, projectID, actorID, sourceRef,
+	)
+}
+
 func (repository *Repository) ListEligibleProjects(
 	ctx context.Context,
 	organizationID, actorID, afterID string,
