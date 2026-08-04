@@ -45,6 +45,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: memory-indexer
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
       ports:
         - protocol: TCP
           port: 8443

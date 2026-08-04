@@ -29,6 +29,7 @@ spec:
                 operator: In
                 values:
                   - control-api-gateway
+                  - integration-gateway
                   - control-plane
                   - internal-rpc-authority-publisher
       ports:

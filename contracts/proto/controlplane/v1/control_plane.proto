@@ -192,6 +192,9 @@ service ControlPlaneService {
   rpc GetIntegrationContinuation(GetIntegrationContinuationRequest) returns (GetIntegrationContinuationResponse);
   // AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
   rpc AcknowledgeIntegrationContinuation(AcknowledgeIntegrationContinuationRequest) returns (AcknowledgeIntegrationContinuationResponse);
+  // ValidateIntegrationResultAccess проверяет capability против current owner
+  // continuation state; request не принимает caller-selected resource IDs.
+  rpc ValidateIntegrationResultAccess(ValidateIntegrationResultAccessRequest) returns (ValidateIntegrationResultAccessResponse);
 
   // CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
@@ -2220,6 +2223,13 @@ message IntegrationContinuation {
   // continuation_attempt — текущая server-owned delivery attempt; retry
   // перепривязывает тот же immutable outcome и увеличивает version/fence.
   uint32 continuation_attempt = 27;
+  // transition_grant — свежая узкая authority для следующего gateway transition.
+  string transition_grant = 28;
+  google.protobuf.Timestamp transition_grant_expires_at = 29;
+  // result_access_grant выдаётся только READY continuation turn и позволяет
+  // producer-owned version-pinned read/ack в integration-gateway.
+  string result_access_grant = 30;
+  google.protobuf.Timestamp result_access_grant_expires_at = 31;
 }
 
 message ResolveIntegrationSessionRequest {}
@@ -2396,6 +2406,17 @@ message AcknowledgeIntegrationContinuationRequest {
 
 message AcknowledgeIntegrationContinuationResponse {
   IntegrationContinuation continuation = 1;
+}
+
+message ValidateIntegrationResultAccessRequest {}
+
+message ValidateIntegrationResultAccessResponse {
+  IntegrationContinuation continuation = 1;
+  string outcome = 2;
+  string reference = 3;
+  string reference_sha256 = 4;
+  string result_attempt_id = 5;
+  uint64 signer_generation = 6;
 }
 
 // CheckReadinessRequest описывает версионированное сообщение контракта control-plane.

@@ -6,21 +6,34 @@ import "time"
 
 // ApplicationIdentity — результат точных mTLS- и OIDC-проверок, а не поле запроса.
 type ApplicationIdentity struct {
-	ActorID          string
-	OrganizationID   string
-	ProjectID        string
-	SessionJTI       string
-	SessionRevision  uint64
-	SubjectDigest    string
-	CredentialDigest string
-	TenantOwner      bool
-	CallerWorkload   string
-	CallerSPIFFEID   string
-	BoundSessionID   string
-	BoundTurnID      string
-	BoundAttempt     uint32
-	BoundInputSHA256 string
-	BoundGeneration  uint64
+	ActorID                     string
+	OrganizationID              string
+	ProjectID                   string
+	SessionJTI                  string
+	SessionRevision             uint64
+	SubjectDigest               string
+	CredentialDigest            string
+	TenantOwner                 bool
+	CallerWorkload              string
+	CallerSPIFFEID              string
+	BoundSessionID              string
+	BoundTurnID                 string
+	BoundAttempt                uint32
+	BoundInputSHA256            string
+	BoundGeneration             uint64
+	BoundRuntimeRevisionID      string
+	BoundRuntimeRevisionVersion uint64
+	BoundRuntimeRevisionSHA256  string
+	BoundContinuationID         string
+	BoundContinuationVersion    uint64
+	BoundContinuationFence      uint64
+	BoundInvocationID           string
+	BoundSignerKeysetRevision   uint64
+	BoundSignerHighWatermark    uint64
+	BoundSignerServedGeneration uint64
+	BoundSignerKeysetSHA256     string
+	BoundSignerGeneration       uint64
+	AllowedOperationIDs         []string
 }
 
 type Provenance struct {

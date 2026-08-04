@@ -158,6 +158,9 @@ spec:
             - name: application-grants
               mountPath: /var/run/config/mattercodex/control-plane/application-grants
               readOnly: true
+            - name: integration-continuation-grant-signer
+              mountPath: /var/run/secrets/mattercodex/control-plane/continuation-grant
+              readOnly: true
             - name: otel-ca
               mountPath: /var/run/config/mattercodex/control-plane/observability
               readOnly: true
@@ -261,6 +264,12 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-application-grants
+        - name: integration-continuation-grant-signer
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-integration-continuation-grant-signer
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

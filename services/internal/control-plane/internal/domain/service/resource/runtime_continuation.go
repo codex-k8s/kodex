@@ -1924,8 +1924,10 @@ func (service *Service) CompleteRuntimeExecution(
 		Outcome           string
 		TerminalReference string
 		TerminalSHA256    string
-	}{runtimeIntent(input.RuntimeExecutionInput), input.Outcome,
-		input.TerminalReference, input.TerminalSHA256})
+	}{
+		runtimeIntent(input.RuntimeExecutionInput), input.Outcome,
+		input.TerminalReference, input.TerminalSHA256,
+	})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -2677,8 +2679,10 @@ func (service *Service) VerifyRuntimeRestore(
 		ArchiveSHA256         string
 		RestoreProofReference string
 		RestoreProofSHA256    string
-	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveSHA256,
-		input.RestoreProofReference, input.RestoreProofSHA256})
+	}{
+		runtimeIntent(input.RuntimeExecutionInput), input.ArchiveSHA256,
+		input.RestoreProofReference, input.RestoreProofSHA256,
+	})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -3330,9 +3334,11 @@ func (service *Service) ExpireRuntimeCleanupAuthorization(
 		CleanupAuthorizationGeneration uint64
 		ArchiveSHA256                  string
 		RestoreProofSHA256             string
-	}{runtimeIntent(input.RuntimeExecutionInput), input.CleanupAuthorizationID,
+	}{
+		runtimeIntent(input.RuntimeExecutionInput), input.CleanupAuthorizationID,
 		input.CleanupAuthorizationGeneration, input.ArchiveSHA256,
-		input.RestoreProofSHA256})
+		input.RestoreProofSHA256,
+	})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -4511,8 +4517,7 @@ func (service *Service) SuspendForIntegrationApproval(
 			); err != nil {
 				return err
 			}
-			suspendedTurn, suspendedSession, suspendedProcess, err :=
-				service.suspendIntegrationGraph(ctx, tx, input.Principal, resolved, now)
+			suspendedTurn, suspendedSession, suspendedProcess, err := service.suspendIntegrationGraph(ctx, tx, input.Principal, resolved, now)
 			if err != nil {
 				return err
 			}
@@ -6179,6 +6184,42 @@ func (service *Service) AcknowledgeIntegrationContinuation(
 		})
 	})
 	return result, err
+}
+
+// IntegrationContinuationRuntimeRevisionSHA256 разрешает digest только через
+// version-pinned owner read уже авторизованной continuation, без ID из request.
+func (service *Service) IntegrationContinuationRuntimeRevisionSHA256(
+	ctx context.Context,
+	principal value.Principal,
+	continuation IntegrationContinuation,
+) (string, error) {
+	if value.ValidateID(principal.ActorID) != nil ||
+		value.ValidateID(principal.OrganizationID) != nil ||
+		value.ValidateID(principal.ProjectID) != nil ||
+		principal.OrganizationID != continuation.OrganizationID ||
+		principal.ProjectID != continuation.ProjectID ||
+		continuation.ContinuationState != "READY" ||
+		value.ValidateID(continuation.ContinuationRuntimeRevisionID) != nil ||
+		continuation.ContinuationRuntimeRevisionVersion == 0 {
+		return "", errs.ErrPermissionDenied
+	}
+	revision, err := service.repository.Get(
+		ctx, principal.OrganizationID, principal.ProjectID,
+		continuation.ContinuationRuntimeRevisionID, enum.KindRuntimeRevision,
+	)
+	if err != nil {
+		return "", err
+	}
+	if revision.OwnerActorID != principal.ActorID ||
+		revision.Version != continuation.ContinuationRuntimeRevisionVersion ||
+		revision.State != enum.StateActive {
+		return "", errs.ErrNotFound
+	}
+	digest, err := entity.ProjectionSHA256(revision)
+	if err != nil {
+		return "", errs.ErrInternal
+	}
+	return digest, nil
 }
 
 func (service *Service) requireRuntimeOwner(

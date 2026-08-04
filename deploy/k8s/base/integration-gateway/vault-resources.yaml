@@ -1,0 +1,162 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: integration-gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: integration-gateway-vault-ca
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: integration-gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "-7"
+spec:
+  vaultConnectionRef: integration-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: integration-gateway
+    serviceAccount: integration-gateway
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: integration-egress-proxy
+  annotations:
+    argocd.argoproj.io/sync-wave: "-7"
+spec:
+  vaultConnectionRef: integration-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: integration-egress-proxy
+    serviceAccount: integration-egress-proxy
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: provider-health-adapter
+  annotations:
+    argocd.argoproj.io/sync-wave: "-7"
+spec:
+  vaultConnectionRef: integration-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: provider-health-adapter
+    serviceAccount: provider-health-adapter
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: integration-gateway-provider-health-credential
+  annotations:
+    argocd.argoproj.io/sync-wave: "-6"
+spec:
+  vaultAuthRef: integration-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/integration-gateway/credentials/provider-health
+  refreshAfter: 5m
+  destination:
+    create: true
+    name: integration-gateway-provider-health-credential
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        provider-health.token:
+          text: '{{ get .Secrets "token" }}'
+        token:
+          text: '{{ get .Secrets "token" }}'
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata:
+  name: integration-egress-proxy-server-tls
+  annotations:
+    argocd.argoproj.io/sync-wave: "-6"
+spec:
+  vaultAuthRef: integration-egress-proxy
+  mount: pki
+  role: integration-egress-proxy
+  commonName: integration-egress-proxy.mattercodex-system.svc.cluster.local
+  altNames:
+    - integration-egress-proxy
+    - integration-egress-proxy.mattercodex-system.svc
+    - integration-egress-proxy.mattercodex-system.svc.cluster.local
+  format: pem
+  expiryOffset: 5m
+  ttl: 1h
+  rolloutRestartTargets:
+    - kind: Deployment
+      name: integration-egress-proxy
+  destination:
+    create: true
+    name: integration-egress-proxy-server-tls
+    type: kubernetes.io/tls
+    overwrite: false
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata:
+  name: integration-egress-proxy-provider-client-tls
+  annotations:
+    argocd.argoproj.io/sync-wave: "-6"
+spec:
+  vaultAuthRef: integration-egress-proxy
+  mount: pki
+  role: integration-egress-proxy-provider-client
+  commonName: integration-egress-proxy-client.mattercodex-system.svc.cluster.local
+  altNames:
+    - integration-egress-proxy-client.mattercodex-system.svc.cluster.local
+  format: pem
+  expiryOffset: 5m
+  ttl: 1h
+  rolloutRestartTargets:
+    - kind: Deployment
+      name: integration-egress-proxy
+  destination:
+    create: true
+    name: integration-egress-proxy-provider-client-tls
+    type: kubernetes.io/tls
+    overwrite: false
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata:
+  name: provider-health-adapter-server-tls
+  annotations:
+    argocd.argoproj.io/sync-wave: "-6"
+spec:
+  vaultAuthRef: provider-health-adapter
+  mount: pki
+  role: provider-health-adapter
+  commonName: provider-health-adapter.mattercodex-system.svc.cluster.local
+  altNames:
+    - provider-health-adapter
+    - provider-health-adapter.mattercodex-system.svc
+    - provider-health-adapter.mattercodex-system.svc.cluster.local
+  format: pem
+  expiryOffset: 5m
+  ttl: 1h
+  rolloutRestartTargets:
+    - kind: Deployment
+      name: provider-health-adapter
+  destination:
+    create: true
+    name: provider-health-adapter-server-tls
+    type: kubernetes.io/tls
+    overwrite: false

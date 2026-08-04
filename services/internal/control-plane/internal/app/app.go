@@ -20,10 +20,12 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
 	"github.com/codex-k8s/matter-codex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
+	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
+	continuationgrantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/continuationgrant"
 	grantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/grant"
 	oidcauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/oidc"
 	authoritypolicy "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/policy"
@@ -282,8 +284,31 @@ func Run(
 		return err
 	}
 	authenticators := []transportgrpc.ApplicationAuthenticator{state.oidc}
+	var continuationProducer authoritypolicy.Producer
 	for producerID, producer := range loadedPolicy.Producers {
 		if producerID == loadedPolicy.OIDC.ID {
+			continue
+		}
+		if producer.Credential == "INTEGRATION_CONTINUATION_GRANT" || producer.Credential == "INTEGRATION_RESULT_ACCESS_GRANT" {
+			purpose := integrationgatewayauth.PurposeTransition
+			publicKeysetFile := filepath.Join(config.ApplicationGrantTrustDir, producerID+".public-keyset.json")
+			if producer.Credential == "INTEGRATION_RESULT_ACCESS_GRANT" {
+				purpose = integrationgatewayauth.PurposeResultAccess
+				publicKeysetFile = filepath.Join(config.ApplicationGrantTrustDir, "control-plane.integration-continuation.public-keyset.json")
+			} else {
+				continuationProducer = producer
+			}
+			verifier, verifyErr := continuationgrantauth.New(continuationgrantauth.Config{
+				Issuer: producer.CredentialIssuer, Audience: producer.CredentialAudience,
+				WorkloadID: producer.CallerWorkload, CallerSPIFFEID: producer.CallerSPIFFEID,
+				PublicJWKFile: publicKeysetFile, Generation: config.ContinuationGrantSignerGeneration,
+				MaximumTTL: 8 * 24 * time.Hour, ExpectedPurpose: purpose,
+				CredentialMetadata: producer.CredentialMetadata,
+			})
+			if verifyErr != nil {
+				return verifyErr
+			}
+			authenticators = append(authenticators, verifier)
 			continue
 		}
 		verifier, err := grantauth.New(grantauth.Config{
@@ -300,6 +325,35 @@ func Run(
 			return err
 		}
 		authenticators = append(authenticators, verifier)
+	}
+	if continuationProducer.ID == "" {
+		return errors.New("integration continuation grant producer is unavailable")
+	}
+	continuationPublicJWK := filepath.Join(config.ApplicationGrantTrustDir, continuationProducer.ID+".public-keyset.json")
+	transitionSigner, err := integrationgatewayauth.NewSigner(integrationgatewayauth.Config{
+		Issuer: continuationProducer.CredentialIssuer, Audience: continuationProducer.CredentialAudience,
+		WorkloadID: "integration-gateway", CallerSPIFFEID: continuationProducer.CallerSPIFFEID,
+		Generation: config.ContinuationGrantSignerGeneration, MaximumTTL: 8 * 24 * time.Hour,
+	}, config.ContinuationGrantPrivateJWKFile, continuationPublicJWK)
+	if err != nil {
+		return err
+	}
+	resultVerifier, err := integrationgatewayauth.NewVerifier(integrationgatewayauth.Config{
+		Issuer: continuationProducer.CredentialIssuer, Audience: "urn:mattercodex:integration-result-access",
+		WorkloadID: "agent-runner", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+		Generation: config.ContinuationGrantSignerGeneration, MaximumTTL: 8 * 24 * time.Hour,
+	}, continuationPublicJWK)
+	if err != nil {
+		return err
+	}
+	resultSigner, err := integrationgatewayauth.NewSigner(integrationgatewayauth.Config{
+		Issuer: continuationProducer.CredentialIssuer, Audience: "urn:mattercodex:integration-result-access",
+		WorkloadID:     "agent-runner",
+		CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
+		Generation:     config.ContinuationGrantSignerGeneration, MaximumTTL: 8 * 24 * time.Hour,
+	}, config.ContinuationGrantPrivateJWKFile, continuationPublicJWK)
+	if err != nil {
+		return err
 	}
 	applicationRegistry, err := transportgrpc.NewApplicationRegistry(authenticators)
 	if err != nil {
@@ -375,7 +429,7 @@ func Run(
 	if _, err := checker.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)
 	}
-	controlServer, err := transportgrpc.NewServer(resourceService, checker)
+	controlServer, err := transportgrpc.NewServer(resourceService, checker, transitionSigner, resultSigner, resultVerifier)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package integrationgateway.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1;integrationgatewayv1";
+
+// IntegrationResultService предоставляет producer-owned version-pinned read
+// для результата integration invocation. Actor и result binding выводятся из
+// mTLS, signed authorization context и continuation access grant в metadata.
+service IntegrationResultService {
+  // ResolveIntegrationResult не принимает caller-selected resource IDs.
+  rpc ResolveIntegrationResult(ResolveIntegrationResultRequest) returns (ResolveIntegrationResultResponse);
+  // AcknowledgeIntegrationResult подтверждает exact уже выданную версию.
+  rpc AcknowledgeIntegrationResult(AcknowledgeIntegrationResultRequest) returns (AcknowledgeIntegrationResultResponse);
+  // CheckReadiness проверяет тот же authority/PostgreSQL path без чтения payload.
+  rpc CheckReadiness(IntegrationResultServiceCheckReadinessRequest) returns (IntegrationResultServiceCheckReadinessResponse);
+}
+
+message ResolveIntegrationResultRequest {}
+
+message ResolveIntegrationResultResponse {
+  string invocation_id = 1;
+  string attempt_id = 2;
+  IntegrationOutcome outcome = 3;
+  string reference = 4;
+  string reference_sha256 = 5;
+  bytes structured_outcome_json = 6;
+  uint64 delivery_version = 7;
+  uint64 delivery_fence = 8;
+  google.protobuf.Timestamp completed_at = 9;
+}
+
+enum IntegrationOutcome {
+  INTEGRATION_OUTCOME_UNSPECIFIED = 0;
+  INTEGRATION_OUTCOME_SUCCEEDED = 1;
+  INTEGRATION_OUTCOME_FAILED = 2;
+  INTEGRATION_OUTCOME_UNKNOWN = 3;
+}
+
+message AcknowledgeIntegrationResultRequest {
+  string idempotency_key = 1;
+  uint64 expected_delivery_version = 2;
+  uint64 expected_delivery_fence = 3;
+  string expected_reference_sha256 = 4;
+}
+
+message AcknowledgeIntegrationResultResponse {
+  string invocation_id = 1;
+  string attempt_id = 2;
+  IntegrationOutcome outcome = 3;
+  string reference = 4;
+  string reference_sha256 = 5;
+  uint64 delivery_version = 6;
+  uint64 delivery_fence = 7;
+  google.protobuf.Timestamp acknowledged_at = 8;
+}
+
+message IntegrationResultServiceCheckReadinessRequest {}
+
+message IntegrationResultServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 schema_version = 2;
+  bool authority_ready = 3;
+  bool postgres_ready = 4;
+}

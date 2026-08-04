@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: integration-gateway-migrate
+  labels:
+    app.kubernetes.io/name: integration-gateway
+    app.kubernetes.io/component: migration
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: integration-gateway
+        app.kubernetes.io/component: migration
+    spec:
+      serviceAccountName: integration-gateway-migrator
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migrate
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/integration-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          command: [/usr/local/bin/integration-gateway-cli]
+          args: [migrate, up]
+          envFrom:
+            - configMapRef: {name: integration-gateway-db-principals}
+          env:
+            - {name: INTEGRATION_GATEWAY_MIGRATION_DSN_FILE, value: /var/run/secrets/mattercodex/integration-gateway/postgres-migrator/dsn}
+            - {name: INTEGRATION_GATEWAY_POSTGRES_CURRENT_DSN_FILE, value: /var/run/secrets/mattercodex/integration-gateway/postgres-migrator/runtime-current-dsn}
+            - {name: INTEGRATION_GATEWAY_POSTGRES_NEXT_DSN_FILE, value: /var/run/secrets/mattercodex/integration-gateway/postgres-migrator/runtime-next-dsn}
+            - {name: INTEGRATION_GATEWAY_POSTGRES_CA_FILE, value: /var/run/config/mattercodex/integration-gateway/postgres/ca.pem}
+            - {name: INTEGRATION_GATEWAY_POSTGRES_TLS_SERVER_NAME, value: integration-gateway-postgresql-rw.mattercodex-system.svc.cluster.local}
+            - {name: INTEGRATION_GATEWAY_POSTGRES_CONTEXT_KEY_FILE, value: /var/run/secrets/mattercodex/integration-gateway/postgres-context/key}
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: postgres-migrator, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-migrator, readOnly: true}
+            - {name: postgres-context, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-context, readOnly: true}
+            - {name: postgres-ca, mountPath: /var/run/config/mattercodex/integration-gateway/postgres, readOnly: true}
+      volumes:
+        - name: postgres-migrator
+          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-postgres-migrator}}
+        - name: postgres-context
+          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-postgres-context-migration}}
+        - name: postgres-ca
+          secret: {secretName: integration-gateway-postgresql-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}

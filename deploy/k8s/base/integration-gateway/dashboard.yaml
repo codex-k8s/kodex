@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: integration-gateway-dashboard
+  labels:
+    app.kubernetes.io/name: integration-gateway
+    grafana_dashboard: "1"
+data:
+  integration-gateway.json: |
+    {
+      "annotations": {"list": []},
+      "editable": false,
+      "panels": [
+        {"id": 1, "title": "Готовые реплики", "type": "stat", "targets": [{"expr": "sum(mattercodex_integration_gateway_readiness{ready=\"true\"})", "legendFormat": "ready"}]},
+        {"id": 2, "title": "HTTP outcomes", "type": "timeseries", "targets": [{"expr": "sum by (route, outcome) (rate(mattercodex_integration_gateway_http_requests_total[5m]))", "legendFormat": "{{route}} {{outcome}}"}]},
+        {"id": 3, "title": "Worker cycles", "type": "timeseries", "targets": [{"expr": "sum by (worker, outcome) (rate(mattercodex_integration_gateway_worker_cycles_total[5m]))", "legendFormat": "{{worker}} {{outcome}}"}]},
+        {"id": 4, "title": "Invocation outcomes", "type": "timeseries", "targets": [{"expr": "sum by (outcome) (rate(mattercodex_integration_gateway_invocations_total[5m]))", "legendFormat": "{{outcome}}"}]}
+      ],
+      "schemaVersion": 39,
+      "tags": ["mattercodex", "integration-gateway"],
+      "templating": {"list": []},
+      "time": {"from": "now-6h", "to": "now"},
+      "timezone": "browser",
+      "title": "MatterCodex integration-gateway",
+      "uid": "mattercodex-integration-gateway",
+      "version": 1
+    }

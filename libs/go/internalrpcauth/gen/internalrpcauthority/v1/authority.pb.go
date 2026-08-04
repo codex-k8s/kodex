@@ -85,13 +85,14 @@ func (ActorKind) EnumDescriptor() ([]byte, []int) {
 type AuthoritySource int32
 
 const (
-	AuthoritySource_AUTHORITY_SOURCE_UNSPECIFIED           AuthoritySource = 0
-	AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION          AuthoritySource = 1
-	AuthoritySource_AUTHORITY_SOURCE_MATTERMOST_EVENT      AuthoritySource = 2
-	AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE          AuthoritySource = 3
-	AuthoritySource_AUTHORITY_SOURCE_AGENT_SESSION         AuthoritySource = 4
-	AuthoritySource_AUTHORITY_SOURCE_PROCESS_RUN           AuthoritySource = 5
-	AuthoritySource_AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE AuthoritySource = 6
+	AuthoritySource_AUTHORITY_SOURCE_UNSPECIFIED              AuthoritySource = 0
+	AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION             AuthoritySource = 1
+	AuthoritySource_AUTHORITY_SOURCE_MATTERMOST_EVENT         AuthoritySource = 2
+	AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE             AuthoritySource = 3
+	AuthoritySource_AUTHORITY_SOURCE_AGENT_SESSION            AuthoritySource = 4
+	AuthoritySource_AUTHORITY_SOURCE_PROCESS_RUN              AuthoritySource = 5
+	AuthoritySource_AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE    AuthoritySource = 6
+	AuthoritySource_AUTHORITY_SOURCE_INTEGRATION_CONTINUATION AuthoritySource = 7
 )
 
 // Enum value maps for AuthoritySource.
@@ -104,15 +105,17 @@ var (
 		4: "AUTHORITY_SOURCE_AGENT_SESSION",
 		5: "AUTHORITY_SOURCE_PROCESS_RUN",
 		6: "AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE",
+		7: "AUTHORITY_SOURCE_INTEGRATION_CONTINUATION",
 	}
 	AuthoritySource_value = map[string]int32{
-		"AUTHORITY_SOURCE_UNSPECIFIED":           0,
-		"AUTHORITY_SOURCE_OIDC_SESSION":          1,
-		"AUTHORITY_SOURCE_MATTERMOST_EVENT":      2,
-		"AUTHORITY_SOURCE_DOMAIN_STATE":          3,
-		"AUTHORITY_SOURCE_AGENT_SESSION":         4,
-		"AUTHORITY_SOURCE_PROCESS_RUN":           5,
-		"AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE": 6,
+		"AUTHORITY_SOURCE_UNSPECIFIED":              0,
+		"AUTHORITY_SOURCE_OIDC_SESSION":             1,
+		"AUTHORITY_SOURCE_MATTERMOST_EVENT":         2,
+		"AUTHORITY_SOURCE_DOMAIN_STATE":             3,
+		"AUTHORITY_SOURCE_AGENT_SESSION":            4,
+		"AUTHORITY_SOURCE_PROCESS_RUN":              5,
+		"AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE":    6,
+		"AUTHORITY_SOURCE_INTEGRATION_CONTINUATION": 7,
 	}
 )
 
@@ -4511,7 +4514,7 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x10ACTOR_KIND_HUMAN\x10\x01\x12\x14\n" +
 	"\x10ACTOR_KIND_AGENT\x10\x02\x12\x16\n" +
 	"\x12ACTOR_KIND_SERVICE\x10\x03\x12\x19\n" +
-	"\x15ACTOR_KIND_AUTOMATION\x10\x04*\x92\x02\n" +
+	"\x15ACTOR_KIND_AUTOMATION\x10\x04*\xc1\x02\n" +
 	"\x0fAuthoritySource\x12 \n" +
 	"\x1cAUTHORITY_SOURCE_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dAUTHORITY_SOURCE_OIDC_SESSION\x10\x01\x12%\n" +
@@ -4519,7 +4522,8 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x1dAUTHORITY_SOURCE_DOMAIN_STATE\x10\x03\x12\"\n" +
 	"\x1eAUTHORITY_SOURCE_AGENT_SESSION\x10\x04\x12 \n" +
 	"\x1cAUTHORITY_SOURCE_PROCESS_RUN\x10\x05\x12*\n" +
-	"&AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE\x10\x06*\xdc\x01\n" +
+	"&AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE\x10\x06\x12-\n" +
+	")AUTHORITY_SOURCE_INTEGRATION_CONTINUATION\x10\a*\xdc\x01\n" +
 	"\x15WorkloadAuthorityRole\x12'\n" +
 	"#WORKLOAD_AUTHORITY_ROLE_UNSPECIFIED\x10\x00\x120\n" +
 	",WORKLOAD_AUTHORITY_ROLE_AUTHORIZATION_ISSUER\x10\x01\x122\n" +

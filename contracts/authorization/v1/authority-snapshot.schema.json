@@ -452,6 +452,7 @@
               "MATTERMOST_EVENT",
               "DOMAIN_STATE",
               "AGENT_SESSION",
+              "INTEGRATION_CONTINUATION",
               "PROCESS_RUN",
               "AUTOMATION_OCCURRENCE"
             ]
@@ -528,7 +529,13 @@
             "MATTERMOST_SIGNED_EVENT",
             "AGENT_SESSION_GRANT",
             "PROCESS_RUN_GRANT",
-            "AUTOMATION_OCCURRENCE_GRANT"
+            "AUTOMATION_OCCURRENCE_GRANT",
+            "OWNER_GATE_DELIVERY_GRANT",
+            "RUNTIME_REVISION_GRANT",
+            "RUNTIME_RESTORE_VERIFIER_GRANT",
+            "RUNTIME_CLEANUP_AUTHORIZER_GRANT",
+            "MEMORY_INDEX_GRANT",
+            "INTEGRATION_CONTINUATION_GRANT"
           ]
         },
         "application_credential_metadata": {
@@ -595,6 +602,7 @@
               "MATTERMOST_EVENT",
               "DOMAIN_STATE",
               "AGENT_SESSION",
+              "INTEGRATION_CONTINUATION",
               "PROCESS_RUN",
               "AUTOMATION_OCCURRENCE"
             ]

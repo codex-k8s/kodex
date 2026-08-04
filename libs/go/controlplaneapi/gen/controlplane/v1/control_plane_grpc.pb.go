@@ -98,6 +98,7 @@ const (
 	ControlPlaneService_FailIntegrationExecution_FullMethodName           = "/controlplane.v1.ControlPlaneService/FailIntegrationExecution"
 	ControlPlaneService_GetIntegrationContinuation_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation"
 	ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName = "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation"
+	ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName    = "/controlplane.v1.ControlPlaneService/ValidateIntegrationResultAccess"
 	ControlPlaneService_CheckReadiness_FullMethodName                     = "/controlplane.v1.ControlPlaneService/CheckReadiness"
 )
 
@@ -284,6 +285,9 @@ type ControlPlaneServiceClient interface {
 	GetIntegrationContinuation(ctx context.Context, in *GetIntegrationContinuationRequest, opts ...grpc.CallOption) (*GetIntegrationContinuationResponse, error)
 	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
 	AcknowledgeIntegrationContinuation(ctx context.Context, in *AcknowledgeIntegrationContinuationRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationContinuationResponse, error)
+	// ValidateIntegrationResultAccess проверяет capability против current owner
+	// continuation state; request не принимает caller-selected resource IDs.
+	ValidateIntegrationResultAccess(ctx context.Context, in *ValidateIntegrationResultAccessRequest, opts ...grpc.CallOption) (*ValidateIntegrationResultAccessResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 }
@@ -1086,6 +1090,16 @@ func (c *controlPlaneServiceClient) AcknowledgeIntegrationContinuation(ctx conte
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ValidateIntegrationResultAccess(ctx context.Context, in *ValidateIntegrationResultAccessRequest, opts ...grpc.CallOption) (*ValidateIntegrationResultAccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateIntegrationResultAccessResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckReadinessResponse)
@@ -1279,6 +1293,9 @@ type ControlPlaneServiceServer interface {
 	GetIntegrationContinuation(context.Context, *GetIntegrationContinuationRequest) (*GetIntegrationContinuationResponse, error)
 	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
 	AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error)
+	// ValidateIntegrationResultAccess проверяет capability против current owner
+	// continuation state; request не принимает caller-selected resource IDs.
+	ValidateIntegrationResultAccess(context.Context, *ValidateIntegrationResultAccessRequest) (*ValidateIntegrationResultAccessResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
@@ -1527,6 +1544,9 @@ func (UnimplementedControlPlaneServiceServer) GetIntegrationContinuation(context
 }
 func (UnimplementedControlPlaneServiceServer) AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AcknowledgeIntegrationContinuation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ValidateIntegrationResultAccess(context.Context, *ValidateIntegrationResultAccessRequest) (*ValidateIntegrationResultAccessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateIntegrationResultAccess not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
@@ -2974,6 +2994,24 @@ func _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler(srv interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ValidateIntegrationResultAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateIntegrationResultAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ValidateIntegrationResultAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ValidateIntegrationResultAccess(ctx, req.(*ValidateIntegrationResultAccessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckReadinessRequest)
 	if err := dec(in); err != nil {
@@ -3314,6 +3352,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AcknowledgeIntegrationContinuation",
 			Handler:    _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler,
+		},
+		{
+			MethodName: "ValidateIntegrationResultAccess",
+			Handler:    _ControlPlaneService_ValidateIntegrationResultAccess_Handler,
 		},
 		{
 			MethodName: "CheckReadiness",

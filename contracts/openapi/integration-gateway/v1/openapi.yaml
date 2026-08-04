@@ -1,0 +1,242 @@
+openapi: 3.0.3
+info:
+  title: MatterCodex Integration Gateway API
+  version: 1.0.0
+  description: >-
+    API согласования владельцем, проверки connection и долговечного чтения
+    invocation. Actor, tenant и project всегда выводятся из проверенного OIDC bearer.
+servers:
+  - url: https://integration-gateway.mattercodex.local/api/v1
+security:
+  - oidcBearer: []
+paths:
+  /approvals/{approval_id}/decision:
+    post:
+      operationId: decideIntegrationApproval
+      parameters:
+        - $ref: '#/components/parameters/ApprovalID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+      responses:
+        '200':
+          description: Сохранённое решение с одним победителем.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationStatus'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '504': { $ref: '#/components/responses/GatewayTimeout' }
+  /invocations/{invocation_id}:
+    get:
+      operationId: getIntegrationInvocation
+      parameters:
+        - $ref: '#/components/parameters/InvocationID'
+      responses:
+        '200':
+          description: Авторитетное redacted-состояние invocation. Provider payload не возвращается через owner path.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationView'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '504': { $ref: '#/components/responses/GatewayTimeout' }
+  /invocations/{invocation_id}/cancel:
+    post:
+      operationId: cancelIntegrationInvocation
+      parameters:
+        - $ref: '#/components/parameters/InvocationID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvocationCancellation'
+      responses:
+        '200':
+          description: Сохранённый terminal cancel либо его идемпотентный replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationStatus'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '504': { $ref: '#/components/responses/GatewayTimeout' }
+  /connections/{connection_id}/validate:
+    post:
+      operationId: validateIntegrationConnection
+      parameters:
+        - $ref: '#/components/parameters/ConnectionID'
+      responses:
+        '200':
+          description: Ограниченный результат проверки без provider response, URL path или credential value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionValidation'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '504': { $ref: '#/components/responses/GatewayTimeout' }
+  /diagnostics:
+    get:
+      operationId: getIntegrationGatewayDiagnostics
+      responses:
+        '200':
+          description: Ограниченный диагностический статус gateway.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  status: { type: string, enum: [OK] }
+                required: [status]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '504': { $ref: '#/components/responses/GatewayTimeout' }
+components:
+  securitySchemes:
+    oidcBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ApprovalID:
+      name: approval_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InvocationID:
+      name: invocation_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ConnectionID:
+      name: connection_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    ApprovalDecision:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        reason_code:
+          type: string
+          enum: [OWNER_CONFIRMED, OWNER_REJECTED, POLICY_EXCEPTION]
+        idempotency_key: { type: string, format: uuid }
+      required: [decision, reason_code, idempotency_key]
+    InvocationStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        invocation_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING_APPROVAL, APPROVED, REJECTED, EXECUTING, SUCCEEDED, FAILED, UNKNOWN, CANCELLED, EXPIRED]
+        request_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [invocation_id, status, request_hash]
+    InvocationCancellation:
+      type: object
+      additionalProperties: false
+      properties:
+        reason_code: { type: string, enum: [OWNER_CANCELLED] }
+        idempotency_key: { type: string, format: uuid }
+      required: [reason_code, idempotency_key]
+    InvocationView:
+      type: object
+      additionalProperties: false
+      properties:
+        invocation_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING_APPROVAL, APPROVED, REJECTED, EXECUTING, SUCCEEDED, FAILED, UNKNOWN, CANCELLED, EXPIRED]
+        request_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        preview: { type: object }
+        approval:
+          type: object
+          additionalProperties: false
+          properties:
+            approval_id: { type: string, format: uuid }
+            status: { type: string, enum: [PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED] }
+            request_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+            preview: { type: object }
+            expires_at: { type: string, format: date-time }
+            decided_at: { type: string, format: date-time }
+            reason_code: { type: string }
+          required: [approval_id, status, request_hash, preview, expires_at]
+        result_digest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        completed_at: { type: string, format: date-time }
+      required: [invocation_id, status, request_hash, preview]
+    ConnectionValidation:
+      type: object
+      additionalProperties: false
+      properties:
+        connection_id: { type: string, format: uuid }
+        status: { type: string, enum: [VALID, INVALID] }
+        validation_code:
+          type: string
+          enum: [OK, CREDENTIAL_UNAVAILABLE, UNAUTHORIZED, FORBIDDEN, ENDPOINT_UNAVAILABLE, TIMEOUT, PROTOCOL_ERROR]
+        validated_at: { type: string, format: date-time }
+      required: [connection_id, status, validation_code, validated_at]
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        error: { type: string }
+      required: [error]
+  responses:
+    BadRequest:
+      description: Запрос не соответствует закрытому контракту.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthorized:
+      description: OIDC bearer отсутствует или недействителен.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: У проверенного principal нет точного permission либо ресурс принадлежит другой области.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Ресурс не виден в проверенной области.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: Решение проиграло single-winner lock либо неизменяемый request изменился.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Gone:
+      description: Срок действия точного resource snapshot истёк.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooManyRequests:
+      description: Достигнут закрытый предел concurrent requests.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Internal:
+      description: Запрос закрыто отклонён из-за внутренней ошибки.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    GatewayTimeout:
+      description: Истёк ограниченный deadline запроса.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

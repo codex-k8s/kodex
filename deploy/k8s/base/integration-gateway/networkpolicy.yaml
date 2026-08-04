@@ -1,0 +1,160 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-gateway-deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: integration-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-gateway-exact-runtime-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: integration-gateway
+      app.kubernetes.io/component: external-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-runner
+      ports:
+        - {protocol: TCP, port: 8443}
+        - {protocol: TCP, port: 9443}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-api-gateway
+      ports:
+        - {protocol: TCP, port: 8443}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - {protocol: TCP, port: 9090}
+        - {protocol: TCP, port: 9091}
+        - {protocol: TCP, port: 9092}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: integration-gateway-postgresql
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+      ports:
+        - {protocol: TCP, port: 8443}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-egress-proxy
+      ports:
+        - {protocol: TCP, port: 8443}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: identity
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sso
+      ports:
+        - {protocol: TCP, port: 443}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+      ports:
+        - {protocol: TCP, port: 8200}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-postgresql
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-readback-attestor
+      ports:
+        - {protocol: TCP, port: 8443}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: internal-rpc-authority-restore-controller
+      ports:
+        - {protocol: TCP, port: 8443}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opentelemetry-collector
+      ports:
+        - {protocol: TCP, port: 4317}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentry-relay
+      ports:
+        - {protocol: TCP, port: 8443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-gateway-migration-exact-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: integration-gateway
+      app.kubernetes.io/component: migration
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: integration-gateway-postgresql
+      ports:
+        - {protocol: TCP, port: 5432}

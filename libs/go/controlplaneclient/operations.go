@@ -107,6 +107,7 @@ func IntegrationGatewayOperations() map[string]string {
 		"control.integration-execution.begin":      controlplanev1.ControlPlaneService_BeginIntegrationExecution_FullMethodName,
 		"control.integration-execution.complete":   controlplanev1.ControlPlaneService_CompleteIntegrationExecution_FullMethodName,
 		"control.integration-execution.fail":       controlplanev1.ControlPlaneService_FailIntegrationExecution_FullMethodName,
+		"control.integration-result.validate":      controlplanev1.ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
 	}
 }
 

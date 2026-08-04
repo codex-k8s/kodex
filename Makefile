@@ -7,7 +7,7 @@ PROTOBUF_GO_PLUGIN_REVISION := 1
 GRPC_GO_PLUGIN_REMOTE := buf.build/grpc/go:v1.6.2
 GRPC_GO_PLUGIN_REVISION := 1
 
-.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-integration-gateway-openapi-go gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -46,8 +46,11 @@ govulncheck: check-go-toolchain
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 
-gen-openapi-go:
+gen-openapi-go: gen-integration-gateway-openapi-go
 	oapi-codegen -config tools/codegen/openapi/control-center-go.yaml specs/openapi/control-center.v1.yaml
+
+gen-integration-gateway-openapi-go:
+	oapi-codegen -config tools/codegen/openapi/integration-gateway-go.yaml contracts/openapi/integration-gateway/v1/openapi.yaml
 
 gen-openapi-ts:
 	openapi-ts -f tools/codegen/openapi/control-center-ts.config.mjs
