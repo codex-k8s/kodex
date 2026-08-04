@@ -4,7 +4,7 @@ title: Runtime controller и жизненный цикл ресурсов сес
 type: architecture
 status: approved
 owner: architect
-version: 1.3.0
+version: 1.3.1
 updated: 2026-08-04
 ---
 
@@ -29,7 +29,7 @@ Controller не запускает Codex: role image запускает `agent-r
 | guarded PVC delete/finalize | controller может только `ConsumeRuntimeCleanupAuthorization` | active generation, тот же PVC tuple, observed NotFound и deletion proof digest | idempotent `CONSUMED` | controller |
 | cancel/retry/continuation | только owner workload | полный session/turn/process graph | atomic terminal/retry/new revision/grant | не controller |
 | role runtime | exact ServiceAccount profile; bearer остаётся обязательным на application path | immutable runner input и projected credentials | runner handoff exact execution/revision/input tuple | `agent-runner` |
-| bot execution binding | bot-service owner через TLS 1.3/mTLS + bearer и generated control-plane client | control-plane precondition + локально разрешённые по `RunID` bot AgentSession/Turn/Run и их версии | durable bot outbox receipt, затем server-computed binding digest в owner transaction | bounded bot delivery worker |
+| bot execution binding | bot-service owner через TLS 1.3/mTLS + bearer и generated control-plane client | repository-разрешённые source post, role/channel, prompt и bot AgentSession/Turn/Run с версиями | одна owner transaction создаёт либо rejoin-ит control Session/Turn/attempt/fresh RuntimeRevision, binding digests и receipt | bounded bot discovery worker |
 
 mTLS подтверждает peer и не заменяет bearer, application authority, owner
 resolution, idempotency или replay protection. Payload, labels и NATS envelope
@@ -113,12 +113,35 @@ listener с exact client CA и bearer. PostgreSQL outbox атомарно раз
 
 Production producer начинается не в controller: `AFTER INSERT` фактического
 `matter_codex_agent_session_turns` атомарно создаёт durable discovery по
-bot-owned `RunID` и исходному Mattermost post reference. Bounded bot worker до
-control-plane claim вызывает закрытый `ResolveRuntimeAgentBindingIntent`,
-который разрешает единственный `QUEUED` Turn и его fresh RuntimeRevision из
-owner state, затем фиксирует локальный outbox и доставляет
-`BindRuntimeAgentSession`. Потеря ответа на resolve, enqueue, bind или local
-complete повторяет тот же tuple; controller не знает и не синтезирует bot ID.
+bot-owned `RunID` и исходному Mattermost post reference. Claim discovery одной
+локальной транзакцией перечитывает AgentSession/Turn versions, role stable key,
+channel и prompt. Bounded worker до control-plane claim вызывает закрытый
+`MaterializeRuntimeAgentTurn`: control-plane разрешает actor/project/Role/Chat
+только из transport authority и owner state, сам назначает control Session,
+Turn, attempt и fresh RuntimeRevision и в той же owner transaction сохраняет
+exact bot binding, receipt, audit и mutations. Первый user turn поэтому не
+зависит от заранее существующего control Turn. Потеря RPC либо local complete
+повторяет тот же semantic key и возвращает те же IDs/digests; payload IDs не
+назначают authority, controller не знает и не синтезирует bot ID. Legacy
+resolve/bind остаётся только для уже созданных исторических outbox rows.
+
+Credential materialization не даёт долговечной authority namespace-wide
+`secrets/get`. Materializer создаёт только admission-ограниченные
+execution-scoped SA/Role/RoleBinding и one-time copy Pod; его 10-минутный
+projected token читает exact source/destination Secret names. Полный Pod и
+Secret проходят webhook с тем же signed ticket и PostgreSQL replay key.
+`NONE`, `PROJECT_READ_ONLY` и `CLUSTER_ADMIN` используют одного trusted issuer
+actor, но только exact profile выбирает предустановленный admin subject.
+До успешного `Secret Create` durable credential effect отсутствует, поэтому
+archive/restore exchanger после crash может получить новый short-lived STS
+grant. Потерянный ответ и `AlreadyExists` проверяет action-specific one-time
+readback Pod с exact `resourceNames`. Controller читает только immutable owner
+receipt с Secret UID/resourceVersion, expiry и content digest, но не Secret.
+Workload materializer и оба S3 exchanger запускаются как UID/GID 10001 с
+`fsGroup=10001`; TLS, CA, projected Kubernetes/Vault tokens и Vault CSI files
+имеют mode `0440`. Их startup/readiness выполняют `check-snapshot` либо
+`check-s3-*` и реально читают/разбирают те же production cert/key/CA/token,
+ticket trust и action config paths до Ready.
 
 `Succeeded`/`Failed` фаза Pod не завершает turn. После фактического результата
 runner публикует `mattercodex.runtime-turn-handoff.v1` в собственный Pod:

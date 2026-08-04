@@ -36,6 +36,42 @@ func (server *Server) ResolveRuntimeAgentBindingIntent(
 	}, nil
 }
 
+func (server *Server) MaterializeRuntimeAgentTurn(
+	ctx context.Context,
+	request *controlplanev1.MaterializeRuntimeAgentTurnRequest,
+) (*controlplanev1.MaterializeRuntimeAgentTurnResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	materialized, err := server.service.MaterializeRuntimeAgentTurn(ctx,
+		resource.MaterializeRuntimeAgentTurnInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			SourceRef: request.GetSourceRef(), RoleStableKey: request.GetRoleStableKey(),
+			ExternalChannelRef: request.GetExternalChannelRef(), PromptText: request.GetPromptText(),
+			AgentSessionKey: request.GetAgentSessionKey(), AgentSessionID: request.GetAgentSessionId(),
+			AgentSessionVersion:     request.GetAgentSessionVersion(),
+			AgentSessionTurnID:      request.GetAgentSessionTurnId(),
+			AgentSessionTurnVersion: request.GetAgentSessionTurnVersion(),
+			AgentRunID:              request.GetAgentRunId(),
+		})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.MaterializeRuntimeAgentTurnResponse{
+		SessionId: materialized.SessionID, SessionVersion: materialized.SessionVersion,
+		TurnId: materialized.TurnID, TurnVersion: materialized.TurnVersion,
+		Attempt: materialized.Attempt, InputSha256: materialized.InputSHA256,
+		RuntimeRevisionId:         materialized.RuntimeRevisionID,
+		RuntimeRevisionVersion:    materialized.RuntimeRevisionVersion,
+		RuntimeRevisionSha256:     materialized.RuntimeRevisionSHA256,
+		AgentSessionBindingSha256: materialized.AgentSessionBindingSHA256,
+		AgentTurnBindingSha256:    materialized.AgentTurnBindingSHA256,
+	}, nil
+}
+
 func (server *Server) SetResourceRetentionPolicy(
 	ctx context.Context,
 	request *controlplanev1.SetResourceRetentionPolicyRequest,

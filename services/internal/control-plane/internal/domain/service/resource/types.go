@@ -161,6 +161,27 @@ type RuntimeAgentBindingIntent struct {
 	RuntimeRevisionSHA256  string
 }
 
+type MaterializeRuntimeAgentTurnInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	SourceRef               string
+	RoleStableKey           string
+	ExternalChannelRef      string
+	PromptText              string
+	AgentSessionKey         string
+	AgentSessionID          int64
+	AgentSessionVersion     uint64
+	AgentSessionTurnID      int64
+	AgentSessionTurnVersion uint64
+	AgentRunID              string
+}
+
+type MaterializedRuntimeAgentTurn struct {
+	RuntimeAgentBindingIntent
+	AgentSessionBindingSHA256 string
+	AgentTurnBindingSHA256    string
+}
+
 type ResourceRetentionPolicyInput struct {
 	Principal               value.Principal
 	IdempotencyKey          string

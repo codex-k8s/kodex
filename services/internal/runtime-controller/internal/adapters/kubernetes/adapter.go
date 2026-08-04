@@ -1310,22 +1310,6 @@ func executionCredentialVolume(
 	}}}, corev1.VolumeMount{Name: name, MountPath: path, ReadOnly: true}
 }
 
-func secretDataSHA256(data map[string][]byte) string {
-	keys := make([]string, 0, len(data))
-	for key := range data {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	digest := sha256.New()
-	for _, key := range keys {
-		_, _ = digest.Write([]byte(key))
-		_, _ = digest.Write([]byte{0})
-		_, _ = digest.Write(data[key])
-		_, _ = digest.Write([]byte{0})
-	}
-	return hex.EncodeToString(digest.Sum(nil))
-}
-
 func (adapter *Adapter) List(ctx context.Context) ([]entity.RuntimeStatus, error) {
 	configMaps := &corev1.ConfigMapList{}
 	continueToken := ""
@@ -2340,24 +2324,29 @@ func (adapter *Adapter) readS3CredentialSnapshot(
 	if action != "archive" && action != "restore" {
 		return "", errs.ErrInvalidInput
 	}
-	secret, err := adapter.client.CoreV1().Secrets(adapter.config.Namespace).Get(
-		ctx, s3CredentialSecretName(execution, action), metav1.GetOptions{},
+	receiptName := "runtime-authority-receipt-" + stableHash(execution.ID+":s3-"+action, 24)
+	receipt, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(
+		ctx, receiptName, metav1.GetOptions{},
 	)
-	if err != nil || secret.Immutable == nil || !*secret.Immutable ||
-		secret.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
-		secret.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
-		secret.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
-		secret.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
-		secret.Annotations["runtime.mattercodex.dev/action"] != action ||
-		secret.Annotations["runtime.mattercodex.dev/bucket"] != adapter.config.S3Bucket ||
-		secret.Annotations["runtime.mattercodex.dev/workload-ticket-sha256"] != execution.WorkloadTicketSHA256 ||
-		!validSHA256Text(secret.Annotations["runtime.mattercodex.dev/inline-policy-sha256"]) ||
-		!validSHA256Text(secret.Annotations["runtime.mattercodex.dev/readback-sha256"]) ||
-		len(secret.Data) != 3 || len(secret.Data["access-key-id"]) == 0 ||
-		len(secret.Data["secret-access-key"]) == 0 || len(secret.Data["session-token"]) == 0 {
-		return "", errors.New("read exact runtime S3 credential snapshot")
+	if err != nil || receipt.Immutable == nil || !*receipt.Immutable ||
+		receipt.Data["execution_id"] != execution.ID || receipt.Data["mode"] != "s3-"+action ||
+		receipt.Data["version"] != strconv.FormatUint(execution.Version, 10) ||
+		receipt.Data["fence"] != strconv.FormatUint(execution.Fence, 10) ||
+		receipt.Data["s3_execution_id"] != execution.ID ||
+		receipt.Data["s3_organization_id"] != execution.OrganizationID ||
+		receipt.Data["s3_project_id"] != execution.ProjectID ||
+		receipt.Data["s3_session_id"] != execution.SessionID ||
+		receipt.Data["s3_action"] != action ||
+		receipt.Data["s3_secret_name"] != s3CredentialSecretName(execution, action) ||
+		receipt.Data["s3_secret_uid"] == "" || receipt.Data["s3_secret_resource_version"] == "" ||
+		!validSHA256Text(receipt.Data["request_sha256"]) ||
+		!validSHA256Text(receipt.Data["s3_policy_sha256"]) ||
+		!validSHA256Text(receipt.Data["s3_readback_sha256"]) ||
+		!validSHA256Text(receipt.Data["s3_secret_data_sha256"]) ||
+		!validSHA256Text(receipt.Data["s3_content_sha256"]) {
+		return "", errors.New("read exact runtime S3 credential owner receipt")
 	}
-	expiresAt, err := time.Parse(time.RFC3339, secret.Annotations["runtime.mattercodex.dev/expires-at"])
+	expiresAt, err := time.Parse(time.RFC3339, receipt.Data["s3_expires_at"])
 	now := adapter.now().UTC()
 	if err != nil || !expiresAt.After(now.Add(time.Minute)) || expiresAt.After(now.Add(15*time.Minute)) {
 		return "", errors.New("runtime S3 credential lifetime is invalid")
@@ -2369,27 +2358,27 @@ func (adapter *Adapter) readS3CredentialSnapshot(
 			sourceExecutionID = execution.ID
 		}
 	}
-	if secret.Annotations["runtime.mattercodex.dev/source-execution-id"] != sourceExecutionID ||
-		secret.Annotations["runtime.mattercodex.dev/sts-session-name"] !=
-			"mcx-"+shortID(execution.ID)+"-"+action ||
-		!strings.HasPrefix(secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"], "arn:") ||
-		!strings.Contains(secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"],
-			":assumed-role/mattercodex-runtime-"+action+"-execution/") {
+	if receipt.Data["s3_source_execution_id"] != sourceExecutionID {
 		return "", errs.ErrStateConflict
 	}
 	payload, err := json.Marshal(struct {
-		UID, ResourceVersion, ExecutionID, Action, SourceExecutionID, ExpiresAt string
-		AssumedRoleARN, PolicySHA256, ReadbackSHA256, SecretDataSHA256          string
-	}{string(secret.UID), secret.ResourceVersion, execution.ID, action, sourceExecutionID,
-		expiresAt.UTC().Format(time.RFC3339),
-		secret.Annotations["runtime.mattercodex.dev/assumed-role-arn"],
-		secret.Annotations["runtime.mattercodex.dev/inline-policy-sha256"],
-		secret.Annotations["runtime.mattercodex.dev/readback-sha256"], secretDataSHA256(secret.Data)})
+		Name, UID, ResourceVersion, ExecutionID, OrganizationID, ProjectID string
+		SessionID, SourceExecutionID, Action, PolicySHA256, ReadbackSHA256 string
+		SecretDataSHA256, ExpiresAt                                        string
+	}{receipt.Data["s3_secret_name"], receipt.Data["s3_secret_uid"],
+		receipt.Data["s3_secret_resource_version"], execution.ID,
+		execution.OrganizationID, execution.ProjectID, execution.SessionID,
+		sourceExecutionID, action, receipt.Data["s3_policy_sha256"],
+		receipt.Data["s3_readback_sha256"], receipt.Data["s3_secret_data_sha256"],
+		expiresAt.UTC().Format(time.RFC3339)})
 	if err != nil {
 		return "", errors.New("encode runtime S3 credential snapshot")
 	}
 	digest := sha256.Sum256(payload)
-	return hex.EncodeToString(digest[:]), nil
+	if hex.EncodeToString(digest[:]) != receipt.Data["s3_content_sha256"] {
+		return "", errors.New("runtime S3 credential owner receipt digest mismatch")
+	}
+	return receipt.Data["s3_content_sha256"], nil
 }
 
 func validSHA256Text(value string) bool {
@@ -2682,7 +2671,7 @@ func accessServiceAccountName(execution entity.Execution) string {
 	if execution.AccessProfile == enum.AccessClusterAdmin {
 		return "runtime-role-cluster-admin"
 	}
-	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID, 24)
+	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
 }
 func projectNamespaceName(projectID string) string {
 	return "mattercodex-project-" + stableHash(projectID, 20)

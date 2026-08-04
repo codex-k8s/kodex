@@ -263,6 +263,27 @@ spec:
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
+metadata: {name: runtime-s3-readback-exact-paths}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: runtime-controller
+      app.kubernetes.io/component: runtime-s3-credential-readback
+      runtime.mattercodex.dev/managed: "true"
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {component: kube-apiserver}}
+      ports: [{protocol: TCP, port: 6443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
 metadata: {name: runtime-controller-migration-exact-paths}
 spec:
   podSelector:

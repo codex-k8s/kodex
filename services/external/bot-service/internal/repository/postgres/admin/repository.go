@@ -1939,8 +1939,11 @@ func (repo *Repository) ClaimRuntimeAgentBindingDiscovery(
 	var discovery adminrepo.RuntimeAgentBindingDiscovery
 	err := repo.db.QueryRow(ctx, query("runtime_agent_binding_discovery__claim.sql"),
 		leaseToken, leaseExpiresAt).Scan(
-		&discovery.ID, &discovery.AgentSessionTurnID, &discovery.AgentRunID,
-		&discovery.SourceRef, &discovery.LeaseToken,
+		&discovery.ID, &discovery.AgentSessionID, &discovery.AgentSessionTurnID,
+		&discovery.AgentSessionVersion, &discovery.AgentSessionTurnVersion,
+		&discovery.AgentRunID, &discovery.SourceRef, &discovery.LeaseToken,
+		&discovery.AgentSessionKey, &discovery.RoleStableKey,
+		&discovery.ExternalChannelRef, &discovery.PromptText,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return adminrepo.RuntimeAgentBindingDiscovery{}, adminrepo.ErrNotFound

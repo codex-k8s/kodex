@@ -4,7 +4,7 @@ title: Контракт исполнения и продолжения control-p
 type: service-contract
 status: approved
 owner: developer
-version: 1.14.0
+version: 1.14.1
 updated: 2026-08-04
 ---
 
@@ -172,7 +172,7 @@ attempt/revision/input/fence/generation/state/deadline; (4) только пос�
 
 | Сценарий | Owner transaction и replay | Закрытый отказ |
 | --- | --- | --- |
-| bot binding | bot-service durable outbox разрешает `RunID` в локальные AgentSession/Turn и их версии, затем generated client вызывает `BindRuntimeAgentSession`; control-plane атомарно сохраняет binding и receipt | payload не назначает bot identity; stale session/turn/run version или другой semantic hash конфликтуют |
+| bot first turn/binding | `AFTER INSERT AgentSessionTurn` создаёт discovery с immutable локальным snapshot; generated client вызывает специализированный `MaterializeRuntimeAgentTurn`. Control-plane из verified principal разрешает actor/project/Role/Chat и одной owner transaction/receipt создаёт либо rejoin-ит Session, prompt Artifact, свежую RuntimeRevision, Turn/attempt и exact binding на bot AgentSession/Turn/Run. Затем bot durable outbox идемпотентно доставляет тот же binding в `BindRuntimeAgentSession`, чтобы локальный owner сохранил digests; lost response повторяет обе receipts | Payload не назначает control IDs или bot identity; stale session/turn/run version, другой source/role/channel/prompt либо semantic hash конфликтуют до claim |
 | reschedule | receipt replay проверяется до stale precondition; predecessor `RETRIED`, successor, fresh RuntimeRevision/capacity и скопированный authoritative agent binding фиксируются одной transaction | старая observation/revision не мутируется; successor без binding не создаётся |
 | retention | claim читает effective owner-managed `ResourceRetentionPolicy` и pin-ит ID/version/durations/eligible-at/retain-until; terminal/archive/cleanup используют только pinned snapshot | missing/retired/version mismatch и текущая process env policy не используются |
 | cleanup | один Session/full-graph lock проверяет queued/PENDING/admitted/running successors, capacity delay, owner gate/callback, manual/legal hold и non-rejoined continuation | terminal predecessor не разрешает удалить PVC живого successor |

@@ -4,7 +4,7 @@ title: Диагностика и восстановление runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 1.4.0
+version: 1.4.1
 updated: 2026-08-04
 ---
 
@@ -117,6 +117,23 @@ immutable one-time receipt. Vault action role выдаёт только bootstra
 `restore-role-arn`; передавать inline policy/session tags в Vault generate
 endpoint запрещено, потому что этот endpoint их не принимает.
 
+До успешного `Secret Create` durable credential effect отсутствует: crash
+безопасно получает новый short-lived STS grant, который ещё не доступен
+workload. Потерянный ответ и `AlreadyExists` запускают action-specific one-time
+`runtime-s3-readback-*` Pod. Его projected token живёт не более 600 секунд, Role
+даёт `get` только exact Secret, а admission сверяет issuer, audience,
+execution/source/action, full tuple и Pod spec. Controller проверяет только
+`runtime-authority-receipt-*` с exact UID/resourceVersion/policy/readback/data
+digest/expiry и не читает Secret. Mismatch является fail-closed инцидентом;
+broad `secrets/get` не добавлять.
+
+Перед Ready у `runtime-workload-materializer`, `runtime-s3-archive-exchanger` и
+`runtime-s3-restore-exchanger` проверить UID/GID/fsGroup `10001`, modes `0440`
+и успешный exec probe `check-snapshot|check-s3-*`. Probe обязан прочитать TLS
+cert/key/CA, projected Kubernetes/Vault tokens, ticket public key, S3 CA и
+action KMS/role config. TCP-only probe или world-readable secret является
+fail-closed конфигурационным инцидентом.
+
 Для archive нужны quiesced CSI snapshot/clone, exact S3 `VersionId`, checksum,
 size, KMS, COMPLIANCE Object Lock не менее 90 суток, exact retain-until
 `HeadObject`+`GetObjectRetention` и metadata provenance. Restore proof обязан
@@ -167,10 +184,14 @@ Routine controller и `runtime-credential-broker`, `runtime-project-read-broker`
 `runtime-cluster-admin-broker`, `runtime-s3-archive-broker`,
 `runtime-s3-restore-broker` не имеют Secret access либо права создавать role Pod/
 ServiceAccount/RoleBinding и права создавать/bind-ить `cluster-admin`.
-Проверить успешный `runtime-workload-materializer`: только он после
-action-specific Ed25519 full-tuple ticket, exact mTLS caller, bearer equality и
-one-time receipt выполняет immutable credential readback и exact desired Pod
-create. Admission, archive и restore должны читать три
+Проверить успешный `runtime-workload-materializer`: он не имеет Secret verbs и
+после action-specific Ed25519 full-tuple ticket создаёт только exact
+execution-scoped SA/Role/RoleBinding и `runtime-credential-copy-*` Pod.
+Projected token copy Pod живёт не более 600 секунд; Role содержит только exact
+source/destination names, а webhook сверяет full Pod и immutable destination
+Secret с RuntimeRevision и PostgreSQL replay receipt. Прямая попытка
+materializer создать произвольные SA/RBAC/Pod либо copy identity записать
+Secret другой execution должна быть отклонена. Admission, archive и restore должны читать три
 разных public verifier path; private keys существуют только у control-plane.
 `PROJECT_READ_ONLY` binding должен соответствовать exact project namespace и
 session identity. `CLUSTER_ADMIN` использует только

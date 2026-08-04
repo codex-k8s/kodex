@@ -2,6 +2,8 @@ package resource
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -355,6 +358,300 @@ func runtimeResourcePolicy(role entity.RoleSpec) (string, string) {
 	return resourceClass, clusterProfile
 }
 
+// MaterializeRuntimeAgentTurn замыкает первый bot turn на owner graph одной
+// транзакцией. Bot identifiers разрешены локальным repository и служат данными
+// проверки; control-plane IDs, provider binding, revision и digests назначает
+// только owner.
+func (service *Service) MaterializeRuntimeAgentTurn(
+	ctx context.Context,
+	input MaterializeRuntimeAgentTurnInput,
+) (MaterializedRuntimeAgentTurn, error) {
+	if err := authorize(input.Principal, permissionRuntimeAgentBind); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if input.Principal.CallerWorkload != service.botServiceWorkload ||
+		input.Principal.CallerSPIFFEID != service.botServiceSPIFFEID ||
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		!validRuntimeReference(input.SourceRef) ||
+		value.ValidateStableKey(input.RoleStableKey) != nil ||
+		!validRuntimeReference(input.ExternalChannelRef) ||
+		len(input.PromptText) == 0 || len(input.PromptText) > 1<<20 ||
+		!utf8.ValidString(input.PromptText) || strings.ContainsRune(input.PromptText, '\x00') ||
+		!validOpaqueRuntimeIdentifier(input.AgentSessionKey) ||
+		input.AgentSessionID <= 0 || input.AgentSessionVersion == 0 ||
+		input.AgentSessionTurnID <= 0 || input.AgentSessionTurnVersion == 0 ||
+		!validOpaqueRuntimeIdentifier(input.AgentRunID) {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		SourceRef, RoleStableKey, ExternalChannelRef, PromptText string
+		AgentSessionKey, AgentRunID                              string
+		AgentSessionID, AgentSessionTurnID                       int64
+		AgentSessionVersion, AgentSessionTurnVersion             uint64
+	}{input.SourceRef, input.RoleStableKey, input.ExternalChannelRef, input.PromptText,
+		input.AgentSessionKey, input.AgentRunID, input.AgentSessionID,
+		input.AgentSessionTurnID, input.AgentSessionVersion,
+		input.AgentSessionTurnVersion})
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	var result, validated MaterializedRuntimeAgentTurn
+	err = service.withLifecycleReceipt(
+		ctx, input.Principal, input.IdempotencyKey,
+		"materialize_runtime_agent_turn", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, currentErr := service.currentMaterializedRuntimeAgentTurn(ctx, tx, input)
+			if currentErr == nil {
+				validated = current
+				return lifecycleReceiptReplay, nil
+			}
+			if !errors.Is(currentErr, errs.ErrNotFound) {
+				return 0, currentErr
+			}
+			return lifecycleReceiptApply, nil
+		},
+		func() error {
+			if validated.TurnID == "" || validated != result {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
+			materialized, applyErr := service.applyRuntimeAgentTurnMaterialization(ctx, tx, input)
+			if applyErr != nil {
+				return applyErr
+			}
+			result = materialized
+			return nil
+		},
+	)
+	return result, err
+}
+
+func (service *Service) applyRuntimeAgentTurnMaterialization(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input MaterializeRuntimeAgentTurnInput,
+) (MaterializedRuntimeAgentTurn, error) {
+	resources, err := tx.ListSnapshotResources(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	role, chat, err := resolveBotMaterializationResources(
+		resources, input.RoleStableKey, input.ExternalChannelRef,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	role, err = tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, role.ID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	chat, err = tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, chat.ID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	roleSpec, roleOK := role.Spec.(entity.RoleSpec)
+	chatSpec, chatOK := chat.Spec.(entity.ChatSpec)
+	roleIDs, err := tx.ActorRoleIDs(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, input.Principal.ActorID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if !roleOK || !chatOK || role.State != enum.StateActive ||
+		chat.State != enum.StateActive || roleSpec.StableKey != input.RoleStableKey ||
+		chatSpec.ExternalChannelRef != input.ExternalChannelRef ||
+		!slices.Contains(roleIDs, role.ID) {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrNotFound
+	}
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	now = now.UTC().Truncate(time.Microsecond)
+	session, err := runtimeAgentSessionForUpdate(
+		ctx, tx, input.Principal, input.AgentSessionKey, input.AgentSessionID,
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		sessionID := uuid.NewString()
+		binding, bindingErr := service.selectProviderBinding(
+			ctx, tx, input.Principal, role.ID, roleSpec, "", now,
+		)
+		if bindingErr != nil {
+			return MaterializedRuntimeAgentTurn{}, bindingErr
+		}
+		sessionDigest, digestErr := runtimeAgentSessionDigest(
+			sessionID, input.AgentSessionKey, input.AgentSessionID,
+			input.AgentSessionVersion,
+		)
+		if digestErr != nil {
+			return MaterializedRuntimeAgentTurn{}, digestErr
+		}
+		session, err = entity.New(sessionID, input.Principal.OrganizationID,
+			input.Principal.ProjectID, chat.ID, input.Principal.ActorID,
+			enum.KindSession, "Bot session "+input.AgentSessionKey,
+			entity.SessionSpec{AgentID: role.ID,
+				ProviderAccountBindingID: binding.ID, ConversationID: chat.ID,
+				AgentSessionKey: input.AgentSessionKey, AgentSessionID: input.AgentSessionID,
+				AgentSessionBindingVersion: input.AgentSessionVersion,
+				AgentSessionBindingSHA256:  sessionDigest}, now)
+		if err != nil {
+			return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+		}
+		if err = tx.Insert(ctx, session); err != nil {
+			return MaterializedRuntimeAgentTurn{}, err
+		}
+		if err = service.appendMutationRecords(ctx, tx, input.Principal,
+			"materialize_runtime_agent_session", session); err != nil {
+			return MaterializedRuntimeAgentTurn{}, err
+		}
+	} else if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	sessionSpec, ok := session.Spec.(entity.SessionSpec)
+	if !ok || session.Kind != enum.KindSession || session.State != enum.StateActive ||
+		session.OwnerActorID != input.Principal.ActorID || sessionSpec.AgentID != role.ID ||
+		sessionSpec.ConversationID != chat.ID ||
+		sessionSpec.AgentSessionKey != input.AgentSessionKey ||
+		sessionSpec.AgentSessionID != input.AgentSessionID {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	if sessionSpec.LastTurnSequence == ^uint64(0) {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	sessionSpec.LastTurnSequence++
+	sessionSpec.AgentSessionBindingVersion = input.AgentSessionVersion
+	sessionSpec.AgentSessionBindingSHA256, err = runtimeAgentSessionDigest(
+		session.ID, input.AgentSessionKey, input.AgentSessionID, input.AgentSessionVersion,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	updatedSession, err := session.Update(session.Name, sessionSpec, now)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	if err = tx.Update(ctx, updatedSession, session.Version); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = service.appendMutationRecords(ctx, tx, input.Principal,
+		"materialize_runtime_agent_turn_session", updatedSession); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	session = updatedSession
+	promptDigest := sha256.Sum256([]byte(input.PromptText))
+	promptSHA256 := hex.EncodeToString(promptDigest[:])
+	evidenceDigest := sha256.Sum256([]byte(strings.Join([]string{
+		input.SourceRef, input.AgentSessionKey, strconv.FormatInt(input.AgentSessionTurnID, 10),
+		input.AgentRunID, promptSHA256,
+	}, "\x00")))
+	artifact, err := entity.New(uuid.NewString(), input.Principal.OrganizationID,
+		input.Principal.ProjectID, session.ID, input.Principal.ActorID,
+		enum.KindArtifact, "Mattermost prompt "+input.SourceRef,
+		entity.ArtifactSpec{ArtifactKind: "mattermost-prompt", Direction: "INPUT",
+			StorageRef: "mattermost://post/" + input.SourceRef,
+			SizeBytes:  uint64(len([]byte(input.PromptText))), MediaType: "text/plain; charset=utf-8",
+			SHA256: promptSHA256, ScanStatus: "CLEAN",
+			RetentionPolicyRef: "policy://runtime-input",
+			ScanPolicyRevision: 1, ScanEvidenceSHA256: hex.EncodeToString(evidenceDigest[:]),
+			ScannerWorkloadID: service.botServiceWorkload, ScannedAt: now}, now)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	if err = tx.Insert(ctx, artifact); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = service.appendMutationRecords(ctx, tx, input.Principal,
+		"materialize_runtime_agent_prompt", artifact); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revision, err := service.createRuntimeRevision(ctx, tx, input.Principal,
+		session, sessionSpec)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
+	if !ok {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInternal
+	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	turnID := uuid.NewString()
+	inputSHA256 := hashRuntimeInput(input.SourceRef, promptSHA256,
+		revisionSpec.ManifestSHA256, "")
+	turnBindingSHA256, err := runtimeAgentTurnDigest(
+		session.ID, turnID, inputSHA256, 1, revision.ID, revisionSHA256,
+		revision.Version, sessionSpec.AgentSessionBindingSHA256,
+		input.AgentRunID, input.AgentSessionTurnID, input.AgentSessionTurnVersion,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	turn, err := entity.New(turnID, input.Principal.OrganizationID,
+		input.Principal.ProjectID, session.ID, input.Principal.ActorID,
+		enum.KindTurn, "Turn "+session.ID, entity.TurnSpec{
+			SessionID: session.ID, Sequence: sessionSpec.LastTurnSequence,
+			SourceRef: input.SourceRef, PromptArtifactID: artifact.ID,
+			RuntimeRevisionID: revision.ID, Attempt: 1,
+			EffectiveInputSHA256: inputSHA256,
+			AgentSessionTurnID:   input.AgentSessionTurnID, AgentRunID: input.AgentRunID,
+			AgentTurnBindingVersion: input.AgentSessionTurnVersion,
+			AgentTurnBindingSHA256:  turnBindingSHA256,
+		}, now)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	if err = tx.Insert(ctx, turn); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = tx.SaveTurnAttempt(ctx, domainrepo.TurnAttempt{TurnID: turn.ID,
+		Attempt: 1, WorkloadID: "unassigned",
+		AuthorityGeneration: input.Principal.AuthorityGeneration,
+		State:               "QUEUED", InputSHA256: inputSHA256,
+		LeaseFence: turn.Version, StartedAt: now}); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	binding := domainrepo.RuntimeAgentBinding{
+		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		SessionID: session.ID, TurnID: turn.ID, Attempt: 1, InputSHA256: inputSHA256,
+		RuntimeRevisionID: revision.ID, RuntimeRevisionVersion: revision.Version,
+		RuntimeRevisionSHA256: revisionSHA256,
+		AgentSessionKey:       input.AgentSessionKey, AgentSessionID: input.AgentSessionID,
+		AgentSessionVersion:       input.AgentSessionVersion,
+		AgentSessionBindingSHA256: sessionSpec.AgentSessionBindingSHA256,
+		AgentSessionTurnID:        input.AgentSessionTurnID, AgentRunID: input.AgentRunID,
+		AgentSessionTurnVersion: input.AgentSessionTurnVersion,
+		AgentTurnBindingSHA256:  turnBindingSHA256, CreatedAt: now,
+	}
+	if err = tx.InsertRuntimeAgentBinding(ctx, binding); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = service.appendMutationRecords(ctx, tx, input.Principal,
+		"materialize_runtime_agent_turn", turn); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	result := MaterializedRuntimeAgentTurn{RuntimeAgentBindingIntent: RuntimeAgentBindingIntent{
+		SessionID: session.ID, SessionVersion: updatedSession.Version,
+		TurnID: turn.ID, TurnVersion: turn.Version, Attempt: 1,
+		InputSHA256: inputSHA256, RuntimeRevisionID: revision.ID,
+		RuntimeRevisionVersion: revision.Version,
+		RuntimeRevisionSHA256:  revisionSHA256,
+	}, AgentSessionBindingSHA256: sessionSpec.AgentSessionBindingSHA256,
+		AgentTurnBindingSHA256: turnBindingSHA256}
+	if err = service.appendLifecycleAudit(ctx, tx, input.Principal,
+		"materialize_runtime_agent_binding", turn.ID, "RUNTIME_AGENT_BINDING",
+		turn.Version, now); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	return result, nil
+}
+
 // ResolveRuntimeAgentBindingIntent разрешает единственный QUEUED Turn по
 // server-owned source reference. Bot identifiers в этот read не входят.
 func (service *Service) ResolveRuntimeAgentBindingIntent(
@@ -614,6 +911,189 @@ func validateRuntimeAgentRevision(
 func validOpaqueRuntimeIdentifier(value string) bool {
 	return len(value) >= 1 && len(value) <= 256 && strings.TrimSpace(value) == value &&
 		!strings.ContainsAny(value, "\x00\r\n")
+}
+
+func resolveBotMaterializationResources(
+	resources []entity.Resource,
+	roleStableKey, externalChannelRef string,
+) (entity.Resource, entity.Resource, error) {
+	var role, chat entity.Resource
+	roleCount, chatCount := 0, 0
+	for _, resource := range resources {
+		switch spec := resource.Spec.(type) {
+		case entity.RoleSpec:
+			if resource.Kind == enum.KindRole && resource.State == enum.StateActive &&
+				spec.StableKey == roleStableKey {
+				role, roleCount = resource, roleCount+1
+			}
+		case entity.ChatSpec:
+			if resource.Kind == enum.KindChat && resource.State == enum.StateActive &&
+				spec.ExternalChannelRef == externalChannelRef {
+				chat, chatCount = resource, chatCount+1
+			}
+		}
+	}
+	if roleCount != 1 || chatCount != 1 {
+		return entity.Resource{}, entity.Resource{}, errs.ErrNotFound
+	}
+	return role, chat, nil
+}
+
+func runtimeAgentSessionForUpdate(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	agentSessionKey string,
+	agentSessionID int64,
+) (entity.Resource, error) {
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	var found entity.Resource
+	count := 0
+	for _, candidate := range resources {
+		spec, ok := candidate.Spec.(entity.SessionSpec)
+		if ok && candidate.Kind == enum.KindSession &&
+			spec.AgentSessionKey == agentSessionKey && spec.AgentSessionID == agentSessionID {
+			found, count = candidate, count+1
+		}
+	}
+	if count == 0 {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	if count != 1 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, found.ID)
+}
+
+func runtimeAgentSessionDigest(
+	controlSessionID, agentSessionKey string,
+	agentSessionID int64,
+	agentSessionVersion uint64,
+) (string, error) {
+	digest, err := canonicalHash(struct {
+		ControlSessionID, AgentSessionKey string
+		AgentSessionID                    int64
+		AgentSessionVersion               uint64
+	}{controlSessionID, agentSessionKey, agentSessionID, agentSessionVersion})
+	if err != nil {
+		return "", errs.ErrInternal
+	}
+	return digest, nil
+}
+
+func runtimeAgentTurnDigest(
+	controlSessionID, controlTurnID, inputSHA256 string,
+	attempt uint32,
+	runtimeRevisionID, runtimeRevisionSHA256 string,
+	runtimeRevisionVersion uint64,
+	agentSessionBindingSHA256, agentRunID string,
+	agentSessionTurnID int64,
+	agentSessionTurnVersion uint64,
+) (string, error) {
+	digest, err := canonicalHash(struct {
+		ControlSessionID, ControlTurnID, InputSHA256 string
+		Attempt                                      uint32
+		RuntimeRevisionID, RuntimeRevisionSHA256     string
+		RuntimeRevisionVersion                       uint64
+		AgentSessionBindingSHA256, AgentRunID        string
+		AgentSessionTurnID                           int64
+		AgentSessionTurnVersion                      uint64
+	}{controlSessionID, controlTurnID, inputSHA256, attempt,
+		runtimeRevisionID, runtimeRevisionSHA256, runtimeRevisionVersion,
+		agentSessionBindingSHA256, agentRunID, agentSessionTurnID,
+		agentSessionTurnVersion})
+	if err != nil {
+		return "", errs.ErrInternal
+	}
+	return digest, nil
+}
+
+func (service *Service) currentMaterializedRuntimeAgentTurn(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input MaterializeRuntimeAgentTurnInput,
+) (MaterializedRuntimeAgentTurn, error) {
+	resources, err := tx.ListSnapshotResources(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	var discovered entity.Resource
+	count := 0
+	for _, candidate := range resources {
+		spec, ok := candidate.Spec.(entity.TurnSpec)
+		if ok && candidate.Kind == enum.KindTurn && spec.SourceRef == input.SourceRef {
+			discovered, count = candidate, count+1
+		}
+	}
+	if count == 0 {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrNotFound
+	}
+	if count != 1 {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	turn, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, discovered.ID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	turnSpec, ok := turn.Spec.(entity.TurnSpec)
+	if !ok || turn.Kind != enum.KindTurn || turn.State != enum.StateQueued ||
+		turn.OwnerActorID != input.Principal.ActorID || turnSpec.Attempt != 1 ||
+		turnSpec.AgentSessionTurnID != input.AgentSessionTurnID ||
+		turnSpec.AgentRunID != input.AgentRunID ||
+		turnSpec.AgentTurnBindingVersion != input.AgentSessionTurnVersion {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	session, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, turnSpec.SessionID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	sessionSpec, ok := session.Spec.(entity.SessionSpec)
+	if !ok || session.Kind != enum.KindSession || session.State != enum.StateActive ||
+		session.OwnerActorID != input.Principal.ActorID ||
+		sessionSpec.AgentSessionKey != input.AgentSessionKey ||
+		sessionSpec.AgentSessionID != input.AgentSessionID ||
+		sessionSpec.AgentSessionBindingVersion != input.AgentSessionVersion {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	binding, err := tx.GetRuntimeAgentBindingForUpdate(ctx, turn.ID, turnSpec.Attempt)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revision, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, turnSpec.RuntimeRevisionID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil || revision.Kind != enum.KindRuntimeRevision || revision.State != enum.StateActive ||
+		binding.OrganizationID != input.Principal.OrganizationID ||
+		binding.ProjectID != input.Principal.ProjectID || binding.SessionID != session.ID ||
+		binding.TurnID != turn.ID || binding.Attempt != turnSpec.Attempt ||
+		binding.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
+		binding.RuntimeRevisionID != revision.ID || binding.RuntimeRevisionVersion != revision.Version ||
+		binding.RuntimeRevisionSHA256 != revisionSHA256 ||
+		binding.AgentSessionKey != input.AgentSessionKey || binding.AgentSessionID != input.AgentSessionID ||
+		binding.AgentSessionVersion != input.AgentSessionVersion ||
+		binding.AgentSessionTurnID != input.AgentSessionTurnID || binding.AgentRunID != input.AgentRunID ||
+		binding.AgentSessionTurnVersion != input.AgentSessionTurnVersion ||
+		binding.AgentSessionBindingSHA256 != sessionSpec.AgentSessionBindingSHA256 ||
+		binding.AgentTurnBindingSHA256 != turnSpec.AgentTurnBindingSHA256 {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	return MaterializedRuntimeAgentTurn{RuntimeAgentBindingIntent: RuntimeAgentBindingIntent{
+		SessionID: session.ID, SessionVersion: session.Version,
+		TurnID: turn.ID, TurnVersion: turn.Version, Attempt: turnSpec.Attempt,
+		InputSHA256: turnSpec.EffectiveInputSHA256, RuntimeRevisionID: revision.ID,
+		RuntimeRevisionVersion: revision.Version, RuntimeRevisionSHA256: revisionSHA256,
+	}, AgentSessionBindingSHA256: binding.AgentSessionBindingSHA256,
+		AgentTurnBindingSHA256: binding.AgentTurnBindingSHA256}, nil
 }
 
 func (service *Service) ClaimRuntimeExecution(

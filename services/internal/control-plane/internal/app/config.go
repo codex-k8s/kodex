@@ -284,6 +284,7 @@ func expectedOperations() map[string]string {
 		"control.memory-indexer.readiness":             controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.runtime-execution.claim":              controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
 		"control.runtime-execution.agent.bind":         controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
+		"control.runtime-execution.agent.materialize":  controlplanev1.ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName,
 		"control.runtime-execution.agent.resolve":      controlplanev1.ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName,
 		"control.runtime-retention.set":                controlplanev1.ControlPlaneService_SetResourceRetentionPolicy_FullMethodName,
 		"control.runtime-retention.retire":             controlplanev1.ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName,

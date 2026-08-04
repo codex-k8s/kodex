@@ -36,8 +36,10 @@ type RuntimeAgentBindingDelivery struct {
 }
 
 type RuntimeAgentBindingDiscovery struct {
-	ID, AgentSessionTurnID            int64
-	AgentRunID, SourceRef, LeaseToken string
+	ID, AgentSessionID, AgentSessionTurnID             int64
+	AgentSessionVersion, AgentSessionTurnVersion       uint64
+	AgentRunID, SourceRef, LeaseToken, AgentSessionKey string
+	RoleStableKey, ExternalChannelRef, PromptText      string
 }
 
 // RuntimeAgentBindingOutboxRepository — узкий durable effect port. Регистрация,

@@ -33,6 +33,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -95,6 +96,15 @@ func run(ctx context.Context) error {
 	if strings.HasPrefix(os.Args[1], "serve-") {
 		return runAuthority(ctx, strings.TrimPrefix(os.Args[1], "serve-"))
 	}
+	if strings.HasPrefix(os.Args[1], "check-") {
+		return checkAuthorityFiles(strings.TrimPrefix(os.Args[1], "check-"))
+	}
+	if os.Args[1] == "copy-credential" {
+		return runCredentialCopy(ctx)
+	}
+	if os.Args[1] == "s3-readback" {
+		return runS3CredentialReadback(ctx)
+	}
 	if os.Args[1] != "snapshot" && os.Args[1] != "s3-archive" && os.Args[1] != "s3-restore" {
 		return errors.New("runtime credential broker mode is invalid")
 	}
@@ -118,23 +128,233 @@ func run(ctx context.Context) error {
 	return requestMaterialization(ctx, raw, snapshot, os.Args[1])
 }
 
-func materialize(ctx context.Context, client kubernetes.Interface, namespace string, snapshot runtimeSnapshot, mode string) error {
+func materialize(ctx context.Context, client kubernetes.Interface, namespace string, snapshot runtimeSnapshot, mode string) (map[string]string, error) {
 	if mode == "snapshot" {
 		for index, credential := range snapshot.Revision.Credentials {
-			if err := materializeCredential(ctx, client, namespace, snapshot.Execution, credential, index); err != nil {
-				return err
+			if err := materializeCredentialCopy(ctx, client, namespace, snapshot, credential, index); err != nil {
+				return nil, err
 			}
 		}
 		if err := materializeAccessProfile(ctx, client, namespace, snapshot.Execution, len(snapshot.Revision.Credentials)); err != nil {
-			return err
+			return nil, err
 		}
 		if err := materializeWorkerJournalGrants(ctx, client, namespace, snapshot.Execution); err != nil {
-			return err
+			return nil, err
 		}
-		return materializeRolePod(ctx, client, namespace, snapshot)
+		return nil, materializeRolePod(ctx, client, namespace, snapshot)
 	}
 	action := strings.TrimPrefix(mode, "s3-")
-	return materializeS3Credential(ctx, client, namespace, snapshot.Execution, action)
+	return materializeS3Credential(ctx, client, namespace, snapshot, action)
+}
+
+func runCredentialCopy(ctx context.Context) error {
+	namespace, executionID := requiredEnv("RUNTIME_NAMESPACE"), requiredEnv("RUNTIME_EXECUTION_ID")
+	index, err := strconv.Atoi(requiredEnv("RUNTIME_CREDENTIAL_INDEX"))
+	if namespace == "" || uuid.Validate(executionID) != nil || err != nil || index < 0 || index > 63 {
+		return errors.New("runtime credential copy identity is invalid")
+	}
+	raw, err := os.ReadFile(runtimeConfigFile)
+	if err != nil || len(raw) == 0 || len(raw) > 1<<20 {
+		return errors.New("read immutable runtime credential copy input")
+	}
+	var snapshot runtimeSnapshot
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&snapshot) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		snapshot.Execution.ID != executionID || index >= len(snapshot.Revision.Credentials) ||
+		snapshot.Execution.Validate() != nil || snapshot.Revision.ValidateFor(snapshot.Execution) != nil ||
+		!credentialSnapshotMatches(snapshot.Execution, snapshot.Revision) || verifyWorkloadTicket(snapshot, "snapshot") != nil {
+		return errors.New("immutable runtime credential copy input is invalid")
+	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return errors.New("load runtime credential copy Kubernetes identity")
+	}
+	config.Timeout = 5 * time.Second
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return errors.New("create runtime credential copy Kubernetes client")
+	}
+	credential := snapshot.Revision.Credentials[index]
+	if err := materializeCredential(ctx, client, namespace, snapshot.Execution, credential, index); err != nil {
+		return err
+	}
+	immutable := true
+	receipt := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		Name:   credentialCopyReceiptName(executionID, index),
+		Labels: executionLabels(snapshot.Execution, "runtime-credential-copy-receipt"),
+		Annotations: map[string]string{"runtime.mattercodex.dev/runtime-config-name": configName(snapshot.Execution),
+			"runtime.mattercodex.dev/copy-service-account": credentialCopyName(executionID, index)},
+	}, Immutable: &immutable, Data: map[string]string{
+		"execution_id": executionID, "credential_index": strconv.Itoa(index),
+		"resource_id": credential.ResourceID, "version": strconv.FormatUint(credential.Version, 10),
+		"provider_content_version": credential.ProviderContentVersion,
+		"content_sha256":           credential.ContentSHA256,
+	}}
+	created, err := client.CoreV1().ConfigMaps(namespace).Create(ctx, receipt, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		created, err = client.CoreV1().ConfigMaps(namespace).Get(ctx, receipt.Name, metav1.GetOptions{})
+	}
+	if err != nil || created.Immutable == nil || !*created.Immutable || !reflectStringMapEqual(created.Data, receipt.Data) {
+		return errors.New("commit runtime credential copy receipt")
+	}
+	return nil
+}
+
+func materializeCredentialCopy(
+	ctx context.Context,
+	client kubernetes.Interface,
+	namespace string,
+	snapshot runtimeSnapshot,
+	credential entity.CredentialRef,
+	index int,
+) error {
+	parsed, err := url.Parse(credential.Reference)
+	if err != nil || parsed.Scheme != "k8s-immutable-secret" || parsed.Host != namespace ||
+		parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil || !validDNSLabel(strings.TrimPrefix(parsed.Path, "/")) {
+		return errors.New("runtime credential source reference is invalid")
+	}
+	execution := snapshot.Execution
+	name := credentialCopyName(execution.ID, index)
+	labels := executionLabels(execution, "runtime-credential-copy")
+	resourceAnnotations := map[string]string{
+		"runtime.mattercodex.dev/runtime-config-name":    configName(execution),
+		"runtime.mattercodex.dev/workload-ticket-sha256": execution.WorkloadTicketSHA256,
+		"runtime.mattercodex.dev/source-secret":          strings.TrimPrefix(parsed.Path, "/"),
+		"runtime.mattercodex.dev/destination-secret":     executionCredentialSecretName(execution.ID, index),
+		"runtime.mattercodex.dev/credential-index":       strconv.Itoa(index),
+	}
+	podAnnotations := make(map[string]string, len(resourceAnnotations)+2)
+	for key, value := range resourceAnnotations {
+		podAnnotations[key] = value
+	}
+	podAnnotations["runtime.mattercodex.dev/next-input-config"] = configName(execution)
+	podAnnotations["runtime.mattercodex.dev/workload-ticket"] = snapshot.WorkloadTicket
+	keyRaw, err := os.ReadFile(workloadTicketKeyFile)
+	if err != nil || len(keyRaw) == 0 || len(keyRaw) > 4096 {
+		return errors.New("read runtime workload ticket verification material")
+	}
+	trustName := "runtime-ticket-trust-" + stableHash(execution.ID, 20)
+	immutable := true
+	trust := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: trustName,
+		Labels:      executionLabels(execution, "runtime-ticket-trust"),
+		Annotations: map[string]string{"runtime.mattercodex.dev/runtime-config-name": configName(execution)}},
+		Immutable: &immutable, Data: map[string]string{"public-key.hex": strings.TrimSpace(string(keyRaw))}}
+	actualTrust, err := client.CoreV1().ConfigMaps(namespace).Get(ctx, trustName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualTrust, err = client.CoreV1().ConfigMaps(namespace).Create(ctx, trust, metav1.CreateOptions{})
+	}
+	if err != nil || actualTrust.Immutable == nil || !*actualTrust.Immutable ||
+		actualTrust.Data["public-key.hex"] != trust.Data["public-key.hex"] {
+		return errors.New("materialize exact runtime ticket trust snapshot")
+	}
+	serviceAccounts := client.CoreV1().ServiceAccounts(namespace)
+	account := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: resourceAnnotations}, AutomountServiceAccountToken: boolPointer(false)}
+	actualAccount, err := serviceAccounts.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualAccount, err = serviceAccounts.Create(ctx, account, metav1.CreateOptions{})
+	}
+	if err != nil || actualAccount.Name != name || !reflectStringMapEqual(actualAccount.Annotations, resourceAnnotations) {
+		return errors.New("materialize exact runtime credential copy identity")
+	}
+	role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: resourceAnnotations}, Rules: []rbacv1.PolicyRule{
+		{APIGroups: []string{""}, Resources: []string{"secrets"}, ResourceNames: []string{strings.TrimPrefix(parsed.Path, "/"), executionCredentialSecretName(execution.ID, index)}, Verbs: []string{"get"}},
+		{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"create"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{configName(execution), credentialCopyReceiptName(execution.ID, index)}, Verbs: []string{"get"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"create"}},
+	}}
+	actualRole, err := client.RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualRole, err = client.RbacV1().Roles(namespace).Create(ctx, role, metav1.CreateOptions{})
+	}
+	if err != nil || !policyRulesEqual(actualRole.Rules, role.Rules) || !reflectStringMapEqual(actualRole.Annotations, resourceAnnotations) {
+		return errors.New("materialize exact runtime credential copy role")
+	}
+	binding := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: resourceAnnotations},
+		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: name, Namespace: namespace}},
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
+	actualBinding, err := client.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualBinding, err = client.RbacV1().RoleBindings(namespace).Create(ctx, binding, metav1.CreateOptions{})
+	}
+	if err != nil || len(actualBinding.Subjects) != 1 || actualBinding.Subjects[0] != binding.Subjects[0] || actualBinding.RoleRef != binding.RoleRef {
+		return errors.New("materialize exact runtime credential copy binding")
+	}
+	tokenTTL := int64(600)
+	defaultMode := int32(0o440)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: labels, Annotations: podAnnotations},
+		Spec: corev1.PodSpec{
+			ServiceAccountName: name, AutomountServiceAccountToken: boolPointer(false),
+			RestartPolicy: corev1.RestartPolicyOnFailure, EnableServiceLinks: boolPointer(false),
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: boolPointer(true), RunAsUser: int64Pointer(10001),
+				RunAsGroup: int64Pointer(10001), FSGroup: int64Pointer(10001),
+			},
+			Containers: []corev1.Container{{
+				Name: "copy", Image: requiredEnv("RUNTIME_CREDENTIAL_COPY_IMAGE"),
+				Command: []string{"/usr/local/bin/runtime-credential-broker"}, Args: []string{"copy-credential"},
+				Env: []corev1.EnvVar{
+					{Name: "RUNTIME_NAMESPACE", Value: namespace},
+					{Name: "RUNTIME_EXECUTION_ID", Value: execution.ID},
+					{Name: "RUNTIME_CREDENTIAL_INDEX", Value: strconv.Itoa(index)},
+				},
+				SecurityContext: restrictedSecurityContext(),
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "runtime-config", MountPath: runtimeConfigFile, SubPath: "runtime.json", ReadOnly: true},
+					{Name: "ticket-trust", MountPath: "/var/run/config/mattercodex/runtime-workload-ticket", ReadOnly: true},
+					{Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true},
+				},
+			}},
+			Volumes: []corev1.Volume{
+				{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: &defaultMode,
+				}}},
+				{Name: "ticket-trust", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: trustName}, DefaultMode: &defaultMode,
+				}}},
+				{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+					DefaultMode: &defaultMode,
+					Sources: []corev1.VolumeProjection{
+						{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Audience: "https://kubernetes.default.svc", ExpirationSeconds: &tokenTTL, Path: "token"}},
+						{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
+						{DownwardAPI: &corev1.DownwardAPIProjection{Items: []corev1.DownwardAPIVolumeFile{{Path: "namespace", FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.namespace"}}}}},
+					},
+				}}},
+			},
+		},
+	}
+	actualPod, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualPod, err = client.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
+	}
+	if err != nil || actualPod.Name != name || actualPod.Spec.ServiceAccountName != name || !reflectStringMapEqual(actualPod.Annotations, podAnnotations) {
+		return errors.New("materialize exact runtime credential copy Pod")
+	}
+	return wait.PollUntilContextTimeout(ctx, 250*time.Millisecond, 30*time.Second, true, func(pollCtx context.Context) (bool, error) {
+		receipt, getErr := client.CoreV1().ConfigMaps(namespace).Get(pollCtx, credentialCopyReceiptName(execution.ID, index), metav1.GetOptions{})
+		if apierrors.IsNotFound(getErr) {
+			return false, nil
+		}
+		if getErr != nil || receipt.Immutable == nil || !*receipt.Immutable || receipt.Data["execution_id"] != execution.ID ||
+			receipt.Data["credential_index"] != strconv.Itoa(index) || receipt.Data["resource_id"] != credential.ResourceID ||
+			receipt.Data["provider_content_version"] != credential.ProviderContentVersion || receipt.Data["content_sha256"] != credential.ContentSHA256 {
+			return false, errors.New("runtime credential copy receipt mismatch")
+		}
+		return true, nil
+	})
+}
+
+func credentialCopyName(executionID string, index int) string {
+	return "runtime-credential-copy-" + stableHash(executionID+":"+strconv.Itoa(index), 20)
+}
+
+func credentialCopyReceiptName(executionID string, index int) string {
+	return "runtime-credential-copy-receipt-" + stableHash(executionID+":"+strconv.Itoa(index), 20)
+}
+
+func reflectStringMapEqual(left, right map[string]string) bool {
+	return jsonEqual(left, right)
 }
 
 func requestMaterialization(ctx context.Context, raw []byte, snapshot runtimeSnapshot, mode string) error {
@@ -199,6 +419,9 @@ func runAuthority(ctx context.Context, mode string) error {
 	if mode != "snapshot" && mode != "s3-archive" && mode != "s3-restore" {
 		return errors.New("runtime credential authority mode is invalid")
 	}
+	if err := checkAuthorityFiles(mode); err != nil {
+		return err
+	}
 	namespace := requiredEnv("RUNTIME_NAMESPACE")
 	listen := requiredEnv("RUNTIME_CREDENTIAL_AUTHORITY_LISTEN")
 	if namespace == "" || listen == "" {
@@ -233,6 +456,10 @@ func runAuthority(ctx context.Context, mode string) error {
 	mux.HandleFunc("/readyz", func(writer http.ResponseWriter, request *http.Request) {
 		probeCtx, cancel := context.WithTimeout(request.Context(), 3*time.Second)
 		defer cancel()
+		if fileErr := checkAuthorityFiles(mode); fileErr != nil {
+			http.Error(writer, "credential authority material is unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		if _, probeErr := client.CoreV1().ConfigMaps(namespace).Get(probeCtx, "kube-root-ca.crt", metav1.GetOptions{}); probeErr != nil {
 			http.Error(writer, "credential authority dependency is unavailable", http.StatusServiceUnavailable)
 			return
@@ -258,6 +485,46 @@ func runAuthority(ctx context.Context, mode string) error {
 		}
 		return errors.New("serve runtime credential authority")
 	}
+}
+
+func checkAuthorityFiles(mode string) error {
+	if mode != "snapshot" && mode != "s3-archive" && mode != "s3-restore" {
+		return errors.New("runtime credential authority mode is invalid")
+	}
+	paths := []string{
+		brokerTLSCAFile, brokerTLSCertFile, brokerTLSKeyFile, workloadTicketKeyFile,
+		"/var/run/secrets/kubernetes.io/serviceaccount/token",
+		"/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+	}
+	if mode == "s3-archive" || mode == "s3-restore" {
+		paths = append(paths, vaultTokenFile, requiredEnv("RUNTIME_VAULT_CA_FILE"),
+			requiredEnv("RUNTIME_S3_CA_FILE"), s3KMSKeyARNFile)
+		if mode == "s3-archive" {
+			paths = append(paths, s3ArchiveRoleARNFile)
+		} else {
+			paths = append(paths, s3RestoreRoleARNFile)
+		}
+	}
+	for _, path := range paths {
+		if path == "" {
+			return errors.New("runtime credential authority file path is invalid")
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil || len(bytes.TrimSpace(raw)) == 0 || len(raw) > 1<<20 {
+			return errors.New("read runtime credential authority material")
+		}
+	}
+	if _, err := exactMTLSServerConfig(brokerTLSCAFile, brokerTLSCertFile, brokerTLSKeyFile); err != nil {
+		return err
+	}
+	keyRaw, err := os.ReadFile(workloadTicketKeyFile)
+	if err != nil {
+		return errors.New("read runtime workload ticket verification material")
+	}
+	if _, err = workloadticket.DecodePublicKey(keyRaw); err != nil {
+		return errors.New("read runtime workload ticket verification material")
+	}
+	return nil
 }
 
 func exactMTLSServerConfig(caFile, certificateFile, privateKeyFile string) (*tls.Config, error) {
@@ -321,11 +588,12 @@ func authorityHandler(
 			writer.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if err := materialize(request.Context(), client, namespace, snapshot, mode); err != nil {
+		proof, err := materialize(request.Context(), client, namespace, snapshot, mode)
+		if err != nil {
 			http.Error(writer, "credential materialization failed", http.StatusServiceUnavailable)
 			return
 		}
-		if err := recordAuthorityReceipt(request.Context(), client, namespace, snapshot.Execution, mode, digest); err != nil {
+		if err := recordAuthorityReceipt(request.Context(), client, namespace, snapshot.Execution, mode, digest, proof); err != nil {
 			http.Error(writer, "credential authority receipt was not committed", http.StatusServiceUnavailable)
 			return
 		}
@@ -362,6 +630,29 @@ func rejoinAuthorityReceipt(
 		receipt.Data["fence"] != strconv.FormatUint(execution.Fence, 10) {
 		return false, errors.New("runtime credential authority receipt mismatch")
 	}
+	if mode == "s3-archive" || mode == "s3-restore" {
+		action := strings.TrimPrefix(mode, "s3-")
+		sourceExecutionID := execution.ID
+		if action == "restore" && execution.RestoreSourceExecutionID != "" {
+			sourceExecutionID = execution.RestoreSourceExecutionID
+		}
+		if receipt.Data["s3_execution_id"] != execution.ID ||
+			receipt.Data["s3_organization_id"] != execution.OrganizationID ||
+			receipt.Data["s3_project_id"] != execution.ProjectID ||
+			receipt.Data["s3_session_id"] != execution.SessionID ||
+			receipt.Data["s3_source_execution_id"] != sourceExecutionID ||
+			receipt.Data["s3_action"] != action || receipt.Data["s3_secret_name"] != s3CredentialSecretName(execution.ID, action) ||
+			receipt.Data["s3_secret_uid"] == "" || receipt.Data["s3_secret_resource_version"] == "" ||
+			!validSHA256(receipt.Data["s3_policy_sha256"]) || !validSHA256(receipt.Data["s3_readback_sha256"]) ||
+			!validSHA256(receipt.Data["s3_secret_data_sha256"]) || !validSHA256(receipt.Data["s3_content_sha256"]) {
+			return false, errors.New("runtime credential authority S3 proof mismatch")
+		}
+		expiresAt, parseErr := time.Parse(time.RFC3339, receipt.Data["s3_expires_at"])
+		if parseErr != nil || !expiresAt.After(time.Now().UTC().Add(time.Minute)) ||
+			expiresAt.After(time.Now().UTC().Add(maximumSTSTTL+time.Minute)) {
+			return false, errors.New("runtime credential authority S3 proof expired")
+		}
+	}
 	return true, nil
 }
 
@@ -371,15 +662,26 @@ func recordAuthorityReceipt(
 	namespace string,
 	execution entity.Execution,
 	mode, digest string,
+	proof map[string]string,
 ) error {
 	immutable := true
 	desired := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
-		Name:   authorityReceiptName(execution.ID, mode),
-		Labels: map[string]string{"runtime.mattercodex.dev/managed": "true", "app.kubernetes.io/component": "runtime-credential-authority-receipt"},
+		Name: authorityReceiptName(execution.ID, mode),
+		Labels: map[string]string{
+			"runtime.mattercodex.dev/managed":   "true",
+			"runtime.mattercodex.dev/execution": shortID(execution.ID),
+			"app.kubernetes.io/component":       "runtime-credential-authority-receipt",
+		},
 	}, Immutable: &immutable, Data: map[string]string{
 		"request_sha256": digest, "execution_id": execution.ID, "mode": mode,
 		"version": strconv.FormatUint(execution.Version, 10), "fence": strconv.FormatUint(execution.Fence, 10),
 	}}
+	for key, value := range proof {
+		if !strings.HasPrefix(key, "s3_") || value == "" {
+			return errors.New("runtime credential authority proof is invalid")
+		}
+		desired.Data[key] = value
+	}
 	created, err := client.CoreV1().ConfigMaps(namespace).Create(ctx, desired, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		returnValue, readErr := rejoinAuthorityReceipt(ctx, client, namespace, execution, mode, digest)
@@ -619,15 +921,6 @@ func materializeAccessProfile(ctx context.Context, client kubernetes.Interface, 
 		if apierrors.IsNotFound(err) {
 			account, err = accounts.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name,
 				Labels: executionLabels(execution, "runtime-access"), Annotations: annotations}, AutomountServiceAccountToken: boolPointer(false)}, metav1.CreateOptions{})
-		} else if err == nil {
-			if account.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
-				account.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
-				account.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID {
-				return errors.New("runtime access identity lineage mismatch")
-			}
-			updated := account.DeepCopy()
-			updated.Annotations, updated.Labels = annotations, executionLabels(execution, "runtime-access")
-			account, err = accounts.Update(ctx, updated, metav1.UpdateOptions{})
 		}
 		if err != nil || account.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
 			return errors.New("materialize exact runtime access identity")
@@ -665,10 +958,6 @@ func materializeHandoff(ctx context.Context, client kubernetes.Interface, namesp
 	actual, err := roles.Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		actual, err = roles.Create(ctx, desired, metav1.CreateOptions{})
-	} else if err == nil {
-		updated := actual.DeepCopy()
-		updated.Labels, updated.Rules = desired.Labels, desired.Rules
-		actual, err = roles.Update(ctx, updated, metav1.UpdateOptions{})
 	}
 	if err != nil || !policyRulesEqual(actual.Rules, desired.Rules) {
 		return errors.New("materialize exact runtime handoff role")
@@ -683,10 +972,6 @@ func applyRoleBinding(ctx context.Context, client kubernetes.Interface, namespac
 	actual, err := bindings.Get(ctx, desired.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		actual, err = bindings.Create(ctx, desired, metav1.CreateOptions{})
-	} else if err == nil {
-		updated := actual.DeepCopy()
-		updated.Labels, updated.Subjects, updated.RoleRef = desired.Labels, desired.Subjects, desired.RoleRef
-		actual, err = bindings.Update(ctx, updated, metav1.UpdateOptions{})
 	}
 	if err != nil || len(actual.Subjects) != 1 || actual.Subjects[0] != desired.Subjects[0] || actual.RoleRef != desired.RoleRef {
 		return errors.New("materialize exact runtime role binding")
@@ -704,37 +989,38 @@ func materializeS3Credential(
 	ctx context.Context,
 	client kubernetes.Interface,
 	namespace string,
-	execution entity.Execution,
+	snapshot runtimeSnapshot,
 	action string,
-) error {
+) (map[string]string, error) {
+	execution := snapshot.Execution
 	if action != "archive" && action != "restore" {
-		return errors.New("runtime S3 credential action is invalid")
+		return nil, errors.New("runtime S3 credential action is invalid")
 	}
 	secrets := client.CoreV1().Secrets(namespace)
 	policy, sourceExecutionID, err := exactS3Policy(execution, action)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	policyRaw, err := json.Marshal(policy)
 	if err != nil {
-		return errors.New("encode exact runtime S3 policy")
+		return nil, errors.New("encode exact runtime S3 policy")
 	}
 	policyDigest := sha256.Sum256(policyRaw)
 	policySHA256 := hex.EncodeToString(policyDigest[:])
 	vaultClient, vaultAddress, err := newVaultClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	kubernetesJWT, err := os.ReadFile(vaultTokenFile)
 	if err != nil || len(kubernetesJWT) < 20 || len(kubernetesJWT) > 1<<20 {
-		return errors.New("read runtime S3 broker identity")
+		return nil, errors.New("read runtime S3 broker identity")
 	}
 	vaultRole := "runtime-s3-" + action + "-exchanger"
 	login := vaultResponse{}
 	if err := vaultRequest(ctx, vaultClient, http.MethodPost, vaultAddress+"/v1/auth/kubernetes/login", "", map[string]any{
 		"role": vaultRole, "jwt": string(kubernetesJWT),
 	}, &login); err != nil || login.Auth == nil || login.Auth.ClientToken == "" || login.Auth.Accessor == "" {
-		return errors.New("authenticate exact runtime S3 broker identity")
+		return nil, errors.New("authenticate exact runtime S3 broker identity")
 	}
 	tags := map[string]string{
 		"organization_id":     execution.OrganizationID,
@@ -752,18 +1038,18 @@ func materializeS3Credential(
 		login.Auth.ClientToken, map[string]any{
 			"ttl": "15m", "role_session_name": "mcx-broker-" + shortID(execution.ID) + "-" + action,
 		}, &bootstrap); err != nil {
-		return errors.New("issue runtime S3 broker credential")
+		return nil, errors.New("issue runtime S3 broker credential")
 	}
 	bootstrapAccessKey, accessOK := bootstrap.Data["access_key"].(string)
 	bootstrapSecretKey, secretOK := bootstrap.Data["secret_key"].(string)
 	bootstrapToken, tokenOK := bootstrap.Data["security_token"].(string)
 	if !accessOK || !secretOK || !tokenOK || bootstrapAccessKey == "" || bootstrapSecretKey == "" || bootstrapToken == "" ||
 		bootstrap.LeaseID == "" || bootstrap.LeaseDuration < 60 || bootstrap.LeaseDuration > int64(maximumSTSTTL/time.Second) {
-		return errors.New("runtime S3 broker credential response is invalid")
+		return nil, errors.New("runtime S3 broker credential response is invalid")
 	}
 	stsClient, roleARN, err := newS3STSClient(action, bootstrapAccessKey, bootstrapSecretKey, bootstrapToken)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	tagValues := make([]ststypes.Tag, 0, len(tags))
 	tagNames := make([]string, 0, len(tags))
@@ -781,7 +1067,7 @@ func materializeS3Credential(
 		Policy: aws.String(string(policyRaw)), Tags: tagValues,
 	})
 	if err != nil || assumed.Credentials == nil || assumed.AssumedRoleUser == nil {
-		return errors.New("assume exact runtime S3 execution role")
+		return nil, errors.New("assume exact runtime S3 execution role")
 	}
 	accessKeyID := aws.ToString(assumed.Credentials.AccessKeyId)
 	secretAccessKey := aws.ToString(assumed.Credentials.SecretAccessKey)
@@ -789,7 +1075,7 @@ func materializeS3Credential(
 	expiresAt := aws.ToTime(assumed.Credentials.Expiration).UTC()
 	if !accessOK || !secretOK || !tokenOK || accessKeyID == "" || secretAccessKey == "" || sessionToken == "" ||
 		expiresAt.Before(time.Now().UTC().Add(time.Minute)) || expiresAt.After(time.Now().UTC().Add(maximumSTSTTL+time.Minute)) {
-		return errors.New("runtime S3 credential response is invalid")
+		return nil, errors.New("runtime S3 credential response is invalid")
 	}
 	readbackRaw, err := json.Marshal(struct {
 		BootstrapLeaseID, LoginAccessor, AssumedRoleARN, PolicySHA256 string
@@ -798,9 +1084,14 @@ func materializeS3Credential(
 		execution.ID, action, sourceExecutionID,
 		expiresAt.Format(time.RFC3339)})
 	if err != nil {
-		return errors.New("encode runtime S3 credential readback")
+		return nil, errors.New("encode runtime S3 credential readback")
 	}
 	readbackDigest := sha256.Sum256(readbackRaw)
+	actionTicket := snapshot.ArchiveWorkloadTicket
+	if action == "restore" {
+		actionTicket = snapshot.RestoreWorkloadTicket
+	}
+	actionTicketDigest := sha256.Sum256([]byte(actionTicket))
 	immutable := true
 	destination := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 		Name: s3CredentialSecretName(execution.ID, action),
@@ -808,6 +1099,8 @@ func materializeS3Credential(
 			"runtime.mattercodex.dev/managed": "true", "app.kubernetes.io/component": "runtime-s3-credential",
 		},
 		Annotations: map[string]string{
+			"runtime.mattercodex.dev/runtime-config-name":    configName(execution),
+			"runtime.mattercodex.dev/workload-ticket":        actionTicket,
 			"runtime.mattercodex.dev/execution-id":           execution.ID,
 			"runtime.mattercodex.dev/organization-id":        execution.OrganizationID,
 			"runtime.mattercodex.dev/project-id":             execution.ProjectID,
@@ -815,7 +1108,7 @@ func materializeS3Credential(
 			"runtime.mattercodex.dev/source-execution-id":    sourceExecutionID,
 			"runtime.mattercodex.dev/action":                 action,
 			"runtime.mattercodex.dev/bucket":                 requiredEnv("RUNTIME_S3_BUCKET"),
-			"runtime.mattercodex.dev/workload-ticket-sha256": execution.WorkloadTicketSHA256,
+			"runtime.mattercodex.dev/workload-ticket-sha256": hex.EncodeToString(actionTicketDigest[:]),
 			"runtime.mattercodex.dev/sts-session-name":       sessionName,
 			"runtime.mattercodex.dev/assumed-role-arn":       aws.ToString(assumed.AssumedRoleUser.Arn),
 			"runtime.mattercodex.dev/inline-policy-sha256":   policySHA256,
@@ -826,20 +1119,268 @@ func materializeS3Credential(
 		"access-key-id": []byte(accessKeyID), "secret-access-key": []byte(secretAccessKey), "session-token": []byte(sessionToken),
 	}}
 	if destination.Annotations["runtime.mattercodex.dev/bucket"] == "" {
-		return errors.New("runtime S3 bucket is invalid")
+		return nil, errors.New("runtime S3 bucket is invalid")
+	}
+	expiresAt, err = time.Parse(time.RFC3339, destination.Annotations["runtime.mattercodex.dev/expires-at"])
+	readbackSHA256 := destination.Annotations["runtime.mattercodex.dev/readback-sha256"]
+	if err != nil || !expiresAt.After(time.Now().UTC().Add(time.Minute)) ||
+		!validSHA256(readbackSHA256) ||
+		destination.Annotations["runtime.mattercodex.dev/inline-policy-sha256"] != policySHA256 {
+		return nil, errors.New("runtime S3 credential lifetime is invalid")
 	}
 	created, err := secrets.Create(ctx, destination, metav1.CreateOptions{})
-	if apierrors.IsAlreadyExists(err) {
-		// Secret immutable, deterministic by execution/action and only the
-		// trusted action exchanger can create this admitted profile. A crash
-		// after Create but before the receipt therefore rejoins without Secret
-		// read authority and commits the exact request receipt.
-		return nil
+	// Admission one-time receipt отклоняет новый API request UID после потерянного
+	// успешного ответа. В этом случае только scoped readback отличает persisted
+	// exact Secret от настоящего запрета или mismatch.
+	if apierrors.IsAlreadyExists(err) || apierrors.IsForbidden(err) {
+		return materializeS3CredentialReadback(
+			ctx, client, namespace, snapshot, action, sourceExecutionID, policySHA256,
+		)
 	}
 	if err != nil || !credentialSnapshotSecretMatches(created, destination) || secretDataSHA256(created.Data) != secretDataSHA256(destination.Data) {
-		return errors.New("materialize immutable runtime S3 credential snapshot")
+		return nil, errors.New("materialize immutable runtime S3 credential snapshot")
+	}
+	return s3CredentialProof(execution, action, sourceExecutionID, policySHA256, actionTicket, created)
+}
+
+func s3CredentialProof(
+	execution entity.Execution,
+	action, sourceExecutionID, policySHA256, workloadTicket string,
+	created *corev1.Secret,
+) (map[string]string, error) {
+	workloadTicketDigest := sha256.Sum256([]byte(workloadTicket))
+	if created == nil || created.UID == "" || created.ResourceVersion == "" ||
+		created.Immutable == nil || !*created.Immutable || created.Type != corev1.SecretTypeOpaque ||
+		created.Name != s3CredentialSecretName(execution.ID, action) ||
+		created.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+		created.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
+		created.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
+		created.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
+		created.Annotations["runtime.mattercodex.dev/source-execution-id"] != sourceExecutionID ||
+		created.Annotations["runtime.mattercodex.dev/action"] != action ||
+		created.Annotations["runtime.mattercodex.dev/workload-ticket"] != workloadTicket ||
+		created.Annotations["runtime.mattercodex.dev/workload-ticket-sha256"] != hex.EncodeToString(workloadTicketDigest[:]) ||
+		created.Annotations["runtime.mattercodex.dev/inline-policy-sha256"] != policySHA256 ||
+		len(created.Data) != 3 {
+		return nil, errors.New("runtime S3 credential readback identity is invalid")
+	}
+	expiresAt, err := time.Parse(time.RFC3339, created.Annotations["runtime.mattercodex.dev/expires-at"])
+	readbackSHA256 := created.Annotations["runtime.mattercodex.dev/readback-sha256"]
+	if err != nil || !expiresAt.After(time.Now().UTC().Add(time.Minute)) ||
+		!validSHA256(readbackSHA256) {
+		return nil, errors.New("runtime S3 credential readback lifetime is invalid")
+	}
+	contentRaw, err := json.Marshal(struct {
+		Name, UID, ResourceVersion, ExecutionID, OrganizationID, ProjectID string
+		SessionID, SourceExecutionID, Action, PolicySHA256, ReadbackSHA256 string
+		SecretDataSHA256, ExpiresAt                                        string
+	}{created.Name, string(created.UID), created.ResourceVersion, execution.ID,
+		execution.OrganizationID, execution.ProjectID, execution.SessionID,
+		sourceExecutionID, action, policySHA256, readbackSHA256,
+		secretDataSHA256(created.Data), expiresAt.Format(time.RFC3339)})
+	if err != nil {
+		return nil, errors.New("encode runtime S3 credential owner receipt")
+	}
+	contentDigest := sha256.Sum256(contentRaw)
+	return map[string]string{
+		"s3_secret_name": created.Name, "s3_secret_uid": string(created.UID),
+		"s3_secret_resource_version": created.ResourceVersion,
+		"s3_execution_id":            execution.ID, "s3_organization_id": execution.OrganizationID,
+		"s3_project_id": execution.ProjectID, "s3_session_id": execution.SessionID,
+		"s3_source_execution_id": sourceExecutionID, "s3_action": action,
+		"s3_policy_sha256":      policySHA256,
+		"s3_readback_sha256":    readbackSHA256,
+		"s3_secret_data_sha256": secretDataSHA256(created.Data),
+		"s3_expires_at":         expiresAt.Format(time.RFC3339),
+		"s3_content_sha256":     hex.EncodeToString(contentDigest[:]),
+	}, nil
+}
+
+func s3ReadbackName(executionID, action string) string {
+	return "runtime-s3-readback-" + stableHash(executionID+":"+action, 20)
+}
+
+func s3ReadbackReceiptName(executionID, action string) string {
+	return "runtime-s3-readback-receipt-" + stableHash(executionID+":"+action, 20)
+}
+
+func runS3CredentialReadback(ctx context.Context) error {
+	namespace, executionID, action := requiredEnv("RUNTIME_NAMESPACE"), requiredEnv("RUNTIME_EXECUTION_ID"), requiredEnv("RUNTIME_S3_ACTION")
+	if namespace == "" || uuid.Validate(executionID) != nil || (action != "archive" && action != "restore") {
+		return errors.New("runtime S3 readback identity is invalid")
+	}
+	raw, err := os.ReadFile(runtimeConfigFile)
+	if err != nil || len(raw) == 0 || len(raw) > 1<<20 {
+		return errors.New("read immutable runtime S3 readback input")
+	}
+	var snapshot runtimeSnapshot
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&snapshot) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		snapshot.Execution.ID != executionID || snapshot.Execution.Validate() != nil ||
+		snapshot.Revision.ValidateFor(snapshot.Execution) != nil || verifyWorkloadTicket(snapshot, "s3-"+action) != nil {
+		return errors.New("immutable runtime S3 readback input is invalid")
+	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return errors.New("load runtime S3 readback Kubernetes identity")
+	}
+	config.Timeout = 5 * time.Second
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return errors.New("create runtime S3 readback Kubernetes client")
+	}
+	sourceExecutionID, policySHA256 := requiredEnv("RUNTIME_S3_SOURCE_EXECUTION_ID"), requiredEnv("RUNTIME_S3_POLICY_SHA256")
+	if uuid.Validate(sourceExecutionID) != nil || !validSHA256(policySHA256) {
+		return errors.New("runtime S3 readback tuple is invalid")
+	}
+	secret, err := client.CoreV1().Secrets(namespace).Get(ctx, s3CredentialSecretName(executionID, action), metav1.GetOptions{})
+	if err != nil {
+		return errors.New("read exact runtime S3 credential snapshot")
+	}
+	ticket := snapshot.ArchiveWorkloadTicket
+	if action == "restore" {
+		ticket = snapshot.RestoreWorkloadTicket
+	}
+	proof, err := s3CredentialProof(snapshot.Execution, action, sourceExecutionID, policySHA256, ticket, secret)
+	if err != nil {
+		return err
+	}
+	immutable := true
+	receipt := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		Name:   s3ReadbackReceiptName(executionID, action),
+		Labels: executionLabels(snapshot.Execution, "runtime-s3-credential-readback"),
+		Annotations: map[string]string{
+			"runtime.mattercodex.dev/execution-id":             executionID,
+			"runtime.mattercodex.dev/action":                   action,
+			"runtime.mattercodex.dev/readback-service-account": s3ReadbackName(executionID, action),
+		},
+	}, Immutable: &immutable, Data: proof}
+	created, err := client.CoreV1().ConfigMaps(namespace).Create(ctx, receipt, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		created, err = client.CoreV1().ConfigMaps(namespace).Get(ctx, receipt.Name, metav1.GetOptions{})
+	}
+	if err != nil || created.Immutable == nil || !*created.Immutable ||
+		created.Data["s3_content_sha256"] != proof["s3_content_sha256"] ||
+		created.Data["s3_secret_uid"] != proof["s3_secret_uid"] ||
+		created.Data["s3_secret_resource_version"] != proof["s3_secret_resource_version"] {
+		return errors.New("commit runtime S3 credential readback receipt")
 	}
 	return nil
+}
+
+func materializeS3CredentialReadback(
+	ctx context.Context,
+	client kubernetes.Interface,
+	namespace string,
+	snapshot runtimeSnapshot,
+	action, sourceExecutionID, policySHA256 string,
+) (map[string]string, error) {
+	execution := snapshot.Execution
+	name := s3ReadbackName(execution.ID, action)
+	labels := executionLabels(execution, "runtime-s3-credential-readback")
+	ticket := snapshot.ArchiveWorkloadTicket
+	if action == "restore" {
+		ticket = snapshot.RestoreWorkloadTicket
+	}
+	ticketDigest := sha256.Sum256([]byte(ticket))
+	resourceAnnotations := map[string]string{
+		"runtime.mattercodex.dev/execution-id": execution.ID, "runtime.mattercodex.dev/action": action,
+		"runtime.mattercodex.dev/runtime-config-name":  configName(execution),
+		"runtime.mattercodex.dev/secret-name":          s3CredentialSecretName(execution.ID, action),
+		"runtime.mattercodex.dev/source-execution-id":  sourceExecutionID,
+		"runtime.mattercodex.dev/inline-policy-sha256": policySHA256,
+	}
+	podAnnotations := make(map[string]string, len(resourceAnnotations)+3)
+	for key, value := range resourceAnnotations {
+		podAnnotations[key] = value
+	}
+	podAnnotations["runtime.mattercodex.dev/next-input-config"] = configName(execution)
+	podAnnotations["runtime.mattercodex.dev/workload-ticket"] = ticket
+	podAnnotations["runtime.mattercodex.dev/workload-ticket-sha256"] = hex.EncodeToString(ticketDigest[:])
+	keyRaw, err := os.ReadFile(workloadTicketKeyFile)
+	if err != nil || len(keyRaw) == 0 || len(keyRaw) > 4096 {
+		return nil, errors.New("read runtime S3 workload ticket verification material")
+	}
+	trustName := "runtime-s3-readback-trust-" + stableHash(execution.ID+":"+action, 20)
+	immutable := true
+	trust := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: trustName, Labels: labels,
+		Annotations: resourceAnnotations}, Immutable: &immutable,
+		Data: map[string]string{"public-key.hex": strings.TrimSpace(string(keyRaw))}}
+	actualTrust, err := client.CoreV1().ConfigMaps(namespace).Get(ctx, trustName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualTrust, err = client.CoreV1().ConfigMaps(namespace).Create(ctx, trust, metav1.CreateOptions{})
+	}
+	if err != nil || actualTrust.Immutable == nil || !*actualTrust.Immutable || actualTrust.Data["public-key.hex"] != trust.Data["public-key.hex"] {
+		return nil, errors.New("materialize runtime S3 readback trust")
+	}
+	account := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: resourceAnnotations}, AutomountServiceAccountToken: boolPointer(false)}
+	actualAccount, err := client.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualAccount, err = client.CoreV1().ServiceAccounts(namespace).Create(ctx, account, metav1.CreateOptions{})
+	}
+	if err != nil || !reflectStringMapEqual(actualAccount.Annotations, resourceAnnotations) {
+		return nil, errors.New("materialize runtime S3 readback identity")
+	}
+	role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: resourceAnnotations}, Rules: []rbacv1.PolicyRule{
+		{APIGroups: []string{""}, Resources: []string{"secrets"}, ResourceNames: []string{s3CredentialSecretName(execution.ID, action)}, Verbs: []string{"get"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{configName(execution), trustName, s3ReadbackReceiptName(execution.ID, action)}, Verbs: []string{"get"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"create"}},
+	}}
+	actualRole, err := client.RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualRole, err = client.RbacV1().Roles(namespace).Create(ctx, role, metav1.CreateOptions{})
+	}
+	if err != nil || !policyRulesEqual(actualRole.Rules, role.Rules) {
+		return nil, errors.New("materialize runtime S3 readback role")
+	}
+	binding := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: resourceAnnotations},
+		Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: name, Namespace: namespace}},
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
+	actualBinding, err := client.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualBinding, err = client.RbacV1().RoleBindings(namespace).Create(ctx, binding, metav1.CreateOptions{})
+	}
+	if err != nil || len(actualBinding.Subjects) != 1 || actualBinding.Subjects[0] != binding.Subjects[0] || actualBinding.RoleRef != binding.RoleRef {
+		return nil, errors.New("materialize runtime S3 readback binding")
+	}
+	tokenTTL, defaultMode := int64(600), int32(0o440)
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: labels, Annotations: podAnnotations}, Spec: corev1.PodSpec{
+		ServiceAccountName: name, AutomountServiceAccountToken: boolPointer(false), RestartPolicy: corev1.RestartPolicyOnFailure,
+		EnableServiceLinks: boolPointer(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), RunAsUser: int64Pointer(10001), RunAsGroup: int64Pointer(10001), FSGroup: int64Pointer(10001)},
+		Containers: []corev1.Container{{Name: "readback", Image: requiredEnv("RUNTIME_S3_READBACK_IMAGE"), Command: []string{"/usr/local/bin/runtime-credential-broker"}, Args: []string{"s3-readback"},
+			Env: []corev1.EnvVar{{Name: "RUNTIME_NAMESPACE", Value: namespace}, {Name: "RUNTIME_EXECUTION_ID", Value: execution.ID},
+				{Name: "RUNTIME_S3_ACTION", Value: action}, {Name: "RUNTIME_S3_SOURCE_EXECUTION_ID", Value: sourceExecutionID}, {Name: "RUNTIME_S3_POLICY_SHA256", Value: policySHA256}},
+			SecurityContext: restrictedSecurityContext(), VolumeMounts: []corev1.VolumeMount{{Name: "runtime-config", MountPath: runtimeConfigFile, SubPath: "runtime.json", ReadOnly: true}, {Name: "ticket-trust", MountPath: "/var/run/config/mattercodex/runtime-workload-ticket", ReadOnly: true}, {Name: "kube-api-access", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true}}}},
+		Volumes: []corev1.Volume{
+			{Name: "runtime-config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configName(execution)}, DefaultMode: &defaultMode}}},
+			{Name: "ticket-trust", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: trustName}, DefaultMode: &defaultMode}}},
+			{Name: "kube-api-access", VolumeSource: projectedKubeAPIVolume(&defaultMode, &tokenTTL)},
+		},
+	}}
+	actualPod, err := client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		actualPod, err = client.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
+	}
+	if err != nil || actualPod.Spec.ServiceAccountName != name || !reflectStringMapEqual(actualPod.Annotations, podAnnotations) {
+		return nil, errors.New("materialize runtime S3 readback Pod")
+	}
+	var proof map[string]string
+	err = wait.PollUntilContextTimeout(ctx, 250*time.Millisecond, 30*time.Second, true, func(pollCtx context.Context) (bool, error) {
+		receipt, getErr := client.CoreV1().ConfigMaps(namespace).Get(pollCtx, s3ReadbackReceiptName(execution.ID, action), metav1.GetOptions{})
+		if apierrors.IsNotFound(getErr) {
+			return false, nil
+		}
+		if getErr != nil || receipt.Immutable == nil || !*receipt.Immutable ||
+			receipt.Data["s3_execution_id"] != execution.ID || receipt.Data["s3_action"] != action ||
+			receipt.Data["s3_source_execution_id"] != sourceExecutionID || receipt.Data["s3_policy_sha256"] != policySHA256 ||
+			!validSHA256(receipt.Data["s3_content_sha256"]) || receipt.Data["s3_secret_uid"] == "" || receipt.Data["s3_secret_resource_version"] == "" {
+			return false, errors.New("runtime S3 readback receipt mismatch")
+		}
+		proof = receipt.Data
+		return true, nil
+	})
+	return proof, err
 }
 
 func exactS3Policy(execution entity.Execution, action string) (map[string]any, string, error) {
@@ -1036,6 +1577,8 @@ func materializeCredential(
 		},
 		Annotations: map[string]string{
 			"runtime.mattercodex.dev/execution-id":             execution.ID,
+			"runtime.mattercodex.dev/runtime-config-name":      configName(execution),
+			"runtime.mattercodex.dev/credential-index":         strconv.Itoa(index),
 			"runtime.mattercodex.dev/runtime-revision-id":      execution.RuntimeRevisionID,
 			"runtime.mattercodex.dev/runtime-revision-version": strconv.FormatUint(execution.RuntimeRevisionVersion, 10),
 			"runtime.mattercodex.dev/credential-resource-id":   credential.ResourceID,
@@ -1044,9 +1587,11 @@ func materializeCredential(
 			"runtime.mattercodex.dev/content-sha256":           credential.ContentSHA256,
 			"runtime.mattercodex.dev/purpose":                  credential.Purpose,
 			"runtime.mattercodex.dev/source-secret":            sourceName,
+			"runtime.mattercodex.dev/destination-secret":       executionCredentialSecretName(execution.ID, index),
 			"runtime.mattercodex.dev/source-secret-uid":        string(source.UID),
 			"runtime.mattercodex.dev/source-resource-version":  source.ResourceVersion,
 			"runtime.mattercodex.dev/snapshot-sha256":          execution.CredentialSnapshotSHA256,
+			"runtime.mattercodex.dev/copy-service-account":     credentialCopyName(execution.ID, index),
 		},
 	}, Immutable: &immutable, Type: source.Type, Data: source.Data}
 	secrets := client.CoreV1().Secrets(namespace)
@@ -1127,6 +1672,11 @@ func secretDataSHA256(data map[string][]byte) string {
 	return hex.EncodeToString(digest.Sum(nil))
 }
 
+func validSHA256(value string) bool {
+	return len(value) == 64 && value == strings.ToLower(value) &&
+		strings.Trim(value, "0123456789abcdef") == ""
+}
+
 func executionCredentialSecretName(executionID string, index int) string {
 	parsed := strings.ReplaceAll(executionID, "-", "")
 	return "runtime-credential-" + parsed[:20] + "-" + strconv.Itoa(index)
@@ -1149,7 +1699,7 @@ func accessServiceAccountName(execution entity.Execution) string {
 	if string(execution.AccessProfile) == "CLUSTER_ADMIN" {
 		return "runtime-role-cluster-admin"
 	}
-	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID, 24)
+	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
 }
 
 func projectNamespaceName(projectID string) string {
@@ -1187,6 +1737,31 @@ func executionLabels(execution entity.Execution, component string) map[string]st
 }
 
 func boolPointer(value bool) *bool { return &value }
+
+func int64Pointer(value int64) *int64 { return &value }
+
+func restrictedSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		RunAsNonRoot: boolPointer(true), RunAsUser: int64Pointer(10001), RunAsGroup: int64Pointer(10001),
+		AllowPrivilegeEscalation: boolPointer(false), ReadOnlyRootFilesystem: boolPointer(true),
+		Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
+}
+
+func projectedKubeAPIVolume(defaultMode *int32, tokenTTL *int64) corev1.VolumeSource {
+	return corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+		DefaultMode: defaultMode,
+		Sources: []corev1.VolumeProjection{
+			{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+				Audience: "https://kubernetes.default.svc", ExpirationSeconds: tokenTTL, Path: "token",
+			}},
+			{ConfigMap: &corev1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"},
+				Items:                []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}},
+			}},
+		},
+	}}
+}
 
 func validDNSLabel(value string) bool {
 	if len(value) < 1 || len(value) > 63 || value[0] == '-' || value[len(value)-1] == '-' {

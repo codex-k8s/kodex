@@ -65,6 +65,7 @@ const (
 	ControlPlaneService_ClaimRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution"
 	ControlPlaneService_BindRuntimeAgentSession_FullMethodName            = "/controlplane.v1.ControlPlaneService/BindRuntimeAgentSession"
 	ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName   = "/controlplane.v1.ControlPlaneService/ResolveRuntimeAgentBindingIntent"
+	ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName        = "/controlplane.v1.ControlPlaneService/MaterializeRuntimeAgentTurn"
 	ControlPlaneService_SetResourceRetentionPolicy_FullMethodName         = "/controlplane.v1.ControlPlaneService/SetResourceRetentionPolicy"
 	ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName      = "/controlplane.v1.ControlPlaneService/RetireResourceRetentionPolicy"
 	ControlPlaneService_GetResourceRetentionPolicy_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetResourceRetentionPolicy"
@@ -213,6 +214,9 @@ type ControlPlaneServiceClient interface {
 	// ResolveRuntimeAgentBindingIntent разрешает Mattermost source reference в
 	// exact owner tuple только для bot-service до runtime claim.
 	ResolveRuntimeAgentBindingIntent(ctx context.Context, in *ResolveRuntimeAgentBindingIntentRequest, opts ...grpc.CallOption) (*ResolveRuntimeAgentBindingIntentResponse, error)
+	// MaterializeRuntimeAgentTurn атомарно создаёт server-owned Session/Turn,
+	// fresh RuntimeRevision и exact bot binding из подтверждённого bot turn.
+	MaterializeRuntimeAgentTurn(ctx context.Context, in *MaterializeRuntimeAgentTurnRequest, opts ...grpc.CallOption) (*MaterializeRuntimeAgentTurnResponse, error)
 	// SetResourceRetentionPolicy атомарно создаёт следующую owner version.
 	SetResourceRetentionPolicy(ctx context.Context, in *SetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*SetResourceRetentionPolicyResponse, error)
 	// RetireResourceRetentionPolicy закрывает exact current policy version.
@@ -752,6 +756,16 @@ func (c *controlPlaneServiceClient) ResolveRuntimeAgentBindingIntent(ctx context
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) MaterializeRuntimeAgentTurn(ctx context.Context, in *MaterializeRuntimeAgentTurnRequest, opts ...grpc.CallOption) (*MaterializeRuntimeAgentTurnResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeRuntimeAgentTurnResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) SetResourceRetentionPolicy(ctx context.Context, in *SetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*SetResourceRetentionPolicyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetResourceRetentionPolicyResponse)
@@ -1195,6 +1209,9 @@ type ControlPlaneServiceServer interface {
 	// ResolveRuntimeAgentBindingIntent разрешает Mattermost source reference в
 	// exact owner tuple только для bot-service до runtime claim.
 	ResolveRuntimeAgentBindingIntent(context.Context, *ResolveRuntimeAgentBindingIntentRequest) (*ResolveRuntimeAgentBindingIntentResponse, error)
+	// MaterializeRuntimeAgentTurn атомарно создаёт server-owned Session/Turn,
+	// fresh RuntimeRevision и exact bot binding из подтверждённого bot turn.
+	MaterializeRuntimeAgentTurn(context.Context, *MaterializeRuntimeAgentTurnRequest) (*MaterializeRuntimeAgentTurnResponse, error)
 	// SetResourceRetentionPolicy атомарно создаёт следующую owner version.
 	SetResourceRetentionPolicy(context.Context, *SetResourceRetentionPolicyRequest) (*SetResourceRetentionPolicyResponse, error)
 	// RetireResourceRetentionPolicy закрывает exact current policy version.
@@ -1411,6 +1428,9 @@ func (UnimplementedControlPlaneServiceServer) BindRuntimeAgentSession(context.Co
 }
 func (UnimplementedControlPlaneServiceServer) ResolveRuntimeAgentBindingIntent(context.Context, *ResolveRuntimeAgentBindingIntentRequest) (*ResolveRuntimeAgentBindingIntentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveRuntimeAgentBindingIntent not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) MaterializeRuntimeAgentTurn(context.Context, *MaterializeRuntimeAgentTurnRequest) (*MaterializeRuntimeAgentTurnResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeRuntimeAgentTurn not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) SetResourceRetentionPolicy(context.Context, *SetResourceRetentionPolicyRequest) (*SetResourceRetentionPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetResourceRetentionPolicy not implemented")
@@ -2360,6 +2380,24 @@ func _ControlPlaneService_ResolveRuntimeAgentBindingIntent_Handler(srv interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_MaterializeRuntimeAgentTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeRuntimeAgentTurnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).MaterializeRuntimeAgentTurn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).MaterializeRuntimeAgentTurn(ctx, req.(*MaterializeRuntimeAgentTurnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_SetResourceRetentionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetResourceRetentionPolicyRequest)
 	if err := dec(in); err != nil {
@@ -3144,6 +3182,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveRuntimeAgentBindingIntent",
 			Handler:    _ControlPlaneService_ResolveRuntimeAgentBindingIntent_Handler,
+		},
+		{
+			MethodName: "MaterializeRuntimeAgentTurn",
+			Handler:    _ControlPlaneService_MaterializeRuntimeAgentTurn_Handler,
 		},
 		{
 			MethodName: "SetResourceRetentionPolicy",

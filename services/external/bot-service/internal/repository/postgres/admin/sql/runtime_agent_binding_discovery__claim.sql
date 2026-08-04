@@ -8,10 +8,18 @@ WITH candidate AS (
 	FOR UPDATE SKIP LOCKED
 	LIMIT 1
 )
-UPDATE matter_codex_runtime_agent_binding_discoveries AS discovery
-SET state = 'LEASED', lease_token = $1, lease_expires_at = $2,
-	attempt_count = attempt_count + 1
-FROM candidate
-WHERE discovery.id = candidate.id
-RETURNING discovery.id, discovery.agent_session_turn_id, discovery.agent_run_id,
-	discovery.source_ref, discovery.lease_token;
+,
+leased AS (
+	UPDATE matter_codex_runtime_agent_binding_discoveries AS discovery
+	SET state = 'LEASED', lease_token = $1, lease_expires_at = $2,
+		attempt_count = attempt_count + 1
+	FROM candidate
+	WHERE discovery.id = candidate.id
+	RETURNING discovery.*
+)
+SELECT leased.id, leased.agent_session_id, leased.agent_session_turn_id,
+	leased.agent_session_version, leased.agent_session_turn_version,
+	leased.agent_run_id, leased.source_ref, leased.lease_token,
+	leased.agent_session_key, leased.role_stable_key,
+	leased.external_channel_ref, leased.prompt_text
+FROM leased;

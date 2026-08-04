@@ -4,8 +4,8 @@ title: Оркестрация среды выполнения
 type: domain
 status: approved
 owner: architect
-version: 0.5.0
-updated: 2026-08-03
+version: 0.5.1
+updated: 2026-08-04
 ---
 
 # Оркестрация среды выполнения
@@ -71,11 +71,15 @@ digest вычисляет control-plane. Ни control-plane UUID в роли `se
 идентификаторы из payload не доказывают bot ownership. Terminal handoff
 сохраняет `BLOCKED`, `WAITING_OWNER` и `CHANGES_REQUESTED` как разные owner
 семантики.
-Producer path принадлежит bot-service: TLS 1.3/mTLS+bearer endpoint принимает
-только control-plane precondition, локальная transaction разрешает exact
-`RunID` в bot-owned AgentSession/Turn и их монотонные версии и создаёт durable
-outbox. Bounded worker вызывает generated `BindRuntimeAgentSession`; replay
-lost response использует один semantic idempotency receipt.
+Producer path принадлежит bot-service: `AFTER INSERT` AgentSessionTurn создаёт
+discovery, а его claim перечитывает exact AgentSession/Turn/Run, role/channel,
+prompt и монотонные версии из bot PostgreSQL. Bounded worker вызывает generated
+`MaterializeRuntimeAgentTurn`; одна control-plane owner transaction разрешает
+actor/project/Role/Chat, server-assigns control Session/Turn/attempt/fresh
+RuntimeRevision и сохраняет exact bot binding/receipt/audit. Первый user turn
+достижим без предварительного control Turn; lost response возвращает тот же
+owner tuple по semantic idempotency key. Payload IDs и control UUID не
+назначают bot authority.
 
 Каждый turn/retry/reschedule создаёт новый immutable `RuntimeRevision` и
 capacity observation. Отдельный `effective_runtime_sha256` описывает только

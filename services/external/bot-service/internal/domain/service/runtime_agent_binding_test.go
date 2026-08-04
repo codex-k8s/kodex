@@ -60,8 +60,17 @@ func (*runtimeBindingTestRepository) RetryRuntimeAgentBinding(context.Context, i
 }
 
 type runtimeBindingTestClient struct {
-	request *controlplanev1.BindRuntimeAgentSessionRequest
-	intent  *controlplanev1.ResolveRuntimeAgentBindingIntentResponse
+	request            *controlplanev1.BindRuntimeAgentSessionRequest
+	materializeRequest *controlplanev1.MaterializeRuntimeAgentTurnRequest
+	materialize        *controlplanev1.MaterializeRuntimeAgentTurnResponse
+	materializeCount   int
+	intent             *controlplanev1.ResolveRuntimeAgentBindingIntentResponse
+}
+
+func (client *runtimeBindingTestClient) MaterializeRuntimeAgentTurn(_ context.Context, request *controlplanev1.MaterializeRuntimeAgentTurnRequest, _ ...grpc.CallOption) (*controlplanev1.MaterializeRuntimeAgentTurnResponse, error) {
+	client.materializeRequest = request
+	client.materializeCount++
+	return client.materialize, nil
 }
 
 func (client *runtimeBindingTestClient) ResolveRuntimeAgentBindingIntent(_ context.Context, _ *controlplanev1.ResolveRuntimeAgentBindingIntentRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveRuntimeAgentBindingIntentResponse, error) {
@@ -78,32 +87,43 @@ func (client *runtimeBindingTestClient) BindRuntimeAgentSession(_ context.Contex
 }
 
 func TestRuntimeAgentBindingDiscoveryRejoinsAfterLostCompletionResponse(t *testing.T) {
-	intent := &controlplanev1.ResolveRuntimeAgentBindingIntentResponse{
+	intent := &controlplanev1.MaterializeRuntimeAgentTurnResponse{
 		SessionId: "control-session", SessionVersion: 7,
 		TurnId: "control-turn", TurnVersion: 8, Attempt: 1,
 		InputSha256: strings.Repeat("1", 64), RuntimeRevisionId: "revision",
 		RuntimeRevisionVersion: 3, RuntimeRevisionSha256: strings.Repeat("2", 64),
+		AgentSessionBindingSha256: strings.Repeat("a", 64),
+		AgentTurnBindingSha256:    strings.Repeat("b", 64),
 	}
 	repository := &runtimeBindingTestRepository{
 		discovery: adminrepo.RuntimeAgentBindingDiscovery{
 			ID: 71, AgentSessionTurnID: 61, AgentRunID: "bot-run", SourceRef: "mattermost-post",
-			LeaseToken: "discovery-lease",
+			LeaseToken: "discovery-lease", AgentSessionID: 51, AgentSessionVersion: 9,
+			AgentSessionTurnVersion: 10, AgentSessionKey: "bot-session",
+			RoleStableKey: "developer", ExternalChannelRef: "mattermost-channel", PromptText: "Fix issue",
 		},
 		delivery: adminrepo.RuntimeAgentBindingDelivery{
 			ID: 41, AgentSessionID: 51, AgentSessionTurnID: 61,
 		},
 		discoveryCompleteFailures: 1,
 	}
-	service := NewRuntimeAgentBindingService(repository, &runtimeBindingTestClient{intent: intent})
+	client := &runtimeBindingTestClient{materialize: intent}
+	service := NewRuntimeAgentBindingService(repository, client)
 	if worked, err := service.DiscoverOne(t.Context()); !worked || err == nil {
 		t.Fatalf("lost completion response was not surfaced: worked=%v err=%v", worked, err)
 	}
 	if worked, err := service.DiscoverOne(t.Context()); !worked || err != nil {
 		t.Fatalf("discovery retry did not rejoin: worked=%v err=%v", worked, err)
 	}
-	if repository.enqueueCount != 2 || repository.intent.AgentRunID != "bot-run" ||
-		repository.intent.ControlTurnID != intent.GetTurnId() {
-		t.Fatalf("retry changed exact bot/control tuple: count=%d intent=%+v", repository.enqueueCount, repository.intent)
+	if client.materializeCount != 2 || repository.enqueueCount != 2 ||
+		client.materializeRequest.GetAgentRunId() != "bot-run" ||
+		client.materializeRequest.GetAgentSessionId() != 51 ||
+		client.materializeRequest.GetRoleStableKey() != "developer" {
+		t.Fatalf("retry changed exact bot/control tuple: count=%d request=%+v", client.materializeCount, client.materializeRequest)
+	}
+	if repository.intent.ControlTurnID != intent.GetTurnId() || repository.intent.AgentRunID != "bot-run" ||
+		repository.intent.RuntimeRevisionSHA256 != intent.GetRuntimeRevisionSha256() {
+		t.Fatalf("materialized owner tuple was not durably enqueued: %+v", repository.intent)
 	}
 }
 

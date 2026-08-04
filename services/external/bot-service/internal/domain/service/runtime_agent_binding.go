@@ -42,6 +42,7 @@ type RuntimeAgentBindingRegistration struct {
 }
 
 type runtimeAgentBindingClient interface {
+	MaterializeRuntimeAgentTurn(context.Context, *controlplanev1.MaterializeRuntimeAgentTurnRequest, ...grpc.CallOption) (*controlplanev1.MaterializeRuntimeAgentTurnResponse, error)
 	ResolveRuntimeAgentBindingIntent(context.Context, *controlplanev1.ResolveRuntimeAgentBindingIntentRequest, ...grpc.CallOption) (*controlplanev1.ResolveRuntimeAgentBindingIntentResponse, error)
 	BindRuntimeAgentSession(context.Context, *controlplanev1.BindRuntimeAgentSessionRequest, ...grpc.CallOption) (*controlplanev1.BindRuntimeAgentSessionResponse, error)
 }
@@ -142,8 +143,8 @@ func (service *RuntimeAgentBindingService) DeliverOne(ctx context.Context) (bool
 	return true, nil
 }
 
-// DiscoverOne связывает фактически созданный bot turn с exact control-plane
-// owner tuple до claim. Потерянный ответ безопасно повторяет тот же intent.
+// DiscoverOne материализует server-owned control Turn из exact bot repository
+// tuple до claim. Потерянный ответ повторяет ту же owner-команду и receipt.
 func (service *RuntimeAgentBindingService) DiscoverOne(ctx context.Context) (bool, error) {
 	if service == nil || service.repository == nil || service.client == nil {
 		return false, errors.New("runtime agent binding service is not configured")
@@ -158,18 +159,39 @@ func (service *RuntimeAgentBindingService) DiscoverOne(ctx context.Context) (boo
 	if err != nil {
 		return false, err
 	}
-	intent, callErr := service.client.ResolveRuntimeAgentBindingIntent(ctx,
-		&controlplanev1.ResolveRuntimeAgentBindingIntentRequest{SourceRef: discovery.SourceRef})
+	idempotencyKey := "runtime-materialize:" + strconv.FormatInt(discovery.AgentSessionTurnID, 10) +
+		":" + strconv.FormatUint(discovery.AgentSessionTurnVersion, 10)
+	intent, callErr := service.client.MaterializeRuntimeAgentTurn(ctx,
+		&controlplanev1.MaterializeRuntimeAgentTurnRequest{
+			IdempotencyKey: idempotencyKey, SourceRef: discovery.SourceRef,
+			RoleStableKey:      discovery.RoleStableKey,
+			ExternalChannelRef: discovery.ExternalChannelRef, PromptText: discovery.PromptText,
+			AgentSessionKey: discovery.AgentSessionKey, AgentSessionId: discovery.AgentSessionID,
+			AgentSessionVersion:     discovery.AgentSessionVersion,
+			AgentSessionTurnId:      discovery.AgentSessionTurnID,
+			AgentSessionTurnVersion: discovery.AgentSessionTurnVersion,
+			AgentRunId:              discovery.AgentRunID,
+		})
 	if callErr != nil {
 		return true, service.repository.RetryRuntimeAgentBindingDiscovery(
 			ctx, discovery.ID, discovery.LeaseToken, time.Now().Add(5*time.Second),
 			"owner_intent_unavailable",
 		)
 	}
-	idempotencyKey := "runtime-binding:" + intent.GetTurnId() + ":" +
+	if intent.GetSessionId() == "" || intent.GetTurnId() == "" || intent.GetAttempt() != 1 ||
+		!runtimeBindingSHA256Pattern.MatchString(intent.GetInputSha256()) ||
+		!runtimeBindingSHA256Pattern.MatchString(intent.GetRuntimeRevisionSha256()) ||
+		!runtimeBindingSHA256Pattern.MatchString(intent.GetAgentSessionBindingSha256()) ||
+		!runtimeBindingSHA256Pattern.MatchString(intent.GetAgentTurnBindingSha256()) {
+		return true, service.repository.RetryRuntimeAgentBindingDiscovery(
+			ctx, discovery.ID, discovery.LeaseToken, time.Now().Add(5*time.Second),
+			"materialization_response_mismatch",
+		)
+	}
+	bindingKey := "runtime-binding:" + intent.GetTurnId() + ":" +
 		strconv.FormatUint(uint64(intent.GetAttempt()), 10)
-	_, err = service.Register(ctx, RegisterRuntimeAgentBindingCommand{
-		IdempotencyKey:   idempotencyKey,
+	if _, err = service.Register(ctx, RegisterRuntimeAgentBindingCommand{
+		IdempotencyKey:   bindingKey,
 		ControlSessionID: intent.GetSessionId(), ControlSessionVersion: intent.GetSessionVersion(),
 		ControlTurnID: intent.GetTurnId(), ControlTurnVersion: intent.GetTurnVersion(),
 		Attempt: intent.GetAttempt(), InputSHA256: intent.GetInputSha256(),
@@ -177,11 +199,10 @@ func (service *RuntimeAgentBindingService) DiscoverOne(ctx context.Context) (boo
 		RuntimeRevisionVersion: intent.GetRuntimeRevisionVersion(),
 		RuntimeRevisionSHA256:  intent.GetRuntimeRevisionSha256(),
 		AgentRunID:             discovery.AgentRunID,
-	})
-	if err != nil {
+	}); err != nil {
 		return true, service.repository.RetryRuntimeAgentBindingDiscovery(
 			ctx, discovery.ID, discovery.LeaseToken, time.Now().Add(5*time.Second),
-			"binding_intent_conflict",
+			"binding_delivery_unavailable",
 		)
 	}
 	if err := service.repository.CompleteRuntimeAgentBindingDiscovery(

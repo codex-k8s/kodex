@@ -63,8 +63,9 @@ func TestAdmissionAndRBACSelectOnlyExactRuntimeProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(admission), "objectSelector:\n      matchLabels: {app.kubernetes.io/component: role-runtime}") {
-		t.Fatal("webhook is not limited to the exact role-runtime profile")
+	if !strings.Contains(string(admission), "values: [role-runtime, runtime-credential-copy, runtime-s3-credential-readback]") ||
+		!strings.Contains(string(admission), "values: [runtime-credential-snapshot, runtime-s3-credential]") {
+		t.Fatal("webhook is not limited to exact role/copy/credential profiles")
 	}
 	rbac, err := os.ReadFile(filepath.Join(root, "serviceaccounts-rbac.yaml"))
 	if err != nil {
@@ -80,6 +81,47 @@ func TestAdmissionAndRBACSelectOnlyExactRuntimeProfile(t *testing.T) {
 		!strings.Contains(text, "runtime-s3-archive-exchanger") ||
 		!strings.Contains(text, "runtime-s3-restore-exchanger") {
 		t.Fatal("trusted materializer/exchanger identities are absent")
+	}
+}
+
+func TestS3CredentialRejoinUsesExactOwnerReceiptWithoutSecretRead(t *testing.T) {
+	execution := testExecution()
+	execution.Version = 7
+	execution.Fence = 9
+	action := "archive"
+	expiresAt := time.Now().UTC().Add(10 * time.Minute).Truncate(time.Second)
+	data := map[string]string{
+		"request_sha256": strings.Repeat("1", 64), "execution_id": execution.ID,
+		"mode": "s3-archive", "version": "7", "fence": "9",
+		"s3_secret_name": s3CredentialSecretName(execution, action),
+		"s3_secret_uid":  "credential-secret-uid", "s3_secret_resource_version": "11",
+		"s3_execution_id": execution.ID, "s3_organization_id": execution.OrganizationID,
+		"s3_project_id": execution.ProjectID, "s3_session_id": execution.SessionID,
+		"s3_source_execution_id": execution.ID, "s3_action": action,
+		"s3_policy_sha256": strings.Repeat("2", 64), "s3_readback_sha256": strings.Repeat("3", 64),
+		"s3_secret_data_sha256": strings.Repeat("4", 64), "s3_expires_at": expiresAt.Format(time.RFC3339),
+	}
+	payload, err := json.Marshal(struct {
+		Name, UID, ResourceVersion, ExecutionID, OrganizationID, ProjectID string
+		SessionID, SourceExecutionID, Action, PolicySHA256, ReadbackSHA256 string
+		SecretDataSHA256, ExpiresAt                                        string
+	}{data["s3_secret_name"], data["s3_secret_uid"], data["s3_secret_resource_version"],
+		execution.ID, execution.OrganizationID, execution.ProjectID, execution.SessionID,
+		execution.ID, action, data["s3_policy_sha256"], data["s3_readback_sha256"],
+		data["s3_secret_data_sha256"], expiresAt.Format(time.RFC3339)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(payload)
+	data["s3_content_sha256"] = hex.EncodeToString(digest[:])
+	immutable := true
+	client := fake.NewSimpleClientset(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		Name: "runtime-authority-receipt-" + stableHash(execution.ID+":s3-archive", 24), Namespace: "test",
+	}, Immutable: &immutable, Data: data})
+	adapter := &Adapter{client: client, config: Config{Namespace: "test"}, now: time.Now}
+	actual, err := adapter.readS3CredentialSnapshot(t.Context(), execution, action)
+	if err != nil || actual != data["s3_content_sha256"] {
+		t.Fatalf("owner receipt rejoin failed: digest=%s err=%v", actual, err)
 	}
 }
 

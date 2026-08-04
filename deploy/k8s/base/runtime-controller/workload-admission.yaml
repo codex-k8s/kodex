@@ -34,7 +34,7 @@ spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
       terminationGracePeriodSeconds: 10
-      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, fsGroupChangePolicy: OnRootMismatch, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: admission
           image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -44,7 +44,11 @@ spec:
             - {name: RUNTIME_ADMISSION_TLS_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/runtime-admission/tls.crt}
             - {name: RUNTIME_ADMISSION_TLS_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/runtime-admission/tls.key}
             - {name: RUNTIME_ADMISSION_PUBLIC_KEY_FILE, value: /var/run/config/mattercodex/runtime-workload-ticket/public-key.hex}
+            - {name: RUNTIME_ADMISSION_S3_ARCHIVE_PUBLIC_KEY_FILE, value: /var/run/config/mattercodex/runtime-workload-ticket/s3-archive-public-key.hex}
+            - {name: RUNTIME_ADMISSION_S3_RESTORE_PUBLIC_KEY_FILE, value: /var/run/config/mattercodex/runtime-workload-ticket/s3-restore-public-key.hex}
             - {name: RUNTIME_ADMISSION_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/runtime-admission-postgres/dsn}
+            - {name: RUNTIME_CREDENTIAL_COPY_IMAGE, value: "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+            - {name: RUNTIME_S3_READBACK_IMAGE, value: "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
           ports: [{name: https, containerPort: 8443, protocol: TCP}]
           startupProbe: {httpGet: {path: /readyz, port: https, scheme: HTTPS}, periodSeconds: 2, failureThreshold: 30}
           readinessProbe: {httpGet: {path: /readyz, port: https, scheme: HTTPS}, periodSeconds: 5, failureThreshold: 2}
@@ -110,4 +114,25 @@ webhooks:
     namespaceSelector:
       matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
     objectSelector:
-      matchLabels: {app.kubernetes.io/component: role-runtime}
+      matchExpressions:
+        - {key: app.kubernetes.io/component, operator: In, values: [role-runtime, runtime-credential-copy, runtime-s3-credential-readback]}
+  - name: runtime-credential-snapshot-authority.mattercodex.dev
+    admissionReviewVersions: [v1]
+    sideEffects: None
+    failurePolicy: Fail
+    matchPolicy: Equivalent
+    timeoutSeconds: 5
+    clientConfig:
+      service: {namespace: mattercodex-system, name: runtime-workload-admission, path: /validate-runtime-pod, port: 443}
+      caBundle: ${RUNTIME_WORKLOAD_ADMISSION_CA_BUNDLE}
+    rules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [secrets]
+        scope: Namespaced
+    namespaceSelector:
+      matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+    objectSelector:
+      matchExpressions:
+        - {key: app.kubernetes.io/component, operator: In, values: [runtime-credential-snapshot, runtime-s3-credential]}

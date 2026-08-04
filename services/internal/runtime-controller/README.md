@@ -4,7 +4,7 @@ title: Runtime controller
 type: service
 status: approved
 owner: backend
-version: 1.3.0
+version: 1.3.1
 updated: 2026-08-04
 ---
 
@@ -30,6 +30,8 @@ role-image Pod. Он не запускает Codex, не меняет домен
 - `runtime-credential-broker serve-snapshot|serve-s3-archive|serve-s3-restore`
   — раздельные trusted materializer/exchangers с server-derived spec,
   STS tags/policy, immutable one-time receipt и exact readback;
+- `runtime-credential-broker copy-credential` — execution-scoped one-time Pod
+  с 600-секундным Kubernetes token и Role только на exact source/destination;
 - `runtime-workload-admission` — fail-closed TLS admission webhook с
   Ed25519 full-tuple verification, exact immutable Pod spec readback и
   PostgreSQL one-time replay receipt;
@@ -37,10 +39,12 @@ role-image Pod. Он не запускает Codex, не меняет домен
   durable inbox/projection.
 
 Каждый worker имеет отдельные ServiceAccount, SPIFFE/application grant и
-per-job `Role` только на exact journal. Controller и routine broker Jobs не
-читают Secret, не создают role Pod/ServiceAccount/RoleBinding и не создают/не
-bind-ят `cluster-admin` authority. Namespace mutation принадлежит только
-trusted `runtime-workload-materializer`; Vault/STS разделены между
+per-job `Role` только на exact journal. Controller, долговечный materializer и
+routine broker Jobs не читают Secret и не создают/bind-ят `cluster-admin`
+authority. Materializer может только создавать fail-closed
+admission-ограниченные execution resources; Secret читает и создаёт one-time
+copy identity, а full Pod/Secret spec и replay проверяет независимый webhook.
+Vault/STS разделены между
 archive/restore exchangers. Vault выдаёт broker только public keys с именем
 `public-key.hex` (раздельные admission/archive/restore verifier),
 `kms-key-arn`, `archive-role-arn` и
@@ -77,10 +81,12 @@ tuple, отдельные control-plane session/turn и server-owned bot
 с exact SNI/CA/client identity и пути immutable execution credential
 snapshots. Control-plane UUID никогда не используется как bot `session_key`.
 Bot-service сам разрешает `RunID` в локальные AgentSession/Turn и версии,
-начиная с transaction trigger фактически созданного bot turn, сохраняет
-durable discovery/binding outbox до control-plane claim и доставляет generated
-`BindRuntimeAgentSession` через mTLS+bearer; lost response повторяет тот же
-idempotency intent.
+начиная с transaction trigger фактически созданного bot turn, claim-ит durable
+discovery вместе с role/channel/prompt и вызывает generated
+`MaterializeRuntimeAgentTurn` через mTLS+bearer. Control-plane одной owner
+transaction назначает control Session/Turn/fresh RuntimeRevision и сохраняет
+exact bot binding; lost response повторяет тот же receipt, поэтому первый turn
+не требует заранее существующего control Turn.
 Terminal Pod phase не завершает turn: runner обязан записать
 exact handoff в собственный Pod. Exit без handoff создаёт incident.
 Role Pod становится Ready только после bot-session read и MCP initialize по
@@ -109,6 +115,11 @@ Archive, restore и rehydrate используют разные short-lived exec
 STS Secrets, выдаваемые после проверки подписанного workload ticket: immutable
 Secret UID/resourceVersion, exact session tags, inline
 policy/readback digests и срок не более 15 минут входят в credential snapshot.
+До успешного `Secret Create` durable credential effect отсутствует: crash
+безопасно получает новый short-lived STS grant. `AlreadyExists` и lost response
+проходят action-specific one-time readback Pod с exact `resourceNames`, UID,
+`resourceVersion`, tuple, digest и expiry. Long-lived exchanger не имеет
+`secrets/get`, а controller читает только immutable owner receipt.
 Vault bootstrap role может только вызвать `AssumeRole`/`TagSession` для
 закреплённой archive либо restore execution role. Только trusted action
 exchanger выводит inline policy и session tags из owner-signed ticket и
