@@ -157,3 +157,10 @@ Duplicate/stale не повторяют effect. Sequence gap и conflicting payl
 - использование aggregate version как sequence другого ordering key.
 
 Подробные runtime-инварианты задают `GO-DOC-004` и `GO-DOC-005`.
+
+WebSocket snapshot contract `control-api-gateway` находится в
+[`control-api-gateway/v1/asyncapi.yaml`](control-api-gateway/v1/asyncapi.yaml).
+Он использует `wss`, а не broker: consumer заменяет channel snapshot, а
+gateway каждый раз читает авторитетное состояние через защищённый
+`control-plane` RPC. Модели генерируются командой
+`make gen-control-api-gateway-asyncapi`.

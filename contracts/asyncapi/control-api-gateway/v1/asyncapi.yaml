@@ -1,0 +1,111 @@
+asyncapi: 3.0.0
+info:
+  title: MatterCodex Control API Realtime
+  version: 1.0.0
+  description: >-
+    Защищённый WebSocket snapshot/rejoin contract. Gateway не подписывается на
+    NATS и не хранит проекции: каждый snapshot получается через owner-scoped
+    control-plane RPC после проверки той же session/CSRF/Origin boundary.
+servers:
+  owner:
+    host: control-api.mattercodex.local
+    pathname: /api/v1/realtime
+    protocol: wss
+    security: [{ $ref: '#/components/securitySchemes/ownerSession' }]
+    x-origin-policy: exact-https-allowlist
+    x-required-subprotocols:
+      - mattercodex.control.v1
+      - csrf.<csrf-token>
+channels:
+  realtime:
+    address: /api/v1/realtime
+    messages:
+      subscribe: { $ref: '#/components/messages/Subscribe' }
+      snapshot: { $ref: '#/components/messages/Snapshot' }
+      problem: { $ref: '#/components/messages/Problem' }
+operations:
+  subscribeRealtime:
+    action: receive
+    channel: { $ref: '#/channels/realtime' }
+    messages: [{ $ref: '#/channels/realtime/messages/subscribe' }]
+    x-gateway-mapping: CONTROL_PLANE_AUTHORITY_PROOF_AND_RPC
+    x-authoritative-rpcs:
+      RUNS: /controlplane.v1.ControlPlaneService/ListResources
+      INCIDENTS: /controlplane.v1.ControlPlaneService/ListAuditEvents
+      RESOURCES: /controlplane.v1.ControlPlaneService/ListResources
+      CONFIGURATION_CHANGES: /controlplane.v1.ControlPlaneService/ListAuditEvents
+  publishRealtime:
+    action: send
+    channel: { $ref: '#/channels/realtime' }
+    messages:
+      - { $ref: '#/channels/realtime/messages/snapshot' }
+      - { $ref: '#/channels/realtime/messages/problem' }
+    x-delivery:
+      mode: AUTHORITATIVE_SNAPSHOT
+      orderingKey: connectionId+sequence
+      reconnect: RESUBSCRIBE_AND_READ_CURRENT_STATE
+      duplicateBehavior: CLIENT_REPLACES_CHANNEL_SNAPSHOT
+      gapBehavior: CLIENT_RECONNECTS_AND_RESUBSCRIBES
+    x-consumers:
+      - service: owner-browser-client
+        purpose: REPLACE_OWNER_VISIBLE_REALTIME_PROJECTION
+        effect: REPLACE_CHANNEL_SNAPSHOT
+        eligibility: SAME_VERIFIED_OWNER_SESSION
+components:
+  securitySchemes:
+    ownerSession:
+      type: httpApiKey
+      in: cookie
+      name: __Host-mattercodex-session
+  messages:
+    Subscribe:
+      name: subscribe
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/Subscribe' }
+    Snapshot:
+      name: snapshot
+      contentType: application/json
+      payload: { $ref: '#/components/schemas/Snapshot' }
+    Problem:
+      name: problem
+      contentType: application/problem+json
+      payload: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Subscribe:
+      type: object
+      additionalProperties: false
+      properties:
+        type: { const: SUBSCRIBE }
+        requestId: { type: string, format: uuid }
+        channels:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items: { enum: [RUNS, INCIDENTS, RESOURCES, CONFIGURATION_CHANGES] }
+        resourceKinds:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items: { enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT] }
+      required: [type, requestId, channels]
+    Snapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        type: { const: SNAPSHOT }
+        requestId: { type: string, format: uuid }
+        channel: { enum: [RUNS, INCIDENTS, RESOURCES, CONFIGURATION_CHANGES] }
+        sequence: { type: integer, minimum: 1 }
+        serverTime: { type: string, format: date-time }
+        items: { type: array, maxItems: 100, items: { type: object } }
+      required: [type, requestId, channel, sequence, serverTime, items]
+    Problem:
+      type: object
+      additionalProperties: false
+      properties:
+        type: { const: PROBLEM }
+        requestId: { type: string, format: uuid }
+        code: { type: string, pattern: '^[A-Z][A-Z0-9_]*$' }
+        retryable: { type: boolean }
+      required: [type, requestId, code, retryable]

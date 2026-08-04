@@ -111,6 +111,26 @@ func IntegrationGatewayOperations() map[string]string {
 	}
 }
 
+// ControlAPIGatewayOperations возвращает закрытый набор owner HTTP/WS mappings.
+// Actor, tenant, project и ownership разрешаются proof resolver на стороне
+// control-plane; adapter не принимает эти значения из HTTP payload.
+func ControlAPIGatewayOperations() map[string]string {
+	return map[string]string{
+		"control.readiness.check":     controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.project.create":      controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
+		"control.project.list":        controlplanev1.ControlPlaneService_ListProjects_FullMethodName,
+		"control.resource.create":     controlplanev1.ControlPlaneService_CreateResource_FullMethodName,
+		"control.resource.update":     controlplanev1.ControlPlaneService_UpdateResource_FullMethodName,
+		"control.resource.transition": controlplanev1.ControlPlaneService_TransitionResource_FullMethodName,
+		"control.resource.delete":     controlplanev1.ControlPlaneService_DeleteResource_FullMethodName,
+		"control.access.manage":       controlplanev1.ControlPlaneService_ManageAccessResource_FullMethodName,
+		"control.resource.get":        controlplanev1.ControlPlaneService_GetResource_FullMethodName,
+		"control.resource.list":       controlplanev1.ControlPlaneService_ListResources_FullMethodName,
+		"control.audit.list":          controlplanev1.ControlPlaneService_ListAuditEvents_FullMethodName,
+		"control.diagnostics.get":     controlplanev1.ControlPlaneService_GetDiagnostics_FullMethodName,
+	}
+}
+
 func OwnerGateDeliveryOperations() map[string]string {
 	return map[string]string{
 		"control.owner-gate-delivery.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,

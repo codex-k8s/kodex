@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: control-api-gateway
+  labels: {app.kubernetes.io/name: control-api-gateway}
+spec:
+  groups:
+    - name: control-api-gateway.availability
+      rules:
+        - alert: ControlAPIGatewayUnavailable
+          expr: absent(up{service="control-api-gateway"}) or sum(up{service="control-api-gateway"}) < 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Control API gateway недоступен
+            description: Prometheus не видит готовой реплики owner API.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+        - alert: ControlAPIGatewayProtectedPathUnavailable
+          expr: absent(mattercodex_control_api_gateway_readiness{ready="true"}) or sum(mattercodex_control_api_gateway_readiness{ready="true"}) < 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Защищённый control API path не готов
+            description: Проверить OIDC, resolver, local issuer, mTLS и control-plane readiness.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+        - alert: ControlAPIGatewayUnexpectedFailures
+          expr: sum(rate(mattercodex_control_api_gateway_http_requests_total{status="500"}[5m])) > 0.1
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Растут неожиданные ошибки control API
+            description: Проверить единый error contract и protected RPC path.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
+        - alert: ControlAPIGatewayRateLimited
+          expr: sum(rate(mattercodex_control_api_gateway_http_requests_total{status="429"}[5m])) > 1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Control API устойчиво ограничивает запросы
+            description: Проверить owner client loop и configured bounded rate.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md

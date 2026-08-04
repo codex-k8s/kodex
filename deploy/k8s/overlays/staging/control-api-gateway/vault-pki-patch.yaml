@@ -1,0 +1,7 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata: {name: control-api-gateway-public-tls}
+spec:
+  commonName: control-api.staging.mattercodex.local
+  altNames:
+    - control-api.staging.mattercodex.local

@@ -1,0 +1,103 @@
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: control-api-gateway-vault-ca
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  sources:
+    - secret: {name: mattercodex-vault-ca-source, key: ca.crt}
+  target:
+    namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+    secret: {key: ca.crt}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: control-api-gateway
+  annotations: {argocd.argoproj.io/sync-wave: "-8"}
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: control-api-gateway-vault-ca
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: control-api-gateway
+  annotations: {argocd.argoproj.io/sync-wave: "-7"}
+spec:
+  vaultConnectionRef: control-api-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: control-api-gateway
+    serviceAccount: control-api-gateway
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata:
+  name: control-api-gateway-public-tls
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: pki-public
+  role: control-api-gateway
+  commonName: control-api.mattercodex.local
+  altNames:
+    - control-api.mattercodex.local
+  format: pem
+  expiryOffset: 5m
+  ttl: 1h
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-api-gateway}
+  destination:
+    create: true
+    name: control-api-gateway-public-tls
+    type: kubernetes.io/tls
+    overwrite: false
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: control-api-gateway-session-keys
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/control-api-gateway/session
+  refreshAfter: 5m
+  rolloutRestartTargets:
+    - {kind: Deployment, name: control-api-gateway}
+  destination:
+    create: true
+    name: control-api-gateway-session-keys
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        current.hex: {text: '{{ get .Secrets "current-hex" }}'}
+        previous.hex: {text: '{{ get .Secrets "previous-hex" }}'}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: control-api-gateway-application-grant
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: control-api-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/control-plane/application-grants/control-api-gateway
+  refreshAfter: 5m
+  destination:
+    create: true
+    name: control-api-gateway-application-grant
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        readiness.jwt: {text: '{{ get .Secrets "readiness-jwt" }}'}

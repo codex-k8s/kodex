@@ -6,8 +6,9 @@ PROTOBUF_GO_PLUGIN_REMOTE := buf.build/protocolbuffers/go:v1.36.11
 PROTOBUF_GO_PLUGIN_REVISION := 1
 GRPC_GO_PLUGIN_REMOTE := buf.build/grpc/go:v1.6.2
 GRPC_GO_PLUGIN_REVISION := 1
+ASYNCAPI ?= asyncapi
 
-.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-integration-gateway-openapi-go gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-proto-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-integration-gateway-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -46,11 +47,24 @@ govulncheck: check-go-toolchain
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 
-gen-openapi-go: gen-integration-gateway-openapi-go
+gen-openapi-go: gen-integration-gateway-openapi-go gen-control-api-gateway-openapi-go
 	oapi-codegen -config tools/codegen/openapi/control-center-go.yaml specs/openapi/control-center.v1.yaml
 
 gen-integration-gateway-openapi-go:
 	oapi-codegen -config tools/codegen/openapi/integration-gateway-go.yaml contracts/openapi/integration-gateway/v1/openapi.yaml
+
+gen-control-api-gateway-openapi-go:
+	oapi-codegen -config tools/codegen/openapi/control-api-gateway-go.yaml contracts/openapi/control-api-gateway/v1/openapi.yaml
+	gofmt -w services/external/control-api-gateway/internal/transport/http/generated
+
+lint-control-api-gateway-asyncapi:
+	$(ASYNCAPI) validate contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml
+
+gen-control-api-gateway-asyncapi:
+	$(ASYNCAPI) generate models golang contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml \
+		--packageName generated --goIncludeComments --goIncludeTags --no-interactive \
+		--output services/external/control-api-gateway/internal/transport/websocket/generated
+	./tools/codegen/normalize-control-api-gateway-asyncapi.sh
 
 gen-openapi-ts:
 	openapi-ts -f tools/codegen/openapi/control-center-ts.config.mjs

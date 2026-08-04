@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-api-gateway-dashboard
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: control-api-gateway
+data:
+  control-api-gateway.json: |
+    {"title":"MatterCodex Control API Gateway","uid":"mattercodex-control-api-gateway","schemaVersion":39,"version":1,"panels":[{"type":"timeseries","title":"HTTP requests","targets":[{"expr":"sum by (status) (rate(mattercodex_control_api_gateway_http_requests_total[5m]))"}]},{"type":"timeseries","title":"WebSocket snapshots","targets":[{"expr":"sum by (channel,outcome) (rate(mattercodex_control_api_gateway_websocket_snapshots_total[5m]))"}]},{"type":"stat","title":"Protected readiness","targets":[{"expr":"sum(mattercodex_control_api_gateway_readiness{ready=\"true\"})"}]}]}

@@ -1,0 +1,595 @@
+openapi: 3.0.3
+info:
+  title: MatterCodex Control API Gateway
+  version: 1.0.0
+  description: >-
+    Owner API для проектов, управляемой конфигурации и авторитетных проекций
+    control-plane. Actor, organization, project и ownership выводятся только из
+    проверенной OIDC-сессии и состояния control-plane; request body не является
+    источником полномочий.
+servers:
+  - url: https://control-api.mattercodex.local/api/v1
+tags:
+  - { name: session, description: Защищённая owner-сессия gateway. }
+  - { name: projects, description: Проекты в разрешённой owner boundary. }
+  - { name: resources, description: Управление ресурсами через control-plane. }
+  - { name: projections, description: Авторитетные read-only проекции. }
+paths:
+  /session:
+    post:
+      tags: [session]
+      summary: Создать защищённую owner-сессию
+      operationId: createOwnerSession
+      security: [{ oidcBearer: [] }]
+      responses:
+        '204': { description: Защищённая owner-сессия и CSRF cookie созданы. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+    delete:
+      tags: [session]
+      summary: Завершить локальную owner-сессию
+      operationId: deleteOwnerSession
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }]
+      responses:
+        '204': { description: Локальная сессия закрыта. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /projects:
+    get:
+      tags: [projects]
+      summary: Получить доступные owner проекты
+      operationId: listProjects
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Проекты, видимые проверенному owner.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      tags: [projects]
+      summary: Создать проект с назначенным сервером owner
+      operationId: createProject
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateProject' } } }
+      responses:
+        '201':
+          description: Сервер назначил project ID и owner.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /resources:
+    get:
+      tags: [resources]
+      summary: Получить авторитетную страницу ресурсов
+      operationId: listResources
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ResourceKindQuery' }
+        - { name: parentId, in: query, schema: { type: string, format: uuid } }
+        - { name: state, in: query, schema: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/LifecycleState' } }, style: form, explode: true }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Авторитетная проекция ресурсов текущей owner/tenant boundary.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      tags: [resources]
+      summary: Создать ресурс допустимого вида
+      operationId: createResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateResource' } } }
+      responses:
+        '201':
+          description: Ресурс создан; project и owner назначены сервером.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /resources/{resourceId}:
+    parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+    get:
+      tags: [resources]
+      summary: Получить ресурс после owner resolution
+      operationId: getResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { name: expectedKind, in: query, required: true, schema: { $ref: '#/components/schemas/ResourceKind' } }
+      responses:
+        '200':
+          description: Ресурс после owner/tenant resolution.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    put:
+      tags: [resources]
+      summary: Обновить ресурс с optimistic concurrency
+      operationId: updateResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateResource' } } }
+      responses:
+        '200':
+          description: Ресурс обновлён после server-side owner resolution и OCC.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [resources]
+      summary: Удалить ресурс с optimistic concurrency
+      operationId: deleteResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '200':
+          description: Авторитетное состояние удаления.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /resources/{resourceId}/transition:
+    post:
+      tags: [resources]
+      summary: Выполнить допустимый lifecycle transition
+      operationId: transitionResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ResourceID' }
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TransitionResource' } } }
+      responses:
+        '200':
+          description: Новый state после специализированной проверки lifecycle.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /access-resources:
+    post:
+      tags: [resources]
+      summary: Выполнить специализированную access command
+      operationId: manageAccessResource
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - name: If-Match
+          in: header
+          required: false
+          schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManageAccessResource' } } }
+      responses:
+        '200':
+          description: Результат специализированной административной команды.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /runs:
+    get:
+      tags: [projections]
+      summary: Получить авторитетную проекцию запусков
+      operationId: listRuns
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { name: state, in: query, schema: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/LifecycleState' } }, style: form, explode: true }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Авторитетные PROCESS_RUN resources.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /audit:
+    get:
+      tags: [projections]
+      summary: Получить audit metadata
+      operationId: listAuditEvents
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { name: resourceKind, in: query, schema: { $ref: '#/components/schemas/ResourceKind' } }
+        - { name: resourceId, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { type: string, maxLength: 80, pattern: '^[a-z][a-z0-9_]*$' } }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Audit metadata без credential, token и secret values.
+          content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /incidents:
+    get:
+      tags: [projections]
+      summary: Получить авторитетную проекцию инцидентов
+      operationId: listIncidents
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Авторитетный audit read path действия record_runtime_incident.
+          content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /configuration-changes:
+    get:
+      tags: [projections]
+      summary: Получить проекцию изменений конфигурации
+      operationId: listConfigurationChanges
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Audit projection закрытого набора configuration mutation actions.
+          content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /diagnostics:
+    get:
+      tags: [projections]
+      summary: Получить ограниченную диагностику control-plane
+      operationId: getDiagnostics
+      security: [{ ownerSession: [] }]
+      responses:
+        '200':
+          description: Ограниченная авторитетная диагностика control-plane.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Diagnostics' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  securitySchemes:
+    oidcBearer: { type: http, scheme: bearer, bearerFormat: JWT }
+    ownerSession: { type: apiKey, in: cookie, name: __Host-mattercodex-session }
+  parameters:
+    CSRFToken: { name: X-CSRF-Token, in: header, required: true, schema: { type: string, minLength: 43, maxLength: 64 } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+    IfMatch: { name: If-Match, in: header, required: true, schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+    ResourceID: { name: resourceId, in: path, required: true, schema: { type: string, format: uuid } }
+    ResourceKindQuery: { name: kind, in: query, required: true, schema: { $ref: '#/components/schemas/ResourceKind' } }
+    PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+    PageToken: { name: pageToken, in: query, schema: { type: string, maxLength: 1024 } }
+  headers:
+    ETag: { description: Точная версия ресурса для следующего If-Match., schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+  schemas:
+    ResourceKind:
+      type: string
+      enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT]
+    MutableResourceKind:
+      type: string
+      enum: [CHAT, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION]
+    AccessResourceKind: { type: string, enum: [TEAM, ROLE, PROMPT_PROFILE] }
+    LifecycleState:
+      type: string
+      enum: [ACTIVE, PAUSED, ARCHIVED, DELETION_PENDING, DELETED, QUEUED, CLAIMED, RUNNING, WAITING_OWNER, WAITING_EXTERNAL, SUCCEEDED, FAILED, CANCELLED, EXPIRED, BLOCKED]
+    ProjectSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        slug: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        description: { type: string, maxLength: 2000 }
+        locale: { type: string, minLength: 2, maxLength: 16 }
+      required: [slug, locale]
+    CreateProject:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        spec: { $ref: '#/components/schemas/ProjectSpec' }
+      required: [name, spec]
+    ChatSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        roomType: { type: string, enum: [USER, COORDINATION, WORK_CONTROL, RUNS] }
+        defaultAgentId: { type: string, format: uuid }
+        externalChannelRef: { type: string, maxLength: 512 }
+        workPolicy: { type: string, maxLength: 80 }
+      required: [stableKey, roomType, workPolicy]
+    CredentialBindingSpec:
+      type: object
+      additionalProperties: false
+      description: Содержит только URI/metadata Secret; secret value запрещён.
+      properties:
+        purpose: { type: string, minLength: 1, maxLength: 120 }
+        immutableSecretRef: { type: string, minLength: 1, maxLength: 512 }
+        principalRef: { type: string, minLength: 1, maxLength: 512 }
+        revision: { type: integer, format: int64, minimum: 1 }
+      required: [purpose, immutableSecretRef, principalRef, revision]
+    RepositoryWorkspaceSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        repositoryRef: { type: string, minLength: 1, maxLength: 512 }
+        workspaceMode: { type: string, minLength: 1, maxLength: 80 }
+        defaultBranch: { type: string, minLength: 1, maxLength: 255 }
+        credentialBindingId: { type: string, format: uuid }
+      required: [repositoryRef, workspaceMode, defaultBranch]
+    IntegrationSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        definitionRef: { type: string, minLength: 1, maxLength: 512 }
+        definitionVersion: { type: integer, format: int64, minimum: 1 }
+        capabilities: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, maxLength: 120 } }
+        credentialBindingIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
+        endpointRef: { type: string, minLength: 1, maxLength: 512 }
+      required: [definitionRef, definitionVersion, capabilities, credentialBindingIds, endpointRef]
+    TeamSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        externalTeamRef: { type: string, maxLength: 512 }
+        memberActorIds: { type: array, maxItems: 200, uniqueItems: true, items: { type: string, format: uuid } }
+        roleIds: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, format: uuid } }
+      required: [stableKey, memberActorIds, roleIds]
+    RoleSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
+        allowedTargetRoleIds: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, format: uuid } }
+        promptProfileId: { type: string, format: uuid }
+        providerCredentialBindingIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
+        repositoryWorkspaceIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
+        integrationIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
+      required: [stableKey, capabilities, allowedTargetRoleIds, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds]
+    PromptProfileSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        revision: { type: integer, format: int64, minimum: 1 }
+        contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sourceRef: { type: string, minLength: 1, maxLength: 512 }
+        locale: { type: string, minLength: 2, maxLength: 16 }
+      required: [revision, contentSha256, sourceRef, locale]
+    ResourceSpecInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      maxProperties: 1
+      properties:
+        chat: { $ref: '#/components/schemas/ChatSpec' }
+        credentialBinding: { $ref: '#/components/schemas/CredentialBindingSpec' }
+        repositoryWorkspace: { $ref: '#/components/schemas/RepositoryWorkspaceSpec' }
+        integration: { $ref: '#/components/schemas/IntegrationSpec' }
+    AccessSpecInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      maxProperties: 1
+      properties:
+        team: { $ref: '#/components/schemas/TeamSpec' }
+        role: { $ref: '#/components/schemas/RoleSpec' }
+        promptProfile: { $ref: '#/components/schemas/PromptProfileSpec' }
+    CreateResource:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { $ref: '#/components/schemas/MutableResourceKind' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        parentId: { type: string, format: uuid }
+        spec: { $ref: '#/components/schemas/ResourceSpecInput' }
+      required: [kind, name, spec]
+    UpdateResource:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { $ref: '#/components/schemas/MutableResourceKind' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        spec: { $ref: '#/components/schemas/ResourceSpecInput' }
+        detachGitManagement: { type: boolean, default: false }
+      required: [kind, name, spec]
+    TransitionResource:
+      type: object
+      additionalProperties: false
+      properties:
+        targetState: { $ref: '#/components/schemas/LifecycleState' }
+        reasonCode: { type: string, minLength: 1, maxLength: 80, pattern: '^[A-Z][A-Z0-9_]*$' }
+      required: [targetState, reasonCode]
+    ManageAccessResource:
+      type: object
+      additionalProperties: false
+      description: CREATE/UPDATE требуют name+spec; остальные действия требуют resourceId+If-Match и запрещают name/spec.
+      properties:
+        kind: { $ref: '#/components/schemas/AccessResourceKind' }
+        action: { type: string, enum: [CREATE, UPDATE, ACTIVATE, PAUSE, ARCHIVE, DELETE] }
+        resourceId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        spec: { $ref: '#/components/schemas/AccessSpecInput' }
+      required: [kind, action]
+    Resource:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/ResourceKind' }
+        name: { type: string }
+        state: { $ref: '#/components/schemas/LifecycleState' }
+        version: { type: integer, format: int64, minimum: 1 }
+        projectId: { type: string, format: uuid }
+        parentId: { type: string, format: uuid }
+        spec: { type: object, description: Безопасная protobuf JSON-проекция; credential values отсутствуют. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, kind, name, state, version, spec, createdAt, updatedAt]
+    ResourcePage:
+      type: object
+      additionalProperties: false
+      properties:
+        resources: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Resource' } }
+        nextPageToken: { type: string }
+      required: [resources]
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        action: { type: string }
+        resourceId: { type: string, format: uuid }
+        resourceKind: { $ref: '#/components/schemas/ResourceKind' }
+        resourceVersion: { type: integer, format: int64, minimum: 1 }
+        outcome: { type: string }
+        actorId: { type: string, format: uuid }
+        correlationId: { type: string, format: uuid }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        occurredAt: { type: string, format: date-time }
+      required: [id, action, resourceId, resourceKind, resourceVersion, outcome, actorId, correlationId, policyRevision, occurredAt]
+    AuditPage:
+      type: object
+      additionalProperties: false
+      properties:
+        events: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AuditEvent' } }
+        nextPageToken: { type: string }
+      required: [events]
+    Diagnostics:
+      type: object
+      additionalProperties: false
+      properties:
+        schemaVersion: { type: integer, format: int64 }
+        pendingOutboxEvents: { type: integer, format: int64 }
+        terminalOutboxEvents: { type: integer, format: int64 }
+        oldestPendingAgeSeconds: { type: number, format: double }
+        activeTurnLeases: { type: integer, format: int64 }
+        queuedScheduleOccurrences: { type: integer, format: int64 }
+        runtimePrincipalStatus: { type: string }
+        runtimePrincipalGeneration: { type: integer, format: int64 }
+      required: [schemaVersion, pendingOutboxEvents, terminalOutboxEvents, oldestPendingAgeSeconds, activeTurnLeases, queuedScheduleOccurrences, runtimePrincipalStatus, runtimePrincipalGeneration]
+    Problem:
+      type: object
+      additionalProperties: false
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { type: string, pattern: '^[A-Z][A-Z0-9_]*$' }
+        correlationId: { type: string, format: uuid }
+        retryable: { type: boolean }
+      required: [type, title, status, code, correlationId, retryable]
+  responses:
+    BadRequest: { description: Запрос не соответствует закрытому контракту., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    UnsupportedMediaType: { description: Поддерживается только application/json., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Unauthorized: { description: Owner credential или session недействительны., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Forbidden: { description: CSRF/Origin или exact permission отклонены., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    NotFound: { description: Ресурс отсутствует либо скрыт другой областью., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Conflict: { description: Idempotency либо lifecycle conflict., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    PreconditionFailed: { description: If-Match не совпал с авторитетной версией., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    TooManyRequests: { description: Достигнут bounded rate/concurrency limit., headers: { Retry-After: { schema: { type: integer, minimum: 1 } } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Internal: { description: Неожиданный либо несогласованный downstream outcome закрыто преобразован., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Unavailable: { description: Защищённый control-plane path временно недоступен., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
