@@ -347,11 +347,24 @@ type RuntimeExecution struct {
 	RehydrateProofSHA256                string
 	CredentialSnapshotSHA256            string
 	WorkloadTicketSHA256                string
+	ProviderBindingID                   string
+	ProviderBindingVersion              uint64
+	ProviderBindingSHA256               string
+	CodexSessionID                      string
+	CodexArchiveRelativePath            string
+	CodexArchiveSHA256                  string
+	CodexArchiveProvenance              string
+	Materializations                    []RuntimeMaterialization
 	WorkloadTicket                      string `json:"-"`
 	ArchiveWorkloadTicket               string `json:"-"`
 	RestoreWorkloadTicket               string `json:"-"`
 	CreatedAt                           time.Time
 	UpdatedAt                           time.Time
+}
+
+type RuntimeMaterialization struct {
+	Kind, ArtifactID, SHA256, RelativePath, MediaType, StorageRef string
+	ArtifactVersion, SizeBytes                                    uint64
 }
 
 // RuntimeAgentBinding — неизменяемая связь двух owner aggregate. Поля bot

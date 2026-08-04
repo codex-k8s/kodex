@@ -157,6 +157,7 @@ type EnqueueTurnInput struct {
 	SourceRef        string
 	PromptArtifactID string
 	ProcessRunID     string
+	InputArtifactIDs []string
 }
 
 type ClaimTurnInput struct {
@@ -170,6 +171,27 @@ type ClaimTurnResult struct {
 	LeaseExpiresAt      time.Time
 	Attempt             uint32
 	AuthorityGeneration uint64
+}
+
+type ReportRuntimeProgressInput struct {
+	Principal                                                       value.Principal
+	IdempotencyKey, TurnID, LeaseToken, ExecutionID, Kind, Markdown string
+	ExpectedTurnVersion, ExpectedExecutionVersion, ExpectedFence    uint64
+	Attempt                                                         uint32
+	AuthorityGeneration                                             uint64
+	Sequence                                                        uint32
+}
+
+type ReportRuntimeProgressResult struct {
+	DeliveryID string
+	Turn       entity.Resource
+	Execution  RuntimeExecution
+}
+
+type RuntimeMaterializationResult struct {
+	OrganizationID, ProjectID                string
+	ExecutionVersion, Fence, GrantGeneration uint64
+	Materialization                          domainrepo.RuntimeMaterialization
 }
 
 type RuntimeAgentSessionBindingInput struct {
@@ -638,12 +660,16 @@ type RecordRuntimeIncidentInput struct {
 
 type CompleteRuntimeExecutionInput struct {
 	RuntimeExecutionInput
-	Outcome                                                                             string
-	TerminalReference                                                                   string
-	TerminalSHA256                                                                      string
-	ResultArtifactID, ResultArtifactSHA256, ResultArtifactName, ResultArtifactMediaType string
-	ResultArtifactVersion                                                               uint64
-	ResultArtifactPayload                                                               []byte
+	Outcome, TerminalReference, TerminalSHA256                            string
+	Outputs                                                               []RuntimeOutput
+	CodexSessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
+}
+
+type RuntimeOutput struct {
+	Kind, ArtifactID, ArtifactSHA256, ArtifactName, ArtifactMediaType string
+	ArtifactVersion                                                   uint64
+	ArtifactPayload                                                   []byte
+	Sequence, Total                                                   uint32
 }
 
 type CancelRuntimeExecutionInput struct {

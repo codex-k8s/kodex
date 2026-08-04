@@ -183,8 +183,9 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	}
 	handler, err := apihttp.New(service, readbackVerifier, apihttp.Config{
 		SlashToken: strings.TrimSpace(string(slashTokenRaw)), MaximumBodyBytes: config.Gateway.MaximumBodyBytes,
-		MattermostClientSPIFFE:  config.Gateway.MattermostClientSPIFFE,
-		ReadbackClientSPIFFEIDs: config.Gateway.ReadbackClientSPIFFEIDs,
+		MattermostClientSPIFFE:      config.Gateway.MattermostClientSPIFFE,
+		ReadbackClientSPIFFEIDs:     config.Gateway.ReadbackClientSPIFFEIDs,
+		MaterializationClientSPIFFE: config.Gateway.MaterializationClientSPIFFE,
 	})
 	if err != nil {
 		return err
@@ -303,6 +304,8 @@ func observeHTTP(metrics *internalobservability.Metrics, next http.Handler) http
 		default:
 			if strings.HasPrefix(request.URL.Path, "/internal/v1/deliveries/") {
 				route = "readback"
+			} else if strings.HasPrefix(request.URL.Path, "/internal/v1/runtime-materializations/") {
+				route = "materialization"
 			}
 		}
 		recorder := &statusRecorder{ResponseWriter: response, status: http.StatusOK}

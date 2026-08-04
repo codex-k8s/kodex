@@ -540,25 +540,19 @@ func exactRuntimePod(username string, pod *corev1.Pod, snapshot runtimeSnapshot)
 		return false
 	}
 	expectedBroker := "system:serviceaccount:mattercodex-system:runtime-workload-materializer"
-	expectedAccount := ""
-	switch execution.AccessProfile {
-	case "NONE":
-		expectedAccount = "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
-	case "PROJECT_READ_ONLY":
-		expectedAccount = "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
-	case "CLUSTER_ADMIN":
-		expectedAccount = "runtime-role-cluster-admin"
-	default:
+	if execution.AccessProfile != "NONE" {
 		return false
 	}
-	expectedPod := "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID, 24)
+	expectedAccount := "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+
+		execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
+	expectedPod := "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID+":"+execution.ID, 24)
 	expectedImage := roleImageRepository + "@" + revision.ImageDigest
 	if username != expectedBroker || pod.Name != expectedPod || pod.Spec.ServiceAccountName != expectedAccount ||
 		pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken ||
 		pod.Spec.HostNetwork || pod.Spec.HostPID || pod.Spec.HostIPC || pod.Spec.RestartPolicy != corev1.RestartPolicyNever ||
-		len(pod.Spec.InitContainers) != 1 || len(pod.Spec.Containers) != 1 ||
-		pod.Spec.InitContainers[0].Image != expectedImage || pod.Spec.Containers[0].Image != expectedImage ||
-		!stringSliceEqual(pod.Spec.InitContainers[0].Args, []string{"runtime-init-workspace"}) ||
+		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 2 ||
+		pod.Spec.InitContainers[1].Image != expectedImage || pod.Spec.Containers[0].Image != expectedImage ||
+		!stringSliceEqual(pod.Spec.InitContainers[1].Args, []string{"runtime-init-workspace"}) ||
 		!stringSliceEqual(pod.Spec.Containers[0].Args, []string{"runtime-session"}) ||
 		pod.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
 		pod.Annotations["runtime.mattercodex.dev/revision-sha256"] != execution.RuntimeRevisionSHA256 ||

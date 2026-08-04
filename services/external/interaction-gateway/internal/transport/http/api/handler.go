@@ -26,10 +26,11 @@ import (
 )
 
 type Config struct {
-	SlashToken              string
-	MaximumBodyBytes        int64
-	MattermostClientSPIFFE  string
-	ReadbackClientSPIFFEIDs []string
+	SlashToken                  string
+	MaximumBodyBytes            int64
+	MattermostClientSPIFFE      string
+	ReadbackClientSPIFFEIDs     []string
+	MaterializationClientSPIFFE string
 }
 
 type Handler struct {
@@ -52,7 +53,39 @@ func New(service *domainservice.Service, readbackGrant *readbackgrant.Verifier, 
 		}
 		readback[identity] = struct{}{}
 	}
+	if !strings.HasPrefix(config.MaterializationClientSPIFFE, "spiffe://") {
+		return nil, errors.New("runtime materialization identity is invalid")
+	}
 	return &Handler{service: service, config: config, readbackSPIFFE: readback, readbackGrant: readbackGrant}, nil
+}
+
+func (handler *Handler) GetRuntimeMaterialization(response http.ResponseWriter, request *http.Request,
+	executionID openapi_types.UUID, artifactID openapi_types.UUID, params generated.GetRuntimeMaterializationParams) {
+	identity, ok := peerSPIFFE(request)
+	if !ok || identity != handler.config.MaterializationClientSPIFFE {
+		writeError(response, http.StatusForbidden, "runtime materialization identity is not allowed")
+		return
+	}
+	authorization := request.Header.Get("Authorization")
+	grant := strings.TrimPrefix(authorization, "Bearer ")
+	if grant == "" || len(grant) > 16<<10 || strings.TrimSpace(grant) != grant || authorization != "Bearer "+grant ||
+		params.Version < 1 || len(params.Sha256) != 64 {
+		writeError(response, http.StatusUnauthorized, "runtime materialization credential is not allowed")
+		return
+	}
+	raw, _, err := handler.service.ReadRuntimeMaterialization(request.Context(), grant,
+		executionID.String(), artifactID.String(), uint64(params.Version), params.Sha256)
+	if err != nil {
+		writeError(response, http.StatusServiceUnavailable, "runtime materialization is unavailable")
+		return
+	}
+	response.Header().Set("Content-Type", "application/octet-stream")
+	response.Header().Set("Content-Length", strconv.Itoa(len(raw)))
+	response.Header().Set("X-MatterCodex-Artifact-Version", strconv.FormatInt(params.Version, 10))
+	response.Header().Set("X-MatterCodex-Artifact-SHA256", params.Sha256)
+	response.Header().Set("X-Content-Type-Options", "nosniff")
+	response.WriteHeader(http.StatusOK)
+	_, _ = response.Write(raw)
 }
 
 func (handler *Handler) AcceptMattermostSlashCommand(response http.ResponseWriter, request *http.Request) {

@@ -121,6 +121,7 @@ const (
 	permissionRuntimeClaim            = "controlplane.runtime_execution.claim"
 	permissionRuntimeAgentBind        = "controlplane.runtime_execution.agent.bind"
 	permissionRuntimeRead             = "controlplane.runtime_execution.read"
+	permissionRuntimeProgress         = "controlplane.runtime_execution.progress"
 	permissionRuntimeAdmit            = "controlplane.runtime_execution.admit"
 	permissionRuntimeHeartbeat        = "controlplane.runtime_execution.heartbeat"
 	permissionRuntimeIncident         = "controlplane.runtime_execution.incident"

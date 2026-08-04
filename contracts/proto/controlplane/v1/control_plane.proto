@@ -73,6 +73,8 @@ service ControlPlaneService {
   rpc ClaimTurn(ClaimTurnRequest) returns (ClaimTurnResponse);
   // RenewTurn продлевает только аренду текущей попытки, fence и поколения.
   rpc RenewTurn(RenewTurnRequest) returns (RenewTurnResponse);
+  // ReportRuntimeProgress создаёт durable owner delivery, не завершая Turn.
+  rpc ReportRuntimeProgress(ReportRuntimeProgressRequest) returns (ReportRuntimeProgressResponse);
   // CompleteTurn завершает только текущую аренду и фиксирует конечный исход.
   rpc CompleteTurn(CompleteTurnRequest) returns (CompleteTurnResponse);
   // RetryTurn выполняет версионированную операцию ControlPlaneService.
@@ -148,15 +150,6 @@ service ControlPlaneService {
   // ClaimRuntimeExecution материализует server-owned immutable snapshot для
   // точной попытки из проверенного runtime grant; request не принимает IDs.
   rpc ClaimRuntimeExecution(ClaimRuntimeExecutionRequest) returns (ClaimRuntimeExecutionResponse);
-  // BindRuntimeAgentSession принимает bot-owned identifiers только от
-  // авторитетного bot-service и атомарно связывает их с exact owner graph до claim.
-  rpc BindRuntimeAgentSession(BindRuntimeAgentSessionRequest) returns (BindRuntimeAgentSessionResponse);
-  // ResolveRuntimeAgentBindingIntent разрешает Mattermost source reference в
-  // exact owner tuple только для bot-service до runtime claim.
-  rpc ResolveRuntimeAgentBindingIntent(ResolveRuntimeAgentBindingIntentRequest) returns (ResolveRuntimeAgentBindingIntentResponse);
-  // MaterializeRuntimeAgentTurn атомарно создаёт server-owned Session/Turn,
-  // fresh RuntimeRevision и exact bot binding из подтверждённого bot turn.
-  rpc MaterializeRuntimeAgentTurn(MaterializeRuntimeAgentTurnRequest) returns (MaterializeRuntimeAgentTurnResponse);
   // SetResourceRetentionPolicy атомарно создаёт следующую owner version.
   rpc SetResourceRetentionPolicy(SetResourceRetentionPolicyRequest) returns (SetResourceRetentionPolicyResponse);
   // RetireResourceRetentionPolicy закрывает exact current policy version.
@@ -169,6 +162,9 @@ service ControlPlaneService {
   rpc ReleaseRuntimeRetention(ReleaseRuntimeRetentionRequest) returns (ReleaseRuntimeRetentionResponse);
   // GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
   rpc GetRuntimeExecution(GetRuntimeExecutionRequest) returns (GetRuntimeExecutionResponse);
+  // GetRuntimeMaterialization подтверждает один exact execution-bound object
+  // для mediation через interaction-gateway без S3 credential у runner.
+  rpc GetRuntimeMaterialization(GetRuntimeMaterializationRequest) returns (GetRuntimeMaterializationResponse);
   // AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
   rpc AdmitRuntimeExecution(AdmitRuntimeExecutionRequest) returns (AdmitRuntimeExecutionResponse);
   // HeartbeatRuntimeExecution продлевает только текущую lease/fence.
@@ -615,6 +611,8 @@ message PromptProfileSpec {
   string source_ref = 3;
   string locale = 4;
   ConfigurationOwnership ownership = 10;
+  string content_artifact_id = 11;
+  uint64 content_artifact_version = 12;
 }
 
 // CredentialBindingSpec описывает версионированное сообщение контракта control-plane.
@@ -642,6 +640,9 @@ message RepositoryWorkspaceSpec {
   string workspace_mode = 2;
   string default_branch = 3;
   string credential_binding_id = 4;
+  string snapshot_artifact_id = 5;
+  uint64 snapshot_artifact_version = 6;
+  string snapshot_artifact_sha256 = 7;
   ConfigurationOwnership ownership = 10;
 }
 
@@ -674,6 +675,9 @@ message RuntimeRevisionSpec {
   string chat_id = 14;
   string provider_credential_binding_id = 15;
   string effective_runtime_sha256 = 16;
+  string codex_model = 17;
+  string codex_sandbox = 18;
+  string codex_approval_policy = 19;
 }
 
 // EffectiveResourceRef описывает версионированное сообщение контракта control-plane.
@@ -722,6 +726,16 @@ message TurnSpec {
   uint64 result_artifact_version = 20;
   // result_artifact_sha256 фиксирует digest той же версии результата.
   string result_artifact_sha256 = 21;
+  repeated EffectiveArtifactRef input_artifacts = 22;
+}
+
+message EffectiveArtifactRef {
+  string artifact_id = 1;
+  uint64 version = 2;
+  string sha256 = 3;
+  string relative_path = 4;
+  string media_type = 5;
+  uint64 size_bytes = 6;
 }
 
 // ProcessRunSpec описывает версионированное сообщение контракта control-plane.
@@ -1258,6 +1272,7 @@ message EnqueueTurnRequest {
   string process_run_id = 5;
   reserved 6;
   reserved "runtime_revision_id";
+  repeated string input_artifact_ids = 7;
 }
 
 // EnqueueTurnResponse описывает версионированное сообщение контракта control-plane.
@@ -1296,6 +1311,33 @@ message RenewTurnResponse {
   google.protobuf.Timestamp lease_expires_at = 3;
   uint32 attempt = 4;
   uint64 authority_generation = 5;
+}
+
+enum RuntimeProgressKind {
+  RUNTIME_PROGRESS_KIND_UNSPECIFIED = 0;
+  RUNTIME_PROGRESS_KIND_STATUS = 1;
+  RUNTIME_PROGRESS_KIND_PROGRESS = 2;
+}
+
+message ReportRuntimeProgressRequest {
+  string idempotency_key = 1;
+  string turn_id = 2;
+  string lease_token = 3;
+  uint64 expected_turn_version = 4;
+  uint32 attempt = 5;
+  uint64 authority_generation = 6;
+  string execution_id = 7;
+  uint64 expected_execution_version = 8;
+  uint64 expected_execution_fence = 9;
+  RuntimeProgressKind kind = 10;
+  uint32 sequence = 11;
+  string markdown = 12;
+}
+
+message ReportRuntimeProgressResponse {
+  string delivery_id = 1;
+  Resource turn = 2;
+  RuntimeExecution execution = 3;
 }
 
 // CompleteTurnRequest описывает версионированное сообщение контракта control-plane.
@@ -1999,6 +2041,25 @@ message RuntimeExecution {
   // Раздельные one-time tickets доступны только action-specific broker.
   string archive_workload_ticket = 92;
   string restore_workload_ticket = 93;
+  string provider_binding_id = 94;
+  uint64 provider_binding_version = 95;
+  string provider_binding_sha256 = 96;
+  string codex_session_id = 97;
+  repeated RuntimeMaterialization materializations = 98;
+  string codex_archive_relative_path = 99;
+  string codex_archive_sha256 = 100;
+  string codex_archive_provenance = 101;
+}
+
+message RuntimeMaterialization {
+  string kind = 1;
+  string artifact_id = 2;
+  uint64 artifact_version = 3;
+  string sha256 = 4;
+  uint64 size_bytes = 5;
+  string relative_path = 6;
+  string media_type = 7;
+  string storage_ref = 8;
 }
 
 message ClaimRuntimeExecutionRequest {
@@ -2007,79 +2068,6 @@ message ClaimRuntimeExecutionRequest {
 
 message ClaimRuntimeExecutionResponse {
   RuntimeExecution execution = 1;
-}
-
-// BindRuntimeAgentSessionRequest — закрытая owner-команда, а не универсальный update.
-message BindRuntimeAgentSessionRequest {
-  string idempotency_key = 1;
-  string session_id = 2;
-  uint64 expected_session_version = 3;
-  string turn_id = 4;
-  uint64 expected_turn_version = 5;
-  uint32 expected_attempt = 6;
-  string expected_input_sha256 = 7;
-  string runtime_revision_id = 8;
-  uint64 runtime_revision_version = 9;
-  string runtime_revision_sha256 = 10;
-  string agent_session_key = 11;
-  int64 agent_session_id = 12;
-  uint64 agent_session_version = 13;
-  int64 agent_session_turn_id = 14;
-  string agent_run_id = 15;
-  uint64 agent_session_turn_version = 16;
-}
-
-message BindRuntimeAgentSessionResponse {
-  string session_id = 1;
-  uint64 session_version = 2;
-  string turn_id = 3;
-  uint64 turn_version = 4;
-  string agent_session_binding_sha256 = 5;
-  string agent_turn_binding_sha256 = 6;
-}
-
-message ResolveRuntimeAgentBindingIntentRequest {
-  string source_ref = 1;
-}
-
-message ResolveRuntimeAgentBindingIntentResponse {
-  string session_id = 1;
-  uint64 session_version = 2;
-  string turn_id = 3;
-  uint64 turn_version = 4;
-  uint32 attempt = 5;
-  string input_sha256 = 6;
-  string runtime_revision_id = 7;
-  uint64 runtime_revision_version = 8;
-  string runtime_revision_sha256 = 9;
-}
-
-message MaterializeRuntimeAgentTurnRequest {
-  string idempotency_key = 1;
-  string source_ref = 2;
-  string role_stable_key = 3;
-  string external_channel_ref = 4;
-  string prompt_text = 5;
-  string agent_session_key = 6;
-  int64 agent_session_id = 7;
-  uint64 agent_session_version = 8;
-  int64 agent_session_turn_id = 9;
-  uint64 agent_session_turn_version = 10;
-  string agent_run_id = 11;
-}
-
-message MaterializeRuntimeAgentTurnResponse {
-  string session_id = 1;
-  uint64 session_version = 2;
-  string turn_id = 3;
-  uint64 turn_version = 4;
-  uint32 attempt = 5;
-  string input_sha256 = 6;
-  string runtime_revision_id = 7;
-  uint64 runtime_revision_version = 8;
-  string runtime_revision_sha256 = 9;
-  string agent_session_binding_sha256 = 10;
-  string agent_turn_binding_sha256 = 11;
 }
 
 message ResourceRetentionPolicy {
@@ -2171,6 +2159,22 @@ message GetRuntimeExecutionResponse {
   RuntimeExecution execution = 1;
 }
 
+message GetRuntimeMaterializationRequest {
+  string execution_id = 1;
+  string artifact_id = 2;
+  uint64 artifact_version = 3;
+  string artifact_sha256 = 4;
+}
+
+message GetRuntimeMaterializationResponse {
+  string organization_id = 1;
+  string project_id = 2;
+  uint64 execution_version = 3;
+  uint64 execution_fence = 4;
+  uint64 grant_generation = 5;
+  RuntimeMaterialization materialization = 6;
+}
+
 message AdmitRuntimeExecutionRequest {
   string idempotency_key = 1;
   string execution_id = 2;
@@ -2221,12 +2225,26 @@ message CompleteRuntimeExecutionRequest {
   RuntimeTerminalOutcome outcome = 7;
   string terminal_reference = 8;
   string terminal_sha256 = 9;
-  string result_artifact_id = 10;
-  uint64 result_artifact_version = 11;
-  string result_artifact_sha256 = 12;
-  string result_artifact_name = 13;
-  string result_artifact_media_type = 14;
-  bytes result_artifact_payload = 15;
+  reserved 10 to 15;
+  reserved "result_artifact_id", "result_artifact_version", "result_artifact_sha256",
+    "result_artifact_name", "result_artifact_media_type", "result_artifact_payload";
+  repeated RuntimeOutput outputs = 16;
+  string codex_session_id = 17;
+  string archive_sha256 = 18;
+  string archive_provenance = 19;
+  string archive_relative_path = 20;
+}
+
+message RuntimeOutput {
+  string kind = 1;
+  string artifact_id = 2;
+  uint64 artifact_version = 3;
+  string artifact_sha256 = 4;
+  string artifact_name = 5;
+  string artifact_media_type = 6;
+  bytes artifact_payload = 7;
+  uint32 sequence = 8;
+  uint32 total = 9;
 }
 
 message CompleteRuntimeExecutionResponse {

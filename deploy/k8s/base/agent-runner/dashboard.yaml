@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-runner-dashboard
+  labels: {grafana_dashboard: "1", app.kubernetes.io/name: agent-runner}
+data:
+  agent-runner.json: |
+    {"uid":"mattercodex-agent-runner","title":"MatterCodex agent-runner","schemaVersion":39,"panels":[{"type":"timeseries","title":"Turn outcomes","targets":[{"expr":"sum by (outcome) (rate(mattercodex_agent_runner_turns_total[5m]))"}]},{"type":"timeseries","title":"Capacity retries","targets":[{"expr":"sum(rate(mattercodex_agent_runner_retries_total[5m]))"}]}]}

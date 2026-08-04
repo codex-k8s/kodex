@@ -4,7 +4,7 @@ title: Runtime controller и жизненный цикл ресурсов сес
 type: architecture
 status: approved
 owner: architect
-version: 1.3.1
+version: 1.4.0
 updated: 2026-08-04
 ---
 
@@ -93,76 +93,57 @@ pressure. Unknown, stale, неполная binding либо pagination пере�
 в очередь. Самый старый доказанно terminal idle Pod может быть удалён один раз,
 после чего capacity вычисляется повторно. PVC при eviction не удаляется.
 
-### Agent runner, terminal handoff и warm Pod
+### Agent runner, terminal handoff и successor Pod
 
-Immutable `mattercodex.agent-runner-input.v1` содержит exact execution
-version/fence/grant, RuntimeRevision id/version/SHA-256, input SHA-256,
-control-plane session/turn и отдельные bot `AgentSession`/`AgentSessionTurn`/
-`RunID` с server-computed binding digest. Control-plane ID не подставляется в
-bot `session_key`. Контейнер получает только команду `runtime-session`, session
-PVC и immutable execution credential artifacts; каждый artifact связан с
-provider content version, Secret UID/resourceVersion и digest. Bot-service и
-MCP доступны только по HTTPS/mTLS с exact hostname/SNI, доверенной CA, client
-identity и bearer; NetworkPolicy не заменяет peer/application authorization.
-Bot-service принимает регистрацию только на отдельном `:8443` TLS 1.3/mTLS
-listener с exact client CA и bearer. PostgreSQL outbox атомарно разрешает
-`RunID` в bot-owned `AgentSession`/Turn и их монотонные версии; redelivery
-повторяет один `BindRuntimeAgentSession` idempotency intent. Статусы `BLOCKED`,
-`WAITING_OWNER` и `CHANGES_REQUESTED` остаются разными owner outcomes и не
-схлопываются в terminal Pod phase.
+Immutable `mattercodex.agent-runner-input.v2` содержит exact
+execution/version/fence/grant, RuntimeRevision id/version/SHA-256, Session,
+Turn, attempt, input SHA-256, provider binding id/version/SHA-256, Codex policy,
+versioned materializations, TLS bindings и только пути immutable credentials.
+Control-plane остаётся единственным владельцем Session/Turn/Process и FIFO;
+bot-service session API не является authority. Контейнер получает только
+`runtime-init-workspace` либо `runtime-session`, session PVC и exact
+execution artifacts. Каждый artifact связан с owner id/version/SHA-256 и
+читается через `interaction-gateway` по TLS 1.3/mTLS/SNI/CA + bearer без прямого
+чтения чужой БД либо broad object-store credential.
 
-Production producer начинается не в controller: `AFTER INSERT` фактического
-`matter_codex_agent_session_turns` атомарно создаёт durable discovery по
-bot-owned `RunID` и исходному Mattermost post reference. Claim discovery одной
-локальной транзакцией перечитывает AgentSession/Turn versions, role stable key,
-channel и prompt. Bounded worker до control-plane claim вызывает закрытый
-`MaterializeRuntimeAgentTurn`: control-plane разрешает actor/project/Role/Chat
-только из transport authority и owner state, сам назначает control Session,
-Turn, attempt и fresh RuntimeRevision и в той же owner transaction сохраняет
-exact bot binding, receipt, audit и mutations. Первый user turn поэтому не
-зависит от заранее существующего control Turn. Потеря RPC либо local complete
-повторяет тот же semantic key и возвращает те же IDs/digests; payload IDs не
-назначают authority, controller не знает и не синтезирует bot ID. Legacy
-resolve/bind остаётся только для уже созданных исторических outbox rows.
+Первый `ClaimRuntimeExecution` создаёт durable `PENDING` до role Pod и допускает
+только server-owned `QUEUED` attempt без Turn lease. Controller материализует
+journal, immutable ConfigMap, credentials и Pod, но ещё не выполняет admission.
+Runner своей exact application identity вызывает `ClaimTurn`; следующий
+reconcile видит живую Turn lease и только тогда выполняет
+`AdmitRuntimeExecution`. Identity controller не подменяет runner. Crash до
+Pod, после Pod, после Turn claim либо после admission повторяет тот же
+server-owned receipt/tuple и не создаёт второй execution или lease.
 
-Credential materialization не даёт долговечной authority namespace-wide
-`secrets/get`. Materializer создаёт только admission-ограниченные
-execution-scoped SA/Role/RoleBinding и one-time copy Pod; его 10-минутный
-projected token читает exact source/destination Secret names. Полный Pod и
-Secret проходят webhook с тем же signed ticket и PostgreSQL replay key.
-`NONE`, `PROJECT_READ_ONLY` и `CLUSTER_ADMIN` используют одного trusted issuer
-actor, но только exact profile выбирает предустановленный admin subject.
-До успешного `Secret Create` durable credential effect отсутствует, поэтому
-archive/restore exchanger после crash может получить новый short-lived STS
-grant. Потерянный ответ и `AlreadyExists` проверяет action-specific one-time
-readback Pod с exact `resourceNames`. Controller читает только immutable owner
-receipt с Secret UID/resourceVersion, expiry и content digest, но не Secret.
-Workload materializer и оба S3 exchanger запускаются как UID/GID 10001 с
-`fsGroup=10001`; TLS, CA, projected Kubernetes/Vault tokens и Vault CSI files
-имеют mode `0440`. Их startup/readiness выполняют `check-snapshot` либо
-`check-s3-*` и реально читают/разбирают те же production cert/key/CA/token,
-ticket trust и action config paths до Ready.
+Credential materializer не получает namespace-wide `secrets/get`. Он создаёт
+отдельный `runtime-access-*` ServiceAccount, exact handoff Role/RoleBinding и
+credential projections только для одного execution. Direct access profile
+runner всегда `NONE`; Kubernetes token служит только чтению immutable input и
+атомарной записи controller-owned handoff ConfigMap. Admission сверяет signed
+ticketed Pod целиком. Vault role authority sidecar допускает лишь этот
+ServiceAccount prefix в `mattercodex-system`. При удалении Pod controller
+проверяет lineage и удаляет RoleBinding, Role и ServiceAccount с
+UID/resourceVersion preconditions, поэтому параллельные execution не получают
+объединённые полномочия.
 
-`Succeeded`/`Failed` фаза Pod не завершает turn. После фактического результата
-runner публикует `mattercodex.runtime-turn-handoff.v1` в собственный Pod:
-exact execution version/fence/generation/revision/input, закрытый outcome,
-terminal reference и digest. Только этот handoff разрешает controller вызвать
-`CompleteRuntimeExecution`; выход Pod без handoff публикует incident и ждёт
-owner expiry/cancel/retry.
+`Succeeded`/`Failed` фаза Pod не завершает Turn. После фактического результата
+runner публикует подписанный `mattercodex.runtime-turn-handoff.v2` в отдельный
+controller-owned ConfigMap: exact execution/revision/input/provider tuple,
+закрытый outcome, terminal digest, Codex thread/rollout provenance и bounded
+множество Markdown chunks, files и images. Controller проверяет Ed25519 trust,
+lease/fence/generation, каждый payload digest и только затем вызывает
+`CompleteRuntimeExecution`. Одна owner transaction закрывает execution,
+Turn/Process/leases/grants и создаёт durable interaction deliveries. Выход Pod
+без handoff создаёт incident и оставляет owner recovery выбрать
+expiry/cancel/retry.
 
-После terminal controller сначала архивирует PVC и получает restore proof,
-затем открывает `archive-gate=OPEN`. Новый claim той же session запрещён owner
-query, пока у любого predecessor нет archive+proof. Running/Ready warm Pod
-используется повторно только при том же server-owned
-`effective_runtime_sha256` и открытом gate: controller публикует новый
-immutable RuntimeRevision/ConfigMap и fresh authority/credential snapshots.
-Broker обновляет handoff Role точным множеством новых immutable Secret names,
-а runner читает их через Kubernetes API в собственный `0700` tmp staging,
-сверяет execution/snapshot/purpose и только затем меняет клиенты; старые mounted
-Secret не переиспользуются. После `SUCCESSOR_READY` runner сам проверяет новый
-tuple и закрывает gate. Любое
-несовпадение ведёт к guarded Pod replacement. `CLUSTER_ADMIN` Pod не прогревается
-и удаляется после terminal.
+После terminal controller архивирует quiesced PVC и фиксирует exact rollout
+JSONL path/SHA-256/provenance вместе с provider binding. Successor всегда новый
+execution-scoped Pod с fresh RuntimeRevision, credentials, config, env и MCP
+client; старый процесс и mounted secrets не переиспользуются. Retained PVC
+сохраняет `CODEX_HOME`, а resume разрешён только для того же provider account и
+проверенного rollout. Если PVC уже удалён, owner назначает exact archive source,
+rehydrate восстанавливает новый PVC и только после proof разрешает role Pod.
 
 ### Archive, restore и rehydrate
 
@@ -242,7 +223,7 @@ Backfill проходит тот же путь. Legacy PVC без server-owned e
 | handoff complete | exact runner handoff, current lease/fence/generation | terminal state и atomic revoke всех grants/claims/leases/events | archive gate остаётся CLOSED |
 | Pod exit без handoff | current nonterminal execution | incident audit, не complete | Pod не выдаёт terminal authority |
 | cancel/delete/expiry | полный owner graph | terminal + revoke одной transaction | stale Pod guarded delete; PVC сохраняется |
-| retry/continuation | terminal predecessor и policy | новая attempt, fresh RuntimeRevision/grant | новый admission; warm reuse только совместимый |
+| retry/continuation | terminal predecessor и policy | новая attempt, fresh RuntimeRevision/grant | новый admission и новый execution-scoped Pod |
 | archive | terminal retention owner и exact PVC | immutable archive provenance | versioned S3 + readback |
 | restore proof | separate verifier, exact archive version/checksum | immutable proof | safe temporary extraction |
 | rehydrate | source только из `CONSUMED` cleanup snapshot; assignment только один раз на новую PVC generation | bind/consume exact PVC UID и immutable proof | same-FS staging, atomic publish, proof до Pod |

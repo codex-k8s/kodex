@@ -144,15 +144,6 @@ spec:
             - name: runtime-client-ca
               mountPath: /var/run/config/mattercodex/bot-service-runtime-client-ca
               readOnly: true
-            - name: runtime-binding
-              mountPath: /var/run/secrets/mattercodex/bot-service-runtime-binding
-              readOnly: true
-            - name: control-plane-tls
-              mountPath: /var/run/secrets/mattercodex/bot-service-control-plane
-              readOnly: true
-            - name: control-plane-ca
-              mountPath: /var/run/config/mattercodex/bot-service-control-plane
-              readOnly: true
             - name: internal-rpc-authority-sockets
               mountPath: /run/mattercodex/internal-rpc-authority
               readOnly: true
@@ -237,10 +228,6 @@ spec:
             defaultMode: 288
             items:
               - {key: ca.pem, path: ca.pem}
-        - name: runtime-binding
-          secret:
-            secretName: ${MATTERCODEX_BOT_SERVICE_RUNTIME_BINDING_SECRET}
-            defaultMode: 288
         - name: control-plane-tls
           secret:
             secretName: ${MATTERCODEX_BOT_SERVICE_CONTROL_PLANE_TLS_SECRET}

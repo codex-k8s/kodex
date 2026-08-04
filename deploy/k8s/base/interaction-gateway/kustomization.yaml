@@ -25,6 +25,7 @@ configMapGenerator:
       - INTERACTION_GATEWAY_TLS_CLIENT_CA_FILE=/var/run/config/mattercodex/interaction-gateway/client-ca/ca.pem
       - INTERACTION_GATEWAY_MATTERMOST_CLIENT_SPIFFE_ID=spiffe://mattercodex.local/ns/mattermost/sa/mattermost
       - INTERACTION_GATEWAY_READBACK_CLIENT_SPIFFE_IDS=spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane
+      - INTERACTION_GATEWAY_MATERIALIZATION_CLIENT_SPIFFE_ID=spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner
       - INTERACTION_GATEWAY_SLASH_TOKEN_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/slash-token
       - INTERACTION_GATEWAY_POSTGRES_DSN_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/postgres-dsn
       - INTERACTION_GATEWAY_POSTGRES_CA_FILE=/var/run/config/mattercodex/interaction-gateway/postgres/ca.pem

@@ -89,6 +89,30 @@ func (client *Client) GetArtifact(ctx context.Context, grant, artifactID string,
 	return projectArtifact(resource), nil
 }
 
+func (client *Client) GetRuntimeMaterialization(ctx context.Context, grant, executionID, artifactID string,
+	artifactVersion uint64, artifactSHA256 string) (domaincontrol.RuntimeMaterialization, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
+	if err != nil {
+		return domaincontrol.RuntimeMaterialization{}, err
+	}
+	response, err := client.client.ControlPlane.GetRuntimeMaterialization(protected,
+		&controlplanev1.GetRuntimeMaterializationRequest{ExecutionId: executionID, ArtifactId: artifactID,
+			ArtifactVersion: artifactVersion, ArtifactSha256: artifactSHA256})
+	if err != nil || response.GetMaterialization() == nil {
+		return domaincontrol.RuntimeMaterialization{}, errors.New("read control-plane runtime materialization")
+	}
+	item := response.GetMaterialization()
+	if response.GetProjectId() == "" || item.GetStorageRef() == "" || item.GetArtifactVersion() != artifactVersion ||
+		item.GetSha256() != artifactSHA256 || item.GetSizeBytes() == 0 {
+		return domaincontrol.RuntimeMaterialization{}, errors.New("control-plane runtime materialization is incomplete")
+	}
+	return domaincontrol.RuntimeMaterialization{ProjectID: response.GetProjectId(), StorageRef: item.GetStorageRef(),
+		MediaType: item.GetMediaType(), SHA256: item.GetSha256(), ArtifactVersion: item.GetArtifactVersion(),
+		SizeBytes: item.GetSizeBytes()}, nil
+}
+
 func (client *Client) GetTurn(ctx context.Context, grant, turnID string) (domaincontrol.Turn, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
@@ -160,7 +184,7 @@ func (client *Client) CreateSession(ctx context.Context, grant, idempotencyKey, 
 	return domaincontrol.Session{ID: response.GetSession().GetId(), Version: response.GetSession().GetVersion()}, nil
 }
 
-func (client *Client) EnqueueTurn(ctx context.Context, grant, idempotencyKey, sessionID, sourceRef, artifactID string) (domaincontrol.Turn, error) {
+func (client *Client) EnqueueTurn(ctx context.Context, grant, idempotencyKey, sessionID, sourceRef, artifactID string, inputArtifactIDs []string) (domaincontrol.Turn, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
@@ -169,7 +193,7 @@ func (client *Client) EnqueueTurn(ctx context.Context, grant, idempotencyKey, se
 	}
 	response, err := client.client.ControlPlane.EnqueueTurn(protected, &controlplanev1.EnqueueTurnRequest{
 		IdempotencyKey: idempotencyKey, SessionId: sessionID, SourceRef: sourceRef,
-		PromptArtifactId: artifactID,
+		PromptArtifactId: artifactID, InputArtifactIds: slices.Clone(inputArtifactIDs),
 	})
 	if err != nil || response.GetTurn() == nil || response.GetTurn().GetId() == "" {
 		return domaincontrol.Turn{}, errors.New("enqueue control-plane turn")

@@ -354,6 +354,7 @@ func (server *Server) EnqueueTurn(
 		SourceRef:        request.GetSourceRef(),
 		PromptArtifactID: request.GetPromptArtifactId(),
 		ProcessRunID:     request.GetProcessRunId(),
+		InputArtifactIDs: request.GetInputArtifactIds(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

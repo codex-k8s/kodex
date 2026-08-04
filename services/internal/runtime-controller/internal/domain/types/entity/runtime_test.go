@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,12 @@ func validExecution() Execution {
 		ArchiveRetentionSeconds: 7776000, PVCCleanupEligibleAt: time.Now().UTC().Add(24 * time.Hour),
 		CapacityObservationExpiresAt: time.Now().UTC().Add(time.Hour), RescheduleAfter: time.Now().UTC().Add(time.Minute),
 		RestoreAssignmentState: "NONE", WorkloadTicketSHA256: strings.Repeat("9", 64),
+		ProviderBindingID: uuid.NewString(), ProviderBindingVersion: 1, ProviderBindingSHA256: strings.Repeat("7", 64),
 		CleanupAuthorizationState: "NONE",
+	}
+	execution.Materializations = []Materialization{
+		{Kind: "PROMPT", ArtifactID: uuid.NewString(), ArtifactVersion: 1, SHA256: strings.Repeat("1", 64), SizeBytes: 1, RelativePath: ".matter-codex/inbox/prompt.md", MediaType: "text/markdown", StorageRef: "s3://runtime/prompt"},
+		{Kind: "INSTRUCTION", ArtifactID: uuid.NewString(), ArtifactVersion: 1, SHA256: strings.Repeat("2", 64), SizeBytes: 1, RelativePath: "AGENTS.md", MediaType: "text/markdown", StorageRef: "s3://runtime/instructions"},
 	}
 	raw, _ := json.Marshal(struct {
 		ExecutionID string
@@ -66,18 +72,14 @@ func TestExecutionValidateRejectsOpenLifecycleValues(t *testing.T) {
 
 func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 	execution := validExecution()
-	credentialID, promptID := uuid.NewString(), uuid.NewString()
+	promptID := uuid.NewString()
 	revision := Revision{
 		ID: execution.RuntimeRevisionID, Version: execution.RuntimeRevisionVersion,
 		ManifestSHA256: strings.Repeat("c", 64), EffectiveRuntimeSHA256: execution.EffectiveRuntimeSHA256,
 		ImageDigest: "sha256:" + strings.Repeat("d", 64),
 		SessionID:   execution.SessionID, RoleID: execution.RoleID,
-		ProviderCredentialBindingID: credentialID, PromptProfileID: promptID, PromptRevision: 1,
+		ProviderCredentialBindingID: execution.ProviderBindingID, PromptProfileID: promptID, PromptRevision: 1,
 		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: strings.Repeat("e", 64),
-		CredentialBindingIDs: []string{credentialID},
-		Credentials: []CredentialRef{{ResourceID: credentialID, Purpose: "provider",
-			Reference: "k8s-immutable-secret://mattercodex-system/provider", Version: 1,
-			ProviderContentVersion: "uid:1", ContentSHA256: strings.Repeat("6", 64)}},
 		ProviderObservedUsage: 1, ProviderObservedLimit: 2, ProviderObservationRevision: 1,
 		ProviderObservedAt: time.Now().UTC(), ProviderObservationMaxAge: time.Hour,
 		AgentProfile: "developer",
@@ -86,18 +88,37 @@ func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 			{Kind: "RESOURCE_KIND_SESSION", ResourceID: execution.SessionID, Version: 1, ProjectionSHA256: strings.Repeat("2", 64)},
 			{Kind: "RESOURCE_KIND_ROLE", ResourceID: execution.RoleID, Version: 1, ProjectionSHA256: strings.Repeat("3", 64)},
 			{Kind: "RESOURCE_KIND_PROMPT_PROFILE", ResourceID: promptID, Version: 1, ProjectionSHA256: strings.Repeat("4", 64)},
-			{Kind: "RESOURCE_KIND_CREDENTIAL_BINDING", ResourceID: credentialID, Version: 1, ProjectionSHA256: strings.Repeat("5", 64)},
 		},
+	}
+	purposes := []string{"provider-account", "control-plane-application-grant",
+		"runtime-materialization-application-grant", "mcp-token", "handoff-private-key",
+		"control-plane-client-tls", "interaction-gateway-client-tls", "mcp-client-tls"}
+	for _, purpose := range purposes {
+		identifier := uuid.NewString()
+		if purpose == "provider-account" {
+			identifier = execution.ProviderBindingID
+		}
+		revision.CredentialBindingIDs = append(revision.CredentialBindingIDs, identifier)
+		revision.Credentials = append(revision.Credentials, CredentialRef{ResourceID: identifier, Purpose: purpose,
+			Reference: "k8s-immutable-secret://mattercodex-system/credential-" + identifier, Version: 1,
+			ProviderContentVersion: "uid:1", ContentSHA256: strings.Repeat("6", 64)})
+		revision.Components = append(revision.Components, Component{Kind: "RESOURCE_KIND_CREDENTIAL_BINDING",
+			ResourceID: identifier, Version: 1, ProjectionSHA256: strings.Repeat("6", 64)})
 	}
 	type snapshotEntry struct {
 		ID, Purpose, ImmutableSecretRef, ProviderContentVersion, ContentSHA256 string
 		Version                                                                uint64
 	}
+	snapshot := make([]snapshotEntry, 0, len(revision.Credentials))
+	for _, credential := range revision.Credentials {
+		snapshot = append(snapshot, snapshotEntry{credential.ResourceID, credential.Purpose, credential.Reference,
+			credential.ProviderContentVersion, credential.ContentSHA256, credential.Version})
+	}
+	slices.SortFunc(snapshot, func(left, right snapshotEntry) int { return strings.Compare(left.ID, right.ID) })
 	raw, _ := json.Marshal(struct {
 		ExecutionID string
 		Credentials []snapshotEntry
-	}{execution.ID, []snapshotEntry{{credentialID, "provider", revision.Credentials[0].Reference,
-		revision.Credentials[0].ProviderContentVersion, revision.Credentials[0].ContentSHA256, 1}}})
+	}{execution.ID, snapshot})
 	digest := sha256.Sum256(raw)
 	execution.CredentialSnapshotSHA256 = hex.EncodeToString(digest[:])
 	if err := revision.ValidateFor(execution); err != nil {

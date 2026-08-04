@@ -61,7 +61,7 @@
 
 | Tool | Version | Scope | Why |
 |---|---:|---|---|
-| `@openai/codex` | `0.144.1` | Codex developer/reviewer agent | `codex exec --json`, MCP config smoke и non-interactive developer/reviewer run внутри Kubernetes Job |
+| `@openai/codex` | `0.144.1` | Codex developer/reviewer agent | typed `codex app-server` stdio JSON-RPC с exact generated schema, session `thread/start|resume`, `turn/start|interrupt`, required MCP и non-interactive developer/reviewer run внутри Kubernetes Job |
 | `node` | `24.17.x` | Agent JS/TS runtime | запуск Vue/TypeScript/OpenAPI/AsyncAPI tooling; свежий `@asyncapi/cli` требует Node 24 |
 | `npm` | `11.13.x` | Agent JS package runner | запуск npm scripts и глобальных CLI packages |
 | `pnpm` | `11.8.0` | Agent JS package runner | поддержка frontend/workspace проектов на pnpm |

@@ -27,6 +27,7 @@ type GatewayConfig struct {
 	TLSClientCAFile             string        `env:"TLS_CLIENT_CA_FILE,required"`
 	MattermostClientSPIFFE      string        `env:"MATTERMOST_CLIENT_SPIFFE_ID,required"`
 	ReadbackClientSPIFFEIDs     []string      `env:"READBACK_CLIENT_SPIFFE_IDS,required" envSeparator:","`
+	MaterializationClientSPIFFE string        `env:"MATERIALIZATION_CLIENT_SPIFFE_ID,required"`
 	SlashTokenFile              string        `env:"SLASH_TOKEN_FILE,required"`
 	PostgresDSNFile             string        `env:"POSTGRES_DSN_FILE,required"`
 	PostgresCAFile              string        `env:"POSTGRES_CA_FILE,required"`
@@ -161,6 +162,7 @@ func (config Config) validate() error {
 	}
 	expectedPostgresUser := "interaction_gateway_runtime_g" + strconv.FormatUint(gateway.PostgresPrincipalGeneration, 10)
 	if !strings.HasPrefix(gateway.MattermostClientSPIFFE, "spiffe://") ||
+		!strings.HasPrefix(gateway.MaterializationClientSPIFFE, "spiffe://") ||
 		len(gateway.ReadbackClientSPIFFEIDs) == 0 || len(gateway.ReadbackClientSPIFFEIDs) > 8 ||
 		gateway.InstanceID == "" || gateway.RetentionRef == "" || gateway.EventIssuer == "" || gateway.EventAudience == "" ||
 		gateway.PostgresPrincipalGeneration == 0 || gateway.PostgresExpectedUser != expectedPostgresUser ||

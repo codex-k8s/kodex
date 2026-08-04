@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -259,12 +261,13 @@ func (service *Service) resolveBoundExecution(
 		current.InputSHA256 != turnSpec.EffectiveInputSHA256 {
 		return resolvedExecution{}, errs.ErrStateConflict
 	}
-	// Lease/attempt являются дочерними строками уже заблокированного Turn и
-	// берутся только после полного owner graph, чтобы не образовать inversion.
-	lease, err := tx.GetTurnLeaseForUpdate(ctx, turn.ID)
-	if err != nil {
-		return resolvedExecution{}, err
-	}
+	// Первый controller claim обязан существовать до role Pod. Для server-owned
+	// PENDING допускается только точная QUEUED attempt без Turn lease; все
+	// последующие операции проходят обычную live lease boundary.
+	bootstrap := principal.CallerWorkload == service.runtimeControllerWorkload &&
+		principal.CallerSPIFFEID == service.runtimeControllerSPIFFEID &&
+		turn.State == enum.StateQueued && (graph.Runtime == nil ||
+		(graph.Runtime.State == "PENDING" && graph.Runtime.Version == 1 && graph.Runtime.Fence == 1))
 	attempt, err := tx.GetTurnAttemptForUpdate(ctx, turn.ID, turnSpec.Attempt)
 	if err != nil {
 		return resolvedExecution{}, err
@@ -273,16 +276,27 @@ func (service *Service) resolveBoundExecution(
 	if err != nil {
 		return resolvedExecution{}, err
 	}
-	if lease.Attempt != turnSpec.Attempt ||
-		lease.WorkloadID != agentRunnerWorkload ||
-		lease.AuthorityGeneration != principal.AuthorityGrantGeneration ||
-		!lease.ExpiresAt.After(now) ||
-		attempt.WorkloadID != agentRunnerWorkload ||
-		attempt.LeaseFence != lease.Fence ||
-		attempt.AuthorityGeneration != principal.AuthorityGrantGeneration ||
-		attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
-		!attempt.FinishedAt.IsZero() {
-		return resolvedExecution{}, errs.ErrNotFound
+	if bootstrap {
+		if attempt.State != "QUEUED" || attempt.WorkloadID != "unassigned" ||
+			attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 || !attempt.FinishedAt.IsZero() {
+			return resolvedExecution{}, errs.ErrNotFound
+		}
+	} else {
+		lease, leaseErr := tx.GetTurnLeaseForUpdate(ctx, turn.ID)
+		if leaseErr != nil {
+			return resolvedExecution{}, leaseErr
+		}
+		if lease.Attempt != turnSpec.Attempt ||
+			lease.WorkloadID != agentRunnerWorkload ||
+			lease.AuthorityGeneration != principal.AuthorityGrantGeneration ||
+			!lease.ExpiresAt.After(now) ||
+			attempt.WorkloadID != agentRunnerWorkload ||
+			attempt.LeaseFence != lease.Fence ||
+			attempt.AuthorityGeneration != principal.AuthorityGrantGeneration ||
+			attempt.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
+			!attempt.FinishedAt.IsZero() {
+			return resolvedExecution{}, errs.ErrNotFound
+		}
 	}
 	revision, err := tx.GetForUpdate(
 		ctx, principal.OrganizationID, principal.ProjectID, turnSpec.RuntimeRevisionID,
@@ -1180,7 +1194,14 @@ func (service *Service) ClaimRuntimeExecution(
 				restoreSource.ArchiveObjectLockMode != "COMPLIANCE" ||
 				restoreSource.ArchiveRetainUntil.IsZero() ||
 				!validSHA256Text(restoreSource.ArchiveProvenanceSHA256) ||
-				restoreSource.RetentionPolicyID == "" || restoreSource.RetentionPolicyVersion == 0) {
+				restoreSource.RetentionPolicyID == "" || restoreSource.RetentionPolicyVersion == 0 ||
+				restoreSource.CodexSessionID == "" || restoreSource.ProviderBindingID == "" ||
+				!validRuntimeArchivePath(restoreSource.CodexArchiveRelativePath) ||
+				!validSHA256Text(restoreSource.CodexArchiveSHA256) ||
+				!validCodexArchiveProvenance(restoreSource.CodexArchiveProvenance,
+					restoreSource.CodexArchiveRelativePath, restoreSource.CodexArchiveSHA256) ||
+				restoreSource.ProviderBindingVersion == 0 ||
+				!validSHA256Text(restoreSource.ProviderBindingSHA256)) {
 				return errs.ErrStateConflict
 			}
 			resourceClass, clusterProfile := runtimeResourcePolicy(resolved.RoleSpec)
@@ -1194,24 +1215,6 @@ func (service *Service) ClaimRuntimeExecution(
 			if err != nil || !validRuntimeRetentionPolicy(retentionPolicy, now) {
 				return errs.ErrStateConflict
 			}
-			agentBinding, err := tx.GetRuntimeAgentBindingForUpdate(
-				ctx, resolved.Turn.ID, resolved.TurnSpec.Attempt,
-			)
-			if err != nil || agentBinding.OrganizationID != principal.OrganizationID ||
-				agentBinding.ProjectID != principal.ProjectID || agentBinding.SessionID != resolved.Session.ID ||
-				agentBinding.InputSHA256 != resolved.TurnSpec.EffectiveInputSHA256 ||
-				agentBinding.RuntimeRevisionID != resolved.Revision.ID ||
-				agentBinding.RuntimeRevisionVersion != resolved.Revision.Version ||
-				agentBinding.RuntimeRevisionSHA256 != resolved.RevisionHash ||
-				agentBinding.AgentSessionID <= 0 || agentBinding.AgentSessionTurnID <= 0 ||
-				!validOpaqueRuntimeIdentifier(agentBinding.AgentSessionKey) ||
-				!validOpaqueRuntimeIdentifier(agentBinding.AgentRunID) ||
-				agentBinding.AgentSessionVersion == 0 || agentBinding.AgentSessionTurnVersion == 0 ||
-				!validSHA256Text(agentBinding.AgentSessionBindingSHA256) ||
-				!validSHA256Text(agentBinding.AgentTurnBindingSHA256) ||
-				!validSHA256Text(resolved.RevisionSpec.EffectiveRuntimeSHA256) {
-				return errs.ErrStateConflict
-			}
 			provider, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID,
 				resolved.RevisionSpec.ProviderCredentialBindingID)
 			if err != nil {
@@ -1219,8 +1222,22 @@ func (service *Service) ClaimRuntimeExecution(
 			}
 			providerSpec, ok := provider.Spec.(entity.CredentialBindingSpec)
 			if !ok || provider.Kind != enum.KindCredentialBinding ||
-				providerSpec.ProviderObservationRevision == 0 || providerSpec.ProviderObservedAt.IsZero() {
+				providerSpec.ProviderObservationRevision == 0 || providerSpec.ProviderObservedAt.IsZero() ||
+				!validSHA256Text(resolved.RevisionSpec.EffectiveRuntimeSHA256) {
 				return errs.ErrStateConflict
+			}
+			providerSHA256, err := entity.ProjectionSHA256(provider)
+			if err != nil {
+				return errs.ErrInternal
+			}
+			if restoreErr == nil && (restoreSource.ProviderBindingID != provider.ID ||
+				restoreSource.ProviderBindingVersion != provider.Version ||
+				restoreSource.ProviderBindingSHA256 != providerSHA256) {
+				return errs.ErrStateConflict
+			}
+			materializations, err := service.runtimeMaterializations(ctx, tx, principal, resolved)
+			if err != nil {
+				return err
 			}
 			type credentialSnapshotEntry struct {
 				ID, Purpose, ImmutableSecretRef, ProviderContentVersion, ContentSHA256 string
@@ -1259,19 +1276,11 @@ func (service *Service) ClaimRuntimeExecution(
 				return errs.ErrInternal
 			}
 			agentBindingSHA256, err := canonicalHash(struct {
-				ControlSessionID, ControlTurnID, InputSHA256, RevisionSHA256 string
-				Attempt                                                      uint32
-				AgentSessionKey                                              string
-				AgentSessionID, AgentTurnID                                  int64
-				AgentRunID                                                   string
-				SessionBindingVersion, TurnBindingVersion                    uint64
-				SessionBindingSHA256, TurnBindingSHA256                      string
+				SessionID, TurnID, InputSHA256, RevisionSHA256, ProviderSHA256 string
+				Attempt                                                        uint32
+				Sequence                                                       uint64
 			}{resolved.Session.ID, resolved.Turn.ID, resolved.TurnSpec.EffectiveInputSHA256,
-				resolved.RevisionHash, resolved.TurnSpec.Attempt,
-				agentBinding.AgentSessionKey, agentBinding.AgentSessionID,
-				agentBinding.AgentSessionTurnID, agentBinding.AgentRunID,
-				agentBinding.AgentSessionVersion, agentBinding.AgentSessionTurnVersion,
-				agentBinding.AgentSessionBindingSHA256, agentBinding.AgentTurnBindingSHA256})
+				resolved.RevisionHash, providerSHA256, resolved.TurnSpec.Attempt, resolved.TurnSpec.Sequence})
 			if err != nil {
 				return errs.ErrInternal
 			}
@@ -1295,15 +1304,21 @@ func (service *Service) ClaimRuntimeExecution(
 				WorkloadSPIFFEID: principal.CallerSPIFFEID,
 				GrantGeneration:  principal.AuthorityGrantGeneration,
 				Version:          1, Fence: 1, State: "PENDING",
-				AgentSessionKey:         agentBinding.AgentSessionKey,
-				AgentSessionID:          agentBinding.AgentSessionID,
-				AgentSessionTurnID:      agentBinding.AgentSessionTurnID,
-				AgentRunID:              agentBinding.AgentRunID,
-				AgentBindingSHA256:      agentBindingSHA256,
-				RetentionPolicyID:       retentionPolicy.ID,
-				RetentionPolicyVersion:  retentionPolicy.Version,
-				PVCRetentionSeconds:     retentionPolicy.PVCRetentionSeconds,
-				ArchiveRetentionSeconds: retentionPolicy.ArchiveRetentionSeconds,
+				AgentSessionKey:    "owner:" + resolved.Session.ID,
+				AgentSessionID:     int64(resolved.TurnSpec.Sequence),
+				AgentSessionTurnID: int64(resolved.TurnSpec.Sequence),
+				AgentRunID:         "owner:" + executionID,
+				AgentBindingSHA256: agentBindingSHA256,
+				ProviderBindingID:  provider.ID, ProviderBindingVersion: provider.Version,
+				ProviderBindingSHA256: providerSHA256, Materializations: materializations,
+				CodexSessionID:           restoreSource.CodexSessionID,
+				CodexArchiveRelativePath: restoreSource.CodexArchiveRelativePath,
+				CodexArchiveSHA256:       restoreSource.CodexArchiveSHA256,
+				CodexArchiveProvenance:   restoreSource.CodexArchiveProvenance,
+				RetentionPolicyID:        retentionPolicy.ID,
+				RetentionPolicyVersion:   retentionPolicy.Version,
+				PVCRetentionSeconds:      retentionPolicy.PVCRetentionSeconds,
+				ArchiveRetentionSeconds:  retentionPolicy.ArchiveRetentionSeconds,
 				PVCCleanupEligibleAt: resolved.Session.UpdatedAt.Add(
 					time.Duration(retentionPolicy.PVCRetentionSeconds) * time.Second,
 				),
@@ -1357,6 +1372,100 @@ func (service *Service) ClaimRuntimeExecution(
 		err = service.issueRuntimeWorkloadTicket(&result)
 	}
 	return result, err
+}
+
+func (service *Service) runtimeMaterializations(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	resolved resolvedExecution,
+) ([]domainrepo.RuntimeMaterialization, error) {
+	appendArtifact := func(result []domainrepo.RuntimeMaterialization, kind string, artifact entity.Resource,
+		spec entity.ArtifactSpec, relativePath string) ([]domainrepo.RuntimeMaterialization, error) {
+		if artifact.ParentID != resolved.Session.ID && artifact.ParentID != resolved.Role.ID &&
+			artifact.ParentID != principal.ProjectID {
+			return nil, errs.ErrStateConflict
+		}
+		return append(result, domainrepo.RuntimeMaterialization{Kind: kind, ArtifactID: artifact.ID,
+			ArtifactVersion: artifact.Version, SHA256: spec.SHA256, SizeBytes: spec.SizeBytes,
+			RelativePath: relativePath, MediaType: spec.MediaType, StorageRef: spec.StorageRef}), nil
+	}
+	result := make([]domainrepo.RuntimeMaterialization, 0, 2+len(resolved.TurnSpec.InputArtifacts))
+	prompt, promptSpec, err := service.requireCleanArtifactResource(ctx, tx, principal, resolved.TurnSpec.PromptArtifactID)
+	if err != nil || promptSpec.Direction != "INPUT" || promptSpec.MediaType != "text/markdown" {
+		if err != nil {
+			return nil, err
+		}
+		return nil, errs.ErrStateConflict
+	}
+	result, err = appendArtifact(result, "PROMPT", prompt, promptSpec, ".matter-codex/inbox/prompt.md")
+	if err != nil {
+		return nil, err
+	}
+	promptProfile, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID,
+		resolved.RevisionSpec.PromptProfileID)
+	if err != nil {
+		return nil, err
+	}
+	profileSpec, ok := promptProfile.Spec.(entity.PromptProfileSpec)
+	if !ok || profileSpec.ContentArtifactID == "" || profileSpec.ContentArtifactVersion == 0 {
+		return nil, errs.ErrStateConflict
+	}
+	instructions, instructionsSpec, err := service.requireCleanArtifactResource(ctx, tx, principal,
+		profileSpec.ContentArtifactID)
+	if err != nil || instructions.Version != profileSpec.ContentArtifactVersion ||
+		instructionsSpec.SHA256 != profileSpec.ContentSHA256 || instructionsSpec.MediaType != "text/markdown" {
+		if err != nil {
+			return nil, err
+		}
+		return nil, errs.ErrStateConflict
+	}
+	result, err = appendArtifact(result, "INSTRUCTION", instructions, instructionsSpec, "AGENTS.md")
+	if err != nil {
+		return nil, err
+	}
+	for _, component := range resolved.RevisionSpec.Components {
+		if component.Kind != enum.KindRepositoryWorkspace {
+			continue
+		}
+		workspace, getErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, component.ResourceID)
+		if getErr != nil {
+			return nil, getErr
+		}
+		workspaceSpec, ok := workspace.Spec.(entity.RepositoryWorkspaceSpec)
+		if !ok || workspaceSpec.WorkspaceMode != "SNAPSHOT" || workspaceSpec.SnapshotArtifactID == "" {
+			return nil, errs.ErrStateConflict
+		}
+		snapshot, snapshotSpec, getErr := service.requireCleanArtifactResource(ctx, tx, principal,
+			workspaceSpec.SnapshotArtifactID)
+		if getErr != nil || snapshot.Version != workspaceSpec.SnapshotVersion ||
+			snapshotSpec.SHA256 != workspaceSpec.SnapshotSHA256 {
+			if getErr != nil {
+				return nil, getErr
+			}
+			return nil, errs.ErrStateConflict
+		}
+		result, err = appendArtifact(result, "REPOSITORY", snapshot, snapshotSpec,
+			".matter-codex/repositories/"+workspace.ID+".snapshot")
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, reference := range resolved.TurnSpec.InputArtifacts {
+		artifact, artifactSpec, getErr := service.requireCleanArtifactResource(ctx, tx, principal, reference.ArtifactID)
+		if getErr != nil || artifact.Version != reference.Version || artifactSpec.SHA256 != reference.SHA256 ||
+			artifactSpec.SizeBytes != reference.SizeBytes || artifactSpec.MediaType != reference.MediaType {
+			if getErr != nil {
+				return nil, getErr
+			}
+			return nil, errs.ErrStateConflict
+		}
+		result, err = appendArtifact(result, "ATTACHMENT", artifact, artifactSpec, reference.RelativePath)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 func validRuntimeRetentionPolicy(
@@ -1423,8 +1532,10 @@ func (service *Service) GetRuntimeExecution(
 		if err != nil {
 			return err
 		}
-		if found.Version != expectedVersion || found.WorkloadID != principal.CallerWorkload ||
-			found.WorkloadSPIFFEID != principal.CallerSPIFFEID ||
+		callerAllowed := (principal.CallerWorkload == service.runtimeControllerWorkload &&
+			principal.CallerSPIFFEID == service.runtimeControllerSPIFFEID) ||
+			(principal.CallerWorkload == agentRunnerWorkload && principal.CallerSPIFFEID == agentRunnerSPIFFEID)
+		if found.Version < expectedVersion || !callerAllowed ||
 			found.GrantGeneration != principal.AuthorityGrantGeneration ||
 			found.TurnID != principal.AuthorityReference ||
 			found.Attempt != uint32(principal.AuthorityRevision) ||
@@ -1848,7 +1959,7 @@ func runtimeMutationReceiptDisposition(
 }
 
 func runtimeReceiptMatchesCurrent(current, stored RuntimeExecution) error {
-	if current != stored {
+	if !reflect.DeepEqual(current, stored) {
 		return errs.ErrStateConflict
 	}
 	return nil
@@ -1932,33 +2043,21 @@ func (service *Service) CompleteRuntimeExecution(
 		!validSHA256Text(input.TerminalSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
-	artifactProvided := input.ResultArtifactID != "" || input.ResultArtifactVersion != 0 ||
-		input.ResultArtifactSHA256 != "" || input.ResultArtifactName != "" ||
-		input.ResultArtifactMediaType != "" || len(input.ResultArtifactPayload) != 0
-	if artifactProvided {
-		payloadDigest := sha256.Sum256(input.ResultArtifactPayload)
-		if value.ValidateID(input.ResultArtifactID) != nil || input.ResultArtifactVersion == 0 ||
-			!validSHA256Text(input.ResultArtifactSHA256) ||
-			hex.EncodeToString(payloadDigest[:]) != input.ResultArtifactSHA256 ||
-			input.ResultArtifactName != "result.md" || input.ResultArtifactMediaType != "text/markdown" ||
-			len(input.ResultArtifactPayload) == 0 || len(input.ResultArtifactPayload) > 160<<10 ||
-			!utf8.Valid(input.ResultArtifactPayload) {
-			return RuntimeExecution{}, errs.ErrInvalidInput
-		}
+	if validateRuntimeOutputs(input.Outputs) != nil || uuid.Validate(input.CodexSessionID) != nil ||
+		!validRuntimeArchivePath(input.ArchiveRelativePath) || !validSHA256Text(input.ArchiveSHA256) ||
+		!validBoundedReference(input.ArchiveProvenance) ||
+		!validCodexArchiveProvenance(input.ArchiveProvenance, input.ArchiveRelativePath, input.ArchiveSHA256) {
+		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
-		Runtime                                                                             runtimeExecutionIntent
-		Outcome                                                                             string
-		TerminalReference                                                                   string
-		TerminalSHA256                                                                      string
-		ResultArtifactID, ResultArtifactSHA256, ResultArtifactName, ResultArtifactMediaType string
-		ResultArtifactVersion                                                               uint64
-		ResultArtifactPayloadSHA256                                                         string
+		Runtime                                                               runtimeExecutionIntent
+		Outcome, TerminalReference, TerminalSHA256                            string
+		CodexSessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
+		Outputs                                                               []RuntimeOutput
 	}{
-		runtimeIntent(input.RuntimeExecutionInput), input.Outcome,
-		input.TerminalReference, input.TerminalSHA256, input.ResultArtifactID,
-		input.ResultArtifactSHA256, input.ResultArtifactName, input.ResultArtifactMediaType,
-		input.ResultArtifactVersion, hashString(string(input.ResultArtifactPayload)),
+		runtimeIntent(input.RuntimeExecutionInput), input.Outcome, input.TerminalReference,
+		input.TerminalSHA256, input.CodexSessionID, input.ArchiveRelativePath, input.ArchiveSHA256, input.ArchiveProvenance,
+		slices.Clone(input.Outputs),
 	})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
@@ -2032,13 +2131,14 @@ func (service *Service) CompleteRuntimeExecution(
 				!execution.LeaseExpiresAt.After(now) {
 				return errs.ErrStateConflict
 			}
-			if input.ResultArtifactID != "" {
-				expectedArtifactID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:runtime-result:"+
-					execution.ID+":"+execution.AgentRunID+":"+input.ResultArtifactSHA256)).String()
-				if input.ResultArtifactID != expectedArtifactID {
+			for _, output := range input.Outputs {
+				expectedArtifactID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:runtime-output:"+
+					execution.ID+":"+output.Kind+":"+strconv.FormatUint(uint64(output.Sequence), 10)+":"+output.ArtifactSHA256)).String()
+				if output.ArtifactID != expectedArtifactID {
 					return errs.ErrStateConflict
 				}
 			}
+			primary := input.Outputs[0]
 			turnState := enum.StateSucceeded
 			if input.Outcome == "FAILED" {
 				turnState = enum.StateFailed
@@ -2047,10 +2147,10 @@ func (service *Service) CompleteRuntimeExecution(
 			}
 			closedTurn, err := service.closeRuntimeGraph(
 				ctx, tx, input.Principal, execution, turnState,
-				strings.ToLower(input.Outcome), now, &runtimeResultArtifact{ID: input.ResultArtifactID,
-					Version: input.ResultArtifactVersion, SHA256: input.ResultArtifactSHA256,
-					Name: input.ResultArtifactName, MediaType: input.ResultArtifactMediaType,
-					Payload: slices.Clone(input.ResultArtifactPayload)},
+				strings.ToLower(input.Outcome), now, &runtimeResultArtifact{ID: primary.ArtifactID,
+					Version: primary.ArtifactVersion, SHA256: primary.ArtifactSHA256,
+					Name: primary.ArtifactName, MediaType: primary.ArtifactMediaType,
+					Payload: slices.Clone(primary.ArtifactPayload)},
 			)
 			if err != nil {
 				return err
@@ -2064,10 +2164,8 @@ func (service *Service) CompleteRuntimeExecution(
 			if !ok {
 				return errs.ErrStateConflict
 			}
-			if err := service.enqueueInteractionTerminalDelivery(ctx, tx, graph.Session, closedTurn, closedSpec,
-				&runtimeResultArtifact{ID: input.ResultArtifactID, Version: input.ResultArtifactVersion,
-					SHA256: input.ResultArtifactSHA256, Name: input.ResultArtifactName,
-					MediaType: input.ResultArtifactMediaType, Payload: slices.Clone(input.ResultArtifactPayload)}); err != nil {
+			if err := service.materializeRuntimeOutputs(ctx, tx, input.Principal, execution, graph.Session,
+				closedTurn, closedSpec, input.Outputs, now); err != nil {
 				return err
 			}
 			expectedVersion, expectedFence := execution.Version, execution.Fence
@@ -2083,6 +2181,10 @@ func (service *Service) CompleteRuntimeExecution(
 			execution.TerminalOutcome = input.Outcome
 			execution.TerminalReference = input.TerminalReference
 			execution.TerminalSHA256 = input.TerminalSHA256
+			execution.CodexSessionID = input.CodexSessionID
+			execution.CodexArchiveRelativePath = input.ArchiveRelativePath
+			execution.CodexArchiveSHA256 = input.ArchiveSHA256
+			execution.CodexArchiveProvenance = input.ArchiveProvenance
 			execution.LeaseID = ""
 			execution.LeaseTokenSHA256 = ""
 			execution.LeaseExpiresAt = time.Time{}
@@ -2098,6 +2200,22 @@ func (service *Service) CompleteRuntimeExecution(
 		},
 	)
 	return result, err
+}
+
+func validCodexArchiveProvenance(value, path, digest string) bool {
+	const prefix = "codex-app-server-rollout-v1:"
+	suffix := ":" + path + ":" + digest
+	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
+		return false
+	}
+	sourceExecutionID := strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
+	return uuid.Validate(sourceExecutionID) == nil
+}
+
+func validRuntimeArchivePath(value string) bool {
+	return regexp.MustCompile(`^\.matter-codex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`).MatchString(value) &&
+		len(value) <= 255 &&
+		!strings.Contains(value, "\\") && !strings.Contains(value, "..")
 }
 
 func (service *Service) CancelRuntimeExecution(
@@ -3643,7 +3761,7 @@ func (service *Service) closeRuntimeGraph(
 	}
 	spec.Outcome = outcome
 	if resultArtifact != nil && resultArtifact.ID != "" {
-		evidence := sha256.Sum256([]byte(strings.Join([]string{execution.ID, execution.AgentRunID,
+		evidence := sha256.Sum256([]byte(strings.Join([]string{execution.ID, execution.TurnID,
 			resultArtifact.SHA256, execution.ImmutableInputSHA256}, "\x00")))
 		artifact, artifactErr := entity.New(resultArtifact.ID, principal.OrganizationID, principal.ProjectID,
 			execution.SessionID, principal.ActorID, enum.KindArtifact, resultArtifact.Name,

@@ -4,7 +4,6 @@ package controlplane
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"time"
 
@@ -128,8 +127,10 @@ func (client *Client) GetRevision(
 		PromptProfileID:             spec.GetPromptProfileId(), PromptRevision: spec.GetPromptRevision(),
 		AuthorityPolicyRevision: spec.GetAuthorityPolicyRevision(),
 		AuthorityPolicySHA256:   spec.GetAuthorityPolicySha256(),
-		CredentialBindingIDs:    append([]string(nil), spec.GetCredentialBindingIds()...),
-		IntegrationIDs:          append([]string(nil), spec.GetIntegrationIds()...),
+		CodexModel:              spec.GetCodexModel(), CodexSandbox: spec.GetCodexSandbox(),
+		CodexApprovalPolicy:  spec.GetCodexApprovalPolicy(),
+		CredentialBindingIDs: append([]string(nil), spec.GetCredentialBindingIds()...),
+		IntegrationIDs:       append([]string(nil), spec.GetIntegrationIds()...),
 	}
 	for _, component := range spec.GetComponents() {
 		revision.Components = append(revision.Components, entity.Component{
@@ -284,10 +285,15 @@ func (client *Client) Complete(
 		ExpectedGrantGeneration: execution.GrantGeneration, LeaseToken: leaseToken,
 		Outcome: terminal, TerminalReference: reference, TerminalSha256: digest}
 	if handoff != nil {
-		request.ResultArtifactId, request.ResultArtifactVersion = handoff.ResultArtifactID, handoff.ResultArtifactVersion
-		request.ResultArtifactSha256, request.ResultArtifactName = handoff.ResultArtifactSHA256, handoff.ResultArtifactName
-		request.ResultArtifactMediaType = handoff.ResultArtifactMediaType
-		request.ResultArtifactPayload = slices.Clone(handoff.ResultArtifactPayload)
+		request.CodexSessionId, request.ArchiveRelativePath, request.ArchiveSha256, request.ArchiveProvenance =
+			handoff.CodexSessionID, handoff.ArchiveRelativePath, handoff.ArchiveSHA256, handoff.ArchiveProvenance
+		for _, output := range handoff.Outputs {
+			request.Outputs = append(request.Outputs, &controlplanev1.RuntimeOutput{Kind: output.Kind,
+				ArtifactId: output.ArtifactID, ArtifactVersion: output.ArtifactVersion,
+				ArtifactSha256: output.ArtifactSHA256, ArtifactName: output.ArtifactName,
+				ArtifactMediaType: output.ArtifactMediaType, ArtifactPayload: append([]byte(nil), output.ArtifactPayload...),
+				Sequence: output.Sequence, Total: output.Total})
+		}
 	}
 	response, err := client.shared.ControlPlane.CompleteRuntimeExecution(ctx, request)
 	if err != nil {
@@ -488,6 +494,10 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		RestoreTargetPVCResourceVersion: source.GetRestoreTargetPvcResourceVersion(),
 		RehydrateProofReference:         source.GetRehydrateProofReference(), RehydrateProofSHA256: source.GetRehydrateProofSha256(),
 		CredentialSnapshotSHA256: source.GetCredentialSnapshotSha256(), WorkloadTicketSHA256: source.GetWorkloadTicketSha256(),
+		ProviderBindingID: source.GetProviderBindingId(), ProviderBindingVersion: source.GetProviderBindingVersion(),
+		ProviderBindingSHA256: source.GetProviderBindingSha256(), CodexSessionID: source.GetCodexSessionId(),
+		CodexArchiveRelativePath: source.GetCodexArchiveRelativePath(),
+		CodexArchiveSHA256:       source.GetCodexArchiveSha256(), CodexArchiveProvenance: source.GetCodexArchiveProvenance(),
 		WorkloadTicket: source.GetWorkloadTicket(), ArchiveWorkloadTicket: source.GetArchiveWorkloadTicket(),
 		RestoreWorkloadTicket: source.GetRestoreWorkloadTicket(),
 		ResourceClass:         enum.ResourceClass(trimEnum(source.GetResourceClass().String(), "RUNTIME_RESOURCE_CLASS_")),
@@ -523,6 +533,12 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		ArchiveKMSKeyARN:        source.GetArchiveKmsKeyArn(),
 		ArchiveObjectLockMode:   source.GetArchiveObjectLockMode(),
 		ArchiveProvenanceSHA256: source.GetArchiveProvenanceSha256(),
+	}
+	for _, item := range source.GetMaterializations() {
+		execution.Materializations = append(execution.Materializations, entity.Materialization{Kind: item.GetKind(),
+			ArtifactID: item.GetArtifactId(), ArtifactVersion: item.GetArtifactVersion(), SHA256: item.GetSha256(),
+			SizeBytes: item.GetSizeBytes(), RelativePath: item.GetRelativePath(), MediaType: item.GetMediaType(),
+			StorageRef: item.GetStorageRef()})
 	}
 	if source.GetLeaseExpiresAt() != nil {
 		execution.LeaseExpiresAt = source.GetLeaseExpiresAt().AsTime()

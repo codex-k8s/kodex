@@ -7,6 +7,7 @@ package generated
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -16,9 +17,10 @@ import (
 )
 
 const (
-	DeliveryReadbackBearerScopes deliveryReadbackBearerContextKey = "deliveryReadbackBearer.Scopes"
-	MattermostUserBearerScopes   mattermostUserBearerContextKey   = "mattermostUserBearer.Scopes"
-	WorkloadMTLSScopes           workloadMTLSContextKey           = "workloadMTLS.Scopes"
+	DeliveryReadbackBearerScopes       deliveryReadbackBearerContextKey       = "deliveryReadbackBearer.Scopes"
+	MattermostUserBearerScopes         mattermostUserBearerContextKey         = "mattermostUserBearer.Scopes"
+	RuntimeMaterializationBearerScopes runtimeMaterializationBearerContextKey = "runtimeMaterializationBearer.Scopes"
+	WorkloadMTLSScopes                 workloadMTLSContextKey                 = "workloadMTLS.Scopes"
 )
 
 // Defines values for ArtifactBindingReadbackScanState.
@@ -327,8 +329,17 @@ type deliveryReadbackBearerContextKey string
 // mattermostUserBearerContextKey is the context key for mattermostUserBearer security scheme
 type mattermostUserBearerContextKey string
 
+// runtimeMaterializationBearerContextKey is the context key for runtimeMaterializationBearer security scheme
+type runtimeMaterializationBearerContextKey string
+
 // workloadMTLSContextKey is the context key for workloadMTLS security scheme
 type workloadMTLSContextKey string
+
+// GetRuntimeMaterializationParams defines parameters for GetRuntimeMaterialization.
+type GetRuntimeMaterializationParams struct {
+	Version int64  `form:"version" json:"version"`
+	Sha256  string `form:"sha256" json:"sha256"`
+}
 
 // AcceptMattermostActionJSONRequestBody defines body for AcceptMattermostAction for application/json ContentType.
 type AcceptMattermostActionJSONRequestBody = ActionCallback
@@ -344,6 +355,9 @@ type ServerInterface interface {
 
 	// (GET /internal/v1/deliveries/{delivery_id})
 	GetInteractionDelivery(w http.ResponseWriter, r *http.Request, deliveryId openapi_types.UUID)
+
+	// (GET /internal/v1/runtime-materializations/{execution_id}/{artifact_id})
+	GetRuntimeMaterialization(w http.ResponseWriter, r *http.Request, executionId openapi_types.UUID, artifactId openapi_types.UUID, params GetRuntimeMaterializationParams)
 
 	// (POST /mattermost/v1/actions)
 	AcceptMattermostAction(w http.ResponseWriter, r *http.Request)
@@ -392,6 +406,78 @@ func (siw *ServerInterfaceWrapper) GetInteractionDelivery(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetInteractionDelivery(w, r, deliveryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRuntimeMaterialization operation middleware
+func (siw *ServerInterfaceWrapper) GetRuntimeMaterialization(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "execution_id" -------------
+	var executionId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "execution_id", r.PathValue("execution_id"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "execution_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifact_id" -------------
+	var artifactId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifact_id", r.PathValue("artifact_id"), &artifactId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifact_id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, RuntimeMaterializationBearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, WorkloadMTLSScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRuntimeMaterializationParams
+
+	// ------------- Required query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "sha256" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "sha256", r.URL.Query(), &params.Sha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sha256"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha256", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRuntimeMaterialization(w, r, executionId, artifactId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -614,6 +700,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/deliveries/{delivery_id}", wrapper.GetInteractionDelivery)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/v1/runtime-materializations/{execution_id}/{artifact_id}", wrapper.GetRuntimeMaterialization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/v1/actions", wrapper.AcceptMattermostAction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/v1/artifacts/{grant_id}/content", wrapper.DownloadInteractionArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/v1/commands/codex", wrapper.AcceptMattermostSlashCommand)

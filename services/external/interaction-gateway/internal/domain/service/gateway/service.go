@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/matter-codex/libs/go/i18n"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
@@ -28,6 +29,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/enum"
 	"github.com/google/uuid"
+	mattermostmodel "github.com/mattermost/mattermost/server/public/model"
 )
 
 //go:embed messages/*.json
@@ -640,7 +642,8 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 		if linkErr != nil {
 			return true, linkErr
 		}
-		if work.Kind == "FINAL_MARKDOWN" && work.ArtifactMediaType == "text/markdown" &&
+		if (work.Kind == "FINAL_MARKDOWN" || work.Kind == "STATUS" || work.Kind == "PROGRESS") &&
+			work.ArtifactMediaType == "text/markdown" &&
 			work.ArtifactSizeBytes <= uint64(service.config.MaximumPromptBytes) {
 			raw := artifactRaw
 			if len(raw) == 0 {
@@ -655,6 +658,9 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 		}
 		message += "\n\n" + service.text(delivery.Locale, "card.artifact.protected_link",
 			map[string]any{"URL": link, "Name": binding.Name, "Size": binding.SizeBytes, "SHA256": binding.SHA256})
+	}
+	if !utf8.ValidString(message) || utf8.RuneCountInString(message) > mattermostmodel.PostMessageMaxRunesV2 {
+		return true, errors.New("Mattermost delivery message exceeds the provider limit")
 	}
 	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, map[string]any{"message": message})
 	if err != nil {
@@ -750,6 +756,21 @@ func (service *Service) GetDeliveryScoped(ctx context.Context, organizationID, p
 		return entity.Delivery{}, err
 	}
 	return delivery, nil
+}
+
+func (service *Service) ReadRuntimeMaterialization(ctx context.Context, grant, executionID, artifactID string,
+	artifactVersion uint64, artifactSHA256 string) ([]byte, string, error) {
+	materialization, err := service.control.GetRuntimeMaterialization(ctx, grant, executionID, artifactID,
+		artifactVersion, artifactSHA256)
+	if err != nil {
+		return nil, "", err
+	}
+	raw, err := service.objects.Get(ctx, materialization.ProjectID, materialization.StorageRef,
+		materialization.SizeBytes, materialization.SHA256)
+	if err != nil {
+		return nil, "", errors.New("read runtime materialization object")
+	}
+	return raw, materialization.MediaType, nil
 }
 
 func (service *Service) ValidateDeliveryReadback(ctx context.Context, grantID, deliveryID, organizationID,
@@ -921,26 +942,18 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 		if len(inbound.Text) == 0 || len([]byte(inbound.Text)) > service.config.MaximumPromptBytes {
 			return Result{}, service.failInbound(ctx, inbound, "PROMPT_SIZE_INVALID")
 		}
-		manifest := entity.WorkspaceManifest{
-			Version: 1, OrganizationID: inbound.OrganizationID, ProjectID: inbound.ProjectID,
-			ChatID: inbound.ChatID, SessionID: inbound.SessionID, ProviderEventID: inbound.ProviderEventID,
-			Prompt: inbound.Text, PromptSHA256: digestBytes([]byte(inbound.Text)), Files: inbound.AttachmentArtifacts,
-		}
-		manifestRaw, manifestErr := internalrpcauth.CanonicalJSON(manifest)
-		if manifestErr != nil {
-			return Result{}, service.failInbound(ctx, inbound, "MANIFEST_INVALID")
-		}
-		manifestDigest := digestBytes(manifestRaw)
+		promptRaw := []byte(inbound.Text)
+		promptDigest := digestBytes(promptRaw)
 		object, putErr := service.objects.Put(ctx, inbound.ProjectID,
-			path.Join("inbound", inbound.ID, "workspace-manifest.json"), manifestRaw, "application/json", manifestDigest)
+			path.Join("inbound", inbound.ID, "prompt.md"), promptRaw, "text/markdown", promptDigest)
 		if putErr != nil {
 			return Result{}, service.retryInbound(ctx, inbound, "MANIFEST_WRITE_FAILED")
 		}
 		artifact, registerErr := service.control.RegisterArtifact(ctx, grant, domaincontrol.ArtifactInput{
-			IdempotencyKey: stableID(inbound.ID, "prompt-manifest"), Name: "workspace-manifest.json",
-			ParentID: inbound.SessionID, Kind: "workspace-manifest", Direction: "INPUT",
-			StorageRef: object.Reference, SizeBytes: uint64(len(manifestRaw)), MediaType: "application/json",
-			SHA256: manifestDigest, RetentionRef: service.config.RetentionRef,
+			IdempotencyKey: stableID(inbound.ID, "prompt"), Name: "prompt.md",
+			ParentID: inbound.SessionID, Kind: "prompt", Direction: "INPUT",
+			StorageRef: object.Reference, SizeBytes: uint64(len(promptRaw)), MediaType: "text/markdown",
+			SHA256: promptDigest, RetentionRef: service.config.RetentionRef,
 		})
 		if registerErr != nil {
 			return Result{}, service.retryInbound(ctx, inbound, "PROMPT_REGISTER_FAILED")
@@ -971,8 +984,12 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 	if inbound.PostID == "" {
 		sourceReference = "mattermost://" + inbound.TeamID + "/" + inbound.ChannelID + "/commands/" + inbound.ProviderEventID
 	}
+	attachmentIDs := make([]string, 0, len(inbound.AttachmentArtifacts))
+	for _, attachment := range inbound.AttachmentArtifacts {
+		attachmentIDs = append(attachmentIDs, attachment.ArtifactID)
+	}
 	turn, err := service.control.EnqueueTurn(ctx, grant, stableID(inbound.ID, "turn"), inbound.SessionID,
-		sourceReference, inbound.PromptArtifactID)
+		sourceReference, inbound.PromptArtifactID, attachmentIDs)
 	if err != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "TURN_ENQUEUE_FAILED")
 	}

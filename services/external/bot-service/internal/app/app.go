@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -40,12 +39,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	defer closeStorage()
-	runtimeBindingSvc, runtimeBindingBearer, closeRuntimeBinding, err := openRuntimeAgentBinding(ctx, cfg, storage)
-	if err != nil {
-		return err
-	}
-	defer closeRuntimeBinding()
-
 	localizer, err := texti18n.New(cfg.Locale)
 	if err != nil {
 		return fmt.Errorf("open localizer: %w", err)
@@ -191,8 +184,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		ControlCenterReadToken: cfg.ControlCenterReadToken,
 		ControlCenterAssetsDir: cfg.ControlCenterAssetsDir,
 		Logger:                 logger,
-		RuntimeAgentBindings:   runtimeBindingSvc,
-		RuntimeBindingBearer:   runtimeBindingBearer,
 	})
 	server := newHTTPServer(cfg, router)
 	var runtimeServer *http.Server
@@ -263,27 +254,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if automationStorage != nil && threadPublisher != nil {
 		go runAutomationOwnerAttentionDeliveryLoop(ctx, automationSvc, cfg.AutomationDeliveryInterval, cfg.AutomationDeliveryConcurrency, logger)
 	}
-	workerCtx, cancelBindingWorker := context.WithCancel(ctx)
-	bindingWorkerDone := make(chan struct{})
-	if runtimeBindingSvc != nil {
-		go func() {
-			defer close(bindingWorkerDone)
-			runtimeBindingSvc.Run(workerCtx, logger)
-		}()
-	} else {
-		close(bindingWorkerDone)
-	}
-	defer func() {
-		cancelBindingWorker()
-		joinTimer := time.NewTimer(cfg.ShutdownTimeout)
-		defer joinTimer.Stop()
-		select {
-		case <-bindingWorkerDone:
-		case <-joinTimer.C:
-			logger.Error("runtime agent binding worker shutdown timed out")
-		}
-	}()
-
 	select {
 	case <-ctx.Done():
 		var shutdownErrors []error
@@ -303,62 +273,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	}
-}
-
-func openRuntimeAgentBinding(
-	ctx context.Context,
-	cfg Config,
-	repository *adminpostgres.Repository,
-) (*statusservice.RuntimeAgentBindingService, string, func(), error) {
-	if !cfg.RuntimeBindingEnabled {
-		return nil, "", func() {}, nil
-	}
-	if repository == nil {
-		return nil, "", nil, fmt.Errorf("runtime agent binding requires PostgreSQL")
-	}
-	bearer, err := readBoundedCredential(cfg.RuntimeBindingIngressBearerFile)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("read runtime binding ingress bearer: %w", err)
-	}
-	startupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	client, err := controlplaneclient.Dial(startupCtx, controlplaneclient.Config{
-		Target: cfg.ControlPlaneTarget, TLSServerName: cfg.ControlPlaneTLSServerName,
-		CAFile:                cfg.ControlPlaneCAFile,
-		ClientCertificateFile: cfg.ControlPlaneClientCertificateFile,
-		ClientPrivateKeyFile:  cfg.ControlPlaneClientPrivateKeyFile,
-		ApplicationGrantFile:  cfg.ControlPlaneApplicationGrantFile,
-		ExpectedIssuerUID:     cfg.ControlPlaneExpectedIssuerUID,
-		ExpectedIssuerGID:     cfg.ControlPlaneExpectedIssuerGID,
-		DialTimeout:           2 * time.Second,
-		Operations:            controlplaneclient.BotServiceRuntimeBindingOperations(),
-	})
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("open runtime binding control-plane client: %w", err)
-	}
-	if err := client.Check(startupCtx); err != nil {
-		_ = client.Close()
-		return nil, "", nil, fmt.Errorf("runtime binding startup barrier: %w", err)
-	}
-	return statusservice.NewRuntimeAgentBindingService(repository, client.ControlPlane), bearer, func() {
-		_ = client.Close()
-	}, nil
-}
-
-func readBoundedCredential(path string) (string, error) {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 16<<10 || info.Mode().Perm()&0o007 != 0 {
-		return "", fmt.Errorf("credential file is unsafe")
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read credential file")
-	}
-	value := strings.TrimSpace(string(raw))
-	if len(value) < 32 || len(value) > 16<<10 {
-		return "", fmt.Errorf("credential is invalid")
-	}
-	return value, nil
 }
 
 func newRuntimeTLSServer(cfg Config, handler http.Handler) (*http.Server, error) {

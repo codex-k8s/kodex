@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -324,7 +325,7 @@ func (service *Service) lockOwnerGraphSet(
 		graph.Turn = lockedTurns[turnID]
 		lockedSpec, ok := graph.Turn.Spec.(entity.TurnSpec)
 		if !ok || graph.Turn.Kind != enum.KindTurn ||
-			graph.Turn.Version != candidate.Turn.Version || lockedSpec != candidate.TurnSpec {
+			graph.Turn.Version != candidate.Turn.Version || !reflect.DeepEqual(lockedSpec, candidate.TurnSpec) {
 			return lockedOwnerGraphSet{}, errs.ErrStateConflict
 		}
 		if candidate.Scheduled {

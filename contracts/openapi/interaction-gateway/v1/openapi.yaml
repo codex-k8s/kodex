@@ -110,6 +110,50 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
+  /internal/v1/runtime-materializations/{execution_id}/{artifact_id}:
+    get:
+      operationId: getRuntimeMaterialization
+      description: >-
+        Проксирует один version/digest-bound private object для exact
+        agent-runner workload. Bearer передаётся owner RPC control-plane,
+        который повторно разрешает execution, revision и artifact.
+      security:
+        - workloadMTLS: []
+          runtimeMaterializationBearer: []
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: artifact_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: version
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+        - name: sha256
+          in: query
+          required: true
+          schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+      responses:
+        '200':
+          description: Проверенные байты точной версии artifact.
+          headers:
+            X-MatterCodex-Artifact-Version:
+              schema: { type: string }
+            X-MatterCodex-Artifact-SHA256:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /mattermost/v1/artifacts/{grant_id}/content:
     get:
       operationId: downloadInteractionArtifact
@@ -145,6 +189,10 @@ components:
     workloadMTLS:
       type: mutualTLS
     deliveryReadbackBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWS
+    runtimeMaterializationBearer:
       type: http
       scheme: bearer
       bearerFormat: JWS

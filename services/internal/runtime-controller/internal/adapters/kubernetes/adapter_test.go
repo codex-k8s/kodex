@@ -245,6 +245,19 @@ func TestRevokeAccessRemovesGrantButPreservesStableWarmIdentity(t *testing.T) {
 	}
 }
 
+func TestAccessIdentityIsExecutionScoped(t *testing.T) {
+	first := testExecution()
+	second := first
+	second.ID = uuid.NewString()
+	if accessServiceAccountName(first) == accessServiceAccountName(second) {
+		t.Fatal("different runtime executions share one Kubernetes identity")
+	}
+	if !strings.HasPrefix(accessServiceAccountName(first), "runtime-access-") ||
+		!strings.HasPrefix(accessServiceAccountName(second), "runtime-access-") {
+		t.Fatal("runtime access identity does not use the admitted prefix")
+	}
+}
+
 func TestListSelectsAnnotatedJournalAsSingleRetentionOwner(t *testing.T) {
 	first := testExecution()
 	first.State = enum.ExecutionSucceeded
@@ -314,7 +327,13 @@ func testExecution() entity.Execution {
 		ArchiveRetainUntil:           time.Now().UTC().Add(90 * 24 * time.Hour),
 		CapacityObservationExpiresAt: time.Now().UTC().Add(time.Hour), RescheduleAfter: time.Now().UTC().Add(time.Minute),
 		RestoreAssignmentState: "NONE", WorkloadTicketSHA256: strings.Repeat("9", 64),
+		ProviderBindingID: uuid.NewString(), ProviderBindingVersion: 1,
+		ProviderBindingSHA256:     strings.Repeat("7", 64),
 		CleanupAuthorizationState: "NONE"}
+	execution.Materializations = []entity.Materialization{
+		{Kind: "PROMPT", ArtifactID: uuid.NewString(), ArtifactVersion: 1, SHA256: strings.Repeat("1", 64), SizeBytes: 1, RelativePath: ".matter-codex/inbox/prompt.md", MediaType: "text/markdown", StorageRef: "s3://runtime/prompt"},
+		{Kind: "INSTRUCTION", ArtifactID: uuid.NewString(), ArtifactVersion: 1, SHA256: strings.Repeat("2", 64), SizeBytes: 1, RelativePath: "AGENTS.md", MediaType: "text/markdown", StorageRef: "s3://runtime/instructions"},
+	}
 	raw, _ := json.Marshal(struct {
 		ExecutionID string
 		Credentials []struct{}

@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: agent-runner-default-deny}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: role-runtime, runtime.mattercodex.dev/managed: "true"}}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: agent-runner-exact-runtime-paths}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/component: role-runtime, runtime.mattercodex.dev/managed: "true"}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
+      ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: interaction-gateway}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: mcp-gateway}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: internal-rpc-authority-readback-attestor}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}}
+      ports: [{protocol: TCP, port: 5432}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: vault}}
+      ports: [{protocol: TCP, port: 8200}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: opentelemetry-collector}}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: sentry-relay}}
+      ports: [{protocol: TCP, port: 8443}]

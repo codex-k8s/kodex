@@ -9,16 +9,16 @@ FROM golang:1.26.5-alpine AS context
 
 ENV GOTOOLCHAIN=local
 
-WORKDIR /src
+WORKDIR /src/services/jobs/agent-runner
 
-COPY go.mod go.sum ./
+COPY services/jobs/agent-runner /src/services/jobs/agent-runner
+COPY libs/go/controlplaneapi libs/go/controlplaneclient libs/go/grpcserver libs/go/internalrpcauth libs/go/observability libs/go/runtimecontract /src/libs/go/
+
 RUN go mod download
-
-COPY services/jobs/agent-runner ./services/jobs/agent-runner
 
 RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN mkdir -p /out/mattercodex-protected \
-	&& CGO_ENABLED=0 go build -trimpath -o /out/mattercodex-protected/matter-codex-agent-runner ./services/jobs/agent-runner/cmd/agent-runner
+	&& CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-X main.buildVersion=0.1.0' -o /out/mattercodex-protected/matter-codex-agent-runner ./cmd/agent-runner
 
 ARG GOOSE_VERSION=v3.27.1
 ARG OAPI_CODEGEN_VERSION=v2.7.1

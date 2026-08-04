@@ -4,7 +4,7 @@ title: Runtime controller
 type: service
 status: approved
 owner: backend
-version: 1.3.1
+version: 2.0.0
 updated: 2026-08-04
 ---
 
@@ -75,32 +75,31 @@ organization limit, server-owned provider binding и свежую observation,
 не затрагивается.
 
 Role image запускает `agent-runner runtime-session`. Источник
-`mattercodex.agent-runner-input.v1` содержит exact execution/revision/input
-tuple, отдельные control-plane session/turn и server-owned bot
-`AgentSession`/`AgentSessionTurn`/`RunID`, profile, HTTPS bot-service/MCP routes
-с exact SNI/CA/client identity и пути immutable execution credential
-snapshots. Control-plane UUID никогда не используется как bot `session_key`.
-Bot-service сам разрешает `RunID` в локальные AgentSession/Turn и версии,
-начиная с transaction trigger фактически созданного bot turn, claim-ит durable
-discovery вместе с role/channel/prompt и вызывает generated
-`MaterializeRuntimeAgentTurn` через mTLS+bearer. Control-plane одной owner
-transaction назначает control Session/Turn/fresh RuntimeRevision и сохраняет
-exact bot binding; lost response повторяет тот же receipt, поэтому первый turn
-не требует заранее существующего control Turn.
-Terminal Pod phase не завершает turn: runner обязан записать
-exact handoff в собственный Pod. Exit без handoff создаёт incident.
-Role Pod становится Ready только после bot-session read и MCP initialize по
+`mattercodex.agent-runner-input.v2` содержит exact execution/revision/input,
+Session/Turn/attempt, provider binding, Codex policy, materializations,
+control-plane/interaction-gateway/MCP TLS bindings и пути immutable execution
+credentials. Первый `PENDING` Pod создаётся до admission; runner захватывает
+Turn lease своей exact identity, после чего повторный reconcile выполняет
+`AdmitRuntimeExecution`. Identity runtime-controller не подменяет runner.
+Terminal Pod phase не завершает turn: runner обязан записать signed v2 envelope
+в controller-owned ConfigMap. Exit без handoff создаёт incident.
+Role Pod становится Ready только после materialization, Turn claim,
+RuntimeExecution admission и MCP initialize по
 тому же TLS 1.3/mTLS exact SNI/CA/client certificate + bearer пути, который
-использует turn. Периодический readback и каждый warm successor повторяют
+использует turn. Периодический readback и каждый successor повторяют
 barrier; credential digest либо peer mismatch снимает readiness до claim.
 
-Warm Pod допускается только `Running`+`Ready`, с тем же server-owned
-`effective_runtime_sha256` и открытым archive gate. Successor получает свежие
-immutable RuntimeRevision, ConfigMap и authority/credential snapshots; runner
-через exact handoff Role читает новые execution-owned Secret в `0700` tmp
-staging, проверяет tuple/snapshot/purpose и закрывает gate. Старые mounted
-credentials не становятся authority successor. Несовместимый Pod заменяется.
-`CLUSTER_ADMIN` Pod не прогревается.
+Successor использует новый execution-scoped Pod и свежие immutable
+RuntimeRevision, ConfigMap, authority/credential snapshots; retained session
+PVC сохраняет Codex state. Старые mounted credentials и MCP client не
+переиспользуются. Прямой Kubernetes access profile runner закрыто запрещён:
+кластерные действия проходят только через специализированные MCP boundaries.
+Каждый role Pod получает отдельный `runtime-access-*` ServiceAccount и exact
+handoff Role/RoleBinding; общая identity между параллельными execution
+запрещена. Vault role `internal-rpc-authority-agent-runner` допускает только
+этот префикс в `mattercodex-system`. Удаление Pod проверяет exact lineage и с
+UID/resourceVersion preconditions удаляет execution-scoped ServiceAccount и
+handoff RBAC.
 
 ## Session archive и cleanup
 

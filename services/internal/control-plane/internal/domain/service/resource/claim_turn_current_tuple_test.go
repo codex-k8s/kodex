@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -37,6 +38,7 @@ func (repository *currentTupleTestRepository) Transact(
 	leases := cloneLeaseMap(repository.tx.leases)
 	attempts := cloneAttemptMap(repository.tx.attempts)
 	audits, events := len(repository.tx.audits), len(repository.tx.events)
+	deliveries := len(repository.tx.deliveries)
 	if err := apply(repository.tx); err != nil {
 		repository.tx.resources = resources
 		repository.tx.receipts = receipts
@@ -47,6 +49,7 @@ func (repository *currentTupleTestRepository) Transact(
 		repository.tx.attempts = attempts
 		repository.tx.audits = repository.tx.audits[:audits]
 		repository.tx.events = repository.tx.events[:events]
+		repository.tx.deliveries = repository.tx.deliveries[:deliveries]
 		return err
 	}
 	return nil
@@ -91,10 +94,19 @@ type currentTupleTestTransaction struct {
 	retention     domainrepo.ResourceRetentionPolicy
 	audits        []domainrepo.Audit
 	events        []event.Change
+	deliveries    []domainrepo.InteractionDeliveryWork
 }
 
 func (tx *currentTupleTestTransaction) CurrentTime(context.Context) (time.Time, error) {
 	return tx.now, nil
+}
+
+func (tx *currentTupleTestTransaction) EnqueueInteractionDelivery(
+	_ context.Context,
+	work domainrepo.InteractionDeliveryWork,
+) error {
+	tx.deliveries = append(tx.deliveries, work)
+	return nil
 }
 
 func (tx *currentTupleTestTransaction) SessionHasUnverifiedRuntimeArchive(
@@ -825,6 +837,20 @@ type currentTupleTestObserver struct{}
 
 func (currentTupleTestObserver) ObserveMutation(enum.Kind, string) {}
 
+type currentTupleReadbackIssuer struct{}
+
+func (currentTupleReadbackIssuer) Issue(_ context.Context, claims InteractionReadbackClaims) (InteractionReadbackCredential, error) {
+	return InteractionReadbackCredential{
+		Compact: "synthetic-readback-credential", SHA256: hashString(claims.DeliveryID),
+		ProducerID: "control-plane", Purpose: "interaction-delivery-readback",
+		WorkloadID: "interaction-gateway", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		Operation: "interaction.delivery.readback", Permission: "control.interaction.delivery.readback",
+		KeysetSHA256: hashString("test-readback-keyset"), Generation: 1, KeysetRevision: 1, KeysetHighWatermark: 1,
+	}, nil
+}
+
+func (currentTupleReadbackIssuer) Check(context.Context) error { return nil }
+
 type currentTupleFixture struct {
 	service       *Service
 	tx            *currentTupleTestTransaction
@@ -851,6 +877,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	organization, project, actor := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	sessionID, turnID := uuid.NewString(), uuid.NewString()
 	revisionID, artifactID, roleID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	instructionArtifactID := uuid.NewString()
 	promptID, bindingID := uuid.NewString(), uuid.NewString()
 	digest := hashString("claim-turn-current-tuple")
 	projectResource, err := entity.New(
@@ -868,6 +895,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		enum.KindPromptProfile, "Prompt profile",
 		entity.PromptProfileSpec{
 			Revision: 1, ContentSHA256: digest, SourceRef: "prompt:test", Locale: "ru",
+			ContentArtifactID: instructionArtifactID, ContentArtifactVersion: 1,
 			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"},
 		}, now,
 	)
@@ -889,6 +917,28 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	)
 	if err != nil {
 		t.Fatalf("create credential binding: %v", err)
+	}
+	runtimeCredentials := make([]entity.Resource, 0, 7)
+	credentialIDs := []string{bindingID}
+	for _, purpose := range []string{
+		"control-plane-application-grant", "runtime-materialization-application-grant", "mcp-token",
+		"handoff-private-key", "control-plane-client-tls", "interaction-gateway-client-tls", "mcp-client-tls",
+	} {
+		credential, credentialErr := entity.New(
+			uuid.NewString(), organization, project, "", actor, enum.KindCredentialBinding, "Runtime credential "+purpose,
+			entity.CredentialBindingSpec{
+				Purpose: purpose, SecretRef: "vault://runtime/" + purpose,
+				PrincipalRef: "runtime:" + purpose, Revision: 1,
+				ImmutableSecretRef:     "k8s-immutable-secret://mattercodex-system/test-" + purpose,
+				ProviderContentVersion: "runtime:" + purpose + ":v1", ContentSHA256: digest,
+				Ownership: entity.ConfigurationOwnership{ManagedBy: "GIT", SourceRef: "git:runtime-credentials", SourceRevision: 1},
+			}, now,
+		)
+		if credentialErr != nil {
+			t.Fatalf("create runtime credential %s: %v", purpose, credentialErr)
+		}
+		runtimeCredentials = append(runtimeCredentials, credential)
+		credentialIDs = append(credentialIDs, credential.ID)
 	}
 	role, err := entity.New(
 		roleID, organization, project, "", actor, enum.KindRole, "Runtime role",
@@ -931,9 +981,17 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		Kind: enum.KindCredentialBinding, ResourceID: binding.ID, Version: binding.Version,
 		ProjectionSHA256: bindingSHA,
 	}}
-	for _, kind := range []enum.Kind{
-		enum.KindRepositoryWorkspace, enum.KindIntegration,
-	} {
+	for _, credential := range runtimeCredentials {
+		credentialSHA, hashErr := entity.ProjectionSHA256(credential)
+		if hashErr != nil {
+			t.Fatalf("hash runtime credential: %v", hashErr)
+		}
+		components = append(components, entity.EffectiveResourceRef{
+			Kind: enum.KindCredentialBinding, ResourceID: credential.ID, Version: credential.Version,
+			ProjectionSHA256: credentialSHA,
+		})
+	}
+	for _, kind := range []enum.Kind{enum.KindIntegration, enum.KindMemoryRecord} {
 		components = append(components, entity.EffectiveResourceRef{
 			Kind: kind, ResourceID: uuid.NewString(), Version: 1,
 			ProjectionSHA256: digest,
@@ -945,7 +1003,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		entity.RuntimeRevisionSpec{
 			ManifestSHA256: digest, ImageDigest: "sha256:" + digest,
 			PromptProfileID: promptID, PromptRevision: 1,
-			CredentialBindingIDs:   []string{bindingID},
+			CredentialBindingIDs:   credentialIDs,
 			AuthorityPolicyVersion: 1, AuthorityPolicySHA256: digest,
 			Components: components, CreatedAt: now, SessionID: sessionID,
 			RoleID: roleID, ProviderCredentialBindingID: bindingID,
@@ -979,7 +1037,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		artifactID, organization, project, sessionID, actor, enum.KindArtifact, "Input",
 		entity.ArtifactSpec{
 			ArtifactKind: "prompt", Direction: "INPUT", StorageRef: "s3://test/input",
-			SizeBytes: 1, MediaType: "text/plain", SHA256: digest,
+			SizeBytes: 1, MediaType: "text/markdown", SHA256: digest,
 			ScanStatus: "CLEAN", RetentionPolicyRef: "retention:test",
 			ScanPolicyRevision: 1, ScanEvidenceSHA256: digest,
 			ScannerWorkloadID: "artifact-scanner", ScannedAt: now,
@@ -987,6 +1045,19 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	)
 	if err != nil {
 		t.Fatalf("create artifact: %v", err)
+	}
+	instructionArtifact, err := entity.New(
+		instructionArtifactID, organization, project, roleID, actor, enum.KindArtifact, "Instructions",
+		entity.ArtifactSpec{
+			ArtifactKind: "instruction-set", Direction: "INPUT", StorageRef: "s3://test/instructions",
+			SizeBytes: 1, MediaType: "text/markdown", SHA256: digest,
+			ScanStatus: "CLEAN", RetentionPolicyRef: "retention:test",
+			ScanPolicyRevision: 1, ScanEvidenceSHA256: digest,
+			ScannerWorkloadID: "artifact-scanner", ScannedAt: now,
+		}, now,
+	)
+	if err != nil {
+		t.Fatalf("create instruction artifact: %v", err)
 	}
 	revisionSHA256, err := entity.ProjectionSHA256(revision)
 	if err != nil {
@@ -997,7 +1068,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		resources: map[string]entity.Resource{
 			projectResource.ID: projectResource, prompt.ID: prompt, binding.ID: binding,
 			role.ID: role, revision.ID: revision, session.ID: session,
-			turn.ID: turn, artifact.ID: artifact,
+			turn.ID: turn, artifact.ID: artifact, instructionArtifact.ID: instructionArtifact,
 		},
 		receipts:    make(map[string]domainrepo.Receipt),
 		runtimes:    make(map[string]RuntimeExecution),
@@ -1031,6 +1102,9 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 			EffectiveFrom:           now.Add(-time.Hour),
 		},
 	}
+	for _, credential := range runtimeCredentials {
+		tx.resources[credential.ID] = credential
+	}
 	repository := &currentTupleTestRepository{tx: tx}
 	const runtimeWorker = "runtime-controller"
 	const runtimeSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller"
@@ -1063,6 +1137,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		CleanupAuthorizerWorkload:  "cleanup-authorizer",
 		CleanupAuthorizerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/cleanup-authorizer",
 		PendingRescheduleDelay:     30 * time.Second,
+		InteractionReadbackIssuer:  currentTupleReadbackIssuer{},
 		Observer:                   currentTupleTestObserver{},
 	})
 	if err != nil {
@@ -1472,6 +1547,15 @@ func (fixture currentTupleFixture) claimAndCreateRuntime(
 	if err := requireCurrentTurnBinding(graph); err != nil {
 		t.Fatalf("pre-claim current tuple: %v", err)
 	}
+	runtimePrincipal := fixture.principal(
+		permissionRuntimeClaim, fixture.runtimeWorker, fixture.runtimeSPIFFE,
+	)
+	execution, err := fixture.service.ClaimRuntimeExecution(
+		context.Background(), runtimePrincipal, "claim-runtime-current-tuple",
+	)
+	if err != nil {
+		t.Fatalf("ClaimRuntimeExecution before role Pod: %v", err)
+	}
 	claim, err := fixture.service.ClaimTurn(context.Background(), ClaimTurnInput{
 		Principal: claimPrincipal, IdempotencyKey: fixture.claimKey,
 	})
@@ -1503,9 +1587,6 @@ func (fixture currentTupleFixture) claimAndCreateRuntime(
 		t.Fatal("ClaimTurn replay created another graph version bump")
 	}
 
-	runtimePrincipal := fixture.principal(
-		permissionRuntimeClaim, fixture.runtimeWorker, fixture.runtimeSPIFFE,
-	)
 	if _, resolveErr := fixture.service.resolveBoundExecution(
 		context.Background(), fixture.tx, runtimePrincipal,
 	); resolveErr != nil {
@@ -1514,11 +1595,14 @@ func (fixture currentTupleFixture) claimAndCreateRuntime(
 		lease := fixture.tx.leases[fixture.turnID]
 		t.Fatalf("resolve runtime graph before claim: %v; turn=%+v attempt=%+v lease=%+v", resolveErr, turn, attempt, lease)
 	}
-	execution, err := fixture.service.ClaimRuntimeExecution(
+	recoveredExecution, err := fixture.service.ClaimRuntimeExecution(
 		context.Background(), runtimePrincipal, "claim-runtime-current-tuple",
 	)
 	if err != nil {
-		t.Fatalf("ClaimRuntimeExecution after real ClaimTurn: %v", err)
+		t.Fatalf("ClaimRuntimeExecution replay after real ClaimTurn: %v", err)
+	}
+	if !reflect.DeepEqual(recoveredExecution, execution) {
+		t.Fatalf("runtime bootstrap replay changed execution: before=%+v after=%+v", execution, recoveredExecution)
 	}
 	if execution.WorkloadID != fixture.runtimeWorker ||
 		execution.WorkloadSPIFFEID != fixture.runtimeSPIFFE || execution.State != "PENDING" {
@@ -1542,7 +1626,7 @@ func TestProductionClaimTurnPropagatesUnscheduledCurrentTuple(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimRuntimeExecution durable PENDING recovery: %v", err)
 	}
-	if recovered != execution || len(fixture.tx.runtimes) != 1 {
+	if !reflect.DeepEqual(recovered, execution) || len(fixture.tx.runtimes) != 1 {
 		t.Fatalf("durable PENDING recovery created a different execution: %+v", recovered)
 	}
 

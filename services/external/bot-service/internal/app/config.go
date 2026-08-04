@@ -23,16 +23,6 @@ type Config struct {
 	RuntimeTLSCertificateFile           string        `env:"MATTERCODEX_BOT_SERVICE_RUNTIME_TLS_CERTIFICATE_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-runtime-tls/tls.crt"`
 	RuntimeTLSPrivateKeyFile            string        `env:"MATTERCODEX_BOT_SERVICE_RUNTIME_TLS_PRIVATE_KEY_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-runtime-tls/tls.key"`
 	RuntimeTLSClientCAFile              string        `env:"MATTERCODEX_BOT_SERVICE_RUNTIME_TLS_CLIENT_CA_FILE" envDefault:"/var/run/config/mattercodex/bot-service-runtime-client-ca/ca.pem"`
-	RuntimeBindingEnabled               bool          `env:"MATTERCODEX_RUNTIME_BINDING_ENABLED" envDefault:"true"`
-	RuntimeBindingIngressBearerFile     string        `env:"MATTERCODEX_RUNTIME_BINDING_INGRESS_BEARER_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-runtime-binding/ingress-bearer"`
-	ControlPlaneTarget                  string        `env:"MATTERCODEX_CONTROL_PLANE_TARGET" envDefault:"control-plane.mattercodex-system.svc:8443"`
-	ControlPlaneTLSServerName           string        `env:"MATTERCODEX_CONTROL_PLANE_TLS_SERVER_NAME" envDefault:"control-plane.mattercodex-system.svc.cluster.local"`
-	ControlPlaneCAFile                  string        `env:"MATTERCODEX_CONTROL_PLANE_CA_FILE" envDefault:"/var/run/config/mattercodex/bot-service-control-plane/ca.pem"`
-	ControlPlaneClientCertificateFile   string        `env:"MATTERCODEX_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-control-plane/tls.crt"`
-	ControlPlaneClientPrivateKeyFile    string        `env:"MATTERCODEX_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-control-plane/tls.key"`
-	ControlPlaneApplicationGrantFile    string        `env:"MATTERCODEX_CONTROL_PLANE_APPLICATION_GRANT_FILE" envDefault:"/var/run/secrets/mattercodex/bot-service-control-plane/application-grant"`
-	ControlPlaneExpectedIssuerUID       uint32        `env:"MATTERCODEX_CONTROL_PLANE_EXPECTED_ISSUER_UID" envDefault:"29001"`
-	ControlPlaneExpectedIssuerGID       uint32        `env:"MATTERCODEX_CONTROL_PLANE_EXPECTED_ISSUER_GID" envDefault:"29000"`
 	MattermostSiteURL                   string        `env:"MATTERCODEX_MATTERMOST_SITE_URL"`
 	MattermostInternalURL               string        `env:"MATTERCODEX_MATTERMOST_INTERNAL_URL"`
 	BotServiceSiteURL                   string        `env:"MATTERCODEX_BOT_SERVICE_SITE_URL"`
@@ -124,16 +114,6 @@ func (cfg *Config) Validate() error {
 		!strings.HasPrefix(cfg.RuntimeTLSPrivateKeyFile, "/") ||
 		!strings.HasPrefix(cfg.RuntimeTLSClientCAFile, "/")) {
 		return fmt.Errorf("bot-service runtime mTLS configuration is invalid")
-	}
-	if cfg.RuntimeBindingEnabled && (!cfg.RuntimeEnabled || strings.TrimSpace(cfg.ControlPlaneTarget) == "" ||
-		strings.TrimSpace(cfg.ControlPlaneTLSServerName) == "" ||
-		!strings.HasPrefix(cfg.RuntimeBindingIngressBearerFile, "/") ||
-		!strings.HasPrefix(cfg.ControlPlaneCAFile, "/") ||
-		!strings.HasPrefix(cfg.ControlPlaneClientCertificateFile, "/") ||
-		!strings.HasPrefix(cfg.ControlPlaneClientPrivateKeyFile, "/") ||
-		!strings.HasPrefix(cfg.ControlPlaneApplicationGrantFile, "/") ||
-		cfg.ControlPlaneExpectedIssuerUID == 0 || cfg.ControlPlaneExpectedIssuerGID == 0) {
-		return fmt.Errorf("bot-service runtime binding configuration is invalid")
 	}
 	if cfg.ReadHeaderTimeout <= 0 || cfg.ReadHeaderTimeout > 30*time.Second {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_READ_HEADER_TIMEOUT is invalid")

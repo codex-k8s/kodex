@@ -7,7 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/errs"
@@ -120,6 +123,14 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 		service.observer.Observe("capacity", "deferred")
 		return errs.ErrCapacityDeferred
 	}
+	status, err := service.cluster.Materialize(ctx, execution, revision, "", journal)
+	if err != nil {
+		if errors.Is(err, errs.ErrDependency) {
+			service.observer.Observe("bootstrap", "materializing")
+			return nil
+		}
+		return err
+	}
 	admitted, err := service.controlPlane.Admit(
 		ctx, journal.AdmitIdempotencyKey, execution,
 	)
@@ -131,18 +142,6 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 		return errs.ErrStateConflict
 	}
 	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
-		return err
-	}
-	status, err := service.cluster.Materialize(
-		ctx, admitted.Execution, revision, admitted.LeaseToken, journal,
-	)
-	if err != nil {
-		if errors.Is(err, errs.ErrDependency) && admitted.Execution.RestoreSourceExecutionID != "" {
-			service.observer.Observe("rehydrate", "scheduled")
-			return nil
-		}
-		_ = service.recordIncident(ctx, journal, admitted.Execution,
-			enum.IncidentReconcileFailed, "materialize_failed")
 		return err
 	}
 	if status.Ready {
@@ -307,7 +306,7 @@ func (service *Service) rejoinExecution(
 				current.Version-journal.Execution.Version > 3 {
 				return runtimerepo.Journal{}, errs.ErrStateConflict
 			}
-			if current == journal.Execution {
+			if reflect.DeepEqual(current, journal.Execution) {
 				return journal, nil
 			}
 			leaseToken := journal.LeaseToken
@@ -390,6 +389,14 @@ func (service *Service) resumeAdmission(
 		service.observer.Observe("capacity", "deferred")
 		return errs.ErrCapacityDeferred
 	}
+	_, err = service.cluster.Materialize(ctx, journal.Execution, revision, "", journal)
+	if errors.Is(err, errs.ErrDependency) {
+		service.observer.Observe("bootstrap", "materializing")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
 	admitted, err := service.controlPlane.Admit(
 		ctx, journal.AdmitIdempotencyKey, journal.AdmissionRequest,
 	)
@@ -401,14 +408,7 @@ func (service *Service) resumeAdmission(
 	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
 		return err
 	}
-	_, err = service.cluster.Materialize(
-		ctx, admitted.Execution, revision, admitted.LeaseToken, journal,
-	)
-	if errors.Is(err, errs.ErrDependency) && admitted.Execution.RestoreSourceExecutionID != "" {
-		service.observer.Observe("rehydrate", "scheduled")
-		return nil
-	}
-	return err
+	return nil
 }
 
 func (service *Service) heartbeat(ctx context.Context, journal runtimerepo.Journal) error {
@@ -460,32 +460,52 @@ func (service *Service) complete(
 }
 
 func validateHandoff(execution entity.Execution, handoff entity.RuntimeHandoff) error {
-	if handoff.Schema != "mattercodex.runtime-turn-handoff.v1" || handoff.ExecutionID != execution.ID ||
+	if handoff.Schema != "mattercodex.runtime-turn-handoff.v2" || handoff.ExecutionID != execution.ID ||
 		handoff.ExecutionVersion == 0 || handoff.Fence == 0 || handoff.GrantGeneration != execution.GrantGeneration ||
 		handoff.RuntimeRevisionSHA256 != execution.RuntimeRevisionSHA256 ||
 		handoff.EffectiveRuntimeSHA256 != execution.EffectiveRuntimeSHA256 ||
 		handoff.ImmutableInputSHA256 != execution.ImmutableInputSHA256 ||
-		handoff.AgentSessionID != execution.AgentSessionID ||
-		handoff.AgentSessionTurnID != execution.AgentSessionTurnID ||
-		handoff.AgentRunID != execution.AgentRunID ||
-		handoff.AgentBindingSHA256 != execution.AgentBindingSHA256 ||
+		handoff.SessionID != execution.SessionID || handoff.TurnID != execution.TurnID || handoff.Attempt != execution.Attempt ||
+		handoff.ProviderBindingID != execution.ProviderBindingID ||
+		handoff.ProviderBindingVersion != execution.ProviderBindingVersion ||
+		handoff.ProviderBindingSHA256 != execution.ProviderBindingSHA256 ||
 		handoff.ExecutionVersion > execution.Version || handoff.Fence > execution.Fence ||
 		execution.Version-handoff.ExecutionVersion != execution.Fence-handoff.Fence ||
 		(handoff.Outcome != terminalSucceeded && handoff.Outcome != terminalFailed &&
 			handoff.Outcome != terminalBlocked) ||
-		handoff.TerminalReference == "" || !sha256PatternString(handoff.TerminalSHA256) ||
-		handoff.ResultArtifactID == "" || handoff.ResultArtifactVersion == 0 ||
-		!sha256PatternString(handoff.ResultArtifactSHA256) || handoff.ResultArtifactName == "" ||
-		handoff.ResultArtifactMediaType != "text/markdown" || len(handoff.ResultArtifactPayload) == 0 ||
-		len(handoff.ResultArtifactPayload) > 160<<10 ||
+		handoff.TerminalReference == "" || !sha256PatternString(handoff.TerminalSHA256) || len(handoff.Outputs) == 0 ||
+		len(handoff.Outputs) > 32 || handoff.CodexSessionID == "" ||
+		!validCodexArchivePath(handoff.ArchiveRelativePath) ||
+		!sha256PatternString(handoff.ArchiveSHA256) || handoff.ArchiveProvenance == "" ||
+		!validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256) ||
 		handoff.ObservedAt.IsZero() || handoff.ObservedAt.After(time.Now().UTC().Add(time.Minute)) {
 		return errs.ErrStateConflict
 	}
-	resultDigest := sha256.Sum256(handoff.ResultArtifactPayload)
-	if hex.EncodeToString(resultDigest[:]) != handoff.ResultArtifactSHA256 {
-		return errs.ErrStateConflict
+	for _, output := range handoff.Outputs {
+		resultDigest := sha256.Sum256(output.ArtifactPayload)
+		if output.ArtifactID == "" || output.ArtifactVersion == 0 || output.ArtifactName == "" ||
+			!sha256PatternString(output.ArtifactSHA256) || hex.EncodeToString(resultDigest[:]) != output.ArtifactSHA256 ||
+			len(output.ArtifactPayload) == 0 || output.Sequence == 0 || output.Total == 0 || output.Sequence > output.Total {
+			return errs.ErrStateConflict
+		}
 	}
 	return nil
+}
+
+func validCodexArchiveProvenance(value, path, digest string) bool {
+	const prefix = "codex-app-server-rollout-v1:"
+	suffix := ":" + path + ":" + digest
+	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
+		return false
+	}
+	sourceExecutionID := strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
+	return uuid.Validate(sourceExecutionID) == nil
+}
+
+func validCodexArchivePath(value string) bool {
+	return regexp.MustCompile(`^\.matter-codex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`).MatchString(value) &&
+		len(value) <= 255 &&
+		!strings.Contains(value, "\\") && !strings.Contains(value, "..")
 }
 
 func sha256PatternString(value string) bool {

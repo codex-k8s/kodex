@@ -4,7 +4,7 @@ title: Interaction gateway
 type: service
 status: approved
 owner: manager
-version: 1.2.0
+version: 1.3.0
 updated: 2026-08-04
 ---
 
@@ -32,6 +32,10 @@ Legacy `services/external/bot-service` не используется и не и�
   delivery-scoped bearer credential; после JWS gateway online сверяет у
   control-plane exact durable issue row, credential digest и отсутствие
   revocation тем же generated client profile;
+- `GET /internal/v1/runtime-materializations/{executionId}/{artifactId}` —
+  exact agent-runner mTLS proxy: bearer передаётся owner RPC control-plane,
+  затем gateway читает только возвращённый project-scoped private object и
+  повторно сверяет version, size и SHA-256;
 - `GET /mattermost/v1/artifacts/{grantId}/content` — одноразовая выдача
   private S3 object после аутентификации Mattermost User и повторного readback
   actor/Team/Channel membership;

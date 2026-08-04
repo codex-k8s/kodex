@@ -39,38 +39,6 @@ func (server *Server) ClaimRuntimeExecution(
 	}, nil
 }
 
-func (server *Server) BindRuntimeAgentSession(
-	ctx context.Context,
-	request *controlplanev1.BindRuntimeAgentSessionRequest,
-) (*controlplanev1.BindRuntimeAgentSessionResponse, error) {
-	principal, err := authorization.Principal(
-		ctx, controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
-	)
-	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
-	}
-	binding, err := server.service.BindRuntimeAgentSession(ctx, resource.RuntimeAgentSessionBindingInput{
-		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
-		SessionID: request.GetSessionId(), ExpectedSessionVersion: request.GetExpectedSessionVersion(),
-		TurnID: request.GetTurnId(), ExpectedTurnVersion: request.GetExpectedTurnVersion(),
-		ExpectedAttempt: request.GetExpectedAttempt(), ExpectedInputSHA256: request.GetExpectedInputSha256(),
-		RuntimeRevisionID: request.GetRuntimeRevisionId(), RuntimeRevisionVersion: request.GetRuntimeRevisionVersion(),
-		RuntimeRevisionSHA256: request.GetRuntimeRevisionSha256(),
-		AgentSessionKey:       request.GetAgentSessionKey(), AgentSessionID: request.GetAgentSessionId(),
-		AgentSessionVersion: request.GetAgentSessionVersion(), AgentSessionTurnID: request.GetAgentSessionTurnId(),
-		AgentRunID: request.GetAgentRunId(), AgentSessionTurnVersion: request.GetAgentSessionTurnVersion(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	return &controlplanev1.BindRuntimeAgentSessionResponse{
-		SessionId: binding.SessionID, SessionVersion: binding.SessionVersion,
-		TurnId: binding.TurnID, TurnVersion: binding.TurnVersion,
-		AgentSessionBindingSha256: binding.AgentSessionBindingSHA256,
-		AgentTurnBindingSha256:    binding.AgentTurnBindingSHA256,
-	}, nil
-}
-
 func (server *Server) GetRuntimeExecution(
 	ctx context.Context,
 	request *controlplanev1.GetRuntimeExecutionRequest,
@@ -90,6 +58,55 @@ func (server *Server) GetRuntimeExecution(
 	return &controlplanev1.GetRuntimeExecutionResponse{
 		Execution: toProtoRuntimeExecution(execution),
 	}, nil
+}
+
+func (server *Server) ReportRuntimeProgress(ctx context.Context,
+	request *controlplanev1.ReportRuntimeProgressRequest) (*controlplanev1.ReportRuntimeProgressResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_ReportRuntimeProgress_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	kind := map[controlplanev1.RuntimeProgressKind]string{
+		controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_STATUS:   "STATUS",
+		controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS: "PROGRESS",
+	}[request.GetKind()]
+	result, err := server.service.ReportRuntimeProgress(ctx, resource.ReportRuntimeProgressInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), TurnID: request.GetTurnId(),
+		LeaseToken: request.GetLeaseToken(), ExpectedTurnVersion: request.GetExpectedTurnVersion(),
+		Attempt: request.GetAttempt(), AuthorityGeneration: request.GetAuthorityGeneration(),
+		ExecutionID: request.GetExecutionId(), ExpectedExecutionVersion: request.GetExpectedExecutionVersion(),
+		ExpectedFence: request.GetExpectedExecutionFence(), Kind: kind, Sequence: request.GetSequence(),
+		Markdown: request.GetMarkdown(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	turn, err := toProtoResource(result.Turn)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.ReportRuntimeProgressResponse{DeliveryId: result.DeliveryID, Turn: turn,
+		Execution: toProtoRuntimeExecution(result.Execution)}, nil
+}
+
+func (server *Server) GetRuntimeMaterialization(ctx context.Context,
+	request *controlplanev1.GetRuntimeMaterializationRequest) (*controlplanev1.GetRuntimeMaterializationResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_GetRuntimeMaterialization_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	result, err := server.service.GetRuntimeMaterialization(ctx, principal, request.GetExecutionId(),
+		request.GetArtifactId(), request.GetArtifactVersion(), request.GetArtifactSha256())
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	item := result.Materialization
+	return &controlplanev1.GetRuntimeMaterializationResponse{OrganizationId: result.OrganizationID,
+		ProjectId: result.ProjectID, ExecutionVersion: result.ExecutionVersion, ExecutionFence: result.Fence,
+		GrantGeneration: result.GrantGeneration, Materialization: &controlplanev1.RuntimeMaterialization{
+			Kind: item.Kind, ArtifactId: item.ArtifactID, ArtifactVersion: item.ArtifactVersion,
+			Sha256: item.SHA256, SizeBytes: item.SizeBytes, RelativePath: item.RelativePath,
+			MediaType: item.MediaType, StorageRef: item.StorageRef}}, nil
 }
 
 func (server *Server) AdmitRuntimeExecution(
@@ -179,6 +196,13 @@ func (server *Server) CompleteRuntimeExecution(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
+	outputs := make([]resource.RuntimeOutput, 0, len(request.GetOutputs()))
+	for _, output := range request.GetOutputs() {
+		outputs = append(outputs, resource.RuntimeOutput{Kind: output.GetKind(), ArtifactID: output.GetArtifactId(),
+			ArtifactVersion: output.GetArtifactVersion(), ArtifactSHA256: output.GetArtifactSha256(),
+			ArtifactName: output.GetArtifactName(), ArtifactMediaType: output.GetArtifactMediaType(),
+			ArtifactPayload: slices.Clone(output.GetArtifactPayload()), Sequence: output.GetSequence(), Total: output.GetTotal()})
+	}
 	execution, err := server.service.CompleteRuntimeExecution(ctx, resource.CompleteRuntimeExecutionInput{
 		RuntimeExecutionInput: resource.RuntimeExecutionInput{
 			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
@@ -190,10 +214,8 @@ func (server *Server) CompleteRuntimeExecution(
 		Outcome:           runtimeTerminalOutcome(request.GetOutcome()),
 		TerminalReference: request.GetTerminalReference(),
 		TerminalSHA256:    request.GetTerminalSha256(),
-		ResultArtifactID:  request.GetResultArtifactId(), ResultArtifactVersion: request.GetResultArtifactVersion(),
-		ResultArtifactSHA256: request.GetResultArtifactSha256(), ResultArtifactName: request.GetResultArtifactName(),
-		ResultArtifactMediaType: request.GetResultArtifactMediaType(),
-		ResultArtifactPayload:   slices.Clone(request.GetResultArtifactPayload()),
+		Outputs:           outputs, CodexSessionID: request.GetCodexSessionId(), ArchiveRelativePath: request.GetArchiveRelativePath(), ArchiveSHA256: request.GetArchiveSha256(),
+		ArchiveProvenance: request.GetArchiveProvenance(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -504,6 +526,13 @@ func (server *Server) ExpireRuntimeCleanupAuthorization(
 }
 
 func toProtoRuntimeExecution(execution resource.RuntimeExecution) *controlplanev1.RuntimeExecution {
+	materializations := make([]*controlplanev1.RuntimeMaterialization, 0, len(execution.Materializations))
+	for _, item := range execution.Materializations {
+		materializations = append(materializations, &controlplanev1.RuntimeMaterialization{Kind: item.Kind,
+			ArtifactId: item.ArtifactID, ArtifactVersion: item.ArtifactVersion, Sha256: item.SHA256,
+			SizeBytes: item.SizeBytes, RelativePath: item.RelativePath, MediaType: item.MediaType,
+			StorageRef: item.StorageRef})
+	}
 	return &controlplanev1.RuntimeExecution{
 		ExecutionId: execution.ID, OrganizationId: execution.OrganizationID,
 		ProjectId: execution.ProjectID, ProcessId: execution.ProcessID,
@@ -585,7 +614,12 @@ func toProtoRuntimeExecution(execution resource.RuntimeExecution) *controlplanev
 		WorkloadTicket:                      execution.WorkloadTicket,
 		ArchiveWorkloadTicket:               execution.ArchiveWorkloadTicket,
 		RestoreWorkloadTicket:               execution.RestoreWorkloadTicket,
-		CreatedAt:                           timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
+		ProviderBindingId:                   execution.ProviderBindingID, ProviderBindingVersion: execution.ProviderBindingVersion,
+		ProviderBindingSha256: execution.ProviderBindingSHA256, CodexSessionId: execution.CodexSessionID,
+		CodexArchiveRelativePath: execution.CodexArchiveRelativePath,
+		CodexArchiveSha256:       execution.CodexArchiveSHA256, CodexArchiveProvenance: execution.CodexArchiveProvenance,
+		Materializations: materializations,
+		CreatedAt:        timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
 	}
 }
 

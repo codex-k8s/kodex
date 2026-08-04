@@ -4,7 +4,7 @@ title: Диагностика и восстановление runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 1.4.1
+version: 1.6.0
 updated: 2026-08-04
 ---
 
@@ -77,23 +77,22 @@ Pod. Controller replay-ит тот же admission receipt и восстанав�
 несовместимого session Pod controller выполняет guarded replacement; PVC
 остаётся.
 
-## Runner handoff и warm Pod
+## Runner handoff и successor Pod
 
-Pod `Succeeded`/`Failed` без `mattercodex.runtime-turn-handoff.v1` не является
+Pod `Succeeded`/`Failed` без проверенного signed
+`mattercodex.runtime-turn-handoff.v2` в exact handoff ConfigMap не является
 terminal доказательством. Проверить incident `runner_exited_without_handoff`,
 runner logs без credential values и owner lease/expiry. Не вызывать complete
 вручную.
 
 После корректного handoff gate остаётся `CLOSED`, пока archive и restore proof
-не подтверждены. Только затем controller открывает `OPEN`. Successor допустим
-на том же Running/Ready Pod лишь при том же `effective_runtime_sha256`; он
-получает fresh RuntimeRevision, authority/credential snapshots и сам переводит
-`SUCCESSOR_READY` обратно в `CLOSED`.
+не подтверждены. Successor создаётся как новый execution-scoped Pod с fresh
+RuntimeRevision, authority/credential snapshots и retained session PVC.
 Застрявший или несовместимый gate требует устранить причину и дать controller
 выполнить guarded replacement, не patch Pod вручную.
 
-До первого claim и после каждого warm successor `/readyz` должен оставаться
-503, пока runner не выполнит bot-session readiness read и MCP `initialize` по
+До первого claim и в каждом successor `/readyz` должен оставаться 503, пока
+runner не выполнит control-plane working-path readback и MCP `initialize` по
 рабочему TLS 1.3/mTLS exact SNI/CA/client certificate + bearer пути. Ошибка
 CA/certificate/bearer обязана сделать Pod NotReady до claim. Plaintext
 localhost probe не считается peer/application проверкой; после восстановления
@@ -149,8 +148,9 @@ version/checksum/metadata/tree/PVC mismatch сохраняет Pod отсутс�
 
 ## Двухфазный cleanup
 
-Четыре часа простоя удаляют только warm Pod. Eligibility PVC определяет
-`control-plane` по pinned `ResourceRetentionPolicy` id/version и
+Terminal role Pod не используется как warm process и удаляется только
+controller-owned guarded cleanup; это не назначает eligibility PVC. Eligibility
+PVC определяет `control-plane` по pinned `ResourceRetentionPolicy` id/version и
 `pvc_cleanup_eligible_at`, а не текущей конфигурации, Pod/journal timestamp.
 Сначала authorizer под session graph lock создаёт `ACTIVE` claim с
 exact PVC name/UID/resourceVersion и expiry; это блокирует новый work той же

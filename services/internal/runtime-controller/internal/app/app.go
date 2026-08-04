@@ -88,8 +88,10 @@ func Run(
 	}
 	cluster, err := kubeadapter.InCluster(kubeadapter.Config{
 		Environment: config.Environment, Namespace: config.Namespace,
-		RoleImageRepository: config.RoleImageRepository,
-		AgentGatewayURL:     config.AgentGatewayURL, MCPGatewayURL: config.MCPGatewayURL,
+		RoleImageRepository:             config.RoleImageRepository,
+		RunnerControlPlaneTarget:        config.RunnerControlPlaneTarget,
+		RunnerControlPlaneTLSServerName: config.RunnerControlPlaneTLSServerName,
+		InteractionGatewayURL:           config.InteractionGatewayURL, MCPGatewayURL: config.MCPGatewayURL,
 		ControllerImage: config.ControllerImage, AuthorityImage: config.AuthorityImage,
 		StorageClass: config.StorageClass, PVCSize: config.PVCSize,
 		ReadClusterRole:  config.ReadClusterRole,

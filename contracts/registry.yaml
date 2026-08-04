@@ -60,10 +60,10 @@ packages:
       - artifact-scanner
       - memory-indexer
       - integration-gateway
-  - id: runtime-controller-agent-runner-input-v1
+  - id: runtime-controller-agent-runner-input-v2
     format: json-schema
     owner: runtime-controller
-    source: contracts/runtime-controller/v1/agent-runner-input.schema.json
+    source: contracts/runtime-controller/v2/agent-runner-input.schema.json
     consumers:
       - runtime-controller
       - agent-runner

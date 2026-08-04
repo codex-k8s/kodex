@@ -233,11 +233,11 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		}, nil
 	case *controlplanev1.ResourceSpec_PromptProfile:
 		return entity.PromptProfileSpec{
-			Revision:      value.PromptProfile.GetRevision(),
-			ContentSHA256: value.PromptProfile.GetContentSha256(),
-			SourceRef:     value.PromptProfile.GetSourceRef(),
-			Locale:        value.PromptProfile.GetLocale(),
-			Ownership:     configurationOwnershipFromProto(value.PromptProfile.GetOwnership()),
+			Revision: value.PromptProfile.GetRevision(), ContentSHA256: value.PromptProfile.GetContentSha256(),
+			SourceRef: value.PromptProfile.GetSourceRef(), Locale: value.PromptProfile.GetLocale(),
+			ContentArtifactID:      value.PromptProfile.GetContentArtifactId(),
+			ContentArtifactVersion: value.PromptProfile.GetContentArtifactVersion(),
+			Ownership:              configurationOwnershipFromProto(value.PromptProfile.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_CredentialBinding:
 		expiresAt, err := optionalTime(value.CredentialBinding.GetExpiresAt())
@@ -271,6 +271,9 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			WorkspaceMode:       value.RepositoryWorkspace.GetWorkspaceMode(),
 			DefaultBranch:       value.RepositoryWorkspace.GetDefaultBranch(),
 			CredentialBindingID: value.RepositoryWorkspace.GetCredentialBindingId(),
+			SnapshotArtifactID:  value.RepositoryWorkspace.GetSnapshotArtifactId(),
+			SnapshotVersion:     value.RepositoryWorkspace.GetSnapshotArtifactVersion(),
+			SnapshotSHA256:      value.RepositoryWorkspace.GetSnapshotArtifactSha256(),
 			Ownership:           configurationOwnershipFromProto(value.RepositoryWorkspace.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_Integration:
@@ -308,15 +311,17 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ChatID:                      value.RuntimeRevision.GetChatId(),
 			ProviderCredentialBindingID: value.RuntimeRevision.GetProviderCredentialBindingId(),
 			EffectiveRuntimeSHA256:      value.RuntimeRevision.GetEffectiveRuntimeSha256(),
-			PromptProfileID:             value.RuntimeRevision.GetPromptProfileId(),
-			PromptRevision:              value.RuntimeRevision.GetPromptRevision(),
-			CredentialBindingIDs:        value.RuntimeRevision.GetCredentialBindingIds(),
-			IntegrationIDs:              value.RuntimeRevision.GetIntegrationIds(),
-			PredecessorRevisionID:       value.RuntimeRevision.GetPredecessorRevisionId(),
-			AuthorityPolicyVersion:      value.RuntimeRevision.GetAuthorityPolicyRevision(),
-			AuthorityPolicySHA256:       value.RuntimeRevision.GetAuthorityPolicySha256(),
-			Components:                  components,
-			CreatedAt:                   createdAt,
+			CodexModel:                  value.RuntimeRevision.GetCodexModel(), CodexSandbox: value.RuntimeRevision.GetCodexSandbox(),
+			CodexApprovalPolicy:    value.RuntimeRevision.GetCodexApprovalPolicy(),
+			PromptProfileID:        value.RuntimeRevision.GetPromptProfileId(),
+			PromptRevision:         value.RuntimeRevision.GetPromptRevision(),
+			CredentialBindingIDs:   value.RuntimeRevision.GetCredentialBindingIds(),
+			IntegrationIDs:         value.RuntimeRevision.GetIntegrationIds(),
+			PredecessorRevisionID:  value.RuntimeRevision.GetPredecessorRevisionId(),
+			AuthorityPolicyVersion: value.RuntimeRevision.GetAuthorityPolicyRevision(),
+			AuthorityPolicySHA256:  value.RuntimeRevision.GetAuthorityPolicySha256(),
+			Components:             components,
+			CreatedAt:              createdAt,
 		}, nil
 	case *controlplanev1.ResourceSpec_Session:
 		return entity.SessionSpec{
@@ -331,6 +336,12 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			AgentSessionBindingSHA256:  value.Session.GetAgentSessionBindingSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Turn:
+		inputArtifacts := make([]entity.EffectiveArtifactRef, 0, len(value.Turn.GetInputArtifacts()))
+		for _, artifact := range value.Turn.GetInputArtifacts() {
+			inputArtifacts = append(inputArtifacts, entity.EffectiveArtifactRef{ArtifactID: artifact.GetArtifactId(),
+				Version: artifact.GetVersion(), SHA256: artifact.GetSha256(), RelativePath: artifact.GetRelativePath(),
+				MediaType: artifact.GetMediaType(), SizeBytes: artifact.GetSizeBytes()})
+		}
 		return entity.TurnSpec{
 			SessionID:               value.Turn.GetSessionId(),
 			Sequence:                value.Turn.GetSequence(),
@@ -353,6 +364,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			AgentRunID:              value.Turn.GetAgentRunId(),
 			AgentTurnBindingVersion: value.Turn.GetAgentTurnBindingVersion(),
 			AgentTurnBindingSHA256:  value.Turn.GetAgentTurnBindingSha256(),
+			InputArtifacts:          inputArtifacts,
 		}, nil
 	case *controlplanev1.ResourceSpec_ProcessRun:
 		return entity.ProcessRunSpec{
@@ -662,11 +674,13 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.PromptProfileSpec:
 		result.Value = &controlplanev1.ResourceSpec_PromptProfile{
 			PromptProfile: &controlplanev1.PromptProfileSpec{
-				Revision:      value.Revision,
-				ContentSha256: value.ContentSHA256,
-				SourceRef:     value.SourceRef,
-				Locale:        value.Locale,
-				Ownership:     configurationOwnershipToProto(value.Ownership),
+				Revision:               value.Revision,
+				ContentSha256:          value.ContentSHA256,
+				SourceRef:              value.SourceRef,
+				Locale:                 value.Locale,
+				ContentArtifactId:      value.ContentArtifactID,
+				ContentArtifactVersion: value.ContentArtifactVersion,
+				Ownership:              configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.CredentialBindingSpec:
@@ -692,11 +706,14 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.RepositoryWorkspaceSpec:
 		result.Value = &controlplanev1.ResourceSpec_RepositoryWorkspace{
 			RepositoryWorkspace: &controlplanev1.RepositoryWorkspaceSpec{
-				RepositoryRef:       value.RepositoryRef,
-				WorkspaceMode:       value.WorkspaceMode,
-				DefaultBranch:       value.DefaultBranch,
-				CredentialBindingId: value.CredentialBindingID,
-				Ownership:           configurationOwnershipToProto(value.Ownership),
+				RepositoryRef:           value.RepositoryRef,
+				WorkspaceMode:           value.WorkspaceMode,
+				DefaultBranch:           value.DefaultBranch,
+				CredentialBindingId:     value.CredentialBindingID,
+				SnapshotArtifactId:      value.SnapshotArtifactID,
+				SnapshotArtifactVersion: value.SnapshotVersion,
+				SnapshotArtifactSha256:  value.SnapshotSHA256,
+				Ownership:               configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.IntegrationSpec:
@@ -733,15 +750,17 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ChatId:                      value.ChatID,
 				ProviderCredentialBindingId: value.ProviderCredentialBindingID,
 				EffectiveRuntimeSha256:      value.EffectiveRuntimeSHA256,
-				PromptProfileId:             value.PromptProfileID,
-				PromptRevision:              value.PromptRevision,
-				CredentialBindingIds:        value.CredentialBindingIDs,
-				IntegrationIds:              value.IntegrationIDs,
-				PredecessorRevisionId:       value.PredecessorRevisionID,
-				AuthorityPolicyRevision:     value.AuthorityPolicyVersion,
-				AuthorityPolicySha256:       value.AuthorityPolicySHA256,
-				Components:                  components,
-				CreatedAt:                   timestamppb.New(value.CreatedAt),
+				CodexModel:                  value.CodexModel, CodexSandbox: value.CodexSandbox,
+				CodexApprovalPolicy:     value.CodexApprovalPolicy,
+				PromptProfileId:         value.PromptProfileID,
+				PromptRevision:          value.PromptRevision,
+				CredentialBindingIds:    value.CredentialBindingIDs,
+				IntegrationIds:          value.IntegrationIDs,
+				PredecessorRevisionId:   value.PredecessorRevisionID,
+				AuthorityPolicyRevision: value.AuthorityPolicyVersion,
+				AuthorityPolicySha256:   value.AuthorityPolicySHA256,
+				Components:              components,
+				CreatedAt:               timestamppb.New(value.CreatedAt),
 			},
 		}
 	case entity.SessionSpec:
@@ -759,6 +778,12 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 			},
 		}
 	case entity.TurnSpec:
+		inputArtifacts := make([]*controlplanev1.EffectiveArtifactRef, 0, len(value.InputArtifacts))
+		for _, artifact := range value.InputArtifacts {
+			inputArtifacts = append(inputArtifacts, &controlplanev1.EffectiveArtifactRef{ArtifactId: artifact.ArtifactID,
+				Version: artifact.Version, Sha256: artifact.SHA256, RelativePath: artifact.RelativePath,
+				MediaType: artifact.MediaType, SizeBytes: artifact.SizeBytes})
+		}
 		result.Value = &controlplanev1.ResourceSpec_Turn{
 			Turn: &controlplanev1.TurnSpec{
 				SessionId:                value.SessionID,
@@ -782,6 +807,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				AgentRunId:               value.AgentRunID,
 				AgentTurnBindingVersion:  value.AgentTurnBindingVersion,
 				AgentTurnBindingSha256:   value.AgentTurnBindingSHA256,
+				InputArtifacts:           inputArtifacts,
 			},
 		}
 	case entity.ProcessRunSpec:

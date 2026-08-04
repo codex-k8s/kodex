@@ -3189,6 +3189,14 @@ func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamed
 		"rehydrate_proof_sha256":                  execution.RehydrateProofSHA256,
 		"credential_snapshot_sha256":              execution.CredentialSnapshotSHA256,
 		"workload_ticket_sha256":                  execution.WorkloadTicketSHA256,
+		"provider_binding_id":                     execution.ProviderBindingID,
+		"provider_binding_version":                execution.ProviderBindingVersion,
+		"provider_binding_sha256":                 execution.ProviderBindingSHA256,
+		"codex_session_id":                        execution.CodexSessionID,
+		"codex_archive_relative_path":             execution.CodexArchiveRelativePath,
+		"codex_archive_sha256":                    execution.CodexArchiveSHA256,
+		"codex_archive_provenance":                execution.CodexArchiveProvenance,
+		"materializations":                        execution.Materializations,
 		"created_at":                              execution.CreatedAt, "updated_at": execution.UpdatedAt,
 	}
 }
@@ -3238,6 +3246,10 @@ func runtimeExecutionUpdateArgs(
 		"rehydrate_proof_sha256":              execution.RehydrateProofSHA256,
 		"archive_retain_until":                execution.ArchiveRetainUntil,
 		"pvc_cleanup_eligible_at":             execution.PVCCleanupEligibleAt,
+		"codex_session_id":                    execution.CodexSessionID,
+		"codex_archive_relative_path":         execution.CodexArchiveRelativePath,
+		"codex_archive_sha256":                execution.CodexArchiveSHA256,
+		"codex_archive_provenance":            execution.CodexArchiveProvenance,
 		"updated_at":                          execution.UpdatedAt,
 		"expected_version":                    expectedVersion, "expected_fence": expectedFence,
 	}
@@ -3329,6 +3341,7 @@ type rowScanner interface {
 
 func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 	var execution domainrepo.RuntimeExecution
+	var materializationsRaw []byte
 	err := row.Scan(
 		&execution.ID, &execution.OrganizationID, &execution.ProjectID,
 		&execution.ProcessID, &execution.SessionID, &execution.ThreadID,
@@ -3374,10 +3387,17 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 		&execution.RestoreTargetPVCUID, &execution.RestoreTargetPVCResourceVersion,
 		&execution.RehydrateProofReference, &execution.RehydrateProofSHA256,
 		&execution.CredentialSnapshotSHA256, &execution.WorkloadTicketSHA256,
+		&execution.ProviderBindingID, &execution.ProviderBindingVersion,
+		&execution.ProviderBindingSHA256, &execution.CodexSessionID,
+		&execution.CodexArchiveRelativePath, &execution.CodexArchiveSHA256,
+		&execution.CodexArchiveProvenance, &materializationsRaw,
 		&execution.CreatedAt, &execution.UpdatedAt,
 	)
 	if err != nil {
 		return domainrepo.RuntimeExecution{}, mapError(err)
+	}
+	if json.Unmarshal(materializationsRaw, &execution.Materializations) != nil {
+		return domainrepo.RuntimeExecution{}, errs.ErrInternal
 	}
 	return execution, nil
 }

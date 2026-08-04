@@ -104,13 +104,18 @@ type InteractionDeliveryWork struct {
 	InlinePayload                                       []byte
 }
 
+type RuntimeMaterialization struct {
+	ProjectID, StorageRef, MediaType, SHA256 string
+	ArtifactVersion, SizeBytes               uint64
+}
+
 type Client interface {
 	Check(context.Context) error
 	CheckInteraction(context.Context, string, string) error
 	RegisterArtifact(context.Context, string, ArtifactInput) (Artifact, error)
 	GetArtifact(context.Context, string, string, uint64) (Artifact, error)
 	CreateSession(context.Context, string, string, string, string, string) (Session, error)
-	EnqueueTurn(context.Context, string, string, string, string, string) (Turn, error)
+	EnqueueTurn(context.Context, string, string, string, string, string, []string) (Turn, error)
 	GetTurn(context.Context, string, string) (Turn, error)
 	ManageConversationLifecycle(context.Context, string, string, string, string, string) error
 	ClaimOwnerGate(context.Context, string) (entity.OwnerGateClaim, error)
@@ -121,4 +126,5 @@ type Client interface {
 	RecordInteractionDelivery(context.Context, string, InteractionDeliveryWork, string) error
 	IssueInteractionDeliveryReadback(context.Context, string, string, bool) (string, time.Time, error)
 	ValidateInteractionDeliveryReadback(context.Context, string, string, string, string, string, string, uint64) (bool, error)
+	GetRuntimeMaterialization(context.Context, string, string, string, uint64, string) (RuntimeMaterialization, error)
 }
