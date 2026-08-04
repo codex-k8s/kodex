@@ -1,0 +1,16 @@
+{
+  "command.accepted": "The request was queued for session {{.SessionID}}.",
+  "command.waiting_scan": "The request is stored and is waiting for the required artifact scan.",
+  "decision.recorded": "The owner decision was recorded.",
+  "card.owner.title": "Owner decision required",
+  "card.owner.summary": "Review result digest SHA-256: {{.Summary}}",
+  "card.owner.approve": "Approve",
+  "card.owner.reject": "Reject",
+  "card.owner.changes": "Request changes",
+  "card.owner.cancel": "Cancel",
+  "card.run.queued": "Run queued",
+  "card.run.body": "Session {{.SessionID}}, turn {{.TurnID}}.",
+  "card.status.created": "Session {{.SessionID}} is ready; input preparation has started.",
+  "card.artifact.waiting": "Files received; security scan is pending.",
+  "card.incident.body": "The request could not be processed ({{.Code}})."
+}

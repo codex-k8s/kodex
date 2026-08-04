@@ -48,11 +48,14 @@ govulncheck: check-go-toolchain
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 
-gen-openapi-go: gen-integration-gateway-openapi-go gen-control-api-gateway-openapi-go
+gen-openapi-go: gen-integration-gateway-openapi-go gen-interaction-gateway-openapi-go gen-control-api-gateway-openapi-go
 	oapi-codegen -config tools/codegen/openapi/control-center-go.yaml specs/openapi/control-center.v1.yaml
 
 gen-integration-gateway-openapi-go:
 	oapi-codegen -config tools/codegen/openapi/integration-gateway-go.yaml contracts/openapi/integration-gateway/v1/openapi.yaml
+
+gen-interaction-gateway-openapi-go:
+	oapi-codegen -config tools/codegen/openapi/interaction-gateway-go.yaml contracts/openapi/interaction-gateway/v1/openapi.yaml
 
 gen-control-api-gateway-openapi-go:
 	oapi-codegen -config tools/codegen/openapi/control-api-gateway-go.yaml contracts/openapi/control-api-gateway/v1/openapi.yaml

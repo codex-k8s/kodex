@@ -1,0 +1,56 @@
+package gateway
+
+import _ "embed"
+
+var (
+	//go:embed sql/readiness__check.sql
+	readinessCheckSQL string
+	//go:embed sql/inbound__insert.sql
+	inboundInsertSQL string
+	//go:embed sql/inbound__lock.sql
+	inboundLockSQL string
+	//go:embed sql/inbound__reclaim.sql
+	inboundReclaimSQL string
+	//go:embed sql/inbound__save.sql
+	inboundSaveSQL string
+	//go:embed sql/inbound__complete.sql
+	inboundCompleteSQL string
+	//go:embed sql/inbound__retry.sql
+	inboundRetrySQL string
+	//go:embed sql/inbound__claim_waiting.sql
+	inboundClaimWaitingSQL string
+	//go:embed sql/cursor__load.sql
+	cursorLoadSQL string
+	//go:embed sql/cursor__advance.sql
+	cursorAdvanceSQL string
+	//go:embed sql/delivery__insert.sql
+	deliveryInsertSQL string
+	//go:embed sql/delivery__get.sql
+	deliveryGetSQL string
+	//go:embed sql/delivery__get_by_post.sql
+	deliveryGetByPostSQL string
+	//go:embed sql/gate_delivery__reaction_posts.sql
+	gateDeliveryReactionPostsSQL string
+	//go:embed sql/gate_delivery__decided.sql
+	gateDeliveryDecidedSQL string
+	//go:embed sql/gate_delivery__rebind.sql
+	gateDeliveryRebindSQL string
+	//go:embed sql/gate_delivery__active.sql
+	gateDeliveryActiveSQL string
+	//go:embed sql/delivery__claim.sql
+	deliveryClaimSQL string
+	//go:embed sql/delivery__accepted.sql
+	deliveryAcceptedSQL string
+	//go:embed sql/delivery__complete.sql
+	deliveryCompleteSQL string
+	//go:embed sql/delivery__retry.sql
+	deliveryRetrySQL string
+	//go:embed sql/gate_claim__pending.sql
+	gateClaimPendingSQL string
+	//go:embed sql/gate_claim__insert.sql
+	gateClaimInsertSQL string
+	//go:embed sql/gate_claim__bind.sql
+	gateClaimBindSQL string
+	//go:embed sql/gate_claim__complete.sql
+	gateClaimCompleteSQL string
+)

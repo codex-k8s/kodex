@@ -1,0 +1,39 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: interaction-gateway
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: interaction-gateway-vault-ca
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: interaction-gateway
+  annotations: {argocd.argoproj.io/sync-wave: "-7"}
+spec:
+  vaultConnectionRef: interaction-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: interaction-gateway
+    serviceAccount: interaction-gateway
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: interaction-gateway-migrator
+  annotations: {argocd.argoproj.io/sync-wave: "-7"}
+spec:
+  vaultConnectionRef: interaction-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: interaction-gateway-migrator
+    serviceAccount: interaction-gateway-migrator
+    audiences: [vault]
+    tokenExpirationSeconds: 600

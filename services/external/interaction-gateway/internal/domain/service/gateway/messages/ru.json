@@ -1,0 +1,16 @@
+{
+  "command.accepted": "Запрос поставлен в очередь для сессии {{.SessionID}}.",
+  "command.waiting_scan": "Запрос сохранён и ожидает обязательной проверки артефактов.",
+  "decision.recorded": "Решение владельца сохранено.",
+  "card.owner.title": "Требуется решение владельца",
+  "card.owner.summary": "Проверьте результат с SHA-256: {{.Summary}}",
+  "card.owner.approve": "Одобрить",
+  "card.owner.reject": "Отклонить",
+  "card.owner.changes": "Запросить изменения",
+  "card.owner.cancel": "Отменить",
+  "card.run.queued": "Запуск поставлен в очередь",
+  "card.run.body": "Сессия {{.SessionID}}, ход {{.TurnID}}.",
+  "card.status.created": "Сессия {{.SessionID}} готова; начата подготовка входных данных.",
+  "card.artifact.waiting": "Файлы получены; ожидается проверка безопасности.",
+  "card.incident.body": "Запрос не удалось обработать ({{.Code}})."
+}

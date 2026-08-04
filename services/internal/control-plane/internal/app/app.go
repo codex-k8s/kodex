@@ -27,6 +27,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	continuationgrantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/continuationgrant"
 	grantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/grant"
+	mattermosteventauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/mattermostevent"
 	oidcauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/oidc"
 	authoritypolicy "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/policy"
 	proofsignerfile "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/proofsigner/file"
@@ -287,6 +288,18 @@ func Run(
 	var continuationProducer authoritypolicy.Producer
 	for producerID, producer := range loadedPolicy.Producers {
 		if producerID == loadedPolicy.OIDC.ID {
+			continue
+		}
+		if producer.Credential == "MATTERMOST_SIGNED_EVENT" {
+			verifier, verifyErr := mattermosteventauth.New(mattermosteventauth.Config{
+				Issuer: producer.CredentialIssuer, Audience: producer.CredentialAudience,
+				WorkloadID: producer.CallerWorkload, CallerSPIFFEID: producer.CallerSPIFFEID,
+				PublicJWKFile: filepath.Join(config.ApplicationGrantTrustDir, producerID+".public.jwk"),
+			})
+			if verifyErr != nil {
+				return verifyErr
+			}
+			authenticators = append(authenticators, verifier)
 			continue
 		}
 		if producer.Credential == "INTEGRATION_CONTINUATION_GRANT" || producer.Credential == "INTEGRATION_RESULT_ACCESS_GRANT" {

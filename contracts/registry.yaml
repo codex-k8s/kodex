@@ -1,5 +1,11 @@
 version: 1
 packages:
+  - id: interaction-gateway-api-v1
+    format: openapi
+    owner: interaction-gateway
+    source: contracts/openapi/interaction-gateway/v1/openapi.yaml
+    consumers:
+      - interaction-gateway
   - id: integration-gateway-api-v1
     format: openapi
     owner: integration-gateway

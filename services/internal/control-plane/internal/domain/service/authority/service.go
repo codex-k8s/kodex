@@ -432,9 +432,11 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 		len(identity.CredentialDigest) != 64 {
 		return errors.New("application identity is invalid")
 	}
+	interactionGrantIsBound := identity.CallerWorkload == "interaction-gateway" && (identity.BoundSessionID != "" || identity.BoundTurnID != "" || identity.BoundAttempt != 0 ||
+		identity.BoundInputSHA256 != "" || identity.BoundGeneration != 0)
 	if (identity.CallerWorkload == "agent-runner" ||
 		identity.CallerWorkload == "runtime-controller" ||
-		identity.CallerWorkload == "integration-gateway" ||
+		interactionGrantIsBound ||
 		identity.CallerWorkload == "runtime-restore-verifier" ||
 		identity.CallerWorkload == "runtime-cleanup-authorizer") &&
 		(value.ValidateID(identity.BoundSessionID) != nil ||
