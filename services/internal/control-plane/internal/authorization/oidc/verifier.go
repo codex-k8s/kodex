@@ -35,6 +35,8 @@ const (
 // Config фиксирует издателя, аудиторию, TLS и единственного транспортного
 // вызывающего.
 type Config struct {
+	ProducerID           string
+	Purpose              string
 	Issuer               string
 	Audience             string
 	TLSServerName        string
@@ -69,7 +71,7 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 	issuer, err := url.Parse(config.Issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" ||
 		issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" ||
-		config.Audience == "" || config.TLSServerName == "" ||
+		config.ProducerID == "" || config.Purpose == "" || config.Audience == "" || config.TLSServerName == "" ||
 		net.ParseIP(config.TLSServerName) != nil ||
 		config.ExpectedCallerSPIFFE == "" ||
 		config.ExpectedWorkload == "" ||
@@ -221,17 +223,20 @@ func (verifier *Verifier) Authenticate(
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
 	return authoritytype.ApplicationIdentity{
-		ActorID:          token.Subject,
-		OrganizationID:   custom.OrganizationID,
-		ProjectID:        custom.ProjectID,
-		SessionJTI:       custom.JTI,
-		SessionID:        custom.SessionID,
-		SessionRevision:  custom.SessionRevision,
-		SubjectDigest:    digest("OIDC_SUBJECT:" + token.Subject),
-		CredentialDigest: digest(raw),
-		TenantOwner:      custom.TenantOwner,
-		CallerWorkload:   verifier.config.ExpectedWorkload,
-		CallerSPIFFEID:   verifier.config.ExpectedCallerSPIFFE,
+		ProducerID:           verifier.config.ProducerID,
+		CredentialPurpose:    verifier.config.Purpose,
+		CredentialGeneration: custom.SessionRevision,
+		ActorID:              token.Subject,
+		OrganizationID:       custom.OrganizationID,
+		ProjectID:            custom.ProjectID,
+		SessionJTI:           custom.JTI,
+		SessionID:            custom.SessionID,
+		SessionRevision:      custom.SessionRevision,
+		SubjectDigest:        digest("OIDC_SUBJECT:" + token.Subject),
+		CredentialDigest:     digest(raw),
+		TenantOwner:          custom.TenantOwner,
+		CallerWorkload:       verifier.config.ExpectedWorkload,
+		CallerSPIFFEID:       verifier.config.ExpectedCallerSPIFFE,
 	}, nil
 }
 

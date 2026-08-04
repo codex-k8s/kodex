@@ -444,6 +444,10 @@ type RuntimeHandoff struct {
 	ExecutionVersion, Fence, GrantGeneration                         uint64
 	AgentSessionID, AgentSessionTurnID                               int64
 	Outcome, TerminalReference, TerminalSHA256                       string
+	ResultArtifactID, ResultArtifactSHA256, ResultArtifactName       string
+	ResultArtifactMediaType                                          string
+	ResultArtifactVersion                                            uint64
+	ResultArtifactPayload                                            []byte
 	ObservedAt                                                       time.Time
 }
 

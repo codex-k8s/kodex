@@ -1,0 +1,49 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: interaction-gateway
+  labels: {app.kubernetes.io/name: interaction-gateway}
+spec:
+  groups:
+    - name: interaction-gateway.availability
+      rules:
+        - alert: InteractionGatewayUnavailable
+          expr: absent(up{service="interaction-gateway"}) or sum(up{service="interaction-gateway"}) < 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Interaction gateway недоступен
+            description: Prometheus не видит доступной реплики gateway.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayNotReady
+          expr: absent(mattercodex_interaction_gateway_readiness{ready="true"}) or sum(mattercodex_interaction_gateway_readiness{ready="true"}) < 1
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Interaction gateway не проходит readiness
+            description: Проверить PostgreSQL, control-plane, Mattermost, S3 и локальный authority issuer.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayDeliveryFailures
+          expr: sum(rate(mattercodex_interaction_gateway_worker_cycles_total{worker="delivery",outcome="failure"}[5m])) > 0.1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Не доставляются карточки Mattermost
+            description: Проверить durable delivery, provider receipt, lease/fence и Mattermost readback.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayInboundFailures
+          expr: sum(rate(mattercodex_interaction_gateway_worker_cycles_total{worker="inbound",outcome="failure"}[5m])) > 0.1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Растёт число отказов входящих событий
+            description: Проверить artifact scan, server-owned mapping и exact control-plane operation profile.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayPostgresqlUnavailable
+          expr: sum(kube_pod_status_ready{namespace="mattercodex-system",condition="true",pod=~"interaction-gateway-postgresql-.*"}) < 2
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: PostgreSQL interaction gateway потерял кворум готовности
+            description: Inbound dedup и outbox delivery закрыты до восстановления CNPG read path.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md

@@ -186,6 +186,8 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			return Loaded{}, errors.New("control-plane operation binding is ambiguous")
 		}
 		operations[candidate.OperationID] = authorityservice.Operation{
+			ProducerID:                   producer.ID,
+			CredentialPurpose:            producer.Credential,
 			FullMethod:                   candidate.FullMethod,
 			Permission:                   candidate.Permission,
 			ProjectRequired:              candidate.ProjectRequired,
@@ -227,7 +229,7 @@ func validTarget(candidate binding) bool {
 }
 
 func producerActorKind(producer Producer) string {
-	if producer.Credential == "OIDC_BEARER" {
+	if producer.Credential == "OIDC_BEARER" || producer.Credential == "MATTERMOST_SIGNED_EVENT" {
 		return "HUMAN"
 	}
 	return "WORKLOAD"
@@ -237,6 +239,8 @@ func producerAuthoritySource(producer Producer) string {
 	switch producer.Credential {
 	case "OIDC_BEARER":
 		return "OIDC_SESSION"
+	case "MATTERMOST_SIGNED_EVENT":
+		return "MATTERMOST_EVENT"
 	case "AGENT_SESSION_GRANT":
 		return "AGENT_SESSION"
 	case "AUTOMATION_OCCURRENCE_GRANT":
@@ -251,6 +255,7 @@ func producerAuthoritySource(producer Producer) string {
 func supportedCredential(credential string) bool {
 	switch credential {
 	case "OIDC_BEARER",
+		"MATTERMOST_SIGNED_EVENT",
 		"AGENT_SESSION_GRANT",
 		"AUTOMATION_OCCURRENCE_GRANT",
 		"PROCESS_RUN_GRANT",

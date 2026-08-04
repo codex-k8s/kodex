@@ -1,0 +1,73 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - poddisruptionbudget.yaml
+  - migration-job.yaml
+  - postgresql.yaml
+  - networkpolicy.yaml
+  - vault-secret-provider-classes.yaml
+  - vault-resources.yaml
+  - servicemonitor.yaml
+  - prometheusrule.yaml
+  - dashboard.yaml
+configMapGenerator:
+  - name: interaction-gateway-runtime
+    literals:
+      - INTERACTION_GATEWAY_HTTP_LISTEN=:8443
+      - INTERACTION_GATEWAY_TECHNICAL_LISTEN=:9090
+      - INTERACTION_GATEWAY_TLS_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
+      - INTERACTION_GATEWAY_TLS_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
+      - INTERACTION_GATEWAY_TLS_CLIENT_CA_FILE=/var/run/config/mattercodex/interaction-gateway/client-ca/ca.pem
+      - INTERACTION_GATEWAY_MATTERMOST_CLIENT_SPIFFE_ID=spiffe://mattercodex.local/ns/mattermost/sa/mattermost
+      - INTERACTION_GATEWAY_READBACK_CLIENT_SPIFFE_IDS=spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane
+      - INTERACTION_GATEWAY_SLASH_TOKEN_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/slash-token
+      - INTERACTION_GATEWAY_POSTGRES_DSN_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/postgres-dsn
+      - INTERACTION_GATEWAY_POSTGRES_CA_FILE=/var/run/config/mattercodex/interaction-gateway/postgres/ca.pem
+      - INTERACTION_GATEWAY_POSTGRES_TLS_SERVER_NAME=interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local
+      - INTERACTION_GATEWAY_POSTGRES_EXPECTED_SESSION_USER=interaction_gateway_runtime_g1
+      - INTERACTION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION=1
+      - INTERACTION_GATEWAY_DELIVERY_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/delivery-key
+      - INTERACTION_GATEWAY_EVENT_ISSUER=https://interaction-gateway.mattercodex-system.svc.cluster.local/authority/mattermost-event
+      - INTERACTION_GATEWAY_EVENT_AUDIENCE=urn:mattercodex:mattermost-event
+      - INTERACTION_GATEWAY_EVENT_PRIVATE_JWK_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/mattermost-event.private.jwk
+      - INTERACTION_GATEWAY_EVENT_GENERATION=1
+      - INTERACTION_GATEWAY_CALLBACK_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/callback-key
+      - INTERACTION_GATEWAY_READBACK_ISSUER=https://control-plane.mattercodex-system.svc.cluster.local/authority/interaction-delivery-readback
+      - INTERACTION_GATEWAY_READBACK_AUDIENCE=urn:mattercodex:interaction-delivery-readback
+      - INTERACTION_GATEWAY_READBACK_PUBLIC_KEYSET_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/delivery-readback.public-keyset.json
+      - INTERACTION_GATEWAY_READBACK_GENERATION=1
+      - INTERACTION_GATEWAY_ACTION_CALLBACK_URL=https://interaction-gateway.mattercodex-system.svc.cluster.local:8443/mattermost/v1/actions
+      - INTERACTION_GATEWAY_DIALOG_CALLBACK_URL=https://interaction-gateway.mattercodex-system.svc.cluster.local:8443/mattermost/v1/dialogs
+      - INTERACTION_GATEWAY_ARTIFACT_DOWNLOAD_BASE_URL=https://interaction-artifacts.mattercodex.dev
+      - INTERACTION_GATEWAY_ARTIFACT_DOWNLOAD_TTL=5m
+      - INTERACTION_GATEWAY_RETENTION_REF=interaction-input-30d
+      - INTERACTION_GATEWAY_MATTERMOST_SITE_URL=https://mattermost.mattermost.svc.cluster.local
+      - INTERACTION_GATEWAY_MATTERMOST_TLS_SERVER_NAME=mattermost.mattermost.svc.cluster.local
+      - INTERACTION_GATEWAY_MATTERMOST_CA_FILE=/var/run/config/mattercodex/interaction-gateway/mattermost/ca.pem
+      - INTERACTION_GATEWAY_MATTERMOST_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
+      - INTERACTION_GATEWAY_MATTERMOST_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
+      - INTERACTION_GATEWAY_MATTERMOST_MAPPING_MANIFEST_FILE=/var/run/config/mattercodex/interaction-gateway/mapping/manifest.yaml
+      - INTERACTION_GATEWAY_MATTERMOST_MAPPING_EXPECTED_REVISION=production-r1
+      - INTERACTION_GATEWAY_MATTERMOST_MAPPING_SHA256_FILE=/var/run/config/mattercodex/interaction-gateway/mapping/manifest.sha256
+      - INTERACTION_GATEWAY_MATTERMOST_MAPPING_VAULT_KV_VERSION=1
+      - INTERACTION_GATEWAY_S3_ENDPOINT=https://object-store.storage.svc.cluster.local
+      - INTERACTION_GATEWAY_S3_TLS_SERVER_NAME=object-store.storage.svc.cluster.local
+      - INTERACTION_GATEWAY_S3_CA_FILE=/var/run/config/mattercodex/interaction-gateway/object-store/ca.pem
+      - INTERACTION_GATEWAY_S3_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
+      - INTERACTION_GATEWAY_S3_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
+      - INTERACTION_GATEWAY_S3_ACCESS_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/s3-access-key
+      - INTERACTION_GATEWAY_S3_SECRET_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/s3-secret-key
+      - INTERACTION_GATEWAY_S3_BUCKET=mattercodex-interaction-artifacts
+      - INTERACTION_GATEWAY_CONTROL_PLANE_TARGET=dns:///control-plane.mattercodex-system.svc:8443
+      - INTERACTION_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME=control-plane.mattercodex-system.svc.cluster.local
+      - INTERACTION_GATEWAY_CONTROL_PLANE_CA_FILE=/var/run/config/mattercodex/interaction-gateway/control-plane/ca.pem
+      - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
+      - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
+      - INTERACTION_GATEWAY_CONTROL_PLANE_APPLICATION_GRANT_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/owner-gate-delivery.jwt
+generatorOptions:
+  disableNameSuffixHash: true

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/libs/go/runtimecontract"
+	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -657,6 +658,20 @@ func (r *runner) publishRuntimeHandoff(ctx context.Context, status, runID, final
 		outcome = "FAILED"
 	}
 	digest := sha256.Sum256([]byte(runID + "\x00" + status + "\x00" + finalMessage + "\x00" + errorMessage + "\x00" + archive))
+	resultMarkdown := finalMessage
+	if resultMarkdown == "" {
+		resultMarkdown = errorMessage
+	}
+	if resultMarkdown == "" {
+		resultMarkdown = "Runtime completed without a user-visible result."
+	}
+	resultPayload := []byte(resultMarkdown)
+	if len(resultPayload) > 160<<10 {
+		return errors.New("runtime result exceeds owner handoff limit")
+	}
+	resultDigest := sha256.Sum256(resultPayload)
+	resultArtifactID := uuid.NewSHA1(uuid.NameSpaceURL,
+		[]byte("mattercodex:runtime-result:"+contract.ExecutionID+":"+runID+":"+hex.EncodeToString(resultDigest[:]))).String()
 	handoff := runtimeHandoff{
 		Schema: runtimecontract.HandoffSchemaV1, ExecutionID: contract.ExecutionID,
 		ExecutionVersion: contract.ExecutionVersion, Fence: contract.Fence,
@@ -666,6 +681,9 @@ func (r *runner) publishRuntimeHandoff(ctx context.Context, status, runID, final
 		AgentSessionID: contract.AgentSessionID, AgentSessionTurnID: contract.AgentSessionTurnID,
 		AgentRunID: contract.AgentRunID, AgentBindingSHA256: contract.AgentBindingSHA256,
 		TerminalReference: "agent-runner:" + runID, TerminalSHA256: hex.EncodeToString(digest[:]),
+		ResultArtifactID: resultArtifactID, ResultArtifactVersion: 1,
+		ResultArtifactSHA256: hex.EncodeToString(resultDigest[:]), ResultArtifactName: "result.md",
+		ResultArtifactMediaType: "text/markdown", ResultArtifactPayload: resultPayload,
 		ObservedAt: time.Now().UTC(),
 	}
 	raw, err := runtimecontract.EncodeHandoff(handoff)

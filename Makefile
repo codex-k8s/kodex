@@ -9,7 +9,7 @@ GRPC_GO_PLUGIN_REVISION := 1
 ASYNCAPI ?= asyncapi
 CONTROL_API_GATEWAY_ASYNCAPI_VERSION := @asyncapi/cli/6.0.2
 
-.PHONY: check-go-toolchain check-proto-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-integration-gateway-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-proto-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-go test-go-postgres test-go-all test-render-evidence tidy-go govulncheck gen-openapi gen-openapi-go gen-integration-gateway-openapi-go gen-interaction-gateway-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -48,11 +48,14 @@ govulncheck: check-go-toolchain
 
 gen-openapi: gen-openapi-go gen-openapi-ts
 
-gen-openapi-go: gen-integration-gateway-openapi-go gen-control-api-gateway-openapi-go
+gen-openapi-go: gen-integration-gateway-openapi-go gen-interaction-gateway-openapi-go gen-control-api-gateway-openapi-go
 	oapi-codegen -config tools/codegen/openapi/control-center-go.yaml specs/openapi/control-center.v1.yaml
 
 gen-integration-gateway-openapi-go:
 	oapi-codegen -config tools/codegen/openapi/integration-gateway-go.yaml contracts/openapi/integration-gateway/v1/openapi.yaml
+
+gen-interaction-gateway-openapi-go:
+	oapi-codegen -config tools/codegen/openapi/interaction-gateway-go.yaml contracts/openapi/interaction-gateway/v1/openapi.yaml
 
 gen-control-api-gateway-openapi-go:
 	oapi-codegen -config tools/codegen/openapi/control-api-gateway-go.yaml contracts/openapi/control-api-gateway/v1/openapi.yaml

@@ -446,7 +446,7 @@ func (service *Service) complete(
 	}
 	updated, err := service.controlPlane.Complete(
 		ctx, journal.CompleteIdempotencyKey, journal.Execution,
-		journal.LeaseToken, outcome, reference, digestHex,
+		journal.LeaseToken, outcome, reference, digestHex, status.Handoff,
 	)
 	if err != nil {
 		return err
@@ -474,7 +474,15 @@ func validateHandoff(execution entity.Execution, handoff entity.RuntimeHandoff) 
 		(handoff.Outcome != terminalSucceeded && handoff.Outcome != terminalFailed &&
 			handoff.Outcome != terminalBlocked) ||
 		handoff.TerminalReference == "" || !sha256PatternString(handoff.TerminalSHA256) ||
+		handoff.ResultArtifactID == "" || handoff.ResultArtifactVersion == 0 ||
+		!sha256PatternString(handoff.ResultArtifactSHA256) || handoff.ResultArtifactName == "" ||
+		handoff.ResultArtifactMediaType != "text/markdown" || len(handoff.ResultArtifactPayload) == 0 ||
+		len(handoff.ResultArtifactPayload) > 160<<10 ||
 		handoff.ObservedAt.IsZero() || handoff.ObservedAt.After(time.Now().UTC().Add(time.Minute)) {
+		return errs.ErrStateConflict
+	}
+	resultDigest := sha256.Sum256(handoff.ResultArtifactPayload)
+	if hex.EncodeToString(resultDigest[:]) != handoff.ResultArtifactSHA256 {
 		return errs.ErrStateConflict
 	}
 	return nil

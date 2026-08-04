@@ -8,9 +8,12 @@ import (
 )
 
 type migrationConfig struct {
-	DSNFile       string `env:"CONTROL_PLANE_POSTGRES_MIGRATION_DSN_FILE,required,notEmpty"`
-	TLSServerName string `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME,required,notEmpty"`
-	CAFile        string `env:"CONTROL_PLANE_POSTGRES_CA_FILE,required,notEmpty"`
+	DSNFile                             string `env:"CONTROL_PLANE_POSTGRES_MIGRATION_DSN_FILE,required,notEmpty"`
+	TLSServerName                       string `env:"CONTROL_PLANE_POSTGRES_TLS_SERVER_NAME,required,notEmpty"`
+	CAFile                              string `env:"CONTROL_PLANE_POSTGRES_CA_FILE,required,notEmpty"`
+	KeysetGenesisEnabled                bool   `env:"CONTROL_PLANE_KEYSET_GENESIS_ENABLED"`
+	MattermostEventPublicKeysetFile     string `env:"CONTROL_PLANE_MATTERMOST_EVENT_PUBLIC_KEYSET_FILE"`
+	InteractionReadbackPublicKeysetFile string `env:"CONTROL_PLANE_INTERACTION_READBACK_PUBLIC_KEYSET_FILE"`
 }
 
 type runtimePrincipalConfig struct {

@@ -29,6 +29,8 @@ const (
 )
 
 type Config struct {
+	ProducerID     string
+	Purpose        string
 	Issuer         string
 	Audience       string
 	WorkloadID     string
@@ -65,7 +67,7 @@ type claims struct {
 }
 
 func New(config Config) (*Verifier, error) {
-	if config.Issuer == "" || config.Audience == "" ||
+	if config.ProducerID == "" || config.Purpose == "" || config.Issuer == "" || config.Audience == "" ||
 		value.ValidateStableKey(config.WorkloadID) != nil ||
 		config.CallerSPIFFEID == "" ||
 		!filepath.IsAbs(config.PublicJWKFile) {
@@ -178,21 +180,24 @@ func (verifier *Verifier) Authenticate(
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
 	return authoritytype.ApplicationIdentity{
-		ActorID:          parsed.Subject,
-		OrganizationID:   parsed.OrganizationID,
-		ProjectID:        parsed.ProjectID,
-		SessionJTI:       parsed.JTI,
-		SessionRevision:  parsed.Revision,
-		SubjectDigest:    digest("WORKLOAD_SUBJECT:" + parsed.Subject),
-		CredentialDigest: digest(compact),
-		TenantOwner:      parsed.TenantOwner,
-		CallerWorkload:   verifier.config.WorkloadID,
-		CallerSPIFFEID:   verifier.config.CallerSPIFFEID,
-		BoundSessionID:   parsed.SessionID,
-		BoundTurnID:      parsed.TurnID,
-		BoundAttempt:     parsed.Attempt,
-		BoundInputSHA256: parsed.InputSHA256,
-		BoundGeneration:  parsed.Generation,
+		ProducerID:           verifier.config.ProducerID,
+		CredentialPurpose:    verifier.config.Purpose,
+		CredentialGeneration: parsed.Revision,
+		ActorID:              parsed.Subject,
+		OrganizationID:       parsed.OrganizationID,
+		ProjectID:            parsed.ProjectID,
+		SessionJTI:           parsed.JTI,
+		SessionRevision:      parsed.Revision,
+		SubjectDigest:        digest("WORKLOAD_SUBJECT:" + parsed.Subject),
+		CredentialDigest:     digest(compact),
+		TenantOwner:          parsed.TenantOwner,
+		CallerWorkload:       verifier.config.WorkloadID,
+		CallerSPIFFEID:       verifier.config.CallerSPIFFEID,
+		BoundSessionID:       parsed.SessionID,
+		BoundTurnID:          parsed.TurnID,
+		BoundAttempt:         parsed.Attempt,
+		BoundInputSHA256:     parsed.InputSHA256,
+		BoundGeneration:      parsed.Generation,
 	}, nil
 }
 

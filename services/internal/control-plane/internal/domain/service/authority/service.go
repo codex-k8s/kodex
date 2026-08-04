@@ -32,6 +32,8 @@ var operationPattern = regexp.MustCompile(
 
 // Operation — версионированная политика производителя, полученная из того же снимка.
 type Operation struct {
+	ProducerID                   string
+	CredentialPurpose            string
 	FullMethod                   string
 	Permission                   string
 	ProjectRequired              bool
@@ -95,6 +97,7 @@ func New(
 	}
 	for operationID, operation := range config.Operations {
 		if !operationPattern.MatchString(operationID) ||
+			!operationPattern.MatchString(operation.ProducerID) || operation.CredentialPurpose == "" ||
 			operation.FullMethod == "" || operation.Permission == "" ||
 			operation.CallerWorkload == "" ||
 			operation.CallerSPIFFEID == "" ||
@@ -121,8 +124,7 @@ func (service *Service) Resolve(
 	if !ok || value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		value.ValidateID(input.CorrelationID) != nil ||
 		validateApplicationIdentity(input.Identity) != nil ||
-		input.Identity.CallerWorkload != operation.CallerWorkload ||
-		input.Identity.CallerSPIFFEID != operation.CallerSPIFFEID ||
+		!credentialMatches(operation, input.Identity) ||
 		(input.Identity.BoundContinuationID != "" && !slices.Contains(input.Identity.AllowedOperationIDs, input.OperationID)) {
 		return authoritytype.Proof{}, errs.ErrUnauthenticated
 	}
@@ -141,6 +143,9 @@ func (service *Service) Resolve(
 		return authoritytype.Proof{}, errs.ErrPermissionDenied
 	}
 	requestHash, err := canonicalDigest(struct {
+		ProducerID                  string
+		CredentialPurpose           string
+		CredentialGeneration        uint64
 		SubjectDigest               string
 		CredentialDigest            string
 		SessionJTI                  string
@@ -163,6 +168,9 @@ func (service *Service) Resolve(
 		BoundContinuationFence      uint64
 		BoundInvocationID           string
 	}{
+		input.Identity.ProducerID,
+		input.Identity.CredentialPurpose,
+		input.Identity.CredentialGeneration,
 		input.Identity.SubjectDigest,
 		input.Identity.CredentialDigest,
 		input.Identity.SessionJTI,
@@ -393,6 +401,14 @@ func (service *Service) Resolve(
 	return result, err
 }
 
+func credentialMatches(operation Operation, identity authoritytype.ApplicationIdentity) bool {
+	return identity.CallerWorkload == operation.CallerWorkload &&
+		identity.CallerSPIFFEID == operation.CallerSPIFFEID &&
+		identity.ProducerID == operation.ProducerID &&
+		identity.CredentialPurpose == operation.CredentialPurpose &&
+		identity.CredentialGeneration > 0
+}
+
 func continuationGrantVersionAllowed(currentVersion, currentFence, grantedVersion, grantedFence uint64) bool {
 	return currentVersion == grantedVersion && currentFence == grantedFence ||
 		currentVersion == grantedVersion+1 && currentFence == grantedFence+1
@@ -422,7 +438,8 @@ func (service *Service) Check(ctx context.Context) (ReadinessState, error) {
 }
 
 func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) error {
-	if value.ValidateID(identity.ActorID) != nil ||
+	if !operationPattern.MatchString(identity.ProducerID) || identity.CredentialPurpose == "" ||
+		identity.CredentialGeneration == 0 || value.ValidateID(identity.ActorID) != nil ||
 		value.ValidateID(identity.OrganizationID) != nil ||
 		(identity.ProjectID != "" && value.ValidateID(identity.ProjectID) != nil) ||
 		value.ValidateID(identity.SessionJTI) != nil ||
@@ -432,9 +449,11 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 		len(identity.CredentialDigest) != 64 {
 		return errors.New("application identity is invalid")
 	}
+	interactionGrantIsBound := identity.CallerWorkload == "interaction-gateway" && (identity.BoundSessionID != "" || identity.BoundTurnID != "" || identity.BoundAttempt != 0 ||
+		identity.BoundInputSHA256 != "" || identity.BoundGeneration != 0)
 	if (identity.CallerWorkload == "agent-runner" ||
 		identity.CallerWorkload == "runtime-controller" ||
-		identity.CallerWorkload == "integration-gateway" ||
+		interactionGrantIsBound ||
 		identity.CallerWorkload == "runtime-restore-verifier" ||
 		identity.CallerWorkload == "runtime-cleanup-authorizer") &&
 		(value.ValidateID(identity.BoundSessionID) != nil ||

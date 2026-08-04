@@ -7,6 +7,7 @@ require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/i18n v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/runtimecontract v0.0.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/go-github/v88 v88.0.0
@@ -33,6 +34,8 @@ replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ./libs/go/c
 replace github.com/codex-k8s/matter-codex/libs/go/controlplaneclient => ./libs/go/controlplaneclient
 
 replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ./libs/go/internalrpcauth
+
+replace github.com/codex-k8s/matter-codex/libs/go/i18n => ./libs/go/i18n
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect

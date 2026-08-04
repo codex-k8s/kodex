@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: interaction-gateway
+  labels: {app.kubernetes.io/name: interaction-gateway}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: interaction-gateway}}
+  namespaceSelector: {matchNames: [mattercodex-system]}
+  endpoints: [{port: metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}]
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: interaction-gateway-internal-rpc-authority-issuer
+  labels: {app.kubernetes.io/name: internal-rpc-authority, app.kubernetes.io/component: issuer}
+spec:
+  selector:
+    matchLabels: {app.kubernetes.io/name: interaction-gateway, mattercodex.dev/internal-rpc-authority-issuer: enabled}
+  podMetricsEndpoints: [{port: authority-metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}]

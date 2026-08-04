@@ -1,0 +1,81 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultConnection
+metadata:
+  name: interaction-gateway
+spec:
+  address: https://vault.mattercodex-system.svc:8200
+  tlsServerName: vault.mattercodex-system.svc.cluster.local
+  skipTLSVerify: false
+  caCertSecretRef: interaction-gateway-vault-ca
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: interaction-gateway
+  annotations: {argocd.argoproj.io/sync-wave: "-7"}
+spec:
+  vaultConnectionRef: interaction-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: interaction-gateway
+    serviceAccount: interaction-gateway
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: interaction-gateway-migrator
+  annotations: {argocd.argoproj.io/sync-wave: "-7"}
+spec:
+  vaultConnectionRef: interaction-gateway
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: interaction-gateway-migrator
+    serviceAccount: interaction-gateway-migrator
+    audiences: [vault]
+    tokenExpirationSeconds: 600
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: interaction-gateway-mapping
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: interaction-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/interaction-gateway/mapping/production/revisions/production-r1
+  version: 1
+  refreshAfter: 1h
+  destination:
+    create: true
+    name: interaction-gateway-mapping
+    overwrite: false
+    transformation:
+      excludeRaw: true
+      templates:
+        manifest.yaml:
+          text: '{{ get .Secrets "manifest.yaml" }}'
+        manifest.sha256:
+          text: '{{ get .Secrets "manifest.sha256" }}'
+        revision:
+          text: '{{ get .Secrets "revision" }}'
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: interaction-gateway-bot-tokens
+  annotations: {argocd.argoproj.io/sync-wave: "-6"}
+spec:
+  vaultAuthRef: interaction-gateway
+  mount: kv
+  type: kv-v2
+  path: mattercodex/interaction-gateway/bot-tokens/production
+  refreshAfter: 5m
+  destination:
+    create: true
+    name: interaction-gateway-bot-tokens
+    overwrite: false

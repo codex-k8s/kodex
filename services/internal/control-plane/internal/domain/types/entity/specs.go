@@ -519,6 +519,8 @@ type TurnSpec struct {
 	Attempt                 uint32 `json:"attempt"`
 	Outcome                 string `json:"outcome,omitempty"`
 	ResultArtifactID        string `json:"resultArtifactId,omitempty"`
+	ResultArtifactVersion   uint64 `json:"resultArtifactVersion,omitempty"`
+	ResultArtifactSHA256    string `json:"resultArtifactSha256,omitempty"`
 	EffectiveInputSHA256    string `json:"effectiveInputSha256"`
 	PredecessorTurnID       string `json:"predecessorTurnId,omitempty"`
 	OwnerFeedback           string `json:"ownerFeedback,omitempty"`
@@ -551,6 +553,12 @@ func (spec TurnSpec) Validate() error {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("turn binding is invalid")
 		}
+	}
+	resultBinding := spec.ResultArtifactID != "" || spec.ResultArtifactVersion != 0 ||
+		spec.ResultArtifactSHA256 != ""
+	if resultBinding && (spec.ResultArtifactID == "" || spec.ResultArtifactVersion == 0 ||
+		!validSHA256(spec.ResultArtifactSHA256)) {
+		return errors.New("turn result artifact binding is invalid")
 	}
 	feedback := spec.OwnerFeedback != "" || spec.OwnerFeedbackGateID != "" ||
 		spec.OwnerFeedbackVersion != 0 || spec.OwnerFeedbackSHA256 != ""

@@ -135,6 +135,16 @@ func (repository *Repository) Get(
 	return resource, nil
 }
 
+// GetIncludingDeleted обходит projection cache: terminal tombstone нужен
+// только специализированному idempotency readback lifecycle-команды.
+func (repository *Repository) GetIncludingDeleted(
+	ctx context.Context,
+	organizationID, projectID, resourceID string,
+	expectedKind enum.Kind,
+) (entity.Resource, error) {
+	return repository.source.GetIncludingDeleted(ctx, organizationID, projectID, resourceID, expectedKind)
+}
+
 type resourceEnvelopeSource struct {
 	repository     domainrepo.Repository
 	organizationID string

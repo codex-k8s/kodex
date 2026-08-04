@@ -1,0 +1,1 @@
+SELECT interaction_gateway_claim_owner_gate_request();

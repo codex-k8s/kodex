@@ -303,6 +303,14 @@ type ManageSessionInput struct {
 	PreferredProviderCredentialBindingID string
 }
 
+type ManageConversationLifecycleInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+	Kind           string
+	Action         string
+	ResourceID     string
+}
+
 type ManageMemoryRecordInput struct {
 	Principal       value.Principal
 	IdempotencyKey  string
@@ -500,6 +508,50 @@ type ClaimOwnerGateDeliveryResult struct {
 	ExpiresAt  time.Time
 }
 
+type ClaimInteractionDeliveryInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+}
+
+type ClaimInteractionDeliveryResult struct {
+	Work               domainrepo.InteractionDeliveryWork
+	LeaseToken         string
+	ReadbackCredential string
+}
+
+type IssueInteractionDeliveryReadbackInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+	DeliveryID     string
+	Readiness      bool
+}
+
+type IssueInteractionDeliveryReadbackResult struct {
+	DeliveryID string
+	Credential string
+	ExpiresAt  time.Time
+}
+
+type ValidateInteractionDeliveryReadbackInput struct {
+	Principal        value.Principal
+	IdempotencyKey   string
+	GrantID          string
+	DeliveryID       string
+	OrganizationID   string
+	ProjectID        string
+	CredentialSHA256 string
+	Generation       uint64
+}
+
+type RecordInteractionDeliveryInput struct {
+	Principal             value.Principal
+	IdempotencyKey        string
+	DeliveryID            string
+	Fence                 uint64
+	LeaseToken            string
+	ProviderReceiptSHA256 string
+}
+
 type ExpireOwnerGateInput struct {
 	Principal      value.Principal
 	IdempotencyKey string
@@ -586,9 +638,12 @@ type RecordRuntimeIncidentInput struct {
 
 type CompleteRuntimeExecutionInput struct {
 	RuntimeExecutionInput
-	Outcome           string
-	TerminalReference string
-	TerminalSHA256    string
+	Outcome                                                                             string
+	TerminalReference                                                                   string
+	TerminalSHA256                                                                      string
+	ResultArtifactID, ResultArtifactSHA256, ResultArtifactName, ResultArtifactMediaType string
+	ResultArtifactVersion                                                               uint64
+	ResultArtifactPayload                                                               []byte
 }
 
 type CancelRuntimeExecutionInput struct {

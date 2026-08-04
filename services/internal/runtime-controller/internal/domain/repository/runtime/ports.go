@@ -22,7 +22,7 @@ type ControlPlane interface {
 	Admit(context.Context, string, entity.Execution) (AdmitResult, error)
 	Reschedule(context.Context, string, entity.Execution) (entity.Execution, error)
 	Heartbeat(context.Context, string, entity.Execution, string) (entity.Execution, error)
-	Complete(context.Context, string, entity.Execution, string, string, string, string) (entity.Execution, error)
+	Complete(context.Context, string, entity.Execution, string, string, string, string, *entity.RuntimeHandoff) (entity.Execution, error)
 	Incident(context.Context, string, entity.Execution, enum.IncidentKind, string, string) (entity.Execution, error)
 	Expire(context.Context, string) (entity.Execution, error)
 	RecordArchive(context.Context, string, entity.Execution, entity.ArchiveEvidence) (entity.Execution, error)

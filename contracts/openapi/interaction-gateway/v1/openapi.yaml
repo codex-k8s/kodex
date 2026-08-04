@@ -1,0 +1,327 @@
+openapi: 3.0.3
+info:
+  title: MatterCodex Interaction Gateway API
+  version: 1.0.0
+  description: >-
+    Входная Mattermost boundary и защищённый readback собственной доставки.
+    Actor, organization, project и chat не принимаются как authority из payload:
+    gateway разрешает их по подтверждённому Mattermost transport и server-owned manifest.
+servers:
+  - url: https://interaction-gateway.mattercodex.local
+security:
+  - workloadMTLS: []
+paths:
+  /mattermost/v1/commands/codex:
+    post:
+      operationId: acceptMattermostSlashCommand
+      description: >-
+        Принимает slash command. Поле token проверяется по mounted secret, а
+        team/channel/user повторно разрешаются через Mattermost REST readback.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SlashCommand'
+      responses:
+        '200':
+          description: Команда принята либо является идемпотентным replay.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MattermostResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /mattermost/v1/actions:
+    post:
+      operationId: acceptMattermostAction
+      description: >-
+        Принимает button/menu callback. Непрозрачный callback_token связан с
+        delivery, post, channel, actor и exact lineage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionCallback' }
+      responses:
+        '200':
+          description: Решение принято либо является идемпотентным replay.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MattermostResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /mattermost/v1/dialogs:
+    post:
+      operationId: acceptMattermostDialog
+      description: Принимает dialog/form submission с тем же callback lineage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DialogSubmission' }
+      responses:
+        '200':
+          description: Форма принята либо является идемпотентным replay.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MattermostResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /internal/v1/deliveries/{delivery_id}:
+    get:
+      operationId: getInteractionDelivery
+      description: >-
+        Возвращает полный неизменяемый payload и provider receipt только
+        разрешённой workload через exact mTLS boundary и короткоживущий
+        application credential, связанный с organization/project/delivery.
+      security:
+        - workloadMTLS: []
+          deliveryReadbackBearer: []
+      parameters:
+        - name: delivery_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Авторитетное transport/idempotency состояние gateway.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryReadback' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /mattermost/v1/artifacts/{grant_id}/content:
+    get:
+      operationId: downloadInteractionArtifact
+      description: >-
+        Одноразово проксирует private S3 object только exact Mattermost actor,
+        повторно подтверждённому через REST readback и server-owned
+        Team/Channel/project/session/turn/artifact binding. grant_id не является
+        bearer secret и не даёт доступа без пользовательской Mattermost сессии.
+      security:
+        - mattermostUserBearer: []
+      parameters:
+        - name: grant_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Проверенное содержимое точной версии artifact.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Content-SHA256:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  securitySchemes:
+    workloadMTLS:
+      type: mutualTLS
+    deliveryReadbackBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWS
+    mattermostUserBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Mattermost session token
+  schemas:
+    SlashCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        token: { type: string, minLength: 16, maxLength: 4096 }
+        team_id: { type: string, minLength: 1, maxLength: 64 }
+        team_domain: { type: string, minLength: 1, maxLength: 64 }
+        channel_id: { type: string, minLength: 1, maxLength: 64 }
+        channel_name: { type: string, minLength: 1, maxLength: 64 }
+        user_id: { type: string, minLength: 1, maxLength: 64 }
+        user_name: { type: string, minLength: 1, maxLength: 64 }
+        command: { type: string, enum: [/codex] }
+        text: { type: string, minLength: 1, maxLength: 16384 }
+        response_url: { type: string, format: uri, maxLength: 2048 }
+        trigger_id: { type: string, maxLength: 256 }
+      required: [token, team_id, channel_id, user_id, command, text, trigger_id]
+    ActionCallback:
+      type: object
+      additionalProperties: false
+      properties:
+        user_id: { type: string, minLength: 1, maxLength: 64 }
+        user_name: { type: string, maxLength: 64 }
+        channel_id: { type: string, minLength: 1, maxLength: 64 }
+        team_id: { type: string, minLength: 1, maxLength: 64 }
+        post_id: { type: string, minLength: 1, maxLength: 64 }
+        trigger_id: { type: string, maxLength: 256 }
+        context:
+          $ref: '#/components/schemas/CallbackContext'
+      required: [user_id, channel_id, team_id, post_id, context]
+    DialogSubmission:
+      type: object
+      additionalProperties: false
+      properties:
+        type: { type: string, enum: [dialog_submission] }
+        callback_id: { type: string, minLength: 1, maxLength: 128 }
+        state: { type: string, minLength: 1, maxLength: 8192 }
+        user_id: { type: string, minLength: 1, maxLength: 64 }
+        channel_id: { type: string, minLength: 1, maxLength: 64 }
+        team_id: { type: string, minLength: 1, maxLength: 64 }
+        submission:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 4096
+        cancelled: { type: boolean }
+      required: [type, callback_id, state, user_id, channel_id, team_id, submission]
+    CallbackContext:
+      type: object
+      additionalProperties: false
+      properties:
+        delivery_id: { type: string, format: uuid }
+        callback_token: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        action: { type: string, enum: [APPROVE, REJECT, CHANGES_REQUESTED, CANCEL, OPEN_DIALOG] }
+        value: { type: string, maxLength: 256 }
+      required: [delivery_id, callback_token, action]
+    MattermostResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        response_type: { type: string, enum: [ephemeral, in_channel] }
+        text: { type: string, minLength: 1, maxLength: 4096 }
+        delete_original: { type: boolean }
+        skip_slack_parsing: { type: boolean }
+      required: [response_type, text]
+    DeliveryReadback:
+      type: object
+      additionalProperties: false
+      properties:
+        delivery_id: { type: string, format: uuid }
+        kind: { type: string, enum: [RUN, STATUS, INCIDENT, OWNER_DECISION, ARTIFACT] }
+        state: { type: string, enum: [PENDING, DELIVERING, PROVIDER_ACCEPTED, DELIVERED, DEAD_LETTER] }
+        organization_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        turn_id: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1, maximum: 100 }
+        input_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        channel_id: { type: string, minLength: 1, maxLength: 64 }
+        root_post_id: { type: string, maxLength: 64 }
+        payload:
+          type: object
+          additionalProperties: true
+        payload_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        provider_post_id: { type: string, maxLength: 64 }
+        provider_receipt_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        attempts: { type: integer, minimum: 0, maximum: 32 }
+        ack_attempts: { type: integer, minimum: 0, maximum: 32 }
+        last_error_code: { type: string, maxLength: 64 }
+        attachments:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/ArtifactBindingReadback' }
+        upload_receipts:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/UploadReceiptReadback' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      required:
+        - delivery_id
+        - kind
+        - state
+        - organization_id
+        - project_id
+        - channel_id
+        - payload
+        - payload_sha256
+        - attempts
+        - ack_attempts
+        - attachments
+        - upload_receipts
+        - created_at
+        - updated_at
+    ArtifactBindingReadback:
+      type: object
+      additionalProperties: false
+      properties:
+        artifact_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        path: { type: string, minLength: 1, maxLength: 512 }
+        storage_ref: { type: string, minLength: 1, maxLength: 2048 }
+        size_bytes: { type: integer, format: int64, minimum: 1, maximum: 268435456 }
+        media_type: { type: string, minLength: 3, maxLength: 255 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        provenance: { type: string, minLength: 1, maxLength: 512 }
+        scan_state: { type: string, enum: [CLEAN] }
+      required: [artifact_id, name, path, storage_ref, size_bytes, media_type, sha256, provenance, scan_state]
+    UploadReceiptReadback:
+      type: object
+      additionalProperties: false
+      properties:
+        artifact_id: { type: string, format: uuid }
+        provider_file_id: { type: string, minLength: 1, maxLength: 64 }
+        channel_id: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size_bytes: { type: integer, format: int64, minimum: 1, maximum: 268435456 }
+        media_type: { type: string, minLength: 3, maxLength: 255 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+      required: [artifact_id, provider_file_id, channel_id, name, size_bytes, media_type, sha256, created_at]
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        error: { type: string }
+      required: [error]
+  responses:
+    BadRequest:
+      description: Request violates the closed contract.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthorized:
+      description: Mattermost token, callback proof, or mTLS identity is invalid.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Verified actor is outside the server-owned project mapping.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Resource is hidden or unknown in the verified boundary.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: Version, idempotency digest, or lifecycle state conflicts.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooLarge:
+      description: Request exceeds the configured bounded size.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Internal:
+      description: Internal processing failed closed.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unavailable:
+      description: Authoritative dependency is not ready.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

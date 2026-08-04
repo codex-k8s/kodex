@@ -302,6 +302,8 @@ func prepareRetryTurnSpec(
 	)
 	spec.Outcome = ""
 	spec.ResultArtifactID = ""
+	spec.ResultArtifactVersion = 0
+	spec.ResultArtifactSHA256 = ""
 	return spec, nil
 }
 

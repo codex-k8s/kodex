@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.1.0
+version: 1.2.0
 updated: 2026-07-31
 ---
 
@@ -93,6 +93,14 @@ Credential не передается по незашифрованному со�
 `PerRPCCredentials` требует transport security. Health/готовность проверяют тот
 же auth path, который используют рабочие RPC, а не упрощенный обход.
 
+После криптографической проверки credential сохраняет и передаёт в доменное
+решение его неизменяемые `purpose`, `producer_id`, workload/SPIFFE, полный
+метод/operation и generation. Operation profile сравнивает каждое из этих
+полей с закрытым реестром: совпадение workload не позволяет использовать
+credential другого producer или purpose. Обобщение нескольких producer/purpose
+в один «доверенный workload» запрещено; readiness проверяет тот же
+producer-specific путь.
+
 Worker/application grant не может быть разрешением на claim для всего проекта.
 Он неизменяемо связывает точные workload/SPIFFE, audience, полный метод,
 permission, organization/project, session, turn, attempt, дайджест неизменяемого
@@ -156,6 +164,26 @@ Verifier хранит принадлежащие целевой стороне �
 атомарным CAS между репликами. Вызывающая сторона не может создавать, удалять
 или изменять эту отметку. Пустой локальный снимок не разрешает принять более
 старое состояние.
+
+Для versioned JWK keyset эта отметка включает неизменяемую историю
+`generation → kid + RFC 7638 thumbprint/public-key digest + role`. История и
+retired union обновляются одной транзакцией с fence и audit. Исчезнувший
+`PREVIOUS` считается retired и не может появиться снова; retired key identity
+не переиздаётся под новым generation. Genesis выполняет только отдельная
+controller/migrator identity через явный single-winner protocol с точным
+readback. Отсутствие fence, history или genesis audit в уже существующей среде
+не является разрешением «первого запуска» и закрывает verifier readiness.
+
+Защищённый delivery readback требует одновременно exact mTLS peer и
+application credential, связанный с producer/purpose/workload/SPIFFE/full
+operation/permission/organization/project/delivery/generation и bounded TTL.
+Issuer сохраняет durable issue/audit/revocation state, а consumer и readiness
+используют тот же путь: локально успешная JWS-проверка не заменяет online
+owner-readback exact issue row, credential digest и `revoked_at IS NULL`.
+Пользовательский artifact download не выдаёт direct
+object-store bearer URL: gateway повторно аутентифицирует actor у transport
+provider, сверяет membership и полный tenant/session/turn/artifact lineage,
+фиксирует one-time consumption либо revocation и не журналирует credential.
 
 ## Проверяемое контрольное чтение и повтор служебного изменения
 
