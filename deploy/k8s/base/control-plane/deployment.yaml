@@ -146,6 +146,9 @@ spec:
             - name: lease-signing
               mountPath: /var/run/secrets/mattercodex/control-plane/lease-signing
               readOnly: true
+            - name: runtime-workload-signing
+              mountPath: /var/run/secrets/mattercodex/control-plane/runtime-workload-signing
+              readOnly: true
             - name: authority-policy
               mountPath: /var/run/config/mattercodex/control-plane/authority
               readOnly: true
@@ -232,6 +235,12 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-lease-signing
+        - name: runtime-workload-signing
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-runtime-workload-signing
         - name: authority-policy
           configMap:
             name: internal-rpc-authority-publisher-target-registry

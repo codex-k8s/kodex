@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -51,22 +52,87 @@ func (repository *currentTupleTestRepository) Transact(
 	return nil
 }
 
+func (repository *currentTupleTestRepository) ResolveRuntimeAgentBindingIntent(
+	_ context.Context,
+	organizationID, projectID, actorID, sourceRef string,
+) (entity.Resource, entity.Resource, entity.Resource, error) {
+	var session, turn, revision entity.Resource
+	for _, candidate := range repository.tx.resources {
+		spec, ok := candidate.Spec.(entity.TurnSpec)
+		if !ok || candidate.OrganizationID != organizationID || candidate.ProjectID != projectID ||
+			candidate.OwnerActorID != actorID || candidate.State != enum.StateQueued ||
+			spec.SourceRef != sourceRef {
+			continue
+		}
+		if turn.ID != "" {
+			return entity.Resource{}, entity.Resource{}, entity.Resource{}, errs.ErrStateConflict
+		}
+		turn = candidate
+		session = repository.tx.resources[spec.SessionID]
+		revision = repository.tx.resources[spec.RuntimeRevisionID]
+	}
+	if turn.ID == "" || session.ID == "" || revision.ID == "" {
+		return entity.Resource{}, entity.Resource{}, entity.Resource{}, errs.ErrNotFound
+	}
+	return session, turn, revision, nil
+}
+
 type currentTupleTestTransaction struct {
 	domainrepo.Transaction
-	now         time.Time
-	resources   map[string]entity.Resource
-	receipts    map[string]domainrepo.Receipt
-	runtimes    map[string]RuntimeExecution
-	occurrences map[string]domainrepo.ScheduleOccurrence
-	runs        map[string]domainrepo.ScheduledRun
-	leases      map[string]domainrepo.TurnLease
-	attempts    map[string]domainrepo.TurnAttempt
-	audits      []domainrepo.Audit
-	events      []event.Change
+	now           time.Time
+	resources     map[string]entity.Resource
+	receipts      map[string]domainrepo.Receipt
+	runtimes      map[string]RuntimeExecution
+	occurrences   map[string]domainrepo.ScheduleOccurrence
+	runs          map[string]domainrepo.ScheduledRun
+	leases        map[string]domainrepo.TurnLease
+	attempts      map[string]domainrepo.TurnAttempt
+	agentBindings map[string]domainrepo.RuntimeAgentBinding
+	retention     domainrepo.ResourceRetentionPolicy
+	audits        []domainrepo.Audit
+	events        []event.Change
 }
 
 func (tx *currentTupleTestTransaction) CurrentTime(context.Context) (time.Time, error) {
 	return tx.now, nil
+}
+
+func (tx *currentTupleTestTransaction) SessionHasUnverifiedRuntimeArchive(
+	context.Context, string, string, string,
+) (bool, error) {
+	return false, nil
+}
+
+func (tx *currentTupleTestTransaction) SessionHasActiveRuntimeCleanup(
+	context.Context, string, string, string,
+) (bool, error) {
+	return false, nil
+}
+
+func (tx *currentTupleTestTransaction) LatestSessionRuntimeArchiveForRestore(
+	context.Context, string, string, string,
+) (domainrepo.RuntimeExecution, error) {
+	return domainrepo.RuntimeExecution{}, errs.ErrNotFound
+}
+
+func (tx *currentTupleTestTransaction) GetRuntimeAgentBindingForUpdate(
+	_ context.Context,
+	turnID string,
+	attempt uint32,
+) (domainrepo.RuntimeAgentBinding, error) {
+	binding, ok := tx.agentBindings[turnAttemptMapKey(turnID, attempt)]
+	if !ok {
+		return domainrepo.RuntimeAgentBinding{}, errs.ErrNotFound
+	}
+	return binding, nil
+}
+
+func (tx *currentTupleTestTransaction) GetCurrentResourceRetentionPolicy(
+	context.Context,
+	string,
+	string,
+) (domainrepo.ResourceRetentionPolicy, error) {
+	return tx.retention, nil
 }
 
 func receiptMapKey(scope, key string) string { return scope + "\x00" + key }
@@ -816,6 +882,8 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 			PrincipalRef: "provider:test", Revision: 1, ProviderEligible: true,
 			ProviderCapabilities: []string{"chat"}, ProviderObservedLimit: 10,
 			ProviderObservationRevision: 1, ProviderObservedAt: now,
+			ImmutableSecretRef:     "k8s-immutable-secret://mattercodex-system/runtime-provider-test-v1",
+			ProviderContentVersion: "provider:test:v1", ContentSHA256: digest,
 			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"},
 		}, now,
 	)
@@ -845,12 +913,25 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	if err != nil {
 		t.Fatalf("hash role: %v", err)
 	}
+	promptSHA, err := entity.ProjectionSHA256(prompt)
+	if err != nil {
+		t.Fatalf("hash prompt profile: %v", err)
+	}
+	bindingSHA, err := entity.ProjectionSHA256(binding)
+	if err != nil {
+		t.Fatalf("hash credential binding: %v", err)
+	}
 	components := []entity.EffectiveResourceRef{{
 		Kind: enum.KindRole, ResourceID: role.ID, Version: role.Version,
 		ProjectionSHA256: roleSHA,
+	}, {
+		Kind: enum.KindPromptProfile, ResourceID: prompt.ID, Version: prompt.Version,
+		ProjectionSHA256: promptSHA,
+	}, {
+		Kind: enum.KindCredentialBinding, ResourceID: binding.ID, Version: binding.Version,
+		ProjectionSHA256: bindingSHA,
 	}}
 	for _, kind := range []enum.Kind{
-		enum.KindPromptProfile, enum.KindCredentialBinding,
 		enum.KindRepositoryWorkspace, enum.KindIntegration,
 	} {
 		components = append(components, entity.EffectiveResourceRef{
@@ -868,6 +949,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 			AuthorityPolicyVersion: 1, AuthorityPolicySHA256: digest,
 			Components: components, CreatedAt: now, SessionID: sessionID,
 			RoleID: roleID, ProviderCredentialBindingID: bindingID,
+			EffectiveRuntimeSHA256: digest,
 		}, now,
 	)
 	if err != nil {
@@ -906,6 +988,10 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	if err != nil {
 		t.Fatalf("create artifact: %v", err)
 	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil {
+		t.Fatalf("hash runtime revision: %v", err)
+	}
 	tx := &currentTupleTestTransaction{
 		now: now,
 		resources: map[string]entity.Resource{
@@ -925,13 +1011,35 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 				LeaseFence: turn.Version, StartedAt: now,
 			},
 		},
+		agentBindings: map[string]domainrepo.RuntimeAgentBinding{
+			turnAttemptMapKey(turn.ID, 1): {
+				OrganizationID: organization, ProjectID: project, SessionID: sessionID,
+				TurnID: turnID, Attempt: 1, InputSHA256: digest,
+				RuntimeRevisionID: revisionID, RuntimeRevisionVersion: revision.Version,
+				RuntimeRevisionSHA256: revisionSHA256,
+				AgentSessionKey:       "agent-session-test", AgentSessionID: 101,
+				AgentSessionVersion: 1, AgentSessionBindingSHA256: digest,
+				AgentSessionTurnID: 201, AgentRunID: "agent-run-test",
+				AgentSessionTurnVersion: 1, AgentTurnBindingSHA256: digest,
+				CreatedAt: now,
+			},
+		},
+		retention: domainrepo.ResourceRetentionPolicy{
+			ID: "runtime-default", Version: 1,
+			PVCRetentionSeconds:     uint64((7 * 24 * time.Hour) / time.Second),
+			ArchiveRetentionSeconds: uint64((90 * 24 * time.Hour) / time.Second),
+			EffectiveFrom:           now.Add(-time.Hour),
+		},
 	}
 	repository := &currentTupleTestRepository{tx: tx}
 	const runtimeWorker = "runtime-controller"
 	const runtimeSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller"
 	service, err := New(repository, Config{
-		LeaseSigningKey:   []byte("0123456789abcdef0123456789abcdef"),
-		TurnLeaseDuration: time.Minute, MaximumScheduleClaims: 10,
+		LeaseSigningKey:            []byte("0123456789abcdef0123456789abcdef"),
+		RuntimeAdmissionSigningKey: ed25519.NewKeyFromSeed([]byte("runtime-admission-signing-test!!")),
+		RuntimeArchiveSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-archive-signing-test-key")),
+		RuntimeRestoreSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-restore-signing-test-key")),
+		TurnLeaseDuration:          time.Minute, MaximumScheduleClaims: 10,
 		RuntimeImageDigest:      "sha256:" + digest,
 		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: digest,
 		OwnerGateDeliveryWorkload:  "interaction-gateway",
@@ -944,12 +1052,17 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		MemoryIndexerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
 		RuntimeControllerWorkload:  runtimeWorker,
 		RuntimeControllerSPIFFEID:  runtimeSPIFFE,
+		BotServiceWorkload:         "bot-service",
+		BotServiceSPIFFEID:         "spiffe://mattercodex.local/ns/mattercodex-system/sa/bot-service",
+		ArchiveWorkload:            "runtime-archive",
+		ArchiveSPIFFEID:            "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
 		IntegrationGatewayWorkload: "integration-gateway",
 		IntegrationGatewaySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		RestoreVerifierWorkload:    "restore-verifier",
 		RestoreVerifierSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/restore-verifier",
 		CleanupAuthorizerWorkload:  "cleanup-authorizer",
 		CleanupAuthorizerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/cleanup-authorizer",
+		PendingRescheduleDelay:     30 * time.Second,
 		Observer:                   currentTupleTestObserver{},
 	})
 	if err != nil {
@@ -1393,6 +1506,14 @@ func (fixture currentTupleFixture) claimAndCreateRuntime(
 	runtimePrincipal := fixture.principal(
 		permissionRuntimeClaim, fixture.runtimeWorker, fixture.runtimeSPIFFE,
 	)
+	if _, resolveErr := fixture.service.resolveBoundExecution(
+		context.Background(), fixture.tx, runtimePrincipal,
+	); resolveErr != nil {
+		turn := fixture.tx.resources[fixture.turnID]
+		attempt := fixture.tx.attempts[turnAttemptMapKey(fixture.turnID, 1)]
+		lease := fixture.tx.leases[fixture.turnID]
+		t.Fatalf("resolve runtime graph before claim: %v; turn=%+v attempt=%+v lease=%+v", resolveErr, turn, attempt, lease)
+	}
 	execution, err := fixture.service.ClaimRuntimeExecution(
 		context.Background(), runtimePrincipal, "claim-runtime-current-tuple",
 	)
@@ -1412,6 +1533,17 @@ func TestProductionClaimTurnPropagatesUnscheduledCurrentTuple(t *testing.T) {
 	claim, execution := fixture.claimAndCreateRuntime(t, process)
 	if execution.TurnID != claim.Turn.ID || execution.ProcessID != process.ID {
 		t.Fatalf("runtime execution does not use claimed graph: %+v", execution)
+	}
+	recovered, err := fixture.service.ClaimRuntimeExecution(
+		context.Background(),
+		fixture.principal(permissionRuntimeClaim, fixture.runtimeWorker, fixture.runtimeSPIFFE),
+		"claim-runtime-after-controller-crash",
+	)
+	if err != nil {
+		t.Fatalf("ClaimRuntimeExecution durable PENDING recovery: %v", err)
+	}
+	if recovered != execution || len(fixture.tx.runtimes) != 1 {
+		t.Fatalf("durable PENDING recovery created a different execution: %+v", recovered)
 	}
 
 	runtimePrincipal := fixture.principal(
@@ -1495,6 +1627,26 @@ func TestProductionClaimTurnPropagatesUnscheduledCurrentTuple(t *testing.T) {
 	if err != nil || replaced.State != enum.StateCancelled ||
 		replaced.Version != suspendedTurn.Version+1 {
 		t.Fatalf("integration predecessor replacement became unreachable: %v %+v", err, replaced)
+	}
+}
+
+func TestResolveRuntimeAgentBindingIntentPrecedesFirstClaim(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	principal := fixture.principal(
+		permissionRuntimeAgentBind,
+		"bot-service",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/bot-service",
+	)
+	intent, err := fixture.service.ResolveRuntimeAgentBindingIntent(
+		t.Context(), principal, "test:turn",
+	)
+	if err != nil {
+		t.Fatalf("resolve first bot turn owner tuple: %v", err)
+	}
+	if intent.SessionID != fixture.sessionID || intent.TurnID != fixture.turnID ||
+		intent.RuntimeRevisionID != fixture.revisionID || intent.Attempt != 1 ||
+		intent.InputSHA256 != fixture.inputSHA256 || intent.RuntimeRevisionSHA256 == "" {
+		t.Fatalf("resolved intent lost exact owner tuple: %+v", intent)
 	}
 }
 

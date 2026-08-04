@@ -3,6 +3,8 @@ package app
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -181,8 +183,34 @@ func Run(
 	if err != nil {
 		return errors.New("turn lease signing key is unavailable")
 	}
+	decodeRuntimeSigningKey := func(path string) (ed25519.PrivateKey, error) {
+		raw, readErr := readSecret(path, maximumSecretFileBytes)
+		if readErr != nil {
+			return nil, readErr
+		}
+		decoded, decodeErr := hex.DecodeString(strings.TrimSpace(string(raw)))
+		if decodeErr != nil || len(decoded) != ed25519.PrivateKeySize {
+			return nil, errors.New("runtime workload signing key is invalid")
+		}
+		return ed25519.PrivateKey(decoded), nil
+	}
+	admissionSigningKey, err := decodeRuntimeSigningKey(config.RuntimeAdmissionSigningKeyFile)
+	if err != nil {
+		return errors.New("runtime admission signing key is unavailable")
+	}
+	archiveSigningKey, err := decodeRuntimeSigningKey(config.RuntimeArchiveSigningKeyFile)
+	if err != nil {
+		return errors.New("runtime archive signing key is unavailable")
+	}
+	restoreSigningKey, err := decodeRuntimeSigningKey(config.RuntimeRestoreSigningKeyFile)
+	if err != nil {
+		return errors.New("runtime restore signing key is unavailable")
+	}
 	resourceService, err := resource.New(cachedRepository, resource.Config{
 		LeaseSigningKey:            leaseKey,
+		RuntimeAdmissionSigningKey: admissionSigningKey,
+		RuntimeArchiveSigningKey:   archiveSigningKey,
+		RuntimeRestoreSigningKey:   restoreSigningKey,
 		TurnLeaseDuration:          config.TurnLeaseDuration,
 		MaximumScheduleClaims:      config.ScheduleClaimLimit,
 		RuntimeImageDigest:         config.RuntimeImageDigest,
@@ -198,12 +226,17 @@ func Run(
 		MemoryIndexerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/memory-indexer",
 		RuntimeControllerWorkload:  "runtime-controller",
 		RuntimeControllerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-controller",
+		BotServiceWorkload:         "matter-codex-bot-service",
+		BotServiceSPIFFEID:         "spiffe://mattercodex.local/ns/mattermost/sa/matter-codex-bot-service",
+		ArchiveWorkload:            "runtime-archive",
+		ArchiveSPIFFEID:            "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-archive",
 		IntegrationGatewayWorkload: "integration-gateway",
 		IntegrationGatewaySPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
 		RestoreVerifierWorkload:    "runtime-restore-verifier",
 		RestoreVerifierSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-restore-verifier",
 		CleanupAuthorizerWorkload:  "runtime-cleanup-authorizer",
 		CleanupAuthorizerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-cleanup-authorizer",
+		PendingRescheduleDelay:     config.PendingRescheduleDelay,
 		Observer:                   businessMetrics,
 	})
 	if err != nil {

@@ -1089,7 +1089,7 @@ func (service *Service) completeProcessFromTurn(
 	turn entity.Resource,
 	turnSpec entity.TurnSpec,
 ) error {
-	if turnSpec.ProcessRunID == "" || !turn.State.Terminal() {
+	if turnSpec.ProcessRunID == "" || (!turn.State.Terminal() && turn.State != enum.StateBlocked) {
 		return nil
 	}
 	process, err := tx.GetForUpdate(
@@ -1143,6 +1143,9 @@ func (service *Service) completeProcessFromTurn(
 		ctx, tx, principal, "complete_process_from_turn", updated,
 	); err != nil {
 		return err
+	}
+	if turn.State == enum.StateBlocked {
+		return nil
 	}
 	return service.finishContinuationOccurrence(
 		ctx, tx, principal, updated, processSpec, turn, turnSpec,
@@ -2286,6 +2289,32 @@ func (service *Service) createRuntimeRevision(
 		}
 		return 0
 	})
+	compatibleComponents := make([]entity.EffectiveResourceRef, 0, len(components))
+	for _, component := range components {
+		// Session lineage и её monotonic turn sequence не меняют исполняемую
+		// среду; все code/config/authority/credential projections остаются.
+		if component.Kind != enum.KindSession {
+			compatibleComponents = append(compatibleComponents, component)
+		}
+	}
+	effectiveRuntimeSHA256, err := canonicalHash(struct {
+		OrganizationID          string
+		ProjectID               string
+		ImageDigest             string
+		AuthorityPolicyRevision uint64
+		AuthorityPolicySHA256   string
+		Components              []entity.EffectiveResourceRef
+	}{
+		principal.OrganizationID,
+		principal.ProjectID,
+		service.runtimeImageDigest,
+		service.authorityPolicyRevision,
+		service.authorityPolicySHA256,
+		compatibleComponents,
+	})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInternal
+	}
 	predecessorID := ""
 	predecessor, err := tx.LatestRuntimeRevision(
 		ctx,
@@ -2352,6 +2381,7 @@ func (service *Service) createRuntimeRevision(
 			RoleID:                      role.ID,
 			ChatID:                      sessionSpec.ConversationID,
 			ProviderCredentialBindingID: sessionSpec.ProviderAccountBindingID,
+			EffectiveRuntimeSHA256:      effectiveRuntimeSHA256,
 		},
 		now,
 	)

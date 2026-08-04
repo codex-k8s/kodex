@@ -55,6 +55,20 @@ func TestCodexShellEnvironmentAllowlistIncludesRuntimeEnv(t *testing.T) {
 	}
 }
 
+func TestRuntimeSuccessorCredentialDigestAndPurposeAreExact(t *testing.T) {
+	data := map[string][]byte{"token": []byte("fresh-token")}
+	digest := runtimeSecretDataSHA256(data)
+	if len(digest) != 64 || !runtimeCredentialPurposeDataMatches("session-token", data) {
+		t.Fatal("exact session credential was rejected")
+	}
+	if runtimeCredentialPurposeDataMatches("codex-auth", data) ||
+		runtimeCredentialPurposeDataMatches("session-token", map[string][]byte{
+			"token": []byte("fresh-token"), "unexpected": []byte("value"),
+		}) || digest == runtimeSecretDataSHA256(map[string][]byte{"token": []byte("stale-token")}) {
+		t.Fatal("credential purpose or content mutation was accepted")
+	}
+}
+
 func TestDisableCodexConfigOverlayForAuthCheck(t *testing.T) {
 	t.Setenv("MATTERCODEX_CODEX_CONFIG_OVERLAY", `sandbox_mode = "danger-full-access"`)
 

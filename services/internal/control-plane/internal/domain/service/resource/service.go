@@ -2,9 +2,12 @@
 package resource
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,6 +24,56 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
 )
+
+func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) error {
+	if execution == nil || !validSHA256Text(execution.WorkloadTicketSHA256) {
+		return errs.ErrStateConflict
+	}
+	issuedAt := service.now().UTC().Truncate(time.Microsecond)
+	type ticketPayload struct {
+		Issuer, Audience, TicketID                                string
+		IssuedAt, ExpiresAt                                       time.Time
+		ExecutionID, OrganizationID, ProjectID, SessionID, TurnID string
+		Attempt                                                   uint32
+		RuntimeRevisionID, RuntimeRevisionSHA256                  string
+		RuntimeRevisionVersion, Version, Fence, GrantGeneration   uint64
+		ImmutableInputSHA256, EffectiveRuntimeSHA256              string
+		AgentBindingSHA256, CredentialSnapshotSHA256              string
+		WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
+		State                                                     string
+	}
+	issue := func(issuer, audience string, privateKey ed25519.PrivateKey) (string, error) {
+		payload, marshalErr := json.Marshal(ticketPayload{issuer, audience,
+			hashString(execution.ID + "\x00" + fmt.Sprint(execution.Version) + "\x00" + fmt.Sprint(execution.Fence) + "\x00" + audience),
+			issuedAt, issuedAt.Add(5 * time.Minute),
+			execution.ID, execution.OrganizationID, execution.ProjectID,
+			execution.SessionID, execution.TurnID, execution.Attempt,
+			execution.RuntimeRevisionID, execution.RuntimeRevisionSHA256,
+			execution.RuntimeRevisionVersion, execution.Version, execution.Fence,
+			execution.GrantGeneration, execution.ImmutableInputSHA256,
+			execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
+			execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
+			execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
+		if marshalErr != nil {
+			return "", marshalErr
+		}
+		signature := ed25519.Sign(privateKey, payload)
+		return base64.RawURLEncoding.EncodeToString(payload) + "." +
+			base64.RawURLEncoding.EncodeToString(signature), nil
+	}
+	var err error
+	execution.WorkloadTicket, err = issue("mattercodex-control-plane-workload-admission", "mattercodex-runtime-workload-admission", service.runtimeAdmissionSigningKey)
+	if err == nil {
+		execution.ArchiveWorkloadTicket, err = issue("mattercodex-control-plane-s3-archive", "mattercodex-runtime-s3-archive", service.runtimeArchiveSigningKey)
+	}
+	if err == nil {
+		execution.RestoreWorkloadTicket, err = issue("mattercodex-control-plane-s3-restore", "mattercodex-runtime-s3-restore", service.runtimeRestoreSigningKey)
+	}
+	if err != nil {
+		return errs.ErrInternal
+	}
+	return nil
+}
 
 const (
 	auditKindScheduleOccurrence = "SCHEDULE_OCCURRENCE"
@@ -62,6 +115,7 @@ const (
 	permissionApplyGitConfiguration  = "controlplane.configuration.git.apply"
 	permissionDetachConfiguration    = "controlplane.configuration.detach"
 	permissionRuntimeClaim           = "controlplane.runtime_execution.claim"
+	permissionRuntimeAgentBind       = "controlplane.runtime_execution.agent.bind"
 	permissionRuntimeRead            = "controlplane.runtime_execution.read"
 	permissionRuntimeAdmit           = "controlplane.runtime_execution.admit"
 	permissionRuntimeHeartbeat       = "controlplane.runtime_execution.heartbeat"
@@ -69,12 +123,17 @@ const (
 	permissionRuntimeComplete        = "controlplane.runtime_execution.complete"
 	permissionRuntimeCancel          = "controlplane.runtime_execution.cancel"
 	permissionRuntimeRetry           = "controlplane.runtime_execution.retry"
+	permissionRuntimeReschedule      = "controlplane.runtime_execution.reschedule"
 	permissionRuntimeExpire          = "controlplane.runtime_execution.expire"
 	permissionRuntimeArchive         = "controlplane.runtime_execution.archive"
 	permissionRuntimeRestore         = "controlplane.runtime_execution.restore.verify"
+	permissionRuntimeRestoreBind     = "controlplane.runtime_execution.restore.bind"
+	permissionRuntimeRehydrate       = "controlplane.runtime_execution.rehydrate.complete"
 	permissionRuntimeCleanup         = "controlplane.runtime_execution.cleanup.authorize"
 	permissionRuntimeCleanupConsume  = "controlplane.runtime_execution.cleanup.consume"
 	permissionRuntimeCleanupExpire   = "controlplane.runtime_execution.cleanup.expire"
+	permissionRuntimeRetentionManage = "controlplane.runtime_retention.manage"
+	permissionRuntimeRetentionRead   = "controlplane.runtime_retention.read"
 	permissionIntegrationResolve     = "controlplane.integration_session.read"
 	permissionIntegrationSuspend     = "controlplane.integration_continuation.suspend"
 	permissionIntegrationDecide      = "controlplane.integration_continuation.decide"
@@ -90,6 +149,9 @@ const (
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
 type Config struct {
 	LeaseSigningKey            []byte
+	RuntimeAdmissionSigningKey ed25519.PrivateKey
+	RuntimeArchiveSigningKey   ed25519.PrivateKey
+	RuntimeRestoreSigningKey   ed25519.PrivateKey
 	TurnLeaseDuration          time.Duration
 	MaximumScheduleClaims      int
 	RuntimeImageDigest         string
@@ -105,12 +167,17 @@ type Config struct {
 	MemoryIndexerSPIFFEID      string
 	RuntimeControllerWorkload  string
 	RuntimeControllerSPIFFEID  string
+	BotServiceWorkload         string
+	BotServiceSPIFFEID         string
+	ArchiveWorkload            string
+	ArchiveSPIFFEID            string
 	IntegrationGatewayWorkload string
 	IntegrationGatewaySPIFFEID string
 	RestoreVerifierWorkload    string
 	RestoreVerifierSPIFFEID    string
 	CleanupAuthorizerWorkload  string
 	CleanupAuthorizerSPIFFEID  string
+	PendingRescheduleDelay     time.Duration
 	Observer                   Observer
 }
 
@@ -118,6 +185,9 @@ type Config struct {
 type Service struct {
 	repository                 domainrepo.Repository
 	leaseSigningKey            []byte
+	runtimeAdmissionSigningKey ed25519.PrivateKey
+	runtimeArchiveSigningKey   ed25519.PrivateKey
+	runtimeRestoreSigningKey   ed25519.PrivateKey
 	turnLeaseDuration          time.Duration
 	maximumScheduleClaims      int
 	runtimeImageDigest         string
@@ -133,12 +203,17 @@ type Service struct {
 	memoryIndexerSPIFFEID      string
 	runtimeControllerWorkload  string
 	runtimeControllerSPIFFEID  string
+	botServiceWorkload         string
+	botServiceSPIFFEID         string
+	archiveWorkload            string
+	archiveSPIFFEID            string
 	integrationGatewayWorkload string
 	integrationGatewaySPIFFEID string
 	restoreVerifierWorkload    string
 	restoreVerifierSPIFFEID    string
 	cleanupAuthorizerWorkload  string
 	cleanupAuthorizerSPIFFEID  string
+	pendingRescheduleDelay     time.Duration
 	observer                   Observer
 	now                        func() time.Time
 }
@@ -146,6 +221,12 @@ type Service struct {
 // New создаёт сервис только с полноценными устойчивыми границами.
 func New(repository domainrepo.Repository, config Config) (*Service, error) {
 	if repository == nil || len(config.LeaseSigningKey) < 32 ||
+		len(config.RuntimeAdmissionSigningKey) != ed25519.PrivateKeySize ||
+		len(config.RuntimeArchiveSigningKey) != ed25519.PrivateKeySize ||
+		len(config.RuntimeRestoreSigningKey) != ed25519.PrivateKeySize ||
+		bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeArchiveSigningKey) ||
+		bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeRestoreSigningKey) ||
+		bytes.Equal(config.RuntimeArchiveSigningKey, config.RuntimeRestoreSigningKey) ||
 		config.TurnLeaseDuration < 30*time.Second ||
 		config.TurnLeaseDuration > 30*time.Minute ||
 		config.MaximumScheduleClaims < 1 ||
@@ -163,8 +244,16 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.MemoryIndexerSPIFFEID) ||
 		value.ValidateStableKey(config.RuntimeControllerWorkload) != nil ||
 		!validSPIFFEID(config.RuntimeControllerSPIFFEID) ||
+		value.ValidateStableKey(config.BotServiceWorkload) != nil ||
+		!validSPIFFEID(config.BotServiceSPIFFEID) ||
+		config.BotServiceWorkload == config.RuntimeControllerWorkload ||
+		config.BotServiceSPIFFEID == config.RuntimeControllerSPIFFEID ||
 		config.RuntimeControllerWorkload == agentRunnerWorkload ||
 		config.RuntimeControllerSPIFFEID == agentRunnerSPIFFEID ||
+		value.ValidateStableKey(config.ArchiveWorkload) != nil ||
+		!validSPIFFEID(config.ArchiveSPIFFEID) ||
+		config.ArchiveWorkload == config.RuntimeControllerWorkload ||
+		config.ArchiveSPIFFEID == config.RuntimeControllerSPIFFEID ||
 		value.ValidateStableKey(config.IntegrationGatewayWorkload) != nil ||
 		!validSPIFFEID(config.IntegrationGatewaySPIFFEID) ||
 		value.ValidateStableKey(config.RestoreVerifierWorkload) != nil ||
@@ -185,12 +274,16 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		config.CleanupAuthorizerSPIFFEID == config.IntegrationGatewaySPIFFEID ||
 		config.CleanupAuthorizerWorkload == controlAPIGatewayWorkload ||
 		config.CleanupAuthorizerSPIFFEID == controlAPIGatewaySPIFFEID ||
+		config.PendingRescheduleDelay < 5*time.Second || config.PendingRescheduleDelay > 5*time.Minute ||
 		config.Observer == nil {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
 	return &Service{
 		repository:                 repository,
 		leaseSigningKey:            slices.Clone(config.LeaseSigningKey),
+		runtimeAdmissionSigningKey: slices.Clone(config.RuntimeAdmissionSigningKey),
+		runtimeArchiveSigningKey:   slices.Clone(config.RuntimeArchiveSigningKey),
+		runtimeRestoreSigningKey:   slices.Clone(config.RuntimeRestoreSigningKey),
 		turnLeaseDuration:          config.TurnLeaseDuration,
 		maximumScheduleClaims:      config.MaximumScheduleClaims,
 		runtimeImageDigest:         config.RuntimeImageDigest,
@@ -206,12 +299,17 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		memoryIndexerSPIFFEID:      config.MemoryIndexerSPIFFEID,
 		runtimeControllerWorkload:  config.RuntimeControllerWorkload,
 		runtimeControllerSPIFFEID:  config.RuntimeControllerSPIFFEID,
+		botServiceWorkload:         config.BotServiceWorkload,
+		botServiceSPIFFEID:         config.BotServiceSPIFFEID,
+		archiveWorkload:            config.ArchiveWorkload,
+		archiveSPIFFEID:            config.ArchiveSPIFFEID,
 		integrationGatewayWorkload: config.IntegrationGatewayWorkload,
 		integrationGatewaySPIFFEID: config.IntegrationGatewaySPIFFEID,
 		restoreVerifierWorkload:    config.RestoreVerifierWorkload,
 		restoreVerifierSPIFFEID:    config.RestoreVerifierSPIFFEID,
 		cleanupAuthorizerWorkload:  config.CleanupAuthorizerWorkload,
 		cleanupAuthorizerSPIFFEID:  config.CleanupAuthorizerSPIFFEID,
+		pendingRescheduleDelay:     config.PendingRescheduleDelay,
 		observer:                   config.Observer,
 		now:                        time.Now,
 	}, nil

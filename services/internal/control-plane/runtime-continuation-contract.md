@@ -4,8 +4,8 @@ title: Контракт исполнения и продолжения control-p
 type: service-contract
 status: approved
 owner: developer
-version: 1.13.0
-updated: 2026-08-03
+version: 1.14.1
+updated: 2026-08-04
 ---
 
 # Контракт исполнения и продолжения control-plane
@@ -160,14 +160,26 @@ attempt/revision/input/fence/generation/state/deadline; (4) только пос�
 - Consumer implementation, inbox и deploy ownership будущего `agent-runner`
   принадлежат #192. В #221 фиксируется только безопасный read/rejoin wire
   contract и профиль операции, не заявление о готовом consumer.
-- Развёртывание `runtime-controller` #188 и `integration-gateway` #189/#220,
-  их readiness и sidecar configuration не принадлежат этому unit.
-- Deployable, issuer/readback и runtime-доставка ключей для
-  `runtime-restore-verifier` и `runtime-cleanup-authorizer` не материализованы
-  в разрешённом scope #221. Control-plane фиксирует exact deny-by-default
-  profiles и ожидаемые отдельные trust files; до появления этих deployable
-  startup/readiness либо destructive RPC остаётся закрытым. Это не заявление о
-  готовом внешнем verifier/cleanup worker.
+- `runtime-controller` #188 материализует consumer, readiness, archive,
+  restore/rehydrate и cleanup workers поверх этого owner contract;
+  `integration-gateway` #189/#220 остаётся отдельным unit.
+- `runtime-restore-verifier` и `runtime-cleanup-authorizer` теперь имеют
+  отдельные deploy identities, issuer/readback, application grants и
+  journal-only RBAC. Unknown/missing trust или неполный proof сохраняют
+  destructive path закрытым.
+
+## Дополнение Issue #188: binding, reschedule и retention
+
+| Сценарий | Owner transaction и replay | Закрытый отказ |
+| --- | --- | --- |
+| bot first turn/binding | `AFTER INSERT AgentSessionTurn` создаёт discovery с immutable локальным snapshot; generated client вызывает специализированный `MaterializeRuntimeAgentTurn`. Control-plane из verified principal разрешает actor/project/Role/Chat и одной owner transaction/receipt создаёт либо rejoin-ит Session, prompt Artifact, свежую RuntimeRevision, Turn/attempt и exact binding на bot AgentSession/Turn/Run. Затем bot durable outbox идемпотентно доставляет тот же binding в `BindRuntimeAgentSession`, чтобы локальный owner сохранил digests; lost response повторяет обе receipts | Payload не назначает control IDs или bot identity; stale session/turn/run version, другой source/role/channel/prompt либо semantic hash конфликтуют до claim |
+| reschedule | receipt replay проверяется до stale precondition; predecessor `RETRIED`, successor, fresh RuntimeRevision/capacity и скопированный authoritative agent binding фиксируются одной transaction | старая observation/revision не мутируется; successor без binding не создаётся |
+| retention | claim читает effective owner-managed `ResourceRetentionPolicy` и pin-ит ID/version/durations/eligible-at/retain-until; terminal/archive/cleanup используют только pinned snapshot | missing/retired/version mismatch и текущая process env policy не используются |
+| cleanup | один Session/full-graph lock проверяет queued/PENDING/admitted/running successors, capacity delay, owner gate/callback, manual/legal hold и non-rejoined continuation | terminal predecessor не разрешает удалить PVC живого successor |
+
+`20260802000100_control_plane_runtime_continuation.sql` не изменяется после
+применения. Все новые поля и constraints идут только через последующие
+forward-only migrations; named SQL и `pgx.StrictNamedArgs` обновляются вместе.
 
 ## Ручные негативные и конкурентные сценарии
 

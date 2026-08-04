@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/runtime-controller/v1/agent-runner-input.schema.json",
+  "title": "MatterCodex agent-runner runtime input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "execution_id", "execution_version", "fence", "grant_generation", "runtime_revision_id", "runtime_revision_version", "runtime_revision_sha256", "effective_runtime_sha256", "immutable_input_sha256", "session_key", "agent_session_id", "agent_session_turn_id", "agent_run_id", "agent_binding_sha256", "credential_snapshot_sha256", "workload_ticket_sha256", "agent_profile", "bot_service_url", "mcp_url", "bot_service_tls", "mcp_tls", "credential_files"],
+  "properties": {
+    "schema": {"const": "mattercodex.agent-runner-input.v1"},
+    "execution_id": {"type": "string", "format": "uuid"},
+    "execution_version": {"type": "integer", "minimum": 1},
+    "fence": {"type": "integer", "minimum": 1},
+    "grant_generation": {"type": "integer", "minimum": 1},
+    "runtime_revision_id": {"type": "string", "format": "uuid"},
+    "runtime_revision_version": {"type": "integer", "minimum": 1},
+    "runtime_revision_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "effective_runtime_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "immutable_input_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "session_key": {"type": "string", "minLength": 1, "maxLength": 256},
+    "agent_session_id": {"type": "integer", "minimum": 1},
+    "agent_session_turn_id": {"type": "integer", "minimum": 1},
+    "agent_run_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "agent_binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "credential_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "workload_ticket_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "agent_profile": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$"},
+    "bot_service_url": {"type": "string", "format": "uri", "pattern": "^https://[^/]+\\.svc\\.cluster\\.local:[0-9]+$"},
+    "mcp_url": {"type": "string", "format": "uri", "pattern": "^https://[^/]+\\.svc\\.cluster\\.local:[0-9]+/mcp/sessions/[^/]+$"},
+    "bot_service_tls": {"$ref": "#/$defs/tls_binding"},
+    "mcp_tls": {"$ref": "#/$defs/tls_binding"},
+    "credential_files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_token", "mcp_token", "codex_auth"],
+      "properties": {
+        "session_token": {"type": "string", "pattern": "^/var/run/secrets/"},
+        "mcp_token": {"type": "string", "pattern": "^/var/run/secrets/"},
+        "codex_auth": {"type": "string", "pattern": "^/var/run/secrets/"}
+      }
+    }
+  },
+  "$defs": {
+    "tls_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server_name", "ca_file", "certificate_file", "private_key_file", "binding_sha256"],
+      "properties": {
+        "server_name": {"type": "string", "pattern": "^[a-z0-9.-]+\\.svc\\.cluster\\.local$"},
+        "ca_file": {"type": "string", "pattern": "^/var/run/secrets/"},
+        "certificate_file": {"type": "string", "pattern": "^/var/run/secrets/"},
+        "private_key_file": {"type": "string", "pattern": "^/var/run/secrets/"},
+        "binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

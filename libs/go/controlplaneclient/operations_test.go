@@ -35,6 +35,7 @@ func TestRuntimeAndIntegrationProfilesMatchAuthorityPolicy(t *testing.T) {
 		profile    map[string]string
 	}{
 		{producerID: "control-plane.runtime-controller", profile: RuntimeControllerOperations()},
+		{producerID: "control-plane.runtime-archive", profile: RuntimeArchiveOperations()},
 		{producerID: "control-plane.runtime-restore-verifier", profile: RuntimeRestoreVerifierOperations()},
 		{producerID: "control-plane.runtime-cleanup-authorizer", profile: RuntimeCleanupAuthorizerOperations()},
 		{producerID: "control-plane.integration-gateway", profile: IntegrationGatewayOperations()},

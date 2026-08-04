@@ -64,6 +64,47 @@ func (service *Service) prepareRetriedExecution(
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}
+	previousBinding, err := tx.GetRuntimeAgentBindingForUpdate(ctx, turn.ID, previousAttempt)
+	if err != nil || previousBinding.SessionID != session.ID ||
+		previousBinding.TurnID != turn.ID || previousBinding.Attempt != previousAttempt ||
+		previousBinding.AgentSessionTurnID <= 0 || previousBinding.AgentRunID == "" ||
+		previousBinding.AgentSessionBindingSHA256 == "" {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrInternal
+	}
+	turnBindingSHA256, err := canonicalHash(struct {
+		ControlSessionID, ControlTurnID, InputSHA256 string
+		Attempt                                      uint32
+		RuntimeRevisionID, RuntimeRevisionSHA256     string
+		RuntimeRevisionVersion                       uint64
+		AgentSessionBindingSHA256, AgentRunID        string
+		AgentSessionTurnID                           int64
+		AgentSessionTurnVersion                      uint64
+	}{session.ID, turn.ID, spec.EffectiveInputSHA256, spec.Attempt,
+		revision.ID, revisionSHA256, revision.Version,
+		previousBinding.AgentSessionBindingSHA256, previousBinding.AgentRunID,
+		previousBinding.AgentSessionTurnID, previousBinding.AgentSessionTurnVersion})
+	if err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, errs.ErrInternal
+	}
+	spec.AgentSessionTurnID = previousBinding.AgentSessionTurnID
+	spec.AgentRunID = previousBinding.AgentRunID
+	spec.AgentTurnBindingVersion = previousBinding.AgentSessionTurnVersion
+	spec.AgentTurnBindingSHA256 = turnBindingSHA256
+	nextBinding := previousBinding
+	nextBinding.Attempt = spec.Attempt
+	nextBinding.InputSHA256 = spec.EffectiveInputSHA256
+	nextBinding.RuntimeRevisionID = revision.ID
+	nextBinding.RuntimeRevisionVersion = revision.Version
+	nextBinding.RuntimeRevisionSHA256 = revisionSHA256
+	nextBinding.AgentTurnBindingSHA256 = turnBindingSHA256
+	nextBinding.CreatedAt = now
+	if err := tx.InsertRuntimeAgentBinding(ctx, nextBinding); err != nil {
+		return entity.Resource{}, entity.TurnSpec{}, err
+	}
 	retried, err := turn.ReplaceAndTransition(spec, enum.StateQueued, now)
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict

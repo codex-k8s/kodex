@@ -4,8 +4,8 @@ title: Хранение и очистка ресурсов сессий
 type: operations
 status: approved
 owner: sre
-version: 0.2.0
-updated: 2026-07-21
+version: 0.5.0
+updated: 2026-08-04
 ---
 
 # Хранение и очистка ресурсов сессий
@@ -25,6 +25,14 @@ updated: 2026-07-21
 | Метаданные PostgreSQL и аудит | Очередь, связи, решения и доказательства | Хранятся по политике аудита; удаление не связано с TTL pod/PVC. |
 
 Значения задаются версионируемой `ResourceRetentionPolicy` на уровне организации или рабочей области. Более короткий срок для PVC не может обходить обязательную проверку архива и защиту активной работы.
+
+Новый Project получает approved default `prototype-testing-v1` version 1 в
+той же owner transaction, что и сам aggregate. Дальше только закрытые
+`SetResourceRetentionPolicy`, `GetResourceRetentionPolicy` и
+`RetireResourceRetentionPolicy` принимают exact operator SPIFFE/permission,
+expected version, idempotency key и reason. Set атомарно retires current и
+создаёт монотонную next version; уже созданные execution сохраняют собственный
+pin. Missing current, unknown scope или version mismatch всегда fail-closed.
 
 ## Что считается активностью
 
@@ -67,7 +75,12 @@ PVC можно удалить, только если одновременно в
 
 ## Очиститель
 
-Очиститель работает идемпотентно по фазам `eligible -> archiving -> kubernetes_cleanup -> retained -> purged`. Записи выбираются из PostgreSQL через `FOR UPDATE SKIP LOCKED`; Kubernetes `NotFound` считается успешным повтором.
+Очиститель работает идемпотентно по фазам `eligible -> archiving ->
+restore_proved -> cleanup_claimed -> kubernetes_cleanup -> consumed`. Записи
+выбираются под PostgreSQL session/full graph lock. Kubernetes `NotFound`
+считается допустимым повтором только при активной owner claim того же generation,
+заранее сохранённых PVC name/UID/resourceVersion, bounded expiry и durable
+deletion proof.
 
 Обязательные возможности:
 
@@ -80,20 +93,52 @@ PVC можно удалить, только если одновременно в
 
 При давлении на ресурсы сначала удаляются прогретые idle pod, затем уже eligible PVC. Минимальная отсрочка PVC не сокращается автоматически; аварийное принудительное удаление требует явного действия владельца и успешного архива.
 
+Ручная и юридическая блокировки являются owner state, а не payload flag:
+`HoldRuntimeRetention` server-side назначает `hold_id` exact Session scope и
+фиксирует `MANUAL|LEGAL`, version, actor, reason, idempotency receipt и audit;
+`ReleaseRuntimeRetention` требует exact hold/version и ту же owner boundary.
+Active hold проверяется под full Session graph lock при issue, consume,
+reissue и expiry cleanup authorization. Удаление строки или обход через
+process-local config запрещены.
+
 ## Переход с текущей среды выполнения
 
 До появления S3-архива текущие PVC не удаляются новым автоматическим правилом. Сначала выполняются инвентаризация и архивирование унаследованных сессий, затем предварительный отчет без удаления, и только после ручной приемки владельцем включается автоматическая очистка.
 
-## Активное сдерживание PR-2
+## Шлюз активации runtime-controller
 
-До отдельного результата после PR-4 с доказанным предикатом PostgreSQL/S3 действует безусловный режим `inventory-only` для PVC сессии и Secret токена сессии:
+Issue #188 материализует доказуемый PostgreSQL/S3 предикат через
+специализированные archive, restore proof, cleanup authorization и consume
+команды. До слияния, отдельного владельческого шлюза и развёртывания этого
+unit прежний `runtime prune` остаётся строго `inventory-only`.
 
-- автоматический и ручной `runtime prune`, включая `--apply`, только инвентаризирует эти ресурсы и не вызывает для них `delete` или `patch`;
-- `active`, `queued`, `approval`, `callback`, `no_archive`, `archive_failed`, `grace`, `unknown_db` и `unknown_s3` являются только диагностическими причинами; ни одна причина и их отсутствие не разрешают удаление;
-- Kubernetes-инвентаризация не утверждает наличие или отсутствие архива, если PostgreSQL или S3 не проверены, и сообщает `unknown_db` и `unknown_s3`;
-- повтор предварительного просмотра не изменяет ресурсы;
-- отказ ResourceQuota при создании PVC сессии возвращается как отдельный неустранимый вытеснением вид типизированной ошибки ёмкости; `ChatRunService` не вытесняет простаивающий pod, не вызывает `CleanupAgentSession` и не повторяет запуск с созданием PVC;
-- удаление завершённого session pod по retention привязано к точным `UID` и `resourceVersion` из инвентаризации; `NotFound` и конфликт предусловия считаются безопасным отсутствием удаления и не увеличивают счётчик;
-- очистка несессионных Job, PVC запуска и ConfigMap, а также жизненный цикл session pod остаются отдельными действующими путями и не дают права удалить PVC или Secret сессии.
+После активации удаление session PVC выполняет только `runtime-controller`:
 
-Включающего флага, аварийного обхода или аудита разрешённого удаления сессионных данных в этом состоянии нет. Рост занятого хранилища и более ранний отказ ёмкости являются принятым безопасным компромиссом.
+- controller использует terminal journal и не выводит eligibility из
+  Kubernetes labels;
+- четырёхчасовой TTL относится только к Pod, а eligibility PVC выводится из
+  закреплённых owner-ом `ResourceRetentionPolicy` id/version и
+  `pvc_cleanup_eligible_at`; ни controller config, ни timestamp journal/Pod не
+  являются источником срока;
+- versioned archive, checksum readback и независимый restore proof должны
+  совпасть с authoritative execution;
+- отдельный authorizer повторно проверяет отсутствие queued/running work,
+  approval, callback и continuation, после чего выдаёт bounded authorization;
+- authorizer под session/full graph lock сначала создаёт bounded claim с exact
+  PVC name/UID/resourceVersion и запрещает новый work той же session;
+- только после claim delete использует exact `UID` и `resourceVersion`, а
+  `NotFound` принимается с observed timestamp и deletion proof;
+- controller потребляет ту же authorization до server-side expiry после
+  повторного owner graph lock;
+  ошибка, неизвестное состояние или pressure сохраняют PVC;
+- backfill автоматически продолжает archive/proof/authorization для каждого
+  controller-owned terminal journal; legacy PVC без server-owned
+  `RuntimeExecution` и journal остаётся `inventory-only` и не усыновляется по
+  Kubernetes labels.
+
+После `CONSUMED` cleanup следующий claim pin-ит последний authoritative S3
+version/checksum/provenance. Новый PVC сначала fail-closed восстанавливается и
+получает proof, связанный с его UID; role Pod до этого не запускается.
+
+Очистка несессионных Job и ConfigMap не даёт права удалить session PVC.
+Аварийного флага обхода proof, grace, owner graph или legal/manual hold нет.

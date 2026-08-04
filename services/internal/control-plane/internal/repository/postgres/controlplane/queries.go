@@ -132,8 +132,53 @@ var sqlRuntimeExecutionGetByTurnForUpdate string
 //go:embed sql/runtime_execution__get_by_turn.sql
 var sqlRuntimeExecutionGetByTurn string
 
+//go:embed sql/runtime_agent_binding__get_for_update.sql
+var sqlRuntimeAgentBindingGetForUpdate string
+
+//go:embed sql/runtime_agent_binding__insert.sql
+var sqlRuntimeAgentBindingInsert string
+
+//go:embed sql/runtime_agent_binding__resolve_intent.sql
+var sqlRuntimeAgentBindingResolveIntent string
+
+//go:embed sql/resource_retention_policy__current.sql
+var sqlResourceRetentionPolicyCurrent string
+
+//go:embed sql/resource_retention_policy__get_for_update.sql
+var sqlResourceRetentionPolicyGetForUpdate string
+
+//go:embed sql/resource_retention_policy__get_version_for_update.sql
+var sqlResourceRetentionPolicyGetVersionForUpdate string
+
+//go:embed sql/resource_retention_policy__insert.sql
+var sqlResourceRetentionPolicyInsert string
+
+//go:embed sql/resource_retention_policy__retire.sql
+var sqlResourceRetentionPolicyRetire string
+
+//go:embed sql/runtime_retention_hold__active_for_update.sql
+var sqlRuntimeRetentionHoldActiveForUpdate string
+
+//go:embed sql/runtime_retention_hold__get_for_update.sql
+var sqlRuntimeRetentionHoldGetForUpdate string
+
+//go:embed sql/runtime_retention_hold__insert.sql
+var sqlRuntimeRetentionHoldInsert string
+
+//go:embed sql/runtime_retention_hold__release.sql
+var sqlRuntimeRetentionHoldRelease string
+
 //go:embed sql/runtime_execution__session_has_live.sql
 var sqlRuntimeExecutionSessionHasLive string
+
+//go:embed sql/runtime_execution__session_has_unverified_archive.sql
+var sqlRuntimeExecutionSessionHasUnverifiedArchive string
+
+//go:embed sql/runtime_execution__session_has_active_cleanup.sql
+var sqlRuntimeExecutionSessionHasActiveCleanup string
+
+//go:embed sql/runtime_execution__latest_session_archive_for_restore.sql
+var sqlRuntimeExecutionLatestSessionArchiveForRestore string
 
 //go:embed sql/runtime_execution__insert.sql
 var sqlRuntimeExecutionInsert string
@@ -233,6 +278,9 @@ var sqlScheduledRunFinish string
 
 //go:embed sql/session__open_turns.sql
 var sqlSessionOpenTurns string
+
+//go:embed sql/session__blocks_runtime_cleanup.sql
+var sqlSessionBlocksRuntimeCleanup string
 
 //go:embed sql/transaction__set_scope.sql
 var sqlTransactionSetScope string

@@ -2,12 +2,16 @@ package resource
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -354,6 +358,744 @@ func runtimeResourcePolicy(role entity.RoleSpec) (string, string) {
 	return resourceClass, clusterProfile
 }
 
+// MaterializeRuntimeAgentTurn замыкает первый bot turn на owner graph одной
+// транзакцией. Bot identifiers разрешены локальным repository и служат данными
+// проверки; control-plane IDs, provider binding, revision и digests назначает
+// только owner.
+func (service *Service) MaterializeRuntimeAgentTurn(
+	ctx context.Context,
+	input MaterializeRuntimeAgentTurnInput,
+) (MaterializedRuntimeAgentTurn, error) {
+	if err := authorize(input.Principal, permissionRuntimeAgentBind); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if input.Principal.CallerWorkload != service.botServiceWorkload ||
+		input.Principal.CallerSPIFFEID != service.botServiceSPIFFEID ||
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		!validRuntimeReference(input.SourceRef) ||
+		value.ValidateStableKey(input.RoleStableKey) != nil ||
+		!validRuntimeReference(input.ExternalChannelRef) ||
+		len(input.PromptText) == 0 || len(input.PromptText) > 1<<20 ||
+		!utf8.ValidString(input.PromptText) || strings.ContainsRune(input.PromptText, '\x00') ||
+		!validOpaqueRuntimeIdentifier(input.AgentSessionKey) ||
+		input.AgentSessionID <= 0 || input.AgentSessionVersion == 0 ||
+		input.AgentSessionTurnID <= 0 || input.AgentSessionTurnVersion == 0 ||
+		!validOpaqueRuntimeIdentifier(input.AgentRunID) {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		SourceRef, RoleStableKey, ExternalChannelRef, PromptText string
+		AgentSessionKey, AgentRunID                              string
+		AgentSessionID, AgentSessionTurnID                       int64
+		AgentSessionVersion, AgentSessionTurnVersion             uint64
+	}{input.SourceRef, input.RoleStableKey, input.ExternalChannelRef, input.PromptText,
+		input.AgentSessionKey, input.AgentRunID, input.AgentSessionID,
+		input.AgentSessionTurnID, input.AgentSessionVersion,
+		input.AgentSessionTurnVersion})
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	var result, validated MaterializedRuntimeAgentTurn
+	err = service.withLifecycleReceipt(
+		ctx, input.Principal, input.IdempotencyKey,
+		"materialize_runtime_agent_turn", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, currentErr := service.currentMaterializedRuntimeAgentTurn(ctx, tx, input)
+			if currentErr == nil {
+				validated = current
+				return lifecycleReceiptReplay, nil
+			}
+			if !errors.Is(currentErr, errs.ErrNotFound) {
+				return 0, currentErr
+			}
+			return lifecycleReceiptApply, nil
+		},
+		func() error {
+			if validated.TurnID == "" || validated != result {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
+			materialized, applyErr := service.applyRuntimeAgentTurnMaterialization(ctx, tx, input)
+			if applyErr != nil {
+				return applyErr
+			}
+			result = materialized
+			return nil
+		},
+	)
+	return result, err
+}
+
+func (service *Service) applyRuntimeAgentTurnMaterialization(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input MaterializeRuntimeAgentTurnInput,
+) (MaterializedRuntimeAgentTurn, error) {
+	resources, err := tx.ListSnapshotResources(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	role, chat, err := resolveBotMaterializationResources(
+		resources, input.RoleStableKey, input.ExternalChannelRef,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	role, err = tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, role.ID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	chat, err = tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, chat.ID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	roleSpec, roleOK := role.Spec.(entity.RoleSpec)
+	chatSpec, chatOK := chat.Spec.(entity.ChatSpec)
+	roleIDs, err := tx.ActorRoleIDs(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, input.Principal.ActorID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if !roleOK || !chatOK || role.State != enum.StateActive ||
+		chat.State != enum.StateActive || roleSpec.StableKey != input.RoleStableKey ||
+		chatSpec.ExternalChannelRef != input.ExternalChannelRef ||
+		!slices.Contains(roleIDs, role.ID) {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrNotFound
+	}
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	now = now.UTC().Truncate(time.Microsecond)
+	session, err := runtimeAgentSessionForUpdate(
+		ctx, tx, input.Principal, input.AgentSessionKey, input.AgentSessionID,
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		sessionID := uuid.NewString()
+		binding, bindingErr := service.selectProviderBinding(
+			ctx, tx, input.Principal, role.ID, roleSpec, "", now,
+		)
+		if bindingErr != nil {
+			return MaterializedRuntimeAgentTurn{}, bindingErr
+		}
+		sessionDigest, digestErr := runtimeAgentSessionDigest(
+			sessionID, input.AgentSessionKey, input.AgentSessionID,
+			input.AgentSessionVersion,
+		)
+		if digestErr != nil {
+			return MaterializedRuntimeAgentTurn{}, digestErr
+		}
+		session, err = entity.New(sessionID, input.Principal.OrganizationID,
+			input.Principal.ProjectID, chat.ID, input.Principal.ActorID,
+			enum.KindSession, "Bot session "+input.AgentSessionKey,
+			entity.SessionSpec{AgentID: role.ID,
+				ProviderAccountBindingID: binding.ID, ConversationID: chat.ID,
+				AgentSessionKey: input.AgentSessionKey, AgentSessionID: input.AgentSessionID,
+				AgentSessionBindingVersion: input.AgentSessionVersion,
+				AgentSessionBindingSHA256:  sessionDigest}, now)
+		if err != nil {
+			return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+		}
+		if err = tx.Insert(ctx, session); err != nil {
+			return MaterializedRuntimeAgentTurn{}, err
+		}
+		if err = service.appendMutationRecords(ctx, tx, input.Principal,
+			"materialize_runtime_agent_session", session); err != nil {
+			return MaterializedRuntimeAgentTurn{}, err
+		}
+	} else if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	sessionSpec, ok := session.Spec.(entity.SessionSpec)
+	if !ok || session.Kind != enum.KindSession || session.State != enum.StateActive ||
+		session.OwnerActorID != input.Principal.ActorID || sessionSpec.AgentID != role.ID ||
+		sessionSpec.ConversationID != chat.ID ||
+		sessionSpec.AgentSessionKey != input.AgentSessionKey ||
+		sessionSpec.AgentSessionID != input.AgentSessionID {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	if sessionSpec.LastTurnSequence == ^uint64(0) {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	sessionSpec.LastTurnSequence++
+	sessionSpec.AgentSessionBindingVersion = input.AgentSessionVersion
+	sessionSpec.AgentSessionBindingSHA256, err = runtimeAgentSessionDigest(
+		session.ID, input.AgentSessionKey, input.AgentSessionID, input.AgentSessionVersion,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	updatedSession, err := session.Update(session.Name, sessionSpec, now)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	if err = tx.Update(ctx, updatedSession, session.Version); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = service.appendMutationRecords(ctx, tx, input.Principal,
+		"materialize_runtime_agent_turn_session", updatedSession); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	session = updatedSession
+	promptDigest := sha256.Sum256([]byte(input.PromptText))
+	promptSHA256 := hex.EncodeToString(promptDigest[:])
+	evidenceDigest := sha256.Sum256([]byte(strings.Join([]string{
+		input.SourceRef, input.AgentSessionKey, strconv.FormatInt(input.AgentSessionTurnID, 10),
+		input.AgentRunID, promptSHA256,
+	}, "\x00")))
+	artifact, err := entity.New(uuid.NewString(), input.Principal.OrganizationID,
+		input.Principal.ProjectID, session.ID, input.Principal.ActorID,
+		enum.KindArtifact, "Mattermost prompt "+input.SourceRef,
+		entity.ArtifactSpec{ArtifactKind: "mattermost-prompt", Direction: "INPUT",
+			StorageRef: "mattermost://post/" + input.SourceRef,
+			SizeBytes:  uint64(len([]byte(input.PromptText))), MediaType: "text/plain; charset=utf-8",
+			SHA256: promptSHA256, ScanStatus: "CLEAN",
+			RetentionPolicyRef: "policy://runtime-input",
+			ScanPolicyRevision: 1, ScanEvidenceSHA256: hex.EncodeToString(evidenceDigest[:]),
+			ScannerWorkloadID: service.botServiceWorkload, ScannedAt: now}, now)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	if err = tx.Insert(ctx, artifact); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = service.appendMutationRecords(ctx, tx, input.Principal,
+		"materialize_runtime_agent_prompt", artifact); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revision, err := service.createRuntimeRevision(ctx, tx, input.Principal,
+		session, sessionSpec)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
+	if !ok {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInternal
+	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	turnID := uuid.NewString()
+	inputSHA256 := hashRuntimeInput(input.SourceRef, promptSHA256,
+		revisionSpec.ManifestSHA256, "")
+	turnBindingSHA256, err := runtimeAgentTurnDigest(
+		session.ID, turnID, inputSHA256, 1, revision.ID, revisionSHA256,
+		revision.Version, sessionSpec.AgentSessionBindingSHA256,
+		input.AgentRunID, input.AgentSessionTurnID, input.AgentSessionTurnVersion,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	turn, err := entity.New(turnID, input.Principal.OrganizationID,
+		input.Principal.ProjectID, session.ID, input.Principal.ActorID,
+		enum.KindTurn, "Turn "+session.ID, entity.TurnSpec{
+			SessionID: session.ID, Sequence: sessionSpec.LastTurnSequence,
+			SourceRef: input.SourceRef, PromptArtifactID: artifact.ID,
+			RuntimeRevisionID: revision.ID, Attempt: 1,
+			EffectiveInputSHA256: inputSHA256,
+			AgentSessionTurnID:   input.AgentSessionTurnID, AgentRunID: input.AgentRunID,
+			AgentTurnBindingVersion: input.AgentSessionTurnVersion,
+			AgentTurnBindingSHA256:  turnBindingSHA256,
+		}, now)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrInvalidInput
+	}
+	if err = tx.Insert(ctx, turn); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = tx.SaveTurnAttempt(ctx, domainrepo.TurnAttempt{TurnID: turn.ID,
+		Attempt: 1, WorkloadID: "unassigned",
+		AuthorityGeneration: input.Principal.AuthorityGeneration,
+		State:               "QUEUED", InputSHA256: inputSHA256,
+		LeaseFence: turn.Version, StartedAt: now}); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	binding := domainrepo.RuntimeAgentBinding{
+		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		SessionID: session.ID, TurnID: turn.ID, Attempt: 1, InputSHA256: inputSHA256,
+		RuntimeRevisionID: revision.ID, RuntimeRevisionVersion: revision.Version,
+		RuntimeRevisionSHA256: revisionSHA256,
+		AgentSessionKey:       input.AgentSessionKey, AgentSessionID: input.AgentSessionID,
+		AgentSessionVersion:       input.AgentSessionVersion,
+		AgentSessionBindingSHA256: sessionSpec.AgentSessionBindingSHA256,
+		AgentSessionTurnID:        input.AgentSessionTurnID, AgentRunID: input.AgentRunID,
+		AgentSessionTurnVersion: input.AgentSessionTurnVersion,
+		AgentTurnBindingSHA256:  turnBindingSHA256, CreatedAt: now,
+	}
+	if err = tx.InsertRuntimeAgentBinding(ctx, binding); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	if err = service.appendMutationRecords(ctx, tx, input.Principal,
+		"materialize_runtime_agent_turn", turn); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	result := MaterializedRuntimeAgentTurn{RuntimeAgentBindingIntent: RuntimeAgentBindingIntent{
+		SessionID: session.ID, SessionVersion: updatedSession.Version,
+		TurnID: turn.ID, TurnVersion: turn.Version, Attempt: 1,
+		InputSHA256: inputSHA256, RuntimeRevisionID: revision.ID,
+		RuntimeRevisionVersion: revision.Version,
+		RuntimeRevisionSHA256:  revisionSHA256,
+	}, AgentSessionBindingSHA256: sessionSpec.AgentSessionBindingSHA256,
+		AgentTurnBindingSHA256: turnBindingSHA256}
+	if err = service.appendLifecycleAudit(ctx, tx, input.Principal,
+		"materialize_runtime_agent_binding", turn.ID, "RUNTIME_AGENT_BINDING",
+		turn.Version, now); err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	return result, nil
+}
+
+// ResolveRuntimeAgentBindingIntent разрешает единственный QUEUED Turn по
+// server-owned source reference. Bot identifiers в этот read не входят.
+func (service *Service) ResolveRuntimeAgentBindingIntent(
+	ctx context.Context,
+	principal value.Principal,
+	sourceRef string,
+) (RuntimeAgentBindingIntent, error) {
+	if err := authorize(principal, permissionRuntimeAgentBind); err != nil {
+		return RuntimeAgentBindingIntent{}, err
+	}
+	if principal.CallerWorkload != service.botServiceWorkload ||
+		principal.CallerSPIFFEID != service.botServiceSPIFFEID ||
+		!validRuntimeReference(sourceRef) {
+		return RuntimeAgentBindingIntent{}, errs.ErrPermissionDenied
+	}
+	reader, ok := service.repository.(interface {
+		ResolveRuntimeAgentBindingIntent(
+			context.Context, string, string, string, string,
+		) (entity.Resource, entity.Resource, entity.Resource, error)
+	})
+	if !ok {
+		return RuntimeAgentBindingIntent{}, errs.ErrInternal
+	}
+	session, turn, revision, err := reader.ResolveRuntimeAgentBindingIntent(
+		ctx, principal.OrganizationID, principal.ProjectID, principal.ActorID, sourceRef,
+	)
+	if err != nil {
+		return RuntimeAgentBindingIntent{}, err
+	}
+	_, sessionOK := session.Spec.(entity.SessionSpec)
+	turnSpec, turnOK := turn.Spec.(entity.TurnSpec)
+	_, revisionOK := revision.Spec.(entity.RuntimeRevisionSpec)
+	if !sessionOK || !turnOK || !revisionOK || session.Kind != enum.KindSession ||
+		turn.Kind != enum.KindTurn || revision.Kind != enum.KindRuntimeRevision ||
+		session.State != enum.StateActive || turn.State != enum.StateQueued ||
+		revision.State != enum.StateActive || session.OwnerActorID != principal.ActorID ||
+		turn.OwnerActorID != principal.ActorID || turnSpec.SourceRef != sourceRef ||
+		turnSpec.SessionID != session.ID || turnSpec.RuntimeRevisionID != revision.ID ||
+		turnSpec.Attempt == 0 {
+		return RuntimeAgentBindingIntent{}, errs.ErrStateConflict
+	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil {
+		return RuntimeAgentBindingIntent{}, errs.ErrInternal
+	}
+	return RuntimeAgentBindingIntent{
+		SessionID: session.ID, SessionVersion: session.Version,
+		TurnID: turn.ID, TurnVersion: turn.Version, Attempt: turnSpec.Attempt,
+		InputSHA256:       turnSpec.EffectiveInputSHA256,
+		RuntimeRevisionID: revision.ID, RuntimeRevisionVersion: revision.Version,
+		RuntimeRevisionSHA256: revisionSHA256,
+	}, nil
+}
+
+// BindRuntimeAgentSession материализует неизменяемую связь двух owner aggregate.
+// Bot identifiers являются authority только потому, что команда допускает exact
+// bot-service workload; runtime-controller эту команду вызвать не может.
+func (service *Service) BindRuntimeAgentSession(
+	ctx context.Context,
+	input RuntimeAgentSessionBindingInput,
+) (RuntimeAgentSessionBinding, error) {
+	if err := authorize(input.Principal, permissionRuntimeAgentBind); err != nil {
+		return RuntimeAgentSessionBinding{}, err
+	}
+	if input.Principal.CallerWorkload != service.botServiceWorkload ||
+		input.Principal.CallerSPIFFEID != service.botServiceSPIFFEID {
+		return RuntimeAgentSessionBinding{}, errs.ErrPermissionDenied
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.SessionID) != nil || value.ValidateID(input.TurnID) != nil ||
+		value.ValidateID(input.RuntimeRevisionID) != nil || input.ExpectedSessionVersion == 0 ||
+		input.ExpectedTurnVersion == 0 || input.ExpectedAttempt == 0 ||
+		input.RuntimeRevisionVersion == 0 || !validSHA256Text(input.ExpectedInputSHA256) ||
+		!validSHA256Text(input.RuntimeRevisionSHA256) || input.AgentSessionID <= 0 ||
+		input.AgentSessionVersion == 0 || input.AgentSessionTurnID <= 0 ||
+		input.AgentSessionTurnVersion == 0 || !validOpaqueRuntimeIdentifier(input.AgentSessionKey) ||
+		!validOpaqueRuntimeIdentifier(input.AgentRunID) {
+		return RuntimeAgentSessionBinding{}, errs.ErrInvalidInput
+	}
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		SessionID, TurnID, InputSHA256, RuntimeRevisionID, RuntimeRevisionSHA256 string
+		ExpectedSessionVersion, ExpectedTurnVersion, RuntimeRevisionVersion      uint64
+		Attempt                                                                  uint32
+		AgentSessionKey, AgentRunID                                              string
+		AgentSessionID, AgentSessionTurnID                                       int64
+		AgentSessionVersion, AgentSessionTurnVersion                             uint64
+	}{input.SessionID, input.TurnID, input.ExpectedInputSHA256,
+		input.RuntimeRevisionID, input.RuntimeRevisionSHA256,
+		input.ExpectedSessionVersion, input.ExpectedTurnVersion,
+		input.RuntimeRevisionVersion, input.ExpectedAttempt,
+		input.AgentSessionKey, input.AgentRunID, input.AgentSessionID,
+		input.AgentSessionTurnID, input.AgentSessionVersion,
+		input.AgentSessionTurnVersion})
+	if err != nil {
+		return RuntimeAgentSessionBinding{}, errs.ErrInvalidInput
+	}
+	var result RuntimeAgentSessionBinding
+	var current domainrepo.RuntimeAgentBinding
+	err = service.withLifecycleReceipt(
+		ctx, input.Principal, input.IdempotencyKey, "bind_runtime_agent_session",
+		requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			graph, err := service.lockOwnerGraphByTurn(ctx, tx, input.Principal, input.TurnID)
+			if err != nil {
+				return 0, err
+			}
+			if err := validateRuntimeAgentBindingGraph(graph, input); err != nil {
+				return 0, err
+			}
+			if err := validateRuntimeAgentRevision(ctx, tx, input); err != nil {
+				return 0, err
+			}
+			current, err = tx.GetRuntimeAgentBindingForUpdate(ctx, input.TurnID, input.ExpectedAttempt)
+			if err == nil {
+				if !runtimeAgentBindingMatchesInput(current, input) {
+					return 0, errs.ErrStateConflict
+				}
+				return lifecycleReceiptReplay, nil
+			}
+			if !errors.Is(err, errs.ErrNotFound) {
+				return 0, err
+			}
+			return lifecycleReceiptApply, nil
+		},
+		func() error {
+			if result.SessionID != current.SessionID || result.TurnID != current.TurnID ||
+				result.AgentSessionBindingSHA256 != current.AgentSessionBindingSHA256 ||
+				result.AgentTurnBindingSHA256 != current.AgentTurnBindingSHA256 {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
+			graph, err := service.lockOwnerGraphByTurn(ctx, tx, input.Principal, input.TurnID)
+			if err != nil {
+				return err
+			}
+			if err := validateRuntimeAgentBindingGraph(graph, input); err != nil {
+				return err
+			}
+			if err := validateRuntimeAgentRevision(ctx, tx, input); err != nil {
+				return err
+			}
+			sessionDigest, err := canonicalHash(struct {
+				ControlSessionID, AgentSessionKey string
+				AgentSessionID                    int64
+				AgentSessionVersion               uint64
+			}{input.SessionID, input.AgentSessionKey, input.AgentSessionID, input.AgentSessionVersion})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			turnDigest, err := canonicalHash(struct {
+				ControlSessionID, ControlTurnID, InputSHA256 string
+				Attempt                                      uint32
+				RuntimeRevisionID, RuntimeRevisionSHA256     string
+				RuntimeRevisionVersion                       uint64
+				AgentSessionBindingSHA256, AgentRunID        string
+				AgentSessionTurnID                           int64
+				AgentSessionTurnVersion                      uint64
+			}{input.SessionID, input.TurnID, input.ExpectedInputSHA256,
+				input.ExpectedAttempt, input.RuntimeRevisionID,
+				input.RuntimeRevisionSHA256, input.RuntimeRevisionVersion,
+				sessionDigest, input.AgentRunID, input.AgentSessionTurnID,
+				input.AgentSessionTurnVersion})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			binding := domainrepo.RuntimeAgentBinding{
+				OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+				SessionID: input.SessionID, TurnID: input.TurnID, Attempt: input.ExpectedAttempt,
+				InputSHA256: input.ExpectedInputSHA256, RuntimeRevisionID: input.RuntimeRevisionID,
+				RuntimeRevisionVersion: input.RuntimeRevisionVersion,
+				RuntimeRevisionSHA256:  input.RuntimeRevisionSHA256,
+				AgentSessionKey:        input.AgentSessionKey, AgentSessionID: input.AgentSessionID,
+				AgentSessionVersion:       input.AgentSessionVersion,
+				AgentSessionBindingSHA256: sessionDigest,
+				AgentSessionTurnID:        input.AgentSessionTurnID, AgentRunID: input.AgentRunID,
+				AgentSessionTurnVersion: input.AgentSessionTurnVersion,
+				AgentTurnBindingSHA256:  turnDigest, CreatedAt: now,
+			}
+			if err := tx.InsertRuntimeAgentBinding(ctx, binding); err != nil {
+				return err
+			}
+			result = RuntimeAgentSessionBinding{
+				SessionID: input.SessionID, SessionVersion: graph.Session.Version,
+				TurnID: input.TurnID, TurnVersion: graph.Turn.Version,
+				AgentSessionBindingSHA256: sessionDigest,
+				AgentTurnBindingSHA256:    turnDigest,
+			}
+			return service.appendLifecycleAudit(ctx, tx, input.Principal,
+				"bind_runtime_agent_session", input.TurnID, "RUNTIME_AGENT_BINDING",
+				graph.Turn.Version, now)
+		},
+	)
+	return result, err
+}
+
+func validateRuntimeAgentBindingGraph(graph lockedOwnerGraph, input RuntimeAgentSessionBindingInput) error {
+	turnSpec, turnOK := graph.Turn.Spec.(entity.TurnSpec)
+	if !turnOK || graph.Session.ID != input.SessionID || graph.Session.Version != input.ExpectedSessionVersion ||
+		graph.Turn.ID != input.TurnID || graph.Turn.Version != input.ExpectedTurnVersion ||
+		graph.Session.OwnerActorID != input.Principal.ActorID ||
+		graph.Turn.OwnerActorID != input.Principal.ActorID || graph.Turn.State.Terminal() ||
+		turnSpec.SessionID != input.SessionID || turnSpec.Attempt != input.ExpectedAttempt ||
+		turnSpec.EffectiveInputSHA256 != input.ExpectedInputSHA256 ||
+		turnSpec.RuntimeRevisionID != input.RuntimeRevisionID || graph.Runtime != nil {
+		return errs.ErrStateConflict
+	}
+	revision, ok := graph.Process.Spec.(entity.ProcessRunSpec)
+	current, currentErr := currentExecution(revision)
+	if !ok || currentErr != nil || current.SessionID != input.SessionID ||
+		current.SessionVersion != input.ExpectedSessionVersion || current.TurnID != input.TurnID ||
+		current.TurnVersion != input.ExpectedTurnVersion || current.Attempt != input.ExpectedAttempt ||
+		current.RuntimeRevisionID != input.RuntimeRevisionID ||
+		current.RuntimeRevisionVersion != input.RuntimeRevisionVersion ||
+		current.InputSHA256 != input.ExpectedInputSHA256 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func runtimeAgentBindingMatchesInput(binding domainrepo.RuntimeAgentBinding, input RuntimeAgentSessionBindingInput) bool {
+	return binding.OrganizationID == input.Principal.OrganizationID &&
+		binding.ProjectID == input.Principal.ProjectID && binding.SessionID == input.SessionID &&
+		binding.TurnID == input.TurnID && binding.Attempt == input.ExpectedAttempt &&
+		binding.InputSHA256 == input.ExpectedInputSHA256 && binding.RuntimeRevisionID == input.RuntimeRevisionID &&
+		binding.RuntimeRevisionVersion == input.RuntimeRevisionVersion &&
+		binding.RuntimeRevisionSHA256 == input.RuntimeRevisionSHA256 &&
+		binding.AgentSessionKey == input.AgentSessionKey && binding.AgentSessionID == input.AgentSessionID &&
+		binding.AgentSessionVersion == input.AgentSessionVersion &&
+		binding.AgentSessionTurnID == input.AgentSessionTurnID && binding.AgentRunID == input.AgentRunID &&
+		binding.AgentSessionTurnVersion == input.AgentSessionTurnVersion
+}
+
+func validateRuntimeAgentRevision(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input RuntimeAgentSessionBindingInput,
+) error {
+	revision, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, input.RuntimeRevisionID)
+	if err != nil {
+		return err
+	}
+	digest, err := entity.ProjectionSHA256(revision)
+	if err != nil || revision.Kind != enum.KindRuntimeRevision || revision.State != enum.StateActive ||
+		revision.Version != input.RuntimeRevisionVersion || digest != input.RuntimeRevisionSHA256 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func validOpaqueRuntimeIdentifier(value string) bool {
+	return len(value) >= 1 && len(value) <= 256 && strings.TrimSpace(value) == value &&
+		!strings.ContainsAny(value, "\x00\r\n")
+}
+
+func resolveBotMaterializationResources(
+	resources []entity.Resource,
+	roleStableKey, externalChannelRef string,
+) (entity.Resource, entity.Resource, error) {
+	var role, chat entity.Resource
+	roleCount, chatCount := 0, 0
+	for _, resource := range resources {
+		switch spec := resource.Spec.(type) {
+		case entity.RoleSpec:
+			if resource.Kind == enum.KindRole && resource.State == enum.StateActive &&
+				spec.StableKey == roleStableKey {
+				role, roleCount = resource, roleCount+1
+			}
+		case entity.ChatSpec:
+			if resource.Kind == enum.KindChat && resource.State == enum.StateActive &&
+				spec.ExternalChannelRef == externalChannelRef {
+				chat, chatCount = resource, chatCount+1
+			}
+		}
+	}
+	if roleCount != 1 || chatCount != 1 {
+		return entity.Resource{}, entity.Resource{}, errs.ErrNotFound
+	}
+	return role, chat, nil
+}
+
+func runtimeAgentSessionForUpdate(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	agentSessionKey string,
+	agentSessionID int64,
+) (entity.Resource, error) {
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	var found entity.Resource
+	count := 0
+	for _, candidate := range resources {
+		spec, ok := candidate.Spec.(entity.SessionSpec)
+		if ok && candidate.Kind == enum.KindSession &&
+			spec.AgentSessionKey == agentSessionKey && spec.AgentSessionID == agentSessionID {
+			found, count = candidate, count+1
+		}
+	}
+	if count == 0 {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	if count != 1 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, found.ID)
+}
+
+func runtimeAgentSessionDigest(
+	controlSessionID, agentSessionKey string,
+	agentSessionID int64,
+	agentSessionVersion uint64,
+) (string, error) {
+	digest, err := canonicalHash(struct {
+		ControlSessionID, AgentSessionKey string
+		AgentSessionID                    int64
+		AgentSessionVersion               uint64
+	}{controlSessionID, agentSessionKey, agentSessionID, agentSessionVersion})
+	if err != nil {
+		return "", errs.ErrInternal
+	}
+	return digest, nil
+}
+
+func runtimeAgentTurnDigest(
+	controlSessionID, controlTurnID, inputSHA256 string,
+	attempt uint32,
+	runtimeRevisionID, runtimeRevisionSHA256 string,
+	runtimeRevisionVersion uint64,
+	agentSessionBindingSHA256, agentRunID string,
+	agentSessionTurnID int64,
+	agentSessionTurnVersion uint64,
+) (string, error) {
+	digest, err := canonicalHash(struct {
+		ControlSessionID, ControlTurnID, InputSHA256 string
+		Attempt                                      uint32
+		RuntimeRevisionID, RuntimeRevisionSHA256     string
+		RuntimeRevisionVersion                       uint64
+		AgentSessionBindingSHA256, AgentRunID        string
+		AgentSessionTurnID                           int64
+		AgentSessionTurnVersion                      uint64
+	}{controlSessionID, controlTurnID, inputSHA256, attempt,
+		runtimeRevisionID, runtimeRevisionSHA256, runtimeRevisionVersion,
+		agentSessionBindingSHA256, agentRunID, agentSessionTurnID,
+		agentSessionTurnVersion})
+	if err != nil {
+		return "", errs.ErrInternal
+	}
+	return digest, nil
+}
+
+func (service *Service) currentMaterializedRuntimeAgentTurn(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input MaterializeRuntimeAgentTurnInput,
+) (MaterializedRuntimeAgentTurn, error) {
+	resources, err := tx.ListSnapshotResources(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+	)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	var discovered entity.Resource
+	count := 0
+	for _, candidate := range resources {
+		spec, ok := candidate.Spec.(entity.TurnSpec)
+		if ok && candidate.Kind == enum.KindTurn && spec.SourceRef == input.SourceRef {
+			discovered, count = candidate, count+1
+		}
+	}
+	if count == 0 {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrNotFound
+	}
+	if count != 1 {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	turn, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, discovered.ID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	turnSpec, ok := turn.Spec.(entity.TurnSpec)
+	if !ok || turn.Kind != enum.KindTurn || turn.State != enum.StateQueued ||
+		turn.OwnerActorID != input.Principal.ActorID || turnSpec.Attempt != 1 ||
+		turnSpec.AgentSessionTurnID != input.AgentSessionTurnID ||
+		turnSpec.AgentRunID != input.AgentRunID ||
+		turnSpec.AgentTurnBindingVersion != input.AgentSessionTurnVersion {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	session, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, turnSpec.SessionID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	sessionSpec, ok := session.Spec.(entity.SessionSpec)
+	if !ok || session.Kind != enum.KindSession || session.State != enum.StateActive ||
+		session.OwnerActorID != input.Principal.ActorID ||
+		sessionSpec.AgentSessionKey != input.AgentSessionKey ||
+		sessionSpec.AgentSessionID != input.AgentSessionID ||
+		sessionSpec.AgentSessionBindingVersion != input.AgentSessionVersion {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	binding, err := tx.GetRuntimeAgentBindingForUpdate(ctx, turn.ID, turnSpec.Attempt)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revision, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, turnSpec.RuntimeRevisionID)
+	if err != nil {
+		return MaterializedRuntimeAgentTurn{}, err
+	}
+	revisionSHA256, err := entity.ProjectionSHA256(revision)
+	if err != nil || revision.Kind != enum.KindRuntimeRevision || revision.State != enum.StateActive ||
+		binding.OrganizationID != input.Principal.OrganizationID ||
+		binding.ProjectID != input.Principal.ProjectID || binding.SessionID != session.ID ||
+		binding.TurnID != turn.ID || binding.Attempt != turnSpec.Attempt ||
+		binding.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
+		binding.RuntimeRevisionID != revision.ID || binding.RuntimeRevisionVersion != revision.Version ||
+		binding.RuntimeRevisionSHA256 != revisionSHA256 ||
+		binding.AgentSessionKey != input.AgentSessionKey || binding.AgentSessionID != input.AgentSessionID ||
+		binding.AgentSessionVersion != input.AgentSessionVersion ||
+		binding.AgentSessionTurnID != input.AgentSessionTurnID || binding.AgentRunID != input.AgentRunID ||
+		binding.AgentSessionTurnVersion != input.AgentSessionTurnVersion ||
+		binding.AgentSessionBindingSHA256 != sessionSpec.AgentSessionBindingSHA256 ||
+		binding.AgentTurnBindingSHA256 != turnSpec.AgentTurnBindingSHA256 {
+		return MaterializedRuntimeAgentTurn{}, errs.ErrStateConflict
+	}
+	return MaterializedRuntimeAgentTurn{RuntimeAgentBindingIntent: RuntimeAgentBindingIntent{
+		SessionID: session.ID, SessionVersion: session.Version,
+		TurnID: turn.ID, TurnVersion: turn.Version, Attempt: turnSpec.Attempt,
+		InputSHA256: turnSpec.EffectiveInputSHA256, RuntimeRevisionID: revision.ID,
+		RuntimeRevisionVersion: revision.Version, RuntimeRevisionSHA256: revisionSHA256,
+	}, AgentSessionBindingSHA256: binding.AgentSessionBindingSHA256,
+		AgentTurnBindingSHA256: binding.AgentTurnBindingSHA256}, nil
+}
+
 func (service *Service) ClaimRuntimeExecution(
 	ctx context.Context,
 	principal value.Principal,
@@ -384,14 +1126,13 @@ func (service *Service) ClaimRuntimeExecution(
 				return lifecycleReceiptApply, nil
 			}
 			receiptExecution = *resolved.Runtime
-			if receiptExecution.State != "PENDING" || receiptExecution.Version != 1 ||
-				receiptExecution.Fence != 1 ||
-				receiptExecution.GrantGeneration != principal.AuthorityGrantGeneration ||
-				receiptExecution.RuntimeRevisionSHA256 != resolved.RevisionHash ||
-				receiptExecution.ImmutableInputSHA256 != principal.AuthorityDigest {
+			if !recoverablePendingRuntime(receiptExecution, resolved, principal) {
 				return 0, errs.ErrStateConflict
 			}
-			return lifecycleReceiptReplay, nil
+			// Новый server-owned claim key может заново обнаружить durable PENDING,
+			// если controller упал до создания Kubernetes journal. Owner transaction
+			// сохраняет новый receipt без повторного state transition или audit.
+			return lifecycleReceiptApplyOrReplay, nil
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
@@ -400,16 +1141,146 @@ func (service *Service) ClaimRuntimeExecution(
 				return err
 			}
 			if resolved.Runtime != nil {
+				if !recoverablePendingRuntime(*resolved.Runtime, resolved, principal) {
+					return errs.ErrStateConflict
+				}
+				result = *resolved.Runtime
+				return nil
+			}
+			archiveBlocked, err := tx.SessionHasUnverifiedRuntimeArchive(
+				ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if archiveBlocked {
+				return errs.ErrStateConflict
+			}
+			cleanupActive, err := tx.SessionHasActiveRuntimeCleanup(
+				ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if cleanupActive {
+				return errs.ErrStateConflict
+			}
+			restoreSource, restoreErr := tx.LatestSessionRuntimeArchiveForRestore(
+				ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+			)
+			if restoreErr != nil && !errors.Is(restoreErr, errs.ErrNotFound) {
+				return restoreErr
+			}
+			if restoreErr == nil && (restoreSource.CleanupAuthorizationState != "CONSUMED" ||
+				!validSHA256Text(restoreSource.ArchiveSHA256) ||
+				!validSHA256Text(restoreSource.RestoreProofSHA256) ||
+				!validSHA256Text(restoreSource.CleanupDeletionProofSHA256) ||
+				restoreSource.ArchiveObjectKey == "" || restoreSource.ArchiveVersionID == "" ||
+				!strings.HasPrefix(restoreSource.ArchiveKMSKeyARN, "arn:") ||
+				restoreSource.ArchiveObjectLockMode != "COMPLIANCE" ||
+				restoreSource.ArchiveRetainUntil.IsZero() ||
+				!validSHA256Text(restoreSource.ArchiveProvenanceSHA256) ||
+				restoreSource.RetentionPolicyID == "" || restoreSource.RetentionPolicyVersion == 0) {
 				return errs.ErrStateConflict
 			}
 			resourceClass, clusterProfile := runtimeResourcePolicy(resolved.RoleSpec)
-			now := service.now().UTC().Truncate(time.Microsecond)
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			retentionPolicy, err := tx.GetCurrentResourceRetentionPolicy(
+				ctx, principal.OrganizationID, principal.ProjectID,
+			)
+			if err != nil || !validRuntimeRetentionPolicy(retentionPolicy, now) {
+				return errs.ErrStateConflict
+			}
+			agentBinding, err := tx.GetRuntimeAgentBindingForUpdate(
+				ctx, resolved.Turn.ID, resolved.TurnSpec.Attempt,
+			)
+			if err != nil || agentBinding.OrganizationID != principal.OrganizationID ||
+				agentBinding.ProjectID != principal.ProjectID || agentBinding.SessionID != resolved.Session.ID ||
+				agentBinding.InputSHA256 != resolved.TurnSpec.EffectiveInputSHA256 ||
+				agentBinding.RuntimeRevisionID != resolved.Revision.ID ||
+				agentBinding.RuntimeRevisionVersion != resolved.Revision.Version ||
+				agentBinding.RuntimeRevisionSHA256 != resolved.RevisionHash ||
+				agentBinding.AgentSessionID <= 0 || agentBinding.AgentSessionTurnID <= 0 ||
+				!validOpaqueRuntimeIdentifier(agentBinding.AgentSessionKey) ||
+				!validOpaqueRuntimeIdentifier(agentBinding.AgentRunID) ||
+				agentBinding.AgentSessionVersion == 0 || agentBinding.AgentSessionTurnVersion == 0 ||
+				!validSHA256Text(agentBinding.AgentSessionBindingSHA256) ||
+				!validSHA256Text(agentBinding.AgentTurnBindingSHA256) ||
+				!validSHA256Text(resolved.RevisionSpec.EffectiveRuntimeSHA256) {
+				return errs.ErrStateConflict
+			}
+			provider, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID,
+				resolved.RevisionSpec.ProviderCredentialBindingID)
+			if err != nil {
+				return err
+			}
+			providerSpec, ok := provider.Spec.(entity.CredentialBindingSpec)
+			if !ok || provider.Kind != enum.KindCredentialBinding ||
+				providerSpec.ProviderObservationRevision == 0 || providerSpec.ProviderObservedAt.IsZero() {
+				return errs.ErrStateConflict
+			}
+			type credentialSnapshotEntry struct {
+				ID, Purpose, ImmutableSecretRef, ProviderContentVersion, ContentSHA256 string
+				Version                                                                uint64
+			}
+			credentialSnapshot := make([]credentialSnapshotEntry, 0)
+			for _, component := range resolved.RevisionSpec.Components {
+				if component.Kind == enum.KindCredentialBinding {
+					credential, getErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, component.ResourceID)
+					if getErr != nil {
+						return getErr
+					}
+					spec, ok := credential.Spec.(entity.CredentialBindingSpec)
+					digest, digestErr := entity.ProjectionSHA256(credential)
+					if !ok || credential.Kind != enum.KindCredentialBinding || credential.State != enum.StateActive ||
+						credential.Version != component.Version || digestErr != nil || digest != component.ProjectionSHA256 ||
+						!strings.HasPrefix(spec.ImmutableSecretRef, "k8s-immutable-secret://") {
+						return errs.ErrStateConflict
+					}
+					credentialSnapshot = append(credentialSnapshot, credentialSnapshotEntry{
+						ID: credential.ID, Purpose: spec.Purpose, ImmutableSecretRef: spec.ImmutableSecretRef,
+						ProviderContentVersion: spec.ProviderContentVersion, ContentSHA256: spec.ContentSHA256,
+						Version: credential.Version,
+					})
+				}
+			}
+			slices.SortFunc(credentialSnapshot, func(left, right credentialSnapshotEntry) int {
+				return strings.Compare(left.ID, right.ID)
+			})
+			executionID := uuid.NewString()
+			credentialSnapshotSHA256, err := canonicalHash(struct {
+				ExecutionID string
+				Credentials []credentialSnapshotEntry
+			}{executionID, credentialSnapshot})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			agentBindingSHA256, err := canonicalHash(struct {
+				ControlSessionID, ControlTurnID, InputSHA256, RevisionSHA256 string
+				Attempt                                                      uint32
+				AgentSessionKey                                              string
+				AgentSessionID, AgentTurnID                                  int64
+				AgentRunID                                                   string
+				SessionBindingVersion, TurnBindingVersion                    uint64
+				SessionBindingSHA256, TurnBindingSHA256                      string
+			}{resolved.Session.ID, resolved.Turn.ID, resolved.TurnSpec.EffectiveInputSHA256,
+				resolved.RevisionHash, resolved.TurnSpec.Attempt,
+				agentBinding.AgentSessionKey, agentBinding.AgentSessionID,
+				agentBinding.AgentSessionTurnID, agentBinding.AgentRunID,
+				agentBinding.AgentSessionVersion, agentBinding.AgentSessionTurnVersion,
+				agentBinding.AgentSessionBindingSHA256, agentBinding.AgentTurnBindingSHA256})
+			if err != nil {
+				return errs.ErrInternal
+			}
 			threadID := resolved.SessionSpec.ConversationID
 			if threadID == "" {
 				threadID = resolved.Session.ID
 			}
 			result = RuntimeExecution{
-				ID: uuid.NewString(), OrganizationID: principal.OrganizationID,
+				ID: executionID, OrganizationID: principal.OrganizationID,
 				ProjectID: principal.ProjectID, ProcessID: resolved.Process.ID,
 				SessionID: resolved.Session.ID, ThreadID: threadID,
 				RoleID: resolved.Role.ID, TurnID: resolved.Turn.ID,
@@ -417,14 +1288,61 @@ func (service *Service) ClaimRuntimeExecution(
 				RuntimeRevisionID:      resolved.Revision.ID,
 				RuntimeRevisionVersion: resolved.Revision.Version,
 				RuntimeRevisionSHA256:  resolved.RevisionHash,
+				EffectiveRuntimeSHA256: resolved.RevisionSpec.EffectiveRuntimeSHA256,
 				ImmutableInputSHA256:   resolved.TurnSpec.EffectiveInputSHA256,
 				ResourceClass:          resourceClass, ClusterAccessProfile: clusterProfile,
 				WorkloadID:       principal.CallerWorkload,
 				WorkloadSPIFFEID: principal.CallerSPIFFEID,
 				GrantGeneration:  principal.AuthorityGrantGeneration,
 				Version:          1, Fence: 1, State: "PENDING",
-				CleanupAuthorizationState: "NONE",
-				CreatedAt:                 now, UpdatedAt: now,
+				AgentSessionKey:         agentBinding.AgentSessionKey,
+				AgentSessionID:          agentBinding.AgentSessionID,
+				AgentSessionTurnID:      agentBinding.AgentSessionTurnID,
+				AgentRunID:              agentBinding.AgentRunID,
+				AgentBindingSHA256:      agentBindingSHA256,
+				RetentionPolicyID:       retentionPolicy.ID,
+				RetentionPolicyVersion:  retentionPolicy.Version,
+				PVCRetentionSeconds:     retentionPolicy.PVCRetentionSeconds,
+				ArchiveRetentionSeconds: retentionPolicy.ArchiveRetentionSeconds,
+				PVCCleanupEligibleAt: resolved.Session.UpdatedAt.Add(
+					time.Duration(retentionPolicy.PVCRetentionSeconds) * time.Second,
+				),
+				CapacityObservationExpiresAt: providerSpec.ProviderObservedAt.Add(resolved.RoleSpec.ProviderAccountPool.ObservationMaxAge),
+				RescheduleAfter:              now.Add(service.pendingRescheduleDelay),
+				CredentialSnapshotSHA256:     credentialSnapshotSHA256,
+				CleanupAuthorizationState:    "NONE",
+				CreatedAt:                    now, UpdatedAt: now,
+			}
+			if restoreErr == nil {
+				result.RestoreSourceExecutionID = restoreSource.ID
+				result.RestoreSourceArchiveReference = restoreSource.ArchiveReference
+				result.RestoreSourceArchiveSHA256 = restoreSource.ArchiveSHA256
+				result.RestoreSourceRuntimeRevisionSHA256 = restoreSource.RuntimeRevisionSHA256
+				result.RestoreSourceImmutableInputSHA256 = restoreSource.ImmutableInputSHA256
+				result.RestoreSourceProofSHA256 = restoreSource.RestoreProofSHA256
+				result.RestoreSourceVersion = restoreSource.Version
+				result.RestoreSourceArchiveObjectKey = restoreSource.ArchiveObjectKey
+				result.RestoreSourceArchiveVersionID = restoreSource.ArchiveVersionID
+				result.RestoreSourceArchiveKMSKeyARN = restoreSource.ArchiveKMSKeyARN
+				result.RestoreSourceArchiveObjectLockMode = restoreSource.ArchiveObjectLockMode
+				result.RestoreSourceArchiveRetainUntil = restoreSource.ArchiveRetainUntil
+				result.RestoreSourceRetentionPolicyID = restoreSource.RetentionPolicyID
+				result.RestoreSourceRetentionPolicyVersion = restoreSource.RetentionPolicyVersion
+				result.RestoreSourceProvenanceSHA256 = restoreSource.ArchiveProvenanceSHA256
+				result.RestoreAssignmentState = "ASSIGNED"
+				result.RestoreAssignmentGeneration = 1
+			}
+			result.WorkloadTicketSHA256, err = canonicalHash(struct {
+				ExecutionID, SessionID, TurnID, RuntimeRevisionSHA256, EffectiveRuntimeSHA256     string
+				Attempt                                                                           uint32
+				Fence, GrantGeneration                                                            uint64
+				AgentBindingSHA256, CredentialSnapshotSHA256, ResourceClass, ClusterAccessProfile string
+			}{result.ID, result.SessionID, result.TurnID, result.RuntimeRevisionSHA256,
+				result.EffectiveRuntimeSHA256, result.Attempt, result.Fence, result.GrantGeneration,
+				result.AgentBindingSHA256, result.CredentialSnapshotSHA256,
+				result.ResourceClass, result.ClusterAccessProfile})
+			if err != nil {
+				return errs.ErrInternal
 			}
 			if err := tx.InsertRuntimeExecution(ctx, result); err != nil {
 				return err
@@ -435,7 +1353,53 @@ func (service *Service) ClaimRuntimeExecution(
 			)
 		},
 	)
+	if err == nil {
+		err = service.issueRuntimeWorkloadTicket(&result)
+	}
 	return result, err
+}
+
+func validRuntimeRetentionPolicy(
+	policy domainrepo.ResourceRetentionPolicy,
+	now time.Time,
+) bool {
+	return value.ValidateStableKey(policy.ID) == nil && policy.Version > 0 &&
+		!policy.EffectiveFrom.IsZero() && !policy.EffectiveFrom.After(now) &&
+		policy.PVCRetentionSeconds >= uint64((24*time.Hour)/time.Second) &&
+		policy.PVCRetentionSeconds <= uint64((30*24*time.Hour)/time.Second) &&
+		policy.ArchiveRetentionSeconds >= uint64((90*24*time.Hour)/time.Second) &&
+		policy.ArchiveRetentionSeconds <= uint64((10*365*24*time.Hour)/time.Second)
+}
+
+func pinRuntimeRetention(execution *RuntimeExecution, transitionedAt time.Time) error {
+	if execution == nil || execution.RetentionPolicyID == "" ||
+		execution.RetentionPolicyVersion == 0 ||
+		execution.PVCRetentionSeconds < uint64((24*time.Hour)/time.Second) ||
+		execution.ArchiveRetentionSeconds < uint64((90*24*time.Hour)/time.Second) {
+		return errs.ErrStateConflict
+	}
+	execution.PVCCleanupEligibleAt = transitionedAt.Add(
+		time.Duration(execution.PVCRetentionSeconds) * time.Second,
+	)
+	execution.ArchiveRetainUntil = transitionedAt.Add(
+		time.Duration(execution.ArchiveRetentionSeconds) * time.Second,
+	)
+	return nil
+}
+
+func recoverablePendingRuntime(
+	execution RuntimeExecution,
+	resolved resolvedExecution,
+	principal value.Principal,
+) bool {
+	return execution.State == "PENDING" && execution.Version == 1 && execution.Fence == 1 &&
+		execution.GrantGeneration == principal.AuthorityGrantGeneration &&
+		execution.RuntimeRevisionID == resolved.Revision.ID &&
+		execution.RuntimeRevisionVersion == resolved.Revision.Version &&
+		execution.RuntimeRevisionSHA256 == resolved.RevisionHash &&
+		execution.ImmutableInputSHA256 == principal.AuthorityDigest &&
+		execution.SessionID == resolved.Session.ID && execution.TurnID == resolved.Turn.ID &&
+		execution.Attempt == resolved.TurnSpec.Attempt
 }
 
 func (service *Service) GetRuntimeExecution(
@@ -470,6 +1434,9 @@ func (service *Service) GetRuntimeExecution(
 		result = found
 		return nil
 	})
+	if err == nil {
+		err = service.issueRuntimeWorkloadTicket(&result)
+	}
 	return result, err
 }
 
@@ -512,9 +1479,13 @@ func (service *Service) AdmitRuntimeExecution(
 			)
 		},
 		func() error {
-			return validateAdmitRuntimeReceipt(
+			if err := validateAdmitRuntimeReceipt(
 				receiptExecution, receiptTurnLease, result, receiptNow,
-			)
+			); err != nil {
+				return err
+			}
+			result.Execution = receiptExecution
+			return nil
 		},
 		func(tx domainrepo.Transaction) error {
 			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
@@ -555,6 +1526,9 @@ func (service *Service) AdmitRuntimeExecution(
 			)
 		},
 	)
+	if err == nil {
+		err = service.issueRuntimeWorkloadTicket(&result.Execution)
+	}
 	return result, err
 }
 
@@ -873,10 +1847,18 @@ func validateAdmitRuntimeReceipt(
 	stored AdmitRuntimeExecutionResult,
 	now time.Time,
 ) error {
-	if err := runtimeReceiptMatchesCurrent(current, stored.Execution); err != nil {
-		return err
-	}
-	if current.State != "ADMITTED" || current.LeaseTokenSHA256 == "" ||
+	if current.ID != stored.Execution.ID || current.OrganizationID != stored.Execution.OrganizationID ||
+		current.ProjectID != stored.Execution.ProjectID || current.SessionID != stored.Execution.SessionID ||
+		current.TurnID != stored.Execution.TurnID || current.Attempt != stored.Execution.Attempt ||
+		current.RuntimeRevisionID != stored.Execution.RuntimeRevisionID ||
+		current.RuntimeRevisionVersion != stored.Execution.RuntimeRevisionVersion ||
+		current.RuntimeRevisionSHA256 != stored.Execution.RuntimeRevisionSHA256 ||
+		current.ImmutableInputSHA256 != stored.Execution.ImmutableInputSHA256 ||
+		current.GrantGeneration != stored.Execution.GrantGeneration ||
+		(current.State != "ADMITTED" && current.State != "RUNNING") ||
+		current.Version < stored.Execution.Version || current.Fence < stored.Execution.Fence ||
+		current.Version-stored.Execution.Version != current.Fence-stored.Execution.Fence ||
+		current.LeaseTokenSHA256 == "" ||
 		!current.LeaseExpiresAt.After(now) ||
 		turnLease.TurnID != current.TurnID ||
 		turnLease.Attempt != current.Attempt ||
@@ -902,6 +1884,11 @@ func validateClosedRuntimeReceiptGraph(locked lockedRuntimeReceipt) error {
 	}
 	want := enum.State(execution.State)
 	if execution.State == "SUSPENDED" {
+		if execution.TerminalOutcome == "BLOCKED" &&
+			locked.Graph.Turn.State == enum.StateBlocked &&
+			locked.Graph.Process.State == enum.StateBlocked {
+			return nil
+		}
 		if (locked.Graph.Turn.State != enum.StateWaitingExternal &&
 			locked.Graph.Turn.State != enum.StateWaitingOwner) ||
 			(locked.Graph.Process.State != enum.StateWaitingExternal &&
@@ -927,7 +1914,7 @@ func (service *Service) CompleteRuntimeExecution(
 		return RuntimeExecution{}, err
 	}
 	if len(input.LeaseToken) != 64 ||
-		(input.Outcome != "SUCCEEDED" && input.Outcome != "FAILED") ||
+		(input.Outcome != "SUCCEEDED" && input.Outcome != "FAILED" && input.Outcome != "BLOCKED") ||
 		!validBoundedReference(input.TerminalReference) ||
 		!validSHA256Text(input.TerminalSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
@@ -1014,6 +2001,8 @@ func (service *Service) CompleteRuntimeExecution(
 			turnState := enum.StateSucceeded
 			if input.Outcome == "FAILED" {
 				turnState = enum.StateFailed
+			} else if input.Outcome == "BLOCKED" {
+				turnState = enum.StateBlocked
 			}
 			closedTurn, err := service.closeRuntimeGraph(
 				ctx, tx, input.Principal, execution, turnState,
@@ -1031,6 +2020,12 @@ func (service *Service) CompleteRuntimeExecution(
 			execution.Version++
 			execution.Fence++
 			execution.State = input.Outcome
+			if input.Outcome == "BLOCKED" {
+				execution.State = "SUSPENDED"
+			}
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.TerminalOutcome = input.Outcome
 			execution.TerminalReference = input.TerminalReference
 			execution.TerminalSHA256 = input.TerminalSHA256
@@ -1146,6 +2141,9 @@ func (service *Service) CancelRuntimeExecution(
 			execution.Version++
 			execution.Fence++
 			execution.State = "CANCELLED"
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.TerminalOutcome = "CANCELLED"
 			execution.TerminalReference = input.ReasonCode
 			execution.TerminalSHA256 = hashString(input.ReasonCode)
@@ -1339,6 +2337,9 @@ func (service *Service) RetryRuntimeExecution(
 			execution.Version++
 			execution.Fence++
 			execution.State = "RETRIED"
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.LeaseID = ""
 			execution.LeaseTokenSHA256 = ""
 			execution.LeaseExpiresAt = time.Time{}
@@ -1354,6 +2355,58 @@ func (service *Service) RetryRuntimeExecution(
 		},
 	)
 	return result, err
+}
+
+// RescheduleRuntimeExecution разрешает controller заменить только stale
+// immutable PENDING snapshot; exact version/fence защищают от гонки с admit.
+func (service *Service) RescheduleRuntimeExecution(
+	ctx context.Context,
+	input RuntimeExecutionInput,
+) (RetryRuntimeExecutionResult, error) {
+	if err := validateRuntimeMutation(service, input, permissionRuntimeReschedule, false); err != nil {
+		return RetryRuntimeExecutionResult{}, err
+	}
+	if input.Principal.CallerWorkload != service.runtimeControllerWorkload ||
+		input.Principal.CallerSPIFFEID != service.runtimeControllerSPIFFEID {
+		return RetryRuntimeExecutionResult{}, errs.ErrPermissionDenied
+	}
+	err := service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+		if err != nil {
+			return err
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		if err := requireExactRuntimeApplicationAuthority(execution, input.Principal); err != nil {
+			return err
+		}
+		if execution.Version == input.ExpectedVersion && execution.Fence == input.ExpectedFence {
+			if execution.State != "PENDING" ||
+				(now.Before(execution.RescheduleAfter) && now.Before(execution.CapacityObservationExpiresAt)) {
+				return errs.ErrStateConflict
+			}
+			return nil
+		}
+		// Lost response обязан дойти до receipt replay RetryRuntimeExecution:
+		// stale precondition не должен заслонять уже атомарно созданного successor.
+		if execution.Version == input.ExpectedVersion+1 &&
+			execution.Fence == input.ExpectedFence+1 && execution.State == "RETRIED" {
+			return nil
+		}
+		return errs.ErrVersionMismatch
+	})
+	if err != nil {
+		return RetryRuntimeExecutionResult{}, err
+	}
+	retry := input
+	retry.Principal.Permission = permissionRuntimeRetry
+	return service.RetryRuntimeExecution(ctx, retry)
 }
 
 func (service *Service) ExpireRuntimeExecution(
@@ -1460,6 +2513,9 @@ func (service *Service) ExpireRuntimeExecution(
 			execution.Version++
 			execution.Fence++
 			execution.State = "EXPIRED"
+			if err := pinRuntimeRetention(&execution, now); err != nil {
+				return err
+			}
 			execution.TerminalOutcome = "EXPIRED"
 			execution.TerminalReference = "database-clock:" + now.Format(time.RFC3339Nano)
 			execution.TerminalSHA256 = hashString(execution.TerminalReference)
@@ -1485,20 +2541,32 @@ func (service *Service) RecordRuntimeArchive(
 	input RuntimeArchiveInput,
 ) (RuntimeExecution, error) {
 	if err := validateRuntimeMutation(
-		service, input.RuntimeExecutionInput, permissionRuntimeArchive, true,
+		service, input.RuntimeExecutionInput, permissionRuntimeArchive, false,
 	); err != nil {
 		return RuntimeExecution{}, err
 	}
-	if !validBoundedReference(input.ArchiveReference) ||
-		!validSHA256Text(input.ArchiveSHA256) {
+	if input.Principal.CallerWorkload != service.archiveWorkload ||
+		input.Principal.CallerSPIFFEID != service.archiveSPIFFEID ||
+		input.ExpectedGrantGeneration == 0 ||
+		!validBoundedReference(input.ArchiveReference) ||
+		!validSHA256Text(input.ArchiveSHA256) ||
+		!validBoundedReference(input.ArchiveObjectKey) ||
+		!validOpaqueRuntimeIdentifier(input.ArchiveVersionID) ||
+		!strings.HasPrefix(input.ArchiveKMSKeyARN, "arn:") ||
+		input.ArchiveObjectLockMode != "COMPLIANCE" || input.ArchiveRetainUntil.IsZero() ||
+		!validSHA256Text(input.ArchiveProvenanceSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
-		Runtime          runtimeExecutionIntent
-		ArchiveReference string
-		ArchiveSHA256    string
+		Runtime                                    runtimeExecutionIntent
+		ArchiveReference, ArchiveSHA256, ObjectKey string
+		VersionID, KMSKeyARN, ObjectLockMode       string
+		RetainUntil                                time.Time
+		ProvenanceSHA256                           string
 	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveReference,
-		input.ArchiveSHA256})
+		input.ArchiveSHA256, input.ArchiveObjectKey, input.ArchiveVersionID,
+		input.ArchiveKMSKeyARN, input.ArchiveObjectLockMode,
+		input.ArchiveRetainUntil, input.ArchiveProvenanceSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1518,6 +2586,9 @@ func (service *Service) RecordRuntimeArchive(
 				return 0, errs.ErrStateConflict
 			}
 			execution := locked.Execution
+			if requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil {
+				return 0, errs.ErrStateConflict
+			}
 			var disposition lifecycleReceiptDisposition
 			switch {
 			case execution.Version == input.ExpectedVersion &&
@@ -1528,6 +2599,12 @@ func (service *Service) RecordRuntimeArchive(
 				execution.Fence == input.ExpectedFence+1 &&
 				execution.ArchiveReference == input.ArchiveReference &&
 				execution.ArchiveSHA256 == input.ArchiveSHA256 &&
+				execution.ArchiveObjectKey == input.ArchiveObjectKey &&
+				execution.ArchiveVersionID == input.ArchiveVersionID &&
+				execution.ArchiveKMSKeyARN == input.ArchiveKMSKeyARN &&
+				execution.ArchiveObjectLockMode == input.ArchiveObjectLockMode &&
+				execution.ArchiveRetainUntil.Equal(input.ArchiveRetainUntil) &&
+				execution.ArchiveProvenanceSHA256 == input.ArchiveProvenanceSHA256 &&
 				execution.RestoreProofSHA256 == "" &&
 				execution.CleanupAuthorizationState == "NONE":
 				disposition = lifecycleReceiptReplay
@@ -1544,7 +2621,9 @@ func (service *Service) RecordRuntimeArchive(
 				return err
 			}
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
-				!runtimeTerminal(execution.State) || execution.ArchiveSHA256 != "" {
+				!runtimeTerminal(execution.State) || execution.ArchiveSHA256 != "" ||
+				!execution.ArchiveRetainUntil.Equal(input.ArchiveRetainUntil) ||
+				requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil {
 				return errs.ErrStateConflict
 			}
 			now, err := tx.CurrentTime(ctx)
@@ -1556,6 +2635,11 @@ func (service *Service) RecordRuntimeArchive(
 			execution.Fence++
 			execution.ArchiveReference = input.ArchiveReference
 			execution.ArchiveSHA256 = input.ArchiveSHA256
+			execution.ArchiveObjectKey = input.ArchiveObjectKey
+			execution.ArchiveVersionID = input.ArchiveVersionID
+			execution.ArchiveKMSKeyARN = input.ArchiveKMSKeyARN
+			execution.ArchiveObjectLockMode = input.ArchiveObjectLockMode
+			execution.ArchiveProvenanceSHA256 = input.ArchiveProvenanceSHA256
 			execution.UpdatedAt = now
 			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
@@ -1640,13 +2724,16 @@ func (service *Service) VerifyRuntimeRestore(
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
-			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
 			if err != nil {
 				return err
 			}
-			if err := service.requireRuntimeOwner(ctx, tx, input.Principal, execution); err != nil {
-				return err
+			if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+				return errs.ErrStateConflict
 			}
+			execution := locked.Execution
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
 				!runtimeTerminal(execution.State) ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
@@ -1681,6 +2768,163 @@ func (service *Service) VerifyRuntimeRestore(
 	return result, err
 }
 
+func (service *Service) BindRuntimeRestoreTarget(
+	ctx context.Context,
+	input RuntimeRestoreTargetInput,
+) (RuntimeExecution, error) {
+	if err := validateRuntimeMutation(service, input.RuntimeExecutionInput, permissionRuntimeRestoreBind, false); err != nil {
+		return RuntimeExecution{}, err
+	}
+	if input.Principal.CallerWorkload != service.restoreVerifierWorkload ||
+		input.Principal.CallerSPIFFEID != service.restoreVerifierSPIFFEID ||
+		!validRuntimePVCTuple(input.PVCName, input.PVCUID, input.PVCResourceVersion) ||
+		input.ExpectedAssignmentGeneration == 0 {
+		return RuntimeExecution{}, errs.ErrPermissionDenied
+	}
+	requestHash, err := semanticCommandHash(input.Principal, input)
+	if err != nil {
+		return RuntimeExecution{}, errs.ErrInvalidInput
+	}
+	var result RuntimeExecution
+	var receipt RuntimeExecution
+	err = service.withLifecycleReceipt(ctx, input.Principal, input.IdempotencyKey,
+		"bind_runtime_restore_target", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(ctx, tx, input.Principal, input.ExecutionID)
+			if err != nil {
+				return 0, err
+			}
+			execution := locked.Execution
+			receipt = execution
+			switch {
+			case execution.Version == input.ExpectedVersion && execution.Fence == input.ExpectedFence &&
+				execution.RestoreAssignmentState == "ASSIGNED" &&
+				execution.RestoreAssignmentGeneration == input.ExpectedAssignmentGeneration:
+				return lifecycleReceiptApply, nil
+			case execution.Version == input.ExpectedVersion+1 && execution.Fence == input.ExpectedFence+1 &&
+				execution.RestoreAssignmentState == "BOUND" &&
+				execution.RestoreAssignmentGeneration == input.ExpectedAssignmentGeneration &&
+				execution.RestoreTargetPVCName == input.PVCName && execution.RestoreTargetPVCUID == input.PVCUID &&
+				execution.RestoreTargetPVCResourceVersion == input.PVCResourceVersion:
+				return lifecycleReceiptReplay, nil
+			default:
+				return 0, errs.ErrStateConflict
+			}
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receipt, result) },
+		func(tx domainrepo.Transaction) error {
+			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			if err != nil {
+				return err
+			}
+			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
+				execution.State != "PENDING" || execution.RestoreAssignmentState != "ASSIGNED" ||
+				execution.RestoreAssignmentGeneration != input.ExpectedAssignmentGeneration {
+				return errs.ErrStateConflict
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			expectedVersion, expectedFence := execution.Version, execution.Fence
+			execution.Version++
+			execution.Fence++
+			execution.RestoreAssignmentState = "BOUND"
+			execution.RestoreTargetPVCName = input.PVCName
+			execution.RestoreTargetPVCUID = input.PVCUID
+			execution.RestoreTargetPVCResourceVersion = input.PVCResourceVersion
+			execution.UpdatedAt = now
+			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
+				return err
+			}
+			result = execution
+			return service.appendLifecycleAudit(ctx, tx, input.Principal, "bind_runtime_restore_target",
+				execution.ID, "RUNTIME_EXECUTION", execution.Version, now)
+		})
+	return result, err
+}
+
+func (service *Service) CompleteRuntimeRehydrate(
+	ctx context.Context,
+	input RuntimeRehydrateInput,
+) (RuntimeExecution, error) {
+	if err := validateRuntimeMutation(service, input.RuntimeExecutionInput, permissionRuntimeRehydrate, false); err != nil {
+		return RuntimeExecution{}, err
+	}
+	if input.Principal.CallerWorkload != service.restoreVerifierWorkload ||
+		input.Principal.CallerSPIFFEID != service.restoreVerifierSPIFFEID ||
+		!validRuntimePVCTuple(input.PVCName, input.PVCUID, input.PVCResourceVersion) ||
+		input.AssignmentGeneration == 0 || !validBoundedReference(input.ProofReference) ||
+		!validSHA256Text(input.ProofSHA256) {
+		return RuntimeExecution{}, errs.ErrPermissionDenied
+	}
+	requestHash, err := semanticCommandHash(input.Principal, input)
+	if err != nil {
+		return RuntimeExecution{}, errs.ErrInvalidInput
+	}
+	var result RuntimeExecution
+	var receipt RuntimeExecution
+	err = service.withLifecycleReceipt(ctx, input.Principal, input.IdempotencyKey,
+		"complete_runtime_rehydrate", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			locked, err := service.lockRuntimeReceiptAuthority(ctx, tx, input.Principal, input.ExecutionID)
+			if err != nil {
+				return 0, err
+			}
+			execution := locked.Execution
+			receipt = execution
+			if execution.RestoreAssignmentGeneration != input.AssignmentGeneration ||
+				execution.RestoreTargetPVCName != input.PVCName || execution.RestoreTargetPVCUID != input.PVCUID ||
+				execution.RestoreTargetPVCResourceVersion != input.PVCResourceVersion {
+				return 0, errs.ErrStateConflict
+			}
+			switch {
+			case execution.Version == input.ExpectedVersion && execution.Fence == input.ExpectedFence &&
+				execution.RestoreAssignmentState == "BOUND":
+				return lifecycleReceiptApply, nil
+			case execution.Version == input.ExpectedVersion+1 && execution.Fence == input.ExpectedFence+1 &&
+				execution.RestoreAssignmentState == "CONSUMED" &&
+				execution.RehydrateProofReference == input.ProofReference &&
+				execution.RehydrateProofSHA256 == input.ProofSHA256:
+				return lifecycleReceiptReplay, nil
+			default:
+				return 0, errs.ErrStateConflict
+			}
+		},
+		func() error { return runtimeReceiptMatchesCurrent(receipt, result) },
+		func(tx domainrepo.Transaction) error {
+			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			if err != nil {
+				return err
+			}
+			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
+				execution.State != "PENDING" || execution.RestoreAssignmentState != "BOUND" ||
+				execution.RestoreAssignmentGeneration != input.AssignmentGeneration ||
+				execution.RestoreTargetPVCName != input.PVCName || execution.RestoreTargetPVCUID != input.PVCUID ||
+				execution.RestoreTargetPVCResourceVersion != input.PVCResourceVersion {
+				return errs.ErrStateConflict
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			expectedVersion, expectedFence := execution.Version, execution.Fence
+			execution.Version++
+			execution.Fence++
+			execution.RestoreAssignmentState = "CONSUMED"
+			execution.RehydrateProofReference = input.ProofReference
+			execution.RehydrateProofSHA256 = input.ProofSHA256
+			execution.UpdatedAt = now
+			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
+				return err
+			}
+			result = execution
+			return service.appendLifecycleAudit(ctx, tx, input.Principal, "complete_runtime_rehydrate",
+				execution.ID, "RUNTIME_EXECUTION", execution.Version, now)
+		})
+	return result, err
+}
+
 func (service *Service) AuthorizeRuntimeCleanup(
 	ctx context.Context,
 	input RuntimeCleanupInput,
@@ -1691,7 +2935,8 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		return RuntimeExecution{}, err
 	}
 	if input.Principal.CallerWorkload != service.cleanupAuthorizerWorkload ||
-		input.Principal.CallerSPIFFEID != service.cleanupAuthorizerSPIFFEID {
+		input.Principal.CallerSPIFFEID != service.cleanupAuthorizerSPIFFEID ||
+		!validRuntimePVCTuple(input.PVCName, input.PVCUID, input.PVCResourceVersion) {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
 	}
 	if !validSHA256Text(input.ArchiveSHA256) ||
@@ -1703,8 +2948,12 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		ArchiveSHA256             string
 		RestoreProofSHA256        string
 		ExpectedCleanupGeneration uint64
+		PVCName                   string
+		PVCUID                    string
+		PVCResourceVersion        string
 	}{runtimeIntent(input.RuntimeExecutionInput), input.ArchiveSHA256,
-		input.RestoreProofSHA256, input.ExpectedCleanupGeneration})
+		input.RestoreProofSHA256, input.ExpectedCleanupGeneration,
+		input.PVCName, input.PVCUID, input.PVCResourceVersion})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1731,7 +2980,7 @@ func (service *Service) AuthorizeRuntimeCleanup(
 				execution.RestoreVerifierGeneration != execution.GrantGeneration {
 				return 0, errs.ErrStateConflict
 			}
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -1754,6 +3003,9 @@ func (service *Service) AuthorizeRuntimeCleanup(
 				execution.Fence != input.ExpectedFence+(execution.Version-input.ExpectedVersion) ||
 				execution.CleanupAuthorizationState != "ACTIVE" ||
 				execution.CleanupAuthorizationGeneration != input.ExpectedCleanupGeneration+1 ||
+				execution.CleanupPVCName != input.PVCName ||
+				execution.CleanupPVCUID != input.PVCUID ||
+				execution.CleanupPVCResourceVersion != input.PVCResourceVersion ||
 				value.ValidateID(execution.CleanupAuthorizationID) != nil ||
 				!execution.CleanupAuthorizationExpiresAt.After(locked.Now) {
 				return 0, errs.ErrStateConflict
@@ -1763,13 +3015,16 @@ func (service *Service) AuthorizeRuntimeCleanup(
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
-			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
 			if err != nil {
 				return err
 			}
-			if err := service.requireRuntimeOwner(ctx, tx, input.Principal, execution); err != nil {
-				return err
+			if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+				return errs.ErrStateConflict
 			}
+			execution := locked.Execution
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
 				!runtimeTerminal(execution.State) ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
@@ -1780,16 +3035,9 @@ func (service *Service) AuthorizeRuntimeCleanup(
 				requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil {
 				return errs.ErrStateConflict
 			}
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return err
-			}
-			if err := lockRuntimeCleanupSession(
-				ctx, tx, input.Principal, execution,
-			); err != nil {
-				return err
-			}
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			now := locked.Now
+			session := locked.Graph.Session
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -1811,6 +3059,15 @@ func (service *Service) AuthorizeRuntimeCleanup(
 					return err
 				}
 			}
+			eligibleAt := execution.PVCCleanupEligibleAt
+			if execution.RetentionPolicyID == "" || execution.RetentionPolicyVersion == 0 ||
+				execution.PVCRetentionSeconds < uint64((24*time.Hour)/time.Second) ||
+				execution.PVCRetentionSeconds > uint64((30*24*time.Hour)/time.Second) ||
+				execution.ArchiveRetentionSeconds < uint64((90*24*time.Hour)/time.Second) ||
+				execution.ArchiveRetainUntil.IsZero() ||
+				eligibleAt.Before(session.UpdatedAt) || eligibleAt.After(now) {
+				return errs.ErrStateConflict
+			}
 			expectedVersion, expectedFence := execution.Version, execution.Fence
 			execution.Version++
 			execution.Fence++
@@ -1819,6 +3076,13 @@ func (service *Service) AuthorizeRuntimeCleanup(
 			execution.CleanupAuthorizationExpiresAt = now.Add(cleanupAuthorizationLifetime)
 			execution.CleanupAuthorizationState = "ACTIVE"
 			execution.CleanupConsumedAt = time.Time{}
+			execution.CleanupPVCName = input.PVCName
+			execution.CleanupPVCUID = input.PVCUID
+			execution.CleanupPVCResourceVersion = input.PVCResourceVersion
+			execution.CleanupClaimedAt = now
+			execution.CleanupEligibleAt = eligibleAt
+			execution.CleanupNotFoundAt = time.Time{}
+			execution.CleanupDeletionProofSHA256 = ""
 			execution.UpdatedAt = now
 			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
@@ -1885,8 +3149,17 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		value.ValidateID(input.CleanupAuthorizationID) != nil ||
 		input.CleanupAuthorizationGeneration == 0 ||
 		!validSHA256Text(input.ArchiveSHA256) ||
-		!validSHA256Text(input.RestoreProofSHA256) {
+		!validSHA256Text(input.RestoreProofSHA256) ||
+		!validRuntimePVCTuple(input.PVCName, input.PVCUID, input.PVCResourceVersion) ||
+		input.ObservedNotFoundAt.IsZero() || !validSHA256Text(input.DeletionProofSHA256) {
 		return RuntimeExecution{}, errs.ErrPermissionDenied
+	}
+	if input.DeletionProofSHA256 != runtimePVCDeletionProofSHA256(
+		input.PVCName, input.PVCUID, input.PVCResourceVersion,
+		input.CleanupAuthorizationID, input.CleanupAuthorizationGeneration,
+		input.ObservedNotFoundAt,
+	) {
+		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
 		Runtime                        runtimeExecutionIntent
@@ -1894,9 +3167,15 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		CleanupAuthorizationGeneration uint64
 		ArchiveSHA256                  string
 		RestoreProofSHA256             string
+		PVCName                        string
+		PVCUID                         string
+		PVCResourceVersion             string
+		ObservedNotFoundAt             time.Time
+		DeletionProofSHA256            string
 	}{runtimeIntent(input.RuntimeExecutionInput), input.CleanupAuthorizationID,
 		input.CleanupAuthorizationGeneration, input.ArchiveSHA256,
-		input.RestoreProofSHA256})
+		input.RestoreProofSHA256, input.PVCName, input.PVCUID,
+		input.PVCResourceVersion, input.ObservedNotFoundAt, input.DeletionProofSHA256})
 	if err != nil {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
@@ -1919,10 +3198,13 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 			if execution.CleanupAuthorizationID != input.CleanupAuthorizationID ||
 				execution.CleanupAuthorizationGeneration != input.CleanupAuthorizationGeneration ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
-				execution.RestoreProofSHA256 != input.RestoreProofSHA256 {
+				execution.RestoreProofSHA256 != input.RestoreProofSHA256 ||
+				execution.CleanupPVCName != input.PVCName ||
+				execution.CleanupPVCUID != input.PVCUID ||
+				execution.CleanupPVCResourceVersion != input.PVCResourceVersion {
 				return 0, errs.ErrStateConflict
 			}
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -1941,7 +3223,9 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 			case execution.Version == input.ExpectedVersion+1 &&
 				execution.Fence == input.ExpectedFence+1 &&
 				execution.CleanupAuthorizationState == "CONSUMED" &&
-				!execution.CleanupConsumedAt.IsZero():
+				!execution.CleanupConsumedAt.IsZero() &&
+				execution.CleanupNotFoundAt.Equal(input.ObservedNotFoundAt) &&
+				execution.CleanupDeletionProofSHA256 == input.DeletionProofSHA256:
 				disposition = lifecycleReceiptReplay
 			default:
 				return 0, errs.ErrStateConflict
@@ -1951,14 +3235,17 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
 		func(tx domainrepo.Transaction) error {
-			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
 			if err != nil {
 				return err
 			}
-			now, err := tx.CurrentTime(ctx)
-			if err != nil {
-				return err
+			if err := validateClosedRuntimeReceiptGraph(locked); err != nil {
+				return errs.ErrStateConflict
 			}
+			execution := locked.Execution
+			now := locked.Now
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
 				requireExactRuntimeApplicationAuthority(execution, input.Principal) != nil ||
 				execution.CleanupAuthorizationState != "ACTIVE" ||
@@ -1966,15 +3253,15 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 				execution.CleanupAuthorizationGeneration != input.CleanupAuthorizationGeneration ||
 				execution.ArchiveSHA256 != input.ArchiveSHA256 ||
 				execution.RestoreProofSHA256 != input.RestoreProofSHA256 ||
-				!execution.CleanupAuthorizationExpiresAt.After(now) {
+				execution.CleanupPVCName != input.PVCName ||
+				execution.CleanupPVCUID != input.PVCUID ||
+				execution.CleanupPVCResourceVersion != input.PVCResourceVersion ||
+				!execution.CleanupAuthorizationExpiresAt.After(now) ||
+				input.ObservedNotFoundAt.Before(execution.CleanupClaimedAt) ||
+				input.ObservedNotFoundAt.After(now) {
 				return errs.ErrStateConflict
 			}
-			if err := lockRuntimeCleanupSession(
-				ctx, tx, input.Principal, execution,
-			); err != nil {
-				return err
-			}
-			blocked, err := tx.IntegrationContinuationBlocksCleanup(
+			blocked, err := tx.SessionBlocksRuntimeCleanup(
 				ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
 			)
 			if err != nil || blocked {
@@ -1988,6 +3275,8 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 			execution.Fence++
 			execution.CleanupAuthorizationState = "CONSUMED"
 			execution.CleanupConsumedAt = now
+			execution.CleanupNotFoundAt = input.ObservedNotFoundAt
+			execution.CleanupDeletionProofSHA256 = input.DeletionProofSHA256
 			execution.UpdatedAt = now
 			if err := tx.UpdateRuntimeExecution(
 				ctx, execution, expectedVersion, expectedFence,
@@ -2004,24 +3293,20 @@ func (service *Service) ConsumeRuntimeCleanupAuthorization(
 	return result, err
 }
 
-func lockRuntimeCleanupSession(
-	ctx context.Context,
-	tx domainrepo.Transaction,
-	principal value.Principal,
-	execution RuntimeExecution,
-) error {
-	session, err := tx.GetForUpdate(
-		ctx, execution.OrganizationID, execution.ProjectID, execution.SessionID,
-	)
-	if err != nil {
-		return err
-	}
-	if session.Kind != enum.KindSession || session.OwnerActorID != principal.ActorID ||
-		session.OrganizationID != execution.OrganizationID ||
-		session.ProjectID != execution.ProjectID {
-		return errs.ErrNotFound
-	}
-	return nil
+func runtimePVCDeletionProofSHA256(
+	name, uid, resourceVersion, authorizationID string,
+	generation uint64,
+	observedAt time.Time,
+) string {
+	return hashString(strings.Join([]string{
+		"runtime-pvc-not-found-v2", name, uid, resourceVersion, authorizationID,
+		strconv.FormatUint(generation, 10), observedAt.Format(time.RFC3339Nano),
+	}, "\n"))
+}
+
+func validRuntimePVCTuple(name, uid, resourceVersion string) bool {
+	return len(name) >= 1 && len(name) <= 253 && value.ValidateID(uid) == nil &&
+		len(resourceVersion) >= 1 && len(resourceVersion) <= 64
 }
 
 func (service *Service) ExpireRuntimeCleanupAuthorization(
@@ -2326,7 +3611,7 @@ func (service *Service) completeRuntimeProcessFromTurn(
 	turn entity.Resource,
 ) error {
 	spec, ok := turn.Spec.(entity.TurnSpec)
-	if !ok || !turn.State.Terminal() {
+	if !ok || (!turn.State.Terminal() && turn.State != enum.StateBlocked) {
 		return errs.ErrStateConflict
 	}
 	if err := service.completeProcessFromTurn(ctx, tx, principal, turn, spec); err != nil {
@@ -2877,6 +4162,9 @@ func (service *Service) suspendRuntimeExecutionForIntegration(
 	execution.Version++
 	execution.Fence++
 	execution.State = "SUSPENDED"
+	if err := pinRuntimeRetention(&execution, now); err != nil {
+		return err
+	}
 	execution.TerminalOutcome = "SUSPENDED"
 	execution.TerminalReference = invocationID
 	execution.TerminalSHA256 = requestSHA256
@@ -2925,6 +4213,9 @@ func (service *Service) suspendRuntimeExecutionForOwnerGate(
 	execution.Version++
 	execution.Fence++
 	execution.State = "SUSPENDED"
+	if err := pinRuntimeRetention(&execution, now); err != nil {
+		return err
+	}
 	execution.TerminalOutcome = "SUSPENDED"
 	execution.TerminalReference = gateID
 	execution.TerminalSHA256 = requestSHA256

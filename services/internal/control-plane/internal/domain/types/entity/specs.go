@@ -283,6 +283,9 @@ type CredentialBindingSpec struct {
 	ProviderObservedLimit       uint64                 `json:"providerObservedLimit,omitempty"`
 	ProviderObservationRevision uint64                 `json:"providerObservationRevision,omitempty"`
 	ProviderObservedAt          time.Time              `json:"providerObservedAt,omitempty"`
+	ImmutableSecretRef          string                 `json:"immutableSecretRef"`
+	ProviderContentVersion      string                 `json:"providerContentVersion"`
+	ContentSHA256               string                 `json:"contentSha256"`
 	Ownership                   ConfigurationOwnership `json:"ownership"`
 }
 
@@ -293,7 +296,10 @@ func (spec CredentialBindingSpec) ConfigurationOwnership() ConfigurationOwnershi
 func (spec CredentialBindingSpec) Validate() error {
 	if value.ValidateStableKey(spec.Purpose) != nil ||
 		!validSecretRef(spec.SecretRef) ||
+		!validImmutableSecretRef(spec.ImmutableSecretRef) ||
 		!validExternalRef(spec.PrincipalRef) ||
+		!validExternalRef(spec.ProviderContentVersion) ||
+		!validSHA256(spec.ContentSHA256) ||
 		spec.Revision == 0 || spec.Ownership.Validate() != nil {
 		return errors.New("credential binding specification is invalid")
 	}
@@ -392,6 +398,7 @@ type RuntimeRevisionSpec struct {
 	RoleID                      string                 `json:"roleId"`
 	ChatID                      string                 `json:"chatId,omitempty"`
 	ProviderCredentialBindingID string                 `json:"providerCredentialBindingId"`
+	EffectiveRuntimeSHA256      string                 `json:"effectiveRuntimeSha256"`
 }
 
 func (RuntimeRevisionSpec) Kind() enum.Kind { return enum.KindRuntimeRevision }
@@ -411,6 +418,7 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		value.ValidateID(spec.SessionID) != nil ||
 		value.ValidateID(spec.RoleID) != nil ||
 		value.ValidateID(spec.ProviderCredentialBindingID) != nil ||
+		!validSHA256(spec.EffectiveRuntimeSHA256) ||
 		(spec.ChatID != "" && value.ValidateID(spec.ChatID) != nil) {
 		return errors.New("runtime revision specification is invalid")
 	}
@@ -457,11 +465,15 @@ func (reference EffectiveResourceRef) Validate() error {
 }
 
 type SessionSpec struct {
-	AgentID                  string `json:"agentId"`
-	ProviderAccountBindingID string `json:"providerAccountBindingId"`
-	ConversationID           string `json:"conversationId,omitempty"`
-	ArchiveRef               string `json:"archiveRef,omitempty"`
-	LastTurnSequence         uint64 `json:"lastTurnSequence"`
+	AgentID                    string `json:"agentId"`
+	ProviderAccountBindingID   string `json:"providerAccountBindingId"`
+	ConversationID             string `json:"conversationId,omitempty"`
+	ArchiveRef                 string `json:"archiveRef,omitempty"`
+	LastTurnSequence           uint64 `json:"lastTurnSequence"`
+	AgentSessionKey            string `json:"agentSessionKey,omitempty"`
+	AgentSessionID             int64  `json:"agentSessionId,omitempty"`
+	AgentSessionBindingVersion uint64 `json:"agentSessionBindingVersion,omitempty"`
+	AgentSessionBindingSHA256  string `json:"agentSessionBindingSha256,omitempty"`
 }
 
 func (SessionSpec) Kind() enum.Kind { return enum.KindSession }
@@ -478,25 +490,36 @@ func (spec SessionSpec) Validate() error {
 	if spec.ArchiveRef != "" && !validExternalRef(spec.ArchiveRef) {
 		return errors.New("session archive reference is invalid")
 	}
+	agentBinding := spec.AgentSessionKey != "" || spec.AgentSessionID != 0 ||
+		spec.AgentSessionBindingVersion != 0 || spec.AgentSessionBindingSHA256 != ""
+	if agentBinding && (len(spec.AgentSessionKey) < 1 || len(spec.AgentSessionKey) > 256 ||
+		spec.AgentSessionID <= 0 || spec.AgentSessionBindingVersion == 0 ||
+		!validSHA256(spec.AgentSessionBindingSHA256)) {
+		return errors.New("agent session binding is invalid")
+	}
 	return nil
 }
 
 type TurnSpec struct {
-	SessionID            string `json:"sessionId"`
-	Sequence             uint64 `json:"sequence"`
-	SourceRef            string `json:"sourceRef"`
-	PromptArtifactID     string `json:"promptArtifactId"`
-	RuntimeRevisionID    string `json:"runtimeRevisionId"`
-	ProcessRunID         string `json:"processRunId,omitempty"`
-	Attempt              uint32 `json:"attempt"`
-	Outcome              string `json:"outcome,omitempty"`
-	ResultArtifactID     string `json:"resultArtifactId,omitempty"`
-	EffectiveInputSHA256 string `json:"effectiveInputSha256"`
-	PredecessorTurnID    string `json:"predecessorTurnId,omitempty"`
-	OwnerFeedback        string `json:"ownerFeedback,omitempty"`
-	OwnerFeedbackGateID  string `json:"ownerFeedbackGateId,omitempty"`
-	OwnerFeedbackVersion uint64 `json:"ownerFeedbackGateVersion,omitempty"`
-	OwnerFeedbackSHA256  string `json:"ownerFeedbackSha256,omitempty"`
+	SessionID               string `json:"sessionId"`
+	Sequence                uint64 `json:"sequence"`
+	SourceRef               string `json:"sourceRef"`
+	PromptArtifactID        string `json:"promptArtifactId"`
+	RuntimeRevisionID       string `json:"runtimeRevisionId"`
+	ProcessRunID            string `json:"processRunId,omitempty"`
+	Attempt                 uint32 `json:"attempt"`
+	Outcome                 string `json:"outcome,omitempty"`
+	ResultArtifactID        string `json:"resultArtifactId,omitempty"`
+	EffectiveInputSHA256    string `json:"effectiveInputSha256"`
+	PredecessorTurnID       string `json:"predecessorTurnId,omitempty"`
+	OwnerFeedback           string `json:"ownerFeedback,omitempty"`
+	OwnerFeedbackGateID     string `json:"ownerFeedbackGateId,omitempty"`
+	OwnerFeedbackVersion    uint64 `json:"ownerFeedbackGateVersion,omitempty"`
+	OwnerFeedbackSHA256     string `json:"ownerFeedbackSha256,omitempty"`
+	AgentSessionTurnID      int64  `json:"agentSessionTurnId,omitempty"`
+	AgentRunID              string `json:"agentRunId,omitempty"`
+	AgentTurnBindingVersion uint64 `json:"agentTurnBindingVersion,omitempty"`
+	AgentTurnBindingSHA256  string `json:"agentTurnBindingSha256,omitempty"`
 }
 
 func (TurnSpec) Kind() enum.Kind { return enum.KindTurn }
@@ -527,6 +550,13 @@ func (spec TurnSpec) Validate() error {
 		!validSHA256(spec.OwnerFeedbackSHA256) ||
 		digestText(spec.OwnerFeedback) != spec.OwnerFeedbackSHA256) {
 		return errors.New("turn owner feedback binding is invalid")
+	}
+	agentBinding := spec.AgentSessionTurnID != 0 || spec.AgentRunID != "" ||
+		spec.AgentTurnBindingVersion != 0 || spec.AgentTurnBindingSHA256 != ""
+	if agentBinding && (spec.AgentSessionTurnID <= 0 || len(spec.AgentRunID) < 1 ||
+		len(spec.AgentRunID) > 256 || spec.AgentTurnBindingVersion == 0 ||
+		!validSHA256(spec.AgentTurnBindingSHA256)) {
+		return errors.New("agent turn binding is invalid")
 	}
 	return nil
 }
@@ -1126,6 +1156,17 @@ func validSecretRef(reference string) bool {
 	parsed, err := url.Parse(reference)
 	return err == nil &&
 		(parsed.Scheme == "vault" || parsed.Scheme == "k8s-secret") &&
+		parsed.Host != "" && parsed.Path != "" && parsed.Path != "/" &&
+		parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
+}
+
+func validImmutableSecretRef(reference string) bool {
+	if !validExternalRef(reference) {
+		return false
+	}
+	parsed, err := url.Parse(reference)
+	return err == nil &&
+		(parsed.Scheme == "vault-versioned" || parsed.Scheme == "k8s-immutable-secret") &&
 		parsed.Host != "" && parsed.Path != "" && parsed.Path != "/" &&
 		parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
 }

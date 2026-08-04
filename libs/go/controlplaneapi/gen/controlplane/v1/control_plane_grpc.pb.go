@@ -63,6 +63,14 @@ const (
 	ControlPlaneService_GetRuntimeRevision_FullMethodName                 = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
 	ControlPlaneService_RecordMemoryEmbedding_FullMethodName              = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
 	ControlPlaneService_ClaimRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution"
+	ControlPlaneService_BindRuntimeAgentSession_FullMethodName            = "/controlplane.v1.ControlPlaneService/BindRuntimeAgentSession"
+	ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName   = "/controlplane.v1.ControlPlaneService/ResolveRuntimeAgentBindingIntent"
+	ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName        = "/controlplane.v1.ControlPlaneService/MaterializeRuntimeAgentTurn"
+	ControlPlaneService_SetResourceRetentionPolicy_FullMethodName         = "/controlplane.v1.ControlPlaneService/SetResourceRetentionPolicy"
+	ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName      = "/controlplane.v1.ControlPlaneService/RetireResourceRetentionPolicy"
+	ControlPlaneService_GetResourceRetentionPolicy_FullMethodName         = "/controlplane.v1.ControlPlaneService/GetResourceRetentionPolicy"
+	ControlPlaneService_HoldRuntimeRetention_FullMethodName               = "/controlplane.v1.ControlPlaneService/HoldRuntimeRetention"
+	ControlPlaneService_ReleaseRuntimeRetention_FullMethodName            = "/controlplane.v1.ControlPlaneService/ReleaseRuntimeRetention"
 	ControlPlaneService_GetRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/GetRuntimeExecution"
 	ControlPlaneService_AdmitRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
 	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName          = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
@@ -70,9 +78,12 @@ const (
 	ControlPlaneService_CompleteRuntimeExecution_FullMethodName           = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
 	ControlPlaneService_CancelRuntimeExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/CancelRuntimeExecution"
 	ControlPlaneService_RetryRuntimeExecution_FullMethodName              = "/controlplane.v1.ControlPlaneService/RetryRuntimeExecution"
+	ControlPlaneService_RescheduleRuntimeExecution_FullMethodName         = "/controlplane.v1.ControlPlaneService/RescheduleRuntimeExecution"
 	ControlPlaneService_ExpireRuntimeExecution_FullMethodName             = "/controlplane.v1.ControlPlaneService/ExpireRuntimeExecution"
 	ControlPlaneService_RecordRuntimeArchive_FullMethodName               = "/controlplane.v1.ControlPlaneService/RecordRuntimeArchive"
 	ControlPlaneService_VerifyRuntimeRestore_FullMethodName               = "/controlplane.v1.ControlPlaneService/VerifyRuntimeRestore"
+	ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName           = "/controlplane.v1.ControlPlaneService/BindRuntimeRestoreTarget"
+	ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName           = "/controlplane.v1.ControlPlaneService/CompleteRuntimeRehydrate"
 	ControlPlaneService_AuthorizeRuntimeCleanup_FullMethodName            = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeCleanup"
 	ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName = "/controlplane.v1.ControlPlaneService/ConsumeRuntimeCleanupAuthorization"
 	ControlPlaneService_ExpireRuntimeCleanupAuthorization_FullMethodName  = "/controlplane.v1.ControlPlaneService/ExpireRuntimeCleanupAuthorization"
@@ -197,6 +208,25 @@ type ControlPlaneServiceClient interface {
 	// ClaimRuntimeExecution материализует server-owned immutable snapshot для
 	// точной попытки из проверенного runtime grant; request не принимает IDs.
 	ClaimRuntimeExecution(ctx context.Context, in *ClaimRuntimeExecutionRequest, opts ...grpc.CallOption) (*ClaimRuntimeExecutionResponse, error)
+	// BindRuntimeAgentSession принимает bot-owned identifiers только от
+	// авторитетного bot-service и атомарно связывает их с exact owner graph до claim.
+	BindRuntimeAgentSession(ctx context.Context, in *BindRuntimeAgentSessionRequest, opts ...grpc.CallOption) (*BindRuntimeAgentSessionResponse, error)
+	// ResolveRuntimeAgentBindingIntent разрешает Mattermost source reference в
+	// exact owner tuple только для bot-service до runtime claim.
+	ResolveRuntimeAgentBindingIntent(ctx context.Context, in *ResolveRuntimeAgentBindingIntentRequest, opts ...grpc.CallOption) (*ResolveRuntimeAgentBindingIntentResponse, error)
+	// MaterializeRuntimeAgentTurn атомарно создаёт server-owned Session/Turn,
+	// fresh RuntimeRevision и exact bot binding из подтверждённого bot turn.
+	MaterializeRuntimeAgentTurn(ctx context.Context, in *MaterializeRuntimeAgentTurnRequest, opts ...grpc.CallOption) (*MaterializeRuntimeAgentTurnResponse, error)
+	// SetResourceRetentionPolicy атомарно создаёт следующую owner version.
+	SetResourceRetentionPolicy(ctx context.Context, in *SetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*SetResourceRetentionPolicyResponse, error)
+	// RetireResourceRetentionPolicy закрывает exact current policy version.
+	RetireResourceRetentionPolicy(ctx context.Context, in *RetireResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*RetireResourceRetentionPolicyResponse, error)
+	// GetResourceRetentionPolicy читает current owner policy без local default.
+	GetResourceRetentionPolicy(ctx context.Context, in *GetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*GetResourceRetentionPolicyResponse, error)
+	// HoldRuntimeRetention устанавливает server-owned manual/legal hold сессии.
+	HoldRuntimeRetention(ctx context.Context, in *HoldRuntimeRetentionRequest, opts ...grpc.CallOption) (*HoldRuntimeRetentionResponse, error)
+	// ReleaseRuntimeRetention снимает exact versioned hold.
+	ReleaseRuntimeRetention(ctx context.Context, in *ReleaseRuntimeRetentionRequest, opts ...grpc.CallOption) (*ReleaseRuntimeRetentionResponse, error)
 	// GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
 	GetRuntimeExecution(ctx context.Context, in *GetRuntimeExecutionRequest, opts ...grpc.CallOption) (*GetRuntimeExecutionResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
@@ -211,12 +241,20 @@ type ControlPlaneServiceClient interface {
 	CancelRuntimeExecution(ctx context.Context, in *CancelRuntimeExecutionRequest, opts ...grpc.CallOption) (*CancelRuntimeExecutionResponse, error)
 	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
 	RetryRuntimeExecution(ctx context.Context, in *RetryRuntimeExecutionRequest, opts ...grpc.CallOption) (*RetryRuntimeExecutionResponse, error)
+	// RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
+	// attempt/RuntimeRevision/provider observation без мутации старого snapshot.
+	RescheduleRuntimeExecution(ctx context.Context, in *RescheduleRuntimeExecutionRequest, opts ...grpc.CallOption) (*RescheduleRuntimeExecutionResponse, error)
 	// ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
 	ExpireRuntimeExecution(ctx context.Context, in *ExpireRuntimeExecutionRequest, opts ...grpc.CallOption) (*ExpireRuntimeExecutionResponse, error)
 	// RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
 	RecordRuntimeArchive(ctx context.Context, in *RecordRuntimeArchiveRequest, opts ...grpc.CallOption) (*RecordRuntimeArchiveResponse, error)
 	// VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
 	VerifyRuntimeRestore(ctx context.Context, in *VerifyRuntimeRestoreRequest, opts ...grpc.CallOption) (*VerifyRuntimeRestoreResponse, error)
+	// BindRuntimeRestoreTarget одноразово связывает restore с exact новой PVC.
+	BindRuntimeRestoreTarget(ctx context.Context, in *BindRuntimeRestoreTargetRequest, opts ...grpc.CallOption) (*BindRuntimeRestoreTargetResponse, error)
+	// CompleteRuntimeRehydrate потребляет restore assignment после durable proof
+	// и до запуска role Pod.
+	CompleteRuntimeRehydrate(ctx context.Context, in *CompleteRuntimeRehydrateRequest, opts ...grpc.CallOption) (*CompleteRuntimeRehydrateResponse, error)
 	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
 	AuthorizeRuntimeCleanup(ctx context.Context, in *AuthorizeRuntimeCleanupRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeCleanupResponse, error)
 	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
@@ -698,6 +736,86 @@ func (c *controlPlaneServiceClient) ClaimRuntimeExecution(ctx context.Context, i
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) BindRuntimeAgentSession(ctx context.Context, in *BindRuntimeAgentSessionRequest, opts ...grpc.CallOption) (*BindRuntimeAgentSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindRuntimeAgentSessionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_BindRuntimeAgentSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ResolveRuntimeAgentBindingIntent(ctx context.Context, in *ResolveRuntimeAgentBindingIntentRequest, opts ...grpc.CallOption) (*ResolveRuntimeAgentBindingIntentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveRuntimeAgentBindingIntentResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) MaterializeRuntimeAgentTurn(ctx context.Context, in *MaterializeRuntimeAgentTurnRequest, opts ...grpc.CallOption) (*MaterializeRuntimeAgentTurnResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeRuntimeAgentTurnResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) SetResourceRetentionPolicy(ctx context.Context, in *SetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*SetResourceRetentionPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetResourceRetentionPolicyResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetResourceRetentionPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RetireResourceRetentionPolicy(ctx context.Context, in *RetireResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*RetireResourceRetentionPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetireResourceRetentionPolicyResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetResourceRetentionPolicy(ctx context.Context, in *GetResourceRetentionPolicyRequest, opts ...grpc.CallOption) (*GetResourceRetentionPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetResourceRetentionPolicyResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetResourceRetentionPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) HoldRuntimeRetention(ctx context.Context, in *HoldRuntimeRetentionRequest, opts ...grpc.CallOption) (*HoldRuntimeRetentionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HoldRuntimeRetentionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_HoldRuntimeRetention_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ReleaseRuntimeRetention(ctx context.Context, in *ReleaseRuntimeRetentionRequest, opts ...grpc.CallOption) (*ReleaseRuntimeRetentionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseRuntimeRetentionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReleaseRuntimeRetention_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetRuntimeExecution(ctx context.Context, in *GetRuntimeExecutionRequest, opts ...grpc.CallOption) (*GetRuntimeExecutionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetRuntimeExecutionResponse)
@@ -768,6 +886,16 @@ func (c *controlPlaneServiceClient) RetryRuntimeExecution(ctx context.Context, i
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) RescheduleRuntimeExecution(ctx context.Context, in *RescheduleRuntimeExecutionRequest, opts ...grpc.CallOption) (*RescheduleRuntimeExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RescheduleRuntimeExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RescheduleRuntimeExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ExpireRuntimeExecution(ctx context.Context, in *ExpireRuntimeExecutionRequest, opts ...grpc.CallOption) (*ExpireRuntimeExecutionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ExpireRuntimeExecutionResponse)
@@ -792,6 +920,26 @@ func (c *controlPlaneServiceClient) VerifyRuntimeRestore(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerifyRuntimeRestoreResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_VerifyRuntimeRestore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) BindRuntimeRestoreTarget(ctx context.Context, in *BindRuntimeRestoreTargetRequest, opts ...grpc.CallOption) (*BindRuntimeRestoreTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindRuntimeRestoreTargetResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CompleteRuntimeRehydrate(ctx context.Context, in *CompleteRuntimeRehydrateRequest, opts ...grpc.CallOption) (*CompleteRuntimeRehydrateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRuntimeRehydrateResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1055,6 +1203,25 @@ type ControlPlaneServiceServer interface {
 	// ClaimRuntimeExecution материализует server-owned immutable snapshot для
 	// точной попытки из проверенного runtime grant; request не принимает IDs.
 	ClaimRuntimeExecution(context.Context, *ClaimRuntimeExecutionRequest) (*ClaimRuntimeExecutionResponse, error)
+	// BindRuntimeAgentSession принимает bot-owned identifiers только от
+	// авторитетного bot-service и атомарно связывает их с exact owner graph до claim.
+	BindRuntimeAgentSession(context.Context, *BindRuntimeAgentSessionRequest) (*BindRuntimeAgentSessionResponse, error)
+	// ResolveRuntimeAgentBindingIntent разрешает Mattermost source reference в
+	// exact owner tuple только для bot-service до runtime claim.
+	ResolveRuntimeAgentBindingIntent(context.Context, *ResolveRuntimeAgentBindingIntentRequest) (*ResolveRuntimeAgentBindingIntentResponse, error)
+	// MaterializeRuntimeAgentTurn атомарно создаёт server-owned Session/Turn,
+	// fresh RuntimeRevision и exact bot binding из подтверждённого bot turn.
+	MaterializeRuntimeAgentTurn(context.Context, *MaterializeRuntimeAgentTurnRequest) (*MaterializeRuntimeAgentTurnResponse, error)
+	// SetResourceRetentionPolicy атомарно создаёт следующую owner version.
+	SetResourceRetentionPolicy(context.Context, *SetResourceRetentionPolicyRequest) (*SetResourceRetentionPolicyResponse, error)
+	// RetireResourceRetentionPolicy закрывает exact current policy version.
+	RetireResourceRetentionPolicy(context.Context, *RetireResourceRetentionPolicyRequest) (*RetireResourceRetentionPolicyResponse, error)
+	// GetResourceRetentionPolicy читает current owner policy без local default.
+	GetResourceRetentionPolicy(context.Context, *GetResourceRetentionPolicyRequest) (*GetResourceRetentionPolicyResponse, error)
+	// HoldRuntimeRetention устанавливает server-owned manual/legal hold сессии.
+	HoldRuntimeRetention(context.Context, *HoldRuntimeRetentionRequest) (*HoldRuntimeRetentionResponse, error)
+	// ReleaseRuntimeRetention снимает exact versioned hold.
+	ReleaseRuntimeRetention(context.Context, *ReleaseRuntimeRetentionRequest) (*ReleaseRuntimeRetentionResponse, error)
 	// GetRuntimeExecution повторно читает snapshot только внутри проверенной boundary.
 	GetRuntimeExecution(context.Context, *GetRuntimeExecutionRequest) (*GetRuntimeExecutionResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
@@ -1069,12 +1236,20 @@ type ControlPlaneServiceServer interface {
 	CancelRuntimeExecution(context.Context, *CancelRuntimeExecutionRequest) (*CancelRuntimeExecutionResponse, error)
 	// RetryRuntimeExecution закрывает прежнюю попытку и создаёт новую fenced attempt.
 	RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error)
+	// RescheduleRuntimeExecution заменяет stale PENDING попытку свежими
+	// attempt/RuntimeRevision/provider observation без мутации старого snapshot.
+	RescheduleRuntimeExecution(context.Context, *RescheduleRuntimeExecutionRequest) (*RescheduleRuntimeExecutionResponse, error)
 	// ExpireRuntimeExecution выбирает одну истёкшую lease по database clock.
 	ExpireRuntimeExecution(context.Context, *ExpireRuntimeExecutionRequest) (*ExpireRuntimeExecutionResponse, error)
 	// RecordRuntimeArchive закрепляет неизменяемые archive reference и checksum.
 	RecordRuntimeArchive(context.Context, *RecordRuntimeArchiveRequest) (*RecordRuntimeArchiveResponse, error)
 	// VerifyRuntimeRestore сохраняет независимое доказательство восстановления.
 	VerifyRuntimeRestore(context.Context, *VerifyRuntimeRestoreRequest) (*VerifyRuntimeRestoreResponse, error)
+	// BindRuntimeRestoreTarget одноразово связывает restore с exact новой PVC.
+	BindRuntimeRestoreTarget(context.Context, *BindRuntimeRestoreTargetRequest) (*BindRuntimeRestoreTargetResponse, error)
+	// CompleteRuntimeRehydrate потребляет restore assignment после durable proof
+	// и до запуска role Pod.
+	CompleteRuntimeRehydrate(context.Context, *CompleteRuntimeRehydrateRequest) (*CompleteRuntimeRehydrateResponse, error)
 	// AuthorizeRuntimeCleanup выдаёт ровно одну bounded cleanup authorization.
 	AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error)
 	// ConsumeRuntimeCleanupAuthorization завершает ровно одну действующую authorization.
@@ -1248,6 +1423,30 @@ func (UnimplementedControlPlaneServiceServer) RecordMemoryEmbedding(context.Cont
 func (UnimplementedControlPlaneServiceServer) ClaimRuntimeExecution(context.Context, *ClaimRuntimeExecutionRequest) (*ClaimRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimRuntimeExecution not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) BindRuntimeAgentSession(context.Context, *BindRuntimeAgentSessionRequest) (*BindRuntimeAgentSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindRuntimeAgentSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ResolveRuntimeAgentBindingIntent(context.Context, *ResolveRuntimeAgentBindingIntentRequest) (*ResolveRuntimeAgentBindingIntentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveRuntimeAgentBindingIntent not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) MaterializeRuntimeAgentTurn(context.Context, *MaterializeRuntimeAgentTurnRequest) (*MaterializeRuntimeAgentTurnResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeRuntimeAgentTurn not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetResourceRetentionPolicy(context.Context, *SetResourceRetentionPolicyRequest) (*SetResourceRetentionPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetResourceRetentionPolicy not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RetireResourceRetentionPolicy(context.Context, *RetireResourceRetentionPolicyRequest) (*RetireResourceRetentionPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetireResourceRetentionPolicy not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetResourceRetentionPolicy(context.Context, *GetResourceRetentionPolicyRequest) (*GetResourceRetentionPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetResourceRetentionPolicy not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) HoldRuntimeRetention(context.Context, *HoldRuntimeRetentionRequest) (*HoldRuntimeRetentionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method HoldRuntimeRetention not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ReleaseRuntimeRetention(context.Context, *ReleaseRuntimeRetentionRequest) (*ReleaseRuntimeRetentionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseRuntimeRetention not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) GetRuntimeExecution(context.Context, *GetRuntimeExecutionRequest) (*GetRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeExecution not implemented")
 }
@@ -1269,6 +1468,9 @@ func (UnimplementedControlPlaneServiceServer) CancelRuntimeExecution(context.Con
 func (UnimplementedControlPlaneServiceServer) RetryRuntimeExecution(context.Context, *RetryRuntimeExecutionRequest) (*RetryRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetryRuntimeExecution not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) RescheduleRuntimeExecution(context.Context, *RescheduleRuntimeExecutionRequest) (*RescheduleRuntimeExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RescheduleRuntimeExecution not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ExpireRuntimeExecution(context.Context, *ExpireRuntimeExecutionRequest) (*ExpireRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExpireRuntimeExecution not implemented")
 }
@@ -1277,6 +1479,12 @@ func (UnimplementedControlPlaneServiceServer) RecordRuntimeArchive(context.Conte
 }
 func (UnimplementedControlPlaneServiceServer) VerifyRuntimeRestore(context.Context, *VerifyRuntimeRestoreRequest) (*VerifyRuntimeRestoreResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VerifyRuntimeRestore not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) BindRuntimeRestoreTarget(context.Context, *BindRuntimeRestoreTargetRequest) (*BindRuntimeRestoreTargetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindRuntimeRestoreTarget not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CompleteRuntimeRehydrate(context.Context, *CompleteRuntimeRehydrateRequest) (*CompleteRuntimeRehydrateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeRehydrate not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeCleanup(context.Context, *AuthorizeRuntimeCleanupRequest) (*AuthorizeRuntimeCleanupResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeCleanup not implemented")
@@ -2136,6 +2344,150 @@ func _ControlPlaneService_ClaimRuntimeExecution_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_BindRuntimeAgentSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindRuntimeAgentSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).BindRuntimeAgentSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).BindRuntimeAgentSession(ctx, req.(*BindRuntimeAgentSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ResolveRuntimeAgentBindingIntent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveRuntimeAgentBindingIntentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ResolveRuntimeAgentBindingIntent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ResolveRuntimeAgentBindingIntent(ctx, req.(*ResolveRuntimeAgentBindingIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_MaterializeRuntimeAgentTurn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeRuntimeAgentTurnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).MaterializeRuntimeAgentTurn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).MaterializeRuntimeAgentTurn(ctx, req.(*MaterializeRuntimeAgentTurnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_SetResourceRetentionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetResourceRetentionPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetResourceRetentionPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetResourceRetentionPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetResourceRetentionPolicy(ctx, req.(*SetResourceRetentionPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RetireResourceRetentionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetireResourceRetentionPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RetireResourceRetentionPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RetireResourceRetentionPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RetireResourceRetentionPolicy(ctx, req.(*RetireResourceRetentionPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetResourceRetentionPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResourceRetentionPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetResourceRetentionPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetResourceRetentionPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetResourceRetentionPolicy(ctx, req.(*GetResourceRetentionPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_HoldRuntimeRetention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HoldRuntimeRetentionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).HoldRuntimeRetention(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_HoldRuntimeRetention_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).HoldRuntimeRetention(ctx, req.(*HoldRuntimeRetentionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ReleaseRuntimeRetention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseRuntimeRetentionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReleaseRuntimeRetention(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReleaseRuntimeRetention_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReleaseRuntimeRetention(ctx, req.(*ReleaseRuntimeRetentionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRuntimeExecutionRequest)
 	if err := dec(in); err != nil {
@@ -2262,6 +2614,24 @@ func _ControlPlaneService_RetryRuntimeExecution_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_RescheduleRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RescheduleRuntimeExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RescheduleRuntimeExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RescheduleRuntimeExecution(ctx, req.(*RescheduleRuntimeExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ExpireRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ExpireRuntimeExecutionRequest)
 	if err := dec(in); err != nil {
@@ -2312,6 +2682,42 @@ func _ControlPlaneService_VerifyRuntimeRestore_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).VerifyRuntimeRestore(ctx, req.(*VerifyRuntimeRestoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_BindRuntimeRestoreTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindRuntimeRestoreTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).BindRuntimeRestoreTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).BindRuntimeRestoreTarget(ctx, req.(*BindRuntimeRestoreTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CompleteRuntimeRehydrate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRuntimeRehydrateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CompleteRuntimeRehydrate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CompleteRuntimeRehydrate(ctx, req.(*CompleteRuntimeRehydrateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2770,6 +3176,38 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ClaimRuntimeExecution_Handler,
 		},
 		{
+			MethodName: "BindRuntimeAgentSession",
+			Handler:    _ControlPlaneService_BindRuntimeAgentSession_Handler,
+		},
+		{
+			MethodName: "ResolveRuntimeAgentBindingIntent",
+			Handler:    _ControlPlaneService_ResolveRuntimeAgentBindingIntent_Handler,
+		},
+		{
+			MethodName: "MaterializeRuntimeAgentTurn",
+			Handler:    _ControlPlaneService_MaterializeRuntimeAgentTurn_Handler,
+		},
+		{
+			MethodName: "SetResourceRetentionPolicy",
+			Handler:    _ControlPlaneService_SetResourceRetentionPolicy_Handler,
+		},
+		{
+			MethodName: "RetireResourceRetentionPolicy",
+			Handler:    _ControlPlaneService_RetireResourceRetentionPolicy_Handler,
+		},
+		{
+			MethodName: "GetResourceRetentionPolicy",
+			Handler:    _ControlPlaneService_GetResourceRetentionPolicy_Handler,
+		},
+		{
+			MethodName: "HoldRuntimeRetention",
+			Handler:    _ControlPlaneService_HoldRuntimeRetention_Handler,
+		},
+		{
+			MethodName: "ReleaseRuntimeRetention",
+			Handler:    _ControlPlaneService_ReleaseRuntimeRetention_Handler,
+		},
+		{
 			MethodName: "GetRuntimeExecution",
 			Handler:    _ControlPlaneService_GetRuntimeExecution_Handler,
 		},
@@ -2798,6 +3236,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_RetryRuntimeExecution_Handler,
 		},
 		{
+			MethodName: "RescheduleRuntimeExecution",
+			Handler:    _ControlPlaneService_RescheduleRuntimeExecution_Handler,
+		},
+		{
 			MethodName: "ExpireRuntimeExecution",
 			Handler:    _ControlPlaneService_ExpireRuntimeExecution_Handler,
 		},
@@ -2808,6 +3250,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VerifyRuntimeRestore",
 			Handler:    _ControlPlaneService_VerifyRuntimeRestore_Handler,
+		},
+		{
+			MethodName: "BindRuntimeRestoreTarget",
+			Handler:    _ControlPlaneService_BindRuntimeRestoreTarget_Handler,
+		},
+		{
+			MethodName: "CompleteRuntimeRehydrate",
+			Handler:    _ControlPlaneService_CompleteRuntimeRehydrate_Handler,
 		},
 		{
 			MethodName: "AuthorizeRuntimeCleanup",

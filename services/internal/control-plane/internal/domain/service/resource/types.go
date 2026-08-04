@@ -120,6 +120,88 @@ type ClaimTurnResult struct {
 	AuthorityGeneration uint64
 }
 
+type RuntimeAgentSessionBindingInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	SessionID               string
+	ExpectedSessionVersion  uint64
+	TurnID                  string
+	ExpectedTurnVersion     uint64
+	ExpectedAttempt         uint32
+	ExpectedInputSHA256     string
+	RuntimeRevisionID       string
+	RuntimeRevisionVersion  uint64
+	RuntimeRevisionSHA256   string
+	AgentSessionKey         string
+	AgentSessionID          int64
+	AgentSessionVersion     uint64
+	AgentSessionTurnID      int64
+	AgentRunID              string
+	AgentSessionTurnVersion uint64
+}
+
+type RuntimeAgentSessionBinding struct {
+	SessionID                 string
+	SessionVersion            uint64
+	TurnID                    string
+	TurnVersion               uint64
+	AgentSessionBindingSHA256 string
+	AgentTurnBindingSHA256    string
+}
+
+type RuntimeAgentBindingIntent struct {
+	SessionID              string
+	SessionVersion         uint64
+	TurnID                 string
+	TurnVersion            uint64
+	Attempt                uint32
+	InputSHA256            string
+	RuntimeRevisionID      string
+	RuntimeRevisionVersion uint64
+	RuntimeRevisionSHA256  string
+}
+
+type MaterializeRuntimeAgentTurnInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	SourceRef               string
+	RoleStableKey           string
+	ExternalChannelRef      string
+	PromptText              string
+	AgentSessionKey         string
+	AgentSessionID          int64
+	AgentSessionVersion     uint64
+	AgentSessionTurnID      int64
+	AgentSessionTurnVersion uint64
+	AgentRunID              string
+}
+
+type MaterializedRuntimeAgentTurn struct {
+	RuntimeAgentBindingIntent
+	AgentSessionBindingSHA256 string
+	AgentTurnBindingSHA256    string
+}
+
+type ResourceRetentionPolicyInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	ExpectedVersion         uint64
+	PVCRetentionSeconds     uint64
+	ArchiveRetentionSeconds uint64
+	ReasonCode              string
+}
+
+type RuntimeRetentionHoldInput struct {
+	Principal              value.Principal
+	IdempotencyKey         string
+	SessionID              string
+	ExpectedSessionVersion uint64
+	HoldID                 string
+	ExpectedHoldVersion    uint64
+	Kind                   string
+	ReasonCode             string
+}
+
 type RenewTurnInput struct {
 	Principal           value.Principal
 	IdempotencyKey      string
@@ -462,8 +544,14 @@ type CancelRuntimeExecutionInput struct {
 
 type RuntimeArchiveInput struct {
 	RuntimeExecutionInput
-	ArchiveReference string
-	ArchiveSHA256    string
+	ArchiveReference        string
+	ArchiveSHA256           string
+	ArchiveObjectKey        string
+	ArchiveVersionID        string
+	ArchiveKMSKeyARN        string
+	ArchiveObjectLockMode   string
+	ArchiveRetainUntil      time.Time
+	ArchiveProvenanceSHA256 string
 }
 
 type RuntimeRestoreInput struct {
@@ -473,11 +561,32 @@ type RuntimeRestoreInput struct {
 	RestoreProofSHA256    string
 }
 
+type RuntimeRestoreTargetInput struct {
+	RuntimeExecutionInput
+	ExpectedAssignmentGeneration uint64
+	PVCName                      string
+	PVCUID                       string
+	PVCResourceVersion           string
+}
+
+type RuntimeRehydrateInput struct {
+	RuntimeExecutionInput
+	AssignmentGeneration uint64
+	PVCName              string
+	PVCUID               string
+	PVCResourceVersion   string
+	ProofReference       string
+	ProofSHA256          string
+}
+
 type RuntimeCleanupInput struct {
 	RuntimeExecutionInput
 	ArchiveSHA256             string
 	RestoreProofSHA256        string
 	ExpectedCleanupGeneration uint64
+	PVCName                   string
+	PVCUID                    string
+	PVCResourceVersion        string
 }
 
 type RuntimeCleanupAuthorizationInput struct {
@@ -486,6 +595,11 @@ type RuntimeCleanupAuthorizationInput struct {
 	CleanupAuthorizationGeneration uint64
 	ArchiveSHA256                  string
 	RestoreProofSHA256             string
+	PVCName                        string
+	PVCUID                         string
+	PVCResourceVersion             string
+	ObservedNotFoundAt             time.Time
+	DeletionProofSHA256            string
 }
 
 type PinnedIntegrationResource = domainrepo.PinnedIntegrationResource

@@ -97,6 +97,7 @@ updated: 2026-07-28
 | `ARCH-MC-007`      | `docs/architecture/runtime-and-sessions.md`                 |
 | `ARCH-MC-008`      | `docs/architecture/attachments-and-artifacts.md`            |
 | `ARCH-MC-009`      | `docs/architecture/automations-and-playbooks.md`            |
+| `ARCH-MC-010`      | `docs/architecture/runtime-controller.md`                   |
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
 | `ROAD-MC-001`      | `docs/roadmap/README.md`                                    |
@@ -119,6 +120,8 @@ updated: 2026-07-28
 | `GO-DOC-004`       | `docs/guides/event-delivery-go.md`                          |
 | `GO-DOC-005`       | `docs/guides/interservice-communication.md`                 |
 | `GO-DOC-006`       | `docs/guides/shared-go-libraries.md`                        |
+| `SVC-MC-005`       | `services/internal/runtime-controller/README.md`            |
+| `RUN-MC-008`       | `docs/runbooks/runtime-controller.md`                       |
 | `FE-DOC-001`       | `docs/guides/frontend-vue.md`                               |
 | `INFRA-DOC-001`    | `docs/guides/infrastructure.md`                             |
 | `SVC-DOC-001`      | `services/README.md`                                        |

@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -97,6 +98,11 @@ type runner struct {
 	rotatingCredentialFiles  []string
 	credentialWatcherFactory func() (credentialEventWatcher, error)
 	sessionArchiveProof      map[string]sessionSourceProof
+	runtimeContract          *runtimeSessionContract
+	runtimeContractReadback  atomic.Pointer[runtimeSessionContract]
+	runtimeReady             atomic.Bool
+	persistentRuntime        bool
+	codexAuthFile            string
 }
 
 type sessionSourceProof struct {
@@ -187,8 +193,18 @@ func main() {
 	if len(os.Args) < 2 {
 		r.fail(errors.New("mode is required"), nil)
 	}
+	if os.Args[1] == "runtime-init-workspace" {
+		if err := os.Mkdir("/workspace-root/session", 0o750); err != nil && !errors.Is(err, os.ErrExist) {
+			r.fail(errors.New("initialize runtime workspace"), nil)
+		}
+		return
+	}
 	ctx := context.Background()
-	if err := r.prepareEphemeralRuntime(); err != nil {
+	prepareRuntime := r.prepareEphemeralRuntime
+	if len(os.Args) >= 2 && os.Args[1] == "runtime-session" {
+		prepareRuntime = r.preparePersistentRuntime
+	}
+	if err := prepareRuntime(); err != nil {
 		r.fail(err, nil)
 	}
 	defer r.cleanupEphemeralRuntime()
@@ -212,6 +228,8 @@ func main() {
 		err = r.runChat(ctx)
 	case "session":
 		err = r.runSession(ctx)
+	case "runtime-session":
+		err = r.runRuntimeSession(ctx)
 	default:
 		err = fmt.Errorf("unknown mode %q", os.Args[1])
 	}
@@ -486,6 +504,13 @@ func (r *runner) runSession(ctx context.Context) error {
 		return err
 	}
 	client := &http.Client{Timeout: 60 * time.Second}
+	if r.runtimeContract != nil {
+		transport, err := runtimeMTLSTransport(r.runtimeContract.BotServiceTLS)
+		if err != nil {
+			return err
+		}
+		client.Transport = transport
+	}
 	snapshot, err := r.fetchSessionSnapshot(ctx, client, botServiceURL, sessionKey, sessionToken)
 	if err != nil {
 		return err
@@ -537,6 +562,11 @@ func (r *runner) runSessionTurns(
 		if !claim.HasTurn {
 			time.Sleep(10 * time.Second)
 			continue
+		}
+		if r.runtimeContract != nil &&
+			(claim.TurnID != r.runtimeContract.AgentSessionTurnID ||
+				claim.RunID != r.runtimeContract.AgentRunID) {
+			return errors.New("bot-service turn does not match immutable runtime binding")
 		}
 		if strings.TrimSpace(claim.CodexSessionID) != "" {
 			codexSessionID = strings.TrimSpace(claim.CodexSessionID)
@@ -702,6 +732,33 @@ func (r *runner) runSessionTurns(
 		}); err != nil {
 			return err
 		}
+		if r.runtimeContract != nil {
+			if err := r.publishRuntimeHandoff(ctx, status, claim.RunID, finalMessage, errorMessage, archive); err != nil {
+				return err
+			}
+			next, err := r.waitRuntimeSuccessor(ctx)
+			if err != nil {
+				return err
+			}
+			if r.runtimeContract.credentialRoot != "" {
+				_ = os.RemoveAll(r.runtimeContract.credentialRoot)
+			}
+			r.runtimeReady.Store(false)
+			r.runtimeContract = next
+			r.runtimeContractReadback.Store(next)
+			if err := r.probeRuntimeDependencies(ctx); err != nil {
+				return errors.New("runtime successor mTLS and bearer barrier failed")
+			}
+			transport, err := runtimeMTLSTransport(next.BotServiceTLS)
+			if err != nil {
+				return err
+			}
+			client.Transport = transport
+			botServiceURL = strings.TrimRight(next.BotServiceURL, "/")
+			sessionKey = next.SessionKey
+			sessionToken = next.sessionToken
+			r.runtimeReady.Store(true)
+		}
 	}
 }
 
@@ -845,15 +902,54 @@ func (r *runner) prepareEphemeralRuntime() error {
 	return nil
 }
 
+func (r *runner) preparePersistentRuntime() error {
+	if r.ephemeralRoot != "" {
+		return nil
+	}
+	root := "/workspace/.mattercodex/runtime"
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return errors.New("persistent runtime directory is unavailable")
+	}
+	if err := os.Chmod(root, 0o700); err != nil {
+		return errors.New("persistent runtime directory is unsafe")
+	}
+	r.ephemeralRoot = root
+	r.persistentRuntime = true
+	r.codexHome = filepath.Join(root, "codex-home")
+	r.rawArtifacts = filepath.Join(root, "raw-artifacts")
+	for _, dir := range []string{r.codexHome, r.rawArtifacts} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return errors.New("persistent runner directory is unavailable")
+		}
+	}
+	values := map[string]struct{}{}
+	exactOnlyValues := map[string]struct{}{}
+	collectEnvironmentSecretValues(values, exactOnlyValues, os.Environ())
+	inventory, err := compileSecretInventory(values, map[string]int64{}, exactOnlyValues)
+	if err != nil {
+		return err
+	}
+	if err := inventory.validateForExecution(); err != nil {
+		return err
+	}
+	r.secrets = inventory
+	return nil
+}
+
 func (r *runner) cleanupEphemeralRuntime() {
 	if r.ephemeralRoot == "" {
 		return
 	}
-	_ = os.RemoveAll(r.ephemeralRoot)
+	if !r.persistentRuntime {
+		_ = os.RemoveAll(r.ephemeralRoot)
+	}
 	r.ephemeralRoot = ""
 	r.codexHome = ""
 	r.rawArtifacts = ""
+	r.codexAuthFile = ""
 	r.sessionArchiveProof = nil
+	r.runtimeContract = nil
+	r.persistentRuntime = false
 }
 
 func (r *runner) command(ctx context.Context, name string, args ...string) *exec.Cmd {
@@ -942,7 +1038,11 @@ func (r *runner) prepareCodexHome(ctx context.Context) error {
 	if err := writeCodexConfig(filepath.Join(r.codexHome, "config.toml")); err != nil {
 		return err
 	}
-	authBody, err := r.readCredentialFileWithEventGuard(ctx, codexAuthPath)
+	authPath := codexAuthPath
+	if r.codexAuthFile != "" {
+		authPath = r.codexAuthFile
+	}
+	authBody, err := r.readCredentialFileWithEventGuard(ctx, authPath)
 	if err != nil {
 		return err
 	}
@@ -2850,11 +2950,6 @@ func readCodexSessionID(eventsPath string) string {
 		}
 	}
 	return sessionID
-}
-
-func sanitizeSessionSources(root string, inventory secretInventory) error {
-	_, err := sanitizeSessionSourcesWithProof(root, inventory)
-	return err
 }
 
 func sanitizeSessionSourcesWithProof(root string, inventory secretInventory) (map[string]sessionSourceProof, error) {

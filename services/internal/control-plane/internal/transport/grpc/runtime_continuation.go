@@ -2,11 +2,13 @@ package grpc
 
 import (
 	"context"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -28,6 +30,38 @@ func (server *Server) ClaimRuntimeExecution(
 	}
 	return &controlplanev1.ClaimRuntimeExecutionResponse{
 		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
+func (server *Server) BindRuntimeAgentSession(
+	ctx context.Context,
+	request *controlplanev1.BindRuntimeAgentSessionRequest,
+) (*controlplanev1.BindRuntimeAgentSessionResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	binding, err := server.service.BindRuntimeAgentSession(ctx, resource.RuntimeAgentSessionBindingInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		SessionID: request.GetSessionId(), ExpectedSessionVersion: request.GetExpectedSessionVersion(),
+		TurnID: request.GetTurnId(), ExpectedTurnVersion: request.GetExpectedTurnVersion(),
+		ExpectedAttempt: request.GetExpectedAttempt(), ExpectedInputSHA256: request.GetExpectedInputSha256(),
+		RuntimeRevisionID: request.GetRuntimeRevisionId(), RuntimeRevisionVersion: request.GetRuntimeRevisionVersion(),
+		RuntimeRevisionSHA256: request.GetRuntimeRevisionSha256(),
+		AgentSessionKey:       request.GetAgentSessionKey(), AgentSessionID: request.GetAgentSessionId(),
+		AgentSessionVersion: request.GetAgentSessionVersion(), AgentSessionTurnID: request.GetAgentSessionTurnId(),
+		AgentRunID: request.GetAgentRunId(), AgentSessionTurnVersion: request.GetAgentSessionTurnVersion(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.BindRuntimeAgentSessionResponse{
+		SessionId: binding.SessionID, SessionVersion: binding.SessionVersion,
+		TurnId: binding.TurnID, TurnVersion: binding.TurnVersion,
+		AgentSessionBindingSha256: binding.AgentSessionBindingSHA256,
+		AgentTurnBindingSha256:    binding.AgentTurnBindingSHA256,
 	}, nil
 }
 
@@ -212,6 +246,30 @@ func (server *Server) RetryRuntimeExecution(
 	}, nil
 }
 
+func (server *Server) RescheduleRuntimeExecution(
+	ctx context.Context,
+	request *controlplanev1.RescheduleRuntimeExecutionRequest,
+) (*controlplanev1.RescheduleRuntimeExecutionResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_RescheduleRuntimeExecution_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	result, err := server.service.RescheduleRuntimeExecution(ctx, resource.RuntimeExecutionInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), ExecutionID: request.GetExecutionId(),
+		ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	turn, err := toProtoResource(result.Turn)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.RescheduleRuntimeExecutionResponse{
+		PreviousExecution: toProtoRuntimeExecution(result.Previous), Turn: turn,
+	}, nil
+}
+
 func (server *Server) ExpireRuntimeExecution(
 	ctx context.Context,
 	request *controlplanev1.ExpireRuntimeExecutionRequest,
@@ -243,6 +301,10 @@ func (server *Server) RecordRuntimeArchive(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
+	archiveRetainUntil := time.Time{}
+	if request.GetArchiveRetainUntil() != nil {
+		archiveRetainUntil = request.GetArchiveRetainUntil().AsTime()
+	}
 	execution, err := server.service.RecordRuntimeArchive(ctx, resource.RuntimeArchiveInput{
 		RuntimeExecutionInput: resource.RuntimeExecutionInput{
 			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
@@ -251,6 +313,11 @@ func (server *Server) RecordRuntimeArchive(
 			ExpectedGrantGeneration: principal.AuthorityGrantGeneration,
 		},
 		ArchiveReference: request.GetArchiveReference(), ArchiveSHA256: request.GetArchiveSha256(),
+		ArchiveObjectKey: request.GetArchiveObjectKey(), ArchiveVersionID: request.GetArchiveVersionId(),
+		ArchiveKMSKeyARN:        request.GetArchiveKmsKeyArn(),
+		ArchiveObjectLockMode:   request.GetArchiveObjectLockMode(),
+		ArchiveRetainUntil:      archiveRetainUntil,
+		ArchiveProvenanceSHA256: request.GetArchiveProvenanceSha256(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -288,6 +355,47 @@ func (server *Server) VerifyRuntimeRestore(
 	}, nil
 }
 
+func (server *Server) BindRuntimeRestoreTarget(
+	ctx context.Context,
+	request *controlplanev1.BindRuntimeRestoreTargetRequest,
+) (*controlplanev1.BindRuntimeRestoreTargetResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_BindRuntimeRestoreTarget_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.BindRuntimeRestoreTarget(ctx, resource.RuntimeRestoreTargetInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence()},
+		ExpectedAssignmentGeneration: request.GetExpectedAssignmentGeneration(), PVCName: request.GetPvcName(),
+		PVCUID: request.GetPvcUid(), PVCResourceVersion: request.GetPvcResourceVersion(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.BindRuntimeRestoreTargetResponse{Execution: toProtoRuntimeExecution(execution)}, nil
+}
+
+func (server *Server) CompleteRuntimeRehydrate(
+	ctx context.Context,
+	request *controlplanev1.CompleteRuntimeRehydrateRequest,
+) (*controlplanev1.CompleteRuntimeRehydrateResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_CompleteRuntimeRehydrate_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	execution, err := server.service.CompleteRuntimeRehydrate(ctx, resource.RuntimeRehydrateInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence()},
+		AssignmentGeneration: request.GetAssignmentGeneration(), PVCName: request.GetPvcName(), PVCUID: request.GetPvcUid(),
+		PVCResourceVersion: request.GetPvcResourceVersion(), ProofReference: request.GetProofReference(),
+		ProofSHA256: request.GetProofSha256(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.CompleteRuntimeRehydrateResponse{Execution: toProtoRuntimeExecution(execution)}, nil
+}
+
 func (server *Server) AuthorizeRuntimeCleanup(
 	ctx context.Context,
 	request *controlplanev1.AuthorizeRuntimeCleanupRequest,
@@ -307,6 +415,9 @@ func (server *Server) AuthorizeRuntimeCleanup(
 		ArchiveSHA256:             request.GetArchiveSha256(),
 		RestoreProofSHA256:        request.GetRestoreProofSha256(),
 		ExpectedCleanupGeneration: request.GetExpectedCleanupGeneration(),
+		PVCName:                   request.GetPvcName(),
+		PVCUID:                    request.GetPvcUid(),
+		PVCResourceVersion:        request.GetPvcResourceVersion(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -338,6 +449,11 @@ func (server *Server) ConsumeRuntimeCleanupAuthorization(
 			CleanupAuthorizationGeneration: request.GetCleanupAuthorizationGeneration(),
 			ArchiveSHA256:                  request.GetArchiveSha256(),
 			RestoreProofSHA256:             request.GetRestoreProofSha256(),
+			PVCName:                        request.GetPvcName(),
+			PVCUID:                         request.GetPvcUid(),
+			PVCResourceVersion:             request.GetPvcResourceVersion(),
+			ObservedNotFoundAt:             timestampOrZero(request.GetObservedNotFoundAt()),
+			DeletionProofSHA256:            request.GetDeletionProofSha256(),
 		},
 	)
 	if err != nil {
@@ -397,17 +513,69 @@ func toProtoRuntimeExecution(execution resource.RuntimeExecution) *controlplanev
 		TerminalReference: execution.TerminalReference,
 		TerminalSha256:    execution.TerminalSHA256,
 		ArchiveReference:  execution.ArchiveReference, ArchiveSha256: execution.ArchiveSHA256,
-		RestoreProofReference:          execution.RestoreProofReference,
-		RestoreProofSha256:             execution.RestoreProofSHA256,
-		RestoreVerifierWorkloadId:      execution.RestoreVerifierWorkload,
-		RestoreVerifierSpiffeId:        execution.RestoreVerifierSPIFFEID,
-		RestoreVerifierGeneration:      execution.RestoreVerifierGeneration,
-		CleanupAuthorizationId:         execution.CleanupAuthorizationID,
-		CleanupAuthorizationExpiresAt:  optionalTimestamp(execution.CleanupAuthorizationExpiresAt),
-		CleanupAuthorizationState:      toProtoRuntimeCleanupAuthorizationState(execution.CleanupAuthorizationState),
-		CleanupAuthorizationGeneration: execution.CleanupAuthorizationGeneration,
-		CleanupConsumedAt:              optionalTimestamp(execution.CleanupConsumedAt),
-		CreatedAt:                      timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
+		ArchiveObjectKey: execution.ArchiveObjectKey, ArchiveVersionId: execution.ArchiveVersionID,
+		ArchiveKmsKeyArn:                    execution.ArchiveKMSKeyARN,
+		ArchiveObjectLockMode:               execution.ArchiveObjectLockMode,
+		ArchiveProvenanceSha256:             execution.ArchiveProvenanceSHA256,
+		RestoreProofReference:               execution.RestoreProofReference,
+		RestoreProofSha256:                  execution.RestoreProofSHA256,
+		RestoreVerifierWorkloadId:           execution.RestoreVerifierWorkload,
+		RestoreVerifierSpiffeId:             execution.RestoreVerifierSPIFFEID,
+		RestoreVerifierGeneration:           execution.RestoreVerifierGeneration,
+		CleanupAuthorizationId:              execution.CleanupAuthorizationID,
+		CleanupAuthorizationExpiresAt:       optionalTimestamp(execution.CleanupAuthorizationExpiresAt),
+		CleanupAuthorizationState:           toProtoRuntimeCleanupAuthorizationState(execution.CleanupAuthorizationState),
+		CleanupAuthorizationGeneration:      execution.CleanupAuthorizationGeneration,
+		CleanupConsumedAt:                   optionalTimestamp(execution.CleanupConsumedAt),
+		CleanupPvcName:                      execution.CleanupPVCName,
+		CleanupPvcUid:                       execution.CleanupPVCUID,
+		CleanupPvcResourceVersion:           execution.CleanupPVCResourceVersion,
+		CleanupClaimedAt:                    optionalTimestamp(execution.CleanupClaimedAt),
+		CleanupEligibleAt:                   optionalTimestamp(execution.CleanupEligibleAt),
+		CleanupNotFoundAt:                   optionalTimestamp(execution.CleanupNotFoundAt),
+		CleanupDeletionProofSha256:          execution.CleanupDeletionProofSHA256,
+		RestoreSourceExecutionId:            execution.RestoreSourceExecutionID,
+		RestoreSourceArchiveReference:       execution.RestoreSourceArchiveReference,
+		RestoreSourceArchiveSha256:          execution.RestoreSourceArchiveSHA256,
+		RestoreSourceRuntimeRevisionSha256:  execution.RestoreSourceRuntimeRevisionSHA256,
+		RestoreSourceImmutableInputSha256:   execution.RestoreSourceImmutableInputSHA256,
+		RestoreSourceProofSha256:            execution.RestoreSourceProofSHA256,
+		RestoreSourceVersion:                execution.RestoreSourceVersion,
+		RestoreSourceArchiveObjectKey:       execution.RestoreSourceArchiveObjectKey,
+		RestoreSourceArchiveVersionId:       execution.RestoreSourceArchiveVersionID,
+		RestoreSourceArchiveKmsKeyArn:       execution.RestoreSourceArchiveKMSKeyARN,
+		RestoreSourceArchiveObjectLockMode:  execution.RestoreSourceArchiveObjectLockMode,
+		RestoreSourceArchiveRetainUntil:     optionalTimestamp(execution.RestoreSourceArchiveRetainUntil),
+		RestoreSourceRetentionPolicyId:      execution.RestoreSourceRetentionPolicyID,
+		RestoreSourceRetentionPolicyVersion: execution.RestoreSourceRetentionPolicyVersion,
+		RestoreSourceProvenanceSha256:       execution.RestoreSourceProvenanceSHA256,
+		EffectiveRuntimeSha256:              execution.EffectiveRuntimeSHA256,
+		AgentSessionKey:                     execution.AgentSessionKey,
+		AgentSessionId:                      execution.AgentSessionID,
+		AgentSessionTurnId:                  execution.AgentSessionTurnID,
+		AgentRunId:                          execution.AgentRunID,
+		AgentBindingSha256:                  execution.AgentBindingSHA256,
+		RetentionPolicyId:                   execution.RetentionPolicyID,
+		RetentionPolicyVersion:              execution.RetentionPolicyVersion,
+		PvcRetention:                        durationpb.New(time.Duration(execution.PVCRetentionSeconds) * time.Second),
+		ArchiveRetention:                    durationpb.New(time.Duration(execution.ArchiveRetentionSeconds) * time.Second),
+		ArchiveRetainUntil:                  optionalTimestamp(execution.ArchiveRetainUntil),
+		PvcCleanupEligibleAt:                timestamppb.New(execution.PVCCleanupEligibleAt),
+		CapacityObservationExpiresAt:        timestamppb.New(execution.CapacityObservationExpiresAt),
+		RescheduleAfter:                     timestamppb.New(execution.RescheduleAfter),
+		RestoreAssignmentState:              execution.RestoreAssignmentState,
+		RestoreAssignmentGeneration:         execution.RestoreAssignmentGeneration,
+		RestoreTargetPvcName:                execution.RestoreTargetPVCName,
+		RestoreTargetPvcUid:                 execution.RestoreTargetPVCUID,
+		RestoreTargetPvcResourceVersion:     execution.RestoreTargetPVCResourceVersion,
+		RehydrateProofReference:             execution.RehydrateProofReference,
+		RehydrateProofSha256:                execution.RehydrateProofSHA256,
+		CredentialSnapshotSha256:            execution.CredentialSnapshotSHA256,
+		WorkloadTicketSha256:                execution.WorkloadTicketSHA256,
+		WorkloadTicket:                      execution.WorkloadTicket,
+		ArchiveWorkloadTicket:               execution.ArchiveWorkloadTicket,
+		RestoreWorkloadTicket:               execution.RestoreWorkloadTicket,
+		CreatedAt:                           timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
 	}
 }
 
@@ -423,6 +591,7 @@ func runtimeTerminalOutcome(outcome controlplanev1.RuntimeTerminalOutcome) strin
 	return map[controlplanev1.RuntimeTerminalOutcome]string{
 		controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_SUCCEEDED: "SUCCEEDED",
 		controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_FAILED:    "FAILED",
+		controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_BLOCKED:   "BLOCKED",
 	}[outcome]
 }
 
@@ -463,6 +632,7 @@ func toProtoRuntimeTerminalOutcome(value string) controlplanev1.RuntimeTerminalO
 		"SUSPENDED": controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_SUSPENDED,
 		"CANCELLED": controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_CANCELLED,
 		"EXPIRED":   controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_EXPIRED,
+		"BLOCKED":   controlplanev1.RuntimeTerminalOutcome_RUNTIME_TERMINAL_OUTCOME_BLOCKED,
 	}[value]
 }
 

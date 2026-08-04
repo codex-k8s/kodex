@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: runtime-controller}
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: runtime-controller
+          env: [{name: RUNTIME_NATS_REPLICAS, value: "1"}]
