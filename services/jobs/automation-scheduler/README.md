@@ -64,7 +64,7 @@ Mattermost API и Kubernetes API в operation profile job отсутствуют
 | Операция | Transaction/lock | Idempotency | Fence/lease | One-winner |
 | --- | --- | --- | --- | --- |
 | due materialization | После SQL eligibility Schedule rows `FOR UPDATE SKIP LOCKED` + occurrence unique key | process key сохраняется при unknown outcome; ротация short-lived bearer не меняет semantic intent | Schedule version и PostgreSQL clock | unique occurrence + row lock |
-| occurrence reservation | Organization grant → server-owned project partition → canonical occurrence → Schedule | один stable semantic key; bearer JTI/revision/digest остаются transport replay metadata | unbound credential не содержит project/occurrence execution scope | eligibility применяется до `LIMIT`; `SKIP LOCKED`, blocker query и OCC update |
+| occurrence reservation | Organization grant → server-owned project partition → canonical occurrence → Schedule | один stable semantic key; bearer JTI/revision/digest остаются transport replay metadata; owner возвращает закрытый stage `RESERVED/MATERIALIZED/RETIRED` и server-derived materialization key | unbound credential не содержит project/occurrence execution scope; повтор после expiry сохраняет монотонное generation | eligibility применяется до `LIMIT`; `SKIP LOCKED`, blocker query и OCC update |
 | materialization/completion | capability row → exact occurrence/current graph до receipt | exact lost-response replay возвращает сохранённый result | server JTI+project+occurrence+attempt+input+generation+full method+workload+SPIFFE+token digest, `ISSUED→CONSUMED/REVOKED` | terminal owner graph либо watchdog, не HTTP response |
 | invalid row isolation | отдельная owner transaction после rollback; повреждённая expired binding восстанавливается из immutable ScheduledRun, а доказанно отсутствующий graph получает dead-letter | проверяет отсутствие receipt текущего claim key либо maintenance receipt occurrence+attempt | `QUEUED` без claim/execution получает quarantine; потенциально живой graph не терминализируется частично | repair/dead-letter имеют cardinality-one audit; остальные строки того же schedule продолжаются |
 | owner gate | RuntimeExecution -> occurrence -> Schedule -> run -> Session -> Turn -> ProcessRun -> Gate | server-owned decision/delivery receipts | current tuple, delivery fence и deadline | решение/expiry имеет одного победителя |
@@ -103,8 +103,13 @@ ScheduledRun либо `RECOVERY_BLOCKED` с exact owner readback/repair; док�
 создаёт busy loop: следующий запуск происходит только по ticker. Повторы
 `Unavailable`/`DeadlineExceeded` ограничены двумя попытками с тем же
 семантическим idempotency key. Если transport outcome остался неизвестным,
-следующий цикл сохраняет тот же due/claim key до authoritative ответа; после
-restart duplicate блокируют owner receipt и occurrence unique key.
+следующий цикл сохраняет тот же due/claim key до authoritative ответа.
+`MATERIALIZED` повторно присоединяет этот key к exact сохранённому graph и
+completion capability без второго эффекта. Только owner-side `RETIRED` после
+expiry либо закрытого stage позволяет job забыть старый claim key; следующий
+bounded poll новым key запускает watchdog release/recovery. Permission,
+idempotency и tuple mismatch не преобразуются в `RETIRED` или пустой ответ.
+После restart duplicate блокируют owner receipt и occurrence unique key.
 
 ## Примеры и эксплуатация
 

@@ -979,9 +979,11 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		t.Fatalf("create project: %v", err)
 	}
 	chat, err := entity.New(chatID, organization, project, "", actor, enum.KindChat, "Scheduled room",
-		entity.ChatSpec{StableKey: "scheduled-room", RoomType: "RUNS", DefaultAgentID: roleID,
+		entity.ChatSpec{
+			StableKey: "scheduled-room", RoomType: "RUNS", DefaultAgentID: roleID,
 			ExternalChannelRef: "mattermost:scheduled-room", WorkPolicy: "scheduled delivery",
-			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"}}, now)
+			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"},
+		}, now)
 	if err != nil {
 		t.Fatalf("create chat: %v", err)
 	}
@@ -1438,9 +1440,10 @@ func (fixture currentTupleFixture) produceScheduledGraphWithTarget(
 	materializePrincipal := claimPrincipal
 	materializePrincipal.Permission = permissionUseScheduleCapability
 	materializePrincipal.ProjectID = ""
+	materializeKey := reserved.MaterializationIdempotencyKey
 	claimed, err := fixture.service.MaterializeScheduleOccurrence(context.Background(),
 		MaterializeScheduleOccurrenceInput{
-			Principal: materializePrincipal, IdempotencyKey: "materialize-occurrence-current-digest",
+			Principal: materializePrincipal, IdempotencyKey: materializeKey,
 			OccurrenceID: reserved.Occurrence.ID, ProjectID: reserved.ProjectID,
 			ExpectedAttempt:           reserved.Occurrence.Attempt,
 			MaterializationCapability: reserved.MaterializationCapability,
@@ -1459,7 +1462,7 @@ func (fixture currentTupleFixture) produceScheduledGraphWithTarget(
 		101, hashString("rotated-materialize-grant")
 	replayed, err := fixture.service.MaterializeScheduleOccurrence(context.Background(),
 		MaterializeScheduleOccurrenceInput{
-			Principal: rotatedMaterializePrincipal, IdempotencyKey: "materialize-occurrence-current-digest",
+			Principal: rotatedMaterializePrincipal, IdempotencyKey: materializeKey,
 			OccurrenceID: reserved.Occurrence.ID, ProjectID: reserved.ProjectID,
 			ExpectedAttempt:           reserved.Occurrence.Attempt,
 			MaterializationCapability: reserved.MaterializationCapability,
@@ -2063,10 +2066,12 @@ func TestScheduledProducerClaimTurnRuntimePathPreservesDigestAndOutboxSemantics(
 					Outcome: "SUCCEEDED", ScheduledOutcome: "requires_human",
 					TerminalReference: "codex://sessions/" + fixture.sessionID + "/executions/" + execution.ID,
 					TerminalSHA256:    hashString("scheduled-runtime-terminal"),
-					Outputs: []RuntimeOutput{{Kind: "FINAL_MARKDOWN", ArtifactID: resultID,
+					Outputs: []RuntimeOutput{{
+						Kind: "FINAL_MARKDOWN", ArtifactID: resultID,
 						ArtifactVersion: 1, ArtifactSHA256: resultSHA256, ArtifactName: "result.md",
 						ArtifactMediaType: "text/markdown", ArtifactPayload: payload,
-						ArtifactSizeBytes: uint64(len(payload)), Sequence: 1, Total: 1}},
+						ArtifactSizeBytes: uint64(len(payload)), Sequence: 1, Total: 1,
+					}},
 					CodexSessionID: uuid.NewString(), ArchiveRelativePath: archivePath,
 					ArchiveSHA256: archiveSHA256,
 					ArchiveProvenance: "codex-app-server-rollout-v1:" + execution.ID + ":" +
@@ -2317,7 +2322,8 @@ func TestScheduleRecoveryCommitsBeforeNoNextCandidate(t *testing.T) {
 					IdempotencyKey: "claim-occurrence-current-digest",
 				},
 			)
-			if !errors.Is(staleErr, errs.ErrStateConflict) || stale.MaterializationCapability != "" {
+			if staleErr != nil || stale.Disposition != ScheduleOccurrenceClaimRetired ||
+				stale.MaterializationCapability != "" {
 				t.Fatalf("recovery exposed stale scheduler authority: %v %+v", staleErr, stale)
 			}
 		})
@@ -2690,9 +2696,11 @@ func TestTerminalWinnerWatchdogRecoveryHonorsRetryLimit(t *testing.T) {
 
 func TestDeliveryRecoverySourceRequiresExactFailedTerminalReference(t *testing.T) {
 	executionID, sessionID := uuid.NewString(), uuid.NewString()
-	lineage := domainrepo.CodexLineage{ExecutionID: executionID, SessionID: sessionID,
+	lineage := domainrepo.CodexLineage{
+		ExecutionID: executionID, SessionID: sessionID,
 		TerminalOutcome: "FAILED", TerminalReference: "codex://sessions/" + sessionID +
-			"/executions/" + executionID + "/delivery-recovery"}
+			"/executions/" + executionID + "/delivery-recovery",
+	}
 	if actual := deliveryRecoverySource(lineage); actual != executionID {
 		t.Fatalf("delivery recovery source = %q", actual)
 	}
@@ -2780,7 +2788,8 @@ func TestScheduledRequeueRestoresSnapshotAndNextAttemptReachesClaimTurn(t *testi
 					Principal: scheduler, IdempotencyKey: "claim-occurrence-current-digest",
 				},
 			)
-			if !errors.Is(err, errs.ErrStateConflict) || stale.MaterializationCapability != "" {
+			if err != nil || stale.Disposition != ScheduleOccurrenceClaimRetired ||
+				stale.MaterializationCapability != "" {
 				t.Fatalf("stale previous claim exposed authority: %v %+v", err, stale)
 			}
 
@@ -2873,14 +2882,13 @@ func TestRequeuedScheduleCompletionReceiptRequiresCurrentQueuedSnapshot(t *testi
 	}
 	keyHash := hashString("complete-requeued")
 	requestHash := hashString("complete-request")
-	fixture.tx.receipts[receiptMapKey("complete_schedule_occurrence", keyHash)] =
-		domainrepo.Receipt{
-			OrganizationID: fixture.organization,
-			Scope:          "complete_schedule_occurrence",
-			KeyHash:        keyHash,
-			RequestHash:    requestHash,
-			Payload:        payload,
-		}
+	fixture.tx.receipts[receiptMapKey("complete_schedule_occurrence", keyHash)] = domainrepo.Receipt{
+		OrganizationID: fixture.organization,
+		Scope:          "complete_schedule_occurrence",
+		KeyHash:        keyHash,
+		RequestHash:    requestHash,
+		Payload:        payload,
+	}
 	replayed, err := replayRequeuedScheduleCompletion(
 		context.Background(), fixture.tx, fixture.organization, occurrence, schedule,
 		previousAttempt, keyHash, requestHash,
@@ -2967,7 +2975,173 @@ func TestScheduledRequeueRejectsClosedScheduleStates(t *testing.T) {
 	}
 }
 
-func TestScheduledProducerReplayAfterLeaseExpiryFailsBeforeReceiptExposure(t *testing.T) {
+func TestScheduledClaimRejoinsCommittedMaterializationWithoutSecondGraph(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	schedule := fixture.tx.resources[produced.schedule.ID]
+	spec := schedule.Spec.(entity.ScheduleSpec)
+	principal := fixture.principalFor(
+		permissionClaimSchedule, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+	)
+	processesBefore := 0
+	for _, current := range fixture.tx.resources {
+		if current.Kind == enum.KindProcessRun {
+			processesBefore++
+		}
+	}
+	auditsBefore, eventsBefore, runsBefore :=
+		len(fixture.tx.audits), len(fixture.tx.events), len(fixture.tx.runs)
+
+	rejoined, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "claim-occurrence-current-digest",
+		},
+	)
+	if err != nil || rejoined.Disposition != ScheduleOccurrenceClaimMaterialized ||
+		rejoined.Occurrence.ID != produced.claim.Occurrence.ID ||
+		rejoined.MaterializationCapability == "" {
+		t.Fatalf("committed materialization did not rejoin: %v %+v", err, rejoined)
+	}
+	materializePrincipal := principal
+	materializePrincipal.Permission = permissionUseScheduleCapability
+	materialized, err := fixture.service.MaterializeScheduleOccurrence(
+		context.Background(), MaterializeScheduleOccurrenceInput{
+			Principal: materializePrincipal,
+			IdempotencyKey: rejoined.MaterializationIdempotencyKey,
+			OccurrenceID: rejoined.Occurrence.ID, ProjectID: rejoined.ProjectID,
+			ExpectedAttempt:           rejoined.Occurrence.Attempt,
+			MaterializationCapability: rejoined.MaterializationCapability,
+		},
+	)
+	if err != nil || materialized != produced.claim {
+		t.Fatalf("exact materialization replay failed: %v %+v", err, materialized)
+	}
+	processesAfter := 0
+	for _, current := range fixture.tx.resources {
+		if current.Kind == enum.KindProcessRun {
+			processesAfter++
+		}
+	}
+	if processesBefore != 1 || processesAfter != processesBefore ||
+		len(fixture.tx.runs) != runsBefore || len(fixture.tx.audits) != auditsBefore ||
+		len(fixture.tx.events) != eventsBefore {
+		t.Fatalf("rejoin repeated graph effects: processes=%d/%d runs=%d/%d audits=%d/%d events=%d/%d",
+			processesBefore, processesAfter, runsBefore, len(fixture.tx.runs),
+			auditsBefore, len(fixture.tx.audits), eventsBefore, len(fixture.tx.events))
+	}
+}
+
+func TestExpiredScheduleReservationRetiresKeyAndAdvancesGeneration(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	queued := fixture.createNextDueOccurrence(t, produced, "expired-reservation")
+	schedule := fixture.tx.resources[queued.ScheduleID]
+	spec := schedule.Spec.(entity.ScheduleSpec)
+	principal := fixture.principalFor(
+		permissionClaimSchedule, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+	)
+	// Сохраняем независимый исходный graph live, чтобы проверка наблюдала именно
+	// release просроченной reservation side schedule, а не retry другой строки.
+	original := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+	original.LeaseExpiresAt = fixture.tx.now.Add(time.Hour)
+	fixture.tx.occurrences[original.ID] = original
+	reserved, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "expired-reservation-old-key",
+		},
+	)
+	if err != nil || reserved.Occurrence.ID != queued.ID ||
+		reserved.Disposition != ScheduleOccurrenceClaimReserved {
+		t.Fatalf("reserve occurrence before expiry: %v %+v", err, reserved)
+	}
+	oldGeneration := reserved.Occurrence.AuthorityGeneration
+	fixture.tx.now = reserved.CapabilityExpiresAt.Add(time.Microsecond)
+	retired, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "expired-reservation-old-key",
+		},
+	)
+	if err != nil || retired.Disposition != ScheduleOccurrenceClaimRetired ||
+		retired.MaterializationCapability != "" || retired.Occurrence.ID != "" {
+		t.Fatalf("expired reservation did not return closed retirement: %v %+v", err, retired)
+	}
+	advanced, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "expired-reservation-new-key",
+		},
+	)
+	if err != nil || advanced.Occurrence.ID != queued.ID ||
+		advanced.Disposition != ScheduleOccurrenceClaimReserved ||
+		advanced.Occurrence.AuthorityGeneration != oldGeneration+1 ||
+		advanced.MaterializationCapability == reserved.MaterializationCapability {
+		t.Fatalf("new key did not release/recover backlog with fresh generation: %v %+v current=%+v capabilities=%+v maintenance=%v",
+			err, advanced, fixture.tx.occurrences[queued.ID], fixture.tx.capabilities,
+			fixture.observer.maintenance)
+	}
+	if !slices.Contains(fixture.observer.maintenance, "reservation_expired") {
+		t.Fatalf("reservation watchdog effect is not observable: %v", fixture.observer.maintenance)
+	}
+}
+
+func TestScheduleClaimMismatchNeverBecomesRetiredSuccess(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	schedule := fixture.tx.resources[produced.schedule.ID]
+	spec := schedule.Spec.(entity.ScheduleSpec)
+	principal := fixture.principalFor(
+		permissionClaimSchedule, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
+	)
+
+	deniedPrincipal := principal
+	deniedPrincipal.Permission = permissionClaimTurn
+	denied, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: deniedPrincipal, IdempotencyKey: "claim-occurrence-current-digest",
+		},
+	)
+	if !errors.Is(err, errs.ErrPermissionDenied) || denied.Disposition != "" {
+		t.Fatalf("permission mismatch became disposition success: %v %+v", err, denied)
+	}
+	receiptKey := receiptMapKey(
+		"claim_schedule_occurrence", hashString("claim-occurrence-current-digest"),
+	)
+	receipt := fixture.tx.receipts[receiptKey]
+	originalRequestHash := receipt.RequestHash
+	receipt.RequestHash = hashString("different-semantic-intent")
+	fixture.tx.receipts[receiptKey] = receipt
+	conflicted, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "claim-occurrence-current-digest",
+		},
+	)
+	if !errors.Is(err, errs.ErrIdempotencyConflict) || conflicted.Disposition != "" {
+		t.Fatalf("idempotency mismatch became disposition success: %v %+v", err, conflicted)
+	}
+	receipt.RequestHash = originalRequestHash
+	fixture.tx.receipts[receiptKey] = receipt
+	for tokenHash, capability := range fixture.tx.capabilities {
+		if capability.OccurrenceID == produced.claim.Occurrence.ID &&
+			capability.FullMethod == materializeScheduleOccurrenceMethod {
+			delete(fixture.tx.capabilities, tokenHash)
+		}
+	}
+	broken, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "claim-occurrence-current-digest",
+		},
+	)
+	if !errors.Is(err, errs.ErrStateConflict) || broken.Disposition != "" {
+		t.Fatalf("missing exact tuple became retired/empty success: %v %+v", err, broken)
+	}
+}
+
+func TestScheduledProducerReplayAfterLeaseExpiryReturnsRetiredWithoutReceiptExposure(t *testing.T) {
 	fixture := newCurrentTupleFixture(t)
 	produced := fixture.produceScheduledGraph(t)
 	fixture.tx.now = produced.claim.Occurrence.LeaseExpiresAt.Add(time.Microsecond)
@@ -2983,7 +3157,8 @@ func TestScheduledProducerReplayAfterLeaseExpiryFailsBeforeReceiptExposure(t *te
 			Principal: principal, IdempotencyKey: "claim-occurrence-current-digest",
 		},
 	)
-	if !errors.Is(err, errs.ErrStateConflict) || result.MaterializationCapability != "" {
+	if err != nil || result.Disposition != ScheduleOccurrenceClaimRetired ||
+		result.MaterializationCapability != "" {
 		t.Fatalf("expired scheduler replay exposed authority: %v %+v", err, result)
 	}
 	if len(fixture.tx.audits) != audits || len(fixture.tx.events) != events {

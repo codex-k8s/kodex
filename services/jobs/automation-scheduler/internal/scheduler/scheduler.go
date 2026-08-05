@@ -122,6 +122,13 @@ func (scheduler *Scheduler) claim(ctx context.Context) error {
 			scheduler.metrics.ObserveOccurrence("claim", "empty")
 			break
 		}
+		if errors.Is(err, client.ErrClaimRetired) {
+			// Только authoritative RETIRED доказывает, что прежний semantic key
+			// больше не может rejoin-ить live reservation/materialization.
+			scheduler.claimKey = ""
+			scheduler.metrics.ObserveOccurrence("claim", "retired")
+			break
+		}
 		if err != nil {
 			scheduler.metrics.ObserveOccurrence("claim", "error")
 			joined = errors.Join(joined, fmt.Errorf("claim schedule occurrence: %w", err))

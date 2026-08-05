@@ -59,7 +59,7 @@ func validOperation(value string) bool {
 
 func validOutcome(value string) bool {
 	switch value {
-	case "created", "empty", "claimed", "pending", "terminal", "expired", "error":
+	case "created", "empty", "claimed", "pending", "terminal", "expired", "retired", "error":
 		return true
 	default:
 		return false

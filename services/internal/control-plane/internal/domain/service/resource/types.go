@@ -368,11 +368,21 @@ type ClaimScheduleOccurrenceInput struct {
 	IdempotencyKey string
 }
 
+type ScheduleOccurrenceClaimDisposition string
+
+const (
+	ScheduleOccurrenceClaimReserved     ScheduleOccurrenceClaimDisposition = "RESERVED"
+	ScheduleOccurrenceClaimMaterialized ScheduleOccurrenceClaimDisposition = "MATERIALIZED"
+	ScheduleOccurrenceClaimRetired      ScheduleOccurrenceClaimDisposition = "RETIRED"
+)
+
 type ScheduleOccurrenceResult struct {
-	Occurrence                domainrepo.ScheduleOccurrence
-	MaterializationCapability string
-	CapabilityExpiresAt       time.Time
-	ProjectID                 string
+	Occurrence                      domainrepo.ScheduleOccurrence
+	MaterializationCapability       string
+	MaterializationIdempotencyKey   string
+	CapabilityExpiresAt             time.Time
+	ProjectID                       string
+	Disposition                     ScheduleOccurrenceClaimDisposition
 }
 
 type MaterializeScheduleOccurrenceInput struct {

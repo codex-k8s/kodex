@@ -1616,6 +1616,15 @@ message ClaimScheduleOccurrenceRequest {
   string idempotency_key = 1;
 }
 
+// ScheduleOccurrenceClaimDisposition закрыто описывает authoritative stage
+// semantic claim после проверки owner receipt и exact occurrence tuple.
+enum ScheduleOccurrenceClaimDisposition {
+  SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_UNSPECIFIED = 0;
+  SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RESERVED = 1;
+  SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_MATERIALIZED = 2;
+  SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RETIRED = 3;
+}
+
 // ClaimScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
 message ClaimScheduleOccurrenceResponse {
   ScheduleOccurrence occurrence = 1;
@@ -1624,6 +1633,8 @@ message ClaimScheduleOccurrenceResponse {
   // остаётся единственным доказательством exact occurrence authority.
   string project_id = 3;
   google.protobuf.Timestamp capability_expires_at = 4;
+  ScheduleOccurrenceClaimDisposition disposition = 5;
+  string materialization_idempotency_key = 6;
 }
 
 message MaterializeScheduleOccurrenceRequest {
@@ -2398,8 +2409,7 @@ message CompleteRuntimeExecutionRequest {
   string terminal_reference = 8;
   string terminal_sha256 = 9;
   reserved 10 to 15;
-  reserved "result_artifact_id", "result_artifact_version", "result_artifact_sha256",
-    "result_artifact_name", "result_artifact_media_type", "result_artifact_payload";
+  reserved "result_artifact_id", "result_artifact_version", "result_artifact_sha256", "result_artifact_name", "result_artifact_media_type", "result_artifact_payload";
   repeated RuntimeOutput outputs = 16;
   string codex_session_id = 17;
   string archive_sha256 = 18;

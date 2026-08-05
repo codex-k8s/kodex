@@ -319,6 +319,25 @@ func TestSchedulerMaintenanceCommitsBeforeCandidateSelection(t *testing.T) {
 	}
 }
 
+func TestExpiredReservationGenerationHighWatermarkHasStorageClosure(t *testing.T) {
+	migration, err := os.ReadFile(
+		"../../../../cmd/cli/migrations/20260805000200_automation_scheduler_final.sql",
+	)
+	if err != nil {
+		t.Fatalf("read scheduler capability migration: %v", err)
+	}
+	source := string(migration)
+	for _, required := range []string{
+		"authority_generation IS NULL",
+		"state = 'QUEUED' AND authority_generation > 0",
+		"UNIQUE (occurrence_id, attempt, full_method, authority_generation)",
+	} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("expired reservation generation closure is absent: %s", required)
+		}
+	}
+}
+
 func TestIntegrationMaterializationReplacesPredecessorTurn(t *testing.T) {
 	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
 	organizationID := "3a3ed463-59fe-4a2b-9f96-58cd7d3dd526"

@@ -386,6 +386,17 @@ forward-only migrations; named SQL и `pgx.StrictNamedArgs` обновляютс
     После specialized terminal closure R1 тот же O2 materializes ровно один
     graph; конкурентный poll либо crash/replay не создаёт вторую attempt,
     receipt, audit или outbox sequence.
+37. Для composite scheduler claim потерять ответ после commit
+    `MaterializeScheduleOccurrence` и исчерпания bounded transport retries.
+    Следующий цикл с тем же claim key получает authoritative `MATERIALIZED`,
+    повторяет тот же производный materialization key/capability и читает exact
+    сохранённые occurrence/completion capability без второй
+    Session/Turn/ProcessRun/ScheduledRun. Отдельно истечь неиспользованную
+    reservation: replay старого key возвращает только `RETIRED`, не token;
+    следующий bounded poll с новым key атомарно отзывает прежнюю capability и
+    выдаёт fresh JTI с большим generation. Permission, idempotency, project,
+    occurrence, attempt, input, workload, SPIFFE либо receipt mismatch не
+    преобразуются в `RETIRED`/empty и не раскрывают capability.
 
 ## Forward-only rollback
 

@@ -3,8 +3,6 @@ package controlplane
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"time"
 
@@ -15,8 +13,9 @@ import (
 )
 
 var (
-	ErrNoWork  = errors.New("no schedule occurrence is available")
-	ErrPending = errors.New("schedule occurrence is not terminal")
+	ErrNoWork       = errors.New("no schedule occurrence is available")
+	ErrClaimRetired = errors.New("schedule occurrence claim is retired")
+	ErrPending      = errors.New("schedule occurrence is not terminal")
 )
 
 type Config struct {
@@ -101,14 +100,22 @@ func (client *Client) ClaimNext(ctx context.Context, key string) (Claim, error) 
 	if err != nil {
 		return Claim{}, err
 	}
+	switch response.GetDisposition() {
+	case controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RETIRED:
+		return Claim{}, ErrClaimRetired
+	case controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RESERVED,
+		controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_MATERIALIZED:
+	default:
+		return Claim{}, errors.New("schedule occurrence claim disposition is invalid")
+	}
 	occurrence := response.GetOccurrence()
 	if occurrence == nil || occurrence.GetOccurrenceId() == "" || occurrence.GetAttempt() == 0 ||
 		response.GetProjectId() == "" || response.GetMaterializationCapability() == "" ||
-		response.GetCapabilityExpiresAt() == nil {
+		response.GetMaterializationIdempotencyKey() == "" || response.GetCapabilityExpiresAt() == nil {
 		return Claim{}, errors.New("reserved schedule occurrence is incomplete")
 	}
 	materializeRequest := &controlplanev1.MaterializeScheduleOccurrenceRequest{
-		IdempotencyKey: semanticKey("materialize", key, occurrence.GetOccurrenceId()),
+		IdempotencyKey: response.GetMaterializationIdempotencyKey(),
 		OccurrenceId:   occurrence.GetOccurrenceId(), ProjectId: response.GetProjectId(),
 		ExpectedAttempt:           occurrence.GetAttempt(),
 		MaterializationCapability: response.GetMaterializationCapability(),
@@ -160,15 +167,6 @@ func (client *Client) Complete(ctx context.Context, claim Claim, key string) (st
 		return "", errors.New("completed schedule occurrence is incomplete")
 	}
 	return response.GetOccurrence().GetState().String(), nil
-}
-
-func semanticKey(parts ...string) string {
-	hash := sha256.New()
-	for _, part := range parts {
-		_, _ = hash.Write([]byte(part))
-		_, _ = hash.Write([]byte{0})
-	}
-	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func (client *Client) Close() error {

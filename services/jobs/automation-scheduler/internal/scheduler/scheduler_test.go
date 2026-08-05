@@ -207,3 +207,49 @@ func TestUnknownOutcomeKeepsSemanticKeysAcrossCycles(t *testing.T) {
 		t.Fatal("replayed occurrence was not transiently tracked")
 	}
 }
+
+func TestRetiredClaimKeyAdvancesBacklogOnNextBoundedPoll(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	metrics, err := internalobservability.New(func(collectors ...prometheus.Collector) error {
+		for _, collector := range collectors {
+			if registerErr := registry.Register(collector); registerErr != nil {
+				return registerErr
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("create metrics: %v", err)
+	}
+	fake := &schedulerTestControlPlane{
+		claimErrors: []error{errors.New("unknown reserve outcome"), client.ErrClaimRetired},
+		claims: []client.Claim{{
+			OccurrenceID: "recovered-occurrence", Attempt: 1,
+			LeaseToken:     "fresh-generation-token",
+			LeaseExpiresAt: time.Now().UTC().Add(time.Minute),
+		}},
+	}
+	job, err := New(fake, metrics, Config{
+		DueLimit: 10, ClaimLimit: 10, MaximumTrackedClaims: 20,
+	})
+	if err != nil {
+		t.Fatalf("create scheduler: %v", err)
+	}
+
+	if cycleErr := job.Cycle(context.Background()); cycleErr == nil {
+		t.Fatal("unknown reserve outcome was not reported")
+	}
+	if cycleErr := job.Cycle(context.Background()); cycleErr != nil {
+		t.Fatalf("authoritative retirement became cycle error: %v", cycleErr)
+	}
+	if cycleErr := job.Cycle(context.Background()); cycleErr != nil {
+		t.Fatalf("new bounded poll did not advance backlog: %v", cycleErr)
+	}
+	if len(fake.claimKeys) < 3 || fake.claimKeys[0] != fake.claimKeys[1] ||
+		fake.claimKeys[2] == fake.claimKeys[1] {
+		t.Fatalf("claim key retirement protocol is invalid: %v", fake.claimKeys)
+	}
+	if _, exists := job.claims["recovered-occurrence"]; !exists {
+		t.Fatal("new semantic key did not claim recovered backlog")
+	}
+}

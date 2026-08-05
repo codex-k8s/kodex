@@ -75,7 +75,7 @@ func validateQueuedScheduledOccurrence(
 		occurrence.Attempt == 0 || occurrence.EffectiveInputSHA256 != spec.EffectiveInputSHA ||
 		!validSHA256Text(occurrence.EffectiveInputSHA256) ||
 		occurrenceHasExecutionBinding(occurrence) ||
-		occurrence.ClaimantWorkloadID != "" || occurrence.AuthorityGeneration != 0 ||
+		occurrence.ClaimantWorkloadID != "" ||
 		occurrence.TokenHash != "" || occurrence.ClaimKeySHA256 != "" ||
 		!occurrence.LeaseExpiresAt.IsZero() {
 		return errs.ErrStateConflict
@@ -109,7 +109,7 @@ func (service *Service) deadLetterQueuedScheduleOccurrence(
 			}
 			if occurrence.Attempt != candidate.Attempt || occurrence.State != "QUEUED" ||
 				occurrenceHasExecutionBinding(occurrence) || occurrence.ClaimantWorkloadID != "" ||
-				occurrence.AuthorityGeneration != 0 || occurrence.TokenHash != "" ||
+				occurrence.TokenHash != "" ||
 				occurrence.ClaimKeySHA256 != "" || !occurrence.LeaseExpiresAt.IsZero() {
 				return errs.ErrStateConflict
 			}

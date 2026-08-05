@@ -437,12 +437,35 @@ func (server *Server) ClaimScheduleOccurrence(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	return &controlplanev1.ClaimScheduleOccurrenceResponse{
-		Occurrence:                toProtoOccurrence(claimed.Occurrence),
-		MaterializationCapability: claimed.MaterializationCapability,
-		ProjectId:                 claimed.ProjectID,
-		CapabilityExpiresAt:       timestamppb.New(claimed.CapabilityExpiresAt),
-	}, nil
+	disposition := toProtoScheduleOccurrenceClaimDisposition(claimed.Disposition)
+	if disposition == controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_UNSPECIFIED {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	response := &controlplanev1.ClaimScheduleOccurrenceResponse{
+		ProjectId: claimed.ProjectID, Disposition: disposition,
+	}
+	if claimed.Disposition != resource.ScheduleOccurrenceClaimRetired {
+		response.Occurrence = toProtoOccurrence(claimed.Occurrence)
+		response.MaterializationCapability = claimed.MaterializationCapability
+		response.MaterializationIdempotencyKey = claimed.MaterializationIdempotencyKey
+		response.CapabilityExpiresAt = timestamppb.New(claimed.CapabilityExpiresAt)
+	}
+	return response, nil
+}
+
+func toProtoScheduleOccurrenceClaimDisposition(
+	disposition resource.ScheduleOccurrenceClaimDisposition,
+) controlplanev1.ScheduleOccurrenceClaimDisposition {
+	switch disposition {
+	case resource.ScheduleOccurrenceClaimReserved:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RESERVED
+	case resource.ScheduleOccurrenceClaimMaterialized:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_MATERIALIZED
+	case resource.ScheduleOccurrenceClaimRetired:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RETIRED
+	default:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_UNSPECIFIED
+	}
 }
 
 func (server *Server) MaterializeScheduleOccurrence(

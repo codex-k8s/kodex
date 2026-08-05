@@ -21,7 +21,10 @@ ALTER TABLE control_plane.schedule_occurrences
         OR (
             state NOT IN ('RESERVED', 'CLAIMED')
             AND claimant_workload_id IS NULL
-            AND authority_generation IS NULL
+            AND (
+                authority_generation IS NULL
+                OR (state = 'QUEUED' AND authority_generation > 0)
+            )
             AND token_hash IS NULL
             AND claim_key_sha256 IS NULL
             AND lease_expires_at IS NULL
