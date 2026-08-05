@@ -99,7 +99,8 @@ const (
 	permissionCancelTurn              = "controlplane.turn.cancel"
 	permissionClaimSchedule           = "controlplane.schedule.claim"
 	permissionManageSchedule          = "controlplane.schedule.manage"
-	permissionExecuteSchedule         = "controlplane.schedule.execute"
+	permissionUseScheduleCapability   = "controlplane.schedule.capability.use"
+	permissionRecoverSchedule         = "controlplane.schedule.recover"
 	permissionStartProcess            = "controlplane.process.start"
 	permissionCancelProcess           = "controlplane.process.cancel"
 	permissionCompleteProcess         = "controlplane.process.complete"
@@ -1583,7 +1584,7 @@ func identity(principal value.Principal) commandIdentity {
 	// только текущий bearer. Они участвуют в transport replay protection, но не
 	// меняют долговечный semantic intent уже проверенной workload-команды.
 	// Bound grants несут generation и сохраняют exact session/turn lineage.
-	if principal.AuthoritySource == "APPLICATION_GRANT" &&
+	if principal.AuthoritySource == "AUTOMATION_OCCURRENCE" &&
 		principal.AuthorityGrantGeneration == 0 {
 		result.AuthorityReference = ""
 		result.AuthorityRevision = 0

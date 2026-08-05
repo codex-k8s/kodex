@@ -36,6 +36,10 @@ func (repository *currentTupleTestRepository) Transact(
 	receipts := cloneReceiptMap(repository.tx.receipts)
 	runtimes := cloneRuntimeMap(repository.tx.runtimes)
 	occurrences := cloneOccurrenceMap(repository.tx.occurrences)
+	capabilities := make(map[string]domainrepo.ScheduleOccurrenceCapability, len(repository.tx.capabilities))
+	for key, capability := range repository.tx.capabilities {
+		capabilities[key] = capability
+	}
 	runs := cloneRunMap(repository.tx.runs)
 	leases := cloneLeaseMap(repository.tx.leases)
 	attempts := cloneAttemptMap(repository.tx.attempts)
@@ -50,6 +54,7 @@ func (repository *currentTupleTestRepository) Transact(
 		repository.tx.receipts = receipts
 		repository.tx.runtimes = runtimes
 		repository.tx.occurrences = occurrences
+		repository.tx.capabilities = capabilities
 		repository.tx.runs = runs
 		repository.tx.leases = leases
 		repository.tx.attempts = attempts
@@ -69,6 +74,7 @@ type currentTupleTestTransaction struct {
 	receipts                map[string]domainrepo.Receipt
 	runtimes                map[string]RuntimeExecution
 	occurrences             map[string]domainrepo.ScheduleOccurrence
+	capabilities            map[string]domainrepo.ScheduleOccurrenceCapability
 	runs                    map[string]domainrepo.ScheduledRun
 	leases                  map[string]domainrepo.TurnLease
 	attempts                map[string]domainrepo.TurnAttempt
@@ -551,7 +557,7 @@ func (tx *currentTupleTestTransaction) HasBlockingScheduleExecution(
 			continue
 		}
 		if occurrence.ID != candidateOccurrenceID &&
-			(occurrence.State == "CLAIMED" || occurrence.State == "WAITING_OWNER" ||
+			(occurrence.State == "RESERVED" || occurrence.State == "CLAIMED" || occurrence.State == "WAITING_OWNER" ||
 				occurrence.State == "CONTINUATION") {
 			return true, nil
 		}
@@ -567,7 +573,7 @@ func (tx *currentTupleTestTransaction) HasBlockingScheduleExecution(
 }
 
 func (tx *currentTupleTestTransaction) SkipOverlappedScheduleOccurrences(
-	ctx context.Context, organizationID, projectID string, now time.Time,
+	ctx context.Context, organizationID, projectID string, now time.Time, limit int,
 ) ([]domainrepo.ScheduleOccurrence, error) {
 	result := make([]domainrepo.ScheduleOccurrence, 0)
 	for id, occurrence := range tx.occurrences {
@@ -590,6 +596,9 @@ func (tx *currentTupleTestTransaction) SkipOverlappedScheduleOccurrences(
 		occurrence.UpdatedAt = now
 		tx.occurrences[id] = occurrence
 		result = append(result, occurrence)
+		if len(result) == limit {
+			break
+		}
 	}
 	return result, nil
 }
@@ -602,7 +611,8 @@ func (tx *currentTupleTestTransaction) ExpiredScheduleOccurrenceCandidates(
 	result := make([]domainrepo.ScheduleOccurrence, 0)
 	for _, occurrence := range tx.occurrences {
 		if occurrence.OrganizationID == organizationID && occurrence.ProjectID == projectID &&
-			occurrence.State == "CLAIMED" && !occurrence.LeaseExpiresAt.After(now) {
+			(occurrence.State == "RESERVED" || occurrence.State == "CLAIMED") &&
+			!occurrence.LeaseExpiresAt.After(now) {
 			result = append(result, occurrence)
 		}
 	}
@@ -673,6 +683,7 @@ func (tx *currentTupleTestTransaction) UpdateScheduleOccurrence(
 	// Модель fake повторяет поле-за-полем production UPDATE, чтобы новое
 	// изменяемое поле нельзя было случайно "проверить" заменой всей структуры.
 	current.State = occurrence.State
+	current.Version = occurrence.Version
 	current.Attempt = occurrence.Attempt
 	current.EffectiveInputSHA256 = occurrence.EffectiveInputSHA256
 	current.ClaimantWorkloadID = occurrence.ClaimantWorkloadID
@@ -683,6 +694,8 @@ func (tx *currentTupleTestTransaction) UpdateScheduleOccurrence(
 	current.AvailableAt = occurrence.AvailableAt
 	current.Outcome = occurrence.Outcome
 	current.ResultArtifactID = occurrence.ResultArtifactID
+	current.RecoveryEvidenceSHA256 = occurrence.RecoveryEvidenceSHA256
+	current.RecoveryBlockedAt = occurrence.RecoveryBlockedAt
 	current.ExecutionSessionID = occurrence.ExecutionSessionID
 	current.ExecutionSessionVersion = occurrence.ExecutionSessionVersion
 	current.ExecutionTurnID = occurrence.ExecutionTurnID
@@ -693,6 +706,49 @@ func (tx *currentTupleTestTransaction) UpdateScheduleOccurrence(
 	current.ExecutionRuntimeRevisionVersion = occurrence.ExecutionRuntimeRevisionVersion
 	current.UpdatedAt = occurrence.UpdatedAt
 	tx.occurrences[occurrence.ID] = current
+	return nil
+}
+
+func (tx *currentTupleTestTransaction) InsertScheduleOccurrenceCapability(
+	_ context.Context, capability domainrepo.ScheduleOccurrenceCapability,
+) error {
+	if _, exists := tx.capabilities[capability.TokenSHA256]; exists {
+		return errs.ErrStateConflict
+	}
+	tx.capabilities[capability.TokenSHA256] = capability
+	return nil
+}
+
+func (tx *currentTupleTestTransaction) GetScheduleOccurrenceCapabilityForUpdate(
+	_ context.Context, tokenSHA256 string,
+) (domainrepo.ScheduleOccurrenceCapability, error) {
+	capability, ok := tx.capabilities[tokenSHA256]
+	if !ok {
+		return domainrepo.ScheduleOccurrenceCapability{}, errs.ErrNotFound
+	}
+	return capability, nil
+}
+
+func (tx *currentTupleTestTransaction) GetScheduleOccurrenceCapabilityByOccurrenceForUpdate(
+	_ context.Context, occurrenceID string, attempt uint32, fullMethod string, generation uint64,
+) (domainrepo.ScheduleOccurrenceCapability, error) {
+	for _, capability := range tx.capabilities {
+		if capability.OccurrenceID == occurrenceID && capability.Attempt == attempt &&
+			capability.FullMethod == fullMethod && capability.AuthorityGeneration == generation {
+			return capability, nil
+		}
+	}
+	return domainrepo.ScheduleOccurrenceCapability{}, errs.ErrNotFound
+}
+
+func (tx *currentTupleTestTransaction) UpdateScheduleOccurrenceCapability(
+	_ context.Context, capability domainrepo.ScheduleOccurrenceCapability, expectedState string,
+) error {
+	current, ok := tx.capabilities[capability.TokenSHA256]
+	if !ok || current.State != expectedState || current.ID != capability.ID {
+		return errs.ErrStateConflict
+	}
+	tx.capabilities[capability.TokenSHA256] = capability
 	return nil
 }
 
@@ -1131,6 +1187,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		automationProjectCursor: make(map[string]int),
 		runtimes:                make(map[string]RuntimeExecution),
 		occurrences:             make(map[string]domainrepo.ScheduleOccurrence),
+		capabilities:            make(map[string]domainrepo.ScheduleOccurrenceCapability),
 		runs:                    make(map[string]domainrepo.ScheduledRun),
 		leases:                  make(map[string]domainrepo.TurnLease),
 		attempts: map[string]domainrepo.TurnAttempt{
@@ -1225,6 +1282,8 @@ func (fixture currentTupleFixture) principalFor(
 	}
 	if workload == "scheduler" {
 		principal.ProjectID = ""
+		principal.AuthoritySource = "AUTOMATION_OCCURRENCE"
+		principal.AuthorityGrantGeneration = 0
 	}
 	return principal
 }
@@ -1249,7 +1308,7 @@ func (fixture currentTupleFixture) startRootProcess(t *testing.T) entity.Resourc
 type scheduledProducerPath struct {
 	schedule       entity.Resource
 	snapshotDigest string
-	claim          ScheduleOccurrenceResult
+	claim          MaterializeScheduleOccurrenceResult
 	turn           entity.Resource
 	process        entity.Resource
 	runtime        entity.Resource
@@ -1259,33 +1318,70 @@ func (fixture currentTupleFixture) produceScheduledGraph(t *testing.T) scheduled
 	return fixture.produceScheduledGraphWithMaximumAttempts(t, 3)
 }
 
+func (fixture currentTupleFixture) produceScheduledGraphForTarget(
+	t *testing.T, targetType string,
+) scheduledProducerPath {
+	return fixture.produceScheduledGraphWithTarget(t, 3, targetType)
+}
+
+func (fixture currentTupleFixture) materializeReservedOccurrence(
+	t *testing.T, reserved ScheduleOccurrenceResult, key string,
+) MaterializeScheduleOccurrenceResult {
+	t.Helper()
+	result, err := fixture.service.MaterializeScheduleOccurrence(context.Background(),
+		MaterializeScheduleOccurrenceInput{
+			Principal: fixture.principalFor(permissionUseScheduleCapability, "scheduler",
+				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+				reserved.Occurrence.ID, uint64(reserved.Occurrence.Attempt),
+				reserved.Occurrence.EffectiveInputSHA256, fixture.grant),
+			IdempotencyKey: key, OccurrenceID: reserved.Occurrence.ID,
+			ProjectID: reserved.ProjectID, ExpectedAttempt: reserved.Occurrence.Attempt,
+			MaterializationCapability: reserved.MaterializationCapability,
+		})
+	if err != nil {
+		t.Fatalf("MaterializeScheduleOccurrence: %v", err)
+	}
+	return result
+}
+
 func (fixture currentTupleFixture) produceScheduledGraphWithMaximumAttempts(
 	t *testing.T,
 	maximumAttempts uint32,
+) scheduledProducerPath {
+	return fixture.produceScheduledGraphWithTarget(t, maximumAttempts, "PLAYBOOK")
+}
+
+func (fixture currentTupleFixture) produceScheduledGraphWithTarget(
+	t *testing.T,
+	maximumAttempts uint32,
+	targetType string,
 ) scheduledProducerPath {
 	t.Helper()
 	managePrincipal := fixture.principal(
 		permissionManageSchedule, controlAPIGatewayWorkload, controlAPIGatewaySPIFFEID,
 	)
+	spec := entity.ScheduleSpec{
+		TargetResourceID: fixture.roleID, Interval: time.Hour,
+		Timezone: "UTC", Calendar: "GREGORIAN", OverlapPolicy: "FORBID",
+		MisfirePolicy: "RUN_ONCE", NextRunAt: fixture.tx.now.Add(time.Minute),
+		DeliveryPolicy: "AT_LEAST_ONCE", MaximumAttempts: maximumAttempts,
+		InitialBackoff: time.Second, MaximumBackoff: time.Minute,
+		DeadLetterAfter: time.Hour, PromptProfileID: fixture.promptID,
+		PromptRevision: 1, SessionPolicy: "PERSISTENT",
+		ExecutionSessionID: fixture.sessionID, RoomID: fixture.chatID,
+		NotificationPolicy:       "ON_ACTION_OR_FAILURE",
+		MaximumExecutionDuration: time.Minute, Coalesce: true,
+		RuntimeRevisionID: fixture.revisionID, TargetType: targetType,
+		PromptArtifactID: fixture.artifactID,
+		Ownership:        entity.ConfigurationOwnership{ManagedBy: "UI"},
+	}
+	if targetType == "PLAYBOOK" {
+		spec.PlaybookRef, spec.PlaybookVersion = "playbook:test", 1
+	}
 	schedule, err := fixture.service.ManageSchedule(context.Background(), ManageScheduleInput{
 		Principal: managePrincipal, IdempotencyKey: "create-schedule-current-digest",
 		Action: "CREATE", Name: "Scheduled production path",
-		Spec: entity.ScheduleSpec{
-			TargetResourceID: fixture.roleID, Interval: time.Hour,
-			Timezone: "UTC", Calendar: "GREGORIAN", OverlapPolicy: "FORBID",
-			MisfirePolicy: "RUN_ONCE", NextRunAt: fixture.tx.now.Add(time.Minute),
-			DeliveryPolicy: "AT_LEAST_ONCE", MaximumAttempts: maximumAttempts,
-			InitialBackoff: time.Second, MaximumBackoff: time.Minute,
-			DeadLetterAfter: time.Hour, PromptProfileID: fixture.promptID,
-			PromptRevision: 1, SessionPolicy: "PERSISTENT",
-			ExecutionSessionID: fixture.sessionID, RoomID: fixture.chatID,
-			NotificationPolicy:       "ON_ACTION_OR_FAILURE",
-			MaximumExecutionDuration: time.Minute, Coalesce: true,
-			RuntimeRevisionID: fixture.revisionID, TargetType: "PLAYBOOK",
-			PlaybookRef: "playbook:test", PlaybookVersion: 1,
-			PromptArtifactID: fixture.artifactID,
-			Ownership:        entity.ConfigurationOwnership{ManagedBy: "UI"},
-		},
+		Spec: spec,
 	})
 	if err != nil {
 		t.Fatalf("ManageSchedule CREATE: %v", err)
@@ -1303,15 +1399,24 @@ func (fixture currentTupleFixture) produceScheduledGraphWithMaximumAttempts(
 	if err != nil || len(due.Occurrences) != 1 {
 		t.Fatalf("ClaimDueSchedules: %v %+v", err, due)
 	}
+	rotatedDuePrincipal := schedulerPrincipal
+	rotatedDuePrincipal.CorrelationID, rotatedDuePrincipal.AuthorityReference = uuid.NewString(), uuid.NewString()
+	rotatedDuePrincipal.AuthorityRevision, rotatedDuePrincipal.AuthorityDigest = 99, hashString("rotated-due-grant")
+	dueReplay, err := fixture.service.ClaimDueSchedules(context.Background(), ClaimDueSchedulesInput{
+		Principal: rotatedDuePrincipal, IdempotencyKey: "claim-due-current-digest", Limit: 1,
+	})
+	if err != nil || !reflect.DeepEqual(dueReplay, due) {
+		t.Fatalf("ClaimDueSchedules rotation replay: %v %+v", err, dueReplay)
+	}
 	snapshotDigest := due.Occurrences[0].EffectiveInputSHA256
 	claimPrincipal := fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionClaimSchedule, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		schedule.ID, fixture.tx.resources[schedule.ID].Version,
 		snapshotDigest, fixture.grant,
 	)
 	auditsBeforeClaim, eventsBeforeClaim := len(fixture.tx.audits), len(fixture.tx.events)
-	claimed, err := fixture.service.ClaimScheduleOccurrence(
+	reserved, err := fixture.service.ClaimScheduleOccurrence(
 		context.Background(), ClaimScheduleOccurrenceInput{
 			Principal: claimPrincipal, IdempotencyKey: "claim-occurrence-current-digest",
 		},
@@ -1319,17 +1424,48 @@ func (fixture currentTupleFixture) produceScheduledGraphWithMaximumAttempts(
 	if err != nil {
 		t.Fatalf("ClaimScheduleOccurrence: %v", err)
 	}
+	rotatedClaimPrincipal := claimPrincipal
+	rotatedClaimPrincipal.CorrelationID, rotatedClaimPrincipal.AuthorityReference = uuid.NewString(), uuid.NewString()
+	rotatedClaimPrincipal.AuthorityRevision, rotatedClaimPrincipal.AuthorityDigest = 100, hashString("rotated-claim-grant")
+	reservedReplay, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(), ClaimScheduleOccurrenceInput{
+			Principal: rotatedClaimPrincipal, IdempotencyKey: "claim-occurrence-current-digest",
+		},
+	)
+	if err != nil || reservedReplay != reserved {
+		t.Fatalf("ClaimScheduleOccurrence rotation replay: %v %+v", err, reservedReplay)
+	}
+	materializePrincipal := claimPrincipal
+	materializePrincipal.Permission = permissionUseScheduleCapability
+	materializePrincipal.ProjectID = ""
+	claimed, err := fixture.service.MaterializeScheduleOccurrence(context.Background(),
+		MaterializeScheduleOccurrenceInput{
+			Principal: materializePrincipal, IdempotencyKey: "materialize-occurrence-current-digest",
+			OccurrenceID: reserved.Occurrence.ID, ProjectID: reserved.ProjectID,
+			ExpectedAttempt:           reserved.Occurrence.Attempt,
+			MaterializationCapability: reserved.MaterializationCapability,
+		})
+	if err != nil {
+		t.Fatalf("MaterializeScheduleOccurrence: %v", err)
+	}
 	if claimed.Occurrence.EffectiveInputSHA256 == snapshotDigest {
 		t.Fatal("materialized execution digest was not separated from schedule snapshot")
 	}
 	auditsAfterClaim, eventsAfterClaim := len(fixture.tx.audits), len(fixture.tx.events)
-	replayed, err := fixture.service.ClaimScheduleOccurrence(
-		context.Background(), ClaimScheduleOccurrenceInput{
-			Principal: claimPrincipal, IdempotencyKey: "claim-occurrence-current-digest",
-		},
-	)
+	rotatedMaterializePrincipal := materializePrincipal
+	rotatedMaterializePrincipal.CorrelationID, rotatedMaterializePrincipal.AuthorityReference =
+		uuid.NewString(), uuid.NewString()
+	rotatedMaterializePrincipal.AuthorityRevision, rotatedMaterializePrincipal.AuthorityDigest =
+		101, hashString("rotated-materialize-grant")
+	replayed, err := fixture.service.MaterializeScheduleOccurrence(context.Background(),
+		MaterializeScheduleOccurrenceInput{
+			Principal: rotatedMaterializePrincipal, IdempotencyKey: "materialize-occurrence-current-digest",
+			OccurrenceID: reserved.Occurrence.ID, ProjectID: reserved.ProjectID,
+			ExpectedAttempt:           reserved.Occurrence.Attempt,
+			MaterializationCapability: reserved.MaterializationCapability,
+		})
 	if err != nil || replayed != claimed {
-		t.Fatalf("ClaimScheduleOccurrence replay: %v %+v", err, replayed)
+		t.Fatalf("MaterializeScheduleOccurrence replay: %v %+v", err, replayed)
 	}
 	if len(fixture.tx.audits) == auditsBeforeClaim || len(fixture.tx.events) == eventsBeforeClaim {
 		t.Fatal("initial scheduler claim did not persist its graph records")
@@ -1341,6 +1477,13 @@ func (fixture currentTupleFixture) produceScheduledGraphWithMaximumAttempts(
 	process := fixture.tx.resources[claimed.Occurrence.ExecutionProcessRunID]
 	runtimeRevision := fixture.tx.resources[claimed.Occurrence.ExecutionRuntimeRevisionID]
 	turnSpec := turn.Spec.(entity.TurnSpec)
+	runtimeSpec := runtimeRevision.Spec.(entity.RuntimeRevisionSpec)
+	if turnSpec.ScheduledResultContract == nil || runtimeSpec.ScheduledResultContract == nil ||
+		*turnSpec.ScheduledResultContract != *runtimeSpec.ScheduledResultContract ||
+		turnSpec.ScheduledResultContract.Validate() != nil {
+		t.Fatalf("scheduled result contract is not pinned in Turn/RuntimeRevision: turn=%+v revision=%+v",
+			turnSpec.ScheduledResultContract, runtimeSpec.ScheduledResultContract)
+	}
 	run := fixture.tx.runs[turnAttemptMapKey(claimed.Occurrence.ID, claimed.Occurrence.Attempt)]
 	if turnSpec.EffectiveInputSHA256 != claimed.Occurrence.EffectiveInputSHA256 ||
 		run.CurrentInputSHA256 != turnSpec.EffectiveInputSHA256 ||
@@ -1400,16 +1543,17 @@ func (fixture currentTupleFixture) completeScheduledOccurrence(
 	schedule := fixture.tx.resources[produced.schedule.ID]
 	spec := schedule.Spec.(entity.ScheduleSpec)
 	principal := fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionUseScheduleCapability, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 	)
 	completed, err := fixture.service.CompleteScheduleOccurrence(
 		context.Background(), CompleteScheduleOccurrenceInput{
 			Principal: principal, IdempotencyKey: "complete-occurrence-" + suffix,
-			OccurrenceID:    produced.claim.Occurrence.ID,
-			LeaseToken:      produced.claim.LeaseToken,
-			ExpectedAttempt: produced.claim.Occurrence.Attempt,
+			OccurrenceID:         produced.claim.Occurrence.ID,
+			CompletionCapability: produced.claim.CompletionCapability,
+			ExpectedAttempt:      produced.claim.Occurrence.Attempt,
+			ProjectID:            fixture.project,
 		},
 	)
 	if err != nil {
@@ -1439,6 +1583,11 @@ func (fixture currentTupleFixture) createNextDueOccurrence(
 	t.Helper()
 	original := fixture.tx.resources[produced.schedule.ID]
 	spec := original.Spec.(entity.ScheduleSpec)
+	// Первый next run назначает server по текущему PostgreSQL time. Короткий
+	// interval создаёт независимую due-строку, не перенося clock за deadline
+	// проверяемой occurrence.
+	spec.Interval = time.Minute
+	spec.Cron = ""
 	spec.NextRunAt = fixture.tx.now.Add(time.Minute)
 	second, err := fixture.service.ManageSchedule(context.Background(), ManageScheduleInput{
 		Principal: fixture.principal(
@@ -1796,185 +1945,189 @@ func TestProductionClaimTurnPropagatesScheduledCurrentTuple(t *testing.T) {
 }
 
 func TestScheduledProducerClaimTurnRuntimePathPreservesDigestAndOutboxSemantics(t *testing.T) {
-	fixture := newCurrentTupleFixture(t)
-	produced := fixture.produceScheduledGraph(t)
-	turnSpec := produced.turn.Spec.(entity.TurnSpec)
-	claimPrincipal := fixture.principalFor(
-		permissionClaimTurn, agentRunnerWorkload, agentRunnerSPIFFEID,
-		produced.turn.ID, uint64(turnSpec.Attempt),
-		turnSpec.EffectiveInputSHA256, fixture.grant,
-	)
-	auditsBeforeClaim, eventsBeforeClaim := len(fixture.tx.audits), len(fixture.tx.events)
-	claimed, err := fixture.service.ClaimTurn(context.Background(), ClaimTurnInput{
-		Principal: claimPrincipal, IdempotencyKey: "claim-produced-scheduled-turn",
-	})
-	if err != nil {
-		t.Fatalf("ClaimTurn after scheduled producers: %v", err)
-	}
-	auditsAfterClaim, eventsAfterClaim := len(fixture.tx.audits), len(fixture.tx.events)
-	if auditsAfterClaim <= auditsBeforeClaim || eventsAfterClaim <= eventsBeforeClaim {
-		t.Fatal("ClaimTurn did not atomically persist graph records")
-	}
-	replayed, err := fixture.service.ClaimTurn(context.Background(), ClaimTurnInput{
-		Principal: claimPrincipal, IdempotencyKey: "claim-produced-scheduled-turn",
-	})
-	if err != nil || replayed.Turn.Version != claimed.Turn.Version {
-		t.Fatalf("scheduled ClaimTurn replay: %v %+v", err, replayed)
-	}
-	if len(fixture.tx.audits) != auditsAfterClaim || len(fixture.tx.events) != eventsAfterClaim {
-		t.Fatal("scheduled ClaimTurn replay repeated graph effects")
-	}
+	for _, targetType := range []string{"PLAYBOOK", "AGENT"} {
+		t.Run(targetType, func(t *testing.T) {
+			fixture := newCurrentTupleFixture(t)
+			produced := fixture.produceScheduledGraphForTarget(t, targetType)
+			turnSpec := produced.turn.Spec.(entity.TurnSpec)
+			claimPrincipal := fixture.principalFor(
+				permissionClaimTurn, agentRunnerWorkload, agentRunnerSPIFFEID,
+				produced.turn.ID, uint64(turnSpec.Attempt),
+				turnSpec.EffectiveInputSHA256, fixture.grant,
+			)
+			auditsBeforeClaim, eventsBeforeClaim := len(fixture.tx.audits), len(fixture.tx.events)
+			claimed, err := fixture.service.ClaimTurn(context.Background(), ClaimTurnInput{
+				Principal: claimPrincipal, IdempotencyKey: "claim-produced-scheduled-turn",
+			})
+			if err != nil {
+				t.Fatalf("ClaimTurn after scheduled producers: %v", err)
+			}
+			auditsAfterClaim, eventsAfterClaim := len(fixture.tx.audits), len(fixture.tx.events)
+			if auditsAfterClaim <= auditsBeforeClaim || eventsAfterClaim <= eventsBeforeClaim {
+				t.Fatal("ClaimTurn did not atomically persist graph records")
+			}
+			replayed, err := fixture.service.ClaimTurn(context.Background(), ClaimTurnInput{
+				Principal: claimPrincipal, IdempotencyKey: "claim-produced-scheduled-turn",
+			})
+			if err != nil || replayed.Turn.Version != claimed.Turn.Version {
+				t.Fatalf("scheduled ClaimTurn replay: %v %+v", err, replayed)
+			}
+			if len(fixture.tx.audits) != auditsAfterClaim || len(fixture.tx.events) != eventsAfterClaim {
+				t.Fatal("scheduled ClaimTurn replay repeated graph effects")
+			}
 
-	process := fixture.tx.resources[produced.process.ID]
-	processSpec := process.Spec.(entity.ProcessRunSpec)
-	occurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
-	run := fixture.tx.runs[turnAttemptMapKey(occurrence.ID, occurrence.Attempt)]
-	if processSpec.CurrentTurnVersion != claimed.Turn.Version ||
-		occurrence.ExecutionTurnVersion != claimed.Turn.Version ||
-		run.CurrentTurnVersion != claimed.Turn.Version ||
-		occurrence.ExecutionProcessVersion != process.Version ||
-		run.CurrentProcessVersion != process.Version ||
-		occurrence.EffectiveInputSHA256 != turnSpec.EffectiveInputSHA256 ||
-		run.CurrentInputSHA256 != turnSpec.EffectiveInputSHA256 ||
-		run.EffectiveInputSHA256 != produced.snapshotDigest {
-		t.Fatalf("scheduled current tuple/digest was not propagated: process=%+v occurrence=%+v run=%+v",
-			processSpec, occurrence, run)
-	}
+			process := fixture.tx.resources[produced.process.ID]
+			processSpec := process.Spec.(entity.ProcessRunSpec)
+			occurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+			run := fixture.tx.runs[turnAttemptMapKey(occurrence.ID, occurrence.Attempt)]
+			if processSpec.CurrentTurnVersion != claimed.Turn.Version ||
+				occurrence.ExecutionTurnVersion != claimed.Turn.Version ||
+				run.CurrentTurnVersion != claimed.Turn.Version ||
+				occurrence.ExecutionProcessVersion != process.Version ||
+				run.CurrentProcessVersion != process.Version ||
+				occurrence.EffectiveInputSHA256 != turnSpec.EffectiveInputSHA256 ||
+				run.CurrentInputSHA256 != turnSpec.EffectiveInputSHA256 ||
+				run.EffectiveInputSHA256 != produced.snapshotDigest {
+				t.Fatalf("scheduled current tuple/digest was not propagated: process=%+v occurrence=%+v run=%+v",
+					processSpec, occurrence, run)
+			}
 
-	scheduleEvents := 0
-	seen := make(map[string]struct{}, len(fixture.tx.events))
-	for _, change := range fixture.tx.events {
-		key := string(change.ResourceKind) + "\x00" + change.ResourceID + "\x00" +
-			strconv.FormatUint(change.EventSequence, 10)
-		if _, exists := seen[key]; exists {
-			t.Fatalf("duplicate outbox sequence: %s", key)
-		}
-		seen[key] = struct{}{}
-		if change.EventSequence != change.ResourceVersion {
-			t.Fatalf("outbox sequence %d differs from resource version %d: %+v",
-				change.EventSequence, change.ResourceVersion, change)
-		}
-		if change.ResourceKind == enum.KindSchedule && change.ResourceID == produced.schedule.ID {
-			scheduleEvents++
-		}
-	}
-	if scheduleEvents != 0 {
-		t.Fatalf("polling-only Schedule received an outbox event: %d", scheduleEvents)
-	}
+			scheduleEvents := 0
+			seen := make(map[string]struct{}, len(fixture.tx.events))
+			for _, change := range fixture.tx.events {
+				key := string(change.ResourceKind) + "\x00" + change.ResourceID + "\x00" +
+					strconv.FormatUint(change.EventSequence, 10)
+				if _, exists := seen[key]; exists {
+					t.Fatalf("duplicate outbox sequence: %s", key)
+				}
+				seen[key] = struct{}{}
+				if change.EventSequence != change.ResourceVersion {
+					t.Fatalf("outbox sequence %d differs from resource version %d: %+v",
+						change.EventSequence, change.ResourceVersion, change)
+				}
+				if change.ResourceKind == enum.KindSchedule && change.ResourceID == produced.schedule.ID {
+					scheduleEvents++
+				}
+			}
+			if scheduleEvents != 0 {
+				t.Fatalf("polling-only Schedule received an outbox event: %d", scheduleEvents)
+			}
 
-	runtimePrincipal := fixture.principalFor(
-		permissionRuntimeClaim, fixture.runtimeWorker, fixture.runtimeSPIFFE,
-		produced.turn.ID, uint64(turnSpec.Attempt),
-		turnSpec.EffectiveInputSHA256, fixture.grant,
-	)
-	execution, err := fixture.service.ClaimRuntimeExecution(
-		context.Background(), runtimePrincipal, "claim-produced-scheduled-runtime",
-	)
-	if err != nil {
-		t.Fatalf("ClaimRuntimeExecution after scheduled ClaimTurn: %v", err)
-	}
-	if execution.WorkloadID != fixture.runtimeWorker ||
-		execution.WorkloadSPIFFEID != fixture.runtimeSPIFFE {
-		t.Fatalf("runtime authority does not belong to exact executor: %+v", execution)
-	}
-	admitPrincipal := fixture.principalFor(
-		permissionRuntimeAdmit, fixture.runtimeWorker, fixture.runtimeSPIFFE,
-		produced.turn.ID, uint64(turnSpec.Attempt),
-		turnSpec.EffectiveInputSHA256, fixture.grant,
-	)
-	admitted, err := fixture.service.AdmitRuntimeExecution(
-		context.Background(), RuntimeExecutionInput{
-			Principal: admitPrincipal, IdempotencyKey: "admit-produced-scheduled-runtime",
-			ExecutionID: execution.ID, ExpectedVersion: execution.Version,
-			ExpectedFence: execution.Fence, ExpectedGrantGeneration: fixture.grant,
-		},
-	)
-	if err != nil || admitted.Execution.State != "ADMITTED" {
-		t.Fatalf("AdmitRuntimeExecution after scheduled producers: %v %+v", err, admitted)
-	}
-	payload := []byte("Требуется решение владельца.")
-	resultSHA256 := hashString(string(payload))
-	resultID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:runtime-output:"+
-		execution.ID+":FINAL_MARKDOWN:1:"+resultSHA256)).String()
-	archiveSHA256 := hashString("scheduled-runtime-archive")
-	archivePath := ".matter-codex/state/codex-home/sessions/2026/08/05/rollout-scheduled.jsonl"
-	deliveriesBefore := len(fixture.tx.deliveries)
-	completePrincipal := admitPrincipal
-	completePrincipal.Permission = permissionRuntimeComplete
-	waiting, err := fixture.service.CompleteRuntimeExecution(
-		context.Background(), CompleteRuntimeExecutionInput{
-			RuntimeExecutionInput: RuntimeExecutionInput{
-				Principal: completePrincipal, IdempotencyKey: "complete-scheduled-requires-owner",
-				ExecutionID: admitted.Execution.ID, ExpectedVersion: admitted.Execution.Version,
-				ExpectedFence: admitted.Execution.Fence, ExpectedGrantGeneration: fixture.grant,
-				LeaseToken: admitted.LeaseToken,
-			},
-			Outcome: "SUCCEEDED", ScheduledOutcome: "requires_human",
-			TerminalReference: "codex://sessions/" + fixture.sessionID + "/executions/" + execution.ID,
-			TerminalSHA256:    hashString("scheduled-runtime-terminal"),
-			Outputs: []RuntimeOutput{{Kind: "FINAL_MARKDOWN", ArtifactID: resultID,
-				ArtifactVersion: 1, ArtifactSHA256: resultSHA256, ArtifactName: "result.md",
-				ArtifactMediaType: "text/markdown", ArtifactPayload: payload,
-				ArtifactSizeBytes: uint64(len(payload)), Sequence: 1, Total: 1}},
-			CodexSessionID: uuid.NewString(), ArchiveRelativePath: archivePath,
-			ArchiveSHA256: archiveSHA256,
-			ArchiveProvenance: "codex-app-server-rollout-v1:" + execution.ID + ":" +
-				archivePath + ":" + archiveSHA256,
-		},
-	)
-	if err != nil || waiting.State != "SUSPENDED" || waiting.TerminalOutcome != "SUSPENDED" {
-		t.Fatalf("scheduled requires_human completion: %v %+v", err, waiting)
-	}
-	waitingTurn := fixture.tx.resources[produced.turn.ID]
-	waitingProcess := fixture.tx.resources[produced.process.ID]
-	waitingOccurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
-	waitingRun := fixture.tx.runs[turnAttemptMapKey(waitingOccurrence.ID, waitingOccurrence.Attempt)]
-	gate, gateErr := fixture.tx.ActiveOwnerGateForProcess(
-		context.Background(), fixture.organization, fixture.project, produced.process.ID,
-	)
-	gateSpec, gateOK := gate.Spec.(entity.OwnerGateSpec)
-	if gateErr != nil || !gateOK || waitingTurn.State != enum.StateWaitingOwner ||
-		waitingProcess.State != enum.StateWaitingOwner || waitingOccurrence.State != "WAITING_OWNER" ||
-		waitingRun.State != "WAITING_OWNER" || waitingRun.Outcome != "requires_human" ||
-		waitingRun.ResultArtifactID != resultID || gateSpec.NotificationRoomID != fixture.chatID ||
-		len(fixture.tx.deliveries) != deliveriesBefore {
-		t.Fatalf("requires_human graph/route is incomplete: gate=%+v turn=%+v process=%+v occurrence=%+v run=%+v",
-			gate, waitingTurn, waitingProcess, waitingOccurrence, waitingRun)
-	}
-	gateSpec.DeliveryFence = 1
-	gateSpec.DeliveryClaimTokenSHA256 = hashString("scheduled-owner-gate-token")
-	gateSpec.DeliveryClaimKeySHA256 = hashString("scheduled-owner-gate-key")
-	gateSpec.DeliveryClaimExpiresAt = fixture.tx.now.Add(time.Minute)
-	gateSpec.MattermostPostID = "post-scheduled-owner-gate"
-	gateSpec.MattermostChannelID = "channel-scheduled-owner-gate"
-	gateSpec.MattermostRootPostID = "root-scheduled-owner-gate"
-	gateSpec.DeliveredAt = fixture.tx.now
-	deliveredGate, err := gate.Update(gate.Name, gateSpec, fixture.tx.now)
-	if err != nil {
-		t.Fatalf("materialize owner-gate delivery receipt: %v", err)
-	}
-	fixture.tx.resources[gate.ID] = deliveredGate
-	decisionPrincipal := fixture.principal(permissionResolveGate,
-		controlAPIGatewayWorkload, controlAPIGatewaySPIFFEID)
-	decision, err := fixture.service.ResolveOwnerGate(context.Background(), ResolveOwnerGateInput{
-		Principal: decisionPrincipal, IdempotencyKey: "approve-scheduled-owner-gate",
-		OwnerGateID: deliveredGate.ID, ExpectedVersion: deliveredGate.Version,
-		Decision: "APPROVED", Reason: "Результат принят владельцем.",
-		ProcessRunID: waitingProcess.ID, ProcessExpectedVersion: waitingProcess.Version,
-		SessionID: gateSpec.SessionID, TurnID: gateSpec.TurnID, Attempt: gateSpec.Attempt,
-		ImmutableInputSHA256: gateSpec.ImmutableInputSHA256,
-	})
-	if err != nil {
-		t.Fatalf("approve scheduled owner gate: %v", err)
-	}
-	approvedOccurrence := fixture.tx.occurrences[waitingOccurrence.ID]
-	approvedRun := fixture.tx.runs[turnAttemptMapKey(waitingOccurrence.ID, waitingOccurrence.Attempt)]
-	if decision.OwnerGate.State != enum.StateSucceeded || decision.Process.State != enum.StateSucceeded ||
-		fixture.tx.resources[waitingTurn.ID].State != enum.StateSucceeded ||
-		approvedOccurrence.State != "SUCCEEDED" || approvedOccurrence.Outcome != "action_taken" ||
-		approvedRun.State != "SUCCEEDED" || approvedRun.Outcome != "action_taken" {
-		t.Fatalf("owner decision did not close exact scheduled graph: decision=%+v occurrence=%+v run=%+v",
-			decision, approvedOccurrence, approvedRun)
+			runtimePrincipal := fixture.principalFor(
+				permissionRuntimeClaim, fixture.runtimeWorker, fixture.runtimeSPIFFE,
+				produced.turn.ID, uint64(turnSpec.Attempt),
+				turnSpec.EffectiveInputSHA256, fixture.grant,
+			)
+			execution, err := fixture.service.ClaimRuntimeExecution(
+				context.Background(), runtimePrincipal, "claim-produced-scheduled-runtime",
+			)
+			if err != nil {
+				t.Fatalf("ClaimRuntimeExecution after scheduled ClaimTurn: %v", err)
+			}
+			if execution.WorkloadID != fixture.runtimeWorker ||
+				execution.WorkloadSPIFFEID != fixture.runtimeSPIFFE {
+				t.Fatalf("runtime authority does not belong to exact executor: %+v", execution)
+			}
+			admitPrincipal := fixture.principalFor(
+				permissionRuntimeAdmit, fixture.runtimeWorker, fixture.runtimeSPIFFE,
+				produced.turn.ID, uint64(turnSpec.Attempt),
+				turnSpec.EffectiveInputSHA256, fixture.grant,
+			)
+			admitted, err := fixture.service.AdmitRuntimeExecution(
+				context.Background(), RuntimeExecutionInput{
+					Principal: admitPrincipal, IdempotencyKey: "admit-produced-scheduled-runtime",
+					ExecutionID: execution.ID, ExpectedVersion: execution.Version,
+					ExpectedFence: execution.Fence, ExpectedGrantGeneration: fixture.grant,
+				},
+			)
+			if err != nil || admitted.Execution.State != "ADMITTED" {
+				t.Fatalf("AdmitRuntimeExecution after scheduled producers: %v %+v", err, admitted)
+			}
+			payload := []byte("Требуется решение владельца.")
+			resultSHA256 := hashString(string(payload))
+			resultID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:runtime-output:"+
+				execution.ID+":FINAL_MARKDOWN:1:"+resultSHA256)).String()
+			archiveSHA256 := hashString("scheduled-runtime-archive")
+			archivePath := ".matter-codex/state/codex-home/sessions/2026/08/05/rollout-scheduled.jsonl"
+			deliveriesBefore := len(fixture.tx.deliveries)
+			completePrincipal := admitPrincipal
+			completePrincipal.Permission = permissionRuntimeComplete
+			waiting, err := fixture.service.CompleteRuntimeExecution(
+				context.Background(), CompleteRuntimeExecutionInput{
+					RuntimeExecutionInput: RuntimeExecutionInput{
+						Principal: completePrincipal, IdempotencyKey: "complete-scheduled-requires-owner",
+						ExecutionID: admitted.Execution.ID, ExpectedVersion: admitted.Execution.Version,
+						ExpectedFence: admitted.Execution.Fence, ExpectedGrantGeneration: fixture.grant,
+						LeaseToken: admitted.LeaseToken,
+					},
+					Outcome: "SUCCEEDED", ScheduledOutcome: "requires_human",
+					TerminalReference: "codex://sessions/" + fixture.sessionID + "/executions/" + execution.ID,
+					TerminalSHA256:    hashString("scheduled-runtime-terminal"),
+					Outputs: []RuntimeOutput{{Kind: "FINAL_MARKDOWN", ArtifactID: resultID,
+						ArtifactVersion: 1, ArtifactSHA256: resultSHA256, ArtifactName: "result.md",
+						ArtifactMediaType: "text/markdown", ArtifactPayload: payload,
+						ArtifactSizeBytes: uint64(len(payload)), Sequence: 1, Total: 1}},
+					CodexSessionID: uuid.NewString(), ArchiveRelativePath: archivePath,
+					ArchiveSHA256: archiveSHA256,
+					ArchiveProvenance: "codex-app-server-rollout-v1:" + execution.ID + ":" +
+						archivePath + ":" + archiveSHA256,
+				},
+			)
+			if err != nil || waiting.State != "SUSPENDED" || waiting.TerminalOutcome != "SUSPENDED" {
+				t.Fatalf("scheduled requires_human completion: %v %+v", err, waiting)
+			}
+			waitingTurn := fixture.tx.resources[produced.turn.ID]
+			waitingProcess := fixture.tx.resources[produced.process.ID]
+			waitingOccurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+			waitingRun := fixture.tx.runs[turnAttemptMapKey(waitingOccurrence.ID, waitingOccurrence.Attempt)]
+			gate, gateErr := fixture.tx.ActiveOwnerGateForProcess(
+				context.Background(), fixture.organization, fixture.project, produced.process.ID,
+			)
+			gateSpec, gateOK := gate.Spec.(entity.OwnerGateSpec)
+			if gateErr != nil || !gateOK || waitingTurn.State != enum.StateWaitingOwner ||
+				waitingProcess.State != enum.StateWaitingOwner || waitingOccurrence.State != "WAITING_OWNER" ||
+				waitingRun.State != "WAITING_OWNER" || waitingRun.Outcome != "requires_human" ||
+				waitingRun.ResultArtifactID != resultID || gateSpec.NotificationRoomID != fixture.chatID ||
+				len(fixture.tx.deliveries) != deliveriesBefore {
+				t.Fatalf("requires_human graph/route is incomplete: gate=%+v turn=%+v process=%+v occurrence=%+v run=%+v",
+					gate, waitingTurn, waitingProcess, waitingOccurrence, waitingRun)
+			}
+			gateSpec.DeliveryFence = 1
+			gateSpec.DeliveryClaimTokenSHA256 = hashString("scheduled-owner-gate-token")
+			gateSpec.DeliveryClaimKeySHA256 = hashString("scheduled-owner-gate-key")
+			gateSpec.DeliveryClaimExpiresAt = fixture.tx.now.Add(time.Minute)
+			gateSpec.MattermostPostID = "post-scheduled-owner-gate"
+			gateSpec.MattermostChannelID = "channel-scheduled-owner-gate"
+			gateSpec.MattermostRootPostID = "root-scheduled-owner-gate"
+			gateSpec.DeliveredAt = fixture.tx.now
+			deliveredGate, err := gate.Update(gate.Name, gateSpec, fixture.tx.now)
+			if err != nil {
+				t.Fatalf("materialize owner-gate delivery receipt: %v", err)
+			}
+			fixture.tx.resources[gate.ID] = deliveredGate
+			decisionPrincipal := fixture.principal(permissionResolveGate,
+				controlAPIGatewayWorkload, controlAPIGatewaySPIFFEID)
+			decision, err := fixture.service.ResolveOwnerGate(context.Background(), ResolveOwnerGateInput{
+				Principal: decisionPrincipal, IdempotencyKey: "approve-scheduled-owner-gate",
+				OwnerGateID: deliveredGate.ID, ExpectedVersion: deliveredGate.Version,
+				Decision: "APPROVED", Reason: "Результат принят владельцем.",
+				ProcessRunID: waitingProcess.ID, ProcessExpectedVersion: waitingProcess.Version,
+				SessionID: gateSpec.SessionID, TurnID: gateSpec.TurnID, Attempt: gateSpec.Attempt,
+				ImmutableInputSHA256: gateSpec.ImmutableInputSHA256,
+			})
+			if err != nil {
+				t.Fatalf("approve scheduled owner gate: %v", err)
+			}
+			approvedOccurrence := fixture.tx.occurrences[waitingOccurrence.ID]
+			approvedRun := fixture.tx.runs[turnAttemptMapKey(waitingOccurrence.ID, waitingOccurrence.Attempt)]
+			if decision.OwnerGate.State != enum.StateSucceeded || decision.Process.State != enum.StateSucceeded ||
+				fixture.tx.resources[waitingTurn.ID].State != enum.StateSucceeded ||
+				approvedOccurrence.State != "SUCCEEDED" || approvedOccurrence.Outcome != "action_taken" ||
+				approvedRun.State != "SUCCEEDED" || approvedRun.Outcome != "action_taken" {
+				t.Fatalf("owner decision did not close exact scheduled graph: decision=%+v occurrence=%+v run=%+v",
+					decision, approvedOccurrence, approvedRun)
+			}
+		})
 	}
 }
 
@@ -2022,7 +2175,7 @@ func TestScheduleArchiveRejectsOpenGraphAndPausedRetryWaitsForResume(t *testing.
 	pausedSchedule := fixture.tx.resources[scheduleID]
 	pausedSpec := pausedSchedule.Spec.(entity.ScheduleSpec)
 	scheduler := fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionClaimSchedule, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		pausedSchedule.ID, pausedSchedule.Version,
 		pausedSpec.EffectiveInputSHA, fixture.grant,
@@ -2031,7 +2184,7 @@ func TestScheduleArchiveRejectsOpenGraphAndPausedRetryWaitsForResume(t *testing.
 		context.Background(), ClaimScheduleOccurrenceInput{
 			Principal: scheduler, IdempotencyKey: "claim-paused-retry",
 		},
-	); !errors.Is(err, errs.ErrStateConflict) || result.LeaseToken != "" {
+	); !errors.Is(err, errs.ErrStateConflict) || result.MaterializationCapability != "" {
 		t.Fatalf("paused Schedule exposed queued retry: %v %+v", err, result)
 	}
 	if _, err := fixture.manageScheduleAction(
@@ -2042,7 +2195,7 @@ func TestScheduleArchiveRejectsOpenGraphAndPausedRetryWaitsForResume(t *testing.
 	activeSchedule := fixture.tx.resources[scheduleID]
 	activeSpec := activeSchedule.Spec.(entity.ScheduleSpec)
 	scheduler = fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionClaimSchedule, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		activeSchedule.ID, activeSchedule.Version,
 		activeSpec.EffectiveInputSHA, fixture.grant,
@@ -2122,14 +2275,14 @@ func TestScheduleRecoveryCommitsBeforeNoNextCandidate(t *testing.T) {
 			result, err := fixture.service.ClaimScheduleOccurrence(
 				context.Background(), ClaimScheduleOccurrenceInput{
 					Principal: fixture.principalFor(
-						permissionExecuteSchedule, "scheduler",
+						permissionClaimSchedule, "scheduler",
 						"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 						schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 					),
 					IdempotencyKey: "claim-after-no-next-recovery",
 				},
 			)
-			if !errors.Is(err, errs.ErrNotFound) || result.LeaseToken != "" {
+			if !errors.Is(err, errs.ErrNotFound) || result.MaterializationCapability != "" {
 				t.Fatalf("no-next poll returned %v %+v", err, result)
 			}
 			recovered := fixture.tx.occurrences[previous.ID]
@@ -2157,14 +2310,14 @@ func TestScheduleRecoveryCommitsBeforeNoNextCandidate(t *testing.T) {
 			stale, staleErr := fixture.service.ClaimScheduleOccurrence(
 				context.Background(), ClaimScheduleOccurrenceInput{
 					Principal: fixture.principalFor(
-						permissionExecuteSchedule, "scheduler",
+						permissionClaimSchedule, "scheduler",
 						"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 						schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 					),
 					IdempotencyKey: "claim-occurrence-current-digest",
 				},
 			)
-			if !errors.Is(staleErr, errs.ErrStateConflict) || stale.LeaseToken != "" {
+			if !errors.Is(staleErr, errs.ErrStateConflict) || stale.MaterializationCapability != "" {
 				t.Fatalf("recovery exposed stale scheduler authority: %v %+v", staleErr, stale)
 			}
 		})
@@ -2183,7 +2336,7 @@ func TestInvalidExpiredOccurrenceRecoveryDoesNotBlockBacklog(t *testing.T) {
 	schedule := fixture.tx.resources[valid.ScheduleID]
 	spec := schedule.Spec.(entity.ScheduleSpec)
 	principal := fixture.principalFor(
-		permissionExecuteSchedule,
+		permissionClaimSchedule,
 		"scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		schedule.ID,
@@ -2198,7 +2351,7 @@ func TestInvalidExpiredOccurrenceRecoveryDoesNotBlockBacklog(t *testing.T) {
 			Principal: principal, IdempotencyKey: "claim-behind-invalid-recovery",
 		},
 	)
-	if err != nil || claimed.Occurrence.ID != valid.ID || claimed.LeaseToken == "" {
+	if err != nil || claimed.Occurrence.ID != valid.ID || claimed.MaterializationCapability == "" {
 		t.Fatalf("invalid recovery row blocked valid backlog: %v %+v", err, claimed)
 	}
 	if len(fixture.tx.audits) <= auditsBefore {
@@ -2252,14 +2405,14 @@ func TestSkipOverlapCommitsBeforeNoNextCandidate(t *testing.T) {
 	result, err := fixture.service.ClaimScheduleOccurrence(
 		context.Background(), ClaimScheduleOccurrenceInput{
 			Principal: fixture.principalFor(
-				permissionExecuteSchedule, "scheduler",
+				permissionClaimSchedule, "scheduler",
 				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 				schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 			),
 			IdempotencyKey: "claim-after-only-overlap-skip",
 		},
 	)
-	if !errors.Is(err, errs.ErrNotFound) || result.LeaseToken != "" {
+	if !errors.Is(err, errs.ErrNotFound) || result.MaterializationCapability != "" {
 		t.Fatalf("skip-only poll returned %v %+v", err, result)
 	}
 	skipped := fixture.tx.occurrences[skippedCandidate.ID]
@@ -2274,7 +2427,7 @@ func TestSkipOverlapCommitsBeforeNoNextCandidate(t *testing.T) {
 	if _, err := fixture.service.ClaimScheduleOccurrence(
 		context.Background(), ClaimScheduleOccurrenceInput{
 			Principal: fixture.principalFor(
-				permissionExecuteSchedule, "scheduler",
+				permissionClaimSchedule, "scheduler",
 				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 				schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 			),
@@ -2307,7 +2460,7 @@ func TestInvalidQueuedOccurrenceDoesNotBlockNextSchedule(t *testing.T) {
 		context.Background(),
 		ClaimScheduleOccurrenceInput{
 			Principal: fixture.principalFor(
-				permissionExecuteSchedule,
+				permissionClaimSchedule,
 				"scheduler",
 				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 				schedule.ID,
@@ -2318,7 +2471,7 @@ func TestInvalidQueuedOccurrenceDoesNotBlockNextSchedule(t *testing.T) {
 			IdempotencyKey: "claim-after-invalid-row",
 		},
 	)
-	if err != nil || result.Occurrence.ID != valid.ID || result.LeaseToken == "" {
+	if err != nil || result.Occurrence.ID != valid.ID || result.MaterializationCapability == "" {
 		t.Fatalf("valid occurrence behind invalid row was not claimed: %v %+v", err, result)
 	}
 	isolated := fixture.tx.occurrences[invalid.ID]
@@ -2350,7 +2503,7 @@ func TestHistoricalOpenScheduledRunBlocksQueueMaterialization(t *testing.T) {
 	schedule := fixture.tx.resources[produced.schedule.ID]
 	spec := schedule.Spec.(entity.ScheduleSpec)
 	principal := fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionClaimSchedule, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 	)
@@ -2361,7 +2514,7 @@ func TestHistoricalOpenScheduledRunBlocksQueueMaterialization(t *testing.T) {
 			Principal: principal, IdempotencyKey: "claim-behind-historical-open-run",
 		},
 	)
-	if !errors.Is(err, errs.ErrNotFound) || blocked.LeaseToken != "" ||
+	if !errors.Is(err, errs.ErrNotFound) || blocked.MaterializationCapability != "" ||
 		len(fixture.tx.resources) != resourcesBefore || len(fixture.tx.audits) != auditsBefore {
 		t.Fatalf("historical open run did not block materialization: %v %+v", err, blocked)
 	}
@@ -2377,7 +2530,7 @@ func TestHistoricalOpenScheduledRunBlocksQueueMaterialization(t *testing.T) {
 		},
 	)
 	if err != nil || claimed.Occurrence.ID != candidate.ID ||
-		claimed.Occurrence.State != "CLAIMED" || claimed.LeaseToken == "" {
+		claimed.Occurrence.State != "RESERVED" || claimed.MaterializationCapability == "" {
 		t.Fatalf("closed historical run did not unblock materialization: %v %+v", err, claimed)
 	}
 }
@@ -2393,7 +2546,7 @@ func TestTerminalWinnerWatchdogRecoveryUsesCompletionRetryDisposition(t *testing
 	schedule := fixture.tx.resources[produced.schedule.ID]
 	spec := schedule.Spec.(entity.ScheduleSpec)
 	scheduler := fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionClaimSchedule, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 	)
@@ -2410,7 +2563,7 @@ func TestTerminalWinnerWatchdogRecoveryUsesCompletionRetryDisposition(t *testing
 	if recovered.State != "QUEUED" || recovered.Attempt != previous.Attempt+1 ||
 		recovered.EffectiveInputSHA256 != produced.snapshotDigest ||
 		occurrenceHasExecutionBinding(recovered) || recovered.TokenHash != "" ||
-		finishedRun.State != "FAILED" || finishedRun.Outcome != "execution_failed" ||
+		finishedRun.State != "FAILED" || finishedRun.Outcome != "failed" ||
 		finishedRun.FinishedAt.IsZero() || previousRun.State != "CLAIMED" {
 		t.Fatalf("terminal-winner recovery diverged from completion: occurrence=%+v run=%+v",
 			recovered, finishedRun)
@@ -2438,7 +2591,7 @@ func TestTerminalWinnerWatchdogRecoveryUsesCompletionRetryDisposition(t *testing
 	staleSchedule := fixture.tx.resources[produced.schedule.ID]
 	staleSpec := staleSchedule.Spec.(entity.ScheduleSpec)
 	stalePrincipal := fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionUseScheduleCapability, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		staleSchedule.ID, staleSchedule.Version,
 		staleSpec.EffectiveInputSHA, fixture.grant,
@@ -2446,11 +2599,12 @@ func TestTerminalWinnerWatchdogRecoveryUsesCompletionRetryDisposition(t *testing
 	stale, err := fixture.service.CompleteScheduleOccurrence(
 		context.Background(), CompleteScheduleOccurrenceInput{
 			Principal: stalePrincipal, IdempotencyKey: "stale-after-watchdog-winner",
-			OccurrenceID: previous.ID, LeaseToken: produced.claim.LeaseToken,
+			OccurrenceID: previous.ID, CompletionCapability: produced.claim.CompletionCapability,
 			ExpectedAttempt: previous.Attempt,
+			ProjectID:       fixture.project,
 		},
 	)
-	if !errors.Is(err, errs.ErrStateConflict) || stale.TokenHash != "" {
+	if !errors.Is(err, errs.ErrPermissionDenied) || stale.TokenHash != "" {
 		t.Fatalf("stale scheduler token survived watchdog winner: %v %+v", err, stale)
 	}
 
@@ -2471,18 +2625,23 @@ func TestTerminalWinnerWatchdogRecoveryUsesCompletionRetryDisposition(t *testing
 	schedule = fixture.tx.resources[produced.schedule.ID]
 	spec = schedule.Spec.(entity.ScheduleSpec)
 	scheduler = fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionClaimSchedule, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 	)
-	next, err := fixture.service.ClaimScheduleOccurrence(
+	reservedNext, err := fixture.service.ClaimScheduleOccurrence(
 		context.Background(), ClaimScheduleOccurrenceInput{
 			Principal: scheduler, IdempotencyKey: "claim-after-watchdog-retry",
 		},
 	)
-	if err != nil || next.Occurrence.ID != previous.ID || next.Occurrence.Attempt != 2 ||
+	if err != nil || reservedNext.Occurrence.ID != previous.ID ||
+		reservedNext.Occurrence.Attempt != 2 || reservedNext.Occurrence.State != "RESERVED" {
+		t.Fatalf("watchdog retry was not reserved: %v %+v", err, reservedNext)
+	}
+	next := fixture.materializeReservedOccurrence(t, reservedNext, "materialize-after-watchdog-retry")
+	if next.Occurrence.ID != previous.ID || next.Occurrence.Attempt != 2 ||
 		next.Occurrence.EffectiveInputSHA256 == produced.snapshotDigest {
-		t.Fatalf("watchdog retry did not rematerialize execution: %v %+v", err, next)
+		t.Fatalf("watchdog retry did not rematerialize execution: %+v", next)
 	}
 	turn := fixture.tx.resources[next.Occurrence.ExecutionTurnID]
 	turnSpec := turn.Spec.(entity.TurnSpec)
@@ -2509,7 +2668,7 @@ func TestTerminalWinnerWatchdogRecoveryHonorsRetryLimit(t *testing.T) {
 	result, err := fixture.service.ClaimScheduleOccurrence(
 		context.Background(), ClaimScheduleOccurrenceInput{
 			Principal: fixture.principalFor(
-				permissionExecuteSchedule, "scheduler",
+				permissionClaimSchedule, "scheduler",
 				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 				schedule.ID, schedule.Version, spec.EffectiveInputSHA, fixture.grant,
 			),
@@ -2523,7 +2682,7 @@ func TestTerminalWinnerWatchdogRecoveryHonorsRetryLimit(t *testing.T) {
 	run := fixture.tx.runs[turnAttemptMapKey(previous.ID, previous.Attempt)]
 	if deadLetter.State != "DEAD_LETTER" || deadLetter.Attempt != previous.Attempt ||
 		deadLetter.TokenHash != "" || deadLetter.ClaimKeySHA256 != "" ||
-		run.State != "FAILED" || run.Outcome != "execution_failed" {
+		run.State != "FAILED" || run.Outcome != "failed" {
 		t.Fatalf("watchdog retry limit left open authority: occurrence=%+v run=%+v",
 			deadLetter, run)
 	}
@@ -2612,7 +2771,7 @@ func TestScheduledRequeueRestoresSnapshotAndNextAttemptReachesClaimTurn(t *testi
 			fixture.tx.resources[closedProcess.ID] = closedProcess
 
 			scheduler := fixture.principalFor(
-				permissionExecuteSchedule, "scheduler",
+				permissionClaimSchedule, "scheduler",
 				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 				schedule.ID, schedule.Version, produced.snapshotDigest, fixture.grant,
 			)
@@ -2621,7 +2780,7 @@ func TestScheduledRequeueRestoresSnapshotAndNextAttemptReachesClaimTurn(t *testi
 					Principal: scheduler, IdempotencyKey: "claim-occurrence-current-digest",
 				},
 			)
-			if !errors.Is(err, errs.ErrStateConflict) || stale.LeaseToken != "" {
+			if !errors.Is(err, errs.ErrStateConflict) || stale.MaterializationCapability != "" {
 				t.Fatalf("stale previous claim exposed authority: %v %+v", err, stale)
 			}
 
@@ -2635,20 +2794,22 @@ func TestScheduledRequeueRestoresSnapshotAndNextAttemptReachesClaimTurn(t *testi
 			if err != nil {
 				t.Fatalf("ClaimScheduleOccurrence next attempt: %v", err)
 			}
-			if next.Occurrence.Attempt != previousAttempt+1 ||
-				next.Occurrence.EffectiveInputSHA256 == produced.snapshotDigest ||
-				next.Occurrence.EffectiveInputSHA256 == previousDigest {
-				t.Fatalf("next attempt did not materialize a fresh execution digest: %+v", next)
+			materialized := fixture.materializeReservedOccurrence(t, next,
+				"materialize-requeued-"+scenario.name)
+			if materialized.Occurrence.Attempt != previousAttempt+1 ||
+				materialized.Occurrence.EffectiveInputSHA256 == produced.snapshotDigest ||
+				materialized.Occurrence.EffectiveInputSHA256 == previousDigest {
+				t.Fatalf("next attempt did not materialize a fresh execution digest: %+v", materialized)
 			}
-			if next.Occurrence.ExecutionProcessRunID != produced.process.ID {
-				t.Fatalf("retry created a second root ProcessRun: %+v", next.Occurrence)
+			if materialized.Occurrence.ExecutionProcessRunID != produced.process.ID {
+				t.Fatalf("retry created a second root ProcessRun: %+v", materialized.Occurrence)
 			}
-			nextRun := fixture.tx.runs[turnAttemptMapKey(next.Occurrence.ID, next.Occurrence.Attempt)]
+			nextRun := fixture.tx.runs[turnAttemptMapKey(materialized.Occurrence.ID, materialized.Occurrence.Attempt)]
 			if nextRun.EffectiveInputSHA256 != produced.snapshotDigest ||
-				nextRun.CurrentInputSHA256 != next.Occurrence.EffectiveInputSHA256 {
+				nextRun.CurrentInputSHA256 != materialized.Occurrence.EffectiveInputSHA256 {
 				t.Fatalf("next run lost snapshot/current digest separation: %+v", nextRun)
 			}
-			turn := fixture.tx.resources[next.Occurrence.ExecutionTurnID]
+			turn := fixture.tx.resources[materialized.Occurrence.ExecutionTurnID]
 			turnSpec := turn.Spec.(entity.TurnSpec)
 			claimed, err := fixture.service.ClaimTurn(context.Background(), ClaimTurnInput{
 				Principal: fixture.principalFor(
@@ -2669,7 +2830,7 @@ func TestScheduledDigestLifecycleUsesClosedHelpers(t *testing.T) {
 	checks := []struct {
 		file, function, helper string
 	}{
-		{"specialized.go", "claimScheduleOccurrence", "materializeScheduledOccurrence"},
+		{"specialized.go", "MaterializeScheduleOccurrence", "materializeScheduledOccurrence"},
 		{"specialized.go", "CompleteScheduleOccurrence", "applyScheduledTerminalDisposition"},
 		{"final_owner_wave.go", "recoverExpiredScheduleOccurrence", "applyScheduledTerminalDisposition"},
 		{"current_execution.go", "prepareRetriedExecution", "rebindScheduledOccurrence"},
@@ -2812,7 +2973,7 @@ func TestScheduledProducerReplayAfterLeaseExpiryFailsBeforeReceiptExposure(t *te
 	fixture.tx.now = produced.claim.Occurrence.LeaseExpiresAt.Add(time.Microsecond)
 	schedule := fixture.tx.resources[produced.schedule.ID]
 	principal := fixture.principalFor(
-		permissionExecuteSchedule, "scheduler",
+		permissionClaimSchedule, "scheduler",
 		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
 		schedule.ID, schedule.Version, produced.snapshotDigest, fixture.grant,
 	)
@@ -2822,7 +2983,7 @@ func TestScheduledProducerReplayAfterLeaseExpiryFailsBeforeReceiptExposure(t *te
 			Principal: principal, IdempotencyKey: "claim-occurrence-current-digest",
 		},
 	)
-	if !errors.Is(err, errs.ErrStateConflict) || result.LeaseToken != "" {
+	if !errors.Is(err, errs.ErrStateConflict) || result.MaterializationCapability != "" {
 		t.Fatalf("expired scheduler replay exposed authority: %v %+v", err, result)
 	}
 	if len(fixture.tx.audits) != audits || len(fixture.tx.events) != events {

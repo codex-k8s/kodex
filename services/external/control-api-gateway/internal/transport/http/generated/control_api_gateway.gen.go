@@ -287,25 +287,25 @@ func (e MutableResourceKind) Valid() bool {
 
 // Defines values for OwnerGateDecision.
 const (
-	APPROVED         OwnerGateDecision = "APPROVED"
-	CANCELLED        OwnerGateDecision = "CANCELLED"
-	CHANGESREQUESTED OwnerGateDecision = "CHANGES_REQUESTED"
-	PENDING          OwnerGateDecision = "PENDING"
-	REJECTED         OwnerGateDecision = "REJECTED"
+	OwnerGateDecisionAPPROVED         OwnerGateDecision = "APPROVED"
+	OwnerGateDecisionCANCELLED        OwnerGateDecision = "CANCELLED"
+	OwnerGateDecisionCHANGESREQUESTED OwnerGateDecision = "CHANGES_REQUESTED"
+	OwnerGateDecisionPENDING          OwnerGateDecision = "PENDING"
+	OwnerGateDecisionREJECTED         OwnerGateDecision = "REJECTED"
 )
 
 // Valid indicates whether the value is a known member of the OwnerGateDecision enum.
 func (e OwnerGateDecision) Valid() bool {
 	switch e {
-	case APPROVED:
+	case OwnerGateDecisionAPPROVED:
 		return true
-	case CANCELLED:
+	case OwnerGateDecisionCANCELLED:
 		return true
-	case CHANGESREQUESTED:
+	case OwnerGateDecisionCHANGESREQUESTED:
 		return true
-	case PENDING:
+	case OwnerGateDecisionPENDING:
 		return true
-	case REJECTED:
+	case OwnerGateDecisionREJECTED:
 		return true
 	default:
 		return false
@@ -342,6 +342,27 @@ func (e ProviderPoolPolicy) Valid() bool {
 	case LeastUsed:
 		return true
 	case Weighted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolveScheduleRecoveryAction.
+const (
+	CANCEL ResolveScheduleRecoveryAction = "CANCEL"
+	REPAIR ResolveScheduleRecoveryAction = "REPAIR"
+	SKIP   ResolveScheduleRecoveryAction = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the ResolveScheduleRecoveryAction enum.
+func (e ResolveScheduleRecoveryAction) Valid() bool {
+	switch e {
+	case CANCEL:
+		return true
+	case REPAIR:
+		return true
+	case SKIP:
 		return true
 	default:
 		return false
@@ -426,6 +447,51 @@ func (e RuntimeIncidentKind) Valid() bool {
 	case RECONCILEFAILED:
 		return true
 	case WORKLOADUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleOccurrenceState.
+const (
+	ScheduleOccurrenceStateCANCELLED       ScheduleOccurrenceState = "CANCELLED"
+	ScheduleOccurrenceStateCLAIMED         ScheduleOccurrenceState = "CLAIMED"
+	ScheduleOccurrenceStateCONTINUATION    ScheduleOccurrenceState = "CONTINUATION"
+	ScheduleOccurrenceStateDEADLETTER      ScheduleOccurrenceState = "DEAD_LETTER"
+	ScheduleOccurrenceStateFAILED          ScheduleOccurrenceState = "FAILED"
+	ScheduleOccurrenceStateQUEUED          ScheduleOccurrenceState = "QUEUED"
+	ScheduleOccurrenceStateRECOVERYBLOCKED ScheduleOccurrenceState = "RECOVERY_BLOCKED"
+	ScheduleOccurrenceStateRESERVED        ScheduleOccurrenceState = "RESERVED"
+	ScheduleOccurrenceStateSKIPPED         ScheduleOccurrenceState = "SKIPPED"
+	ScheduleOccurrenceStateSUCCEEDED       ScheduleOccurrenceState = "SUCCEEDED"
+	ScheduleOccurrenceStateWAITINGOWNER    ScheduleOccurrenceState = "WAITING_OWNER"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleOccurrenceState enum.
+func (e ScheduleOccurrenceState) Valid() bool {
+	switch e {
+	case ScheduleOccurrenceStateCANCELLED:
+		return true
+	case ScheduleOccurrenceStateCLAIMED:
+		return true
+	case ScheduleOccurrenceStateCONTINUATION:
+		return true
+	case ScheduleOccurrenceStateDEADLETTER:
+		return true
+	case ScheduleOccurrenceStateFAILED:
+		return true
+	case ScheduleOccurrenceStateQUEUED:
+		return true
+	case ScheduleOccurrenceStateRECOVERYBLOCKED:
+		return true
+	case ScheduleOccurrenceStateRESERVED:
+		return true
+	case ScheduleOccurrenceStateSKIPPED:
+		return true
+	case ScheduleOccurrenceStateSUCCEEDED:
+		return true
+	case ScheduleOccurrenceStateWAITINGOWNER:
 		return true
 	default:
 		return false
@@ -759,6 +825,17 @@ type RepositoryWorkspaceSpec struct {
 	WorkspaceMode       string              `json:"workspaceMode"`
 }
 
+// ResolveScheduleRecovery defines model for ResolveScheduleRecovery.
+type ResolveScheduleRecovery struct {
+	Action                 ResolveScheduleRecoveryAction `json:"action"`
+	ExpectedAttempt        int                           `json:"expectedAttempt"`
+	ReasonCode             string                        `json:"reasonCode"`
+	RecoveryEvidenceSha256 string                        `json:"recoveryEvidenceSha256"`
+}
+
+// ResolveScheduleRecoveryAction defines model for ResolveScheduleRecovery.Action.
+type ResolveScheduleRecoveryAction string
+
 // Resource defines model for Resource.
 type Resource struct {
 	CreatedAt time.Time              `json:"createdAt"`
@@ -863,6 +940,33 @@ type RuntimeRevisionProjection struct {
 	RoleId                  openapi_types.UUID  `json:"roleId"`
 	SessionId               openapi_types.UUID  `json:"sessionId"`
 }
+
+// ScheduleOccurrence defines model for ScheduleOccurrence.
+type ScheduleOccurrence struct {
+	Attempt                int                     `json:"attempt"`
+	AuthorityGeneration    int64                   `json:"authorityGeneration"`
+	AvailableAt            time.Time               `json:"availableAt"`
+	EffectiveInputSha256   string                  `json:"effectiveInputSha256"`
+	OccurrenceId           openapi_types.UUID      `json:"occurrenceId"`
+	Outcome                *string                 `json:"outcome,omitempty"`
+	RecoveryEvidenceSha256 *string                 `json:"recoveryEvidenceSha256,omitempty"`
+	ScheduleId             openapi_types.UUID      `json:"scheduleId"`
+	ScheduledFor           time.Time               `json:"scheduledFor"`
+	State                  ScheduleOccurrenceState `json:"state"`
+	TargetKind             ResourceKind            `json:"targetKind"`
+	TargetResourceId       openapi_types.UUID      `json:"targetResourceId"`
+	TargetVersion          int64                   `json:"targetVersion"`
+	Version                int64                   `json:"version"`
+}
+
+// ScheduleOccurrencePage defines model for ScheduleOccurrencePage.
+type ScheduleOccurrencePage struct {
+	NextPageToken *string              `json:"nextPageToken,omitempty"`
+	Occurrences   []ScheduleOccurrence `json:"occurrences"`
+}
+
+// ScheduleOccurrenceState defines model for ScheduleOccurrenceState.
+type ScheduleOccurrenceState string
 
 // ScheduleProjection defines model for ScheduleProjection.
 type ScheduleProjection struct {
@@ -1108,6 +1212,19 @@ type ListRunsParams struct {
 	PageToken *PageToken        `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListScheduleOccurrencesParams defines parameters for ListScheduleOccurrences.
+type ListScheduleOccurrencesParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ResolveScheduleRecoveryParams defines parameters for ResolveScheduleRecovery.
+type ResolveScheduleRecoveryParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // RunScheduleNowParams defines parameters for RunScheduleNow.
 type RunScheduleNowParams struct {
 	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
@@ -1147,6 +1264,9 @@ type UpdateResourceJSONRequestBody = UpdateResource
 
 // TransitionResourceJSONRequestBody defines body for TransitionResource for application/json ContentType.
 type TransitionResourceJSONRequestBody = TransitionResource
+
+// ResolveScheduleRecoveryJSONRequestBody defines body for ResolveScheduleRecovery for application/json ContentType.
+type ResolveScheduleRecoveryJSONRequestBody = ResolveScheduleRecovery
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1201,6 +1321,12 @@ type ServerInterface interface {
 	// Получить авторитетную проекцию запусков
 	// (GET /runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
+	// Получить ограниченную owner-visible историю запусков расписания
+	// (GET /schedules/{scheduleId}/occurrences)
+	ListScheduleOccurrences(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params ListScheduleOccurrencesParams)
+	// Разрешить exact recovery incident без частичного terminal graph
+	// (POST /schedules/{scheduleId}/occurrences/{occurrenceId}/recovery)
+	ResolveScheduleRecovery(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, occurrenceId openapi_types.UUID, params ResolveScheduleRecoveryParams)
 	// Создать отдельный немедленный запуск без сдвига watermark
 	// (POST /schedules/{scheduleId}/run-now)
 	RunScheduleNow(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params RunScheduleNowParams)
@@ -2554,6 +2680,182 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListScheduleOccurrences operation middleware
+func (siw *ServerInterfaceWrapper) ListScheduleOccurrences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListScheduleOccurrencesParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScheduleOccurrences(w, r, scheduleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveScheduleRecovery operation middleware
+func (siw *ServerInterfaceWrapper) ResolveScheduleRecovery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "occurrenceId" -------------
+	var occurrenceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "occurrenceId", r.PathValue("occurrenceId"), &occurrenceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "occurrenceId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResolveScheduleRecoveryParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveScheduleRecovery(w, r, scheduleId, occurrenceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RunScheduleNow operation middleware
 func (siw *ServerInterfaceWrapper) RunScheduleNow(w http.ResponseWriter, r *http.Request) {
 
@@ -2945,6 +3247,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/resources/{resourceId}", wrapper.UpdateResource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources/{resourceId}/transition", wrapper.TransitionResource)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs", wrapper.ListRuns)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences", wrapper.ListScheduleOccurrences)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences/{occurrenceId}/recovery", wrapper.ResolveScheduleRecovery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/run-now", wrapper.RunScheduleNow)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/session", wrapper.DeleteOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/session", wrapper.CreateOwnerSession)

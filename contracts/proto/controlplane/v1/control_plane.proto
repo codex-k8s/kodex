@@ -106,12 +106,16 @@ service ControlPlaneService {
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
   // ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
   rpc ClaimScheduleOccurrence(ClaimScheduleOccurrenceRequest) returns (ClaimScheduleOccurrenceResponse);
+  // MaterializeScheduleOccurrence расходует одноразовую exact-occurrence capability.
+  rpc MaterializeScheduleOccurrence(MaterializeScheduleOccurrenceRequest) returns (MaterializeScheduleOccurrenceResponse);
   // CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
   rpc CompleteScheduleOccurrence(CompleteScheduleOccurrenceRequest) returns (CompleteScheduleOccurrenceResponse);
   // CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
   rpc CancelScheduleOccurrence(CancelScheduleOccurrenceRequest) returns (CancelScheduleOccurrenceResponse);
   // ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
   rpc ListScheduleOccurrences(ListScheduleOccurrencesRequest) returns (ListScheduleOccurrencesResponse);
+  // ResolveScheduleRecovery — единственный owner repair/cancel/skip path RECOVERY_BLOCKED.
+  rpc ResolveScheduleRecovery(ResolveScheduleRecoveryRequest) returns (ResolveScheduleRecoveryResponse);
 
   // StartProcess выполняет версионированную операцию ControlPlaneService.
   rpc StartProcess(StartProcessRequest) returns (StartProcessResponse);
@@ -461,6 +465,18 @@ enum ScheduleOccurrenceState {
   // SCHEDULE_OCCURRENCE_STATE_CONTINUATION — решение CHANGES_REQUESTED принято,
   // а новый неизменяемый ход продолжает тот же ProcessRun.
   SCHEDULE_OCCURRENCE_STATE_CONTINUATION = 9;
+  // SCHEDULE_OCCURRENCE_STATE_RESERVED — execution tuple ещё не создан;
+  // control-plane выдал одну bounded materialization capability.
+  SCHEDULE_OCCURRENCE_STATE_RESERVED = 10;
+  // SCHEDULE_OCCURRENCE_STATE_RECOVERY_BLOCKED — non-terminal incident требует owner action.
+  SCHEDULE_OCCURRENCE_STATE_RECOVERY_BLOCKED = 11;
+}
+
+enum ScheduleRecoveryAction {
+  SCHEDULE_RECOVERY_ACTION_UNSPECIFIED = 0;
+  SCHEDULE_RECOVERY_ACTION_REPAIR = 1;
+  SCHEDULE_RECOVERY_ACTION_CANCEL = 2;
+  SCHEDULE_RECOVERY_ACTION_SKIP = 3;
 }
 
 // SessionAction задаёт закрытое перечисление контракта control-plane.
@@ -693,6 +709,19 @@ message RuntimeRevisionSpec {
   // account для verified `/agents openai auth`; identifier привязки не
   // раскрывается пользователю и не принимается от runner.
   string provider_account_name = 20;
+  // scheduled_result_contract заполняется owner-side только для scheduled
+  // revision и входит в immutable manifest digest.
+  ScheduledResultContract scheduled_result_contract = 21;
+}
+
+// ScheduledResultContract — закрытый immutable contract результата scheduled
+// execution; route/tenant/notification authority в него не входят.
+message ScheduledResultContract {
+  string schema = 1;
+  string path = 2;
+  string format = 3;
+  string schema_sha256 = 4;
+  uint64 maximum_bytes = 5;
 }
 
 // EffectiveResourceRef описывает версионированное сообщение контракта control-plane.
@@ -742,6 +771,7 @@ message TurnSpec {
   // result_artifact_sha256 фиксирует digest той же версии результата.
   string result_artifact_sha256 = 21;
   repeated EffectiveArtifactRef input_artifacts = 22;
+  ScheduledResultContract scheduled_result_contract = 23;
 }
 
 message EffectiveArtifactRef {
@@ -1572,6 +1602,8 @@ message ScheduleOccurrence {
   uint64 execution_process_version = 28;
   string execution_runtime_revision_id = 29;
   uint64 execution_runtime_revision_version = 30;
+  uint64 version = 31;
+  string recovery_evidence_sha256 = 32;
 }
 
 // ClaimDueSchedulesResponse описывает версионированное сообщение контракта control-plane.
@@ -1587,21 +1619,35 @@ message ClaimScheduleOccurrenceRequest {
 // ClaimScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
 message ClaimScheduleOccurrenceResponse {
   ScheduleOccurrence occurrence = 1;
-  string lease_token = 2;
-  // project_id является только locator, cryptographically bound lease_token
+  string materialization_capability = 2;
+  // project_id является только locator, cryptographically bound capability
   // остаётся единственным доказательством exact occurrence authority.
   string project_id = 3;
+  google.protobuf.Timestamp capability_expires_at = 4;
+}
+
+message MaterializeScheduleOccurrenceRequest {
+  string idempotency_key = 1;
+  string occurrence_id = 2;
+  string project_id = 3;
+  uint32 expected_attempt = 4;
+  string materialization_capability = 5;
+}
+
+message MaterializeScheduleOccurrenceResponse {
+  ScheduleOccurrence occurrence = 1;
+  string completion_capability = 2;
 }
 
 // CompleteScheduleOccurrenceRequest описывает версионированное сообщение контракта control-plane.
 message CompleteScheduleOccurrenceRequest {
   string idempotency_key = 1;
   string occurrence_id = 2;
-  string lease_token = 3;
+  string completion_capability = 3;
   uint32 expected_attempt = 4;
   reserved 5, 6, 7;
   reserved "terminal_state", "outcome", "result_artifact_id";
-  // project_id — непривилегированный locator, проверяемый exact lease token.
+  // project_id — непривилегированный locator, проверяемый exact capability.
   string project_id = 8;
 }
 
@@ -1635,6 +1681,21 @@ message ListScheduleOccurrencesRequest {
 message ListScheduleOccurrencesResponse {
   repeated ScheduleOccurrence occurrences = 1;
   string next_page_token = 2;
+}
+
+message ResolveScheduleRecoveryRequest {
+  string idempotency_key = 1;
+  string occurrence_id = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  ScheduleRecoveryAction action = 5;
+  string evidence_sha256 = 6;
+  string reason_code = 7;
+  string schedule_id = 8;
+}
+
+message ResolveScheduleRecoveryResponse {
+  ScheduleOccurrence occurrence = 1;
 }
 
 // StartProcessRequest описывает версионированное сообщение контракта control-plane.

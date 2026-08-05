@@ -5389,7 +5389,9 @@ func (service *Service) materializeIntegrationContinuation(
 	); err != nil {
 		return err
 	}
-	revision, err := service.createRuntimeRevision(ctx, tx, principal, session, sessionSpec)
+	revision, err := service.createRuntimeRevision(
+		ctx, tx, principal, session, sessionSpec, previousSpec.ScheduledResultContract,
+	)
 	if err != nil {
 		return err
 	}

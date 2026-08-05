@@ -414,26 +414,27 @@ func (spec IntegrationSpec) Validate() error {
 }
 
 type RuntimeRevisionSpec struct {
-	ManifestSHA256              string                 `json:"manifestSha256"`
-	ImageDigest                 string                 `json:"imageDigest"`
-	PromptProfileID             string                 `json:"promptProfileId"`
-	PromptRevision              uint64                 `json:"promptRevision"`
-	CredentialBindingIDs        []string               `json:"credentialBindingIds"`
-	IntegrationIDs              []string               `json:"integrationIds"`
-	PredecessorRevisionID       string                 `json:"predecessorRevisionId,omitempty"`
-	AuthorityPolicyVersion      uint64                 `json:"authorityPolicyRevision"`
-	AuthorityPolicySHA256       string                 `json:"authorityPolicySha256"`
-	Components                  []EffectiveResourceRef `json:"components"`
-	CreatedAt                   time.Time              `json:"createdAt"`
-	SessionID                   string                 `json:"sessionId"`
-	RoleID                      string                 `json:"roleId"`
-	ChatID                      string                 `json:"chatId,omitempty"`
-	ProviderCredentialBindingID string                 `json:"providerCredentialBindingId"`
-	ProviderAccountName         string                 `json:"providerAccountName"`
-	EffectiveRuntimeSHA256      string                 `json:"effectiveRuntimeSha256"`
-	CodexModel                  string                 `json:"codexModel"`
-	CodexSandbox                string                 `json:"codexSandbox"`
-	CodexApprovalPolicy         string                 `json:"codexApprovalPolicy"`
+	ManifestSHA256              string                      `json:"manifestSha256"`
+	ImageDigest                 string                      `json:"imageDigest"`
+	PromptProfileID             string                      `json:"promptProfileId"`
+	PromptRevision              uint64                      `json:"promptRevision"`
+	CredentialBindingIDs        []string                    `json:"credentialBindingIds"`
+	IntegrationIDs              []string                    `json:"integrationIds"`
+	PredecessorRevisionID       string                      `json:"predecessorRevisionId,omitempty"`
+	AuthorityPolicyVersion      uint64                      `json:"authorityPolicyRevision"`
+	AuthorityPolicySHA256       string                      `json:"authorityPolicySha256"`
+	Components                  []EffectiveResourceRef      `json:"components"`
+	CreatedAt                   time.Time                   `json:"createdAt"`
+	SessionID                   string                      `json:"sessionId"`
+	RoleID                      string                      `json:"roleId"`
+	ChatID                      string                      `json:"chatId,omitempty"`
+	ProviderCredentialBindingID string                      `json:"providerCredentialBindingId"`
+	ProviderAccountName         string                      `json:"providerAccountName"`
+	EffectiveRuntimeSHA256      string                      `json:"effectiveRuntimeSha256"`
+	CodexModel                  string                      `json:"codexModel"`
+	CodexSandbox                string                      `json:"codexSandbox"`
+	CodexApprovalPolicy         string                      `json:"codexApprovalPolicy"`
+	ScheduledResultContract     *ScheduledResultContractRef `json:"scheduledResultContract,omitempty"`
 }
 
 func (RuntimeRevisionSpec) Kind() enum.Kind { return enum.KindRuntimeRevision }
@@ -467,6 +468,9 @@ func (spec RuntimeRevisionSpec) Validate() error {
 	if spec.PredecessorRevisionID != "" &&
 		value.ValidateID(spec.PredecessorRevisionID) != nil {
 		return errors.New("runtime revision predecessor is invalid")
+	}
+	if spec.ScheduledResultContract != nil && spec.ScheduledResultContract.Validate() != nil {
+		return errors.New("runtime revision scheduled result contract is invalid")
 	}
 	for _, identifiers := range [][]string{spec.CredentialBindingIDs, spec.IntegrationIDs} {
 		for _, identifier := range identifiers {
@@ -543,28 +547,62 @@ func (spec SessionSpec) Validate() error {
 }
 
 type TurnSpec struct {
-	SessionID               string                 `json:"sessionId"`
-	Sequence                uint64                 `json:"sequence"`
-	SourceRef               string                 `json:"sourceRef"`
-	PromptArtifactID        string                 `json:"promptArtifactId"`
-	RuntimeRevisionID       string                 `json:"runtimeRevisionId"`
-	ProcessRunID            string                 `json:"processRunId,omitempty"`
-	Attempt                 uint32                 `json:"attempt"`
-	Outcome                 string                 `json:"outcome,omitempty"`
-	ResultArtifactID        string                 `json:"resultArtifactId,omitempty"`
-	ResultArtifactVersion   uint64                 `json:"resultArtifactVersion,omitempty"`
-	ResultArtifactSHA256    string                 `json:"resultArtifactSha256,omitempty"`
-	EffectiveInputSHA256    string                 `json:"effectiveInputSha256"`
-	PredecessorTurnID       string                 `json:"predecessorTurnId,omitempty"`
-	OwnerFeedback           string                 `json:"ownerFeedback,omitempty"`
-	OwnerFeedbackGateID     string                 `json:"ownerFeedbackGateId,omitempty"`
-	OwnerFeedbackVersion    uint64                 `json:"ownerFeedbackGateVersion,omitempty"`
-	OwnerFeedbackSHA256     string                 `json:"ownerFeedbackSha256,omitempty"`
-	AgentSessionTurnID      int64                  `json:"agentSessionTurnId,omitempty"`
-	AgentRunID              string                 `json:"agentRunId,omitempty"`
-	AgentTurnBindingVersion uint64                 `json:"agentTurnBindingVersion,omitempty"`
-	AgentTurnBindingSHA256  string                 `json:"agentTurnBindingSha256,omitempty"`
-	InputArtifacts          []EffectiveArtifactRef `json:"inputArtifacts,omitempty"`
+	SessionID               string                      `json:"sessionId"`
+	Sequence                uint64                      `json:"sequence"`
+	SourceRef               string                      `json:"sourceRef"`
+	PromptArtifactID        string                      `json:"promptArtifactId"`
+	RuntimeRevisionID       string                      `json:"runtimeRevisionId"`
+	ProcessRunID            string                      `json:"processRunId,omitempty"`
+	Attempt                 uint32                      `json:"attempt"`
+	Outcome                 string                      `json:"outcome,omitempty"`
+	ResultArtifactID        string                      `json:"resultArtifactId,omitempty"`
+	ResultArtifactVersion   uint64                      `json:"resultArtifactVersion,omitempty"`
+	ResultArtifactSHA256    string                      `json:"resultArtifactSha256,omitempty"`
+	EffectiveInputSHA256    string                      `json:"effectiveInputSha256"`
+	PredecessorTurnID       string                      `json:"predecessorTurnId,omitempty"`
+	OwnerFeedback           string                      `json:"ownerFeedback,omitempty"`
+	OwnerFeedbackGateID     string                      `json:"ownerFeedbackGateId,omitempty"`
+	OwnerFeedbackVersion    uint64                      `json:"ownerFeedbackGateVersion,omitempty"`
+	OwnerFeedbackSHA256     string                      `json:"ownerFeedbackSha256,omitempty"`
+	AgentSessionTurnID      int64                       `json:"agentSessionTurnId,omitempty"`
+	AgentRunID              string                      `json:"agentRunId,omitempty"`
+	AgentTurnBindingVersion uint64                      `json:"agentTurnBindingVersion,omitempty"`
+	AgentTurnBindingSHA256  string                      `json:"agentTurnBindingSha256,omitempty"`
+	InputArtifacts          []EffectiveArtifactRef      `json:"inputArtifacts,omitempty"`
+	ScheduledResultContract *ScheduledResultContractRef `json:"scheduledResultContract,omitempty"`
+}
+
+const (
+	ScheduledResultSchema       = "mattercodex.scheduled-result.v1"
+	ScheduledResultPath         = ".matter-codex/outbox/scheduled-result.v1.json"
+	ScheduledResultFormat       = "application/json"
+	ScheduledResultSchemaSHA256 = "13eadb9bc557312d0968b7507cb5cb33b30d6b12c8e4c2a5a504060c354da13a"
+	ScheduledResultMaximumBytes = uint64(8192)
+)
+
+// ScheduledResultContractRef фиксирует в immutable Turn exact закрытый
+// контракт результата, который runtime-controller передаёт runner до запуска.
+type ScheduledResultContractRef struct {
+	Schema       string `json:"schema"`
+	Path         string `json:"path"`
+	Format       string `json:"format"`
+	SchemaSHA256 string `json:"schemaSha256"`
+	MaximumBytes uint64 `json:"maximumBytes"`
+}
+
+func NewScheduledResultContractRef() *ScheduledResultContractRef {
+	return &ScheduledResultContractRef{Schema: ScheduledResultSchema, Path: ScheduledResultPath,
+		Format: ScheduledResultFormat, SchemaSHA256: ScheduledResultSchemaSHA256,
+		MaximumBytes: ScheduledResultMaximumBytes}
+}
+
+func (contract ScheduledResultContractRef) Validate() error {
+	if contract.Schema != ScheduledResultSchema || contract.Path != ScheduledResultPath ||
+		contract.Format != ScheduledResultFormat || contract.SchemaSHA256 != ScheduledResultSchemaSHA256 ||
+		contract.MaximumBytes != ScheduledResultMaximumBytes {
+		return errors.New("scheduled result contract is invalid")
+	}
+	return nil
 }
 
 type EffectiveArtifactRef struct {
@@ -632,6 +670,9 @@ func (spec TurnSpec) Validate() error {
 	}
 	if len(spec.InputArtifacts) > 4096 {
 		return errors.New("turn input artifact set is invalid")
+	}
+	if spec.ScheduledResultContract != nil && spec.ScheduledResultContract.Validate() != nil {
+		return errors.New("scheduled result contract is invalid")
 	}
 	seenArtifacts := make(map[string]struct{}, len(spec.InputArtifacts))
 	for _, artifact := range spec.InputArtifacts {

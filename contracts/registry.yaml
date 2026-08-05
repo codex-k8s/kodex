@@ -66,6 +66,14 @@ packages:
     consumers:
       - runtime-controller
       - agent-runner
+  - id: scheduled-result-v1
+    format: json-schema
+    owner: control-plane
+    source: contracts/runtime/scheduled-result/v1/schema.json
+    consumers:
+      - control-plane
+      - runtime-controller
+      - agent-runner
   - id: internal-rpc-authority-v1
     format: proto
     owner: internal-rpc-authority

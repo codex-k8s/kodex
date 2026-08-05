@@ -25,7 +25,7 @@ WHERE organization_id = @organization_id::uuid
           WHERE open_occurrence.organization_id = resources.organization_id
             AND open_occurrence.project_id = resources.project_id
             AND open_occurrence.schedule_id = resources.id
-            AND open_occurrence.state = ANY(ARRAY['CLAIMED','WAITING_OWNER','CONTINUATION']::text[])
+            AND open_occurrence.state = ANY(ARRAY['RESERVED','CLAIMED','WAITING_OWNER','CONTINUATION']::text[])
       )
       OR spec->>'overlapPolicy' = 'FORBID'
       AND EXISTS (

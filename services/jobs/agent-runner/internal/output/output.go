@@ -36,23 +36,29 @@ const (
 	maximumSummaryRunes      = 12000
 	maximumResponseBytes     = 8 << 10
 	maximumFailureDetails    = 8
-	scheduledResultFile      = "scheduled-result.json"
 )
 
-// ScheduledOutcome читает необязательный закрытый бизнес-исход scheduled
-// execution. Идентификаторы маршрута и policy из файла не принимаются:
+type scheduledResultDocument struct {
+	Schema       string
+	Outcome      string
+	Summary      string
+	ArtifactRefs []string
+}
+
+// ScheduledOutcome читает обязательный закрытый бизнес-исход scheduled
+// execution. Идентификаторы маршрута и policy из документа не принимаются:
 // authority разрешает только control-plane из server-owned occurrence.
 func ScheduledOutcome(input model.Input, runtimeOutcome string) (string, error) {
 	if input.ScheduleOccurrenceID == "" {
 		return "", nil
 	}
-	fallback := "failed"
-	if runtimeOutcome == "SUCCEEDED" {
-		fallback = "action_taken"
+	if input.ScheduledResultContract == nil || input.ScheduledResultContract.Validate() != nil {
+		return "", errors.New("scheduled runtime result contract is invalid")
 	}
-	path := filepath.Join(input.OutboxRoot, scheduledResultFile)
+	name := filepath.Base(input.ScheduledResultContract.Path)
+	path := filepath.Join(input.OutboxRoot, name)
 	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
-		return fallback, nil
+		return "", errors.New("scheduled runtime result is missing")
 	} else if err != nil {
 		return "", errors.New("inspect scheduled runtime result")
 	}
@@ -62,22 +68,82 @@ func ScheduledOutcome(input model.Input, runtimeOutcome string) (string, error) 
 		return "", errors.New("open scheduled runtime result")
 	}
 	defer unix.Close(directory)
-	raw, err := readOutput(directory, scheduledResultFile, 512)
+	raw, err := readOutput(directory, name, int64(input.ScheduledResultContract.MaximumBytes))
 	if err != nil {
 		return "", errors.New("read scheduled runtime result")
 	}
-	var document struct {
-		Outcome string `json:"outcome"`
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&document) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
-		(document.Outcome != "no_action" && document.Outcome != "action_taken" &&
-			document.Outcome != "requires_human" && document.Outcome != "failed") ||
+	document, err := decodeScheduledResult(raw)
+	if err != nil || document.Schema != input.ScheduledResultContract.Schema ||
 		(runtimeOutcome != "SUCCEEDED" && document.Outcome != "failed") {
 		return "", errors.New("scheduled runtime result is invalid")
 	}
 	return document.Outcome, nil
+}
+
+func decodeScheduledResult(raw []byte) (scheduledResultDocument, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return scheduledResultDocument{}, errors.New("scheduled result root is invalid")
+	}
+	seen := make(map[string]struct{}, 4)
+	var document scheduledResultDocument
+	for decoder.More() {
+		keyToken, err := decoder.Token()
+		key, ok := keyToken.(string)
+		if err != nil || !ok {
+			return scheduledResultDocument{}, errors.New("scheduled result field is invalid")
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return scheduledResultDocument{}, errors.New("scheduled result field is duplicated")
+		}
+		seen[key] = struct{}{}
+		switch key {
+		case "schema":
+			err = decoder.Decode(&document.Schema)
+		case "outcome":
+			err = decoder.Decode(&document.Outcome)
+		case "summary":
+			err = decoder.Decode(&document.Summary)
+		case "artifact_refs":
+			err = decoder.Decode(&document.ArtifactRefs)
+		default:
+			return scheduledResultDocument{}, errors.New("scheduled result field is unknown")
+		}
+		if err != nil {
+			return scheduledResultDocument{}, errors.New("scheduled result field value is invalid")
+		}
+	}
+	if token, err = decoder.Token(); err != nil || token != json.Delim('}') ||
+		decoder.Decode(&struct{}{}) != io.EOF || len(seen) != 4 ||
+		(document.Outcome != "no_action" && document.Outcome != "action_taken" &&
+			document.Outcome != "requires_human" && document.Outcome != "failed") ||
+		!utf8.ValidString(document.Summary) || len([]rune(document.Summary)) > 2000 ||
+		strings.ContainsRune(document.Summary, '\x00') || len(document.ArtifactRefs) > 32 {
+		return scheduledResultDocument{}, errors.New("scheduled result document is invalid")
+	}
+	refs := make(map[string]struct{}, len(document.ArtifactRefs))
+	for _, reference := range document.ArtifactRefs {
+		if len(reference) == 0 || len(reference) > 255 || !safeScheduledArtifactRef(reference) {
+			return scheduledResultDocument{}, errors.New("scheduled result artifact reference is invalid")
+		}
+		if _, duplicate := refs[reference]; duplicate {
+			return scheduledResultDocument{}, errors.New("scheduled result artifact reference is duplicated")
+		}
+		refs[reference] = struct{}{}
+	}
+	return document, nil
+}
+
+func safeScheduledArtifactRef(value string) bool {
+	for index, symbol := range value {
+		if (symbol >= 'A' && symbol <= 'Z') || (symbol >= 'a' && symbol <= 'z') ||
+			(symbol >= '0' && symbol <= '9') || index > 0 && (symbol == '.' || symbol == '_' || symbol == '-') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 type stagedReference struct {
@@ -158,7 +224,8 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 		for _, entry := range entries {
 			name := entry.Name()
 			path := filepath.Join(input.OutboxRoot, name)
-			if path == archivePath || name == scheduledResultFile {
+			if path == archivePath || input.ScheduledResultContract != nil &&
+				name == filepath.Base(input.ScheduledResultContract.Path) {
 				continue
 			}
 			if strings.ContainsAny(name, "/\\\x00\r\n") {

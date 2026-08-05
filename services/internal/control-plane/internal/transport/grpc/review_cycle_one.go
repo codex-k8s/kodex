@@ -438,9 +438,36 @@ func (server *Server) ClaimScheduleOccurrence(
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	return &controlplanev1.ClaimScheduleOccurrenceResponse{
-		Occurrence: toProtoOccurrence(claimed.Occurrence),
-		LeaseToken: claimed.LeaseToken,
-		ProjectId:  claimed.ProjectID,
+		Occurrence:                toProtoOccurrence(claimed.Occurrence),
+		MaterializationCapability: claimed.MaterializationCapability,
+		ProjectId:                 claimed.ProjectID,
+		CapabilityExpiresAt:       timestamppb.New(claimed.CapabilityExpiresAt),
+	}, nil
+}
+
+func (server *Server) MaterializeScheduleOccurrence(
+	ctx context.Context,
+	request *controlplanev1.MaterializeScheduleOccurrenceRequest,
+) (*controlplanev1.MaterializeScheduleOccurrenceResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	materialized, err := server.service.MaterializeScheduleOccurrence(ctx,
+		resource.MaterializeScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			OccurrenceID: request.GetOccurrenceId(), ProjectID: request.GetProjectId(),
+			ExpectedAttempt:           request.GetExpectedAttempt(),
+			MaterializationCapability: request.GetMaterializationCapability(),
+		})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.MaterializeScheduleOccurrenceResponse{
+		Occurrence:           toProtoOccurrence(materialized.Occurrence),
+		CompletionCapability: materialized.CompletionCapability,
 	}, nil
 }
 
@@ -458,12 +485,12 @@ func (server *Server) CompleteScheduleOccurrence(
 	completed, err := server.service.CompleteScheduleOccurrence(
 		ctx,
 		resource.CompleteScheduleOccurrenceInput{
-			Principal:       principal,
-			IdempotencyKey:  request.GetIdempotencyKey(),
-			OccurrenceID:    request.GetOccurrenceId(),
-			LeaseToken:      request.GetLeaseToken(),
-			ExpectedAttempt: request.GetExpectedAttempt(),
-			ProjectID:       request.GetProjectId(),
+			Principal:            principal,
+			IdempotencyKey:       request.GetIdempotencyKey(),
+			OccurrenceID:         request.GetOccurrenceId(),
+			CompletionCapability: request.GetCompletionCapability(),
+			ExpectedAttempt:      request.GetExpectedAttempt(),
+			ProjectID:            request.GetProjectId(),
 		},
 	)
 	if err != nil {
@@ -472,6 +499,34 @@ func (server *Server) CompleteScheduleOccurrence(
 	return &controlplanev1.CompleteScheduleOccurrenceResponse{
 		Occurrence: toProtoOccurrence(completed),
 	}, nil
+}
+
+func (server *Server) ResolveScheduleRecovery(
+	ctx context.Context,
+	request *controlplanev1.ResolveScheduleRecoveryRequest,
+) (*controlplanev1.ResolveScheduleRecoveryResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	action := map[controlplanev1.ScheduleRecoveryAction]string{
+		controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR: "REPAIR",
+		controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL: "CANCEL",
+		controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP:   "SKIP",
+	}[request.GetAction()]
+	recovered, err := server.service.ResolveScheduleRecovery(ctx,
+		resource.ResolveScheduleRecoveryInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ScheduleID: request.GetScheduleId(), OccurrenceID: request.GetOccurrenceId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedAttempt: request.GetExpectedAttempt(), Action: action,
+			EvidenceSHA256: request.GetEvidenceSha256(), ReasonCode: request.GetReasonCode(),
+		})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ResolveScheduleRecoveryResponse{Occurrence: toProtoOccurrence(recovered)}, nil
 }
 
 func (server *Server) CancelScheduleOccurrence(
@@ -769,6 +824,8 @@ func toProtoOccurrence(
 		ExecutionProcessVersion:         occurrence.ExecutionProcessVersion,
 		ExecutionRuntimeRevisionId:      occurrence.ExecutionRuntimeRevisionID,
 		ExecutionRuntimeRevisionVersion: occurrence.ExecutionRuntimeRevisionVersion,
+		Version:                         occurrence.Version,
+		RecoveryEvidenceSha256:          occurrence.RecoveryEvidenceSHA256,
 	}
 	if !occurrence.LeaseExpiresAt.IsZero() &&
 		!occurrence.LeaseExpiresAt.Equal(time.Unix(0, 0)) {

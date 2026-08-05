@@ -6,7 +6,7 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 	t.Parallel()
 
 	operations := ControlAPIGatewayOperations()
-	if len(operations) != 23 {
+	if len(operations) != 25 {
 		t.Fatalf("control-api-gateway operation set must contain exact materialized methods: %d", len(operations))
 	}
 	for _, operation := range []string{
@@ -15,6 +15,8 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 		"control.gateway-public-tls.check",
 		"control.schedule.manage",
 		"control.schedule.run-now",
+		"control.schedule.occurrences.list",
+		"control.schedule.recovery.resolve",
 	} {
 		if operations[operation] == "" {
 			t.Fatalf("specialized TLS operation is absent: %s", operation)
@@ -29,13 +31,14 @@ func TestAutomationSchedulerOperationSetIsPollingOnly(t *testing.T) {
 	t.Parallel()
 
 	operations := AutomationSchedulerOperations()
-	if len(operations) != 4 {
+	if len(operations) != 5 {
 		t.Fatalf("automation-scheduler operation set must contain exact polling methods: %d", len(operations))
 	}
 	for _, operation := range []string{
 		"control.automation-scheduler.readiness",
 		"control.schedule.claim-due",
 		"control.schedule.claim-occurrence",
+		"control.schedule.materialize-occurrence",
 		"control.schedule.complete-occurrence",
 	} {
 		if operations[operation] == "" {

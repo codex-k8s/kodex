@@ -16,6 +16,9 @@ func TestAutomationSelectorsApplyEligibilityBeforeLimit(t *testing.T) {
 	}
 	assertBefore("due FORBID", sqlScheduleDue, "open_occurrence.state = ANY", "LIMIT @limit")
 	assertBefore("due historical open run", sqlScheduleDue, "open_run.state = ANY", "LIMIT @limit")
+	if !strings.Contains(sqlScheduleDue, "ARRAY['RESERVED','CLAIMED','WAITING_OWNER','CONTINUATION']") {
+		t.Fatal("due FORBID selector does not treat an exact reservation as open authority")
+	}
 	assertBefore("occurrence active schedule", sqlScheduleOccurrenceNext,
 		"schedule.state = 'ACTIVE'", "LIMIT 1")
 	assertBefore("occurrence open graph", sqlScheduleOccurrenceNext,

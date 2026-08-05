@@ -279,6 +279,18 @@ var sqlScheduleOccurrenceSkipOverlap string
 //go:embed sql/schedule_occurrence__update.sql
 var sqlScheduleOccurrenceUpdate string
 
+//go:embed sql/schedule_capability__insert.sql
+var sqlScheduleCapabilityInsert string
+
+//go:embed sql/schedule_capability__get_for_update.sql
+var sqlScheduleCapabilityGetForUpdate string
+
+//go:embed sql/schedule_capability__get_by_occurrence_for_update.sql
+var sqlScheduleCapabilityGetByOccurrenceForUpdate string
+
+//go:embed sql/schedule_capability__update.sql
+var sqlScheduleCapabilityUpdate string
+
 //go:embed sql/scheduled_run__save.sql
 var sqlScheduledRunSave string
 

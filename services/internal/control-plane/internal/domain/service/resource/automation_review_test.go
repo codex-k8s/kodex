@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
@@ -28,11 +30,11 @@ func TestFirstScheduleRunUsesOwnerAnchorAndTimezone(t *testing.T) {
 	}
 }
 
-func TestUnboundApplicationGrantRotationKeepsSemanticIdentity(t *testing.T) {
+func TestUnboundAutomationOccurrenceGrantRotationKeepsSemanticIdentity(t *testing.T) {
 	base := value.Principal{ActorID: "actor", OrganizationID: "organization", ProjectID: "project",
 		Permission: "control.schedule.claim", PolicyRevision: 4, AuthorityGeneration: 7,
 		CallerWorkload: "automation-scheduler", CallerSPIFFEID: "spiffe://mattercodex/scheduler",
-		AuthoritySource: "APPLICATION_GRANT", AuthorityReference: "jti-one",
+		AuthoritySource: "AUTOMATION_OCCURRENCE", AuthorityReference: "jti-one",
 		AuthorityRevision: 11, AuthorityDigest: hashString("grant-one")}
 	rotated := base
 	rotated.AuthorityReference, rotated.AuthorityRevision, rotated.AuthorityDigest =
@@ -87,6 +89,184 @@ func TestAutomationAuthorityRotatesServerOwnedProjectPartitions(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrPermissionDenied) {
 		t.Fatalf("caller-owned scheduler project was accepted: %v", err)
+	}
+}
+
+func TestScheduledCapabilitiesAreExactOneTimeOwnerAuthority(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	var materialize, completeFound bool
+	for _, capability := range fixture.tx.capabilities {
+		if capability.OccurrenceID != produced.claim.Occurrence.ID ||
+			capability.ProjectID != fixture.project || capability.Attempt != produced.claim.Occurrence.Attempt ||
+			capability.WorkloadID != "scheduler" ||
+			capability.CallerSPIFFEID != "spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler" {
+			continue
+		}
+		switch capability.FullMethod {
+		case materializeScheduleOccurrenceMethod:
+			materialize = capability.State == "CONSUMED" && !capability.ConsumedAt.IsZero()
+		case completeScheduleOccurrenceMethod:
+			completeFound = capability.State == "ISSUED" &&
+				capability.TokenSHA256 == hashString(produced.claim.CompletionCapability)
+		}
+	}
+	if !materialize || !completeFound {
+		t.Fatalf("exact materialize/complete capability lifecycle is incomplete: %+v", fixture.tx.capabilities)
+	}
+	principal := fixture.principalFor(permissionUseScheduleCapability, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		produced.claim.Occurrence.ID, uint64(produced.claim.Occurrence.Attempt),
+		produced.claim.Occurrence.EffectiveInputSHA256, fixture.grant)
+	_, err := fixture.service.MaterializeScheduleOccurrence(context.Background(),
+		MaterializeScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "cross-occurrence-capability",
+			OccurrenceID: uuid.NewString(), ProjectID: fixture.project,
+			ExpectedAttempt:           produced.claim.Occurrence.Attempt,
+			MaterializationCapability: strings.Repeat("a", 64),
+		})
+	if !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrPermissionDenied) {
+		t.Fatalf("cross-occurrence capability was not rejected closed: %v", err)
+	}
+}
+
+func TestScheduleCompletionReplaySurvivesActualBearerRotation(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	fixture.failScheduledTurn(t, produced, "completion-rotation")
+	principal := fixture.principalFor(permissionUseScheduleCapability, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		produced.claim.Occurrence.ID, uint64(produced.claim.Occurrence.Attempt),
+		produced.claim.Occurrence.EffectiveInputSHA256, fixture.grant)
+	first, err := fixture.service.CompleteScheduleOccurrence(context.Background(),
+		CompleteScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "complete-after-rotated-bearer",
+			OccurrenceID: produced.claim.Occurrence.ID, ProjectID: fixture.project,
+			ExpectedAttempt:      produced.claim.Occurrence.Attempt,
+			CompletionCapability: produced.claim.CompletionCapability,
+		})
+	if err != nil {
+		t.Fatalf("complete before bearer rotation: %v", err)
+	}
+	principal.CorrelationID, principal.AuthorityReference = uuid.NewString(), uuid.NewString()
+	principal.AuthorityRevision, principal.AuthorityDigest = 102, hashString("rotated-complete-grant")
+	replayed, err := fixture.service.CompleteScheduleOccurrence(context.Background(),
+		CompleteScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "complete-after-rotated-bearer",
+			OccurrenceID: produced.claim.Occurrence.ID, ProjectID: fixture.project,
+			ExpectedAttempt:      produced.claim.Occurrence.Attempt,
+			CompletionCapability: produced.claim.CompletionCapability,
+		})
+	if err != nil || replayed != first {
+		t.Fatalf("completion rotation replay changed effect: %v first=%+v replay=%+v", err, first, replayed)
+	}
+}
+
+func TestRecoveryBlockedOwnerRepairUsesExactReadbackProof(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	occurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+	fixture.tx.now = occurrence.LeaseExpiresAt.Add(time.Microsecond)
+	occurrence.LeaseExpiresAt = fixture.tx.now.Add(-time.Microsecond)
+	fixture.tx.occurrences[occurrence.ID] = occurrence
+	scheduler := fixture.principalFor(permissionClaimSchedule, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		occurrence.ID, uint64(occurrence.Attempt), occurrence.EffectiveInputSHA256, fixture.grant)
+	if err := fixture.service.recordBlockedScheduleRecovery(context.Background(), domainrepo.Scope{
+		OrganizationID: fixture.organization, ProjectID: fixture.project, ActorID: fixture.actor,
+	}, scheduler, occurrence); err != nil {
+		t.Fatalf("record RECOVERY_BLOCKED: %v", err)
+	}
+	blocked := fixture.tx.occurrences[occurrence.ID]
+	if blocked.State != "RECOVERY_BLOCKED" || blocked.RecoveryEvidenceSHA256 == "" ||
+		blocked.Version <= occurrence.Version {
+		t.Fatalf("recovery incident readback is incomplete: %+v", blocked)
+	}
+	owner := fixture.principal(permissionRecoverSchedule,
+		controlAPIGatewayWorkload, controlAPIGatewaySPIFFEID)
+	wrong := blocked
+	_, err := fixture.service.ResolveScheduleRecovery(context.Background(),
+		ResolveScheduleRecoveryInput{
+			Principal: owner, IdempotencyKey: "repair-blocked-wrong-proof",
+			ScheduleID: blocked.ScheduleID, OccurrenceID: blocked.ID,
+			ExpectedVersion: blocked.Version, ExpectedAttempt: blocked.Attempt,
+			Action: "REPAIR", EvidenceSHA256: hashString("wrong-proof"), ReasonCode: "owner_repair",
+		})
+	if !errors.Is(err, errs.ErrStateConflict) || fixture.tx.occurrences[blocked.ID] != wrong {
+		t.Fatalf("wrong recovery proof changed owner graph: %v", err)
+	}
+	repaired, err := fixture.service.ResolveScheduleRecovery(context.Background(),
+		ResolveScheduleRecoveryInput{
+			Principal: owner, IdempotencyKey: "repair-blocked-exact-proof",
+			ScheduleID: blocked.ScheduleID, OccurrenceID: blocked.ID,
+			ExpectedVersion: blocked.Version, ExpectedAttempt: blocked.Attempt,
+			Action: "REPAIR", EvidenceSHA256: blocked.RecoveryEvidenceSHA256,
+			ReasonCode: "owner_repair",
+		})
+	if err != nil || repaired.State != "CLAIMED" || repaired.RecoveryEvidenceSHA256 != "" ||
+		repaired.ExecutionTurnID != produced.turn.ID || !repaired.LeaseExpiresAt.After(fixture.tx.now) ||
+		repaired.AuthorityGeneration == 0 || repaired.TokenHash == "" ||
+		repaired.ClaimKeySHA256 == "" {
+		t.Fatalf("exact recovery repair did not restore canonical graph: %v %+v", err, repaired)
+	}
+	repairCapability, ok := fixture.tx.capabilities[repaired.TokenHash]
+	if !ok || repairCapability.State != "ISSUED" ||
+		repairCapability.FullMethod != completeScheduleOccurrenceMethod ||
+		repairCapability.OccurrenceID != repaired.ID ||
+		repairCapability.Attempt != repaired.Attempt ||
+		repairCapability.AuthorityGeneration != repaired.AuthorityGeneration ||
+		repairCapability.ImmutableInputSHA256 != produced.turn.Spec.(entity.TurnSpec).EffectiveInputSHA256 {
+		t.Fatalf("recovery repair did not materialize an exact watchdog fence: %+v", repairCapability)
+	}
+	replayed, err := fixture.service.ResolveScheduleRecovery(context.Background(),
+		ResolveScheduleRecoveryInput{
+			Principal: owner, IdempotencyKey: "repair-blocked-exact-proof",
+			ScheduleID: blocked.ScheduleID, OccurrenceID: blocked.ID,
+			ExpectedVersion: blocked.Version, ExpectedAttempt: blocked.Attempt,
+			Action: "REPAIR", EvidenceSHA256: blocked.RecoveryEvidenceSHA256,
+			ReasonCode: "owner_repair",
+		})
+	if err != nil || replayed != repaired {
+		t.Fatalf("recovery repair replay changed result: %v %+v", err, replayed)
+	}
+}
+
+func TestRecoveryBlockedOwnerCancelClosesMalformedCurrentGraph(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	occurrence := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+	runKey := turnAttemptMapKey(occurrence.ID, occurrence.Attempt)
+	run := fixture.tx.runs[runKey]
+	run.CurrentTurnVersion += 7
+	fixture.tx.runs[runKey] = run
+	fixture.tx.now = occurrence.LeaseExpiresAt.Add(time.Microsecond)
+	occurrence.LeaseExpiresAt = fixture.tx.now.Add(-time.Microsecond)
+	fixture.tx.occurrences[occurrence.ID] = occurrence
+	scheduler := fixture.principalFor(permissionClaimSchedule, "scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		occurrence.ID, uint64(occurrence.Attempt), occurrence.EffectiveInputSHA256, fixture.grant)
+	if err := fixture.service.recordBlockedScheduleRecovery(context.Background(), domainrepo.Scope{
+		OrganizationID: fixture.organization, ProjectID: fixture.project, ActorID: fixture.actor,
+	}, scheduler, occurrence); err != nil {
+		t.Fatalf("record malformed RECOVERY_BLOCKED: %v", err)
+	}
+	blocked := fixture.tx.occurrences[occurrence.ID]
+	resolved, err := fixture.service.ResolveScheduleRecovery(context.Background(),
+		ResolveScheduleRecoveryInput{
+			Principal: fixture.principal(permissionRecoverSchedule,
+				controlAPIGatewayWorkload, controlAPIGatewaySPIFFEID),
+			IdempotencyKey: "cancel-malformed-recovery", ScheduleID: blocked.ScheduleID,
+			OccurrenceID: blocked.ID, ExpectedVersion: blocked.Version,
+			ExpectedAttempt: blocked.Attempt, Action: "CANCEL",
+			EvidenceSHA256: blocked.RecoveryEvidenceSHA256, ReasonCode: "owner_cancel",
+		})
+	if err != nil || resolved.State != "CANCELLED" ||
+		fixture.tx.runs[runKey].State != "CANCELLED" ||
+		fixture.tx.resources[produced.turn.ID].State != enum.StateCancelled ||
+		fixture.tx.resources[produced.process.ID].State != enum.StateCancelled {
+		t.Fatalf("owner recovery cancel left a partial graph: %v occurrence=%+v run=%+v turn=%+v process=%+v",
+			err, resolved, fixture.tx.runs[runKey], fixture.tx.resources[produced.turn.ID],
+			fixture.tx.resources[produced.process.ID])
 	}
 }
 
@@ -171,6 +351,104 @@ func TestScheduledDeliveryEligibilityIsClosed(t *testing.T) {
 	}
 	if _, err := closedScheduledTerminalOutcome("SUCCEEDED", "free-form"); err == nil {
 		t.Fatal("free-form successful scheduled outcome was accepted")
+	}
+}
+
+func TestScheduledDeliveryRouteUsesExactRoomForEveryEligibleOutput(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	turn := fixture.tx.resources[produced.turn.ID]
+	spec := turn.Spec.(entity.TurnSpec)
+	spec.Outcome = "action_taken"
+	route, eligible, err := scheduledDeliveryRoute(context.Background(), fixture.tx, turn, spec,
+		produced.claim.Occurrence.ID)
+	if err != nil || !eligible || route.RoomID != fixture.chatID ||
+		route.NotificationPolicy != "ON_ACTION_OR_FAILURE" {
+		t.Fatalf("eligible scheduled route is not exact: eligible=%t err=%v route=%+v",
+			eligible, err, route)
+	}
+	spec.Outcome = "no_action"
+	if _, eligible, err = scheduledDeliveryRoute(context.Background(), fixture.tx, turn, spec,
+		produced.claim.Occurrence.ID); err != nil || eligible {
+		t.Fatalf("no_action unexpectedly created a delivery route: eligible=%t err=%v", eligible, err)
+	}
+}
+
+func TestSecondaryRuntimeOutputsInheritSingleScheduledRoute(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	turn := produced.turn
+	turn.State = enum.StateSucceeded
+	spec := turn.Spec.(entity.TurnSpec)
+	spec.Outcome = "action_taken"
+	primaryPayload := []byte("Выполнение завершено.")
+	primarySHA256 := hashString(string(primaryPayload))
+	primaryID := uuid.NewString()
+	spec.ResultArtifactID, spec.ResultArtifactVersion, spec.ResultArtifactSHA256 =
+		primaryID, 1, primarySHA256
+	turn.Spec = spec
+
+	fileID, imageID := uuid.NewString(), uuid.NewString()
+	fileSHA256, imageSHA256 := hashString("file-output"), hashString("image-output")
+	for _, artifact := range []struct {
+		id, name, kind, storage, mediaType, digest string
+	}{
+		{fileID, "report.txt", "runtime-output-file", "s3://runtime/report.txt", "text/plain", fileSHA256},
+		{imageID, "chart.png", "runtime-output-image", "s3://runtime/chart.png", "image/png", imageSHA256},
+	} {
+		fixture.tx.resources[artifact.id] = entity.Resource{
+			ID: artifact.id, OrganizationID: fixture.organization, ProjectID: fixture.project,
+			ParentID: turn.ID, OwnerActorID: turn.OwnerActorID, Kind: enum.KindArtifact,
+			Name: artifact.name, State: enum.StateActive, Version: 1,
+			Spec: entity.ArtifactSpec{ArtifactKind: artifact.kind, Direction: "OUTPUT",
+				StorageRef: artifact.storage, SizeBytes: 11, MediaType: artifact.mediaType,
+				SHA256: artifact.digest, ScanStatus: "CLEAN"},
+		}
+	}
+	outputs := []RuntimeOutput{
+		{Kind: "FINAL_MARKDOWN", ArtifactID: primaryID, ArtifactVersion: 1,
+			ArtifactSHA256: primarySHA256, ArtifactName: "result.md",
+			ArtifactMediaType: "text/markdown", ArtifactPayload: primaryPayload,
+			ArtifactSizeBytes: uint64(len(primaryPayload)), Sequence: 1, Total: 1},
+		{Kind: "FILE", ArtifactID: fileID, ArtifactVersion: 1, ArtifactSHA256: fileSHA256,
+			ArtifactName: "report.txt", ArtifactStorageRef: "s3://runtime/report.txt",
+			ArtifactSizeBytes: 11, ArtifactMediaType: "text/plain", Sequence: 1, Total: 1},
+		{Kind: "IMAGE", ArtifactID: imageID, ArtifactVersion: 1, ArtifactSHA256: imageSHA256,
+			ArtifactName: "chart.png", ArtifactStorageRef: "s3://runtime/chart.png",
+			ArtifactSizeBytes: 11, ArtifactMediaType: "image/png", Sequence: 1, Total: 1},
+	}
+	execution := RuntimeExecution{
+		ScheduleOccurrenceID: produced.claim.Occurrence.ID, TurnID: turn.ID,
+		RuntimeRevisionID: produced.runtime.ID, RuntimeRevisionVersion: produced.runtime.Version,
+		ImmutableInputSHA256: spec.EffectiveInputSHA256,
+	}
+	principal := fixture.principal(
+		permissionRuntimeComplete, fixture.runtimeWorker, fixture.runtimeSPIFFE,
+	)
+	if err := fixture.service.materializeRuntimeOutputs(context.Background(), fixture.tx,
+		principal, execution, fixture.tx.resources[fixture.sessionID], turn, spec, outputs,
+		fixture.tx.now); err != nil {
+		t.Fatalf("materialize eligible scheduled outputs: %v", err)
+	}
+	if len(fixture.tx.deliveries) != 6 {
+		t.Fatalf("expected primary and secondary delivery work, got %d", len(fixture.tx.deliveries))
+	}
+	for _, work := range fixture.tx.deliveries {
+		if work.NotificationRoomID != fixture.chatID ||
+			work.NotificationPolicy != "ON_ACTION_OR_FAILURE" ||
+			work.ScheduledOutcome != "action_taken" {
+			t.Fatalf("scheduled output escaped exact route: %+v", work)
+		}
+	}
+	beforeSuppressed := len(fixture.tx.deliveries)
+	spec.Outcome = "no_action"
+	if err := fixture.service.materializeRuntimeOutputs(context.Background(), fixture.tx,
+		principal, execution, fixture.tx.resources[fixture.sessionID], turn, spec, outputs,
+		fixture.tx.now); err != nil {
+		t.Fatalf("suppress no_action scheduled outputs: %v", err)
+	}
+	if len(fixture.tx.deliveries) != beforeSuppressed {
+		t.Fatal("no_action created primary or secondary delivery work")
 	}
 }
 

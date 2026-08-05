@@ -364,10 +364,15 @@ RuntimeExecution disposition, workload, generation, attempt, fence, token и
 PostgreSQL expiry. Для нового claim до выдачи token обязана завершиться
 current-tuple propagation; replay проверяет уже сохранённую полную binding и не
 увеличивает версии повторно. `ClaimScheduleOccurrence` использует server-owned
-`claim_key_sha256`: сначала по нему разрешается current occurrence и полный
-graph, затем сверяются workload/generation/token/deadline и только потом
-допустим replay. После runtime claim, terminal, expiry или rebind прежний
-LeaseToken не возвращается.
+`claim_key_sha256` только для reservation и не создаёт execution graph.
+`MaterializeScheduleOccurrence`/`CompleteScheduleOccurrence` сначала блокируют
+one-time capability exact project/occurrence/attempt/input/generation/full
+method/workload/SPIFFE, затем current occurrence/graph и receipt. После consume,
+revoke, terminal, expiry или rebind прежняя capability не возвращается.
+`RECOVERY_BLOCKED` исключён из bounded watchdog selector; owner repair сверяет
+exact evidence/version/attempt, а cancel/skip повторно разрешает и блокирует
+весь доступный Session/Turn/ProcessRun/RuntimeRevision/runtime graph до единого
+закрытия. Частичный terminal и прямой SQL запрещены.
 
 После `AdmitRuntimeExecution` и каждого `HeartbeatRuntimeExecution` сверить в
 одном readback равные deadlines RuntimeExecution и TurnLease. Они продлеваются

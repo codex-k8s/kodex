@@ -56,6 +56,8 @@ type ControlPlane interface {
 	RevokeOwnerSession(context.Context, *controlplanev1.RevokeOwnerSessionRequest, ...grpc.CallOption) (*controlplanev1.RevokeOwnerSessionResponse, error)
 	GetDiagnostics(context.Context, *controlplanev1.GetDiagnosticsRequest, ...grpc.CallOption) (*controlplanev1.GetDiagnosticsResponse, error)
 	RunScheduleNow(context.Context, *controlplanev1.RunScheduleNowRequest, ...grpc.CallOption) (*controlplanev1.RunScheduleNowResponse, error)
+	ListScheduleOccurrences(context.Context, *controlplanev1.ListScheduleOccurrencesRequest, ...grpc.CallOption) (*controlplanev1.ListScheduleOccurrencesResponse, error)
+	ResolveScheduleRecovery(context.Context, *controlplanev1.ResolveScheduleRecoveryRequest, ...grpc.CallOption) (*controlplanev1.ResolveScheduleRecoveryResponse, error)
 }
 
 func (server *Server) RunScheduleNow(writer http.ResponseWriter, request *http.Request,
@@ -77,7 +79,128 @@ func (server *Server) RunScheduleNow(writer http.ResponseWriter, request *http.R
 		return
 	}
 	writer.Header().Set("Cache-Control", "no-store")
-	writer.WriteHeader(http.StatusAccepted)
+	writer.Header().Set("Location", "/api/v1/schedules/"+scheduleID.String()+"/occurrences")
+	projected, err := scheduleOccurrenceProjection(response.GetOccurrence())
+	if err != nil {
+		server.writeInternal(writer, request.Context(), err)
+		return
+	}
+	writeJSON(writer, http.StatusAccepted, projected)
+}
+
+func (server *Server) ResolveScheduleRecovery(writer http.ResponseWriter, request *http.Request,
+	scheduleID uuid.UUID, occurrenceID uuid.UUID, params generated.ResolveScheduleRecoveryParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	var body generated.ResolveScheduleRecoveryJSONRequestBody
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	action := map[generated.ResolveScheduleRecoveryAction]controlplanev1.ScheduleRecoveryAction{
+		generated.REPAIR: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR,
+		generated.CANCEL: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL,
+		generated.SKIP:   controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP,
+	}[body.Action]
+	if action == controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_UNSPECIFIED {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.ResolveScheduleRecovery(request.Context(),
+		&controlplanev1.ResolveScheduleRecoveryRequest{
+			IdempotencyKey: params.IdempotencyKey.String(), ScheduleId: scheduleID.String(),
+			OccurrenceId: occurrenceID.String(), ExpectedVersion: version,
+			ExpectedAttempt: uint32(body.ExpectedAttempt), Action: action,
+			EvidenceSha256: body.RecoveryEvidenceSha256, ReasonCode: body.ReasonCode,
+		})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, true)
+		return
+	}
+	if response.GetOccurrence() == nil || response.GetOccurrence().GetScheduleId() != scheduleID.String() ||
+		response.GetOccurrence().GetOccurrenceId() != occurrenceID.String() {
+		server.writeInternal(writer, request.Context(), errors.New("schedule recovery response is invalid"))
+		return
+	}
+	projected, err := scheduleOccurrenceProjection(response.GetOccurrence())
+	if err != nil {
+		server.writeInternal(writer, request.Context(), err)
+		return
+	}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", projected.Version))
+	writeJSON(writer, http.StatusOK, projected)
+}
+
+func (server *Server) ListScheduleOccurrences(writer http.ResponseWriter, request *http.Request,
+	scheduleID uuid.UUID, params generated.ListScheduleOccurrencesParams,
+) {
+	size := uint32(defaultPageSize)
+	if params.PageSize != nil {
+		size = uint32(*params.PageSize)
+	}
+	token := ""
+	if params.PageToken != nil {
+		token = string(*params.PageToken)
+	}
+	response, err := server.control.ListScheduleOccurrences(request.Context(),
+		&controlplanev1.ListScheduleOccurrencesRequest{ScheduleId: scheduleID.String(), PageSize: size, PageToken: token})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	page := generated.ScheduleOccurrencePage{Occurrences: make([]generated.ScheduleOccurrence, 0, len(response.GetOccurrences()))}
+	for _, occurrence := range response.GetOccurrences() {
+		projected, castErr := scheduleOccurrenceProjection(occurrence)
+		if castErr != nil {
+			server.writeInternal(writer, request.Context(), castErr)
+			return
+		}
+		page.Occurrences = append(page.Occurrences, projected)
+	}
+	if response.GetNextPageToken() != "" {
+		page.NextPageToken = stringPointer(response.GetNextPageToken())
+	}
+	writer.Header().Set("Cache-Control", "no-store")
+	writeJSON(writer, http.StatusOK, page)
+}
+
+func scheduleOccurrenceProjection(input *controlplanev1.ScheduleOccurrence) (generated.ScheduleOccurrence, error) {
+	if input == nil || input.GetScheduledFor() == nil || input.GetAvailableAt() == nil {
+		return generated.ScheduleOccurrence{}, errors.New("schedule occurrence projection is incomplete")
+	}
+	occurrenceID, err := uuid.Parse(input.GetOccurrenceId())
+	if err != nil {
+		return generated.ScheduleOccurrence{}, errors.New("schedule occurrence identity is invalid")
+	}
+	scheduleID, err := uuid.Parse(input.GetScheduleId())
+	if err != nil {
+		return generated.ScheduleOccurrence{}, errors.New("schedule identity is invalid")
+	}
+	targetID, err := uuid.Parse(input.GetTargetResourceId())
+	if err != nil {
+		return generated.ScheduleOccurrence{}, errors.New("schedule target identity is invalid")
+	}
+	outcome := input.GetOutcome()
+	result := generated.ScheduleOccurrence{OccurrenceId: occurrenceID, ScheduleId: scheduleID,
+		ScheduledFor: input.GetScheduledFor().AsTime(), TargetResourceId: targetID,
+		TargetKind:    generated.ResourceKind(strings.TrimPrefix(input.GetTargetKind().String(), "RESOURCE_KIND_")),
+		TargetVersion: int64(input.GetTargetVersion()), EffectiveInputSha256: input.GetEffectiveInputSha256(),
+		State:   generated.ScheduleOccurrenceState(strings.TrimPrefix(input.GetState().String(), "SCHEDULE_OCCURRENCE_STATE_")),
+		Attempt: int(input.GetAttempt()), AuthorityGeneration: int64(input.GetAuthorityGeneration()),
+		Version: int64(input.GetVersion()), AvailableAt: input.GetAvailableAt().AsTime()}
+	if outcome != "" {
+		result.Outcome = &outcome
+	}
+	if input.GetRecoveryEvidenceSha256() != "" {
+		evidence := input.GetRecoveryEvidenceSha256()
+		result.RecoveryEvidenceSha256 = &evidence
+	}
+	if result.Version < 1 {
+		return generated.ScheduleOccurrence{}, errors.New("schedule occurrence version is invalid")
+	}
+	return result, nil
 }
 
 type Server struct {

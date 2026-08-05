@@ -147,6 +147,21 @@ func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 	if err := revision.ValidateFor(execution); err != nil {
 		t.Fatalf("valid runtime revision rejected: %v", err)
 	}
+	execution.ScheduleOccurrenceID = uuid.NewString()
+	revision.ScheduledResultContract = &ScheduledResultContract{
+		Schema: "mattercodex.scheduled-result.v1", Path: ".matter-codex/outbox/scheduled-result.v1.json",
+		Format:       "application/json",
+		SchemaSHA256: "13eadb9bc557312d0968b7507cb5cb33b30d6b12c8e4c2a5a504060c354da13a",
+		MaximumBytes: 8192,
+	}
+	if err := revision.ValidateFor(execution); err != nil {
+		t.Fatalf("scheduled runtime revision contract rejected: %v", err)
+	}
+	revision.ScheduledResultContract = nil
+	if err := revision.ValidateFor(execution); err == nil {
+		t.Fatal("scheduled execution accepted without revision result contract")
+	}
+	execution.ScheduleOccurrenceID = ""
 	revision.Components[0].Kind = "RESOURCE_KIND_UNKNOWN"
 	if err := revision.ValidateFor(execution); err == nil {
 		t.Fatal("unknown runtime revision component accepted")

@@ -4,7 +4,7 @@ title: Automation scheduler
 type: runbook
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-08-05
 ---
 
@@ -49,9 +49,10 @@ actor или credential identifiers.
 3. Вызвать `POST /schedules/{id}/run-now` с owner session, CSRF,
    `Idempotency-Key` и `If-Match`; проверить отдельную немедленную occurrence и
    неизменившийся плановый `next_run_at`. Повтор exact key не создаёт вторую.
-4. Дождаться due и проверить ровно один `ScheduleOccurrence` с неизменяемыми
-   `schedule_id + scheduled_for`, один `ScheduledRun`, один root Turn и, для
-   PLAYBOOK, один ProcessRun.
+4. Дождаться due и проверить переход `QUEUED -> RESERVED -> CLAIMED`: unbound
+   credential только резервирует строку, materialization/complete используют
+   разные one-time capability exact occurrence/attempt/input/generation/full
+   method. Для AGENT и PLAYBOOK проверить один root ProcessRun.
 5. Проверить, что job не создаёт Pod: Pod создаёт только runtime-controller
    после отдельного owner/runtime claim.
 6. Завершить Turn штатным runner path с закрытым outcome и убедиться, что
@@ -71,10 +72,21 @@ actor или credential identifiers.
   owner-side `DEAD_LETTER/materialization_invalid` и audit; следующая строка
   другого расписания должна быть обработана в том же RPC.
 - Для повреждённой expired execution binding проверить cardinality-one
-  `repair_schedule_occurrence_binding` из coherent ScheduledRun либо
-  `dead_letter_absent_schedule_graph` после доказанного отсутствия graph и
-  продвижение следующей строки того же schedule. Потенциально живой graph не
-  должен получить частичный terminal envelope.
+  `RECOVERY_BLOCKED` и owner list readback с version/attempt/evidence. Неверный
+  proof должен быть отвергнут. `ResolveScheduleRecovery(REPAIR)` разрешён
+  только для доказуемого canonical ScheduledRun binding; `CANCEL/SKIP` либо
+  доказывает отсутствие graph, либо повторно разрешает и блокирует весь
+  Session/Turn/ProcessRun/RuntimeRevision/runtime graph перед его единым
+  закрытием. Прямой SQL запрещён.
+- Для scheduled result удалить файл, добавить неизвестное/дублированное поле и
+  превысить `maximum_bytes`: runner обязан fail closed. Проверить exact path
+  `.matter-codex/outbox/scheduled-result.v1.json`, schema
+  `mattercodex.scheduled-result.v1` и отсутствие fallback в `action_taken`.
+  Тот же contract и schema digest должны присутствовать в authoritative
+  `RuntimeRevision`, `Turn` и runner input, а не вычисляться Pod локально.
+- Вернуть вторичные FILE/IMAGE при `no_action`/`AUDIT_ONLY`: artifacts остаются
+  в owner storage/audit, но delivery rows нет. При разрешённом исходе все виды
+  должны иметь один exact schedule RoomID без actor-default fallback.
 - Отключить доступ к local issuer. `/readyz` должен стать 503, рабочие RPC не
   должны перейти на plaintext либо mTLS-only fallback.
 - Вернуть `requires_human`. Occurrence, ScheduledRun и ProcessRun должны
@@ -97,7 +109,7 @@ actor или credential identifiers.
 
 При рестарте удалить только Pod через контролируемый orchestrator path, не
 Schedule/Occurrence/receipt. После запуска job снова вызывает due/claim;
-unique occurrence и PostgreSQL locks не допускают второй process run. Потеря
+unique occurrence, capability consumption и PostgreSQL locks не допускают второй process run. Потеря
 локальной карты lease не теряет работу: после server-issued deadline
 control-plane watchdog закрывает старый graph и создаёт retry/dead-letter.
 При retry сравнить ProcessRun ID до и после restart: меняются только
@@ -132,11 +144,11 @@ snapshot/readback и control-plane readiness. `skipTLSVerify`, plaintext и
 ## Rollback
 
 После отдельного owner OK вернуть Deployment на предыдущий подписанный digest
-тем же canonical render и дождаться protected readiness. Additive migration
-добавляет organization scheduler cursor, exact scheduled runtime lineage и
-route/policy поля durable delivery; при application rollback она остаётся на
-месте, а прежний binary игнорирует новые nullable поля. Down migration без
-отдельного owner решения не выполнять.
+тем же canonical render и дождаться protected readiness. Миграции добавляют
+organization scheduler cursor, exact scheduled runtime lineage, route/policy
+поля durable delivery, occurrence version/recovery evidence и one-time
+capability journal. Финальная миграция намеренно forward-only: при application
+rollback новые таблица и nullable поля остаются на месте; `Down` не выполнять.
 Перед rollback можно штатно поставить затронутые Schedule на `PAUSED` через
 `ManageSchedule`; прямой SQL запрещён. Уже созданные occurrence, runs,
 receipts, owner gates и audit не удалять. После восстановления активировать

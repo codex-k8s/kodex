@@ -13,10 +13,11 @@ func AgentRunnerOperations() map[string]string {
 
 func AutomationSchedulerOperations() map[string]string {
 	return map[string]string{
-		"control.automation-scheduler.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.schedule.claim-due":             controlplanev1.ControlPlaneService_ClaimDueSchedules_FullMethodName,
-		"control.schedule.claim-occurrence":      controlplanev1.ControlPlaneService_ClaimScheduleOccurrence_FullMethodName,
-		"control.schedule.complete-occurrence":   controlplanev1.ControlPlaneService_CompleteScheduleOccurrence_FullMethodName,
+		"control.automation-scheduler.readiness":  controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.schedule.claim-due":              controlplanev1.ControlPlaneService_ClaimDueSchedules_FullMethodName,
+		"control.schedule.claim-occurrence":       controlplanev1.ControlPlaneService_ClaimScheduleOccurrence_FullMethodName,
+		"control.schedule.materialize-occurrence": controlplanev1.ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName,
+		"control.schedule.complete-occurrence":    controlplanev1.ControlPlaneService_CompleteScheduleOccurrence_FullMethodName,
 	}
 }
 
@@ -123,6 +124,8 @@ func ControlAPIGatewayOperations() map[string]string {
 		"control.gateway-public-tls.check":   controlplanev1.ControlPlaneService_CheckGatewayPublicTLS_FullMethodName,
 		"control.schedule.manage":            controlplanev1.ControlPlaneService_ManageSchedule_FullMethodName,
 		"control.schedule.run-now":           controlplanev1.ControlPlaneService_RunScheduleNow_FullMethodName,
+		"control.schedule.occurrences.list":  controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
+		"control.schedule.recovery.resolve":  controlplanev1.ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
 	}
 }
 

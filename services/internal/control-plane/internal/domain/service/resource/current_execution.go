@@ -50,7 +50,9 @@ func (service *Service) prepareRetriedExecution(
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}
-	revision, err := service.createRuntimeRevision(ctx, tx, principal, session, sessionSpec)
+	revision, err := service.createRuntimeRevision(
+		ctx, tx, principal, session, sessionSpec, spec.ScheduledResultContract,
+	)
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
 	}

@@ -285,6 +285,7 @@ func (service *Service) EnqueueTurn(
 				input.Principal,
 				session,
 				sessionSpec,
+				nil,
 			)
 			if err != nil {
 				return entity.Resource{}, err
@@ -1677,6 +1678,7 @@ func (service *Service) ClaimDueSchedules(
 					Outcome:              outcome,
 				}
 				if err := tx.SaveScheduleOccurrence(ctx, domainrepo.ScheduleOccurrence{
+					Version:              1,
 					ID:                   occurrence.OccurrenceID,
 					ScheduleID:           occurrence.ScheduleID,
 					OrganizationID:       schedule.OrganizationID,
@@ -2272,6 +2274,7 @@ func (service *Service) createRuntimeRevision(
 	principal value.Principal,
 	session entity.Resource,
 	sessionSpec entity.SessionSpec,
+	scheduledResultContract *entity.ScheduledResultContractRef,
 ) (entity.Resource, error) {
 	resources, err := tx.ListSnapshotResources(
 		ctx,
@@ -2481,6 +2484,7 @@ func (service *Service) createRuntimeRevision(
 		AuthorityPolicySHA256                         string
 		Components                                    []entity.EffectiveResourceRef
 		CodexModel, CodexSandbox, CodexApprovalPolicy string
+		ScheduledResultContract                       *entity.ScheduledResultContractRef
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -2488,7 +2492,7 @@ func (service *Service) createRuntimeRevision(
 		service.authorityPolicyRevision,
 		service.authorityPolicySHA256,
 		compatibleComponents,
-		"gpt-5.4", "workspace-write", "never",
+		"gpt-5.4", "workspace-write", "never", scheduledResultContract,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -2519,6 +2523,7 @@ func (service *Service) createRuntimeRevision(
 		ChatID                                           string
 		ProviderCredentialBindingID, ProviderAccountName string
 		CodexModel, CodexSandbox, CodexApprovalPolicy    string
+		ScheduledResultContract                          *entity.ScheduledResultContractRef
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -2533,7 +2538,7 @@ func (service *Service) createRuntimeRevision(
 		sessionSpec.ConversationID,
 		sessionSpec.ProviderAccountBindingID,
 		providerAccountName,
-		"gpt-5.4", "workspace-write", "never",
+		"gpt-5.4", "workspace-write", "never", scheduledResultContract,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -2565,6 +2570,7 @@ func (service *Service) createRuntimeRevision(
 			ProviderAccountName:         providerAccountName,
 			EffectiveRuntimeSHA256:      effectiveRuntimeSHA256,
 			CodexModel:                  "gpt-5.4", CodexSandbox: "workspace-write", CodexApprovalPolicy: "never",
+			ScheduledResultContract: scheduledResultContract,
 		},
 		now,
 	)

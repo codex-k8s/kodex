@@ -215,6 +215,10 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		if readErr != nil || len(prompt) == 0 || len(prompt) > 1<<20 || !utf8.Valid(prompt) {
 			return errors.New("read immutable turn prompt")
 		}
+		prompt, err = appendScheduledResultContract(prompt, input)
+		if err != nil {
+			return err
+		}
 		result, err = executeWithCapacityRetry(runContext, input, prompt, mcpProxy.SocketPath(),
 			mcpProxy.LocalBearerToken(), client, lease, state)
 		if err != nil {
@@ -323,6 +327,27 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		}
 	}
 	return publishErr
+}
+
+func appendScheduledResultContract(prompt []byte, input model.Input) ([]byte, error) {
+	if input.ScheduleOccurrenceID == "" {
+		return prompt, nil
+	}
+	if input.ScheduledResultContract == nil || input.ScheduledResultContract.Validate() != nil {
+		return nil, errors.New("scheduled result contract is unavailable")
+	}
+	instruction := fmt.Sprintf(`
+
+## Обязательный контракт результата расписания
+
+До завершения запиши ровно один JSON-документ по пути %s. Schema: %s; format: %s; schema SHA-256: %s; максимум %d bytes. Обязательные поля: schema, outcome, summary, artifact_refs. outcome — только no_action, action_taken, requires_human или failed. summary — UTF-8 строка не длиннее 2000 символов. artifact_refs — не более 32 уникальных имён из [A-Za-z0-9][A-Za-z0-9._-]* без путей. При пустом результате используй no_action. Не добавляй route, room, tenant или notification policy: ими владеет control-plane.
+`, input.ScheduledResultContract.Path, input.ScheduledResultContract.Schema,
+		input.ScheduledResultContract.Format, input.ScheduledResultContract.SchemaSHA256,
+		input.ScheduledResultContract.MaximumBytes)
+	if len(prompt)+len(instruction) > 1<<20 {
+		return nil, errors.New("scheduled prompt manifest is too large")
+	}
+	return append(slices.Clone(prompt), []byte(instruction)...), nil
 }
 
 func waitForAdmission(ctx context.Context, client *controlplane.Client) (controlplane.Execution, error) {

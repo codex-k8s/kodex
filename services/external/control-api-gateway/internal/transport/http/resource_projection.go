@@ -240,7 +240,7 @@ func ownerGateProjection(value *controlplanev1.OwnerGateSpec) (generated.Resourc
 	}
 	decision := generated.OwnerGateDecision(strings.TrimPrefix(value.GetDecision().String(), "OWNER_GATE_DECISION_"))
 	if value.GetDecision() == controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_UNSPECIFIED {
-		decision = generated.PENDING
+		decision = generated.OwnerGateDecisionPENDING
 	}
 	if value.GetExpiresAt() == nil || !decision.Valid() {
 		return generated.ResourceSpecProjection{}, errors.New("owner gate projection is invalid")

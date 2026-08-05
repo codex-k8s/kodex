@@ -133,6 +133,12 @@ func (client *Client) GetRevision(
 		CredentialBindingIDs: append([]string(nil), spec.GetCredentialBindingIds()...),
 		IntegrationIDs:       append([]string(nil), spec.GetIntegrationIds()...),
 	}
+	if contract := spec.GetScheduledResultContract(); contract != nil {
+		revision.ScheduledResultContract = &entity.ScheduledResultContract{
+			Schema: contract.GetSchema(), Path: contract.GetPath(), Format: contract.GetFormat(),
+			SchemaSHA256: contract.GetSchemaSha256(), MaximumBytes: int(contract.GetMaximumBytes()),
+		}
+	}
 	for _, component := range spec.GetComponents() {
 		revision.Components = append(revision.Components, entity.Component{
 			Kind: component.GetKind().String(), ResourceID: component.GetResourceId(),

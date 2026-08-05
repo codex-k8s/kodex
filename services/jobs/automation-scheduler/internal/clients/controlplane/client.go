@@ -3,6 +3,8 @@ package controlplane
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -101,24 +103,46 @@ func (client *Client) ClaimNext(ctx context.Context, key string) (Claim, error) 
 	}
 	occurrence := response.GetOccurrence()
 	if occurrence == nil || occurrence.GetOccurrenceId() == "" || occurrence.GetAttempt() == 0 ||
-		response.GetProjectId() == "" || response.GetLeaseToken() == "" || occurrence.GetLeaseExpiresAt() == nil {
-		return Claim{}, errors.New("claimed schedule occurrence is incomplete")
+		response.GetProjectId() == "" || response.GetMaterializationCapability() == "" ||
+		response.GetCapabilityExpiresAt() == nil {
+		return Claim{}, errors.New("reserved schedule occurrence is incomplete")
 	}
-	leaseExpiresAt := occurrence.GetLeaseExpiresAt().AsTime()
+	materializeRequest := &controlplanev1.MaterializeScheduleOccurrenceRequest{
+		IdempotencyKey: semanticKey("materialize", key, occurrence.GetOccurrenceId()),
+		OccurrenceId:   occurrence.GetOccurrenceId(), ProjectId: response.GetProjectId(),
+		ExpectedAttempt:           occurrence.GetAttempt(),
+		MaterializationCapability: response.GetMaterializationCapability(),
+	}
+	var materialized *controlplanev1.MaterializeScheduleOccurrenceResponse
+	err = client.retryUnknown(ctx, func(callCtx context.Context) error {
+		var callErr error
+		materialized, callErr = client.shared.ControlPlane.MaterializeScheduleOccurrence(callCtx, materializeRequest)
+		return callErr
+	})
+	if err != nil {
+		return Claim{}, err
+	}
+	claimed := materialized.GetOccurrence()
+	if claimed == nil || claimed.GetOccurrenceId() != occurrence.GetOccurrenceId() ||
+		claimed.GetAttempt() != occurrence.GetAttempt() ||
+		materialized.GetCompletionCapability() == "" || claimed.GetLeaseExpiresAt() == nil {
+		return Claim{}, errors.New("materialized schedule occurrence is incomplete")
+	}
+	leaseExpiresAt := claimed.GetLeaseExpiresAt().AsTime()
 	if leaseExpiresAt.IsZero() {
-		return Claim{}, errors.New("claimed schedule occurrence lease is invalid")
+		return Claim{}, errors.New("materialized schedule occurrence lease is invalid")
 	}
 	return Claim{
 		ProjectID:    response.GetProjectId(),
-		OccurrenceID: occurrence.GetOccurrenceId(), Attempt: occurrence.GetAttempt(),
-		LeaseToken: response.GetLeaseToken(), LeaseExpiresAt: leaseExpiresAt,
+		OccurrenceID: claimed.GetOccurrenceId(), Attempt: claimed.GetAttempt(),
+		LeaseToken: materialized.GetCompletionCapability(), LeaseExpiresAt: leaseExpiresAt,
 	}, nil
 }
 
 func (client *Client) Complete(ctx context.Context, claim Claim, key string) (string, error) {
 	request := &controlplanev1.CompleteScheduleOccurrenceRequest{
 		IdempotencyKey: key, OccurrenceId: claim.OccurrenceID,
-		LeaseToken: claim.LeaseToken, ExpectedAttempt: claim.Attempt, ProjectId: claim.ProjectID,
+		CompletionCapability: claim.LeaseToken, ExpectedAttempt: claim.Attempt, ProjectId: claim.ProjectID,
 	}
 	var response *controlplanev1.CompleteScheduleOccurrenceResponse
 	err := client.retryUnknown(ctx, func(callCtx context.Context) error {
@@ -136,6 +160,15 @@ func (client *Client) Complete(ctx context.Context, claim Claim, key string) (st
 		return "", errors.New("completed schedule occurrence is incomplete")
 	}
 	return response.GetOccurrence().GetState().String(), nil
+}
+
+func semanticKey(parts ...string) string {
+	hash := sha256.New()
+	for _, part := range parts {
+		_, _ = hash.Write([]byte(part))
+		_, _ = hash.Write([]byte{0})
+	}
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func (client *Client) Close() error {

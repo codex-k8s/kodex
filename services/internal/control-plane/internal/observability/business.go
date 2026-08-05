@@ -35,7 +35,7 @@ func NewBusinessMetrics(
 
 func (metrics *BusinessMetrics) ObserveScheduleMaintenance(effect string) {
 	switch effect {
-	case "requeue", "dead_letter", "overlap_skip", "quarantine", "blocked_recovery", "repair":
+	case "requeue", "dead_letter", "overlap_skip", "quarantine", "blocked_recovery", "repair", "reservation_expired":
 		metrics.scheduleMaintenance.WithLabelValues(effect).Inc()
 	}
 }

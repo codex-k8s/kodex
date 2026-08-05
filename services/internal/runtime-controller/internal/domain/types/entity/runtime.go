@@ -332,6 +332,26 @@ type Revision struct {
 	ProviderObservationMaxAge                     time.Duration
 	AgentProfile                                  string
 	CodexModel, CodexSandbox, CodexApprovalPolicy string
+	ScheduledResultContract                       *ScheduledResultContract
+}
+
+type ScheduledResultContract struct {
+	Schema       string `json:"schema"`
+	Path         string `json:"path"`
+	Format       string `json:"format"`
+	SchemaSHA256 string `json:"schema_sha256"`
+	MaximumBytes int    `json:"maximum_bytes"`
+}
+
+func (contract ScheduledResultContract) Validate() error {
+	if contract.Schema != "mattercodex.scheduled-result.v1" ||
+		contract.Path != ".matter-codex/outbox/scheduled-result.v1.json" ||
+		contract.Format != "application/json" ||
+		contract.SchemaSHA256 != "13eadb9bc557312d0968b7507cb5cb33b30d6b12c8e4c2a5a504060c354da13a" ||
+		contract.MaximumBytes != 8192 {
+		return errors.New("scheduled result contract is invalid")
+	}
+	return nil
 }
 
 type CredentialRef struct {
@@ -369,6 +389,10 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		len(revision.ImageDigest) != 71 || revision.ImageDigest[:7] != "sha256:" ||
 		!sha256Pattern.MatchString(revision.ImageDigest[7:]) {
 		return errors.New("runtime revision does not match execution")
+	}
+	if (execution.ScheduleOccurrenceID == "") != (revision.ScheduledResultContract == nil) ||
+		revision.ScheduledResultContract != nil && revision.ScheduledResultContract.Validate() != nil {
+		return errors.New("runtime revision scheduled result contract does not match execution")
 	}
 	components := make(map[string]Component, len(revision.Components))
 	credentialComponents := make(map[string]Component)

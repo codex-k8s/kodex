@@ -369,21 +369,48 @@ type ClaimScheduleOccurrenceInput struct {
 }
 
 type ScheduleOccurrenceResult struct {
-	Occurrence domainrepo.ScheduleOccurrence
-	LeaseToken string
-	ProjectID  string
+	Occurrence                domainrepo.ScheduleOccurrence
+	MaterializationCapability string
+	CapabilityExpiresAt       time.Time
+	ProjectID                 string
+}
+
+type MaterializeScheduleOccurrenceInput struct {
+	Principal                 value.Principal
+	IdempotencyKey            string
+	OccurrenceID              string
+	ProjectID                 string
+	ExpectedAttempt           uint32
+	MaterializationCapability string
+}
+
+type MaterializeScheduleOccurrenceResult struct {
+	Occurrence           domainrepo.ScheduleOccurrence
+	CompletionCapability string
 }
 
 type CompleteScheduleOccurrenceInput struct {
-	Principal        value.Principal
-	IdempotencyKey   string
-	OccurrenceID     string
-	LeaseToken       string
-	ExpectedAttempt  uint32
-	TerminalState    string
-	Outcome          string
-	ResultArtifactID string
-	ProjectID        string
+	Principal            value.Principal
+	IdempotencyKey       string
+	OccurrenceID         string
+	CompletionCapability string
+	ExpectedAttempt      uint32
+	TerminalState        string
+	Outcome              string
+	ResultArtifactID     string
+	ProjectID            string
+}
+
+type ResolveScheduleRecoveryInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ScheduleID      string
+	OccurrenceID    string
+	ExpectedVersion uint64
+	ExpectedAttempt uint32
+	Action          string
+	EvidenceSHA256  string
+	ReasonCode      string
 }
 
 type CancelScheduleOccurrenceInput struct {

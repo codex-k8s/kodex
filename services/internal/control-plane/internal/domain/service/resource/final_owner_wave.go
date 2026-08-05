@@ -56,7 +56,9 @@ func (service *Service) continueOwnerGateGraph(
 	if err != nil {
 		return OwnerGateResult{}, err
 	}
-	revision, err := service.createRuntimeRevision(ctx, tx, principal, session, sessionSpec)
+	revision, err := service.createRuntimeRevision(
+		ctx, tx, principal, session, sessionSpec, turnSpec.ScheduledResultContract,
+	)
 	if err != nil {
 		return OwnerGateResult{}, err
 	}

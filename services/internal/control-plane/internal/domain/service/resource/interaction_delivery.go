@@ -90,6 +90,19 @@ func validateRuntimeOutputs(outputs []RuntimeOutput) error {
 func (service *Service) materializeRuntimeOutputs(ctx context.Context, tx domainrepo.Transaction,
 	principal value.Principal, execution RuntimeExecution, session, turn entity.Resource, spec entity.TurnSpec,
 	outputs []RuntimeOutput, now time.Time) error {
+	var scheduleRoute *domainrepo.ScheduleOccurrence
+	if execution.ScheduleOccurrenceID != "" {
+		occurrence, eligible, err := scheduledDeliveryRoute(ctx, tx, turn, spec, execution.ScheduleOccurrenceID)
+		if err != nil {
+			return err
+		}
+		if !eligible {
+			// Артефакты уже принадлежат owner storage/audit, но ни одна строка
+			// доставки для подавленного scheduled result не создаётся.
+			return nil
+		}
+		scheduleRoute = &occurrence
+	}
 	primary := outputs[0]
 	if err := service.enqueueInteractionTerminalDelivery(ctx, tx, session, turn, spec,
 		&runtimeResultArtifact{ID: primary.ArtifactID, Version: primary.ArtifactVersion,
@@ -128,12 +141,43 @@ func (service *Service) materializeRuntimeOutputs(ctx context.Context, tx domain
 				ArtifactVersion: output.ArtifactVersion, ArtifactSHA256: output.ArtifactSHA256,
 				ArtifactName: output.ArtifactName, ArtifactStorageRef: output.ArtifactStorageRef,
 				ArtifactSizeBytes: output.ArtifactSizeBytes, ArtifactMediaType: output.ArtifactMediaType}
+			if scheduleRoute != nil {
+				work.NotificationRoomID = scheduleRoute.RoomID
+				work.NotificationPolicy = scheduleRoute.NotificationPolicy
+				work.ScheduledOutcome = spec.Outcome
+			}
 			if err := tx.EnqueueInteractionDelivery(ctx, work); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func scheduledDeliveryRoute(ctx context.Context, tx domainrepo.Transaction, turn entity.Resource,
+	spec entity.TurnSpec, scheduleOccurrenceID string,
+) (domainrepo.ScheduleOccurrence, bool, error) {
+	occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+		ctx, turn.OrganizationID, turn.ProjectID, scheduleOccurrenceID,
+	)
+	if err != nil || occurrence.ExecutionTurnID != turn.ID || occurrence.Attempt != spec.Attempt ||
+		occurrence.NotificationPolicy == "" {
+		if err != nil {
+			return domainrepo.ScheduleOccurrence{}, false, err
+		}
+		return domainrepo.ScheduleOccurrence{}, false, errs.ErrStateConflict
+	}
+	eligible, err := scheduledDeliveryEligible(occurrence.NotificationPolicy, spec.Outcome)
+	if err != nil {
+		return domainrepo.ScheduleOccurrence{}, false, err
+	}
+	if eligible && occurrence.RoomID == "" {
+		return domainrepo.ScheduleOccurrence{}, false, errs.ErrStateConflict
+	}
+	if spec.Outcome == "requires_human" && eligible {
+		return domainrepo.ScheduleOccurrence{}, false, errs.ErrStateConflict
+	}
+	return occurrence, eligible, nil
 }
 
 func inlinePayload(artifact *runtimeResultArtifact) []byte {
@@ -181,31 +225,12 @@ func (service *Service) enqueueInteractionTerminalDelivery(
 ) error {
 	var scheduleRoute *domainrepo.ScheduleOccurrence
 	if scheduleOccurrenceID != "" {
-		occurrence, err := tx.GetScheduleOccurrenceForUpdate(
-			ctx, turn.OrganizationID, turn.ProjectID, scheduleOccurrenceID,
-		)
-		if err != nil || occurrence.ExecutionTurnID != turn.ID || occurrence.Attempt != spec.Attempt ||
-			occurrence.NotificationPolicy == "" {
-			if err != nil {
-				return err
-			}
-			return errs.ErrStateConflict
-		}
-		eligible, err := scheduledDeliveryEligible(occurrence.NotificationPolicy, spec.Outcome)
+		occurrence, eligible, err := scheduledDeliveryRoute(ctx, tx, turn, spec, scheduleOccurrenceID)
 		if err != nil {
 			return err
 		}
-		if occurrence.RoomID == "" {
-			if eligible {
-				return errs.ErrStateConflict
-			}
-			return nil
-		}
 		if !eligible {
 			return nil
-		}
-		if spec.Outcome == "requires_human" {
-			return errs.ErrStateConflict
 		}
 		scheduleRoute = &occurrence
 	}

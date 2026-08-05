@@ -1,10 +1,7 @@
 -- name: ScheduleOccurrenceSkipOverlap
-WITH skipped AS (
-    UPDATE control_plane.schedule_occurrences AS occurrence
-    SET
-        state = 'SKIPPED',
-        outcome = 'overlap',
-        updated_at = @now
+WITH candidates AS (
+    SELECT occurrence.id
+    FROM control_plane.schedule_occurrences AS occurrence
     WHERE occurrence.organization_id = @organization_id::uuid
       AND occurrence.project_id = @project_id::uuid
       AND occurrence.state = 'QUEUED'
@@ -28,6 +25,18 @@ WITH skipped AS (
             AND run_owner.schedule_id = occurrence.schedule_id
             AND run_owner.id <> occurrence.id
       )
+    ORDER BY occurrence.available_at, occurrence.scheduled_for, occurrence.id
+    FOR UPDATE OF occurrence SKIP LOCKED
+    LIMIT @limit
+), skipped AS (
+    UPDATE control_plane.schedule_occurrences AS occurrence
+    SET
+        state = 'SKIPPED',
+        outcome = 'overlap',
+        version = occurrence.version + 1,
+        updated_at = @now
+    FROM candidates
+    WHERE occurrence.id = candidates.id
     RETURNING occurrence.*
 )
 SELECT
@@ -54,6 +63,7 @@ SELECT
     maximum_backoff_ms,
     dead_letter_at,
     state,
+    version,
     attempt,
     coalesce(claimant_workload_id, ''),
     coalesce(authority_generation, 0),
@@ -63,6 +73,8 @@ SELECT
     available_at,
     coalesce(outcome, ''),
     coalesce(result_artifact_id::text, ''),
+    coalesce(recovery_evidence_sha256, ''),
+    coalesce(recovery_blocked_at, 'epoch'::timestamptz),
     coalesce(execution_session_id::text, ''),
     coalesce(execution_session_version, 0),
     coalesce(execution_turn_id::text, ''),

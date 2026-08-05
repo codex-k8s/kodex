@@ -279,7 +279,70 @@ paths:
         - { $ref: '#/components/parameters/IdempotencyKey' }
         - { $ref: '#/components/parameters/IfMatch' }
       responses:
-        '202': { description: Немедленная occurrence устойчиво создана control-plane. }
+        '202':
+          description: Немедленная occurrence устойчиво создана control-plane.
+          headers:
+            Location: { schema: { type: string, format: uri-reference } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleOccurrence' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /schedules/{scheduleId}/occurrences:
+    get:
+      tags: [schedules]
+      summary: Получить ограниченную owner-visible историю запусков расписания
+      operationId: listScheduleOccurrences
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Страница запусков exact owner schedule.
+          content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleOccurrencePage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /schedules/{scheduleId}/occurrences/{occurrenceId}/recovery:
+    post:
+      tags: [schedules]
+      summary: Разрешить exact recovery incident без частичного terminal graph
+      operationId: resolveScheduleRecovery
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: occurrenceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResolveScheduleRecovery' } } }
+      responses:
+        '200':
+          description: Authoritative owner readback после repair/cancel/skip.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleOccurrence' } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -874,6 +937,46 @@ components:
         maximumAttempts: { type: integer, minimum: 1 }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [targetResourceId, targetKind, targetVersion, timezone, nextRunAt, maximumAttempts, ownership]
+    ScheduleOccurrenceState:
+      title: ScheduleOccurrenceState
+      type: string
+      enum: [QUEUED, RESERVED, CLAIMED, WAITING_OWNER, CONTINUATION, SUCCEEDED, FAILED, CANCELLED, SKIPPED, DEAD_LETTER, RECOVERY_BLOCKED]
+    ScheduleOccurrence:
+      title: ScheduleOccurrence
+      type: object
+      additionalProperties: false
+      properties:
+        occurrenceId: { type: string, format: uuid }
+        scheduleId: { type: string, format: uuid }
+        scheduledFor: { type: string, format: date-time }
+        targetResourceId: { type: string, format: uuid }
+        targetKind: { $ref: '#/components/schemas/ResourceKind' }
+        targetVersion: { type: integer, format: int64, minimum: 1 }
+        effectiveInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        state: { $ref: '#/components/schemas/ScheduleOccurrenceState' }
+        attempt: { type: integer, minimum: 1, maximum: 100 }
+        authorityGeneration: { type: integer, format: int64, minimum: 0 }
+        version: { type: integer, format: int64, minimum: 1 }
+        availableAt: { type: string, format: date-time }
+        outcome: { type: string, maxLength: 256 }
+        recoveryEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [occurrenceId, scheduleId, scheduledFor, targetResourceId, targetKind, targetVersion, effectiveInputSha256, state, attempt, authorityGeneration, version, availableAt]
+    ScheduleOccurrencePage:
+      type: object
+      additionalProperties: false
+      properties:
+        occurrences: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ScheduleOccurrence' } }
+        nextPageToken: { type: string }
+      required: [occurrences]
+    ResolveScheduleRecovery:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [REPAIR, CANCEL, SKIP] }
+        expectedAttempt: { type: integer, minimum: 1, maximum: 100 }
+        recoveryEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        reasonCode: { type: string, pattern: '^[a-z][a-z0-9_]{2,63}$' }
+      required: [action, expectedAttempt, recoveryEvidenceSha256, reasonCode]
     OwnerGateProjection:
       title: OwnerGateProjection
       type: object

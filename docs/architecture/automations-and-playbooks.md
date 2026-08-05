@@ -93,9 +93,11 @@ updated: 2026-08-05
 cron/interval/timezone по PostgreSQL time; caller timestamp не является
 authority. Специализированный `RunScheduleNow` под owner/version/idempotency
 lock создаёт отдельную немедленную occurrence и не двигает плановый watermark.
-Scheduler application grant ограничен организацией: exact project выбирает
-durable server-owned cursor, а claim/complete связываются с выбранными owner
-state и lease tuple. Eligibility paused/FORBID/open graph применяется до
+Scheduler application grant ограничен организацией и разрешает только due/
+reservation: exact project выбирает durable server-owned cursor. Исполняемый
+graph создаёт отдельная one-time capability exact project/occurrence/attempt/
+immutable input/generation/full method/workload/SPIFFE; completion получает
+другую capability с durable issue/consume/revoke/readback. Eligibility paused/FORBID/open graph применяется до
 bounded `LIMIT`, поэтому штатная строка не создаёт global head-of-line blocker.
 
 В target rebuild очередь occurrence и retry принадлежит `control-plane`;
@@ -119,7 +121,11 @@ Kubernetes CronJob не используется для пользователь
 `no_action` и `audit_only` остаются в аудите без Mattermost delivery. Для
 разрешённого policy исхода `control-plane` сохраняет durable delivery вместе с
 точным schedule RoomID; `interaction-gateway` не заменяет его actor-default
-маршрутом. Агент может через MCP создать отдельные обсуждения и делегированные
+маршрутом. Это правило одинаково для primary Markdown и всех FILE/IMAGE.
+Runner до старта получает из server-owned `RuntimeRevision` и `Turn` immutable
+`mattercodex.scheduled-result.v1` manifest через generated control-plane read path;
+отсутствующий, неизвестный, дублированный, oversized или неверный JSON fail
+closed и не превращается в `action_taken`. Агент может через MCP создать отдельные обсуждения и делегированные
 запуски.
 
 ## Ручной шлюз запуска по расписанию

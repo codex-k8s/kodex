@@ -116,6 +116,7 @@ type ScheduleOccurrence struct {
 	MaximumBackoff                  time.Duration
 	DeadLetterAt                    time.Time
 	State                           string
+	Version                         uint64
 	Attempt                         uint32
 	ClaimantWorkloadID              string
 	AuthorityGeneration             uint64
@@ -125,6 +126,8 @@ type ScheduleOccurrence struct {
 	AvailableAt                     time.Time
 	Outcome                         string
 	ResultArtifactID                string
+	RecoveryEvidenceSHA256          string
+	RecoveryBlockedAt               time.Time
 	ExecutionSessionID              string
 	ExecutionSessionVersion         uint64
 	ExecutionTurnID                 string
@@ -135,6 +138,19 @@ type ScheduleOccurrence struct {
 	ExecutionRuntimeRevisionVersion uint64
 	CreatedAt                       time.Time
 	UpdatedAt                       time.Time
+}
+
+// ScheduleOccurrenceCapability — server-issued one-time authority точной
+// occurrence/attempt/input/generation и одного полного RPC метода. ID является
+// server-owned JTI, TokenSHA256 — сохраняемым digest непрозрачного proof.
+type ScheduleOccurrenceCapability struct {
+	ID, OrganizationID, ProjectID, OccurrenceID string
+	Attempt                                     uint32
+	AuthorityGeneration                         uint64
+	ImmutableInputSHA256, FullMethod            string
+	WorkloadID, CallerSPIFFEID, TokenSHA256     string
+	State                                       string
+	IssuedAt, ExpiresAt, ConsumedAt, RevokedAt  time.Time
 }
 
 // ScheduledRun сохраняет одну неизменяемую попытку фактического исполнения.
@@ -659,6 +675,7 @@ type Transaction interface {
 		string,
 		string,
 		time.Time,
+		int,
 	) ([]ScheduleOccurrence, error)
 	ExpiredScheduleOccurrenceCandidates(
 		context.Context,
@@ -672,6 +689,10 @@ type Transaction interface {
 	GetScheduleOccurrenceForUpdate(context.Context, string, string, string) (ScheduleOccurrence, error)
 	GetScheduleOccurrenceByCurrentTurn(context.Context, string, string, string) (ScheduleOccurrence, error)
 	GetScheduleOccurrenceByClaimKey(context.Context, string, string, string) (ScheduleOccurrence, error)
+	InsertScheduleOccurrenceCapability(context.Context, ScheduleOccurrenceCapability) error
+	GetScheduleOccurrenceCapabilityForUpdate(context.Context, string) (ScheduleOccurrenceCapability, error)
+	GetScheduleOccurrenceCapabilityByOccurrenceForUpdate(context.Context, string, uint32, string, uint64) (ScheduleOccurrenceCapability, error)
+	UpdateScheduleOccurrenceCapability(context.Context, ScheduleOccurrenceCapability, string) error
 	SaveScheduledRun(context.Context, ScheduledRun) error
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
 	GetScheduledRunByCurrentTurnForUpdate(context.Context, string) (ScheduledRun, error)

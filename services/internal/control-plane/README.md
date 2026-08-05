@@ -150,10 +150,13 @@ Stale process/occurrence/run tuple закрыто отклоняет весь cl
 Scheduled producer хранит два разных server-owned digest без смешения типов.
 До materialization `Schedule.EffectiveInputSHA` и queued occurrence содержат
 immutable snapshot target/prompt/artifact/runtime/session policy. После
-`ClaimScheduleOccurrence` exact execution digest совпадает в
+`ClaimScheduleOccurrence` только фиксирует `RESERVED` и one-time capability;
+после `MaterializeScheduleOccurrence` exact execution digest совпадает в
 `Turn.EffectiveInputSHA256`, `ScheduleOccurrence.EffectiveInputSHA256` и
 `ScheduledRun.CurrentInputSHA256`, а исходный snapshot остаётся в
-`ScheduledRun.EffectiveInputSHA256`. PostgreSQL `UpdateScheduleOccurrence`
+`ScheduledRun.EffectiveInputSHA256`. Та же owner transaction закрепляет
+`scheduled-result.v1` в `RuntimeRevision` и `Turn`; generated read path
+передаёт его runtime-controller и runner без локальной подмены. PostgreSQL `UpdateScheduleOccurrence`
 явно сохраняет изменяемый digest; repository fake повторяет field-level SQL
 contract и не маскирует пропущенный named argument заменой всей структуры.
 Обычный `FAILED/EXPIRED` completion и watchdog, который после ожидания lock

@@ -32,6 +32,7 @@
     "session_id": {"type": "string", "format": "uuid"},
     "turn_id": {"type": "string", "format": "uuid"},
     "schedule_occurrence_id": {"type": "string", "format": "uuid"},
+    "scheduled_result_contract": {"$ref": "#/$defs/scheduled_result_contract"},
     "attempt": {"type": "integer", "minimum": 1},
     "session_key": {"type": "string", "minLength": 1, "maxLength": 256},
     "provider_binding_id": {"type": "string", "format": "uuid"},
@@ -101,22 +102,41 @@
     ,"handoff_config_map": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"}
     ,"pod_namespace": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"}
   },
-  "allOf": [{
-    "if": {
-      "properties": {"codex_delivery_recovery_source_execution_id": {"not": {"const": ""}}},
-      "required": ["codex_delivery_recovery_source_execution_id"]
+  "allOf": [
+    {
+      "if": {
+        "properties": {"codex_delivery_recovery_source_execution_id": {"not": {"const": ""}}},
+        "required": ["codex_delivery_recovery_source_execution_id"]
+      },
+      "then": {"properties": {
+        "attempt": {"minimum": 2},
+        "codex_session_id": {"type": "string", "format": "uuid"},
+        "codex_archive_relative_path": {"not": {"const": ""}},
+        "codex_archive_sha256": {"$ref": "#/$defs/sha256"},
+        "codex_archive_provenance": {"not": {"const": ""}}
+      }}
     },
-    "then": {"properties": {
-      "attempt": {"minimum": 2},
-      "codex_session_id": {"type": "string", "format": "uuid"},
-      "codex_archive_relative_path": {"not": {"const": ""}},
-      "codex_archive_sha256": {"$ref": "#/$defs/sha256"},
-      "codex_archive_provenance": {"not": {"const": ""}}
-    }}
-  }],
+    {
+      "if": {"required": ["schedule_occurrence_id"]},
+      "then": {"required": ["scheduled_result_contract"]},
+      "else": {"not": {"required": ["scheduled_result_contract"]}}
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "secret_path": {"type": "string", "pattern": "^/var/run/secrets/", "maxLength": 1024},
+    "scheduled_result_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "path", "format", "schema_sha256", "maximum_bytes"],
+      "properties": {
+        "schema": {"const": "mattercodex.scheduled-result.v1"},
+        "path": {"const": ".matter-codex/outbox/scheduled-result.v1.json"},
+        "format": {"const": "application/json"},
+        "schema_sha256": {"const": "13eadb9bc557312d0968b7507cb5cb33b30d6b12c8e4c2a5a504060c354da13a"},
+        "maximum_bytes": {"const": 8192}
+      }
+    },
     "tls_binding": {
       "type": "object",
       "additionalProperties": false,
