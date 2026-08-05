@@ -2082,6 +2082,11 @@ message RuntimeExecution {
   string codex_archive_relative_path = 99;
   string codex_archive_sha256 = 100;
   string codex_archive_provenance = 101;
+  // codex_delivery_recovery_source_execution_id назначает control-plane только
+  // после terminal delivery failure. Runner может только повторить staging из
+  // exact protected journal либо вернуть bounded FAILED при его утрате;
+  // повторно запускать provider запрещено.
+  string codex_delivery_recovery_source_execution_id = 102;
 }
 
 message RuntimeMaterialization {

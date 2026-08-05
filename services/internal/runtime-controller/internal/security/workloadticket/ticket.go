@@ -28,6 +28,7 @@ type Payload struct {
 	ImmutableInputSHA256, EffectiveRuntimeSHA256              string
 	AgentBindingSHA256, CredentialSnapshotSHA256              string
 	WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
+	CodexDeliveryRecoverySourceExecutionID                    string
 	State                                                     string
 }
 
@@ -90,6 +91,7 @@ func VerifyForAudience(compact string, publicKey ed25519.PublicKey, execution en
 		payload.WorkloadTicketSHA256 != execution.WorkloadTicketSHA256 ||
 		payload.ResourceClass != string(execution.ResourceClass) ||
 		payload.ClusterAccessProfile != string(execution.AccessProfile) ||
+		payload.CodexDeliveryRecoverySourceExecutionID != execution.CodexDeliveryRecoverySourceExecutionID ||
 		payload.State != string(execution.State) {
 		return Payload{}, errors.New("runtime workload ticket tuple mismatch")
 	}

@@ -67,6 +67,7 @@ type Execution struct {
 	CredentialSnapshotSHA256, WorkloadTicketSHA256                                string
 	ProviderBindingID, ProviderBindingSHA256, CodexSessionID                      string
 	CodexArchiveRelativePath, CodexArchiveSHA256, CodexArchiveProvenance          string
+	CodexDeliveryRecoverySourceExecutionID                                        string
 	ProviderBindingVersion                                                        uint64
 	Materializations                                                              []Materialization
 	WorkloadTicket                                                                string `json:"-"`
@@ -141,6 +142,11 @@ func (execution Execution) Validate() error {
 		!validRestoreSource(execution) || !validRestoreAssignment(execution) ||
 		!validCodexArchive(execution) || !validMaterializations(execution.Materializations) {
 		return errors.New("runtime execution lifecycle evidence is invalid")
+	}
+	if execution.CodexDeliveryRecoverySourceExecutionID != "" &&
+		(uuid.Validate(execution.CodexDeliveryRecoverySourceExecutionID) != nil || execution.Attempt < 2 ||
+			execution.CodexSessionID == "") {
+		return errors.New("runtime delivery recovery source is invalid")
 	}
 	return nil
 }

@@ -963,48 +963,49 @@ type runnerTLSBinding struct {
 }
 
 type runnerInput struct {
-	Schema                     string                  `json:"schema"`
-	ExecutionID                string                  `json:"execution_id"`
-	ExecutionVersion           uint64                  `json:"execution_version"`
-	Fence                      uint64                  `json:"fence"`
-	GrantGeneration            uint64                  `json:"grant_generation"`
-	RuntimeRevisionID          string                  `json:"runtime_revision_id"`
-	RuntimeRevisionVersion     uint64                  `json:"runtime_revision_version"`
-	RuntimeRevisionSHA256      string                  `json:"runtime_revision_sha256"`
-	EffectiveRuntimeSHA256     string                  `json:"effective_runtime_sha256"`
-	ImmutableInputSHA256       string                  `json:"immutable_input_sha256"`
-	SessionID                  string                  `json:"session_id"`
-	TurnID                     string                  `json:"turn_id"`
-	Attempt                    uint32                  `json:"attempt"`
-	SessionKey                 string                  `json:"session_key"`
-	ProviderBindingID          string                  `json:"provider_binding_id"`
-	ProviderAccountName        string                  `json:"provider_account_name"`
-	MCPBindingVersion          uint64                  `json:"mcp_binding_version"`
-	ProviderBindingVersion     uint64                  `json:"provider_binding_version"`
-	ProviderBindingSHA256      string                  `json:"provider_binding_sha256"`
-	CredentialSnapshotSHA256   string                  `json:"credential_snapshot_sha256"`
-	WorkloadTicketSHA256       string                  `json:"workload_ticket_sha256"`
-	AgentProfile               string                  `json:"agent_profile"`
-	CodexModel                 string                  `json:"codex_model"`
-	CodexSandbox               string                  `json:"codex_sandbox"`
-	CodexApprovalPolicy        string                  `json:"codex_approval_policy"`
-	CodexSessionID             string                  `json:"codex_session_id"`
-	CodexArchiveRelativePath   string                  `json:"codex_archive_relative_path"`
-	CodexArchiveSHA256         string                  `json:"codex_archive_sha256"`
-	CodexArchiveProvenance     string                  `json:"codex_archive_provenance"`
-	ControlPlane               runnerGRPCBinding       `json:"control_plane"`
-	MCP                        runnerHTTPBinding       `json:"mcp"`
-	InteractionGateway         runnerHTTPBinding       `json:"interaction_gateway"`
-	CredentialFiles            runnerCredentialFiles   `json:"credential_files"`
-	Materializations           []runnerMaterialization `json:"materializations"`
-	PromptPath                 string                  `json:"prompt_path"`
-	InstructionsPath           string                  `json:"instructions_path"`
-	WorkspaceRoot              string                  `json:"workspace_root"`
-	OutboxRoot                 string                  `json:"outbox_root"`
-	CodexHome                  string                  `json:"codex_home"`
-	MattermostPostMaximumRunes int                     `json:"mattermost_post_max_runes"`
-	HandoffConfigMap           string                  `json:"handoff_config_map"`
-	PodNamespace               string                  `json:"pod_namespace"`
+	Schema                                 string                  `json:"schema"`
+	ExecutionID                            string                  `json:"execution_id"`
+	ExecutionVersion                       uint64                  `json:"execution_version"`
+	Fence                                  uint64                  `json:"fence"`
+	GrantGeneration                        uint64                  `json:"grant_generation"`
+	RuntimeRevisionID                      string                  `json:"runtime_revision_id"`
+	RuntimeRevisionVersion                 uint64                  `json:"runtime_revision_version"`
+	RuntimeRevisionSHA256                  string                  `json:"runtime_revision_sha256"`
+	EffectiveRuntimeSHA256                 string                  `json:"effective_runtime_sha256"`
+	ImmutableInputSHA256                   string                  `json:"immutable_input_sha256"`
+	SessionID                              string                  `json:"session_id"`
+	TurnID                                 string                  `json:"turn_id"`
+	Attempt                                uint32                  `json:"attempt"`
+	SessionKey                             string                  `json:"session_key"`
+	ProviderBindingID                      string                  `json:"provider_binding_id"`
+	ProviderAccountName                    string                  `json:"provider_account_name"`
+	MCPBindingVersion                      uint64                  `json:"mcp_binding_version"`
+	ProviderBindingVersion                 uint64                  `json:"provider_binding_version"`
+	ProviderBindingSHA256                  string                  `json:"provider_binding_sha256"`
+	CredentialSnapshotSHA256               string                  `json:"credential_snapshot_sha256"`
+	WorkloadTicketSHA256                   string                  `json:"workload_ticket_sha256"`
+	AgentProfile                           string                  `json:"agent_profile"`
+	CodexModel                             string                  `json:"codex_model"`
+	CodexSandbox                           string                  `json:"codex_sandbox"`
+	CodexApprovalPolicy                    string                  `json:"codex_approval_policy"`
+	CodexSessionID                         string                  `json:"codex_session_id"`
+	CodexArchiveRelativePath               string                  `json:"codex_archive_relative_path"`
+	CodexArchiveSHA256                     string                  `json:"codex_archive_sha256"`
+	CodexArchiveProvenance                 string                  `json:"codex_archive_provenance"`
+	CodexDeliveryRecoverySourceExecutionID string                  `json:"codex_delivery_recovery_source_execution_id"`
+	ControlPlane                           runnerGRPCBinding       `json:"control_plane"`
+	MCP                                    runnerHTTPBinding       `json:"mcp"`
+	InteractionGateway                     runnerHTTPBinding       `json:"interaction_gateway"`
+	CredentialFiles                        runnerCredentialFiles   `json:"credential_files"`
+	Materializations                       []runnerMaterialization `json:"materializations"`
+	PromptPath                             string                  `json:"prompt_path"`
+	InstructionsPath                       string                  `json:"instructions_path"`
+	WorkspaceRoot                          string                  `json:"workspace_root"`
+	OutboxRoot                             string                  `json:"outbox_root"`
+	CodexHome                              string                  `json:"codex_home"`
+	MattermostPostMaximumRunes             int                     `json:"mattermost_post_max_runes"`
+	HandoffConfigMap                       string                  `json:"handoff_config_map"`
+	PodNamespace                           string                  `json:"pod_namespace"`
 }
 
 func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.Revision) (runnerInput, error) {
@@ -1070,10 +1071,11 @@ func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.
 		CodexApprovalPolicy: revision.CodexApprovalPolicy, CodexSessionID: execution.CodexSessionID,
 		CodexArchiveRelativePath: execution.CodexArchiveRelativePath,
 		CodexArchiveSHA256:       execution.CodexArchiveSHA256, CodexArchiveProvenance: execution.CodexArchiveProvenance,
-		ControlPlane:       runnerGRPCBinding{Target: adapter.config.RunnerControlPlaneTarget, TLS: controlTLS},
-		MCP:                runnerHTTPBinding{URL: strings.TrimRight(adapter.config.SessionMCPURL, "/") + "/mcp/sessions/" + url.PathEscape(execution.AgentSessionKey), TLS: mcpTLS},
-		InteractionGateway: runnerHTTPBinding{URL: adapter.config.InteractionGatewayURL, TLS: interactionTLS},
-		CredentialFiles:    files, Materializations: materializations,
+		CodexDeliveryRecoverySourceExecutionID: execution.CodexDeliveryRecoverySourceExecutionID,
+		ControlPlane:                           runnerGRPCBinding{Target: adapter.config.RunnerControlPlaneTarget, TLS: controlTLS},
+		MCP:                                    runnerHTTPBinding{URL: strings.TrimRight(adapter.config.SessionMCPURL, "/") + "/mcp/sessions/" + url.PathEscape(execution.AgentSessionKey), TLS: mcpTLS},
+		InteractionGateway:                     runnerHTTPBinding{URL: adapter.config.InteractionGatewayURL, TLS: interactionTLS},
+		CredentialFiles:                        files, Materializations: materializations,
 		PromptPath: ".matter-codex/inbox/prompt.md", InstructionsPath: "AGENTS.md", WorkspaceRoot: "/workspace",
 		OutboxRoot: "/workspace/.matter-codex/outbox", CodexHome: "/workspace/.matter-codex/state/codex-home",
 		MattermostPostMaximumRunes: 16383, HandoffConfigMap: handoffName(execution), PodNamespace: adapter.config.Namespace,

@@ -47,6 +47,7 @@ SET version = @version,
 	codex_archive_relative_path = nullif(@codex_archive_relative_path, ''),
 	codex_archive_sha256 = nullif(@codex_archive_sha256, ''),
 	codex_archive_provenance = nullif(@codex_archive_provenance, ''),
+	codex_delivery_recovery_source_execution_id = nullif(@codex_delivery_recovery_source_execution_id, '')::uuid,
     updated_at = @updated_at
 WHERE id = @id
   AND version = @expected_version

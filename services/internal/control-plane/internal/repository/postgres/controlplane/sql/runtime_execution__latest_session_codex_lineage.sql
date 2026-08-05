@@ -4,7 +4,9 @@ SELECT id::text,
        codex_session_id,
        codex_archive_relative_path,
        codex_archive_sha256,
-       codex_archive_provenance
+       codex_archive_provenance,
+       terminal_outcome,
+       terminal_reference
 FROM control_plane.runtime_executions
 WHERE organization_id = @organization_id
   AND project_id = @project_id

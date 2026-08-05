@@ -22,11 +22,15 @@ import (
 )
 
 const (
-	recoverySchema       = "mattercodex.output-recovery.v1"
+	recoverySchema       = "mattercodex.output-recovery.v2"
 	recoveryRelativePath = ".matter-codex/recovery/output.json"
 	recoveryMarkdownPath = ".matter-codex/recovery/full-result.md"
 	maximumRecoveryBytes = 1 << 20
 )
+
+// ErrRecoveryJournalUnavailable означает, что owner разрешил delivery-only
+// attempt, но retained journal отсутствует. Это не разрешает повтор provider.
+var ErrRecoveryJournalUnavailable = errors.New("runtime output recovery journal is unavailable")
 
 // RecoveryJournal сохраняется trusted runner после завершения provider. UID
 // provider-runtime не имеет доступа к каталогу recovery; checksum блокирует
@@ -36,6 +40,7 @@ type RecoveryJournal struct {
 	ChecksumSHA256      string                     `json:"checksum_sha256"`
 	TurnID              string                     `json:"turn_id"`
 	SourceExecutionID   string                     `json:"source_execution_id"`
+	ArchiveExecutionID  string                     `json:"archive_execution_id"`
 	SourceAttempt       uint32                     `json:"source_attempt"`
 	OriginalOutcome     string                     `json:"original_outcome"`
 	TerminalMarkdown    string                     `json:"terminal_markdown"`
@@ -44,6 +49,26 @@ type RecoveryJournal struct {
 	ArchiveSHA256       string                     `json:"archive_sha256"`
 	Existing            []runtimecontract.OutputV2 `json:"existing"`
 	Failed              []RecoveryItem             `json:"failed"`
+}
+
+// AuthorizeRecovery связывает локальный protected journal с server-owned
+// execution marker. Ни отсутствие journal, ни локально подложенный journal не
+// могут превратить обычный Retry в повтор только доставки или наоборот.
+func AuthorizeRecovery(input model.Input, journal RecoveryJournal, found bool) error {
+	if input.CodexDeliveryRecoverySourceExecutionID == "" {
+		if found {
+			return errors.New("runtime output recovery is not authorized")
+		}
+		return nil
+	}
+	if !found || journal.SourceExecutionID != input.CodexDeliveryRecoverySourceExecutionID ||
+		journal.TurnID != input.TurnID || journal.SourceAttempt >= input.Attempt {
+		if !found {
+			return ErrRecoveryJournalUnavailable
+		}
+		return errors.New("runtime output recovery is not authorized")
+	}
+	return nil
 }
 
 func SaveRecovery(input model.Input, journal RecoveryJournal) error {
@@ -148,7 +173,7 @@ func LoadRecovery(input model.Input) (RecoveryJournal, bool, error) {
 
 func Resume(ctx context.Context, input model.Input, journal RecoveryJournal) (BuildResult, error) {
 	if err := validateRecovery(journal); err != nil || journal.TurnID != input.TurnID ||
-		journal.SourceAttempt+1 != input.Attempt {
+		journal.SourceAttempt >= input.Attempt {
 		return BuildResult{}, errors.New("runtime output recovery scope is invalid")
 	}
 	client, token, stagingErr := stagingClient(input)
@@ -276,7 +301,8 @@ func recoveryChecksum(journal RecoveryJournal) (string, error) {
 }
 
 func validateRecovery(journal RecoveryJournal) error {
-	if journal.Schema != recoverySchema || uuid.Validate(journal.TurnID) != nil || uuid.Validate(journal.SourceExecutionID) != nil || journal.SourceAttempt == 0 ||
+	if journal.Schema != recoverySchema || uuid.Validate(journal.TurnID) != nil ||
+		uuid.Validate(journal.SourceExecutionID) != nil || uuid.Validate(journal.ArchiveExecutionID) != nil || journal.SourceAttempt == 0 ||
 		(journal.OriginalOutcome != "SUCCEEDED" && journal.OriginalOutcome != "FAILED" && journal.OriginalOutcome != "BLOCKED") ||
 		journal.TerminalMarkdown == "" || len(journal.TerminalMarkdown) > maximumMarkdownBytes ||
 		!utf8.ValidString(journal.TerminalMarkdown) || len(journal.Failed) == 0 ||

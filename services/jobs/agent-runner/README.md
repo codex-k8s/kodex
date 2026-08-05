@@ -165,7 +165,16 @@ terminal становится `FAILED`, а trusted runner сохраняет pro
 journal и exact source digest на retained PVC. Card Retry создаёт новую attempt,
 которая повторяет только owner staging и signed handoff: app-server/model не
 запускается, уже зарегистрированные refs не дублируются. Journal удаляется
-только после принятого recovery handoff.
+только после принятого recovery handoff. Delivery-only режим разрешает
+server-owned execution marker точного предыдущего delivery execution; отдельный
+`archive_execution_id` сохраняет provenance исходного provider effect через
+несколько частичных Retry. Отсутствие marker либо journal закрыто останавливает
+provider effect. Если server marker действителен, но retained journal утрачен,
+runner после admission фиксирует bounded `FAILED` handoff без чтения outbox и
+без запуска модели; marker продолжает указывать на исходный незавершённый
+delivery. После возврата PVC source execution и Turn обязаны совпасть, а его
+source attempt должен быть строго меньше текущей owner attempt; пропущенные
+owner-visible attempts не делают journal caller authority.
 
 Перед каждым `EnqueueTurn` и созданием свежей RuntimeRevision
 `interaction-gateway` вызывает существующий

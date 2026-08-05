@@ -78,7 +78,10 @@ Role image запускает `agent-runner runtime-session`. Источник
 `mattercodex.agent-runner-input.v2` содержит exact execution/revision/input,
 Session/Turn/attempt, provider binding, Codex policy, materializations,
 control-plane/interaction-gateway/MCP TLS bindings и пути immutable execution
-credentials. Первый `PENDING` Pod создаётся до admission; runner захватывает
+credentials. Для повторной доставки частично опубликованного terminal owner
+добавляет exact `codex_delivery_recovery_source_execution_id`; локальный
+journal без этого server-owned marker либо marker без retained journal закрыто
+останавливают запуск до provider effect. Первый `PENDING` Pod создаётся до admission; runner захватывает
 Turn lease своей exact identity, после чего повторный reconcile выполняет
 `AdmitRuntimeExecution`. Identity runtime-controller не подменяет runner.
 Terminal Pod phase не завершает turn: runner обязан записать signed v2 envelope

@@ -73,6 +73,18 @@ type BuildResult struct {
 	Failed  []RecoveryItem
 }
 
+// TerminalOnly создаёт bounded owner-visible terminal без чтения outbox и
+// staging effects. Он используется, когда server-authorized delivery journal
+// утрачен и повтор provider запрещён.
+func TerminalOnly(input model.Input, markdown string) (BuildResult, error) {
+	if markdown == "" || !utf8.ValidString(markdown) {
+		return BuildResult{}, errors.New("runtime terminal Markdown is invalid")
+	}
+	summary, _ := markdownSummary(markdown, input.MattermostPostMaximumRunes)
+	primary := makeInlineOutput(input.ExecutionID, "FINAL_MARKDOWN", "result.md", "text/markdown", []byte(summary), 1, 1)
+	return BuildResult{Outputs: []runtimecontract.OutputV2{primary}}, nil
+}
+
 // Build всегда сохраняет bounded terminal Markdown. Ошибка отдельного staged
 // artifact добавляется в итог, но не уничтожает owner terminal transaction.
 func Build(ctx context.Context, input model.Input, markdown, archivePath string) (BuildResult, error) {

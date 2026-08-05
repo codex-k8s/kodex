@@ -25,6 +25,28 @@ func TestExecutionValidateAcceptsMattermostThreadAndRejectsUnboundTuple(t *testi
 	}
 }
 
+func TestExecutionValidateBindsDeliveryRecoveryToRetry(t *testing.T) {
+	execution := validExecution()
+	source := uuid.NewString()
+	execution.CodexDeliveryRecoverySourceExecutionID = source
+	execution.CodexSessionID = uuid.NewString()
+	execution.CodexArchiveRelativePath = ".matter-codex/state/codex-home/sessions/2026/08/04/rollout-session.jsonl"
+	execution.CodexArchiveSHA256 = strings.Repeat("6", 64)
+	execution.CodexArchiveProvenance = "codex-app-server-rollout-v1:" + source + ":" +
+		execution.CodexArchiveRelativePath + ":" + execution.CodexArchiveSHA256
+	if err := execution.Validate(); err == nil {
+		t.Fatal("delivery recovery marker was accepted for first attempt")
+	}
+	execution.Attempt = 2
+	if err := execution.Validate(); err != nil {
+		t.Fatalf("delivery recovery marker was rejected for retry: %v", err)
+	}
+	execution.CodexDeliveryRecoverySourceExecutionID = "not-an-execution-id"
+	if err := execution.Validate(); err == nil {
+		t.Fatal("invalid delivery recovery execution was accepted")
+	}
+}
+
 func validExecution() Execution {
 	execution := Execution{
 		ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),

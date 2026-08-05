@@ -371,6 +371,36 @@ func runtimeResourcePolicy(role entity.RoleSpec) (string, string) {
 	return resourceClass, clusterProfile
 }
 
+func latestSessionCodexLineage(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	organizationID, projectID, sessionID string,
+) (domainrepo.CodexLineage, error) {
+	reader, ok := tx.(interface {
+		LatestSessionCodexLineage(context.Context, string, string, string) (domainrepo.CodexLineage, error)
+	})
+	if !ok {
+		return domainrepo.CodexLineage{}, errs.ErrNotFound
+	}
+	return reader.LatestSessionCodexLineage(ctx, organizationID, projectID, sessionID)
+}
+
+func deliveryRecoverySource(lineage domainrepo.CodexLineage) string {
+	if lineage.TerminalOutcome != "FAILED" || uuid.Validate(lineage.ExecutionID) != nil ||
+		uuid.Validate(lineage.SessionID) != nil {
+		return ""
+	}
+	base := "codex://sessions/" + lineage.SessionID + "/executions/" + lineage.ExecutionID + "/delivery-recovery"
+	if lineage.TerminalReference == base {
+		return lineage.ExecutionID
+	}
+	source := strings.TrimPrefix(lineage.TerminalReference, base+"/source/")
+	if source == lineage.TerminalReference || uuid.Validate(source) != nil {
+		return ""
+	}
+	return source
+}
+
 func (service *Service) ClaimRuntimeExecution(
 	ctx context.Context,
 	principal value.Principal,
@@ -420,6 +450,13 @@ func (service *Service) ClaimRuntimeExecution(
 					return errs.ErrStateConflict
 				}
 				result = *resolved.Runtime
+				lineage, lineageErr := latestSessionCodexLineage(
+					ctx, tx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+				)
+				if lineageErr != nil && !errors.Is(lineageErr, errs.ErrNotFound) {
+					return lineageErr
+				}
+				result.CodexDeliveryRecoverySourceExecutionID = deliveryRecoverySource(lineage)
 				return nil
 			}
 			archiveBlocked, err := tx.SessionHasUnverifiedRuntimeArchive(
@@ -446,15 +483,9 @@ func (service *Service) ClaimRuntimeExecution(
 			if restoreErr != nil && !errors.Is(restoreErr, errs.ErrNotFound) {
 				return restoreErr
 			}
-			lineageReader, lineageSupported := tx.(interface {
-				LatestSessionCodexLineage(context.Context, string, string, string) (domainrepo.CodexLineage, error)
-			})
-			lineage, lineageErr := domainrepo.CodexLineage{}, errs.ErrNotFound
-			if lineageSupported {
-				lineage, lineageErr = lineageReader.LatestSessionCodexLineage(
-					ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
-				)
-			}
+			lineage, lineageErr := latestSessionCodexLineage(
+				ctx, tx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+			)
 			if lineageErr != nil && !errors.Is(lineageErr, errs.ErrNotFound) {
 				return lineageErr
 			}
@@ -583,14 +614,15 @@ func (service *Service) ClaimRuntimeExecution(
 				AgentBindingSHA256: agentBindingSHA256,
 				ProviderBindingID:  provider.ID, ProviderBindingVersion: provider.Version,
 				ProviderBindingSHA256: providerSHA256, Materializations: materializations,
-				CodexSessionID:           lineage.SessionID,
-				CodexArchiveRelativePath: lineage.ArchiveRelativePath,
-				CodexArchiveSHA256:       lineage.ArchiveSHA256,
-				CodexArchiveProvenance:   lineage.ArchiveProvenance,
-				RetentionPolicyID:        retentionPolicy.ID,
-				RetentionPolicyVersion:   retentionPolicy.Version,
-				PVCRetentionSeconds:      retentionPolicy.PVCRetentionSeconds,
-				ArchiveRetentionSeconds:  retentionPolicy.ArchiveRetentionSeconds,
+				CodexSessionID:                         lineage.SessionID,
+				CodexArchiveRelativePath:               lineage.ArchiveRelativePath,
+				CodexArchiveSHA256:                     lineage.ArchiveSHA256,
+				CodexArchiveProvenance:                 lineage.ArchiveProvenance,
+				CodexDeliveryRecoverySourceExecutionID: deliveryRecoverySource(lineage),
+				RetentionPolicyID:                      retentionPolicy.ID,
+				RetentionPolicyVersion:                 retentionPolicy.Version,
+				PVCRetentionSeconds:                    retentionPolicy.PVCRetentionSeconds,
+				ArchiveRetentionSeconds:                retentionPolicy.ArchiveRetentionSeconds,
 				PVCCleanupEligibleAt: resolved.Session.UpdatedAt.Add(
 					time.Duration(retentionPolicy.PVCRetentionSeconds) * time.Second,
 				),
@@ -624,10 +656,12 @@ func (service *Service) ClaimRuntimeExecution(
 				Attempt                                                                           uint32
 				Fence, GrantGeneration                                                            uint64
 				AgentBindingSHA256, CredentialSnapshotSHA256, ResourceClass, ClusterAccessProfile string
+				CodexDeliveryRecoverySourceExecutionID                                            string
 			}{result.ID, result.SessionID, result.TurnID, result.RuntimeRevisionSHA256,
 				result.EffectiveRuntimeSHA256, result.Attempt, result.Fence, result.GrantGeneration,
 				result.AgentBindingSHA256, result.CredentialSnapshotSHA256,
-				result.ResourceClass, result.ClusterAccessProfile})
+				result.ResourceClass, result.ClusterAccessProfile,
+				result.CodexDeliveryRecoverySourceExecutionID})
 			if err != nil {
 				return errs.ErrInternal
 			}

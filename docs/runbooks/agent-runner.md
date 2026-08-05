@@ -68,7 +68,7 @@ updated: 2026-08-04
 | incident after exit | отсутствующий/invalid signed handoff | сохранить Pod/PVC, проверить key trust overlap и ConfigMap RBAC |
 | resume отклонён | app-server rollout path/type/link-count/digest/provenance или provider binding не совпал | сохранить PVC, проверить owner RuntimeExecution и restore evidence; не заменять archive вручную |
 | delivery pending | interaction-gateway временно недоступен | оставить owner row для reclaim; не публиковать в Mattermost вручную |
-| отдельный output не сохранён | owner staging, S3 readback или Artifact registration не завершены | terminal `FAILED` сохраняет protected recovery journal; card Retry запускает новую attempt только для доставки immutable bytes, без повторного вызова модели; не загружать файл вручную |
+| отдельный output не сохранён | owner staging, S3 readback или Artifact registration не завершены | terminal `FAILED` сохраняет protected recovery journal с предыдущим delivery execution и отдельным исходным provider execution для archive provenance; card Retry запускает новую attempt только для доставки immutable bytes, без повторного вызова модели; если journal утрачен, новая attempt также фиксирует bounded `FAILED`, сохраняет исходный server marker и не читает outbox/не запускает модель — вернуть retained PVC либо разбирать owner recovery, не загружать файл вручную |
 | capacity retries | exact `CodexErrorInfo=serverOverloaded` | дождаться 1/3/5; после исчерпания owner получит terminal result |
 | blocked без retry | `unauthorized`, `cyberPolicy` либо invalid/missing `codexErrorInfo` | для auth выполнить `/agents openai auth <account-name>`, где публичное имя разрешено owner из stable binding; device-code обновляет credential revision той же logical account и не меняет lineage; policy/unknown вручную не повторять |
 | quota без capacity retry | `usageLimitExceeded`, terminal `BLOCKED` | проверить лимит учётной записи; не смешивать с `serverOverloaded` и не использовать Retry до обновления account binding |
@@ -96,8 +96,11 @@ runner фиксирует `FAILED` и protected checksum journal на retained P
 создаёт новую owner attempt/revision/grant, повторно читает exact digest исходного
 файла либо полного Markdown и выполняет только staging/handoff. Успешные refs
 переиспользуются, provider/app-server не запускается, а журнал удаляется только
-после принятого handoff. Повреждение журнала, mismatch Turn/attempt или исчезновение
-immutable source закрыто останавливают recovery.
+после принятого handoff. Control-plane переносит в новый execution только
+server-owned `codex_delivery_recovery_source_execution_id`; без exact marker
+локальный journal не может назначить recovery, а без exact journal marker
+закрыто останавливает attempt до provider. Повреждение журнала, mismatch
+Turn/attempt или исчезновение immutable source также закрыто останавливают recovery.
 
 При cancel/SIGTERM runner отправляет `turn/interrupt` для exact
 `(threadId, turnId)`, ждёт bounded grace и затем завершает process group.

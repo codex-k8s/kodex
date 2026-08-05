@@ -125,8 +125,13 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		return err
 	}
 	recovery, recovering, err := output.LoadRecovery(input)
-	if err != nil || (recovering && (recovery.TurnID != input.TurnID || recovery.SourceAttempt+1 != input.Attempt)) {
+	if err != nil {
 		return errors.New("load runtime output recovery")
+	}
+	recoveryAuthorizationErr := output.AuthorizeRecovery(input, recovery, recovering)
+	recoveryJournalUnavailable := errors.Is(recoveryAuthorizationErr, output.ErrRecoveryJournalUnavailable)
+	if recoveryAuthorizationErr != nil && !recoveryJournalUnavailable {
+		return recoveryAuthorizationErr
 	}
 	// Проверка выполняется до ClaimTurn, но terminal фиксируется только после
 	// admission через signed handoff и owner transaction.
@@ -174,6 +179,12 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 			"Восстанавливается доставка выходных артефактов без повторного запуска модели."); err != nil {
 			return errors.New("publish runtime recovery progress")
 		}
+	} else if recoveryJournalUnavailable {
+		if err := client.Progress(ctx, lease,
+			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS, 1,
+			"Журнал повторной доставки недоступен; повторный запуск модели запрещён."); err != nil {
+			return errors.New("publish runtime recovery unavailable progress")
+		}
 	} else if providerAuthenticationErr == nil {
 		if err := client.Progress(ctx, lease,
 			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS, 1, "Codex выполняет ход."); err != nil {
@@ -194,6 +205,11 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		result = codex.Result{Outcome: recovery.OriginalOutcome, FinalMessage: recovery.TerminalMarkdown,
 			SessionID: recovery.CodexSessionID, ArchiveRelativePath: recovery.ArchiveRelativePath,
 			ArchiveSHA256: recovery.ArchiveSHA256}
+	} else if recoveryJournalUnavailable {
+		result = codex.Result{Outcome: "FAILED",
+			FinalMessage: "Доставка выходных артефактов не восстановлена: защищённый journal недоступен. Модель повторно не запускалась; восстановите retained workspace и повторите доставку.",
+			SessionID:    input.CodexSessionID, ArchiveRelativePath: input.CodexArchiveRelativePath,
+			ArchiveSHA256: input.CodexArchiveSHA256}
 	} else if providerAuthenticationErr == nil {
 		prompt, readErr := os.ReadFile(filepath.Join(input.WorkspaceRoot, input.PromptPath))
 		if readErr != nil || len(prompt) == 0 || len(prompt) > 1<<20 || !utf8.Valid(prompt) {
@@ -216,7 +232,9 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	}
 	terminalMarkdown := result.FinalMessage
 	outcome := result.Outcome
-	if result.Outcome == "FAILED" {
+	if recoveryJournalUnavailable {
+		terminalMarkdown = result.FinalMessage
+	} else if result.Outcome == "FAILED" {
 		var nextAction string
 		outcome, terminalMarkdown, nextAction = codex.TerminalPresentation(result.FailureCode)
 		if nextAction == "REAUTH_DEVICE_CODE" {
@@ -228,6 +246,8 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	var built output.BuildResult
 	if recovering {
 		built, err = output.Resume(ctx, input, recovery)
+	} else if recoveryJournalUnavailable {
+		built, err = output.TerminalOnly(input, terminalMarkdown)
 	} else {
 		built, err = output.Build(ctx, input, terminalMarkdown, result.ArchivePath)
 	}
@@ -240,11 +260,12 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		originalOutcome = recovery.OriginalOutcome
 	}
 	if len(built.Failed) != 0 {
-		recoverySourceExecutionID := input.ExecutionID
+		archiveExecutionID := input.ExecutionID
 		if recovering {
-			recoverySourceExecutionID = recovery.SourceExecutionID
+			archiveExecutionID = recovery.ArchiveExecutionID
 		}
-		journal := output.RecoveryJournal{TurnID: input.TurnID, SourceExecutionID: recoverySourceExecutionID, SourceAttempt: input.Attempt,
+		journal := output.RecoveryJournal{TurnID: input.TurnID, SourceExecutionID: input.ExecutionID,
+			ArchiveExecutionID: archiveExecutionID, SourceAttempt: input.Attempt,
 			OriginalOutcome: originalOutcome, TerminalMarkdown: string(outputs[0].Payload),
 			CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
 			ArchiveSHA256: result.ArchiveSHA256, Existing: slices.Clone(outputs[1:]), Failed: built.Failed}
@@ -256,11 +277,19 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	terminalDigest := sha256.Sum256([]byte(outcome + "\x00" + result.SessionID + "\x00" +
 		result.ArchiveSHA256 + "\x00" + outputs[0].SHA256))
 	terminalReference := "codex://sessions/" + result.SessionID + "/executions/" + input.ExecutionID
+	if len(built.Failed) != 0 {
+		terminalReference += "/delivery-recovery"
+	} else if recoveryJournalUnavailable {
+		terminalReference += "/delivery-recovery/source/" + input.CodexDeliveryRecoverySourceExecutionID
+	}
 	archiveExecutionID := input.ExecutionID
 	if recovering {
-		archiveExecutionID = recovery.SourceExecutionID
+		archiveExecutionID = recovery.ArchiveExecutionID
 	}
 	archiveProvenance := "codex-app-server-rollout-v1:" + archiveExecutionID + ":" + result.ArchiveRelativePath + ":" + result.ArchiveSHA256
+	if recoveryJournalUnavailable {
+		archiveProvenance = input.CodexArchiveProvenance
+	}
 	if result.SessionID == "" && outcome == "BLOCKED" {
 		terminalReference = "preflight://provider-auth/" + input.ExecutionID
 		archiveProvenance = ""

@@ -13979,8 +13979,13 @@ type RuntimeExecution struct {
 	CodexArchiveRelativePath string                    `protobuf:"bytes,99,opt,name=codex_archive_relative_path,json=codexArchiveRelativePath,proto3" json:"codex_archive_relative_path,omitempty"`
 	CodexArchiveSha256       string                    `protobuf:"bytes,100,opt,name=codex_archive_sha256,json=codexArchiveSha256,proto3" json:"codex_archive_sha256,omitempty"`
 	CodexArchiveProvenance   string                    `protobuf:"bytes,101,opt,name=codex_archive_provenance,json=codexArchiveProvenance,proto3" json:"codex_archive_provenance,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// codex_delivery_recovery_source_execution_id назначает control-plane только
+	// после terminal delivery failure. Runner может только повторить staging из
+	// exact protected journal либо вернуть bounded FAILED при его утрате;
+	// повторно запускать provider запрещено.
+	CodexDeliveryRecoverySourceExecutionId string `protobuf:"bytes,102,opt,name=codex_delivery_recovery_source_execution_id,json=codexDeliveryRecoverySourceExecutionId,proto3" json:"codex_delivery_recovery_source_execution_id,omitempty"`
+	unknownFields                          protoimpl.UnknownFields
+	sizeCache                              protoimpl.SizeCache
 }
 
 func (x *RuntimeExecution) Reset() {
@@ -14716,6 +14721,13 @@ func (x *RuntimeExecution) GetCodexArchiveSha256() string {
 func (x *RuntimeExecution) GetCodexArchiveProvenance() string {
 	if x != nil {
 		return x.CodexArchiveProvenance
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetCodexDeliveryRecoverySourceExecutionId() string {
+	if x != nil {
+		return x.CodexDeliveryRecoverySourceExecutionId
 	}
 	return ""
 }
@@ -22189,7 +22201,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1dRecordMemoryEmbeddingResponse\x12(\n" +
 	"\x10memory_record_id\x18\x01 \x01(\tR\x0ememoryRecordId\x12)\n" +
 	"\x10resource_version\x18\x02 \x01(\x04R\x0fresourceVersion\x12+\n" +
-	"\x11projection_sha256\x18\x03 \x01(\tR\x10projectionSha256\"\xb5.\n" +
+	"\x11projection_sha256\x18\x03 \x01(\tR\x10projectionSha256\"\x92/\n" +
 	"\x10RuntimeExecution\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1d\n" +
@@ -22299,7 +22311,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10materializations\x18b \x03(\v2'.controlplane.v1.RuntimeMaterializationR\x10materializations\x12=\n" +
 	"\x1bcodex_archive_relative_path\x18c \x01(\tR\x18codexArchiveRelativePath\x120\n" +
 	"\x14codex_archive_sha256\x18d \x01(\tR\x12codexArchiveSha256\x128\n" +
-	"\x18codex_archive_provenance\x18e \x01(\tR\x16codexArchiveProvenance\"\x94\x02\n" +
+	"\x18codex_archive_provenance\x18e \x01(\tR\x16codexArchiveProvenance\x12[\n" +
+	"+codex_delivery_recovery_source_execution_id\x18f \x01(\tR&codexDeliveryRecoverySourceExecutionId\"\x94\x02\n" +
 	"\x16RuntimeMaterialization\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1f\n" +
 	"\vartifact_id\x18\x02 \x01(\tR\n" +

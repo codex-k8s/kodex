@@ -54,7 +54,8 @@ SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        coalesce(provider_binding_id::text, ''), coalesce(provider_binding_version, 0),
        coalesce(provider_binding_sha256, ''), coalesce(codex_session_id, ''),
        coalesce(codex_archive_relative_path, ''), coalesce(codex_archive_sha256, ''),
-       coalesce(codex_archive_provenance, ''), materializations,
+       coalesce(codex_archive_provenance, ''),
+       coalesce(codex_delivery_recovery_source_execution_id::text, ''), materializations,
        created_at, updated_at
 FROM control_plane.runtime_executions
 WHERE turn_id = @turn_id AND attempt = @attempt

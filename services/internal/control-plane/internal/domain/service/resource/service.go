@@ -40,6 +40,7 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 		ImmutableInputSHA256, EffectiveRuntimeSHA256              string
 		AgentBindingSHA256, CredentialSnapshotSHA256              string
 		WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
+		CodexDeliveryRecoverySourceExecutionID                    string
 		State                                                     string
 	}
 	issue := func(issuer, audience string, privateKey ed25519.PrivateKey) (string, error) {
@@ -53,7 +54,8 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 			execution.GrantGeneration, execution.ImmutableInputSHA256,
 			execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
 			execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
-			execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
+			execution.ResourceClass, execution.ClusterAccessProfile,
+			execution.CodexDeliveryRecoverySourceExecutionID, execution.State})
 		if marshalErr != nil {
 			return "", marshalErr
 		}

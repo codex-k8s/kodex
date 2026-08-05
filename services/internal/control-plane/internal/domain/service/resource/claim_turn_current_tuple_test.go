@@ -2212,6 +2212,30 @@ func TestTerminalWinnerWatchdogRecoveryHonorsRetryLimit(t *testing.T) {
 	}
 }
 
+func TestDeliveryRecoverySourceRequiresExactFailedTerminalReference(t *testing.T) {
+	executionID, sessionID := uuid.NewString(), uuid.NewString()
+	lineage := domainrepo.CodexLineage{ExecutionID: executionID, SessionID: sessionID,
+		TerminalOutcome: "FAILED", TerminalReference: "codex://sessions/" + sessionID +
+			"/executions/" + executionID + "/delivery-recovery"}
+	if actual := deliveryRecoverySource(lineage); actual != executionID {
+		t.Fatalf("delivery recovery source = %q", actual)
+	}
+	originalSource := uuid.NewString()
+	lineage.TerminalReference += "/source/" + originalSource
+	if actual := deliveryRecoverySource(lineage); actual != originalSource {
+		t.Fatalf("retained delivery recovery source = %q", actual)
+	}
+	lineage.TerminalOutcome = "SUCCEEDED"
+	if actual := deliveryRecoverySource(lineage); actual != "" {
+		t.Fatalf("successful terminal authorized recovery: %q", actual)
+	}
+	lineage.TerminalOutcome = "FAILED"
+	lineage.TerminalReference = "codex://sessions/" + sessionID + "/executions/" + executionID
+	if actual := deliveryRecoverySource(lineage); actual != "" {
+		t.Fatalf("ordinary failed terminal authorized delivery recovery: %q", actual)
+	}
+}
+
 func TestScheduledRequeueRestoresSnapshotAndNextAttemptReachesClaimTurn(t *testing.T) {
 	for _, scenario := range []struct {
 		name    string

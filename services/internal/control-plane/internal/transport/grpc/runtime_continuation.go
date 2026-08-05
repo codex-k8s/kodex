@@ -695,8 +695,9 @@ func toProtoRuntimeExecution(execution resource.RuntimeExecution) *controlplanev
 		ProviderBindingSha256: execution.ProviderBindingSHA256, CodexSessionId: execution.CodexSessionID,
 		CodexArchiveRelativePath: execution.CodexArchiveRelativePath,
 		CodexArchiveSha256:       execution.CodexArchiveSHA256, CodexArchiveProvenance: execution.CodexArchiveProvenance,
-		Materializations: materializations,
-		CreatedAt:        timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
+		CodexDeliveryRecoverySourceExecutionId: execution.CodexDeliveryRecoverySourceExecutionID,
+		Materializations:                       materializations,
+		CreatedAt:                              timestamppb.New(execution.CreatedAt), UpdatedAt: timestamppb.New(execution.UpdatedAt),
 	}
 }
 

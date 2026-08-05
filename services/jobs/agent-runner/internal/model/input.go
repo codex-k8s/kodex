@@ -65,48 +65,49 @@ type Materialization struct {
 }
 
 type Input struct {
-	Schema                     string            `json:"schema"`
-	ExecutionID                string            `json:"execution_id"`
-	ExecutionVersion           uint64            `json:"execution_version"`
-	Fence                      uint64            `json:"fence"`
-	GrantGeneration            uint64            `json:"grant_generation"`
-	RuntimeRevisionID          string            `json:"runtime_revision_id"`
-	RuntimeRevisionVersion     uint64            `json:"runtime_revision_version"`
-	RuntimeRevisionSHA256      string            `json:"runtime_revision_sha256"`
-	EffectiveRuntimeSHA256     string            `json:"effective_runtime_sha256"`
-	ImmutableInputSHA256       string            `json:"immutable_input_sha256"`
-	SessionID                  string            `json:"session_id"`
-	TurnID                     string            `json:"turn_id"`
-	Attempt                    uint32            `json:"attempt"`
-	SessionKey                 string            `json:"session_key"`
-	ProviderBindingID          string            `json:"provider_binding_id"`
-	ProviderAccountName        string            `json:"provider_account_name"`
-	MCPBindingVersion          uint64            `json:"mcp_binding_version"`
-	ProviderBindingVersion     uint64            `json:"provider_binding_version"`
-	ProviderBindingSHA256      string            `json:"provider_binding_sha256"`
-	CredentialSnapshotSHA256   string            `json:"credential_snapshot_sha256"`
-	WorkloadTicketSHA256       string            `json:"workload_ticket_sha256"`
-	AgentProfile               string            `json:"agent_profile"`
-	CodexModel                 string            `json:"codex_model"`
-	CodexSandbox               string            `json:"codex_sandbox"`
-	CodexApprovalPolicy        string            `json:"codex_approval_policy"`
-	CodexSessionID             string            `json:"codex_session_id"`
-	CodexArchiveRelativePath   string            `json:"codex_archive_relative_path"`
-	CodexArchiveSHA256         string            `json:"codex_archive_sha256"`
-	CodexArchiveProvenance     string            `json:"codex_archive_provenance"`
-	ControlPlane               GRPCBinding       `json:"control_plane"`
-	MCP                        HTTPBinding       `json:"mcp"`
-	InteractionGateway         HTTPBinding       `json:"interaction_gateway"`
-	CredentialFiles            CredentialFiles   `json:"credential_files"`
-	Materializations           []Materialization `json:"materializations"`
-	PromptPath                 string            `json:"prompt_path"`
-	InstructionsPath           string            `json:"instructions_path"`
-	WorkspaceRoot              string            `json:"workspace_root"`
-	OutboxRoot                 string            `json:"outbox_root"`
-	CodexHome                  string            `json:"codex_home"`
-	MattermostPostMaximumRunes int               `json:"mattermost_post_max_runes"`
-	HandoffConfigMap           string            `json:"handoff_config_map"`
-	PodNamespace               string            `json:"pod_namespace"`
+	Schema                                 string            `json:"schema"`
+	ExecutionID                            string            `json:"execution_id"`
+	ExecutionVersion                       uint64            `json:"execution_version"`
+	Fence                                  uint64            `json:"fence"`
+	GrantGeneration                        uint64            `json:"grant_generation"`
+	RuntimeRevisionID                      string            `json:"runtime_revision_id"`
+	RuntimeRevisionVersion                 uint64            `json:"runtime_revision_version"`
+	RuntimeRevisionSHA256                  string            `json:"runtime_revision_sha256"`
+	EffectiveRuntimeSHA256                 string            `json:"effective_runtime_sha256"`
+	ImmutableInputSHA256                   string            `json:"immutable_input_sha256"`
+	SessionID                              string            `json:"session_id"`
+	TurnID                                 string            `json:"turn_id"`
+	Attempt                                uint32            `json:"attempt"`
+	SessionKey                             string            `json:"session_key"`
+	ProviderBindingID                      string            `json:"provider_binding_id"`
+	ProviderAccountName                    string            `json:"provider_account_name"`
+	MCPBindingVersion                      uint64            `json:"mcp_binding_version"`
+	ProviderBindingVersion                 uint64            `json:"provider_binding_version"`
+	ProviderBindingSHA256                  string            `json:"provider_binding_sha256"`
+	CredentialSnapshotSHA256               string            `json:"credential_snapshot_sha256"`
+	WorkloadTicketSHA256                   string            `json:"workload_ticket_sha256"`
+	AgentProfile                           string            `json:"agent_profile"`
+	CodexModel                             string            `json:"codex_model"`
+	CodexSandbox                           string            `json:"codex_sandbox"`
+	CodexApprovalPolicy                    string            `json:"codex_approval_policy"`
+	CodexSessionID                         string            `json:"codex_session_id"`
+	CodexArchiveRelativePath               string            `json:"codex_archive_relative_path"`
+	CodexArchiveSHA256                     string            `json:"codex_archive_sha256"`
+	CodexArchiveProvenance                 string            `json:"codex_archive_provenance"`
+	CodexDeliveryRecoverySourceExecutionID string            `json:"codex_delivery_recovery_source_execution_id"`
+	ControlPlane                           GRPCBinding       `json:"control_plane"`
+	MCP                                    HTTPBinding       `json:"mcp"`
+	InteractionGateway                     HTTPBinding       `json:"interaction_gateway"`
+	CredentialFiles                        CredentialFiles   `json:"credential_files"`
+	Materializations                       []Materialization `json:"materializations"`
+	PromptPath                             string            `json:"prompt_path"`
+	InstructionsPath                       string            `json:"instructions_path"`
+	WorkspaceRoot                          string            `json:"workspace_root"`
+	OutboxRoot                             string            `json:"outbox_root"`
+	CodexHome                              string            `json:"codex_home"`
+	MattermostPostMaximumRunes             int               `json:"mattermost_post_max_runes"`
+	HandoffConfigMap                       string            `json:"handoff_config_map"`
+	PodNamespace                           string            `json:"pod_namespace"`
 }
 
 func DecodeInput(path string) (Input, error) {
@@ -171,6 +172,10 @@ func (input Input) Validate() error {
 		validCodexArchiveProvenance(input.CodexArchiveProvenance, input.CodexArchiveRelativePath, input.CodexArchiveSHA256)
 	if (!archiveEmpty && !archivePresent) || (archivePresent && input.CodexSessionID == "") {
 		return errors.New("runtime Codex archive binding is invalid")
+	}
+	if input.CodexDeliveryRecoverySourceExecutionID != "" &&
+		(uuid.Validate(input.CodexDeliveryRecoverySourceExecutionID) != nil || input.Attempt < 2 || !archivePresent) {
+		return errors.New("runtime Codex delivery recovery binding is invalid")
 	}
 	if len(input.Materializations) < 2 || len(input.Materializations) > MaximumMaterializations {
 		return errors.New("runtime materialization set is invalid")
