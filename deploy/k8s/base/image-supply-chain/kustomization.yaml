@@ -6,6 +6,7 @@ resources:
   - serviceaccount.yaml
   - registry.yaml
   - staging-read-registry.yaml
+  - evidence-registry.yaml
   - registry-tls-secret-provider-class.yaml
   - buildkit.yaml
   - buildkit-tls-secret-provider-class.yaml

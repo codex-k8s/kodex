@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mattercodex-image-registry-evidence
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-storage: evidence
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests: {storage: 20Gi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattercodex-image-registry-evidence
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: evidence
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: evidence
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/component: image-registry
+        mattercodex.dev/registry-scope: evidence
+    spec:
+      serviceAccountName: mattercodex-image-registry-evidence
+      shareProcessNamespace: true
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: registry
+          image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+          env:
+            - {name: REGISTRY_HTTP_ADDR, value: "127.0.0.1:5008"}
+            - {name: REGISTRY_HTTP_RELATIVEURLS, value: "true"}
+            - {name: REGISTRY_STORAGE_DELETE_ENABLED, value: "false"}
+          ports: [{name: backend, containerPort: 5008}]
+          readinessProbe: {tcpSocket: {port: backend}, periodSeconds: 5, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext: &restricted
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/registry}
+            - {name: identity, mountPath: /identity, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+        - name: evidence-authorizer
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/usr/local/bin/registry-write-authorizer]
+          env: [{name: REGISTRY_AUTHORIZATION_PROFILE, value: evidence}]
+          ports: [{name: evidence, containerPort: 5007}]
+          readinessProbe: {tcpSocket: {port: evidence}, periodSeconds: 5, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext: *restricted
+          volumeMounts:
+            - {name: identity, mountPath: /identity, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+        - name: certificate-guard
+          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/bin/sh, /opt/mattercodex/registry-readiness.sh]
+          env:
+            - {name: TARGET_PORT, value: "5007"}
+            - {name: SERVER_NAME, value: mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local}
+            - {name: CLIENT_AUTH_REQUIRED, value: "true"}
+            - {name: USERNAME_FILE, value: /identity/probe.username}
+            - {name: PASSWORD_FILE, value: /identity/probe.password}
+          readinessProbe: {exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}, periodSeconds: 5, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext: *restricted
+          volumeMounts:
+            - {name: identity, mountPath: /identity, readOnly: true}
+            - {name: readiness-script, mountPath: /opt/mattercodex, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: data, persistentVolumeClaim: {claimName: mattercodex-image-registry-evidence}}
+        - name: identity
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes: {secretProviderClass: mattercodex-image-registry-evidence}
+        - {name: tmp, emptyDir: {sizeLimit: 32Mi}}
+        - {name: readiness-script, configMap: {name: mattercodex-registry-readiness, defaultMode: 0555}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattercodex-image-registry-evidence
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: evidence
+spec:
+  selector:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: evidence
+  ports: [{name: https, port: 5007, targetPort: evidence}]

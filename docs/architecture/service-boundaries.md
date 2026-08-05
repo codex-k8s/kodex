@@ -90,12 +90,13 @@ immutable claim snapshot и не попадает в status/log/audit/provenance
 claim, затем разделяет scanner, signer, admission owner и promotion по разным
 Pod/ServiceAccount/Vault/mTLS границам. Admission фиксирует exact SBOM,
 vulnerability, native BuildKit provenance, signature и receipt через protected
-RPC; staging OCI receipt проходит readback до verdict. Только server-selected
+RPC; durable evidence OCI manifest проходит readback до verdict. Только server-selected
 одноразовый owner promotion claim, включающий content/manifest receipt digests,
-OCI receipt с exact promoted subject и совместный registry readback делают
+тот же exact evidence manifest digest и совместный registry readback делают
 artifact пригодным для `RuntimeRevision`. Marker/PVC задают порядок только
-внутри admission scan/sign/record; promotion восстанавливается из owner state,
-и PVC не является источником lifecycle state. Pull/admin/signing/promotion credentials
+внутри admission scan/sign/record; promotion восстанавливается из owner state и
+выделенного read-only evidence path, а PVC не является источником lifecycle
+state. Pull/admin/signing/promotion credentials
 builder не выдаются.
 
 ## Контракты

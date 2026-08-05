@@ -35,6 +35,10 @@ require_policy() {
     fail "admission image is not immutable"
   echo "$PROMOTION_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "promotion repository is invalid"
+  [ "$EVIDENCE_REPOSITORY" = "mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission" ] ||
+    fail "evidence repository is invalid"
+  [ "$PROMOTION_EVIDENCE_REPOSITORY" = "mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence" ] ||
+    fail "promotion evidence repository is invalid"
   echo "$PROMOTED_PULL_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "promoted pull repository is invalid"
   [ "${PROMOTION_REPOSITORY#*/}" = "${PROMOTED_PULL_REPOSITORY#*/}" ] ||
@@ -48,7 +52,7 @@ require_policy() {
   echo "$TRUSTED_ROLE_BASE_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
     fail "trusted role base repository is invalid"
   echo "$TRUSTED_ROLE_BASE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "trusted role base digest is invalid"
-  for tool in base64 cmp cosign grype image-admission-bridge jq regctl sha256sum syft; do
+  for tool in base64 cmp cosign grype image-admission-bridge jq regctl sha256sum syft wc; do
     command -v "$tool" >/dev/null || fail "admission image is incomplete"
   done
 }
@@ -164,28 +168,52 @@ claim_promotion() {
   fail "owner promotion claim timeout"
 }
 
-publish_or_verify_receipt() {
-  receipt_subject=$1
-  receipt_tag=$2
-  receipt_payload=$3
-  receipt_sha256=$4
-  receipt_manifest=$5
-  receipt_type=application/vnd.mattercodex.image-admission-receipt.v1+json
-  if regctl manifest get "$receipt_tag" --format raw-body >"$receipt_manifest" 2>/dev/null; then
-    regctl artifact get "$receipt_tag" >"${receipt_payload}.readback"
-    cmp -s "$receipt_payload" "${receipt_payload}.readback" ||
-      fail "immutable admission receipt tag already points to another payload"
+publish_or_verify_evidence() {
+  evidence_tag=$1
+  evidence_payload=$2
+  evidence_manifest=$3
+  evidence_type=application/vnd.mattercodex.image-admission-evidence.v1+json
+  evidence_sha256=$(sha256sum "$evidence_payload" | awk '{print $1}')
+  if regctl manifest get "$evidence_tag" --format raw-body >"$evidence_manifest" 2>/dev/null; then
+    regctl artifact get "$evidence_tag" >"${evidence_payload}.readback"
+    cmp -s "$evidence_payload" "${evidence_payload}.readback" ||
+      fail "immutable admission evidence tag already points to another payload"
   else
-    regctl artifact put --artifact-type "$receipt_type" --subject "$receipt_subject" \
-      "$receipt_tag" <"$receipt_payload" >/dev/null
+    regctl artifact put --artifact-type "$evidence_type" "$evidence_tag" <"$evidence_payload" >/dev/null
   fi
-  regctl artifact get "$receipt_tag" >"${receipt_payload}.readback"
-  cmp -s "$receipt_payload" "${receipt_payload}.readback" || fail "admission receipt OCI readback mismatch"
-  regctl manifest get "$receipt_tag" --format raw-body >"$receipt_manifest"
-  jq -e --arg type "$receipt_type" --arg digest "$image_digest" --arg receipt "$receipt_sha256" '
-    .artifactType == $type and .subject.digest == $digest and
-    (.layers | type == "array" and length == 1) and .layers[0].digest == ("sha256:" + $receipt)
-  ' "$receipt_manifest" >/dev/null || fail "admission receipt OCI binding mismatch"
+  regctl artifact get "$evidence_tag" >"${evidence_payload}.readback"
+  cmp -s "$evidence_payload" "${evidence_payload}.readback" || fail "admission evidence OCI readback mismatch"
+  regctl manifest get "$evidence_tag" --format raw-body >"$evidence_manifest"
+  verify_evidence_manifest "$evidence_manifest" "$evidence_sha256" "sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')"
+}
+
+verify_evidence_manifest() {
+  evidence_manifest=$1
+  evidence_sha256=$2
+  expected_manifest_digest=$3
+  [ "sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')" = "$expected_manifest_digest" ] ||
+    fail "admission evidence OCI manifest digest mismatch"
+  jq -e --arg type application/vnd.mattercodex.image-admission-evidence.v1+json --arg payload "$evidence_sha256" '
+    .schemaVersion == 2 and .mediaType == "application/vnd.oci.image.manifest.v1+json" and
+    (.config | type == "object") and (.config.digest | test("^sha256:[a-f0-9]{64}$")) and
+    .artifactType == $type and (.subject == null) and
+    (.layers | type == "array" and length == 1) and .layers[0].digest == ("sha256:" + $payload)
+  ' "$evidence_manifest" >/dev/null || fail "admission evidence OCI manifest binding mismatch"
+}
+
+verify_evidence_bundle() {
+  evidence_payload=$1
+  jq -e --arg artifact "$artifact_id" --arg image "$image_digest" --arg receipt "$promotion_receipt" '
+    .schema == "mattercodex.dev/image-admission-evidence/v1" and
+    .artifactId == $artifact and .imageDigest == $image and
+    (.admissionReceipt | type == "object") and
+    (.admissionReceiptSHA256 == $receipt) and
+    (.provenance | type == "object") and (.nativeProvenance | type == "array" and length > 0) and
+    (.sbom | type == "object") and
+    (.vulnerability | type == "object") and (.signatureBinding | type == "object")
+  ' "$evidence_payload" >/dev/null || fail "durable admission evidence binding mismatch"
+  [ "$(jq -Sjc '.admissionReceipt' "$evidence_payload" | sha256sum | awk '{print $1}')" = "$promotion_receipt" ] ||
+    fail "durable admission receipt payload mismatch"
 }
 
 login_registry() {
@@ -227,6 +255,7 @@ verify_image_and_provenance() {
   jq -r '.manifests[] | select(.platform.os != "unknown" and .platform.architecture != "unknown") |
     [.digest, .platform.os, .platform.architecture, (.platform.variant // "")] | @tsv' \
     /work/image-index.json >/work/platform-manifests
+  : >/work/native-provenance.jsonl
   while IFS="$(printf '\t')" read -r platform_digest platform_os platform_arch platform_variant; do
     echo "$platform_digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "platform manifest digest is invalid"
     platform_ref="${subject_name}@${platform_digest}"
@@ -266,7 +295,9 @@ verify_image_and_provenance() {
       --arg frontend "$frontend_sha256" --arg builder_id "$EXPECTED_BUILDER_ID" \
       --arg build_type "$EXPECTED_BUILD_TYPE" -f /opt/mattercodex/provenance-policy.jq \
       /work/provenance.statement.json >/dev/null || fail "native provenance binding mismatch"
+    jq -c . /work/provenance.statement.json >>/work/native-provenance.jsonl
   done </work/platform-manifests
+  jq -sSjc . /work/native-provenance.jsonl >/work/native-provenance.json
   jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
     --arg immutable "$immutable_build_sha256" --arg manifest "$image_digest" \
     --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" \
@@ -282,6 +313,20 @@ verify_image_and_provenance() {
 if [ "${1:-}" = validate-runtime-config ]; then
   [ "$#" -eq 2 ] && [ -r "$2" ] || fail "runtime config fixture is invalid"
   verify_runtime_config "$2"
+  exit 0
+fi
+
+if [ "${1:-}" = validate-evidence ]; then
+  [ "$#" -eq 7 ] || fail "evidence fixture is invalid"
+  artifact_id=$2
+  image_digest=$3
+  promotion_receipt=$4
+  evidence_payload=$5
+  evidence_manifest=$6
+  expected_manifest_digest=$7
+  verify_evidence_bundle "$evidence_payload"
+  verify_evidence_manifest "$evidence_manifest" "$(sha256sum "$evidence_payload" | awk '{print $1}')" \
+    "$expected_manifest_digest"
   exit 0
 fi
 
@@ -317,7 +362,7 @@ case "${1:-}" in
       export COSIGN_PASSWORD="$(cat /identity/cosign.password)"
       printf '%s\n' "$image_digest" >/work/image-digest.subject
       cosign sign-blob --yes --key /identity/cosign.key --output-signature /work/image-digest.sig /work/image-digest.subject
-      for evidence in provenance sbom vulnerability; do
+      for evidence in provenance native-provenance sbom vulnerability; do
         cosign sign-blob --yes --key /identity/cosign.key --output-signature "/work/$evidence.sig" "/work/$evidence.json"
       done
     fi
@@ -332,7 +377,7 @@ case "${1:-}" in
       login_registry "$staging_host" /identity/username /identity/password
       cosign verify-blob --key /identity/cosign.pub --signature /work/image-digest.sig /work/image-digest.subject \
         >/work/signature-verification.json
-      for evidence in provenance sbom vulnerability; do
+      for evidence in provenance native-provenance sbom vulnerability; do
         cosign verify-blob --key /identity/cosign.pub --signature "/work/$evidence.sig" "/work/$evidence.json" \
           >"/work/$evidence-verification.json"
       done
@@ -356,10 +401,34 @@ case "${1:-}" in
         verdict:$verdict,signatureIdentity:$signature,signatureSHA256:$signature_sha}' \
       >/work/admission.receipt.json
     sha256sum /work/admission.receipt.json | awk '{print $1}' >/work/admission.receipt.sha256
-    jq -Sjc -n --arg subject "$image_digest" --arg receipt "$(cat /work/admission.receipt.sha256)" \
-      '{schema:"mattercodex.dev/local-admission-receipt/v1",subjectDigest:$subject,receiptSHA256:$receipt}' \
-      >/work/admission.receipt-manifest.json
-    printf 'sha256:%s\n' "$(sha256sum /work/admission.receipt-manifest.json | awk '{print $1}')" \
+    for signature in image-digest provenance native-provenance sbom vulnerability; do
+      [ -f "/work/$signature.sig" ] || : >"/work/$signature.sig"
+    done
+    for evidence_file in provenance.json native-provenance.json sbom.json vulnerability.json signature.binding.json admission.receipt.json; do
+      [ "$(wc -c <"/work/$evidence_file")" -le 16777216 ] || fail "admission evidence exceeds bound"
+    done
+    jq -Sjc -n --arg schema "mattercodex.dev/image-admission-evidence/v1" \
+      --arg artifact "$artifact_id" --arg image "$image_digest" \
+      --arg receipt "$(cat /work/admission.receipt.sha256)" \
+      --slurpfile provenance /work/provenance.json --slurpfile sbom /work/sbom.json \
+      --slurpfile native_provenance /work/native-provenance.json \
+      --slurpfile vulnerability /work/vulnerability.json --slurpfile binding /work/signature.binding.json \
+      --slurpfile admission_receipt /work/admission.receipt.json \
+      --rawfile image_signature /work/image-digest.sig --rawfile provenance_signature /work/provenance.sig \
+      --rawfile native_provenance_signature /work/native-provenance.sig \
+      --rawfile sbom_signature /work/sbom.sig --rawfile vulnerability_signature /work/vulnerability.sig \
+      '{schema:$schema,artifactId:$artifact,imageDigest:$image,admissionReceiptSHA256:$receipt,
+        provenance:$provenance[0],nativeProvenance:$native_provenance[0],sbom:$sbom[0],vulnerability:$vulnerability[0],
+        signatureBinding:$binding[0],admissionReceipt:$admission_receipt[0],
+        signatures:{imageDigest:$image_signature,provenance:$provenance_signature,
+          nativeProvenance:$native_provenance_signature,
+          sbom:$sbom_signature,vulnerability:$vulnerability_signature}}' >/work/admission.evidence.json
+    [ "$(wc -c </work/admission.evidence.json)" -le 67108864 ] || fail "admission evidence bundle exceeds bound"
+    evidence_host=${EVIDENCE_REPOSITORY%%/*}
+    evidence_tag="${EVIDENCE_REPOSITORY}:artifact-${artifact_id}"
+    login_registry "$evidence_host" /identity/evidence.username /identity/evidence.password
+    publish_or_verify_evidence "$evidence_tag" /work/admission.evidence.json /work/admission.evidence-manifest.json
+    printf 'sha256:%s\n' "$(sha256sum /work/admission.evidence-manifest.json | awk '{print $1}')" \
       >/work/admission.receipt-manifest.digest
     IMAGE_OWNER_SBOM_SHA256_FILE=/work/sbom.sha256 \
     IMAGE_OWNER_VULNERABILITY_SHA256_FILE=/work/vulnerability.sha256 \
@@ -375,14 +444,18 @@ case "${1:-}" in
     load_promotion_claim
     promotion_host=${PROMOTION_REPOSITORY%%/*}
     destination_tag="${PROMOTION_REPOSITORY}:artifact-${artifact_id}"
-    promoted_receipt_tag="${PROMOTION_REPOSITORY}:admission-receipt-${artifact_id}"
+    promoted_evidence_tag="${PROMOTION_EVIDENCE_REPOSITORY}:artifact-${artifact_id}"
     promotion_reference="${PROMOTION_REPOSITORY}@${image_digest}"
     promoted_reference="${PROMOTED_PULL_REPOSITORY}@${image_digest}"
+    evidence_host=${EVIDENCE_REPOSITORY%%/*}
+    evidence_reference="${EVIDENCE_REPOSITORY}@${staging_receipt_manifest_digest}"
+    login_registry "$evidence_host" /identity/evidence.username /identity/evidence.password
+    regctl manifest get "$evidence_reference" --format raw-body >/work/admission.evidence-manifest.json
+    regctl artifact get "$evidence_reference" >/work/admission.evidence.json
+    verify_evidence_manifest /work/admission.evidence-manifest.json \
+      "$(sha256sum /work/admission.evidence.json | awk '{print $1}')" "$staging_receipt_manifest_digest"
+    verify_evidence_bundle /work/admission.evidence.json
     login_registry "$staging_host" /identity/staging.username /identity/staging.password
-    [ "$(sha256sum /work/admission.receipt.json | awk '{print $1}')" = "$promotion_receipt" ] ||
-      fail "staging admission receipt payload mismatch"
-    [ "sha256:$(sha256sum /work/admission.receipt-manifest.json | awk '{print $1}')" = \
-      "$staging_receipt_manifest_digest" ] || fail "staging admission receipt manifest mismatch"
     # Owner проверяет expiry/revocation/fence до первой pull-visible копии.
     image-admission-bridge authorize-promotion
     load_promotion_claim
@@ -397,16 +470,24 @@ case "${1:-}" in
     fi
     [ "$(regctl image digest "$promotion_reference")" = "$image_digest" ] || fail "promotion readback mismatch"
     regctl manifest get "$promotion_reference" --format raw-body >/work/promotion.image-manifest.json
-    publish_or_verify_receipt "$promotion_reference" "$promoted_receipt_tag" /work/admission.receipt.json \
-      "$promotion_receipt" /work/promoted.admission.receipt-manifest.json
+    if promoted_evidence_digest=$(regctl image digest "$promoted_evidence_tag" 2>/dev/null); then
+      [ "$promoted_evidence_digest" = "$staging_receipt_manifest_digest" ] ||
+        fail "immutable promoted evidence tag already points to another manifest"
+    else
+      regctl image copy "$evidence_reference" "$promoted_evidence_tag"
+    fi
+    regctl manifest get "${PROMOTION_EVIDENCE_REPOSITORY}@${staging_receipt_manifest_digest}" \
+      --format raw-body >/work/promoted.admission.evidence-manifest.json
     image_manifest_sha256=$(sha256sum /work/promotion.image-manifest.json | awk '{print $1}')
-    receipt_manifest_sha256=$(sha256sum /work/promoted.admission.receipt-manifest.json | awk '{print $1}')
+    promoted_evidence_manifest_digest="sha256:$(sha256sum /work/promoted.admission.evidence-manifest.json | awk '{print $1}')"
+    [ "$promoted_evidence_manifest_digest" = "$staging_receipt_manifest_digest" ] ||
+      fail "promoted admission evidence manifest digest mismatch"
     jq -Sjc -n --arg image "$image_digest" --arg image_manifest "$image_manifest_sha256" \
       --arg receipt "$promotion_receipt" --arg staging_receipt_manifest "$staging_receipt_manifest_digest" \
-      --arg promoted_receipt_manifest "$receipt_manifest_sha256" \
+      --arg promoted_evidence_manifest "$promoted_evidence_manifest_digest" \
       '{imageManifestDigest:$image,imageManifestSHA256:$image_manifest,
         admissionReceiptSHA256:$receipt,stagingAdmissionReceiptManifestDigest:$staging_receipt_manifest,
-        promotedAdmissionReceiptManifestSHA256:$promoted_receipt_manifest}' \
+        promotedAdmissionEvidenceManifestDigest:$promoted_evidence_manifest}' \
       >/work/promotion.readback.json
     sha256sum /work/promotion.readback.json | awk '{print $1}' >/work/promotion.readback.sha256
     IMAGE_OWNER_PROMOTED_REFERENCE="$promoted_reference" \

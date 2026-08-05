@@ -60,7 +60,7 @@ func TestDockerfileKeepsInstallationStepPhysicallySecretFreeAndRestoresRuntimeAB
 		FrontendSha256: strings.Repeat("a", 64), BaseImageReference: "registry.example/base/runtime",
 		BaseImageDigest: "sha256:" + strings.Repeat("b", 64), SpecSha256: strings.Repeat("c", 64),
 		RoleRuntimeContractSha256: strings.Repeat("d", 64),
-		InstallationBlock:         "echo first", BuildSecretRefs: []string{"vault-versioned://builder/token/v1"},
+		InstallationBlock:         "echo first",
 	}
 	first := installationScript(input)
 	dockerfileRaw := dockerfile(input, "registry.example.test/mattercodex/dockerfile")
@@ -69,7 +69,7 @@ func TestDockerfileKeepsInstallationStepPhysicallySecretFreeAndRestoresRuntimeAB
 	if bytes.Equal(first, second) {
 		t.Fatal("installation block did not affect BuildKit input")
 	}
-	if bytes.Contains(dockerfileRaw, []byte(input.BuildSecretRefs[0])) || bytes.Contains(dockerfileRaw, []byte("type=secret")) ||
+	if bytes.Contains(dockerfileRaw, []byte("type=secret")) ||
 		bytes.Contains(dockerfileRaw, first) || !bytes.Contains(dockerfileRaw, []byte("from=mattercodex-install")) ||
 		bytes.Contains(dockerfileRaw, []byte("COPY .")) || !bytes.Contains(dockerfileRaw, []byte("target=/workspace/source,readonly")) ||
 		!bytes.Contains(dockerfileRaw, []byte("COPY --from=trusted-runtime /usr/local/bin/mattercodex-init")) ||

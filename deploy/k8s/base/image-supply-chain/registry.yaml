@@ -113,8 +113,11 @@ spec:
             - name: tmp
               mountPath: /tmp
         - name: pull-authorizer
-          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/registry-pull-authorizer]
+          env:
+            - name: REGISTRY_PULL_HOST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullRegistryHost}}
           ports: [{name: registry, containerPort: 5000, protocol: TCP}]
           readinessProbe: {tcpSocket: {port: registry}, periodSeconds: 5, timeoutSeconds: 2}
           resources:
@@ -221,6 +224,8 @@ spec:
           env:
             - name: REGISTRY_HTTP_ADDR
               value: 127.0.0.1:5005
+            - name: REGISTRY_HTTP_RELATIVEURLS
+              value: "true"
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "false"
           ports:
@@ -263,7 +268,7 @@ spec:
             - name: tmp
               mountPath: /tmp
         - name: write-authorizer
-          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/registry-write-authorizer]
           ports: [{name: write, containerPort: 5001, protocol: TCP}]

@@ -21,16 +21,16 @@ spec:
       serviceAccountName: mattercodex-image-pull-readback
       automountServiceAccountToken: false
       enableServiceLinks: false
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       tolerations: [{operator: Exists}]
       containers:
         - name: bootstrap
-          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/node-pull-bootstrap]
           env:
             - {name: NODE_NAME, valueFrom: {fieldRef: {fieldPath: spec.nodeName}}}
             - {name: HOST_IP, valueFrom: {fieldRef: {fieldPath: status.hostIP}}}
+            - name: REGISTRY_PULL_HOST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullRegistryHost}}
             - name: PULL_CREDENTIAL_GENERATION
               valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullCredentialGeneration}}
             - name: READBACK_IMAGE

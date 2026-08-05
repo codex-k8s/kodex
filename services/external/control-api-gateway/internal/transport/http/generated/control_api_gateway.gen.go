@@ -1198,23 +1198,20 @@ type RoleImagePlatformOS string
 
 // RoleImageRecipeInput defines model for RoleImageRecipeInput.
 type RoleImageRecipeInput struct {
-	BaseImageDigest    string `json:"baseImageDigest"`
-	BaseImageReference string `json:"baseImageReference"`
-
-	// BuildSecretRefs Необязательные immutable authority refs только для trusted materializer; значения не передаются installation/build layer.
-	BuildSecretRefs   []string            `json:"buildSecretRefs"`
-	BuilderSha256     string              `json:"builderSha256"`
-	ContextRef        string              `json:"contextRef"`
-	ContextSha256     string              `json:"contextSha256"`
-	FrontendSha256    string              `json:"frontendSha256"`
-	InstallationBlock string              `json:"installationBlock"`
-	Packages          []RoleImagePackage  `json:"packages"`
-	Platforms         []RoleImagePlatform `json:"platforms"`
-	SourceRef         string              `json:"sourceRef"`
-	SourceRevision    string              `json:"sourceRevision"`
-	SourceSha256      string              `json:"sourceSha256"`
-	ToolchainSha256   string              `json:"toolchainSha256"`
-	Tools             []RoleImageTool     `json:"tools"`
+	BaseImageDigest    string              `json:"baseImageDigest"`
+	BaseImageReference string              `json:"baseImageReference"`
+	BuilderSha256      string              `json:"builderSha256"`
+	ContextRef         string              `json:"contextRef"`
+	ContextSha256      string              `json:"contextSha256"`
+	FrontendSha256     string              `json:"frontendSha256"`
+	InstallationBlock  string              `json:"installationBlock"`
+	Packages           []RoleImagePackage  `json:"packages"`
+	Platforms          []RoleImagePlatform `json:"platforms"`
+	SourceRef          string              `json:"sourceRef"`
+	SourceRevision     string              `json:"sourceRevision"`
+	SourceSha256       string              `json:"sourceSha256"`
+	ToolchainSha256    string              `json:"toolchainSha256"`
+	Tools              []RoleImageTool     `json:"tools"`
 }
 
 // RoleImageRecipeProjection defines model for RoleImageRecipeProjection.

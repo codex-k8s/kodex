@@ -24,8 +24,9 @@ workload владеют evidence, verdict и переносом exact digest.
    context/package/tool из одного server-configured OCI repository. Exact
    manifest содержит один слой утверждённого media type; descriptor и payload
    size/digest проверяются потоково в private bounded `emptyDir`, после чего тот
-   же snapshot безопасно извлекается. Отсутствие optional secret refs не создаёт
-   обязательного volume. Secret values не входят в context, mounts или BuildKit.
+   же snapshot безопасно извлекается. Recipe/claim не содержит build credential
+   refs: private external input публикуется owner-side до сборки. Secret values
+   не входят в context, mounts или BuildKit.
 6. Builder генерирует Dockerfile и обращается к вынесенному rootless BuildKit по
    exact mTLS/SNI/CA. Staging push credential/egress принадлежит только BuildKit;
    builder client имеет лишь input pull и BuildKit egress. Недоверенный
@@ -35,17 +36,19 @@ workload владеют evidence, verdict и переносом exact digest.
 7. BuildKit публикует staging artifact, native SLSA provenance и labels полного
    immutable tuple. Builder возвращает только bounded digest/status evidence.
 8. `image-admission` server-side claim связывает SBOM, vulnerability evidence,
-   native provenance, signature и staging OCI receipt с exact artifact. Content
-   и OCI manifest digests receipt записываются owner-side до verdict. Rejected evidence
+   native provenance, signature и receipt с exact artifact, публикуя их одним
+   immutable OCI evidence bundle в выделенный repository. Content digest receipt
+   и фактически прочитанный OCI manifest digest записываются owner-side до verdict. Rejected evidence
    переводит artifact в `BLOCKED`; accepted evidence делает artifact доступным
    только специализированному promotion claim.
 9. Отдельный `image-promotion` Pod/ServiceAccount получает fenced одноразовый
    server-selected claim без artifact ID из payload. Claim включает exact
    staging reference, admission revision и оба receipt digest; поэтому
-   promotion восстанавливается без admission PVC. Workload копирует exact
+   promotion восстанавливает evidence по exact OCI manifest digest без admission PVC. Workload копирует exact
    image digest, сначала расходует claim owner-side через
-   `AuthorizeImagePromotion`, воспроизводит admission receipt, выполняет readback
-   обоих manifests и завершает одноразовым authorization token. Builder не
+   `AuthorizeImagePromotion`, копирует тот же evidence manifest в закрытый
+   promoted repository, выполняет readback обоих manifests и завершает
+   одноразовым authorization token. Builder не
    получает signer/promotion/node-pull identity.
 10. Свежая `RuntimeRevision` разрешает recipe и artifact внутри owner boundary,
    закрыто проверяет все версии/digests и содержит единственный immutable
@@ -71,12 +74,12 @@ workload владеют evidence, verdict и переносом exact digest.
 | expiry | owner-команда после lease deadline; старый grant закрыт |
 | dead letter | owner-команда после исчерпания maximum attempts; новых claims нет |
 | claim admission | `image-admission`; одна lease/fence на exact artifact и current policy |
-| admission accepted | staging OCI receipt проходит exact readback; owner transaction фиксирует оба receipt digest и evidence, promotion identity ещё не выдана |
-| admission rejected | staging OCI receipt и evidence фиксируются owner transaction, artifact переходит в `BLOCKED`; promotion неприменим |
+| admission accepted | durable OCI evidence bundle проходит exact readback; owner transaction фиксирует receipt content и реальный OCI manifest digest, promotion identity ещё не выдана |
+| admission rejected | тот же durable evidence bundle фиксируется owner transaction, artifact переходит в `BLOCKED`; promotion неприменим |
 | claim promotion | `image-promotion`; server-side queue выбирает exact artifact и возвращает staging reference, admission revision, receipt digests, fence/generation/JTI и bounded expiry |
 | promotion expiry | следующий специализированный claim заменяет истёкший, повышает fence/generation и отзывает старый claim |
 | authorize promotion | `control-plane`; owner-side расходует current claim до registry copy и выдаёт bounded одноразовый token |
-| promotion/readback | `image-promotion`; exact destination digest и OCI admission-receipt subject/readback, затем completion по token и artifact `ACTIVE` |
+| promotion/readback | `image-promotion`; exact image destination и неизменный OCI evidence manifest digest/readback, затем completion по token и artifact `ACTIVE` |
 | RuntimeRevision | `control-plane`; только current promoted artifact с exact runtime ABI; missing/stale/mismatch закрыто отклоняется |
 
 Отдельные `renew admission`, `retry admission` и универсальный CRUD намеренно

@@ -32,9 +32,11 @@ const bootstrapError = "node pull bootstrap failed"
 type config struct{ nodeName, hostIP, generation, registry, image, vaultCA, vaultToken, socket, output string }
 
 func main() {
+	registry := os.Getenv("REGISTRY_PULL_HOST")
 	configuration := config{nodeName: os.Getenv("NODE_NAME"), hostIP: os.Getenv("HOST_IP"), generation: os.Getenv("PULL_CREDENTIAL_GENERATION"),
-		registry: "registry-pull.invalid", image: os.Getenv("READBACK_IMAGE"), vaultCA: "/vault/ca.pem",
-		vaultToken: "/vault-token/token", socket: "/run/containerd/containerd.sock", output: "/host/etc/containerd/certs.d/registry-pull.invalid"}
+		registry: registry, image: os.Getenv("READBACK_IMAGE"), vaultCA: "/vault/ca.pem",
+		vaultToken: "/vault-token/token", socket: "/run/containerd/containerd.sock",
+		output: filepath.Join("/host/etc/containerd/certs.d", registry)}
 	for {
 		if bootstrap(context.Background(), configuration) != nil {
 			_, _ = os.Stderr.WriteString(bootstrapError + "\n")
@@ -46,8 +48,8 @@ func main() {
 
 func bootstrap(ctx context.Context, configuration config) error {
 	generation, err := strconv.ParseUint(configuration.generation, 10, 64)
-	if configuration.nodeName == "" || net.ParseIP(configuration.hostIP) == nil || generation == 0 ||
-		!strings.HasPrefix(configuration.image, configuration.registry+"/mattercodex/roles@sha256:") {
+	if err != nil || configuration.nodeName == "" || net.ParseIP(configuration.hostIP) == nil || generation == 0 ||
+		!validNodeReadbackImage(configuration.registry, configuration.image) {
 		return errors.New(bootstrapError)
 	}
 	client, err := vaultClient(configuration.vaultCA)
@@ -107,6 +109,14 @@ func bootstrap(ctx context.Context, configuration config) error {
 		return errors.New(bootstrapError)
 	}
 	return os.WriteFile("/ready/node-pull", []byte(configuration.image+"\n"), 0o400)
+}
+
+func validNodeReadbackImage(registry, image string) bool {
+	prefix := registry + "/mattercodex/agent-runner@sha256:"
+	digest := strings.TrimPrefix(image, prefix)
+	return strings.Contains(registry, ".") && !strings.ContainsAny(registry, "/:@?# \\\r\n\t") &&
+		digest != image && digest != strings.Repeat("0", 64) && len(digest) == 64 &&
+		strings.Trim(digest, "0123456789abcdef") == ""
 }
 
 func vaultClient(caPath string) (*http.Client, error) {

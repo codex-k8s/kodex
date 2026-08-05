@@ -1238,8 +1238,8 @@ func roleImageInputFromProto(input *controlplanev1.RoleImageRecipeInput) (entity
 		SourceRef: input.GetSourceRef(), SourceRevision: input.GetSourceRevision(), SourceSHA256: input.GetSourceSha256(),
 		ContextRef: input.GetContextRef(), ContextSHA256: input.GetContextSha256(),
 		BuilderSHA256: input.GetBuilderSha256(), FrontendSHA256: input.GetFrontendSha256(),
-		InstallationBlock: input.GetInstallationBlock(), BuildSecretRefs: input.GetBuildSecretRefs(),
-		ToolchainSHA256: input.GetToolchainSha256(),
+		InstallationBlock: input.GetInstallationBlock(),
+		ToolchainSHA256:   input.GetToolchainSha256(),
 	}
 	for _, platform := range input.GetPlatforms() {
 		result.Platforms = append(result.Platforms, entity.RoleImagePlatform{
@@ -1268,8 +1268,8 @@ func roleImageInputToProto(input entity.RoleImageRecipeInput) *controlplanev1.Ro
 		SourceRef: input.SourceRef, SourceRevision: input.SourceRevision, SourceSha256: input.SourceSHA256,
 		ContextRef: input.ContextRef, ContextSha256: input.ContextSHA256,
 		BuilderSha256: input.BuilderSHA256, FrontendSha256: input.FrontendSHA256,
-		InstallationBlock: input.InstallationBlock, BuildSecretRefs: input.BuildSecretRefs,
-		ToolchainSha256: input.ToolchainSHA256,
+		InstallationBlock: input.InstallationBlock,
+		ToolchainSha256:   input.ToolchainSHA256,
 	}
 	for _, platform := range input.Platforms {
 		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{

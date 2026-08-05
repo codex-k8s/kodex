@@ -871,14 +871,8 @@ components:
         packages: { type: array, maxItems: 256, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImagePackage' } }
         tools: { type: array, maxItems: 128, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImageTool' } }
         installationBlock: { type: string, minLength: 0, maxLength: 32768, default: '' }
-        buildSecretRefs:
-          description: Необязательные immutable authority refs только для trusted materializer; значения не передаются installation/build layer.
-          type: array
-          maxItems: 32
-          uniqueItems: true
-          items: { type: string, minLength: 1, maxLength: 400, pattern: '^vault-versioned://[a-z0-9][a-z0-9/-]*/v[1-9][0-9]*$' }
         toolchainSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-      required: [baseImageReference, baseImageDigest, sourceRef, sourceRevision, sourceSha256, contextRef, contextSha256, builderSha256, frontendSha256, platforms, packages, tools, installationBlock, buildSecretRefs, toolchainSha256]
+      required: [baseImageReference, baseImageDigest, sourceRef, sourceRevision, sourceSha256, contextRef, contextSha256, builderSha256, frontendSha256, platforms, packages, tools, installationBlock, toolchainSha256]
     RoleImageRecipeReadback:
       title: RoleImageRecipeReadback
       description: Полный version-pinned owner readback без значений credentials.

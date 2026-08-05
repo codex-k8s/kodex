@@ -3655,22 +3655,24 @@ type RuntimeRevisionSpec struct {
 	// revision и входит в immutable manifest digest.
 	ScheduledResultContract *ScheduledResultContract `protobuf:"bytes,21,opt,name=scheduled_result_contract,json=scheduledResultContract,proto3" json:"scheduled_result_contract,omitempty"`
 	// image_reference — единственный exact promoted repository@sha256 source для runtime.
-	ImageReference                         string `protobuf:"bytes,22,opt,name=image_reference,json=imageReference,proto3" json:"image_reference,omitempty"`
-	RoleImageRecipeId                      string `protobuf:"bytes,23,opt,name=role_image_recipe_id,json=roleImageRecipeId,proto3" json:"role_image_recipe_id,omitempty"`
-	RoleImageRecipeVersion                 uint64 `protobuf:"varint,24,opt,name=role_image_recipe_version,json=roleImageRecipeVersion,proto3" json:"role_image_recipe_version,omitempty"`
-	RoleImageSpecSha256                    string `protobuf:"bytes,25,opt,name=role_image_spec_sha256,json=roleImageSpecSha256,proto3" json:"role_image_spec_sha256,omitempty"`
-	ImageBuildId                           string `protobuf:"bytes,26,opt,name=image_build_id,json=imageBuildId,proto3" json:"image_build_id,omitempty"`
-	ImageBuildVersion                      uint64 `protobuf:"varint,27,opt,name=image_build_version,json=imageBuildVersion,proto3" json:"image_build_version,omitempty"`
-	ImageBuildAttempt                      uint32 `protobuf:"varint,28,opt,name=image_build_attempt,json=imageBuildAttempt,proto3" json:"image_build_attempt,omitempty"`
-	ImageArtifactId                        string `protobuf:"bytes,29,opt,name=image_artifact_id,json=imageArtifactId,proto3" json:"image_artifact_id,omitempty"`
-	ImageArtifactVersion                   uint64 `protobuf:"varint,30,opt,name=image_artifact_version,json=imageArtifactVersion,proto3" json:"image_artifact_version,omitempty"`
-	ImageManifestDigest                    string `protobuf:"bytes,31,opt,name=image_manifest_digest,json=imageManifestDigest,proto3" json:"image_manifest_digest,omitempty"`
-	ImageAdmissionRevision                 uint64 `protobuf:"varint,32,opt,name=image_admission_revision,json=imageAdmissionRevision,proto3" json:"image_admission_revision,omitempty"`
-	ImageAdmissionReceiptSha256            string `protobuf:"bytes,33,opt,name=image_admission_receipt_sha256,json=imageAdmissionReceiptSha256,proto3" json:"image_admission_receipt_sha256,omitempty"`
-	ImagePolicyRevision                    uint64 `protobuf:"varint,34,opt,name=image_policy_revision,json=imagePolicyRevision,proto3" json:"image_policy_revision,omitempty"`
-	ImagePolicySha256                      string `protobuf:"bytes,35,opt,name=image_policy_sha256,json=imagePolicySha256,proto3" json:"image_policy_sha256,omitempty"`
-	ImageSignatureSha256                   string `protobuf:"bytes,36,opt,name=image_signature_sha256,json=imageSignatureSha256,proto3" json:"image_signature_sha256,omitempty"`
-	ImagePromotionReadbackSha256           string `protobuf:"bytes,37,opt,name=image_promotion_readback_sha256,json=imagePromotionReadbackSha256,proto3" json:"image_promotion_readback_sha256,omitempty"`
+	ImageReference               string `protobuf:"bytes,22,opt,name=image_reference,json=imageReference,proto3" json:"image_reference,omitempty"`
+	RoleImageRecipeId            string `protobuf:"bytes,23,opt,name=role_image_recipe_id,json=roleImageRecipeId,proto3" json:"role_image_recipe_id,omitempty"`
+	RoleImageRecipeVersion       uint64 `protobuf:"varint,24,opt,name=role_image_recipe_version,json=roleImageRecipeVersion,proto3" json:"role_image_recipe_version,omitempty"`
+	RoleImageSpecSha256          string `protobuf:"bytes,25,opt,name=role_image_spec_sha256,json=roleImageSpecSha256,proto3" json:"role_image_spec_sha256,omitempty"`
+	ImageBuildId                 string `protobuf:"bytes,26,opt,name=image_build_id,json=imageBuildId,proto3" json:"image_build_id,omitempty"`
+	ImageBuildVersion            uint64 `protobuf:"varint,27,opt,name=image_build_version,json=imageBuildVersion,proto3" json:"image_build_version,omitempty"`
+	ImageBuildAttempt            uint32 `protobuf:"varint,28,opt,name=image_build_attempt,json=imageBuildAttempt,proto3" json:"image_build_attempt,omitempty"`
+	ImageArtifactId              string `protobuf:"bytes,29,opt,name=image_artifact_id,json=imageArtifactId,proto3" json:"image_artifact_id,omitempty"`
+	ImageArtifactVersion         uint64 `protobuf:"varint,30,opt,name=image_artifact_version,json=imageArtifactVersion,proto3" json:"image_artifact_version,omitempty"`
+	ImageManifestDigest          string `protobuf:"bytes,31,opt,name=image_manifest_digest,json=imageManifestDigest,proto3" json:"image_manifest_digest,omitempty"`
+	ImageAdmissionRevision       uint64 `protobuf:"varint,32,opt,name=image_admission_revision,json=imageAdmissionRevision,proto3" json:"image_admission_revision,omitempty"`
+	ImageAdmissionReceiptSha256  string `protobuf:"bytes,33,opt,name=image_admission_receipt_sha256,json=imageAdmissionReceiptSha256,proto3" json:"image_admission_receipt_sha256,omitempty"`
+	ImagePolicyRevision          uint64 `protobuf:"varint,34,opt,name=image_policy_revision,json=imagePolicyRevision,proto3" json:"image_policy_revision,omitempty"`
+	ImagePolicySha256            string `protobuf:"bytes,35,opt,name=image_policy_sha256,json=imagePolicySha256,proto3" json:"image_policy_sha256,omitempty"`
+	ImageSignatureSha256         string `protobuf:"bytes,36,opt,name=image_signature_sha256,json=imageSignatureSha256,proto3" json:"image_signature_sha256,omitempty"`
+	ImagePromotionReadbackSha256 string `protobuf:"bytes,37,opt,name=image_promotion_readback_sha256,json=imagePromotionReadbackSha256,proto3" json:"image_promotion_readback_sha256,omitempty"`
+	// Digest фактически прочитанного OCI evidence manifest, слой которого
+	// содержит exact receipt и полный bounded admission evidence bundle.
 	ImageAdmissionReceiptOciManifestDigest string `protobuf:"bytes,38,opt,name=image_admission_receipt_oci_manifest_digest,json=imageAdmissionReceiptOciManifestDigest,proto3" json:"image_admission_receipt_oci_manifest_digest,omitempty"`
 	// role_runtime_contract_* закрепляют проверенный runtime ABI promoted image.
 	RoleRuntimeContractRevision uint64 `protobuf:"varint,39,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
@@ -4208,13 +4210,9 @@ type RoleImageRecipeInput struct {
 	Tools              []*RoleImageTool       `protobuf:"bytes,12,rep,name=tools,proto3" json:"tools,omitempty"`
 	// Пустая строка — каноническое значение отсутствующего аварийного блока.
 	InstallationBlock string `protobuf:"bytes,13,opt,name=installation_block,json=installationBlock,proto3" json:"installation_block,omitempty"`
-	// Version-pinned vault-versioned refs доступны только trusted materialization;
-	// binding обязан совпасть с project/recipe/version/generation/sourceRef, а
-	// значения не попадают в build context, mounts, logs или provenance.
-	BuildSecretRefs []string `protobuf:"bytes,14,rep,name=build_secret_refs,json=buildSecretRefs,proto3" json:"build_secret_refs,omitempty"`
-	ToolchainSha256 string   `protobuf:"bytes,15,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	ToolchainSha256   string `protobuf:"bytes,15,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RoleImageRecipeInput) Reset() {
@@ -4336,13 +4334,6 @@ func (x *RoleImageRecipeInput) GetInstallationBlock() string {
 		return x.InstallationBlock
 	}
 	return ""
-}
-
-func (x *RoleImageRecipeInput) GetBuildSecretRefs() []string {
-	if x != nil {
-		return x.BuildSecretRefs
-	}
-	return nil
 }
 
 func (x *RoleImageRecipeInput) GetToolchainSha256() string {
@@ -4670,48 +4661,49 @@ func (x *ImageBuildSpec) GetDiagnosticSummary() string {
 
 // ImageArtifactSpec binds all independent admission evidence to one digest.
 type ImageArtifactSpec struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	RecipeId                          string                 `protobuf:"bytes,1,opt,name=recipe_id,json=recipeId,proto3" json:"recipe_id,omitempty"`
-	RecipeVersion                     uint64                 `protobuf:"varint,2,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
-	RecipeGeneration                  uint64                 `protobuf:"varint,3,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
-	SpecSha256                        string                 `protobuf:"bytes,4,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
-	BuildId                           string                 `protobuf:"bytes,5,opt,name=build_id,json=buildId,proto3" json:"build_id,omitempty"`
-	BuildVersion                      uint64                 `protobuf:"varint,6,opt,name=build_version,json=buildVersion,proto3" json:"build_version,omitempty"`
-	BuildAttempt                      uint32                 `protobuf:"varint,7,opt,name=build_attempt,json=buildAttempt,proto3" json:"build_attempt,omitempty"`
-	StagingReference                  string                 `protobuf:"bytes,8,opt,name=staging_reference,json=stagingReference,proto3" json:"staging_reference,omitempty"`
-	ManifestDigest                    string                 `protobuf:"bytes,9,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
-	ProvenanceSha256                  string                 `protobuf:"bytes,10,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
-	ImmutableBuildSha256              string                 `protobuf:"bytes,11,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
-	SbomSha256                        string                 `protobuf:"bytes,12,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
-	VulnerabilityEvidenceSha256       string                 `protobuf:"bytes,13,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
-	PolicyRevision                    uint64                 `protobuf:"varint,14,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
-	PolicySha256                      string                 `protobuf:"bytes,15,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
-	AdmissionVerdict                  ImageAdmissionVerdict  `protobuf:"varint,16,opt,name=admission_verdict,json=admissionVerdict,proto3,enum=controlplane.v1.ImageAdmissionVerdict" json:"admission_verdict,omitempty"`
-	SignatureIdentity                 string                 `protobuf:"bytes,17,opt,name=signature_identity,json=signatureIdentity,proto3" json:"signature_identity,omitempty"`
-	SignatureSha256                   string                 `protobuf:"bytes,18,opt,name=signature_sha256,json=signatureSha256,proto3" json:"signature_sha256,omitempty"`
-	AdmissionRevision                 uint64                 `protobuf:"varint,19,opt,name=admission_revision,json=admissionRevision,proto3" json:"admission_revision,omitempty"`
-	AdmissionReceiptSha256            string                 `protobuf:"bytes,20,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
-	PromotionClaimJtiSha256           string                 `protobuf:"bytes,21,opt,name=promotion_claim_jti_sha256,json=promotionClaimJtiSha256,proto3" json:"promotion_claim_jti_sha256,omitempty"`
-	PromotionClaimExpiresAt           *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=promotion_claim_expires_at,json=promotionClaimExpiresAt,proto3" json:"promotion_claim_expires_at,omitempty"`
-	PromotedReference                 string                 `protobuf:"bytes,23,opt,name=promoted_reference,json=promotedReference,proto3" json:"promoted_reference,omitempty"`
-	PromotionReadbackSha256           string                 `protobuf:"bytes,24,opt,name=promotion_readback_sha256,json=promotionReadbackSha256,proto3" json:"promotion_readback_sha256,omitempty"`
-	PromotedAt                        *timestamppb.Timestamp `protobuf:"bytes,25,opt,name=promoted_at,json=promotedAt,proto3" json:"promoted_at,omitempty"`
-	AdmissionClaimantWorkloadId       string                 `protobuf:"bytes,26,opt,name=admission_claimant_workload_id,json=admissionClaimantWorkloadId,proto3" json:"admission_claimant_workload_id,omitempty"`
-	AdmissionAuthorityGeneration      uint64                 `protobuf:"varint,27,opt,name=admission_authority_generation,json=admissionAuthorityGeneration,proto3" json:"admission_authority_generation,omitempty"`
-	AdmissionFence                    uint64                 `protobuf:"varint,28,opt,name=admission_fence,json=admissionFence,proto3" json:"admission_fence,omitempty"`
-	AdmissionClaimTokenSha256         string                 `protobuf:"bytes,29,opt,name=admission_claim_token_sha256,json=admissionClaimTokenSha256,proto3" json:"admission_claim_token_sha256,omitempty"`
-	AdmissionClaimExpiresAt           *timestamppb.Timestamp `protobuf:"bytes,30,opt,name=admission_claim_expires_at,json=admissionClaimExpiresAt,proto3" json:"admission_claim_expires_at,omitempty"`
-	BaseImageDigest                   string                 `protobuf:"bytes,31,opt,name=base_image_digest,json=baseImageDigest,proto3" json:"base_image_digest,omitempty"`
-	SourceSha256                      string                 `protobuf:"bytes,32,opt,name=source_sha256,json=sourceSha256,proto3" json:"source_sha256,omitempty"`
-	ContextSha256                     string                 `protobuf:"bytes,33,opt,name=context_sha256,json=contextSha256,proto3" json:"context_sha256,omitempty"`
-	BuilderSha256                     string                 `protobuf:"bytes,34,opt,name=builder_sha256,json=builderSha256,proto3" json:"builder_sha256,omitempty"`
-	FrontendSha256                    string                 `protobuf:"bytes,35,opt,name=frontend_sha256,json=frontendSha256,proto3" json:"frontend_sha256,omitempty"`
-	ToolchainSha256                   string                 `protobuf:"bytes,36,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
-	Platforms                         []*RoleImagePlatform   `protobuf:"bytes,37,rep,name=platforms,proto3" json:"platforms,omitempty"`
-	PromotionClaimantWorkloadId       string                 `protobuf:"bytes,38,opt,name=promotion_claimant_workload_id,json=promotionClaimantWorkloadId,proto3" json:"promotion_claimant_workload_id,omitempty"`
-	PromotionClaimantSpiffeId         string                 `protobuf:"bytes,39,opt,name=promotion_claimant_spiffe_id,json=promotionClaimantSpiffeId,proto3" json:"promotion_claimant_spiffe_id,omitempty"`
-	PromotionAuthorityGeneration      uint64                 `protobuf:"varint,40,opt,name=promotion_authority_generation,json=promotionAuthorityGeneration,proto3" json:"promotion_authority_generation,omitempty"`
-	PromotionFence                    uint64                 `protobuf:"varint,41,opt,name=promotion_fence,json=promotionFence,proto3" json:"promotion_fence,omitempty"`
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	RecipeId                     string                 `protobuf:"bytes,1,opt,name=recipe_id,json=recipeId,proto3" json:"recipe_id,omitempty"`
+	RecipeVersion                uint64                 `protobuf:"varint,2,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+	RecipeGeneration             uint64                 `protobuf:"varint,3,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	SpecSha256                   string                 `protobuf:"bytes,4,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
+	BuildId                      string                 `protobuf:"bytes,5,opt,name=build_id,json=buildId,proto3" json:"build_id,omitempty"`
+	BuildVersion                 uint64                 `protobuf:"varint,6,opt,name=build_version,json=buildVersion,proto3" json:"build_version,omitempty"`
+	BuildAttempt                 uint32                 `protobuf:"varint,7,opt,name=build_attempt,json=buildAttempt,proto3" json:"build_attempt,omitempty"`
+	StagingReference             string                 `protobuf:"bytes,8,opt,name=staging_reference,json=stagingReference,proto3" json:"staging_reference,omitempty"`
+	ManifestDigest               string                 `protobuf:"bytes,9,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	ProvenanceSha256             string                 `protobuf:"bytes,10,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
+	ImmutableBuildSha256         string                 `protobuf:"bytes,11,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	SbomSha256                   string                 `protobuf:"bytes,12,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
+	VulnerabilityEvidenceSha256  string                 `protobuf:"bytes,13,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
+	PolicyRevision               uint64                 `protobuf:"varint,14,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicySha256                 string                 `protobuf:"bytes,15,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	AdmissionVerdict             ImageAdmissionVerdict  `protobuf:"varint,16,opt,name=admission_verdict,json=admissionVerdict,proto3,enum=controlplane.v1.ImageAdmissionVerdict" json:"admission_verdict,omitempty"`
+	SignatureIdentity            string                 `protobuf:"bytes,17,opt,name=signature_identity,json=signatureIdentity,proto3" json:"signature_identity,omitempty"`
+	SignatureSha256              string                 `protobuf:"bytes,18,opt,name=signature_sha256,json=signatureSha256,proto3" json:"signature_sha256,omitempty"`
+	AdmissionRevision            uint64                 `protobuf:"varint,19,opt,name=admission_revision,json=admissionRevision,proto3" json:"admission_revision,omitempty"`
+	AdmissionReceiptSha256       string                 `protobuf:"bytes,20,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
+	PromotionClaimJtiSha256      string                 `protobuf:"bytes,21,opt,name=promotion_claim_jti_sha256,json=promotionClaimJtiSha256,proto3" json:"promotion_claim_jti_sha256,omitempty"`
+	PromotionClaimExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=promotion_claim_expires_at,json=promotionClaimExpiresAt,proto3" json:"promotion_claim_expires_at,omitempty"`
+	PromotedReference            string                 `protobuf:"bytes,23,opt,name=promoted_reference,json=promotedReference,proto3" json:"promoted_reference,omitempty"`
+	PromotionReadbackSha256      string                 `protobuf:"bytes,24,opt,name=promotion_readback_sha256,json=promotionReadbackSha256,proto3" json:"promotion_readback_sha256,omitempty"`
+	PromotedAt                   *timestamppb.Timestamp `protobuf:"bytes,25,opt,name=promoted_at,json=promotedAt,proto3" json:"promoted_at,omitempty"`
+	AdmissionClaimantWorkloadId  string                 `protobuf:"bytes,26,opt,name=admission_claimant_workload_id,json=admissionClaimantWorkloadId,proto3" json:"admission_claimant_workload_id,omitempty"`
+	AdmissionAuthorityGeneration uint64                 `protobuf:"varint,27,opt,name=admission_authority_generation,json=admissionAuthorityGeneration,proto3" json:"admission_authority_generation,omitempty"`
+	AdmissionFence               uint64                 `protobuf:"varint,28,opt,name=admission_fence,json=admissionFence,proto3" json:"admission_fence,omitempty"`
+	AdmissionClaimTokenSha256    string                 `protobuf:"bytes,29,opt,name=admission_claim_token_sha256,json=admissionClaimTokenSha256,proto3" json:"admission_claim_token_sha256,omitempty"`
+	AdmissionClaimExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,30,opt,name=admission_claim_expires_at,json=admissionClaimExpiresAt,proto3" json:"admission_claim_expires_at,omitempty"`
+	BaseImageDigest              string                 `protobuf:"bytes,31,opt,name=base_image_digest,json=baseImageDigest,proto3" json:"base_image_digest,omitempty"`
+	SourceSha256                 string                 `protobuf:"bytes,32,opt,name=source_sha256,json=sourceSha256,proto3" json:"source_sha256,omitempty"`
+	ContextSha256                string                 `protobuf:"bytes,33,opt,name=context_sha256,json=contextSha256,proto3" json:"context_sha256,omitempty"`
+	BuilderSha256                string                 `protobuf:"bytes,34,opt,name=builder_sha256,json=builderSha256,proto3" json:"builder_sha256,omitempty"`
+	FrontendSha256               string                 `protobuf:"bytes,35,opt,name=frontend_sha256,json=frontendSha256,proto3" json:"frontend_sha256,omitempty"`
+	ToolchainSha256              string                 `protobuf:"bytes,36,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
+	Platforms                    []*RoleImagePlatform   `protobuf:"bytes,37,rep,name=platforms,proto3" json:"platforms,omitempty"`
+	PromotionClaimantWorkloadId  string                 `protobuf:"bytes,38,opt,name=promotion_claimant_workload_id,json=promotionClaimantWorkloadId,proto3" json:"promotion_claimant_workload_id,omitempty"`
+	PromotionClaimantSpiffeId    string                 `protobuf:"bytes,39,opt,name=promotion_claimant_spiffe_id,json=promotionClaimantSpiffeId,proto3" json:"promotion_claimant_spiffe_id,omitempty"`
+	PromotionAuthorityGeneration uint64                 `protobuf:"varint,40,opt,name=promotion_authority_generation,json=promotionAuthorityGeneration,proto3" json:"promotion_authority_generation,omitempty"`
+	PromotionFence               uint64                 `protobuf:"varint,41,opt,name=promotion_fence,json=promotionFence,proto3" json:"promotion_fence,omitempty"`
+	// Реальный OCI evidence manifest digest; digest локального JSON запрещён.
 	AdmissionReceiptOciManifestDigest string                 `protobuf:"bytes,42,opt,name=admission_receipt_oci_manifest_digest,json=admissionReceiptOciManifestDigest,proto3" json:"admission_receipt_oci_manifest_digest,omitempty"`
 	RoleRuntimeContractRevision       uint64                 `protobuf:"varint,43,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
 	RoleRuntimeContractSha256         string                 `protobuf:"bytes,44,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
@@ -16206,17 +16198,14 @@ type RoleImageBuildInput struct {
 	Packages                    []*RoleImagePackage    `protobuf:"bytes,15,rep,name=packages,proto3" json:"packages,omitempty"`
 	Tools                       []*RoleImageTool       `protobuf:"bytes,16,rep,name=tools,proto3" json:"tools,omitempty"`
 	InstallationBlock           string                 `protobuf:"bytes,17,opt,name=installation_block,json=installationBlock,proto3" json:"installation_block,omitempty"`
-	BuildSecretRefs             []string               `protobuf:"bytes,18,rep,name=build_secret_refs,json=buildSecretRefs,proto3" json:"build_secret_refs,omitempty"`
 	ToolchainSha256             string                 `protobuf:"bytes,19,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
 	PolicyRevision              uint64                 `protobuf:"varint,20,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
 	PolicySha256                string                 `protobuf:"bytes,21,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
 	ImmutableBuildSha256        string                 `protobuf:"bytes,22,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
 	RoleRuntimeContractRevision uint64                 `protobuf:"varint,23,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
 	RoleRuntimeContractSha256   string                 `protobuf:"bytes,24,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
-	// project_id назначен control-plane и связывает trusted credential resolution.
-	ProjectId     string `protobuf:"bytes,25,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *RoleImageBuildInput) Reset() {
@@ -16368,13 +16357,6 @@ func (x *RoleImageBuildInput) GetInstallationBlock() string {
 	return ""
 }
 
-func (x *RoleImageBuildInput) GetBuildSecretRefs() []string {
-	if x != nil {
-		return x.BuildSecretRefs
-	}
-	return nil
-}
-
 func (x *RoleImageBuildInput) GetToolchainSha256() string {
 	if x != nil {
 		return x.ToolchainSha256
@@ -16413,13 +16395,6 @@ func (x *RoleImageBuildInput) GetRoleRuntimeContractRevision() uint64 {
 func (x *RoleImageBuildInput) GetRoleRuntimeContractSha256() string {
 	if x != nil {
 		return x.RoleRuntimeContractSha256
-	}
-	return ""
-}
-
-func (x *RoleImageBuildInput) GetProjectId() string {
-	if x != nil {
-		return x.ProjectId
 	}
 	return ""
 }
@@ -17393,24 +17368,25 @@ func (x *ClaimImageAdmissionResponse) GetClaimExpiresAt() *timestamppb.Timestamp
 }
 
 type RecordImageAdmissionRequest struct {
-	state                             protoimpl.MessageState `protogen:"open.v1"`
-	IdempotencyKey                    string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	ImageArtifactId                   string                 `protobuf:"bytes,2,opt,name=image_artifact_id,json=imageArtifactId,proto3" json:"image_artifact_id,omitempty"`
-	ExpectedVersion                   uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
-	ExpectedFence                     uint64                 `protobuf:"varint,4,opt,name=expected_fence,json=expectedFence,proto3" json:"expected_fence,omitempty"`
-	ClaimToken                        string                 `protobuf:"bytes,5,opt,name=claim_token,json=claimToken,proto3" json:"claim_token,omitempty"`
-	ManifestDigest                    string                 `protobuf:"bytes,6,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
-	ImmutableBuildSha256              string                 `protobuf:"bytes,7,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
-	ProvenanceSha256                  string                 `protobuf:"bytes,8,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
-	SbomSha256                        string                 `protobuf:"bytes,9,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
-	VulnerabilityEvidenceSha256       string                 `protobuf:"bytes,10,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
-	PolicyRevision                    uint64                 `protobuf:"varint,11,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
-	PolicySha256                      string                 `protobuf:"bytes,12,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
-	Verdict                           ImageAdmissionVerdict  `protobuf:"varint,13,opt,name=verdict,proto3,enum=controlplane.v1.ImageAdmissionVerdict" json:"verdict,omitempty"`
-	SignatureIdentity                 string                 `protobuf:"bytes,14,opt,name=signature_identity,json=signatureIdentity,proto3" json:"signature_identity,omitempty"`
-	SignatureSha256                   string                 `protobuf:"bytes,15,opt,name=signature_sha256,json=signatureSha256,proto3" json:"signature_sha256,omitempty"`
-	AdmissionReceiptSha256            string                 `protobuf:"bytes,16,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
-	AdmissionReceiptOciManifestDigest string                 `protobuf:"bytes,17,opt,name=admission_receipt_oci_manifest_digest,json=admissionReceiptOciManifestDigest,proto3" json:"admission_receipt_oci_manifest_digest,omitempty"`
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey              string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ImageArtifactId             string                 `protobuf:"bytes,2,opt,name=image_artifact_id,json=imageArtifactId,proto3" json:"image_artifact_id,omitempty"`
+	ExpectedVersion             uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	ExpectedFence               uint64                 `protobuf:"varint,4,opt,name=expected_fence,json=expectedFence,proto3" json:"expected_fence,omitempty"`
+	ClaimToken                  string                 `protobuf:"bytes,5,opt,name=claim_token,json=claimToken,proto3" json:"claim_token,omitempty"`
+	ManifestDigest              string                 `protobuf:"bytes,6,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	ImmutableBuildSha256        string                 `protobuf:"bytes,7,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	ProvenanceSha256            string                 `protobuf:"bytes,8,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
+	SbomSha256                  string                 `protobuf:"bytes,9,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
+	VulnerabilityEvidenceSha256 string                 `protobuf:"bytes,10,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
+	PolicyRevision              uint64                 `protobuf:"varint,11,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicySha256                string                 `protobuf:"bytes,12,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	Verdict                     ImageAdmissionVerdict  `protobuf:"varint,13,opt,name=verdict,proto3,enum=controlplane.v1.ImageAdmissionVerdict" json:"verdict,omitempty"`
+	SignatureIdentity           string                 `protobuf:"bytes,14,opt,name=signature_identity,json=signatureIdentity,proto3" json:"signature_identity,omitempty"`
+	SignatureSha256             string                 `protobuf:"bytes,15,opt,name=signature_sha256,json=signatureSha256,proto3" json:"signature_sha256,omitempty"`
+	AdmissionReceiptSha256      string                 `protobuf:"bytes,16,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
+	// Реальный OCI evidence manifest digest после registry readback.
+	AdmissionReceiptOciManifestDigest string `protobuf:"bytes,17,opt,name=admission_receipt_oci_manifest_digest,json=admissionReceiptOciManifestDigest,proto3" json:"admission_receipt_oci_manifest_digest,omitempty"`
 	unknownFields                     protoimpl.UnknownFields
 	sizeCache                         protoimpl.SizeCache
 }
@@ -25726,7 +25702,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x11RoleImagePlatform\x12\x0e\n" +
 	"\x02os\x18\x01 \x01(\tR\x02os\x12\"\n" +
 	"\farchitecture\x18\x02 \x01(\tR\farchitecture\x12\x18\n" +
-	"\avariant\x18\x03 \x01(\tR\avariant\"\xb6\x05\n" +
+	"\avariant\x18\x03 \x01(\tR\avariant\"\x8a\x05\n" +
 	"\x14RoleImageRecipeInput\x120\n" +
 	"\x14base_image_reference\x18\x01 \x01(\tR\x12baseImageReference\x12*\n" +
 	"\x11base_image_digest\x18\x02 \x01(\tR\x0fbaseImageDigest\x12\x1d\n" +
@@ -25743,8 +25719,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" \x03(\v2\".controlplane.v1.RoleImagePlatformR\tplatforms\x12=\n" +
 	"\bpackages\x18\v \x03(\v2!.controlplane.v1.RoleImagePackageR\bpackages\x124\n" +
 	"\x05tools\x18\f \x03(\v2\x1e.controlplane.v1.RoleImageToolR\x05tools\x12-\n" +
-	"\x12installation_block\x18\r \x01(\tR\x11installationBlock\x12*\n" +
-	"\x11build_secret_refs\x18\x0e \x03(\tR\x0fbuildSecretRefs\x12)\n" +
+	"\x12installation_block\x18\r \x01(\tR\x11installationBlock\x12)\n" +
 	"\x10toolchain_sha256\x18\x0f \x01(\tR\x0ftoolchainSha256\"\xe7\x02\n" +
 	"\x13RoleImageRecipeSpec\x12;\n" +
 	"\x05input\x18\x01 \x01(\v2%.controlplane.v1.RoleImageRecipeInputR\x05input\x12\x1e\n" +
@@ -26878,7 +26853,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12)\n" +
 	"\x10expected_version\x18\x02 \x01(\x04R\x0fexpectedVersion\"O\n" +
 	"\x1aGetRoleImageRecipeResponse\x121\n" +
-	"\x06recipe\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x06recipe\"\xf0\b\n" +
+	"\x06recipe\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x06recipe\"\xa5\b\n" +
 	"\x13RoleImageBuildInput\x12\x1b\n" +
 	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12%\n" +
 	"\x0erecipe_version\x18\x02 \x01(\x04R\rrecipeVersion\x12+\n" +
@@ -26900,16 +26875,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\tplatforms\x18\x0e \x03(\v2\".controlplane.v1.RoleImagePlatformR\tplatforms\x12=\n" +
 	"\bpackages\x18\x0f \x03(\v2!.controlplane.v1.RoleImagePackageR\bpackages\x124\n" +
 	"\x05tools\x18\x10 \x03(\v2\x1e.controlplane.v1.RoleImageToolR\x05tools\x12-\n" +
-	"\x12installation_block\x18\x11 \x01(\tR\x11installationBlock\x12*\n" +
-	"\x11build_secret_refs\x18\x12 \x03(\tR\x0fbuildSecretRefs\x12)\n" +
+	"\x12installation_block\x18\x11 \x01(\tR\x11installationBlock\x12)\n" +
 	"\x10toolchain_sha256\x18\x13 \x01(\tR\x0ftoolchainSha256\x12'\n" +
 	"\x0fpolicy_revision\x18\x14 \x01(\x04R\x0epolicyRevision\x12#\n" +
 	"\rpolicy_sha256\x18\x15 \x01(\tR\fpolicySha256\x124\n" +
 	"\x16immutable_build_sha256\x18\x16 \x01(\tR\x14immutableBuildSha256\x12C\n" +
 	"\x1erole_runtime_contract_revision\x18\x17 \x01(\x04R\x1broleRuntimeContractRevision\x12?\n" +
-	"\x1crole_runtime_contract_sha256\x18\x18 \x01(\tR\x19roleRuntimeContractSha256\x12\x1d\n" +
-	"\n" +
-	"project_id\x18\x19 \x01(\tR\tprojectId\"A\n" +
+	"\x1crole_runtime_contract_sha256\x18\x18 \x01(\tR\x19roleRuntimeContractSha256\"A\n" +
 	"\x16ClaimImageBuildRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\xc1\x02\n" +
 	"\x17ClaimImageBuildResponse\x12:\n" +

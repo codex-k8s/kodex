@@ -100,6 +100,7 @@ configure_client_role mattercodex-role-image-input-read role-image-builder-input
 configure_client_role mattercodex-image-registry-pull-probe mattercodex-image-registry-pull-probe
 configure_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe
 configure_client_role mattercodex-image-registry-promotion-probe mattercodex-image-registry-promotion-probe
+configure_client_role mattercodex-image-registry-evidence-probe mattercodex-image-registry-evidence-probe
 configure_client_role mattercodex-image-scanner mattercodex-image-scanner
 configure_client_role mattercodex-image-signer mattercodex-image-signer
 configure_client_role image-admission image-admission
@@ -113,6 +114,7 @@ vault write pki-public/roles/mattercodex-image-registry-pull \
   ttl=1h max_ttl=2h >/dev/null
 configure_server_role pki-buildkit-push mattercodex-image-registry-push mattercodex-image-registry-push
 configure_server_role pki mattercodex-image-registry-staging-read mattercodex-image-registry-staging-read
+configure_server_role pki mattercodex-image-registry-evidence mattercodex-image-registry-evidence
 configure_server_role pki mattercodex-image-registry-admin mattercodex-image-registry-admin
 configure_server_role pki mattercodex-image-registry-promotion mattercodex-image-registry-promotion
 vault write pki-node-pull/roles/mattercodex-node-pull \
@@ -164,14 +166,6 @@ HCL
 cat <<'HCL' | vault policy write role-image-builder-inputs - >/dev/null
 path "kv/data/mattercodex/role-image-builder/input-read" {
   capabilities = ["read"]
-}
-HCL
-cat <<'HCL' | vault policy write role-image-builder-secret-resolver - >/dev/null
-path "kv/data/mattercodex/role-image-builder/input-authority/*" {
-  capabilities = ["read"]
-}
-path "auth/token/revoke-self" {
-  capabilities = ["update"]
 }
 HCL
 cat <<'HCL' | vault policy write role-image-builder-base-pull - >/dev/null
@@ -240,6 +234,26 @@ path "kv/data/mattercodex/image-registry/admin" {
   capabilities = ["read"]
 }
 HCL
+cat <<'HCL' | vault policy write mattercodex-image-registry-evidence-pki - >/dev/null
+path "pki/issue/mattercodex-image-registry-evidence" {
+  capabilities = ["update"]
+}
+path "pki/issue/mattercodex-image-registry-evidence-probe" {
+  capabilities = ["update"]
+}
+path "pki/cert/ca" {
+  capabilities = ["read"]
+}
+path "kv/data/mattercodex/image-registry/evidence-probe" {
+  capabilities = ["read"]
+}
+path "kv/data/mattercodex/image-registry/evidence-admission" {
+  capabilities = ["read"]
+}
+path "kv/data/mattercodex/image-registry/evidence-promotion" {
+  capabilities = ["read"]
+}
+HCL
 cat <<'HCL' | vault policy write mattercodex-image-registry-promotion-pki - >/dev/null
 path "pki/issue/mattercodex-image-registry-promotion" {
   capabilities = ["update"]
@@ -287,11 +301,6 @@ vault write auth/kubernetes/role/role-image-builder-base-pull \
   bound_service_account_namespaces=mattercodex-system \
   token_policies=role-image-builder-base-pull \
   token_ttl=30m token_max_ttl=1h >/dev/null
-vault write auth/kubernetes/role/role-image-builder-secret-resolver \
-  bound_service_account_names=role-image-builder \
-  bound_service_account_namespaces=mattercodex-system audience=vault \
-  token_policies=role-image-builder-secret-resolver \
-  token_ttl=5m token_max_ttl=5m >/dev/null
 configure_kubernetes_role mattercodex-image-registry-pull mattercodex-image-registry-pull mattercodex-image-registry-pull-pki
 vault write auth/kubernetes/role/mattercodex-image-registry-push \
   bound_service_account_names=mattercodex-image-registry-push \
@@ -299,6 +308,7 @@ vault write auth/kubernetes/role/mattercodex-image-registry-push \
   token_policies=mattercodex-image-registry-push-pki \
   token_ttl=30m token_max_ttl=1h >/dev/null
 configure_kubernetes_role mattercodex-image-registry-staging-read mattercodex-image-registry-staging-read mattercodex-image-registry-staging-read
+configure_kubernetes_role mattercodex-image-registry-evidence mattercodex-image-registry-evidence mattercodex-image-registry-evidence-pki
 configure_kubernetes_role mattercodex-node-pull-bootstrap mattercodex-image-pull-readback mattercodex-node-pull-bootstrap
 configure_kubernetes_role mattercodex-image-registry-admin mattercodex-image-registry-admin mattercodex-image-registry-admin-pki
 configure_kubernetes_role mattercodex-image-registry-promotion mattercodex-image-registry-promotion mattercodex-image-registry-promotion-pki
@@ -321,10 +331,10 @@ configure_phase_policy mattercodex-image-scanner mattercodex-image-scanner \
 configure_phase_policy mattercodex-image-signer mattercodex-image-signer \
   mattercodex/image-registry/signer mattercodex/image-admission/signing
 configure_phase_policy image-admission image-admission \
-  mattercodex/image-registry/admission mattercodex/image-admission/signing \
+  mattercodex/image-registry/admission mattercodex/image-registry/evidence-admission mattercodex/image-admission/signing \
   mattercodex/image-admission/application-grant
 configure_phase_policy image-promotion image-promotion \
-  mattercodex/image-registry/promotion-staging mattercodex/image-registry/promotion \
+  mattercodex/image-registry/promotion-staging mattercodex/image-registry/promotion mattercodex/image-registry/evidence-promotion \
   mattercodex/image-promotion/application-grant
 configure_phase_policy mattercodex-registry-cleanup mattercodex-registry-cleanup \
   mattercodex/image-registry/admin
@@ -374,6 +384,7 @@ verify_client_role mattercodex-image-registry-pull-probe mattercodex-image-regis
 verify_client_role mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
 verify_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe
 verify_client_role mattercodex-image-registry-promotion-probe mattercodex-image-registry-promotion-probe
+verify_client_role mattercodex-image-registry-evidence-probe mattercodex-image-registry-evidence-probe
 verify_client_role mattercodex-image-scanner mattercodex-image-scanner
 verify_client_role mattercodex-image-signer mattercodex-image-signer
 verify_client_role image-admission image-admission
@@ -394,5 +405,6 @@ vault read -format=json pki-public/roles/mattercodex-image-registry-pull |
 verify_server_role pki mattercodex-image-registry-push mattercodex-image-registry-push
 verify_server_role pki mattercodex-image-registry-admin mattercodex-image-registry-admin
 verify_server_role pki mattercodex-image-registry-promotion mattercodex-image-registry-promotion
+verify_server_role pki mattercodex-image-registry-evidence mattercodex-image-registry-evidence
 
 echo "image supply-chain PKI roles configured for $1 and exact pull host"

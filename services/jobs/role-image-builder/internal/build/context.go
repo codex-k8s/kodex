@@ -66,7 +66,7 @@ func ExtractContextReader(archive io.Reader, destination, expectedContextSHA256,
 			if err := os.MkdirAll(target, 0o700); err != nil {
 				return fmt.Errorf("%w: create directory", ErrInvalidContext)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			total += header.Size
 			if total > maximumContextBytes {
 				return fmt.Errorf("%w: extracted size exceeded", ErrInvalidContext)

@@ -59,40 +59,56 @@ func TestPhaseFromRawJSONUsesReachableBuildKitVertex(t *testing.T) {
 	}
 }
 
-func TestBuildPhaseOrderIsMonotonic(t *testing.T) {
+func TestBuildPhaseTrackerAcceptsActualBuildKitOrdering(t *testing.T) {
 	t.Parallel()
-	sequence := []controlplanev1.ImageBuildStage{
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL,
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING,
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION,
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION,
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH,
+	tracker := newBuildPhaseTracker()
+	rawEvents := []string{
+		`{"vertexes":[{"name":"resolve dockerfile frontend"}]}`,
+		`{"vertexes":[{"name":"load metadata for registry/base@sha256:abc"}]}`,
+		`{"vertexes":[{"name":"RUN /bin/sh /run/mattercodex/install.sh"}]}`,
+		`{"vertexes":[{"name":"COPY --from=trusted-runtime /usr/local/bin/mattercodex-init /usr/local/bin/mattercodex-init"}]}`,
+		`{"vertexes":[{"name":"exporting to image"}]}`,
 	}
-	for index := 1; index < len(sequence); index++ {
-		if buildStageOrder(sequence[index]) <= buildStageOrder(sequence[index-1]) {
-			t.Fatalf("valid build phase sequence regressed at %s", sequence[index])
+	var actual []controlplanev1.ImageBuildStage
+	for _, raw := range rawEvents {
+		phases, err := tracker.observe(phaseFromRawJSON([]byte(raw)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, phase := range phases {
+			actual = append(actual, phase.Stage)
 		}
 	}
-	if buildStageOrder(controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING) >=
-		buildStageOrder(controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION) {
-		t.Fatal("real SOLVING regression is not rejected after finalization")
+	if !tracker.complete() || len(actual) != len(buildPhaseSequence) {
+		t.Fatalf("actual BuildKit sequence was not completed: %v", actual)
+	}
+	for index := range buildPhaseSequence {
+		if actual[index] != buildPhaseSequence[index] {
+			t.Fatalf("phase %d = %s, want %s", index, actual[index], buildPhaseSequence[index])
+		}
 	}
 }
 
-func TestVersionedCredentialReferenceIsExact(t *testing.T) {
+func TestBuildPhaseTrackerRejectsRealRegression(t *testing.T) {
 	t.Parallel()
-	path, version, ok := parseVersionedCredentialReference("vault-versioned://builder/token/v7")
-	if !ok || path != "builder/token" || version != 7 {
-		t.Fatalf("canonical credential reference was rejected: %q %d %v", path, version, ok)
-	}
-	for _, reference := range []string{
-		"k8s-immutable-secret://builder/token/v7", "vault-versioned://builder/token/latest",
-		"vault-versioned://builder/../token/v7", "vault-versioned://builder/token/v0",
-		"vault-versioned://builder/token/v7?version=8",
-	} {
-		if _, _, accepted := parseVersionedCredentialReference(reference); accepted {
-			t.Fatalf("unsafe credential reference was accepted: %s", reference)
+	tracker := newBuildPhaseTracker()
+	for _, stage := range buildPhaseSequence[:4] {
+		if _, err := tracker.observe(stage); err != nil {
+			t.Fatal(err)
 		}
+	}
+	if _, err := tracker.observe(controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tracker.observe(controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL); err != nil {
+		t.Fatalf("a repeated completed vertex must be idempotent: %v", err)
+	}
+	tracker = newBuildPhaseTracker()
+	if _, err := tracker.observe(controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tracker.observe(controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION); err == nil {
+		t.Fatal("a previously unseen phase regression was accepted")
 	}
 }
 

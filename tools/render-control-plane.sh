@@ -109,13 +109,19 @@ registry_host='mattercodex-image-registry.mattercodex-system.svc.cluster.local:5
 placeholder="$registry_host/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 replacement="$registry_pull_host/mattercodex/control-plane@$image_digest"
 placeholder_count=$(grep -F -c "$placeholder" "$raw_render" || true)
-if [[ "$placeholder_count" -ne 3 ]]; then
-  echo "canonical render does not contain exactly three control-plane image inputs" >&2
+if [[ "$placeholder_count" -ne 2 ]]; then
+  echo "canonical render does not contain exactly two control-plane image inputs" >&2
   exit 1
 fi
 pull_readback_placeholder='registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000'
 if [[ $(grep -F -c "$pull_readback_placeholder" "$raw_render" || true) -ne 1 ]]; then
   echo "canonical render does not contain one authenticated pull readback input" >&2
+  exit 1
+fi
+node_readback_placeholder='registry-pull.invalid/mattercodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+node_readback_replacement="$registry_pull_host/mattercodex/agent-runner@$trusted_base_digest"
+if [[ $(grep -F -c "$node_readback_placeholder" "$raw_render" || true) -ne 1 ]]; then
+  echo "canonical render does not contain one trusted-base node readback input" >&2
   exit 1
 fi
 
@@ -137,7 +143,7 @@ fi
 
 registry_host_placeholder='registry-pull.invalid'
 registry_host_placeholder_count=$(grep -F -c "$registry_host_placeholder" "$raw_render" || true)
-if [[ "$registry_host_placeholder_count" -lt 2 ]]; then
+if [[ "$registry_host_placeholder_count" -ne 13 ]]; then
   echo "canonical render does not materialize the node registry endpoint" >&2
   exit 1
 fi
@@ -145,7 +151,7 @@ tools_placeholder='admission-tools.invalid/mattercodex/image-admission-tools@sha
 admission_placeholder='mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000'
 tools_digest=${admission_tools_image##*@}
 if [[ $(grep -F -c "$tools_placeholder" "$raw_render" || true) -lt 5 ]] ||
-  [[ $(grep -F -c "$admission_placeholder" "$raw_render" || true) -ne 1 ]] ||
+  [[ $(grep -F -c "$admission_placeholder" "$raw_render" || true) -ne 5 ]] ||
   [[ $(grep -F -c 'mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000' "$raw_render" || true) -ne 1 ]] ||
   [[ $(grep -F -c 'policyRevision: "0"' "$raw_render" || true) -ne 1 ]] ||
   [[ $(grep -F -c 'policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"' "$raw_render" || true) -ne 1 ]]; then
@@ -153,7 +159,8 @@ if [[ $(grep -F -c "$tools_placeholder" "$raw_render" || true) -lt 5 ]] ||
   exit 1
 fi
 if [[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "0"' "$raw_render" || true) -ne 2 ]] ||
-  [[ $(grep -F -c 'name: PULL_CREDENTIAL_GENERATION' "$raw_render" || true) -ne 1 ]]; then
+  [[ $(grep -F -c 'pullCredentialGeneration: "0"' "$raw_render" || true) -ne 1 ]] ||
+  [[ $(grep -F -c 'name: PULL_CREDENTIAL_GENERATION' "$raw_render" || true) -ne 2 ]]; then
   echo "canonical render does not contain the pull credential generation fence" >&2
   exit 1
 fi
@@ -166,6 +173,7 @@ fi
 sed \
   -e "s|$placeholder|$replacement|g" \
   -e "s|$pull_readback_placeholder|$replacement|g" \
+  -e "s|$node_readback_placeholder|$node_readback_replacement|g" \
   -e "s|$authority_placeholder|$authority_replacement|g" \
   -e "s|$runtime_digest_placeholder|$runtime_digest_replacement|g" \
   -e "s|$tools_placeholder|$admission_tools_image|g" \
@@ -174,6 +182,7 @@ sed \
   -e "s|policyRevision: \"0\"|policyRevision: \"$policy_revision\"|g" \
   -e "s|policySHA256: \"0000000000000000000000000000000000000000000000000000000000000000\"|policySHA256: \"$policy_sha256\"|g" \
   -e "s|mattercodex.dev/pull-credential-generation: \"0\"|mattercodex.dev/pull-credential-generation: \"$pull_credential_generation\"|g" \
+  -e "s|pullCredentialGeneration: \"0\"|pullCredentialGeneration: \"$pull_credential_generation\"|g" \
   -e "/name: PULL_CREDENTIAL_GENERATION/{n;s|value: \"0\"|value: \"$pull_credential_generation\"|;}" \
   -e "s|$registry_host_placeholder|$registry_pull_host|g" \
   -e "s|192.0.2.0/32|$node_ipv4_cidr|g" \
@@ -191,6 +200,10 @@ fi
 
 if grep -F -q "$registry_host_placeholder" "$final_render"; then
   echo "unresolved registry pull host remains in render" >&2
+  exit 1
+fi
+if grep -F -q 'pullCredentialGeneration: "0"' "$final_render"; then
+  echo "unresolved pull credential generation remains in render" >&2
   exit 1
 fi
 if grep -F -q '192.0.2.0/32' "$final_render" || grep -F -q '2001:db8::/128' "$final_render"; then

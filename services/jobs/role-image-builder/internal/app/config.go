@@ -38,11 +38,6 @@ type Config struct {
 	InputRegistryCAFile          string        `env:"ROLE_IMAGE_BUILDER_INPUT_REGISTRY_CA_FILE"`
 	InputRegistryCertificateFile string        `env:"ROLE_IMAGE_BUILDER_INPUT_REGISTRY_CERTIFICATE_FILE"`
 	InputRegistryPrivateKeyFile  string        `env:"ROLE_IMAGE_BUILDER_INPUT_REGISTRY_PRIVATE_KEY_FILE"`
-	CredentialVaultAddress       string        `env:"ROLE_IMAGE_BUILDER_CREDENTIAL_VAULT_ADDRESS"`
-	CredentialVaultTLSServerName string        `env:"ROLE_IMAGE_BUILDER_CREDENTIAL_VAULT_TLS_SERVER_NAME"`
-	CredentialVaultCAFile        string        `env:"ROLE_IMAGE_BUILDER_CREDENTIAL_VAULT_CA_FILE"`
-	CredentialVaultTokenFile     string        `env:"ROLE_IMAGE_BUILDER_CREDENTIAL_VAULT_TOKEN_FILE"`
-	CredentialVaultRole          string        `env:"ROLE_IMAGE_BUILDER_CREDENTIAL_VAULT_ROLE"`
 	TrustedRoleBaseRepository    string        `env:"ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY"`
 	TrustedRoleBaseDigest        string        `env:"ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_DIGEST"`
 	FrontendRepository           string        `env:"ROLE_IMAGE_BUILDER_FRONTEND_REPOSITORY"`
@@ -81,11 +76,6 @@ func loadConfig() (Config, error) {
 		InputRegistryCAFile:          "/var/run/secrets/mattercodex/role-image-builder/input-read/ca.pem",
 		InputRegistryCertificateFile: "/var/run/secrets/mattercodex/role-image-builder/input-read/tls.crt",
 		InputRegistryPrivateKeyFile:  "/var/run/secrets/mattercodex/role-image-builder/input-read/tls.key",
-		CredentialVaultAddress:       "https://vault.mattercodex-system.svc:8200",
-		CredentialVaultTLSServerName: "vault.mattercodex-system.svc.cluster.local",
-		CredentialVaultCAFile:        "/var/run/config/mattercodex/role-image-builder/vault/ca.pem",
-		CredentialVaultTokenFile:     "/var/run/secrets/tokens/role-image-builder-vault/token",
-		CredentialVaultRole:          "role-image-builder-secret-resolver",
 		TrustedRoleBaseRepository:    "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner",
 		TrustedRoleBaseDigest:        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		FrontendRepository:           "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/dockerfile",
@@ -123,8 +113,7 @@ func (config Config) validate() error {
 		config.BuildKitCAFile, config.BuildKitCertificateFile, config.BuildKitPrivateKeyFile,
 		config.BuildKitPullDockerConfig,
 		config.WorkspaceRoot, config.InputDockerConfig, config.InputRegistryCAFile,
-		config.InputRegistryCertificateFile, config.InputRegistryPrivateKeyFile,
-		config.CredentialVaultCAFile, config.CredentialVaultTokenFile} {
+		config.InputRegistryCertificateFile, config.InputRegistryPrivateKeyFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("role image builder path is invalid")
 		}
@@ -137,9 +126,6 @@ func (config Config) validate() error {
 		config.ReadinessInterval < time.Second || config.ReadinessInterval > time.Minute ||
 		config.InputRepository == "" || strings.ContainsAny(config.InputRepository, "@?# \r\n\t") ||
 		config.InputRegistryTLSServerName == "" || strings.ContainsAny(config.InputRegistryTLSServerName, "*/:@?# \r\n\t") ||
-		config.CredentialVaultAddress != "https://vault.mattercodex-system.svc:8200" ||
-		config.CredentialVaultTLSServerName != "vault.mattercodex-system.svc.cluster.local" ||
-		config.CredentialVaultRole != "role-image-builder-secret-resolver" ||
 		config.TrustedRoleBaseRepository == "" || strings.ContainsAny(config.TrustedRoleBaseRepository, "@?# \r\n\t") ||
 		!validManifestDigest(config.TrustedRoleBaseDigest) ||
 		config.FrontendRepository == "" || strings.ContainsAny(config.FrontendRepository, "@?# \r\n\t") ||

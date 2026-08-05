@@ -27,6 +27,10 @@ type pullProfile struct {
 }
 
 func main() {
+	registryHost := os.Getenv("REGISTRY_PULL_HOST")
+	if !strings.Contains(registryHost, ".") || strings.ContainsAny(registryHost, "/:@?# \\\r\n\t") {
+		log.Fatal(pullServerError)
+	}
 	pool := x509.NewCertPool()
 	for _, path := range []string{"/identity/client-ca.pem", "/identity/node-client-ca.pem"} {
 		value, err := os.ReadFile(path)
@@ -37,7 +41,7 @@ func main() {
 	backend, _ := url.Parse("http://127.0.0.1:5006")
 	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("redirect rejected") }}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.TLS == nil || len(request.TLS.PeerCertificates) != 1 || !authorizedPull(request) {
+		if request.TLS == nil || len(request.TLS.PeerCertificates) != 1 || !authorizedPull(request, registryHost) {
 			http.Error(writer, "request forbidden", http.StatusForbidden)
 			return
 		}
@@ -71,7 +75,7 @@ func main() {
 	}
 }
 
-func authorizedPull(request *http.Request) bool {
+func authorizedPull(request *http.Request, registryHost string) bool {
 	if request.Method != http.MethodGet && request.Method != http.MethodHead || strings.ContainsAny(request.URL.Path, "\r\n\\") {
 		return false
 	}
@@ -84,13 +88,13 @@ func authorizedPull(request *http.Request) bool {
 	}
 	if profile, ok := profiles[cn]; ok {
 		username, password, supplied := request.BasicAuth()
-		return supplied && dockerCredentialMatches(profile.configFile, username, password) && pathInRepositories(request.URL.Path, profile.repositories)
+		return supplied && dockerCredentialMatches(profile.configFile, username, password, registryHost) && pathInRepositories(request.URL.Path, profile.repositories)
 	}
-	return strings.HasPrefix(cn, "mattercodex-node-pull-") && authorizedNodePull(request, certificate) &&
-		pathInRepositories(request.URL.Path, []string{"mattercodex/roles"})
+	return strings.HasPrefix(cn, "mattercodex-node-pull-") && authorizedNodePull(request, certificate, registryHost) &&
+		pathInRepositories(request.URL.Path, []string{"mattercodex/agent-runner", "mattercodex/roles"})
 }
 
-func authorizedNodePull(request *http.Request, certificate *x509.Certificate) bool {
+func authorizedNodePull(request *http.Request, certificate *x509.Certificate, registryHost string) bool {
 	remote, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil || net.ParseIP(remote) == nil {
 		return false
@@ -118,13 +122,13 @@ func authorizedNodePull(request *http.Request, certificate *x509.Certificate) bo
 	if err != nil || !ok {
 		return false
 	}
-	digest := sha256.Sum256([]byte(username + "\n" + parts[1] + "\nregistry-pull.invalid"))
+	digest := sha256.Sum256([]byte(username + "\n" + parts[1] + "\n" + registryHost))
 	return rsa.VerifyPSS(publicKey, cryptoHashSHA256, digest[:], signature, nil) == nil
 }
 
 const cryptoHashSHA256 = 5 // crypto.SHA256; kept constant to avoid mutable algorithm selection.
 
-func dockerCredentialMatches(path, username, password string) bool {
+func dockerCredentialMatches(path, username, password, registryHost string) bool {
 	value, err := os.ReadFile(path)
 	if err != nil || len(value) > 1<<20 {
 		return false
@@ -139,7 +143,7 @@ func dockerCredentialMatches(path, username, password string) bool {
 	}
 	entry, ok := document.Auths["mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000"]
 	if !ok {
-		entry, ok = document.Auths["registry-pull.invalid"]
+		entry, ok = document.Auths[registryHost]
 	}
 	decoded, err := base64.StdEncoding.DecodeString(entry.Auth)
 	return ok && err == nil && string(decoded) == username+":"+password

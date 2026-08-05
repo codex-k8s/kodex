@@ -774,6 +774,8 @@ message RuntimeRevisionSpec {
   string image_policy_sha256 = 35;
   string image_signature_sha256 = 36;
   string image_promotion_readback_sha256 = 37;
+  // Digest фактически прочитанного OCI evidence manifest, слой которого
+  // содержит exact receipt и полный bounded admission evidence bundle.
   string image_admission_receipt_oci_manifest_digest = 38;
   // role_runtime_contract_* закрепляют проверенный runtime ABI promoted image.
   uint64 role_runtime_contract_revision = 39;
@@ -822,10 +824,6 @@ message RoleImageRecipeInput {
   repeated RoleImageTool tools = 12;
   // Пустая строка — каноническое значение отсутствующего аварийного блока.
   string installation_block = 13;
-  // Version-pinned vault-versioned refs доступны только trusted materialization;
-  // binding обязан совпасть с project/recipe/version/generation/sourceRef, а
-  // значения не попадают в build context, mounts, logs или provenance.
-  repeated string build_secret_refs = 14;
   string toolchain_sha256 = 15;
 }
 
@@ -930,6 +928,7 @@ message ImageArtifactSpec {
   string promotion_claimant_spiffe_id = 39;
   uint64 promotion_authority_generation = 40;
   uint64 promotion_fence = 41;
+  // Реальный OCI evidence manifest digest; digest локального JSON запрещён.
   string admission_receipt_oci_manifest_digest = 42;
   uint64 role_runtime_contract_revision = 43;
   string role_runtime_contract_sha256 = 44;
@@ -2272,15 +2271,12 @@ message RoleImageBuildInput {
   repeated RoleImagePackage packages = 15;
   repeated RoleImageTool tools = 16;
   string installation_block = 17;
-  repeated string build_secret_refs = 18;
   string toolchain_sha256 = 19;
   uint64 policy_revision = 20;
   string policy_sha256 = 21;
   string immutable_build_sha256 = 22;
   uint64 role_runtime_contract_revision = 23;
   string role_runtime_contract_sha256 = 24;
-  // project_id назначен control-plane и связывает trusted credential resolution.
-  string project_id = 25;
 }
 
 message ClaimImageBuildRequest {
@@ -2408,6 +2404,7 @@ message RecordImageAdmissionRequest {
   string signature_identity = 14;
   string signature_sha256 = 15;
   string admission_receipt_sha256 = 16;
+  // Реальный OCI evidence manifest digest после registry readback.
   string admission_receipt_oci_manifest_digest = 17;
 }
 

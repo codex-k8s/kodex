@@ -100,15 +100,16 @@ final_render="$temporary_directory/final.yaml"
 
 kubectl kustomize "$overlay" >"$raw_render"
 
-digest_placeholder='mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+digest_placeholder='registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000'
 digest_replacement="$registry_pull_host/mattercodex/control-plane@$control_plane_digest"
 if [[ $(grep -F -c "$digest_placeholder" "$raw_render" || true) -ne 1 ]]; then
-  echo "supply-chain render must contain one node readback image input" >&2
+  echo "supply-chain render must contain one authenticated registry readback input" >&2
   exit 1
 fi
-pull_readback_placeholder='registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000'
-if [[ $(grep -F -c "$pull_readback_placeholder" "$raw_render" || true) -ne 1 ]]; then
-  echo "supply-chain render must contain one authenticated pull readback input" >&2
+node_readback_placeholder='registry-pull.invalid/mattercodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+node_readback_replacement="$registry_pull_host/mattercodex/agent-runner@$trusted_base_digest"
+if [[ $(grep -F -c "$node_readback_placeholder" "$raw_render" || true) -ne 1 ]]; then
+  echo "supply-chain render must contain one trusted-base node readback image input" >&2
   exit 1
 fi
 tools_placeholder='admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000'
@@ -117,7 +118,7 @@ authority_placeholder='ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha
 authority_replacement="$registry_pull_host/mattercodex/internal-rpc-authority@$authority_image_digest"
 tools_digest=${admission_tools_image##*@}
 if [[ $(grep -F -c "$tools_placeholder" "$raw_render" || true) -lt 1 ]] ||
-  [[ $(grep -F -c "$admission_placeholder" "$raw_render" || true) -ne 1 ]] ||
+  [[ $(grep -F -c "$admission_placeholder" "$raw_render" || true) -ne 5 ]] ||
   [[ $(grep -F -c "$authority_placeholder" "$raw_render" || true) -ne 1 ]] ||
   [[ $(grep -F -c 'mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000' "$raw_render" || true) -ne 1 ]] ||
   [[ $(grep -F -c 'policyRevision: "0"' "$raw_render" || true) -ne 1 ]] ||
@@ -126,11 +127,12 @@ if [[ $(grep -F -c "$tools_placeholder" "$raw_render" || true) -lt 1 ]] ||
   exit 1
 fi
 if [[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "0"' "$raw_render" || true) -ne 2 ]] ||
-  [[ $(grep -F -c 'name: PULL_CREDENTIAL_GENERATION' "$raw_render" || true) -ne 1 ]]; then
+  [[ $(grep -F -c 'pullCredentialGeneration: "0"' "$raw_render" || true) -ne 1 ]] ||
+  [[ $(grep -F -c 'name: PULL_CREDENTIAL_GENERATION' "$raw_render" || true) -ne 2 ]]; then
   echo "supply-chain render does not contain the pull credential generation fence" >&2
   exit 1
 fi
-if [[ $(grep -F -c 'registry-pull.invalid' "$raw_render" || true) -lt 3 ]]; then
+if [[ $(grep -F -c 'registry-pull.invalid' "$raw_render" || true) -ne 12 ]]; then
   echo "supply-chain render does not bind the pull endpoint consistently" >&2
   exit 1
 fi
@@ -142,7 +144,7 @@ fi
 
 sed \
   -e "s|$digest_placeholder|$digest_replacement|g" \
-  -e "s|$pull_readback_placeholder|$digest_replacement|g" \
+  -e "s|$node_readback_placeholder|$node_readback_replacement|g" \
   -e "s|$tools_placeholder|$admission_tools_image|g" \
   -e "s|$admission_placeholder|$admission_image|g" \
   -e "s|$authority_placeholder|$authority_replacement|g" \
@@ -150,6 +152,7 @@ sed \
   -e "s|policyRevision: \"0\"|policyRevision: \"$policy_revision\"|g" \
   -e "s|policySHA256: \"0000000000000000000000000000000000000000000000000000000000000000\"|policySHA256: \"$policy_sha256\"|g" \
   -e "s|mattercodex.dev/pull-credential-generation: \"0\"|mattercodex.dev/pull-credential-generation: \"$pull_credential_generation\"|g" \
+  -e "s|pullCredentialGeneration: \"0\"|pullCredentialGeneration: \"$pull_credential_generation\"|g" \
   -e "/name: PULL_CREDENTIAL_GENERATION/{n;s|value: \"0\"|value: \"$pull_credential_generation\"|;}" \
   -e "s|registry-pull.invalid|$registry_pull_host|g" \
   -e "s|192.0.2.0/32|$node_ipv4_cidr|g" \
@@ -162,6 +165,7 @@ sed \
 
 if grep -F -q 'sha256:0000000000000000000000000000000000000000000000000000000000000000' "$final_render" ||
   grep -F -q 'registry-pull.invalid' "$final_render" ||
+  grep -F -q 'pullCredentialGeneration: "0"' "$final_render" ||
   grep -F -q '192.0.2.0/32' "$final_render" || grep -F -q '2001:db8::/128' "$final_render"; then
   echo "unresolved supply-chain input remains in render" >&2
   exit 1

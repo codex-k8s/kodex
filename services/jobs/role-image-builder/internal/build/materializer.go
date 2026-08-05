@@ -26,10 +26,8 @@ var ErrMaterialization = errors.New("role image input materialization failed")
 const maximumManifestBytes = int64(1 << 20)
 
 type MaterializerConfig struct {
-	DockerConfig, Repository, TLSServerName                              string
-	CAFile, CertificateFile, PrivateKeyFile                              string
-	CredentialVaultAddress, CredentialVaultTLSServerName                 string
-	CredentialVaultCAFile, CredentialVaultTokenFile, CredentialVaultRole string
+	DockerConfig, Repository, TLSServerName string
+	CAFile, CertificateFile, PrivateKeyFile string
 }
 
 // Materializer является trusted fetch boundary. Он получает pull-only mTLS и
@@ -38,7 +36,6 @@ type Materializer struct {
 	client                 *http.Client
 	repository, host, path string
 	username, password     string
-	resolver               *credentialResolver
 }
 
 func newMaterializer(config MaterializerConfig) (*Materializer, error) {
@@ -76,21 +73,14 @@ func newMaterializer(config MaterializerConfig) (*Materializer, error) {
 		ForceAttemptHTTP2: false, DisableKeepAlives: true,
 		DialContext: (&netDialer{timeout: 3 * time.Second}).DialContext,
 	}
-	resolver, err := newCredentialResolver(config)
-	if err != nil {
-		return nil, err
-	}
 	return &Materializer{client: &http.Client{Transport: transport, Timeout: 30 * time.Second,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return ErrMaterialization }},
 		repository: config.Repository, host: host, path: repositoryPath,
-		username: username, password: password, resolver: resolver}, nil
+		username: username, password: password}, nil
 }
 
 // Check выполняет тот же authenticated mTLS registry path, что и materialization.
 func (materializer *Materializer) Check(ctx context.Context) error {
-	if err := materializer.resolver.Check(ctx); err != nil {
-		return ErrMaterialization
-	}
 	request, err := materializer.request(ctx, http.MethodGet, "https://"+materializer.host+"/v2/")
 	if err != nil {
 		return ErrMaterialization
@@ -116,12 +106,8 @@ func (materializer *Materializer) Materialize(
 		!materializer.allowedRef(input.GetContextRef()) {
 		return "INPUT_FETCH_REJECTED", ErrMaterialization
 	}
-	credentials, err := materializer.resolver.Resolve(ctx, input)
-	if err != nil {
-		return "INPUT_FETCH_REJECTED", ErrMaterialization
-	}
 	archive := filepath.Join(root, "context.tar")
-	if err := materializer.downloadExact(ctx, input.GetContextRef(), archive, input.GetContextSha256(), maximumContextBytes, credentials[input.GetContextRef()]); err != nil {
+	if err := materializer.downloadExact(ctx, input.GetContextRef(), archive, input.GetContextSha256(), maximumContextBytes); err != nil {
 		return "INPUT_DIGEST_MISMATCH", err
 	}
 	if beforeContextValidation == nil {
@@ -146,7 +132,7 @@ func (materializer *Materializer) Materialize(
 			return "INPUT_FETCH_REJECTED", ErrMaterialization
 		}
 		destination := filepath.Join(contextDirectory, ".mattercodex", "packages", digest)
-		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, digest, maximumFileBytes, credentials[item.GetSourceRef()]); err != nil {
+		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, digest, maximumFileBytes); err != nil {
 			return "INPUT_DIGEST_MISMATCH", err
 		}
 	}
@@ -155,7 +141,7 @@ func (materializer *Materializer) Materialize(
 			return "INPUT_FETCH_REJECTED", ErrMaterialization
 		}
 		destination := filepath.Join(contextDirectory, ".mattercodex", "tools", item.GetSha256())
-		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, item.GetSha256(), maximumFileBytes, credentials[item.GetSourceRef()]); err != nil {
+		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, item.GetSha256(), maximumFileBytes); err != nil {
 			return "INPUT_DIGEST_MISMATCH", err
 		}
 	}
@@ -166,14 +152,13 @@ func (materializer *Materializer) downloadExact(
 	ctx context.Context,
 	reference, destination, expectedSHA256 string,
 	maximumBytes int64,
-	credential inputCredential,
 ) error {
 	manifestDigest, ok := materializer.referenceDigest(reference)
 	if !ok || !plainSHA256(expectedSHA256) {
 		return ErrMaterialization
 	}
 	manifestURL := "https://" + materializer.host + "/v2/" + materializer.path + "/manifests/" + manifestDigest
-	request, err := materializer.requestWithCredential(ctx, http.MethodGet, manifestURL, credential)
+	request, err := materializer.request(ctx, http.MethodGet, manifestURL)
 	if err != nil {
 		return ErrMaterialization
 	}
@@ -205,7 +190,7 @@ func (materializer *Materializer) downloadExact(
 		return ErrMaterialization
 	}
 	blobURL := "https://" + materializer.host + "/v2/" + materializer.path + "/blobs/" + document.Layers[0].Digest
-	request, err = materializer.requestWithCredential(ctx, http.MethodGet, blobURL, credential)
+	request, err = materializer.request(ctx, http.MethodGet, blobURL)
 	if err != nil {
 		return ErrMaterialization
 	}
@@ -242,19 +227,11 @@ func (materializer *Materializer) downloadExact(
 }
 
 func (materializer *Materializer) request(ctx context.Context, method, target string) (*http.Request, error) {
-	return materializer.requestWithCredential(ctx, method, target, inputCredential{})
-}
-
-func (materializer *Materializer) requestWithCredential(ctx context.Context, method, target string, credential inputCredential) (*http.Request, error) {
 	request, err := http.NewRequestWithContext(ctx, method, target, nil)
 	if err != nil {
 		return nil, err
 	}
-	username, password := materializer.username, materializer.password
-	if credential.SourceRef != "" {
-		username, password = credential.Username, credential.Password
-	}
-	request.SetBasicAuth(username, password)
+	request.SetBasicAuth(materializer.username, materializer.password)
 	request.Header.Set("User-Agent", "mattercodex-role-image-materializer/1")
 	return request, nil
 }
@@ -302,11 +279,6 @@ func readRegistryCredential(path, host string) (string, string, error) {
 		return "", "", ErrMaterialization
 	}
 	return username, password, nil
-}
-
-func validCredentialReference(reference string) bool {
-	_, _, ok := parseVersionedCredentialReference(reference)
-	return ok
 }
 
 type boundedWriter struct {

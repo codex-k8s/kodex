@@ -12,7 +12,6 @@ ALTER TABLE control_plane.resources
         kind = 'ROLE_IMAGE_RECIPE'
         OR (
             NOT (spec ? 'installationBlock')
-            AND NOT (spec ? 'buildSecretRefs')
             AND NOT (spec ? 'input')
         )
     ),

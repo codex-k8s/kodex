@@ -62,9 +62,11 @@ materializer по pull-only mTLS и basic identity читает context/package/
 совпадают. Байты пишутся в private bounded `emptyDir`, тем же immutable
 snapshot безопасно разбираются и удаляются после attempt. RWX PVC, ручной
 producer и повторное чтение изменяемого inode после hash не входят в путь.
-Пустой `buildSecretRefs` не создаёт обязательного Secret volume; непустые
-immutable refs доступны только trusted fetch authority, а значения не
-передаются BuildKit.
+Role image recipe не принимает build credentials. Context/package/tool blobs
+заранее публикует владелец в закрытый immutable input repository, а trusted
+materializer использует только собственную pull-only authority этого
+repository. Installation `RUN` не получает credentials через spec, mount,
+environment или build context.
 
 Builder обращается к BuildKit через client-only mTLS и публикует только в
 staging. Installation block исполняется в удалённом worker без credential
@@ -85,11 +87,14 @@ Update, archive или delete рецепта в той же owner-транзак
 Только отдельный HMAC-signed fenced короткоживущий claim, который включает
 оба receipt digest, выданный promotion workload после verdict, может быть
 owner-side расходован в одноразовую authorization до registry copy;
-истечение заменяет claim с повышением generation/fence. Admission receipt
-до verdict публикуется отдельным staging OCI artifact с exact subject, а
-promotion воспроизводит тот же payload с exact promoted subject. Authorization
+истечение заменяет claim с повышением generation/fence. До verdict admission
+owner публикует bounded evidence bundle (provenance, SBOM, vulnerability
+evidence, detached signatures и receipt) как immutable OCI artifact в
+выделенный evidence repository. Exact OCI manifest digest фиксируется owner-side;
+promotion заново читает bundle только по этому digest и после authorization
+копирует тот же manifest в закрытый promoted evidence repository. Authorization
 связывает artifact/version/attempt/fence/generation/digests, имеет TTL не больше
-Job deadline и durable idempotency receipt. Совместный image/receipt manifest
+Job deadline и durable idempotency receipt. Совместный image/evidence manifest
 readback фиксируется owner-транзакцией по одноразовому token, а
 pull видит только promoted admitted content. Admin DELETE не выдаётся сборщику
 или pull. Rootless BuildKit
@@ -109,26 +114,31 @@ source context подключается к installation step read-only и не �
 summary до 256 байт. Raw BuildKit output, installation text, context paths и
 credential values в status/log/audit/provenance не публикуются.
 
-`buildSecretRefs` использует только форму
-`vault-versioned://<bounded-path>/v<version>`. Trusted materializer получает
-короткий Vault token через свой projected ServiceAccount token и принимает
-binding лишь при точном совпадении `projectId`, `recipeId`, recipe
-version/generation и одного `sourceRef`. Credential живёт только в памяти HTTP
-клиента; untrusted `RUN`, context, cache и owner state его не получают.
+Авторитетный build spec связывает только immutable `contextRef`, package/tool
+source refs и их digest. Credential reference не входит в source Proto/OpenAPI,
+canonical hash, owner readback или builder claim; private external source
+переносится в input repository до создания recipe через owner-side boundary.
 
 BuildKit frontend/base pull использует отдельные `pki-public` CA/SNI и
 pull-only Docker config; тот же путь выполняют readiness и production
 `buildctl`. Staging write проходит через отдельный trust root и server-side
 authorizer, допускающий только CN BuildKit, методы OCI push и два закрытых
 repository. Scan/sign/admit/promote читают staging через отдельный read-only
-endpoint; подписи и admission receipt до owner authorization остаются в
-Job-owned immutable workspace.
+endpoint. Отдельный evidence authorizer принимает OCI write только от exact
+`image-admission` mTLS/application identity, только для закрытого evidence
+repository и без DELETE/admin; signer и promotion имеют соответственно key-only
+и read/target-copy полномочия. Job workspace не является recovery source:
+promotion восстанавливает все доказательства из durable OCI manifest digest.
 
-Node pull bootstrap запускается из внешнего bootstrap image до protected pull,
+Node pull bootstrap запускается из version-pinned admission runtime, а как
+readback target использует уже обязательный trusted `agent-runner` exact digest
+до protected role pull,
 выпускает в Vault короткую per-node certificate identity с exact node IP и
 generation, атомарно обновляет containerd `hosts.toml`, затем проверяет реальный
-CRI `PullImage` exact digest. Общий node password, anonymous fallback и
-ручная host-настройка не используются.
+CRI `PullImage` exact digest. Bootstrap Pod обращается только к DNS/Vault через
+явную `NetworkPolicy`; registry трафик выполняет host containerd после Unix
+socket call. Общий node password, anonymous fallback, `hostNetwork` и ручная
+host-настройка не используются.
 
 ## Сквозная карта authority и lifecycle
 

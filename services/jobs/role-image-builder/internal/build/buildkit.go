@@ -35,8 +35,6 @@ type Config struct {
 	InputDockerConfig, BuildKitPullDockerConfig, WorkspaceRoot              string
 	InputRegistryTLSServerName, InputRegistryCAFile                         string
 	InputRegistryCertificateFile, InputRegistryPrivateKeyFile               string
-	CredentialVaultAddress, CredentialVaultTLSServerName                    string
-	CredentialVaultCAFile, CredentialVaultTokenFile, CredentialVaultRole    string
 	InputRepository, TrustedRoleBaseRepository, TrustedRoleBaseDigest       string
 	FrontendRepository, StagingRepository                                   string
 	ExpectedBuilderSHA256, ExpectedFrontendSHA256, ExpectedToolchainSHA256  string
@@ -83,12 +81,7 @@ func New(config Config) (*Executor, error) {
 	materializer, err := newMaterializer(MaterializerConfig{DockerConfig: config.InputDockerConfig,
 		Repository: config.InputRepository, TLSServerName: config.InputRegistryTLSServerName,
 		CAFile: config.InputRegistryCAFile, CertificateFile: config.InputRegistryCertificateFile,
-		PrivateKeyFile:               config.InputRegistryPrivateKeyFile,
-		CredentialVaultAddress:       config.CredentialVaultAddress,
-		CredentialVaultTLSServerName: config.CredentialVaultTLSServerName,
-		CredentialVaultCAFile:        config.CredentialVaultCAFile,
-		CredentialVaultTokenFile:     config.CredentialVaultTokenFile,
-		CredentialVaultRole:          config.CredentialVaultRole})
+		PrivateKeyFile: config.InputRegistryPrivateKeyFile})
 	if err != nil {
 		return nil, err
 	}
@@ -234,24 +227,37 @@ func (executor *Executor) Build(
 	if err := command.Start(); err != nil {
 		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph did not start"}
 	}
-	lastStage := controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING
+	tracker := newBuildPhaseTracker()
+	lastStage := controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL
+	var progressionErr error
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
-		stage := phaseFromRawJSON(scanner.Bytes())
-		if stage == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED ||
-			buildStageOrder(stage) <= buildStageOrder(lastStage) {
+		if progressionErr != nil {
 			continue
 		}
-		lastStage = stage
-		select {
-		case phases <- phaseProgress(stage):
-		default:
+		progression, err := tracker.observe(phaseFromRawJSON(scanner.Bytes()))
+		if err != nil {
+			progressionErr = err
+			continue
+		}
+		for _, phase := range progression {
+			lastStage = phase.Stage
+			select {
+			case phases <- phase:
+			default:
+			}
 		}
 	}
 	waitErr := command.Wait()
+	if progressionErr != nil {
+		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build phase progression was rejected"}
+	}
 	if scanner.Err() != nil || waitErr != nil {
 		return controlclient.BuildEvidence{}, failureForStage(lastStage)
+	}
+	if !tracker.complete() {
+		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build phase progression was incomplete"}
 	}
 	metadata, err := os.ReadFile(metadataFile)
 	if err != nil || len(metadata) == 0 || len(metadata) > 1<<20 {
@@ -421,6 +427,49 @@ func phaseProgress(stage controlplanev1.ImageBuildStage) Phase {
 	return Phase{Stage: stage, Percent: percent}
 }
 
+type buildPhaseTracker struct {
+	next           int
+	pendingSolving bool
+}
+
+var buildPhaseSequence = [...]controlplanev1.ImageBuildStage{
+	controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL,
+	controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING,
+	controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION,
+	controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION,
+	controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH,
+}
+
+func newBuildPhaseTracker() *buildPhaseTracker { return &buildPhaseTracker{} }
+
+func (tracker *buildPhaseTracker) observe(stage controlplanev1.ImageBuildStage) ([]Phase, error) {
+	if stage == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED {
+		return nil, nil
+	}
+	if stage == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING && tracker.next == 0 {
+		tracker.pendingSolving = true
+		return nil, nil
+	}
+	for index := 0; index < tracker.next; index++ {
+		if buildPhaseSequence[index] == stage {
+			return nil, nil
+		}
+	}
+	if tracker.next >= len(buildPhaseSequence) || buildPhaseSequence[tracker.next] != stage {
+		return nil, errors.New("BuildKit phase progression regressed")
+	}
+	progression := []Phase{phaseProgress(stage)}
+	tracker.next++
+	if stage == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL && tracker.pendingSolving {
+		progression = append(progression, phaseProgress(controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING))
+		tracker.next++
+		tracker.pendingSolving = false
+	}
+	return progression, nil
+}
+
+func (tracker *buildPhaseTracker) complete() bool { return tracker.next == len(buildPhaseSequence) }
+
 func failureForStage(stage controlplanev1.ImageBuildStage) Failure {
 	switch stage {
 	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL:
@@ -433,23 +482,6 @@ func failureForStage(stage controlplanev1.ImageBuildStage) Failure {
 		return Failure{"STAGING_PUSH_FAILED", "STAGING_EXPORT_REJECTED", "Staging export failed"}
 	default:
 		return Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build solve failed"}
-	}
-}
-
-func buildStageOrder(stage controlplanev1.ImageBuildStage) int {
-	switch stage {
-	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL:
-		return 1
-	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING:
-		return 2
-	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION:
-		return 3
-	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION:
-		return 4
-	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH:
-		return 5
-	default:
-		return 0
 	}
 }
 

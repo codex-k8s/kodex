@@ -109,12 +109,11 @@ func roleImageBuildInput(claim resource.ImageBuildClaim) *controlplanev1.RoleIma
 		SourceRef: input.GetSourceRef(), SourceRevision: input.GetSourceRevision(), SourceSha256: input.GetSourceSha256(),
 		ContextRef: input.GetContextRef(), ContextSha256: input.GetContextSha256(), BuilderSha256: input.GetBuilderSha256(),
 		FrontendSha256: input.GetFrontendSha256(), Platforms: input.GetPlatforms(), Packages: input.GetPackages(),
-		Tools: input.GetTools(), InstallationBlock: input.GetInstallationBlock(), BuildSecretRefs: input.GetBuildSecretRefs(),
+		Tools: input.GetTools(), InstallationBlock: input.GetInstallationBlock(),
 		ToolchainSha256: input.GetToolchainSha256(), PolicyRevision: claim.PolicyRevision,
 		PolicySha256: claim.PolicySHA256, ImmutableBuildSha256: spec.ImmutableBuildSHA256,
 		RoleRuntimeContractRevision: claim.RoleRuntimeContractRevision,
 		RoleRuntimeContractSha256:   claim.RoleRuntimeContractSHA256,
-		ProjectId:                   claim.ImageBuild.ProjectID,
 	}
 }
 

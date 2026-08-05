@@ -89,15 +89,51 @@ pull_host=registry.nodes.example.test
   10.42.0.0/24 fd42::/64 "$trusted_base_digest" "$frontend_sha256" 1 "$runtime_contract_sha256" \
   >"$temporary_directory/supply.yaml"
 [[ $(grep -F -c "common_name: $pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
-[[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 4 ]]
+[[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 3 ]]
 [[ $(grep -F -c '10.42.0.0/24' "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'fd42::/64' "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c "$tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
+for binary in registry-pull-authorizer registry-write-authorizer node-pull-bootstrap; do
+  binary_images=$(MC195_BINARY="/usr/local/bin/$binary" yq eval-all '
+    select(.kind == "Deployment" or .kind == "DaemonSet") |
+    .spec.template.spec.containers[] | select(.command[]? == strenv(MC195_BINARY)) | .image' \
+    "$temporary_directory/supply.yaml" | grep -v '^---$')
+  [[ -n $binary_images ]] && ! grep -Fvxq "$admission_image" <<<"$binary_images" || {
+    echo "$binary does not use the image that contains the compiled binary" >&2
+    exit 1
+  }
+done
 grep -Fq 'openssl x509 -in /identity/tls.crt -checkend 900' "$temporary_directory/supply.yaml"
 grep -Fq 'DOCKER_CONFIG_FILE' "$temporary_directory/supply.yaml"
 grep -Fq "$pull_host/mattercodex/control-plane@$control_digest" "$temporary_directory/supply.yaml"
+grep -Fq "$pull_host/mattercodex/agent-runner@$trusted_base_digest" "$temporary_directory/supply.yaml"
+push_relative_urls=$(yq eval-all 'select(.kind == "Deployment" and .metadata.name == "mattercodex-image-registry-push") |
+  .spec.template.spec.containers[] | select(.name == "registry") | .env[] |
+  select(.name == "REGISTRY_HTTP_RELATIVEURLS") | .value' "$temporary_directory/supply.yaml")
+[[ $push_relative_urls == "true" ]] || { echo "staging registry does not return relative upload locations" >&2; exit 1; }
+grep -Fq 'mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission' \
+  "$temporary_directory/supply.yaml"
+if grep -Fq 'hostNetwork: true' "$temporary_directory/supply.yaml" ||
+  ! grep -Fq 'name: mattercodex-node-pull-bootstrap-exact-paths' "$temporary_directory/supply.yaml"; then
+  echo "node pull bootstrap network boundary is incomplete" >&2
+  exit 1
+fi
+node_egress_ports=$(yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "mattercodex-node-pull-bootstrap-exact-paths") |
+  [.spec.egress[].ports[].port] | sort | join(",")' "$temporary_directory/supply.yaml")
+[[ $node_egress_ports == "53,53,8200" ]] || { echo "node bootstrap received non-DNS/Vault egress" >&2; exit 1; }
+grep -Fq 'REGISTRY_AUTHORIZATION_PROFILE' "$temporary_directory/supply.yaml"
+grep -Fq 'mattercodex/image-registry/evidence-admission' \
+  "$repository_root/tools/configure-image-supply-chain-pki.sh"
+if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "mattercodex-image-registry-evidence") |
+  .spec.ingress[].from[].podSelector.matchExpressions[]?.values[]' "$temporary_directory/supply.yaml" |
+  grep -Fqx sign; then
+  echo "signer received evidence registry network authority" >&2
+  exit 1
+fi
 [[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "3"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
+[[ $(grep -F -c 'pullCredentialGeneration: "3"' \
+  "$temporary_directory/supply.yaml") -eq 1 ]]
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
@@ -110,6 +146,13 @@ grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
 if rg -q 'staging-push|STAGING_DOCKER' \
   "$repository_root/deploy/k8s/base/role-image-builder"; then
   echo "builder still receives staging push authority" >&2
+  exit 1
+fi
+if rg -q 'BuildSecretRefs|buildSecretRefs|build_secret_refs|role-image-builder-secret-resolver|input-authority' \
+  "$repository_root/contracts" "$repository_root/libs/go/controlplaneapi" \
+  "$repository_root/services/internal/control-plane" "$repository_root/services/external/control-api-gateway" \
+  "$repository_root/services/jobs/role-image-builder" "$repository_root/deploy/k8s/base/role-image-builder"; then
+  echo "removed build credential field or authority remains" >&2
   exit 1
 fi
 if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "role-image-builder-exact-egress") |
@@ -131,7 +174,7 @@ cat >"$temporary_directory/bin/kubectl" <<EOF
 #!/bin/sh
 policy_revision=\${FIXTURE_POLICY_REVISION:-7}
 cat <<JSON
-{"immutable":true,"metadata":{"labels":{"mattercodex.dev/owner-intent":"true"},"annotations":{"mattercodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/mattercodex/internal-rpc-authority@$authority_digest","promotionRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles","promotedPullRepository":"registry.example.test/mattercodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/mattercodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft"}}
+{"immutable":true,"metadata":{"labels":{"mattercodex.dev/owner-intent":"true"},"annotations":{"mattercodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/mattercodex/internal-rpc-authority@$authority_digest","promotionRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles","promotionEvidenceRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence","evidenceRepository":"mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission","promotedPullRepository":"registry.example.test/mattercodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/mattercodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc"}}
 JSON
 EOF
 chmod 0555 "$temporary_directory/bin/kubectl"
@@ -190,6 +233,41 @@ if sed -n '/^  promote)/,/^  \*)/p' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" |
   grep -Fq 'load_owner_claim'; then
   echo "promotion still depends on admission PVC claim" >&2
+  exit 1
+fi
+promotion_body=$(sed -n '/^  promote)/,/^  \*)/p' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh")
+grep -Fq 'regctl artifact get "$evidence_reference"' <<<"$promotion_body"
+grep -Fq 'image-admission-bridge authorize-promotion' <<<"$promotion_body"
+authorize_line=$(grep -n 'image-admission-bridge authorize-promotion' <<<"$promotion_body" | cut -d: -f1)
+copy_line=$(grep -n 'regctl image copy "$evidence_reference"' <<<"$promotion_body" | cut -d: -f1)
+[[ $authorize_line -lt $copy_line ]] || { echo "evidence was promoted before owner authorization" >&2; exit 1; }
+
+receipt_sha=$(jq -Sjc -n '{artifactId:"artifact-1",imageDigest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' |
+  sha256sum | awk '{print $1}')
+jq -Sjc -n --arg receipt "$receipt_sha" '{schema:"mattercodex.dev/image-admission-evidence/v1",
+  artifactId:"artifact-1",imageDigest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  admissionReceiptSHA256:$receipt,provenance:{version:1},nativeProvenance:[{version:1}],sbom:{version:1},vulnerability:{version:1},
+  signatureBinding:{version:1},admissionReceipt:{artifactId:"artifact-1",imageDigest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}' \
+  >"$temporary_directory/evidence.json"
+evidence_sha=$(sha256sum "$temporary_directory/evidence.json" | awk '{print $1}')
+jq -Sjc -n --arg payload "$evidence_sha" '{schemaVersion:2,
+  mediaType:"application/vnd.oci.image.manifest.v1+json",
+  artifactType:"application/vnd.mattercodex.image-admission-evidence.v1+json",
+  config:{mediaType:"application/vnd.oci.empty.v1+json",digest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",size:2},
+  layers:[{mediaType:"application/octet-stream",digest:("sha256:"+$payload),size:1}]}' \
+  >"$temporary_directory/evidence-manifest.json"
+evidence_manifest_digest="sha256:$(sha256sum "$temporary_directory/evidence-manifest.json" | awk '{print $1}')"
+sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence \
+  artifact-1 sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$receipt_sha" \
+  "$temporary_directory/evidence.json" "$temporary_directory/evidence-manifest.json" "$evidence_manifest_digest"
+jq '.layers[0].digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
+  "$temporary_directory/evidence-manifest.json" >"$temporary_directory/evidence-manifest-unsafe.json"
+if sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence \
+  artifact-1 sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$receipt_sha" \
+  "$temporary_directory/evidence.json" "$temporary_directory/evidence-manifest-unsafe.json" \
+  "sha256:$(sha256sum "$temporary_directory/evidence-manifest-unsafe.json" | awk '{print $1}')" >/dev/null 2>&1; then
+  echo "OCI evidence manifest with foreign layer was accepted" >&2
   exit 1
 fi
 

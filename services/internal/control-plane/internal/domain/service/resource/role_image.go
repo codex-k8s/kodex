@@ -1565,7 +1565,6 @@ func canonicalRoleImageInput(input entity.RoleImageRecipeInput) entity.RoleImage
 	result.Platforms = slices.Clone(input.Platforms)
 	result.Packages = slices.Clone(input.Packages)
 	result.Tools = slices.Clone(input.Tools)
-	result.BuildSecretRefs = slices.Clone(input.BuildSecretRefs)
 	slices.SortFunc(result.Platforms, func(left, right entity.RoleImagePlatform) int {
 		return strings.Compare(left.OS+"/"+left.Architecture+"/"+left.Variant,
 			right.OS+"/"+right.Architecture+"/"+right.Variant)
@@ -1578,7 +1577,6 @@ func canonicalRoleImageInput(input entity.RoleImageRecipeInput) entity.RoleImage
 		return strings.Compare(left.Name+"/"+left.Version+"/"+left.SourceRef+"/"+left.SHA256,
 			right.Name+"/"+right.Version+"/"+right.SourceRef+"/"+right.SHA256)
 	})
-	slices.Sort(result.BuildSecretRefs)
 	return result
 }
 

@@ -63,10 +63,6 @@ func (runner *Runner) Cycle(ctx context.Context) error {
 	defer prepared.Close()
 	runner.metrics.Observe("materialize", "success")
 	runner.metrics.Observe("context", "success")
-	if err := runner.client.Report(ctx, &claim, uuid.NewString(),
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING, 25); err != nil {
-		return err
-	}
 	buildContext, cancelBuild := context.WithCancel(ctx)
 	defer cancelBuild()
 	type buildResult struct {

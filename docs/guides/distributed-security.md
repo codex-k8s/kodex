@@ -428,6 +428,13 @@ applied -> pending -> reload -> exact peer readback -> applied
   не получает эту identity, application secret или egress. Readiness BuildKit
   выполняет тот же rootless `RUN` и реальный bounded push в отдельный readiness
   repository; `debug workers` без build/push не считается готовностью пути.
+- Admission evidence до owner verdict хранится как immutable OCI artifact в
+  отдельном repository с собственным server-side mTLS/application authorizer.
+  Он разрешает write только admission owner, exact OCI upload methods и
+  repository, запрещает DELETE/admin и выдаёт promotion только read. Owner
+  фиксирует digest фактически прочитанного OCI manifest, а retry/promotion не
+  зависит от `emptyDir` или PVC предыдущего Job. Signer key и promotion write
+  authority физически не совмещаются.
 - Promotion claim расходуется owner-транзакцией до первого внешнего copy.
   Authorization связывает artifact/version/attempt/fence/generation/digests,
   имеет срок короче Job deadline и устойчивую idempotency receipt; completion
@@ -439,6 +446,9 @@ applied -> pending -> reload -> exact peer readback -> applied
   exact rendered node CIDR, а DaemonSet с `imagePullPolicy: Always` доказывает
   реальный CRI pull path на каждом node. Общий push/admin/promotion credential,
   `0.0.0.0/0`, `::/0` и readiness только из registry Pod запрещены.
+  Bootstrap, вызывающий host CRI через Unix socket, не использует
+  `hostNetwork`: его собственный egress ограничен exact DNS/Vault, а registry
+  соединение выполняет host runtime с per-node identity.
 - `RuntimeRevision`, runtime-controller client, credential broker, workload
   admission и `ValidatingAdmissionPolicy` используют один exact promoted
   `repository@sha256`, ABI revision/digest и закрытую форму Pod: два init и три

@@ -24,6 +24,8 @@ tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
 admission_image=$(jq -er '.data.admissionImage' <<<"$intent")
 authority_image=$(jq -er '.data.authorityImage' <<<"$intent")
 promotion_repository=$(jq -er '.data.promotionRepository' <<<"$intent")
+promotion_evidence_repository=$(jq -er '.data.promotionEvidenceRepository' <<<"$intent")
+evidence_repository=$(jq -er '.data.evidenceRepository' <<<"$intent")
 promoted_pull_repository=$(jq -er '.data.promotedPullRepository' <<<"$intent")
 policy_revision=$(jq -er '.data.policyRevision' <<<"$intent")
 policy_sha256=$(jq -er '.data.policySHA256' <<<"$intent")
@@ -42,15 +44,19 @@ for image in "$tools_image" "$admission_image" "$authority_image"; do
     { echo "admission image binding is invalid" >&2; exit 78; }
 done
 [[ ${tools_image##*@} == "$tools_digest" ]] || { echo "admission tools digest mismatch" >&2; exit 78; }
-for repository in "$promotion_repository" "$promoted_pull_repository"; do
+for repository in "$promotion_repository" "$promotion_evidence_repository" "$evidence_repository" "$promoted_pull_repository"; do
   [[ $repository =~ ^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$ ]] ||
     { echo "promotion repository binding is invalid" >&2; exit 78; }
 done
 [[ ${promotion_repository#*/} == "${promoted_pull_repository#*/}" ]] ||
   { echo "promotion and pull repository paths differ" >&2; exit 78; }
+[[ $evidence_repository == mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission ]] ||
+  { echo "evidence repository binding is invalid" >&2; exit 78; }
+[[ $promotion_evidence_repository == mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence ]] ||
+  { echo "promotion evidence repository binding is invalid" >&2; exit 78; }
 [[ $policy_revision =~ ^[1-9][0-9]*$ ]] || { echo "policy revision is invalid" >&2; exit 78; }
 [[ $policy_sha256 =~ ^[a-f0-9]{64}$ ]] || { echo "policy digest is invalid" >&2; exit 78; }
-[[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft ]] ||
+[[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc ]] ||
   { echo "admission tools contract is invalid" >&2; exit 78; }
 [[ $builder_identity == spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder ]] ||
   { echo "builder identity is invalid" >&2; exit 78; }
@@ -63,7 +69,8 @@ done
 [[ $role_runtime_contract_sha256 =~ ^[a-f0-9]{64}$ ]] || { echo "runtime contract digest is invalid" >&2; exit 78; }
 
 run_sha256=$(printf '%s\n' "$environment_name" "$run_id" "$admission_image" "$authority_image" "$tools_digest" \
-  "$policy_revision" "$policy_sha256" "$promotion_repository" "$promoted_pull_repository" | sha256sum | awk '{print $1}')
+  "$policy_revision" "$policy_sha256" "$promotion_repository" "$promotion_evidence_repository" \
+  "$evidence_repository" "$promoted_pull_repository" | sha256sum | awk '{print $1}')
 suffix=${run_sha256:0:32}
 claim_name="mc-admit-$suffix"
 # Claim TTL равен 15 минутам; каждый Job вместе с повторами завершается раньше.
@@ -212,6 +219,8 @@ EOF
             - {name: ADMISSION_TOOLS_IMAGE, value: "${tools_image}"}
             - {name: ADMISSION_IMAGE, value: "${admission_image}"}
             - {name: PROMOTION_REPOSITORY, value: "${promotion_repository}"}
+            - {name: PROMOTION_EVIDENCE_REPOSITORY, value: "${promotion_evidence_repository}"}
+            - {name: EVIDENCE_REPOSITORY, value: "${evidence_repository}"}
             - {name: PROMOTED_PULL_REPOSITORY, value: "${promoted_pull_repository}"}
             - {name: EXPECTED_BUILDER_ID, value: "${builder_identity}"}
             - {name: EXPECTED_BUILD_TYPE, value: "${build_type}"}

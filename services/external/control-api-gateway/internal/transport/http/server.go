@@ -1135,8 +1135,8 @@ func roleImageRecipeInput(input generated.RoleImageRecipeInput) *controlplanev1.
 		SourceRef: input.SourceRef, SourceRevision: input.SourceRevision, SourceSha256: input.SourceSha256,
 		ContextRef: input.ContextRef, ContextSha256: input.ContextSha256,
 		BuilderSha256: input.BuilderSha256, FrontendSha256: input.FrontendSha256,
-		InstallationBlock: input.InstallationBlock, BuildSecretRefs: append([]string(nil), input.BuildSecretRefs...),
-		ToolchainSha256: input.ToolchainSha256,
+		InstallationBlock: input.InstallationBlock,
+		ToolchainSha256:   input.ToolchainSha256,
 	}
 	for _, platform := range input.Platforms {
 		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{
@@ -1166,8 +1166,7 @@ func roleImageRecipeReadbackInput(input *controlplanev1.RoleImageRecipeInput) (g
 		SourceRef: status.SourceRef, SourceRevision: status.SourceRevision, SourceSha256: status.SourceSha256,
 		ContextRef: status.ContextRef, ContextSha256: status.ContextSha256, BuilderSha256: status.BuilderSha256,
 		FrontendSha256: status.FrontendSha256, Platforms: status.Platforms, Packages: status.Packages,
-		Tools: status.Tools, InstallationBlock: input.GetInstallationBlock(),
-		BuildSecretRefs: append([]string(nil), input.GetBuildSecretRefs()...), ToolchainSha256: status.ToolchainSha256,
+		Tools: status.Tools, InstallationBlock: input.GetInstallationBlock(), ToolchainSha256: status.ToolchainSha256,
 	}, nil
 }
 

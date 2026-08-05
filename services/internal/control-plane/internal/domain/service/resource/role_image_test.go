@@ -46,7 +46,7 @@ func TestRoleImageCanonicalHashCoversInstallationAndNormalizesSets(t *testing.T)
 		Platforms:         []entity.RoleImagePlatform{{OS: "linux", Architecture: "arm64"}, {OS: "linux", Architecture: "amd64"}},
 		Packages:          []entity.RoleImagePackage{{Manager: "apt", Name: "jq", Version: "1.7", Digest: "sha256:" + digest, SourceRef: "oci://example.test/inputs@sha256:" + digest}},
 		Tools:             []entity.RoleImageTool{{Name: "cosign", Version: "3.0.2", SourceRef: "oci://example.test/inputs@sha256:" + digest, SHA256: digest}},
-		InstallationBlock: "printf 'first\\n'", BuildSecretRefs: []string{"vault-versioned://builder/token/v1"},
+		InstallationBlock: "printf 'first\\n'",
 	}
 	first, err := service.newRoleImageRecipeSpec(canonicalRoleImageInput(input), 1)
 	if err != nil {

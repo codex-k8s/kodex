@@ -13,9 +13,12 @@ data:
   admissionImage: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
   authorityImage: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
   promotionRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles
+  promotionEvidenceRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence
+  evidenceRepository: mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission
   promotedPullRepository: registry-pull.invalid/mattercodex/roles
+  pullRegistryHost: registry-pull.invalid
   pullCredentialGeneration: "0"
-  nodeReadbackImage: registry-pull.invalid/mattercodex/roles@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  nodeReadbackImage: registry-pull.invalid/mattercodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
   roleImageInputRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs
   policyRevision: "0"
   policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"
@@ -30,4 +33,4 @@ data:
   signerIdentity: mattercodex-image-signer
   admissionOwnerIdentity: mattercodex-image-admission-owner
   promotionIdentity: mattercodex-image-promotion-writer
-  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft
+  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc

@@ -84,7 +84,6 @@ type RoleImageRecipeInput struct {
 	Packages           []RoleImagePackage  `json:"packages"`
 	Tools              []RoleImageTool     `json:"tools"`
 	InstallationBlock  string              `json:"installationBlock"`
-	BuildSecretRefs    []string            `json:"buildSecretRefs,omitempty"`
 	ToolchainSHA256    string              `json:"toolchainSha256"`
 }
 
@@ -97,7 +96,7 @@ func (input RoleImageRecipeInput) Validate() error {
 		!validSHA256(input.BuilderSHA256) ||
 		!validSHA256(input.FrontendSHA256) || !validSHA256(input.ToolchainSHA256) ||
 		len(input.Platforms) == 0 || len(input.Platforms) > 8 ||
-		len(input.Packages) > 256 || len(input.Tools) > 128 || len(input.BuildSecretRefs) > 32 ||
+		len(input.Packages) > 256 || len(input.Tools) > 128 ||
 		!validInstallationBlock(input.InstallationBlock) {
 		return errors.New("role image recipe input is invalid")
 	}
@@ -125,32 +124,7 @@ func (input RoleImageRecipeInput) Validate() error {
 	if !uniqueSortedKeys(platformKeys) || !uniqueSortedKeys(packageKeys) || !uniqueSortedKeys(toolKeys) {
 		return errors.New("role image recipe input contains duplicates")
 	}
-	secretRefs := slices.Clone(input.BuildSecretRefs)
-	slices.Sort(secretRefs)
-	for index, reference := range secretRefs {
-		if !validRoleImageBuildSecretRef(reference) || (index > 0 && reference == secretRefs[index-1]) {
-			return errors.New("role image build secret reference is invalid")
-		}
-	}
 	return nil
-}
-
-func validRoleImageBuildSecretRef(reference string) bool {
-	value := strings.TrimPrefix(reference, "vault-versioned://")
-	if value == reference || len(value) < 4 || len(value) > 400 || strings.ContainsAny(value, "?# .\\\r\n\t") {
-		return false
-	}
-	path, version, found := strings.Cut(value, "/v")
-	if !found || path == "" || version == "" || strings.Contains(version, "/") || strings.Trim(version, "0123456789") != "" ||
-		strings.TrimLeft(version, "0") == "" || strings.HasPrefix(path, "/") || strings.HasSuffix(path, "/") {
-		return false
-	}
-	for _, character := range path {
-		if !(character >= 'a' && character <= 'z') && !(character >= '0' && character <= '9') && character != '-' && character != '/' {
-			return false
-		}
-	}
-	return true
 }
 
 type RoleImageRecipeSpec struct {
