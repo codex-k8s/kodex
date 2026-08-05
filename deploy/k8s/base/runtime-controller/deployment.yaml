@@ -52,6 +52,12 @@ spec:
               valueFrom: {fieldRef: {fieldPath: "metadata.annotations['mattercodex.dev/controller-image']"}}
             - name: RUNTIME_AUTHORITY_IMAGE
               valueFrom: {fieldRef: {fieldPath: "metadata.annotations['mattercodex.dev/authority-image']"}}
+            - name: RUNTIME_PROMOTED_ROLE_IMAGE_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: promotedPullRepository}}
+            - name: RUNTIME_ROLE_RUNTIME_CONTRACT_REVISION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+            - name: RUNTIME_ROLE_RUNTIME_CONTRACT_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: otel-collector.observability.svc:4317
             - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME

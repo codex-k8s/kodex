@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattercodex-image-registry-staging-read
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    app.kubernetes.io/component: image-registry
+    mattercodex.dev/registry-scope: staging-read
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: staging-read
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mattercodex-image-registry
+        app.kubernetes.io/component: image-registry
+        mattercodex.dev/registry-scope: staging-read
+    spec:
+      serviceAccountName: mattercodex-image-registry-staging-read
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: registry
+          image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+          env:
+            - {name: REGISTRY_HTTP_ADDR, value: "0.0.0.0:5004"}
+            - {name: REGISTRY_HTTP_TLS_CERTIFICATE, value: /identity/tls.crt}
+            - {name: REGISTRY_HTTP_TLS_KEY, value: /identity/tls.key}
+            - {name: REGISTRY_HTTP_TLS_CLIENTCAS_0, value: /identity/client-ca.pem}
+            - {name: REGISTRY_HTTP_TLS_CLIENTAUTH, value: require-and-verify-client-cert}
+            - {name: REGISTRY_AUTH, value: htpasswd}
+            - {name: REGISTRY_AUTH_HTPASSWD_REALM, value: mattercodex-staging-read}
+            - {name: REGISTRY_AUTH_HTPASSWD_PATH, value: /identity/auth.htpasswd}
+            - {name: REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED, value: "true"}
+            - {name: REGISTRY_STORAGE_DELETE_ENABLED, value: "false"}
+          ports: [{name: read, containerPort: 5004}]
+          readinessProbe: {tcpSocket: {port: read}, periodSeconds: 5, timeoutSeconds: 2}
+          livenessProbe: {tcpSocket: {port: read}, periodSeconds: 15, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/registry, readOnly: true}
+            - {name: identity, mountPath: /identity, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: mattercodex-image-registry-staging, readOnly: true}
+        - name: identity
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes: {secretProviderClass: mattercodex-image-registry-staging-read}
+        - name: tmp
+          emptyDir: {sizeLimit: 32Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattercodex-image-registry-staging-read
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: staging-read
+spec:
+  selector:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: staging-read
+  ports: [{name: https, port: 5004, targetPort: read}]

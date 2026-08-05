@@ -36,7 +36,6 @@ import (
 const (
 	maximumAdmissionBody = 2 << 20
 	admissionNamespace   = "mattercodex-system"
-	roleImageRepository  = "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runtime"
 )
 
 type runtimeSnapshot struct {
@@ -546,7 +545,7 @@ func exactRuntimePod(username string, pod *corev1.Pod, snapshot runtimeSnapshot)
 	expectedAccount := "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+
 		execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
 	expectedPod := "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID+":"+execution.ID, 24)
-	expectedImage := roleImageRepository + "@" + revision.ImageDigest
+	expectedImage := revision.ImageReference
 	if username != expectedBroker || pod.Name != expectedPod || pod.Spec.ServiceAccountName != expectedAccount ||
 		pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken ||
 		pod.Spec.HostNetwork || pod.Spec.HostPID || pod.Spec.HostIPC || pod.Spec.RestartPolicy != corev1.RestartPolicyNever ||

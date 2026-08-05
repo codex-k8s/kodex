@@ -16,7 +16,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 15 {
+	if loaded.Revision != 17 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
 	}
 	for _, producerID := range []string{
@@ -26,6 +26,9 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		"control-plane.integration-gateway",
 		"control-plane.integration-continuation",
 		"control-plane.agent-session",
+		"control-plane.role-image-builder",
+		"control-plane.image-admission",
+		"control-plane.image-promotion",
 		"control-plane.oidc",
 	} {
 		if _, ok := loaded.Producers[producerID]; !ok {
@@ -37,6 +40,10 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		"control.runtime-execution.cleanup.authorize": "runtime-cleanup-authorizer",
 		"control.runtime-execution.cleanup.expire":    "runtime-cleanup-authorizer",
 		"control.runtime-execution.cleanup.consume":   "runtime-controller",
+		"control.image-build.complete":                "role-image-builder",
+		"control.image-admission.record":              "image-admission",
+		"control.image-promotion.claim":               "image-promotion",
+		"control.image-promotion.complete":            "image-promotion",
 	}
 	for operationID, workload := range securityBindings {
 		operation, ok := loaded.Operations[operationID]

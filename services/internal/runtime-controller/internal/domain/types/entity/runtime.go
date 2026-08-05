@@ -313,7 +313,25 @@ type Revision struct {
 	Version                                       uint64
 	ManifestSHA256                                string
 	EffectiveRuntimeSHA256                        string
-	ImageDigest                                   string
+	ImageReference                                string
+	RoleImageRecipeID                             string
+	RoleImageRecipeVersion                        uint64
+	RoleImageSpecSHA256                           string
+	ImageBuildID                                  string
+	ImageBuildVersion                             uint64
+	ImageBuildAttempt                             uint32
+	ImageArtifactID                               string
+	ImageArtifactVersion                          uint64
+	ImageManifestDigest                           string
+	ImageAdmissionRevision                        uint64
+	ImageAdmissionReceiptSHA256                   string
+	ImageAdmissionReceiptOCIManifestDigest        string
+	ImagePolicyRevision                           uint64
+	ImagePolicySHA256                             string
+	ImageSignatureSHA256                          string
+	ImagePromotionReadbackSHA256                  string
+	RoleRuntimeContractRevision                   uint64
+	RoleRuntimeContractSHA256                     string
 	SessionID, RoleID, ChatID                     string
 	ProviderCredentialBindingID                   string
 	ProviderAccountName                           string
@@ -386,8 +404,17 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		revision.ProviderObservationMaxAge < time.Minute || revision.ProviderObservationMaxAge > 24*time.Hour ||
 		!regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`).MatchString(revision.ProviderAccountName) ||
 		!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(revision.AgentProfile) ||
-		len(revision.ImageDigest) != 71 || revision.ImageDigest[:7] != "sha256:" ||
-		!sha256Pattern.MatchString(revision.ImageDigest[7:]) {
+		!validExactImageReference(revision.ImageReference, revision.ImageManifestDigest) ||
+		uuid.Validate(revision.RoleImageRecipeID) != nil || revision.RoleImageRecipeVersion == 0 ||
+		!sha256Pattern.MatchString(revision.RoleImageSpecSHA256) ||
+		uuid.Validate(revision.ImageBuildID) != nil || revision.ImageBuildVersion == 0 || revision.ImageBuildAttempt == 0 ||
+		uuid.Validate(revision.ImageArtifactID) != nil || revision.ImageArtifactVersion == 0 ||
+		revision.ImageAdmissionRevision == 0 || !sha256Pattern.MatchString(revision.ImageAdmissionReceiptSHA256) ||
+		!validManifestDigest(revision.ImageAdmissionReceiptOCIManifestDigest) ||
+		revision.ImagePolicyRevision == 0 || !sha256Pattern.MatchString(revision.ImagePolicySHA256) ||
+		!sha256Pattern.MatchString(revision.ImageSignatureSHA256) ||
+		!sha256Pattern.MatchString(revision.ImagePromotionReadbackSHA256) ||
+		revision.RoleRuntimeContractRevision == 0 || !sha256Pattern.MatchString(revision.RoleRuntimeContractSHA256) {
 		return errors.New("runtime revision does not match execution")
 	}
 	if (execution.ScheduleOccurrenceID == "") != (revision.ScheduledResultContract == nil) ||
@@ -502,6 +529,9 @@ func (revision Revision) ValidateFor(execution Execution) error {
 	}
 	for _, required := range []string{
 		"RESOURCE_KIND_ROLE:" + revision.RoleID,
+		"RESOURCE_KIND_ROLE_IMAGE_RECIPE:" + revision.RoleImageRecipeID,
+		"RESOURCE_KIND_IMAGE_BUILD:" + revision.ImageBuildID,
+		"RESOURCE_KIND_IMAGE_ARTIFACT:" + revision.ImageArtifactID,
 		"RESOURCE_KIND_PROMPT_PROFILE:" + revision.PromptProfileID,
 		"RESOURCE_KIND_CREDENTIAL_BINDING:" + revision.ProviderCredentialBindingID,
 		"RESOURCE_KIND_SESSION:" + revision.SessionID,
@@ -509,6 +539,11 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		if components[required].ResourceID == "" {
 			return errors.New("runtime revision required component is missing")
 		}
+	}
+	if components["RESOURCE_KIND_ROLE_IMAGE_RECIPE:"+revision.RoleImageRecipeID].Version != revision.RoleImageRecipeVersion ||
+		components["RESOURCE_KIND_IMAGE_BUILD:"+revision.ImageBuildID].Version != revision.ImageBuildVersion ||
+		components["RESOURCE_KIND_IMAGE_ARTIFACT:"+revision.ImageArtifactID].Version != revision.ImageArtifactVersion {
+		return errors.New("runtime revision image component version is invalid")
 	}
 	if revision.ChatID != "" && components["RESOURCE_KIND_CHAT:"+revision.ChatID].ResourceID == "" {
 		return errors.New("runtime revision chat component is missing")
@@ -525,9 +560,27 @@ func validResourceKind(value string) bool {
 		"RESOURCE_KIND_PROCESS_RUN", "RESOURCE_KIND_SCHEDULE", "RESOURCE_KIND_OWNER_GATE",
 		"RESOURCE_KIND_MEMORY_RECORD", "RESOURCE_KIND_WORK_CLAIM", "RESOURCE_KIND_ARTIFACT":
 		return true
+	case "RESOURCE_KIND_ROLE_IMAGE_RECIPE", "RESOURCE_KIND_IMAGE_BUILD", "RESOURCE_KIND_IMAGE_ARTIFACT":
+		return true
 	default:
 		return false
 	}
+}
+
+func validExactImageReference(reference, digest string) bool {
+	if len(digest) != 71 || !strings.HasPrefix(digest, "sha256:") ||
+		!sha256Pattern.MatchString(strings.TrimPrefix(digest, "sha256:")) ||
+		len(reference) > 1024 || strings.ContainsAny(reference, "\r\n\t ") ||
+		strings.Contains(reference, "://") || strings.Count(reference, "@") != 1 {
+		return false
+	}
+	repository, actualDigest, ok := strings.Cut(reference, "@")
+	return ok && repository != "" && strings.Contains(repository, "/") && actualDigest == digest
+}
+
+func validManifestDigest(digest string) bool {
+	return len(digest) == 71 && strings.HasPrefix(digest, "sha256:") &&
+		sha256Pattern.MatchString(strings.TrimPrefix(digest, "sha256:"))
 }
 
 type RuntimeStatus struct {

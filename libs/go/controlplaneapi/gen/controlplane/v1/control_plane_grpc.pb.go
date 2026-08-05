@@ -78,6 +78,20 @@ const (
 	ControlPlaneService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
 	ControlPlaneService_RegisterArtifact_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
 	ControlPlaneService_RecordArtifactScan_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
+	ControlPlaneService_ManageRoleImageRecipe_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageRoleImageRecipe"
+	ControlPlaneService_GetRoleImageRecipe_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetRoleImageRecipe"
+	ControlPlaneService_ClaimImageBuild_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ClaimImageBuild"
+	ControlPlaneService_RenewImageBuild_FullMethodName                          = "/controlplane.v1.ControlPlaneService/RenewImageBuild"
+	ControlPlaneService_ReportImageBuildProgress_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ReportImageBuildProgress"
+	ControlPlaneService_CompleteImageBuild_FullMethodName                       = "/controlplane.v1.ControlPlaneService/CompleteImageBuild"
+	ControlPlaneService_FailImageBuild_FullMethodName                           = "/controlplane.v1.ControlPlaneService/FailImageBuild"
+	ControlPlaneService_ManageImageBuild_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ManageImageBuild"
+	ControlPlaneService_ClaimImageAdmission_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ClaimImageAdmission"
+	ControlPlaneService_RecordImageAdmission_FullMethodName                     = "/controlplane.v1.ControlPlaneService/RecordImageAdmission"
+	ControlPlaneService_ClaimImagePromotion_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ClaimImagePromotion"
+	ControlPlaneService_AuthorizeImagePromotion_FullMethodName                  = "/controlplane.v1.ControlPlaneService/AuthorizeImagePromotion"
+	ControlPlaneService_CompleteImagePromotion_FullMethodName                   = "/controlplane.v1.ControlPlaneService/CompleteImagePromotion"
+	ControlPlaneService_GetRoleImageBuild_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetRoleImageBuild"
 	ControlPlaneService_GetRuntimeRevision_FullMethodName                       = "/controlplane.v1.ControlPlaneService/GetRuntimeRevision"
 	ControlPlaneService_RecordMemoryEmbedding_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordMemoryEmbedding"
 	ControlPlaneService_ClaimRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ClaimRuntimeExecution"
@@ -262,6 +276,40 @@ type ControlPlaneServiceClient interface {
 	RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
 	RecordArtifactScan(ctx context.Context, in *RecordArtifactScanRequest, opts ...grpc.CallOption) (*RecordArtifactScanResponse, error)
+	// ManageRoleImageRecipe — единственный owner path create/update/archive/restore/delete
+	// и запуска сборки. Actor, tenant, owner, generation и policy назначает сервер.
+	ManageRoleImageRecipe(ctx context.Context, in *ManageRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageRoleImageRecipeResponse, error)
+	// GetRoleImageRecipe возвращает владельцу exact version полной редактируемой
+	// спецификации; secret references остаются ссылками, а значения не возвращаются.
+	GetRoleImageRecipe(ctx context.Context, in *GetRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetRoleImageRecipeResponse, error)
+	// ClaimImageBuild выдаёт builder одну exact fenced attempt без идентификаторов
+	// из payload и возвращает секретный installation block только в этом ответе.
+	ClaimImageBuild(ctx context.Context, in *ClaimImageBuildRequest, opts ...grpc.CallOption) (*ClaimImageBuildResponse, error)
+	// RenewImageBuild продлевает только current attempt/fence/grant generation.
+	RenewImageBuild(ctx context.Context, in *RenewImageBuildRequest, opts ...grpc.CallOption) (*RenewImageBuildResponse, error)
+	// ReportImageBuildProgress фиксирует только bounded stage/progress без build input.
+	ReportImageBuildProgress(ctx context.Context, in *ReportImageBuildProgressRequest, opts ...grpc.CallOption) (*ReportImageBuildProgressResponse, error)
+	// CompleteImageBuild закрепляет staging digest и provenance exact immutable tuple.
+	CompleteImageBuild(ctx context.Context, in *CompleteImageBuildRequest, opts ...grpc.CallOption) (*CompleteImageBuildResponse, error)
+	// FailImageBuild закрывает current attempt безопасным error code без log payload.
+	FailImageBuild(ctx context.Context, in *FailImageBuildRequest, opts ...grpc.CallOption) (*FailImageBuildResponse, error)
+	// ManageImageBuild — закрытый owner path cancel/retry/expiry/dead-letter.
+	ManageImageBuild(ctx context.Context, in *ManageImageBuildRequest, opts ...grpc.CallOption) (*ManageImageBuildResponse, error)
+	// ClaimImageAdmission выдаёт independent admission workload exact staging tuple.
+	ClaimImageAdmission(ctx context.Context, in *ClaimImageAdmissionRequest, opts ...grpc.CallOption) (*ClaimImageAdmissionResponse, error)
+	// RecordImageAdmission сохраняет SBOM/vulnerability/signature evidence.
+	RecordImageAdmission(ctx context.Context, in *RecordImageAdmissionRequest, opts ...grpc.CallOption) (*RecordImageAdmissionResponse, error)
+	// ClaimImagePromotion выдаёт promotion workload новый fenced one-time claim
+	// для server-selected accepted artifact; истёкший claim заменяется.
+	ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error)
+	// AuthorizeImagePromotion атомарно расходует current claim до любого
+	// pull-visible side effect и фиксирует durable exact publish authorization.
+	AuthorizeImagePromotion(ctx context.Context, in *AuthorizeImagePromotionRequest, opts ...grpc.CallOption) (*AuthorizeImagePromotionResponse, error)
+	// CompleteImagePromotion принимает только предварительно сохранённую publish
+	// authorization после exact promoted readback.
+	CompleteImagePromotion(ctx context.Context, in *CompleteImagePromotionRequest, opts ...grpc.CallOption) (*CompleteImagePromotionResponse, error)
+	// GetRoleImageBuild выполняет авторитетный version-pinned readback без secret input.
+	GetRoleImageBuild(ctx context.Context, in *GetRoleImageBuildRequest, opts ...grpc.CallOption) (*GetRoleImageBuildResponse, error)
 	// GetRuntimeRevision — авторитетное чтение закреплённой версии для
 	// runtime-controller.
 	GetRuntimeRevision(ctx context.Context, in *GetRuntimeRevisionRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionResponse, error)
@@ -952,6 +1000,146 @@ func (c *controlPlaneServiceClient) RecordArtifactScan(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ManageRoleImageRecipe(ctx context.Context, in *ManageRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageRoleImageRecipeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageRoleImageRecipeResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRoleImageRecipe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetRoleImageRecipe(ctx context.Context, in *GetRoleImageRecipeRequest, opts ...grpc.CallOption) (*GetRoleImageRecipeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRoleImageRecipeResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetRoleImageRecipe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ClaimImageBuild(ctx context.Context, in *ClaimImageBuildRequest, opts ...grpc.CallOption) (*ClaimImageBuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimImageBuildResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimImageBuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RenewImageBuild(ctx context.Context, in *RenewImageBuildRequest, opts ...grpc.CallOption) (*RenewImageBuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewImageBuildResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RenewImageBuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ReportImageBuildProgress(ctx context.Context, in *ReportImageBuildProgressRequest, opts ...grpc.CallOption) (*ReportImageBuildProgressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportImageBuildProgressResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReportImageBuildProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CompleteImageBuild(ctx context.Context, in *CompleteImageBuildRequest, opts ...grpc.CallOption) (*CompleteImageBuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteImageBuildResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteImageBuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) FailImageBuild(ctx context.Context, in *FailImageBuildRequest, opts ...grpc.CallOption) (*FailImageBuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailImageBuildResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_FailImageBuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ManageImageBuild(ctx context.Context, in *ManageImageBuildRequest, opts ...grpc.CallOption) (*ManageImageBuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageImageBuildResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageImageBuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ClaimImageAdmission(ctx context.Context, in *ClaimImageAdmissionRequest, opts ...grpc.CallOption) (*ClaimImageAdmissionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimImageAdmissionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimImageAdmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RecordImageAdmission(ctx context.Context, in *RecordImageAdmissionRequest, opts ...grpc.CallOption) (*RecordImageAdmissionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordImageAdmissionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordImageAdmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimImagePromotionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimImagePromotion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AuthorizeImagePromotion(ctx context.Context, in *AuthorizeImagePromotionRequest, opts ...grpc.CallOption) (*AuthorizeImagePromotionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeImagePromotionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeImagePromotion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) CompleteImagePromotion(ctx context.Context, in *CompleteImagePromotionRequest, opts ...grpc.CallOption) (*CompleteImagePromotionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteImagePromotionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CompleteImagePromotion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetRoleImageBuild(ctx context.Context, in *GetRoleImageBuildRequest, opts ...grpc.CallOption) (*GetRoleImageBuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRoleImageBuildResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetRoleImageBuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetRuntimeRevision(ctx context.Context, in *GetRuntimeRevisionRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetRuntimeRevisionResponse)
@@ -1494,6 +1682,40 @@ type ControlPlaneServiceServer interface {
 	RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
 	RecordArtifactScan(context.Context, *RecordArtifactScanRequest) (*RecordArtifactScanResponse, error)
+	// ManageRoleImageRecipe — единственный owner path create/update/archive/restore/delete
+	// и запуска сборки. Actor, tenant, owner, generation и policy назначает сервер.
+	ManageRoleImageRecipe(context.Context, *ManageRoleImageRecipeRequest) (*ManageRoleImageRecipeResponse, error)
+	// GetRoleImageRecipe возвращает владельцу exact version полной редактируемой
+	// спецификации; secret references остаются ссылками, а значения не возвращаются.
+	GetRoleImageRecipe(context.Context, *GetRoleImageRecipeRequest) (*GetRoleImageRecipeResponse, error)
+	// ClaimImageBuild выдаёт builder одну exact fenced attempt без идентификаторов
+	// из payload и возвращает секретный installation block только в этом ответе.
+	ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error)
+	// RenewImageBuild продлевает только current attempt/fence/grant generation.
+	RenewImageBuild(context.Context, *RenewImageBuildRequest) (*RenewImageBuildResponse, error)
+	// ReportImageBuildProgress фиксирует только bounded stage/progress без build input.
+	ReportImageBuildProgress(context.Context, *ReportImageBuildProgressRequest) (*ReportImageBuildProgressResponse, error)
+	// CompleteImageBuild закрепляет staging digest и provenance exact immutable tuple.
+	CompleteImageBuild(context.Context, *CompleteImageBuildRequest) (*CompleteImageBuildResponse, error)
+	// FailImageBuild закрывает current attempt безопасным error code без log payload.
+	FailImageBuild(context.Context, *FailImageBuildRequest) (*FailImageBuildResponse, error)
+	// ManageImageBuild — закрытый owner path cancel/retry/expiry/dead-letter.
+	ManageImageBuild(context.Context, *ManageImageBuildRequest) (*ManageImageBuildResponse, error)
+	// ClaimImageAdmission выдаёт independent admission workload exact staging tuple.
+	ClaimImageAdmission(context.Context, *ClaimImageAdmissionRequest) (*ClaimImageAdmissionResponse, error)
+	// RecordImageAdmission сохраняет SBOM/vulnerability/signature evidence.
+	RecordImageAdmission(context.Context, *RecordImageAdmissionRequest) (*RecordImageAdmissionResponse, error)
+	// ClaimImagePromotion выдаёт promotion workload новый fenced one-time claim
+	// для server-selected accepted artifact; истёкший claim заменяется.
+	ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error)
+	// AuthorizeImagePromotion атомарно расходует current claim до любого
+	// pull-visible side effect и фиксирует durable exact publish authorization.
+	AuthorizeImagePromotion(context.Context, *AuthorizeImagePromotionRequest) (*AuthorizeImagePromotionResponse, error)
+	// CompleteImagePromotion принимает только предварительно сохранённую publish
+	// authorization после exact promoted readback.
+	CompleteImagePromotion(context.Context, *CompleteImagePromotionRequest) (*CompleteImagePromotionResponse, error)
+	// GetRoleImageBuild выполняет авторитетный version-pinned readback без secret input.
+	GetRoleImageBuild(context.Context, *GetRoleImageBuildRequest) (*GetRoleImageBuildResponse, error)
 	// GetRuntimeRevision — авторитетное чтение закреплённой версии для
 	// runtime-controller.
 	GetRuntimeRevision(context.Context, *GetRuntimeRevisionRequest) (*GetRuntimeRevisionResponse, error)
@@ -1770,6 +1992,48 @@ func (UnimplementedControlPlaneServiceServer) RegisterArtifact(context.Context, 
 }
 func (UnimplementedControlPlaneServiceServer) RecordArtifactScan(context.Context, *RecordArtifactScanRequest) (*RecordArtifactScanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordArtifactScan not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageRoleImageRecipe(context.Context, *ManageRoleImageRecipeRequest) (*ManageRoleImageRecipeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageRoleImageRecipe not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetRoleImageRecipe(context.Context, *GetRoleImageRecipeRequest) (*GetRoleImageRecipeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRoleImageRecipe not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimImageBuild not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RenewImageBuild(context.Context, *RenewImageBuildRequest) (*RenewImageBuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewImageBuild not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ReportImageBuildProgress(context.Context, *ReportImageBuildProgressRequest) (*ReportImageBuildProgressResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportImageBuildProgress not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CompleteImageBuild(context.Context, *CompleteImageBuildRequest) (*CompleteImageBuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteImageBuild not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) FailImageBuild(context.Context, *FailImageBuildRequest) (*FailImageBuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailImageBuild not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageImageBuild(context.Context, *ManageImageBuildRequest) (*ManageImageBuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageImageBuild not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ClaimImageAdmission(context.Context, *ClaimImageAdmissionRequest) (*ClaimImageAdmissionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimImageAdmission not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordImageAdmission(context.Context, *RecordImageAdmissionRequest) (*RecordImageAdmissionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordImageAdmission not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimImagePromotion not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AuthorizeImagePromotion(context.Context, *AuthorizeImagePromotionRequest) (*AuthorizeImagePromotionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeImagePromotion not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) CompleteImagePromotion(context.Context, *CompleteImagePromotionRequest) (*CompleteImagePromotionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteImagePromotion not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetRoleImageBuild(context.Context, *GetRoleImageBuildRequest) (*GetRoleImageBuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRoleImageBuild not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetRuntimeRevision(context.Context, *GetRuntimeRevisionRequest) (*GetRuntimeRevisionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeRevision not implemented")
@@ -2974,6 +3238,258 @@ func _ControlPlaneService_RecordArtifactScan_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ManageRoleImageRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageRoleImageRecipeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageRoleImageRecipe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageRoleImageRecipe(ctx, req.(*ManageRoleImageRecipeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetRoleImageRecipe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoleImageRecipeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetRoleImageRecipe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetRoleImageRecipe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetRoleImageRecipe(ctx, req.(*GetRoleImageRecipeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ClaimImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimImageBuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ClaimImageBuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ClaimImageBuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ClaimImageBuild(ctx, req.(*ClaimImageBuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RenewImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewImageBuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RenewImageBuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RenewImageBuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RenewImageBuild(ctx, req.(*RenewImageBuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ReportImageBuildProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportImageBuildProgressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReportImageBuildProgress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReportImageBuildProgress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReportImageBuildProgress(ctx, req.(*ReportImageBuildProgressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CompleteImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteImageBuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CompleteImageBuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CompleteImageBuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CompleteImageBuild(ctx, req.(*CompleteImageBuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_FailImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailImageBuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).FailImageBuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_FailImageBuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).FailImageBuild(ctx, req.(*FailImageBuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ManageImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageImageBuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageImageBuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageImageBuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageImageBuild(ctx, req.(*ManageImageBuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ClaimImageAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimImageAdmissionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ClaimImageAdmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ClaimImageAdmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ClaimImageAdmission(ctx, req.(*ClaimImageAdmissionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RecordImageAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordImageAdmissionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordImageAdmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordImageAdmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordImageAdmission(ctx, req.(*RecordImageAdmissionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ClaimImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimImagePromotionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ClaimImagePromotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ClaimImagePromotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ClaimImagePromotion(ctx, req.(*ClaimImagePromotionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AuthorizeImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeImagePromotionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AuthorizeImagePromotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AuthorizeImagePromotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AuthorizeImagePromotion(ctx, req.(*AuthorizeImagePromotionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_CompleteImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteImagePromotionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CompleteImagePromotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CompleteImagePromotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CompleteImagePromotion(ctx, req.(*CompleteImagePromotionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetRoleImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoleImageBuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetRoleImageBuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetRoleImageBuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetRoleImageBuild(ctx, req.(*GetRoleImageBuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetRuntimeRevision_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRuntimeRevisionRequest)
 	if err := dec(in); err != nil {
@@ -3936,6 +4452,62 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordArtifactScan",
 			Handler:    _ControlPlaneService_RecordArtifactScan_Handler,
+		},
+		{
+			MethodName: "ManageRoleImageRecipe",
+			Handler:    _ControlPlaneService_ManageRoleImageRecipe_Handler,
+		},
+		{
+			MethodName: "GetRoleImageRecipe",
+			Handler:    _ControlPlaneService_GetRoleImageRecipe_Handler,
+		},
+		{
+			MethodName: "ClaimImageBuild",
+			Handler:    _ControlPlaneService_ClaimImageBuild_Handler,
+		},
+		{
+			MethodName: "RenewImageBuild",
+			Handler:    _ControlPlaneService_RenewImageBuild_Handler,
+		},
+		{
+			MethodName: "ReportImageBuildProgress",
+			Handler:    _ControlPlaneService_ReportImageBuildProgress_Handler,
+		},
+		{
+			MethodName: "CompleteImageBuild",
+			Handler:    _ControlPlaneService_CompleteImageBuild_Handler,
+		},
+		{
+			MethodName: "FailImageBuild",
+			Handler:    _ControlPlaneService_FailImageBuild_Handler,
+		},
+		{
+			MethodName: "ManageImageBuild",
+			Handler:    _ControlPlaneService_ManageImageBuild_Handler,
+		},
+		{
+			MethodName: "ClaimImageAdmission",
+			Handler:    _ControlPlaneService_ClaimImageAdmission_Handler,
+		},
+		{
+			MethodName: "RecordImageAdmission",
+			Handler:    _ControlPlaneService_RecordImageAdmission_Handler,
+		},
+		{
+			MethodName: "ClaimImagePromotion",
+			Handler:    _ControlPlaneService_ClaimImagePromotion_Handler,
+		},
+		{
+			MethodName: "AuthorizeImagePromotion",
+			Handler:    _ControlPlaneService_AuthorizeImagePromotion_Handler,
+		},
+		{
+			MethodName: "CompleteImagePromotion",
+			Handler:    _ControlPlaneService_CompleteImagePromotion_Handler,
+		},
+		{
+			MethodName: "GetRoleImageBuild",
+			Handler:    _ControlPlaneService_GetRoleImageBuild_Handler,
 		},
 		{
 			MethodName: "GetRuntimeRevision",

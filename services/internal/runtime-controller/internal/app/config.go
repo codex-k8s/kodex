@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/value"
 )
 
 const serviceName = "runtime-controller"
@@ -24,13 +25,15 @@ type Config struct {
 	ControlPlaneCertificateFile      string        `env:"RUNTIME_CONTROL_PLANE_CERTIFICATE_FILE"`
 	ControlPlanePrivateKeyFile       string        `env:"RUNTIME_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile             string        `env:"RUNTIME_APPLICATION_GRANT_FILE"`
-	RoleImageRepository              string        `env:"RUNTIME_ROLE_IMAGE_REPOSITORY"`
 	RunnerControlPlaneTarget         string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TARGET"`
 	RunnerControlPlaneTLSServerName  string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TLS_SERVER_NAME"`
 	InteractionGatewayURL            string        `env:"RUNTIME_INTERACTION_GATEWAY_URL"`
 	SessionMCPURL                    string        `env:"RUNTIME_SESSION_MCP_URL"`
 	ControllerImage                  string        `env:"RUNTIME_CONTROLLER_IMAGE"`
 	AuthorityImage                   string        `env:"RUNTIME_AUTHORITY_IMAGE"`
+	PromotedRoleImageRepository      string        `env:"RUNTIME_PROMOTED_ROLE_IMAGE_REPOSITORY"`
+	RoleRuntimeContractRevision      uint64        `env:"RUNTIME_ROLE_RUNTIME_CONTRACT_REVISION"`
+	RoleRuntimeContractSHA256        string        `env:"RUNTIME_ROLE_RUNTIME_CONTRACT_SHA256"`
 	StorageClass                     string        `env:"RUNTIME_STORAGE_CLASS"`
 	PVCSize                          string        `env:"RUNTIME_PVC_SIZE"`
 	ReadClusterRole                  string        `env:"RUNTIME_READ_CLUSTER_ROLE"`
@@ -83,7 +86,6 @@ func loadConfig() (Config, error) {
 		ControlPlaneCertificateFile:     "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
 		ControlPlanePrivateKeyFile:      "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
 		ApplicationGrantFile:            "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
-		RoleImageRepository:             "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runtime",
 		RunnerControlPlaneTarget:        "control-plane.mattercodex-system.svc:8443",
 		RunnerControlPlaneTLSServerName: "control-plane.mattercodex-system.svc.cluster.local",
 		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
@@ -171,8 +173,9 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSDurable != "RUNTIME_CONTROLLER_V1" ||
 		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.PostgresPrincipal == "" ||
 		config.MaximumCPUMilli < 1 || config.MaximumMemoryBytes < 1 ||
-		!validPinnedImage(config.ControllerImage) || !validPinnedImage(config.AuthorityImage) ||
-		strings.Contains(config.RoleImageRepository, "@") {
+		!value.ValidImageRepository(config.PromotedRoleImageRepository) || config.RoleRuntimeContractRevision == 0 ||
+		!validSHA256(config.RoleRuntimeContractSHA256) ||
+		!validPinnedImage(config.ControllerImage) || !validPinnedImage(config.AuthorityImage) {
 		return errors.New("runtime-controller bounded configuration is invalid")
 	}
 	if config.WarmTTL != 4*time.Hour ||
@@ -187,6 +190,11 @@ func (config Config) validate() error {
 		return errors.New("runtime-controller duration is invalid")
 	}
 	return nil
+}
+
+func validSHA256(value string) bool {
+	return len(value) == 64 && strings.Trim(value, "0123456789abcdef") == "" &&
+		value != strings.Repeat("0", 64)
 }
 
 func validPinnedImage(value string) bool {

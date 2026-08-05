@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: role-image-builder-runtime
+data:
+  ROLE_IMAGE_BUILDER_TECHNICAL_LISTEN: ":9090"
+  ROLE_IMAGE_BUILDER_CONTROL_PLANE_TARGET: control-plane.mattercodex-system.svc:8443
+  ROLE_IMAGE_BUILDER_CONTROL_PLANE_TLS_SERVER_NAME: control-plane.mattercodex-system.svc.cluster.local
+  ROLE_IMAGE_BUILDER_BUILDKIT_BINARY: /usr/bin/buildctl
+  ROLE_IMAGE_BUILDER_BUILDKIT_ADDRESS: tcp://mattercodex-buildkit.mattercodex-system.svc.cluster.local:1234
+  ROLE_IMAGE_BUILDER_BUILDKIT_TLS_SERVER_NAME: mattercodex-buildkit.mattercodex-system.svc.cluster.local
+  ROLE_IMAGE_BUILDER_WORKSPACE_ROOT: /var/run/mattercodex/work
+  ROLE_IMAGE_BUILDER_INPUT_DOCKER_CONFIG: /var/run/secrets/mattercodex/role-image-builder/input-read/config.json
+  ROLE_IMAGE_BUILDER_FRONTEND_REPOSITORY: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/dockerfile
+  ROLE_IMAGE_BUILDER_STAGING_REPOSITORY: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
+  ROLE_IMAGE_BUILDER_EXPECTED_BUILDER_SHA256: 995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe
+  ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+  ROLE_IMAGE_BUILDER_STARTUP_TIMEOUT: 30s
+  ROLE_IMAGE_BUILDER_SHUTDOWN_TIMEOUT: 20s
+  ROLE_IMAGE_BUILDER_RPC_DEADLINE: 5s
+  ROLE_IMAGE_BUILDER_POLL_INTERVAL: 1s
+  ROLE_IMAGE_BUILDER_RENEW_INTERVAL: 20s
+  ROLE_IMAGE_BUILDER_READINESS_INTERVAL: 10s

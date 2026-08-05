@@ -24,7 +24,9 @@ WHERE organization_id = @organization_id::uuid
       'CREDENTIAL_BINDING',
       'REPOSITORY_WORKSPACE',
       'INTEGRATION'
-      ,'SESSION'
+      ,'SESSION',
+      'ROLE_IMAGE_RECIPE',
+      'IMAGE_ARTIFACT'
   )
 ORDER BY kind, id
 FOR SHARE

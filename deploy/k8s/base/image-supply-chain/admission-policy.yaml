@@ -10,11 +10,27 @@ metadata:
 immutable: true
 data:
   toolsImage: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  admissionImage: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  authorityImage: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  promotionRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles
+  promotionEvidenceRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence
+  evidenceRepository: mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission
+  promotedPullRepository: registry-pull.invalid/mattercodex/roles
+  pullRegistryHost: registry-pull.invalid
+  pullCredentialGeneration: "0"
+  nodeReadbackImage: registry-pull.invalid/mattercodex/agent-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  roleImageInputRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs
   policyRevision: "0"
-  builderIdentity: spiffe://mattercodex.local/ns/mattercodex-system/sa/mattercodex-role-image-builder
-  buildType: https://mobyproject.org/buildkit@v1
+  policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+  builderIdentity: spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder
+  buildType: https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
+  trustedRoleBaseRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner
+  trustedRoleBaseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  frontendSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+  roleRuntimeContractRevision: "1"
+  roleRuntimeContractSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   scannerIdentity: mattercodex-image-scanner
   signerIdentity: mattercodex-image-signer
   admissionOwnerIdentity: mattercodex-image-admission-owner
   promotionIdentity: mattercodex-image-promotion-writer
-  requiredTools: base64,buildctl,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft
+  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc

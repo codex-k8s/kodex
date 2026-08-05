@@ -59,6 +59,9 @@ packages:
       - artifact-scanner
       - memory-indexer
       - integration-gateway
+      - role-image-builder
+      - image-admission
+      - image-promotion
   - id: runtime-controller-agent-runner-input-v2
     format: json-schema
     owner: runtime-controller
@@ -89,6 +92,9 @@ packages:
       - runtime-controller
       - agent-runner
       - automation-scheduler
+      - role-image-builder
+      - image-admission
+      - image-promotion
   - id: internal-rpc-authorization-policy-v1
     format: json-schema
     owner: internal-rpc-authority

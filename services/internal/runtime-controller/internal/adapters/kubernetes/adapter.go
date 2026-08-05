@@ -23,6 +23,7 @@ import (
 	runtimerepo "github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/value"
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -62,13 +63,13 @@ const (
 type Config struct {
 	Environment                      string
 	Namespace                        string
-	RoleImageRepository              string
 	RunnerControlPlaneTarget         string
 	RunnerControlPlaneTLSServerName  string
 	InteractionGatewayURL            string
 	SessionMCPURL                    string
 	ControllerImage                  string
 	AuthorityImage                   string
+	PromotedRoleImageRepository      string
 	StorageClass                     string
 	PVCSize                          string
 	ReadClusterRole                  string
@@ -117,10 +118,11 @@ func InCluster(config Config) (*Adapter, error) {
 
 func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 	if client == nil || (config.Environment != "staging" && config.Environment != "production") ||
-		config.Namespace == "" || config.RoleImageRepository == "" ||
+		config.Namespace == "" ||
 		config.RunnerControlPlaneTarget == "" || config.RunnerControlPlaneTLSServerName == "" ||
 		config.InteractionGatewayURL == "" || config.SessionMCPURL == "" ||
 		config.ControllerImage == "" || config.AuthorityImage == "" ||
+		!value.ValidImageRepository(config.PromotedRoleImageRepository) ||
 		config.StorageClass == "" || config.PVCSize == "" || config.MaximumPods < 1 ||
 		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
 		config.MaximumCPU < 1 || config.MaximumMemoryBytes < 1 ||
@@ -1185,6 +1187,9 @@ func (adapter *Adapter) rolePod(
 	if !validWorkloadTicket(execution.WorkloadTicket) {
 		return nil, errs.ErrStateConflict
 	}
+	if revision.ImageReference != adapter.config.PromotedRoleImageRepository+"@"+revision.ImageManifestDigest {
+		return nil, errors.New("runtime role image reference is outside the promoted repository")
+	}
 	volumes := []corev1.Volume{
 		{Name: "session", VolumeSource: corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName(execution)},
@@ -1296,7 +1301,7 @@ func (adapter *Adapter) rolePod(
 			VolumeMounts: []corev1.VolumeMount{{Name: "authority-sockets", MountPath: "/run/mattercodex"}},
 			Resources:    smallResources(),
 		}, {
-			Name: "workspace-init", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			Name: "workspace-init", Image: revision.ImageReference,
 			ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"},
 			Env:             runnerObservabilityEnv(adapter.config.Environment),
 			SecurityContext: restrictedSecurityContext(10001),
@@ -1306,7 +1311,7 @@ func (adapter *Adapter) rolePod(
 				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")}},
 		}},
 		Containers: []corev1.Container{{
-			Name: "role-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			Name: "role-runtime", Image: revision.ImageReference,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Args:            []string{"runtime-session"},
 			Env: append([]corev1.EnvVar{
@@ -1322,7 +1327,7 @@ func (adapter *Adapter) rolePod(
 			ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 5, TimeoutSeconds: 2, FailureThreshold: 3},
 			LivenessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 10, TimeoutSeconds: 2, FailureThreshold: 3},
 		}, {
-			Name: "provider-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			Name: "provider-runtime", Image: revision.ImageReference,
 			ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 			Env:       []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: "/workspace/.matter-codex/state/codex-home"}},
 			Resources: smallResources(), SecurityContext: restrictedSecurityContext(10002),
@@ -3019,28 +3024,45 @@ func sameBinding(subjects []rbacv1.Subject, expected rbacv1.Subject) bool {
 func podMatches(actual, expected *corev1.Pod) bool {
 	if actual == nil || expected == nil || actual.DeletionTimestamp != nil ||
 		actual.Spec.ServiceAccountName != expected.Spec.ServiceAccountName ||
-		actual.Spec.AutomountServiceAccountToken == nil || *actual.Spec.AutomountServiceAccountToken ||
+		!reflect.DeepEqual(actual.Spec.AutomountServiceAccountToken, expected.Spec.AutomountServiceAccountToken) ||
 		actual.Spec.RestartPolicy != expected.Spec.RestartPolicy ||
-		actual.Spec.EnableServiceLinks == nil || *actual.Spec.EnableServiceLinks ||
-		len(actual.Spec.Containers) != 1 || len(expected.Spec.Containers) != 1 ||
+		!reflect.DeepEqual(actual.Spec.EnableServiceLinks, expected.Spec.EnableServiceLinks) ||
+		!reflect.DeepEqual(actual.Spec.TerminationGracePeriodSeconds, expected.Spec.TerminationGracePeriodSeconds) ||
+		!reflect.DeepEqual(actual.Spec.SecurityContext, expected.Spec.SecurityContext) ||
+		!reflect.DeepEqual(actual.Spec.ImagePullSecrets, expected.Spec.ImagePullSecrets) ||
+		len(actual.Spec.InitContainers) != len(expected.Spec.InitContainers) ||
+		len(actual.Spec.InitContainers) != 2 ||
+		len(actual.Spec.Containers) != len(expected.Spec.Containers) ||
+		len(actual.Spec.Containers) != 3 ||
 		!reflect.DeepEqual(actual.Spec.Volumes, expected.Spec.Volumes) {
 		return false
 	}
-	left, right := actual.Spec.Containers[0], expected.Spec.Containers[0]
-	return left.Name == right.Name && left.Image == right.Image &&
-		left.ImagePullPolicy == right.ImagePullPolicy &&
-		reflect.DeepEqual(left.Env, right.Env) &&
-		reflect.DeepEqual(left.Resources, right.Resources) &&
-		reflect.DeepEqual(left.SecurityContext, right.SecurityContext) &&
-		reflect.DeepEqual(left.VolumeMounts, right.VolumeMounts) &&
-		left.ReadinessProbe != nil && right.ReadinessProbe != nil &&
-		left.ReadinessProbe.HTTPGet != nil && right.ReadinessProbe.HTTPGet != nil &&
-		left.ReadinessProbe.HTTPGet.Path == right.ReadinessProbe.HTTPGet.Path &&
-		left.ReadinessProbe.HTTPGet.Port == right.ReadinessProbe.HTTPGet.Port &&
-		left.LivenessProbe != nil && right.LivenessProbe != nil &&
-		left.LivenessProbe.HTTPGet != nil && right.LivenessProbe.HTTPGet != nil &&
-		left.LivenessProbe.HTTPGet.Path == right.LivenessProbe.HTTPGet.Path &&
-		left.LivenessProbe.HTTPGet.Port == right.LivenessProbe.HTTPGet.Port
+	for index := range expected.Spec.InitContainers {
+		if !executableContainerMatches(actual.Spec.InitContainers[index], expected.Spec.InitContainers[index]) {
+			return false
+		}
+	}
+	for index := range expected.Spec.Containers {
+		if !executableContainerMatches(actual.Spec.Containers[index], expected.Spec.Containers[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func executableContainerMatches(actual, expected corev1.Container) bool {
+	return actual.Name == expected.Name && actual.Image == expected.Image &&
+		actual.ImagePullPolicy == expected.ImagePullPolicy &&
+		reflect.DeepEqual(actual.Command, expected.Command) &&
+		reflect.DeepEqual(actual.Args, expected.Args) &&
+		reflect.DeepEqual(actual.Env, expected.Env) &&
+		reflect.DeepEqual(actual.Ports, expected.Ports) &&
+		reflect.DeepEqual(actual.Resources, expected.Resources) &&
+		reflect.DeepEqual(actual.SecurityContext, expected.SecurityContext) &&
+		reflect.DeepEqual(actual.VolumeMounts, expected.VolumeMounts) &&
+		reflect.DeepEqual(actual.StartupProbe, expected.StartupProbe) &&
+		reflect.DeepEqual(actual.ReadinessProbe, expected.ReadinessProbe) &&
+		reflect.DeepEqual(actual.LivenessProbe, expected.LivenessProbe)
 }
 
 func restrictedSecurityContext(uid int64) *corev1.SecurityContext {

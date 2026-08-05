@@ -73,6 +73,76 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 			return generated.ResourceSpecProjection{}, errors.New("integration projection is invalid")
 		}
 		return generated.ResourceSpecProjection{Integration: &generated.IntegrationProjection{DefinitionRef: value.Integration.GetDefinitionRef(), DefinitionVersion: int64(value.Integration.GetDefinitionVersion()), Capabilities: value.Integration.GetCapabilities(), CredentialBindingIds: bindings, EndpointRef: value.Integration.GetEndpointRef(), Ownership: ownership}}, nil
+	case *controlplanev1.ResourceSpec_RoleImageRecipe:
+		input, err := roleImageRecipeProjectionInput(value.RoleImageRecipe.GetInput())
+		if err != nil || value.RoleImageRecipe.GetGeneration() == 0 || value.RoleImageRecipe.GetPolicyRevision() == 0 {
+			return generated.ResourceSpecProjection{}, errors.New("role image recipe projection is invalid")
+		}
+		return generated.ResourceSpecProjection{RoleImageRecipe: &generated.RoleImageRecipeProjection{
+			Input: input, Generation: int64(value.RoleImageRecipe.GetGeneration()),
+			SpecSha256: value.RoleImageRecipe.GetSpecSha256(), PolicyRevision: int64(value.RoleImageRecipe.GetPolicyRevision()),
+			PolicySha256:                value.RoleImageRecipe.GetPolicySha256(),
+			RoleRuntimeContractRevision: int64(value.RoleImageRecipe.GetRoleRuntimeContractRevision()),
+			RoleRuntimeContractSha256:   value.RoleImageRecipe.GetRoleRuntimeContractSha256(),
+		}}, nil
+	case *controlplanev1.ResourceSpec_ImageBuild:
+		recipeID, err := requiredUUID(value.ImageBuild.GetRecipeId())
+		stage := generated.ImageBuildStage(strings.TrimPrefix(value.ImageBuild.GetStage().String(), "IMAGE_BUILD_STAGE_"))
+		if err != nil || !stage.Valid() || value.ImageBuild.GetAvailableAt() == nil {
+			return generated.ResourceSpecProjection{}, errors.New("image build projection is invalid")
+		}
+		return generated.ResourceSpecProjection{ImageBuild: &generated.ImageBuildProjection{
+			RecipeId: recipeID, RecipeVersion: int64(value.ImageBuild.GetRecipeVersion()),
+			RecipeGeneration: int64(value.ImageBuild.GetRecipeGeneration()), SpecSha256: value.ImageBuild.GetSpecSha256(),
+			Attempt: int(value.ImageBuild.GetAttempt()), Stage: stage, ProgressPercent: int(value.ImageBuild.GetProgressPercent()),
+			StagingReference: optionalString(value.ImageBuild.GetStagingReference()), ManifestDigest: optionalString(value.ImageBuild.GetManifestDigest()),
+			ProvenanceSha256: optionalString(value.ImageBuild.GetProvenanceSha256()), ImmutableBuildSha256: value.ImageBuild.GetImmutableBuildSha256(),
+			ErrorCode: optionalString(value.ImageBuild.GetErrorCode()), AvailableAt: value.ImageBuild.GetAvailableAt().AsTime(),
+			DiagnosticCode:    optionalString(value.ImageBuild.GetDiagnosticCode()),
+			DiagnosticSummary: optionalString(value.ImageBuild.GetDiagnosticSummary()),
+			MaximumAttempts:   int(value.ImageBuild.GetMaximumAttempts()),
+		}}, nil
+	case *controlplanev1.ResourceSpec_ImageArtifact:
+		recipeID, recipeErr := requiredUUID(value.ImageArtifact.GetRecipeId())
+		buildID, buildErr := requiredUUID(value.ImageArtifact.GetBuildId())
+		if recipeErr != nil || buildErr != nil {
+			return generated.ResourceSpecProjection{}, errors.New("image artifact projection is invalid")
+		}
+		platforms, platformErr := roleImagePlatformsProjection(value.ImageArtifact.GetPlatforms())
+		if platformErr != nil || len(platforms) == 0 {
+			return generated.ResourceSpecProjection{}, errors.New("image artifact platforms are invalid")
+		}
+		projection := &generated.ImageArtifactProjection{
+			RecipeId: recipeID, RecipeVersion: int64(value.ImageArtifact.GetRecipeVersion()),
+			RecipeGeneration: int64(value.ImageArtifact.GetRecipeGeneration()), SpecSha256: value.ImageArtifact.GetSpecSha256(),
+			BuildId: buildID, BuildVersion: int64(value.ImageArtifact.GetBuildVersion()), BuildAttempt: int(value.ImageArtifact.GetBuildAttempt()),
+			StagingReference: value.ImageArtifact.GetStagingReference(), ManifestDigest: value.ImageArtifact.GetManifestDigest(),
+			ProvenanceSha256: value.ImageArtifact.GetProvenanceSha256(), ImmutableBuildSha256: value.ImageArtifact.GetImmutableBuildSha256(),
+			BaseImageDigest: value.ImageArtifact.GetBaseImageDigest(), SourceSha256: value.ImageArtifact.GetSourceSha256(),
+			ContextSha256: value.ImageArtifact.GetContextSha256(), BuilderSha256: value.ImageArtifact.GetBuilderSha256(),
+			FrontendSha256: value.ImageArtifact.GetFrontendSha256(), ToolchainSha256: value.ImageArtifact.GetToolchainSha256(),
+			RoleRuntimeContractRevision: int64(value.ImageArtifact.GetRoleRuntimeContractRevision()),
+			RoleRuntimeContractSha256:   value.ImageArtifact.GetRoleRuntimeContractSha256(),
+			Platforms:                   platforms,
+			SbomSha256:                  optionalString(value.ImageArtifact.GetSbomSha256()), VulnerabilityEvidenceSha256: optionalString(value.ImageArtifact.GetVulnerabilityEvidenceSha256()),
+			PolicyRevision: int64(value.ImageArtifact.GetPolicyRevision()), PolicySha256: value.ImageArtifact.GetPolicySha256(),
+			SignatureIdentity: optionalString(value.ImageArtifact.GetSignatureIdentity()), SignatureSha256: optionalString(value.ImageArtifact.GetSignatureSha256()),
+			AdmissionRevision: int64(value.ImageArtifact.GetAdmissionRevision()), AdmissionReceiptSha256: optionalString(value.ImageArtifact.GetAdmissionReceiptSha256()),
+			AdmissionReceiptOciManifestDigest: optionalString(value.ImageArtifact.GetAdmissionReceiptOciManifestDigest()),
+			PromotedReference:                 optionalString(value.ImageArtifact.GetPromotedReference()), PromotionReadbackSha256: optionalString(value.ImageArtifact.GetPromotionReadbackSha256()),
+		}
+		if verdict := value.ImageArtifact.GetAdmissionVerdict(); verdict != controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_UNSPECIFIED {
+			cast := generated.ImageAdmissionVerdict(strings.TrimPrefix(verdict.String(), "IMAGE_ADMISSION_VERDICT_"))
+			if !cast.Valid() {
+				return generated.ResourceSpecProjection{}, errors.New("image artifact verdict is invalid")
+			}
+			projection.AdmissionVerdict = &cast
+		}
+		if value.ImageArtifact.GetPromotedAt() != nil {
+			promotedAt := value.ImageArtifact.GetPromotedAt().AsTime()
+			projection.PromotedAt = &promotedAt
+		}
+		return generated.ResourceSpecProjection{ImageArtifact: projection}, nil
 	case *controlplanev1.ResourceSpec_RuntimeRevision:
 		prompt, err := requiredUUID(value.RuntimeRevision.GetPromptProfileId())
 		if err != nil {
@@ -90,7 +160,35 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		if err != nil {
 			return generated.ResourceSpecProjection{}, err
 		}
-		return generated.ResourceSpecProjection{RuntimeRevision: &generated.RuntimeRevisionProjection{ManifestSha256: value.RuntimeRevision.GetManifestSha256(), ImageDigest: value.RuntimeRevision.GetImageDigest(), PromptProfileId: prompt, PromptRevision: int64(value.RuntimeRevision.GetPromptRevision()), SessionId: sessionID, RoleId: roleID, ChatId: chatID, EffectiveRuntimeSha256: value.RuntimeRevision.GetEffectiveRuntimeSha256(), AuthorityPolicyRevision: int64(value.RuntimeRevision.GetAuthorityPolicyRevision())}}, nil
+		recipeID, err := requiredUUID(value.RuntimeRevision.GetRoleImageRecipeId())
+		if err != nil {
+			return generated.ResourceSpecProjection{}, err
+		}
+		buildID, err := requiredUUID(value.RuntimeRevision.GetImageBuildId())
+		if err != nil {
+			return generated.ResourceSpecProjection{}, err
+		}
+		artifactID, err := requiredUUID(value.RuntimeRevision.GetImageArtifactId())
+		if err != nil {
+			return generated.ResourceSpecProjection{}, err
+		}
+		return generated.ResourceSpecProjection{RuntimeRevision: &generated.RuntimeRevisionProjection{
+			ManifestSha256: value.RuntimeRevision.GetManifestSha256(), ImageReference: value.RuntimeRevision.GetImageReference(),
+			RoleImageRecipeId: recipeID, RoleImageRecipeVersion: int64(value.RuntimeRevision.GetRoleImageRecipeVersion()),
+			RoleImageSpecSha256: value.RuntimeRevision.GetRoleImageSpecSha256(), ImageBuildId: buildID,
+			ImageBuildVersion: int64(value.RuntimeRevision.GetImageBuildVersion()), ImageBuildAttempt: int(value.RuntimeRevision.GetImageBuildAttempt()),
+			ImageArtifactId: artifactID, ImageArtifactVersion: int64(value.RuntimeRevision.GetImageArtifactVersion()),
+			ImageManifestDigest: value.RuntimeRevision.GetImageManifestDigest(), ImageAdmissionRevision: int64(value.RuntimeRevision.GetImageAdmissionRevision()),
+			ImageAdmissionReceiptSha256:            value.RuntimeRevision.GetImageAdmissionReceiptSha256(),
+			ImageAdmissionReceiptOciManifestDigest: value.RuntimeRevision.GetImageAdmissionReceiptOciManifestDigest(),
+			ImagePolicyRevision:                    int64(value.RuntimeRevision.GetImagePolicyRevision()), ImagePolicySha256: value.RuntimeRevision.GetImagePolicySha256(),
+			ImageSignatureSha256: value.RuntimeRevision.GetImageSignatureSha256(), ImagePromotionReadbackSha256: value.RuntimeRevision.GetImagePromotionReadbackSha256(),
+			RoleRuntimeContractRevision: int64(value.RuntimeRevision.GetRoleRuntimeContractRevision()),
+			RoleRuntimeContractSha256:   value.RuntimeRevision.GetRoleRuntimeContractSha256(),
+			PromptProfileId:             prompt, PromptRevision: int64(value.RuntimeRevision.GetPromptRevision()),
+			SessionId: sessionID, RoleId: roleID, ChatId: chatID,
+			EffectiveRuntimeSha256: value.RuntimeRevision.GetEffectiveRuntimeSha256(), AuthorityPolicyRevision: int64(value.RuntimeRevision.GetAuthorityPolicyRevision()),
+		}}, nil
 	case *controlplanev1.ResourceSpec_Session:
 		agent, err := requiredUUID(value.Session.GetAgentId())
 		if err != nil {
@@ -152,6 +250,7 @@ func roleProjection(value *controlplanev1.RoleSpec, version uint64) (generated.R
 	credentials, e3 := parseUUIDs(value.GetProviderCredentialBindingIds())
 	workspaces, e4 := parseUUIDs(value.GetRepositoryWorkspaceIds())
 	integrations, e5 := parseUUIDs(value.GetIntegrationIds())
+	recipeID, e6 := requiredUUID(value.GetRoleImageRecipeId())
 	pool := value.GetProviderAccountPool()
 	policy := generated.ProviderPoolPolicy("")
 	bindings := []generated.ProviderPoolBindingProjection{}
@@ -166,10 +265,60 @@ func roleProjection(value *controlplanev1.RoleSpec, version uint64) (generated.R
 			bindings = append(bindings, generated.ProviderPoolBindingProjection{CredentialBindingId: id, Weight: int(item.GetWeight())})
 		}
 	}
-	if err != nil || e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || pool == nil || !policy.Valid() {
+	if err != nil || e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || e6 != nil || pool == nil || !policy.Valid() {
 		return generated.ResourceSpecProjection{}, errors.New("role projection is invalid")
 	}
-	return generated.ResourceSpecProjection{Role: &generated.RoleProjection{StableKey: value.GetStableKey(), Capabilities: value.GetCapabilities(), AllowedTargetRoleIds: allowed, PromptProfileId: prompt, ProviderCredentialBindingIds: credentials, RepositoryWorkspaceIds: workspaces, IntegrationIds: integrations, ProviderAccountPool: generated.ProviderPoolProjection{Policy: policy, PolicyRevision: int64(pool.GetPolicyRevision()), ObservationMaxAgeSeconds: int64(pool.GetObservationMaxAge().AsDuration().Seconds()), Bindings: bindings}, Ownership: ownership}}, nil
+	return generated.ResourceSpecProjection{Role: &generated.RoleProjection{StableKey: value.GetStableKey(), Capabilities: value.GetCapabilities(), AllowedTargetRoleIds: allowed, PromptProfileId: prompt, RoleImageRecipeId: recipeID, ProviderCredentialBindingIds: credentials, RepositoryWorkspaceIds: workspaces, IntegrationIds: integrations, ProviderAccountPool: generated.ProviderPoolProjection{Policy: policy, PolicyRevision: int64(pool.GetPolicyRevision()), ObservationMaxAgeSeconds: int64(pool.GetObservationMaxAge().AsDuration().Seconds()), Bindings: bindings}, Ownership: ownership}}, nil
+}
+
+func roleImageRecipeProjectionInput(input *controlplanev1.RoleImageRecipeInput) (generated.RoleImageRecipeStatusInput, error) {
+	if input == nil {
+		return generated.RoleImageRecipeStatusInput{}, errors.New("role image recipe input is missing")
+	}
+	result := generated.RoleImageRecipeStatusInput{
+		BaseImageReference: input.GetBaseImageReference(), BaseImageDigest: input.GetBaseImageDigest(),
+		SourceRef: input.GetSourceRef(), SourceRevision: input.GetSourceRevision(), SourceSha256: input.GetSourceSha256(),
+		ContextRef: input.GetContextRef(), ContextSha256: input.GetContextSha256(), BuilderSha256: input.GetBuilderSha256(),
+		FrontendSha256: input.GetFrontendSha256(), ToolchainSha256: input.GetToolchainSha256(),
+		Packages:  make([]generated.RoleImagePackage, 0, len(input.GetPackages())),
+		Tools:     make([]generated.RoleImageTool, 0, len(input.GetTools())),
+		Platforms: make([]generated.RoleImagePlatform, 0, len(input.GetPlatforms())),
+	}
+	for _, item := range input.GetPackages() {
+		manager := generated.RoleImagePackageManager(item.GetManager())
+		if !manager.Valid() {
+			return generated.RoleImageRecipeStatusInput{}, errors.New("role image package manager is invalid")
+		}
+		result.Packages = append(result.Packages, generated.RoleImagePackage{
+			Manager: manager, Name: item.GetName(), Version: item.GetVersion(), Digest: item.GetDigest(), SourceRef: item.GetSourceRef(),
+		})
+	}
+	for _, item := range input.GetTools() {
+		result.Tools = append(result.Tools, generated.RoleImageTool{
+			Name: item.GetName(), Version: item.GetVersion(), SourceRef: item.GetSourceRef(), Sha256: item.GetSha256(),
+		})
+	}
+	platforms, err := roleImagePlatformsProjection(input.GetPlatforms())
+	if err != nil {
+		return generated.RoleImageRecipeStatusInput{}, err
+	}
+	result.Platforms = platforms
+	return result, nil
+}
+
+func roleImagePlatformsProjection(platforms []*controlplanev1.RoleImagePlatform) ([]generated.RoleImagePlatform, error) {
+	result := make([]generated.RoleImagePlatform, 0, len(platforms))
+	for _, item := range platforms {
+		osValue := generated.RoleImagePlatformOS(item.GetOs())
+		architecture := generated.RoleImagePlatformArchitecture(item.GetArchitecture())
+		if !osValue.Valid() || !architecture.Valid() {
+			return nil, errors.New("role image platform is invalid")
+		}
+		result = append(result, generated.RoleImagePlatform{
+			Os: osValue, Architecture: architecture, Variant: optionalString(item.GetVariant()),
+		})
+	}
+	return result, nil
 }
 
 func turnProjection(value *controlplanev1.TurnSpec) (generated.ResourceSpecProjection, error) {

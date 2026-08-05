@@ -48,6 +48,12 @@ func fromProtoKind(kind controlplanev1.ResourceKind) enum.Kind {
 		return enum.KindWorkClaim
 	case controlplanev1.ResourceKind_RESOURCE_KIND_ARTIFACT:
 		return enum.KindArtifact
+	case controlplanev1.ResourceKind_RESOURCE_KIND_ROLE_IMAGE_RECIPE:
+		return enum.KindRoleImageRecipe
+	case controlplanev1.ResourceKind_RESOURCE_KIND_IMAGE_BUILD:
+		return enum.KindImageBuild
+	case controlplanev1.ResourceKind_RESOURCE_KIND_IMAGE_ARTIFACT:
+		return enum.KindImageArtifact
 	default:
 		return ""
 	}
@@ -89,6 +95,12 @@ func toProtoKind(kind enum.Kind) controlplanev1.ResourceKind {
 		return controlplanev1.ResourceKind_RESOURCE_KIND_WORK_CLAIM
 	case enum.KindArtifact:
 		return controlplanev1.ResourceKind_RESOURCE_KIND_ARTIFACT
+	case enum.KindRoleImageRecipe:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_ROLE_IMAGE_RECIPE
+	case enum.KindImageBuild:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_IMAGE_BUILD
+	case enum.KindImageArtifact:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_IMAGE_ARTIFACT
 	default:
 		return controlplanev1.ResourceKind_RESOURCE_KIND_UNSPECIFIED
 	}
@@ -229,7 +241,8 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 				ObservationMaxAge: poolMaxAge,
 				Bindings:          poolBindings,
 			},
-			Ownership: configurationOwnershipFromProto(value.Role.GetOwnership()),
+			RoleImageRecipeID: value.Role.GetRoleImageRecipeId(),
+			Ownership:         configurationOwnershipFromProto(value.Role.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_PromptProfile:
 		return entity.PromptProfileSpec{
@@ -304,15 +317,33 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			})
 		}
 		return entity.RuntimeRevisionSpec{
-			ManifestSHA256:              value.RuntimeRevision.GetManifestSha256(),
-			ImageDigest:                 value.RuntimeRevision.GetImageDigest(),
-			SessionID:                   value.RuntimeRevision.GetSessionId(),
-			RoleID:                      value.RuntimeRevision.GetRoleId(),
-			ChatID:                      value.RuntimeRevision.GetChatId(),
-			ProviderCredentialBindingID: value.RuntimeRevision.GetProviderCredentialBindingId(),
-			ProviderAccountName:         value.RuntimeRevision.GetProviderAccountName(),
-			EffectiveRuntimeSHA256:      value.RuntimeRevision.GetEffectiveRuntimeSha256(),
-			CodexModel:                  value.RuntimeRevision.GetCodexModel(), CodexSandbox: value.RuntimeRevision.GetCodexSandbox(),
+			ManifestSHA256:                         value.RuntimeRevision.GetManifestSha256(),
+			ImageReference:                         value.RuntimeRevision.GetImageReference(),
+			RoleImageRecipeID:                      value.RuntimeRevision.GetRoleImageRecipeId(),
+			RoleImageRecipeVersion:                 value.RuntimeRevision.GetRoleImageRecipeVersion(),
+			RoleImageSpecSHA256:                    value.RuntimeRevision.GetRoleImageSpecSha256(),
+			ImageBuildID:                           value.RuntimeRevision.GetImageBuildId(),
+			ImageBuildVersion:                      value.RuntimeRevision.GetImageBuildVersion(),
+			ImageBuildAttempt:                      value.RuntimeRevision.GetImageBuildAttempt(),
+			ImageArtifactID:                        value.RuntimeRevision.GetImageArtifactId(),
+			ImageArtifactVersion:                   value.RuntimeRevision.GetImageArtifactVersion(),
+			ImageManifestDigest:                    value.RuntimeRevision.GetImageManifestDigest(),
+			ImageAdmissionRevision:                 value.RuntimeRevision.GetImageAdmissionRevision(),
+			ImageAdmissionReceiptSHA256:            value.RuntimeRevision.GetImageAdmissionReceiptSha256(),
+			ImageAdmissionReceiptOCIManifestDigest: value.RuntimeRevision.GetImageAdmissionReceiptOciManifestDigest(),
+			ImagePolicyRevision:                    value.RuntimeRevision.GetImagePolicyRevision(),
+			ImagePolicySHA256:                      value.RuntimeRevision.GetImagePolicySha256(),
+			ImageSignatureSHA256:                   value.RuntimeRevision.GetImageSignatureSha256(),
+			ImagePromotionReadbackSHA256:           value.RuntimeRevision.GetImagePromotionReadbackSha256(),
+			RoleRuntimeContractRevision:            value.RuntimeRevision.GetRoleRuntimeContractRevision(),
+			RoleRuntimeContractSHA256:              value.RuntimeRevision.GetRoleRuntimeContractSha256(),
+			SessionID:                              value.RuntimeRevision.GetSessionId(),
+			RoleID:                                 value.RuntimeRevision.GetRoleId(),
+			ChatID:                                 value.RuntimeRevision.GetChatId(),
+			ProviderCredentialBindingID:            value.RuntimeRevision.GetProviderCredentialBindingId(),
+			ProviderAccountName:                    value.RuntimeRevision.GetProviderAccountName(),
+			EffectiveRuntimeSHA256:                 value.RuntimeRevision.GetEffectiveRuntimeSha256(),
+			CodexModel:                             value.RuntimeRevision.GetCodexModel(), CodexSandbox: value.RuntimeRevision.GetCodexSandbox(),
 			CodexApprovalPolicy: value.RuntimeRevision.GetCodexApprovalPolicy(),
 			ScheduledResultContract: scheduledResultContractFromProto(
 				value.RuntimeRevision.GetScheduledResultContract(),
@@ -590,6 +621,88 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ScannerWorkloadID:  value.Artifact.GetScannerWorkloadId(),
 			ScannedAt:          scannedAt,
 		}, nil
+	case *controlplanev1.ResourceSpec_RoleImageRecipe:
+		input, err := roleImageInputFromProto(value.RoleImageRecipe.GetInput())
+		if err != nil {
+			return nil, err
+		}
+		return entity.RoleImageRecipeSpec{
+			Input: input, Generation: value.RoleImageRecipe.GetGeneration(),
+			SpecSHA256:                  value.RoleImageRecipe.GetSpecSha256(),
+			PolicyRevision:              value.RoleImageRecipe.GetPolicyRevision(),
+			PolicySHA256:                value.RoleImageRecipe.GetPolicySha256(),
+			RoleRuntimeContractRevision: value.RoleImageRecipe.GetRoleRuntimeContractRevision(),
+			RoleRuntimeContractSHA256:   value.RoleImageRecipe.GetRoleRuntimeContractSha256(),
+		}, nil
+	case *controlplanev1.ResourceSpec_ImageBuild:
+		leaseExpiresAt, err := optionalTime(value.ImageBuild.GetLeaseExpiresAt())
+		if err != nil {
+			return nil, err
+		}
+		availableAt, err := requiredTime(value.ImageBuild.GetAvailableAt())
+		if err != nil {
+			return nil, err
+		}
+		return entity.ImageBuildSpec{
+			RecipeID: value.ImageBuild.GetRecipeId(), RecipeVersion: value.ImageBuild.GetRecipeVersion(),
+			RecipeGeneration: value.ImageBuild.GetRecipeGeneration(), SpecSHA256: value.ImageBuild.GetSpecSha256(),
+			Attempt: value.ImageBuild.GetAttempt(), ClaimantWorkloadID: value.ImageBuild.GetClaimantWorkloadId(),
+			ClaimantSPIFFEID: value.ImageBuild.GetClaimantSpiffeId(), AuthorityGeneration: value.ImageBuild.GetAuthorityGeneration(),
+			Fence: value.ImageBuild.GetFence(), LeaseExpiresAt: leaseExpiresAt,
+			Stage: imageBuildStageFromProto(value.ImageBuild.GetStage()), ProgressPercent: value.ImageBuild.GetProgressPercent(),
+			StagingReference: value.ImageBuild.GetStagingReference(), ManifestDigest: value.ImageBuild.GetManifestDigest(),
+			ProvenanceSHA256: value.ImageBuild.GetProvenanceSha256(), ImmutableBuildSHA256: value.ImageBuild.GetImmutableBuildSha256(),
+			ErrorCode: value.ImageBuild.GetErrorCode(), AvailableAt: availableAt, MaximumAttempts: value.ImageBuild.GetMaximumAttempts(),
+			LeaseTokenSHA256: value.ImageBuild.GetLeaseTokenSha256(), ClaimJTISHA256: value.ImageBuild.GetClaimJtiSha256(),
+			DiagnosticCode: value.ImageBuild.GetDiagnosticCode(), DiagnosticSummary: value.ImageBuild.GetDiagnosticSummary(),
+		}, nil
+	case *controlplanev1.ResourceSpec_ImageArtifact:
+		promotionClaimExpiresAt, err := optionalTime(value.ImageArtifact.GetPromotionClaimExpiresAt())
+		if err != nil {
+			return nil, err
+		}
+		promotedAt, err := optionalTime(value.ImageArtifact.GetPromotedAt())
+		if err != nil {
+			return nil, err
+		}
+		admissionClaimExpiresAt, err := optionalTime(value.ImageArtifact.GetAdmissionClaimExpiresAt())
+		if err != nil {
+			return nil, err
+		}
+		promotionAuthorizationExpiresAt, err := optionalTime(value.ImageArtifact.GetPromotionAuthorizationExpiresAt())
+		if err != nil {
+			return nil, err
+		}
+		return entity.ImageArtifactSpec{
+			RecipeID: value.ImageArtifact.GetRecipeId(), RecipeVersion: value.ImageArtifact.GetRecipeVersion(),
+			RecipeGeneration: value.ImageArtifact.GetRecipeGeneration(), SpecSHA256: value.ImageArtifact.GetSpecSha256(),
+			BuildID: value.ImageArtifact.GetBuildId(), BuildVersion: value.ImageArtifact.GetBuildVersion(),
+			BuildAttempt: value.ImageArtifact.GetBuildAttempt(), StagingReference: value.ImageArtifact.GetStagingReference(),
+			ManifestDigest: value.ImageArtifact.GetManifestDigest(), ProvenanceSHA256: value.ImageArtifact.GetProvenanceSha256(),
+			ImmutableBuildSHA256: value.ImageArtifact.GetImmutableBuildSha256(), SBOMSHA256: value.ImageArtifact.GetSbomSha256(),
+			BaseImageDigest: value.ImageArtifact.GetBaseImageDigest(), SourceSHA256: value.ImageArtifact.GetSourceSha256(),
+			ContextSHA256: value.ImageArtifact.GetContextSha256(), BuilderSHA256: value.ImageArtifact.GetBuilderSha256(),
+			FrontendSHA256: value.ImageArtifact.GetFrontendSha256(), ToolchainSHA256: value.ImageArtifact.GetToolchainSha256(),
+			Platforms:                   roleImagePlatformsFromProto(value.ImageArtifact.GetPlatforms()),
+			VulnerabilityEvidenceSHA256: value.ImageArtifact.GetVulnerabilityEvidenceSha256(),
+			PolicyRevision:              value.ImageArtifact.GetPolicyRevision(), PolicySHA256: value.ImageArtifact.GetPolicySha256(),
+			AdmissionVerdict:  imageAdmissionVerdictFromProto(value.ImageArtifact.GetAdmissionVerdict()),
+			SignatureIdentity: value.ImageArtifact.GetSignatureIdentity(), SignatureSHA256: value.ImageArtifact.GetSignatureSha256(),
+			AdmissionRevision: value.ImageArtifact.GetAdmissionRevision(), AdmissionReceiptSHA256: value.ImageArtifact.GetAdmissionReceiptSha256(),
+			AdmissionReceiptOCIManifestDigest: value.ImageArtifact.GetAdmissionReceiptOciManifestDigest(),
+			RoleRuntimeContractRevision:       value.ImageArtifact.GetRoleRuntimeContractRevision(),
+			RoleRuntimeContractSHA256:         value.ImageArtifact.GetRoleRuntimeContractSha256(),
+			PromotionClaimJTISHA256:           value.ImageArtifact.GetPromotionClaimJtiSha256(), PromotionClaimExpiresAt: promotionClaimExpiresAt,
+			PromotionClaimantWorkloadID:  value.ImageArtifact.GetPromotionClaimantWorkloadId(),
+			PromotionClaimantSPIFFEID:    value.ImageArtifact.GetPromotionClaimantSpiffeId(),
+			PromotionAuthorityGeneration: value.ImageArtifact.GetPromotionAuthorityGeneration(), PromotionFence: value.ImageArtifact.GetPromotionFence(),
+			PromotionAuthorizationTokenSHA256: value.ImageArtifact.GetPromotionAuthorizationTokenSha256(),
+			PromotionAuthorizationExpiresAt:   promotionAuthorizationExpiresAt,
+			PromotedReference:                 value.ImageArtifact.GetPromotedReference(), PromotionReadbackSHA256: value.ImageArtifact.GetPromotionReadbackSha256(),
+			PromotedAt: promotedAt, AdmissionClaimantWorkloadID: value.ImageArtifact.GetAdmissionClaimantWorkloadId(),
+			AdmissionAuthorityGeneration: value.ImageArtifact.GetAdmissionAuthorityGeneration(), AdmissionFence: value.ImageArtifact.GetAdmissionFence(),
+			AdmissionClaimTokenSHA256: value.ImageArtifact.GetAdmissionClaimTokenSha256(), AdmissionClaimExpiresAt: admissionClaimExpiresAt,
+		}, nil
 	default:
 		return nil, errors.New("resource specification is unknown")
 	}
@@ -676,7 +789,8 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 					),
 					Bindings: poolBindings,
 				},
-				Ownership: configurationOwnershipToProto(value.Ownership),
+				RoleImageRecipeId: value.RoleImageRecipeID,
+				Ownership:         configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.PromptProfileSpec:
@@ -751,15 +865,33 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 		}
 		result.Value = &controlplanev1.ResourceSpec_RuntimeRevision{
 			RuntimeRevision: &controlplanev1.RuntimeRevisionSpec{
-				ManifestSha256:              value.ManifestSHA256,
-				ImageDigest:                 value.ImageDigest,
-				SessionId:                   value.SessionID,
-				RoleId:                      value.RoleID,
-				ChatId:                      value.ChatID,
-				ProviderCredentialBindingId: value.ProviderCredentialBindingID,
-				ProviderAccountName:         value.ProviderAccountName,
-				EffectiveRuntimeSha256:      value.EffectiveRuntimeSHA256,
-				CodexModel:                  value.CodexModel, CodexSandbox: value.CodexSandbox,
+				ManifestSha256:                         value.ManifestSHA256,
+				ImageReference:                         value.ImageReference,
+				RoleImageRecipeId:                      value.RoleImageRecipeID,
+				RoleImageRecipeVersion:                 value.RoleImageRecipeVersion,
+				RoleImageSpecSha256:                    value.RoleImageSpecSHA256,
+				ImageBuildId:                           value.ImageBuildID,
+				ImageBuildVersion:                      value.ImageBuildVersion,
+				ImageBuildAttempt:                      value.ImageBuildAttempt,
+				ImageArtifactId:                        value.ImageArtifactID,
+				ImageArtifactVersion:                   value.ImageArtifactVersion,
+				ImageManifestDigest:                    value.ImageManifestDigest,
+				ImageAdmissionRevision:                 value.ImageAdmissionRevision,
+				ImageAdmissionReceiptSha256:            value.ImageAdmissionReceiptSHA256,
+				ImageAdmissionReceiptOciManifestDigest: value.ImageAdmissionReceiptOCIManifestDigest,
+				ImagePolicyRevision:                    value.ImagePolicyRevision,
+				ImagePolicySha256:                      value.ImagePolicySHA256,
+				ImageSignatureSha256:                   value.ImageSignatureSHA256,
+				ImagePromotionReadbackSha256:           value.ImagePromotionReadbackSHA256,
+				RoleRuntimeContractRevision:            value.RoleRuntimeContractRevision,
+				RoleRuntimeContractSha256:              value.RoleRuntimeContractSHA256,
+				SessionId:                              value.SessionID,
+				RoleId:                                 value.RoleID,
+				ChatId:                                 value.ChatID,
+				ProviderCredentialBindingId:            value.ProviderCredentialBindingID,
+				ProviderAccountName:                    value.ProviderAccountName,
+				EffectiveRuntimeSha256:                 value.EffectiveRuntimeSHA256,
+				CodexModel:                             value.CodexModel, CodexSandbox: value.CodexSandbox,
 				CodexApprovalPolicy:     value.CodexApprovalPolicy,
 				ScheduledResultContract: scheduledResultContractToProto(value.ScheduledResultContract),
 				PromptProfileId:         value.PromptProfileID,
@@ -986,6 +1118,63 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ScannedAt:          optionalTimestamp(value.ScannedAt),
 			},
 		}
+	case entity.RoleImageRecipeSpec:
+		result.Value = &controlplanev1.ResourceSpec_RoleImageRecipe{
+			RoleImageRecipe: &controlplanev1.RoleImageRecipeSpec{
+				Input: roleImageInputToProto(value.Input), Generation: value.Generation,
+				SpecSha256: value.SpecSHA256, PolicyRevision: value.PolicyRevision,
+				PolicySha256:                value.PolicySHA256,
+				RoleRuntimeContractRevision: value.RoleRuntimeContractRevision,
+				RoleRuntimeContractSha256:   value.RoleRuntimeContractSHA256,
+			},
+		}
+	case entity.ImageBuildSpec:
+		result.Value = &controlplanev1.ResourceSpec_ImageBuild{
+			ImageBuild: &controlplanev1.ImageBuildSpec{
+				RecipeId: value.RecipeID, RecipeVersion: value.RecipeVersion, RecipeGeneration: value.RecipeGeneration,
+				SpecSha256: value.SpecSHA256, Attempt: value.Attempt, ClaimantWorkloadId: value.ClaimantWorkloadID,
+				ClaimantSpiffeId: value.ClaimantSPIFFEID, AuthorityGeneration: value.AuthorityGeneration,
+				Fence: value.Fence, LeaseExpiresAt: optionalTimestamp(value.LeaseExpiresAt),
+				Stage: imageBuildStageToProto(value.Stage), ProgressPercent: value.ProgressPercent,
+				StagingReference: value.StagingReference, ManifestDigest: value.ManifestDigest,
+				ProvenanceSha256: value.ProvenanceSHA256, ImmutableBuildSha256: value.ImmutableBuildSHA256,
+				ErrorCode: value.ErrorCode, AvailableAt: timestamppb.New(value.AvailableAt), MaximumAttempts: value.MaximumAttempts,
+				LeaseTokenSha256: value.LeaseTokenSHA256, ClaimJtiSha256: value.ClaimJTISHA256,
+				DiagnosticCode: value.DiagnosticCode, DiagnosticSummary: value.DiagnosticSummary,
+			},
+		}
+	case entity.ImageArtifactSpec:
+		result.Value = &controlplanev1.ResourceSpec_ImageArtifact{
+			ImageArtifact: &controlplanev1.ImageArtifactSpec{
+				RecipeId: value.RecipeID, RecipeVersion: value.RecipeVersion, RecipeGeneration: value.RecipeGeneration,
+				SpecSha256: value.SpecSHA256, BuildId: value.BuildID, BuildVersion: value.BuildVersion,
+				BuildAttempt: value.BuildAttempt, StagingReference: value.StagingReference,
+				ManifestDigest: value.ManifestDigest, ProvenanceSha256: value.ProvenanceSHA256,
+				ImmutableBuildSha256: value.ImmutableBuildSHA256, SbomSha256: value.SBOMSHA256,
+				BaseImageDigest: value.BaseImageDigest, SourceSha256: value.SourceSHA256,
+				ContextSha256: value.ContextSHA256, BuilderSha256: value.BuilderSHA256,
+				FrontendSha256: value.FrontendSHA256, ToolchainSha256: value.ToolchainSHA256,
+				Platforms:                   roleImagePlatformsToProto(value.Platforms),
+				VulnerabilityEvidenceSha256: value.VulnerabilityEvidenceSHA256,
+				PolicyRevision:              value.PolicyRevision, PolicySha256: value.PolicySHA256,
+				AdmissionVerdict:  imageAdmissionVerdictToProto(value.AdmissionVerdict),
+				SignatureIdentity: value.SignatureIdentity, SignatureSha256: value.SignatureSHA256,
+				AdmissionRevision: value.AdmissionRevision, AdmissionReceiptSha256: value.AdmissionReceiptSHA256,
+				AdmissionReceiptOciManifestDigest: value.AdmissionReceiptOCIManifestDigest,
+				RoleRuntimeContractRevision:       value.RoleRuntimeContractRevision,
+				RoleRuntimeContractSha256:         value.RoleRuntimeContractSHA256,
+				PromotionClaimJtiSha256:           value.PromotionClaimJTISHA256, PromotionClaimExpiresAt: optionalTimestamp(value.PromotionClaimExpiresAt),
+				PromotionClaimantWorkloadId:  value.PromotionClaimantWorkloadID,
+				PromotionClaimantSpiffeId:    value.PromotionClaimantSPIFFEID,
+				PromotionAuthorityGeneration: value.PromotionAuthorityGeneration, PromotionFence: value.PromotionFence,
+				PromotionAuthorizationTokenSha256: value.PromotionAuthorizationTokenSHA256,
+				PromotionAuthorizationExpiresAt:   optionalTimestamp(value.PromotionAuthorizationExpiresAt),
+				PromotedReference:                 value.PromotedReference, PromotionReadbackSha256: value.PromotionReadbackSHA256,
+				PromotedAt: optionalTimestamp(value.PromotedAt), AdmissionClaimantWorkloadId: value.AdmissionClaimantWorkloadID,
+				AdmissionAuthorityGeneration: value.AdmissionAuthorityGeneration, AdmissionFence: value.AdmissionFence,
+				AdmissionClaimTokenSha256: value.AdmissionClaimTokenSHA256, AdmissionClaimExpiresAt: optionalTimestamp(value.AdmissionClaimExpiresAt),
+			},
+		}
 	default:
 		return nil, errors.New("domain resource specification is unknown")
 	}
@@ -1038,6 +1227,113 @@ func optionalTimestamp(value time.Time) *timestamppb.Timestamp {
 		return nil
 	}
 	return timestamppb.New(value)
+}
+
+func roleImageInputFromProto(input *controlplanev1.RoleImageRecipeInput) (entity.RoleImageRecipeInput, error) {
+	if input == nil {
+		return entity.RoleImageRecipeInput{}, errors.New("role image recipe input is absent")
+	}
+	result := entity.RoleImageRecipeInput{
+		BaseImageReference: input.GetBaseImageReference(), BaseImageDigest: input.GetBaseImageDigest(),
+		SourceRef: input.GetSourceRef(), SourceRevision: input.GetSourceRevision(), SourceSHA256: input.GetSourceSha256(),
+		ContextRef: input.GetContextRef(), ContextSHA256: input.GetContextSha256(),
+		BuilderSHA256: input.GetBuilderSha256(), FrontendSHA256: input.GetFrontendSha256(),
+		InstallationBlock: input.GetInstallationBlock(),
+		ToolchainSHA256:   input.GetToolchainSha256(),
+	}
+	for _, platform := range input.GetPlatforms() {
+		result.Platforms = append(result.Platforms, entity.RoleImagePlatform{
+			OS: platform.GetOs(), Architecture: platform.GetArchitecture(), Variant: platform.GetVariant(),
+		})
+	}
+	for _, item := range input.GetPackages() {
+		result.Packages = append(result.Packages, entity.RoleImagePackage{
+			Manager: item.GetManager(), Name: item.GetName(), Version: item.GetVersion(), Digest: item.GetDigest(), SourceRef: item.GetSourceRef(),
+		})
+	}
+	for _, item := range input.GetTools() {
+		result.Tools = append(result.Tools, entity.RoleImageTool{
+			Name: item.GetName(), Version: item.GetVersion(), SourceRef: item.GetSourceRef(), SHA256: item.GetSha256(),
+		})
+	}
+	if result.Validate() != nil {
+		return entity.RoleImageRecipeInput{}, errors.New("role image recipe input is invalid")
+	}
+	return result, nil
+}
+
+func roleImageInputToProto(input entity.RoleImageRecipeInput) *controlplanev1.RoleImageRecipeInput {
+	result := &controlplanev1.RoleImageRecipeInput{
+		BaseImageReference: input.BaseImageReference, BaseImageDigest: input.BaseImageDigest,
+		SourceRef: input.SourceRef, SourceRevision: input.SourceRevision, SourceSha256: input.SourceSHA256,
+		ContextRef: input.ContextRef, ContextSha256: input.ContextSHA256,
+		BuilderSha256: input.BuilderSHA256, FrontendSha256: input.FrontendSHA256,
+		InstallationBlock: input.InstallationBlock,
+		ToolchainSha256:   input.ToolchainSHA256,
+	}
+	for _, platform := range input.Platforms {
+		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{
+			Os: platform.OS, Architecture: platform.Architecture, Variant: platform.Variant,
+		})
+	}
+	for _, item := range input.Packages {
+		result.Packages = append(result.Packages, &controlplanev1.RoleImagePackage{
+			Manager: item.Manager, Name: item.Name, Version: item.Version, Digest: item.Digest, SourceRef: item.SourceRef,
+		})
+	}
+	for _, item := range input.Tools {
+		result.Tools = append(result.Tools, &controlplanev1.RoleImageTool{
+			Name: item.Name, Version: item.Version, SourceRef: item.SourceRef, Sha256: item.SHA256,
+		})
+	}
+	return result
+}
+
+func roleImagePlatformsFromProto(platforms []*controlplanev1.RoleImagePlatform) []entity.RoleImagePlatform {
+	result := make([]entity.RoleImagePlatform, 0, len(platforms))
+	for _, platform := range platforms {
+		result = append(result, entity.RoleImagePlatform{
+			OS: platform.GetOs(), Architecture: platform.GetArchitecture(), Variant: platform.GetVariant(),
+		})
+	}
+	return result
+}
+
+func roleImagePlatformsToProto(platforms []entity.RoleImagePlatform) []*controlplanev1.RoleImagePlatform {
+	result := make([]*controlplanev1.RoleImagePlatform, 0, len(platforms))
+	for _, platform := range platforms {
+		result = append(result, &controlplanev1.RoleImagePlatform{
+			Os: platform.OS, Architecture: platform.Architecture, Variant: platform.Variant,
+		})
+	}
+	return result
+}
+
+func imageBuildStageFromProto(stage controlplanev1.ImageBuildStage) entity.ImageBuildStage {
+	return entity.ImageBuildStage(trimEnum(stage.String(), "IMAGE_BUILD_STAGE_"))
+}
+
+func imageBuildStageToProto(stage entity.ImageBuildStage) controlplanev1.ImageBuildStage {
+	value, exists := controlplanev1.ImageBuildStage_value["IMAGE_BUILD_STAGE_"+string(stage)]
+	if !exists {
+		return controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED
+	}
+	return controlplanev1.ImageBuildStage(value)
+}
+
+func imageAdmissionVerdictFromProto(verdict controlplanev1.ImageAdmissionVerdict) entity.ImageAdmissionVerdict {
+	if verdict == controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_UNSPECIFIED {
+		return ""
+	}
+	return entity.ImageAdmissionVerdict(trimEnum(verdict.String(), "IMAGE_ADMISSION_VERDICT_"))
+}
+
+func imageAdmissionVerdictToProto(verdict entity.ImageAdmissionVerdict) controlplanev1.ImageAdmissionVerdict {
+	value, exists := controlplanev1.ImageAdmissionVerdict_value["IMAGE_ADMISSION_VERDICT_"+string(verdict)]
+	if !exists {
+		return controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_UNSPECIFIED
+	}
+	return controlplanev1.ImageAdmissionVerdict(value)
 }
 
 func timestampOrZero(value *timestamppb.Timestamp) time.Time {

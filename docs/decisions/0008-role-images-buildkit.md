@@ -4,8 +4,8 @@ title: Образы ролей и BuildKit
 type: decision
 status: approved
 owner: architect
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-08-05
 ---
 
 # ADR-MC-008. Образы ролей и BuildKit
@@ -13,6 +13,14 @@ updated: 2026-07-16
 ## Решение
 
 `RoleImageRecipe` имеет канонический хеш. Существующий подписанный дайджест образа переиспользуется; отсутствующий образ собирается BuildKit в изолированном контуре сборки. Типизированные списки пакетов предпочтительнее shell; сценарий установки — проверенный администратором аварийный механизм.
+
+Сценарий установки необязателен; его каноническое отсутствие — пустая строка.
+Полную version-pinned specification читает только проверенный owner через
+специализированную операцию. Trusted materializer получает context/package/tool
+из одного exact OCI repository по manifest и payload digests через отдельную
+pull-only mTLS identity. Недоверенный `RUN` не получает secret или registry
+credential; protected runtime ABI после него восстанавливается из exact trusted
+base и проверяется admission до promotion.
 
 Kaniko исключается из промышленной конфигурации как архивированный и неподдерживаемый исходный проект.
 
@@ -22,6 +30,11 @@ Kaniko исключается из промышленной конфигурац
 digest и выдаёт короткоживущий подписанный claim; только его promotion writer
 переносит exact digest в read-only для node pull контур. Среда выполнения
 использует дайджест.
+
+Rootless BuildKit работает с process sandbox, Kubernetes user namespace,
+`hostUsers: false`, `procMount: Unmasked` и требуемыми rootless
+AppArmor/seccomp primitives без privileged или insecure fallback. Readiness
+выполняет тот же Dockerfile `RUN`, что и рабочая сборка.
 
 ## Последствия
 

@@ -64,10 +64,38 @@ spec:
               value: sentry-relay.observability.svc:8443
             - name: CONTROL_PLANE_NATS_REPLICAS
               value: "3"
-            - name: CONTROL_PLANE_RUNTIME_IMAGE_DIGEST
+            - name: CONTROL_PLANE_IMAGE_POLICY_REVISION
               valueFrom:
-                fieldRef:
-                  fieldPath: metadata.annotations['mattercodex.dev/agent-runtime-image-digest']
+                configMapKeyRef:
+                  name: mattercodex-image-admission-policy
+                  key: policyRevision
+            - name: CONTROL_PLANE_IMAGE_POLICY_SHA256
+              valueFrom:
+                configMapKeyRef:
+                  name: mattercodex-image-admission-policy
+                  key: policySHA256
+            - name: CONTROL_PLANE_IMAGE_BUILD_LEASE_DURATION
+              value: 5m
+            - name: CONTROL_PLANE_IMAGE_ADMISSION_CLAIM_TTL
+              value: 30m
+            - name: CONTROL_PLANE_IMAGE_PROMOTION_CLAIM_TTL
+              value: 15m
+            - name: CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS
+              value: "3"
+            - name: CONTROL_PLANE_STAGING_IMAGE_REPOSITORY
+              value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
+            - name: CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY
+              value: registry-pull.invalid/mattercodex/roles
+            - name: CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleImageInputRepository}}
+            - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
+            - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
+            - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+            - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
           ports:
             - name: grpc
               containerPort: 8443

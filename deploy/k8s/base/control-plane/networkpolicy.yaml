@@ -35,6 +35,14 @@ spec:
               app.kubernetes.io/name: automation-scheduler
         - podSelector:
             matchLabels:
+              app.kubernetes.io/name: role-image-builder
+        - podSelector:
+            matchExpressions:
+              - key: mattercodex.dev/image-admission-phase
+                operator: In
+                values: [claim, admit, promote]
+        - podSelector:
+            matchLabels:
               app.kubernetes.io/name: artifact-scanner
         - podSelector:
             matchLabels:

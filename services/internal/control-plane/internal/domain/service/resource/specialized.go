@@ -738,10 +738,10 @@ func (service *Service) claimScheduleOccurrence(
 			return err
 		}
 		result = ScheduleOccurrenceResult{
-			Occurrence:                      occurrence,
-			MaterializationCapability:       service.scheduleCapabilityToken(capability),
-			MaterializationIdempotencyKey:   schedulerMaterializationKey(input.IdempotencyKey, occurrence.ID),
-			CapabilityExpiresAt:             capability.ExpiresAt, ProjectID: projectID,
+			Occurrence:                    occurrence,
+			MaterializationCapability:     service.scheduleCapabilityToken(capability),
+			MaterializationIdempotencyKey: schedulerMaterializationKey(input.IdempotencyKey, occurrence.ID),
+			CapabilityExpiresAt:           capability.ExpiresAt, ProjectID: projectID,
 			Disposition: ScheduleOccurrenceClaimReserved,
 		}
 		return nil
@@ -854,11 +854,11 @@ func (service *Service) replayScheduleOccurrenceClaim(
 			return retired, true, nil
 		}
 		return ScheduleOccurrenceResult{
-			Occurrence:                      current,
-			MaterializationCapability:       token,
-			MaterializationIdempotencyKey:   schedulerMaterializationKey(input.IdempotencyKey, current.ID),
-			CapabilityExpiresAt:             capability.ExpiresAt,
-			ProjectID: input.Principal.ProjectID, Disposition: ScheduleOccurrenceClaimReserved,
+			Occurrence:                    current,
+			MaterializationCapability:     token,
+			MaterializationIdempotencyKey: schedulerMaterializationKey(input.IdempotencyKey, current.ID),
+			CapabilityExpiresAt:           capability.ExpiresAt,
+			ProjectID:                     input.Principal.ProjectID, Disposition: ScheduleOccurrenceClaimReserved,
 		}, true, nil
 	}
 	if capability.State != "CONSUMED" ||
@@ -898,11 +898,11 @@ func (service *Service) replayScheduleOccurrenceClaim(
 		return retired, true, nil
 	}
 	return ScheduleOccurrenceResult{
-		Occurrence:                      current,
-		MaterializationCapability:       token,
-		MaterializationIdempotencyKey:   materializeInput.IdempotencyKey,
-		CapabilityExpiresAt:             capability.ExpiresAt,
-		ProjectID: input.Principal.ProjectID, Disposition: ScheduleOccurrenceClaimMaterialized,
+		Occurrence:                    current,
+		MaterializationCapability:     token,
+		MaterializationIdempotencyKey: materializeInput.IdempotencyKey,
+		CapabilityExpiresAt:           capability.ExpiresAt,
+		ProjectID:                     input.Principal.ProjectID, Disposition: ScheduleOccurrenceClaimMaterialized,
 	}, true, nil
 }
 

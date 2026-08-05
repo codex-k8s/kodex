@@ -19,6 +19,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
@@ -58,6 +59,10 @@ type ControlPlane interface {
 	RunScheduleNow(context.Context, *controlplanev1.RunScheduleNowRequest, ...grpc.CallOption) (*controlplanev1.RunScheduleNowResponse, error)
 	ListScheduleOccurrences(context.Context, *controlplanev1.ListScheduleOccurrencesRequest, ...grpc.CallOption) (*controlplanev1.ListScheduleOccurrencesResponse, error)
 	ResolveScheduleRecovery(context.Context, *controlplanev1.ResolveScheduleRecoveryRequest, ...grpc.CallOption) (*controlplanev1.ResolveScheduleRecoveryResponse, error)
+	ManageRoleImageRecipe(context.Context, *controlplanev1.ManageRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.ManageRoleImageRecipeResponse, error)
+	GetRoleImageRecipe(context.Context, *controlplanev1.GetRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageRecipeResponse, error)
+	ManageImageBuild(context.Context, *controlplanev1.ManageImageBuildRequest, ...grpc.CallOption) (*controlplanev1.ManageImageBuildResponse, error)
+	GetRoleImageBuild(context.Context, *controlplanev1.GetRoleImageBuildRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageBuildResponse, error)
 }
 
 func (server *Server) RunScheduleNow(writer http.ResponseWriter, request *http.Request,
@@ -100,9 +105,9 @@ func (server *Server) ResolveScheduleRecovery(writer http.ResponseWriter, reques
 		return
 	}
 	action := map[generated.ResolveScheduleRecoveryAction]controlplanev1.ScheduleRecoveryAction{
-		generated.REPAIR: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR,
-		generated.CANCEL: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL,
-		generated.SKIP:   controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP,
+		generated.ResolveScheduleRecoveryActionREPAIR: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR,
+		generated.ResolveScheduleRecoveryActionCANCEL: controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL,
+		generated.ResolveScheduleRecoveryActionSKIP:   controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP,
 	}[body.Action]
 	if action == controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_UNSPECIFIED {
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
@@ -525,6 +530,153 @@ func (server *Server) ManageAccessResource(writer http.ResponseWriter, request *
 	server.writeResourceResponse(writer, request.Context(), http.StatusOK, response.GetResource(), err, true)
 }
 
+func (server *Server) ManageRoleImageRecipe(writer http.ResponseWriter, request *http.Request, params generated.ManageRoleImageRecipeParams) {
+	var body generated.ManageRoleImageRecipe
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	action, ok := roleImageRecipeAction(body.Action)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	create := action == controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_CREATE
+	update := action == controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_UPDATE
+	var recipeID, name string
+	var version uint64
+	var input *controlplanev1.RoleImageRecipeInput
+	if create {
+		if body.RecipeId != nil || params.IfMatch != nil || body.Name == nil || body.Input == nil {
+			writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+			return
+		}
+		name, input = *body.Name, roleImageRecipeInput(*body.Input)
+	} else {
+		if body.RecipeId == nil || params.IfMatch == nil {
+			writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+			return
+		}
+		recipeID = body.RecipeId.String()
+		parsedVersion, versionOK := requireETag(writer, generated.IfMatch(*params.IfMatch))
+		if !versionOK {
+			return
+		}
+		version = parsedVersion
+		if update {
+			if body.Name == nil || body.Input == nil {
+				writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+				return
+			}
+			name, input = *body.Name, roleImageRecipeInput(*body.Input)
+		} else if body.Name != nil || body.Input != nil {
+			writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+			return
+		}
+	}
+	response, err := server.control.ManageRoleImageRecipe(request.Context(), &controlplanev1.ManageRoleImageRecipeRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), Action: action, RecipeId: recipeID,
+		ExpectedVersion: version, Name: name, Input: input,
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, true)
+		return
+	}
+	recipe, convertErr := ConvertResource(response.GetRecipe())
+	if convertErr != nil {
+		server.writeInternal(writer, request.Context(), convertErr)
+		return
+	}
+	result := generated.RoleImageRecipeResult{Recipe: recipe, Reused: response.GetReused()}
+	if response.GetImageBuild() != nil {
+		converted, err := ConvertResource(response.GetImageBuild())
+		if err != nil {
+			server.writeInternal(writer, request.Context(), err)
+			return
+		}
+		result.ImageBuild = &converted
+	}
+	if response.GetImageArtifact() != nil {
+		converted, err := ConvertResource(response.GetImageArtifact())
+		if err != nil {
+			server.writeInternal(writer, request.Context(), err)
+			return
+		}
+		result.ImageArtifact = &converted
+	}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", recipe.Version))
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (server *Server) GetRoleImageRecipe(
+	writer http.ResponseWriter,
+	request *http.Request,
+	recipeID openapi_types.UUID,
+	params generated.GetRoleImageRecipeParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.GetRoleImageRecipe(request.Context(), &controlplanev1.GetRoleImageRecipeRequest{
+		RecipeId: recipeID.String(), ExpectedVersion: version,
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	resource, err := ConvertResource(response.GetRecipe())
+	spec := response.GetRecipe().GetSpec().GetRoleImageRecipe()
+	input, inputErr := roleImageRecipeReadbackInput(spec.GetInput())
+	if err != nil || inputErr != nil || spec == nil {
+		server.writeInternal(writer, request.Context(), errors.New("role image recipe readback is invalid"))
+		return
+	}
+	result := generated.RoleImageRecipeReadback{Recipe: resource, Input: input,
+		Generation: int64(spec.GetGeneration()), SpecSha256: spec.GetSpecSha256(),
+		PolicyRevision: int64(spec.GetPolicyRevision()), PolicySha256: spec.GetPolicySha256(),
+		RoleRuntimeContractRevision: int64(spec.GetRoleRuntimeContractRevision()),
+		RoleRuntimeContractSha256:   spec.GetRoleRuntimeContractSha256()}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", resource.Version))
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (server *Server) ManageImageBuild(writer http.ResponseWriter, request *http.Request, params generated.ManageImageBuildParams) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	var body generated.ManageImageBuild
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	action, ok := imageBuildOwnerAction(body.Action)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.ManageImageBuild(request.Context(), &controlplanev1.ManageImageBuildRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), ImageBuildId: body.ImageBuildId.String(),
+		ExpectedVersion: version, Action: action,
+	})
+	server.writeResourceResponse(writer, request.Context(), http.StatusOK, response.GetImageBuild(), err, true)
+}
+
+func (server *Server) GetRoleImageBuild(
+	writer http.ResponseWriter,
+	request *http.Request,
+	imageBuildID openapi_types.UUID,
+	params generated.GetRoleImageBuildParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.GetRoleImageBuild(request.Context(), &controlplanev1.GetRoleImageBuildRequest{
+		ImageBuildId: imageBuildID.String(), ExpectedVersion: version,
+	})
+	server.writeResourceResponse(writer, request.Context(), http.StatusOK, response.GetImageBuild(), err, false)
+}
+
 func (server *Server) DetachAccessResource(writer http.ResponseWriter, request *http.Request, resourceID generated.ResourceID, params generated.DetachAccessResourceParams) {
 	version, ok := requireETag(writer, params.IfMatch)
 	if !ok {
@@ -920,7 +1072,7 @@ func accessSpec(kind generated.AccessResourceKind, input generated.AccessSpecInp
 		if input.Role == nil {
 			break
 		}
-		return controlplanev1.ResourceKind_RESOURCE_KIND_ROLE, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Role{Role: &controlplanev1.RoleSpec{StableKey: input.Role.StableKey, Capabilities: input.Role.Capabilities, AllowedTargetRoleIds: uuidStrings(input.Role.AllowedTargetRoleIds), PromptProfileId: uuidValue(input.Role.PromptProfileId), ProviderCredentialBindingIds: uuidStrings(input.Role.ProviderCredentialBindingIds), RepositoryWorkspaceIds: uuidStrings(input.Role.RepositoryWorkspaceIds), IntegrationIds: uuidStrings(input.Role.IntegrationIds), Ownership: uiOwnership()}}}, true
+		return controlplanev1.ResourceKind_RESOURCE_KIND_ROLE, &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Role{Role: &controlplanev1.RoleSpec{StableKey: input.Role.StableKey, Capabilities: input.Role.Capabilities, AllowedTargetRoleIds: uuidStrings(input.Role.AllowedTargetRoleIds), PromptProfileId: uuidValue(input.Role.PromptProfileId), RoleImageRecipeId: input.Role.RoleImageRecipeId.String(), ProviderCredentialBindingIds: uuidStrings(input.Role.ProviderCredentialBindingIds), RepositoryWorkspaceIds: uuidStrings(input.Role.RepositoryWorkspaceIds), IntegrationIds: uuidStrings(input.Role.IntegrationIds), Ownership: uiOwnership()}}}, true
 	case generated.AccessResourceKindPROMPTPROFILE:
 		if input.PromptProfile == nil || input.PromptProfile.Revision < 1 {
 			break
@@ -945,12 +1097,77 @@ func accessKind(kind generated.AccessResourceKind) (controlplanev1.ResourceKind,
 
 func administrativeAction(input generated.ManageAccessResourceAction) (controlplanev1.AdministrativeAction, bool) {
 	mapping := map[generated.ManageAccessResourceAction]controlplanev1.AdministrativeAction{
-		generated.CREATE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_CREATE, generated.UPDATE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_UPDATE,
-		generated.ACTIVATE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_ACTIVATE, generated.PAUSE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_PAUSE,
-		generated.ARCHIVE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_ARCHIVE, generated.DELETE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_DELETE,
+		generated.ManageAccessResourceActionCREATE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_CREATE, generated.ManageAccessResourceActionUPDATE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_UPDATE,
+		generated.ManageAccessResourceActionACTIVATE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_ACTIVATE, generated.ManageAccessResourceActionPAUSE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_PAUSE,
+		generated.ManageAccessResourceActionARCHIVE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_ARCHIVE, generated.ManageAccessResourceActionDELETE: controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_DELETE,
 	}
 	value, ok := mapping[input]
 	return value, ok
+}
+
+func roleImageRecipeAction(input generated.ManageRoleImageRecipeAction) (controlplanev1.RoleImageRecipeAction, bool) {
+	mapping := map[generated.ManageRoleImageRecipeAction]controlplanev1.RoleImageRecipeAction{
+		generated.ManageRoleImageRecipeActionCREATE:       controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_CREATE,
+		generated.ManageRoleImageRecipeActionUPDATE:       controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_UPDATE,
+		generated.ManageRoleImageRecipeActionARCHIVE:      controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_ARCHIVE,
+		generated.ManageRoleImageRecipeActionRESTORE:      controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_RESTORE,
+		generated.ManageRoleImageRecipeActionDELETE:       controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_DELETE,
+		generated.ManageRoleImageRecipeActionREQUESTBUILD: controlplanev1.RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD,
+	}
+	value, ok := mapping[input]
+	return value, ok
+}
+
+func imageBuildOwnerAction(input generated.ManageImageBuildAction) (controlplanev1.ImageBuildOwnerAction, bool) {
+	mapping := map[generated.ManageImageBuildAction]controlplanev1.ImageBuildOwnerAction{
+		generated.ManageImageBuildActionCANCEL:     controlplanev1.ImageBuildOwnerAction_IMAGE_BUILD_OWNER_ACTION_CANCEL,
+		generated.ManageImageBuildActionRETRY:      controlplanev1.ImageBuildOwnerAction_IMAGE_BUILD_OWNER_ACTION_RETRY,
+		generated.ManageImageBuildActionEXPIRE:     controlplanev1.ImageBuildOwnerAction_IMAGE_BUILD_OWNER_ACTION_EXPIRE,
+		generated.ManageImageBuildActionDEADLETTER: controlplanev1.ImageBuildOwnerAction_IMAGE_BUILD_OWNER_ACTION_DEAD_LETTER,
+	}
+	value, ok := mapping[input]
+	return value, ok
+}
+
+func roleImageRecipeInput(input generated.RoleImageRecipeInput) *controlplanev1.RoleImageRecipeInput {
+	result := &controlplanev1.RoleImageRecipeInput{
+		BaseImageReference: input.BaseImageReference, BaseImageDigest: input.BaseImageDigest,
+		SourceRef: input.SourceRef, SourceRevision: input.SourceRevision, SourceSha256: input.SourceSha256,
+		ContextRef: input.ContextRef, ContextSha256: input.ContextSha256,
+		BuilderSha256: input.BuilderSha256, FrontendSha256: input.FrontendSha256,
+		InstallationBlock: input.InstallationBlock,
+		ToolchainSha256:   input.ToolchainSha256,
+	}
+	for _, platform := range input.Platforms {
+		result.Platforms = append(result.Platforms, &controlplanev1.RoleImagePlatform{
+			Os: string(platform.Os), Architecture: string(platform.Architecture), Variant: value(platform.Variant),
+		})
+	}
+	for _, item := range input.Packages {
+		result.Packages = append(result.Packages, &controlplanev1.RoleImagePackage{
+			Manager: string(item.Manager), Name: item.Name, Version: item.Version, Digest: item.Digest, SourceRef: item.SourceRef,
+		})
+	}
+	for _, item := range input.Tools {
+		result.Tools = append(result.Tools, &controlplanev1.RoleImageTool{
+			Name: item.Name, Version: item.Version, SourceRef: item.SourceRef, Sha256: item.Sha256,
+		})
+	}
+	return result
+}
+
+func roleImageRecipeReadbackInput(input *controlplanev1.RoleImageRecipeInput) (generated.RoleImageRecipeInput, error) {
+	status, err := roleImageRecipeProjectionInput(input)
+	if err != nil {
+		return generated.RoleImageRecipeInput{}, err
+	}
+	return generated.RoleImageRecipeInput{
+		BaseImageReference: status.BaseImageReference, BaseImageDigest: status.BaseImageDigest,
+		SourceRef: status.SourceRef, SourceRevision: status.SourceRevision, SourceSha256: status.SourceSha256,
+		ContextRef: status.ContextRef, ContextSha256: status.ContextSha256, BuilderSha256: status.BuilderSha256,
+		FrontendSha256: status.FrontendSha256, Platforms: status.Platforms, Packages: status.Packages,
+		Tools: status.Tools, InstallationBlock: input.GetInstallationBlock(), ToolchainSha256: status.ToolchainSha256,
+	}, nil
 }
 
 func resourceKind(input generated.ResourceKind) (controlplanev1.ResourceKind, bool) {

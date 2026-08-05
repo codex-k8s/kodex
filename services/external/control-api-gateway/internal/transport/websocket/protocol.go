@@ -98,6 +98,9 @@ const (
 	ResourceKindMemoryRecord        ResourceKind = "MEMORY_RECORD"
 	ResourceKindWorkClaim           ResourceKind = "WORK_CLAIM"
 	ResourceKindArtifact            ResourceKind = "ARTIFACT"
+	ResourceKindRoleImageRecipe     ResourceKind = "ROLE_IMAGE_RECIPE"
+	ResourceKindImageBuild          ResourceKind = "IMAGE_BUILD"
+	ResourceKindImageArtifact       ResourceKind = "IMAGE_ARTIFACT"
 )
 
 func (value ResourceKind) valid() bool {
@@ -106,7 +109,8 @@ func (value ResourceKind) valid() bool {
 		ResourceKindPromptProfile, ResourceKindCredentialBinding, ResourceKindRepositoryWorkspace,
 		ResourceKindIntegration, ResourceKindRuntimeRevision, ResourceKindSession, ResourceKindTurn,
 		ResourceKindProcessRun, ResourceKindSchedule, ResourceKindOwnerGate, ResourceKindMemoryRecord,
-		ResourceKindWorkClaim, ResourceKindArtifact:
+		ResourceKindWorkClaim, ResourceKindArtifact, ResourceKindRoleImageRecipe,
+		ResourceKindImageBuild, ResourceKindImageArtifact:
 		return true
 	default:
 		return false
@@ -318,6 +322,39 @@ func validateResourceProjection(resource httpgenerated.Resource) error {
 		validKind = validKind || resource.Kind == httpgenerated.ResourceKindARTIFACT
 		if !value.ScanStatus.Valid() {
 			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.RoleImageRecipe; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindROLEIMAGERECIPE
+		for _, item := range value.Input.Packages {
+			if !item.Manager.Valid() {
+				return errors.New(errClosedEnum)
+			}
+		}
+		for _, platform := range value.Input.Platforms {
+			if !platform.Os.Valid() || !platform.Architecture.Valid() {
+				return errors.New(errClosedEnum)
+			}
+		}
+	}
+	if value := resource.Spec.ImageBuild; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindIMAGEBUILD
+		if !value.Stage.Valid() {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.ImageArtifact; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindIMAGEARTIFACT
+		if value.AdmissionVerdict != nil && !value.AdmissionVerdict.Valid() {
+			return errors.New(errClosedEnum)
+		}
+		for _, platform := range value.Platforms {
+			if !platform.Os.Valid() || !platform.Architecture.Valid() {
+				return errors.New(errClosedEnum)
+			}
 		}
 	}
 	if selected != 1 || !validKind {

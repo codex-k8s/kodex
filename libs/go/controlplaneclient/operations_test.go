@@ -6,7 +6,7 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 	t.Parallel()
 
 	operations := ControlAPIGatewayOperations()
-	if len(operations) != 25 {
+	if len(operations) != 29 {
 		t.Fatalf("control-api-gateway operation set must contain exact materialized methods: %d", len(operations))
 	}
 	for _, operation := range []string{
@@ -17,9 +17,13 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 		"control.schedule.run-now",
 		"control.schedule.occurrences.list",
 		"control.schedule.recovery.resolve",
+		"control.role-image-recipe.manage",
+		"control.role-image-recipe.get",
+		"control.image-build.manage",
+		"control.image-build.get",
 	} {
 		if operations[operation] == "" {
-			t.Fatalf("specialized TLS operation is absent: %s", operation)
+			t.Fatalf("specialized control API operation is absent: %s", operation)
 		}
 	}
 	if _, exists := operations["control.gateway-public-tls.admit"]; exists {
@@ -47,5 +51,23 @@ func TestAutomationSchedulerOperationSetIsPollingOnly(t *testing.T) {
 	}
 	if _, exists := operations["control.schedule-resource.get"]; exists {
 		t.Fatal("polling-only automation-scheduler must not declare a false event hydration operation")
+	}
+}
+
+func TestImagePromotionOperationSetConsumesClaimBeforeSideEffect(t *testing.T) {
+	t.Parallel()
+	operations := ImagePromotionOperations()
+	if len(operations) != 4 {
+		t.Fatalf("image promotion operation set must contain exact methods: %d", len(operations))
+	}
+	for _, operation := range []string{
+		"control.image-promotion.readiness",
+		"control.image-promotion.claim",
+		"control.image-promotion.authorize",
+		"control.image-promotion.complete",
+	} {
+		if operations[operation] == "" {
+			t.Fatalf("image promotion operation is absent: %s", operation)
+		}
 	}
 }

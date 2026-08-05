@@ -6,13 +6,9 @@ metadata:
     app.kubernetes.io/name: mattercodex-registry-node-pull-readback
     app.kubernetes.io/component: image-pull-readback
 spec:
-  updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
+  updateStrategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 1}}
   selector:
-    matchLabels:
-      app.kubernetes.io/name: mattercodex-registry-node-pull-readback
+    matchLabels: {app.kubernetes.io/name: mattercodex-registry-node-pull-readback}
   template:
     metadata:
       labels:
@@ -25,34 +21,51 @@ spec:
       serviceAccountName: mattercodex-image-pull-readback
       automountServiceAccountToken: false
       enableServiceLinks: false
-      terminationGracePeriodSeconds: 5
-      imagePullSecrets:
-        - name: mattercodex-image-pull
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
+      tolerations: [{operator: Exists}]
       containers:
-        - name: readback
-          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          imagePullPolicy: Always
-          command:
-            - /usr/local/bin/control-plane-cli
-          args:
-            - image-readback
+        - name: bootstrap
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/usr/local/bin/node-pull-bootstrap]
+          env:
+            - {name: NODE_NAME, valueFrom: {fieldRef: {fieldPath: spec.nodeName}}}
+            - {name: HOST_IP, valueFrom: {fieldRef: {fieldPath: status.hostIP}}}
+            - name: REGISTRY_PULL_HOST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullRegistryHost}}
+            - name: PULL_CREDENTIAL_GENERATION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullCredentialGeneration}}
+            - name: READBACK_IMAGE
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: nodeReadbackImage}}
+          readinessProbe:
+            exec: {command: [/bin/sh, -ec, test -s /ready/node-pull]}
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 12
           resources:
-            requests:
-              cpu: 5m
-              memory: 8Mi
-            limits:
-              cpu: 50m
-              memory: 32Mi
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
+            runAsUser: 0
+            runAsGroup: 0
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: containerd-config, mountPath: /host/etc/containerd/certs.d}
+            - {name: containerd-socket, mountPath: /run/containerd/containerd.sock}
+            - {name: vault-ca, mountPath: /vault, readOnly: true}
+            - {name: vault-token, mountPath: /vault-token, readOnly: true}
+            - {name: readiness, mountPath: /ready}
+      volumes:
+        - name: containerd-config
+          hostPath: {path: /etc/containerd/certs.d, type: DirectoryOrCreate}
+        - name: containerd-socket
+          hostPath: {path: /run/containerd/containerd.sock, type: Socket}
+        - name: vault-ca
+          configMap: {name: mattercodex-vault-ca, defaultMode: 0440}
+        - name: vault-token
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken: {path: token, audience: vault, expirationSeconds: 600}
+        - name: readiness
+          emptyDir: {sizeLimit: 1Mi}

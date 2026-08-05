@@ -453,6 +453,9 @@
               "DOMAIN_STATE",
               "AGENT_SESSION",
               "INTEGRATION_CONTINUATION",
+              "IMAGE_BUILD",
+              "IMAGE_ARTIFACT",
+              "IMAGE_PROMOTION_CLAIM",
               "PROCESS_RUN",
               "AUTOMATION_OCCURRENCE"
             ]
@@ -535,7 +538,10 @@
             "RUNTIME_RESTORE_VERIFIER_GRANT",
             "RUNTIME_CLEANUP_AUTHORIZER_GRANT",
             "MEMORY_INDEX_GRANT",
-            "INTEGRATION_CONTINUATION_GRANT"
+            "INTEGRATION_CONTINUATION_GRANT",
+            "ROLE_IMAGE_BUILD_GRANT",
+            "IMAGE_ADMISSION_GRANT",
+            "IMAGE_PROMOTION_GRANT"
           ]
         },
         "application_credential_metadata": {
@@ -603,6 +609,9 @@
               "DOMAIN_STATE",
               "AGENT_SESSION",
               "INTEGRATION_CONTINUATION",
+              "IMAGE_BUILD",
+              "IMAGE_ARTIFACT",
+              "IMAGE_PROMOTION_CLAIM",
               "PROCESS_RUN",
               "AUTOMATION_OCCURRENCE"
             ]

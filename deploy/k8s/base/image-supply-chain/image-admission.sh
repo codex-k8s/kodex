@@ -6,75 +6,367 @@ fail() {
   exit 1
 }
 
-require_common() {
-  echo "$IMAGE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "invalid image digest"
-  echo "$SOURCE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "invalid source digest"
-  echo "$BUILD_TAG" | grep -Eq '^v[0-9]{14}-[a-f0-9]{40}$' || fail "invalid build tag"
-  echo "$POLICY_REVISION" | grep -Eq '^[1-9][0-9]*$' || fail "invalid policy revision"
-  echo "$IMAGE_NAME" | grep -Eq '^[a-z0-9]+([._-][a-z0-9]+)*$' || fail "invalid image name"
-  echo "$ADMISSION_TOOLS_IMAGE" |
-    grep -Eq '^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$' ||
-    fail "admission tools image is not immutable"
-  echo "$ADMISSION_TOOLS_SHA256" | grep -Eq '^sha256:[a-f0-9]{64}$' ||
-    fail "invalid admission tools digest"
-  [ "${ADMISSION_TOOLS_IMAGE##*@}" = "$ADMISSION_TOOLS_SHA256" ] ||
-    fail "admission tools digest mismatch"
-  echo "$ADMISSION_ATTEMPT_SHA256" | grep -Eq '^[a-f0-9]{64}$' ||
-    fail "invalid admission attempt digest"
-  [ "$EXPECTED_BUILDER_ID" = "spiffe://mattercodex.local/ns/mattercodex-system/sa/mattercodex-role-image-builder" ] ||
-    fail "untrusted builder identity"
-  [ "$EXPECTED_BUILD_TYPE" = "https://mobyproject.org/buildkit@v1" ] ||
-    fail "untrusted build type"
-  for identity in "$SCANNER_IDENTITY" "$SIGNER_IDENTITY" "$ADMISSION_OWNER_IDENTITY" "$PROMOTION_IDENTITY"; do
-    echo "$identity" | grep -Eq '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' ||
-      fail "invalid admission phase identity"
-  done
-  computed_attempt=$(printf '%s\n' "$SOURCE_DIGEST" "$BUILD_TAG" "$IMAGE_DIGEST" \
-    "$ADMISSION_TOOLS_SHA256" "$POLICY_REVISION" "$EXPECTED_BUILDER_ID" \
-    "$EXPECTED_BUILD_TYPE" "$SCANNER_IDENTITY" "$SIGNER_IDENTITY" \
-    "$ADMISSION_OWNER_IDENTITY" "$PROMOTION_IDENTITY" |
-    sha256sum | awk '{print $1}')
-  [ "$computed_attempt" = "$ADMISSION_ATTEMPT_SHA256" ] ||
-    fail "admission attempt tuple mismatch"
-  for tool in base64 buildctl cmp cosign curl date grype jq openssl pgrep regctl sha256sum syft; do
-    command -v "$tool" >/dev/null || fail "admission tool image is incomplete"
-  done
-}
-
-wait_for_evidence() {
-  marker=$1
-  remaining=150
-  while [ ! -f "/work/$marker" ] && [ "$remaining" -gt 0 ]; do
+wait_for_file() {
+  file=$1
+  remaining=120
+  while [ ! -f "/work/$file" ] && [ "$remaining" -gt 0 ]; do
     sleep 10
     remaining=$((remaining - 1))
   done
-  [ -f "/work/$marker" ] || fail "predecessor evidence timeout"
-  [ "$(cat "/work/$marker")" = "$ADMISSION_ATTEMPT_SHA256" ] ||
-    fail "stale predecessor evidence"
+  [ -f "/work/$file" ] || fail "predecessor evidence timeout"
 }
 
 write_marker() {
-  printf '%s\n' "$ADMISSION_ATTEMPT_SHA256" >"/work/$1"
+  printf '%s\n' "$ADMISSION_RUN_ID" >"/work/$1"
 }
 
-validate_evidence_manifest() {
-  builder_key_sha256=$(sha256sum /identity/builder.pub | awk '{print $1}')
-  jq -e --arg source "$SOURCE_DIGEST" --arg build "$BUILD_TAG" \
-    --arg image "$IMAGE_DIGEST" --arg tools "$ADMISSION_TOOLS_SHA256" \
-    --arg policy "$POLICY_REVISION" --arg attempt "$ADMISSION_ATTEMPT_SHA256" \
-    --arg builder "$EXPECTED_BUILDER_ID" --arg build_type "$EXPECTED_BUILD_TYPE" \
-    --arg builder_key "$builder_key_sha256" \
-    --arg scanner "$SCANNER_IDENTITY" --arg signer "$SIGNER_IDENTITY" \
-    --arg owner "$ADMISSION_OWNER_IDENTITY" --arg promotion "$PROMOTION_IDENTITY" '
-      .sourceDigest == $source and .buildTag == $build and
-      .imageDigest == $image and .toolsDigest == $tools and
-      .policyRevision == $policy and .attemptSHA256 == $attempt and
-      .builderIdentity == $builder and .buildType == $build_type and
-      .builderSignatureIdentitySHA256 == $builder_key and
-      .scannerIdentity == $scanner and .signerIdentity == $signer and
-      .admissionOwnerIdentity == $owner and .promotionIdentity == $promotion and
-      (.resolvedDependenciesSHA256 | type == "string" and test("^[a-f0-9]{64}$"))
-    ' /work/evidence.manifest.json >/dev/null || fail "evidence tuple mismatch"
+wait_for_marker() {
+  wait_for_file "$1"
+  [ "$(cat "/work/$1")" = "$ADMISSION_RUN_ID" ] || fail "stale predecessor evidence"
+}
+
+require_policy() {
+  echo "$POLICY_REVISION" | grep -Eq '^[1-9][0-9]*$' || fail "invalid policy revision"
+  echo "$POLICY_SHA256" | grep -Eq '^[a-f0-9]{64}$' || fail "invalid policy digest"
+  echo "$ADMISSION_RUN_ID" | grep -Eq '^v[0-9]{14}-[a-f0-9]{40}$' || fail "invalid admission run ID"
+  echo "$ADMISSION_TOOLS_IMAGE" | grep -Eq '^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$' ||
+    fail "admission tools image is not immutable"
+  echo "$ADMISSION_IMAGE" | grep -Eq '^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$' ||
+    fail "admission image is not immutable"
+  echo "$PROMOTION_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
+    fail "promotion repository is invalid"
+  [ "$EVIDENCE_REPOSITORY" = "mattercodex-image-registry-evidence.mattercodex-system.svc.cluster.local:5007/evidence/role-image-admission" ] ||
+    fail "evidence repository is invalid"
+  [ "$PROMOTION_EVIDENCE_REPOSITORY" = "mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/evidence" ] ||
+    fail "promotion evidence repository is invalid"
+  echo "$PROMOTED_PULL_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
+    fail "promoted pull repository is invalid"
+  [ "${PROMOTION_REPOSITORY#*/}" = "${PROMOTED_PULL_REPOSITORY#*/}" ] ||
+    fail "promotion and pull repository paths differ"
+  [ "$EXPECTED_BUILDER_ID" = "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder" ] ||
+    fail "untrusted builder identity"
+  [ "$EXPECTED_BUILD_TYPE" = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md" ] ||
+    fail "untrusted build type"
+  echo "$ROLE_RUNTIME_CONTRACT_REVISION" | grep -Eq '^[1-9][0-9]*$' || fail "invalid runtime contract revision"
+  echo "$ROLE_RUNTIME_CONTRACT_SHA256" | grep -Eq '^[a-f0-9]{64}$' || fail "invalid runtime contract digest"
+  echo "$TRUSTED_ROLE_BASE_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
+    fail "trusted role base repository is invalid"
+  echo "$TRUSTED_ROLE_BASE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "trusted role base digest is invalid"
+  for tool in base64 cmp cosign grype image-admission-bridge jq regctl sha256sum syft wc; do
+    command -v "$tool" >/dev/null || fail "admission image is incomplete"
+  done
+}
+
+verify_runtime_config() {
+  config_file=$1
+  jq -e '
+    .User == "10001:10001" and
+    .Entrypoint == ["/usr/local/bin/mattercodex-init", "entrypoint", "/usr/local/bin/matter-codex-agent-runner"] and
+    .Cmd == ["runtime-session"]
+  ' "$config_file" >/dev/null || fail "role runtime ABI mismatch"
+}
+
+load_owner_claim() {
+  wait_for_file owner-claim.json
+  jq -e --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" '
+    . as $claim |
+    (.artifactId | type == "string" and length > 0) and
+    (.version | type == "number" and . > 0) and
+    (.fence | type == "number" and . > 0) and
+    (.claimToken | type == "string" and length > 0) and
+    (.recipeId | type == "string" and length > 0) and
+    (.recipeVersion | type == "number" and . > 0) and
+    (.recipeGeneration | type == "number" and . > 0) and
+    (.specSHA256 | test("^[a-f0-9]{64}$")) and
+    (.buildId | type == "string" and length > 0) and
+    (.buildVersion | type == "number" and . > 0) and
+    (.buildAttempt | type == "number" and . > 0) and
+    (.stagingReference | test("^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$")) and
+    (.manifestDigest | test("^sha256:[a-f0-9]{64}$")) and
+    (.immutableBuildSHA256 | test("^[a-f0-9]{64}$")) and
+    (.provenanceSHA256 | test("^[a-f0-9]{64}$")) and
+    (.baseImageDigest | test("^sha256:[a-f0-9]{64}$")) and
+    (.sourceSHA256 | test("^[a-f0-9]{64}$")) and
+    (.contextSHA256 | test("^[a-f0-9]{64}$")) and
+    (.builderSHA256 | test("^[a-f0-9]{64}$")) and
+    (.frontendSHA256 | test("^[a-f0-9]{64}$")) and
+    (.toolchainSHA256 | test("^[a-f0-9]{64}$")) and
+    (.roleRuntimeContractRevision | type == "number" and . > 0) and
+    (.roleRuntimeContractSHA256 | test("^[a-f0-9]{64}$")) and
+    (.platforms | type == "array" and length > 0 and length <= 8 and
+      all(.[]; test("^linux/(amd64|arm64)(/[A-Za-z0-9][A-Za-z0-9._+~-]{0,127})?$")) and
+      (unique | length) == length) and
+    .policyRevision == $policy and .policySHA256 == $policy_sha and
+    ($claim.stagingReference | endswith("@" + $claim.manifestDigest))
+  ' /work/owner-claim.json >/dev/null || fail "owner admission claim is invalid"
+  artifact_id=$(jq -er .artifactId /work/owner-claim.json)
+  source_ref=$(jq -er .stagingReference /work/owner-claim.json)
+  image_digest=$(jq -er .manifestDigest /work/owner-claim.json)
+  image_hex=${image_digest#sha256:}
+  spec_sha256=$(jq -er .specSHA256 /work/owner-claim.json)
+  immutable_build_sha256=$(jq -er .immutableBuildSHA256 /work/owner-claim.json)
+  expected_provenance_sha256=$(jq -er .provenanceSHA256 /work/owner-claim.json)
+  base_image_digest=$(jq -er .baseImageDigest /work/owner-claim.json)
+  source_sha256=$(jq -er .sourceSHA256 /work/owner-claim.json)
+  context_sha256=$(jq -er .contextSHA256 /work/owner-claim.json)
+  builder_sha256=$(jq -er .builderSHA256 /work/owner-claim.json)
+  frontend_sha256=$(jq -er .frontendSHA256 /work/owner-claim.json)
+  toolchain_sha256=$(jq -er .toolchainSHA256 /work/owner-claim.json)
+  runtime_contract_revision=$(jq -er .roleRuntimeContractRevision /work/owner-claim.json)
+  runtime_contract_sha256=$(jq -er .roleRuntimeContractSHA256 /work/owner-claim.json)
+  [ "$runtime_contract_revision" = "$ROLE_RUNTIME_CONTRACT_REVISION" ] || fail "runtime contract revision mismatch"
+  [ "$runtime_contract_sha256" = "$ROLE_RUNTIME_CONTRACT_SHA256" ] || fail "runtime contract digest mismatch"
+  [ "$base_image_digest" = "$TRUSTED_ROLE_BASE_DIGEST" ] || fail "trusted role base digest mismatch"
+  jq -r '.platforms[]' /work/owner-claim.json | sort -u >/work/expected-platforms
+  staging_write_host=${source_ref%%/*}
+  [ "$staging_write_host" = "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001" ] ||
+    fail "unexpected staging write host"
+  source_ref="mattercodex-image-registry-staging-read.mattercodex-system.svc.cluster.local:5004/${source_ref#*/}"
+  subject_name=${source_ref%@*}
+  staging_host=${source_ref%%/*}
+}
+
+load_promotion_claim() {
+  wait_for_file owner-promotion.json
+  jq -e '
+    . as $claim |
+    (.artifactId | type == "string" and length > 0) and
+    (.version | type == "number" and . > 0) and
+    ((.claim | type == "string" and length > 0) or
+      ((.claim // "") == "" and (.authorizationToken | type == "string" and length > 0))) and
+    (.fence | type == "number" and . > 0) and
+    (.expiresAt | type == "string" and length > 0) and
+    (.stagingReference | test("^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$")) and
+    (.manifestDigest | test("^sha256:[a-f0-9]{64}$")) and
+    (.admissionRevision | type == "number" and . > 0) and
+    (.admissionReceiptSHA256 | test("^[a-f0-9]{64}$")) and
+    (.admissionReceiptOCIManifestDigest | test("^sha256:[a-f0-9]{64}$")) and
+    ($claim.stagingReference | endswith("@" + $claim.manifestDigest))
+  ' /work/owner-promotion.json >/dev/null || fail "owner promotion claim is invalid"
+  artifact_id=$(jq -er .artifactId /work/owner-promotion.json)
+  source_ref=$(jq -er .stagingReference /work/owner-promotion.json)
+  image_digest=$(jq -er .manifestDigest /work/owner-promotion.json)
+  promotion_receipt=$(jq -er .admissionReceiptSHA256 /work/owner-promotion.json)
+  staging_receipt_manifest_digest=$(jq -er .admissionReceiptOCIManifestDigest /work/owner-promotion.json)
+  staging_write_host=${source_ref%%/*}
+  [ "$staging_write_host" = "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001" ] ||
+    fail "unexpected staging write host"
+  source_ref="mattercodex-image-registry-staging-read.mattercodex-system.svc.cluster.local:5004/${source_ref#*/}"
+  subject_name=${source_ref%@*}
+  staging_host=${source_ref%%/*}
+}
+
+claim_promotion() {
+  remaining=120
+  while [ "$remaining" -gt 0 ]; do
+    if image-admission-bridge claim-promotion; then
+      return 0
+    fi
+    remaining=$((remaining - 1))
+    sleep 10
+  done
+  fail "owner promotion claim timeout"
+}
+
+evidence_entries() {
+  cat <<'EOF'
+image-digest.subject|application/vnd.mattercodex.image-digest.v1+text
+image-digest.sig|application/vnd.dev.cosign.signature.v1+text
+provenance.json|application/vnd.mattercodex.provenance-binding.v1+json
+provenance.sig|application/vnd.dev.cosign.signature.v1+text
+native-provenance.json|application/vnd.mattercodex.native-provenance.v1+json
+native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+sbom.json|application/spdx+json
+sbom.sig|application/vnd.dev.cosign.signature.v1+text
+vulnerability.json|application/vnd.mattercodex.vulnerability-report.v1+json
+vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
+signature.binding.json|application/vnd.mattercodex.signature-binding.v1+json
+admission.receipt.json|application/vnd.mattercodex.admission-receipt.v1+json
+cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
+EOF
+}
+
+verify_evidence_manifest() {
+  evidence_manifest=$1
+  expected_manifest_digest=$2
+  expected_artifact=$3
+  expected_image=$4
+  expected_policy_revision=$5
+  expected_policy_sha256=$6
+  expected_entries=$(evidence_entries | jq -Rn \
+    '[inputs | split("|") | {key:.[0],value:.[1]}] | from_entries')
+  [ "sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')" = "$expected_manifest_digest" ] ||
+    fail "admission evidence OCI manifest digest mismatch"
+  jq -e --arg artifact "$expected_artifact" --arg image "$expected_image" \
+    --arg policy "$expected_policy_revision" --arg policy_sha "$expected_policy_sha256" \
+    --argjson expected "$expected_entries" '
+    (. | keys | sort) == (["annotations","artifactType","config","layers","mediaType","schemaVersion"] | sort) and
+    .schemaVersion == 2 and .mediaType == "application/vnd.oci.image.manifest.v1+json" and
+    .artifactType == "application/vnd.mattercodex.image-admission-evidence.v2" and
+    .config == {mediaType:"application/vnd.mattercodex.image-admission-evidence.config.v2+json",
+      digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2} and
+    (.annotations | keys | sort) == (["mattercodex.dev/artifact-id","mattercodex.dev/evidence-schema",
+      "mattercodex.dev/image-digest","mattercodex.dev/policy-revision","mattercodex.dev/policy-sha256"] | sort) and
+    .annotations["mattercodex.dev/evidence-schema"] == "mattercodex.dev/image-admission-evidence/v2" and
+    .annotations["mattercodex.dev/artifact-id"] == $artifact and
+    .annotations["mattercodex.dev/image-digest"] == $image and
+    .annotations["mattercodex.dev/policy-revision"] == $policy and
+    .annotations["mattercodex.dev/policy-sha256"] == $policy_sha and
+    (.layers | type == "array" and length == ($expected | length)) and
+    ([.layers[].annotations["org.opencontainers.image.title"]] | sort) == ($expected | keys | sort) and
+    ([.layers[].annotations["org.opencontainers.image.title"]] | unique | length) == ($expected | length) and
+    all(.layers[];
+      (. | keys | sort) == (["annotations","digest","mediaType","size"] | sort) and
+      (.annotations | keys) == ["org.opencontainers.image.title"] and
+      .mediaType == $expected[.annotations["org.opencontainers.image.title"]] and
+      (.digest | test("^sha256:[a-f0-9]{64}$")) and
+      (.size | type == "number" and . >= 0 and . <= 16777216)) and
+    ([.layers[].size] | add) <= 67108864
+  ' "$evidence_manifest" >/dev/null || fail "admission evidence OCI manifest binding mismatch"
+}
+
+verify_evidence_files() {
+  evidence_directory=$1
+  evidence_manifest=$2
+  evidence_entries | while IFS='|' read -r evidence_name evidence_media_type; do
+    evidence_path="$evidence_directory/$evidence_name"
+    [ -f "$evidence_path" ] || fail "admission evidence entry is missing"
+    expected_digest=$(jq -er --arg name "$evidence_name" '.layers[] |
+      select(.annotations["org.opencontainers.image.title"] == $name) | .digest' "$evidence_manifest")
+    expected_size=$(jq -er --arg name "$evidence_name" '.layers[] |
+      select(.annotations["org.opencontainers.image.title"] == $name) | .size' "$evidence_manifest")
+    [ "sha256:$(sha256sum "$evidence_path" | awk '{print $1}')" = "$expected_digest" ] &&
+      [ "$(wc -c <"$evidence_path" | tr -d ' ')" = "$expected_size" ] ||
+      fail "admission evidence entry descriptor mismatch"
+  done
+}
+
+restore_evidence_entries() {
+  evidence_reference=$1
+  evidence_manifest=$2
+  evidence_directory=$3
+  mkdir -p "$evidence_directory"
+  evidence_entries | while IFS='|' read -r evidence_name evidence_media_type; do
+    temporary="$evidence_directory/$evidence_name.next"
+    regctl artifact get "$evidence_reference" --file "$evidence_name" >"$temporary" 2>/dev/null ||
+      fail "admission evidence entry recovery failed"
+    mv "$temporary" "$evidence_directory/$evidence_name"
+  done
+  verify_evidence_files "$evidence_directory" "$evidence_manifest"
+}
+
+verify_recovered_evidence() {
+  evidence_directory=$1
+  evidence_manifest=$2
+  expected_manifest_digest=$3
+  expected_artifact=$4
+  expected_image=$5
+  expected_receipt=$6
+  expected_policy_revision=$7
+  expected_policy_sha256=$8
+  required_verdict=$9
+  verify_evidence_manifest "$evidence_manifest" "$expected_manifest_digest" "$expected_artifact" "$expected_image" \
+    "$expected_policy_revision" "$expected_policy_sha256"
+  verify_evidence_files "$evidence_directory" "$evidence_manifest"
+  receipt="$evidence_directory/admission.receipt.json"
+  signature_binding="$evidence_directory/signature.binding.json"
+  [ "$(sha256sum "$receipt" | awk '{print $1}')" = "$expected_receipt" ] ||
+    fail "durable admission receipt payload mismatch"
+  verdict=$(jq -er '.verdict' "$receipt")
+  [ "$required_verdict" = ACCEPTED ] || [ "$required_verdict" = REJECTED ] ||
+    fail "required admission verdict is invalid"
+  [ "$verdict" = "$required_verdict" ] ||
+    fail "durable admission verdict mismatch"
+  signature_identity=$(jq -er '.signatureIdentity' "$receipt")
+  jq -e --arg artifact "$expected_artifact" --arg image "$expected_image" \
+    --arg policy "$expected_policy_revision" --arg policy_sha "$expected_policy_sha256" '
+    (. | keys | sort) == (["artifactId","imageDigest","immutableBuildSHA256","policyRevision","policySHA256",
+      "provenanceSHA256","sbomSHA256","signatureIdentity","signatureSHA256","specSHA256",
+      "version","verdict","vulnerabilityEvidenceSHA256"] | sort) and
+    .version == "v1" and .artifactId == $artifact and .imageDigest == $image and
+    .policyRevision == $policy and .policySHA256 == $policy_sha and
+    (.specSHA256 | test("^[a-f0-9]{64}$")) and (.immutableBuildSHA256 | test("^[a-f0-9]{64}$")) and
+    (.provenanceSHA256 | test("^[a-f0-9]{64}$")) and (.sbomSHA256 | test("^[a-f0-9]{64}$")) and
+    (.vulnerabilityEvidenceSHA256 | test("^[a-f0-9]{64}$")) and
+    (.signatureSHA256 | test("^[a-f0-9]{64}$")) and (.verdict == "ACCEPTED" or .verdict == "REJECTED")
+  ' "$receipt" >/dev/null || fail "durable admission receipt binding mismatch"
+  jq -e --arg image "$expected_image" --arg policy "$expected_policy_revision" \
+    --arg policy_sha "$expected_policy_sha256" --arg verdict "$verdict" --arg identity "$signature_identity" '
+    (. | keys | sort) == (["imageDigest","policyRevision","policySHA256","signatureIdentity","verdict",
+      "verification","version"] | sort) and
+    .version == "v1" and .imageDigest == $image and .policyRevision == $policy and
+    .policySHA256 == $policy_sha and .signatureIdentity == $identity and .verdict == $verdict and
+    .verification == "cosign-key-v1"
+  ' "$signature_binding" >/dev/null || fail "durable signature binding mismatch"
+  [ "$(sha256sum "$signature_binding" | awk '{print $1}')" = "$(jq -er .signatureSHA256 "$receipt")" ] &&
+    [ "$(sha256sum "$evidence_directory/provenance.json" | awk '{print $1}')" = "$(jq -er .provenanceSHA256 "$receipt")" ] &&
+    [ "$(sha256sum "$evidence_directory/sbom.json" | awk '{print $1}')" = "$(jq -er .sbomSHA256 "$receipt")" ] &&
+    [ "$(sha256sum "$evidence_directory/vulnerability.json" | awk '{print $1}')" = "$(jq -er .vulnerabilityEvidenceSHA256 "$receipt")" ] ||
+    fail "durable admission evidence hash mismatch"
+  jq -e --arg image "$expected_image" --argjson policy "$expected_policy_revision" \
+    --arg policy_sha "$expected_policy_sha256" '
+    .schema == "mattercodex.dev/image-provenance-binding/v1" and .manifestDigest == $image and
+    .policyRevision == $policy and .policySHA256 == $policy_sha
+  ' "$evidence_directory/provenance.json" >/dev/null || fail "durable provenance binding mismatch"
+  jq -e 'type == "array" and length > 0' "$evidence_directory/native-provenance.json" >/dev/null ||
+    fail "durable native provenance is invalid"
+  jq -e 'type == "object"' "$evidence_directory/sbom.json" >/dev/null || fail "durable SBOM is invalid"
+  jq -e 'type == "object"' "$evidence_directory/vulnerability.json" >/dev/null ||
+    fail "durable vulnerability evidence is invalid"
+  expected_subject="$evidence_directory/.expected-image-digest.$$"
+  printf '%s\n' "$expected_image" >"$expected_subject"
+  cmp -s "$expected_subject" "$evidence_directory/image-digest.subject" ||
+    fail "durable image digest subject mismatch"
+  rm -f "$expected_subject"
+  if [ "$verdict" = ACCEPTED ]; then
+    echo "$signature_identity" | grep -Eq '^[a-f0-9]{64}$' || fail "durable signature identity is invalid"
+    [ "$(sha256sum "$evidence_directory/cosign.pub" | awk '{print $1}')" = "$signature_identity" ] ||
+      fail "durable signature identity mismatch"
+    for signed_name in image-digest provenance native-provenance sbom vulnerability; do
+      signed_file="$evidence_directory/$signed_name.json"
+      [ "$signed_name" = image-digest ] && signed_file="$evidence_directory/image-digest.subject"
+      cosign verify-blob --key "$evidence_directory/cosign.pub" \
+        --signature "$evidence_directory/$signed_name.sig" "$signed_file" >/dev/null 2>&1 ||
+        fail "durable evidence signature verification failed"
+    done
+  else
+    [ "$signature_identity" = not-applicable-rejected ] || fail "rejected evidence signature identity mismatch"
+    for signature_file in "$evidence_directory"/*.sig; do
+      [ ! -s "$signature_file" ] || fail "rejected evidence contains a signature"
+    done
+  fi
+}
+
+publish_or_verify_evidence() {
+  evidence_tag=$1
+  evidence_manifest=$2
+  evidence_type=application/vnd.mattercodex.image-admission-evidence.v2
+  config_type=application/vnd.mattercodex.image-admission-evidence.config.v2+json
+  printf '{}' >/work/evidence.config.json
+  if ! regctl manifest get "$evidence_tag" --format raw-body >"$evidence_manifest" 2>/dev/null; then
+    set -- --artifact-type "$evidence_type" --config-type "$config_type" \
+      --config-file /work/evidence.config.json --file-title --strip-dirs \
+      --annotation "mattercodex.dev/evidence-schema=mattercodex.dev/image-admission-evidence/v2" \
+      --annotation "mattercodex.dev/artifact-id=$artifact_id" \
+      --annotation "mattercodex.dev/image-digest=$image_digest" \
+      --annotation "mattercodex.dev/policy-revision=$POLICY_REVISION" \
+      --annotation "mattercodex.dev/policy-sha256=$POLICY_SHA256"
+    while IFS='|' read -r evidence_name evidence_media_type; do
+      set -- "$@" --file-media-type "$evidence_media_type" --file "/work/$evidence_name"
+    done <<EOF
+$(evidence_entries)
+EOF
+    regctl artifact put "$@" "$evidence_tag" >/dev/null
+  fi
+  regctl manifest get "$evidence_tag" --format raw-body >"$evidence_manifest"
+  evidence_manifest_digest="sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')"
+  verify_evidence_manifest "$evidence_manifest" "$evidence_manifest_digest" "$artifact_id" "$image_digest" \
+    "$POLICY_REVISION" "$POLICY_SHA256"
+  restore_evidence_entries "$evidence_tag" "$evidence_manifest" /work/evidence.readback
+  evidence_entries | while IFS='|' read -r evidence_name evidence_media_type; do
+    cmp -s "/work/$evidence_name" "/work/evidence.readback/$evidence_name" ||
+      fail "immutable admission evidence tag already points to another payload"
+  done
 }
 
 login_registry() {
@@ -89,258 +381,292 @@ login_registry() {
   auth=$(printf '%s:%s' "$(tr -d '\r\n' <"$username_file")" \
     "$(tr -d '\r\n' <"$password_file")" | base64 | tr -d '\r\n')
   if [ -f "$docker_directory/config.json" ]; then
-    jq --arg host "$host" --arg auth "$auth" \
-      '.auths[$host] = {auth:$auth}' "$docker_directory/config.json" \
-      > "$docker_directory/config.next.json"
+    jq --arg host "$host" --arg auth "$auth" '.auths[$host] = {auth:$auth}' \
+      "$docker_directory/config.json" >"$docker_directory/config.next.json"
     mv "$docker_directory/config.next.json" "$docker_directory/config.json"
   else
-    jq -n --arg host "$host" --arg auth "$auth" \
-      '{auths:{($host):{auth:$auth}}}' > "$docker_directory/config.json"
+    jq -n --arg host "$host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' >"$docker_directory/config.json"
   fi
   export DOCKER_CONFIG=$docker_directory
   regctl registry set "$host" --tls enabled \
     --cacert "$(cat /identity/ca.pem)" \
     --client-cert "$(cat /identity/registry-client.crt)" \
     --client-key "$(cat /identity/registry-client.key)"
-  regctl registry login "$host" \
-    --user "$(tr -d '\r\n' <"$username_file")" \
+  regctl registry login "$host" --user "$(tr -d '\r\n' <"$username_file")" \
     --pass-stdin <"$password_file" >/dev/null
 }
 
-validate_provenance_statement() {
-  statement=$1
-  image_hex=${IMAGE_DIGEST#sha256:}
-  jq -e --arg image "$image_hex" --arg source "$SOURCE_DIGEST" \
-    --arg subject "$subject_name" --arg build_tag "$BUILD_TAG" \
-    --arg tools_digest "$ADMISSION_TOOLS_SHA256" \
-    --arg policy_revision "$POLICY_REVISION" \
-    --arg builder_id "$EXPECTED_BUILDER_ID" \
-    --arg build_type "$EXPECTED_BUILD_TYPE" \
-    -f /opt/mattercodex/provenance-policy.jq "$statement" >/dev/null ||
-    fail "provenance semantic binding mismatch"
+verify_image_and_provenance() {
+  regctl manifest get "$source_ref" --format raw-body >/work/image-index.json
+  jq -e '.manifests | type == "array" and length >= 2' /work/image-index.json >/dev/null ||
+    fail "staging image is not an attested OCI index"
+  jq -r '.manifests[] | select(.platform.os != "unknown" and .platform.architecture != "unknown") |
+    .platform.os + "/" + .platform.architecture +
+      (if (.platform.variant // "") == "" then "" else "/" + .platform.variant end)' \
+    /work/image-index.json | sort -u >/work/actual-platforms
+  cmp -s /work/expected-platforms /work/actual-platforms || fail "image platform set mismatch"
+  jq -r '.manifests[] | select(.platform.os != "unknown" and .platform.architecture != "unknown") |
+    [.digest, .platform.os, .platform.architecture, (.platform.variant // "")] | @tsv' \
+    /work/image-index.json >/work/platform-manifests
+  : >/work/native-provenance.jsonl
+  while IFS="$(printf '\t')" read -r platform_digest platform_os platform_arch platform_variant; do
+    echo "$platform_digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "platform manifest digest is invalid"
+    platform_ref="${subject_name}@${platform_digest}"
+    regctl image inspect "$platform_ref" --format '{{json .Config.Labels}}' >/work/labels.json
+    regctl image inspect "$platform_ref" --format '{{json .Config}}' >/work/image-config.json
+    jq -e --arg spec "$spec_sha256" --arg immutable "$immutable_build_sha256" \
+      --arg source "$source_sha256" --arg context "$context_sha256" --arg base "$base_image_digest" \
+      --arg builder "$builder_sha256" --arg frontend "$frontend_sha256" --arg toolchain "$toolchain_sha256" \
+      --arg policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" --arg runtime "$runtime_contract_sha256" '
+      ."mattercodex.dev/spec-sha256" == $spec and
+      ."mattercodex.dev/immutable-build-sha256" == $immutable and
+      ."mattercodex.dev/source-sha256" == $source and
+      ."mattercodex.dev/context-sha256" == $context and
+      ."mattercodex.dev/base-image-digest" == $base and
+      ."mattercodex.dev/builder-sha256" == $builder and
+      ."mattercodex.dev/frontend-sha256" == $frontend and
+      ."mattercodex.dev/toolchain-sha256" == $toolchain and
+      ."mattercodex.dev/policy-revision" == $policy and
+      ."mattercodex.dev/policy-sha256" == $policy_sha and
+      ."mattercodex.dev/runtime-contract-sha256" == $runtime
+    ' /work/labels.json >/dev/null || fail "build labels mismatch"
+    verify_runtime_config /work/image-config.json
+    [ "$(jq --arg image "$platform_digest" '[.manifests[] |
+      select(.platform.os == "unknown" and .platform.architecture == "unknown") |
+      select(.annotations["vnd.docker.reference.digest"] == $image)] | length' /work/image-index.json)" = 1 ] ||
+      fail "native provenance manifest cardinality mismatch"
+    attestation_digest=$(jq -er --arg image "$platform_digest" '.manifests[] |
+      select(.platform.os == "unknown" and .platform.architecture == "unknown") |
+      select(.annotations["vnd.docker.reference.digest"] == $image) | .digest' /work/image-index.json)
+    regctl manifest get "${subject_name}@${attestation_digest}" --format raw-body >/work/provenance-manifest.json
+    [ "$(jq '[.layers[] | select(.mediaType == "application/vnd.in-toto+json")] | length' \
+      /work/provenance-manifest.json)" = 1 ] || fail "native provenance layer cardinality mismatch"
+    provenance_layer=$(jq -er '.layers[] | select(.mediaType == "application/vnd.in-toto+json") | .digest' \
+      /work/provenance-manifest.json)
+    regctl blob get "$source_ref" "$provenance_layer" >/work/provenance.statement.json
+    jq -e --arg image "${platform_digest#sha256:}" --arg base "${base_image_digest#sha256:}" \
+      --arg frontend "$frontend_sha256" --arg builder_id "$EXPECTED_BUILDER_ID" \
+      --arg build_type "$EXPECTED_BUILD_TYPE" -f /opt/mattercodex/provenance-policy.jq \
+      /work/provenance.statement.json >/dev/null || fail "native provenance binding mismatch"
+    jq -c . /work/provenance.statement.json >>/work/native-provenance.jsonl
+  done </work/platform-manifests
+  jq -sSjc . /work/native-provenance.jsonl >/work/native-provenance.json
+  jq -Sjc -n --arg build_type "$EXPECTED_BUILD_TYPE" --arg builder_id "$EXPECTED_BUILDER_ID" \
+    --arg immutable "$immutable_build_sha256" --arg manifest "$image_digest" \
+    --argjson policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" \
+    --arg schema "mattercodex.dev/image-provenance-binding/v1" --arg spec "$spec_sha256" \
+    '{buildType:$build_type,builderId:$builder_id,immutableBuildSHA256:$immutable,
+      manifestDigest:$manifest,policyRevision:$policy,policySHA256:$policy_sha,
+      schema:$schema,specSHA256:$spec}' >/work/provenance.binding.json
+  cp /work/provenance.binding.json /work/provenance.json
+  sha256sum /work/provenance.binding.json | awk '{print $1}' >/work/provenance.sha256
+  [ "$(cat /work/provenance.sha256)" = "$expected_provenance_sha256" ] || fail "owner provenance digest mismatch"
 }
 
-decode_signed_provenance() {
-  envelope=$1
-  statement=$2
-  expected_type=$3
-  decoded="${statement}.decoded"
-  image_hex=${IMAGE_DIGEST#sha256:}
-  jq -er 'select(.payloadType == "application/vnd.in-toto+json") | .payload' "$envelope" |
-    base64 -d >"$decoded" || fail "signed provenance DSSE decode failed"
-  jq -e --arg image "$image_hex" --arg expected_type "$expected_type" '
-    ._type == "https://in-toto.io/Statement/v1" and
-    .predicateType == $expected_type and
-    ([.subject[]? | select(.digest.sha256 == $image)] | length == 1) and
-    (.predicate | type == "object")
-  ' "$decoded" >/dev/null || fail "signed provenance envelope mismatch"
-  jq -S -c .predicate "$decoded" >"$statement" ||
-    fail "signed provenance predicate decode failed"
-  rm -f "$decoded"
-  validate_provenance_statement "$statement"
-}
+if [ "${1:-}" = validate-runtime-config ]; then
+  [ "$#" -eq 2 ] && [ -r "$2" ] || fail "runtime config fixture is invalid"
+  verify_runtime_config "$2"
+  exit 0
+fi
 
-verify_trusted_build() {
-  cosign verify-attestation --key /identity/builder.pub \
-    --type https://mattercodex.dev/attestation/trusted-build/v1 \
-    "$source_ref" > /work/trusted-build-verification.json
-  decode_signed_provenance /work/trusted-build-verification.json \
-    /work/provenance.trusted.json \
-    https://mattercodex.dev/attestation/trusted-build/v1
-}
+if [ "${1:-}" = validate-evidence-recovery ]; then
+  [ "$#" -eq 11 ] || fail "evidence recovery fixture is invalid"
+  artifact_id=$2
+  image_digest=$3
+  promotion_receipt=$4
+  evidence_reference=$5
+  evidence_manifest=$6
+  expected_manifest_digest=$7
+  expected_policy_revision=$8
+  expected_policy_sha256=$9
+  required_verdict=${10}
+  evidence_directory=${11}
+  verify_evidence_manifest "$evidence_manifest" "$expected_manifest_digest" "$artifact_id" "$image_digest" \
+    "$expected_policy_revision" "$expected_policy_sha256"
+  restore_evidence_entries "$evidence_reference" "$evidence_manifest" "$evidence_directory"
+  verify_recovered_evidence "$evidence_directory" "$evidence_manifest" "$expected_manifest_digest" \
+    "$artifact_id" "$image_digest" "$promotion_receipt" "$expected_policy_revision" \
+    "$expected_policy_sha256" "$required_verdict"
+  exit 0
+fi
 
-require_common
-staging_host=mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001
-promotion_host=mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003
-source_ref="$staging_host/mattercodex/$IMAGE_NAME@$IMAGE_DIGEST"
-subject_name="$staging_host/mattercodex/$IMAGE_NAME"
-destination_ref="$promotion_host/mattercodex/$IMAGE_NAME:$BUILD_TAG"
+if [ "${1:-}" = validate-evidence ]; then
+  [ "$#" -eq 10 ] || fail "evidence fixture is invalid"
+  artifact_id=$2
+  image_digest=$3
+  promotion_receipt=$4
+  evidence_directory=$5
+  evidence_manifest=$6
+  expected_manifest_digest=$7
+  expected_policy_revision=$8
+  expected_policy_sha256=$9
+  required_verdict=${10}
+  verify_recovered_evidence "$evidence_directory" "$evidence_manifest" "$expected_manifest_digest" \
+    "$artifact_id" "$image_digest" "$promotion_receipt" "$expected_policy_revision" \
+    "$expected_policy_sha256" "$required_verdict"
+  exit 0
+fi
+
+require_policy
 
 case "${1:-}" in
+  claim)
+    image-admission-bridge claim
+    write_marker claim.complete
+    ;;
   scan)
+    wait_for_marker claim.complete
+    load_owner_claim
     login_registry "$staging_host" /identity/username /identity/password
-    readback=$(regctl image digest "$source_ref")
-    [ "$readback" = "$IMAGE_DIGEST" ] || fail "staging digest mismatch"
-    regctl image inspect "$source_ref" --format '{{json .Config.Labels}}' > /work/labels.json
-    jq -e --arg source "$SOURCE_DIGEST" --arg build "$BUILD_TAG" \
-      --arg tools "$ADMISSION_TOOLS_SHA256" --arg policy "$POLICY_REVISION" '
-        ."mattercodex.dev/source-sha256" == $source and
-        ."mattercodex.dev/build-tag" == $build and
-        ."mattercodex.dev/admission-tools-sha256" == $tools and
-        ."mattercodex.dev/admission-policy-revision" == $policy
-      ' /work/labels.json >/dev/null || fail "build labels mismatch"
-    verify_trusted_build
-    cp /work/provenance.trusted.json /work/provenance.json
+    [ "$(regctl image digest "$source_ref")" = "$image_digest" ] || fail "staging digest mismatch"
+    verify_image_and_provenance
     syft "$source_ref" -o spdx-json=/work/sbom.json
-    if ! grype sbom:/work/sbom.json --fail-on high -o json > /work/vulnerability.json; then
-      printf '%s\n' REJECTED > /work/verdict
-      fail "vulnerability policy rejected image"
+    if grype sbom:/work/sbom.json --fail-on high -o json >/work/vulnerability.json; then
+      printf '%s\n' ACCEPTED >/work/verdict
+    else
+      printf '%s\n' REJECTED >/work/verdict
     fi
-    printf '%s\n' ACCEPTED > /work/verdict
-    sha256sum /work/provenance.json | awk '{print $1}' > /work/provenance.sha256
-    sha256sum /work/sbom.json | awk '{print $1}' > /work/sbom.sha256
-    sha256sum /work/vulnerability.json | awk '{print $1}' > /work/vulnerability.sha256
-    jq -S -c '.predicate.buildDefinition.resolvedDependencies' /work/provenance.json |
-      sha256sum | awk '{print $1}' > /work/resolved-dependencies.sha256
-    jq -cn --arg source "$SOURCE_DIGEST" --arg build "$BUILD_TAG" \
-      --arg image "$IMAGE_DIGEST" --arg tools "$ADMISSION_TOOLS_SHA256" \
-      --arg policy "$POLICY_REVISION" --arg attempt "$ADMISSION_ATTEMPT_SHA256" \
-      --arg builder "$EXPECTED_BUILDER_ID" --arg build_type "$EXPECTED_BUILD_TYPE" \
-      --arg builder_key "$(sha256sum /identity/builder.pub | awk '{print $1}')" \
-      --arg scanner "$SCANNER_IDENTITY" --arg signer "$SIGNER_IDENTITY" \
-      --arg owner "$ADMISSION_OWNER_IDENTITY" --arg promotion "$PROMOTION_IDENTITY" \
-      --arg dependencies "$(cat /work/resolved-dependencies.sha256)" \
-      '{sourceDigest:$source,buildTag:$build,imageDigest:$image,toolsDigest:$tools,
-        policyRevision:$policy,attemptSHA256:$attempt,builderIdentity:$builder,
-        buildType:$build_type,builderSignatureIdentitySHA256:$builder_key,
-        scannerIdentity:$scanner,signerIdentity:$signer,
-        admissionOwnerIdentity:$owner,promotionIdentity:$promotion,
-        resolvedDependenciesSHA256:$dependencies}' > /work/evidence.manifest.json
-    validate_evidence_manifest
+    sha256sum /work/sbom.json | awk '{print $1}' >/work/sbom.sha256
+    sha256sum /work/vulnerability.json | awk '{print $1}' >/work/vulnerability.sha256
     write_marker scan.complete
     ;;
   sign)
-    wait_for_evidence scan.complete
-    validate_evidence_manifest
-    [ "$(cat /work/verdict)" = ACCEPTED ] ||
-      fail "scanner evidence is absent"
-    login_registry "$staging_host" /identity/username /identity/password
-    verify_trusted_build
-    [ "$(sha256sum /work/provenance.trusted.json | awk '{print $1}')" = \
-      "$(cat /work/provenance.sha256)" ] || fail "builder provenance changed"
-    export COSIGN_PASSWORD="$(cat /identity/cosign.password)"
-    cosign sign --yes --key /identity/cosign.key "$source_ref"
-    cosign attest --yes --key /identity/cosign.key \
-      --type https://mattercodex.dev/attestation/provenance/v1 \
-      --predicate /work/provenance.json "$source_ref"
-    cosign attest --yes --key /identity/cosign.key \
-      --type https://mattercodex.dev/attestation/sbom/v1 \
-      --predicate /work/sbom.json "$source_ref"
-    cosign attest --yes --key /identity/cosign.key \
-      --type https://mattercodex.dev/attestation/vulnerability/v1 \
-      --predicate /work/vulnerability.json "$source_ref"
+    wait_for_marker scan.complete
+    load_owner_claim
+    if [ "$(cat /work/verdict)" = ACCEPTED ]; then
+      login_registry "$staging_host" /identity/username /identity/password
+      verify_image_and_provenance
+      export COSIGN_PASSWORD="$(cat /identity/cosign.password)"
+      printf '%s\n' "$image_digest" >/work/image-digest.subject
+      cosign sign-blob --yes --key /identity/cosign.key --output-signature /work/image-digest.sig /work/image-digest.subject
+      for evidence in provenance native-provenance sbom vulnerability; do
+        cosign sign-blob --yes --key /identity/cosign.key --output-signature "/work/$evidence.sig" "/work/$evidence.json"
+      done
+    fi
     write_marker signature.complete
     ;;
   admit)
-    wait_for_evidence signature.complete
-    validate_evidence_manifest
-    [ "$(cat /work/verdict)" = ACCEPTED ] ||
-      fail "signed evidence is absent"
-    login_registry "$staging_host" /identity/username /identity/password
-    verify_trusted_build
-    [ "$(sha256sum /work/provenance.trusted.json | awk '{print $1}')" = \
-      "$(cat /work/provenance.sha256)" ] || fail "builder provenance changed"
-    cosign verify --key /identity/cosign.pub "$source_ref" >/work/signature-verification.json
-    for evidence in provenance sbom vulnerability; do
-      cosign verify-attestation --key /identity/cosign.pub \
-        --type "https://mattercodex.dev/attestation/$evidence/v1" \
-        "$source_ref" > "/work/$evidence-verification.json"
+    wait_for_marker signature.complete
+    load_owner_claim
+    verdict=$(cat /work/verdict)
+    signature_identity=not-applicable-rejected
+    if [ "$verdict" = ACCEPTED ]; then
+      login_registry "$staging_host" /identity/username /identity/password
+      cosign verify-blob --key /identity/cosign.pub --signature /work/image-digest.sig /work/image-digest.subject \
+        >/work/signature-verification.json
+      for evidence in provenance native-provenance sbom vulnerability; do
+        cosign verify-blob --key /identity/cosign.pub --signature "/work/$evidence.sig" "/work/$evidence.json" \
+          >"/work/$evidence-verification.json"
+      done
+      signature_identity=$(sha256sum /identity/cosign.pub | awk '{print $1}')
+    fi
+    jq -cn --arg image "$image_digest" --arg policy "$POLICY_REVISION" \
+      --arg policy_sha "$POLICY_SHA256" --arg signature "$signature_identity" \
+      --arg verdict "$verdict" \
+      '{version:"v1",imageDigest:$image,policyRevision:$policy,policySHA256:$policy_sha,
+        signatureIdentity:$signature,verdict:$verdict,verification:"cosign-key-v1"}' \
+      >/work/signature.binding.json
+    sha256sum /work/signature.binding.json | awk '{print $1}' >/work/signature.sha256
+    jq -cn --arg artifact "$artifact_id" --arg image "$image_digest" --arg spec "$spec_sha256" \
+      --arg immutable "$immutable_build_sha256" --arg provenance "$(cat /work/provenance.sha256)" \
+      --arg sbom "$(cat /work/sbom.sha256)" --arg vulnerability "$(cat /work/vulnerability.sha256)" \
+      --arg policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" --arg verdict "$verdict" \
+      --arg signature "$signature_identity" --arg signature_sha "$(cat /work/signature.sha256)" \
+      '{version:"v1",artifactId:$artifact,imageDigest:$image,specSHA256:$spec,
+        immutableBuildSHA256:$immutable,provenanceSHA256:$provenance,sbomSHA256:$sbom,
+        vulnerabilityEvidenceSHA256:$vulnerability,policyRevision:$policy,policySHA256:$policy_sha,
+        verdict:$verdict,signatureIdentity:$signature,signatureSHA256:$signature_sha}' \
+      >/work/admission.receipt.json
+    sha256sum /work/admission.receipt.json | awk '{print $1}' >/work/admission.receipt.sha256
+    printf '%s\n' "$image_digest" >/work/image-digest.subject
+    cp /identity/cosign.pub /work/cosign.pub
+    for signature in image-digest provenance native-provenance sbom vulnerability; do
+      [ -f "/work/$signature.sig" ] || : >"/work/$signature.sig"
     done
-    decode_signed_provenance \
-      /work/provenance-verification.json /work/provenance-verified.json \
-      https://mattercodex.dev/attestation/provenance/v1
-    [ "$(sha256sum /work/provenance-verified.json | awk '{print $1}')" = \
-      "$(cat /work/provenance.sha256)" ] || fail "verified provenance digest mismatch"
-    issued_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    expires_at=$(date -u -d '+10 minutes' +%Y-%m-%dT%H:%M:%SZ)
-    jq -cn \
-      --arg version v1 \
-      --arg source "$SOURCE_DIGEST" \
-      --arg build "$BUILD_TAG" \
-      --arg image "$IMAGE_DIGEST" \
-      --arg provenance "$(cat /work/provenance.sha256)" \
-      --arg sbom "$(cat /work/sbom.sha256)" \
-      --arg vulnerability "$(cat /work/vulnerability.sha256)" \
-      --arg policy "$POLICY_REVISION" \
-      --arg tools "$ADMISSION_TOOLS_SHA256" \
-      --arg attempt "$ADMISSION_ATTEMPT_SHA256" \
-      --arg builder "$EXPECTED_BUILDER_ID" \
-      --arg build_type "$EXPECTED_BUILD_TYPE" \
-      --arg builder_key "$(sha256sum /identity/builder.pub | awk '{print $1}')" \
-      --arg dependencies "$(cat /work/resolved-dependencies.sha256)" \
-      --arg scanner_owner "$SCANNER_IDENTITY" \
-      --arg signer_owner "$SIGNER_IDENTITY" \
-      --arg admission_owner "$ADMISSION_OWNER_IDENTITY" \
-      --arg promotion_owner "$PROMOTION_IDENTITY" \
-      --arg verdict ACCEPTED \
-      --arg sbom_identity application/spdx+json \
-      --arg scanner_identity "$ADMISSION_TOOLS_IMAGE" \
-      --arg signature_identity "$(sha256sum /identity/cosign.pub | awk '{print $1}')" \
-      --arg issued_at "$issued_at" \
-      --arg expires_at "$expires_at" \
-      '{version:$version,sourceDigest:$source,buildTag:$build,imageDigest:$image,
-        provenanceDigest:$provenance,sbomDigest:$sbom,
-        sbomIdentity:$sbom_identity,scannerIdentity:$scanner_identity,
-        vulnerabilityEvidenceDigest:$vulnerability,
-        vulnerabilityPolicyRevision:$policy,vulnerabilityVerdict:$verdict,
-        admissionToolsSHA256:$tools,admissionAttemptSHA256:$attempt,
-        builderIdentity:$builder,buildType:$build_type,
-        builderSignatureIdentitySHA256:$builder_key,
-        resolvedDependenciesSHA256:$dependencies,
-        scannerOwnerIdentity:$scanner_owner,signerOwnerIdentity:$signer_owner,
-        admissionOwnerIdentity:$admission_owner,promotionIdentity:$promotion_owner,
-        signatureIdentitySHA256:$signature_identity,signatureVerified:true,
-        issuedAt:$issued_at,expiresAt:$expires_at}' > /work/admission.receipt.json
-    sha256sum /work/admission.receipt.json | awk '{print $1}' > /work/admission.receipt.sha256
-    export COSIGN_PASSWORD="$(cat /identity/admission.password)"
-    cosign sign-blob --yes --key /identity/admission.key \
-      --output-signature /work/promotion.claim.sig /work/admission.receipt.json
+    evidence_total=0
+    while IFS='|' read -r evidence_file evidence_media_type; do
+      evidence_size=$(wc -c <"/work/$evidence_file" | tr -d ' ')
+      [ "$evidence_size" -le 16777216 ] || fail "admission evidence entry exceeds bound"
+      evidence_total=$((evidence_total + evidence_size))
+      [ "$evidence_total" -le 67108864 ] || fail "admission evidence exceeds bound"
+    done <<EOF
+$(evidence_entries)
+EOF
+    evidence_host=${EVIDENCE_REPOSITORY%%/*}
+    evidence_tag="${EVIDENCE_REPOSITORY}:artifact-${artifact_id}"
+    login_registry "$evidence_host" /identity/evidence.username /identity/evidence.password
+    publish_or_verify_evidence "$evidence_tag" /work/admission.evidence-manifest.json
+    evidence_manifest_digest="sha256:$(sha256sum /work/admission.evidence-manifest.json | awk '{print $1}')"
+    verify_recovered_evidence /work/evidence.readback /work/admission.evidence-manifest.json \
+      "$evidence_manifest_digest" "$artifact_id" "$image_digest" \
+      "$(cat /work/admission.receipt.sha256)" "$POLICY_REVISION" "$POLICY_SHA256" "$verdict"
+    printf '%s\n' "$evidence_manifest_digest" >/work/admission.receipt-manifest.digest
+    IMAGE_OWNER_SBOM_SHA256_FILE=/work/sbom.sha256 \
+    IMAGE_OWNER_VULNERABILITY_SHA256_FILE=/work/vulnerability.sha256 \
+    IMAGE_OWNER_SIGNATURE_SHA256_FILE=/work/signature.sha256 \
+    IMAGE_OWNER_ADMISSION_RECEIPT_SHA256_FILE=/work/admission.receipt.sha256 \
+    IMAGE_OWNER_ADMISSION_RECEIPT_OCI_MANIFEST_DIGEST_FILE=/work/admission.receipt-manifest.digest \
+    IMAGE_OWNER_SIGNATURE_IDENTITY="$signature_identity" IMAGE_OWNER_VERDICT="$verdict" \
+      image-admission-bridge record
     write_marker admission.complete
     ;;
   promote)
-    wait_for_evidence admission.complete
-    validate_evidence_manifest
-    cosign verify-blob --key /identity/admission.pub \
-      --signature /work/promotion.claim.sig /work/admission.receipt.json
-    jq -e --arg source "$SOURCE_DIGEST" --arg build "$BUILD_TAG" \
-      --arg image "$IMAGE_DIGEST" --arg policy "$POLICY_REVISION" \
-      --arg scanner "$ADMISSION_TOOLS_IMAGE" --arg tools "$ADMISSION_TOOLS_SHA256" \
-      --arg attempt "$ADMISSION_ATTEMPT_SHA256" --arg builder "$EXPECTED_BUILDER_ID" \
-      --arg build_type "$EXPECTED_BUILD_TYPE" --arg scanner_owner "$SCANNER_IDENTITY" \
-      --arg builder_key "$(jq -r .builderSignatureIdentitySHA256 /work/evidence.manifest.json)" \
-      --arg dependencies "$(jq -r .resolvedDependenciesSHA256 /work/evidence.manifest.json)" \
-      --arg signer_owner "$SIGNER_IDENTITY" --arg admission_owner "$ADMISSION_OWNER_IDENTITY" \
-      --arg promotion_owner "$PROMOTION_IDENTITY" \
-      '.sourceDigest == $source and .buildTag == $build and
-       .imageDigest == $image and .vulnerabilityPolicyRevision == $policy and
-       .scannerIdentity == $scanner and .sbomIdentity == "application/spdx+json" and
-       .admissionToolsSHA256 == $tools and .admissionAttemptSHA256 == $attempt and
-       .builderIdentity == $builder and .buildType == $build_type and
-       .builderSignatureIdentitySHA256 == $builder_key and
-       .resolvedDependenciesSHA256 == $dependencies and
-       .scannerOwnerIdentity == $scanner_owner and .signerOwnerIdentity == $signer_owner and
-       .admissionOwnerIdentity == $admission_owner and .promotionIdentity == $promotion_owner and
-       .vulnerabilityVerdict == "ACCEPTED" and .signatureVerified == true' \
-      /work/admission.receipt.json >/dev/null || fail "promotion claim mismatch"
-    expires_at=$(jq -r .expiresAt /work/admission.receipt.json)
-    [ "$(date -u +%s)" -lt "$(date -u -d "$expires_at" +%s)" ] ||
-      fail "promotion claim expired"
+    claim_promotion
+    load_promotion_claim
+    promotion_host=${PROMOTION_REPOSITORY%%/*}
+    destination_tag="${PROMOTION_REPOSITORY}:artifact-${artifact_id}"
+    promoted_evidence_tag="${PROMOTION_EVIDENCE_REPOSITORY}:artifact-${artifact_id}"
+    promotion_reference="${PROMOTION_REPOSITORY}@${image_digest}"
+    promoted_reference="${PROMOTED_PULL_REPOSITORY}@${image_digest}"
+    evidence_host=${EVIDENCE_REPOSITORY%%/*}
+    evidence_reference="${EVIDENCE_REPOSITORY}@${staging_receipt_manifest_digest}"
+    login_registry "$evidence_host" /identity/evidence.username /identity/evidence.password
+    regctl manifest get "$evidence_reference" --format raw-body >/work/admission.evidence-manifest.json
+    verify_evidence_manifest /work/admission.evidence-manifest.json "$staging_receipt_manifest_digest" \
+      "$artifact_id" "$image_digest" "$POLICY_REVISION" "$POLICY_SHA256"
+    restore_evidence_entries "$evidence_reference" /work/admission.evidence-manifest.json /work/evidence
+    verify_recovered_evidence /work/evidence /work/admission.evidence-manifest.json \
+      "$staging_receipt_manifest_digest" "$artifact_id" "$image_digest" "$promotion_receipt" \
+      "$POLICY_REVISION" "$POLICY_SHA256" ACCEPTED
     login_registry "$staging_host" /identity/staging.username /identity/staging.password
+    # Owner проверяет expiry/revocation/fence до первой pull-visible копии.
+    image-admission-bridge authorize-promotion
+    load_promotion_claim
+    jq -e '(.authorizationToken | type == "string" and length > 0) and
+      (.authorizationExpiresAt | type == "string" and length > 0) and (.claim == "")' \
+      /work/owner-promotion.json >/dev/null || fail "owner promotion authorization is invalid"
     login_registry "$promotion_host" /identity/promotion.username /identity/promotion.password
-    if current_digest=$(regctl image digest "$destination_ref" 2>/dev/null); then
-      [ "$current_digest" = "$IMAGE_DIGEST" ] ||
-        fail "immutable promotion tag already points to another digest"
+    if current_digest=$(regctl image digest "$destination_tag" 2>/dev/null); then
+      [ "$current_digest" = "$image_digest" ] || fail "immutable promotion tag already points to another digest"
     else
-      regctl image copy "$source_ref" "$destination_ref"
+      regctl image copy "$source_ref" "$destination_tag"
     fi
-    [ "$(regctl image digest "$destination_ref")" = "$IMAGE_DIGEST" ] ||
-      fail "promotion readback mismatch"
-    receipt_sha256=$(cat /work/admission.receipt.sha256)
-    issued_at=$(jq -r .issuedAt /work/admission.receipt.json)
-    regctl artifact put --subject "$destination_ref" \
-      --artifact-type application/vnd.mattercodex.image-admission.v1+json \
-      --annotation "org.opencontainers.image.created=$issued_at" \
-      --annotation "mattercodex.dev/admission-receipt-sha256=$receipt_sha256" \
-      --by-digest --file /work/admission.receipt.json \
-      >/work/admission-artifact.digest
-    grep -Eq '^sha256:[a-f0-9]{64}$' /work/admission-artifact.digest ||
-      fail "admission receipt readback is invalid"
-    regctl artifact get --subject "$destination_ref" \
-      --filter-artifact-type application/vnd.mattercodex.image-admission.v1+json \
-      --latest >/work/admission.readback.json
-    [ "$(sha256sum /work/admission.readback.json | awk '{print $1}')" = "$receipt_sha256" ] ||
-      fail "admission receipt content mismatch"
-    printf 'admitted image digest: %s\n' "$IMAGE_DIGEST"
+    [ "$(regctl image digest "$promotion_reference")" = "$image_digest" ] || fail "promotion readback mismatch"
+    regctl manifest get "$promotion_reference" --format raw-body >/work/promotion.image-manifest.json
+    if promoted_evidence_digest=$(regctl image digest "$promoted_evidence_tag" 2>/dev/null); then
+      [ "$promoted_evidence_digest" = "$staging_receipt_manifest_digest" ] ||
+        fail "immutable promoted evidence tag already points to another manifest"
+    else
+      regctl image copy "$evidence_reference" "$promoted_evidence_tag"
+    fi
+    regctl manifest get "${PROMOTION_EVIDENCE_REPOSITORY}@${staging_receipt_manifest_digest}" \
+      --format raw-body >/work/promoted.admission.evidence-manifest.json
+    image_manifest_sha256=$(sha256sum /work/promotion.image-manifest.json | awk '{print $1}')
+    promoted_evidence_manifest_digest="sha256:$(sha256sum /work/promoted.admission.evidence-manifest.json | awk '{print $1}')"
+    [ "$promoted_evidence_manifest_digest" = "$staging_receipt_manifest_digest" ] ||
+      fail "promoted admission evidence manifest digest mismatch"
+    jq -Sjc -n --arg image "$image_digest" --arg image_manifest "$image_manifest_sha256" \
+      --arg receipt "$promotion_receipt" --arg staging_receipt_manifest "$staging_receipt_manifest_digest" \
+      --arg promoted_evidence_manifest "$promoted_evidence_manifest_digest" \
+      '{imageManifestDigest:$image,imageManifestSHA256:$image_manifest,
+        admissionReceiptSHA256:$receipt,stagingAdmissionReceiptManifestDigest:$staging_receipt_manifest,
+        promotedAdmissionEvidenceManifestDigest:$promoted_evidence_manifest}' \
+      >/work/promotion.readback.json
+    sha256sum /work/promotion.readback.json | awk '{print $1}' >/work/promotion.readback.sha256
+    IMAGE_OWNER_PROMOTED_REFERENCE="$promoted_reference" \
+    IMAGE_OWNER_PROMOTION_READBACK_SHA256_FILE=/work/promotion.readback.sha256 \
+      image-admission-bridge complete
+    printf 'promoted image digest: %s\n' "$image_digest"
     ;;
   *) fail "unknown admission phase" ;;
 esac

@@ -77,6 +77,11 @@ func (repository *Repository) Get(
 	organizationID, projectID, resourceID string,
 	expectedKind enum.Kind,
 ) (entity.Resource, error) {
+	// RoleImageRecipe содержит multiline installation block и bounded secret
+	// references. Этот owner state никогда не материализуется в Redis.
+	if expectedKind == enum.KindRoleImageRecipe {
+		return repository.source.Get(ctx, organizationID, projectID, resourceID, expectedKind)
+	}
 	epoch, err := repository.source.CacheEpoch(ctx, organizationID, projectID)
 	if err != nil {
 		return entity.Resource{}, err

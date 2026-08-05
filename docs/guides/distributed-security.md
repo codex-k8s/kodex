@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-07-31
+version: 1.3.0
+updated: 2026-08-05
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -410,6 +410,55 @@ applied -> pending -> reload -> exact peer readback -> applied
   принимает только exact digest и bounded подписанный claim admission owner,
   связанный с provenance, SBOM, vulnerability policy/version и проверенной
   signature identity; missing/stale/rejected evidence закрыто отклоняется.
+- Durable evidence сохраняет подписанный payload побайтно. Разбор и повторная
+  JSON-сериализация не могут быть storage boundary: один авторитетный OCI
+  manifest задаёт закрытый набор layers с exact title, media type, size и
+  digest, а recovery повторно проверяет descriptors, owner binding и detached
+  signature над восстановленными байтами.
+- Materializer недоверенного build input принадлежит deployable, получает
+  отдельную pull-only mTLS/application identity и destination-bound egress.
+  Он принимает только exact OCI manifest digest и single-layer descriptor,
+  ограниченно потоково проверяет media type, size и payload digest и сохраняет
+  байты в private `emptyDir`. Hash и разбор архива выполняются над тем же
+  открытым потоком; повторное чтение изменяемого RWX path после проверки
+  запрещено. Context, package и tool используют один и тот же инвариант.
+- Произвольный installation block исполняется только в удалённом sandboxed
+  worker после trusted materialization и физически не получает credential
+  files, secret mounts, registry push identity или client egress. Redaction не
+  заменяет эту границу. Protected runtime binaries восстанавливаются после
+  недоверенного `RUN` из exact trusted base, а admission сверяет pinned base,
+  ABI revision/digest, labels и OCI `User`/`Entrypoint`/`Cmd`.
+- Staging write endpoint принимает только client certificate выделенной
+  BuildKit push role из Pod, выбранного exact `NetworkPolicy`; builder client
+  не получает эту identity, application secret или egress. Readiness BuildKit
+  выполняет тот же rootless `RUN` и реальный bounded push в отдельный readiness
+  repository; `debug workers` без build/push не считается готовностью пути.
+- Admission evidence до owner verdict хранится как immutable OCI artifact в
+  отдельном repository с собственным server-side mTLS/application authorizer.
+  Он разрешает write только admission owner, exact OCI upload methods и
+  repository, запрещает DELETE/admin и выдаёт promotion только read. Owner
+  фиксирует digest фактически прочитанного OCI manifest, а retry/promotion не
+  зависит от `emptyDir` или PVC предыдущего Job. Signer key и promotion write
+  authority физически не совмещаются.
+- Promotion claim расходуется owner-транзакцией до первого внешнего copy.
+  Authorization связывает artifact/version/attempt/fence/generation/digests,
+  имеет срок короче Job deadline и устойчивую idempotency receipt; completion
+  принимает только одноразовый authorization token. Stale claim не имеет права
+  записывать pull-visible content, а orphaned authorized digest не становится
+  достижимым через `RuntimeRevision` без owner completion/readback.
+- Node pull использует отдельный внешний DNS/SAN, client mTLS и pull credential
+  с forward-only generation. `LoadBalancer` и `NetworkPolicy` принимают только
+  exact rendered node CIDR, а DaemonSet с `imagePullPolicy: Always` доказывает
+  реальный CRI pull path на каждом node. Общий push/admin/promotion credential,
+  `0.0.0.0/0`, `::/0` и readiness только из registry Pod запрещены.
+  Bootstrap, вызывающий host CRI через Unix socket, не использует
+  `hostNetwork`: его собственный egress ограничен exact DNS/Vault, а registry
+  соединение выполняет host runtime с per-node identity.
+- `RuntimeRevision`, runtime-controller client, credential broker, workload
+  admission и `ValidatingAdmissionPolicy` используют один exact promoted
+  `repository@sha256`, ABI revision/digest и закрытую форму Pod: два init и три
+  containers с фиксированными именами/commands. Legacy repository, mutable ref
+  и произвольный extra container закрыто отклоняются.
 
 Kubernetes API не описывается переносимым `podSelector` на компонент
 control-plane. Политика строится из фактического Service ClusterIP и готовых

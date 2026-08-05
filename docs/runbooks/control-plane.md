@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.19.0
-updated: 2026-08-03
+version: 1.20.0
+updated: 2026-08-05
 ---
 
 # Диагностика и восстановление control-plane
@@ -39,8 +39,10 @@ Service и имеют независимые Vault identities; pull endpoint ф�
 2. проверить, что DaemonSet `mattercodex-registry-node-pull-readback` готов на
    каждом schedulable node, его image использует exact pull FQDN и digest;
 3. проверить BuildKit `debug workers` probe с exact SNI/CA и отдельным probe
-   client certificate; build Job обязан монтировать отдельный
-   `mattercodex-role-image-builder-tls`, label сам по себе полномочий не даёт;
+   client certificate; Deployment `role-image-builder` обязан использовать
+   только BuildKit client и input-read identities, а base-pull/staging-push
+   identities и egress обязаны оставаться внутри BuildKit; label сам по себе
+   полномочий не даёт;
 4. проверить retention job: он оставляет три лексикографически последних
    immutable tag вида `vYYYYMMDDHHMMSS-<git-sha>` и удаляет четвёртый и старше;
 5. при неизвестном tag job должен завершиться ошибкой без удаления; pull/push
@@ -64,18 +66,17 @@ registry-pull.<environment-domain>` тем же
    а internal certificate SAN содержит push/admin Service DNS;
 3. дождаться registry pod и LoadBalancer address, затем сверить DNS→address и
    TLS chain/SNI без `insecure`/добавления CA на узлы;
-4. Job из `tools/render-image-build-job.sh` использует client-only BuildKit
-   mTLS и scoped staging-push, но не содержит promotion identity и не имеет
-   egress к promotion endpoint; server/probe Pod не содержит client key;
-5. четыре последовательно ожидающих Job из
-   `tools/render-image-admission-job.sh` проверяют exact
-   BuildKit provenance/source/builder/build type/build tag, exact source
-   material, immutable resolved dependencies и отдельную builder signature,
-   формируют SBOM, применяют зафиксированную
-   vulnerability policy, проверяет signature identity и выпускает bounded
-   подписанный admission receipt/claim; scanner/signer/admission/promotion
+4. Deployment `role-image-builder` получает server-owned fenced attempt,
+   использует input-read и client-only BuildKit mTLS, но не получает
+   staging-push/signer/promotion credential и не имеет egress к push либо
+   promotion endpoint; staging-push принадлежит только BuildKit;
+5. пять последовательно ожидающих Job из
+   `tools/render-image-admission-job.sh` начинают с protected owner claim,
+   проверяют exact BuildKit provenance/labels/digest, формируют SBOM, применяют
+   зафиксированную vulnerability policy, проверяют signature identity и
+   записывают evidence через protected RPC; scanner/signer/admission/promotion
    имеют разные ServiceAccount, Vault role, mTLS identity и ключи; только
-   promotion Job копирует exact digest и читает обратно image и receipt digest;
+   promotion Job расходует one-time owner claim после exact digest readback;
 6. retention job использует только admin identity. Отрицательный readback
    обязан показать, что pull не может push/delete, push не может delete, а
    неавторизованный BuildKit client не проходит TLS handshake.
@@ -98,8 +99,16 @@ tools/render-control-plane.sh \
   sha256:<agent-runtime-image-digest> \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
+  <approved-image-admission-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
+  <exact-node-ipv4-cidr> \
+  <exact-node-ipv6-cidr> \
+  sha256:<trusted-role-base-digest> \
+  <frontend-sha256> \
+  <role-runtime-contract-revision> \
+  <role-runtime-contract-sha256> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -109,31 +118,30 @@ tools/render-control-plane.sh \
 tools/render-image-supply-chain.sh \
   staging \
   sha256:<control-plane-image-digest> \
+  sha256:<internal-rpc-authority-image-digest> \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
+  <approved-image-admission-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
+  <exact-node-ipv4-cidr> \
+  <exact-node-ipv6-cidr> \
+  sha256:<trusted-role-base-digest> \
+  <frontend-sha256> \
+  <role-runtime-contract-revision> \
+  <role-runtime-contract-sha256> \
   > /tmp/image-supply-chain-staging.yaml
-
-tools/render-image-build-job.sh \
-  staging \
-  v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
-  <read-only-source-pvc> \
-  sha256:<context.tar-digest> \
-  agent-runtime \
-  > /tmp/agent-runtime-build.yaml
 
 tools/render-image-admission-job.sh \
   staging \
   v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
-  sha256:<context.tar-digest> \
-  agent-runtime \
-  sha256:<staging-image-digest> \
-  > /tmp/agent-runtime-admission.yaml
+  > /tmp/role-image-admission.yaml
 ```
 
 4. Сверить immutable ConfigMap owner intent, server-owned builder/build type,
-   полный admission attempt digest в PVC/Jobs, четыре admission ServiceAccount,
+   полный admission run digest в PVC/Jobs, пять фаз и четыре независимых
+   admission/promotion/scanner/signer ServiceAccount,
    SecretProviderClass, client certificate, certificate guard, probes,
    selectors и exact destinations NetworkPolicy.
 5. После отдельного разрешения на доступ к среде читать только metadata:

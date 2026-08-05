@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: role-image-builder
+  labels:
+    app.kubernetes.io/name: role-image-builder
+    app.kubernetes.io/component: image-build-client
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: role-image-builder
+      app.kubernetes.io/component: image-build-client
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: role-image-builder
+        app.kubernetes.io/component: image-build-client
+        mattercodex.dev/image-build-client: "true"
+    spec:
+      serviceAccountName: role-image-builder
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 29000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: role-image-builder
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-builder@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: role-image-builder-runtime}
+          env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom: {fieldRef: {fieldPath: "metadata.labels['mattercodex.dev/environment']"}}
+            - {name: ROLE_IMAGE_BUILDER_CONTROL_PLANE_CA_FILE, value: /var/run/config/mattercodex/role-image-builder/control-plane/ca.pem}
+            - {name: ROLE_IMAGE_BUILDER_CONTROL_PLANE_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/role-image-builder/workload-tls/tls.crt}
+            - {name: ROLE_IMAGE_BUILDER_CONTROL_PLANE_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/role-image-builder/workload-tls/tls.key}
+            - {name: ROLE_IMAGE_BUILDER_APPLICATION_GRANT_FILE, value: /var/run/secrets/mattercodex/role-image-builder/application-grant/application-grant.jws}
+            - {name: ROLE_IMAGE_BUILDER_BUILDKIT_CA_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/ca.pem}
+            - {name: ROLE_IMAGE_BUILDER_BUILDKIT_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/tls.crt}
+            - {name: ROLE_IMAGE_BUILDER_BUILDKIT_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/tls.key}
+            - {name: ROLE_IMAGE_BUILDER_BUILDKIT_PULL_DOCKER_CONFIG, value: /var/run/secrets/mattercodex/role-image-builder/base-pull/config.json}
+            - name: ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
+            - name: ROLE_IMAGE_BUILDER_INPUT_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleImageInputRepository}}
+            - name: ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_DIGEST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
+            - name: ROLE_IMAGE_BUILDER_ROLE_RUNTIME_CONTRACT_REVISION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+            - name: ROLE_IMAGE_BUILDER_ROLE_RUNTIME_CONTRACT_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+            - name: ROLE_IMAGE_BUILDER_EXPECTED_FRONTEND_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: frontendSHA256}}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
+            - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/role-image-builder/observability/otel-ca.pem}
+            - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
+            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/role-image-builder/observability/sentry-dsn}
+            - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
+          ports: [{name: metrics, containerPort: 9090, protocol: TCP}]
+          startupProbe: &technicalProbe
+            httpGet: {path: /livez, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            <<: *technicalProbe
+            httpGet: {path: /readyz, port: metrics}
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /livez, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: work, mountPath: /var/run/mattercodex/work}
+            - {name: buildkit-client, mountPath: /var/run/secrets/mattercodex/role-image-builder/buildkit, readOnly: true}
+            - {name: input-read, mountPath: /var/run/secrets/mattercodex/role-image-builder/input-read, readOnly: true}
+            - {name: base-pull, mountPath: /var/run/secrets/mattercodex/role-image-builder/base-pull, readOnly: true}
+            - {name: workload-tls, mountPath: /var/run/secrets/mattercodex/role-image-builder/workload-tls, readOnly: true}
+            - {name: control-plane-ca, mountPath: /var/run/config/mattercodex/role-image-builder/control-plane, readOnly: true}
+            - {name: application-grant, mountPath: /var/run/secrets/mattercodex/role-image-builder/application-grant, readOnly: true}
+            - {name: otel-ca, mountPath: /var/run/config/mattercodex/role-image-builder/observability, readOnly: true}
+            - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/role-image-builder/observability, readOnly: true}
+      volumes:
+        - name: work
+          emptyDir: {sizeLimit: 2Gi}
+        - name: buildkit-client
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes: {secretProviderClass: role-image-builder-buildkit-client}
+        - name: input-read
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes: {secretProviderClass: role-image-builder-input-read}
+        - name: base-pull
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes: {secretProviderClass: role-image-builder-base-pull}
+        - name: workload-tls
+          secret: {secretName: internal-rpc-authority-role-image-builder-workload-tls, defaultMode: 0440}
+        - name: control-plane-ca
+          configMap: {name: mattercodex-internal-ca, defaultMode: 0440}
+        - name: application-grant
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes: {secretProviderClass: role-image-builder-application-grant}
+        - name: otel-ca
+          configMap: {name: mattercodex-otel-ca, defaultMode: 0440}
+        - name: sentry-dsn
+          secret: {secretName: mattercodex-sentry, defaultMode: 0440}

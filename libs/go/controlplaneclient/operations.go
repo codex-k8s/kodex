@@ -28,6 +28,34 @@ func ArtifactScannerOperations() map[string]string {
 	}
 }
 
+func RoleImageBuilderOperations() map[string]string {
+	return map[string]string{
+		"control.role-image-builder.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.image-build.claim":            controlplanev1.ControlPlaneService_ClaimImageBuild_FullMethodName,
+		"control.image-build.renew":            controlplanev1.ControlPlaneService_RenewImageBuild_FullMethodName,
+		"control.image-build.progress":         controlplanev1.ControlPlaneService_ReportImageBuildProgress_FullMethodName,
+		"control.image-build.complete":         controlplanev1.ControlPlaneService_CompleteImageBuild_FullMethodName,
+		"control.image-build.fail":             controlplanev1.ControlPlaneService_FailImageBuild_FullMethodName,
+	}
+}
+
+func ImageAdmissionOperations() map[string]string {
+	return map[string]string{
+		"control.image-admission.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.image-admission.claim":     controlplanev1.ControlPlaneService_ClaimImageAdmission_FullMethodName,
+		"control.image-admission.record":    controlplanev1.ControlPlaneService_RecordImageAdmission_FullMethodName,
+	}
+}
+
+func ImagePromotionOperations() map[string]string {
+	return map[string]string{
+		"control.image-promotion.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.image-promotion.claim":     controlplanev1.ControlPlaneService_ClaimImagePromotion_FullMethodName,
+		"control.image-promotion.authorize": controlplanev1.ControlPlaneService_AuthorizeImagePromotion_FullMethodName,
+		"control.image-promotion.complete":  controlplanev1.ControlPlaneService_CompleteImagePromotion_FullMethodName,
+	}
+}
+
 func RuntimeControllerOperations() map[string]string {
 	return map[string]string{
 		"control.runtime-controller.readiness":      controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
@@ -126,6 +154,10 @@ func ControlAPIGatewayOperations() map[string]string {
 		"control.schedule.run-now":           controlplanev1.ControlPlaneService_RunScheduleNow_FullMethodName,
 		"control.schedule.occurrences.list":  controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
 		"control.schedule.recovery.resolve":  controlplanev1.ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
+		"control.role-image-recipe.manage":   controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
+		"control.role-image-recipe.get":      controlplanev1.ControlPlaneService_GetRoleImageRecipe_FullMethodName,
+		"control.image-build.manage":         controlplanev1.ControlPlaneService_ManageImageBuild_FullMethodName,
+		"control.image-build.get":            controlplanev1.ControlPlaneService_GetRoleImageBuild_FullMethodName,
 	}
 }
 

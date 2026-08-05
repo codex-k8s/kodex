@@ -15,6 +15,7 @@ tags:
   - { name: resources, description: Управление ресурсами через control-plane. }
   - { name: projections, description: Авторитетные read-only проекции. }
   - { name: schedules, description: Специализированные owner-команды расписаний. }
+  - { name: role-images, description: Специализированные owner-команды image recipe/build. }
 paths:
   /session:
     post:
@@ -260,6 +261,112 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /role-image-recipes/commands:
+    post:
+      tags: [role-images]
+      summary: Выполнить закрытую owner-команду RoleImageRecipe
+      operationId: manageRoleImageRecipe
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { name: If-Match, in: header, required: false, schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManageRoleImageRecipe' } } }
+      responses:
+        '200':
+          description: Авторитетный recipe и результат resolve/build/reuse.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RoleImageRecipeResult' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /role-image-recipes/{recipeId}:
+    get:
+      tags: [role-images]
+      summary: Прочитать exact version полной редактируемой RoleImageRecipe specification
+      operationId: getRoleImageRecipe
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: recipeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '200':
+          description: Полная owner-scoped specification; secret values отсутствуют.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RoleImageRecipeReadback' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /image-builds/commands:
+    post:
+      tags: [role-images]
+      summary: Выполнить закрытую owner-команду ImageBuild
+      operationId: manageImageBuild
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManageImageBuild' } } }
+      responses:
+        '200':
+          description: Авторитетное состояние ImageBuild.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /image-builds/{imageBuildId}:
+    get:
+      tags: [role-images]
+      summary: Прочитать exact version ImageBuild через специализированный owner path
+      operationId: getRoleImageBuild
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: imageBuildId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '200':
+          description: Авторитетное состояние exact ImageBuild version.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
@@ -554,7 +661,7 @@ components:
     ResourceKind:
       title: ResourceKind
       type: string
-      enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT]
+      enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT, ROLE_IMAGE_RECIPE, IMAGE_BUILD, IMAGE_ARTIFACT]
     MutableResourceKind:
       title: MutableResourceKind
       type: string
@@ -659,10 +766,11 @@ components:
         capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
         allowedTargetRoleIds: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, format: uuid } }
         promptProfileId: { type: string, format: uuid }
+        roleImageRecipeId: { type: string, format: uuid }
         providerCredentialBindingIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
         repositoryWorkspaceIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
         integrationIds: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, format: uuid } }
-      required: [stableKey, capabilities, allowedTargetRoleIds, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds]
+      required: [stableKey, capabilities, allowedTargetRoleIds, roleImageRecipeId, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds]
     PromptProfileSpec:
       type: object
       additionalProperties: false
@@ -715,6 +823,129 @@ components:
         targetState: { $ref: '#/components/schemas/LifecycleState' }
         reasonCode: { type: string, minLength: 1, maxLength: 80, pattern: '^[A-Z][A-Z0-9_]*$' }
       required: [targetState, reasonCode]
+    RoleImagePackage:
+      title: RoleImagePackage
+      type: object
+      additionalProperties: false
+      properties:
+        manager: { $ref: '#/components/schemas/RoleImagePackageManager' }
+        name: { type: string, minLength: 1, maxLength: 128 }
+        version: { type: string, minLength: 1, maxLength: 128 }
+        digest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        sourceRef: { type: string, minLength: 1, maxLength: 512, pattern: '^oci://[^\s@]+@sha256:[0-9a-f]{64}$' }
+      required: [manager, name, version, digest, sourceRef]
+    RoleImageTool:
+      title: RoleImageTool
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        version: { type: string, minLength: 1, maxLength: 128 }
+        sourceRef: { type: string, minLength: 1, maxLength: 512 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [name, version, sourceRef, sha256]
+    RoleImagePlatform:
+      title: RoleImagePlatform
+      type: object
+      additionalProperties: false
+      properties:
+        os: { $ref: '#/components/schemas/RoleImagePlatformOS' }
+        architecture: { $ref: '#/components/schemas/RoleImagePlatformArchitecture' }
+        variant: { type: string, maxLength: 128 }
+      required: [os, architecture]
+    RoleImageRecipeInput:
+      title: RoleImageRecipeInput
+      type: object
+      additionalProperties: false
+      properties:
+        baseImageReference: { type: string, minLength: 1, maxLength: 512 }
+        baseImageDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        sourceRef: { type: string, minLength: 1, maxLength: 512 }
+        sourceRevision: { type: string, minLength: 1, maxLength: 128 }
+        sourceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        contextRef: { type: string, minLength: 1, maxLength: 512, pattern: '^oci://[^\s@]+@sha256:[0-9a-f]{64}$' }
+        contextSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        builderSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        frontendSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        platforms: { type: array, minItems: 1, maxItems: 8, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImagePlatform' } }
+        packages: { type: array, maxItems: 256, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImagePackage' } }
+        tools: { type: array, maxItems: 128, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImageTool' } }
+        installationBlock: { type: string, minLength: 0, maxLength: 32768, default: '' }
+        toolchainSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [baseImageReference, baseImageDigest, sourceRef, sourceRevision, sourceSha256, contextRef, contextSha256, builderSha256, frontendSha256, platforms, packages, tools, installationBlock, toolchainSha256]
+    RoleImageRecipeReadback:
+      title: RoleImageRecipeReadback
+      description: Полный version-pinned owner readback без значений credentials.
+      type: object
+      additionalProperties: false
+      properties:
+        recipe: { $ref: '#/components/schemas/Resource' }
+        input: { $ref: '#/components/schemas/RoleImageRecipeInput' }
+        generation: { type: integer, format: int64, minimum: 1 }
+        specSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        policySha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        roleRuntimeContractRevision: { type: integer, format: int64, minimum: 1 }
+        roleRuntimeContractSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [recipe, input, generation, specSha256, policyRevision, policySha256, roleRuntimeContractRevision, roleRuntimeContractSha256]
+    RoleImageRecipeStatusInput:
+      title: RoleImageRecipeStatusInput
+      description: Безопасная read/status проекция без installation block и build secret references.
+      type: object
+      additionalProperties: false
+      properties:
+        baseImageReference: { type: string, minLength: 1, maxLength: 512 }
+        baseImageDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        sourceRef: { type: string, minLength: 1, maxLength: 512 }
+        sourceRevision: { type: string, minLength: 1, maxLength: 128 }
+        sourceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        contextRef: { type: string, minLength: 1, maxLength: 512, pattern: '^oci://[^\s@]+@sha256:[0-9a-f]{64}$' }
+        contextSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        builderSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        frontendSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        platforms: { type: array, minItems: 1, maxItems: 8, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImagePlatform' } }
+        packages: { type: array, maxItems: 256, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImagePackage' } }
+        tools: { type: array, maxItems: 128, uniqueItems: true, items: { $ref: '#/components/schemas/RoleImageTool' } }
+        toolchainSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [baseImageReference, baseImageDigest, sourceRef, sourceRevision, sourceSha256, contextRef, contextSha256, builderSha256, frontendSha256, platforms, packages, tools, toolchainSha256]
+    RoleImagePackageManager:
+      title: RoleImagePackageManager
+      type: string
+      enum: [apk, apt, dnf, pip, npm]
+    RoleImagePlatformOS:
+      title: RoleImagePlatformOS
+      type: string
+      enum: [linux]
+    RoleImagePlatformArchitecture:
+      title: RoleImagePlatformArchitecture
+      type: string
+      enum: [amd64, arm64]
+    ManageRoleImageRecipe:
+      type: object
+      additionalProperties: false
+      description: CREATE требует name+input без recipeId/If-Match; UPDATE требует все поля; остальные действия требуют recipeId+If-Match без name/input.
+      properties:
+        action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, RESTORE, DELETE, REQUEST_BUILD] }
+        recipeId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        input: { $ref: '#/components/schemas/RoleImageRecipeInput' }
+      required: [action]
+    RoleImageRecipeResult:
+      type: object
+      additionalProperties: false
+      properties:
+        recipe: { $ref: '#/components/schemas/Resource' }
+        imageBuild: { $ref: '#/components/schemas/Resource' }
+        imageArtifact: { $ref: '#/components/schemas/Resource' }
+        reused: { type: boolean }
+      required: [recipe, reused]
+    ManageImageBuild:
+      type: object
+      additionalProperties: false
+      properties:
+        imageBuildId: { type: string, format: uuid }
+        action: { type: string, enum: [CANCEL, RETRY, EXPIRE, DEAD_LETTER] }
+      required: [imageBuildId, action]
     ManageAccessResource:
       type: object
       additionalProperties: false
@@ -808,12 +1039,13 @@ components:
         capabilities: { type: array, items: { type: string } }
         allowedTargetRoleIds: { type: array, items: { type: string, format: uuid } }
         promptProfileId: { type: string, format: uuid }
+        roleImageRecipeId: { type: string, format: uuid }
         providerCredentialBindingIds: { type: array, items: { type: string, format: uuid } }
         repositoryWorkspaceIds: { type: array, items: { type: string, format: uuid } }
         integrationIds: { type: array, items: { type: string, format: uuid } }
         providerAccountPool: { $ref: '#/components/schemas/ProviderPoolProjection' }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [stableKey, capabilities, allowedTargetRoleIds, promptProfileId, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds, providerAccountPool, ownership]
+      required: [stableKey, capabilities, allowedTargetRoleIds, promptProfileId, roleImageRecipeId, providerCredentialBindingIds, repositoryWorkspaceIds, integrationIds, providerAccountPool, ownership]
     PromptProfileProjection:
       title: PromptProfileProjection
       type: object
@@ -871,7 +1103,25 @@ components:
       additionalProperties: false
       properties:
         manifestSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-        imageDigest: { type: string }
+        imageReference: { type: string, pattern: '^[^[:space:]@]+@sha256:[0-9a-f]{64}$' }
+        roleImageRecipeId: { type: string, format: uuid }
+        roleImageRecipeVersion: { type: integer, format: int64, minimum: 1 }
+        roleImageSpecSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        imageBuildId: { type: string, format: uuid }
+        imageBuildVersion: { type: integer, format: int64, minimum: 1 }
+        imageBuildAttempt: { type: integer, minimum: 1 }
+        imageArtifactId: { type: string, format: uuid }
+        imageArtifactVersion: { type: integer, format: int64, minimum: 1 }
+        imageManifestDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        imageAdmissionRevision: { type: integer, format: int64, minimum: 1 }
+        imageAdmissionReceiptSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        imageAdmissionReceiptOciManifestDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        imagePolicyRevision: { type: integer, format: int64, minimum: 1 }
+        imagePolicySha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        imageSignatureSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        imagePromotionReadbackSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        roleRuntimeContractRevision: { type: integer, format: int64, minimum: 1 }
+        roleRuntimeContractSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         promptProfileId: { type: string, format: uuid }
         promptRevision: { type: integer, format: int64, minimum: 1 }
         sessionId: { type: string, format: uuid }
@@ -879,7 +1129,7 @@ components:
         chatId: { type: string, format: uuid }
         effectiveRuntimeSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         authorityPolicyRevision: { type: integer, format: int64, minimum: 1 }
-      required: [manifestSha256, imageDigest, promptProfileId, promptRevision, sessionId, roleId, effectiveRuntimeSha256, authorityPolicyRevision]
+      required: [manifestSha256, imageReference, roleImageRecipeId, roleImageRecipeVersion, roleImageSpecSha256, imageBuildId, imageBuildVersion, imageBuildAttempt, imageArtifactId, imageArtifactVersion, imageManifestDigest, imageAdmissionRevision, imageAdmissionReceiptSha256, imageAdmissionReceiptOciManifestDigest, imagePolicyRevision, imagePolicySha256, imageSignatureSha256, imagePromotionReadbackSha256, roleRuntimeContractRevision, roleRuntimeContractSha256, promptProfileId, promptRevision, sessionId, roleId, effectiveRuntimeSha256, authorityPolicyRevision]
     SessionProjection:
       title: SessionProjection
       type: object
@@ -1033,6 +1283,92 @@ components:
         scanEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         scannedAt: { type: string, format: date-time }
       required: [artifactKind, direction, sizeBytes, mediaType, sha256, scanStatus, scanPolicyRevision]
+    RoleImageRecipeProjection:
+      title: RoleImageRecipeProjection
+      type: object
+      additionalProperties: false
+      properties:
+        input: { $ref: '#/components/schemas/RoleImageRecipeStatusInput' }
+        generation: { type: integer, format: int64, minimum: 1 }
+        specSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        policySha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        roleRuntimeContractRevision: { type: integer, format: int64, minimum: 1 }
+        roleRuntimeContractSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [input, generation, specSha256, policyRevision, policySha256, roleRuntimeContractRevision, roleRuntimeContractSha256]
+    ImageBuildProjection:
+      title: ImageBuildProjection
+      type: object
+      additionalProperties: false
+      properties:
+        recipeId: { type: string, format: uuid }
+        recipeVersion: { type: integer, format: int64, minimum: 1 }
+        recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        specSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        attempt: { type: integer, minimum: 1, maximum: 10 }
+        stage: { $ref: '#/components/schemas/ImageBuildStage' }
+        progressPercent: { type: integer, minimum: 0, maximum: 100 }
+        stagingReference: { type: string }
+        manifestDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        provenanceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        immutableBuildSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        errorCode: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,63}$' }
+        diagnosticCode: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,63}$' }
+        diagnosticSummary: { type: string, minLength: 1, maxLength: 256 }
+        availableAt: { type: string, format: date-time }
+        maximumAttempts: { type: integer, minimum: 1, maximum: 10 }
+      required: [recipeId, recipeVersion, recipeGeneration, specSha256, attempt, stage, progressPercent, immutableBuildSha256, availableAt, maximumAttempts]
+    ImageBuildStage:
+      title: ImageBuildStage
+      type: string
+      enum: [QUEUED, MATERIALIZATION, CONTEXT_VALIDATION, BASE_PULL, SOLVING, INSTALLATION, TRUSTED_RUNTIME_FINALIZATION, STAGING_PUSH, PROVENANCE, COMPLETED, FAILED, CANCELLED, EXPIRED, DEAD_LETTER]
+    ImageArtifactProjection:
+      title: ImageArtifactProjection
+      type: object
+      additionalProperties: false
+      properties:
+        recipeId: { type: string, format: uuid }
+        recipeVersion: { type: integer, format: int64, minimum: 1 }
+        recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        specSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        buildId: { type: string, format: uuid }
+        buildVersion: { type: integer, format: int64, minimum: 1 }
+        buildAttempt: { type: integer, minimum: 1 }
+        stagingReference: { type: string }
+        manifestDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        provenanceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        immutableBuildSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        baseImageDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        sourceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        contextSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        builderSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        frontendSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        toolchainSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        roleRuntimeContractRevision: { type: integer, format: int64, minimum: 1 }
+        roleRuntimeContractSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        platforms:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { $ref: '#/components/schemas/RoleImagePlatform' }
+        sbomSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        vulnerabilityEvidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        policySha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        admissionVerdict: { $ref: '#/components/schemas/ImageAdmissionVerdict' }
+        signatureIdentity: { type: string }
+        signatureSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        admissionRevision: { type: integer, format: int64, minimum: 0 }
+        admissionReceiptSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        admissionReceiptOciManifestDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        promotedReference: { type: string }
+        promotionReadbackSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        promotedAt: { type: string, format: date-time }
+      required: [recipeId, recipeVersion, recipeGeneration, specSha256, buildId, buildVersion, buildAttempt, stagingReference, manifestDigest, provenanceSha256, immutableBuildSha256, baseImageDigest, sourceSha256, contextSha256, builderSha256, frontendSha256, toolchainSha256, roleRuntimeContractRevision, roleRuntimeContractSha256, platforms, policyRevision, policySha256, admissionRevision]
+    ImageAdmissionVerdict:
+      title: ImageAdmissionVerdict
+      type: string
+      enum: [ACCEPTED, REJECTED]
     ResourceSpecProjection:
       title: ResourceSpecProjection
       type: object
@@ -1057,6 +1393,9 @@ components:
         memoryRecord: { $ref: '#/components/schemas/MemoryRecordProjection' }
         workClaim: { $ref: '#/components/schemas/WorkClaimProjection' }
         artifact: { $ref: '#/components/schemas/ArtifactProjection' }
+        roleImageRecipe: { $ref: '#/components/schemas/RoleImageRecipeProjection' }
+        imageBuild: { $ref: '#/components/schemas/ImageBuildProjection' }
+        imageArtifact: { $ref: '#/components/schemas/ImageArtifactProjection' }
     Resource:
       title: Resource
       type: object

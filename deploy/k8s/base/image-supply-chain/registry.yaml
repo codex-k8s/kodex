@@ -67,33 +67,23 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
-              value: 0.0.0.0:5000
-            - name: REGISTRY_HTTP_TLS_CERTIFICATE
-              value: /var/run/secrets/mattercodex/registry/tls.crt
-            - name: REGISTRY_HTTP_TLS_KEY
-              value: /var/run/secrets/mattercodex/registry/tls.key
-            - name: REGISTRY_AUTH
-              value: htpasswd
-            - name: REGISTRY_AUTH_HTPASSWD_REALM
-              value: mattercodex-image-pull
-            - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
+              value: 127.0.0.1:5006
             - name: REGISTRY_STORAGE_MAINTENANCE_READONLY_ENABLED
               value: "true"
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "false"
           ports:
-            - name: registry
-              containerPort: 5000
+            - name: backend
+              containerPort: 5006
           readinessProbe:
             tcpSocket:
-              port: registry
+              port: backend
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: registry
+              port: backend
             periodSeconds: 15
             timeoutSeconds: 2
             failureThreshold: 3
@@ -122,6 +112,27 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+        - name: pull-authorizer
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/usr/local/bin/registry-pull-authorizer]
+          env:
+            - name: REGISTRY_PULL_HOST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: pullRegistryHost}}
+          ports: [{name: registry, containerPort: 5000, protocol: TCP}]
+          readinessProbe: {tcpSocket: {port: registry}, periodSeconds: 5, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: credentials, mountPath: /identity, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
         - name: certificate-guard
           image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
@@ -129,7 +140,7 @@ spec:
           env:
             - {name: TARGET_PORT, value: "5000"}
             - {name: SERVER_NAME, value: registry-pull.invalid}
-            - {name: CLIENT_AUTH_REQUIRED, value: "false"}
+            - {name: CLIENT_AUTH_REQUIRED, value: "true"}
             - {name: DOCKER_CONFIG_FILE, value: /identity/pull-dockerconfigjson}
             - {name: READBACK_IMAGE, value: "registry-pull.invalid/mattercodex/control-plane@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
             - {name: PULL_CREDENTIAL_GENERATION, value: "0"}
@@ -212,35 +223,23 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: REGISTRY_HTTP_ADDR
-              value: 0.0.0.0:5001
-            - name: REGISTRY_HTTP_TLS_CERTIFICATE
-              value: /var/run/secrets/mattercodex/registry/tls.crt
-            - name: REGISTRY_HTTP_TLS_KEY
-              value: /var/run/secrets/mattercodex/registry/tls.key
-            - name: REGISTRY_HTTP_TLS_CLIENTCAS_0
-              value: /var/run/secrets/mattercodex/registry/client-ca.pem
-            - name: REGISTRY_HTTP_TLS_CLIENTAUTH
-              value: require-and-verify-client-cert
-            - name: REGISTRY_AUTH
-              value: htpasswd
-            - name: REGISTRY_AUTH_HTPASSWD_REALM
-              value: mattercodex-image-push
-            - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /var/run/secrets/mattercodex/registry/auth.htpasswd
+              value: 127.0.0.1:5005
+            - name: REGISTRY_HTTP_RELATIVEURLS
+              value: "true"
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "false"
           ports:
-            - name: registry
-              containerPort: 5001
+            - name: backend
+              containerPort: 5005
           readinessProbe:
             tcpSocket:
-              port: registry
+              port: backend
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: registry
+              port: backend
             periodSeconds: 15
             timeoutSeconds: 2
             failureThreshold: 3
@@ -268,18 +267,13 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
-        - name: certificate-guard
-          image: admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        - name: write-authorizer
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
-          command: [/bin/sh, /opt/mattercodex/registry-readiness.sh]
-          env:
-            - {name: TARGET_PORT, value: "5001"}
-            - {name: SERVER_NAME, value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local}
-            - {name: CLIENT_AUTH_REQUIRED, value: "true"}
-            - {name: USERNAME_FILE, value: /identity/push.username}
-            - {name: PASSWORD_FILE, value: /identity/push.password}
+          command: [/usr/local/bin/registry-write-authorizer]
+          ports: [{name: write, containerPort: 5001, protocol: TCP}]
           readinessProbe:
-            exec: {command: [/bin/sh, -ec, test -f /tmp/registry-ready]}
+            tcpSocket: {port: write}
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 2
@@ -295,7 +289,6 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: credentials, mountPath: /identity, readOnly: true}
-            - {name: readiness-script, mountPath: /opt/mattercodex, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - name: data
@@ -615,12 +608,31 @@ metadata:
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Local
+  loadBalancerSourceRanges:
+    - 192.0.2.0/32
+    - 2001:db8::/128
   selector:
     app.kubernetes.io/name: mattercodex-image-registry
     mattercodex.dev/registry-scope: pull
   ports:
     - name: https
       port: 443
+      targetPort: registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattercodex-image-registry
+  labels:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: pull
+spec:
+  selector:
+    app.kubernetes.io/name: mattercodex-image-registry
+    mattercodex.dev/registry-scope: pull
+  ports:
+    - name: https
+      port: 5000
       targetPort: registry
 ---
 apiVersion: v1
@@ -637,7 +649,7 @@ spec:
   ports:
     - name: https
       port: 5001
-      targetPort: registry
+      targetPort: write
 ---
 apiVersion: v1
 kind: Service

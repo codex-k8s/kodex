@@ -4,7 +4,7 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.2
+version: 1.2.4
 updated: 2026-08-05
 ---
 
@@ -58,7 +58,7 @@ runbook и ручная проверка входят в один Issue и од�
 | `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
 | `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
 | `automation-scheduler`   | job                             | bounded polling защищённых scheduler RPC и transient tracking выданных leases                                                              | cron/backoff/owner state, AI execution, Mattermost и Kubernetes          |
-| `role-image-builder`     | job                             | build specification hash, BuildKit execution, provenance и staging registry artifact                                                       | SBOM/vulnerability/signature admission, promotion и role business state |
+| `role-image-builder`     | job                             | trusted materialization, BuildKit execution, provenance и staging registry artifact                                                        | canonical build specification hash, SBOM/vulnerability/signature admission, promotion и role business state |
 | `image-admission`        | bounded job                     | SBOM, vulnerability-policy verdict, signature verification, admission receipt и одноразовый promotion claim exact digest                   | build execution, node pull и role business state                        |
 | `control-center`         | staff PWA                       | UI state                                                                                                                                   | business authority, secrets и прямой доступ к внутренним RPC            |
 
@@ -78,17 +78,26 @@ credential, audience, полным именем метода и permission. Ск
 проверкой байтов, а `control-plane` — границей метаданных, состояния и
 результата.
 
-`role-image-builder` материализуется owner-triggered Job через
-`tools/render-image-build-job.sh`: его вход — read-only source PVC и exact
-digest `context.tar`, подготовленные владельцем workspace; Job не выбирает
-tenant, рецепт или source revision. Он использует client-only mTLS BuildKit и
-scoped staging push, но не получает promotion identity. Отдельный
-`render-image-admission-job.sh` читает immutable owner intent и разделяет
-scanner, signer, admission owner и promotion по четырём Pod/ServiceAccount/
-Vault/mTLS границам. Он декодирует и семантически проверяет DSSE
-provenance/SBOM/vulnerability/signature policy, подписывает exact admission
-receipt и выдаёт promotion claim только после полного readback. Pull/admin
-credentials и изменение доменных агрегатов build Job не выдаются.
+`role-image-builder` материализуется как отдельный deployable
+`services/jobs/role-image-builder`. Он получает server-owned fenced attempt
+через protected RPC, потоково читает exact OCI context/package/tool в private
+`emptyDir`, использует pull-only input identity и client-only mTLS к вынесенному
+rootless BuildKit. Base-pull и staging-push identities, credentials и egress
+принадлежат только BuildKit. Tenant, owner, recipe, generation, policy и artifact eligibility
+назначает `control-plane`; installation block доступен builder только в
+immutable claim snapshot и не попадает в status/log/audit/provenance.
+Отдельный `render-image-admission-job.sh` сначала получает server-owned artifact
+claim, затем разделяет scanner, signer, admission owner и promotion по разным
+Pod/ServiceAccount/Vault/mTLS границам. Admission фиксирует exact SBOM,
+vulnerability, native BuildKit provenance, signature и receipt через protected
+RPC; durable evidence OCI manifest проходит readback до verdict. Только server-selected
+одноразовый owner promotion claim, включающий content/manifest receipt digests,
+тот же exact evidence manifest digest и совместный registry readback делают
+artifact пригодным для `RuntimeRevision`. Marker/PVC задают порядок только
+внутри admission scan/sign/record; promotion восстанавливается из owner state и
+выделенного read-only evidence path, а PVC не является источником lifecycle
+state. Pull/admin/signing/promotion credentials
+builder не выдаются.
 
 ## Контракты
 

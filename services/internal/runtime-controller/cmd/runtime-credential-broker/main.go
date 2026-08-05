@@ -738,14 +738,19 @@ func materializeRolePod(ctx context.Context, client kubernetes.Interface, namesp
 		pod.Annotations["runtime.mattercodex.dev/workload-ticket"] != snapshot.WorkloadTicket ||
 		pod.Spec.ServiceAccountName != accessServiceAccountName(execution) || pod.Spec.AutomountServiceAccountToken == nil ||
 		*pod.Spec.AutomountServiceAccountToken || pod.Spec.RestartPolicy != corev1.RestartPolicyNever ||
-		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 2 ||
+		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 3 ||
+		pod.Spec.InitContainers[0].Name != "internal-rpc-authority-socket-init" ||
+		pod.Spec.InitContainers[1].Name != "workspace-init" ||
+		pod.Spec.Containers[0].Name != "role-runtime" || pod.Spec.Containers[1].Name != "provider-runtime" ||
+		pod.Spec.Containers[2].Name != "internal-rpc-authority-issuer" ||
 		len(pod.Spec.InitContainers[1].Args) != 1 || pod.Spec.InitContainers[1].Args[0] != "runtime-init-workspace" ||
 		len(pod.Spec.Containers[0].Args) != 1 || pod.Spec.Containers[0].Args[0] != "runtime-session" ||
-		pod.Spec.InitContainers[1].Image != pod.Spec.Containers[0].Image ||
-		!strings.HasSuffix(pod.Spec.Containers[0].Image, "@"+revision.ImageDigest) ||
+		len(pod.Spec.Containers[1].Args) != 1 || pod.Spec.Containers[1].Args[0] != "runtime-provider" ||
+		pod.Spec.InitContainers[1].Image != pod.Spec.Containers[0].Image || pod.Spec.Containers[1].Image != revision.ImageReference ||
+		pod.Spec.Containers[0].Image != revision.ImageReference ||
 		!restrictedContainer(pod.Spec.InitContainers[0].SecurityContext) || !restrictedContainer(pod.Spec.InitContainers[1].SecurityContext) ||
 		!restrictedContainer(pod.Spec.Containers[0].SecurityContext) ||
-		!restrictedContainer(pod.Spec.Containers[1].SecurityContext) ||
+		!restrictedContainer(pod.Spec.Containers[1].SecurityContext) || !restrictedContainer(pod.Spec.Containers[2].SecurityContext) ||
 		!exactRuntimeVolumes(pod.Spec.Volumes, execution, len(revision.Credentials)) {
 		return errors.New("runtime role Pod ticketed spec is invalid")
 	}
@@ -778,13 +783,25 @@ func exactRolePodShape(actual, desired *corev1.Pod, execution entity.Execution, 
 		actual.Labels["runtime.mattercodex.dev/role"] != desired.Labels["runtime.mattercodex.dev/role"] ||
 		actual.Labels["runtime.mattercodex.dev/access-profile"] != desired.Labels["runtime.mattercodex.dev/access-profile"] ||
 		actual.Spec.AutomountServiceAccountToken == nil || *actual.Spec.AutomountServiceAccountToken ||
-		actual.Spec.RestartPolicy != corev1.RestartPolicyNever || len(actual.Spec.InitContainers) != 1 ||
-		len(actual.Spec.Containers) != 1 || actual.Spec.InitContainers[0].Image != desired.Spec.InitContainers[0].Image ||
+		actual.Spec.RestartPolicy != corev1.RestartPolicyNever || len(actual.Spec.InitContainers) != 2 ||
+		len(actual.Spec.Containers) != 3 ||
+		actual.Spec.InitContainers[0].Name != "internal-rpc-authority-socket-init" ||
+		actual.Spec.InitContainers[1].Name != "workspace-init" ||
+		actual.Spec.Containers[0].Name != "role-runtime" || actual.Spec.Containers[1].Name != "provider-runtime" ||
+		actual.Spec.Containers[2].Name != "internal-rpc-authority-issuer" ||
+		actual.Spec.InitContainers[0].Image != desired.Spec.InitContainers[0].Image ||
+		actual.Spec.InitContainers[1].Image != desired.Spec.InitContainers[1].Image ||
 		actual.Spec.Containers[0].Image != desired.Spec.Containers[0].Image ||
-		!jsonEqual(actual.Spec.InitContainers[0].Args, []string{"runtime-init-workspace"}) ||
+		actual.Spec.Containers[1].Image != desired.Spec.Containers[1].Image ||
+		actual.Spec.Containers[2].Image != desired.Spec.Containers[2].Image ||
+		!jsonEqual(actual.Spec.InitContainers[1].Args, []string{"runtime-init-workspace"}) ||
 		!jsonEqual(actual.Spec.Containers[0].Args, []string{"runtime-session"}) ||
+		!jsonEqual(actual.Spec.Containers[1].Args, []string{"runtime-provider"}) ||
 		!restrictedContainer(actual.Spec.InitContainers[0].SecurityContext) ||
-		!restrictedContainer(actual.Spec.Containers[0].SecurityContext) {
+		!restrictedContainer(actual.Spec.InitContainers[1].SecurityContext) ||
+		!restrictedContainer(actual.Spec.Containers[0].SecurityContext) ||
+		!restrictedContainer(actual.Spec.Containers[1].SecurityContext) ||
+		!restrictedContainer(actual.Spec.Containers[2].SecurityContext) {
 		return false
 	}
 	if warm {
