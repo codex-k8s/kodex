@@ -3205,8 +3205,12 @@ type RuntimeRevisionSpec struct {
 	CodexModel                  string                  `protobuf:"bytes,17,opt,name=codex_model,json=codexModel,proto3" json:"codex_model,omitempty"`
 	CodexSandbox                string                  `protobuf:"bytes,18,opt,name=codex_sandbox,json=codexSandbox,proto3" json:"codex_sandbox,omitempty"`
 	CodexApprovalPolicy         string                  `protobuf:"bytes,19,opt,name=codex_approval_policy,json=codexApprovalPolicy,proto3" json:"codex_approval_policy,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// provider_account_name — публичное server-owned имя той же logical OpenAI
+	// account для verified `/agents openai auth`; identifier привязки не
+	// раскрывается пользователю и не принимается от runner.
+	ProviderAccountName string `protobuf:"bytes,20,opt,name=provider_account_name,json=providerAccountName,proto3" json:"provider_account_name,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *RuntimeRevisionSpec) Reset() {
@@ -3368,6 +3372,13 @@ func (x *RuntimeRevisionSpec) GetCodexSandbox() string {
 func (x *RuntimeRevisionSpec) GetCodexApprovalPolicy() string {
 	if x != nil {
 		return x.CodexApprovalPolicy
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSpec) GetProviderAccountName() string {
+	if x != nil {
+		return x.ProviderAccountName
 	}
 	return ""
 }
@@ -21170,7 +21181,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x16credential_binding_ids\x18\x04 \x03(\tR\x14credentialBindingIds\x12!\n" +
 	"\fendpoint_ref\x18\x05 \x01(\tR\vendpointRef\x12E\n" +
 	"\townership\x18\n" +
-	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\"\x8d\a\n" +
+	" \x01(\v2'.controlplane.v1.ConfigurationOwnershipR\townership\"\xc1\a\n" +
 	"\x13RuntimeRevisionSpec\x12'\n" +
 	"\x0fmanifest_sha256\x18\x01 \x01(\tR\x0emanifestSha256\x12!\n" +
 	"\fimage_digest\x18\x02 \x01(\tR\vimageDigest\x12*\n" +
@@ -21196,7 +21207,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vcodex_model\x18\x11 \x01(\tR\n" +
 	"codexModel\x12#\n" +
 	"\rcodex_sandbox\x18\x12 \x01(\tR\fcodexSandbox\x122\n" +
-	"\x15codex_approval_policy\x18\x13 \x01(\tR\x13codexApprovalPolicy\"\xb1\x01\n" +
+	"\x15codex_approval_policy\x18\x13 \x01(\tR\x13codexApprovalPolicy\x122\n" +
+	"\x15provider_account_name\x18\x14 \x01(\tR\x13providerAccountName\"\xb1\x01\n" +
 	"\x14EffectiveResourceRef\x121\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12\x1f\n" +
 	"\vresource_id\x18\x02 \x01(\tR\n" +

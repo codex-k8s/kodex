@@ -105,12 +105,6 @@ spec:
                   name: ${MATTERCODEX_BOT_SERVICE_SECRET}
                   key: mattermost-admin-token
                   optional: true
-            - name: MATTERCODEX_CONTROL_CENTER_READ_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: ${MATTERCODEX_BOT_SERVICE_SECRET}
-                  key: control-center-read-token
-                  optional: true
             - name: MATTERCODEX_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

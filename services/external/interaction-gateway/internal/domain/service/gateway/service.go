@@ -355,6 +355,34 @@ func (service *Service) resolveRuntimeAction(ctx context.Context, inbound entity
 		return Result{}, service.retryInbound(ctx, inbound, "AUTHORITY_SIGN_FAILED")
 	}
 	action := string(inbound.Action)
+	if action == "RETRY" {
+		current, readErr := service.control.GetTurn(ctx, grant, delivery.TurnID)
+		if readErr != nil || current.ID != delivery.TurnID || current.SessionID != delivery.SessionID ||
+			current.Attempt == 0 || current.Attempt == ^uint32(0) {
+			return Result{}, service.failInbound(ctx, inbound, "RUNTIME_ACTION_CONFLICT")
+		}
+		nextAttempt := current.Attempt + 1
+		executionID := stableID(current.ID, fmt.Sprintf("runtime-execution:%d", nextAttempt))
+		binding, bindingErr := service.bot.EnsureRuntimeMCPBinding(ctx, domainbot.BindingRequest{
+			ControlSessionID: delivery.SessionID, ChannelID: delivery.ChannelID, RootPostID: delivery.RootPostID,
+			BotStableKey: delivery.BotStableKey, ExecutionID: executionID, TurnID: current.ID, Attempt: nextAttempt,
+		})
+		if bindingErr != nil {
+			return Result{}, service.retryInbound(ctx, inbound, "MCP_BINDING_CREATE_FAILED")
+		}
+		_, bindingErr = service.control.BindSessionMCP(ctx, grant, domaincontrol.SessionMCPBindingInput{
+			IdempotencyKey: stableID(inbound.ID, fmt.Sprintf("session-mcp-binding:%d:%s:%s",
+				binding.AgentSessionVersion, binding.ProviderContentVersion, binding.ContentSHA256)),
+			SessionID: delivery.SessionID, AgentSessionKey: binding.AgentSessionKey,
+			AgentSessionID: binding.AgentSessionID, AgentSessionVersion: binding.AgentSessionVersion,
+			AgentSessionBindingSHA256: binding.AgentSessionBindingSHA256,
+			ImmutableSecretRef:        binding.ImmutableSecretRef, ProviderContentVersion: binding.ProviderContentVersion,
+			ContentSHA256: binding.ContentSHA256,
+		})
+		if bindingErr != nil {
+			return Result{}, service.retryInbound(ctx, inbound, "MCP_BINDING_REGISTER_FAILED")
+		}
+	}
 	turn, err := service.control.ManageRuntimeAction(ctx, grant, domaincontrol.RuntimeActionInput{
 		IdempotencyKey: stableID(inbound.ID, "runtime-action:"+strings.ToLower(action)),
 		SessionID:      delivery.SessionID, TurnID: delivery.TurnID, Action: action,
@@ -1023,11 +1051,14 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 		inbound.SessionID = session.ID
 		createdSession = true
 	}
+	turnIdempotencyKey := stableID(inbound.ID, "turn")
+	expectedTurnID := stableID(turnIdempotencyKey, "control-plane-turn")
+	expectedExecutionID := stableID(expectedTurnID, "runtime-execution:1")
 	// Перед каждым turn bot-service заново подтверждает exact current Secret и
 	// выдаёт свежую owner binding revision. Rotation меняет также UID/version/digest.
 	binding, bindingErr := service.bot.EnsureRuntimeMCPBinding(ctx, domainbot.BindingRequest{
 		ControlSessionID: inbound.SessionID, ChannelID: inbound.ChannelID, RootPostID: sessionScope,
-		BotStableKey: inbound.BotStableKey,
+		BotStableKey: inbound.BotStableKey, ExecutionID: expectedExecutionID, TurnID: expectedTurnID, Attempt: 1,
 	})
 	if bindingErr != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "MCP_BINDING_CREATE_FAILED")
@@ -1144,9 +1175,9 @@ func (service *Service) processPrompt(ctx context.Context, inbound entity.Inboun
 	for _, attachment := range inbound.AttachmentArtifacts {
 		attachmentIDs = append(attachmentIDs, attachment.ArtifactID)
 	}
-	turn, err := service.control.EnqueueTurn(ctx, grant, stableID(inbound.ID, "turn"), inbound.SessionID,
+	turn, err := service.control.EnqueueTurn(ctx, grant, turnIdempotencyKey, inbound.SessionID,
 		sourceReference, inbound.PromptArtifactID, attachmentIDs)
-	if err != nil {
+	if err != nil || turn.ID != expectedTurnID {
 		return Result{}, service.retryInbound(ctx, inbound, "TURN_ENQUEUE_FAILED")
 	}
 	if err := service.enqueueRunCard(ctx, inbound, turn.ID); err != nil {

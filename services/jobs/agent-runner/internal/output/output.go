@@ -57,11 +57,27 @@ type artifactFailure struct {
 	name, reason string
 }
 
+type RecoveryItem struct {
+	Kind          string `json:"kind"`
+	Name          string `json:"name"`
+	MediaType     string `json:"media_type"`
+	SHA256        string `json:"sha256"`
+	SizeBytes     uint64 `json:"size_bytes"`
+	Sequence      uint32 `json:"sequence"`
+	Total         uint32 `json:"total"`
+	InlinePayload []byte `json:"inline_payload,omitempty"`
+}
+
+type BuildResult struct {
+	Outputs []runtimecontract.OutputV2
+	Failed  []RecoveryItem
+}
+
 // Build всегда сохраняет bounded terminal Markdown. Ошибка отдельного staged
 // artifact добавляется в итог, но не уничтожает owner terminal transaction.
-func Build(ctx context.Context, input model.Input, markdown, archivePath string) ([]runtimecontract.OutputV2, error) {
+func Build(ctx context.Context, input model.Input, markdown, archivePath string) (BuildResult, error) {
 	if markdown == "" || !utf8.ValidString(markdown) {
-		return nil, errors.New("runtime terminal Markdown is invalid")
+		return BuildResult{}, errors.New("runtime terminal Markdown is invalid")
 	}
 	fullMarkdown := []byte(markdown)
 	summary, truncated := markdownSummary(markdown, input.MattermostPostMaximumRunes)
@@ -72,12 +88,12 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 	outboxDescriptor, err := unix.Open(input.OutboxRoot,
 		unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
-		return nil, errors.New("read runtime outbox")
+		return BuildResult{}, errors.New("read runtime outbox")
 	}
 	outbox := os.NewFile(uintptr(outboxDescriptor), input.OutboxRoot)
 	if outbox == nil {
 		_ = unix.Close(outboxDescriptor)
-		return nil, errors.New("open runtime outbox")
+		return BuildResult{}, errors.New("open runtime outbox")
 	}
 	defer outbox.Close()
 	names := make([]string, 0, maximumOutboxReferences)
@@ -106,7 +122,7 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 			break
 		}
 		if readErr != nil {
-			return nil, errors.New("read runtime outbox")
+			return BuildResult{}, errors.New("read runtime outbox")
 		}
 	}
 	pending := make([]pendingOutput, 0, len(names)+1)
@@ -152,6 +168,7 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 	}
 	sequences := map[string]uint32{}
 	references := make([]runtimecontract.OutputV2, 0, min(len(pending), runtimecontract.MaximumOutputs-1))
+	failedItems := make([]RecoveryItem, 0, min(len(pending), runtimecontract.MaximumOutputs-1))
 	failed := 0
 	fullResultStaged := false
 	for _, item := range pending {
@@ -162,12 +179,14 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 		sequences[item.kind]++
 		if stagingErr != nil {
 			failed++
+			failedItems = append(failedItems, makeRecoveryItem(item, sequences[item.kind], counts[item.kind]))
 			failures = appendArtifactFailure(failures, item.name, "staging credential или TLS binding недоступен")
 			continue
 		}
 		output, stageErr := stage(ctx, client, token, input, item, sequences[item.kind], counts[item.kind])
 		if stageErr != nil {
 			failed++
+			failedItems = append(failedItems, makeRecoveryItem(item, sequences[item.kind], counts[item.kind]))
 			failures = appendArtifactFailure(failures, item.name, "owner staging/readback не завершён")
 			continue
 		}
@@ -180,7 +199,7 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 		notices = append(notices, "Полный итог приложен отдельным защищённым артефактом.")
 	}
 	if failed != 0 {
-		notices = append(notices, fmt.Sprintf("%d выходных артефактов не удалось сохранить. Повторная доставка потребует Retry.", failed))
+		notices = append(notices, fmt.Sprintf("%d выходных артефактов не удалось сохранить. Retry повторит только доставку и не запустит модель повторно.", failed))
 	}
 	for _, failure := range failures {
 		notices = append(notices, fmt.Sprintf("- %q: %s.", failure.name, failure.reason))
@@ -195,7 +214,17 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 	primary := makeInlineOutput(input.ExecutionID, "FINAL_MARKDOWN", "result.md", "text/markdown", []byte(summary), 1, 1)
 	outputs := append([]runtimecontract.OutputV2{primary}, references...)
 	normalizeSequences(outputs)
-	return outputs, nil
+	return BuildResult{Outputs: outputs, Failed: failedItems}, nil
+}
+
+func makeRecoveryItem(item pendingOutput, sequence, total uint32) RecoveryItem {
+	digest := sha256.Sum256(item.payload)
+	recovery := RecoveryItem{Kind: item.kind, Name: item.name, MediaType: item.mediaType,
+		SHA256: hex.EncodeToString(digest[:]), SizeBytes: uint64(len(item.payload)), Sequence: sequence, Total: total}
+	if item.name == "full-result.md" {
+		recovery.InlinePayload = slices.Clone(item.payload)
+	}
+	return recovery
 }
 
 func stagingClient(input model.Input) (*http.Client, string, error) {

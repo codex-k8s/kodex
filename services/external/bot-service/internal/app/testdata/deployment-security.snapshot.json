@@ -104,7 +104,6 @@
           "readOnlyRootFilesystem": true
         },
         "secret_refs": [
-          "${MATTERCODEX_BOT_SERVICE_SECRET}/control-center-read-token",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-admin-token",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-bot-token",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-slash-token",
@@ -158,6 +157,7 @@
     "base/internal-rpc-authority-restore/networkpolicy.yaml",
     "base/internal-rpc-authority/networkpolicy.yaml",
     "base/runtime-controller/networkpolicy.yaml",
+    "bot-service/networkpolicy.yaml.tpl",
     "components/internal-rpc-authority-control-api-gateway-issuer/networkpolicy.yaml",
     "components/internal-rpc-authority-control-plane-verifier/networkpolicy.yaml",
     "components/internal-rpc-authority-runtime-controller-issuer/networkpolicy.yaml"

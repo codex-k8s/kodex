@@ -306,11 +306,9 @@ save_secret_and_restart() {
   export BOT_TOKEN_B64
   export SLASH_TOKEN_B64
   export ADMIN_TOKEN_B64
-  export CONTROL_CENTER_READ_TOKEN_B64
   BOT_TOKEN_B64="$(printf '%s' "$bot_token" | base64 | tr -d '\n')"
   SLASH_TOKEN_B64="$(printf '%s' "$slash_token" | base64 | tr -d '\n')"
   ADMIN_TOKEN_B64="$(printf '%s' "$admin_token" | base64 | tr -d '\n')"
-  CONTROL_CENTER_READ_TOKEN_B64="$(printf '%s' "${MATTERCODEX_CONTROL_CENTER_READ_TOKEN:-}" | base64 | tr -d '\n')"
 
   mattercodex_log "bot-service tokens: сохраняются в Kubernetes Secret"
   mattercodex_render_template "$REPO_ROOT/deploy/k8s/bot-service/bot-service-secret.yaml.tpl" "$render_dir/bot-service-secret.yaml"

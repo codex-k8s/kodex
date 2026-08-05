@@ -124,6 +124,7 @@ func (client *Client) GetRevision(
 		ImageDigest: spec.GetImageDigest(),
 		SessionID:   spec.GetSessionId(), RoleID: spec.GetRoleId(), ChatID: spec.GetChatId(),
 		ProviderCredentialBindingID: spec.GetProviderCredentialBindingId(),
+		ProviderAccountName:         spec.GetProviderAccountName(),
 		PromptProfileID:             spec.GetPromptProfileId(), PromptRevision: spec.GetPromptRevision(),
 		AuthorityPolicyRevision: spec.GetAuthorityPolicyRevision(),
 		AuthorityPolicySHA256:   spec.GetAuthorityPolicySha256(),

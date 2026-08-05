@@ -686,6 +686,10 @@ message RuntimeRevisionSpec {
   string codex_model = 17;
   string codex_sandbox = 18;
   string codex_approval_policy = 19;
+  // provider_account_name — публичное server-owned имя той же logical OpenAI
+  // account для verified `/agents openai auth`; identifier привязки не
+  // раскрывается пользователю и не принимается от runner.
+  string provider_account_name = 20;
 }
 
 // EffectiveResourceRef описывает версионированное сообщение контракта control-plane.

@@ -49,10 +49,3 @@ spec:
                 name: matter-codex-bot-service
                 port:
                   name: http
-          - path: /api/control-center/v1/automation-runs
-            pathType: Exact
-            backend:
-              service:
-                name: matter-codex-bot-service
-                port:
-                  name: http

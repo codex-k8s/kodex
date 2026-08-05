@@ -35,7 +35,6 @@ type Config struct {
 	MattermostBotToken                  string        `env:"MATTERCODEX_MATTERMOST_BOT_TOKEN"`
 	MattermostAdminToken                string        `env:"MATTERCODEX_MATTERMOST_ADMIN_TOKEN"`
 	MattermostSlashToken                string        `env:"MATTERCODEX_MATTERMOST_SLASH_TOKEN"`
-	ControlCenterReadToken              string        `env:"MATTERCODEX_CONTROL_CENTER_READ_TOKEN"`
 	ControlCenterAssetsDir              string        `env:"MATTERCODEX_CONTROL_CENTER_ASSETS_DIR" envDefault:"/srv/matter-codex/control-center"`
 	GitHubToken                         string        `env:"MATTERCODEX_GITHUB_TOKEN"`
 	GitHubWebhookSecret                 string        `env:"MATTERCODEX_GITHUB_WEBHOOK_SECRET"`
@@ -55,12 +54,6 @@ type Config struct {
 	AgentUtilityMemoryLimit             string        `env:"MATTERCODEX_AGENT_UTILITY_MEMORY_LIMIT" envDefault:"4Gi"`
 	AgentDevShmSizeLimit                string        `env:"MATTERCODEX_AGENT_DEV_SHM_SIZE_LIMIT" envDefault:"8Gi"`
 	RuntimeJobTTLSeconds                int32         `env:"MATTERCODEX_RUNTIME_JOB_TTL_SECONDS" envDefault:"86400"`
-	RuntimeRetentionEnabled             bool          `env:"MATTERCODEX_RUNTIME_RETENTION_ENABLED" envDefault:"true"`
-	RuntimeRetentionInterval            time.Duration `env:"MATTERCODEX_RUNTIME_RETENTION_INTERVAL" envDefault:"30m"`
-	RuntimeRetentionOlderThan           time.Duration `env:"MATTERCODEX_RUNTIME_RETENTION_OLDER_THAN" envDefault:"24h"`
-	RuntimeSessionRepairEnabled         bool          `env:"MATTERCODEX_RUNTIME_SESSION_REPAIR_ENABLED" envDefault:"true"`
-	RuntimeSessionRepairInterval        time.Duration `env:"MATTERCODEX_RUNTIME_SESSION_REPAIR_INTERVAL" envDefault:"30s"`
-	RuntimeSessionRepairBatch           int           `env:"MATTERCODEX_RUNTIME_SESSION_REPAIR_BATCH" envDefault:"20"`
 	AuthCheckJobTTLSeconds              int32         `env:"MATTERCODEX_CODEX_AUTH_CHECK_JOB_TTL_SECONDS" envDefault:"300"`
 	RuntimeLogTailLines                 int64         `env:"MATTERCODEX_RUNTIME_LOG_TAIL_LINES" envDefault:"40"`
 	AgentServiceAccount                 string        `env:"MATTERCODEX_AGENT_RUNNER_SERVICE_ACCOUNT" envDefault:"matter-codex-agent-runner"`
@@ -89,8 +82,6 @@ type Config struct {
 	CallbackMaxChunkBytes               int           `env:"MATTERCODEX_CALLBACK_MAX_CHUNK_BYTES" envDefault:"49152"`
 	CallbackPublishConcurrency          int           `env:"MATTERCODEX_CALLBACK_PUBLISH_CONCURRENCY" envDefault:"4"`
 	CallbackPublishDeadline             time.Duration `env:"MATTERCODEX_CALLBACK_PUBLISH_DEADLINE" envDefault:"5s"`
-	AutomationDeliveryInterval          time.Duration `env:"MATTERCODEX_AUTOMATION_DELIVERY_INTERVAL" envDefault:"5s"`
-	AutomationDeliveryConcurrency       int           `env:"MATTERCODEX_AUTOMATION_DELIVERY_CONCURRENCY" envDefault:"4"`
 }
 
 func LoadConfig() (Config, error) {
@@ -106,7 +97,6 @@ func LoadConfig() (Config, error) {
 
 func (cfg *Config) Validate() error {
 	cfg.applyPublishDefaults()
-	cfg.applyAutomationDeliveryDefaults()
 	if strings.TrimSpace(cfg.HTTPAddr) == "" {
 		return fmt.Errorf("MATTERCODEX_BOT_SERVICE_HTTP_ADDR is required")
 	}
@@ -177,20 +167,6 @@ func (cfg *Config) Validate() error {
 	if cfg.CallbackPublishDeadline <= 0 || cfg.CallbackPublishDeadline > 15*time.Second {
 		return fmt.Errorf("MATTERCODEX_CALLBACK_PUBLISH_DEADLINE is invalid")
 	}
-	if cfg.AutomationDeliveryInterval <= 0 || cfg.AutomationDeliveryInterval > 5*time.Minute {
-		return fmt.Errorf("MATTERCODEX_AUTOMATION_DELIVERY_INTERVAL is invalid")
-	}
-	if cfg.AutomationDeliveryConcurrency <= 0 || cfg.AutomationDeliveryConcurrency > 16 {
-		return fmt.Errorf("MATTERCODEX_AUTOMATION_DELIVERY_CONCURRENCY is invalid")
-	}
-	if token := strings.TrimSpace(cfg.ControlCenterReadToken); token != "" {
-		if len(token) < 32 || len(token) > 4096 {
-			return fmt.Errorf("MATTERCODEX_CONTROL_CENTER_READ_TOKEN is invalid")
-		}
-		if strings.TrimSpace(cfg.OwnerMattermostUsername) == "" {
-			return fmt.Errorf("MATTERCODEX_OWNER_MATTERMOST_USERNAME is required for Control Center")
-		}
-	}
 	if cfg.InteractiveSurfaceEnabled() {
 		if err := validateInternalServiceOrigin(cfg.BotServiceInternalURL); err != nil {
 			return fmt.Errorf("MATTERCODEX_BOT_SERVICE_INTERNAL_URL is invalid: %w", err)
@@ -209,22 +185,6 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.RuntimeJobTTLSeconds <= 0 {
 		return fmt.Errorf("MATTERCODEX_RUNTIME_JOB_TTL_SECONDS is invalid")
-	}
-	if cfg.RuntimeRetentionEnabled {
-		if cfg.RuntimeRetentionInterval <= 0 {
-			return fmt.Errorf("MATTERCODEX_RUNTIME_RETENTION_INTERVAL is invalid")
-		}
-		if cfg.RuntimeRetentionOlderThan <= 0 {
-			return fmt.Errorf("MATTERCODEX_RUNTIME_RETENTION_OLDER_THAN is invalid")
-		}
-	}
-	if cfg.RuntimeSessionRepairEnabled {
-		if cfg.RuntimeSessionRepairInterval <= 0 {
-			return fmt.Errorf("MATTERCODEX_RUNTIME_SESSION_REPAIR_INTERVAL is invalid")
-		}
-		if cfg.RuntimeSessionRepairBatch <= 0 {
-			return fmt.Errorf("MATTERCODEX_RUNTIME_SESSION_REPAIR_BATCH is invalid")
-		}
 	}
 	if cfg.AuthCheckJobTTLSeconds <= 0 {
 		return fmt.Errorf("MATTERCODEX_CODEX_AUTH_CHECK_JOB_TTL_SECONDS is invalid")
@@ -291,15 +251,6 @@ func (cfg *Config) Validate() error {
 		}
 	}
 	return nil
-}
-
-func (cfg *Config) applyAutomationDeliveryDefaults() {
-	if cfg.AutomationDeliveryInterval == 0 {
-		cfg.AutomationDeliveryInterval = 5 * time.Second
-	}
-	if cfg.AutomationDeliveryConcurrency == 0 {
-		cfg.AutomationDeliveryConcurrency = 4
-	}
 }
 
 func (cfg *Config) applyPublishDefaults() {

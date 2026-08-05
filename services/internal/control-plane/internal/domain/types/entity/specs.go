@@ -19,6 +19,7 @@ import (
 var permissionPattern = regexp.MustCompile(
 	`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$`,
 )
+var providerAccountNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
 
 // Spec — закрытый service-owned payload одного ResourceKind.
 type Spec interface {
@@ -428,6 +429,7 @@ type RuntimeRevisionSpec struct {
 	RoleID                      string                 `json:"roleId"`
 	ChatID                      string                 `json:"chatId,omitempty"`
 	ProviderCredentialBindingID string                 `json:"providerCredentialBindingId"`
+	ProviderAccountName         string                 `json:"providerAccountName"`
 	EffectiveRuntimeSHA256      string                 `json:"effectiveRuntimeSha256"`
 	CodexModel                  string                 `json:"codexModel"`
 	CodexSandbox                string                 `json:"codexSandbox"`
@@ -451,6 +453,7 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		value.ValidateID(spec.SessionID) != nil ||
 		value.ValidateID(spec.RoleID) != nil ||
 		value.ValidateID(spec.ProviderCredentialBindingID) != nil ||
+		!providerAccountNamePattern.MatchString(spec.ProviderAccountName) ||
 		!validSHA256(spec.EffectiveRuntimeSHA256) ||
 		(spec.ChatID != "" && value.ValidateID(spec.ChatID) != nil) {
 		return errors.New("runtime revision specification is invalid")

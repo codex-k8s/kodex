@@ -963,7 +963,8 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		revisionID, organization, project, sessionID, actor,
 		enum.KindRuntimeRevision, "Runtime revision",
 		entity.RuntimeRevisionSpec{
-			ManifestSHA256: digest, ImageDigest: "sha256:" + digest,
+			ProviderAccountName: "test",
+			ManifestSHA256:      digest, ImageDigest: "sha256:" + digest,
 			PromptProfileID: promptID, PromptRevision: 1,
 			CredentialBindingIDs:   credentialIDs,
 			AuthorityPolicyVersion: 1, AuthorityPolicySHA256: digest,

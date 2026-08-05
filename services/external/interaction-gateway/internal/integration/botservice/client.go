@@ -67,8 +67,16 @@ func (client *Client) Check(ctx context.Context) error {
 
 func (client *Client) EnsureRuntimeMCPBinding(ctx context.Context,
 	input domainbot.BindingRequest) (domainbot.Binding, error) {
-	body, err := json.Marshal(map[string]string{"control_session_id": input.ControlSessionID,
-		"channel_id": input.ChannelID, "root_post_id": input.RootPostID, "bot_stable_key": input.BotStableKey})
+	body, err := json.Marshal(struct {
+		ControlSessionID string `json:"control_session_id"`
+		ChannelID        string `json:"channel_id"`
+		RootPostID       string `json:"root_post_id"`
+		BotStableKey     string `json:"bot_stable_key"`
+		ExecutionID      string `json:"execution_id"`
+		TurnID           string `json:"turn_id"`
+		Attempt          uint32 `json:"attempt"`
+	}{input.ControlSessionID, input.ChannelID, input.RootPostID, input.BotStableKey,
+		input.ExecutionID, input.TurnID, input.Attempt})
 	if err != nil {
 		return domainbot.Binding{}, errors.New("encode runtime MCP binding request")
 	}
@@ -96,6 +104,9 @@ func (client *Client) EnsureRuntimeMCPBinding(ctx context.Context,
 		ImmutableSecretRef        string `json:"immutable_secret_ref"`
 		ProviderContentVersion    string `json:"provider_content_version"`
 		ContentSHA256             string `json:"content_sha256"`
+		ExecutionID               string `json:"execution_id"`
+		TurnID                    string `json:"turn_id"`
+		Attempt                   uint32 `json:"attempt"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, (8<<10)+1))
 	decoder.DisallowUnknownFields()
@@ -103,11 +114,14 @@ func (client *Client) EnsureRuntimeMCPBinding(ctx context.Context,
 		wire.AgentSessionKey != "owner:"+input.ControlSessionID || wire.AgentSessionID <= 0 ||
 		wire.AgentSessionVersion == 0 || len(wire.AgentSessionBindingSHA256) != 64 ||
 		!strings.HasPrefix(wire.ImmutableSecretRef, "k8s-immutable-secret://") ||
-		wire.ProviderContentVersion == "" || len(wire.ContentSHA256) != 64 || uuid.Validate(input.ControlSessionID) != nil {
+		wire.ProviderContentVersion == "" || len(wire.ContentSHA256) != 64 ||
+		wire.ExecutionID != input.ExecutionID || wire.TurnID != input.TurnID || wire.Attempt != input.Attempt ||
+		uuid.Validate(input.ControlSessionID) != nil {
 		return domainbot.Binding{}, errors.New("bot-service runtime MCP binding readback is invalid")
 	}
 	return domainbot.Binding{AgentSessionKey: wire.AgentSessionKey, AgentSessionID: wire.AgentSessionID,
 		AgentSessionVersion: wire.AgentSessionVersion, AgentSessionBindingSHA256: wire.AgentSessionBindingSHA256,
+		ExecutionID: wire.ExecutionID, TurnID: wire.TurnID, Attempt: wire.Attempt,
 		ImmutableSecretRef: wire.ImmutableSecretRef, ProviderContentVersion: wire.ProviderContentVersion,
 		ContentSHA256: wire.ContentSHA256}, nil
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -117,8 +118,15 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	if err := security.EnsureWorkspaceDirectory(".matter-codex/outbox"); err != nil {
 		return err
 	}
+	if err := security.EnsureWorkspaceDirectory(".matter-codex/recovery"); err != nil {
+		return err
+	}
 	if err := materialize.Run(ctx, input); err != nil {
 		return err
+	}
+	recovery, recovering, err := output.LoadRecovery(input)
+	if err != nil || (recovering && (recovery.TurnID != input.TurnID || recovery.SourceAttempt+1 != input.Attempt)) {
+		return errors.New("load runtime output recovery")
 	}
 	// Проверка выполняется до ClaimTurn, но terminal фиксируется только после
 	// admission через signed handoff и owner transaction.
@@ -157,12 +165,18 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	}
 	state.ready.Store(true)
 	if err := client.Progress(ctx, lease,
-		controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_STATUS, 1, "Turn execution started."); err != nil {
+		controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_STATUS, 1, "Выполнение хода начато."); err != nil {
 		return errors.New("publish runtime start status")
 	}
-	if providerAuthenticationErr == nil {
+	if recovering {
 		if err := client.Progress(ctx, lease,
-			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS, 1, "Codex is executing the turn."); err != nil {
+			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS, 1,
+			"Восстанавливается доставка выходных артефактов без повторного запуска модели."); err != nil {
+			return errors.New("publish runtime recovery progress")
+		}
+	} else if providerAuthenticationErr == nil {
+		if err := client.Progress(ctx, lease,
+			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_PROGRESS, 1, "Codex выполняет ход."); err != nil {
 			return errors.New("publish runtime progress")
 		}
 	}
@@ -176,7 +190,11 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		<-watchDone
 	}()
 	result := codex.Result{Outcome: "FAILED", FailureCode: "authentication_required"}
-	if providerAuthenticationErr == nil {
+	if recovering {
+		result = codex.Result{Outcome: recovery.OriginalOutcome, FinalMessage: recovery.TerminalMarkdown,
+			SessionID: recovery.CodexSessionID, ArchiveRelativePath: recovery.ArchiveRelativePath,
+			ArchiveSHA256: recovery.ArchiveSHA256}
+	} else if providerAuthenticationErr == nil {
 		prompt, readErr := os.ReadFile(filepath.Join(input.WorkspaceRoot, input.PromptPath))
 		if readErr != nil || len(prompt) == 0 || len(prompt) > 1<<20 || !utf8.Valid(prompt) {
 			return errors.New("read immutable turn prompt")
@@ -202,19 +220,47 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		var nextAction string
 		outcome, terminalMarkdown, nextAction = codex.TerminalPresentation(result.FailureCode)
 		if nextAction == "REAUTH_DEVICE_CODE" {
-			terminalMarkdown += "\n\nКоманда: `/codex openai auth " + input.ProviderBindingID + "`."
+			terminalMarkdown += "\n\nКоманда: `/agents openai auth " + input.ProviderAccountName + "`."
 		}
 	} else if terminalMarkdown == "" {
 		terminalMarkdown = "Выполнение завершилось без итогового сообщения."
 	}
-	outputs, err := output.Build(ctx, input, terminalMarkdown, result.ArchivePath)
-	if err != nil || len(outputs) == 0 {
+	var built output.BuildResult
+	if recovering {
+		built, err = output.Resume(ctx, input, recovery)
+	} else {
+		built, err = output.Build(ctx, input, terminalMarkdown, result.ArchivePath)
+	}
+	if err != nil || len(built.Outputs) == 0 {
 		return errors.New("build terminal runtime outputs")
+	}
+	outputs := built.Outputs
+	originalOutcome := outcome
+	if recovering {
+		originalOutcome = recovery.OriginalOutcome
+	}
+	if len(built.Failed) != 0 {
+		recoverySourceExecutionID := input.ExecutionID
+		if recovering {
+			recoverySourceExecutionID = recovery.SourceExecutionID
+		}
+		journal := output.RecoveryJournal{TurnID: input.TurnID, SourceExecutionID: recoverySourceExecutionID, SourceAttempt: input.Attempt,
+			OriginalOutcome: originalOutcome, TerminalMarkdown: string(outputs[0].Payload),
+			CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
+			ArchiveSHA256: result.ArchiveSHA256, Existing: slices.Clone(outputs[1:]), Failed: built.Failed}
+		if err := output.SaveRecovery(input, journal); err != nil {
+			return errors.New("save runtime output recovery")
+		}
+		outcome = "FAILED"
 	}
 	terminalDigest := sha256.Sum256([]byte(outcome + "\x00" + result.SessionID + "\x00" +
 		result.ArchiveSHA256 + "\x00" + outputs[0].SHA256))
 	terminalReference := "codex://sessions/" + result.SessionID + "/executions/" + input.ExecutionID
-	archiveProvenance := "codex-app-server-rollout-v1:" + input.ExecutionID + ":" + result.ArchiveRelativePath + ":" + result.ArchiveSHA256
+	archiveExecutionID := input.ExecutionID
+	if recovering {
+		archiveExecutionID = recovery.SourceExecutionID
+	}
+	archiveProvenance := "codex-app-server-rollout-v1:" + archiveExecutionID + ":" + result.ArchiveRelativePath + ":" + result.ArchiveSHA256
 	if result.SessionID == "" && outcome == "BLOCKED" {
 		terminalReference = "preflight://provider-auth/" + input.ExecutionID
 		archiveProvenance = ""
@@ -233,7 +279,13 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		ArchiveProvenance:   archiveProvenance,
 		ObservedAt:          time.Now().UTC()}
 	state.ready.Store(false)
-	return handoff.Publish(ctx, input, handoffValue)
+	publishErr := handoff.Publish(ctx, input, handoffValue)
+	if publishErr == nil && recovering && len(built.Failed) == 0 {
+		if err := output.ClearRecovery(input); err != nil {
+			return err
+		}
+	}
+	return publishErr
 }
 
 func waitForAdmission(ctx context.Context, client *controlplane.Client) (controlplane.Execution, error) {
@@ -313,7 +365,7 @@ func executeWithCapacityRetry(ctx context.Context, input model.Input, prompt []b
 		state.retries.WithLabelValues("capacity").Inc()
 		if err := client.Progress(ctx, lease,
 			controlplanev1.RuntimeProgressKind_RUNTIME_PROGRESS_KIND_STATUS, uint32(retry+2),
-			fmt.Sprintf("Provider capacity is temporarily unavailable; retrying in %s.", delay)); err != nil {
+			fmt.Sprintf("Временная нехватка мощности провайдера; повтор через %s.", delay)); err != nil {
 			return codex.Result{}, errors.New("publish capacity retry status")
 		}
 		timer := time.NewTimer(delay)

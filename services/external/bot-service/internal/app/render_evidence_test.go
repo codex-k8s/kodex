@@ -64,8 +64,8 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("поиск отрендеренных YAML: %v", err)
 	}
-	if len(yamlFiles) != 8 {
-		t.Fatalf("число YAML-файлов = %d, ожидалось 8", len(yamlFiles))
+	if len(yamlFiles) != 9 {
+		t.Fatalf("число YAML-файлов = %d, ожидалось 9", len(yamlFiles))
 	}
 	objectCount := 0
 	var runtimeQuota map[string]any
@@ -108,8 +108,8 @@ func TestBotServiceRenderCountsNonEmptyObjects(t *testing.T) {
 			t.Fatalf("закрытие %s: %v", filepath.Base(yamlFile), err)
 		}
 	}
-	if objectCount != 18 {
-		t.Fatalf("число Kubernetes objects = %d, ожидалось 18", objectCount)
+	if objectCount != 20 {
+		t.Fatalf("число Kubernetes objects = %d, ожидалось 20", objectCount)
 	}
 	assertRenderedRuntimeResourcePolicy(t, runtimeQuota, runtimeLimitRange)
 }

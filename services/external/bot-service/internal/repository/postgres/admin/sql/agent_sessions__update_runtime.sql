@@ -11,10 +11,12 @@ update matter_codex_agent_sessions set
 	pod_name = case when $7 <> '' then $7 else pod_name end,
 	pvc_name = case when $8 <> '' then $8 else pvc_name end,
 	token_secret_ref = case when $9 <> '' then $9 else token_secret_ref end,
+	capabilities = case when $10 <> '' then $10::jsonb else capabilities end,
 	last_activity_at = now(),
-	expires_at = case when $10 > 0 then now() + make_interval(secs => $10::int) else expires_at end,
+	expires_at = case when $12 > 0 then now() + make_interval(secs => $12::int) else expires_at end,
 	updated_at = now()
 where session_key = $1
+	and capabilities = coalesce(nullif($11::text, '')::jsonb, capabilities)
 returning
 	id,
 	session_key,

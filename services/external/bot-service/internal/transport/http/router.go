@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -18,7 +17,6 @@ import (
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/value"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
-	controlcenterapi "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/generated"
 	transportmodels "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http/models"
 	githubapi "github.com/google/go-github/v88/github"
 	"github.com/google/uuid"
@@ -37,11 +35,9 @@ const (
 	pathAgentsAction      = "/mattermost/actions/agents"
 	pathAgentsDialog      = "/mattermost/dialogs/agents"
 	pathGitHubWebhook     = "/github/webhook"
-	pathAgentSessions     = "/internal/agent-sessions/"
 	pathRuntimeMCPBinding = "/internal/runtime-mcp-bindings"
 	pathMCPSessions       = "/mcp/sessions/"
 	pathControlCenter     = "/control-center/"
-	pathAutomationHistory = "/api/control-center/v1/automation-runs"
 	dialogCallbackResult  = "agents_dialog_result"
 )
 
@@ -77,8 +73,6 @@ type RouterConfig struct {
 	MattermostSiteURL               string
 	MattermostInternalURL           string
 	ThreadPublisher                 statusservice.MattermostThreadPublisher
-	Automations                     *statusservice.AutomationService
-	ControlCenterReadToken          string
 	ControlCenterAssetsDir          string
 	MattermostResolver              mattermostDNSResolver
 	MattermostDialer                mattermostContextDialer
@@ -99,9 +93,6 @@ type Router struct {
 	interactionSecurity             *statusservice.InteractionSecurityService
 	mattermostResponses             *mattermostResponseClient
 	threadPublisher                 statusservice.MattermostThreadPublisher
-	automations                     *statusservice.AutomationService
-	controlCenterReadTokenHash      [sha256.Size]byte
-	controlCenterConfigured         bool
 	logger                          *slog.Logger
 	runtimeMCPBindingClientSPIFFEID string
 	mcpHandler                      http.Handler
@@ -125,14 +116,9 @@ func NewRouter(cfg RouterConfig) *Router {
 		interactionSecurity:             cfg.InteractionSecurity,
 		mattermostResponses:             newMattermostResponseClient(cfg.MattermostSiteURL, cfg.MattermostInternalURL, cfg.MattermostResolver, cfg.MattermostDialer),
 		threadPublisher:                 cfg.ThreadPublisher,
-		automations:                     cfg.Automations,
 		logger:                          cfg.Logger,
 		runtimeMCPBindingClientSPIFFEID: cfg.RuntimeMCPBindingClientSPIFFEID,
 		mux:                             http.NewServeMux(),
-	}
-	if token := strings.TrimSpace(cfg.ControlCenterReadToken); token != "" {
-		router.controlCenterReadTokenHash = sha256.Sum256([]byte(token))
-		router.controlCenterConfigured = true
 	}
 	if cfg.SessionService != nil {
 		router.mcpHandler = newMCPHandler(cfg.SessionService, cfg.MaxMCPRequestBodyBytes)
@@ -150,12 +136,10 @@ func NewRouter(cfg RouterConfig) *Router {
 	router.register(pathAgentsAction, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentsAction))
 	router.register(pathAgentsDialog, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentsDialog))
 	router.register(pathGitHubWebhook, RouteBoundaryPublic, http.HandlerFunc(router.handleGitHubWebhook))
-	router.register(pathAgentSessions, RouteBoundaryCluster, http.HandlerFunc(router.handleAgentSessionInternal))
 	router.register(pathRuntimeMCPBinding, RouteBoundaryCluster, http.HandlerFunc(router.handleRuntimeMCPBinding))
 	if router.mcpHandler != nil {
 		router.register(pathMCPSessions, RouteBoundaryCluster, router.mcpHandler)
 	}
-	router.register(pathAutomationHistory, RouteBoundaryPublic, http.HandlerFunc(router.handleAutomationHistory))
 	assets := http.NotFoundHandler()
 	if assetsDir := strings.TrimSpace(cfg.ControlCenterAssetsDir); assetsDir != "" {
 		assets = http.StripPrefix(pathControlCenter, http.FileServer(http.Dir(assetsDir)))
@@ -235,60 +219,6 @@ func (router *Router) handleReady(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, transportmodels.ReadyResponse{Status: "ready", Service: "matter-codex-bot-service"})
 }
 
-func (router *Router) handleAutomationHistory(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, controlcenterapi.ErrorResponse{Error: "method_not_allowed"})
-		return
-	}
-	if !router.controlCenterConfigured || router.automations == nil {
-		writeJSON(w, http.StatusServiceUnavailable, controlcenterapi.ErrorResponse{Error: "control_center_unavailable"})
-		return
-	}
-	provided, bearer := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	provided = strings.TrimSpace(provided)
-	providedHash := sha256.Sum256([]byte(provided))
-	if !bearer || provided == "" || subtle.ConstantTimeCompare(providedHash[:], router.controlCenterReadTokenHash[:]) != 1 {
-		writeJSON(w, http.StatusUnauthorized, controlcenterapi.ErrorResponse{Error: "unauthorized"})
-		return
-	}
-	limit := 50
-	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
-		parsed, err := strconv.Atoi(rawLimit)
-		if err != nil || parsed < 1 || parsed > 100 {
-			writeJSON(w, http.StatusBadRequest, controlcenterapi.ErrorResponse{Error: "invalid_limit"})
-			return
-		}
-		limit = parsed
-	}
-	items, err := router.automations.ListHistory(r.Context(), limit)
-	if err != nil {
-		router.logWarn("automation history read failed", "error", err)
-		writeJSON(w, http.StatusServiceUnavailable, controlcenterapi.ErrorResponse{Error: "automation_history_unavailable"})
-		return
-	}
-	response := controlcenterapi.AutomationHistoryResponse{Items: make([]controlcenterapi.AutomationHistoryItem, 0, len(items))}
-	for _, item := range items {
-		mapped := controlcenterapi.AutomationHistoryItem{
-			ScheduleRunId:  item.ScheduledRunPublicID,
-			Status:         controlcenterapi.AutomationHistoryItemStatus(item.Status),
-			Outcome:        controlcenterapi.AutomationHistoryItemOutcome(item.Outcome),
-			DeliveryStatus: controlcenterapi.AutomationHistoryItemDeliveryStatus(item.DeliveryStatus),
-			NextAction:     controlcenterapi.AutomationHistoryItemNextAction(item.NextAction),
-			UpdatedAt:      item.UpdatedAt.UTC(),
-		}
-		if item.OwnerAttentionID > 0 {
-			mapped.OwnerAttentionId = &item.OwnerAttentionID
-		}
-		if item.HumanDecisionStatus != "" {
-			status := controlcenterapi.AutomationHistoryItemHumanDecisionStatus(item.HumanDecisionStatus)
-			mapped.HumanDecisionStatus = &status
-		}
-		response.Items = append(response.Items, mapped)
-	}
-	writeJSON(w, http.StatusOK, response)
-}
-
 func (router *Router) handleAgentsSlash(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
@@ -356,9 +286,8 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_agents_action"})
 		return
 	}
-	action := contextString(request.Context, "action")
-	if contextString(request.Context, "kind") == "agent_turn" && (action == "stop_turn" || action == "recover_stop_turn") {
-		router.handleAgentTurnStopAction(w, r, request)
+	if contextString(request.Context, "kind") == "agent_turn" {
+		writeJSON(w, http.StatusGone, transportmodels.ErrorResponse{Error: "legacy_agent_turn_action_removed"})
 		return
 	}
 	interaction, err := router.interactionSecurity.AuthenticateAction(r.Context(), statusservice.ActionCallback{
@@ -369,10 +298,6 @@ func (router *Router) handleAgentsAction(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		router.writeInteractionDenied(w, err)
-		return
-	}
-	if contextString(request.Context, "kind") == "agent_turn" {
-		router.handleAgentTurnAction(w, r, request, interaction)
 		return
 	}
 	if router.slashService == nil {
@@ -756,94 +681,6 @@ func (router *Router) handleGitHubWebhook(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (router *Router) handleAgentSessionInternal(w http.ResponseWriter, r *http.Request) {
-	if router.sessionService == nil {
-		writeJSON(w, http.StatusServiceUnavailable, transportmodels.ErrorResponse{Error: "agent_session_service_not_configured"})
-		return
-	}
-	sessionKey, action, ok := parseAgentSessionInternalPath(r.URL.Path)
-	if !ok {
-		writeJSON(w, http.StatusNotFound, transportmodels.ErrorResponse{Error: "not_found"})
-		return
-	}
-	token := bearerToken(r.Header.Get("Authorization"))
-	if token == "" {
-		writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "missing_bearer_token"})
-		return
-	}
-	switch action {
-	case "readiness":
-		if r.Method != http.MethodPost {
-			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
-			return
-		}
-		if _, err := router.sessionService.Snapshot(r.Context(), sessionKey, token); err != nil {
-			writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "agent_session_readiness_failed"})
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	case "snapshot":
-		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
-			return
-		}
-		result, err := router.sessionService.Snapshot(r.Context(), sessionKey, token)
-		if err != nil {
-			router.logWarn("agent session snapshot failed", "error", err)
-			writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "agent_session_snapshot_failed"})
-			return
-		}
-		writeJSON(w, http.StatusOK, result)
-	case "turns/claim":
-		if r.Method != http.MethodPost {
-			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
-			return
-		}
-		result, err := router.sessionService.ClaimNextTurn(r.Context(), sessionKey, token)
-		if err != nil {
-			router.logWarn("agent session claim failed", "error", err)
-			writeJSON(w, http.StatusUnauthorized, transportmodels.ErrorResponse{Error: "agent_session_claim_failed"})
-			return
-		}
-		writeJSON(w, http.StatusOK, result)
-	case "turns/complete":
-		if r.Method != http.MethodPost {
-			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
-			return
-		}
-		var command statusservice.CompleteAgentSessionTurnCommand
-		if err := json.NewDecoder(r.Body).Decode(&command); err != nil {
-			writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_complete_payload"})
-			return
-		}
-		if err := router.sessionService.CompleteTurn(r.Context(), sessionKey, token, command); err != nil {
-			router.logWarn("agent session complete failed", "error", err)
-			writeJSON(w, http.StatusBadGateway, transportmodels.ErrorResponse{Error: "agent_session_complete_failed"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	case "turns/status":
-		if r.Method != http.MethodPost {
-			writeJSON(w, http.StatusMethodNotAllowed, transportmodels.ErrorResponse{Error: "method_not_allowed"})
-			return
-		}
-		var command statusservice.UpdateAgentSessionTurnStatusCommand
-		if err := json.NewDecoder(r.Body).Decode(&command); err != nil {
-			writeJSON(w, http.StatusBadRequest, transportmodels.ErrorResponse{Error: "invalid_status_payload"})
-			return
-		}
-		result, err := router.sessionService.UpdateTurnSystemStatus(r.Context(), sessionKey, token, command)
-		if err != nil {
-			router.logWarn("agent session status update failed", "error", err)
-			writeJSON(w, http.StatusBadGateway, transportmodels.ErrorResponse{Error: "agent_session_status_failed"})
-			return
-		}
-		writeJSON(w, http.StatusOK, result)
-	default:
-		writeJSON(w, http.StatusNotFound, transportmodels.ErrorResponse{Error: "not_found"})
-	}
-}
-
 func (router *Router) logWarn(message string, args ...any) {
 	if router.logger != nil {
 		router.logger.Warn(message, args...)
@@ -1042,18 +879,6 @@ func contextInt64List(context map[string]any, key string) []int64 {
 		}
 	}
 	return items
-}
-
-func parseAgentSessionInternalPath(path string) (string, string, bool) {
-	rest := strings.TrimPrefix(path, pathAgentSessions)
-	if rest == path || rest == "" {
-		return "", "", false
-	}
-	sessionKey, action, ok := strings.Cut(rest, "/")
-	if !ok || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(action) == "" {
-		return "", "", false
-	}
-	return strings.TrimSpace(sessionKey), strings.TrimSpace(action), true
 }
 
 func bearerToken(header string) string {

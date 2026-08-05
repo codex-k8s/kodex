@@ -15,6 +15,9 @@ spec:
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: runtime-controller, app.kubernetes.io/component: role-runtime, runtime.mattercodex.dev/managed: "true"}}
+      ports: [{protocol: TCP, port: 8443}]
+    - from:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattermost}}
           podSelector: {matchLabels: {app.kubernetes.io/name: mattermost}}
       ports: [{protocol: TCP, port: 8443}]

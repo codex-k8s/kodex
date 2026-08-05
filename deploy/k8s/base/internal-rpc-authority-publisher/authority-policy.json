@@ -66,7 +66,6 @@
         "allowed_operation_ids": [
           "control.agent-runner.readiness",
           "control.turn.claim",
-          "control.turn.renew",
           "control.agent-runtime-execution.get",
           "control.runtime-execution.progress"
         ],
@@ -1333,35 +1332,6 @@
         },
         "operation_id": "control.turn.claim",
         "permission": "controlplane.turn.claim",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
-        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.agent-session",
-        "authority_sources": [
-          "AGENT_SESSION",
-          "DOMAIN_STATE"
-        ],
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
-        "caller_workload_id": "agent-runner",
-        "full_method": "/controlplane.v1.ControlPlaneService/RenewTurn",
-        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "local_caller": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "local_target": {
-          "primary_gid": 10001,
-          "shared_fs_gid": 29000,
-          "uid": 10001
-        },
-        "operation_id": "control.turn.renew",
-        "permission": "controlplane.turn.renew",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -2684,6 +2654,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 14,
+  "policy_revision": 15,
   "v": 1
 }

@@ -38,6 +38,37 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	}
 }
 
+func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
+	for sandbox, expected := range map[string]string{"read-only": ":read-only", "workspace-write": ":workspace"} {
+		t.Run(sandbox, func(t *testing.T) {
+			workspace := t.TempDir()
+			home := filepath.Join(workspace, ".matter-codex", "state", "codex-home")
+			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
+			digest := sha256.Sum256(auth)
+			input := model.Input{WorkspaceRoot: workspace, CodexHome: home, CodexModel: "gpt-5",
+				CodexApprovalPolicy: "never", CodexSandbox: sandbox,
+				CredentialFiles: model.CredentialFiles{CodexAuthSHA256: hex.EncodeToString(digest[:])}}
+			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(filepath.Join(home, "config.toml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config runtimeConfig
+			if _, err := toml.Decode(string(raw), &config); err != nil || config.Permissions[config.DefaultPermissions].Extends != expected {
+				t.Fatalf("sandbox %s expanded to %#v: %v", sandbox, config.Permissions, err)
+			}
+		})
+	}
+	if _, err := codexPermissionBase("danger-full-access"); err == nil {
+		t.Fatal("danger-full-access was accepted")
+	}
+	if _, err := codexPermissionBase("unknown"); err == nil {
+		t.Fatal("unknown sandbox was accepted")
+	}
+}
+
 func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
 	auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
 	digest := sha256.Sum256(auth)

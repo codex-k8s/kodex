@@ -538,7 +538,7 @@ func (service *Service) ClaimRuntimeExecution(
 			slices.SortFunc(credentialSnapshot, func(left, right credentialSnapshotEntry) int {
 				return strings.Compare(left.ID, right.ID)
 			})
-			executionID := uuid.NewString()
+			executionID := runtimeExecutionID(resolved.Turn.ID, resolved.TurnSpec.Attempt)
 			credentialSnapshotSHA256, err := canonicalHash(struct {
 				ExecutionID string
 				Credentials []credentialSnapshotEntry
@@ -644,6 +644,14 @@ func (service *Service) ClaimRuntimeExecution(
 		err = service.issueRuntimeWorkloadTicket(&result)
 	}
 	return result, err
+}
+
+func runtimeExecutionID(turnID string, attempt uint32) string {
+	namespace, err := uuid.Parse(turnID)
+	if err != nil {
+		namespace = uuid.NameSpaceURL
+	}
+	return uuid.NewSHA1(namespace, []byte(fmt.Sprintf("runtime-execution:%d", attempt))).String()
 }
 
 func (service *Service) runtimeMaterializations(

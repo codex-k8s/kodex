@@ -6,7 +6,6 @@ func AgentRunnerOperations() map[string]string {
 	return map[string]string{
 		"control.agent-runner.readiness":      controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.turn.claim":                  controlplanev1.ControlPlaneService_ClaimTurn_FullMethodName,
-		"control.turn.renew":                  controlplanev1.ControlPlaneService_RenewTurn_FullMethodName,
 		"control.agent-runtime-execution.get": controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
 		"control.runtime-execution.progress":  controlplanev1.ControlPlaneService_ReportRuntimeProgress_FullMethodName,
 	}

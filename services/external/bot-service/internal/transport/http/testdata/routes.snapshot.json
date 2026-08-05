@@ -36,20 +36,12 @@
     "boundary": "public"
   },
   {
-    "path": "/internal/agent-sessions/",
-    "boundary": "cluster"
-  },
-  {
     "path": "/internal/runtime-mcp-bindings",
     "boundary": "cluster"
   },
   {
     "path": "/mcp/sessions/",
     "boundary": "cluster"
-  },
-  {
-    "path": "/api/control-center/v1/automation-runs",
-    "boundary": "public"
   },
   {
     "path": "/control-center",

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
+	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1403,15 +1404,31 @@ func (runner *Runner) GetMattermostBotTokenSecret(ctx context.Context, secretNam
 		return runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("mattermost bot token secret is missing token")
 	}
 	return runtimerepo.MattermostBotTokenSecret{
-		SecretName: secretName,
-		Namespace:  runner.namespace,
-		Token:      token,
-		Integrity:  secretIntegrity(secret, "token", secret.Data["token"]),
+		SecretName:  secretName,
+		Namespace:   runner.namespace,
+		Token:       token,
+		Integrity:   secretIntegrity(secret, "token", secret.Data["token"]),
+		ExecutionID: secret.Annotations["runtime.mattercodex.dev/execution-id"],
+		TurnID:      secret.Annotations["runtime.mattercodex.dev/turn-id"],
+		Attempt:     uint32(parsePositiveInt64(secret.Annotations["runtime.mattercodex.dev/attempt"])),
 	}, nil
 }
 
-func (runner *Runner) EnsureRuntimeMCPToken(ctx context.Context, sessionKey string) (runtimerepo.RuntimeMCPTokenBinding, error) {
-	digest := sha256.Sum256([]byte(sessionKey))
+func parsePositiveInt64(value string) int64 {
+	parsed, err := strconv.ParseInt(value, 10, 32)
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
+}
+
+func (runner *Runner) EnsureRuntimeMCPToken(ctx context.Context, input runtimerepo.RuntimeMCPTokenInput) (runtimerepo.RuntimeMCPTokenBinding, error) {
+	if input.SessionKey == "" || uuid.Validate(input.ExecutionID) != nil || uuid.Validate(input.TurnID) != nil || input.Attempt == 0 {
+		return runtimerepo.RuntimeMCPTokenBinding{}, errors.New("runtime MCP token scope is invalid")
+	}
+	digest := sha256.Sum256([]byte(strings.Join([]string{input.SessionKey, input.ExecutionID, input.TurnID, strconv.FormatUint(uint64(input.Attempt), 10)}, "\x00")))
+	sessionDigest := sha256.Sum256([]byte(input.SessionKey))
+	sessionLabel := hex.EncodeToString(sessionDigest[:12])
 	name := "matter-codex-mcp-" + hex.EncodeToString(digest[:12])
 	secrets := runner.client.CoreV1().Secrets(runner.namespace)
 	secret, err := secrets.Get(ctx, name, metav1.GetOptions{})
@@ -1423,10 +1440,19 @@ func (runner *Runner) EnsureRuntimeMCPToken(ctx context.Context, sessionKey stri
 		immutable := true
 		secret, err = secrets.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name,
 			Labels: map[string]string{"app.kubernetes.io/name": "matter-codex-bot-service",
-				"app.kubernetes.io/component": "runtime-mcp-session-token"}}, Immutable: &immutable,
+				"app.kubernetes.io/component":            "runtime-mcp-session-token",
+				"runtime.mattercodex.dev/session-sha256": sessionLabel}, Annotations: map[string]string{
+				"runtime.mattercodex.dev/execution-id": input.ExecutionID,
+				"runtime.mattercodex.dev/turn-id":      input.TurnID,
+				"runtime.mattercodex.dev/attempt":      strconv.FormatUint(uint64(input.Attempt), 10),
+			}}, Immutable: &immutable,
 			Type: corev1.SecretTypeOpaque, Data: map[string][]byte{"token": []byte(hex.EncodeToString(tokenRaw))}}, metav1.CreateOptions{})
 	}
-	if err != nil || secret.Immutable == nil || !*secret.Immutable || secret.Labels["app.kubernetes.io/component"] != "runtime-mcp-session-token" {
+	if err != nil || secret.Immutable == nil || !*secret.Immutable || secret.Labels["app.kubernetes.io/component"] != "runtime-mcp-session-token" ||
+		secret.Labels["runtime.mattercodex.dev/session-sha256"] != sessionLabel ||
+		secret.Annotations["runtime.mattercodex.dev/execution-id"] != input.ExecutionID ||
+		secret.Annotations["runtime.mattercodex.dev/turn-id"] != input.TurnID ||
+		secret.Annotations["runtime.mattercodex.dev/attempt"] != strconv.FormatUint(uint64(input.Attempt), 10) {
 		return runtimerepo.RuntimeMCPTokenBinding{}, errors.New("runtime MCP token secret is unavailable")
 	}
 	token := strings.TrimSpace(string(secret.Data["token"]))
@@ -1434,7 +1460,34 @@ func (runner *Runner) EnsureRuntimeMCPToken(ctx context.Context, sessionKey stri
 		return runtimerepo.RuntimeMCPTokenBinding{}, errors.New("runtime MCP token secret is invalid")
 	}
 	integrity := secretIntegrity(secret, "token", secret.Data["token"])
-	return runtimerepo.RuntimeMCPTokenBinding{Namespace: runner.namespace, SecretName: name, Integrity: integrity}, nil
+	return runtimerepo.RuntimeMCPTokenBinding{Namespace: runner.namespace, SecretName: name, Integrity: integrity,
+		ExecutionID: input.ExecutionID, TurnID: input.TurnID, Attempt: input.Attempt}, nil
+}
+
+func (runner *Runner) ReconcileRuntimeMCPTokens(ctx context.Context, sessionKey, currentSecretName string) error {
+	if sessionKey == "" || currentSecretName == "" {
+		return errors.New("runtime MCP token reconciliation scope is invalid")
+	}
+	digest := sha256.Sum256([]byte(sessionKey))
+	selector := labels.SelectorFromSet(labels.Set{
+		"app.kubernetes.io/component":            "runtime-mcp-session-token",
+		"runtime.mattercodex.dev/session-sha256": hex.EncodeToString(digest[:12]),
+	}).String()
+	secrets, err := runner.client.CoreV1().Secrets(runner.namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return errors.New("list predecessor runtime MCP tokens")
+	}
+	for _, secret := range secrets.Items {
+		if secret.Name == currentSecretName {
+			continue
+		}
+		if err := runner.client.CoreV1().Secrets(runner.namespace).Delete(ctx, secret.Name, metav1.DeleteOptions{
+			Preconditions: &metav1.Preconditions{UID: &secret.UID, ResourceVersion: &secret.ResourceVersion},
+		}); err != nil && !apierrors.IsNotFound(err) {
+			return errors.New("delete predecessor runtime MCP token")
+		}
+	}
+	return nil
 }
 
 func (runner *Runner) GetRunStatus(ctx context.Context, runID string) (runtimerepo.RunStatus, error) {

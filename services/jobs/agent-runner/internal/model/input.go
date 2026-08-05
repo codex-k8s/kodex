@@ -80,6 +80,8 @@ type Input struct {
 	Attempt                    uint32            `json:"attempt"`
 	SessionKey                 string            `json:"session_key"`
 	ProviderBindingID          string            `json:"provider_binding_id"`
+	ProviderAccountName        string            `json:"provider_account_name"`
+	MCPBindingVersion          uint64            `json:"mcp_binding_version"`
 	ProviderBindingVersion     uint64            `json:"provider_binding_version"`
 	ProviderBindingSHA256      string            `json:"provider_binding_sha256"`
 	CredentialSnapshotSHA256   string            `json:"credential_snapshot_sha256"`
@@ -146,7 +148,8 @@ func (input Input) Validate() error {
 	}
 	if input.Schema != InputSchemaV2 || input.ExecutionVersion == 0 || input.Fence == 0 ||
 		input.GrantGeneration == 0 || input.RuntimeRevisionVersion == 0 || input.Attempt == 0 ||
-		input.ProviderBindingVersion == 0 || input.SessionKey == "" || len(input.SessionKey) > 256 ||
+		input.ProviderBindingVersion == 0 || input.MCPBindingVersion == 0 || input.SessionKey == "" || len(input.SessionKey) > 256 ||
+		!regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`).MatchString(input.ProviderAccountName) ||
 		!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(input.AgentProfile) ||
 		!regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`).MatchString(input.CodexModel) ||
 		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write") ||

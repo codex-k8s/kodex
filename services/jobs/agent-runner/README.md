@@ -113,14 +113,15 @@ bounded terminal Markdown. Inline handoff остаётся малым; круп�
 `CODEX_HOME` всегда существует в session PVC. Перед каждым ходом provider
 container создаёт новый `config.toml`, проверяет exact digest `auth.json` и
 держит его только для app-server до завершения turn. Custom permission profile
-на базе `:workspace` задаёт deny-read для `CODEX_HOME`, `/proc`, projected
+выбирает exact base `read-only` → `:read-only` либо `workspace-write` →
+`:workspace`, затем задаёт deny-read для `CODEX_HOME`, `/proc`, projected
 secrets и authority paths; shell env имеет только bounded `PATH` и `HOME`.
 Настоящий session MCP bearer и mTLS keys остаются в trusted runner-owned UDS
 authority proxy. Provider-side loopback bridge не содержит этих credentials;
 его соединение проверяется по `SO_PEERCRED` UID 10002. App-server получает
 только свежую локальную capability через `bearer_token_env_var`; model shell не
 наследует её и не имеет network allow.
-`danger-full-access` и caller sandbox override закрыто отклоняются.
+`danger-full-access`, неизвестный режим и caller sandbox override закрыто отклоняются.
 Структурированный thread ID принимается только из
 коррелированного `thread/start|resume` response и сверяется с server-owned ID.
 Stderr и provider `message` ограничиваются и отбрасываются: ни одно из них не
@@ -159,18 +160,28 @@ cancel readback. Любой terminal execution сразу удаляет executi
 с provider sidecar; retained PVC остаётся единственным warm state, а successor
 всегда получает новый Pod и свежие mounts.
 
+Если provider завершился, но staging хотя бы одного output не прошёл,
+terminal становится `FAILED`, а trusted runner сохраняет protected checksum
+journal и exact source digest на retained PVC. Card Retry создаёт новую attempt,
+которая повторяет только owner staging и signed handoff: app-server/model не
+запускается, уже зарегистрированные refs не дублируются. Journal удаляется
+только после принятого recovery handoff.
+
 Перед каждым `EnqueueTurn` и созданием свежей RuntimeRevision
 `interaction-gateway` вызывает существующий
 bot-service transport producer по TLS 1.3/mTLS. Тот разрешает exact
-channel/root/bot `AgentSession`, создаёт immutable `TokenSecretRef` и возвращает
-только revision/digests. Readback повторяется перед каждым Turn: новый Secret
-создаёт новую binding revision, а exact равный readback идемпотентен.
+channel/root/bot `AgentSession`, создаёт новый cryptographically random
+immutable `TokenSecretRef` для exact execution/turn/attempt и возвращает только
+revision/digests. Монотонная binding revision и current tuple меняются одной
+AgentSession transaction; predecessor bearer сразу отклоняется, а Secret
+удаляется best-effort reconciliation. Exact равный readback идемпотентен.
 `BindSessionMCP` закрепляет server-owned credential
 binding; credential broker копирует exact Secret только в trusted container.
 Required proxy обращается к
 `matter-codex-bot-service.mattercodex-system.svc:8443/mcp/sessions/<session>`
-с exact SNI/CA/client certificate и настоящим session bearer. Stale secret или
-чужая Session закрывают readiness до `ClaimTurn`.
+с exact SNI/CA/client certificate и настоящим execution-fenced session bearer.
+Stale secret, revision, execution tuple или чужая Session закрывают readiness
+до `ClaimTurn`.
 
 ## Проверенная документация Codex
 

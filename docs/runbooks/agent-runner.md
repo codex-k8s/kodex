@@ -39,12 +39,17 @@ updated: 2026-08-04
    ConfigMap read и handoff ConfigMap read/update, без `secrets/get`. Убедиться,
    что `provider-runtime` UID 10002 не имеет authority/credential/Kubernetes
    mounts и общается с runner только через protected UDS. Он видит session PVC
-   для app-server, но model shell работает под OS-enforced `:workspace` profile
-   с deny на `CODEX_HOME`, `/proc`, authority paths и без inherited env/network.
+   для app-server, но model shell получает закрытый профиль: `read-only`
+   соответствует exact `:read-only`, а `workspace-write` — exact `:workspace`;
+   оба добавляют deny на `CODEX_HOME`, `/proc`, authority paths и не наследуют
+   authority env. Неизвестный режим и `danger-full-access` отклоняются.
    Содержимое пользовательских files не выводить.
 6. Проверить, что Session MCP binding перед текущим Turn получил свежий
-   bot-service `TokenSecretRef` readback, вошёл в RuntimeRevision и был скопирован
-   credential broker только в trusted container. URL/SNI должны указывать на
+   bot-service `TokenSecretRef` readback с exact execution/turn/attempt и
+   монотонной binding revision, вошёл в RuntimeRevision и был скопирован
+   credential broker только в trusted container. Новый binding атомарно
+   становится current в AgentSession; predecessor bearer немедленно перестаёт
+   проходить consumer fence, а удаление Secret повторяет reconciler. URL/SNI должны указывать на
    `matter-codex-bot-service`, а readiness проходить через тот же UDS
    `SO_PEERCRED` proxy и TLS 1.3/mTLS/bearer transport.
 7. Проверить durable interaction delivery и provider receipt у owner readback.
@@ -63,9 +68,9 @@ updated: 2026-08-04
 | incident after exit | отсутствующий/invalid signed handoff | сохранить Pod/PVC, проверить key trust overlap и ConfigMap RBAC |
 | resume отклонён | app-server rollout path/type/link-count/digest/provenance или provider binding не совпал | сохранить PVC, проверить owner RuntimeExecution и restore evidence; не заменять archive вручную |
 | delivery pending | interaction-gateway временно недоступен | оставить owner row для reclaim; не публиковать в Mattermost вручную |
-| отдельный output не сохранён | owner staging, S3 readback или Artifact registration не завершены | terminal Markdown должен сохраниться с bounded per-artifact outcome; не загружать файл вручную |
+| отдельный output не сохранён | owner staging, S3 readback или Artifact registration не завершены | terminal `FAILED` сохраняет protected recovery journal; card Retry запускает новую attempt только для доставки immutable bytes, без повторного вызова модели; не загружать файл вручную |
 | capacity retries | exact `CodexErrorInfo=serverOverloaded` | дождаться 1/3/5; после исчерпания owner получит terminal result |
-| blocked без retry | `unauthorized`, `cyberPolicy` либо invalid/missing `codexErrorInfo` | для auth выполнить `/codex openai auth <logical-binding-id>` и device-code вход той же учётной записи; policy/unknown вручную не повторять |
+| blocked без retry | `unauthorized`, `cyberPolicy` либо invalid/missing `codexErrorInfo` | для auth выполнить `/agents openai auth <account-name>`, где публичное имя разрешено owner из stable binding; device-code обновляет credential revision той же logical account и не меняет lineage; policy/unknown вручную не повторять |
 | quota без capacity retry | `usageLimitExceeded`, terminal `BLOCKED` | проверить лимит учётной записи; не смешивать с `serverOverloaded` и не использовать Retry до обновления account binding |
 | app-server request rejected | approval, user input, token refresh, attestation или dynamic tool request | сохранить incident evidence без payload; runner не должен отвечать approval и расширять authority |
 
@@ -85,6 +90,14 @@ callback replay, control-plane повторно разрешает owner graph, 
 runtime-controller останавливает Pod лишь после authoritative cancel readback.
 Terminal Pod удаляется сразу, но retained PVC сохраняется для нового successor
 Pod. Stale card и cancel/complete race не исправлять повторным прямым RPC.
+
+Если provider outcome уже получен, но хотя бы один output не прошёл staging,
+runner фиксирует `FAILED` и protected checksum journal на retained PVC. Retry
+создаёт новую owner attempt/revision/grant, повторно читает exact digest исходного
+файла либо полного Markdown и выполняет только staging/handoff. Успешные refs
+переиспользуются, provider/app-server не запускается, а журнал удаляется только
+после принятого handoff. Повреждение журнала, mismatch Turn/attempt или исчезновение
+immutable source закрыто останавливают recovery.
 
 При cancel/SIGTERM runner отправляет `turn/interrupt` для exact
 `(threadId, turnId)`, ждёт bounded grace и затем завершает process group.

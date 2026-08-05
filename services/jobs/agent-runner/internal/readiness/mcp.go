@@ -19,6 +19,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,6 +85,10 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 			request.Header.Del("X-Forwarded-Host")
 			request.Header.Del("X-Forwarded-Proto")
 			request.Header.Set("Authorization", "Bearer "+token)
+			request.Header.Set("X-MatterCodex-Execution-ID", input.ExecutionID)
+			request.Header.Set("X-MatterCodex-Turn-ID", input.TurnID)
+			request.Header.Set("X-MatterCodex-Attempt", strconv.FormatUint(uint64(input.Attempt), 10))
+			request.Header.Set("X-MatterCodex-MCP-Binding-Version", strconv.FormatUint(input.MCPBindingVersion, 10))
 		},
 		Transport: transport,
 		ErrorLog:  log.New(io.Discard, "", 0),

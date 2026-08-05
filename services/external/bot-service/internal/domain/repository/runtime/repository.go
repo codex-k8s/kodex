@@ -198,21 +198,35 @@ type MattermostBotTokenSecretInput struct {
 }
 
 type MattermostBotTokenSecret struct {
-	SecretName string
-	Namespace  string
-	Created    bool
-	Token      string
-	Integrity  SecretIntegrity
+	SecretName  string
+	Namespace   string
+	Created     bool
+	Token       string
+	Integrity   SecretIntegrity
+	ExecutionID string
+	TurnID      string
+	Attempt     uint32
 }
 
 type RuntimeMCPTokenBinding struct {
-	Namespace  string
-	SecretName string
-	Integrity  SecretIntegrity
+	Namespace   string
+	SecretName  string
+	Integrity   SecretIntegrity
+	ExecutionID string
+	TurnID      string
+	Attempt     uint32
+}
+
+type RuntimeMCPTokenInput struct {
+	SessionKey  string
+	ExecutionID string
+	TurnID      string
+	Attempt     uint32
 }
 
 type RuntimeMCPTokenPreparer interface {
-	EnsureRuntimeMCPToken(ctx context.Context, sessionKey string) (RuntimeMCPTokenBinding, error)
+	EnsureRuntimeMCPToken(ctx context.Context, input RuntimeMCPTokenInput) (RuntimeMCPTokenBinding, error)
+	ReconcileRuntimeMCPTokens(ctx context.Context, sessionKey, currentSecretName string) error
 }
 
 type CodexAuthSessionInput struct {

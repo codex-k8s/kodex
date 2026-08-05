@@ -971,6 +971,8 @@ func (repo *Repository) UpdateAgentSessionRuntime(ctx context.Context, input adm
 		input.PodName,
 		input.PVCName,
 		input.TokenSecretRef,
+		input.Capabilities,
+		input.ExpectedCapabilities,
 		input.ExtendTTLSeconds,
 	))
 	if err != nil {

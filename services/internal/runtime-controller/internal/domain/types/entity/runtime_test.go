@@ -74,7 +74,8 @@ func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 	execution := validExecution()
 	promptID := uuid.NewString()
 	revision := Revision{
-		ID: execution.RuntimeRevisionID, Version: execution.RuntimeRevisionVersion,
+		ProviderAccountName: "primary",
+		ID:                  execution.RuntimeRevisionID, Version: execution.RuntimeRevisionVersion,
 		ManifestSHA256: strings.Repeat("c", 64), EffectiveRuntimeSHA256: execution.EffectiveRuntimeSHA256,
 		ImageDigest: "sha256:" + strings.Repeat("d", 64),
 		SessionID:   execution.SessionID, RoleID: execution.RoleID,

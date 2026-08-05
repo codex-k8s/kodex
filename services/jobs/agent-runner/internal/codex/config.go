@@ -76,10 +76,14 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		return err
 	}
 	const permissionProfileName = "mattercodex-runtime"
+	permissionBase, err := codexPermissionBase(input.CodexSandbox)
+	if err != nil {
+		return err
+	}
 	config := runtimeConfig{Model: input.CodexModel, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: "save-all"},
-		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: ":workspace",
+		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
 			Filesystem: map[string]string{
 				input.CodexHome: "deny", filepath.Join(input.CodexHome, "**"): "deny",
 				"/var/run/secrets": "deny", "/var/run/secrets/**": "deny",
@@ -101,11 +105,22 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.CodexModel ||
 		!decoded.MCPServers["mattercodex"].Required ||
 		decoded.MCPServers["mattercodex"].BearerTokenEnvVar != "MATTERCODEX_MCP_PROXY_TOKEN" ||
-		decoded.DefaultPermissions != permissionProfileName ||
+		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
 		decoded.Permissions[permissionProfileName].Filesystem[input.CodexHome] != "deny" {
 		return errors.New("validate Codex configuration")
 	}
 	return replacePrivateFile(filepath.Join(input.CodexHome, "config.toml"), raw.Bytes())
+}
+
+func codexPermissionBase(sandbox string) (string, error) {
+	switch sandbox {
+	case "read-only":
+		return ":read-only", nil
+	case "workspace-write":
+		return ":workspace", nil
+	default:
+		return "", errors.New("Codex sandbox policy is invalid")
+	}
 }
 
 func secureDirectory(path string) error {

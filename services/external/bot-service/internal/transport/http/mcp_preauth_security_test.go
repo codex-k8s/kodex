@@ -65,6 +65,30 @@ func TestMCPPreauthorizationRejectsInvalidCredentialsBeforeSDKState(t *testing.T
 	}
 }
 
+func TestMCPExecutionFenceRejectsStalePodAndBindingRevision(t *testing.T) {
+	service, _, _, _ := newSessionBarrierService(0)
+	current := statusservice.RuntimeMCPExecutionBinding{ExecutionID: testMCPExecutionID, TurnID: testMCPTurnID,
+		Attempt: testMCPAttempt, BindingVersion: testMCPBindingVersion}
+	if err := service.AuthorizeMCPTransport(t.Context(), "session-admin", "session-token", current); err != nil {
+		t.Fatalf("current execution binding rejected: %v", err)
+	}
+	staleAttempt := current
+	staleAttempt.Attempt++
+	if err := service.AuthorizeMCPTransport(t.Context(), "session-admin", "session-token", staleAttempt); err == nil {
+		t.Fatal("stale attempt was authorized")
+	}
+	staleRevision := current
+	staleRevision.BindingVersion--
+	if err := service.AuthorizeMCPTransport(t.Context(), "session-admin", "session-token", staleRevision); err == nil {
+		t.Fatal("stale binding revision was authorized")
+	}
+	staleExecution := current
+	staleExecution.ExecutionID = "33333333-3333-4333-8333-333333333333"
+	if err := service.AuthorizeMCPTransport(t.Context(), "session-admin", "session-token", staleExecution); err == nil {
+		t.Fatal("stale execution was authorized")
+	}
+}
+
 func TestMCPClusterRequestWithoutOriginStillRequiresCredentials(t *testing.T) {
 	handler := newMCPHandlerWithOptions(newSessionBarrierServiceOnly(), defaultMCPRequestBodyBytes, mcpHandlerOptions{
 		MaximumTransportSessions: 2,
@@ -351,6 +375,7 @@ func newMCPInitializeRequest(path string, token string, payload string) *http.Re
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
+	setTestMCPExecutionHeaders(request)
 	return request
 }
 
@@ -361,6 +386,7 @@ func serveMCPTransportRequest(handler http.Handler, method string, path string, 
 		request.Header.Set("Content-Type", "application/json")
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
+	setTestMCPExecutionHeaders(request)
 	request.Header.Set("Mcp-Session-Id", sessionID)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)

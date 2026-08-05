@@ -309,6 +309,7 @@ type Revision struct {
 	ImageDigest                                   string
 	SessionID, RoleID, ChatID                     string
 	ProviderCredentialBindingID                   string
+	ProviderAccountName                           string
 	PromptProfileID                               string
 	PromptRevision                                uint64
 	AuthorityPolicyRevision                       uint64
@@ -356,6 +357,7 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		revision.ProviderObservedUsage > revision.ProviderObservedLimit ||
 		revision.ProviderObservationRevision == 0 || revision.ProviderObservedAt.IsZero() ||
 		revision.ProviderObservationMaxAge < time.Minute || revision.ProviderObservationMaxAge > 24*time.Hour ||
+		!regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`).MatchString(revision.ProviderAccountName) ||
 		!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(revision.AgentProfile) ||
 		len(revision.ImageDigest) != 71 || revision.ImageDigest[:7] != "sha256:" ||
 		!sha256Pattern.MatchString(revision.ImageDigest[7:]) {

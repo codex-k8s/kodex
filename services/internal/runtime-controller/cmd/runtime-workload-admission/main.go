@@ -550,14 +550,35 @@ func exactRuntimePod(username string, pod *corev1.Pod, snapshot runtimeSnapshot)
 	if username != expectedBroker || pod.Name != expectedPod || pod.Spec.ServiceAccountName != expectedAccount ||
 		pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken ||
 		pod.Spec.HostNetwork || pod.Spec.HostPID || pod.Spec.HostIPC || pod.Spec.RestartPolicy != corev1.RestartPolicyNever ||
-		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 2 ||
-		pod.Spec.InitContainers[1].Image != expectedImage || pod.Spec.Containers[0].Image != expectedImage ||
+		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 3 ||
+		pod.Spec.InitContainers[0].Name != "internal-rpc-authority-socket-init" ||
+		pod.Spec.InitContainers[1].Name != "workspace-init" ||
+		pod.Spec.InitContainers[1].Image != expectedImage ||
 		!stringSliceEqual(pod.Spec.InitContainers[1].Args, []string{"runtime-init-workspace"}) ||
-		!stringSliceEqual(pod.Spec.Containers[0].Args, []string{"runtime-session"}) ||
 		pod.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
 		pod.Annotations["runtime.mattercodex.dev/revision-sha256"] != execution.RuntimeRevisionSHA256 ||
 		pod.Annotations["runtime.mattercodex.dev/input-sha256"] != execution.ImmutableInputSHA256 ||
 		pod.Annotations["runtime.mattercodex.dev/credential-snapshot-sha256"] != execution.CredentialSnapshotSHA256 {
+		return false
+	}
+	containers := make(map[string]corev1.Container, len(pod.Spec.Containers))
+	for _, container := range pod.Spec.Containers {
+		if _, duplicate := containers[container.Name]; duplicate {
+			return false
+		}
+		containers[container.Name] = container
+	}
+	role, roleOK := containers["role-runtime"]
+	provider, providerOK := containers["provider-runtime"]
+	issuer, issuerOK := containers["internal-rpc-authority-issuer"]
+	if !roleOK || !providerOK || !issuerOK || role.Image != expectedImage || provider.Image != expectedImage ||
+		!stringSliceEqual(role.Args, []string{"runtime-session"}) ||
+		!stringSliceEqual(provider.Args, []string{"runtime-provider"}) ||
+		!stringSliceEqual(issuer.Command, []string{"/usr/local/bin/internal-rpc-authority-issuer"}) ||
+		!exactRunAsUser(role.SecurityContext, 10001) || !exactRunAsUser(provider.SecurityContext, 10002) ||
+		!exactRunAsUser(issuer.SecurityContext, 29001) ||
+		!exactVolumeMountNames(provider.VolumeMounts, "provider-socket", "provider-tmp", "session") ||
+		containerHasMount(provider, "kube-api-access") || containerHasAuthorityMount(provider) {
 		return false
 	}
 	for _, container := range append(pod.Spec.InitContainers, pod.Spec.Containers...) {
@@ -574,6 +595,42 @@ func exactRuntimePod(username string, pod *corev1.Pod, snapshot runtimeSnapshot)
 		}
 	}
 	return true
+}
+
+func exactRunAsUser(security *corev1.SecurityContext, expected int64) bool {
+	return security != nil && security.RunAsUser != nil && *security.RunAsUser == expected
+}
+
+func exactVolumeMountNames(mounts []corev1.VolumeMount, expected ...string) bool {
+	if len(mounts) != len(expected) {
+		return false
+	}
+	names := make([]string, 0, len(mounts))
+	for _, mount := range mounts {
+		names = append(names, mount.Name)
+	}
+	sort.Strings(names)
+	sort.Strings(expected)
+	return strings.Join(names, "\x00") == strings.Join(expected, "\x00")
+}
+
+func containerHasMount(container corev1.Container, name string) bool {
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func containerHasAuthorityMount(container corev1.Container) bool {
+	for _, mount := range container.VolumeMounts {
+		if strings.HasPrefix(mount.Name, "authority-") || mount.Name == "handoff-key" ||
+			mount.Name == "runtime-controller-tls" || mount.Name == "mcp-upstream" {
+			return true
+		}
+	}
+	return false
 }
 
 func stableHash(value string, length int) string {

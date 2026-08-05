@@ -67,7 +67,6 @@ expected_matrix() {
     "GET $origin/metrics" \
     "GET $origin/mattermost/actions/agents" \
     "GET $origin/mattermost/dialogs/agents" \
-    "GET $origin/internal/agent-sessions/synthetic-smoke" \
     "GET $origin/mcp/sessions/synthetic-smoke" \
     "GET $origin/internal/synthetic-smoke"
 }

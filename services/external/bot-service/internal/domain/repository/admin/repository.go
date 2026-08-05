@@ -271,6 +271,8 @@ type UpdateAgentSessionRuntimeInput struct {
 	PodName              string
 	PVCName              string
 	TokenSecretRef       string
+	Capabilities         string
+	ExpectedCapabilities string
 	ExtendTTLSeconds     int
 }
 

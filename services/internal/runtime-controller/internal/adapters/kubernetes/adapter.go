@@ -978,6 +978,8 @@ type runnerInput struct {
 	Attempt                    uint32                  `json:"attempt"`
 	SessionKey                 string                  `json:"session_key"`
 	ProviderBindingID          string                  `json:"provider_binding_id"`
+	ProviderAccountName        string                  `json:"provider_account_name"`
+	MCPBindingVersion          uint64                  `json:"mcp_binding_version"`
 	ProviderBindingVersion     uint64                  `json:"provider_binding_version"`
 	ProviderBindingSHA256      string                  `json:"provider_binding_sha256"`
 	CredentialSnapshotSHA256   string                  `json:"credential_snapshot_sha256"`
@@ -1007,6 +1009,7 @@ type runnerInput struct {
 
 func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.Revision) (runnerInput, error) {
 	files := runnerCredentialFiles{}
+	var mcpBindingVersion uint64
 	controlTLS := runnerTLSBinding{ServerName: adapter.config.RunnerControlPlaneTLSServerName}
 	interactionTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.InteractionGatewayURL)}
 	mcpTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.SessionMCPURL)}
@@ -1023,6 +1026,7 @@ func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.
 			files.MaterializationToken = base + "/application-grant.jws"
 		case "mcp-token":
 			files.MCPToken = base + "/token"
+			mcpBindingVersion = credential.Version
 		case "handoff-private-key":
 			files.HandoffPrivateKey = base + "/ed25519.key"
 			files.HandoffKeyID = "sha256-" + credential.ContentSHA256[:16]
@@ -1037,7 +1041,7 @@ func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.
 			mcpTLS.BindingSHA256 = credential.ContentSHA256
 		}
 	}
-	if files.ControlPlaneGrant == "" || files.MaterializationToken == "" || files.MCPToken == "" ||
+	if files.ControlPlaneGrant == "" || files.MaterializationToken == "" || files.MCPToken == "" || mcpBindingVersion == 0 ||
 		files.CodexAuth == "" || files.HandoffPrivateKey == "" || controlTLS.BindingSHA256 == "" ||
 		interactionTLS.BindingSHA256 == "" || mcpTLS.BindingSHA256 == "" || revision.AgentProfile == "" {
 		return runnerInput{}, errs.ErrStateConflict
@@ -1057,6 +1061,8 @@ func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.
 		ImmutableInputSHA256:   execution.ImmutableInputSHA256,
 		SessionID:              execution.SessionID, TurnID: execution.TurnID, Attempt: execution.Attempt,
 		SessionKey: execution.AgentSessionKey, ProviderBindingID: execution.ProviderBindingID,
+		ProviderAccountName:    revision.ProviderAccountName,
+		MCPBindingVersion:      mcpBindingVersion,
 		ProviderBindingVersion: execution.ProviderBindingVersion, ProviderBindingSHA256: execution.ProviderBindingSHA256,
 		CredentialSnapshotSHA256: execution.CredentialSnapshotSHA256,
 		WorkloadTicketSHA256:     execution.WorkloadTicketSHA256,

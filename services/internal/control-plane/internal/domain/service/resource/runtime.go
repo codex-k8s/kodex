@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 var scheduleParser = cron.NewParser(
 	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
+var publicProviderAccountNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
 
 func validUniqueRuntimeIDs(values []string) bool {
 	seen := make(map[string]struct{}, len(values))
@@ -306,7 +308,7 @@ func (service *Service) EnqueueTurn(
 				return entity.Resource{}, err
 			}
 			turn, err := entity.New(
-				uuid.NewString(),
+				turnIDFromIdempotency(input.IdempotencyKey),
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
 				input.SessionID,
@@ -371,6 +373,14 @@ func (service *Service) EnqueueTurn(
 			)
 		},
 	)
+}
+
+func turnIDFromIdempotency(idempotencyKey string) string {
+	namespace, err := uuid.Parse(idempotencyKey)
+	if err != nil {
+		namespace = uuid.NameSpaceURL
+	}
+	return uuid.NewSHA1(namespace, []byte("control-plane-turn")).String()
 }
 
 // ClaimTurn выдаёт точной рабочей нагрузке одну ограниченную аренду.
@@ -2283,11 +2293,23 @@ func (service *Service) createRuntimeRevision(
 	if !ok {
 		return entity.Resource{}, errs.ErrInternal
 	}
-	if _, err := add(
+	providerBinding, err := add(
 		sessionSpec.ProviderAccountBindingID,
 		enum.KindCredentialBinding,
-	); err != nil {
+	)
+	if err != nil {
 		return entity.Resource{}, err
+	}
+	providerSpec, ok := providerBinding.Spec.(entity.CredentialBindingSpec)
+	if !ok || providerSpec.Purpose != "provider-account" {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	providerAccountName := strings.ToLower(strings.TrimSpace(providerSpec.PrincipalRef))
+	if separator := strings.LastIndexByte(providerAccountName, ':'); separator >= 0 {
+		providerAccountName = providerAccountName[separator+1:]
+	}
+	if !publicProviderAccountNamePattern.MatchString(providerAccountName) {
+		return entity.Resource{}, errs.ErrStateConflict
 	}
 	if sessionSpec.ConversationID != "" {
 		if _, err := add(sessionSpec.ConversationID, enum.KindChat); err != nil {
@@ -2454,19 +2476,19 @@ func (service *Service) createRuntimeRevision(
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
 	manifestSHA256, err := canonicalHash(struct {
-		OrganizationID                                string
-		ProjectID                                     string
-		PredecessorRevisionID                         string
-		ImageDigest                                   string
-		AuthorityPolicyRevision                       uint64
-		AuthorityPolicySHA256                         string
-		Components                                    []entity.EffectiveResourceRef
-		CreatedAt                                     time.Time
-		SessionID                                     string
-		RoleID                                        string
-		ChatID                                        string
-		ProviderCredentialBindingID                   string
-		CodexModel, CodexSandbox, CodexApprovalPolicy string
+		OrganizationID                                   string
+		ProjectID                                        string
+		PredecessorRevisionID                            string
+		ImageDigest                                      string
+		AuthorityPolicyRevision                          uint64
+		AuthorityPolicySHA256                            string
+		Components                                       []entity.EffectiveResourceRef
+		CreatedAt                                        time.Time
+		SessionID                                        string
+		RoleID                                           string
+		ChatID                                           string
+		ProviderCredentialBindingID, ProviderAccountName string
+		CodexModel, CodexSandbox, CodexApprovalPolicy    string
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -2480,6 +2502,7 @@ func (service *Service) createRuntimeRevision(
 		role.ID,
 		sessionSpec.ConversationID,
 		sessionSpec.ProviderAccountBindingID,
+		providerAccountName,
 		"gpt-5.4", "workspace-write", "never",
 	})
 	if err != nil {
@@ -2509,6 +2532,7 @@ func (service *Service) createRuntimeRevision(
 			RoleID:                      role.ID,
 			ChatID:                      sessionSpec.ConversationID,
 			ProviderCredentialBindingID: sessionSpec.ProviderAccountBindingID,
+			ProviderAccountName:         providerAccountName,
 			EffectiveRuntimeSHA256:      effectiveRuntimeSHA256,
 			CodexModel:                  "gpt-5.4", CodexSandbox: "workspace-write", CodexApprovalPolicy: "never",
 		},
