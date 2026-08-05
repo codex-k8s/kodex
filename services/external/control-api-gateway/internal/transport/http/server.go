@@ -55,6 +55,29 @@ type ControlPlane interface {
 	AdmitOwnerSession(context.Context, *controlplanev1.AdmitOwnerSessionRequest, ...grpc.CallOption) (*controlplanev1.AdmitOwnerSessionResponse, error)
 	RevokeOwnerSession(context.Context, *controlplanev1.RevokeOwnerSessionRequest, ...grpc.CallOption) (*controlplanev1.RevokeOwnerSessionResponse, error)
 	GetDiagnostics(context.Context, *controlplanev1.GetDiagnosticsRequest, ...grpc.CallOption) (*controlplanev1.GetDiagnosticsResponse, error)
+	RunScheduleNow(context.Context, *controlplanev1.RunScheduleNowRequest, ...grpc.CallOption) (*controlplanev1.RunScheduleNowResponse, error)
+}
+
+func (server *Server) RunScheduleNow(writer http.ResponseWriter, request *http.Request,
+	scheduleID uuid.UUID, params generated.RunScheduleNowParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.RunScheduleNow(request.Context(), &controlplanev1.RunScheduleNowRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), ScheduleId: scheduleID.String(), ExpectedVersion: version,
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, true)
+		return
+	}
+	if response.GetOccurrence() == nil || response.GetOccurrence().GetScheduleId() != scheduleID.String() {
+		server.writeInternal(writer, request.Context(), errors.New("manual schedule occurrence response is invalid"))
+		return
+	}
+	writer.Header().Set("Cache-Control", "no-store")
+	writer.WriteHeader(http.StatusAccepted)
 }
 
 type Server struct {

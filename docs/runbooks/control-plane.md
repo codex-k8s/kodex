@@ -567,11 +567,10 @@ Outbox delivered receipt очищается не ранее 31 дня, то ес
 lease expiry и error class. Payload может содержать business metadata и не
 должен попадать в Issue.
 
-Для scheduled `ClaimTurn` сверить, что Schedule outbox имеет sequence только
-реальных версий `CREATE`, due watermark и `ManageSchedule` transition.
-Propagation новой Turn/Process version и изменения occurrence/run не меняют
-Schedule и потому не создают `control_plane.schedule_changed`; они сохраняют
-audit и authoritative read в той же transaction. Дубликат
+Для scheduled path сверить, что `automation-scheduler` не объявлен consumer
+outbox/NATS: due watermark, occurrence/run и `ManageSchedule` доступны только
+через authoritative protected gRPC. Все переходы сохраняют audit и readback в
+owner transaction, но не создают `control_plane.schedule_changed`. Дубликат
 `(aggregate_type, aggregate_id, event_sequence)` означает дефект producer и
 полный rollback команды, а не повод удалять outbox row или делать no-op bump
 Schedule. Для Turn/Session/RuntimeRevision каждый опубликованный

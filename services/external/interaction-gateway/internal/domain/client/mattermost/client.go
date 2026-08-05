@@ -37,6 +37,7 @@ type Client interface {
 	Check(context.Context) error
 	ResolveInbound(context.Context, RawEvent) (entity.Boundary, RawEvent, error)
 	ResolveDelivery(string, string) (entity.Boundary, error)
+	ResolveRoomDelivery(string, string, string) (entity.Boundary, error)
 	DownloadFile(context.Context, string, string) ([]byte, string, string, error)
 	Publish(context.Context, entity.Delivery, []string) (Published, error)
 	OpenDecisionDialog(context.Context, string, string, string, string, string) error

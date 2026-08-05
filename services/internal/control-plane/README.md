@@ -99,7 +99,6 @@ Mattermost либо Kubernetes authority.
 | Факт                                          | Условие                                                                                               | Потребитель            | Доставка                                  |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
 | `control_plane.runtime_configuration_changed` | устойчивое изменение project/team/chat/role/prompt/binding/workspace/integration/runtime/session/turn | `runtime-controller`   | at-least-once, inbox и курсор потребителя |
-| `control_plane.schedule_changed`              | реальное изменение `Schedule.Version`: create/manage либо движение due watermark; occurrence/run не переиздают прежнюю sequence | `automation-scheduler` | at-least-once, inbox и курсор потребителя |
 
 Для процессов, шлюзов владельца, памяти, заявок на работу и метаданных артефактов
 спекулятивные события не публикуются: авторитетные пути — `GetResource`,
@@ -173,10 +172,10 @@ graph до закрытия прежнего run.
 Под `PAUSED` queued retry ждёт `ACTIVATE`; `ARCHIVED/DELETION_PENDING/DELETED`
 не принимают requeue. Retry/suspension/rebind сравнивают current digest,
 сохраняя snapshot provenance.
-Переходы occurrence/run пишут
-audit и доступны authoritative read, но не публикуют повторное событие
-неизменённого Schedule; каждый outbox event использует sequence ровно новой
-версии действительно изменённого Resource aggregate.
+Переходы Schedule/occurrence/run пишут audit и доступны authoritative read, но
+не объявляют AsyncAPI event topology: scheduler использует только polling.
+События других утверждённых Resource aggregates используют sequence ровно
+новой версии действительно изменённого aggregate.
 
 Session lifecycle и cross-session delegation используют batch-вариант того же
 resolver: RuntimeExecution/occurrence/schedule/run, Session, Turn и ProcessRun
@@ -211,6 +210,14 @@ unlocked candidate проходит тот же graph resolver, Gate блоки�
 claim сохраняет отдельный server-owned claim-key hash в occurrence: retry
 сначала восстанавливает current graph по этой привязке, и только live exact
 occurrence может повторно вернуть LeaseToken.
+Первый `next_run_at` и каждый следующий watermark вычисляются владельцем по
+PostgreSQL clock из cron/interval/timezone. `RunScheduleNow` создаёт отдельную
+occurrence под owner/version/idempotency lock и не двигает этот watermark.
+Organization-scoped scheduler grant не выбирает проект: durable owner cursor
+разрешает project partition до project-scoped transaction. Ротация JTI и
+revision короткоживущего unbound grant не меняет semantic intent уже
+проверенного workload, но exact SPIFFE, full method, permission и server-owned
+occurrence/lease остаются обязательными.
 `AdmitRuntimeExecution` и `HeartbeatRuntimeExecution` одной transaction по
 PostgreSQL clock выравнивают deadline RuntimeExecution и зависимого TurnLease;
 generic `RenewTurn` не получает runtime authority. Deadline-sensitive paths

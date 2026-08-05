@@ -36,7 +36,49 @@ const (
 	maximumSummaryRunes      = 12000
 	maximumResponseBytes     = 8 << 10
 	maximumFailureDetails    = 8
+	scheduledResultFile      = "scheduled-result.json"
 )
+
+// ScheduledOutcome читает необязательный закрытый бизнес-исход scheduled
+// execution. Идентификаторы маршрута и policy из файла не принимаются:
+// authority разрешает только control-plane из server-owned occurrence.
+func ScheduledOutcome(input model.Input, runtimeOutcome string) (string, error) {
+	if input.ScheduleOccurrenceID == "" {
+		return "", nil
+	}
+	fallback := "failed"
+	if runtimeOutcome == "SUCCEEDED" {
+		fallback = "action_taken"
+	}
+	path := filepath.Join(input.OutboxRoot, scheduledResultFile)
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return fallback, nil
+	} else if err != nil {
+		return "", errors.New("inspect scheduled runtime result")
+	}
+	directory, err := unix.Open(input.OutboxRoot,
+		unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return "", errors.New("open scheduled runtime result")
+	}
+	defer unix.Close(directory)
+	raw, err := readOutput(directory, scheduledResultFile, 512)
+	if err != nil {
+		return "", errors.New("read scheduled runtime result")
+	}
+	var document struct {
+		Outcome string `json:"outcome"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&document) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
+		(document.Outcome != "no_action" && document.Outcome != "action_taken" &&
+			document.Outcome != "requires_human" && document.Outcome != "failed") ||
+		(runtimeOutcome != "SUCCEEDED" && document.Outcome != "failed") {
+		return "", errors.New("scheduled runtime result is invalid")
+	}
+	return document.Outcome, nil
+}
 
 type stagedReference struct {
 	ArtifactID      string `json:"artifact_id"`
@@ -116,7 +158,7 @@ func Build(ctx context.Context, input model.Input, markdown, archivePath string)
 		for _, entry := range entries {
 			name := entry.Name()
 			path := filepath.Join(input.OutboxRoot, name)
-			if path == archivePath {
+			if path == archivePath || name == scheduledResultFile {
 				continue
 			}
 			if strings.ContainsAny(name, "/\\\x00\r\n") {

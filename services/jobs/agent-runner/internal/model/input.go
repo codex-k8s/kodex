@@ -77,6 +77,7 @@ type Input struct {
 	ImmutableInputSHA256                   string            `json:"immutable_input_sha256"`
 	SessionID                              string            `json:"session_id"`
 	TurnID                                 string            `json:"turn_id"`
+	ScheduleOccurrenceID                   string            `json:"schedule_occurrence_id,omitempty"`
 	Attempt                                uint32            `json:"attempt"`
 	SessionKey                             string            `json:"session_key"`
 	ProviderBindingID                      string            `json:"provider_binding_id"`
@@ -139,6 +140,9 @@ func (input Input) Validate() error {
 		if uuid.Validate(identifier) != nil {
 			return errors.New("runtime identity is invalid")
 		}
+	}
+	if input.ScheduleOccurrenceID != "" && uuid.Validate(input.ScheduleOccurrenceID) != nil {
+		return errors.New("runtime schedule occurrence identity is invalid")
 	}
 	for _, digest := range []string{input.RuntimeRevisionSHA256, input.EffectiveRuntimeSHA256,
 		input.ImmutableInputSHA256, input.ProviderBindingSHA256,

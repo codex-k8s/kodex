@@ -286,6 +286,7 @@ func (client *Client) Complete(
 		ExpectedGrantGeneration: execution.GrantGeneration, LeaseToken: leaseToken,
 		Outcome: terminal, TerminalReference: reference, TerminalSha256: digest}
 	if handoff != nil {
+		request.ScheduledOutcome = mapScheduledOutcome(handoff.ScheduledOutcome)
 		request.CodexSessionId, request.ArchiveRelativePath, request.ArchiveSha256, request.ArchiveProvenance =
 			handoff.CodexSessionID, handoff.ArchiveRelativePath, handoff.ArchiveSHA256, handoff.ArchiveProvenance
 		for _, output := range handoff.Outputs {
@@ -302,6 +303,15 @@ func (client *Client) Complete(
 		return entity.Execution{}, mapError(err)
 	}
 	return castExecution(response.GetExecution())
+}
+
+func mapScheduledOutcome(value string) controlplanev1.ScheduledOutcome {
+	return map[string]controlplanev1.ScheduledOutcome{
+		"no_action":      controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_NO_ACTION,
+		"action_taken":   controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_ACTION_TAKEN,
+		"requires_human": controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_REQUIRES_HUMAN,
+		"failed":         controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_FAILED,
+	}[value]
 }
 
 func (client *Client) Incident(
@@ -481,6 +491,7 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		ProjectID: source.GetProjectId(), ProcessID: source.GetProcessId(),
 		SessionID: source.GetSessionId(), ThreadID: source.GetThreadId(),
 		RoleID: source.GetRoleId(), TurnID: source.GetTurnId(), Attempt: source.GetAttempt(),
+		ScheduleOccurrenceID:   source.GetScheduleOccurrenceId(),
 		RuntimeRevisionID:      source.GetRuntimeRevisionId(),
 		RuntimeRevisionVersion: source.GetRuntimeRevisionVersion(),
 		RuntimeRevisionSHA256:  source.GetRuntimeRevisionSha256(),

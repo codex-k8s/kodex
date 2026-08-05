@@ -256,8 +256,13 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	}
 	outputs := built.Outputs
 	originalOutcome := outcome
+	scheduledOutcome, err := output.ScheduledOutcome(input, outcome)
+	if err != nil {
+		return err
+	}
 	if recovering {
 		originalOutcome = recovery.OriginalOutcome
+		scheduledOutcome = recovery.ScheduledOutcome
 	}
 	if len(built.Failed) != 0 {
 		archiveExecutionID := input.ExecutionID
@@ -266,8 +271,9 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		}
 		journal := output.RecoveryJournal{TurnID: input.TurnID, SourceExecutionID: input.ExecutionID,
 			ArchiveExecutionID: archiveExecutionID, SourceAttempt: input.Attempt,
-			OriginalOutcome: originalOutcome, TerminalMarkdown: string(outputs[0].Payload),
-			CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
+			OriginalOutcome: originalOutcome, ScheduledOutcome: scheduledOutcome,
+			TerminalMarkdown: string(outputs[0].Payload),
+			CodexSessionID:   result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
 			ArchiveSHA256: result.ArchiveSHA256, Existing: slices.Clone(outputs[1:]), Failed: built.Failed}
 		if err := output.SaveRecovery(input, journal); err != nil {
 			return errors.New("save runtime output recovery")
@@ -298,9 +304,11 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		ExecutionID: input.ExecutionID, ExecutionVersion: execution.Version, Fence: execution.Fence,
 		GrantGeneration: input.GrantGeneration, RuntimeRevisionSHA256: input.RuntimeRevisionSHA256,
 		EffectiveRuntimeSHA256: input.EffectiveRuntimeSHA256, ImmutableInputSHA256: input.ImmutableInputSHA256,
-		SessionID: input.SessionID, TurnID: input.TurnID, Attempt: input.Attempt,
+		SessionID: input.SessionID, TurnID: input.TurnID,
+		ScheduleOccurrenceID: input.ScheduleOccurrenceID, Attempt: input.Attempt,
 		ProviderBindingID: input.ProviderBindingID, ProviderBindingVersion: input.ProviderBindingVersion,
 		ProviderBindingSHA256: input.ProviderBindingSHA256, Outcome: outcome,
+		ScheduledOutcome:  scheduledOutcome,
 		TerminalReference: terminalReference,
 		TerminalSHA256:    hex.EncodeToString(terminalDigest[:]), Outputs: outputs, CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath,

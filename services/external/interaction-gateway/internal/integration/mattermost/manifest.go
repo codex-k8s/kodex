@@ -257,6 +257,31 @@ func (current *index) resolveDelivery(projectID, actorID string) (entity.Boundar
 	return entity.Boundary{}, errors.New("mattermost delivery target is outside the server-owned mapping")
 }
 
+func (current *index) resolveRoomDelivery(projectID, chatID, actorID string) (entity.Boundary, error) {
+	var actor ActorBinding
+	for _, candidate := range current.actors {
+		if candidate.ProjectID == projectID && candidate.ActorID == actorID {
+			if actor.ActorID != "" {
+				return entity.Boundary{}, errors.New("mattermost room actor mapping is ambiguous")
+			}
+			actor = candidate
+		}
+	}
+	if actor.ActorID == "" {
+		return entity.Boundary{}, errors.New("mattermost room actor is outside the server-owned mapping")
+	}
+	for _, channel := range current.channels {
+		if channel.ProjectID == projectID && channel.OrganizationID == actor.OrganizationID && channel.ChatID == chatID {
+			return entity.Boundary{OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
+				ChatID: channel.ChatID, ActorID: actor.ActorID, RoleID: channel.RoleID,
+				Locale: channel.Locale, BotStableKey: channel.BotStableKey, TeamID: channel.TeamID,
+				ChannelID: channel.ChannelID, SessionID: channel.SessionID,
+				MattermostUserID: actor.MattermostUserID}, nil
+		}
+	}
+	return entity.Boundary{}, errors.New("mattermost room delivery target is outside the server-owned mapping")
+}
+
 func invalidProviderID(value string) bool {
 	return len(value) < 1 || len(value) > 64 || strings.TrimSpace(value) != value || strings.ContainsAny(value, "\x00\r\n")
 }

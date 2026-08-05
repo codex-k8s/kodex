@@ -1140,7 +1140,7 @@ func (service *Service) CompleteTurn(
 			); err != nil {
 				return entity.Resource{}, err
 			}
-			if err := service.enqueueInteractionTerminalDelivery(ctx, tx, graph.Session, updated, spec, nil); err != nil {
+			if err := service.enqueueInteractionTerminalDelivery(ctx, tx, graph.Session, updated, spec, nil, ""); err != nil {
 				return entity.Resource{}, err
 			}
 			if err := service.completeProcessFromTurn(
@@ -1535,6 +1535,25 @@ func (service *Service) ClaimDueSchedules(
 		input.Limit < 1 || input.Limit > service.maximumScheduleClaims {
 		return ClaimDueSchedulesResult{}, errs.ErrInvalidInput
 	}
+	if input.Principal.CallerWorkload != service.schedulerWorkload ||
+		input.Principal.CallerSPIFFEID != service.schedulerSPIFFEID ||
+		input.Principal.ProjectID != "" {
+		return ClaimDueSchedulesResult{}, errs.ErrPermissionDenied
+	}
+	partitionHash, err := semanticCommandHash(input.Principal, struct {
+		Operation string
+		Limit     int
+	}{"DUE", input.Limit})
+	if err != nil {
+		return ClaimDueSchedulesResult{}, errs.ErrInvalidInput
+	}
+	projectID, err := service.selectAutomationProject(
+		ctx, input.Principal, "DUE", input.IdempotencyKey, partitionHash,
+	)
+	if err != nil {
+		return ClaimDueSchedulesResult{}, err
+	}
+	input.Principal.ProjectID = projectID
 	requestHash, err := canonicalHash(struct {
 		Identity commandIdentity
 		Limit    int
@@ -1869,13 +1888,13 @@ func (service *Service) ResolveOwnerGate(
 			executionMatches := executionErr == nil &&
 				execution.SessionID == gateSpec.SessionID &&
 				execution.TurnID == gateSpec.TurnID &&
-				execution.Attempt == gateSpec.Attempt
+				execution.Attempt == gateSpec.Attempt &&
+				execution.InputSHA256 == gateSpec.ImmutableInputSHA256
 			if !ok || process.Kind != enum.KindProcessRun ||
 				process.Version != input.ProcessExpectedVersion ||
 				process.State != enum.StateWaitingOwner ||
 				processSpec.RootInitiatorActorID != gateSpec.RootInitiatorActorID ||
 				!executionMatches ||
-				processSpec.ImmutableInputSHA256 != gateSpec.ImmutableInputSHA256 ||
 				processSpec.ScheduleID != gateSpec.ScheduleID ||
 				processSpec.OccurrenceID != gateSpec.OccurrenceID {
 				return errs.ErrStateConflict
@@ -1908,7 +1927,11 @@ func (service *Service) ResolveOwnerGate(
 				relatedOccurrence = occurrence
 				relatedSchedule = schedule
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			now = now.UTC().Truncate(time.Microsecond)
 			if !gateSpec.ExpiresAt.After(now) {
 				result, err = service.expireOwnerGateGraph(
 					ctx, tx, input.Principal, gate, graph, now,
@@ -1999,11 +2022,14 @@ func (service *Service) ResolveOwnerGate(
 					return errs.ErrStateConflict
 				}
 				expectedToken := relatedOccurrence.TokenHash
-				relatedOccurrence.Outcome = gateTurnSpec.Outcome
+				scheduledOutcome := "failed"
+				if input.Decision == "APPROVED" {
+					scheduledOutcome = "action_taken"
+				}
+				relatedOccurrence.Outcome = scheduledOutcome
 				relatedOccurrence.ResultArtifactID = gateTurnSpec.ResultArtifactID
 				if gateTarget == enum.StateExpired {
 					relatedOccurrence.State = "FAILED"
-					relatedOccurrence.Outcome = "owner_gate_expired"
 				} else if processTarget.Terminal() {
 					relatedOccurrence.State = string(processTarget)
 				}
@@ -2027,7 +2053,7 @@ func (service *Service) ResolveOwnerGate(
 						OccurrenceID:     relatedOccurrence.ID,
 						Attempt:          relatedOccurrence.Attempt,
 						State:            relatedOccurrence.State,
-						Outcome:          relatedOccurrence.Outcome,
+						Outcome:          scheduledOutcome,
 						ResultArtifactID: relatedOccurrence.ResultArtifactID,
 						FinishedAt:       now,
 					}); err != nil {

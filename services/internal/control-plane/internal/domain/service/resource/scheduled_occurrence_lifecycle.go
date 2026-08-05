@@ -92,7 +92,7 @@ func (service *Service) deadLetterQueuedScheduleOccurrence(
 	candidate domainrepo.ScheduleOccurrence,
 	claimKeyHash string,
 ) error {
-	return service.repository.Transact(
+	err := service.repository.Transact(
 		ctx,
 		scope,
 		func(tx domainrepo.Transaction) error {
@@ -174,6 +174,10 @@ func (service *Service) deadLetterQueuedScheduleOccurrence(
 			)
 		},
 	)
+	if err == nil {
+		service.observer.ObserveScheduleMaintenance("quarantine")
+	}
+	return err
 }
 
 func rebindScheduledOccurrence(
@@ -308,6 +312,11 @@ func (service *Service) applyScheduledTerminalDisposition(
 	default:
 		return domainrepo.ScheduleOccurrence{}, errs.ErrStateConflict
 	}
+	closedOutcome, err := closedScheduledTerminalOutcome(terminalState, outcome)
+	if err != nil {
+		return domainrepo.ScheduleOccurrence{}, err
+	}
+	outcome = closedOutcome
 
 	expectedAttempt := occurrence.Attempt
 	expectedToken := occurrence.TokenHash
@@ -359,6 +368,23 @@ func (service *Service) applyScheduledTerminalDisposition(
 		return domainrepo.ScheduleOccurrence{}, err
 	}
 	return occurrence, nil
+}
+
+func closedScheduledTerminalOutcome(terminalState, outcome string) (string, error) {
+	if terminalState == "SUCCEEDED" {
+		switch outcome {
+		case "no_action", "action_taken":
+			return outcome, nil
+		case "owner_gate_approved":
+			return "action_taken", nil
+		default:
+			return "", errs.ErrStateConflict
+		}
+	}
+	if terminalState == "FAILED" || terminalState == "CANCELLED" || terminalState == "EXPIRED" {
+		return "failed", nil
+	}
+	return "", errs.ErrStateConflict
 }
 
 func setScheduledExecutionBinding(

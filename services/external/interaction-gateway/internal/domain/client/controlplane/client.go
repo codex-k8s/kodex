@@ -96,26 +96,27 @@ type RecordDeliveryInput struct {
 }
 
 type InteractionDeliveryWork struct {
-	DeliveryID, OrganizationID, ProjectID, ActorID      string
-	SessionID                                           string
-	SessionVersion                                      uint64
-	TurnID                                              string
-	TurnVersion                                         uint64
-	Attempt                                             uint32
-	RuntimeRevisionID                                   string
-	RuntimeRevisionVersion                              uint64
-	ImmutableInputSHA256                                string
-	Kind, LifecycleState, Outcome                       string
-	ArtifactID                                          string
-	ArtifactVersion                                     uint64
-	ArtifactSHA256                                      string
-	ArtifactName, ArtifactStorageRef, ArtifactMediaType string
-	ArtifactSizeBytes                                   uint64
-	Fence                                               uint64
-	LeaseToken                                          string
-	LeaseExpiresAt                                      time.Time
-	ReadbackCredential                                  string
-	InlinePayload                                       []byte
+	DeliveryID, OrganizationID, ProjectID, ActorID           string
+	SessionID                                                string
+	SessionVersion                                           uint64
+	TurnID                                                   string
+	TurnVersion                                              uint64
+	Attempt                                                  uint32
+	RuntimeRevisionID                                        string
+	RuntimeRevisionVersion                                   uint64
+	ImmutableInputSHA256                                     string
+	Kind, LifecycleState, Outcome                            string
+	ArtifactID                                               string
+	ArtifactVersion                                          uint64
+	ArtifactSHA256                                           string
+	ArtifactName, ArtifactStorageRef, ArtifactMediaType      string
+	ArtifactSizeBytes                                        uint64
+	Fence                                                    uint64
+	LeaseToken                                               string
+	LeaseExpiresAt                                           time.Time
+	ReadbackCredential                                       string
+	InlinePayload                                            []byte
+	NotificationRoomID, NotificationPolicy, ScheduledOutcome string
 }
 
 type RuntimeMaterialization struct {

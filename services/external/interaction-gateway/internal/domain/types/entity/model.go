@@ -187,6 +187,8 @@ type OwnerGateClaim struct {
 	Attempt               uint32
 	ImmutableInputSHA256  string
 	RecipientActorID      string
+	ScheduleID            string
+	NotificationRoomID    string
 	ClaimToken            string
 	ClaimFence            uint64
 	ClaimExpiresAt        time.Time

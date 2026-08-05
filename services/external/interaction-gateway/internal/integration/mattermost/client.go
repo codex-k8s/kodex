@@ -351,6 +351,10 @@ func (client *Client) ResolveDelivery(projectID, actorID string) (entity.Boundar
 	return client.index.resolveDelivery(projectID, actorID)
 }
 
+func (client *Client) ResolveRoomDelivery(projectID, chatID, actorID string) (entity.Boundary, error) {
+	return client.index.resolveRoomDelivery(projectID, chatID, actorID)
+}
+
 func (client *Client) DownloadFile(ctx context.Context, channelID, fileID string) ([]byte, string, string, error) {
 	if invalidProviderID(channelID) || invalidProviderID(fileID) {
 		return nil, "", "", errors.New("mattermost file reference is invalid")

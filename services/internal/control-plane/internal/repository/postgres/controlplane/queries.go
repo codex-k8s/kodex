@@ -240,6 +240,9 @@ var sqlIntegrationContinuationUpdate string
 //go:embed sql/schedule__due.sql
 var sqlScheduleDue string
 
+//go:embed sql/automation_scheduler_project__next.sql
+var sqlAutomationSchedulerProjectNext string
+
 //go:embed sql/schedule_occurrence__get.sql
 var sqlScheduleOccurrenceGet string
 

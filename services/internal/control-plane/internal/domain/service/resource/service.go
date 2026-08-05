@@ -34,6 +34,7 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 		Issuer, Audience, TicketID                                string
 		IssuedAt, ExpiresAt                                       time.Time
 		ExecutionID, OrganizationID, ProjectID, SessionID, TurnID string
+		ScheduleOccurrenceID                                      string
 		Attempt                                                   uint32
 		RuntimeRevisionID, RuntimeRevisionSHA256                  string
 		RuntimeRevisionVersion, Version, Fence, GrantGeneration   uint64
@@ -48,7 +49,7 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 			hashString(execution.ID + "\x00" + fmt.Sprint(execution.Version) + "\x00" + fmt.Sprint(execution.Fence) + "\x00" + audience),
 			issuedAt, issuedAt.Add(5 * time.Minute),
 			execution.ID, execution.OrganizationID, execution.ProjectID,
-			execution.SessionID, execution.TurnID, execution.Attempt,
+			execution.SessionID, execution.TurnID, execution.ScheduleOccurrenceID, execution.Attempt,
 			execution.RuntimeRevisionID, execution.RuntimeRevisionSHA256,
 			execution.RuntimeRevisionVersion, execution.Version, execution.Fence,
 			execution.GrantGeneration, execution.ImmutableInputSHA256,
@@ -1563,7 +1564,7 @@ type commandIdentity struct {
 }
 
 func identity(principal value.Principal) commandIdentity {
-	return commandIdentity{
+	result := commandIdentity{
 		ActorID:             principal.ActorID,
 		OrganizationID:      principal.OrganizationID,
 		ProjectID:           principal.ProjectID,
@@ -1578,6 +1579,17 @@ func identity(principal value.Principal) commandIdentity {
 		AuthorityDigest:     principal.AuthorityDigest,
 		GrantGeneration:     principal.AuthorityGrantGeneration,
 	}
+	// У короткоживущего application grant reference/revision/digest описывают
+	// только текущий bearer. Они участвуют в transport replay protection, но не
+	// меняют долговечный semantic intent уже проверенной workload-команды.
+	// Bound grants несут generation и сохраняют exact session/turn lineage.
+	if principal.AuthoritySource == "APPLICATION_GRANT" &&
+		principal.AuthorityGrantGeneration == 0 {
+		result.AuthorityReference = ""
+		result.AuthorityRevision = 0
+		result.AuthorityDigest = ""
+	}
+	return result
 }
 
 // semanticCommandHash связывает долговечный intent только со стабильной

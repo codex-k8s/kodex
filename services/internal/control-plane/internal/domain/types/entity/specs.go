@@ -1024,6 +1024,7 @@ type OwnerGateSpec struct {
 	DeliveredAt              time.Time `json:"deliveredAt,omitempty"`
 	ScheduleID               string    `json:"scheduleId,omitempty"`
 	OccurrenceID             string    `json:"occurrenceId,omitempty"`
+	NotificationRoomID       string    `json:"notificationRoomId,omitempty"`
 	DecisionReceiptSHA256    string    `json:"decisionReceiptSha256,omitempty"`
 	ContinuationTurnID       string    `json:"continuationTurnId,omitempty"`
 	ContinuationTurnVersion  uint64    `json:"continuationTurnVersion,omitempty"`
@@ -1049,6 +1050,7 @@ func (spec OwnerGateSpec) Validate() error {
 		!validSHA256(spec.DeliveryPayloadSHA256) ||
 		(spec.ScheduleID != "" && value.ValidateID(spec.ScheduleID) != nil) ||
 		(spec.OccurrenceID != "" && value.ValidateID(spec.OccurrenceID) != nil) ||
+		(spec.NotificationRoomID != "" && value.ValidateID(spec.NotificationRoomID) != nil) ||
 		(spec.ContinuationTurnID != "" && value.ValidateID(spec.ContinuationTurnID) != nil) ||
 		(spec.Decision != "" && spec.Decision != "APPROVED" &&
 			spec.Decision != "REJECTED" &&
@@ -1082,6 +1084,9 @@ func (spec OwnerGateSpec) Validate() error {
 	}
 	if (spec.ScheduleID == "") != (spec.OccurrenceID == "") {
 		return errors.New("owner gate schedule lineage is incomplete")
+	}
+	if spec.NotificationRoomID != "" && spec.ScheduleID == "" {
+		return errors.New("owner gate notification route is invalid")
 	}
 	continuation := spec.DecisionReceiptSHA256 != "" || spec.ContinuationTurnID != "" ||
 		spec.ContinuationTurnVersion != 0 || spec.ContinuationInputSHA256 != ""

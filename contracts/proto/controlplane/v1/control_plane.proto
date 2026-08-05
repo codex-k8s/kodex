@@ -98,6 +98,9 @@ service ControlPlaneService {
 
   // ManageSchedule изменяет расписание только через закрытые действия сервера.
   rpc ManageSchedule(ManageScheduleRequest) returns (ManageScheduleResponse);
+  // RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
+  // плановый watermark расписания.
+  rpc RunScheduleNow(RunScheduleNowRequest) returns (RunScheduleNowResponse);
   // ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
   // среды исполнения.
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
@@ -807,6 +810,8 @@ message ScheduleSpec {
   ScheduleOverlapPolicy overlap_policy = 5;
   ScheduleMisfirePolicy misfire_policy = 6;
   google.protobuf.Duration misfire_grace = 7;
+  // next_run_at — output-only owner watermark. Значение request игнорируется,
+  // первый запуск вычисляется control-plane по PostgreSQL time.
   google.protobuf.Timestamp next_run_at = 8;
   ResourceKind target_kind = 9;
   uint64 target_version = 10;
@@ -864,6 +869,8 @@ message OwnerGateSpec {
   string continuation_turn_id = 27;
   uint64 continuation_turn_version = 28;
   string continuation_input_sha256 = 29;
+  // notification_room_id — exact server-owned route scheduled owner gate.
+  string notification_room_id = 30;
 }
 
 // MemoryRecordSpec описывает версионированное сообщение контракта control-plane.
@@ -1517,6 +1524,16 @@ message ManageScheduleResponse {
   Resource schedule = 1;
 }
 
+message RunScheduleNowRequest {
+  string idempotency_key = 1;
+  string schedule_id = 2;
+  uint64 expected_version = 3;
+}
+
+message RunScheduleNowResponse {
+  ScheduleOccurrence occurrence = 1;
+}
+
 // ClaimDueSchedulesRequest описывает версионированное сообщение контракта control-plane.
 message ClaimDueSchedulesRequest {
   string idempotency_key = 1;
@@ -1571,6 +1588,9 @@ message ClaimScheduleOccurrenceRequest {
 message ClaimScheduleOccurrenceResponse {
   ScheduleOccurrence occurrence = 1;
   string lease_token = 2;
+  // project_id является только locator, cryptographically bound lease_token
+  // остаётся единственным доказательством exact occurrence authority.
+  string project_id = 3;
 }
 
 // CompleteScheduleOccurrenceRequest описывает версионированное сообщение контракта control-plane.
@@ -1581,6 +1601,8 @@ message CompleteScheduleOccurrenceRequest {
   uint32 expected_attempt = 4;
   reserved 5, 6, 7;
   reserved "terminal_state", "outcome", "result_artifact_id";
+  // project_id — непривилегированный locator, проверяемый exact lease token.
+  string project_id = 8;
 }
 
 // CompleteScheduleOccurrenceResponse описывает версионированное сообщение контракта control-plane.
@@ -1797,6 +1819,9 @@ message ClaimInteractionDeliveryResponse {
   uint64 artifact_size_bytes = 25;
   string artifact_media_type = 26;
   bytes inline_payload = 27;
+  string notification_room_id = 28;
+  ScheduleNotificationPolicy notification_policy = 29;
+  ScheduledOutcome scheduled_outcome = 30;
 }
 
 message RecordInteractionDeliveryRequest {
@@ -1959,6 +1984,15 @@ enum RuntimeTerminalOutcome {
   RUNTIME_TERMINAL_OUTCOME_BLOCKED = 6;
 }
 
+// ScheduledOutcome — закрытый бизнес-исход scheduled root execution.
+enum ScheduledOutcome {
+  SCHEDULED_OUTCOME_UNSPECIFIED = 0;
+  SCHEDULED_OUTCOME_NO_ACTION = 1;
+  SCHEDULED_OUTCOME_ACTION_TAKEN = 2;
+  SCHEDULED_OUTCOME_REQUIRES_HUMAN = 3;
+  SCHEDULED_OUTCOME_FAILED = 4;
+}
+
 // RuntimeCleanupAuthorizationState — crash-safe lifecycle destructive authorization.
 enum RuntimeCleanupAuthorizationState {
   RUNTIME_CLEANUP_AUTHORIZATION_STATE_UNSPECIFIED = 0;
@@ -2018,6 +2052,8 @@ message RuntimeExecution {
   RuntimeCleanupAuthorizationState cleanup_authorization_state = 38;
   uint64 cleanup_authorization_generation = 39;
   google.protobuf.Timestamp cleanup_consumed_at = 40;
+  // schedule_occurrence_id заполняется owner-side только для scheduled graph.
+  string schedule_occurrence_id = 103;
   string cleanup_pvc_name = 41;
   string cleanup_pvc_uid = 42;
   string cleanup_pvc_resource_version = 43;
@@ -2308,6 +2344,7 @@ message CompleteRuntimeExecutionRequest {
   string archive_sha256 = 18;
   string archive_provenance = 19;
   string archive_relative_path = 20;
+  ScheduledOutcome scheduled_outcome = 21;
 }
 
 message RuntimeOutput {

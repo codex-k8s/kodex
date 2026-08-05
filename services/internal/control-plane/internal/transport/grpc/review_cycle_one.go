@@ -396,6 +396,26 @@ func (server *Server) ManageSchedule(
 	return &controlplanev1.ManageScheduleResponse{Schedule: encoded}, nil
 }
 
+func (server *Server) RunScheduleNow(
+	ctx context.Context,
+	request *controlplanev1.RunScheduleNowRequest,
+) (*controlplanev1.RunScheduleNowResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_RunScheduleNow_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	occurrence, err := server.service.RunScheduleNow(ctx, resource.RunScheduleNowInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		ScheduleID: request.GetScheduleId(), ExpectedVersion: request.GetExpectedVersion(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.RunScheduleNowResponse{Occurrence: toProtoOccurrence(occurrence)}, nil
+}
+
 func (server *Server) ClaimScheduleOccurrence(
 	ctx context.Context,
 	request *controlplanev1.ClaimScheduleOccurrenceRequest,
@@ -420,6 +440,7 @@ func (server *Server) ClaimScheduleOccurrence(
 	return &controlplanev1.ClaimScheduleOccurrenceResponse{
 		Occurrence: toProtoOccurrence(claimed.Occurrence),
 		LeaseToken: claimed.LeaseToken,
+		ProjectId:  claimed.ProjectID,
 	}, nil
 }
 
@@ -442,6 +463,7 @@ func (server *Server) CompleteScheduleOccurrence(
 			OccurrenceID:    request.GetOccurrenceId(),
 			LeaseToken:      request.GetLeaseToken(),
 			ExpectedAttempt: request.GetExpectedAttempt(),
+			ProjectID:       request.GetProjectId(),
 		},
 	)
 	if err != nil {

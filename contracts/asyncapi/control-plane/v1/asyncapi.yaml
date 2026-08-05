@@ -1,10 +1,10 @@
 asyncapi: 3.0.0
 info:
   title: Доменные факты control-plane
-  version: 1.1.0
+  version: 1.2.0
   description: >-
-    Два утверждённых неизменяемых факта для runtime-controller и
-    automation-scheduler. Полное состояние остаётся доступно через gRPC-чтение.
+    Утверждённый неизменяемый факт для runtime-controller. Полное состояние
+    остаётся доступно через gRPC-чтение; automation-scheduler использует polling.
 defaultContentType: application/json
 servers:
   staging:
@@ -21,11 +21,6 @@ channels:
     messages:
       runtimeConfigurationChanged:
         $ref: '#/components/messages/runtimeConfigurationChanged'
-  scheduleChanged:
-    address: control_plane.schedule_changed
-    messages:
-      scheduleChanged:
-        $ref: '#/components/messages/scheduleChanged'
 operations:
   publishRuntimeConfigurationChanged:
     action: send
@@ -53,39 +48,11 @@ operations:
       duplicate: ACK_WITHOUT_EFFECT
       stale: ACK_WITHOUT_EFFECT
       gap: RETRY_WITHOUT_ACK
-  publishScheduleChanged:
-    action: send
-    channel:
-      $ref: '#/channels/scheduleChanged'
-    summary: Уведомить automation-scheduler о новой версии расписания.
-    x-publisher: control-plane
-    x-consumers:
-      - service: automation-scheduler
-        purpose: REFRESH_DUE_SCHEDULE_BY_GRPC
-        exactEffect: >-
-          Прочитать расписание через версионированный gRPC control-plane,
-          атомарно заменить локальную проекцию с устойчивыми inbox и курсором.
-        readiness: >-
-          Подписка запускается только после готовности устойчивого inbox,
-          точного контракта JetStream и защищённого версионированного GetResource.
-    x-delivery:
-      mode: AT_LEAST_ONCE
-      deduplicationKey: eventId
-      orderingKey: organizationId+eventName+aggregateType+aggregateId
-      sequenceField: eventSequence
-      duplicate: ACK_WITHOUT_EFFECT
-      stale: ACK_WITHOUT_EFFECT
-      gap: RETRY_WITHOUT_ACK
 components:
   messages:
     runtimeConfigurationChanged:
       name: control_plane.runtime_configuration_changed
       title: Конфигурация среды исполнения изменена
-      payload:
-        $ref: '#/components/schemas/envelope'
-    scheduleChanged:
-      name: control_plane.schedule_changed
-      title: Расписание изменено
       payload:
         $ref: '#/components/schemas/envelope'
   schemas:
@@ -111,9 +78,7 @@ components:
           format: uuid
         eventName:
           type: string
-          enum:
-            - control_plane.runtime_configuration_changed
-            - control_plane.schedule_changed
+          const: control_plane.runtime_configuration_changed
         eventVersion:
           type: integer
           const: 1

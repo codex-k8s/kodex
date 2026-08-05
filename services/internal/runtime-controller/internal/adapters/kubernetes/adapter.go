@@ -975,6 +975,7 @@ type runnerInput struct {
 	ImmutableInputSHA256                   string                  `json:"immutable_input_sha256"`
 	SessionID                              string                  `json:"session_id"`
 	TurnID                                 string                  `json:"turn_id"`
+	ScheduleOccurrenceID                   string                  `json:"schedule_occurrence_id,omitempty"`
 	Attempt                                uint32                  `json:"attempt"`
 	SessionKey                             string                  `json:"session_key"`
 	ProviderBindingID                      string                  `json:"provider_binding_id"`
@@ -1061,7 +1062,8 @@ func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.
 		EffectiveRuntimeSHA256: execution.EffectiveRuntimeSHA256,
 		ImmutableInputSHA256:   execution.ImmutableInputSHA256,
 		SessionID:              execution.SessionID, TurnID: execution.TurnID, Attempt: execution.Attempt,
-		SessionKey: execution.AgentSessionKey, ProviderBindingID: execution.ProviderBindingID,
+		ScheduleOccurrenceID: execution.ScheduleOccurrenceID,
+		SessionKey:           execution.AgentSessionKey, ProviderBindingID: execution.ProviderBindingID,
 		ProviderAccountName:    revision.ProviderAccountName,
 		MCPBindingVersion:      mcpBindingVersion,
 		ProviderBindingVersion: execution.ProviderBindingVersion, ProviderBindingSHA256: execution.ProviderBindingSHA256,
@@ -1604,9 +1606,11 @@ func castHandoffV2(source runtimecontract.HandoffV2) *entity.RuntimeHandoff {
 		ExecutionVersion: source.ExecutionVersion, Fence: source.Fence, GrantGeneration: source.GrantGeneration,
 		RuntimeRevisionSHA256: source.RuntimeRevisionSHA256, EffectiveRuntimeSHA256: source.EffectiveRuntimeSHA256,
 		ImmutableInputSHA256: source.ImmutableInputSHA256, SessionID: source.SessionID, TurnID: source.TurnID,
-		Attempt: source.Attempt, ProviderBindingID: source.ProviderBindingID,
+		ScheduleOccurrenceID: source.ScheduleOccurrenceID,
+		Attempt:              source.Attempt, ProviderBindingID: source.ProviderBindingID,
 		ProviderBindingVersion: source.ProviderBindingVersion, ProviderBindingSHA256: source.ProviderBindingSHA256,
-		Outcome: source.Outcome, TerminalReference: source.TerminalReference, TerminalSHA256: source.TerminalSHA256,
+		Outcome: source.Outcome, ScheduledOutcome: source.ScheduledOutcome,
+		TerminalReference: source.TerminalReference, TerminalSHA256: source.TerminalSHA256,
 		CodexSessionID: source.CodexSessionID, ArchiveRelativePath: source.ArchiveRelativePath, ArchiveSHA256: source.ArchiveSHA256,
 		ArchiveProvenance: source.ArchiveProvenance, ObservedAt: source.ObservedAt}
 	for _, output := range source.Outputs {

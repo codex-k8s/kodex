@@ -43,7 +43,6 @@ packages:
     source: contracts/asyncapi/control-plane/v1/asyncapi.yaml
     consumers:
       - runtime-controller
-      - automation-scheduler
   - id: control-plane-v1
     format: proto
     owner: control-plane

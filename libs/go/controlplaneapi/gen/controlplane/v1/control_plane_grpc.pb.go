@@ -56,6 +56,7 @@ const (
 	ControlPlaneService_ManageMemoryRecord_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
 	ControlPlaneService_ManageWorkClaim_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
 	ControlPlaneService_ManageSchedule_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ManageSchedule"
+	ControlPlaneService_RunScheduleNow_FullMethodName                           = "/controlplane.v1.ControlPlaneService/RunScheduleNow"
 	ControlPlaneService_ClaimDueSchedules_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
 	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
 	ControlPlaneService_CompleteScheduleOccurrence_FullMethodName               = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
@@ -209,6 +210,9 @@ type ControlPlaneServiceClient interface {
 	ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(ctx context.Context, in *ManageScheduleRequest, opts ...grpc.CallOption) (*ManageScheduleResponse, error)
+	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
+	// плановый watermark расписания.
+	RunScheduleNow(ctx context.Context, in *RunScheduleNowRequest, opts ...grpc.CallOption) (*RunScheduleNowResponse, error)
 	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
 	// среды исполнения.
 	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
@@ -716,6 +720,16 @@ func (c *controlPlaneServiceClient) ManageSchedule(ctx context.Context, in *Mana
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageScheduleResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RunScheduleNow(ctx context.Context, in *RunScheduleNowRequest, opts ...grpc.CallOption) (*RunScheduleNowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunScheduleNowResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RunScheduleNow_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1404,6 +1418,9 @@ type ControlPlaneServiceServer interface {
 	ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error)
+	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
+	// плановый watermark расписания.
+	RunScheduleNow(context.Context, *RunScheduleNowRequest) (*RunScheduleNowResponse, error)
 	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
 	// среды исполнения.
 	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
@@ -1657,6 +1674,9 @@ func (UnimplementedControlPlaneServiceServer) ManageWorkClaim(context.Context, *
 }
 func (UnimplementedControlPlaneServiceServer) ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageSchedule not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RunScheduleNow(context.Context, *RunScheduleNowRequest) (*RunScheduleNowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunScheduleNow not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimDueSchedules not implemented")
@@ -2518,6 +2538,24 @@ func _ControlPlaneService_ManageSchedule_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ManageSchedule(ctx, req.(*ManageScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RunScheduleNow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunScheduleNowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RunScheduleNow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RunScheduleNow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RunScheduleNow(ctx, req.(*RunScheduleNowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3738,6 +3776,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ManageSchedule",
 			Handler:    _ControlPlaneService_ManageSchedule_Handler,
+		},
+		{
+			MethodName: "RunScheduleNow",
+			Handler:    _ControlPlaneService_RunScheduleNow_Handler,
 		},
 		{
 			MethodName: "ClaimDueSchedules",

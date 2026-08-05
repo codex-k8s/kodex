@@ -254,6 +254,7 @@ func (server *Server) CompleteRuntimeExecution(
 			LeaseToken:              request.GetLeaseToken(),
 		},
 		Outcome:           runtimeTerminalOutcome(request.GetOutcome()),
+		ScheduledOutcome:  scheduledOutcome(request.GetScheduledOutcome()),
 		TerminalReference: request.GetTerminalReference(),
 		TerminalSHA256:    request.GetTerminalSha256(),
 		Outputs:           outputs, CodexSessionID: request.GetCodexSessionId(), ArchiveRelativePath: request.GetArchiveRelativePath(), ArchiveSHA256: request.GetArchiveSha256(),
@@ -265,6 +266,15 @@ func (server *Server) CompleteRuntimeExecution(
 	return &controlplanev1.CompleteRuntimeExecutionResponse{
 		Execution: toProtoRuntimeExecution(execution),
 	}, nil
+}
+
+func scheduledOutcome(value controlplanev1.ScheduledOutcome) string {
+	return map[controlplanev1.ScheduledOutcome]string{
+		controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_NO_ACTION:      "no_action",
+		controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_ACTION_TAKEN:   "action_taken",
+		controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_REQUIRES_HUMAN: "requires_human",
+		controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_FAILED:         "failed",
+	}[value]
 }
 
 func (server *Server) CancelRuntimeExecution(
@@ -615,6 +625,7 @@ func toProtoRuntimeExecution(execution resource.RuntimeExecution) *controlplanev
 		ProjectId: execution.ProjectID, ProcessId: execution.ProcessID,
 		SessionId: execution.SessionID, ThreadId: execution.ThreadID,
 		RoleId: execution.RoleID, TurnId: execution.TurnID, Attempt: execution.Attempt,
+		ScheduleOccurrenceId:   execution.ScheduleOccurrenceID,
 		RuntimeRevisionId:      execution.RuntimeRevisionID,
 		RuntimeRevisionVersion: execution.RuntimeRevisionVersion,
 		RuntimeRevisionSha256:  execution.RuntimeRevisionSHA256,

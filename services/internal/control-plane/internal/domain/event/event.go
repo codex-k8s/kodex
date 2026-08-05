@@ -9,7 +9,6 @@ import (
 
 const (
 	RuntimeConfigurationChanged = "control_plane.runtime_configuration_changed"
-	ScheduleChanged             = "control_plane.schedule_changed"
 )
 
 // Change — безопасная ссылка для авторитетного чтения потребителем.
@@ -36,8 +35,6 @@ func EventNameForKind(kind enum.Kind) (string, bool) {
 		enum.KindRepositoryWorkspace, enum.KindIntegration,
 		enum.KindRuntimeRevision, enum.KindSession, enum.KindTurn:
 		return RuntimeConfigurationChanged, true
-	case enum.KindSchedule:
-		return ScheduleChanged, true
 	default:
 		return "", false
 	}

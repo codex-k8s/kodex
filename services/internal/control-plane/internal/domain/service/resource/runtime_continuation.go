@@ -591,11 +591,16 @@ func (service *Service) ClaimRuntimeExecution(
 			if threadID == "" {
 				threadID = resolved.Session.ID
 			}
+			scheduleOccurrenceID, err := resolvedScheduleOccurrenceID(resolved)
+			if err != nil {
+				return err
+			}
 			result = RuntimeExecution{
 				ID: executionID, OrganizationID: principal.OrganizationID,
 				ProjectID: principal.ProjectID, ProcessID: resolved.Process.ID,
 				SessionID: resolved.Session.ID, ThreadID: threadID,
 				RoleID: resolved.Role.ID, TurnID: resolved.Turn.ID,
+				ScheduleOccurrenceID:   scheduleOccurrenceID,
 				Attempt:                resolved.TurnSpec.Attempt,
 				RuntimeRevisionID:      resolved.Revision.ID,
 				RuntimeRevisionVersion: resolved.Revision.Version,
@@ -656,12 +661,12 @@ func (service *Service) ClaimRuntimeExecution(
 				Attempt                                                                           uint32
 				Fence, GrantGeneration                                                            uint64
 				AgentBindingSHA256, CredentialSnapshotSHA256, ResourceClass, ClusterAccessProfile string
-				CodexDeliveryRecoverySourceExecutionID                                            string
+				CodexDeliveryRecoverySourceExecutionID, ScheduleOccurrenceID                      string
 			}{result.ID, result.SessionID, result.TurnID, result.RuntimeRevisionSHA256,
 				result.EffectiveRuntimeSHA256, result.Attempt, result.Fence, result.GrantGeneration,
 				result.AgentBindingSHA256, result.CredentialSnapshotSHA256,
 				result.ResourceClass, result.ClusterAccessProfile,
-				result.CodexDeliveryRecoverySourceExecutionID})
+				result.CodexDeliveryRecoverySourceExecutionID, result.ScheduleOccurrenceID})
 			if err != nil {
 				return errs.ErrInternal
 			}
@@ -686,6 +691,28 @@ func runtimeExecutionID(turnID string, attempt uint32) string {
 		namespace = uuid.NameSpaceURL
 	}
 	return uuid.NewSHA1(namespace, []byte(fmt.Sprintf("runtime-execution:%d", attempt))).String()
+}
+
+func resolvedScheduleOccurrenceID(resolved resolvedExecution) (string, error) {
+	const prefix = "schedule-occurrence:"
+	fromSource := ""
+	if strings.HasPrefix(resolved.TurnSpec.SourceRef, prefix) {
+		fromSource = strings.TrimPrefix(resolved.TurnSpec.SourceRef, prefix)
+		if uuid.Validate(fromSource) != nil {
+			return "", errs.ErrStateConflict
+		}
+	}
+	fromProcess := resolved.ProcessSpec.OccurrenceID
+	if fromProcess != "" && uuid.Validate(fromProcess) != nil {
+		return "", errs.ErrStateConflict
+	}
+	if fromSource != "" && fromProcess != "" && fromSource != fromProcess {
+		return "", errs.ErrStateConflict
+	}
+	if fromProcess != "" {
+		return fromProcess, nil
+	}
+	return fromSource, nil
 }
 
 func (service *Service) runtimeMaterializations(
@@ -1359,6 +1386,16 @@ func (service *Service) CompleteRuntimeExecution(
 		!validSHA256Text(input.TerminalSHA256) {
 		return RuntimeExecution{}, errs.ErrInvalidInput
 	}
+	if input.ScheduledOutcome != "" && input.ScheduledOutcome != "no_action" &&
+		input.ScheduledOutcome != "action_taken" && input.ScheduledOutcome != "requires_human" &&
+		input.ScheduledOutcome != "failed" {
+		return RuntimeExecution{}, errs.ErrInvalidInput
+	}
+	if input.ScheduledOutcome == "requires_human" && input.Outcome != "SUCCEEDED" ||
+		input.ScheduledOutcome == "failed" && input.Outcome == "SUCCEEDED" ||
+		(input.ScheduledOutcome == "no_action" || input.ScheduledOutcome == "action_taken") && input.Outcome != "SUCCEEDED" {
+		return RuntimeExecution{}, errs.ErrInvalidInput
+	}
 	preflightBlocked := input.Outcome == "BLOCKED" && strings.HasPrefix(input.TerminalReference, "preflight://") &&
 		input.CodexSessionID == "" && input.ArchiveRelativePath == "" && input.ArchiveSHA256 == "" && input.ArchiveProvenance == ""
 	if validateRuntimeOutputs(input.Outputs) != nil || (!preflightBlocked && (uuid.Validate(input.CodexSessionID) != nil ||
@@ -1369,11 +1406,11 @@ func (service *Service) CompleteRuntimeExecution(
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
 		Runtime                                                               runtimeExecutionIntent
-		Outcome, TerminalReference, TerminalSHA256                            string
+		Outcome, ScheduledOutcome, TerminalReference, TerminalSHA256          string
 		CodexSessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
 		Outputs                                                               []RuntimeOutput
 	}{
-		runtimeIntent(input.RuntimeExecutionInput), input.Outcome, input.TerminalReference,
+		runtimeIntent(input.RuntimeExecutionInput), input.Outcome, input.ScheduledOutcome, input.TerminalReference,
 		input.TerminalSHA256, input.CodexSessionID, input.ArchiveRelativePath, input.ArchiveSHA256, input.ArchiveProvenance,
 		slices.Clone(input.Outputs),
 	})
@@ -1392,9 +1429,13 @@ func (service *Service) CompleteRuntimeExecution(
 			if err != nil {
 				return 0, err
 			}
+			terminalStates := []string{input.Outcome}
+			if input.ScheduledOutcome == "requires_human" {
+				terminalStates = []string{"SUSPENDED"}
+			}
 			disposition, err := runtimeMutationReceiptDisposition(
 				locked.Execution, input.RuntimeExecutionInput,
-				[]string{"ADMITTED", "RUNNING"}, []string{input.Outcome}, 1,
+				[]string{"ADMITTED", "RUNNING"}, terminalStates, 1,
 			)
 			if err != nil {
 				return 0, err
@@ -1413,6 +1454,9 @@ func (service *Service) CompleteRuntimeExecution(
 				return 0, err
 			}
 			receiptExecution = locked.Execution
+			if (locked.Execution.ScheduleOccurrenceID == "") != (input.ScheduledOutcome == "") {
+				return 0, errs.ErrStateConflict
+			}
 			return disposition, nil
 		},
 		func() error { return runtimeReceiptMatchesCurrent(receiptExecution, result) },
@@ -1449,6 +1493,9 @@ func (service *Service) CompleteRuntimeExecution(
 				!execution.LeaseExpiresAt.After(now) {
 				return errs.ErrStateConflict
 			}
+			if (execution.ScheduleOccurrenceID == "") != (input.ScheduledOutcome == "") {
+				return errs.ErrStateConflict
+			}
 			for _, output := range input.Outputs {
 				expectedArtifactID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:runtime-output:"+
 					execution.ID+":"+output.Kind+":"+strconv.FormatUint(uint64(output.Sequence), 10)+":"+output.ArtifactSHA256)).String()
@@ -1457,15 +1504,25 @@ func (service *Service) CompleteRuntimeExecution(
 				}
 			}
 			primary := input.Outputs[0]
+			if input.ScheduledOutcome == "requires_human" {
+				result, err = service.waitScheduledRuntimeOwner(
+					ctx, tx, input.Principal, execution, graph, input, primary, requestHash, now,
+				)
+				return err
+			}
 			turnState := enum.StateSucceeded
 			if input.Outcome == "FAILED" {
 				turnState = enum.StateFailed
 			} else if input.Outcome == "BLOCKED" {
 				turnState = enum.StateBlocked
 			}
+			businessOutcome := strings.ToLower(input.Outcome)
+			if input.ScheduledOutcome != "" {
+				businessOutcome = input.ScheduledOutcome
+			}
 			closedTurn, err := service.closeRuntimeGraph(
 				ctx, tx, input.Principal, execution, turnState,
-				strings.ToLower(input.Outcome), now, &runtimeResultArtifact{ID: primary.ArtifactID,
+				businessOutcome, now, &runtimeResultArtifact{ID: primary.ArtifactID,
 					Version: primary.ArtifactVersion, SHA256: primary.ArtifactSHA256,
 					Name: primary.ArtifactName, MediaType: primary.ArtifactMediaType,
 					Payload: slices.Clone(primary.ArtifactPayload)},

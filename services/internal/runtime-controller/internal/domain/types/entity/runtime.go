@@ -21,6 +21,7 @@ var codexRolloutPattern = regexp.MustCompile(`^\.matter-codex/state/codex-home/s
 
 type Execution struct {
 	ID, OrganizationID, ProjectID, ProcessID, SessionID, ThreadID, RoleID, TurnID string
+	ScheduleOccurrenceID                                                          string
 	Attempt                                                                       uint32
 	RuntimeRevisionID                                                             string
 	RuntimeRevisionVersion                                                        uint64
@@ -528,12 +529,12 @@ type RuntimeStatus struct {
 
 type RuntimeHandoff struct {
 	Schema, ExecutionID, RuntimeRevisionSHA256, ImmutableInputSHA256      string
-	EffectiveRuntimeSHA256, SessionID, TurnID                             string
+	EffectiveRuntimeSHA256, SessionID, TurnID, ScheduleOccurrenceID       string
 	ExecutionVersion, Fence, GrantGeneration                              uint64
 	Attempt                                                               uint32
 	ProviderBindingID, ProviderBindingSHA256                              string
 	ProviderBindingVersion                                                uint64
-	Outcome, TerminalReference, TerminalSHA256                            string
+	Outcome, ScheduledOutcome, TerminalReference, TerminalSHA256          string
 	Outputs                                                               []RuntimeOutput
 	CodexSessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
 	ObservedAt                                                            time.Time

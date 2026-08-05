@@ -14,6 +14,7 @@ tags:
   - { name: projects, description: Проекты в разрешённой owner boundary. }
   - { name: resources, description: Управление ресурсами через control-plane. }
   - { name: projections, description: Авторитетные read-only проекции. }
+  - { name: schedules, description: Специализированные owner-команды расписаний. }
 paths:
   /session:
     post:
@@ -255,6 +256,31 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /schedules/{scheduleId}/run-now:
+    post:
+      tags: [schedules]
+      summary: Создать отдельный немедленный запуск без сдвига watermark
+      operationId: runScheduleNow
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '202': { description: Немедленная occurrence устойчиво создана control-plane. }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }

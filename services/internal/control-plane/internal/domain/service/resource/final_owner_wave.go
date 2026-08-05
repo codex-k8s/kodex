@@ -214,7 +214,7 @@ func (service *Service) continueOwnerGateGraph(
 				RuntimeRevisionVersion: revision.Version,
 				InputSHA256:            continuationSpec.EffectiveInputSHA256,
 			},
-			"owner_gate_changes_requested",
+			"requires_human",
 			now,
 		); err != nil {
 			return OwnerGateResult{}, err
@@ -227,6 +227,7 @@ func (service *Service) continueOwnerGateGraph(
 		if err := tx.ContinueScheduledRun(ctx, domainrepo.ScheduledRun{
 			OccurrenceID:                       occurrence.ID,
 			Attempt:                            occurrence.Attempt,
+			Outcome:                            "requires_human",
 			ContinuationTurnID:                 continuation.ID,
 			ContinuationTurnVersion:            continuation.Version,
 			ContinuationRuntimeRevisionID:      revision.ID,
@@ -336,16 +337,26 @@ func (service *Service) finishContinuationOccurrence(
 		!turn.State.Terminal() {
 		return errs.ErrStateConflict
 	}
-	now := service.now().UTC().Truncate(time.Microsecond)
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return err
+	}
+	now = now.UTC().Truncate(time.Microsecond)
+	closedOutcome, err := closedScheduledTerminalOutcome(
+		scheduledTerminalState(turn.State), turnSpec.Outcome,
+	)
+	if err != nil {
+		return err
+	}
 	occurrence.State = scheduledTerminalState(turn.State)
-	occurrence.Outcome = turnSpec.Outcome
+	occurrence.Outcome = closedOutcome
 	occurrence.ResultArtifactID = turnSpec.ResultArtifactID
 	occurrence.UpdatedAt = now
 	if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
 		OccurrenceID:     occurrence.ID,
 		Attempt:          occurrence.Attempt,
 		State:            occurrence.State,
-		Outcome:          turnSpec.Outcome,
+		Outcome:          closedOutcome,
 		ResultArtifactID: turnSpec.ResultArtifactID,
 		FinishedAt:       now,
 	}); err != nil {
@@ -494,8 +505,13 @@ func (service *Service) expireOwnerGateGraph(
 	if !ok || process.Kind != enum.KindProcessRun ||
 		process.State != enum.StateWaitingOwner ||
 		process.OwnerActorID != gate.OwnerActorID ||
-		processSpec.RootInitiatorActorID != gateSpec.RootInitiatorActorID ||
-		processSpec.ImmutableInputSHA256 != gateSpec.ImmutableInputSHA256 {
+		processSpec.RootInitiatorActorID != gateSpec.RootInitiatorActorID {
+		return OwnerGateResult{}, errs.ErrStateConflict
+	}
+	execution, err := currentExecution(processSpec)
+	if err != nil || execution.SessionID != gateSpec.SessionID ||
+		execution.TurnID != gateSpec.TurnID || execution.Attempt != gateSpec.Attempt ||
+		execution.InputSHA256 != gateSpec.ImmutableInputSHA256 {
 		return OwnerGateResult{}, errs.ErrStateConflict
 	}
 	turn := graph.Turn
@@ -569,7 +585,7 @@ func (service *Service) expireOwnerGateGraph(
 			return OwnerGateResult{}, errs.ErrStateConflict
 		}
 		occurrence.State = "FAILED"
-		occurrence.Outcome = "owner_gate_expired"
+		occurrence.Outcome = "failed"
 		occurrence.ResultArtifactID = ""
 		occurrence.UpdatedAt = now
 		if err := tx.UpdateScheduleOccurrence(
@@ -581,7 +597,7 @@ func (service *Service) expireOwnerGateGraph(
 			OccurrenceID: occurrence.ID,
 			Attempt:      occurrence.Attempt,
 			State:        "FAILED",
-			Outcome:      "owner_gate_expired",
+			Outcome:      "failed",
 			FinishedAt:   now,
 		}); err != nil {
 			return OwnerGateResult{}, err

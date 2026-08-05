@@ -31,6 +31,7 @@ type Config struct {
 }
 
 type Claim struct {
+	ProjectID      string
 	OccurrenceID   string
 	Attempt        uint32
 	LeaseToken     string
@@ -100,7 +101,7 @@ func (client *Client) ClaimNext(ctx context.Context, key string) (Claim, error) 
 	}
 	occurrence := response.GetOccurrence()
 	if occurrence == nil || occurrence.GetOccurrenceId() == "" || occurrence.GetAttempt() == 0 ||
-		response.GetLeaseToken() == "" || occurrence.GetLeaseExpiresAt() == nil {
+		response.GetProjectId() == "" || response.GetLeaseToken() == "" || occurrence.GetLeaseExpiresAt() == nil {
 		return Claim{}, errors.New("claimed schedule occurrence is incomplete")
 	}
 	leaseExpiresAt := occurrence.GetLeaseExpiresAt().AsTime()
@@ -108,6 +109,7 @@ func (client *Client) ClaimNext(ctx context.Context, key string) (Claim, error) 
 		return Claim{}, errors.New("claimed schedule occurrence lease is invalid")
 	}
 	return Claim{
+		ProjectID:    response.GetProjectId(),
 		OccurrenceID: occurrence.GetOccurrenceId(), Attempt: occurrence.GetAttempt(),
 		LeaseToken: response.GetLeaseToken(), LeaseExpiresAt: leaseExpiresAt,
 	}, nil
@@ -116,7 +118,7 @@ func (client *Client) ClaimNext(ctx context.Context, key string) (Claim, error) 
 func (client *Client) Complete(ctx context.Context, claim Claim, key string) (string, error) {
 	request := &controlplanev1.CompleteScheduleOccurrenceRequest{
 		IdempotencyKey: key, OccurrenceId: claim.OccurrenceID,
-		LeaseToken: claim.LeaseToken, ExpectedAttempt: claim.Attempt,
+		LeaseToken: claim.LeaseToken, ExpectedAttempt: claim.Attempt, ProjectId: claim.ProjectID,
 	}
 	var response *controlplanev1.CompleteScheduleOccurrenceResponse
 	err := client.retryUnknown(ctx, func(callCtx context.Context) error {

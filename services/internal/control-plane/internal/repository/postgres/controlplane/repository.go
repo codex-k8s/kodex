@@ -1483,8 +1483,11 @@ func (wrapped *transaction) EnqueueInteractionDelivery(
 		"artifact_id": work.ArtifactID, "artifact_version": work.ArtifactVersion,
 		"artifact_sha256": work.ArtifactSHA256, "artifact_name": work.ArtifactName,
 		"artifact_storage_ref": work.ArtifactStorageRef, "artifact_size_bytes": work.ArtifactSizeBytes,
-		"artifact_media_type": work.ArtifactMediaType,
-		"inline_payload":      work.InlinePayload,
+		"artifact_media_type":  work.ArtifactMediaType,
+		"inline_payload":       work.InlinePayload,
+		"notification_room_id": work.NotificationRoomID,
+		"notification_policy":  work.NotificationPolicy,
+		"scheduled_outcome":    work.ScheduledOutcome,
 	})
 	if err != nil {
 		return mapError(err)
@@ -1506,7 +1509,7 @@ func (wrapped *transaction) ClaimInteractionDelivery(ctx context.Context, organi
 		&work.RuntimeRevisionVersion, &work.ImmutableInputSHA256, &work.Kind, &work.LifecycleState,
 		&work.Outcome, &work.ArtifactID, &work.ArtifactVersion, &work.ArtifactSHA256,
 		&work.ArtifactName, &work.ArtifactStorageRef, &work.ArtifactSizeBytes, &work.ArtifactMediaType,
-		&work.InlinePayload,
+		&work.InlinePayload, &work.NotificationRoomID, &work.NotificationPolicy, &work.ScheduledOutcome,
 		&work.Fence, &work.LeaseExpiresAt)
 	return work, mapError(err)
 }
@@ -1673,6 +1676,16 @@ func (wrapped *transaction) DueSchedules(
 		resources = append(resources, resource)
 	}
 	return resources, mapError(rows.Err())
+}
+
+func (wrapped *transaction) NextAutomationProject(
+	ctx context.Context, organizationID, operation string,
+) (string, error) {
+	var projectID string
+	err := wrapped.tx.QueryRow(ctx, sqlAutomationSchedulerProjectNext, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "operation": operation,
+	}).Scan(&projectID)
+	return projectID, mapError(err)
 }
 
 func (wrapped *transaction) SaveScheduleOccurrence(
@@ -2056,13 +2069,13 @@ func scanScheduledRun(row pgx.Row) (domainrepo.ScheduledRun, error) {
 
 func (wrapped *transaction) WaitScheduledRun(
 	ctx context.Context,
-	occurrenceID string,
-	attempt uint32,
+	run domainrepo.ScheduledRun,
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
 		sqlScheduledRunWaitOwner,
-		pgx.StrictNamedArgs{"occurrence_id": occurrenceID, "attempt": attempt},
+		pgx.StrictNamedArgs{"occurrence_id": run.OccurrenceID, "attempt": run.Attempt,
+			"outcome": run.Outcome, "result_artifact_id": run.ResultArtifactID},
 	)
 	if err != nil {
 		return mapError(err)
@@ -2124,6 +2137,7 @@ func (wrapped *transaction) ContinueScheduledRun(
 		pgx.StrictNamedArgs{
 			"occurrence_id":                         run.OccurrenceID,
 			"attempt":                               run.Attempt,
+			"outcome":                               run.Outcome,
 			"continuation_turn_id":                  run.ContinuationTurnID,
 			"continuation_turn_version":             run.ContinuationTurnVersion,
 			"continuation_runtime_revision_id":      run.ContinuationRuntimeRevisionID,
@@ -3023,7 +3037,8 @@ func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamed
 		"project_id": execution.ProjectID, "process_id": execution.ProcessID,
 		"session_id": execution.SessionID, "thread_id": execution.ThreadID,
 		"role_id": execution.RoleID, "turn_id": execution.TurnID,
-		"attempt": execution.Attempt, "runtime_revision_id": execution.RuntimeRevisionID,
+		"schedule_occurrence_id": execution.ScheduleOccurrenceID,
+		"attempt":                execution.Attempt, "runtime_revision_id": execution.RuntimeRevisionID,
 		"runtime_revision_version": execution.RuntimeRevisionVersion,
 		"runtime_revision_sha256":  execution.RuntimeRevisionSHA256,
 		"immutable_input_sha256":   execution.ImmutableInputSHA256,
@@ -3259,7 +3274,7 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 	err := row.Scan(
 		&execution.ID, &execution.OrganizationID, &execution.ProjectID,
 		&execution.ProcessID, &execution.SessionID, &execution.ThreadID,
-		&execution.RoleID, &execution.TurnID, &execution.Attempt,
+		&execution.RoleID, &execution.TurnID, &execution.ScheduleOccurrenceID, &execution.Attempt,
 		&execution.RuntimeRevisionID, &execution.RuntimeRevisionVersion,
 		&execution.RuntimeRevisionSHA256, &execution.ImmutableInputSHA256,
 		&execution.ResourceClass, &execution.ClusterAccessProfile,

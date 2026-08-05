@@ -2,6 +2,12 @@
 WITH candidate AS (
     SELECT occurrence.id
     FROM control_plane.schedule_occurrences AS occurrence
+    JOIN control_plane.resources AS schedule
+      ON schedule.organization_id = occurrence.organization_id
+     AND schedule.project_id = occurrence.project_id
+     AND schedule.id = occurrence.schedule_id
+     AND schedule.kind = 'SCHEDULE'
+     AND schedule.state = 'ACTIVE'
     WHERE occurrence.organization_id = @organization_id::uuid
       AND occurrence.project_id = @project_id::uuid
       AND occurrence.state = 'QUEUED'

@@ -115,7 +115,7 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		case StateClaimed:
 			return to == StateRunning || to == StateQueued ||
 				to == StateSucceeded || to == StateFailed || to == StateCancelled ||
-				to == StateExpired || to == StateWaitingExternal
+				to == StateExpired || to == StateWaitingExternal || to == StateWaitingOwner
 		case StateRunning:
 			return to == StateSucceeded || to == StateFailed ||
 				to == StateCancelled || to == StateExpired || to == StateBlocked ||

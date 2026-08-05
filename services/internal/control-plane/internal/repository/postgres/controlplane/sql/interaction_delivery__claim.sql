@@ -27,5 +27,6 @@ RETURNING work.id::text, work.organization_id::text, work.project_id::text, work
     work.immutable_input_sha256, work.kind, work.lifecycle_state, work.outcome,
     COALESCE(work.artifact_id::text, ''), COALESCE(work.artifact_version, 0), work.artifact_sha256,
     work.artifact_name, work.artifact_storage_ref, work.artifact_size_bytes, work.artifact_media_type,
-    work.inline_payload,
+    work.inline_payload, COALESCE(work.notification_room_id::text, ''),
+    COALESCE(work.notification_policy, ''), COALESCE(work.scheduled_outcome, ''),
     work.fence, work.lease_expires_at;

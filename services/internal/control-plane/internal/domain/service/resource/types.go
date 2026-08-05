@@ -356,6 +356,13 @@ type ManageScheduleInput struct {
 	DetachGitManagement bool
 }
 
+type RunScheduleNowInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ScheduleID      string
+	ExpectedVersion uint64
+}
+
 type ClaimScheduleOccurrenceInput struct {
 	Principal      value.Principal
 	IdempotencyKey string
@@ -364,6 +371,7 @@ type ClaimScheduleOccurrenceInput struct {
 type ScheduleOccurrenceResult struct {
 	Occurrence domainrepo.ScheduleOccurrence
 	LeaseToken string
+	ProjectID  string
 }
 
 type CompleteScheduleOccurrenceInput struct {
@@ -375,6 +383,7 @@ type CompleteScheduleOccurrenceInput struct {
 	TerminalState    string
 	Outcome          string
 	ResultArtifactID string
+	ProjectID        string
 }
 
 type CancelScheduleOccurrenceInput struct {
@@ -612,6 +621,7 @@ type RecordRuntimeIncidentInput struct {
 type CompleteRuntimeExecutionInput struct {
 	RuntimeExecutionInput
 	Outcome, TerminalReference, TerminalSHA256                            string
+	ScheduledOutcome                                                      string
 	Outputs                                                               []RuntimeOutput
 	CodexSessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
 }
@@ -860,4 +870,5 @@ type AcknowledgeIntegrationContinuationInput struct {
 // Observer получает только закрытые вид и действие после устойчивой фиксации.
 type Observer interface {
 	ObserveMutation(kind enum.Kind, action string)
+	ObserveScheduleMaintenance(effect string)
 }

@@ -24,6 +24,8 @@
           "control.gateway-public-tls.prepare",
           "control.gateway-public-tls.confirm",
           "control.gateway-public-tls.check",
+          "control.schedule.manage",
+          "control.schedule.run-now",
           "control.readiness.check"
         ],
         "application_credential": "OIDC_BEARER",
@@ -113,7 +115,6 @@
       {
         "allowed_operation_ids": [
           "control.automation-scheduler.readiness",
-          "control.schedule-resource.get",
           "control.schedule.claim-due",
           "control.schedule.claim-occurrence",
           "control.schedule.complete-occurrence"
@@ -1311,6 +1312,48 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/ManageSchedule",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": { "primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001 },
+        "local_target": { "primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001 },
+        "operation_id": "control.schedule.manage",
+        "permission": "controlplane.schedule.manage",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/RunScheduleNow",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": { "primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001 },
+        "local_target": { "primary_gid": 10001, "shared_fs_gid": 29000, "uid": 10001 },
+        "operation_id": "control.schedule.run-now",
+        "permission": "controlplane.schedule.manage",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
         "authority_proof_producer_id": "control-plane.agent-session",
         "authority_sources": [
           "AGENT_SESSION",
@@ -1419,7 +1462,7 @@
         },
         "operation_id": "control.schedule.claim-due",
         "permission": "controlplane.schedule.claim",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -1448,7 +1491,7 @@
         },
         "operation_id": "control.schedule.claim-occurrence",
         "permission": "controlplane.schedule.execute",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -1477,7 +1520,7 @@
         },
         "operation_id": "control.schedule.complete-occurrence",
         "permission": "controlplane.schedule.execute",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
         "target_trust_bundle_id": "mattercodex-internal-ca-g1",
@@ -1849,19 +1892,7 @@
         "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
         "operation_id": "control.automation-scheduler.readiness",
         "permission": "controlplane.readiness.check",
-        "project_required": true,
-        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
-        "target_workload_id": "control-plane"
-      },
-      {
-        "audience": "urn:mattercodex:internal-rpc:control-plane",
-        "authority_proof_producer_id": "control-plane.automation",
-        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
-        "caller_workload_id": "automation-scheduler",
-        "full_method": "/controlplane.v1.ControlPlaneService/GetResource",
-        "operation_id": "control.schedule-resource.get",
-        "permission": "controlplane.resource.read",
-        "project_required": true,
+        "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_workload_id": "control-plane"
       },

@@ -225,24 +225,25 @@ type TurnAttempt struct {
 }
 
 type InteractionDeliveryWork struct {
-	ID, OrganizationID, ProjectID, ActorID              string
-	SessionID                                           string
-	SessionVersion                                      uint64
-	TurnID                                              string
-	TurnVersion                                         uint64
-	Attempt                                             uint32
-	RuntimeRevisionID                                   string
-	RuntimeRevisionVersion                              uint64
-	ImmutableInputSHA256                                string
-	Kind, LifecycleState, Outcome                       string
-	ArtifactID                                          string
-	ArtifactVersion                                     uint64
-	ArtifactSHA256                                      string
-	ArtifactName, ArtifactStorageRef, ArtifactMediaType string
-	ArtifactSizeBytes                                   uint64
-	InlinePayload                                       []byte
-	Fence                                               uint64
-	LeaseExpiresAt                                      time.Time
+	ID, OrganizationID, ProjectID, ActorID                   string
+	SessionID                                                string
+	SessionVersion                                           uint64
+	TurnID                                                   string
+	TurnVersion                                              uint64
+	Attempt                                                  uint32
+	RuntimeRevisionID                                        string
+	RuntimeRevisionVersion                                   uint64
+	ImmutableInputSHA256                                     string
+	Kind, LifecycleState, Outcome                            string
+	ArtifactID                                               string
+	ArtifactVersion                                          uint64
+	ArtifactSHA256                                           string
+	ArtifactName, ArtifactStorageRef, ArtifactMediaType      string
+	ArtifactSizeBytes                                        uint64
+	InlinePayload                                            []byte
+	NotificationRoomID, NotificationPolicy, ScheduledOutcome string
+	Fence                                                    uint64
+	LeaseExpiresAt                                           time.Time
 }
 
 // InteractionDeliveryReadbackGrant — durable owner receipt выданной capability.
@@ -266,6 +267,7 @@ type RuntimeExecution struct {
 	ThreadID                               string
 	RoleID                                 string
 	TurnID                                 string
+	ScheduleOccurrenceID                   string
 	Attempt                                uint32
 	RuntimeRevisionID                      string
 	RuntimeRevisionVersion                 uint64
@@ -642,6 +644,7 @@ type Transaction interface {
 	SaveDelegationEdge(context.Context, DelegationEdge) error
 	GetDelegationEdgeByTargetTurn(context.Context, string, string, string) (DelegationEdge, error)
 	DueSchedules(context.Context, string, string, int, time.Time) ([]entity.Resource, error)
+	NextAutomationProject(context.Context, string, string) (string, error)
 	SaveScheduleOccurrence(context.Context, ScheduleOccurrence) error
 	HasOpenScheduleOccurrence(context.Context, string, string, string) (bool, error)
 	HasBlockingScheduleExecution(
@@ -672,7 +675,7 @@ type Transaction interface {
 	SaveScheduledRun(context.Context, ScheduledRun) error
 	GetScheduledRunForUpdate(context.Context, string, uint32) (ScheduledRun, error)
 	GetScheduledRunByCurrentTurnForUpdate(context.Context, string) (ScheduledRun, error)
-	WaitScheduledRun(context.Context, string, uint32) error
+	WaitScheduledRun(context.Context, ScheduledRun) error
 	SuspendScheduledRun(context.Context, ScheduledRun, string, uint32) error
 	ContinueScheduledRun(context.Context, ScheduledRun) error
 	RebindScheduledRun(context.Context, ScheduledRun, string, uint32) error

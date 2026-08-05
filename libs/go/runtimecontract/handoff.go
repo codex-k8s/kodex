@@ -160,11 +160,13 @@ type HandoffV2 struct {
 	ImmutableInputSHA256   string     `json:"immutable_input_sha256"`
 	SessionID              string     `json:"session_id"`
 	TurnID                 string     `json:"turn_id"`
+	ScheduleOccurrenceID   string     `json:"schedule_occurrence_id,omitempty"`
 	Attempt                uint32     `json:"attempt"`
 	ProviderBindingID      string     `json:"provider_binding_id"`
 	ProviderBindingVersion uint64     `json:"provider_binding_version"`
 	ProviderBindingSHA256  string     `json:"provider_binding_sha256"`
 	Outcome                string     `json:"outcome"`
+	ScheduledOutcome       string     `json:"scheduled_outcome,omitempty"`
 	TerminalReference      string     `json:"terminal_reference"`
 	TerminalSHA256         string     `json:"terminal_sha256"`
 	Outputs                []OutputV2 `json:"outputs"`
@@ -190,6 +192,12 @@ func (handoff HandoffV2) Validate() error {
 		len(handoff.Outputs) > MaximumOutputs || !validCodexTerminalBinding(handoff) ||
 		len(handoff.ArchiveProvenance) > 1024 || handoff.ObservedAt.IsZero() {
 		return errors.New("runtime handoff is invalid")
+	}
+	if (handoff.ScheduleOccurrenceID == "") != (handoff.ScheduledOutcome == "") ||
+		(handoff.ScheduleOccurrenceID != "" && (!uuidPattern.MatchString(handoff.ScheduleOccurrenceID) ||
+			!validScheduledOutcome(handoff.ScheduledOutcome) ||
+			!scheduledOutcomeMatchesRuntime(handoff.ScheduledOutcome, handoff.Outcome))) {
+		return errors.New("runtime handoff scheduled outcome is invalid")
 	}
 	seen := make(map[string]struct{}, len(handoff.Outputs))
 	kindTotals := make(map[string]uint32, 3)
@@ -222,6 +230,18 @@ func (handoff HandoffV2) Validate() error {
 		return errors.New("runtime handoff output budget exceeded")
 	}
 	return nil
+}
+
+func validScheduledOutcome(value string) bool {
+	return value == "no_action" || value == "action_taken" ||
+		value == "requires_human" || value == "failed"
+}
+
+func scheduledOutcomeMatchesRuntime(scheduled, runtime string) bool {
+	if scheduled == "failed" {
+		return runtime == "FAILED" || runtime == "BLOCKED"
+	}
+	return runtime == "SUCCEEDED"
 }
 
 func validCodexTerminalBinding(handoff HandoffV2) bool {

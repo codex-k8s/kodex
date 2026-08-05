@@ -618,7 +618,20 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 		!validSHA256Text(claim.DeliveryPayloadSHA256) || !validSHA256Text(claim.Summary) {
 		return true, errors.New("control-plane owner gate claim boundary is invalid")
 	}
-	boundary, err := service.mattermost.ResolveDelivery(claim.ProjectID, claim.RecipientActorID)
+	var boundary entity.Boundary
+	if claim.ScheduleID != "" {
+		if uuid.Validate(claim.ScheduleID) != nil || uuid.Validate(claim.NotificationRoomID) != nil {
+			return true, errors.New("control-plane owner gate room route is invalid")
+		}
+		boundary, err = service.mattermost.ResolveRoomDelivery(
+			claim.ProjectID, claim.NotificationRoomID, claim.RecipientActorID,
+		)
+	} else {
+		if claim.NotificationRoomID != "" {
+			return true, errors.New("control-plane owner gate room route is invalid")
+		}
+		boundary, err = service.mattermost.ResolveDelivery(claim.ProjectID, claim.RecipientActorID)
+	}
 	if err != nil {
 		return true, err
 	}
@@ -687,7 +700,22 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 		!work.LeaseExpiresAt.After(service.now()) || !validSHA256Text(work.ImmutableInputSHA256) {
 		return true, errors.New("control-plane interaction delivery lineage is invalid")
 	}
-	boundary, err := service.mattermost.ResolveDelivery(work.ProjectID, work.ActorID)
+	var boundary entity.Boundary
+	if work.NotificationRoomID != "" {
+		if uuid.Validate(work.NotificationRoomID) != nil ||
+			(work.ScheduledOutcome != "ACTION_TAKEN" && work.ScheduledOutcome != "FAILED") ||
+			work.NotificationPolicy == "AUDIT_ONLY" || work.NotificationPolicy == "UNSPECIFIED" {
+			return true, errors.New("control-plane scheduled delivery route is invalid")
+		}
+		boundary, err = service.mattermost.ResolveRoomDelivery(
+			work.ProjectID, work.NotificationRoomID, work.ActorID,
+		)
+	} else {
+		if work.NotificationPolicy != "UNSPECIFIED" || work.ScheduledOutcome != "UNSPECIFIED" {
+			return true, errors.New("control-plane scheduled delivery route is invalid")
+		}
+		boundary, err = service.mattermost.ResolveDelivery(work.ProjectID, work.ActorID)
+	}
 	if err != nil || boundary.OrganizationID != work.OrganizationID {
 		return true, errors.New("control-plane interaction delivery route is invalid")
 	}

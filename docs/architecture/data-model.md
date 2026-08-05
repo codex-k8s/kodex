@@ -4,8 +4,8 @@ title: Логическая модель данных
 type: architecture
 status: approved
 owner: architect
-version: 0.3.0
-updated: 2026-07-31
+version: 0.3.1
+updated: 2026-08-05
 ---
 
 # Логическая модель данных
@@ -67,17 +67,17 @@ updated: 2026-07-31
 
 ## Процессы и расписания
 
-| Сущность                | Ключевые поля                                                                                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------- | --------- | ---------------------------------------------------- |
-| `Playbook`              | name, coordinator policy, input schema, prompt version, gates                                                                                                         |
-| `ProcessRun`            | playbook version, parent_run_id, state, result, owner_gate                                                                                                            |
-| `ChildRun`              | process_run_id, thread/session target, callback state                                                                                                                 |
-| `AutomationSchedule`    | target, cron/interval, timezone, policies, next_run_at                                                                                                                |
-| `ScheduleOccurrence`    | schedule_id, scheduled_for, idempotency_key, status                                                                                                                   |
-| `ScheduledRun`          | occurrence_id, runtime turn/session reference, status `queued                                                                                                         | running | waiting_owner | succeeded | failed`, outcome, callback payload hash, finished_at |
-| `ProcessWave`           | process_run_id, coordinator role/session, title, state                                                                                                                |
-| `WorkClaim`             | process/wave/turn, summary, domains, resource keys, state                                                                                                             |
-| `OwnerAttentionRequest` | process/turn, optional exact ScheduledRun/project/policy/root snapshot, server-owned delivery id/payload/hash/post binding, state, resolved_at, resolved_by_user/post |
+| Сущность             | Ключевые поля                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Playbook`           | name, coordinator policy, input schema, prompt version, gates                                                                                                              |
+| `ProcessRun`         | playbook version, parent_run_id, state, result, owner_gate                                                                                                                 |
+| `ChildRun`           | process_run_id, thread/session target, callback state                                                                                                                      |
+| `AutomationSchedule` | target, cron/interval, timezone, policies, room_id, next_run_at                                                                                                            |
+| `ScheduleOccurrence` | schedule_id, scheduled_for, immutable occurrence key, attempt, state, closed outcome                                                                                       |
+| `ScheduledRun`       | occurrence_id, root process_run_id, current turn/session/runtime references, state, attempt, immutable/current input digests, closed outcome, result artifact, finished_at |
+| `ProcessWave`        | process_run_id, coordinator role/session, title, state                                                                                                                     |
+| `WorkClaim`          | process/wave/turn, summary, domains, resource keys, state                                                                                                                  |
+| `OwnerGate`          | process/turn/attempt/input, optional exact schedule/occurrence/room, root/policy snapshot, server-owned delivery id/payload/hash/post binding, state, decision/expiry       |
 
 Уникальный индекс `(schedule_id, scheduled_for)` исключает повторное создание экземпляра расписания.
 

@@ -423,7 +423,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		if err != nil {
 			return nil, err
 		}
-		nextRunAt, err := requiredTime(value.Schedule.GetNextRunAt())
+		nextRunAt, err := optionalTime(value.Schedule.GetNextRunAt())
 		if err != nil {
 			return nil, err
 		}
@@ -532,6 +532,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ContinuationTurnID:       value.OwnerGate.GetContinuationTurnId(),
 			ContinuationTurnVersion:  value.OwnerGate.GetContinuationTurnVersion(),
 			ContinuationInputSHA256:  value.OwnerGate.GetContinuationInputSha256(),
+			NotificationRoomID:       value.OwnerGate.GetNotificationRoomId(),
 		}, nil
 	case *controlplanev1.ResourceSpec_MemoryRecord:
 		return entity.MemoryRecordSpec{
@@ -929,6 +930,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ContinuationTurnId:       value.ContinuationTurnID,
 				ContinuationTurnVersion:  value.ContinuationTurnVersion,
 				ContinuationInputSha256:  value.ContinuationInputSHA256,
+				NotificationRoomId:       value.NotificationRoomID,
 			},
 		}
 	case entity.MemoryRecordSpec:
