@@ -719,6 +719,17 @@ type Transaction interface {
 	ActiveOwnerGateForProcess(context.Context, string, string, string) (entity.Resource, error)
 }
 
+// ImageTransaction materialизует только специализированный image lifecycle.
+// Отдельный порт не расширяет generic CRUD и сохраняет закрытый реестр команд.
+type ImageTransaction interface {
+	NextImageBuild(context.Context, string, string, time.Time) (entity.Resource, error)
+	NextImageAdmission(context.Context, string, string, time.Time) (entity.Resource, error)
+	NextImagePromotion(context.Context, string, string, uint64, string, time.Time) (entity.Resource, error)
+	PromotedImageArtifactBySpec(context.Context, string, string, string, string, uint64, string) (entity.Resource, error)
+	ImageBuildsForRecipeForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+	ImageArtifactsForRecipeForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+}
+
 // Repository — авторитетная граница PostgreSQL.
 type Repository interface {
 	Transact(context.Context, Scope, func(Transaction) error) error

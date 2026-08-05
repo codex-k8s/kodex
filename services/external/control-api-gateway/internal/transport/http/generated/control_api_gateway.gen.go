@@ -174,6 +174,69 @@ func (e ConfigurationManagedBy) Valid() bool {
 	}
 }
 
+// Defines values for ImageAdmissionVerdict.
+const (
+	ImageAdmissionVerdictACCEPTED ImageAdmissionVerdict = "ACCEPTED"
+	ImageAdmissionVerdictREJECTED ImageAdmissionVerdict = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the ImageAdmissionVerdict enum.
+func (e ImageAdmissionVerdict) Valid() bool {
+	switch e {
+	case ImageAdmissionVerdictACCEPTED:
+		return true
+	case ImageAdmissionVerdictREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageBuildStage.
+const (
+	ImageBuildStageBASEPULL          ImageBuildStage = "BASE_PULL"
+	ImageBuildStageCANCELLED         ImageBuildStage = "CANCELLED"
+	ImageBuildStageCOMPLETED         ImageBuildStage = "COMPLETED"
+	ImageBuildStageCONTEXTVALIDATION ImageBuildStage = "CONTEXT_VALIDATION"
+	ImageBuildStageDEADLETTER        ImageBuildStage = "DEAD_LETTER"
+	ImageBuildStageEXPIRED           ImageBuildStage = "EXPIRED"
+	ImageBuildStageFAILED            ImageBuildStage = "FAILED"
+	ImageBuildStagePROVENANCE        ImageBuildStage = "PROVENANCE"
+	ImageBuildStageQUEUED            ImageBuildStage = "QUEUED"
+	ImageBuildStageSOLVING           ImageBuildStage = "SOLVING"
+	ImageBuildStageSTAGINGPUSH       ImageBuildStage = "STAGING_PUSH"
+)
+
+// Valid indicates whether the value is a known member of the ImageBuildStage enum.
+func (e ImageBuildStage) Valid() bool {
+	switch e {
+	case ImageBuildStageBASEPULL:
+		return true
+	case ImageBuildStageCANCELLED:
+		return true
+	case ImageBuildStageCOMPLETED:
+		return true
+	case ImageBuildStageCONTEXTVALIDATION:
+		return true
+	case ImageBuildStageDEADLETTER:
+		return true
+	case ImageBuildStageEXPIRED:
+		return true
+	case ImageBuildStageFAILED:
+		return true
+	case ImageBuildStagePROVENANCE:
+		return true
+	case ImageBuildStageQUEUED:
+		return true
+	case ImageBuildStageSOLVING:
+		return true
+	case ImageBuildStageSTAGINGPUSH:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LifecycleState.
 const (
 	LifecycleStateACTIVE          LifecycleState = "ACTIVE"
@@ -233,28 +296,82 @@ func (e LifecycleState) Valid() bool {
 
 // Defines values for ManageAccessResourceAction.
 const (
-	ACTIVATE ManageAccessResourceAction = "ACTIVATE"
-	ARCHIVE  ManageAccessResourceAction = "ARCHIVE"
-	CREATE   ManageAccessResourceAction = "CREATE"
-	DELETE   ManageAccessResourceAction = "DELETE"
-	PAUSE    ManageAccessResourceAction = "PAUSE"
-	UPDATE   ManageAccessResourceAction = "UPDATE"
+	ManageAccessResourceActionACTIVATE ManageAccessResourceAction = "ACTIVATE"
+	ManageAccessResourceActionARCHIVE  ManageAccessResourceAction = "ARCHIVE"
+	ManageAccessResourceActionCREATE   ManageAccessResourceAction = "CREATE"
+	ManageAccessResourceActionDELETE   ManageAccessResourceAction = "DELETE"
+	ManageAccessResourceActionPAUSE    ManageAccessResourceAction = "PAUSE"
+	ManageAccessResourceActionUPDATE   ManageAccessResourceAction = "UPDATE"
 )
 
 // Valid indicates whether the value is a known member of the ManageAccessResourceAction enum.
 func (e ManageAccessResourceAction) Valid() bool {
 	switch e {
-	case ACTIVATE:
+	case ManageAccessResourceActionACTIVATE:
 		return true
-	case ARCHIVE:
+	case ManageAccessResourceActionARCHIVE:
 		return true
-	case CREATE:
+	case ManageAccessResourceActionCREATE:
 		return true
-	case DELETE:
+	case ManageAccessResourceActionDELETE:
 		return true
-	case PAUSE:
+	case ManageAccessResourceActionPAUSE:
 		return true
-	case UPDATE:
+	case ManageAccessResourceActionUPDATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManageImageBuildAction.
+const (
+	ManageImageBuildActionCANCEL     ManageImageBuildAction = "CANCEL"
+	ManageImageBuildActionDEADLETTER ManageImageBuildAction = "DEAD_LETTER"
+	ManageImageBuildActionEXPIRE     ManageImageBuildAction = "EXPIRE"
+	ManageImageBuildActionRETRY      ManageImageBuildAction = "RETRY"
+)
+
+// Valid indicates whether the value is a known member of the ManageImageBuildAction enum.
+func (e ManageImageBuildAction) Valid() bool {
+	switch e {
+	case ManageImageBuildActionCANCEL:
+		return true
+	case ManageImageBuildActionDEADLETTER:
+		return true
+	case ManageImageBuildActionEXPIRE:
+		return true
+	case ManageImageBuildActionRETRY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManageRoleImageRecipeAction.
+const (
+	ManageRoleImageRecipeActionARCHIVE      ManageRoleImageRecipeAction = "ARCHIVE"
+	ManageRoleImageRecipeActionCREATE       ManageRoleImageRecipeAction = "CREATE"
+	ManageRoleImageRecipeActionDELETE       ManageRoleImageRecipeAction = "DELETE"
+	ManageRoleImageRecipeActionREQUESTBUILD ManageRoleImageRecipeAction = "REQUEST_BUILD"
+	ManageRoleImageRecipeActionRESTORE      ManageRoleImageRecipeAction = "RESTORE"
+	ManageRoleImageRecipeActionUPDATE       ManageRoleImageRecipeAction = "UPDATE"
+)
+
+// Valid indicates whether the value is a known member of the ManageRoleImageRecipeAction enum.
+func (e ManageRoleImageRecipeAction) Valid() bool {
+	switch e {
+	case ManageRoleImageRecipeActionARCHIVE:
+		return true
+	case ManageRoleImageRecipeActionCREATE:
+		return true
+	case ManageRoleImageRecipeActionDELETE:
+		return true
+	case ManageRoleImageRecipeActionREQUESTBUILD:
+		return true
+	case ManageRoleImageRecipeActionRESTORE:
+		return true
+	case ManageRoleImageRecipeActionUPDATE:
 		return true
 	default:
 		return false
@@ -350,19 +467,19 @@ func (e ProviderPoolPolicy) Valid() bool {
 
 // Defines values for ResolveScheduleRecoveryAction.
 const (
-	CANCEL ResolveScheduleRecoveryAction = "CANCEL"
-	REPAIR ResolveScheduleRecoveryAction = "REPAIR"
-	SKIP   ResolveScheduleRecoveryAction = "SKIP"
+	ResolveScheduleRecoveryActionCANCEL ResolveScheduleRecoveryAction = "CANCEL"
+	ResolveScheduleRecoveryActionREPAIR ResolveScheduleRecoveryAction = "REPAIR"
+	ResolveScheduleRecoveryActionSKIP   ResolveScheduleRecoveryAction = "SKIP"
 )
 
 // Valid indicates whether the value is a known member of the ResolveScheduleRecoveryAction enum.
 func (e ResolveScheduleRecoveryAction) Valid() bool {
 	switch e {
-	case CANCEL:
+	case ResolveScheduleRecoveryActionCANCEL:
 		return true
-	case REPAIR:
+	case ResolveScheduleRecoveryActionREPAIR:
 		return true
-	case SKIP:
+	case ResolveScheduleRecoveryActionSKIP:
 		return true
 	default:
 		return false
@@ -374,6 +491,8 @@ const (
 	ResourceKindARTIFACT            ResourceKind = "ARTIFACT"
 	ResourceKindCHAT                ResourceKind = "CHAT"
 	ResourceKindCREDENTIALBINDING   ResourceKind = "CREDENTIAL_BINDING"
+	ResourceKindIMAGEARTIFACT       ResourceKind = "IMAGE_ARTIFACT"
+	ResourceKindIMAGEBUILD          ResourceKind = "IMAGE_BUILD"
 	ResourceKindINTEGRATION         ResourceKind = "INTEGRATION"
 	ResourceKindMEMORYRECORD        ResourceKind = "MEMORY_RECORD"
 	ResourceKindOWNERGATE           ResourceKind = "OWNER_GATE"
@@ -382,6 +501,7 @@ const (
 	ResourceKindPROMPTPROFILE       ResourceKind = "PROMPT_PROFILE"
 	ResourceKindREPOSITORYWORKSPACE ResourceKind = "REPOSITORY_WORKSPACE"
 	ResourceKindROLE                ResourceKind = "ROLE"
+	ResourceKindROLEIMAGERECIPE     ResourceKind = "ROLE_IMAGE_RECIPE"
 	ResourceKindRUNTIMEREVISION     ResourceKind = "RUNTIME_REVISION"
 	ResourceKindSCHEDULE            ResourceKind = "SCHEDULE"
 	ResourceKindSESSION             ResourceKind = "SESSION"
@@ -399,6 +519,10 @@ func (e ResourceKind) Valid() bool {
 		return true
 	case ResourceKindCREDENTIALBINDING:
 		return true
+	case ResourceKindIMAGEARTIFACT:
+		return true
+	case ResourceKindIMAGEBUILD:
+		return true
 	case ResourceKindINTEGRATION:
 		return true
 	case ResourceKindMEMORYRECORD:
@@ -415,6 +539,8 @@ func (e ResourceKind) Valid() bool {
 		return true
 	case ResourceKindROLE:
 		return true
+	case ResourceKindROLEIMAGERECIPE:
+		return true
 	case ResourceKindRUNTIMEREVISION:
 		return true
 	case ResourceKindSCHEDULE:
@@ -426,6 +552,66 @@ func (e ResourceKind) Valid() bool {
 	case ResourceKindTURN:
 		return true
 	case ResourceKindWORKCLAIM:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImagePackageManager.
+const (
+	Apk RoleImagePackageManager = "apk"
+	Apt RoleImagePackageManager = "apt"
+	Dnf RoleImagePackageManager = "dnf"
+	Npm RoleImagePackageManager = "npm"
+	Pip RoleImagePackageManager = "pip"
+)
+
+// Valid indicates whether the value is a known member of the RoleImagePackageManager enum.
+func (e RoleImagePackageManager) Valid() bool {
+	switch e {
+	case Apk:
+		return true
+	case Apt:
+		return true
+	case Dnf:
+		return true
+	case Npm:
+		return true
+	case Pip:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImagePlatformArchitecture.
+const (
+	Amd64 RoleImagePlatformArchitecture = "amd64"
+	Arm64 RoleImagePlatformArchitecture = "arm64"
+)
+
+// Valid indicates whether the value is a known member of the RoleImagePlatformArchitecture enum.
+func (e RoleImagePlatformArchitecture) Valid() bool {
+	switch e {
+	case Amd64:
+		return true
+	case Arm64:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImagePlatformOS.
+const (
+	Linux RoleImagePlatformOS = "linux"
+)
+
+// Valid indicates whether the value is a known member of the RoleImagePlatformOS enum.
+func (e RoleImagePlatformOS) Valid() bool {
+	switch e {
+	case Linux:
 		return true
 	default:
 		return false
@@ -662,6 +848,65 @@ type Diagnostics struct {
 	TerminalOutboxEvents       int64   `json:"terminalOutboxEvents"`
 }
 
+// ImageAdmissionVerdict defines model for ImageAdmissionVerdict.
+type ImageAdmissionVerdict string
+
+// ImageArtifactProjection defines model for ImageArtifactProjection.
+type ImageArtifactProjection struct {
+	AdmissionReceiptOciManifestDigest *string                `json:"admissionReceiptOciManifestDigest,omitempty"`
+	AdmissionReceiptSha256            *string                `json:"admissionReceiptSha256,omitempty"`
+	AdmissionRevision                 int64                  `json:"admissionRevision"`
+	AdmissionVerdict                  *ImageAdmissionVerdict `json:"admissionVerdict,omitempty"`
+	BaseImageDigest                   string                 `json:"baseImageDigest"`
+	BuildAttempt                      int                    `json:"buildAttempt"`
+	BuildId                           openapi_types.UUID     `json:"buildId"`
+	BuildVersion                      int64                  `json:"buildVersion"`
+	BuilderSha256                     string                 `json:"builderSha256"`
+	ContextSha256                     string                 `json:"contextSha256"`
+	FrontendSha256                    string                 `json:"frontendSha256"`
+	ImmutableBuildSha256              string                 `json:"immutableBuildSha256"`
+	ManifestDigest                    string                 `json:"manifestDigest"`
+	Platforms                         []RoleImagePlatform    `json:"platforms"`
+	PolicyRevision                    int64                  `json:"policyRevision"`
+	PolicySha256                      string                 `json:"policySha256"`
+	PromotedAt                        *time.Time             `json:"promotedAt,omitempty"`
+	PromotedReference                 *string                `json:"promotedReference,omitempty"`
+	PromotionReadbackSha256           *string                `json:"promotionReadbackSha256,omitempty"`
+	ProvenanceSha256                  string                 `json:"provenanceSha256"`
+	RecipeGeneration                  int64                  `json:"recipeGeneration"`
+	RecipeId                          openapi_types.UUID     `json:"recipeId"`
+	RecipeVersion                     int64                  `json:"recipeVersion"`
+	SbomSha256                        *string                `json:"sbomSha256,omitempty"`
+	SignatureIdentity                 *string                `json:"signatureIdentity,omitempty"`
+	SignatureSha256                   *string                `json:"signatureSha256,omitempty"`
+	SourceSha256                      string                 `json:"sourceSha256"`
+	SpecSha256                        string                 `json:"specSha256"`
+	StagingReference                  string                 `json:"stagingReference"`
+	ToolchainSha256                   string                 `json:"toolchainSha256"`
+	VulnerabilityEvidenceSha256       *string                `json:"vulnerabilityEvidenceSha256,omitempty"`
+}
+
+// ImageBuildProjection defines model for ImageBuildProjection.
+type ImageBuildProjection struct {
+	Attempt              int                `json:"attempt"`
+	AvailableAt          time.Time          `json:"availableAt"`
+	ErrorCode            *string            `json:"errorCode,omitempty"`
+	ImmutableBuildSha256 string             `json:"immutableBuildSha256"`
+	ManifestDigest       *string            `json:"manifestDigest,omitempty"`
+	MaximumAttempts      int                `json:"maximumAttempts"`
+	ProgressPercent      int                `json:"progressPercent"`
+	ProvenanceSha256     *string            `json:"provenanceSha256,omitempty"`
+	RecipeGeneration     int64              `json:"recipeGeneration"`
+	RecipeId             openapi_types.UUID `json:"recipeId"`
+	RecipeVersion        int64              `json:"recipeVersion"`
+	SpecSha256           string             `json:"specSha256"`
+	Stage                ImageBuildStage    `json:"stage"`
+	StagingReference     *string            `json:"stagingReference,omitempty"`
+}
+
+// ImageBuildStage defines model for ImageBuildStage.
+type ImageBuildStage string
+
 // IncidentPage defines model for IncidentPage.
 type IncidentPage struct {
 	Incidents     []RuntimeIncident `json:"incidents"`
@@ -701,6 +946,26 @@ type ManageAccessResource struct {
 
 // ManageAccessResourceAction defines model for ManageAccessResource.Action.
 type ManageAccessResourceAction string
+
+// ManageImageBuild defines model for ManageImageBuild.
+type ManageImageBuild struct {
+	Action       ManageImageBuildAction `json:"action"`
+	ImageBuildId openapi_types.UUID     `json:"imageBuildId"`
+}
+
+// ManageImageBuildAction defines model for ManageImageBuild.Action.
+type ManageImageBuildAction string
+
+// ManageRoleImageRecipe CREATE требует name+input без recipeId/If-Match; UPDATE требует все поля; остальные действия требуют recipeId+If-Match без name/input.
+type ManageRoleImageRecipe struct {
+	Action   ManageRoleImageRecipeAction `json:"action"`
+	Input    *RoleImageRecipeInput       `json:"input,omitempty"`
+	Name     *string                     `json:"name,omitempty"`
+	RecipeId *openapi_types.UUID         `json:"recipeId,omitempty"`
+}
+
+// ManageRoleImageRecipeAction defines model for ManageRoleImageRecipe.Action.
+type ManageRoleImageRecipeAction string
 
 // MemoryRecordProjection defines model for MemoryRecordProjection.
 type MemoryRecordProjection struct {
@@ -874,6 +1139,8 @@ type ResourceSpecProjection struct {
 	Artifact            *ArtifactProjection            `json:"artifact,omitempty"`
 	Chat                *ChatProjection                `json:"chat,omitempty"`
 	CredentialBinding   *CredentialBindingProjection   `json:"credentialBinding,omitempty"`
+	ImageArtifact       *ImageArtifactProjection       `json:"imageArtifact,omitempty"`
+	ImageBuild          *ImageBuildProjection          `json:"imageBuild,omitempty"`
 	Integration         *IntegrationProjection         `json:"integration,omitempty"`
 	MemoryRecord        *MemoryRecordProjection        `json:"memoryRecord,omitempty"`
 	OwnerGate           *OwnerGateProjection           `json:"ownerGate,omitempty"`
@@ -882,12 +1149,100 @@ type ResourceSpecProjection struct {
 	PromptProfile       *PromptProfileProjection       `json:"promptProfile,omitempty"`
 	RepositoryWorkspace *RepositoryWorkspaceProjection `json:"repositoryWorkspace,omitempty"`
 	Role                *RoleProjection                `json:"role,omitempty"`
+	RoleImageRecipe     *RoleImageRecipeProjection     `json:"roleImageRecipe,omitempty"`
 	RuntimeRevision     *RuntimeRevisionProjection     `json:"runtimeRevision,omitempty"`
 	Schedule            *ScheduleProjection            `json:"schedule,omitempty"`
 	Session             *SessionProjection             `json:"session,omitempty"`
 	Team                *TeamProjection                `json:"team,omitempty"`
 	Turn                *TurnProjection                `json:"turn,omitempty"`
 	WorkClaim           *WorkClaimProjection           `json:"workClaim,omitempty"`
+}
+
+// RoleImagePackage defines model for RoleImagePackage.
+type RoleImagePackage struct {
+	Digest  string                  `json:"digest"`
+	Manager RoleImagePackageManager `json:"manager"`
+	Name    string                  `json:"name"`
+	Version string                  `json:"version"`
+}
+
+// RoleImagePackageManager defines model for RoleImagePackageManager.
+type RoleImagePackageManager string
+
+// RoleImagePlatform defines model for RoleImagePlatform.
+type RoleImagePlatform struct {
+	Architecture RoleImagePlatformArchitecture `json:"architecture"`
+	Os           RoleImagePlatformOS           `json:"os"`
+	Variant      *string                       `json:"variant,omitempty"`
+}
+
+// RoleImagePlatformArchitecture defines model for RoleImagePlatformArchitecture.
+type RoleImagePlatformArchitecture string
+
+// RoleImagePlatformOS defines model for RoleImagePlatformOS.
+type RoleImagePlatformOS string
+
+// RoleImageRecipeInput defines model for RoleImageRecipeInput.
+type RoleImageRecipeInput struct {
+	BaseImageDigest    string              `json:"baseImageDigest"`
+	BaseImageReference string              `json:"baseImageReference"`
+	BuildSecretRefs    []string            `json:"buildSecretRefs"`
+	BuilderSha256      string              `json:"builderSha256"`
+	ContextRef         string              `json:"contextRef"`
+	ContextSha256      string              `json:"contextSha256"`
+	FrontendSha256     string              `json:"frontendSha256"`
+	InstallationBlock  string              `json:"installationBlock"`
+	Packages           []RoleImagePackage  `json:"packages"`
+	Platforms          []RoleImagePlatform `json:"platforms"`
+	SourceRef          string              `json:"sourceRef"`
+	SourceRevision     string              `json:"sourceRevision"`
+	SourceSha256       string              `json:"sourceSha256"`
+	ToolchainSha256    string              `json:"toolchainSha256"`
+	Tools              []RoleImageTool     `json:"tools"`
+}
+
+// RoleImageRecipeProjection defines model for RoleImageRecipeProjection.
+type RoleImageRecipeProjection struct {
+	Generation int64 `json:"generation"`
+
+	// Input Безопасная read/status проекция без installation block и build secret references.
+	Input          RoleImageRecipeStatusInput `json:"input"`
+	PolicyRevision int64                      `json:"policyRevision"`
+	PolicySha256   string                     `json:"policySha256"`
+	SpecSha256     string                     `json:"specSha256"`
+}
+
+// RoleImageRecipeResult defines model for RoleImageRecipeResult.
+type RoleImageRecipeResult struct {
+	ImageArtifact *Resource `json:"imageArtifact,omitempty"`
+	ImageBuild    *Resource `json:"imageBuild,omitempty"`
+	Recipe        Resource  `json:"recipe"`
+	Reused        bool      `json:"reused"`
+}
+
+// RoleImageRecipeStatusInput Безопасная read/status проекция без installation block и build secret references.
+type RoleImageRecipeStatusInput struct {
+	BaseImageDigest    string              `json:"baseImageDigest"`
+	BaseImageReference string              `json:"baseImageReference"`
+	BuilderSha256      string              `json:"builderSha256"`
+	ContextRef         string              `json:"contextRef"`
+	ContextSha256      string              `json:"contextSha256"`
+	FrontendSha256     string              `json:"frontendSha256"`
+	Packages           []RoleImagePackage  `json:"packages"`
+	Platforms          []RoleImagePlatform `json:"platforms"`
+	SourceRef          string              `json:"sourceRef"`
+	SourceRevision     string              `json:"sourceRevision"`
+	SourceSha256       string              `json:"sourceSha256"`
+	ToolchainSha256    string              `json:"toolchainSha256"`
+	Tools              []RoleImageTool     `json:"tools"`
+}
+
+// RoleImageTool defines model for RoleImageTool.
+type RoleImageTool struct {
+	Name      string `json:"name"`
+	Sha256    string `json:"sha256"`
+	SourceRef string `json:"sourceRef"`
+	Version   string `json:"version"`
 }
 
 // RoleProjection defines model for RoleProjection.
@@ -900,6 +1255,7 @@ type RoleProjection struct {
 	ProviderAccountPool          ProviderPoolProjection           `json:"providerAccountPool"`
 	ProviderCredentialBindingIds []openapi_types.UUID             `json:"providerCredentialBindingIds"`
 	RepositoryWorkspaceIds       []openapi_types.UUID             `json:"repositoryWorkspaceIds"`
+	RoleImageRecipeId            openapi_types.UUID               `json:"roleImageRecipeId"`
 	StableKey                    string                           `json:"stableKey"`
 }
 
@@ -911,6 +1267,7 @@ type RoleSpec struct {
 	PromptProfileId              *openapi_types.UUID  `json:"promptProfileId,omitempty"`
 	ProviderCredentialBindingIds []openapi_types.UUID `json:"providerCredentialBindingIds"`
 	RepositoryWorkspaceIds       []openapi_types.UUID `json:"repositoryWorkspaceIds"`
+	RoleImageRecipeId            openapi_types.UUID   `json:"roleImageRecipeId"`
 	StableKey                    string               `json:"stableKey"`
 }
 
@@ -930,15 +1287,31 @@ type RuntimeIncidentKind string
 
 // RuntimeRevisionProjection defines model for RuntimeRevisionProjection.
 type RuntimeRevisionProjection struct {
-	AuthorityPolicyRevision int64               `json:"authorityPolicyRevision"`
-	ChatId                  *openapi_types.UUID `json:"chatId,omitempty"`
-	EffectiveRuntimeSha256  string              `json:"effectiveRuntimeSha256"`
-	ImageDigest             string              `json:"imageDigest"`
-	ManifestSha256          string              `json:"manifestSha256"`
-	PromptProfileId         openapi_types.UUID  `json:"promptProfileId"`
-	PromptRevision          int64               `json:"promptRevision"`
-	RoleId                  openapi_types.UUID  `json:"roleId"`
-	SessionId               openapi_types.UUID  `json:"sessionId"`
+	AuthorityPolicyRevision                int64               `json:"authorityPolicyRevision"`
+	ChatId                                 *openapi_types.UUID `json:"chatId,omitempty"`
+	EffectiveRuntimeSha256                 string              `json:"effectiveRuntimeSha256"`
+	ImageAdmissionReceiptOciManifestDigest string              `json:"imageAdmissionReceiptOciManifestDigest"`
+	ImageAdmissionReceiptSha256            string              `json:"imageAdmissionReceiptSha256"`
+	ImageAdmissionRevision                 int64               `json:"imageAdmissionRevision"`
+	ImageArtifactId                        openapi_types.UUID  `json:"imageArtifactId"`
+	ImageArtifactVersion                   int64               `json:"imageArtifactVersion"`
+	ImageBuildAttempt                      int                 `json:"imageBuildAttempt"`
+	ImageBuildId                           openapi_types.UUID  `json:"imageBuildId"`
+	ImageBuildVersion                      int64               `json:"imageBuildVersion"`
+	ImageManifestDigest                    string              `json:"imageManifestDigest"`
+	ImagePolicyRevision                    int64               `json:"imagePolicyRevision"`
+	ImagePolicySha256                      string              `json:"imagePolicySha256"`
+	ImagePromotionReadbackSha256           string              `json:"imagePromotionReadbackSha256"`
+	ImageReference                         string              `json:"imageReference"`
+	ImageSignatureSha256                   string              `json:"imageSignatureSha256"`
+	ManifestSha256                         string              `json:"manifestSha256"`
+	PromptProfileId                        openapi_types.UUID  `json:"promptProfileId"`
+	PromptRevision                         int64               `json:"promptRevision"`
+	RoleId                                 openapi_types.UUID  `json:"roleId"`
+	RoleImageRecipeId                      openapi_types.UUID  `json:"roleImageRecipeId"`
+	RoleImageRecipeVersion                 int64               `json:"roleImageRecipeVersion"`
+	RoleImageSpecSha256                    string              `json:"roleImageSpecSha256"`
+	SessionId                              openapi_types.UUID  `json:"sessionId"`
 }
 
 // ScheduleOccurrence defines model for ScheduleOccurrence.
@@ -1137,6 +1510,18 @@ type ListConfigurationChangesParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ManageImageBuildParams defines parameters for ManageImageBuild.
+type ManageImageBuildParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// GetRoleImageBuildParams defines parameters for GetRoleImageBuild.
+type GetRoleImageBuildParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListIncidentsParams defines parameters for ListIncidents.
 type ListIncidentsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -1205,6 +1590,13 @@ type TransitionResourceParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 }
 
+// ManageRoleImageRecipeParams defines parameters for ManageRoleImageRecipe.
+type ManageRoleImageRecipeParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        *string        `json:"If-Match,omitempty"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	State     *[]LifecycleState `form:"state,omitempty" json:"state,omitempty"`
@@ -1253,6 +1645,9 @@ type CopyAccessResourceJSONRequestBody = CopyAccessResource
 // DetachAccessResourceJSONRequestBody defines body for DetachAccessResource for application/json ContentType.
 type DetachAccessResourceJSONRequestBody = DetachAccessResource
 
+// ManageImageBuildJSONRequestBody defines body for ManageImageBuild for application/json ContentType.
+type ManageImageBuildJSONRequestBody = ManageImageBuild
+
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProject
 
@@ -1264,6 +1659,9 @@ type UpdateResourceJSONRequestBody = UpdateResource
 
 // TransitionResourceJSONRequestBody defines body for TransitionResource for application/json ContentType.
 type TransitionResourceJSONRequestBody = TransitionResource
+
+// ManageRoleImageRecipeJSONRequestBody defines body for ManageRoleImageRecipe for application/json ContentType.
+type ManageRoleImageRecipeJSONRequestBody = ManageRoleImageRecipe
 
 // ResolveScheduleRecoveryJSONRequestBody defines body for ResolveScheduleRecovery for application/json ContentType.
 type ResolveScheduleRecoveryJSONRequestBody = ResolveScheduleRecovery
@@ -1288,6 +1686,12 @@ type ServerInterface interface {
 	// Получить ограниченную диагностику control-plane
 	// (GET /diagnostics)
 	GetDiagnostics(w http.ResponseWriter, r *http.Request)
+	// Выполнить закрытую owner-команду ImageBuild
+	// (POST /image-builds/commands)
+	ManageImageBuild(w http.ResponseWriter, r *http.Request, params ManageImageBuildParams)
+	// Прочитать exact version ImageBuild через специализированный owner path
+	// (GET /image-builds/{imageBuildId})
+	GetRoleImageBuild(w http.ResponseWriter, r *http.Request, imageBuildId openapi_types.UUID, params GetRoleImageBuildParams)
 	// Получить авторитетную проекцию инцидентов
 	// (GET /incidents)
 	ListIncidents(w http.ResponseWriter, r *http.Request, params ListIncidentsParams)
@@ -1318,6 +1722,9 @@ type ServerInterface interface {
 	// Выполнить допустимый lifecycle transition
 	// (POST /resources/{resourceId}/transition)
 	TransitionResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params TransitionResourceParams)
+	// Выполнить закрытую owner-команду RoleImageRecipe
+	// (POST /role-image-recipes/commands)
+	ManageRoleImageRecipe(w http.ResponseWriter, r *http.Request, params ManageRoleImageRecipeParams)
 	// Получить авторитетную проекцию запусков
 	// (GET /runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
@@ -1806,6 +2213,163 @@ func (siw *ServerInterfaceWrapper) GetDiagnostics(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDiagnostics(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ManageImageBuild operation middleware
+func (siw *ServerInterfaceWrapper) ManageImageBuild(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ManageImageBuildParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ManageImageBuild(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRoleImageBuild operation middleware
+func (siw *ServerInterfaceWrapper) GetRoleImageBuild(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "imageBuildId" -------------
+	var imageBuildId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "imageBuildId", r.PathValue("imageBuildId"), &imageBuildId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "imageBuildId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRoleImageBuildParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRoleImageBuild(w, r, imageBuildId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2615,6 +3179,99 @@ func (siw *ServerInterfaceWrapper) TransitionResource(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ManageRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) ManageRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ManageRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ManageRoleImageRecipe(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -3236,6 +3893,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAuditEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/configuration-changes", wrapper.ListConfigurationChanges)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/image-builds/commands", wrapper.ManageImageBuild)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/image-builds/{imageBuildId}", wrapper.GetRoleImageBuild)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/incidents", wrapper.ListIncidents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/projects", wrapper.ListProjects)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/projects", wrapper.CreateProject)
@@ -3246,6 +3905,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/{resourceId}", wrapper.GetResource)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/resources/{resourceId}", wrapper.UpdateResource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources/{resourceId}/transition", wrapper.TransitionResource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/role-image-recipes/commands", wrapper.ManageRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs", wrapper.ListRuns)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences", wrapper.ListScheduleOccurrences)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences/{occurrenceId}/recovery", wrapper.ResolveScheduleRecovery)

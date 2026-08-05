@@ -4,7 +4,7 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.2
+version: 1.2.3
 updated: 2026-08-05
 ---
 
@@ -78,17 +78,24 @@ credential, audience, полным именем метода и permission. Ск
 проверкой байтов, а `control-plane` — границей метаданных, состояния и
 результата.
 
-`role-image-builder` материализуется owner-triggered Job через
-`tools/render-image-build-job.sh`: его вход — read-only source PVC и exact
-digest `context.tar`, подготовленные владельцем workspace; Job не выбирает
-tenant, рецепт или source revision. Он использует client-only mTLS BuildKit и
-scoped staging push, но не получает promotion identity. Отдельный
-`render-image-admission-job.sh` читает immutable owner intent и разделяет
-scanner, signer, admission owner и promotion по четырём Pod/ServiceAccount/
-Vault/mTLS границам. Он декодирует и семантически проверяет DSSE
-provenance/SBOM/vulnerability/signature policy, подписывает exact admission
-receipt и выдаёт promotion claim только после полного readback. Pull/admin
-credentials и изменение доменных агрегатов build Job не выдаются.
+`role-image-builder` материализуется как отдельный deployable
+`services/jobs/role-image-builder`. Он получает server-owned fenced attempt
+через protected RPC, читает только digest-named `context.tar`, использует
+client-only mTLS к вынесенному rootless BuildKit и scoped base-pull/staging-push
+credentials. Tenant, owner, recipe, generation, policy и artifact eligibility
+назначает `control-plane`; installation block доступен builder только в
+immutable claim snapshot и не попадает в status/log/audit/provenance.
+Отдельный `render-image-admission-job.sh` сначала получает server-owned artifact
+claim, затем разделяет scanner, signer, admission owner и promotion по разным
+Pod/ServiceAccount/Vault/mTLS границам. Admission фиксирует exact SBOM,
+vulnerability, native BuildKit provenance, signature и receipt через protected
+RPC; staging OCI receipt проходит readback до verdict. Только server-selected
+одноразовый owner promotion claim, включающий content/manifest receipt digests,
+OCI receipt с exact promoted subject и совместный registry readback делают
+artifact пригодным для `RuntimeRevision`. Marker/PVC задают порядок только
+внутри admission scan/sign/record; promotion восстанавливается из owner state,
+и PVC не является источником lifecycle state. Pull/admin/signing/promotion credentials
+builder не выдаются.
 
 ## Контракты
 

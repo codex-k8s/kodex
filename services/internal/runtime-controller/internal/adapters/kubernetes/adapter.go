@@ -62,7 +62,6 @@ const (
 type Config struct {
 	Environment                      string
 	Namespace                        string
-	RoleImageRepository              string
 	RunnerControlPlaneTarget         string
 	RunnerControlPlaneTLSServerName  string
 	InteractionGatewayURL            string
@@ -117,7 +116,7 @@ func InCluster(config Config) (*Adapter, error) {
 
 func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 	if client == nil || (config.Environment != "staging" && config.Environment != "production") ||
-		config.Namespace == "" || config.RoleImageRepository == "" ||
+		config.Namespace == "" ||
 		config.RunnerControlPlaneTarget == "" || config.RunnerControlPlaneTLSServerName == "" ||
 		config.InteractionGatewayURL == "" || config.SessionMCPURL == "" ||
 		config.ControllerImage == "" || config.AuthorityImage == "" ||
@@ -1296,7 +1295,7 @@ func (adapter *Adapter) rolePod(
 			VolumeMounts: []corev1.VolumeMount{{Name: "authority-sockets", MountPath: "/run/mattercodex"}},
 			Resources:    smallResources(),
 		}, {
-			Name: "workspace-init", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			Name: "workspace-init", Image: revision.ImageReference,
 			ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"},
 			Env:             runnerObservabilityEnv(adapter.config.Environment),
 			SecurityContext: restrictedSecurityContext(10001),
@@ -1306,7 +1305,7 @@ func (adapter *Adapter) rolePod(
 				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")}},
 		}},
 		Containers: []corev1.Container{{
-			Name: "role-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			Name: "role-runtime", Image: revision.ImageReference,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Args:            []string{"runtime-session"},
 			Env: append([]corev1.EnvVar{
@@ -1322,7 +1321,7 @@ func (adapter *Adapter) rolePod(
 			ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 5, TimeoutSeconds: 2, FailureThreshold: 3},
 			LivenessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 10, TimeoutSeconds: 2, FailureThreshold: 3},
 		}, {
-			Name: "provider-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			Name: "provider-runtime", Image: revision.ImageReference,
 			ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 			Env:       []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: "/workspace/.matter-codex/state/codex-home"}},
 			Resources: smallResources(), SecurityContext: restrictedSecurityContext(10002),

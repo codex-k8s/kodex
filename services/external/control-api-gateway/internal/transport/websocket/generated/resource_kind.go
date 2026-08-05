@@ -21,6 +21,9 @@ const (
   ResourceKindMemoryRecord
   ResourceKindWorkClaim
   ResourceKindArtifact
+  ResourceKindRoleImageRecipe
+  ResourceKindImageBuild
+  ResourceKindImageArtifact
 )
 
 // Value returns the value of the enum.
@@ -31,7 +34,7 @@ func (op ResourceKind) Value() any {
 	return ResourceKindValues[op]
 }
 
-var ResourceKindValues = []any{"PROJECT","TEAM","CHAT","ROLE","PROMPT_PROFILE","CREDENTIAL_BINDING","REPOSITORY_WORKSPACE","INTEGRATION","RUNTIME_REVISION","SESSION","TURN","PROCESS_RUN","SCHEDULE","OWNER_GATE","MEMORY_RECORD","WORK_CLAIM","ARTIFACT"}
+var ResourceKindValues = []any{"PROJECT","TEAM","CHAT","ROLE","PROMPT_PROFILE","CREDENTIAL_BINDING","REPOSITORY_WORKSPACE","INTEGRATION","RUNTIME_REVISION","SESSION","TURN","PROCESS_RUN","SCHEDULE","OWNER_GATE","MEMORY_RECORD","WORK_CLAIM","ARTIFACT","ROLE_IMAGE_RECIPE","IMAGE_BUILD","IMAGE_ARTIFACT"}
 var ValuesToResourceKind = map[any]ResourceKind{
   ResourceKindValues[ResourceKindProject]: ResourceKindProject,
   ResourceKindValues[ResourceKindTeam]: ResourceKindTeam,
@@ -50,4 +53,7 @@ var ValuesToResourceKind = map[any]ResourceKind{
   ResourceKindValues[ResourceKindMemoryRecord]: ResourceKindMemoryRecord,
   ResourceKindValues[ResourceKindWorkClaim]: ResourceKindWorkClaim,
   ResourceKindValues[ResourceKindArtifact]: ResourceKindArtifact,
+  ResourceKindValues[ResourceKindRoleImageRecipe]: ResourceKindRoleImageRecipe,
+  ResourceKindValues[ResourceKindImageBuild]: ResourceKindImageBuild,
+  ResourceKindValues[ResourceKindImageArtifact]: ResourceKindImageArtifact,
 }

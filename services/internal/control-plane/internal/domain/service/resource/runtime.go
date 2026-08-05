@@ -2286,9 +2286,6 @@ func (service *Service) createRuntimeRevision(
 	}
 	byID := make(map[string]entity.Resource, len(resources))
 	for _, item := range resources {
-		if item.State != enum.StateActive {
-			return entity.Resource{}, errs.ErrStateConflict
-		}
 		byID[item.ID] = item
 	}
 	selected := make(map[string]entity.Resource)
@@ -2309,9 +2306,51 @@ func (service *Service) createRuntimeRevision(
 		return entity.Resource{}, err
 	}
 	roleSpec, ok := role.Spec.(entity.RoleSpec)
+	if !ok || roleSpec.RoleImageRecipeID == "" {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	recipe, err := add(roleSpec.RoleImageRecipeID, enum.KindRoleImageRecipe)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	recipeSpec, ok := recipe.Spec.(entity.RoleImageRecipeSpec)
+	if !ok || recipeSpec.PolicyRevision != service.imagePolicyRevision ||
+		recipeSpec.PolicySHA256 != service.imagePolicySHA256 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	imageTx, ok := tx.(domainrepo.ImageTransaction)
 	if !ok {
 		return entity.Resource{}, errs.ErrInternal
 	}
+	imageArtifact, err := imageTx.PromotedImageArtifactBySpec(ctx, principal.OrganizationID,
+		principal.ProjectID, recipe.OwnerActorID, recipeSpec.SpecSHA256, recipeSpec.PolicyRevision, recipeSpec.PolicySHA256)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	artifactSpec, ok := imageArtifact.Spec.(entity.ImageArtifactSpec)
+	if !ok || imageArtifact.State != enum.StateActive ||
+		artifactSpec.SpecSHA256 != recipeSpec.SpecSHA256 ||
+		artifactSpec.PolicyRevision != recipeSpec.PolicyRevision || artifactSpec.PolicySHA256 != recipeSpec.PolicySHA256 ||
+		artifactSpec.AdmissionVerdict != entity.ImageAdmissionAccepted || artifactSpec.AdmissionRevision == 0 ||
+		!validSHA256Text(artifactSpec.AdmissionReceiptSHA256) || !validDigest(artifactSpec.AdmissionReceiptOCIManifestDigest) ||
+		!validSHA256Text(artifactSpec.SignatureSHA256) ||
+		artifactSpec.PromotedReference == "" || !strings.HasSuffix(artifactSpec.PromotedReference, "@"+artifactSpec.ManifestDigest) ||
+		!validSHA256Text(artifactSpec.PromotionReadbackSHA256) {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	imageBuild, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, artifactSpec.BuildID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	buildSpec, ok := imageBuild.Spec.(entity.ImageBuildSpec)
+	if !ok || imageBuild.State != enum.StateSucceeded || imageBuild.Version != artifactSpec.BuildVersion ||
+		buildSpec.Attempt != artifactSpec.BuildAttempt || buildSpec.SpecSHA256 != artifactSpec.SpecSHA256 ||
+		buildSpec.ManifestDigest != artifactSpec.ManifestDigest || buildSpec.ProvenanceSHA256 != artifactSpec.ProvenanceSHA256 ||
+		buildSpec.ImmutableBuildSHA256 != artifactSpec.ImmutableBuildSHA256 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	selected[imageArtifact.ID] = imageArtifact
+	selected[imageBuild.ID] = imageBuild
 	if !slices.Contains(
 		roleSpec.ProviderCredentialBindingIDs,
 		sessionSpec.ProviderAccountBindingID,
@@ -2479,7 +2518,8 @@ func (service *Service) createRuntimeRevision(
 	effectiveRuntimeSHA256, err := canonicalHash(struct {
 		OrganizationID                                string
 		ProjectID                                     string
-		ImageDigest                                   string
+		ImageReference                                string
+		ImageBinding                                  entity.ImageArtifactSpec
 		AuthorityPolicyRevision                       uint64
 		AuthorityPolicySHA256                         string
 		Components                                    []entity.EffectiveResourceRef
@@ -2488,7 +2528,8 @@ func (service *Service) createRuntimeRevision(
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
-		service.runtimeImageDigest,
+		artifactSpec.PromotedReference,
+		artifactSpec,
 		service.authorityPolicyRevision,
 		service.authorityPolicySHA256,
 		compatibleComponents,
@@ -2513,7 +2554,8 @@ func (service *Service) createRuntimeRevision(
 		OrganizationID                                   string
 		ProjectID                                        string
 		PredecessorRevisionID                            string
-		ImageDigest                                      string
+		ImageReference                                   string
+		ImageBinding                                     entity.ImageArtifactSpec
 		AuthorityPolicyRevision                          uint64
 		AuthorityPolicySHA256                            string
 		Components                                       []entity.EffectiveResourceRef
@@ -2528,7 +2570,8 @@ func (service *Service) createRuntimeRevision(
 		principal.OrganizationID,
 		principal.ProjectID,
 		predecessorID,
-		service.runtimeImageDigest,
+		artifactSpec.PromotedReference,
+		artifactSpec,
 		service.authorityPolicyRevision,
 		service.authorityPolicySHA256,
 		components,
@@ -2552,24 +2595,40 @@ func (service *Service) createRuntimeRevision(
 		enum.KindRuntimeRevision,
 		"Effective runtime revision",
 		entity.RuntimeRevisionSpec{
-			ManifestSHA256:              manifestSHA256,
-			ImageDigest:                 service.runtimeImageDigest,
-			PromptProfileID:             prompt.ID,
-			PromptRevision:              promptSpec.Revision,
-			CredentialBindingIDs:        credentialList,
-			IntegrationIDs:              integrationIDs,
-			PredecessorRevisionID:       predecessorID,
-			AuthorityPolicyVersion:      service.authorityPolicyRevision,
-			AuthorityPolicySHA256:       service.authorityPolicySHA256,
-			Components:                  components,
-			CreatedAt:                   now,
-			SessionID:                   session.ID,
-			RoleID:                      role.ID,
-			ChatID:                      sessionSpec.ConversationID,
-			ProviderCredentialBindingID: sessionSpec.ProviderAccountBindingID,
-			ProviderAccountName:         providerAccountName,
-			EffectiveRuntimeSHA256:      effectiveRuntimeSHA256,
-			CodexModel:                  "gpt-5.4", CodexSandbox: "workspace-write", CodexApprovalPolicy: "never",
+			ManifestSHA256:                         manifestSHA256,
+			ImageReference:                         artifactSpec.PromotedReference,
+			RoleImageRecipeID:                      recipe.ID,
+			RoleImageRecipeVersion:                 recipe.Version,
+			RoleImageSpecSHA256:                    recipeSpec.SpecSHA256,
+			ImageBuildID:                           imageBuild.ID,
+			ImageBuildVersion:                      imageBuild.Version,
+			ImageBuildAttempt:                      buildSpec.Attempt,
+			ImageArtifactID:                        imageArtifact.ID,
+			ImageArtifactVersion:                   imageArtifact.Version,
+			ImageManifestDigest:                    artifactSpec.ManifestDigest,
+			ImageAdmissionRevision:                 artifactSpec.AdmissionRevision,
+			ImageAdmissionReceiptSHA256:            artifactSpec.AdmissionReceiptSHA256,
+			ImageAdmissionReceiptOCIManifestDigest: artifactSpec.AdmissionReceiptOCIManifestDigest,
+			ImagePolicyRevision:                    artifactSpec.PolicyRevision,
+			ImagePolicySHA256:                      artifactSpec.PolicySHA256,
+			ImageSignatureSHA256:                   artifactSpec.SignatureSHA256,
+			ImagePromotionReadbackSHA256:           artifactSpec.PromotionReadbackSHA256,
+			PromptProfileID:                        prompt.ID,
+			PromptRevision:                         promptSpec.Revision,
+			CredentialBindingIDs:                   credentialList,
+			IntegrationIDs:                         integrationIDs,
+			PredecessorRevisionID:                  predecessorID,
+			AuthorityPolicyVersion:                 service.authorityPolicyRevision,
+			AuthorityPolicySHA256:                  service.authorityPolicySHA256,
+			Components:                             components,
+			CreatedAt:                              now,
+			SessionID:                              session.ID,
+			RoleID:                                 role.ID,
+			ChatID:                                 sessionSpec.ConversationID,
+			ProviderCredentialBindingID:            sessionSpec.ProviderAccountBindingID,
+			ProviderAccountName:                    providerAccountName,
+			EffectiveRuntimeSHA256:                 effectiveRuntimeSHA256,
+			CodexModel:                             "gpt-5.4", CodexSandbox: "workspace-write", CodexApprovalPolicy: "never",
 			ScheduledResultContract: scheduledResultContract,
 		},
 		now,

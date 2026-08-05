@@ -95,12 +95,21 @@ func TestExecutionValidateRejectsOpenLifecycleValues(t *testing.T) {
 func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 	execution := validExecution()
 	promptID := uuid.NewString()
+	recipeID, buildID, artifactID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	revision := Revision{
 		ProviderAccountName: "primary",
 		ID:                  execution.RuntimeRevisionID, Version: execution.RuntimeRevisionVersion,
 		ManifestSHA256: strings.Repeat("c", 64), EffectiveRuntimeSHA256: execution.EffectiveRuntimeSHA256,
-		ImageDigest: "sha256:" + strings.Repeat("d", 64),
-		SessionID:   execution.SessionID, RoleID: execution.RoleID,
+		ImageReference:    "registry.example.test/role@sha256:" + strings.Repeat("d", 64),
+		RoleImageRecipeID: recipeID, RoleImageRecipeVersion: 1, RoleImageSpecSHA256: strings.Repeat("7", 64),
+		ImageBuildID: buildID, ImageBuildVersion: 2, ImageBuildAttempt: 1,
+		ImageArtifactID: artifactID, ImageArtifactVersion: 3,
+		ImageManifestDigest: "sha256:" + strings.Repeat("d", 64), ImageAdmissionRevision: 4,
+		ImageAdmissionReceiptSHA256:            strings.Repeat("8", 64),
+		ImageAdmissionReceiptOCIManifestDigest: "sha256:" + strings.Repeat("9", 64), ImagePolicyRevision: 5,
+		ImagePolicySHA256: strings.Repeat("9", 64), ImageSignatureSHA256: strings.Repeat("a", 64),
+		ImagePromotionReadbackSHA256: strings.Repeat("b", 64),
+		SessionID:                    execution.SessionID, RoleID: execution.RoleID,
 		ProviderCredentialBindingID: execution.ProviderBindingID, PromptProfileID: promptID, PromptRevision: 1,
 		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: strings.Repeat("e", 64),
 		ProviderObservedUsage: 1, ProviderObservedLimit: 2, ProviderObservationRevision: 1,
@@ -110,6 +119,9 @@ func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 			{Kind: "RESOURCE_KIND_PROJECT", ResourceID: execution.ProjectID, Version: 1, ProjectionSHA256: strings.Repeat("1", 64)},
 			{Kind: "RESOURCE_KIND_SESSION", ResourceID: execution.SessionID, Version: 1, ProjectionSHA256: strings.Repeat("2", 64)},
 			{Kind: "RESOURCE_KIND_ROLE", ResourceID: execution.RoleID, Version: 1, ProjectionSHA256: strings.Repeat("3", 64)},
+			{Kind: "RESOURCE_KIND_ROLE_IMAGE_RECIPE", ResourceID: recipeID, Version: 1, ProjectionSHA256: strings.Repeat("7", 64)},
+			{Kind: "RESOURCE_KIND_IMAGE_BUILD", ResourceID: buildID, Version: 2, ProjectionSHA256: strings.Repeat("8", 64)},
+			{Kind: "RESOURCE_KIND_IMAGE_ARTIFACT", ResourceID: artifactID, Version: 3, ProjectionSHA256: strings.Repeat("9", 64)},
 			{Kind: "RESOURCE_KIND_PROMPT_PROFILE", ResourceID: promptID, Version: 1, ProjectionSHA256: strings.Repeat("4", 64)},
 		},
 	}
@@ -146,6 +158,21 @@ func TestRevisionValidateRequiresClosedCompleteComponentSet(t *testing.T) {
 	execution.CredentialSnapshotSHA256 = hex.EncodeToString(digest[:])
 	if err := revision.ValidateFor(execution); err != nil {
 		t.Fatalf("valid runtime revision rejected: %v", err)
+	}
+	mismatchedImage := revision
+	mismatchedImage.ImageManifestDigest = "sha256:" + strings.Repeat("0", 64)
+	if err := mismatchedImage.ValidateFor(execution); err == nil {
+		t.Fatal("runtime revision accepted an image reference bound to another manifest digest")
+	}
+	unsignedImage := revision
+	unsignedImage.ImageSignatureSHA256 = ""
+	if err := unsignedImage.ValidateFor(execution); err == nil {
+		t.Fatal("runtime revision accepted missing image signature evidence")
+	}
+	missingReceiptManifest := revision
+	missingReceiptManifest.ImageAdmissionReceiptOCIManifestDigest = ""
+	if err := missingReceiptManifest.ValidateFor(execution); err == nil {
+		t.Fatal("runtime revision accepted missing OCI admission receipt manifest")
 	}
 	execution.ScheduleOccurrenceID = uuid.NewString()
 	revision.ScheduledResultContract = &ScheduledResultContract{

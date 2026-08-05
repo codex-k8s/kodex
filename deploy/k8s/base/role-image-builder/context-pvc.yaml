@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: role-image-build-contexts
+  labels:
+    app.kubernetes.io/name: role-image-builder
+    mattercodex.dev/context-contract: role-image-build-context-v1
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 20Gi

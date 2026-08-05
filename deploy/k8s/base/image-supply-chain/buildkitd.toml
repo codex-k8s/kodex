@@ -11,10 +11,15 @@ root = "/var/lib/buildkit"
   enabled = true
   snapshotter = "native"
   rootless = true
-  noProcessSandbox = true
 
 [registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001"]
   ca = ["/var/run/config/mattercodex/image-registry/ca.pem"]
   [[registry."mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001".keypair]]
-    cert = "/var/run/secrets/mattercodex/buildkit/tls/registry-client.crt"
-    key = "/var/run/secrets/mattercodex/buildkit/tls/registry-client.key"
+    cert = "/var/run/secrets/mattercodex/buildkit/tls/staging-registry-client.crt"
+    key = "/var/run/secrets/mattercodex/buildkit/tls/staging-registry-client.key"
+
+[registry."mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000"]
+  ca = ["/var/run/config/mattercodex/image-registry/ca.pem"]
+  [[registry."mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000".keypair]]
+    cert = "/var/run/secrets/mattercodex/buildkit/tls/base-registry-client.crt"
+    key = "/var/run/secrets/mattercodex/buildkit/tls/base-registry-client.key"

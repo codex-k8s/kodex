@@ -4,8 +4,8 @@ title: Образы и цепочка поставки
 type: domain
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-07-31
+version: 0.3.0
+updated: 2026-08-05
 ---
 
 # Образы и цепочка поставки
@@ -26,7 +26,13 @@ updated: 2026-07-31
 - сетевую политику и политику реестра на время сборки;
 - метаданные для каталога инструментов в промпте.
 
-Хеш вычисляется по каноническому рецепту, дайджесту базового образа, входам сборки, платформе и версии сборщика. Если подписанный образ с таким хешем доступен, повторная сборка не запускается.
+Хеш вычисляется по канонической сериализации полной спецификации: base/source/
+context/builder/frontend/platform/package/tool/toolchain/policy digests,
+версиям и multiline installation block. Изменение любого байта installation
+block меняет `spec_sha256`; этот hash входит в image labels и provenance binding,
+поэтому новый рецепт не может переиспользовать старый manifest digest. Reuse
+разрешён только для exact promoted artifact с актуальными admission receipt,
+policy, signature и registry readback.
 
 ## Сборщик
 
@@ -37,16 +43,30 @@ Kaniko не используется в промышленной конфигу�
 Канонический локальный контур разделяет staging push, staging admin,
 promotion writer и node pull по Pod, ServiceAccount, mTLS/Vault identity,
 NetworkPolicy и хранилищу. Pull монтирует promoted storage только read-only и
-не имеет пути к внутренним endpoints. Build Job принимает read-only
-`context.tar` с exact digest/revision, обращается к BuildKit через client-only
+не имеет пути к внутренним endpoints. Отдельный deployable
+`services/jobs/role-image-builder` получает server-owned claim, принимает
+read-only `context.tar` с exact digest/revision, обращается к BuildKit через client-only
 mTLS и публикует только в staging. Отдельный admission owner связывает exact
 source/build/image digest с BuildKit provenance, SBOM digest, версией и
 результатом vulnerability policy, проверенной signature identity и
-подписанным admission receipt. Только короткоживущий claim этого владельца
-разрешает promotion writer перенести exact digest; pull видит только promoted
-admitted content. Admin DELETE не выдаётся сборщику или pull. `noProcessSandbox`
-ограничивается rootless BuildKit Pod без Kubernetes token, прикладных секретов
-и persistent worker state; это не даёт права ослаблять mTLS или registry scopes.
+OCI admission receipt, чей content и manifest digests фиксируются owner-side.
+Update, archive или delete рецепта в той же owner-транзакции закрывает
+незавершённые build/artifact и отзывает их build, admission и promotion claims.
+Только отдельный HMAC-signed fenced короткоживущий claim, который включает
+оба receipt digest,
+выданный promotion workload после verdict, разрешает перенести exact digest;
+истечение заменяет claim с повышением generation/fence. Admission receipt
+до verdict публикуется отдельным staging OCI artifact с exact subject, а
+promotion воспроизводит тот же payload с exact promoted subject. Consumed claim
+и совместный image/receipt manifest readback фиксируются owner-транзакцией, а
+pull видит только promoted admitted content. Admin DELETE не выдаётся сборщику
+или pull. Rootless BuildKit
+сохраняет process sandbox, работает без Kubernetes token, прикладных owner
+secrets и persistent worker state; ослаблять mTLS или registry scopes запрещено.
+Builder сверяет заявленный builder digest с exact BuildKit image, а toolchain
+digest — с отрендеренным builder image. Package/tool blobs внутри context имеют
+digest-named пути, повторно хешируются до BuildKit, устанавливаются offline, а
+source context подключается к installation step read-only и не входит в layers.
 
 ## Допуск к публикации
 

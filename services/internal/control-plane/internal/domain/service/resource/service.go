@@ -108,6 +108,18 @@ const (
 	permissionResolveGate             = "controlplane.owner_gate.resolve"
 	permissionRegisterArtifact        = "controlplane.artifact.register"
 	permissionScanArtifact            = "controlplane.artifact.scan"
+	permissionManageRoleImageRecipe   = "controlplane.role_image_recipe.manage"
+	permissionClaimImageBuild         = "controlplane.image_build.claim"
+	permissionRenewImageBuild         = "controlplane.image_build.renew"
+	permissionReportImageBuild        = "controlplane.image_build.progress"
+	permissionCompleteImageBuild      = "controlplane.image_build.complete"
+	permissionFailImageBuild          = "controlplane.image_build.fail"
+	permissionManageImageBuild        = "controlplane.image_build.manage"
+	permissionClaimImageAdmission     = "controlplane.image_admission.claim"
+	permissionRecordImageAdmission    = "controlplane.image_admission.record"
+	permissionClaimImagePromotion     = "controlplane.image_promotion.claim"
+	permissionCompleteImagePromotion  = "controlplane.image_promotion.complete"
+	permissionReadImageBuild          = "controlplane.image_build.read"
 	permissionManageSession           = "controlplane.session.manage"
 	permissionBindSessionMCP          = "controlplane.session.mcp.bind"
 	permissionConversationLifecycle   = "controlplane.conversation.lifecycle"
@@ -171,7 +183,20 @@ type Config struct {
 	RuntimeRestoreSigningKey   ed25519.PrivateKey
 	TurnLeaseDuration          time.Duration
 	MaximumScheduleClaims      int
-	RuntimeImageDigest         string
+	ImagePolicyRevision        uint64
+	ImagePolicySHA256          string
+	ImageBuildLeaseDuration    time.Duration
+	ImageAdmissionClaimTTL     time.Duration
+	ImagePromotionClaimTTL     time.Duration
+	ImageMaximumAttempts       uint32
+	StagingImageRepository     string
+	PromotedImageRepository    string
+	ImageBuilderWorkload       string
+	ImageBuilderSPIFFEID       string
+	ImageAdmissionWorkload     string
+	ImageAdmissionSPIFFEID     string
+	ImagePromotionWorkload     string
+	ImagePromotionSPIFFEID     string
 	AuthorityPolicyRevision    uint64
 	AuthorityPolicySHA256      string
 	OwnerGateDeliveryWorkload  string
@@ -223,7 +248,20 @@ type Service struct {
 	runtimeRestoreSigningKey   ed25519.PrivateKey
 	turnLeaseDuration          time.Duration
 	maximumScheduleClaims      int
-	runtimeImageDigest         string
+	imagePolicyRevision        uint64
+	imagePolicySHA256          string
+	imageBuildLeaseDuration    time.Duration
+	imageAdmissionClaimTTL     time.Duration
+	imagePromotionClaimTTL     time.Duration
+	imageMaximumAttempts       uint32
+	stagingImageRepository     string
+	promotedImageRepository    string
+	imageBuilderWorkload       string
+	imageBuilderSPIFFEID       string
+	imageAdmissionWorkload     string
+	imageAdmissionSPIFFEID     string
+	imagePromotionWorkload     string
+	imagePromotionSPIFFEID     string
 	authorityPolicyRevision    uint64
 	authorityPolicySHA256      string
 	ownerGateDeliveryWorkload  string
@@ -263,7 +301,21 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		config.TurnLeaseDuration > 30*time.Minute ||
 		config.MaximumScheduleClaims < 1 ||
 		config.MaximumScheduleClaims > 100 ||
-		!validImageDigest(config.RuntimeImageDigest) ||
+		config.ImagePolicyRevision == 0 || !validSHA256Text(config.ImagePolicySHA256) ||
+		config.ImageBuildLeaseDuration < 30*time.Second || config.ImageBuildLeaseDuration > 30*time.Minute ||
+		config.ImageAdmissionClaimTTL < 30*time.Second || config.ImageAdmissionClaimTTL > 30*time.Minute ||
+		config.ImagePromotionClaimTTL < 30*time.Second || config.ImagePromotionClaimTTL > 15*time.Minute ||
+		config.ImageMaximumAttempts == 0 || config.ImageMaximumAttempts > 10 ||
+		!validImageRepository(config.StagingImageRepository) ||
+		!validImageRepository(config.PromotedImageRepository) ||
+		config.StagingImageRepository == config.PromotedImageRepository ||
+		value.ValidateStableKey(config.ImageBuilderWorkload) != nil || !validSPIFFEID(config.ImageBuilderSPIFFEID) ||
+		value.ValidateStableKey(config.ImageAdmissionWorkload) != nil || !validSPIFFEID(config.ImageAdmissionSPIFFEID) ||
+		value.ValidateStableKey(config.ImagePromotionWorkload) != nil || !validSPIFFEID(config.ImagePromotionSPIFFEID) ||
+		config.ImageBuilderWorkload == config.ImageAdmissionWorkload ||
+		config.ImageBuilderSPIFFEID == config.ImageAdmissionSPIFFEID ||
+		config.ImagePromotionWorkload == config.ImageAdmissionWorkload ||
+		config.ImagePromotionSPIFFEID == config.ImageAdmissionSPIFFEID ||
 		config.AuthorityPolicyRevision == 0 ||
 		!validSHA256Text(config.AuthorityPolicySHA256) ||
 		value.ValidateStableKey(config.OwnerGateDeliveryWorkload) != nil ||
@@ -314,7 +366,20 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		runtimeRestoreSigningKey:   slices.Clone(config.RuntimeRestoreSigningKey),
 		turnLeaseDuration:          config.TurnLeaseDuration,
 		maximumScheduleClaims:      config.MaximumScheduleClaims,
-		runtimeImageDigest:         config.RuntimeImageDigest,
+		imagePolicyRevision:        config.ImagePolicyRevision,
+		imagePolicySHA256:          config.ImagePolicySHA256,
+		imageBuildLeaseDuration:    config.ImageBuildLeaseDuration,
+		imageAdmissionClaimTTL:     config.ImageAdmissionClaimTTL,
+		imagePromotionClaimTTL:     config.ImagePromotionClaimTTL,
+		imageMaximumAttempts:       config.ImageMaximumAttempts,
+		stagingImageRepository:     config.StagingImageRepository,
+		promotedImageRepository:    config.PromotedImageRepository,
+		imageBuilderWorkload:       config.ImageBuilderWorkload,
+		imageBuilderSPIFFEID:       config.ImageBuilderSPIFFEID,
+		imageAdmissionWorkload:     config.ImageAdmissionWorkload,
+		imageAdmissionSPIFFEID:     config.ImageAdmissionSPIFFEID,
+		imagePromotionWorkload:     config.ImagePromotionWorkload,
+		imagePromotionSPIFFEID:     config.ImagePromotionSPIFFEID,
 		authorityPolicyRevision:    config.AuthorityPolicyRevision,
 		authorityPolicySHA256:      config.AuthorityPolicySHA256,
 		ownerGateDeliveryWorkload:  config.OwnerGateDeliveryWorkload,
@@ -1172,6 +1237,8 @@ func validateGenericUpdate(current entity.Resource, next entity.Spec) error {
 		}
 	case entity.RuntimeRevisionSpec:
 		return errs.ErrStateConflict
+	case entity.RoleImageRecipeSpec, entity.ImageBuildSpec, entity.ImageArtifactSpec:
+		return errs.ErrStateConflict
 	case entity.SessionSpec:
 		nextSpec, ok := next.(entity.SessionSpec)
 		if !ok || currentSpec.AgentID != nextSpec.AgentID ||
@@ -1271,7 +1338,8 @@ func protectedCreateKind(kind enum.Kind) bool {
 	switch kind {
 	case enum.KindRuntimeRevision, enum.KindProcessRun, enum.KindSchedule,
 		enum.KindOwnerGate, enum.KindArtifact, enum.KindSession,
-		enum.KindMemoryRecord, enum.KindWorkClaim:
+		enum.KindMemoryRecord, enum.KindWorkClaim, enum.KindRoleImageRecipe,
+		enum.KindImageBuild, enum.KindImageArtifact:
 		return true
 	default:
 		return false
@@ -1282,7 +1350,8 @@ func protectedMutationKind(kind enum.Kind) bool {
 	switch kind {
 	case enum.KindRuntimeRevision, enum.KindSession, enum.KindTurn,
 		enum.KindProcessRun, enum.KindSchedule, enum.KindOwnerGate,
-		enum.KindArtifact, enum.KindMemoryRecord, enum.KindWorkClaim:
+		enum.KindArtifact, enum.KindMemoryRecord, enum.KindWorkClaim,
+		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact:
 		return true
 	default:
 		return false
@@ -1296,7 +1365,8 @@ func protectedTransitionKind(kind enum.Kind) bool {
 func ownerBoundLifecycleKind(kind enum.Kind) bool {
 	switch kind {
 	case enum.KindSession, enum.KindTurn, enum.KindProcessRun,
-		enum.KindSchedule, enum.KindOwnerGate, enum.KindWorkClaim:
+		enum.KindSchedule, enum.KindOwnerGate, enum.KindWorkClaim,
+		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact:
 		return true
 	default:
 		return false
@@ -1461,6 +1531,7 @@ func (service *Service) validateReferences(
 		add(spec.DefaultAgentID, enum.KindRole)
 	case entity.RoleSpec:
 		add(spec.PromptProfileID, enum.KindPromptProfile)
+		add(spec.RoleImageRecipeID, enum.KindRoleImageRecipe)
 		for _, identifier := range spec.AllowedTargetRoleIDs {
 			add(identifier, enum.KindRole)
 		}
@@ -1481,6 +1552,9 @@ func (service *Service) validateReferences(
 		}
 	case entity.RuntimeRevisionSpec:
 		add(spec.PromptProfileID, enum.KindPromptProfile)
+		add(spec.RoleImageRecipeID, enum.KindRoleImageRecipe)
+		add(spec.ImageBuildID, enum.KindImageBuild)
+		add(spec.ImageArtifactID, enum.KindImageArtifact)
 		for _, identifier := range spec.CredentialBindingIDs {
 			add(identifier, enum.KindCredentialBinding)
 		}
@@ -1517,6 +1591,11 @@ func (service *Service) validateReferences(
 	case entity.WorkClaimSpec:
 		add(spec.ProcessRunID, enum.KindProcessRun)
 		add(spec.TurnID, enum.KindTurn)
+	case entity.ImageBuildSpec:
+		add(spec.RecipeID, enum.KindRoleImageRecipe)
+	case entity.ImageArtifactSpec:
+		add(spec.RecipeID, enum.KindRoleImageRecipe)
+		add(spec.BuildID, enum.KindImageBuild)
 	}
 	slices.SortFunc(references, func(left, right reference) int {
 		if left.id < right.id {

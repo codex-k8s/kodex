@@ -8,15 +8,17 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
 image_hex=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+base_hex=dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+frontend_hex=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 source_digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 build_tag=v20260801000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 subject=registry.example.test/mattercodex/control-plane
-builder_identity=spiffe://mattercodex.local/ns/mattercodex-system/sa/mattercodex-role-image-builder
-build_type=https://mobyproject.org/buildkit@v1
+builder_identity=spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder
+build_type=https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
 tools_digest=sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 policy_revision=7
-jq -n --arg image "$image_hex" --arg source "$source_digest" \
-  --arg subject "$subject" --arg build_tag "$build_tag" \
+jq -n --arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_hex" \
+  --arg subject "$subject" \
   --arg builder "$builder_identity" --arg build_type "$build_type" \
   --arg tools "$tools_digest" --arg policy "$policy_revision" '{
   _type: "https://in-toto.io/Statement/v1",
@@ -25,41 +27,23 @@ jq -n --arg image "$image_hex" --arg source "$source_digest" \
   predicate: {
     buildDefinition: {
       buildType: $build_type,
-      externalParameters: {args: {
-        "label:mattercodex.dev/source-sha256": $source,
-        "label:mattercodex.dev/build-tag": $build_tag,
-        "label:mattercodex.dev/admission-tools-sha256": $tools,
-        "label:mattercodex.dev/admission-policy-revision": $policy
-      }},
       resolvedDependencies: [{
         uri: "docker-image://docker.io/library/alpine@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        digest: {sha256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}
+        digest: {sha256: $base}
       }, {
-        uri: ("mattercodex:source/" + $build_tag),
-        digest: {sha256: ($source | sub("^sha256:"; ""))}
+        uri: "docker-image://registry.example.test/mattercodex/dockerfile@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        digest: {sha256: $frontend}
       }]
     },
     runDetails: {builder: {id: $builder}}
   }
 }' >"$temporary_directory/valid.json"
-policy_args=(--arg image "$image_hex" --arg source "$source_digest" \
-  --arg subject "$subject" --arg build_tag "$build_tag" --arg tools_digest "$tools_digest" \
-  --arg policy_revision "$policy_revision" --arg builder_id "$builder_identity" \
-  --arg build_type "$build_type")
+policy_args=(--arg image "$image_hex" --arg base "$base_hex" --arg frontend "$frontend_hex" \
+  --arg builder_id "$builder_identity" --arg build_type "$build_type")
 jq -e "${policy_args[@]}" \
   -f "$policy" "$temporary_directory/valid.json" >/dev/null
 
-jq '.predicate.buildDefinition.externalParameters.args["label:mattercodex.dev/source-sha256"] =
-  "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"' \
-  "$temporary_directory/valid.json" >"$temporary_directory/substituted.json"
-if jq -e "${policy_args[@]}" \
-  -f "$policy" "$temporary_directory/substituted.json" >/dev/null; then
-  echo "substituted provenance was accepted" >&2
-  exit 1
-fi
-jq '(.predicate.buildDefinition.resolvedDependencies[] |
-  select(.uri | startswith("mattercodex:source/")) | .digest.sha256) =
-  "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"' \
+jq '.predicate.buildDefinition.resolvedDependencies[0].digest.sha256 = "invalid"' \
   "$temporary_directory/valid.json" >"$temporary_directory/evil-material.json"
 if jq -e "${policy_args[@]}" -f "$policy" "$temporary_directory/evil-material.json" >/dev/null; then
   echo "foreign source material was accepted" >&2
@@ -92,10 +76,13 @@ if jq -e "${policy_args[@]}" -f "$policy" "$temporary_directory/duplicate-materi
 fi
 
 control_digest=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+authority_digest=sha256:abababababababababababababababababababababababababababababababab
 tools_image="registry.example.test/mattercodex/admission-tools@$tools_digest"
+admission_image="registry.example.test/mattercodex/image-admission@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+policy_sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 pull_host=registry.nodes.example.test
 "$repository_root/tools/render-image-supply-chain.sh" staging \
-  "$control_digest" "$pull_host" "$tools_image" 7 3 >"$temporary_directory/supply.yaml"
+  "$control_digest" "$authority_digest" "$pull_host" "$tools_image" "$admission_image" 7 "$policy_sha256" 3 >"$temporary_directory/supply.yaml"
 [[ $(grep -F -c "common_name: $pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 3 ]]
 [[ $(grep -F -c "$tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
@@ -106,12 +93,13 @@ grep -Fq "$pull_host/mattercodex/control-plane@$control_digest" "$temporary_dire
   "$temporary_directory/supply.yaml") -eq 2 ]]
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
 grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' "$temporary_directory/supply.yaml"
-grep -Fq 'registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
+grep -Fq 'base-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
+grep -Fq 'staging-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
 grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/cleanup.sh"
 if "$repository_root/tools/render-image-supply-chain.sh" staging \
-  "$control_digest" registry-pull.mattercodex-system.svc.cluster.local \
-  "$tools_image" 7 3 >/dev/null 2>&1; then
+  "$control_digest" "$authority_digest" registry-pull.mattercodex-system.svc.cluster.local \
+  "$tools_image" "$admission_image" 7 "$policy_sha256" 3 >/dev/null 2>&1; then
   echo "internal Service DNS was accepted as node pull SAN" >&2
   exit 1
 fi
@@ -121,30 +109,29 @@ cat >"$temporary_directory/bin/kubectl" <<EOF
 #!/bin/sh
 policy_revision=\${FIXTURE_POLICY_REVISION:-7}
 cat <<JSON
-{"immutable":true,"metadata":{"labels":{"mattercodex.dev/owner-intent":"true"},"annotations":{"mattercodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","policyRevision":"\$policy_revision","builderIdentity":"$builder_identity","buildType":"$build_type","scannerIdentity":"mattercodex-image-scanner","signerIdentity":"mattercodex-image-signer","admissionOwnerIdentity":"mattercodex-image-admission-owner","promotionIdentity":"mattercodex-image-promotion-writer","requiredTools":"base64,buildctl,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft"}}
+{"immutable":true,"metadata":{"labels":{"mattercodex.dev/owner-intent":"true"},"annotations":{"mattercodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/mattercodex/internal-rpc-authority@$authority_digest","promotionRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles","promotedPullRepository":"registry.example.test/mattercodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft"}}
 JSON
 EOF
 chmod 0555 "$temporary_directory/bin/kubectl"
 PATH="$temporary_directory/bin:$PATH" \
   "$repository_root/tools/render-image-admission-job.sh" staging \
   "$build_tag" \
-  "$source_digest" control-plane "sha256:$image_hex" \
   >"$temporary_directory/admission.yaml"
 PATH="$temporary_directory/bin:$PATH" \
   "$repository_root/tools/render-image-admission-job.sh" production \
-  "$build_tag" "$source_digest" control-plane "sha256:$image_hex" \
+  "$build_tag" \
   >"$temporary_directory/admission-production.yaml"
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
-  "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 4 ]]
+  "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 5 ]]
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
-  "$temporary_directory/admission-production.yaml" | grep -c '^mc-admit-') -eq 4 ]]
+  "$temporary_directory/admission-production.yaml" | grep -c '^mc-admit-') -eq 5 ]]
 for service_account in mattercodex-image-scanner mattercodex-image-signer \
-  mattercodex-image-admission-owner mattercodex-image-promotion-writer; do
+  image-admission image-promotion; do
   grep -Fq "serviceAccountName: $service_account" "$temporary_directory/admission.yaml"
 done
 FIXTURE_POLICY_REVISION=8 PATH="$temporary_directory/bin:$PATH" \
   "$repository_root/tools/render-image-admission-job.sh" staging \
-  "$build_tag" "$source_digest" control-plane "sha256:$image_hex" \
+  "$build_tag" \
   >"$temporary_directory/admission-policy-8.yaml"
 claim_7=$(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name' \
   "$temporary_directory/admission.yaml")
@@ -154,20 +141,35 @@ claim_8=$(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name
   echo "policy revision reused admission evidence storage" >&2
   exit 1
 }
-PATH="$temporary_directory/bin:$PATH" \
-  "$repository_root/tools/render-image-build-job.sh" staging "$build_tag" source-pvc \
-  "$source_digest" control-plane >"$temporary_directory/build.yaml"
-PATH="$temporary_directory/bin:$PATH" \
-  "$repository_root/tools/render-image-build-job.sh" production "$build_tag" source-pvc \
-  "$source_digest" control-plane >"$temporary_directory/build-production.yaml"
-grep -Fq "builder-id=$builder_identity" "$temporary_directory/build.yaml"
-grep -Fq "label:mattercodex.dev/admission-policy-revision=7" "$temporary_directory/build.yaml"
-grep -Fq 'attestation/trusted-build/v1' "$temporary_directory/build.yaml"
-grep -Fq 'mattercodex:source/' "$temporary_directory/build.yaml"
-grep -Fq 'builder.key' "$temporary_directory/build.yaml"
-grep -Fq 'activeDeadlineSeconds: 1800' "$temporary_directory/build-production.yaml"
-grep -Fq 'verify-attestation --key /identity/builder.pub' \
+grep -Fq 'serviceAccountName: role-image-builder' \
+  "$repository_root/deploy/k8s/base/role-image-builder/deployment.yaml"
+grep -Fq 'image-admission-bridge claim' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'IMAGE_OWNER_PROMOTION_READBACK_SHA256_FILE' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'IMAGE_OWNER_ADMISSION_RECEIPT_OCI_MANIFEST_DIGEST_FILE' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'signatureSHA256:$signature_sha' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+if grep -Fq 'issuedAt' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  echo "admission receipt contains non-deterministic issue time" >&2
+  exit 1
+fi
+grep -Fq 'load_promotion_claim' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+promotion_uses_emptydir=$(yq eval-all 'select(.kind == "Job" and .metadata.labels."mattercodex.dev/image-admission-phase" == "promote") |
+  .spec.template.spec.volumes[] | select(.name == "work") | .emptyDir != null' "$temporary_directory/admission.yaml")
+[[ $promotion_uses_emptydir == "true" ]] || {
+  echo "promotion still shares admission PVC" >&2
+  exit 1
+}
+if sed -n '/^  promote)/,/^  \*)/p' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" |
+  grep -Fq 'load_owner_claim'; then
+  echo "promotion still depends on admission PVC claim" >&2
+  exit 1
+fi
 
 auth=$(printf 'pull-reader:current-password' | base64 | tr -d '\n')
 jq -n --arg host "$pull_host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' \
@@ -188,7 +190,6 @@ fi
 if PATH="$temporary_directory/bin:$PATH" \
   "$repository_root/tools/render-image-admission-job.sh" staging \
   "$build_tag" \
-  "$source_digest" control-plane "sha256:$image_hex" \
   attacker.invalid/tools@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
   >/dev/null 2>&1; then
   echo "caller-selected admission tools image was accepted" >&2

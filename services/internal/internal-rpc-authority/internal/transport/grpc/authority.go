@@ -229,6 +229,9 @@ func authoritySource(value string) internalrpcauthorityv1.AuthoritySource {
 		"PROCESS_RUN":              internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_PROCESS_RUN,
 		"AUTOMATION_OCCURRENCE":    internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_AUTOMATION_OCCURRENCE,
 		"INTEGRATION_CONTINUATION": internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_INTEGRATION_CONTINUATION,
+		"IMAGE_BUILD":              internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_BUILD,
+		"IMAGE_ARTIFACT":           internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_ARTIFACT,
+		"IMAGE_PROMOTION_CLAIM":    internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM,
 	}[value]
 }
 

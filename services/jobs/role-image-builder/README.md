@@ -1,0 +1,125 @@
+# role-image-builder
+
+`role-image-builder` — единственный исполнитель одной fenced attempt сборки
+ролевого образа. `control-plane` владеет рецептами, очередью сборок,
+артефактами и eligibility, а отдельные `image-admission` и `image-promotion`
+workload владеют evidence, verdict и переносом exact digest.
+
+## Сквозной путь
+
+1. Owner через `control-api-gateway` вызывает специализированный
+   `ManageRoleImageRecipe`. Gateway не передаёт actor/tenant/owner как данные
+   запроса: authority proof разрешает их в `control-plane`.
+2. `control-plane` канонизирует полную спецификацию, включая multiline
+   installation block, exact base/source/context/builder/frontend/platform/
+   package/tool/toolchain/policy inputs, назначает generation и атомарно
+   создаёт `ImageBuild`, idempotency receipt и audit.
+3. Exact promoted artifact переиспользуется только при совпадении полного
+   `spec_sha256`, актуальных policy revision/digest, admitted signature
+   evidence и promotion readback. Иначе создаётся новая attempt.
+4. Builder получает `ClaimImageBuild` без build ID в payload. Grant, lease и
+   claim связаны с tenant/project/build/attempt/spec/input/generation/JTI/
+   fence. Installation block возвращается только в этом ответе.
+5. Builder проверяет read-only digest-named context tar, отклоняет traversal,
+   symlink и special file, генерирует Dockerfile и обращается к вынесенному
+   rootless BuildKit по exact mTLS/SNI/CA. Base pull и staging push используют
+   разные Docker credentials. `builder_sha256` сверяется с exact BuildKit image,
+   а `toolchain_sha256` — с digest текущего builder image. Secret values доступны
+   только как BuildKit secret mounts и не входят в context или слой.
+6. BuildKit публикует staging artifact, native SLSA provenance и labels полного
+   immutable tuple. Builder возвращает только bounded digest/status evidence.
+7. `image-admission` server-side claim связывает SBOM, vulnerability evidence,
+   native provenance, signature и staging OCI receipt с exact artifact. Content
+   и OCI manifest digests receipt записываются owner-side до verdict. Rejected evidence
+   переводит artifact в `BLOCKED`; accepted evidence делает artifact доступным
+   только специализированному promotion claim.
+8. Отдельный `image-promotion` Pod/ServiceAccount получает fenced одноразовый
+   server-selected claim без artifact ID из payload. Claim включает exact
+   staging reference, admission revision и оба receipt digest; поэтому
+   promotion восстанавливается без admission PVC. Workload копирует exact
+   image digest, воспроизводит admission receipt как OCI artifact с promoted
+   subject, выполняет readback обоих manifests и расходует claim через
+   `CompleteImagePromotion`. Builder не получает signer/promotion/node-pull
+   identity.
+9. Свежая `RuntimeRevision` разрешает recipe и artifact внутри owner boundary,
+   закрыто проверяет все версии/digests и содержит единственный immutable
+   `repository@sha256` reference. `runtime-controller`, credential materializer
+   и admission webhook сравнивают именно этот reference и evidence binding.
+
+События для этого пути не публикуются: producer, admission и runtime используют
+авторитетные защищённые read/command RPC. Ложного AsyncAPI consumer нет.
+
+## Lifecycle matrix
+
+| Переход | Владелец и результат |
+|---|---|
+| create recipe | `control-plane`; server-owned owner/generation/policy, новая queued build или exact reuse |
+| update recipe | `control-plane`; version CAS, generation++, новый canonical hash и build/reuse; прежние build/admission/promotion claims отзываются одной owner-транзакцией |
+| archive/restore/delete recipe | `control-plane`; специализированная команда; незавершённые build и artifact закрываются, их lease/claims отзываются |
+| resolve/reuse | `control-plane`; только exact `ACTIVE`, admitted, signed, promoted artifact с current policy/readback |
+| claim build | `role-image-builder`; одна leased attempt, fence/generation/JTI и immutable input snapshot |
+| renew/progress | `role-image-builder`; только current token/attempt/fence, закрытые stage и percent |
+| complete/fail | `role-image-builder`; terminal owner transaction отзывает lease; complete создаёт immutable artifact |
+| cancel | owner-команда `ManageImageBuild`; закрывает claim/lease, старый worker отвергается |
+| retry | owner-команда; новая attempt/fence/generation и свежий grant, build evidence очищается |
+| expiry | owner-команда после lease deadline; старый grant закрыт |
+| dead letter | owner-команда после исчерпания maximum attempts; новых claims нет |
+| claim admission | `image-admission`; одна lease/fence на exact artifact и current policy |
+| admission accepted | staging OCI receipt проходит exact readback; owner transaction фиксирует оба receipt digest и evidence, promotion identity ещё не выдана |
+| admission rejected | staging OCI receipt и evidence фиксируются owner transaction, artifact переходит в `BLOCKED`; promotion неприменим |
+| claim promotion | `image-promotion`; server-side queue выбирает exact artifact и возвращает staging reference, admission revision, receipt digests, fence/generation/JTI и bounded expiry |
+| promotion expiry | следующий специализированный claim заменяет истёкший, повышает fence/generation и отзывает старый claim |
+| promotion/readback | `image-promotion`; exact destination digest и OCI admission-receipt subject/readback, затем artifact `ACTIVE` |
+| RuntimeRevision | `control-plane`; только current promoted artifact; missing/stale/mismatch закрыто отклоняется |
+
+Отдельные `renew admission`, `retry admission` и универсальный CRUD намеренно
+отсутствуют. Истёкший admission claim становится снова доступен через
+server-side queue predicate; rejected artifact immutable и новый результат
+требует новой build attempt. Promotion claim не продлевается: новый
+специализированный claim для того же owner-resolved artifact повышает fence и
+делает прежний token непригодным до любых registry-действий.
+
+## Безопасность данных
+
+Installation block хранится только в PostgreSQL owner state, минует Redis и не
+попадает в status, audit payload, logs, provenance или admission receipt.
+Context contents и secret values также не логируются. Диагностика содержит
+только закрытые error codes и bounded stage/outcome labels.
+
+Owner предварительно материализует `role-image-builder-build-secrets` без
+значений в Git: для каждого immutable `buildSecretRef` имя ключа равно
+hex-encoded SHA-256 полного reference, а значение доступно только как regular
+file `0400`. Builder повторно разрешает только этот digest-named путь и передаёт
+его BuildKit как `type=secret`; reference и value не входят в Dockerfile,
+context, layer, status или audit.
+
+Typed package/tool artifacts заранее материализуются в exact context как
+`.mattercodex/packages/<sha256>` и `.mattercodex/tools/<sha256>`. Builder до
+BuildKit повторно хеширует каждый regular file. Пакеты устанавливаются только
+offline через закрытый список `apk|apt|dnf|pip|npm`, tool blob копируется в
+`/usr/local/bin/<name>`. Весь source context доступен installation step как
+read-only bind mount и не копируется в image layer автоматически. Входной
+контракт PVC — regular tar `<context_sha256>.tar`, содержащий
+`.mattercodex/source.sha256` с exact source digest; producer workspace обязан
+атомарно материализовать его до owner-команды. Сам PVC не является owner state
+и не доказывает tenant, recipe или пригодность artifact.
+
+## Локальная проверка
+
+```bash
+go test ./...
+go build ./cmd/role-image-builder ./cmd/image-admission-bridge
+docker build --target runtime -f services/jobs/role-image-builder/Dockerfile .
+docker build --target admission-runtime \
+  --build-arg ADMISSION_TOOLS_IMAGE="$ADMISSION_TOOLS_IMAGE" \
+  -f services/jobs/role-image-builder/Dockerfile .
+```
+
+Полные integration/E2E/deploy/lifecycle проверки отложены в Issue #216.
+
+## Rollback
+
+Остановить новые owner-команды и вернуть Deployment на предыдущий exact image
+digest. Уже promoted digest не удалять и policy revision не откатывать.
+Queued/claimed attempts закрыть только специализированными owner-командами;
+ручное изменение PostgreSQL, claims, leases или registry tags запрещено.

@@ -67,6 +67,21 @@ func (repository *currentTupleTestRepository) Transact(
 	return nil
 }
 
+func (repository *currentTupleTestRepository) Get(
+	ctx context.Context,
+	organizationID, projectID, id string,
+	kind enum.Kind,
+) (entity.Resource, error) {
+	resource, err := repository.tx.Get(ctx, organizationID, projectID, id)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if resource.OrganizationID != organizationID || resource.ProjectID != projectID || resource.Kind != kind {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	return resource, nil
+}
+
 type currentTupleTestTransaction struct {
 	domainrepo.Transaction
 	now                     time.Time
@@ -246,7 +261,95 @@ func (tx *currentTupleTestTransaction) ListSnapshotResources(
 		switch resource.Kind {
 		case enum.KindProject, enum.KindRole, enum.KindPromptProfile,
 			enum.KindCredentialBinding, enum.KindRepositoryWorkspace,
-			enum.KindIntegration, enum.KindChat:
+			enum.KindIntegration, enum.KindChat, enum.KindRoleImageRecipe,
+			enum.KindImageBuild, enum.KindImageArtifact:
+			resources = append(resources, resource)
+		}
+	}
+	return resources, nil
+}
+
+func (tx *currentTupleTestTransaction) NextImageBuild(
+	context.Context, string, string, time.Time,
+) (entity.Resource, error) {
+	return entity.Resource{}, errs.ErrNotFound
+}
+
+func (tx *currentTupleTestTransaction) NextImageAdmission(
+	context.Context, string, string, time.Time,
+) (entity.Resource, error) {
+	return entity.Resource{}, errs.ErrNotFound
+}
+
+func (tx *currentTupleTestTransaction) NextImagePromotion(
+	_ context.Context, organizationID, projectID string,
+	policyRevision uint64, policySHA256 string, now time.Time,
+) (entity.Resource, error) {
+	var candidates []entity.Resource
+	for _, resource := range tx.resources {
+		spec, ok := resource.Spec.(entity.ImageArtifactSpec)
+		if resource.OrganizationID == organizationID && resource.ProjectID == projectID &&
+			resource.Kind == enum.KindImageArtifact && resource.State == enum.StateWaitingExternal && ok &&
+			spec.AdmissionVerdict == entity.ImageAdmissionAccepted && spec.PolicyRevision == policyRevision &&
+			spec.PolicySHA256 == policySHA256 && spec.PromotedReference == "" &&
+			(spec.PromotionClaimJTISHA256 == "" || !now.Before(spec.PromotionClaimExpiresAt)) {
+			candidates = append(candidates, resource)
+		}
+	}
+	if len(candidates) == 0 {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].CreatedAt.Equal(candidates[j].CreatedAt) {
+			return candidates[i].ID < candidates[j].ID
+		}
+		return candidates[i].CreatedAt.Before(candidates[j].CreatedAt)
+	})
+	return candidates[0], nil
+}
+
+func (tx *currentTupleTestTransaction) PromotedImageArtifactBySpec(
+	_ context.Context, organizationID, projectID, ownerActorID, specSHA256 string,
+	policyRevision uint64, policySHA256 string,
+) (entity.Resource, error) {
+	for _, resource := range tx.resources {
+		spec, ok := resource.Spec.(entity.ImageArtifactSpec)
+		if resource.OrganizationID == organizationID && resource.ProjectID == projectID &&
+			resource.OwnerActorID == ownerActorID &&
+			resource.Kind == enum.KindImageArtifact && resource.State == enum.StateActive && ok &&
+			spec.SpecSHA256 == specSHA256 && spec.PolicyRevision == policyRevision &&
+			spec.PolicySHA256 == policySHA256 && spec.PromotedReference != "" {
+			return resource, nil
+		}
+	}
+	return entity.Resource{}, errs.ErrNotFound
+}
+
+func (tx *currentTupleTestTransaction) ImageBuildsForRecipeForUpdate(
+	_ context.Context, organizationID, projectID, recipeID string,
+) ([]entity.Resource, error) {
+	resources := make([]entity.Resource, 0)
+	for _, resource := range tx.resources {
+		spec, ok := resource.Spec.(entity.ImageBuildSpec)
+		if resource.OrganizationID == organizationID && resource.ProjectID == projectID &&
+			resource.Kind == enum.KindImageBuild && ok && spec.RecipeID == recipeID &&
+			(resource.State == enum.StateQueued || resource.State == enum.StateClaimed ||
+				resource.State == enum.StateRunning || resource.State == enum.StateBlocked) {
+			resources = append(resources, resource)
+		}
+	}
+	return resources, nil
+}
+
+func (tx *currentTupleTestTransaction) ImageArtifactsForRecipeForUpdate(
+	_ context.Context, organizationID, projectID, recipeID string,
+) ([]entity.Resource, error) {
+	resources := make([]entity.Resource, 0)
+	for _, resource := range tx.resources {
+		spec, ok := resource.Spec.(entity.ImageArtifactSpec)
+		if resource.OrganizationID == organizationID && resource.ProjectID == projectID &&
+			resource.Kind == enum.KindImageArtifact && resource.State == enum.StateWaitingExternal &&
+			ok && spec.RecipeID == recipeID {
 			resources = append(resources, resource)
 		}
 	}
@@ -965,6 +1068,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	organization, project, actor := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	sessionID, turnID, chatID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	revisionID, artifactID, roleID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	imageRecipeID, imageBuildID, imageArtifactID := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	instructionArtifactID := uuid.NewString()
 	promptID, bindingID := uuid.NewString(), uuid.NewString()
 	digest := hashString("claim-turn-current-tuple")
@@ -1051,6 +1155,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		roleID, organization, project, "", actor, enum.KindRole, "Runtime role",
 		entity.RoleSpec{
 			StableKey: "runtime-role", Capabilities: []string{"runtime.execute"},
+			RoleImageRecipeID:            imageRecipeID,
 			PromptProfileID:              promptID,
 			ProviderCredentialBindingIDs: []string{bindingID},
 			ProviderAccountPool: entity.ProviderAccountPool{
@@ -1066,6 +1171,51 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	if err != nil {
 		t.Fatalf("create role: %v", err)
 	}
+	imageRecipe, err := entity.New(
+		imageRecipeID, organization, project, "", actor, enum.KindRoleImageRecipe, "Runtime role image",
+		entity.RoleImageRecipeSpec{Input: entity.RoleImageRecipeInput{
+			BaseImageReference: "registry.example.test/base/runtime", BaseImageDigest: "sha256:" + digest,
+			SourceRef: "git://example.test/runtime", SourceRevision: "v1", SourceSHA256: digest,
+			ContextRef: "oci://example.test/context@sha256:" + digest, ContextSHA256: digest, BuilderSHA256: digest,
+			FrontendSHA256: digest, Platforms: []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}},
+			InstallationBlock: "true", ToolchainSHA256: digest,
+		}, Generation: 1, SpecSHA256: digest, PolicyRevision: 1, PolicySHA256: digest}, now,
+	)
+	if err != nil {
+		t.Fatalf("create role image recipe: %v", err)
+	}
+	imageBuild, err := entity.New(
+		imageBuildID, organization, project, imageRecipeID, actor, enum.KindImageBuild, "Runtime role image build",
+		entity.ImageBuildSpec{RecipeID: imageRecipeID, RecipeVersion: 1, RecipeGeneration: 1,
+			SpecSHA256: digest, Attempt: 1, Stage: entity.ImageBuildStageCompleted, ProgressPercent: 100,
+			StagingReference: "registry.example.test/staging/role@sha256:" + digest,
+			ManifestDigest:   "sha256:" + digest, ProvenanceSHA256: digest, ImmutableBuildSHA256: digest,
+			AvailableAt: now, MaximumAttempts: 3}, now,
+	)
+	if err != nil {
+		t.Fatalf("create role image build: %v", err)
+	}
+	imageBuild.State = enum.StateSucceeded
+	imageArtifact, err := entity.New(
+		imageArtifactID, organization, project, imageBuildID, actor, enum.KindImageArtifact, "Runtime role image artifact",
+		entity.ImageArtifactSpec{RecipeID: imageRecipeID, RecipeVersion: 1, RecipeGeneration: 1,
+			SpecSHA256: digest, BuildID: imageBuildID, BuildVersion: imageBuild.Version, BuildAttempt: 1,
+			StagingReference: "registry.example.test/staging/role@sha256:" + digest,
+			ManifestDigest:   "sha256:" + digest, ProvenanceSHA256: digest, ImmutableBuildSHA256: digest,
+			BaseImageDigest: "sha256:" + digest, SourceSHA256: digest, ContextSHA256: digest,
+			BuilderSHA256: digest, FrontendSHA256: digest, ToolchainSHA256: digest,
+			Platforms:  []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}},
+			SBOMSHA256: digest, VulnerabilityEvidenceSHA256: digest, PolicyRevision: 1, PolicySHA256: digest,
+			AdmissionVerdict: entity.ImageAdmissionAccepted, SignatureIdentity: "test-signer", SignatureSHA256: digest,
+			AdmissionRevision: 1, AdmissionReceiptSHA256: digest,
+			AdmissionReceiptOCIManifestDigest: "sha256:" + digest,
+			PromotedReference:                 "registry.example.test/promoted/role@sha256:" + digest,
+			PromotionReadbackSHA256:           digest, PromotedAt: now}, now,
+	)
+	if err != nil {
+		t.Fatalf("create role image artifact: %v", err)
+	}
+	imageArtifact.State = enum.StateActive
 	roleSHA, err := entity.ProjectionSHA256(role)
 	if err != nil {
 		t.Fatalf("hash role: %v", err)
@@ -1085,6 +1235,15 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 	components := []entity.EffectiveResourceRef{{
 		Kind: enum.KindRole, ResourceID: role.ID, Version: role.Version,
 		ProjectionSHA256: roleSHA,
+	}, {
+		Kind: enum.KindRoleImageRecipe, ResourceID: imageRecipe.ID, Version: imageRecipe.Version,
+		ProjectionSHA256: digest,
+	}, {
+		Kind: enum.KindImageBuild, ResourceID: imageBuild.ID, Version: imageBuild.Version,
+		ProjectionSHA256: digest,
+	}, {
+		Kind: enum.KindImageArtifact, ResourceID: imageArtifact.ID, Version: imageArtifact.Version,
+		ProjectionSHA256: digest,
 	}, {
 		Kind: enum.KindPromptProfile, ResourceID: prompt.ID, Version: prompt.Version,
 		ProjectionSHA256: promptSHA,
@@ -1116,8 +1275,15 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		enum.KindRuntimeRevision, "Runtime revision",
 		entity.RuntimeRevisionSpec{
 			ProviderAccountName: "test",
-			ManifestSHA256:      digest, ImageDigest: "sha256:" + digest,
-			PromptProfileID: promptID, PromptRevision: 1,
+			ManifestSHA256:      digest, ImageReference: "registry.example.test/roles/test@sha256:" + digest,
+			RoleImageRecipeID: imageRecipeID, RoleImageRecipeVersion: 1, RoleImageSpecSHA256: digest,
+			ImageBuildID: imageBuildID, ImageBuildVersion: 1, ImageBuildAttempt: 1,
+			ImageArtifactID: imageArtifactID, ImageArtifactVersion: 1, ImageManifestDigest: "sha256:" + digest,
+			ImageAdmissionRevision: 1, ImageAdmissionReceiptSHA256: digest,
+			ImageAdmissionReceiptOCIManifestDigest: "sha256:" + digest,
+			ImagePolicyRevision:                    1, ImagePolicySHA256: digest, ImageSignatureSHA256: digest,
+			ImagePromotionReadbackSHA256: digest,
+			PromptProfileID:              promptID, PromptRevision: 1,
 			CredentialBindingIDs:   credentialIDs,
 			AuthorityPolicyVersion: 1, AuthorityPolicySHA256: digest,
 			Components: components, CreatedAt: now, SessionID: sessionID,
@@ -1183,6 +1349,7 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		resources: map[string]entity.Resource{
 			projectResource.ID: projectResource, chat.ID: chat, prompt.ID: prompt, binding.ID: binding,
 			role.ID: role, revision.ID: revision, session.ID: session,
+			imageRecipe.ID: imageRecipe, imageBuild.ID: imageBuild, imageArtifact.ID: imageArtifact,
 			turn.ID: turn, artifact.ID: artifact, instructionArtifact.ID: instructionArtifact,
 		},
 		receipts:                make(map[string]domainrepo.Receipt),
@@ -1219,7 +1386,17 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		RuntimeArchiveSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-archive-signing-test-key")),
 		RuntimeRestoreSigningKey:   ed25519.NewKeyFromSeed([]byte("runtime-restore-signing-test-key")),
 		TurnLeaseDuration:          time.Minute, MaximumScheduleClaims: 10,
-		RuntimeImageDigest:      "sha256:" + digest,
+		ImagePolicyRevision: 1, ImagePolicySHA256: digest,
+		ImageBuildLeaseDuration: time.Minute, ImageAdmissionClaimTTL: time.Minute,
+		ImagePromotionClaimTTL: time.Minute, ImageMaximumAttempts: 3,
+		StagingImageRepository:  "registry.example.test/staging/roles",
+		PromotedImageRepository: "registry.example.test/promoted/roles",
+		ImageBuilderWorkload:    "role-image-builder",
+		ImageBuilderSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
+		ImageAdmissionWorkload:  "image-admission",
+		ImageAdmissionSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission",
+		ImagePromotionWorkload:  "image-promotion",
+		ImagePromotionSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
 		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: digest,
 		OwnerGateDeliveryWorkload:  "interaction-gateway",
 		OwnerGateDeliverySPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
@@ -3008,9 +3185,9 @@ func TestScheduledClaimRejoinsCommittedMaterializationWithoutSecondGraph(t *test
 	materializePrincipal.Permission = permissionUseScheduleCapability
 	materialized, err := fixture.service.MaterializeScheduleOccurrence(
 		context.Background(), MaterializeScheduleOccurrenceInput{
-			Principal: materializePrincipal,
+			Principal:      materializePrincipal,
 			IdempotencyKey: rejoined.MaterializationIdempotencyKey,
-			OccurrenceID: rejoined.Occurrence.ID, ProjectID: rejoined.ProjectID,
+			OccurrenceID:   rejoined.Occurrence.ID, ProjectID: rejoined.ProjectID,
 			ExpectedAttempt:           rejoined.Occurrence.Attempt,
 			MaterializationCapability: rejoined.MaterializationCapability,
 		},

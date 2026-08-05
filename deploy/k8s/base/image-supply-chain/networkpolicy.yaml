@@ -155,6 +155,14 @@ spec:
       ports:
         - protocol: TCP
           port: 5001
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: pull
+      ports:
+        - protocol: TCP
+          port: 5000
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -263,6 +271,58 @@ spec:
               mattercodex.dev/registry-scope: promotion
       ports:
         - {protocol: TCP, port: 5003}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-owner-protected-exact-paths
+spec:
+  podSelector:
+    matchExpressions:
+      - key: mattercodex.dev/image-admission-phase
+        operator: In
+        values: [claim, admit, promote]
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: control-plane}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}
+      ports: [{protocol: TCP, port: 5432}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: vault}
+      ports: [{protocol: TCP, port: 8200}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-readback-attestor}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sentry-relay}
+      ports: [{protocol: TCP, port: 8443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

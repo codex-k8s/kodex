@@ -192,6 +192,30 @@ func applyWorkloadProfile(config *Config) error {
 	}
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
+			"role-image-builder": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
+				vaultRole:                 "internal-rpc-authority-role-image-builder",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/restore-ack",
+			},
+			"image-admission": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission",
+				vaultRole:                 "internal-rpc-authority-image-admission",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/restore-ack",
+			},
+			"image-promotion": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
+				vaultRole:                 "internal-rpc-authority-image-promotion",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/restore-ack",
+			},
 			"automation-scheduler": {
 				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
 				vaultRole:                 "internal-rpc-authority-automation-scheduler",

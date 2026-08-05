@@ -377,12 +377,12 @@ const (
 )
 
 type ScheduleOccurrenceResult struct {
-	Occurrence                      domainrepo.ScheduleOccurrence
-	MaterializationCapability       string
-	MaterializationIdempotencyKey   string
-	CapabilityExpiresAt             time.Time
-	ProjectID                       string
-	Disposition                     ScheduleOccurrenceClaimDisposition
+	Occurrence                    domainrepo.ScheduleOccurrence
+	MaterializationCapability     string
+	MaterializationIdempotencyKey string
+	CapabilityExpiresAt           time.Time
+	ProjectID                     string
+	Disposition                   ScheduleOccurrenceClaimDisposition
 }
 
 type MaterializeScheduleOccurrenceInput struct {

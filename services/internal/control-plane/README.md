@@ -361,7 +361,9 @@ tools/render-control-plane.sh \
   sha256:<agent-runtime-image-digest> \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
+  <approved-image-admission-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
   > /tmp/control-plane-staging.yaml
 ```
@@ -398,38 +400,24 @@ registry process для перечитывания ключей. Forward-only pu
 generation входит в Pod templates registry и node-readback DaemonSet: coherent
 rotation обязательно создаёт новые Pod на каждом узле, а пропущенная либо
 рассинхронная generation не получает readiness.
-`tools/render-image-build-job.sh` создаёт bounded Job из
-read-only PVC с `context.tar`, сверяет exact source SHA-256, отправляет сборку
-в BuildKit и публикует только в staging. Он не монтирует promotion identity и
-не имеет сетевого пути к promotion endpoint. Отдельный
-`tools/render-image-admission-job.sh` читает immutable owner intent
-`mattercodex-image-admission-policy`, закрепляет exact source/build/image,
-формирует SBOM, применяет фиксированную vulnerability policy, проверяет
-BuildKit provenance и cosign identity, выпускает короткоживущий подписанный
-admission receipt/claim и только после его readback копирует exact digest.
-Rejected, stale или неполное evidence закрыто останавливает цепочку. Scanner,
-signer, admission owner и promotion выполняются четырьмя Job с разными
-ServiceAccount, Vault role, client certificate, прикладными credentials и
-NetworkPolicy; приватные signing/admission/promotion ключи не сосуществуют в
-одном Pod. DSSE сначала base64-декодируется, затем проверяется как единственный
-точный in-toto Statement с SLSA predicate, image subject, server-owned
-builder/build type, source/build tag/tools/policy parameters и уникальными
-immutable resolved dependencies, включая exact source material. Build Job
-нормализует эту связь после проверки context digest и подписывает отдельной
-builder key; scanner/signer/admission повторно проверяют builder signature.
-Canonical digest dependency graph входит в admission receipt. Evidence PVC и каждый marker привязаны к полному tuple
-source/build/image/tools/policy/scanner/signer/admission/promotion; новая policy
-revision или run не может повторно использовать старое evidence. Immutable
-owner intent также фиксирует закрытый состав `base64`, `buildctl`, `cmp`, `cosign`, `curl`,
-`date`, `grype`, `jq`, `openssl`, `pgrep`, `regctl`, `sha256sum`, `syft`; образ
-без любого из них не является утверждённым. Push,
-signer, admission owner, promotion и admin credentials различны и
-доставляются Vault CSI без значений в manifest. `noProcessSandbox=true`
-остаётся только вынужденной границей
-rootless worker: BuildKit не получает ServiceAccount token или прикладные
-секреты, API закрыт mTLS, state ограничен `emptyDir`, а build client не получает
-admin DELETE. Отключать TLS/auth или использовать internal Service DNS как
-kubelet pull host запрещено.
+`services/jobs/role-image-builder` получает exact fenced attempt у
+`control-plane`, проверяет read-only digest-named `context.tar`, отправляет
+сборку во внешний rootless BuildKit и публикует только в staging. Он не
+монтирует signer, promotion, admin или node-pull identity. Отдельный
+`tools/render-image-admission-job.sh` не принимает artifact IDs/digests от
+caller: первая фаза получает server-owned claim, после чего scanner и signer
+проверяют exact staging digest, labels и native BuildKit provenance. Admission
+фиксирует SBOM/vulnerability/signature/receipt через protected RPC, а отдельный
+promotion workload расходует one-time claim только после exact registry
+readback. Rejected, stale или неполное evidence не становится пригодным.
+Marker/PVC задают только порядок пяти фаз и не являются owner state. Immutable
+intent фиксирует закрытый состав `base64`, `cmp`, `cosign`, `date`, `grype`,
+`image-admission-bridge`, `jq`, `regctl`, `sha256sum`, `syft`; signer,
+admission, promotion и admin credentials различны и доставляются Vault CSI без
+значений в manifest. Rootless BuildKit сохраняет process sandbox, не получает
+ServiceAccount token или прикладные owner secrets, API закрыт mTLS, state
+ограничен `emptyDir`, а build client не получает admin DELETE. Отключать
+TLS/auth или использовать internal Service DNS как kubelet pull host запрещено.
 
 Варианты сборщика Kubernetes сверены с официальными источниками: standalone
 BuildKit, Shipwright Build/BuildRun и Tekton Tasks. В соответствии с
@@ -444,27 +432,19 @@ Supply-chain и build Job имеют отдельные fail-closed render inter
 tools/render-image-supply-chain.sh \
   staging \
   sha256:<control-plane-image-digest> \
+  sha256:<internal-rpc-authority-image-digest> \
   registry-pull.<environment-domain> \
   <approved-admission-tools-image>@sha256:<digest> \
+  <approved-image-admission-image>@sha256:<digest> \
   <approved-vulnerability-policy-revision> \
+  <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
   > /tmp/image-supply-chain-staging.yaml
-
-tools/render-image-build-job.sh \
-  staging \
-  v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
-  <read-only-source-pvc> \
-  sha256:<context.tar-digest> \
-  agent-runtime \
-  > /tmp/agent-runtime-build.yaml
 
 tools/render-image-admission-job.sh \
   staging \
   v<UTC-YYYYMMDDHHMMSS>-<exact-git-sha> \
-  sha256:<context.tar-digest> \
-  agent-runtime \
-  sha256:<staging-image-digest> \
-  > /tmp/agent-runtime-admission.yaml
+  > /tmp/role-image-admission.yaml
 ```
 
 Команды только материализуют YAML. Apply, сборка и promotion требуют

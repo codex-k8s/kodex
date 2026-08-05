@@ -2,76 +2,62 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-gitsha sha256:source-digest image-name sha256:image-digest" >&2
+  echo "usage: render-image-admission-job.sh staging|production vYYYYMMDDHHMMSS-gitsha" >&2
 }
 
-if [[ $# -ne 5 ]]; then
+if [[ $# -ne 2 ]]; then
   usage
   exit 64
 fi
 
 environment_name=$1
-build_tag=$2
-source_digest=$3
-image_name=$4
-image_digest=$5
-
+run_id=$2
 [[ $environment_name == staging || $environment_name == production ]] || { usage; exit 64; }
-[[ $build_tag =~ ^v[0-9]{14}-[a-f0-9]{40}$ ]] || { echo "build_tag is invalid" >&2; exit 64; }
-[[ $source_digest =~ ^sha256:[a-f0-9]{64}$ ]] &&
-  [[ $source_digest != sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
-  { echo "source_digest is invalid" >&2; exit 64; }
-[[ $image_digest =~ ^sha256:[a-f0-9]{64}$ ]] &&
-  [[ $image_digest != sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
-  { echo "image_digest is invalid" >&2; exit 64; }
-[[ $image_name =~ ^[a-z0-9]+([._-][a-z0-9]+)*$ ]] && [[ ${#image_name} -le 80 ]] ||
-  { echo "image_name is invalid" >&2; exit 64; }
+[[ $run_id =~ ^v[0-9]{14}-[a-f0-9]{40}$ ]] || { echo "run_id is invalid" >&2; exit 64; }
 command -v kubectl >/dev/null 2>&1 || { echo "kubectl is required" >&2; exit 69; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 69; }
 
-# Tools image and policy revision are durable owner intent. A caller that may
-# request admission cannot substitute either value in this renderer.
+# Версионированный ConfigMap задаёт только owner intent. Artifact/build tuple
+# выдаётся control-plane после запуска claim phase и не принимается от caller.
 intent=$(kubectl --namespace mattercodex-system get configmap mattercodex-image-admission-policy -o json)
 tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
+admission_image=$(jq -er '.data.admissionImage' <<<"$intent")
+authority_image=$(jq -er '.data.authorityImage' <<<"$intent")
+promotion_repository=$(jq -er '.data.promotionRepository' <<<"$intent")
+promoted_pull_repository=$(jq -er '.data.promotedPullRepository' <<<"$intent")
 policy_revision=$(jq -er '.data.policyRevision' <<<"$intent")
+policy_sha256=$(jq -er '.data.policySHA256' <<<"$intent")
 tools_digest=$(jq -er '.metadata.annotations["mattercodex.dev/admission-tools-sha256"]' <<<"$intent")
 required_tools=$(jq -er '.data.requiredTools' <<<"$intent")
 builder_identity=$(jq -er '.data.builderIdentity' <<<"$intent")
 build_type=$(jq -er '.data.buildType' <<<"$intent")
-scanner_identity=$(jq -er '.data.scannerIdentity' <<<"$intent")
-signer_identity=$(jq -er '.data.signerIdentity' <<<"$intent")
-admission_owner_identity=$(jq -er '.data.admissionOwnerIdentity' <<<"$intent")
-promotion_identity=$(jq -er '.data.promotionIdentity' <<<"$intent")
 jq -e '.immutable == true and .metadata.labels["mattercodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
   { echo "admission owner intent is not immutable" >&2; exit 78; }
-[[ $tools_image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] &&
-  [[ ${tools_image##*@} == "$tools_digest" ]] ||
-  { echo "admission owner intent image binding is invalid" >&2; exit 78; }
-[[ $policy_revision =~ ^[1-9][0-9]*$ ]] ||
-  { echo "admission owner intent policy revision is invalid" >&2; exit 78; }
-[[ $required_tools == base64,buildctl,cmp,cosign,curl,date,grype,jq,openssl,pgrep,regctl,sha256sum,syft ]] ||
-  { echo "admission owner intent tools contract is invalid" >&2; exit 78; }
-[[ $builder_identity == spiffe://mattercodex.local/ns/mattercodex-system/sa/mattercodex-role-image-builder ]] ||
-  { echo "admission builder identity is invalid" >&2; exit 78; }
-[[ $build_type == https://mobyproject.org/buildkit@v1 ]] ||
-  { echo "admission build type is invalid" >&2; exit 78; }
-for identity in "$scanner_identity" "$signer_identity" "$admission_owner_identity" "$promotion_identity"; do
-  [[ $identity =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
-    { echo "admission phase identity is invalid" >&2; exit 78; }
+for image in "$tools_image" "$admission_image" "$authority_image"; do
+  [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+    { echo "admission image binding is invalid" >&2; exit 78; }
 done
+[[ ${tools_image##*@} == "$tools_digest" ]] || { echo "admission tools digest mismatch" >&2; exit 78; }
+for repository in "$promotion_repository" "$promoted_pull_repository"; do
+  [[ $repository =~ ^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$ ]] ||
+    { echo "promotion repository binding is invalid" >&2; exit 78; }
+done
+[[ ${promotion_repository#*/} == "${promoted_pull_repository#*/}" ]] ||
+  { echo "promotion and pull repository paths differ" >&2; exit 78; }
+[[ $policy_revision =~ ^[1-9][0-9]*$ ]] || { echo "policy revision is invalid" >&2; exit 78; }
+[[ $policy_sha256 =~ ^[a-f0-9]{64}$ ]] || { echo "policy digest is invalid" >&2; exit 78; }
+[[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft ]] ||
+  { echo "admission tools contract is invalid" >&2; exit 78; }
+[[ $builder_identity == spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder ]] ||
+  { echo "builder identity is invalid" >&2; exit 78; }
+[[ $build_type == https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md ]] ||
+  { echo "build type is invalid" >&2; exit 78; }
 
-# Полный immutable evidence tuple задаёт отдельное хранилище и replay fence.
-# Повтор того же tuple идемпотентен, новая policy/run identity не видит старых markers.
-attempt_sha256=$(printf '%s\n' "$source_digest" "$build_tag" "$image_digest" \
-  "$tools_digest" "$policy_revision" "$builder_identity" "$build_type" \
-  "$scanner_identity" "$signer_identity" "$admission_owner_identity" \
-  "$promotion_identity" | sha256sum | awk '{print $1}')
-[[ $attempt_sha256 =~ ^[a-f0-9]{64}$ ]] ||
-  { echo "admission attempt digest is invalid" >&2; exit 78; }
-suffix=${attempt_sha256:0:32}
+run_sha256=$(printf '%s\n' "$environment_name" "$run_id" "$admission_image" "$authority_image" "$tools_digest" \
+  "$policy_revision" "$policy_sha256" "$promotion_repository" "$promoted_pull_repository" | sha256sum | awk '{print $1}')
+suffix=${run_sha256:0:32}
 claim_name="mc-admit-$suffix"
-deadline=1800
-[[ $environment_name == production ]] && deadline=2700
+deadline=2700
 
 cat <<EOF
 apiVersion: v1
@@ -83,7 +69,7 @@ metadata:
     app.kubernetes.io/name: mattercodex-image-admission
     mattercodex.dev/image-admission-id: ${suffix}
   annotations:
-    mattercodex.dev/admission-attempt-sha256: ${attempt_sha256}
+    mattercodex.dev/admission-run-sha256: ${run_sha256}
 spec:
   accessModes: [ReadWriteMany]
   resources:
@@ -91,9 +77,15 @@ spec:
 EOF
 
 emit_job() {
-  local phase=$1
-  local service_account=$2
-  local identity_spc=$3
+  local phase=$1 service_account=$2 identity_spc=$3 protected=${4:-false}
+  local workload="" grant_spc=""
+  if [[ $phase == claim || $phase == admit ]]; then
+    workload=image-admission
+    grant_spc=image-admission-application-grant
+  elif [[ $phase == promote ]]; then
+    workload=image-promotion
+    grant_spc=image-promotion-application-grant
+  fi
   cat <<EOF
 ---
 apiVersion: batch/v1
@@ -104,17 +96,11 @@ metadata:
   labels:
     app.kubernetes.io/name: mattercodex-image-admission
     app.kubernetes.io/component: image-admission
-    mattercodex.dev/image-admission: "true"
     mattercodex.dev/image-admission-phase: ${phase}
     mattercodex.dev/image-admission-id: ${suffix}
-    mattercodex.dev/environment: ${environment_name}
   annotations:
-    mattercodex.dev/source-sha256: ${source_digest}
-    mattercodex.dev/image-sha256: ${image_digest}
-    mattercodex.dev/build-tag: ${build_tag}
+    mattercodex.dev/admission-run-sha256: ${run_sha256}
     mattercodex.dev/admission-policy-revision: "${policy_revision}"
-    mattercodex.dev/admission-tools-sha256: ${tools_digest}
-    mattercodex.dev/admission-attempt-sha256: ${attempt_sha256}
 spec:
   backoffLimit: 1
   activeDeadlineSeconds: ${deadline}
@@ -124,10 +110,16 @@ spec:
       labels:
         app.kubernetes.io/name: mattercodex-image-admission
         app.kubernetes.io/component: image-admission
-        mattercodex.dev/image-admission: "true"
         mattercodex.dev/image-admission-phase: ${phase}
         mattercodex.dev/image-admission-id: ${suffix}
         mattercodex.dev/environment: ${environment_name}
+EOF
+  if [[ $protected == true ]]; then
+    cat <<EOF
+        mattercodex.dev/internal-rpc-authority-issuer: enabled
+EOF
+  fi
+  cat <<EOF
     spec:
       serviceAccountName: ${service_account}
       automountServiceAccountToken: false
@@ -136,62 +128,165 @@ spec:
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
-        fsGroup: 2000
+        fsGroup: 29000
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile: {type: RuntimeDefault}
+EOF
+  if [[ $protected == true ]]; then
+    cat <<EOF
+      initContainers:
+        - name: internal-rpc-authority-socket-init
+          image: ${authority_image}
+          command: [/usr/local/bin/internal-rpc-authority-socket-init]
+          securityContext: {runAsNonRoot: true, runAsUser: 29000, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: authority-sockets, mountPath: /run/mattercodex}]
+        - name: internal-rpc-authority-issuer
+          restartPolicy: Always
+          image: ${authority_image}
+          command: [/usr/local/bin/internal-rpc-authority-issuer]
+          env:
+            - {name: DEPLOYMENT_ENVIRONMENT, value: "${environment_name}"}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
+            - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
+            - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem}
+            - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
+            - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
+            - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
+            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID, value: "${workload}"}
+            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: "spiffe://mattercodex.local/ns/mattercodex-system/sa/${workload}"}
+            - {name: INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE, value: "internal-rpc-authority-${workload}"}
+            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS, value: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443}
+            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME, value: internal-rpc-authority-readback-attestor.mattercodex-system.svc}
+            - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem}
+            - {name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE, value: /var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem}
+            - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID, value: "10001"}
+            - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID, value: "10001"}
+            - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn}
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
+              valueFrom: {secretKeyRef: {name: internal-rpc-authority-${workload}-issuer-postgresql, key: username}}
+            - {name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN, value: ":9091"}
+          startupProbe: {httpGet: {path: /readyz, port: 9091}, periodSeconds: 2, failureThreshold: 30}
+          readinessProbe: {httpGet: {path: /readyz, port: 9091}, periodSeconds: 5, timeoutSeconds: 3}
+          livenessProbe: {httpGet: {path: /livez, port: 9091}, periodSeconds: 10, timeoutSeconds: 2}
+          resources: {requests: {cpu: 25m, memory: 32Mi}, limits: {cpu: 250m, memory: 128Mi}}
+          securityContext: {runAsNonRoot: true, runAsUser: 29001, runAsGroup: 29000, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: authority-sockets, mountPath: /run/mattercodex}
+            - {name: authority-snapshot, mountPath: /var/run/config/mattercodex/internal-rpc-authority/snapshot, readOnly: true}
+            - {name: authority-manifest-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust, readOnly: true}
+            - {name: authority-proof-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust, readOnly: true}
+            - {name: authority-issuer-key, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/issuer, readOnly: true}
+            - {name: authority-workload-tls, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/workload-tls, readOnly: true}
+            - {name: authority-readback-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/readback, readOnly: true}
+            - {name: authority-vault-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/vault, readOnly: true}
+            - {name: authority-vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
+            - {name: authority-restore-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore, readOnly: true}
+            - {name: authority-restore-certificate, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust, readOnly: true}
+            - {name: authority-restore-role-trust, mountPath: /var/run/config/mattercodex/internal-rpc-authority/restore/role-trust, readOnly: true}
+            - {name: authority-postgresql, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/postgres, readOnly: true}
+            - {name: authority-postgresql-ca, mountPath: /var/run/config/mattercodex/internal-rpc-authority/postgresql, readOnly: true}
+            - {name: authority-observability, mountPath: /var/run/config/mattercodex/internal-rpc-authority/observability, readOnly: true}
+            - {name: authority-sentry-dsn, mountPath: /var/run/secrets/mattercodex/internal-rpc-authority/observability, readOnly: true}
+EOF
+  fi
+  cat <<EOF
       containers:
         - name: ${phase}
-          image: ${tools_image}
+          image: ${admission_image}
           imagePullPolicy: IfNotPresent
           command: [/bin/sh, /opt/mattercodex/image-admission.sh, ${phase}]
           env:
-            - {name: SOURCE_DIGEST, value: "${source_digest}"}
-            - {name: BUILD_TAG, value: "${build_tag}"}
-            - {name: IMAGE_NAME, value: "${image_name}"}
-            - {name: IMAGE_DIGEST, value: "${image_digest}"}
+            - {name: ADMISSION_RUN_ID, value: "${run_id}"}
             - {name: POLICY_REVISION, value: "${policy_revision}"}
+            - {name: POLICY_SHA256, value: "${policy_sha256}"}
             - {name: ADMISSION_TOOLS_IMAGE, value: "${tools_image}"}
-            - {name: ADMISSION_TOOLS_SHA256, value: "${tools_digest}"}
-            - {name: ADMISSION_ATTEMPT_SHA256, value: "${attempt_sha256}"}
+            - {name: ADMISSION_IMAGE, value: "${admission_image}"}
+            - {name: PROMOTION_REPOSITORY, value: "${promotion_repository}"}
+            - {name: PROMOTED_PULL_REPOSITORY, value: "${promoted_pull_repository}"}
             - {name: EXPECTED_BUILDER_ID, value: "${builder_identity}"}
             - {name: EXPECTED_BUILD_TYPE, value: "${build_type}"}
-            - {name: SCANNER_IDENTITY, value: "${scanner_identity}"}
-            - {name: SIGNER_IDENTITY, value: "${signer_identity}"}
-            - {name: ADMISSION_OWNER_IDENTITY, value: "${admission_owner_identity}"}
-            - {name: PROMOTION_IDENTITY, value: "${promotion_identity}"}
-            - {name: ADMISSION_PHASE, value: "${phase}"}
             - {name: HOME, value: /tmp}
+EOF
+  if [[ $protected == true ]]; then
+    cat <<EOF
+            - {name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET, value: /run/mattercodex/internal-rpc-authority/issuer.sock}
+            - {name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE, value: issuer}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_TARGET, value: control-plane.mattercodex-system.svc:8443}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.mattercodex-system.svc.cluster.local}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_CA_FILE, value: /control-plane/ca.pem}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE, value: /workload-tls/tls.crt}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_PRIVATE_KEY_FILE, value: /workload-tls/tls.key}
+            - {name: IMAGE_OWNER_APPLICATION_GRANT_FILE, value: /application-grant/application-grant.jws}
+            - {name: IMAGE_OWNER_STATE_FILE, value: /work/owner-claim.json}
+            - {name: IMAGE_OWNER_PROMOTION_FILE, value: /work/owner-promotion.json}
+EOF
+  fi
+  cat <<EOF
           volumeMounts:
             - {name: work, mountPath: /work}
             - {name: script, mountPath: /opt/mattercodex, readOnly: true}
             - {name: identity, mountPath: /identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
-          resources:
-            requests: {cpu: 100m, memory: 128Mi}
-            limits: {cpu: "1", memory: 1Gi}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
+EOF
+  if [[ $protected == true ]]; then
+    cat <<EOF
+            - {name: authority-sockets, mountPath: /run/mattercodex/internal-rpc-authority, readOnly: true}
+            - {name: authority-workload-tls, mountPath: /workload-tls, readOnly: true}
+            - {name: control-plane-ca, mountPath: /control-plane, readOnly: true}
+            - {name: application-grant, mountPath: /application-grant, readOnly: true}
+EOF
+  fi
+  cat <<EOF
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 1Gi}}
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       volumes:
+EOF
+  if [[ $phase == promote ]]; then
+    cat <<EOF
+        - {name: work, emptyDir: {sizeLimit: 256Mi}}
+EOF
+  else
+    cat <<EOF
         - name: work
           persistentVolumeClaim: {claimName: ${claim_name}}
-        - name: tmp
-          emptyDir: {sizeLimit: 64Mi}
-        - name: script
-          configMap: {name: mattercodex-image-admission, defaultMode: 0555}
+EOF
+  fi
+  cat <<EOF
+        - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
+        - {name: script, configMap: {name: mattercodex-image-admission, defaultMode: 0555}}
         - name: identity
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes: {secretProviderClass: ${identity_spc}}
 EOF
+  if [[ $protected == true ]]; then
+    cat <<EOF
+        - {name: authority-sockets, emptyDir: {sizeLimit: 8Mi}}
+        - {name: authority-snapshot, secret: {secretName: internal-rpc-authority-snapshot, defaultMode: 0440}}
+        - {name: authority-manifest-trust, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-manifest-trust}}}
+        - {name: authority-proof-trust, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-proof-trust}}}
+        - {name: authority-issuer-key, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: internal-rpc-authority-${workload}-issuer-key}}}
+        - {name: authority-workload-tls, secret: {secretName: internal-rpc-authority-${workload}-workload-tls, defaultMode: 0440}}
+        - {name: control-plane-ca, configMap: {name: mattercodex-internal-ca, defaultMode: 0440}}
+        - {name: application-grant, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: ${grant_spc}}}}
+        - {name: authority-readback-ca, configMap: {name: internal-rpc-authority-readback-attestor-ca, defaultMode: 0440}}
+        - {name: authority-vault-ca, configMap: {name: internal-rpc-authority-vault-ca, defaultMode: 0440}}
+        - name: authority-vault-token
+          projected: {defaultMode: 0400, sources: [{serviceAccountToken: {path: token, audience: vault, expirationSeconds: 600}}]}
+        - {name: authority-restore-ca, configMap: {name: internal-rpc-authority-restore-controller-ca, defaultMode: 0440}}
+        - {name: authority-restore-certificate, secret: {secretName: internal-rpc-authority-restore-controller-tls, defaultMode: 0440, items: [{key: tls.crt, path: tls.crt}]}}
+        - {name: authority-restore-role-trust, secret: {secretName: internal-rpc-authority-restore-role-trust, defaultMode: 0440, items: [{key: restore-role-trust.jws, path: restore-role-trust.jws}]}}
+        - {name: authority-postgresql, secret: {secretName: internal-rpc-authority-${workload}-issuer-postgresql, defaultMode: 0440, items: [{key: dsn, path: dsn}, {key: username, path: username}]}}
+        - {name: authority-postgresql-ca, configMap: {name: internal-rpc-authority-postgresql-ca, defaultMode: 0440}}
+        - {name: authority-observability, configMap: {name: internal-rpc-authority-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}}
+        - {name: authority-sentry-dsn, secret: {secretName: internal-rpc-authority-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}}
+EOF
+  fi
 }
 
-emit_job scan mattercodex-image-scanner mattercodex-image-scanner
-emit_job sign mattercodex-image-signer mattercodex-image-signer
-emit_job admit mattercodex-image-admission-owner mattercodex-image-admission-owner
-emit_job promote mattercodex-image-promotion-writer mattercodex-image-promotion-writer
+emit_job claim image-admission mattercodex-image-admission-owner true
+emit_job scan mattercodex-image-scanner mattercodex-image-scanner false
+emit_job sign mattercodex-image-signer mattercodex-image-signer false
+emit_job admit image-admission mattercodex-image-admission-owner true
+emit_job promote image-promotion mattercodex-image-promotion-writer true

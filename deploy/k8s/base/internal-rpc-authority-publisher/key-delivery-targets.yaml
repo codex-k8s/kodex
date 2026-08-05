@@ -1,7 +1,208 @@
 # Рабочий registry publisher для полного issuer/verifier/resolver пути.
 version: 1
-source_revision: 3
+source_revision: 4
 targets:
+  - workload_id: role-image-builder
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder
+    namespace: mattercodex-system
+    service_account: role-image-builder
+    workload_generation: 1
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/auth-private
+      secret_name: internal-rpc-authority-issuer-key
+      mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/issuer
+    manifest_trust:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/manifest-trust
+      secret_name: internal-rpc-authority-manifest-trust
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/proof-trust
+      secret_name: internal-rpc-authority-proof-trust
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_role_image_builder_issuer_g1
+      vault_database_role: role-image-builder-issuer-g1
+      dsn_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+    restore_coordination:
+      role_credential_id: role-image-builder-issuer-restore-credential
+      role_credential_vault_path: kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/restore-credential
+      role_credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/restore/credential
+      ack_key_id: role-image-builder-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_vault_path: kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/restore-ack
+      ack_key_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.mattercodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.mattercodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:mattercodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: role-image-builder-internal-rpc-authority-exact-paths
+    readback:
+      readback_id: role-image-builder-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: role-image-builder-issuer-readback-credential
+      credential_vault_path: kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/readback-credential
+      credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/credential
+      credential_protected_type: mattercodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: role-image-builder-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_vault_path: kv/data/mattercodex/internal-rpc-authority/role-image-builder/issuer/readback-possession
+      possession_key_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      database_function: internal_rpc_authority.record_authority_key_delivery_readback(uuid)
+      snapshot_database_function: internal_rpc_authority.record_authority_snapshot_readback(uuid)
+      attestor_address: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:mattercodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: role-image-builder-internal-rpc-authority-exact-paths
+  - workload_id: image-admission
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://mattercodex.local/ns/mattercodex-system/sa/image-admission
+    namespace: mattercodex-system
+    service_account: image-admission
+    workload_generation: 1
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/auth-private
+      secret_name: internal-rpc-authority-issuer-key
+      mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/issuer
+    manifest_trust:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/manifest-trust
+      secret_name: internal-rpc-authority-manifest-trust
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/proof-trust
+      secret_name: internal-rpc-authority-proof-trust
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_image_admission_issuer_g1
+      vault_database_role: image-admission-issuer-g1
+      dsn_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+    restore_coordination:
+      role_credential_id: image-admission-issuer-restore-credential
+      role_credential_vault_path: kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/restore-credential
+      role_credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/restore/credential
+      ack_key_id: image-admission-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_vault_path: kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/restore-ack
+      ack_key_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.mattercodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.mattercodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:mattercodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: mattercodex-image-owner-protected-exact-paths
+    readback:
+      readback_id: image-admission-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: image-admission-issuer-readback-credential
+      credential_vault_path: kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/readback-credential
+      credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/credential
+      credential_protected_type: mattercodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: image-admission-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_vault_path: kv/data/mattercodex/internal-rpc-authority/image-admission/issuer/readback-possession
+      possession_key_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      database_function: internal_rpc_authority.record_authority_key_delivery_readback(uuid)
+      snapshot_database_function: internal_rpc_authority.record_authority_snapshot_readback(uuid)
+      attestor_address: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:mattercodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: mattercodex-image-owner-protected-exact-paths
+  - workload_id: image-promotion
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion
+    namespace: mattercodex-system
+    service_account: image-promotion
+    workload_generation: 1
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/auth-private
+      secret_name: internal-rpc-authority-issuer-key
+      mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/issuer
+    manifest_trust:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/manifest-trust
+      secret_name: internal-rpc-authority-manifest-trust
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      vault_path: kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/proof-trust
+      secret_name: internal-rpc-authority-proof-trust
+      mount_path: /var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_image_promotion_issuer_g1
+      vault_database_role: image-promotion-issuer-g1
+      dsn_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+    restore_coordination:
+      role_credential_id: image-promotion-issuer-restore-credential
+      role_credential_vault_path: kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/restore-credential
+      role_credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/restore/credential
+      ack_key_id: image-promotion-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_vault_path: kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/restore-ack
+      ack_key_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.mattercodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.mattercodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/mattercodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:mattercodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: mattercodex-image-owner-protected-exact-paths
+    readback:
+      readback_id: image-promotion-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: image-promotion-issuer-readback-credential
+      credential_vault_path: kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/readback-credential
+      credential_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/credential
+      credential_protected_type: mattercodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: image-promotion-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_vault_path: kv/data/mattercodex/internal-rpc-authority/image-promotion/issuer/readback-possession
+      possession_key_mount_path: /var/run/secrets/mattercodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      database_function: internal_rpc_authority.record_authority_key_delivery_readback(uuid)
+      snapshot_database_function: internal_rpc_authority.record_authority_snapshot_readback(uuid)
+      attestor_address: internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.mattercodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/mattercodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:mattercodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: mattercodex-image-owner-protected-exact-paths
   - workload_id: automation-scheduler
     role: AUTHORIZATION_ISSUER
     spiffe_id: spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler

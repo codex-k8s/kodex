@@ -36,6 +36,24 @@ var sqlMemorySearch string
 //go:embed sql/memory_projection__upsert.sql
 var sqlMemoryProjectionUpsert string
 
+//go:embed sql/image_build__next.sql
+var sqlImageBuildNext string
+
+//go:embed sql/image_admission__next.sql
+var sqlImageAdmissionNext string
+
+//go:embed sql/image_promotion__next.sql
+var sqlImagePromotionNext string
+
+//go:embed sql/image_artifact__promoted_by_spec.sql
+var sqlImageArtifactPromotedBySpec string
+
+//go:embed sql/image_build__for_recipe_update.sql
+var sqlImageBuildForRecipeUpdate string
+
+//go:embed sql/image_artifact__for_recipe_update.sql
+var sqlImageArtifactForRecipeUpdate string
+
 //go:embed sql/outbox__append.sql
 var sqlOutboxAppend string
 

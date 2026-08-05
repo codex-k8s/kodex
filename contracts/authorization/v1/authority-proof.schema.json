@@ -146,6 +146,9 @@
             "DOMAIN_STATE",
             "AGENT_SESSION",
             "INTEGRATION_CONTINUATION",
+            "IMAGE_BUILD",
+            "IMAGE_ARTIFACT",
+            "IMAGE_PROMOTION_CLAIM",
             "PROCESS_RUN",
             "AUTOMATION_OCCURRENCE"
           ]

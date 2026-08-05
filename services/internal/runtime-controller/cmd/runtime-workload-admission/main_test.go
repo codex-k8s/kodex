@@ -47,16 +47,16 @@ func TestExactRuntimePodAccessProfileAdmissionMatrix(t *testing.T) {
 				ServiceAccountName: account, AutomountServiceAccountToken: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever,
 				InitContainers: []corev1.Container{
 					{Name: "internal-rpc-authority-socket-init", Image: "authority", SecurityContext: security.DeepCopy()},
-					{Name: "workspace-init", Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-init-workspace"}, SecurityContext: roleSecurity.DeepCopy()},
+					{Name: "workspace-init", Image: "registry.example.test/agent-runner@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-init-workspace"}, SecurityContext: roleSecurity.DeepCopy()},
 				},
 				Containers: []corev1.Container{
-					{Name: "role-runtime", Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-session"}, SecurityContext: roleSecurity.DeepCopy()},
-					{Name: "provider-runtime", Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-provider"}, SecurityContext: providerSecurity.DeepCopy(), VolumeMounts: []corev1.VolumeMount{{Name: "session"}, {Name: "provider-socket"}, {Name: "provider-tmp"}}},
+					{Name: "role-runtime", Image: "registry.example.test/agent-runner@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-session"}, SecurityContext: roleSecurity.DeepCopy()},
+					{Name: "provider-runtime", Image: "registry.example.test/agent-runner@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-provider"}, SecurityContext: providerSecurity.DeepCopy(), VolumeMounts: []corev1.VolumeMount{{Name: "session"}, {Name: "provider-socket"}, {Name: "provider-tmp"}}},
 					{Name: "internal-rpc-authority-issuer", Image: "authority", Command: []string{"/usr/local/bin/internal-rpc-authority-issuer"}, SecurityContext: issuerSecurity.DeepCopy()},
 				},
 			}
 			clientgoscheme.Scheme.Default(pod)
-			snapshot := runtimeSnapshot{Execution: execution, Revision: entity.Revision{ImageDigest: "sha256:" + strings.Repeat("a", 64)}, DesiredPod: pod.DeepCopy()}
+			snapshot := runtimeSnapshot{Execution: execution, Revision: entity.Revision{ImageReference: "registry.example.test/agent-runner@sha256:" + strings.Repeat("a", 64)}, DesiredPod: pod.DeepCopy()}
 			if !exactRuntimePod("system:serviceaccount:mattercodex-system:runtime-workload-materializer", pod, snapshot) {
 				t.Fatal("exact access profile was denied")
 			}

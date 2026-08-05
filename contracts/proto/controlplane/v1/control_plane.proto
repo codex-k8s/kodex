@@ -150,6 +150,34 @@ service ControlPlaneService {
   rpc RegisterArtifact(RegisterArtifactRequest) returns (RegisterArtifactResponse);
   // RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
   rpc RecordArtifactScan(RecordArtifactScanRequest) returns (RecordArtifactScanResponse);
+
+  // ManageRoleImageRecipe — единственный owner path create/update/archive/restore/delete
+  // и запуска сборки. Actor, tenant, owner, generation и policy назначает сервер.
+  rpc ManageRoleImageRecipe(ManageRoleImageRecipeRequest) returns (ManageRoleImageRecipeResponse);
+  // ClaimImageBuild выдаёт builder одну exact fenced attempt без идентификаторов
+  // из payload и возвращает секретный installation block только в этом ответе.
+  rpc ClaimImageBuild(ClaimImageBuildRequest) returns (ClaimImageBuildResponse);
+  // RenewImageBuild продлевает только current attempt/fence/grant generation.
+  rpc RenewImageBuild(RenewImageBuildRequest) returns (RenewImageBuildResponse);
+  // ReportImageBuildProgress фиксирует только bounded stage/progress без build input.
+  rpc ReportImageBuildProgress(ReportImageBuildProgressRequest) returns (ReportImageBuildProgressResponse);
+  // CompleteImageBuild закрепляет staging digest и provenance exact immutable tuple.
+  rpc CompleteImageBuild(CompleteImageBuildRequest) returns (CompleteImageBuildResponse);
+  // FailImageBuild закрывает current attempt безопасным error code без log payload.
+  rpc FailImageBuild(FailImageBuildRequest) returns (FailImageBuildResponse);
+  // ManageImageBuild — закрытый owner path cancel/retry/expiry/dead-letter.
+  rpc ManageImageBuild(ManageImageBuildRequest) returns (ManageImageBuildResponse);
+  // ClaimImageAdmission выдаёт independent admission workload exact staging tuple.
+  rpc ClaimImageAdmission(ClaimImageAdmissionRequest) returns (ClaimImageAdmissionResponse);
+  // RecordImageAdmission сохраняет SBOM/vulnerability/signature evidence.
+  rpc RecordImageAdmission(RecordImageAdmissionRequest) returns (RecordImageAdmissionResponse);
+  // ClaimImagePromotion выдаёт promotion workload новый fenced one-time claim
+  // для server-selected accepted artifact; истёкший claim заменяется.
+  rpc ClaimImagePromotion(ClaimImagePromotionRequest) returns (ClaimImagePromotionResponse);
+  // CompleteImagePromotion расходует claim только после exact promoted readback.
+  rpc CompleteImagePromotion(CompleteImagePromotionRequest) returns (CompleteImagePromotionResponse);
+  // GetRoleImageBuild выполняет авторитетный version-pinned readback без secret input.
+  rpc GetRoleImageBuild(GetRoleImageBuildRequest) returns (GetRoleImageBuildResponse);
   // GetRuntimeRevision — авторитетное чтение закреплённой версии для
   // runtime-controller.
   rpc GetRuntimeRevision(GetRuntimeRevisionRequest) returns (GetRuntimeRevisionResponse);
@@ -306,6 +334,12 @@ enum ResourceKind {
   RESOURCE_KIND_WORK_CLAIM = 16;
   // RESOURCE_KIND_ARTIFACT — значение закрытого перечисления ResourceKind.
   RESOURCE_KIND_ARTIFACT = 17;
+  // RESOURCE_KIND_ROLE_IMAGE_RECIPE — server-owned declarative build input.
+  RESOURCE_KIND_ROLE_IMAGE_RECIPE = 18;
+  // RESOURCE_KIND_IMAGE_BUILD — server-owned fenced build attempt aggregate.
+  RESOURCE_KIND_IMAGE_BUILD = 19;
+  // RESOURCE_KIND_IMAGE_ARTIFACT — admitted/promoted immutable image metadata.
+  RESOURCE_KIND_IMAGE_ARTIFACT = 20;
 }
 
 // LifecycleState задаёт закрытое перечисление контракта control-plane.
@@ -614,6 +648,9 @@ message RoleSpec {
   repeated string repository_workspace_ids = 6;
   repeated string integration_ids = 7;
   ProviderAccountPool provider_account_pool = 8;
+  // role_image_recipe_id — owner-selected reference, eligibility and exact
+  // artifact are resolved by control-plane during RuntimeRevision creation.
+  string role_image_recipe_id = 9;
   ConfigurationOwnership ownership = 10;
 }
 
@@ -687,7 +724,8 @@ message IntegrationSpec {
 message RuntimeRevisionSpec {
   // manifest_sha256 — вычисленный сервером digest полного эффективного снимка.
   string manifest_sha256 = 1;
-  string image_digest = 2;
+  reserved 2;
+  reserved "image_digest";
   string prompt_profile_id = 3;
   uint64 prompt_revision = 4;
   repeated string credential_binding_ids = 5;
@@ -712,6 +750,169 @@ message RuntimeRevisionSpec {
   // scheduled_result_contract заполняется owner-side только для scheduled
   // revision и входит в immutable manifest digest.
   ScheduledResultContract scheduled_result_contract = 21;
+  // image_reference — единственный exact promoted repository@sha256 source для runtime.
+  string image_reference = 22;
+  string role_image_recipe_id = 23;
+  uint64 role_image_recipe_version = 24;
+  string role_image_spec_sha256 = 25;
+  string image_build_id = 26;
+  uint64 image_build_version = 27;
+  uint32 image_build_attempt = 28;
+  string image_artifact_id = 29;
+  uint64 image_artifact_version = 30;
+  string image_manifest_digest = 31;
+  uint64 image_admission_revision = 32;
+  string image_admission_receipt_sha256 = 33;
+  uint64 image_policy_revision = 34;
+  string image_policy_sha256 = 35;
+  string image_signature_sha256 = 36;
+  string image_promotion_readback_sha256 = 37;
+  string image_admission_receipt_oci_manifest_digest = 38;
+}
+
+// RoleImagePackage — exact typed package input. Version и digest обязательны.
+message RoleImagePackage {
+  string manager = 1;
+  string name = 2;
+  string version = 3;
+  string digest = 4;
+}
+
+// RoleImageTool — exact external tool input without secret material.
+message RoleImageTool {
+  string name = 1;
+  string version = 2;
+  string source_ref = 3;
+  string sha256 = 4;
+}
+
+// RoleImagePlatform — closed OCI target platform tuple.
+message RoleImagePlatform {
+  string os = 1;
+  string architecture = 2;
+  string variant = 3;
+}
+
+// RoleImageRecipeInput — owner declarative input. Server-computed generation,
+// spec hash and policy binding deliberately do not exist in caller payload.
+message RoleImageRecipeInput {
+  string base_image_reference = 1;
+  string base_image_digest = 2;
+  string source_ref = 3;
+  string source_revision = 4;
+  string source_sha256 = 5;
+  string context_ref = 6;
+  string context_sha256 = 7;
+  string builder_sha256 = 8;
+  string frontend_sha256 = 9;
+  repeated RoleImagePlatform platforms = 10;
+  repeated RoleImagePackage packages = 11;
+  repeated RoleImageTool tools = 12;
+  string installation_block = 13;
+  repeated string build_secret_refs = 14;
+  string toolchain_sha256 = 15;
+}
+
+// RoleImageRecipeSpec — durable owner state with canonical server bindings.
+message RoleImageRecipeSpec {
+  RoleImageRecipeInput input = 1;
+  uint64 generation = 2;
+  string spec_sha256 = 3;
+  uint64 policy_revision = 4;
+  string policy_sha256 = 5;
+}
+
+// ImageBuildSpec contains bounded status only; installation block, context
+// contents and secret values are never persisted here.
+message ImageBuildSpec {
+  string recipe_id = 1;
+  uint64 recipe_version = 2;
+  uint64 recipe_generation = 3;
+  string spec_sha256 = 4;
+  uint32 attempt = 5;
+  string claimant_workload_id = 6;
+  string claimant_spiffe_id = 7;
+  uint64 authority_generation = 8;
+  uint64 fence = 9;
+  google.protobuf.Timestamp lease_expires_at = 10;
+  ImageBuildStage stage = 11;
+  uint32 progress_percent = 12;
+  string staging_reference = 13;
+  string manifest_digest = 14;
+  string provenance_sha256 = 15;
+  string immutable_build_sha256 = 16;
+  string error_code = 17;
+  google.protobuf.Timestamp available_at = 18;
+  uint32 maximum_attempts = 19;
+  string lease_token_sha256 = 20;
+  string claim_jti_sha256 = 21;
+}
+
+enum ImageBuildStage {
+  IMAGE_BUILD_STAGE_UNSPECIFIED = 0;
+  IMAGE_BUILD_STAGE_QUEUED = 1;
+  IMAGE_BUILD_STAGE_CONTEXT_VALIDATION = 2;
+  IMAGE_BUILD_STAGE_BASE_PULL = 3;
+  IMAGE_BUILD_STAGE_SOLVING = 4;
+  IMAGE_BUILD_STAGE_STAGING_PUSH = 5;
+  IMAGE_BUILD_STAGE_PROVENANCE = 6;
+  IMAGE_BUILD_STAGE_COMPLETED = 7;
+  IMAGE_BUILD_STAGE_FAILED = 8;
+  IMAGE_BUILD_STAGE_CANCELLED = 9;
+  IMAGE_BUILD_STAGE_EXPIRED = 10;
+  IMAGE_BUILD_STAGE_DEAD_LETTER = 11;
+}
+
+// ImageArtifactSpec binds all independent admission evidence to one digest.
+message ImageArtifactSpec {
+  string recipe_id = 1;
+  uint64 recipe_version = 2;
+  uint64 recipe_generation = 3;
+  string spec_sha256 = 4;
+  string build_id = 5;
+  uint64 build_version = 6;
+  uint32 build_attempt = 7;
+  string staging_reference = 8;
+  string manifest_digest = 9;
+  string provenance_sha256 = 10;
+  string immutable_build_sha256 = 11;
+  string sbom_sha256 = 12;
+  string vulnerability_evidence_sha256 = 13;
+  uint64 policy_revision = 14;
+  string policy_sha256 = 15;
+  ImageAdmissionVerdict admission_verdict = 16;
+  string signature_identity = 17;
+  string signature_sha256 = 18;
+  uint64 admission_revision = 19;
+  string admission_receipt_sha256 = 20;
+  string promotion_claim_jti_sha256 = 21;
+  google.protobuf.Timestamp promotion_claim_expires_at = 22;
+  string promoted_reference = 23;
+  string promotion_readback_sha256 = 24;
+  google.protobuf.Timestamp promoted_at = 25;
+  string admission_claimant_workload_id = 26;
+  uint64 admission_authority_generation = 27;
+  uint64 admission_fence = 28;
+  string admission_claim_token_sha256 = 29;
+  google.protobuf.Timestamp admission_claim_expires_at = 30;
+  string base_image_digest = 31;
+  string source_sha256 = 32;
+  string context_sha256 = 33;
+  string builder_sha256 = 34;
+  string frontend_sha256 = 35;
+  string toolchain_sha256 = 36;
+  repeated RoleImagePlatform platforms = 37;
+  string promotion_claimant_workload_id = 38;
+  string promotion_claimant_spiffe_id = 39;
+  uint64 promotion_authority_generation = 40;
+  uint64 promotion_fence = 41;
+  string admission_receipt_oci_manifest_digest = 42;
+}
+
+enum ImageAdmissionVerdict {
+  IMAGE_ADMISSION_VERDICT_UNSPECIFIED = 0;
+  IMAGE_ADMISSION_VERDICT_ACCEPTED = 1;
+  IMAGE_ADMISSION_VERDICT_REJECTED = 2;
 }
 
 // ScheduledResultContract — закрытый immutable contract результата scheduled
@@ -965,6 +1166,9 @@ message ResourceSpec {
     MemoryRecordSpec memory_record = 15;
     WorkClaimSpec work_claim = 16;
     ArtifactSpec artifact = 17;
+    RoleImageRecipeSpec role_image_recipe = 18;
+    ImageBuildSpec image_build = 19;
+    ImageArtifactSpec image_artifact = 20;
   }
 }
 
@@ -1984,6 +2188,225 @@ message RecordArtifactScanRequest {
 // RecordArtifactScanResponse описывает версионированное сообщение контракта control-plane.
 message RecordArtifactScanResponse {
   Resource artifact = 1;
+}
+
+enum RoleImageRecipeAction {
+  ROLE_IMAGE_RECIPE_ACTION_UNSPECIFIED = 0;
+  ROLE_IMAGE_RECIPE_ACTION_CREATE = 1;
+  ROLE_IMAGE_RECIPE_ACTION_UPDATE = 2;
+  ROLE_IMAGE_RECIPE_ACTION_ARCHIVE = 3;
+  ROLE_IMAGE_RECIPE_ACTION_RESTORE = 4;
+  ROLE_IMAGE_RECIPE_ACTION_DELETE = 5;
+  ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD = 6;
+}
+
+message ManageRoleImageRecipeRequest {
+  string idempotency_key = 1;
+  RoleImageRecipeAction action = 2;
+  string recipe_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  RoleImageRecipeInput input = 6;
+}
+
+message ManageRoleImageRecipeResponse {
+  Resource recipe = 1;
+  Resource image_build = 2;
+  Resource image_artifact = 3;
+  bool reused = 4;
+}
+
+// RoleImageBuildInput is available only in the exact active builder claim.
+message RoleImageBuildInput {
+  string recipe_id = 1;
+  uint64 recipe_version = 2;
+  uint64 recipe_generation = 3;
+  string spec_sha256 = 4;
+  string base_image_reference = 5;
+  string base_image_digest = 6;
+  string source_ref = 7;
+  string source_revision = 8;
+  string source_sha256 = 9;
+  string context_ref = 10;
+  string context_sha256 = 11;
+  string builder_sha256 = 12;
+  string frontend_sha256 = 13;
+  repeated RoleImagePlatform platforms = 14;
+  repeated RoleImagePackage packages = 15;
+  repeated RoleImageTool tools = 16;
+  string installation_block = 17;
+  repeated string build_secret_refs = 18;
+  string toolchain_sha256 = 19;
+  uint64 policy_revision = 20;
+  string policy_sha256 = 21;
+  string immutable_build_sha256 = 22;
+}
+
+message ClaimImageBuildRequest {
+  string idempotency_key = 1;
+}
+
+message ClaimImageBuildResponse {
+  Resource image_build = 1;
+  RoleImageBuildInput input = 2;
+  string lease_token = 3;
+  uint64 fence = 4;
+  uint64 authority_generation = 5;
+  google.protobuf.Timestamp lease_expires_at = 6;
+}
+
+message RenewImageBuildRequest {
+  string idempotency_key = 1;
+  string image_build_id = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+}
+
+message RenewImageBuildResponse {
+  Resource image_build = 1;
+  string lease_token = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+}
+
+message ReportImageBuildProgressRequest {
+  string idempotency_key = 1;
+  string image_build_id = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+  ImageBuildStage stage = 7;
+  uint32 progress_percent = 8;
+}
+
+message ReportImageBuildProgressResponse {
+  Resource image_build = 1;
+}
+
+message CompleteImageBuildRequest {
+  string idempotency_key = 1;
+  string image_build_id = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+  string staging_reference = 7;
+  string manifest_digest = 8;
+  string provenance_sha256 = 9;
+  string immutable_build_sha256 = 10;
+}
+
+message CompleteImageBuildResponse {
+  Resource image_build = 1;
+  Resource image_artifact = 2;
+}
+
+message FailImageBuildRequest {
+  string idempotency_key = 1;
+  string image_build_id = 2;
+  uint64 expected_version = 3;
+  uint32 expected_attempt = 4;
+  uint64 expected_fence = 5;
+  string lease_token = 6;
+  string error_code = 7;
+}
+
+message FailImageBuildResponse {
+  Resource image_build = 1;
+}
+
+enum ImageBuildOwnerAction {
+  IMAGE_BUILD_OWNER_ACTION_UNSPECIFIED = 0;
+  IMAGE_BUILD_OWNER_ACTION_CANCEL = 1;
+  IMAGE_BUILD_OWNER_ACTION_RETRY = 2;
+  IMAGE_BUILD_OWNER_ACTION_EXPIRE = 3;
+  IMAGE_BUILD_OWNER_ACTION_DEAD_LETTER = 4;
+}
+
+message ManageImageBuildRequest {
+  string idempotency_key = 1;
+  string image_build_id = 2;
+  uint64 expected_version = 3;
+  ImageBuildOwnerAction action = 4;
+}
+
+message ManageImageBuildResponse {
+  Resource image_build = 1;
+}
+
+message ClaimImageAdmissionRequest {
+  string idempotency_key = 1;
+}
+
+message ClaimImageAdmissionResponse {
+  Resource image_artifact = 1;
+  string claim_token = 2;
+  uint64 fence = 3;
+  uint64 authority_generation = 4;
+  google.protobuf.Timestamp claim_expires_at = 5;
+}
+
+message RecordImageAdmissionRequest {
+  string idempotency_key = 1;
+  string image_artifact_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string claim_token = 5;
+  string manifest_digest = 6;
+  string immutable_build_sha256 = 7;
+  string provenance_sha256 = 8;
+  string sbom_sha256 = 9;
+  string vulnerability_evidence_sha256 = 10;
+  uint64 policy_revision = 11;
+  string policy_sha256 = 12;
+  ImageAdmissionVerdict verdict = 13;
+  string signature_identity = 14;
+  string signature_sha256 = 15;
+  string admission_receipt_sha256 = 16;
+  string admission_receipt_oci_manifest_digest = 17;
+}
+
+message RecordImageAdmissionResponse {
+  Resource image_artifact = 1;
+  reserved 2, 3;
+}
+
+message ClaimImagePromotionRequest {
+  string idempotency_key = 1;
+  reserved 2;
+}
+
+message ClaimImagePromotionResponse {
+  Resource image_artifact = 1;
+  string promotion_claim = 2;
+  uint64 fence = 3;
+  uint64 authority_generation = 4;
+  google.protobuf.Timestamp claim_expires_at = 5;
+}
+
+message CompleteImagePromotionRequest {
+  string idempotency_key = 1;
+  string image_artifact_id = 2;
+  uint64 expected_version = 3;
+  string promotion_claim = 4;
+  string promoted_reference = 5;
+  string manifest_digest = 6;
+  string promotion_readback_sha256 = 7;
+}
+
+message CompleteImagePromotionResponse {
+  Resource image_artifact = 1;
+}
+
+message GetRoleImageBuildRequest {
+  string image_build_id = 1;
+  uint64 expected_version = 2;
+}
+
+message GetRoleImageBuildResponse {
+  Resource image_build = 1;
 }
 
 // GetRuntimeRevisionRequest описывает версионированное сообщение контракта control-plane.

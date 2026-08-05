@@ -2,10 +2,10 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-control-plane.sh staging|production control-plane-sha256 authority-sha256 agent-runtime-sha256 registry-pull-fqdn admission-tools-image@sha256:digest policy-revision pull-credential-generation" >&2
+  echo "usage: render-control-plane.sh staging|production control-plane-sha256 authority-sha256 agent-runtime-sha256 registry-pull-fqdn admission-tools-image@sha256:digest admission-image@sha256:digest policy-revision policy-sha256 pull-credential-generation" >&2
 }
 
-if [[ $# -ne 8 ]]; then
+if [[ $# -ne 10 ]]; then
   usage
   exit 2
 fi
@@ -16,8 +16,10 @@ authority_image_digest=$3
 agent_runtime_image_digest=$4
 registry_pull_host=$5
 admission_tools_image=$6
-policy_revision=$7
-pull_credential_generation=$8
+admission_image=$7
+policy_revision=$8
+policy_sha256=$9
+pull_credential_generation=${10}
 
 case "$environment_name" in
   staging|production) ;;
@@ -40,8 +42,17 @@ if [[ ! "$admission_tools_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$
   echo "admission_tools_image is invalid" >&2
   exit 2
 fi
+if [[ ! "$admission_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+  [[ "$admission_image" == *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]]; then
+  echo "admission_image is invalid" >&2
+  exit 2
+fi
 [[ $policy_revision =~ ^[1-9][0-9]*$ ]] || {
   echo "policy_revision is invalid" >&2
+  exit 2
+}
+[[ $policy_sha256 =~ ^[a-f0-9]{64}$ ]] && [[ $policy_sha256 != 0000000000000000000000000000000000000000000000000000000000000000 ]] || {
+  echo "policy_sha256 is invalid" >&2
   exit 2
 }
 [[ $pull_credential_generation =~ ^[1-9][0-9]*$ ]] || {
@@ -90,8 +101,8 @@ fi
 authority_placeholder='ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000'
 authority_replacement="$registry_pull_host/mattercodex/internal-rpc-authority@$authority_image_digest"
 authority_placeholder_count=$(grep -F -c "$authority_placeholder" "$raw_render" || true)
-if [[ "$authority_placeholder_count" -ne 2 ]]; then
-  echo "canonical render does not contain exactly two authority image inputs" >&2
+if [[ "$authority_placeholder_count" -ne 3 ]]; then
+  echo "canonical render does not contain exactly three authority image inputs" >&2
   exit 1
 fi
 
@@ -110,10 +121,13 @@ if [[ "$registry_host_placeholder_count" -lt 2 ]]; then
   exit 1
 fi
 tools_placeholder='admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000'
+admission_placeholder='mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000'
 tools_digest=${admission_tools_image##*@}
 if [[ $(grep -F -c "$tools_placeholder" "$raw_render" || true) -lt 5 ]] ||
+  [[ $(grep -F -c "$admission_placeholder" "$raw_render" || true) -ne 1 ]] ||
   [[ $(grep -F -c 'mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000' "$raw_render" || true) -ne 1 ]] ||
-  [[ $(grep -F -c 'policyRevision: "0"' "$raw_render" || true) -ne 1 ]]; then
+  [[ $(grep -F -c 'policyRevision: "0"' "$raw_render" || true) -ne 1 ]] ||
+  [[ $(grep -F -c 'policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"' "$raw_render" || true) -ne 1 ]]; then
   echo "canonical render does not contain the owner admission intent" >&2
   exit 1
 fi
@@ -129,8 +143,10 @@ sed \
   -e "s|$authority_placeholder|$authority_replacement|g" \
   -e "s|$runtime_digest_placeholder|$runtime_digest_replacement|g" \
   -e "s|$tools_placeholder|$admission_tools_image|g" \
+  -e "s|$admission_placeholder|$admission_image|g" \
   -e "s|mattercodex.dev/admission-tools-sha256: sha256:0000000000000000000000000000000000000000000000000000000000000000|mattercodex.dev/admission-tools-sha256: $tools_digest|g" \
   -e "s|policyRevision: \"0\"|policyRevision: \"$policy_revision\"|g" \
+  -e "s|policySHA256: \"0000000000000000000000000000000000000000000000000000000000000000\"|policySHA256: \"$policy_sha256\"|g" \
   -e "s|mattercodex.dev/pull-credential-generation: \"0\"|mattercodex.dev/pull-credential-generation: \"$pull_credential_generation\"|g" \
   -e "/name: PULL_CREDENTIAL_GENERATION/{n;s|value: \"0\"|value: \"$pull_credential_generation\"|;}" \
   -e "s|$registry_host_placeholder|$registry_pull_host|g" \

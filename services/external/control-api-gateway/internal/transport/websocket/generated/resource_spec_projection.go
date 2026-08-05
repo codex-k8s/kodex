@@ -19,4 +19,7 @@ type ResourceSpecProjection struct {
   MemoryRecord *MemoryRecordProjection
   WorkClaim *WorkClaimProjection
   Artifact *ArtifactProjection
+  RoleImageRecipe *RoleImageRecipeProjection
+  ImageBuild *ImageBuildProjection
+  ImageArtifact *ImageArtifactProjection
 }

@@ -186,6 +186,7 @@ type RoleSpec struct {
 	RepositoryWorkspaceIDs       []string               `json:"repositoryWorkspaceIds"`
 	IntegrationIDs               []string               `json:"integrationIds"`
 	ProviderAccountPool          ProviderAccountPool    `json:"providerAccountPool"`
+	RoleImageRecipeID            string                 `json:"roleImageRecipeId,omitempty"`
 	Ownership                    ConfigurationOwnership `json:"ownership"`
 }
 
@@ -241,6 +242,7 @@ func (spec RoleSpec) Validate() error {
 		len(spec.RepositoryWorkspaceIDs) > 32 ||
 		len(spec.IntegrationIDs) > 32 ||
 		spec.ProviderAccountPool.Validate(spec.ProviderCredentialBindingIDs) != nil ||
+		(spec.RoleImageRecipeID != "" && value.ValidateID(spec.RoleImageRecipeID) != nil) ||
 		spec.Ownership.Validate() != nil {
 		return errors.New("role specification is invalid")
 	}
@@ -414,34 +416,59 @@ func (spec IntegrationSpec) Validate() error {
 }
 
 type RuntimeRevisionSpec struct {
-	ManifestSHA256              string                      `json:"manifestSha256"`
-	ImageDigest                 string                      `json:"imageDigest"`
-	PromptProfileID             string                      `json:"promptProfileId"`
-	PromptRevision              uint64                      `json:"promptRevision"`
-	CredentialBindingIDs        []string                    `json:"credentialBindingIds"`
-	IntegrationIDs              []string                    `json:"integrationIds"`
-	PredecessorRevisionID       string                      `json:"predecessorRevisionId,omitempty"`
-	AuthorityPolicyVersion      uint64                      `json:"authorityPolicyRevision"`
-	AuthorityPolicySHA256       string                      `json:"authorityPolicySha256"`
-	Components                  []EffectiveResourceRef      `json:"components"`
-	CreatedAt                   time.Time                   `json:"createdAt"`
-	SessionID                   string                      `json:"sessionId"`
-	RoleID                      string                      `json:"roleId"`
-	ChatID                      string                      `json:"chatId,omitempty"`
-	ProviderCredentialBindingID string                      `json:"providerCredentialBindingId"`
-	ProviderAccountName         string                      `json:"providerAccountName"`
-	EffectiveRuntimeSHA256      string                      `json:"effectiveRuntimeSha256"`
-	CodexModel                  string                      `json:"codexModel"`
-	CodexSandbox                string                      `json:"codexSandbox"`
-	CodexApprovalPolicy         string                      `json:"codexApprovalPolicy"`
-	ScheduledResultContract     *ScheduledResultContractRef `json:"scheduledResultContract,omitempty"`
+	ManifestSHA256                         string                      `json:"manifestSha256"`
+	ImageReference                         string                      `json:"imageReference"`
+	RoleImageRecipeID                      string                      `json:"roleImageRecipeId"`
+	RoleImageRecipeVersion                 uint64                      `json:"roleImageRecipeVersion"`
+	RoleImageSpecSHA256                    string                      `json:"roleImageSpecSha256"`
+	ImageBuildID                           string                      `json:"imageBuildId"`
+	ImageBuildVersion                      uint64                      `json:"imageBuildVersion"`
+	ImageBuildAttempt                      uint32                      `json:"imageBuildAttempt"`
+	ImageArtifactID                        string                      `json:"imageArtifactId"`
+	ImageArtifactVersion                   uint64                      `json:"imageArtifactVersion"`
+	ImageManifestDigest                    string                      `json:"imageManifestDigest"`
+	ImageAdmissionRevision                 uint64                      `json:"imageAdmissionRevision"`
+	ImageAdmissionReceiptSHA256            string                      `json:"imageAdmissionReceiptSha256"`
+	ImageAdmissionReceiptOCIManifestDigest string                      `json:"imageAdmissionReceiptOciManifestDigest"`
+	ImagePolicyRevision                    uint64                      `json:"imagePolicyRevision"`
+	ImagePolicySHA256                      string                      `json:"imagePolicySha256"`
+	ImageSignatureSHA256                   string                      `json:"imageSignatureSha256"`
+	ImagePromotionReadbackSHA256           string                      `json:"imagePromotionReadbackSha256"`
+	PromptProfileID                        string                      `json:"promptProfileId"`
+	PromptRevision                         uint64                      `json:"promptRevision"`
+	CredentialBindingIDs                   []string                    `json:"credentialBindingIds"`
+	IntegrationIDs                         []string                    `json:"integrationIds"`
+	PredecessorRevisionID                  string                      `json:"predecessorRevisionId,omitempty"`
+	AuthorityPolicyVersion                 uint64                      `json:"authorityPolicyRevision"`
+	AuthorityPolicySHA256                  string                      `json:"authorityPolicySha256"`
+	Components                             []EffectiveResourceRef      `json:"components"`
+	CreatedAt                              time.Time                   `json:"createdAt"`
+	SessionID                              string                      `json:"sessionId"`
+	RoleID                                 string                      `json:"roleId"`
+	ChatID                                 string                      `json:"chatId,omitempty"`
+	ProviderCredentialBindingID            string                      `json:"providerCredentialBindingId"`
+	ProviderAccountName                    string                      `json:"providerAccountName"`
+	EffectiveRuntimeSHA256                 string                      `json:"effectiveRuntimeSha256"`
+	CodexModel                             string                      `json:"codexModel"`
+	CodexSandbox                           string                      `json:"codexSandbox"`
+	CodexApprovalPolicy                    string                      `json:"codexApprovalPolicy"`
+	ScheduledResultContract                *ScheduledResultContractRef `json:"scheduledResultContract,omitempty"`
 }
 
 func (RuntimeRevisionSpec) Kind() enum.Kind { return enum.KindRuntimeRevision }
 func (spec RuntimeRevisionSpec) Validate() error {
 	if !validSHA256(spec.ManifestSHA256) ||
-		!strings.HasPrefix(spec.ImageDigest, "sha256:") ||
-		!validSHA256(strings.TrimPrefix(spec.ImageDigest, "sha256:")) ||
+		!validImageReference(spec.ImageReference) ||
+		!strings.HasSuffix(spec.ImageReference, "@"+spec.ImageManifestDigest) ||
+		value.ValidateID(spec.RoleImageRecipeID) != nil || spec.RoleImageRecipeVersion == 0 ||
+		!validSHA256(spec.RoleImageSpecSHA256) ||
+		value.ValidateID(spec.ImageBuildID) != nil || spec.ImageBuildVersion == 0 || spec.ImageBuildAttempt == 0 ||
+		value.ValidateID(spec.ImageArtifactID) != nil || spec.ImageArtifactVersion == 0 ||
+		!validManifestDigest(spec.ImageManifestDigest) || spec.ImageAdmissionRevision == 0 ||
+		!validSHA256(spec.ImageAdmissionReceiptSHA256) ||
+		!validManifestDigest(spec.ImageAdmissionReceiptOCIManifestDigest) || spec.ImagePolicyRevision == 0 ||
+		!validSHA256(spec.ImagePolicySHA256) || !validSHA256(spec.ImageSignatureSHA256) ||
+		!validSHA256(spec.ImagePromotionReadbackSHA256) ||
 		value.ValidateID(spec.PromptProfileID) != nil ||
 		spec.PromptRevision == 0 ||
 		len(spec.CredentialBindingIDs) > 64 || len(spec.IntegrationIDs) > 64 ||

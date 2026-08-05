@@ -88,7 +88,6 @@ func Run(
 	}
 	cluster, err := kubeadapter.InCluster(kubeadapter.Config{
 		Environment: config.Environment, Namespace: config.Namespace,
-		RoleImageRepository:             config.RoleImageRepository,
 		RunnerControlPlaneTarget:        config.RunnerControlPlaneTarget,
 		RunnerControlPlaneTLSServerName: config.RunnerControlPlaneTLSServerName,
 		InteractionGatewayURL:           config.InteractionGatewayURL, SessionMCPURL: config.SessionMCPURL,

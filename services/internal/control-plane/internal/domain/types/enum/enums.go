@@ -22,6 +22,9 @@ const (
 	KindMemoryRecord        Kind = "MEMORY_RECORD"
 	KindWorkClaim           Kind = "WORK_CLAIM"
 	KindArtifact            Kind = "ARTIFACT"
+	KindRoleImageRecipe     Kind = "ROLE_IMAGE_RECIPE"
+	KindImageBuild          Kind = "IMAGE_BUILD"
+	KindImageArtifact       Kind = "IMAGE_ARTIFACT"
 )
 
 // ProcessContinuationKind различает взаимоисключающие owner continuation.
@@ -45,7 +48,7 @@ func (kind Kind) Valid() bool {
 		KindCredentialBinding, KindRepositoryWorkspace, KindIntegration,
 		KindRuntimeRevision, KindSession, KindTurn, KindProcessRun,
 		KindSchedule, KindOwnerGate, KindMemoryRecord, KindWorkClaim,
-		KindArtifact:
+		KindArtifact, KindRoleImageRecipe, KindImageBuild, KindImageArtifact:
 		return true
 	default:
 		return false
@@ -92,6 +95,10 @@ func InitialState(kind Kind) State {
 		return StateWaitingOwner
 	case KindTurn:
 		return StateQueued
+	case KindImageBuild:
+		return StateQueued
+	case KindImageArtifact:
+		return StateWaitingExternal
 	default:
 		return StateActive
 	}
@@ -103,11 +110,38 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		(from.Terminal() &&
 			!(kind == KindTurn && (from == StateFailed || from == StateExpired) && to == StateQueued) &&
 			!(kind == KindProcessRun && (from == StateFailed || from == StateExpired) && to == StateRunning) &&
+			!(kind == KindImageBuild && (from == StateFailed || from == StateExpired) && to == StateQueued) &&
 			!(kind == KindSession && from == StateCancelled &&
 				to == StateDeletionPending)) {
 		return false
 	}
 	switch kind {
+	case KindImageBuild:
+		switch from {
+		case StateQueued:
+			return to == StateClaimed || to == StateCancelled || to == StateExpired
+		case StateClaimed:
+			return to == StateRunning || to == StateSucceeded || to == StateFailed ||
+				to == StateCancelled || to == StateExpired || to == StateBlocked
+		case StateRunning:
+			return to == StateSucceeded || to == StateFailed || to == StateCancelled ||
+				to == StateExpired || to == StateBlocked
+		case StateFailed, StateExpired, StateBlocked:
+			return to == StateQueued || (from == StateBlocked && to == StateCancelled)
+		}
+	case KindImageArtifact:
+		switch from {
+		case StateWaitingExternal:
+			return to == StateActive || to == StateBlocked || to == StateCancelled || to == StateExpired
+		case StateActive:
+			return to == StateArchived || to == StateDeletionPending
+		case StateBlocked:
+			return to == StateArchived || to == StateDeletionPending
+		case StateArchived:
+			return to == StateDeletionPending
+		case StateDeletionPending:
+			return to == StateDeleted
+		}
 	case KindTurn:
 		switch from {
 		case StateQueued:

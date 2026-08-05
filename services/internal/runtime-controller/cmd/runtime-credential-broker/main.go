@@ -742,7 +742,7 @@ func materializeRolePod(ctx context.Context, client kubernetes.Interface, namesp
 		len(pod.Spec.InitContainers[1].Args) != 1 || pod.Spec.InitContainers[1].Args[0] != "runtime-init-workspace" ||
 		len(pod.Spec.Containers[0].Args) != 1 || pod.Spec.Containers[0].Args[0] != "runtime-session" ||
 		pod.Spec.InitContainers[1].Image != pod.Spec.Containers[0].Image ||
-		!strings.HasSuffix(pod.Spec.Containers[0].Image, "@"+revision.ImageDigest) ||
+		pod.Spec.Containers[0].Image != revision.ImageReference ||
 		!restrictedContainer(pod.Spec.InitContainers[0].SecurityContext) || !restrictedContainer(pod.Spec.InitContainers[1].SecurityContext) ||
 		!restrictedContainer(pod.Spec.Containers[0].SecurityContext) ||
 		!restrictedContainer(pod.Spec.Containers[1].SecurityContext) ||

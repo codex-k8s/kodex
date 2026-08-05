@@ -32,7 +32,8 @@ func TestStrictBoundaryMatchesNamedGeneratedEnums(t *testing.T) {
 			string(ResourceKindPromptProfile), string(ResourceKindCredentialBinding), string(ResourceKindRepositoryWorkspace),
 			string(ResourceKindIntegration), string(ResourceKindRuntimeRevision), string(ResourceKindSession), string(ResourceKindTurn),
 			string(ResourceKindProcessRun), string(ResourceKindSchedule), string(ResourceKindOwnerGate), string(ResourceKindMemoryRecord),
-			string(ResourceKindWorkClaim), string(ResourceKindArtifact),
+			string(ResourceKindWorkClaim), string(ResourceKindArtifact), string(ResourceKindRoleImageRecipe),
+			string(ResourceKindImageBuild), string(ResourceKindImageArtifact),
 		}},
 	}
 	for _, test := range tests {
@@ -190,7 +191,8 @@ func TestClosedWebSocketEnumsFailClosed(t *testing.T) {
 				string(ResourceKindRepositoryWorkspace), string(ResourceKindIntegration), string(ResourceKindRuntimeRevision),
 				string(ResourceKindSession), string(ResourceKindTurn), string(ResourceKindProcessRun),
 				string(ResourceKindSchedule), string(ResourceKindOwnerGate), string(ResourceKindMemoryRecord),
-				string(ResourceKindWorkClaim), string(ResourceKindArtifact),
+				string(ResourceKindWorkClaim), string(ResourceKindArtifact), string(ResourceKindRoleImageRecipe),
+				string(ResourceKindImageBuild), string(ResourceKindImageArtifact),
 			},
 			newValue: func() json.Unmarshaler {
 				return new(ResourceKind)

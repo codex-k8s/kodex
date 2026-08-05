@@ -63,14 +63,13 @@ func TestRolePodProviderRuntimeCannotMountRunnerAuthority(t *testing.T) {
 	adapter := &Adapter{config: Config{
 		Namespace:                       "mattercodex-system",
 		Environment:                     "production",
-		RoleImageRepository:             "registry.example.test/agent-runner",
 		RunnerControlPlaneTarget:        "control-plane:8443",
 		RunnerControlPlaneTLSServerName: "control-plane.mattercodex-system.svc.cluster.local",
 		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
 		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
 		AuthorityImage:                  "registry.example.test/internal-rpc-authority@sha256:" + strings.Repeat("c", 64),
 	}}
-	revision := entity.Revision{ImageDigest: "sha256:" + strings.Repeat("d", 64)}
+	revision := entity.Revision{ImageReference: "registry.example.test/agent-runner@sha256:" + strings.Repeat("d", 64)}
 	pod, err := adapter.rolePod(t.Context(), execution, revision)
 	if err != nil {
 		t.Fatalf("rolePod() error = %v", err)

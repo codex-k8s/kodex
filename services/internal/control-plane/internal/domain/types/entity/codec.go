@@ -141,6 +141,12 @@ func UnmarshalSpec(kind enum.Kind, raw []byte) (Spec, error) {
 		target = &WorkClaimSpec{}
 	case enum.KindArtifact:
 		target = &ArtifactSpec{}
+	case enum.KindRoleImageRecipe:
+		target = &RoleImageRecipeSpec{}
+	case enum.KindImageBuild:
+		target = &ImageBuildSpec{}
+	case enum.KindImageArtifact:
+		target = &ImageArtifactSpec{}
 	default:
 		return nil, errors.New("resource kind is invalid")
 	}
@@ -189,6 +195,12 @@ func dereferenceSpec(spec Spec) Spec {
 	case *WorkClaimSpec:
 		return *value
 	case *ArtifactSpec:
+		return *value
+	case *RoleImageRecipeSpec:
+		return *value
+	case *ImageBuildSpec:
+		return *value
+	case *ImageArtifactSpec:
 		return *value
 	default:
 		return nil

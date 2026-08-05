@@ -24,7 +24,6 @@ type Config struct {
 	ControlPlaneCertificateFile      string        `env:"RUNTIME_CONTROL_PLANE_CERTIFICATE_FILE"`
 	ControlPlanePrivateKeyFile       string        `env:"RUNTIME_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile             string        `env:"RUNTIME_APPLICATION_GRANT_FILE"`
-	RoleImageRepository              string        `env:"RUNTIME_ROLE_IMAGE_REPOSITORY"`
 	RunnerControlPlaneTarget         string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TARGET"`
 	RunnerControlPlaneTLSServerName  string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TLS_SERVER_NAME"`
 	InteractionGatewayURL            string        `env:"RUNTIME_INTERACTION_GATEWAY_URL"`
@@ -83,7 +82,6 @@ func loadConfig() (Config, error) {
 		ControlPlaneCertificateFile:     "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
 		ControlPlanePrivateKeyFile:      "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
 		ApplicationGrantFile:            "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
-		RoleImageRepository:             "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runtime",
 		RunnerControlPlaneTarget:        "control-plane.mattercodex-system.svc:8443",
 		RunnerControlPlaneTLSServerName: "control-plane.mattercodex-system.svc.cluster.local",
 		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
@@ -171,8 +169,7 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSDurable != "RUNTIME_CONTROLLER_V1" ||
 		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.PostgresPrincipal == "" ||
 		config.MaximumCPUMilli < 1 || config.MaximumMemoryBytes < 1 ||
-		!validPinnedImage(config.ControllerImage) || !validPinnedImage(config.AuthorityImage) ||
-		strings.Contains(config.RoleImageRepository, "@") {
+		!validPinnedImage(config.ControllerImage) || !validPinnedImage(config.AuthorityImage) {
 		return errors.New("runtime-controller bounded configuration is invalid")
 	}
 	if config.WarmTTL != 4*time.Hour ||

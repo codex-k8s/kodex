@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mattercodex-system
+resources:
+  - configmap.yaml
+  - context-pvc.yaml
+  - deployment.yaml
+  - serviceaccount.yaml
+  - service.yaml
+  - poddisruptionbudget.yaml
+  - servicemonitor.yaml
+  - networkpolicy.yaml
+  - issuer-networkpolicy.yaml
+  - prometheusrule.yaml
+  - vault-secret-provider-classes.yaml
+components:
+  - ../../components/internal-rpc-authority-role-image-builder-issuer

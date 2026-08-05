@@ -6,7 +6,6 @@ data:
   RUNTIME_CONTROLLER_TECHNICAL_LISTEN: ":9090"
   RUNTIME_CONTROL_PLANE_TARGET: "control-plane.mattercodex-system.svc:8443"
   RUNTIME_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.mattercodex-system.svc.cluster.local"
-  RUNTIME_ROLE_IMAGE_REPOSITORY: "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner"
   RUNTIME_RUNNER_CONTROL_PLANE_TARGET: "control-plane.mattercodex-system.svc:8443"
   RUNTIME_RUNNER_CONTROL_PLANE_TLS_SERVER_NAME: "control-plane.mattercodex-system.svc.cluster.local"
   RUNTIME_INTERACTION_GATEWAY_URL: "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443"

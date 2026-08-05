@@ -248,6 +248,12 @@ func producerAuthoritySource(producer Producer) string {
 		return "INTEGRATION_CONTINUATION"
 	case "RUNTIME_MATERIALIZATION_GRANT":
 		return "RUNTIME_EXECUTION"
+	case "ROLE_IMAGE_BUILD_GRANT":
+		return "IMAGE_BUILD"
+	case "IMAGE_ADMISSION_GRANT":
+		return "IMAGE_ARTIFACT"
+	case "IMAGE_PROMOTION_GRANT":
+		return "IMAGE_PROMOTION_CLAIM"
 	default:
 		return "PROCESS_RUN"
 	}
@@ -266,7 +272,10 @@ func supportedCredential(credential string) bool {
 		"RUNTIME_RESTORE_VERIFIER_GRANT",
 		"RUNTIME_CLEANUP_AUTHORIZER_GRANT",
 		"MEMORY_INDEX_GRANT",
-		"RUNTIME_MATERIALIZATION_GRANT":
+		"RUNTIME_MATERIALIZATION_GRANT",
+		"ROLE_IMAGE_BUILD_GRANT",
+		"IMAGE_ADMISSION_GRANT",
+		"IMAGE_PROMOTION_GRANT":
 		// server-owned capability следующего exact integration transition.
 		return true
 	case "INTEGRATION_CONTINUATION_GRANT":
