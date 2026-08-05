@@ -25,8 +25,10 @@ type Config struct {
 	ControlPlanePrivateKeyFile       string        `env:"RUNTIME_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile             string        `env:"RUNTIME_APPLICATION_GRANT_FILE"`
 	RoleImageRepository              string        `env:"RUNTIME_ROLE_IMAGE_REPOSITORY"`
-	AgentGatewayURL                  string        `env:"RUNTIME_AGENT_GATEWAY_URL"`
-	MCPGatewayURL                    string        `env:"RUNTIME_MCP_GATEWAY_URL"`
+	RunnerControlPlaneTarget         string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TARGET"`
+	RunnerControlPlaneTLSServerName  string        `env:"RUNTIME_RUNNER_CONTROL_PLANE_TLS_SERVER_NAME"`
+	InteractionGatewayURL            string        `env:"RUNTIME_INTERACTION_GATEWAY_URL"`
+	SessionMCPURL                    string        `env:"RUNTIME_SESSION_MCP_URL"`
 	ControllerImage                  string        `env:"RUNTIME_CONTROLLER_IMAGE"`
 	AuthorityImage                   string        `env:"RUNTIME_AUTHORITY_IMAGE"`
 	StorageClass                     string        `env:"RUNTIME_STORAGE_CLASS"`
@@ -76,15 +78,17 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.mattercodex-system.svc:8443",
-		ControlPlaneTLSServerName:   "control-plane.mattercodex-system.svc.cluster.local",
-		ControlPlaneCAFile:          "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem",
-		ControlPlaneCertificateFile: "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
-		ControlPlanePrivateKeyFile:  "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
-		ApplicationGrantFile:        "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
-		RoleImageRepository:         "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runtime",
-		AgentGatewayURL:             "https://matter-codex-bot-service.mattermost.svc.cluster.local:8443",
-		MCPGatewayURL:               "https://matter-codex-bot-service.mattermost.svc.cluster.local:8443",
-		StorageClass:                "runtime-session", PVCSize: "20Gi",
+		ControlPlaneTLSServerName:       "control-plane.mattercodex-system.svc.cluster.local",
+		ControlPlaneCAFile:              "/var/run/config/mattercodex/runtime-controller/control-plane/ca.pem",
+		ControlPlaneCertificateFile:     "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.crt",
+		ControlPlanePrivateKeyFile:      "/var/run/secrets/mattercodex/runtime-controller/workload-tls/tls.key",
+		ApplicationGrantFile:            "/var/run/secrets/mattercodex/runtime-controller/application-grant/application-grant.jws",
+		RoleImageRepository:             "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runtime",
+		RunnerControlPlaneTarget:        "control-plane.mattercodex-system.svc:8443",
+		RunnerControlPlaneTLSServerName: "control-plane.mattercodex-system.svc.cluster.local",
+		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
+		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
+		StorageClass:                    "runtime-session", PVCSize: "20Gi",
 		ReadClusterRole:  "runtime-role-project-read",
 		AdminClusterRole: "cluster-admin", ArchiveServiceAccount: "runtime-archive",
 		RestoreServiceAccount: "runtime-restore-verifier", CleanupServiceAccount: "runtime-cleanup-authorizer",
@@ -135,16 +139,17 @@ func (config Config) validate() error {
 		config.ControlPlaneTLSServerName == "" || net.ParseIP(config.ControlPlaneTLSServerName) != nil {
 		return errors.New("runtime-controller TLS endpoint is invalid")
 	}
-	for _, raw := range []string{config.AgentGatewayURL, config.MCPGatewayURL} {
+	if _, _, err := net.SplitHostPort(config.RunnerControlPlaneTarget); err != nil ||
+		config.RunnerControlPlaneTLSServerName == "" || net.ParseIP(config.RunnerControlPlaneTLSServerName) != nil {
+		return errors.New("runtime runner control-plane endpoint is invalid")
+	}
+	for _, raw := range []string{config.InteractionGatewayURL, config.SessionMCPURL} {
 		endpoint, parseErr := url.Parse(raw)
 		if parseErr != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.Path != "" ||
 			endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.User != nil ||
 			!strings.HasSuffix(endpoint.Hostname(), ".svc.cluster.local") {
 			return errors.New("runtime agent gateway endpoint is invalid")
 		}
-	}
-	if config.AgentGatewayURL != config.MCPGatewayURL {
-		return errors.New("runtime agent gateway endpoints must use the authoritative bot-service boundary")
 	}
 	if !strings.HasPrefix(config.NATSURL, "tls://") || config.NATSTLSServerName == "" ||
 		net.ParseIP(config.NATSTLSServerName) != nil || config.PostgresTLSServerName == "" ||

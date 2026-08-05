@@ -536,7 +536,14 @@ func (handler *mcpHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 	}
 	sessionKey := strings.Trim(strings.TrimPrefix(request.URL.Path, pathMCPSessions), "/")
 	token := mcpBearerToken(request)
-	if handler.sessionService == nil || handler.sessionService.AuthorizeMCPTransport(request.Context(), sessionKey, token) != nil {
+	attempt, attemptErr := strconv.ParseUint(request.Header.Get("X-MatterCodex-Attempt"), 10, 32)
+	bindingVersion, versionErr := strconv.ParseUint(request.Header.Get("X-MatterCodex-MCP-Binding-Version"), 10, 64)
+	binding := statusservice.RuntimeMCPExecutionBinding{
+		ExecutionID: request.Header.Get("X-MatterCodex-Execution-ID"),
+		TurnID:      request.Header.Get("X-MatterCodex-Turn-ID"), Attempt: uint32(attempt), BindingVersion: bindingVersion,
+	}
+	if attemptErr != nil || versionErr != nil || handler.sessionService == nil ||
+		handler.sessionService.AuthorizeMCPTransport(request.Context(), sessionKey, token, binding) != nil {
 		writeMCPAuthorizationError(writer, http.StatusUnauthorized)
 		return
 	}
@@ -544,7 +551,7 @@ func (handler *mcpHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 	ctx := context.WithValue(request.Context(), mcpSessionKeyContext, sessionKey)
 	ctx = context.WithValue(ctx, mcpTokenContext, token)
 	request = request.WithContext(ctx)
-	binding := newMCPCredentialBinding(sessionKey, token)
+	credentialBinding := newMCPCredentialBinding(sessionKey, token)
 	transportSessionID, validTransportHeader := mcpTransportSessionID(request)
 	if !validTransportHeader {
 		writeMCPAuthorizationError(writer, http.StatusForbidden)
@@ -569,7 +576,7 @@ func (handler *mcpHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 				createdSessionID = strings.TrimSpace(writer.Header().Get("Mcp-Session-Id"))
 				admitted = handler.admission.finishReservation(
 					createdSessionID,
-					binding,
+					credentialBinding,
 					createdSessionID != "" && handler.hasSDKSession(createdSessionID),
 				)
 			},
@@ -589,7 +596,7 @@ func (handler *mcpHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		return
 	}
 
-	admitted, admissionResult := handler.admission.begin(transportSessionID, binding)
+	admitted, admissionResult := handler.admission.begin(transportSessionID, credentialBinding)
 	switch admissionResult {
 	case mcpTransportAdmissionMissing:
 		http.Error(writer, "MCP session not found", http.StatusNotFound)

@@ -1,5 +1,5 @@
 // Package integrationgatewayauth задаёт узкий подписанный контракт server-owned
-// continuation и result-access capabilities integration-gateway.
+// continuation capability integration-gateway.
 package integrationgatewayauth
 
 import (
@@ -18,17 +18,13 @@ import (
 )
 
 const (
-	ProtectedType       = "mattercodex-integration-continuation-grant+jws"
-	PurposeTransition   = "CONTINUATION_TRANSITION"
-	PurposeResultAccess = "RESULT_ACCESS"
-	// ResultAccessGrantMetadata переносит outcome-specific capability отдельно
-	// от короткоживущего transport application grant вызывающей workload.
-	ResultAccessGrantMetadata = "x-mattercodex-integration-result-grant"
-	maximumFileBytes          = 64 << 10
-	keyStatusCurrent          = "CURRENT"
-	keyStatusPrevious         = "PREVIOUS"
-	keyStatusNext             = "NEXT"
-	keyStatusRetired          = "RETIRED"
+	ProtectedType     = "mattercodex-integration-continuation-grant+jws"
+	PurposeTransition = "CONTINUATION_TRANSITION"
+	maximumFileBytes  = 64 << 10
+	keyStatusCurrent  = "CURRENT"
+	keyStatusPrevious = "PREVIOUS"
+	keyStatusNext     = "NEXT"
+	keyStatusRetired  = "RETIRED"
 )
 
 type Claims struct {
@@ -53,10 +49,6 @@ type Claims struct {
 	ContinuationVersion    uint64   `json:"continuation_version"`
 	ContinuationFence      uint64   `json:"continuation_fence"`
 	InvocationID           string   `json:"invocation_id"`
-	Outcome                string   `json:"outcome,omitempty"`
-	Reference              string   `json:"reference,omitempty"`
-	ReferenceSHA256        string   `json:"reference_sha256,omitempty"`
-	ResultAttemptID        string   `json:"result_attempt_id,omitempty"`
 	AllowedOperationIDs    []string `json:"allowed_operation_ids"`
 	SignerGeneration       uint64   `json:"signer_generation"`
 	JTI                    string   `json:"jti"`
@@ -224,7 +216,7 @@ func validateClaims(config Config, claims Claims, now time.Time, exactGeneration
 	expires := time.Unix(claims.ExpiresAt, 0).UTC()
 	if claims.Version != 1 || claims.Issuer != config.Issuer || claims.Audience != config.Audience ||
 		claims.WorkloadID != config.WorkloadID || claims.CallerSPIFFEID != config.CallerSPIFFEID ||
-		(claims.Purpose != PurposeTransition && claims.Purpose != PurposeResultAccess) ||
+		claims.Purpose != PurposeTransition ||
 		claims.Subject == "" || claims.OrganizationID == "" || claims.ProjectID == "" || claims.SessionID == "" ||
 		claims.TurnID == "" || claims.Attempt == 0 || claims.InputSHA256 == "" ||
 		claims.RuntimeRevisionID == "" || claims.RuntimeRevisionVersion == 0 || claims.RuntimeRevisionSHA256 == "" ||
@@ -239,14 +231,6 @@ func validateClaims(config Config, claims Claims, now time.Time, exactGeneration
 	}
 	if exactGeneration && claims.SignerGeneration != config.Generation {
 		return errors.New("continuation grant signer generation is invalid")
-	}
-	if claims.Purpose == PurposeResultAccess {
-		if claims.ResultAttemptID == "" || claims.Reference == "" || claims.ReferenceSHA256 == "" ||
-			(claims.Outcome != "SUCCEEDED" && claims.Outcome != "FAILED" && claims.Outcome != "UNKNOWN") {
-			return errors.New("result access grant binding is invalid")
-		}
-	} else if claims.Outcome != "" || claims.Reference != "" || claims.ReferenceSHA256 != "" || claims.ResultAttemptID != "" {
-		return errors.New("continuation transition grant has result fields")
 	}
 	return nil
 }

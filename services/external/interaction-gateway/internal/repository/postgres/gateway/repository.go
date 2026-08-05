@@ -620,6 +620,22 @@ func (repository *Repository) GetDeliveryByProviderPost(ctx context.Context, pos
 	return delivery, err
 }
 
+func (repository *Repository) GetRunDeliveryByTurn(ctx context.Context,
+	organizationID, projectID, sessionID, turnID string) (entity.Delivery, error) {
+	var delivery entity.Delivery
+	err := repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-delivery"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+		var getErr error
+		delivery, getErr = repository.getDeliveryWithSQL(ctx, tx, deliveryRunByTurnSQL,
+			organizationID, projectID, sessionID, turnID)
+		return getErr
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.Delivery{}, domainrepo.ErrNotFound
+	}
+	return delivery, err
+}
+
 func (repository *Repository) ListPendingReactionPosts(ctx context.Context, boundaries []entity.Boundary, limit int) (map[string]string, error) {
 	if limit < 1 || limit > 1024 {
 		return nil, errors.New("reaction catch-up limit is invalid")

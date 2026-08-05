@@ -17,6 +17,7 @@ type Config struct {
 	Mattermost MattermostConfig `envPrefix:"INTERACTION_GATEWAY_MATTERMOST_"`
 	Object     ObjectConfig     `envPrefix:"INTERACTION_GATEWAY_S3_"`
 	Control    ControlConfig    `envPrefix:"INTERACTION_GATEWAY_CONTROL_PLANE_"`
+	Bot        BotConfig        `envPrefix:"INTERACTION_GATEWAY_BOT_SERVICE_"`
 }
 
 type GatewayConfig struct {
@@ -27,6 +28,7 @@ type GatewayConfig struct {
 	TLSClientCAFile             string        `env:"TLS_CLIENT_CA_FILE,required"`
 	MattermostClientSPIFFE      string        `env:"MATTERMOST_CLIENT_SPIFFE_ID,required"`
 	ReadbackClientSPIFFEIDs     []string      `env:"READBACK_CLIENT_SPIFFE_IDS,required" envSeparator:","`
+	MaterializationClientSPIFFE string        `env:"MATERIALIZATION_CLIENT_SPIFFE_ID,required"`
 	SlashTokenFile              string        `env:"SLASH_TOKEN_FILE,required"`
 	PostgresDSNFile             string        `env:"POSTGRES_DSN_FILE,required"`
 	PostgresCAFile              string        `env:"POSTGRES_CA_FILE,required"`
@@ -111,6 +113,15 @@ type ControlConfig struct {
 	RequestTimeout             time.Duration `env:"REQUEST_TIMEOUT" envDefault:"5s"`
 }
 
+type BotConfig struct {
+	URL                   string        `env:"URL,required"`
+	TLSServerName         string        `env:"TLS_SERVER_NAME,required"`
+	CAFile                string        `env:"CA_FILE,required"`
+	ClientCertificateFile string        `env:"CLIENT_CERTIFICATE_FILE,required"`
+	ClientPrivateKeyFile  string        `env:"CLIENT_PRIVATE_KEY_FILE,required"`
+	Timeout               time.Duration `env:"TIMEOUT" envDefault:"8s"`
+}
+
 func loadConfig() (Config, error) {
 	var config Config
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
@@ -127,7 +138,7 @@ func (config Config) validate() error {
 		}
 	}
 	for _, name := range []string{gateway.PostgresTLSServerName, config.Mattermost.TLSServerName,
-		config.Object.TLSServerName, config.Control.TLSServerName} {
+		config.Object.TLSServerName, config.Control.TLSServerName, config.Bot.TLSServerName} {
 		if name == "" || net.ParseIP(name) != nil {
 			return errors.New("interaction gateway TLS server name is invalid")
 		}
@@ -143,7 +154,8 @@ func (config Config) validate() error {
 		config.Object.CAFile, config.Object.ClientCertificateFile, config.Object.ClientPrivateKeyFile,
 		config.Object.AccessKeyFile, config.Object.SecretKeyFile, config.Control.CAFile,
 		config.Control.ClientCertificateFile, config.Control.ClientPrivateKeyFile,
-		config.Control.ApplicationGrantFile,
+		config.Control.ApplicationGrantFile, config.Bot.CAFile, config.Bot.ClientCertificateFile,
+		config.Bot.ClientPrivateKeyFile,
 	} {
 		if !filepath.IsAbs(path) {
 			return errors.New("interaction gateway runtime path is invalid")
@@ -153,7 +165,7 @@ func (config Config) validate() error {
 		return errors.New("interaction gateway session token path is invalid")
 	}
 	for _, raw := range []string{gateway.ActionCallbackURL, gateway.DialogCallbackURL, gateway.ArtifactDownloadBaseURL,
-		config.Mattermost.SiteURL, config.Object.Endpoint} {
+		config.Mattermost.SiteURL, config.Object.Endpoint, config.Bot.URL} {
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 			return errors.New("interaction gateway HTTPS URL is invalid")
@@ -161,6 +173,7 @@ func (config Config) validate() error {
 	}
 	expectedPostgresUser := "interaction_gateway_runtime_g" + strconv.FormatUint(gateway.PostgresPrincipalGeneration, 10)
 	if !strings.HasPrefix(gateway.MattermostClientSPIFFE, "spiffe://") ||
+		!strings.HasPrefix(gateway.MaterializationClientSPIFFE, "spiffe://") ||
 		len(gateway.ReadbackClientSPIFFEIDs) == 0 || len(gateway.ReadbackClientSPIFFEIDs) > 8 ||
 		gateway.InstanceID == "" || gateway.RetentionRef == "" || gateway.EventIssuer == "" || gateway.EventAudience == "" ||
 		gateway.PostgresPrincipalGeneration == 0 || gateway.PostgresExpectedUser != expectedPostgresUser ||
@@ -173,6 +186,9 @@ func (config Config) validate() error {
 		gateway.StartupTimeout < 5*time.Second || gateway.StartupTimeout > 2*time.Minute ||
 		gateway.ShutdownTimeout < time.Second || gateway.ShutdownTimeout > time.Minute {
 		return errors.New("interaction gateway bounded configuration is invalid")
+	}
+	if config.Bot.Timeout < time.Second || config.Bot.Timeout > time.Minute {
+		return errors.New("interaction gateway bot-service timeout is invalid")
 	}
 	return nil
 }

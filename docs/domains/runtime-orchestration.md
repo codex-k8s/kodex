@@ -4,7 +4,7 @@ title: Оркестрация среды выполнения
 type: domain
 status: approved
 owner: architect
-version: 0.5.1
+version: 0.6.0
 updated: 2026-08-04
 ---
 
@@ -64,28 +64,22 @@ Mattermost `pending_post_id` используется только как кра
 
 Адаптер создает ресурсы из типизированных спецификаций. Бизнес-код не формирует YAML или shell. Контроллер среды выполнения идемпотентно сверяет состояние `Pod`, `PVC`, `Secret` и `ServiceAccount` и записывает условие состояния.
 
-Control-plane и bot-service сохраняют разные идентификаторы сессии и хода.
-Закрытая owner-команда связывает exact control-plane session/turn/attempt/
-input/revision с bot `AgentSession`/`AgentSessionTurn`/`RunID` и их версиями;
-digest вычисляет control-plane. Ни control-plane UUID в роли `session_key`, ни
-идентификаторы из payload не доказывают bot ownership. Terminal handoff
-сохраняет `BLOCKED`, `WAITING_OWNER` и `CHANGES_REQUESTED` как разные owner
-семантики.
-Producer path принадлежит bot-service: `AFTER INSERT` AgentSessionTurn создаёт
-discovery, а его claim перечитывает exact AgentSession/Turn/Run, role/channel,
-prompt и монотонные версии из bot PostgreSQL. Bounded worker вызывает generated
-`MaterializeRuntimeAgentTurn`; одна control-plane owner transaction разрешает
-actor/project/Role/Chat, server-assigns control Session/Turn/attempt/fresh
-RuntimeRevision и сохраняет exact bot binding/receipt/audit. Первый user turn
-достижим без предварительного control Turn; lost response возвращает тот же
-owner tuple по semantic idempotency key. Payload IDs и control UUID не
-назначают bot authority.
+Control-plane назначает Session/Turn/attempt/sequence и fresh RuntimeRevision;
+bot-service session API не является источником authority. Входной interaction
+producer передаёт owner-команде только transport-verified actor/route и
+immutable payload lineage. Повтор той же команды возвращает тот же owner tuple
+по semantic idempotency key. Первый runner Pod появляется из durable `PENDING`
+RuntimeExecution до Turn lease, после чего exact runner identity захватывает
+FIFO head, а controller выполняет admission. Payload IDs не назначают actor,
+ownership или lifecycle authority. Terminal handoff сохраняет `BLOCKED`,
+`WAITING_OWNER` и `CHANGES_REQUESTED` как разные owner семантики.
 
-Каждый turn/retry/reschedule создаёт новый immutable `RuntimeRevision` и
-capacity observation. Отдельный `effective_runtime_sha256` описывает только
-совместимость warm Pod; reuse всё равно получает свежие authority и credential
-snapshots. Stale observation не допускает execution, но bounded owner
-reschedule переводит очередь на новую attempt без мутации старого снимка.
+Каждый turn/retry/reschedule создаёт новый immutable `RuntimeRevision`,
+capacity observation и execution-scoped Pod/ServiceAccount. Warm process reuse
+запрещён: retained PVC сохраняет только session files и Codex rollout, а config,
+env, MCP client и credentials всегда создаются заново. Stale observation не
+допускает execution, но bounded owner reschedule переводит очередь на новую
+attempt без мутации старого снимка.
 
 Terminal transition pin-ит versioned `ResourceRetentionPolicy`, eligibility и
 S3 retain-until. PVC cleanup выполняется двухфазным exact claim/NotFound proof/
@@ -102,9 +96,12 @@ terminal/archive/cleanup переходы используют только ег
 - Перезапуск bot-service или контроллера не теряет очередь.
 - Устаревшее состояние `running` исправляется по аренде и подтверждениям процесса агента.
 - Недостаток ресурсов не переводит ход в необратимую ошибку.
-- Предварительный Job проверки OpenAI-авторизации распознаёт нехватку планируемой ёмкости, освобождает не более одного проверенного простаивающего agent pod под общей блокировкой ёмкости и повторяет проверку без удаления PVC или сессии. Выбранная сессия повторно проверяется под блокировкой строки БД, которая удерживается до завершения удаления pod и очистки binding: конкурентный queued/running turn отменяет вытеснение. Сессии с текущей или зафиксированной ранее привилегией `cluster-admin` автоматическому вытеснению не подлежат.
+- Capacity reconcile может освободить не более одного доказанно terminal role
+  Pod под общей блокировкой ёмкости и повторить расчёт без удаления PVC,
+  сессии либо очереди. Неизвестный, active или несогласованный owner tuple
+  закрыто запрещает вытеснение.
 - Изменение ревизии среды выполнения применяет свежие env, конфигурацию и интеграции к следующему ходу.
-- Для одной сессии существует не более одного простаивающего pod; TTL по умолчанию — четыре часа.
+- Для одной сессии существует не более одного активного role Pod; successor всегда получает новый Pod, а terminal Pod не используется повторно.
 - Одна сессия имеет один основной диалог, но может владеть несколькими долговечными ссылками на дочерние обсуждения.
 - Повтор межкомнатного делегирования с тем же ключом не создает второй тред или второй ход.
 - Обратный вызов дочернего агента ставится в очередь исходной сессии и не зависит от имени ее роли.

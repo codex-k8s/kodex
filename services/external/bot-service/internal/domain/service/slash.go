@@ -184,6 +184,7 @@ type SlashCommandServiceConfig struct {
 	DatabaseConfigured       bool
 	StorageReady             bool
 	RuntimeConfigured        bool
+	DisableLegacyRuntime     bool
 	MattermostConfigured     bool
 	ChannelManagerEnabled    bool
 }
@@ -404,7 +405,7 @@ func (svc *SlashCommandService) handleToken(ctx context.Context, args []string) 
 }
 
 func (svc *SlashCommandService) handleRuntime(ctx context.Context, args []string, command SlashCommand) string {
-	if svc.cfg.RuntimeRunner == nil {
+	if svc.cfg.RuntimeRunner == nil || svc.cfg.DisableLegacyRuntime {
 		return svc.t("runtime.not_configured", nil)
 	}
 	if len(args) == 0 {
@@ -571,7 +572,7 @@ func retentionCleanupMutationCount(result runtimerepo.RetentionCleanupResult) in
 }
 
 func (svc *SlashCommandService) handleReview(ctx context.Context, args []string, command SlashCommand) string {
-	if svc.cfg.RuntimeRunner == nil {
+	if svc.cfg.RuntimeRunner == nil || svc.cfg.DisableLegacyRuntime {
 		return svc.t("runtime.not_configured", nil)
 	}
 	if len(args) == 0 {
@@ -1258,8 +1259,9 @@ func (svc *SlashCommandService) helpText() string {
 		svc.t("help.profile_list", nil),
 		svc.t("help.prompt", nil),
 		svc.t("help.locale", nil),
-		svc.t("help.runtime", nil),
-		svc.t("help.review", nil),
+	}
+	if !svc.cfg.DisableLegacyRuntime {
+		commands = append(commands, svc.t("help.runtime", nil), svc.t("help.review", nil))
 	}
 	return svc.t("help.header", nil) + "\n" + strings.Join(commands, "\n")
 }
@@ -1313,6 +1315,9 @@ func (svc *SlashCommandService) HandleMenuAction(ctx context.Context, command Me
 func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, command MenuActionCommand, currentCard *MattermostCard) MenuActionResult {
 	action := strings.TrimSpace(command.Action)
 	resource := strings.TrimSpace(command.Resource)
+	if svc.cfg.DisableLegacyRuntime && legacyRuntimeMenuAction(action, resource) {
+		return svc.menuActionTextResult(ctx, command, svc.t("runtime.unavailable", nil), false)
+	}
 	switch action {
 	case menuActionList:
 		switch resource {
@@ -1469,6 +1474,20 @@ func (svc *SlashCommandService) handleMenuTypedAction(ctx context.Context, comma
 		return svc.menuCardResult(command, svc.automationRunNowCard(ctx, command))
 	default:
 		return svc.menuActionTextResult(ctx, command, svc.t("menu.action.unknown", nil), false)
+	}
+}
+
+func legacyRuntimeMenuAction(action, resource string) bool {
+	switch resource {
+	case menuResourceAutomationSchedule, menuResourceAutomationRun, menuResourceRun:
+		return true
+	}
+	switch action {
+	case menuActionRuntimeSmoke, menuActionRuntimePruneDry, menuActionRuntimeCleanup,
+		menuActionAutomationHistory, menuActionAutomationRunNow:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -2628,6 +2647,9 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 	}
 	switch strings.TrimSpace(command.CallbackID) {
 	case dialogCallbackAutomationCreate:
+		if svc.cfg.DisableLegacyRuntime {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("automation.unavailable", nil)}
+		}
 		return svc.handleAutomationCreateDialog(ctx, command, state)
 	case dialogCallbackProjectUpsert:
 		return svc.handleProjectDialogUpsert(ctx, command, state)
@@ -2674,6 +2696,9 @@ func (svc *SlashCommandService) HandleDialogSubmission(ctx context.Context, comm
 	case dialogCallbackPromptEdit:
 		return svc.handlePromptEditDialog(ctx, command, state)
 	case dialogCallbackRuntimePruneApply:
+		if svc.cfg.DisableLegacyRuntime {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime.unavailable", nil)}
+		}
 		return svc.handleRuntimePruneDialog(ctx, command, state)
 	default:
 		return DialogSubmissionResult{StatusCode: 400, Error: svc.t("dialog.unknown", nil)}
@@ -2691,6 +2716,9 @@ func (svc *SlashCommandService) PrevalidateDialogSubmission(command DialogSubmis
 	fieldErrors := map[string]string{}
 	switch strings.TrimSpace(command.CallbackID) {
 	case dialogCallbackAutomationCreate:
+		if svc.cfg.DisableLegacyRuntime {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("automation.unavailable", nil)}
+		}
 		_, fieldErrors = svc.automationDialogInput(command.Submission)
 	case dialogCallbackProjectUpsert:
 		input, validationErrors := svc.projectDialogInput(command.Submission)
@@ -2792,6 +2820,9 @@ func (svc *SlashCommandService) PrevalidateDialogSubmission(command DialogSubmis
 			fieldErrors[dialogFieldTemplateBody] = svc.t("prompt.set.render_failed", map[string]any{"Error": safeError(err)})
 		}
 	case dialogCallbackRuntimePruneApply:
+		if svc.cfg.DisableLegacyRuntime {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("runtime.unavailable", nil)}
+		}
 		if strings.TrimSpace(submissionString(command.Submission, dialogFieldOlderThan)) == "" {
 			fieldErrors[dialogFieldOlderThan] = svc.t("runtime.prune.usage", nil)
 		}
@@ -2824,6 +2855,9 @@ func (svc *SlashCommandService) PrevalidateDialogSubmissionReadOnly(ctx context.
 	fieldErrors := map[string]string{}
 	switch strings.TrimSpace(command.CallbackID) {
 	case dialogCallbackAutomationCreate:
+		if svc.cfg.DisableLegacyRuntime {
+			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("automation.unavailable", nil)}
+		}
 		input, _ := svc.automationDialogInput(command.Submission)
 		if svc.cfg.Automations == nil {
 			return DialogSubmissionResult{StatusCode: 200, Error: svc.t("automation.unavailable", nil)}
@@ -2940,6 +2974,9 @@ func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActi
 	}
 	switch dialogID {
 	case menuDialogAutomationCreate:
+		if svc.cfg.DisableLegacyRuntime {
+			return nil, svc.t("automation.unavailable", nil)
+		}
 		return svc.automationCreateDialog(ctx, command)
 	case menuDialogProjectUpsert:
 		return svc.projectDialog(ctx, command)
@@ -2982,6 +3019,9 @@ func (svc *SlashCommandService) menuDialog(ctx context.Context, command MenuActi
 	case menuDialogPromptEdit:
 		return svc.promptEditDialog(ctx, command)
 	case menuDialogRuntimePruneApply:
+		if svc.cfg.DisableLegacyRuntime {
+			return nil, svc.t("runtime.unavailable", nil)
+		}
 		return svc.runtimePruneApplyDialog(command), ""
 	default:
 		return nil, svc.t("dialog.unknown", nil)
@@ -4152,17 +4192,21 @@ func (svc *SlashCommandService) openAIAccountsStatusText(ctx context.Context) st
 func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction {
 	switch view {
 	case menuViewMain:
-		return []MattermostCardAction{
+		actions := []MattermostCardAction{
 			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "primary"),
-			svc.menuAction(menuViewAutomations, "menu.action.automations", "menu.action.automations.tooltip", "primary"),
 			svc.menuAction(menuViewAccounts, "menu.action.accounts", "menu.action.accounts.tooltip", "default"),
 			svc.menuAction(menuViewRepositories, "menu.action.repositories", "menu.action.repositories.tooltip", "default"),
 			svc.menuAction(menuViewRoles, "menu.action.roles", "menu.action.roles.tooltip", "default"),
 			svc.menuAction(menuViewChats, "menu.action.chats", "menu.action.chats.tooltip", "default"),
-			svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"),
 			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
 			svc.menuAction(menuViewAdvanced, "menu.action.advanced", "menu.action.advanced.tooltip", "default"),
 		}
+		if !svc.cfg.DisableLegacyRuntime {
+			actions = append(actions,
+				svc.menuAction(menuViewAutomations, "menu.action.automations", "menu.action.automations.tooltip", "primary"),
+				svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"))
+		}
+		return actions
 	case menuViewProjects:
 		return []MattermostCardAction{
 			svc.menuResourceAction(menuViewProjects, "projectlist", menuActionList, menuResourceProject, "", "menu.action.project_list", "menu.action.project_list.tooltip", "primary", nil),
@@ -4172,6 +4216,9 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewAutomations:
+		if svc.cfg.DisableLegacyRuntime {
+			return []MattermostCardAction{svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default")}
+		}
 		return []MattermostCardAction{
 			svc.menuResourceAction(menuViewAutomations, "automationlist", menuActionList, menuResourceAutomationSchedule, "", "automation.action.list", "automation.action.list.tooltip", "primary", nil),
 			svc.automationCreateAction(),
@@ -4232,6 +4279,9 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewRuntime:
+		if svc.cfg.DisableLegacyRuntime {
+			return []MattermostCardAction{svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default")}
+		}
 		return []MattermostCardAction{
 			svc.menuResourceAction(menuViewRuntime, "runtimeruns", menuActionList, menuResourceRun, "", "menu.action.runtime_runs", "menu.action.runtime_runs.tooltip", "primary", nil),
 			svc.menuResourceAction(menuViewRuntime, "runtimesmoke", menuActionRuntimeSmoke, menuResourceRuntime, "", "menu.action.runtime_smoke", "menu.action.runtime_smoke.tooltip", "primary", nil),
@@ -4251,13 +4301,16 @@ func (svc *SlashCommandService) menuActions(view string) []MattermostCardAction 
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
 	case menuViewAdvanced:
-		return []MattermostCardAction{
+		actions := []MattermostCardAction{
 			svc.menuAction(menuViewProfiles, "menu.action.profiles", "menu.action.profiles.tooltip", "default"),
 			svc.menuAction(menuViewPrompts, "menu.action.prompts", "menu.action.prompts.tooltip", "default"),
-			svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"),
 			svc.menuAction(menuViewSystem, "menu.action.system", "menu.action.system.tooltip", "default"),
 			svc.menuAction(menuViewMain, "menu.action.back", "menu.action.back.tooltip", "default"),
 		}
+		if !svc.cfg.DisableLegacyRuntime {
+			actions = append(actions, svc.menuAction(menuViewRuntime, "menu.action.runtime", "menu.action.runtime.tooltip", "default"))
+		}
+		return actions
 	case menuViewHelp:
 		return []MattermostCardAction{
 			svc.menuAction(menuViewProjects, "menu.action.projects", "menu.action.projects.tooltip", "primary"),
@@ -5378,7 +5431,7 @@ func (svc *SlashCommandService) invalidateIdleAgentSessionsForRolesText(ctx cont
 }
 
 func (svc *SlashCommandService) invalidateIdleAgentSessionsForRoles(ctx context.Context, roleIDs []int64) agentSessionInvalidationSummary {
-	if !svc.cfg.StorageReady || svc.cfg.Store == nil || svc.cfg.RuntimeRunner == nil {
+	if svc.cfg.DisableLegacyRuntime || !svc.cfg.StorageReady || svc.cfg.Store == nil || svc.cfg.RuntimeRunner == nil {
 		return agentSessionInvalidationSummary{}
 	}
 	seen := make(map[int64]struct{}, len(roleIDs))

@@ -4,6 +4,7 @@ package kubernetes
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -62,8 +63,10 @@ type Config struct {
 	Environment                      string
 	Namespace                        string
 	RoleImageRepository              string
-	AgentGatewayURL                  string
-	MCPGatewayURL                    string
+	RunnerControlPlaneTarget         string
+	RunnerControlPlaneTLSServerName  string
+	InteractionGatewayURL            string
+	SessionMCPURL                    string
 	ControllerImage                  string
 	AuthorityImage                   string
 	StorageClass                     string
@@ -115,7 +118,8 @@ func InCluster(config Config) (*Adapter, error) {
 func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 	if client == nil || (config.Environment != "staging" && config.Environment != "production") ||
 		config.Namespace == "" || config.RoleImageRepository == "" ||
-		config.AgentGatewayURL == "" || config.MCPGatewayURL == "" ||
+		config.RunnerControlPlaneTarget == "" || config.RunnerControlPlaneTLSServerName == "" ||
+		config.InteractionGatewayURL == "" || config.SessionMCPURL == "" ||
 		config.ControllerImage == "" || config.AuthorityImage == "" ||
 		config.StorageClass == "" || config.PVCSize == "" || config.MaximumPods < 1 ||
 		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
@@ -302,6 +306,9 @@ func (adapter *Adapter) Check(ctx context.Context) error {
 		ctx, metav1.ListOptions{Limit: 100},
 	); err != nil {
 		return errors.New("runtime Kubernetes quota read is unavailable")
+	}
+	if _, err := adapter.handoffTrust(ctx); err != nil {
+		return err
 	}
 	return nil
 }
@@ -641,7 +648,9 @@ func (adapter *Adapter) Materialize(
 	leaseToken string,
 	journal runtimerepo.Journal,
 ) (entity.RuntimeStatus, error) {
-	if err := revision.ValidateFor(execution); err != nil || leaseToken == "" {
+	if err := revision.ValidateFor(execution); err != nil ||
+		(execution.State == enum.ExecutionPending && leaseToken != "") ||
+		(execution.State != enum.ExecutionPending && leaseToken == "") {
 		return entity.RuntimeStatus{}, errs.ErrStateConflict
 	}
 	if err := adapter.ensurePVC(ctx, execution); err != nil {
@@ -680,38 +689,6 @@ func (adapter *Adapter) Materialize(
 		ctx, desired.Name, metav1.GetOptions{},
 	)
 	if err == nil {
-		if existing.Labels[executionLabel] != shortID(execution.ID) &&
-			existing.Annotations["runtime.mattercodex.dev/effective-runtime-sha256"] == execution.EffectiveRuntimeSHA256 &&
-			existing.Annotations["runtime.mattercodex.dev/archive-gate"] == "OPEN" &&
-			castStatus(existing, nil).Ready && existing.Status.Phase == corev1.PodRunning {
-			if err := adapter.ensureRunnerHandoffRBAC(ctx, execution); err != nil {
-				return entity.RuntimeStatus{}, err
-			}
-			updated := existing.DeepCopy()
-			updated.Labels[executionLabel] = shortID(execution.ID)
-			updated.Labels["runtime.mattercodex.dev/state"] = strings.ToLower(string(execution.State))
-			updated.Annotations["runtime.mattercodex.dev/execution-id"] = execution.ID
-			updated.Annotations["runtime.mattercodex.dev/version"] = strconv.FormatUint(execution.Version, 10)
-			updated.Annotations["runtime.mattercodex.dev/fence"] = strconv.FormatUint(execution.Fence, 10)
-			updated.Annotations["runtime.mattercodex.dev/grant-generation"] = strconv.FormatUint(execution.GrantGeneration, 10)
-			updated.Annotations["runtime.mattercodex.dev/input-sha256"] = execution.ImmutableInputSHA256
-			updated.Annotations["runtime.mattercodex.dev/revision-sha256"] = execution.RuntimeRevisionSHA256
-			updated.Annotations["runtime.mattercodex.dev/effective-runtime-sha256"] = execution.EffectiveRuntimeSHA256
-			updated.Annotations["runtime.mattercodex.dev/workload-ticket-sha256"] = execution.WorkloadTicketSHA256
-			updated.Annotations["runtime.mattercodex.dev/workload-ticket"] = execution.WorkloadTicket
-			updated.Annotations["runtime.mattercodex.dev/credential-snapshot-sha256"] = execution.CredentialSnapshotSHA256
-			updated.Annotations["runtime.mattercodex.dev/archive-gate"] = "SUCCESSOR_READY"
-			updated.Annotations["runtime.mattercodex.dev/next-input-config"] = configName(execution)
-			delete(updated.Annotations, "runtime.mattercodex.dev/turn-handoff")
-			reused, updateErr := adapter.client.CoreV1().Pods(adapter.config.Namespace).Update(ctx, updated, metav1.UpdateOptions{})
-			if updateErr != nil {
-				return entity.RuntimeStatus{}, errors.New("advance warm runtime pod input")
-			}
-			if err := adapter.patchJournalPhase(ctx, execution.ID, "MATERIALIZED"); err != nil {
-				return entity.RuntimeStatus{}, err
-			}
-			return castStatus(reused, nil), nil
-		}
 		if existing.Labels[executionLabel] != shortID(execution.ID) ||
 			existing.Annotations["runtime.mattercodex.dev/effective-runtime-sha256"] != execution.EffectiveRuntimeSHA256 ||
 			existing.Annotations["runtime.mattercodex.dev/input-sha256"] != execution.ImmutableInputSHA256 ||
@@ -807,7 +784,7 @@ func (adapter *Adapter) ensurePVC(ctx context.Context, execution entity.Executio
 				return errors.New("advance runtime PVC retention owner")
 			}
 		}
-		return nil
+		return adapter.ensureHandoffConfig(ctx, execution)
 	}
 	if !apierrors.IsNotFound(err) {
 		return errors.New("read runtime PVC")
@@ -894,10 +871,14 @@ func (adapter *Adapter) ensureExecutionConfig(
 	if err != nil || len(raw) > maximumJournalSize {
 		return errs.ErrStateConflict
 	}
+	runnerRaw, err := json.Marshal(runtimeInput)
+	if err != nil || len(runnerRaw) > 2<<20 {
+		return errs.ErrStateConflict
+	}
 	desired := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
 		Name: configName(execution), Labels: labels(execution, "immutable-input"),
 		Annotations: map[string]string{"runtime.mattercodex.dev/immutable": "true"},
-	}, Immutable: boolPointer(true), BinaryData: map[string][]byte{"runtime.json": raw}}
+	}, Immutable: boolPointer(true), BinaryData: map[string][]byte{"runtime.json": raw, "runner.json": runnerRaw}}
 	existing, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(
 		ctx, desired.Name, metav1.GetOptions{},
 	)
@@ -906,7 +887,7 @@ func (adapter *Adapter) ensureExecutionConfig(
 			existing.Labels[executionLabel] != shortID(execution.ID) ||
 			existing.Labels[componentLabel] != "immutable-input" ||
 			existing.Annotations["runtime.mattercodex.dev/immutable"] != "true" ||
-			!bytesEqual(existing.BinaryData["runtime.json"], raw) {
+			!bytesEqual(existing.BinaryData["runtime.json"], raw) || !bytesEqual(existing.BinaryData["runner.json"], runnerRaw) {
 			return errs.ErrStateConflict
 		}
 		return nil
@@ -919,13 +900,58 @@ func (adapter *Adapter) ensureExecutionConfig(
 	); err != nil && !apierrors.IsAlreadyExists(err) {
 		return errors.New("create immutable runtime config")
 	}
+	return adapter.ensureHandoffConfig(ctx, execution)
+}
+
+func (adapter *Adapter) ensureHandoffConfig(ctx context.Context, execution entity.Execution) error {
+	desired := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: handoffName(execution),
+		Labels: labels(execution, "runtime-handoff"), Annotations: map[string]string{
+			"runtime.mattercodex.dev/execution-id": execution.ID, "runtime.mattercodex.dev/turn-id": execution.TurnID,
+			"runtime.mattercodex.dev/grant-generation": strconv.FormatUint(execution.GrantGeneration, 10)}}}
+	current, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(ctx, desired.Name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		_, err = adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Create(ctx, desired, metav1.CreateOptions{})
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			return errors.New("create runtime handoff target")
+		}
+		return nil
+	}
+	if err != nil || current.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+		current.Annotations["runtime.mattercodex.dev/turn-id"] != execution.TurnID ||
+		current.Annotations["runtime.mattercodex.dev/grant-generation"] != strconv.FormatUint(execution.GrantGeneration, 10) {
+		return errs.ErrStateConflict
+	}
 	return nil
 }
 
 type runnerCredentialFiles struct {
-	SessionToken string `json:"session_token"`
-	MCPToken     string `json:"mcp_token"`
-	CodexAuth    string `json:"codex_auth"`
+	ControlPlaneGrant    string `json:"control_plane_grant"`
+	MCPToken             string `json:"mcp_token"`
+	MaterializationToken string `json:"materialization_token"`
+	CodexAuth            string `json:"codex_auth"`
+	CodexAuthSHA256      string `json:"codex_auth_sha256"`
+	HandoffPrivateKey    string `json:"handoff_private_key"`
+	HandoffKeyID         string `json:"handoff_key_id"`
+}
+
+type runnerGRPCBinding struct {
+	Target string           `json:"target"`
+	TLS    runnerTLSBinding `json:"tls"`
+}
+
+type runnerHTTPBinding struct {
+	URL string           `json:"url"`
+	TLS runnerTLSBinding `json:"tls"`
+}
+
+type runnerMaterialization struct {
+	Kind            string `json:"kind"`
+	ArtifactID      string `json:"artifact_id"`
+	ArtifactVersion uint64 `json:"artifact_version"`
+	SHA256          string `json:"sha256"`
+	SizeBytes       uint64 `json:"size_bytes"`
+	RelativePath    string `json:"relative_path"`
+	MediaType       string `json:"media_type"`
 }
 
 type runnerTLSBinding struct {
@@ -937,73 +963,122 @@ type runnerTLSBinding struct {
 }
 
 type runnerInput struct {
-	Schema                   string                `json:"schema"`
-	ExecutionID              string                `json:"execution_id"`
-	ExecutionVersion         uint64                `json:"execution_version"`
-	Fence                    uint64                `json:"fence"`
-	GrantGeneration          uint64                `json:"grant_generation"`
-	RuntimeRevisionID        string                `json:"runtime_revision_id"`
-	RuntimeRevisionVersion   uint64                `json:"runtime_revision_version"`
-	RuntimeRevisionSHA256    string                `json:"runtime_revision_sha256"`
-	EffectiveRuntimeSHA256   string                `json:"effective_runtime_sha256"`
-	ImmutableInputSHA256     string                `json:"immutable_input_sha256"`
-	SessionKey               string                `json:"session_key"`
-	AgentSessionID           int64                 `json:"agent_session_id"`
-	AgentSessionTurnID       int64                 `json:"agent_session_turn_id"`
-	AgentRunID               string                `json:"agent_run_id"`
-	AgentBindingSHA256       string                `json:"agent_binding_sha256"`
-	CredentialSnapshotSHA256 string                `json:"credential_snapshot_sha256"`
-	WorkloadTicketSHA256     string                `json:"workload_ticket_sha256"`
-	AgentProfile             string                `json:"agent_profile"`
-	BotServiceURL            string                `json:"bot_service_url"`
-	MCPURL                   string                `json:"mcp_url"`
-	BotServiceTLS            runnerTLSBinding      `json:"bot_service_tls"`
-	MCPTLS                   runnerTLSBinding      `json:"mcp_tls"`
-	CredentialFiles          runnerCredentialFiles `json:"credential_files"`
+	Schema                                 string                  `json:"schema"`
+	ExecutionID                            string                  `json:"execution_id"`
+	ExecutionVersion                       uint64                  `json:"execution_version"`
+	Fence                                  uint64                  `json:"fence"`
+	GrantGeneration                        uint64                  `json:"grant_generation"`
+	RuntimeRevisionID                      string                  `json:"runtime_revision_id"`
+	RuntimeRevisionVersion                 uint64                  `json:"runtime_revision_version"`
+	RuntimeRevisionSHA256                  string                  `json:"runtime_revision_sha256"`
+	EffectiveRuntimeSHA256                 string                  `json:"effective_runtime_sha256"`
+	ImmutableInputSHA256                   string                  `json:"immutable_input_sha256"`
+	SessionID                              string                  `json:"session_id"`
+	TurnID                                 string                  `json:"turn_id"`
+	Attempt                                uint32                  `json:"attempt"`
+	SessionKey                             string                  `json:"session_key"`
+	ProviderBindingID                      string                  `json:"provider_binding_id"`
+	ProviderAccountName                    string                  `json:"provider_account_name"`
+	MCPBindingVersion                      uint64                  `json:"mcp_binding_version"`
+	ProviderBindingVersion                 uint64                  `json:"provider_binding_version"`
+	ProviderBindingSHA256                  string                  `json:"provider_binding_sha256"`
+	CredentialSnapshotSHA256               string                  `json:"credential_snapshot_sha256"`
+	WorkloadTicketSHA256                   string                  `json:"workload_ticket_sha256"`
+	AgentProfile                           string                  `json:"agent_profile"`
+	CodexModel                             string                  `json:"codex_model"`
+	CodexSandbox                           string                  `json:"codex_sandbox"`
+	CodexApprovalPolicy                    string                  `json:"codex_approval_policy"`
+	CodexSessionID                         string                  `json:"codex_session_id"`
+	CodexArchiveRelativePath               string                  `json:"codex_archive_relative_path"`
+	CodexArchiveSHA256                     string                  `json:"codex_archive_sha256"`
+	CodexArchiveProvenance                 string                  `json:"codex_archive_provenance"`
+	CodexDeliveryRecoverySourceExecutionID string                  `json:"codex_delivery_recovery_source_execution_id"`
+	ControlPlane                           runnerGRPCBinding       `json:"control_plane"`
+	MCP                                    runnerHTTPBinding       `json:"mcp"`
+	InteractionGateway                     runnerHTTPBinding       `json:"interaction_gateway"`
+	CredentialFiles                        runnerCredentialFiles   `json:"credential_files"`
+	Materializations                       []runnerMaterialization `json:"materializations"`
+	PromptPath                             string                  `json:"prompt_path"`
+	InstructionsPath                       string                  `json:"instructions_path"`
+	WorkspaceRoot                          string                  `json:"workspace_root"`
+	OutboxRoot                             string                  `json:"outbox_root"`
+	CodexHome                              string                  `json:"codex_home"`
+	MattermostPostMaximumRunes             int                     `json:"mattermost_post_max_runes"`
+	HandoffConfigMap                       string                  `json:"handoff_config_map"`
+	PodNamespace                           string                  `json:"pod_namespace"`
 }
 
 func (adapter *Adapter) runnerInput(execution entity.Execution, revision entity.Revision) (runnerInput, error) {
 	files := runnerCredentialFiles{}
-	botTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.AgentGatewayURL)}
-	mcpTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.MCPGatewayURL)}
+	var mcpBindingVersion uint64
+	controlTLS := runnerTLSBinding{ServerName: adapter.config.RunnerControlPlaneTLSServerName}
+	interactionTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.InteractionGatewayURL)}
+	mcpTLS := runnerTLSBinding{ServerName: mustURLHostname(adapter.config.SessionMCPURL)}
 	for index, credential := range revision.Credentials {
 		base := "/var/run/secrets/mattercodex/runtime/credential-" + strconv.Itoa(index)
+		if credential.ResourceID == revision.ProviderCredentialBindingID {
+			files.CodexAuth = base + "/auth.json"
+			files.CodexAuthSHA256 = credential.ContentSHA256
+		}
 		switch credential.Purpose {
-		case "session-token":
-			files.SessionToken = base + "/token"
+		case "control-plane-application-grant":
+			files.ControlPlaneGrant = base + "/application-grant.jws"
+		case "runtime-materialization-application-grant":
+			files.MaterializationToken = base + "/application-grant.jws"
 		case "mcp-token":
 			files.MCPToken = base + "/token"
-		case "codex-auth":
-			files.CodexAuth = base + "/auth.json"
-		case "bot-client-tls":
-			botTLS.CAFile, botTLS.CertificateFile, botTLS.PrivateKeyFile = base+"/ca.pem", base+"/tls.crt", base+"/tls.key"
-			botTLS.BindingSHA256 = credential.ContentSHA256
+			mcpBindingVersion = credential.Version
+		case "handoff-private-key":
+			files.HandoffPrivateKey = base + "/ed25519.key"
+			files.HandoffKeyID = "sha256-" + credential.ContentSHA256[:16]
+		case "control-plane-client-tls":
+			controlTLS.CAFile, controlTLS.CertificateFile, controlTLS.PrivateKeyFile = base+"/ca.pem", base+"/tls.crt", base+"/tls.key"
+			controlTLS.BindingSHA256 = credential.ContentSHA256
+		case "interaction-gateway-client-tls":
+			interactionTLS.CAFile, interactionTLS.CertificateFile, interactionTLS.PrivateKeyFile = base+"/ca.pem", base+"/tls.crt", base+"/tls.key"
+			interactionTLS.BindingSHA256 = credential.ContentSHA256
 		case "mcp-client-tls":
 			mcpTLS.CAFile, mcpTLS.CertificateFile, mcpTLS.PrivateKeyFile = base+"/ca.pem", base+"/tls.crt", base+"/tls.key"
 			mcpTLS.BindingSHA256 = credential.ContentSHA256
 		}
 	}
-	if files.SessionToken == "" || files.MCPToken == "" || files.CodexAuth == "" ||
-		botTLS.BindingSHA256 == "" || mcpTLS.BindingSHA256 == "" || revision.AgentProfile == "" {
+	if files.ControlPlaneGrant == "" || files.MaterializationToken == "" || files.MCPToken == "" || mcpBindingVersion == 0 ||
+		files.CodexAuth == "" || files.HandoffPrivateKey == "" || controlTLS.BindingSHA256 == "" ||
+		interactionTLS.BindingSHA256 == "" || mcpTLS.BindingSHA256 == "" || revision.AgentProfile == "" {
 		return runnerInput{}, errs.ErrStateConflict
 	}
+	materializations := make([]runnerMaterialization, 0, len(execution.Materializations))
+	for _, item := range execution.Materializations {
+		materializations = append(materializations, runnerMaterialization{Kind: item.Kind, ArtifactID: item.ArtifactID,
+			ArtifactVersion: item.ArtifactVersion, SHA256: item.SHA256, SizeBytes: item.SizeBytes,
+			RelativePath: item.RelativePath, MediaType: item.MediaType})
+	}
 	return runnerInput{
-		Schema: "mattercodex.agent-runner-input.v1", ExecutionID: execution.ID,
+		Schema: "mattercodex.agent-runner-input.v2", ExecutionID: execution.ID,
 		ExecutionVersion: execution.Version, Fence: execution.Fence, GrantGeneration: execution.GrantGeneration,
 		RuntimeRevisionID: execution.RuntimeRevisionID, RuntimeRevisionVersion: execution.RuntimeRevisionVersion,
 		RuntimeRevisionSHA256:  execution.RuntimeRevisionSHA256,
 		EffectiveRuntimeSHA256: execution.EffectiveRuntimeSHA256,
 		ImmutableInputSHA256:   execution.ImmutableInputSHA256,
-		SessionKey:             execution.AgentSessionKey, AgentSessionID: execution.AgentSessionID,
-		AgentSessionTurnID: execution.AgentSessionTurnID, AgentRunID: execution.AgentRunID,
-		AgentBindingSHA256:       execution.AgentBindingSHA256,
+		SessionID:              execution.SessionID, TurnID: execution.TurnID, Attempt: execution.Attempt,
+		SessionKey: execution.AgentSessionKey, ProviderBindingID: execution.ProviderBindingID,
+		ProviderAccountName:    revision.ProviderAccountName,
+		MCPBindingVersion:      mcpBindingVersion,
+		ProviderBindingVersion: execution.ProviderBindingVersion, ProviderBindingSHA256: execution.ProviderBindingSHA256,
 		CredentialSnapshotSHA256: execution.CredentialSnapshotSHA256,
 		WorkloadTicketSHA256:     execution.WorkloadTicketSHA256,
-		AgentProfile:             revision.AgentProfile,
-		BotServiceURL:            adapter.config.AgentGatewayURL,
-		MCPURL:                   strings.TrimRight(adapter.config.MCPGatewayURL, "/") + "/mcp/sessions/" + url.PathEscape(execution.AgentSessionKey),
-		BotServiceTLS:            botTLS, MCPTLS: mcpTLS,
-		CredentialFiles: files,
+		AgentProfile:             revision.AgentProfile, CodexModel: revision.CodexModel, CodexSandbox: revision.CodexSandbox,
+		CodexApprovalPolicy: revision.CodexApprovalPolicy, CodexSessionID: execution.CodexSessionID,
+		CodexArchiveRelativePath: execution.CodexArchiveRelativePath,
+		CodexArchiveSHA256:       execution.CodexArchiveSHA256, CodexArchiveProvenance: execution.CodexArchiveProvenance,
+		CodexDeliveryRecoverySourceExecutionID: execution.CodexDeliveryRecoverySourceExecutionID,
+		ControlPlane:                           runnerGRPCBinding{Target: adapter.config.RunnerControlPlaneTarget, TLS: controlTLS},
+		MCP:                                    runnerHTTPBinding{URL: strings.TrimRight(adapter.config.SessionMCPURL, "/") + "/mcp/sessions/" + url.PathEscape(execution.AgentSessionKey), TLS: mcpTLS},
+		InteractionGateway:                     runnerHTTPBinding{URL: adapter.config.InteractionGatewayURL, TLS: interactionTLS},
+		CredentialFiles:                        files, Materializations: materializations,
+		PromptPath: ".matter-codex/inbox/prompt.md", InstructionsPath: "AGENTS.md", WorkspaceRoot: "/workspace",
+		OutboxRoot: "/workspace/.matter-codex/outbox", CodexHome: "/workspace/.matter-codex/state/codex-home",
+		MattermostPostMaximumRunes: 16383, HandoffConfigMap: handoffName(execution), PodNamespace: adapter.config.Namespace,
 	}, nil
 }
 
@@ -1111,17 +1186,51 @@ func (adapter *Adapter) rolePod(
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
 			SizeLimit: quantityPointer(resource.MustParse("256Mi")),
 		}}},
+		{Name: "authority-sockets", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
+		{Name: "provider-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("1Mi"))}}},
+		{Name: "provider-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("256Mi"))}}},
+		{Name: "authority-snapshot", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "internal-rpc-authority-snapshot", DefaultMode: int32Pointer(0o440)}}},
+		namedCSIVolume("authority-manifest-trust", "internal-rpc-authority-agent-runner-manifest-trust"),
+		namedCSIVolume("authority-proof-trust", "internal-rpc-authority-agent-runner-proof-trust"),
+		namedCSIVolume("authority-issuer-key", "internal-rpc-authority-agent-runner-issuer-key"),
+		{Name: "authority-workload-tls", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "internal-rpc-authority-agent-runner-workload-tls", DefaultMode: int32Pointer(0o440)}}},
+		namedConfigMapVolume("authority-readback-ca", "internal-rpc-authority-readback-attestor-ca"),
+		namedConfigMapVolume("authority-vault-ca", "internal-rpc-authority-vault-ca"),
+		{Name: "authority-vault-token", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+			DefaultMode: int32Pointer(0o400), Sources: []corev1.VolumeProjection{{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+				Path: "token", Audience: "vault", ExpirationSeconds: int64Pointer(600),
+			}}},
+		}}},
+		namedConfigMapVolume("authority-restore-ca", "internal-rpc-authority-restore-controller-ca"),
+		{Name: "authority-restore-certificate", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "internal-rpc-authority-restore-controller-tls", DefaultMode: int32Pointer(0o440)}}},
+		{Name: "authority-restore-role-trust", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "internal-rpc-authority-restore-role-trust", DefaultMode: int32Pointer(0o440)}}},
+		{Name: "authority-postgres", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "internal-rpc-authority-agent-runner-issuer-postgresql", DefaultMode: int32Pointer(0o440)}}},
+		namedConfigMapVolume("authority-postgres-ca", "internal-rpc-authority-postgresql-ca"),
+		{Name: "authority-observability-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: "internal-rpc-authority-otel-ca"}, DefaultMode: int32Pointer(0o440),
+			Items: []corev1.KeyToPath{{Key: "ca.pem", Path: "otel-ca.pem"}}}}},
+		{Name: "authority-sentry-dsn", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+			SecretName: "internal-rpc-authority-sentry", DefaultMode: int32Pointer(0o440),
+			Items: []corev1.KeyToPath{{Key: "dsn", Path: "sentry-dsn"}}}}},
 	}
 	mounts := []corev1.VolumeMount{
-		{Name: "session", MountPath: "/workspace", SubPath: "session"},
-		{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime", ReadOnly: true},
+		{Name: "session", MountPath: "/workspace"},
+		{Name: "runtime-config", MountPath: "/var/run/config/mattercodex/runtime/runtime.json", SubPath: "runner.json", ReadOnly: true},
 		{Name: "tmp", MountPath: "/tmp"},
+		{Name: "authority-sockets", MountPath: "/run/mattercodex/internal-rpc-authority", ReadOnly: true},
+		{Name: "provider-socket", MountPath: "/run/mattercodex/provider"},
+		{Name: "authority-observability-ca", MountPath: "/var/run/config/mattercodex/agent-runner/observability", ReadOnly: true},
+		{Name: "authority-sentry-dsn", MountPath: "/var/run/secrets/mattercodex/agent-runner/observability", ReadOnly: true},
 	}
-	for index := range revision.Credentials {
+	for index, credential := range revision.Credentials {
 		name := "credential-" + strconv.Itoa(index)
-		volume, mount := executionCredentialVolume(execution, name, index)
+		purpose := credential.Purpose
+		if credential.ResourceID == revision.ProviderCredentialBindingID {
+			purpose = "provider-account"
+		}
+		volume, credentialMounts := executionCredentialVolumeForPurpose(execution, name, index, purpose)
 		volumes = append(volumes, volume)
-		mounts = append(mounts, mount)
+		mounts = append(mounts, credentialMounts...)
 	}
 	serviceAccount := accessServiceAccountName(execution)
 	volumes = append(volumes, corev1.Volume{Name: "kube-api-access", VolumeSource: corev1.VolumeSource{
@@ -1171,99 +1280,126 @@ func (adapter *Adapter) rolePod(
 		ServiceAccountName: serviceAccount, AutomountServiceAccountToken: boolPointer(false),
 		EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever,
 		TerminationGracePeriodSeconds: int64Pointer(30),
-		SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(10001),
+		SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000),
 			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
-		InitContainers: []corev1.Container{{
+		InitContainers: []corev1.Container{{Name: "internal-rpc-authority-socket-init", Image: adapter.config.AuthorityImage,
+			Command: []string{"/usr/local/bin/internal-rpc-authority-socket-init"}, SecurityContext: restrictedSecurityContext(29000),
+			VolumeMounts: []corev1.VolumeMount{{Name: "authority-sockets", MountPath: "/run/mattercodex"}},
+			Resources:    smallResources(),
+		}, {
 			Name: "workspace-init", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
 			ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"},
+			Env:             runnerObservabilityEnv(adapter.config.Environment),
 			SecurityContext: restrictedSecurityContext(10001),
-			VolumeMounts:    []corev1.VolumeMount{{Name: "session", MountPath: "/workspace-root"}},
+			VolumeMounts:    mounts,
 			Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{
-				corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")},
-				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}},
+				corev1.ResourceCPU: resource.MustParse("25m"), corev1.ResourceMemory: resource.MustParse("64Mi")},
+				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("128Mi")}},
 		}},
 		Containers: []corev1.Container{{
 			Name: "role-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Args:            []string{"runtime-session"},
-			Env: []corev1.EnvVar{
+			Env: append([]corev1.EnvVar{
 				{Name: "MATTERCODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/mattercodex/runtime/runtime.json"},
 				{Name: "MATTERCODEX_EXECUTION_ID", Value: execution.ID},
 				{Name: "MATTERCODEX_RUNTIME_POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 				{Name: "MATTERCODEX_RUNTIME_POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
-			},
+			}, runnerObservabilityEnv(adapter.config.Environment)...),
+			Ports:           []corev1.ContainerPort{{Name: "metrics", ContainerPort: 9090}},
 			Resources:       corev1.ResourceRequirements{Requests: requests, Limits: limits},
 			SecurityContext: restrictedSecurityContext(10001), VolumeMounts: mounts,
 			StartupProbe:   &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30},
 			ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 5, TimeoutSeconds: 2, FailureThreshold: 3},
 			LivenessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(9090)}}, PeriodSeconds: 10, TimeoutSeconds: 2, FailureThreshold: 3},
-		}}, Volumes: volumes,
+		}, {
+			Name: "provider-runtime", Image: adapter.config.RoleImageRepository + "@" + revision.ImageDigest,
+			ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
+			Env:       []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: "/workspace/.matter-codex/state/codex-home"}},
+			Resources: smallResources(), SecurityContext: restrictedSecurityContext(10002),
+			VolumeMounts: []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"},
+				{Name: "provider-socket", MountPath: "/run/mattercodex/provider"},
+				{Name: "provider-tmp", MountPath: "/tmp"}},
+			ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/mattercodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30},
+		}, authorityIssuerContainer(adapter.config.AuthorityImage)}, Volumes: volumes,
 	}}, nil
+}
+
+func namedCSIVolume(name, providerClass string) corev1.Volume {
+	return corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{CSI: &corev1.CSIVolumeSource{Driver: "secrets-store.csi.k8s.io", ReadOnly: boolPointer(true), VolumeAttributes: map[string]string{"secretProviderClass": providerClass}}}}
+}
+func runnerObservabilityEnv(environment string) []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{Name: "DEPLOYMENT_ENVIRONMENT", Value: environment},
+		{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "otel-collector.observability.svc:4317"},
+		{Name: "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME", Value: "otel-collector.observability.svc.cluster.local"},
+		{Name: "OTEL_EXPORTER_OTLP_CA_FILE", Value: "/var/run/config/mattercodex/agent-runner/observability/otel-ca.pem"},
+		{Name: "OTEL_TRACES_SAMPLER_ARG", Value: "0.1"},
+		{Name: "SENTRY_DSN_FILE", Value: "/var/run/secrets/mattercodex/agent-runner/observability/sentry-dsn"},
+		{Name: "SENTRY_EXPECTED_HOST", Value: "sentry-relay.observability.svc:8443"},
+	}
+}
+func namedConfigMapVolume(name, configMap string) corev1.Volume {
+	return corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configMap}, DefaultMode: int32Pointer(0o440)}}}
+}
+func smallResources() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("50m"), corev1.ResourceMemory: resource.MustParse("32Mi")}}
+}
+
+func authorityIssuerContainer(image string) corev1.Container {
+	return corev1.Container{Name: "internal-rpc-authority-issuer", Image: image, Command: []string{"/usr/local/bin/internal-rpc-authority-issuer"},
+		Env: []corev1.EnvVar{{Name: "DEPLOYMENT_ENVIRONMENT", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.labels['mattercodex.dev/environment']"}}},
+			{Name: "INTERNAL_RPC_AUTHORITY_WORKLOAD_ID", Value: "agent-runner"},
+			{Name: "INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID", Value: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"},
+			{Name: "INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS", Value: "internal-rpc-authority-readback-attestor.mattercodex-system.svc:8443"},
+			{Name: "INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME", Value: "internal-rpc-authority-readback-attestor.mattercodex-system.svc"},
+			{Name: "INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE", Value: "/var/run/config/mattercodex/internal-rpc-authority/readback/ca.pem"},
+			{Name: "INTERNAL_RPC_AUTHORITY_VAULT_AUTH_ROLE", Value: "internal-rpc-authority-agent-runner"},
+			{Name: "INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE", Value: "/var/run/config/mattercodex/internal-rpc-authority/restore/ca.pem"},
+			{Name: "INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN", Value: ":9091"},
+			{Name: "INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID", Value: "10001"}, {Name: "INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID", Value: "10001"},
+			{Name: "INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE", Value: "/var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn"},
+			{Name: "INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "internal-rpc-authority-agent-runner-issuer-postgresql"}, Key: "username"}}},
+			{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "otel-collector.observability.svc:4317"}, {Name: "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME", Value: "otel-collector.observability.svc.cluster.local"},
+			{Name: "OTEL_EXPORTER_OTLP_CA_FILE", Value: "/var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem"}, {Name: "OTEL_TRACES_SAMPLER_ARG", Value: "0.1"},
+			{Name: "SENTRY_DSN_FILE", Value: "/var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn"}, {Name: "SENTRY_EXPECTED_HOST", Value: "sentry-relay.observability.svc:8443"}},
+		Ports: []corev1.ContainerPort{{Name: "authority-metrics", ContainerPort: 9091}}, SecurityContext: restrictedSecurityContext(29001), Resources: smallResources(),
+		ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9091)}}, PeriodSeconds: 5, TimeoutSeconds: 3},
+		LivenessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(9091)}}, PeriodSeconds: 10, TimeoutSeconds: 2},
+		VolumeMounts: []corev1.VolumeMount{{Name: "authority-sockets", MountPath: "/run/mattercodex"},
+			{Name: "authority-snapshot", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/snapshot", ReadOnly: true}, {Name: "authority-manifest-trust", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/manifest-trust", ReadOnly: true},
+			{Name: "authority-proof-trust", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/authority-proof-trust", ReadOnly: true}, {Name: "authority-issuer-key", MountPath: "/var/run/secrets/mattercodex/internal-rpc-authority/issuer", ReadOnly: true},
+			{Name: "authority-workload-tls", MountPath: "/var/run/secrets/mattercodex/internal-rpc-authority/workload-tls", ReadOnly: true}, {Name: "authority-readback-ca", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/readback", ReadOnly: true},
+			{Name: "authority-vault-ca", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/vault", ReadOnly: true}, {Name: "authority-vault-token", MountPath: "/var/run/secrets/tokens/vault", ReadOnly: true},
+			{Name: "authority-restore-ca", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/restore", ReadOnly: true}, {Name: "authority-restore-certificate", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/restore/controller-trust", ReadOnly: true},
+			{Name: "authority-restore-role-trust", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/restore/role-trust", ReadOnly: true}, {Name: "authority-postgres", MountPath: "/var/run/secrets/mattercodex/internal-rpc-authority/postgres", ReadOnly: true},
+			{Name: "authority-postgres-ca", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/postgresql", ReadOnly: true}, {Name: "authority-observability-ca", MountPath: "/var/run/config/mattercodex/internal-rpc-authority/observability", ReadOnly: true},
+			{Name: "authority-sentry-dsn", MountPath: "/var/run/secrets/mattercodex/internal-rpc-authority/observability", ReadOnly: true}}}
 }
 
 func (adapter *Adapter) ensureAccessProfile(ctx context.Context, execution entity.Execution) error {
 	name := accessServiceAccountName(execution)
-	if execution.AccessProfile == enum.AccessClusterAdmin {
-		serviceAccount, err := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace).Get(
-			ctx, name, metav1.GetOptions{},
-		)
-		if err != nil || serviceAccount.Labels[accessLabel] != strings.ToLower(string(enum.AccessClusterAdmin)) {
-			return errors.New("read prebound cluster admin admission identity")
-		}
-		binding, err := adapter.client.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
-		expectedSubject := rbacv1.Subject{Kind: "ServiceAccount", Name: name, Namespace: adapter.config.Namespace}
-		expectedRole := rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: adapter.config.AdminClusterRole}
-		if err != nil || !sameBinding(binding.Subjects, expectedSubject) || binding.RoleRef != expectedRole {
-			return errors.New("read prebound cluster admin admission grant")
-		}
-		return adapter.ensureRunnerHandoffRBAC(ctx, execution)
-	}
-	serviceAccounts := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace)
-	existing, err := serviceAccounts.Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return errors.New("read broker-owned runtime access service account")
-	}
-	if existing.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
-		existing.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
-		existing.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID ||
-		existing.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
+	if execution.AccessProfile != enum.AccessNone {
 		return errs.ErrStateConflict
 	}
-	subject := rbacv1.Subject{Kind: "ServiceAccount", Name: name, Namespace: adapter.config.Namespace}
-	switch execution.AccessProfile {
-	case enum.AccessNone:
-	case enum.AccessProjectRead:
-		projectNamespace := projectNamespaceName(execution.ProjectID)
-		namespace, err := adapter.client.CoreV1().Namespaces().Get(ctx, projectNamespace, metav1.GetOptions{})
-		if err != nil {
-			return errors.New("read server-managed project namespace")
-		}
-		if namespace.Annotations["mattercodex.dev/project-id"] != execution.ProjectID ||
-			namespace.Annotations["mattercodex.dev/organization-id"] != execution.OrganizationID {
-			return errs.ErrStateConflict
-		}
-		bindings := adapter.client.RbacV1().RoleBindings(projectNamespace)
-		desired := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "runtime-access")},
-			Subjects: []rbacv1.Subject{subject}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: adapter.config.ReadClusterRole}}
-		binding, err := bindings.Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return errors.New("read broker-owned project read binding")
-		}
-		if !sameBinding(binding.Subjects, subject) || binding.RoleRef != desired.RoleRef {
-			return errs.ErrStateConflict
-		}
-	default:
-		return errs.ErrStateConflict
+	account, err := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil || account.AutomountServiceAccountToken == nil || *account.AutomountServiceAccountToken ||
+		account.Labels[componentLabel] != "runtime-access" ||
+		account.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID ||
+		account.Annotations["runtime.mattercodex.dev/organization-id"] != execution.OrganizationID ||
+		account.Annotations["runtime.mattercodex.dev/project-id"] != execution.ProjectID ||
+		account.Annotations["runtime.mattercodex.dev/session-id"] != execution.SessionID {
+		return errors.New("read exact runtime access identity")
 	}
 	return adapter.ensureRunnerHandoffRBAC(ctx, execution)
 }
 
 func (adapter *Adapter) ensureRunnerHandoffRBAC(ctx context.Context, execution entity.Execution) error {
-	name := "runtime-handoff-" + shortID(execution.SessionID)
+	name := handoffName(execution)
 	roles := adapter.client.RbacV1().Roles(adapter.config.Namespace)
 	desired := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels(execution, "runtime-handoff")}, Rules: []rbacv1.PolicyRule{
-		{APIGroups: []string{""}, Resources: []string{"pods"}, ResourceNames: []string{podName(execution)}, Verbs: []string{"get", "patch"}},
 		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{configName(execution)}, Verbs: []string{"get"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{handoffName(execution)}, Verbs: []string{"get", "update"}},
 	}}
 	existing, err := roles.Get(ctx, name, metav1.GetOptions{})
 	if err != nil || !handoffRulesMatch(existing.Rules, desired.Rules, execution) {
@@ -1281,22 +1417,7 @@ func (adapter *Adapter) ensureRunnerHandoffRBAC(ctx context.Context, execution e
 }
 
 func handoffRulesMatch(actual, base []rbacv1.PolicyRule, execution entity.Execution) bool {
-	if len(actual) != 3 || len(base) != 2 || !reflect.DeepEqual(actual[:2], base) {
-		return false
-	}
-	secretRule := actual[2]
-	prefix := "runtime-credential-" + shortID(execution.ID) + "-"
-	if !reflect.DeepEqual(secretRule.APIGroups, []string{""}) ||
-		!reflect.DeepEqual(secretRule.Resources, []string{"secrets"}) ||
-		!reflect.DeepEqual(secretRule.Verbs, []string{"get"}) || len(secretRule.ResourceNames) == 0 {
-		return false
-	}
-	for index, name := range secretRule.ResourceNames {
-		if name != prefix+strconv.Itoa(index) {
-			return false
-		}
-	}
-	return true
+	return len(actual) == 2 && len(base) == 2 && reflect.DeepEqual(actual, base) && execution.ID != ""
 }
 
 func executionCredentialVolume(
@@ -1304,11 +1425,32 @@ func executionCredentialVolume(
 	name string,
 	index int,
 ) (corev1.Volume, corev1.VolumeMount) {
+	volume, _ := executionCredentialVolumeForPurpose(execution, name, index, "")
+	return volume, corev1.VolumeMount{Name: name, MountPath: "/var/run/secrets/mattercodex/runtime/" + name, ReadOnly: true}
+}
+
+func executionCredentialVolumeForPurpose(execution entity.Execution, name string, index int, purpose string) (corev1.Volume, []corev1.VolumeMount) {
 	path := "/var/run/secrets/mattercodex/runtime/" + name
 	secretName := executionCredentialSecretName(execution, index)
-	return corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+	volume := corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
 		SecretName: secretName, DefaultMode: int32Pointer(0o440),
-	}}}, corev1.VolumeMount{Name: name, MountPath: path, ReadOnly: true}
+	}}}
+	files := map[string][]string{
+		"control-plane-application-grant":           {"application-grant.jws"},
+		"runtime-materialization-application-grant": {"application-grant.jws"},
+		"mcp-token": {"token"}, "provider-account": {"auth.json"}, "handoff-private-key": {"ed25519.key"},
+		"control-plane-client-tls":       {"ca.pem", "tls.crt", "tls.key"},
+		"interaction-gateway-client-tls": {"ca.pem", "tls.crt", "tls.key"},
+		"mcp-client-tls":                 {"ca.pem", "tls.crt", "tls.key"},
+	}[purpose]
+	if len(files) == 0 {
+		return volume, []corev1.VolumeMount{{Name: name, MountPath: path, ReadOnly: true}}
+	}
+	mounts := make([]corev1.VolumeMount, 0, len(files))
+	for _, file := range files {
+		mounts = append(mounts, corev1.VolumeMount{Name: name, MountPath: path + "/" + file, SubPath: file, ReadOnly: true})
+	}
+	return volume, mounts
 }
 
 func (adapter *Adapter) List(ctx context.Context) ([]entity.RuntimeStatus, error) {
@@ -1385,6 +1527,21 @@ func (adapter *Adapter) List(ctx context.Context) ([]entity.RuntimeStatus, error
 			return nil, errors.New("runtime pod ownership is invalid")
 		}
 		status := castStatus(pod, pvc)
+		handoffConfig, handoffErr := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(
+			ctx, handoffName(document.Execution), metav1.GetOptions{})
+		if handoffErr == nil && len(handoffConfig.BinaryData["handoff.json"]) != 0 {
+			trustedKeys, trustErr := adapter.handoffTrust(ctx)
+			if trustErr != nil {
+				return nil, trustErr
+			}
+			handoff, decodeErr := runtimecontract.DecodeSignedHandoffV2(handoffConfig.BinaryData["handoff.json"], trustedKeys)
+			if decodeErr != nil {
+				return nil, errors.New("verify signed runtime handoff")
+			}
+			status.Handoff = castHandoffV2(handoff)
+		} else if handoffErr != nil && !apierrors.IsNotFound(handoffErr) {
+			return nil, errors.New("read runtime handoff target")
+		}
 		status.ExecutionID = document.Execution.ID
 		status.Version = document.Execution.Version
 		status.Fence = document.Execution.Fence
@@ -1427,6 +1584,41 @@ func (adapter *Adapter) List(ctx context.Context) ([]entity.RuntimeStatus, error
 	return result, nil
 }
 
+func (adapter *Adapter) handoffTrust(ctx context.Context) (map[string]ed25519.PublicKey, error) {
+	config, err := adapter.client.CoreV1().ConfigMaps(adapter.config.Namespace).Get(ctx, "agent-runner-handoff-trust", metav1.GetOptions{})
+	if err != nil || len(config.BinaryData) == 0 || len(config.BinaryData) > 8 {
+		return nil, errors.New("read runtime handoff trust")
+	}
+	result := make(map[string]ed25519.PublicKey, len(config.BinaryData))
+	for keyID, raw := range config.BinaryData {
+		if keyID == "" || len(raw) != ed25519.PublicKeySize || bytes.Equal(raw, make([]byte, ed25519.PublicKeySize)) {
+			return nil, errors.New("runtime handoff trust is invalid")
+		}
+		result[keyID] = ed25519.PublicKey(slices.Clone(raw))
+	}
+	return result, nil
+}
+
+func castHandoffV2(source runtimecontract.HandoffV2) *entity.RuntimeHandoff {
+	result := &entity.RuntimeHandoff{Schema: source.Schema, ExecutionID: source.ExecutionID,
+		ExecutionVersion: source.ExecutionVersion, Fence: source.Fence, GrantGeneration: source.GrantGeneration,
+		RuntimeRevisionSHA256: source.RuntimeRevisionSHA256, EffectiveRuntimeSHA256: source.EffectiveRuntimeSHA256,
+		ImmutableInputSHA256: source.ImmutableInputSHA256, SessionID: source.SessionID, TurnID: source.TurnID,
+		Attempt: source.Attempt, ProviderBindingID: source.ProviderBindingID,
+		ProviderBindingVersion: source.ProviderBindingVersion, ProviderBindingSHA256: source.ProviderBindingSHA256,
+		Outcome: source.Outcome, TerminalReference: source.TerminalReference, TerminalSHA256: source.TerminalSHA256,
+		CodexSessionID: source.CodexSessionID, ArchiveRelativePath: source.ArchiveRelativePath, ArchiveSHA256: source.ArchiveSHA256,
+		ArchiveProvenance: source.ArchiveProvenance, ObservedAt: source.ObservedAt}
+	for _, output := range source.Outputs {
+		result.Outputs = append(result.Outputs, entity.RuntimeOutput{Kind: output.Kind, ArtifactID: output.ID,
+			ArtifactVersion: output.Version, ArtifactSHA256: output.SHA256, ArtifactName: output.Name,
+			ArtifactMediaType: output.MediaType, ArtifactPayload: slices.Clone(output.Payload),
+			ArtifactStorageRef: output.StorageRef, ArtifactSizeBytes: output.SizeBytes,
+			Sequence: output.Sequence, Total: output.Total})
+	}
+	return result
+}
+
 func castStatus(pod *corev1.Pod, pvc *corev1.PersistentVolumeClaim) entity.RuntimeStatus {
 	status := entity.RuntimeStatus{Phase: "Missing"}
 	if pvc != nil {
@@ -1438,22 +1630,6 @@ func castStatus(pod *corev1.Pod, pvc *corev1.PersistentVolumeClaim) entity.Runti
 	status.PodName, status.PodUID, status.PodResourceVersion = pod.Name, string(pod.UID), pod.ResourceVersion
 	status.ExecutionID = pod.Annotations["runtime.mattercodex.dev/execution-id"]
 	status.RuntimeRevisionSHA256 = pod.Annotations["runtime.mattercodex.dev/revision-sha256"]
-	if raw := pod.Annotations["runtime.mattercodex.dev/turn-handoff"]; raw != "" {
-		if handoff, err := runtimecontract.DecodeHandoff([]byte(raw)); err == nil {
-			status.Handoff = &entity.RuntimeHandoff{Schema: handoff.Schema, ExecutionID: handoff.ExecutionID,
-				ExecutionVersion: handoff.ExecutionVersion, Fence: handoff.Fence, GrantGeneration: handoff.GrantGeneration,
-				RuntimeRevisionSHA256:  handoff.RuntimeRevisionSHA256,
-				EffectiveRuntimeSHA256: handoff.EffectiveRuntimeSHA256,
-				ImmutableInputSHA256:   handoff.ImmutableInputSHA256,
-				AgentSessionID:         handoff.AgentSessionID, AgentSessionTurnID: handoff.AgentSessionTurnID,
-				AgentRunID: handoff.AgentRunID, AgentBindingSHA256: handoff.AgentBindingSHA256,
-				Outcome: handoff.Outcome, TerminalReference: handoff.TerminalReference,
-				TerminalSHA256: handoff.TerminalSHA256, ResultArtifactID: handoff.ResultArtifactID,
-				ResultArtifactVersion: handoff.ResultArtifactVersion, ResultArtifactSHA256: handoff.ResultArtifactSHA256,
-				ResultArtifactName: handoff.ResultArtifactName, ResultArtifactMediaType: handoff.ResultArtifactMediaType,
-				ResultArtifactPayload: slices.Clone(handoff.ResultArtifactPayload), ObservedAt: handoff.ObservedAt}
-		}
-	}
 	status.Version, _ = strconv.ParseUint(pod.Annotations["runtime.mattercodex.dev/version"], 10, 64)
 	status.Fence, _ = strconv.ParseUint(pod.Annotations["runtime.mattercodex.dev/fence"], 10, 64)
 	status.GrantGeneration, _ = strconv.ParseUint(pod.Annotations["runtime.mattercodex.dev/grant-generation"], 10, 64)
@@ -1554,6 +1730,9 @@ func (adapter *Adapter) revokeAccessProfile(ctx context.Context, pod *corev1.Pod
 	default:
 		return errs.ErrStateConflict
 	}
+	if err := adapter.deleteRunnerHandoffRBAC(ctx, pod, name); err != nil {
+		return err
+	}
 	serviceAccount, err := adapter.client.CoreV1().ServiceAccounts(adapter.config.Namespace).Get(
 		ctx, name, metav1.GetOptions{},
 	)
@@ -1569,12 +1748,12 @@ func (adapter *Adapter) revokeAccessProfile(ctx context.Context, pod *corev1.Pod
 	); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("revoke exact runtime access service account")
 	}
-	return adapter.deleteRunnerHandoffRBAC(ctx, pod, name)
+	return nil
 }
 
 func (adapter *Adapter) deleteRunnerHandoffRBAC(ctx context.Context, pod *corev1.Pod, serviceAccount string) error {
-	name := "runtime-handoff-" + pod.Labels[sessionLabel]
-	if pod.Labels[sessionLabel] == "" || name != "runtime-handoff-"+shortID(pod.Annotations["runtime.mattercodex.dev/session-id"]) {
+	name := "runtime-handoff-" + pod.Labels[executionLabel]
+	if pod.Labels[executionLabel] == "" || name != "runtime-handoff-"+shortID(pod.Annotations["runtime.mattercodex.dev/execution-id"]) {
 		return errs.ErrStateConflict
 	}
 	bindings := adapter.client.RbacV1().RoleBindings(adapter.config.Namespace)
@@ -2665,17 +2844,18 @@ func s3CredentialBrokerJobName(execution entity.Execution, action string) string
 func configName(execution entity.Execution) string {
 	return "runtime-config-" + shortID(execution.ID) + "-v" + strconv.FormatUint(execution.RuntimeRevisionVersion, 10)
 }
+func handoffName(execution entity.Execution) string {
+	return "runtime-handoff-" + shortID(execution.ID)
+}
 func pvcName(execution entity.Execution) string {
 	return "runtime-session-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID, 20)
 }
 func podName(execution entity.Execution) string {
-	return "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID, 24)
+	return "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID+":"+execution.ID, 24)
 }
 func accessServiceAccountName(execution entity.Execution) string {
-	if execution.AccessProfile == enum.AccessClusterAdmin {
-		return "runtime-role-cluster-admin"
-	}
-	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
+	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+
+		execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
 }
 func projectNamespaceName(projectID string) string {
 	return "mattercodex-project-" + stableHash(projectID, 20)

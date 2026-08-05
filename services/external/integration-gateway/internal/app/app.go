@@ -15,7 +15,6 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
-	"github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
@@ -138,14 +137,6 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	resultGrantVerifier, err := integrationgatewayauth.NewVerifier(integrationgatewayauth.Config{
-		Issuer: config.ResultGrantIssuer, Audience: "urn:mattercodex:integration-result-access",
-		WorkloadID: "agent-runner", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner",
-		Generation: config.ResultGrantSignerGeneration, MaximumTTL: 8 * 24 * time.Hour,
-	}, config.ResultGrantPublicJWKFile)
-	if err != nil {
-		return err
-	}
 	current.authority, err = authorityclient.DialLocal(startup, authorityclient.LocalConfig{
 		SocketPath: authorityclient.VerifierSocketPath, ExpectedServerUID: config.AuthorityVerifierUID,
 		ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second,
@@ -157,7 +148,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err := authorityChecker.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)
 	}
-	resultTransport, err := resultgrpc.New(service, resultGrantVerifier, repository, control)
+	resultTransport, err := resultgrpc.New(repository, control)
 	if err != nil {
 		return err
 	}

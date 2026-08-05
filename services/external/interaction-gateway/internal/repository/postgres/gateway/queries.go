@@ -51,6 +51,8 @@ var (
 	deliveryGetScopedSQL string
 	//go:embed sql/delivery__get_by_post.sql
 	deliveryGetByPostSQL string
+	//go:embed sql/delivery__run_by_turn.sql
+	deliveryRunByTurnSQL string
 	//go:embed sql/gate_delivery__reaction_posts.sql
 	gateDeliveryReactionPostsSQL string
 	//go:embed sql/gate_delivery__decided.sql

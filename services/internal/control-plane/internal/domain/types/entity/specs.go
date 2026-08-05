@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -17,6 +19,7 @@ import (
 var permissionPattern = regexp.MustCompile(
 	`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$`,
 )
+var providerAccountNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
 
 // Spec — закрытый service-owned payload одного ResourceKind.
 type Spec interface {
@@ -255,11 +258,13 @@ func (spec RoleSpec) Validate() error {
 }
 
 type PromptProfileSpec struct {
-	Revision      uint64                 `json:"revision"`
-	ContentSHA256 string                 `json:"contentSha256"`
-	SourceRef     string                 `json:"sourceRef"`
-	Locale        string                 `json:"locale"`
-	Ownership     ConfigurationOwnership `json:"ownership"`
+	Revision               uint64                 `json:"revision"`
+	ContentSHA256          string                 `json:"contentSha256"`
+	SourceRef              string                 `json:"sourceRef"`
+	Locale                 string                 `json:"locale"`
+	ContentArtifactID      string                 `json:"contentArtifactId"`
+	ContentArtifactVersion uint64                 `json:"contentArtifactVersion"`
+	Ownership              ConfigurationOwnership `json:"ownership"`
 }
 
 func (PromptProfileSpec) Kind() enum.Kind { return enum.KindPromptProfile }
@@ -273,6 +278,10 @@ func (spec PromptProfileSpec) Validate() error {
 		(spec.Locale != "ru" && spec.Locale != "en") ||
 		spec.Ownership.Validate() != nil {
 		return errors.New("prompt profile specification is invalid")
+	}
+	if (spec.ContentArtifactID == "") != (spec.ContentArtifactVersion == 0) ||
+		(spec.ContentArtifactID != "" && value.ValidateID(spec.ContentArtifactID) != nil) {
+		return errors.New("prompt profile content artifact is invalid")
 	}
 	return nil
 }
@@ -332,6 +341,9 @@ type RepositoryWorkspaceSpec struct {
 	WorkspaceMode       string                 `json:"workspaceMode"`
 	DefaultBranch       string                 `json:"defaultBranch"`
 	CredentialBindingID string                 `json:"credentialBindingId,omitempty"`
+	SnapshotArtifactID  string                 `json:"snapshotArtifactId,omitempty"`
+	SnapshotVersion     uint64                 `json:"snapshotArtifactVersion,omitempty"`
+	SnapshotSHA256      string                 `json:"snapshotArtifactSha256,omitempty"`
 	Ownership           ConfigurationOwnership `json:"ownership"`
 }
 
@@ -341,7 +353,7 @@ func (spec RepositoryWorkspaceSpec) ConfigurationOwnership() ConfigurationOwners
 }
 
 func (spec RepositoryWorkspaceSpec) Validate() error {
-	if (spec.WorkspaceMode != "NONE" && spec.WorkspaceMode != "GIT") ||
+	if (spec.WorkspaceMode != "NONE" && spec.WorkspaceMode != "GIT" && spec.WorkspaceMode != "SNAPSHOT") ||
 		spec.Ownership.Validate() != nil {
 		return errors.New("repository workspace mode is invalid")
 	}
@@ -350,6 +362,16 @@ func (spec RepositoryWorkspaceSpec) Validate() error {
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" ||
 			parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 			len(spec.DefaultBranch) < 1 || len(spec.DefaultBranch) > 255 {
+			return errors.New("repository workspace specification is invalid")
+		}
+	}
+	if spec.WorkspaceMode == "SNAPSHOT" {
+		parsed, err := url.Parse(spec.RepositoryRef)
+		if err != nil || parsed.Scheme != "artifact" || parsed.Host != "" ||
+			parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+			value.ValidateID(spec.SnapshotArtifactID) != nil || spec.SnapshotVersion == 0 ||
+			!validSHA256(spec.SnapshotSHA256) || spec.CredentialBindingID != "" ||
+			len(spec.DefaultBranch) != 0 {
 			return errors.New("repository workspace specification is invalid")
 		}
 	}
@@ -407,7 +429,11 @@ type RuntimeRevisionSpec struct {
 	RoleID                      string                 `json:"roleId"`
 	ChatID                      string                 `json:"chatId,omitempty"`
 	ProviderCredentialBindingID string                 `json:"providerCredentialBindingId"`
+	ProviderAccountName         string                 `json:"providerAccountName"`
 	EffectiveRuntimeSHA256      string                 `json:"effectiveRuntimeSha256"`
+	CodexModel                  string                 `json:"codexModel"`
+	CodexSandbox                string                 `json:"codexSandbox"`
+	CodexApprovalPolicy         string                 `json:"codexApprovalPolicy"`
 }
 
 func (RuntimeRevisionSpec) Kind() enum.Kind { return enum.KindRuntimeRevision }
@@ -427,9 +453,16 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		value.ValidateID(spec.SessionID) != nil ||
 		value.ValidateID(spec.RoleID) != nil ||
 		value.ValidateID(spec.ProviderCredentialBindingID) != nil ||
+		!providerAccountNamePattern.MatchString(spec.ProviderAccountName) ||
 		!validSHA256(spec.EffectiveRuntimeSHA256) ||
 		(spec.ChatID != "" && value.ValidateID(spec.ChatID) != nil) {
 		return errors.New("runtime revision specification is invalid")
+	}
+	codexPinned := spec.CodexModel != "" || spec.CodexSandbox != "" || spec.CodexApprovalPolicy != ""
+	if codexPinned && (!regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`).MatchString(spec.CodexModel) ||
+		(spec.CodexSandbox != "read-only" && spec.CodexSandbox != "workspace-write") ||
+		(spec.CodexApprovalPolicy != "never" && spec.CodexApprovalPolicy != "on-request")) {
+		return errors.New("runtime revision Codex profile is invalid")
 	}
 	if spec.PredecessorRevisionID != "" &&
 		value.ValidateID(spec.PredecessorRevisionID) != nil {
@@ -510,27 +543,49 @@ func (spec SessionSpec) Validate() error {
 }
 
 type TurnSpec struct {
-	SessionID               string `json:"sessionId"`
-	Sequence                uint64 `json:"sequence"`
-	SourceRef               string `json:"sourceRef"`
-	PromptArtifactID        string `json:"promptArtifactId"`
-	RuntimeRevisionID       string `json:"runtimeRevisionId"`
-	ProcessRunID            string `json:"processRunId,omitempty"`
-	Attempt                 uint32 `json:"attempt"`
-	Outcome                 string `json:"outcome,omitempty"`
-	ResultArtifactID        string `json:"resultArtifactId,omitempty"`
-	ResultArtifactVersion   uint64 `json:"resultArtifactVersion,omitempty"`
-	ResultArtifactSHA256    string `json:"resultArtifactSha256,omitempty"`
-	EffectiveInputSHA256    string `json:"effectiveInputSha256"`
-	PredecessorTurnID       string `json:"predecessorTurnId,omitempty"`
-	OwnerFeedback           string `json:"ownerFeedback,omitempty"`
-	OwnerFeedbackGateID     string `json:"ownerFeedbackGateId,omitempty"`
-	OwnerFeedbackVersion    uint64 `json:"ownerFeedbackGateVersion,omitempty"`
-	OwnerFeedbackSHA256     string `json:"ownerFeedbackSha256,omitempty"`
-	AgentSessionTurnID      int64  `json:"agentSessionTurnId,omitempty"`
-	AgentRunID              string `json:"agentRunId,omitempty"`
-	AgentTurnBindingVersion uint64 `json:"agentTurnBindingVersion,omitempty"`
-	AgentTurnBindingSHA256  string `json:"agentTurnBindingSha256,omitempty"`
+	SessionID               string                 `json:"sessionId"`
+	Sequence                uint64                 `json:"sequence"`
+	SourceRef               string                 `json:"sourceRef"`
+	PromptArtifactID        string                 `json:"promptArtifactId"`
+	RuntimeRevisionID       string                 `json:"runtimeRevisionId"`
+	ProcessRunID            string                 `json:"processRunId,omitempty"`
+	Attempt                 uint32                 `json:"attempt"`
+	Outcome                 string                 `json:"outcome,omitempty"`
+	ResultArtifactID        string                 `json:"resultArtifactId,omitempty"`
+	ResultArtifactVersion   uint64                 `json:"resultArtifactVersion,omitempty"`
+	ResultArtifactSHA256    string                 `json:"resultArtifactSha256,omitempty"`
+	EffectiveInputSHA256    string                 `json:"effectiveInputSha256"`
+	PredecessorTurnID       string                 `json:"predecessorTurnId,omitempty"`
+	OwnerFeedback           string                 `json:"ownerFeedback,omitempty"`
+	OwnerFeedbackGateID     string                 `json:"ownerFeedbackGateId,omitempty"`
+	OwnerFeedbackVersion    uint64                 `json:"ownerFeedbackGateVersion,omitempty"`
+	OwnerFeedbackSHA256     string                 `json:"ownerFeedbackSha256,omitempty"`
+	AgentSessionTurnID      int64                  `json:"agentSessionTurnId,omitempty"`
+	AgentRunID              string                 `json:"agentRunId,omitempty"`
+	AgentTurnBindingVersion uint64                 `json:"agentTurnBindingVersion,omitempty"`
+	AgentTurnBindingSHA256  string                 `json:"agentTurnBindingSha256,omitempty"`
+	InputArtifacts          []EffectiveArtifactRef `json:"inputArtifacts,omitempty"`
+}
+
+type EffectiveArtifactRef struct {
+	ArtifactID   string `json:"artifactId"`
+	Version      uint64 `json:"version"`
+	SHA256       string `json:"sha256"`
+	RelativePath string `json:"relativePath"`
+	MediaType    string `json:"mediaType"`
+	SizeBytes    uint64 `json:"sizeBytes"`
+}
+
+func (reference EffectiveArtifactRef) Validate() error {
+	clean := filepath.Clean(reference.RelativePath)
+	if value.ValidateID(reference.ArtifactID) != nil || reference.Version == 0 ||
+		!validSHA256(reference.SHA256) || clean != reference.RelativePath || filepath.IsAbs(clean) ||
+		clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) ||
+		reference.MediaType == "" || len(reference.MediaType) > 255 ||
+		reference.SizeBytes == 0 || reference.SizeBytes > 64<<20 {
+		return errors.New("turn input artifact is invalid")
+	}
+	return nil
 }
 
 func (TurnSpec) Kind() enum.Kind { return enum.KindTurn }
@@ -574,6 +629,19 @@ func (spec TurnSpec) Validate() error {
 		len(spec.AgentRunID) > 256 || spec.AgentTurnBindingVersion == 0 ||
 		!validSHA256(spec.AgentTurnBindingSHA256)) {
 		return errors.New("agent turn binding is invalid")
+	}
+	if len(spec.InputArtifacts) > 4096 {
+		return errors.New("turn input artifact set is invalid")
+	}
+	seenArtifacts := make(map[string]struct{}, len(spec.InputArtifacts))
+	for _, artifact := range spec.InputArtifacts {
+		if artifact.Validate() != nil {
+			return errors.New("turn input artifact is invalid")
+		}
+		if _, exists := seenArtifacts[artifact.RelativePath]; exists {
+			return errors.New("turn input artifact path is duplicated")
+		}
+		seenArtifacts[artifact.RelativePath] = struct{}{}
 	}
 	return nil
 }

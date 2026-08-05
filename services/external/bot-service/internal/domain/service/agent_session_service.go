@@ -18,6 +18,7 @@ import (
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/types/entity"
 	texti18n "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/i18n"
+	"github.com/google/uuid"
 )
 
 const (
@@ -135,15 +136,32 @@ type AgentSessionService struct {
 	callbackPreflightDeadline time.Duration
 }
 
-// AuthorizeMCPTransport проверяет учётные данные до создания состояния транспорта MCP.
-func (svc *AgentSessionService) AuthorizeMCPTransport(ctx context.Context, sessionKey string, token string) error {
+type RuntimeMCPExecutionBinding struct {
+	ExecutionID    string
+	TurnID         string
+	Attempt        uint32
+	BindingVersion uint64
+}
+
+// AuthorizeMCPTransport проверяет bearer и exact execution binding до создания
+// состояния транспорта MCP.
+func (svc *AgentSessionService) AuthorizeMCPTransport(ctx context.Context, sessionKey string, token string,
+	binding RuntimeMCPExecutionBinding) error {
 	sessionKey = strings.TrimSpace(sessionKey)
 	token = strings.TrimSpace(token)
-	if sessionKey == "" || token == "" {
+	if sessionKey == "" || token == "" || uuid.Validate(binding.ExecutionID) != nil ||
+		uuid.Validate(binding.TurnID) != nil || binding.Attempt == 0 || binding.BindingVersion == 0 {
 		return ErrAgentSessionMCPUnauthorized
 	}
-	session, err := svc.authorize(ctx, sessionKey, token)
+	session, secret, err := svc.authorizeWithSecret(ctx, sessionKey, token)
 	if err != nil {
+		return ErrAgentSessionMCPUnauthorized
+	}
+	currentState, stateErr := parseRuntimeMCPState(session.Capabilities)
+	if secret.ExecutionID != binding.ExecutionID || secret.TurnID != binding.TurnID ||
+		secret.Attempt != binding.Attempt || stateErr != nil || currentState.BindingVersion != binding.BindingVersion ||
+		currentState.ExecutionID != binding.ExecutionID || currentState.TurnID != binding.TurnID ||
+		currentState.Attempt != binding.Attempt {
 		return ErrAgentSessionMCPUnauthorized
 	}
 	if session.Status == agentSessionStatusBlocked || session.Status == agentSessionStatusClosed || session.Status == agentSessionStatusExpired {
@@ -1740,15 +1758,20 @@ func (svc *AgentSessionService) withRequestedClusterAdminPersistenceGuard(ctx co
 }
 
 func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string, token string) (entity.AgentSession, error) {
+	session, _, err := svc.authorizeWithSecret(ctx, sessionKey, token)
+	return session, err
+}
+
+func (svc *AgentSessionService) authorizeWithSecret(ctx context.Context, sessionKey string, token string) (entity.AgentSession, runtimerepo.MattermostBotTokenSecret, error) {
 	if !svc.cfg.StorageReady || svc.cfg.Store == nil {
-		return entity.AgentSession{}, fmt.Errorf("storage is not ready")
+		return entity.AgentSession{}, runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("storage is not ready")
 	}
 	if !svc.cfg.RuntimeReady || svc.cfg.RuntimeRunner == nil {
-		return entity.AgentSession{}, fmt.Errorf("runtime is not ready")
+		return entity.AgentSession{}, runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("runtime is not ready")
 	}
 	session, err := svc.cfg.Store.GetAgentSession(ctx, strings.TrimSpace(sessionKey))
 	if err != nil {
-		return entity.AgentSession{}, err
+		return entity.AgentSession{}, runtimerepo.MattermostBotTokenSecret{}, err
 	}
 	var authorized entity.AgentSession
 	var secret runtimerepo.MattermostBotTokenSecret
@@ -1761,14 +1784,14 @@ func (svc *AgentSessionService) authorize(ctx context.Context, sessionKey string
 		return nil
 	})
 	if err != nil {
-		return entity.AgentSession{}, err
+		return entity.AgentSession{}, runtimerepo.MattermostBotTokenSecret{}, err
 	}
 	providedTokenSHA256 := sha256.Sum256([]byte(strings.TrimSpace(token)))
 	storedTokenSHA256 := sha256.Sum256([]byte(strings.TrimSpace(secret.Token)))
 	if subtle.ConstantTimeCompare(providedTokenSHA256[:], storedTokenSHA256[:]) != 1 {
-		return entity.AgentSession{}, fmt.Errorf("session token is invalid")
+		return entity.AgentSession{}, runtimerepo.MattermostBotTokenSecret{}, fmt.Errorf("session token is invalid")
 	}
-	return authorized, nil
+	return authorized, secret, nil
 }
 
 func (svc *AgentSessionService) withCurrentSessionTokenRuntimeGuard(ctx context.Context, session entity.AgentSession, operation string, sideEffect func(entity.AgentSession, runtimerepo.MattermostBotTokenSecret) error) error {

@@ -12,7 +12,7 @@ import (
 )
 
 func TestExactRuntimePodAccessProfileAdmissionMatrix(t *testing.T) {
-	for _, profile := range []enum.AccessProfile{enum.AccessNone, enum.AccessProjectRead, enum.AccessClusterAdmin} {
+	for _, profile := range []enum.AccessProfile{enum.AccessNone} {
 		t.Run(string(profile), func(t *testing.T) {
 			execution := entity.Execution{
 				ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),
@@ -20,18 +20,21 @@ func TestExactRuntimePodAccessProfileAdmissionMatrix(t *testing.T) {
 				AccessProfile: profile, RuntimeRevisionSHA256: strings.Repeat("1", 64),
 				ImmutableInputSHA256: strings.Repeat("2", 64), CredentialSnapshotSHA256: strings.Repeat("3", 64),
 			}
-			account := "runtime-role-cluster-admin"
-			if profile != enum.AccessClusterAdmin {
-				account = "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+
-					execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
-			}
+			account := "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+
+				execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
 			security := &corev1.SecurityContext{
 				RunAsNonRoot: boolPointer(true), AllowPrivilegeEscalation: boolPointer(false),
 				ReadOnlyRootFilesystem: boolPointer(true),
 				Capabilities:           &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 			}
+			roleSecurity := security.DeepCopy()
+			roleSecurity.RunAsUser = testInt64Pointer(10001)
+			providerSecurity := security.DeepCopy()
+			providerSecurity.RunAsUser = testInt64Pointer(10002)
+			issuerSecurity := security.DeepCopy()
+			issuerSecurity.RunAsUser = testInt64Pointer(29001)
 			pod := &corev1.Pod{}
-			pod.Name = "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID, 24)
+			pod.Name = "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID+":"+execution.ID, 24)
 			pod.Namespace = admissionNamespace
 			pod.Labels = map[string]string{"app.kubernetes.io/component": "role-runtime", "runtime.mattercodex.dev/access-profile": strings.ToLower(string(profile))}
 			pod.Annotations = map[string]string{
@@ -42,8 +45,15 @@ func TestExactRuntimePodAccessProfileAdmissionMatrix(t *testing.T) {
 			}
 			pod.Spec = corev1.PodSpec{
 				ServiceAccountName: account, AutomountServiceAccountToken: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever,
-				InitContainers: []corev1.Container{{Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-init-workspace"}, SecurityContext: security.DeepCopy()}},
-				Containers:     []corev1.Container{{Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-session"}, SecurityContext: security.DeepCopy()}},
+				InitContainers: []corev1.Container{
+					{Name: "internal-rpc-authority-socket-init", Image: "authority", SecurityContext: security.DeepCopy()},
+					{Name: "workspace-init", Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-init-workspace"}, SecurityContext: roleSecurity.DeepCopy()},
+				},
+				Containers: []corev1.Container{
+					{Name: "role-runtime", Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-session"}, SecurityContext: roleSecurity.DeepCopy()},
+					{Name: "provider-runtime", Image: roleImageRepository + "@sha256:" + strings.Repeat("a", 64), Args: []string{"runtime-provider"}, SecurityContext: providerSecurity.DeepCopy(), VolumeMounts: []corev1.VolumeMount{{Name: "session"}, {Name: "provider-socket"}, {Name: "provider-tmp"}}},
+					{Name: "internal-rpc-authority-issuer", Image: "authority", Command: []string{"/usr/local/bin/internal-rpc-authority-issuer"}, SecurityContext: issuerSecurity.DeepCopy()},
+				},
 			}
 			clientgoscheme.Scheme.Default(pod)
 			snapshot := runtimeSnapshot{Execution: execution, Revision: entity.Revision{ImageDigest: "sha256:" + strings.Repeat("a", 64)}, DesiredPod: pod.DeepCopy()}
@@ -58,9 +68,31 @@ func TestExactRuntimePodAccessProfileAdmissionMatrix(t *testing.T) {
 			if exactRuntimePod("system:serviceaccount:mattercodex-system:runtime-workload-materializer", changed, snapshot) {
 				t.Fatal("missing profile label was admitted")
 			}
+			mutations := map[string]func(*corev1.Pod){
+				"provider uid": func(changed *corev1.Pod) { *changed.Spec.Containers[1].SecurityContext.RunAsUser = 10001 },
+				"provider authority mount": func(changed *corev1.Pod) {
+					changed.Spec.Containers[1].VolumeMounts = append(changed.Spec.Containers[1].VolumeMounts, corev1.VolumeMount{Name: "authority-sockets"})
+				},
+				"provider service account token": func(changed *corev1.Pod) {
+					changed.Spec.Containers[1].VolumeMounts = append(changed.Spec.Containers[1].VolumeMounts, corev1.VolumeMount{Name: "kube-api-access"})
+				},
+				"missing issuer": func(changed *corev1.Pod) { changed.Spec.Containers = changed.Spec.Containers[:2] },
+				"role command":   func(changed *corev1.Pod) { changed.Spec.Containers[0].Args = []string{"runtime-provider"} },
+			}
+			for name, mutate := range mutations {
+				t.Run(name, func(t *testing.T) {
+					changed := pod.DeepCopy()
+					mutate(changed)
+					if exactRuntimePod("system:serviceaccount:mattercodex-system:runtime-workload-materializer", changed, snapshot) {
+						t.Fatal("mutated runtime Pod was admitted")
+					}
+				})
+			}
 		})
 	}
 }
+
+func testInt64Pointer(value int64) *int64 { return &value }
 
 func TestExactS3ReadbackPodAdmissionMatrix(t *testing.T) {
 	t.Setenv("RUNTIME_S3_READBACK_IMAGE", "registry.invalid/runtime-controller@sha256:"+strings.Repeat("a", 64))

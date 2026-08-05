@@ -68,6 +68,20 @@ type ResolveGateInput struct {
 	ImmutableInputSHA256 string
 }
 
+type RuntimeActionInput struct {
+	IdempotencyKey string
+	SessionID      string
+	TurnID         string
+	Action         string
+}
+
+type SessionMCPBindingInput struct {
+	IdempotencyKey, SessionID, AgentSessionKey, AgentSessionBindingSHA256 string
+	AgentSessionVersion                                                   uint64
+	AgentSessionID                                                        int64
+	ImmutableSecretRef, ProviderContentVersion, ContentSHA256             string
+}
+
 type RecordDeliveryInput struct {
 	IdempotencyKey string
 	GateID         string
@@ -104,21 +118,43 @@ type InteractionDeliveryWork struct {
 	InlinePayload                                       []byte
 }
 
+type RuntimeMaterialization struct {
+	ProjectID, StorageRef, MediaType, SHA256 string
+	ArtifactVersion, SizeBytes               uint64
+}
+
+type RuntimeOutputMetadata struct {
+	Kind, Name, MediaType, SHA256 string
+	SizeBytes                     uint64
+	Sequence, Total               uint32
+}
+
+type RuntimeOutputAuthorization struct {
+	OrganizationID, ProjectID string
+	ExecutionVersion, Fence   uint64
+	GrantGeneration           uint64
+}
+
 type Client interface {
 	Check(context.Context) error
 	CheckInteraction(context.Context, string, string) error
 	RegisterArtifact(context.Context, string, ArtifactInput) (Artifact, error)
 	GetArtifact(context.Context, string, string, uint64) (Artifact, error)
 	CreateSession(context.Context, string, string, string, string, string) (Session, error)
-	EnqueueTurn(context.Context, string, string, string, string, string) (Turn, error)
+	BindSessionMCP(context.Context, string, SessionMCPBindingInput) (Session, error)
+	EnqueueTurn(context.Context, string, string, string, string, string, []string) (Turn, error)
 	GetTurn(context.Context, string, string) (Turn, error)
 	ManageConversationLifecycle(context.Context, string, string, string, string, string) error
 	ClaimOwnerGate(context.Context, string) (entity.OwnerGateClaim, error)
 	RecordOwnerGateDelivery(context.Context, string, RecordDeliveryInput) error
 	ResolveOwnerGate(context.Context, string, ResolveGateInput) error
+	ManageRuntimeAction(context.Context, string, RuntimeActionInput) (Turn, error)
 	ExpireOwnerGate(context.Context, string) error
 	ClaimInteractionDelivery(context.Context, string) (InteractionDeliveryWork, error)
 	RecordInteractionDelivery(context.Context, string, InteractionDeliveryWork, string) error
 	IssueInteractionDeliveryReadback(context.Context, string, string, bool) (string, time.Time, error)
 	ValidateInteractionDeliveryReadback(context.Context, string, string, string, string, string, string, uint64) (bool, error)
+	GetRuntimeMaterialization(context.Context, string, string, string, uint64, string) (RuntimeMaterialization, error)
+	AuthorizeRuntimeOutput(context.Context, string, string, RuntimeOutputMetadata) (RuntimeOutputAuthorization, error)
+	RegisterRuntimeOutput(context.Context, string, string, RuntimeOutputAuthorization, RuntimeOutputMetadata, string) (Artifact, error)
 }

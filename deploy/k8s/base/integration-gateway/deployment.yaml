@@ -124,7 +124,6 @@ spec:
             - {name: authority-sockets, mountPath: /run/mattercodex/internal-rpc-authority, readOnly: true}
             - {name: server-tls, mountPath: /var/run/secrets/mattercodex/integration-gateway/workload-tls, readOnly: true}
             - {name: client-ca, mountPath: /var/run/config/mattercodex/integration-gateway/client-ca, readOnly: true}
-            - {name: result-grant-trust, mountPath: /var/run/config/mattercodex/integration-gateway/result-grant, readOnly: true}
             - {name: postgres-runtime, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-runtime, readOnly: true}
             - {name: postgres-context, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-context, readOnly: true}
             - {name: postgres-ca, mountPath: /var/run/config/mattercodex/integration-gateway/postgres, readOnly: true}
@@ -280,8 +279,6 @@ spec:
           secret: {secretName: internal-rpc-authority-integration-gateway-workload-tls, defaultMode: 0440}
         - name: client-ca
           configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
-        - name: result-grant-trust
-          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-result-grant-trust}}
         - name: postgres-runtime
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-postgres-runtime}}
         - name: postgres-context

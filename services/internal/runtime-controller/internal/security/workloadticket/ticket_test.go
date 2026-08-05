@@ -25,7 +25,8 @@ func TestVerifyForAudienceBindsIndependentIssuerAndExactTuple(t *testing.T) {
 		RuntimeRevisionSHA256: strings.Repeat("a", 64), ImmutableInputSHA256: strings.Repeat("b", 64),
 		EffectiveRuntimeSHA256: strings.Repeat("c", 64), AgentBindingSHA256: strings.Repeat("d", 64),
 		CredentialSnapshotSHA256: strings.Repeat("e", 64), WorkloadTicketSHA256: strings.Repeat("f", 64),
-		Version: 7, Fence: 8, GrantGeneration: 9, ResourceClass: enum.ResourceStandard,
+		CodexDeliveryRecoverySourceExecutionID: "77777777-7777-4777-8777-777777777777",
+		Version:                                7, Fence: 8, GrantGeneration: 9, ResourceClass: enum.ResourceStandard,
 		AccessProfile: enum.AccessProjectRead, State: enum.ExecutionPending,
 	}
 	privateKey := ed25519.NewKeyFromSeed([]byte("runtime-archive-signing-test-key"))
@@ -39,6 +40,11 @@ func TestVerifyForAudienceBindsIndependentIssuerAndExactTuple(t *testing.T) {
 	execution.Fence++
 	if _, err := VerifyForAudience(compact, privateKey.Public().(ed25519.PublicKey), execution, "mattercodex-runtime-s3-archive", now.Add(time.Minute)); err == nil {
 		t.Fatal("stale exact tuple was accepted")
+	}
+	execution.Fence--
+	execution.CodexDeliveryRecoverySourceExecutionID = "88888888-8888-4888-8888-888888888888"
+	if _, err := VerifyForAudience(compact, privateKey.Public().(ed25519.PublicKey), execution, "mattercodex-runtime-s3-archive", now.Add(time.Minute)); err == nil {
+		t.Fatal("delivery recovery execution substitution was accepted")
 	}
 }
 
@@ -82,7 +88,8 @@ func signTestTicket(t *testing.T, privateKey ed25519.PrivateKey, execution entit
 		GrantGeneration: execution.GrantGeneration, ImmutableInputSHA256: execution.ImmutableInputSHA256,
 		EffectiveRuntimeSHA256: execution.EffectiveRuntimeSHA256, AgentBindingSHA256: execution.AgentBindingSHA256,
 		CredentialSnapshotSHA256: execution.CredentialSnapshotSHA256, WorkloadTicketSHA256: execution.WorkloadTicketSHA256,
-		ResourceClass: string(execution.ResourceClass), ClusterAccessProfile: string(execution.AccessProfile), State: string(execution.State),
+		CodexDeliveryRecoverySourceExecutionID: execution.CodexDeliveryRecoverySourceExecutionID,
+		ResourceClass:                          string(execution.ResourceClass), ClusterAccessProfile: string(execution.AccessProfile), State: string(execution.State),
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

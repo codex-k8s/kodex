@@ -112,35 +112,6 @@ type ExecutionCompletion struct {
 	Audit                entity.AuditEvent
 }
 
-type ResultBinding struct {
-	InvocationID        string
-	AttemptID           string
-	Outcome             enum.InvocationStatus
-	Reference           string
-	ReferenceSHA256     string
-	ContinuationID      string
-	ContinuationVersion uint64
-	ContinuationFence   uint64
-}
-
-type ResultGrantVerifierState struct {
-	KeysetRevision   uint64
-	HighWatermark    uint64
-	ServedGeneration uint64
-	KeysetSHA256     string
-	SignerGeneration uint64
-}
-
-type ResultAcknowledgement struct {
-	Binding         ResultBinding
-	DeliveryVersion uint64
-	DeliveryFence   uint64
-	IdempotencyHash string
-	RequestHash     string
-	AcknowledgedAt  time.Time
-	Audit           entity.AuditEvent
-}
-
 type ConnectionValidation struct {
 	ConnectionID       string
 	ExpectedGeneration uint64
@@ -157,7 +128,6 @@ type Transaction interface {
 	ClaimExecution(context.Context, time.Time) (ExecutionClaim, bool, error)
 	MarkProviderDispatched(context.Context, string, string, time.Time) error
 	CompleteExecution(context.Context, ExecutionCompletion) error
-	AcknowledgeResult(context.Context, ResultAcknowledgement) (entity.Result, error)
 	SetConnectionValidation(context.Context, ConnectionValidation) error
 	CloseSession(context.Context, string, time.Time, entity.AuditEvent) error
 	Expire(context.Context, time.Time, int) (int64, error)
@@ -174,8 +144,6 @@ type Repository interface {
 	GetConnection(context.Context, Scope, string) (entity.Connection, error)
 	ListTools(context.Context, Scope, string) ([]ToolBinding, error)
 	GetInvocation(context.Context, Scope, string) (entity.Invocation, *entity.Approval, *entity.Result, error)
-	ResolveResult(context.Context, Scope, ResultBinding) (entity.Result, error)
-	AdmitResultGrantVerifierState(context.Context, ResultGrantVerifierState) error
 	TouchSession(context.Context, Scope, string, string, time.Time, time.Time, uint64, uint32) (entity.TransportSession, error)
 	ReleaseSession(context.Context, Scope, string) error
 	Check(context.Context) error

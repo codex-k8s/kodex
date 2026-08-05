@@ -1073,10 +1073,10 @@ require_line scripts/k8s/install-bot-service.sh '#!/bin/bash -p'
 require_line scripts/k8s/render-bot-service.sh '#!/bin/bash -p'
 require_line scripts/remote/install-bot-service.sh '#!/bin/bash -p'
 require_source_commitment scripts/build-agent-runner-image.sh 6397eb2ba01d19ad9e197b7922c5f0ecad6987ef3db3b24bc66402408c0c941e
-require_source_commitment scripts/k8s/install-bot-service.sh 26266ea3ef5b4e4a0a0e38831595b91d524477e5efcf346b453f626fa42fd192
-require_source_commitment scripts/k8s/render-bot-service.sh 12e55045dcd482424adc605ad7ae330ff042e2c17ec1d93278b4e94cb41a0095
-require_source_commitment scripts/lib/env.sh eeb924a711e07aec19d1c01a12d69cfbf0ff3af5d3bd902d0ecc780b1f2e394f
-require_source_commitment scripts/remote/install-bot-service.sh 8bd6e4d850670903d42e425fdc4f308e22e7d55af07c169c6f44c833b939cee4
+require_source_commitment scripts/k8s/install-bot-service.sh 5088e75b23dc129146615599ba4dc9909e3835fa7efdff9cfc3e159d48878431
+require_source_commitment scripts/k8s/render-bot-service.sh 64b1b766c77d67d1f3ec843775f5fd02192bcfa26f7152370577ec6a4cb5cfc7
+require_source_commitment scripts/lib/env.sh 2225a7ab9aa9f4649bfac6f140fba76d574148bd79b663aa35c7e1e83e7c2f84
+require_source_commitment scripts/remote/install-bot-service.sh 2a76d6259d8a17e4009fd16a0a2f6a443f24afe222ff5052ad0a91b5d1c06048
 require_source_commitment deploy/k8s/bot-service/kaniko-job.yaml.tpl f5c0cd3e8ca1ec00bdccbed16fcb02651b88902cdd6ce10d87f4f23d5ab6e741
 require_count scripts/k8s/install-bot-service.sh '. "$REPO_ROOT/scripts/' 1
 require_count scripts/k8s/render-bot-service.sh '. "$REPO_ROOT/scripts/' 1
@@ -1123,7 +1123,7 @@ require_final_runtime_stage_contract \
   "ENV GOROOT=/usr/local/go GOENV=off GOFLAGS= GOTOOLCHAIN=local PATH=/usr/local/go/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
   'USER 10001:10001' \
   'ENTRYPOINT ["/usr/local/bin/mattercodex-init", "entrypoint", "/usr/local/bin/matter-codex-agent-runner"]' \
-  "aa16a5700a0367ec702edc2954d5c79274eab96f86511e92256e4e6a63a7c804"
+  "fd21b9be4d62b1bf8b9bdbf4118e8f32cbb3037545a2f3d2c1b3584025d20ad8"
 require_final_runtime_stage_contract \
   deploy/images/agent-runner/Dockerfile \
   "FROM node:24-alpine" \

@@ -14,6 +14,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/enum"
 	"github.com/google/uuid"
 )
 
@@ -115,14 +116,20 @@ func (signer *Signer) Sign(event entity.InboundEvent) (string, error) {
 
 func (signer *Signer) CallbackToken(delivery entity.Delivery, actorID string) (string, error) {
 	if uuid.Validate(delivery.ID) != nil || uuid.Validate(actorID) != nil ||
-		delivery.ChannelID == "" || delivery.OwnerGate == nil {
+		delivery.ChannelID == "" || uuid.Validate(delivery.SessionID) != nil ||
+		uuid.Validate(delivery.TurnID) != nil {
+		return "", errors.New("callback lineage is invalid")
+	}
+	kindID, processID := string(delivery.Kind), ""
+	if delivery.OwnerGate != nil {
+		kindID, processID = delivery.OwnerGate.GateID, delivery.OwnerGate.ProcessRunID
+	} else if delivery.Kind != enum.DeliveryRun {
 		return "", errors.New("callback lineage is invalid")
 	}
 	mac := hmac.New(sha256.New, signer.callbackKey)
 	_, _ = mac.Write([]byte(strings.Join([]string{
 		delivery.ID, actorID, delivery.ChannelID,
-		delivery.OwnerGate.GateID,
-		delivery.OwnerGate.ProcessRunID, delivery.SessionID, delivery.TurnID,
+		kindID, processID, delivery.SessionID, delivery.TurnID,
 	}, "\x00")))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
 }

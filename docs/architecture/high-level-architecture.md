@@ -4,8 +4,8 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-29
+version: 1.1.0
+updated: 2026-08-04
 ---
 
 # Высокоуровневая архитектура
@@ -30,10 +30,11 @@ flowchart LR
     RC --> K8S[Kubernetes API]
     K8S --> AR[Pod агента]
     AR --> AI[Поставщик среды выполнения ИИ]
-    AR --> MG[Шлюз интеграций MCP]
+    AR --> BMCP[Bot Service MCP transport]
+    BMCP --> MG[Шлюз интеграций MCP]
     MG --> EXT[Внешние системы]
     MG --> AP[Ручное согласование]
-    AR --> S3[(S3)]
+    AR --> IG
     IG --> S3
     IG --> MM
     RIB[Role Image Builder] --> REG[(OCI Registry)]
@@ -70,11 +71,11 @@ Gateway не читает PostgreSQL Control Plane напрямую.
 
 Контроллер решает:
 
-- какой pod сессии должен существовать;
+- какой execution-scoped pod сессии должен существовать;
 - какую `RuntimeRevision` применить;
 - достаточно ли ресурсов;
-- какой простаивающий pod можно освободить;
-- когда завершить pod сессии по TTL;
+- какой доказанно terminal pod можно освободить;
+- когда guarded удалить terminal pod, не затрагивая PVC;
 - когда восстановить ход из очереди после временной ошибки.
 
 ## Запуск агента

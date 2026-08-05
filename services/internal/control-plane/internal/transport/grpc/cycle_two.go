@@ -55,6 +55,31 @@ func (server *Server) ManageSession(
 	return &controlplanev1.ManageSessionResponse{Session: encoded}, nil
 }
 
+func (server *Server) BindSessionMCP(
+	ctx context.Context,
+	request *controlplanev1.BindSessionMCPRequest,
+) (*controlplanev1.BindSessionMCPResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_BindSessionMCP_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	changed, err := server.service.BindSessionMCP(ctx, resource.BindSessionMCPInput{Principal: principal,
+		IdempotencyKey: request.GetIdempotencyKey(), SessionID: request.GetSessionId(),
+		AgentSessionKey: request.GetAgentSessionKey(),
+		AgentSessionID:  request.GetAgentSessionId(), AgentSessionVersion: request.GetAgentSessionVersion(),
+		AgentSessionBindingSHA256: request.GetAgentSessionBindingSha256(),
+		ImmutableSecretRef:        request.GetImmutableSecretRef(), ProviderContentVersion: request.GetProviderContentVersion(),
+		ContentSHA256: request.GetContentSha256()})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	encoded, err := toProtoResource(changed)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.BindSessionMCPResponse{Session: encoded}, nil
+}
+
 func (server *Server) ManageConversationLifecycle(
 	ctx context.Context,
 	request *controlplanev1.ManageConversationLifecycleRequest,

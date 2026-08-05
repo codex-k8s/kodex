@@ -219,55 +219,6 @@ func (repository *Repository) GetInvocation(ctx context.Context, scope domainrep
 	return invocation, approval, result, err
 }
 
-func (repository *Repository) ResolveResult(
-	ctx context.Context,
-	scope domainrepo.Scope,
-	binding domainrepo.ResultBinding,
-) (entity.Result, error) {
-	var result entity.Result
-	err := repository.read(ctx, scope, func(tx pgx.Tx) error {
-		var raw []byte
-		if err := tx.QueryRow(ctx, sqlResultResolve, pgx.StrictNamedArgs{
-			"invocation_id": binding.InvocationID,
-			"attempt_id":    binding.AttemptID,
-			"tenant_id":     scope.TenantID,
-			"project_id":    scope.ProjectID,
-			"outcome":       binding.Outcome, "reference_sha256": binding.ReferenceSHA256,
-			"continuation_id": binding.ContinuationID, "continuation_version": binding.ContinuationVersion,
-			"continuation_fence": binding.ContinuationFence,
-		}).Scan(&raw, &result.DeliveryVersion, &result.DeliveryFence,
-			&result.AcknowledgedAt, &result.CompletedAt); err != nil {
-			return err
-		}
-		if json.Unmarshal(raw, &result) != nil || result.InvocationID != binding.InvocationID ||
-			result.AttemptID != binding.AttemptID || result.PayloadDigest != binding.ReferenceSHA256 ||
-			result.Status != binding.Outcome || result.DeliveryVersion == 0 ||
-			result.DeliveryFence == 0 {
-			return errs.ErrConflict
-		}
-		return nil
-	})
-	return result, err
-}
-
-func (repository *Repository) AdmitResultGrantVerifierState(
-	ctx context.Context,
-	state domainrepo.ResultGrantVerifierState,
-) error {
-	var admitted bool
-	if err := repository.pool.QueryRow(ctx, sqlResultGrantKeysetAdmit, pgx.StrictNamedArgs{
-		"keyset_revision": state.KeysetRevision, "high_watermark": state.HighWatermark,
-		"served_generation": state.ServedGeneration, "keyset_sha256": state.KeysetSHA256,
-		"signer_generation": state.SignerGeneration,
-	}).Scan(&admitted); err != nil {
-		return mapError(err)
-	}
-	if !admitted {
-		return errs.ErrForbidden
-	}
-	return nil
-}
-
 func (repository *Repository) TouchSession(ctx context.Context, scope domainrepo.Scope, sessionID, tokenDigest string, now, expiresAt time.Time, maximumRequests uint64, maximumConcurrency uint32) (entity.TransportSession, error) {
 	var session entity.TransportSession
 	err := repository.write(ctx, scope, func(tx pgx.Tx) error {

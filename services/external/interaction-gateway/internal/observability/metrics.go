@@ -82,7 +82,7 @@ func (metrics *Metrics) ObserveDelivery(kind, outcome string) {
 
 func normalizeRoute(value string) string {
 	switch value {
-	case "slash", "action", "dialog", "readback", "technical":
+	case "slash", "action", "dialog", "readback", "materialization", "runtime_output", "technical":
 		return value
 	default:
 		return "unknown"

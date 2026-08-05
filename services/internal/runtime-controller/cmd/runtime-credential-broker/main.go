@@ -738,13 +738,14 @@ func materializeRolePod(ctx context.Context, client kubernetes.Interface, namesp
 		pod.Annotations["runtime.mattercodex.dev/workload-ticket"] != snapshot.WorkloadTicket ||
 		pod.Spec.ServiceAccountName != accessServiceAccountName(execution) || pod.Spec.AutomountServiceAccountToken == nil ||
 		*pod.Spec.AutomountServiceAccountToken || pod.Spec.RestartPolicy != corev1.RestartPolicyNever ||
-		len(pod.Spec.InitContainers) != 1 || len(pod.Spec.Containers) != 1 ||
-		len(pod.Spec.InitContainers[0].Args) != 1 || pod.Spec.InitContainers[0].Args[0] != "runtime-init-workspace" ||
+		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 2 ||
+		len(pod.Spec.InitContainers[1].Args) != 1 || pod.Spec.InitContainers[1].Args[0] != "runtime-init-workspace" ||
 		len(pod.Spec.Containers[0].Args) != 1 || pod.Spec.Containers[0].Args[0] != "runtime-session" ||
-		pod.Spec.InitContainers[0].Image != pod.Spec.Containers[0].Image ||
+		pod.Spec.InitContainers[1].Image != pod.Spec.Containers[0].Image ||
 		!strings.HasSuffix(pod.Spec.Containers[0].Image, "@"+revision.ImageDigest) ||
-		!restrictedContainer(pod.Spec.InitContainers[0].SecurityContext) ||
+		!restrictedContainer(pod.Spec.InitContainers[0].SecurityContext) || !restrictedContainer(pod.Spec.InitContainers[1].SecurityContext) ||
 		!restrictedContainer(pod.Spec.Containers[0].SecurityContext) ||
+		!restrictedContainer(pod.Spec.Containers[1].SecurityContext) ||
 		!exactRuntimeVolumes(pod.Spec.Volumes, execution, len(revision.Credentials)) {
 		return errors.New("runtime role Pod ticketed spec is invalid")
 	}
@@ -841,7 +842,7 @@ func restrictedContainer(security *corev1.SecurityContext) bool {
 }
 
 func exactRuntimeVolumes(volumes []corev1.Volume, execution entity.Execution, credentialCount int) bool {
-	if len(volumes) != credentialCount+4 {
+	if len(volumes) != credentialCount+20 {
 		return false
 	}
 	seen := make(map[string]bool, len(volumes))
@@ -868,6 +869,9 @@ func exactRuntimeVolumes(volumes []corev1.Volume, execution entity.Execution, cr
 				return false
 			}
 		default:
+			if strings.HasPrefix(volume.Name, "authority-") {
+				continue
+			}
 			if !strings.HasPrefix(volume.Name, "credential-") || volume.Secret == nil {
 				return false
 			}
@@ -898,61 +902,40 @@ func jsonEqual(left, right any) bool {
 
 func materializeAccessProfile(ctx context.Context, client kubernetes.Interface, namespace string, execution entity.Execution, credentialCount int) error {
 	name := accessServiceAccountName(execution)
-	if string(execution.AccessProfile) == "CLUSTER_ADMIN" {
-		serviceAccount, err := client.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil || serviceAccount.Labels["runtime.mattercodex.dev/access-profile"] != "cluster_admin" {
-			return errors.New("read prebound cluster admin admission identity")
-		}
-		binding, err := client.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
-		if err != nil || binding.RoleRef.Kind != "ClusterRole" || binding.RoleRef.Name != "cluster-admin" ||
-			len(binding.Subjects) != 1 || binding.Subjects[0].Kind != "ServiceAccount" ||
-			binding.Subjects[0].Name != name || binding.Subjects[0].Namespace != namespace {
-			return errors.New("read prebound cluster admin admission grant")
-		}
-	} else {
-		annotations := map[string]string{
-			"runtime.mattercodex.dev/execution-id":    execution.ID,
-			"runtime.mattercodex.dev/organization-id": execution.OrganizationID,
-			"runtime.mattercodex.dev/project-id":      execution.ProjectID,
-			"runtime.mattercodex.dev/session-id":      execution.SessionID,
-		}
-		accounts := client.CoreV1().ServiceAccounts(namespace)
-		account, err := accounts.Get(ctx, name, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			account, err = accounts.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name,
-				Labels: executionLabels(execution, "runtime-access"), Annotations: annotations}, AutomountServiceAccountToken: boolPointer(false)}, metav1.CreateOptions{})
-		}
-		if err != nil || account.Annotations["runtime.mattercodex.dev/execution-id"] != execution.ID {
+	if string(execution.AccessProfile) != "NONE" {
+		return errors.New("direct Kubernetes access is not allowed for agent-runner")
+	}
+	annotations := map[string]string{
+		"runtime.mattercodex.dev/execution-id":    execution.ID,
+		"runtime.mattercodex.dev/organization-id": execution.OrganizationID,
+		"runtime.mattercodex.dev/project-id":      execution.ProjectID,
+		"runtime.mattercodex.dev/session-id":      execution.SessionID,
+	}
+	accounts := client.CoreV1().ServiceAccounts(namespace)
+	account, err := accounts.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		account, err = accounts.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{
+			Name: name, Labels: executionLabels(execution, "runtime-access"), Annotations: annotations,
+		}, AutomountServiceAccountToken: boolPointer(false)}, metav1.CreateOptions{})
+	}
+	if err != nil || account.AutomountServiceAccountToken == nil || *account.AutomountServiceAccountToken ||
+		account.Labels["app.kubernetes.io/component"] != "runtime-access" {
+		return errors.New("materialize exact runtime access identity")
+	}
+	for key, value := range annotations {
+		if account.Annotations[key] != value {
 			return errors.New("materialize exact runtime access identity")
-		}
-		if string(execution.AccessProfile) == "PROJECT_READ_ONLY" {
-			projectNamespace := projectNamespaceName(execution.ProjectID)
-			ownerNamespace, err := client.CoreV1().Namespaces().Get(ctx, projectNamespace, metav1.GetOptions{})
-			if err != nil || ownerNamespace.Annotations["mattercodex.dev/project-id"] != execution.ProjectID ||
-				ownerNamespace.Annotations["mattercodex.dev/organization-id"] != execution.OrganizationID {
-				return errors.New("read exact server-managed project namespace")
-			}
-			desired := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: executionLabels(execution, "runtime-access")},
-				Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: name, Namespace: namespace}},
-				RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "runtime-role-project-read"}}
-			if err := applyRoleBinding(ctx, client, projectNamespace, desired); err != nil {
-				return err
-			}
 		}
 	}
 	return materializeHandoff(ctx, client, namespace, execution, name, credentialCount)
 }
 
 func materializeHandoff(ctx context.Context, client kubernetes.Interface, namespace string, execution entity.Execution, serviceAccount string, credentialCount int) error {
-	name := "runtime-handoff-" + shortID(execution.SessionID)
-	credentialNames := make([]string, 0, credentialCount)
-	for index := 0; index < credentialCount; index++ {
-		credentialNames = append(credentialNames, executionCredentialSecretName(execution.ID, index))
-	}
+	name := "runtime-handoff-" + shortID(execution.ID)
+	_ = credentialCount
 	desired := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: executionLabels(execution, "runtime-handoff")}, Rules: []rbacv1.PolicyRule{
-		{APIGroups: []string{""}, Resources: []string{"pods"}, ResourceNames: []string{podName(execution)}, Verbs: []string{"get", "patch"}},
 		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{configName(execution)}, Verbs: []string{"get"}},
-		{APIGroups: []string{""}, Resources: []string{"secrets"}, ResourceNames: credentialNames, Verbs: []string{"get"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, ResourceNames: []string{"runtime-handoff-" + shortID(execution.ID)}, Verbs: []string{"get", "update"}},
 	}}
 	roles := client.RbacV1().Roles(namespace)
 	actual, err := roles.Get(ctx, name, metav1.GetOptions{})
@@ -1696,10 +1679,8 @@ func stableHash(value string, length int) string {
 }
 
 func accessServiceAccountName(execution entity.Execution) string {
-	if string(execution.AccessProfile) == "CLUSTER_ADMIN" {
-		return "runtime-role-cluster-admin"
-	}
-	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
+	return "runtime-access-" + stableHash(execution.OrganizationID+":"+execution.ProjectID+":"+
+		execution.SessionID+":"+execution.RoleID+":"+execution.ID, 24)
 }
 
 func projectNamespaceName(projectID string) string {
@@ -1707,7 +1688,7 @@ func projectNamespaceName(projectID string) string {
 }
 
 func podName(execution entity.Execution) string {
-	return "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID, 24)
+	return "runtime-role-" + stableHash(execution.RoleID+":"+execution.ThreadID+":"+execution.SessionID+":"+execution.ID, 24)
 }
 
 func pvcName(execution entity.Execution) string {

@@ -17,6 +17,7 @@ import (
 
 var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var threadPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,256}$`)
+var codexRolloutPattern = regexp.MustCompile(`^\.matter-codex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
 
 type Execution struct {
 	ID, OrganizationID, ProjectID, ProcessID, SessionID, ThreadID, RoleID, TurnID string
@@ -64,9 +65,19 @@ type Execution struct {
 	RestoreTargetPVCName, RestoreTargetPVCUID, RestoreTargetPVCResourceVersion    string
 	RehydrateProofReference, RehydrateProofSHA256                                 string
 	CredentialSnapshotSHA256, WorkloadTicketSHA256                                string
+	ProviderBindingID, ProviderBindingSHA256, CodexSessionID                      string
+	CodexArchiveRelativePath, CodexArchiveSHA256, CodexArchiveProvenance          string
+	CodexDeliveryRecoverySourceExecutionID                                        string
+	ProviderBindingVersion                                                        uint64
+	Materializations                                                              []Materialization
 	WorkloadTicket                                                                string `json:"-"`
 	ArchiveWorkloadTicket                                                         string `json:"-"`
 	RestoreWorkloadTicket                                                         string `json:"-"`
+}
+
+type Materialization struct {
+	Kind, ArtifactID, SHA256, RelativePath, MediaType, StorageRef string
+	ArtifactVersion, SizeBytes                                    uint64
 }
 
 // ArchiveEvidence — exact owner-bound S3 readback, а не вычисленные target поля.
@@ -103,6 +114,8 @@ func (execution Execution) Validate() error {
 		execution.RescheduleAfter.IsZero() ||
 		!sha256Pattern.MatchString(execution.CredentialSnapshotSHA256) ||
 		!sha256Pattern.MatchString(execution.WorkloadTicketSHA256) ||
+		uuid.Validate(execution.ProviderBindingID) != nil || execution.ProviderBindingVersion == 0 ||
+		!sha256Pattern.MatchString(execution.ProviderBindingSHA256) || len(execution.Materializations) < 2 ||
 		execution.GrantGeneration == 0 || execution.Version == 0 || execution.Fence == 0 ||
 		execution.WorkloadID == "" || execution.WorkloadSPIFFEID == "" {
 		return errors.New("runtime execution binding is invalid")
@@ -126,10 +139,61 @@ func (execution Execution) Validate() error {
 	}
 	if !strings.HasPrefix(execution.WorkloadSPIFFEID, "spiffe://") ||
 		!validArchiveState(execution) || !validCleanupState(execution) ||
-		!validRestoreSource(execution) || !validRestoreAssignment(execution) {
+		!validRestoreSource(execution) || !validRestoreAssignment(execution) ||
+		!validCodexArchive(execution) || !validMaterializations(execution.Materializations) {
 		return errors.New("runtime execution lifecycle evidence is invalid")
 	}
+	if execution.CodexDeliveryRecoverySourceExecutionID != "" &&
+		(uuid.Validate(execution.CodexDeliveryRecoverySourceExecutionID) != nil || execution.Attempt < 2 ||
+			execution.CodexSessionID == "") {
+		return errors.New("runtime delivery recovery source is invalid")
+	}
 	return nil
+}
+
+func validCodexArchive(execution Execution) bool {
+	empty := execution.CodexSessionID == "" && execution.CodexArchiveRelativePath == "" &&
+		execution.CodexArchiveSHA256 == "" && execution.CodexArchiveProvenance == ""
+	present := uuid.Validate(execution.CodexSessionID) == nil &&
+		codexRolloutPattern.MatchString(execution.CodexArchiveRelativePath) &&
+		!strings.Contains(execution.CodexArchiveRelativePath, "..") &&
+		sha256Pattern.MatchString(execution.CodexArchiveSHA256) &&
+		validCodexArchiveProvenance(execution.CodexArchiveProvenance,
+			execution.CodexArchiveRelativePath, execution.CodexArchiveSHA256)
+	return empty || present
+}
+
+func validCodexArchiveProvenance(value, path, digest string) bool {
+	const prefix = "codex-app-server-rollout-v1:"
+	suffix := ":" + path + ":" + digest
+	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
+		return false
+	}
+	sourceExecutionID := strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
+	return uuid.Validate(sourceExecutionID) == nil
+}
+
+func validMaterializations(items []Materialization) bool {
+	seen := make(map[string]struct{}, len(items))
+	prompt, instructions := 0, 0
+	for _, item := range items {
+		if uuid.Validate(item.ArtifactID) != nil || item.ArtifactVersion == 0 || item.SizeBytes == 0 ||
+			!sha256Pattern.MatchString(item.SHA256) || item.RelativePath == "" || item.MediaType == "" ||
+			item.StorageRef == "" {
+			return false
+		}
+		if _, duplicate := seen[item.RelativePath]; duplicate {
+			return false
+		}
+		seen[item.RelativePath] = struct{}{}
+		if item.Kind == "PROMPT" && item.RelativePath == ".matter-codex/inbox/prompt.md" {
+			prompt++
+		}
+		if item.Kind == "INSTRUCTION" && item.RelativePath == "AGENTS.md" {
+			instructions++
+		}
+	}
+	return prompt == 1 && instructions == 1
 }
 
 func validRestoreAssignment(execution Execution) bool {
@@ -244,27 +308,29 @@ type Component struct {
 }
 
 type Revision struct {
-	ID                          string
-	Version                     uint64
-	ManifestSHA256              string
-	EffectiveRuntimeSHA256      string
-	ImageDigest                 string
-	SessionID, RoleID, ChatID   string
-	ProviderCredentialBindingID string
-	PromptProfileID             string
-	PromptRevision              uint64
-	AuthorityPolicyRevision     uint64
-	AuthorityPolicySHA256       string
-	CredentialBindingIDs        []string
-	IntegrationIDs              []string
-	Components                  []Component
-	Credentials                 []CredentialRef
-	ProviderObservedUsage       uint64
-	ProviderObservedLimit       uint64
-	ProviderObservationRevision uint64
-	ProviderObservedAt          time.Time
-	ProviderObservationMaxAge   time.Duration
-	AgentProfile                string
+	ID                                            string
+	Version                                       uint64
+	ManifestSHA256                                string
+	EffectiveRuntimeSHA256                        string
+	ImageDigest                                   string
+	SessionID, RoleID, ChatID                     string
+	ProviderCredentialBindingID                   string
+	ProviderAccountName                           string
+	PromptProfileID                               string
+	PromptRevision                                uint64
+	AuthorityPolicyRevision                       uint64
+	AuthorityPolicySHA256                         string
+	CredentialBindingIDs                          []string
+	IntegrationIDs                                []string
+	Components                                    []Component
+	Credentials                                   []CredentialRef
+	ProviderObservedUsage                         uint64
+	ProviderObservedLimit                         uint64
+	ProviderObservationRevision                   uint64
+	ProviderObservedAt                            time.Time
+	ProviderObservationMaxAge                     time.Duration
+	AgentProfile                                  string
+	CodexModel, CodexSandbox, CodexApprovalPolicy string
 }
 
 type CredentialRef struct {
@@ -280,6 +346,7 @@ func (revision Revision) ValidateFor(execution Execution) error {
 	if revision.ID != execution.RuntimeRevisionID ||
 		revision.Version != execution.RuntimeRevisionVersion ||
 		revision.SessionID != execution.SessionID || revision.RoleID != execution.RoleID ||
+		revision.ProviderCredentialBindingID != execution.ProviderBindingID ||
 		uuid.Validate(revision.ID) != nil || uuid.Validate(revision.SessionID) != nil ||
 		uuid.Validate(revision.RoleID) != nil || uuid.Validate(revision.PromptProfileID) != nil ||
 		uuid.Validate(revision.ProviderCredentialBindingID) != nil ||
@@ -296,6 +363,7 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		revision.ProviderObservedUsage > revision.ProviderObservedLimit ||
 		revision.ProviderObservationRevision == 0 || revision.ProviderObservedAt.IsZero() ||
 		revision.ProviderObservationMaxAge < time.Minute || revision.ProviderObservationMaxAge > 24*time.Hour ||
+		!regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`).MatchString(revision.ProviderAccountName) ||
 		!regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`).MatchString(revision.AgentProfile) ||
 		len(revision.ImageDigest) != 71 || revision.ImageDigest[:7] != "sha256:" ||
 		!sha256Pattern.MatchString(revision.ImageDigest[7:]) {
@@ -326,6 +394,15 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		return errors.New("runtime revision component set is incomplete")
 	}
 	credentialRefs := make(map[string]CredentialRef, len(revision.Credentials))
+	requiredPurposes := map[string]int{
+		"control-plane-application-grant":           0,
+		"runtime-materialization-application-grant": 0,
+		"mcp-token":                      0,
+		"handoff-private-key":            0,
+		"control-plane-client-tls":       0,
+		"interaction-gateway-client-tls": 0,
+		"mcp-client-tls":                 0,
+	}
 	for _, credential := range revision.Credentials {
 		component, exists := credentialComponents[credential.ResourceID]
 		if !exists || credential.Version != component.Version || credential.Purpose == "" ||
@@ -338,6 +415,17 @@ func (revision Revision) ValidateFor(execution Execution) error {
 			return errors.New("runtime credential reference is duplicated")
 		}
 		credentialRefs[credential.ResourceID] = credential
+		if credential.ResourceID == revision.ProviderCredentialBindingID && credential.Purpose != "provider-account" {
+			return errors.New("runtime provider credential purpose is invalid")
+		}
+		if _, required := requiredPurposes[credential.Purpose]; required {
+			requiredPurposes[credential.Purpose]++
+		}
+	}
+	for _, count := range requiredPurposes {
+		if count != 1 {
+			return errors.New("runtime authority credential set is incomplete")
+		}
 	}
 	seenBindings := make(map[string]struct{}, len(revision.CredentialBindingIDs))
 	for _, identifier := range revision.CredentialBindingIDs {
@@ -439,16 +527,25 @@ type RuntimeStatus struct {
 }
 
 type RuntimeHandoff struct {
-	Schema, ExecutionID, RuntimeRevisionSHA256, ImmutableInputSHA256 string
-	EffectiveRuntimeSHA256, AgentRunID, AgentBindingSHA256           string
-	ExecutionVersion, Fence, GrantGeneration                         uint64
-	AgentSessionID, AgentSessionTurnID                               int64
-	Outcome, TerminalReference, TerminalSHA256                       string
-	ResultArtifactID, ResultArtifactSHA256, ResultArtifactName       string
-	ResultArtifactMediaType                                          string
-	ResultArtifactVersion                                            uint64
-	ResultArtifactPayload                                            []byte
-	ObservedAt                                                       time.Time
+	Schema, ExecutionID, RuntimeRevisionSHA256, ImmutableInputSHA256      string
+	EffectiveRuntimeSHA256, SessionID, TurnID                             string
+	ExecutionVersion, Fence, GrantGeneration                              uint64
+	Attempt                                                               uint32
+	ProviderBindingID, ProviderBindingSHA256                              string
+	ProviderBindingVersion                                                uint64
+	Outcome, TerminalReference, TerminalSHA256                            string
+	Outputs                                                               []RuntimeOutput
+	CodexSessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
+	ObservedAt                                                            time.Time
+}
+
+type RuntimeOutput struct {
+	Kind, ArtifactID, ArtifactSHA256, ArtifactName, ArtifactMediaType string
+	ArtifactVersion                                                   uint64
+	ArtifactPayload                                                   []byte
+	ArtifactStorageRef                                                string
+	ArtifactSizeBytes                                                 uint64
+	Sequence, Total                                                   uint32
 }
 
 type PVCDeletionProof struct {

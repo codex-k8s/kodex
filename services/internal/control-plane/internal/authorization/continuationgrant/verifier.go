@@ -41,12 +41,10 @@ func New(config Config) (*Verifier, error) {
 	if config.ProducerID == "" || config.Purpose == "" {
 		return nil, errors.New("continuation grant producer is invalid")
 	}
-	if config.ExpectedPurpose != integrationgatewayauth.PurposeTransition &&
-		config.ExpectedPurpose != integrationgatewayauth.PurposeResultAccess {
+	if config.ExpectedPurpose != integrationgatewayauth.PurposeTransition {
 		return nil, errors.New("continuation grant purpose is invalid")
 	}
-	if (config.ExpectedPurpose == integrationgatewayauth.PurposeTransition && config.CredentialMetadata != "authorization") ||
-		(config.ExpectedPurpose == integrationgatewayauth.PurposeResultAccess && config.CredentialMetadata != integrationgatewayauth.ResultAccessGrantMetadata) {
+	if config.CredentialMetadata != "authorization" {
 		return nil, errors.New("continuation grant credential metadata is invalid")
 	}
 	grant, err := integrationgatewayauth.NewVerifier(integrationgatewayauth.Config{

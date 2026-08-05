@@ -110,6 +110,106 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
+  /internal/v1/runtime-materializations/{execution_id}/{artifact_id}:
+    get:
+      operationId: getRuntimeMaterialization
+      description: >-
+        Проксирует один version/digest-bound private object для exact
+        agent-runner workload. Bearer передаётся owner RPC control-plane,
+        который повторно разрешает execution, revision и artifact.
+      security:
+        - workloadMTLS: []
+          runtimeMaterializationBearer: []
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: artifact_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: version
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+        - name: sha256
+          in: query
+          required: true
+          schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+      responses:
+        '200':
+          description: Проверенные байты точной версии artifact.
+          headers:
+            X-MatterCodex-Artifact-Version:
+              schema: { type: string }
+            X-MatterCodex-Artifact-SHA256:
+              schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /internal/v1/runtime-outputs/{execution_id}:
+    put:
+      operationId: putRuntimeOutput
+      description: >-
+        Принимает один bounded output exact execution по mTLS и execution-scoped
+        bearer. Gateway вычисляет digest, выполняет content-addressed private put,
+        readback и server-owned регистрацию Artifact в control-plane.
+      security:
+        - workloadMTLS: []
+          runtimeMaterializationBearer: []
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-MatterCodex-Output-Kind
+          in: header
+          required: true
+          schema: { type: string, enum: [FINAL_MARKDOWN, FILE, IMAGE] }
+        - name: X-MatterCodex-Output-Name
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+        - name: X-MatterCodex-Output-SHA256
+          in: header
+          required: true
+          schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+        - name: X-MatterCodex-Output-Media-Type
+          in: header
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 255 }
+        - name: X-MatterCodex-Output-Sequence
+          in: header
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 4096 }
+        - name: X-MatterCodex-Output-Total
+          in: header
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 4096 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '201':
+          description: Неизменяемая server-owned ссылка на staged artifact.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeOutputReference' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /mattermost/v1/artifacts/{grant_id}/content:
     get:
       operationId: downloadInteractionArtifact
@@ -145,6 +245,10 @@ components:
     workloadMTLS:
       type: mutualTLS
     deliveryReadbackBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWS
+    runtimeMaterializationBearer:
       type: http
       scheme: bearer
       bearerFormat: JWS
@@ -205,7 +309,7 @@ components:
       properties:
         delivery_id: { type: string, format: uuid }
         callback_token: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
-        action: { type: string, enum: [APPROVE, REJECT, CHANGES_REQUESTED, CANCEL, OPEN_DIALOG] }
+        action: { type: string, enum: [APPROVE, REJECT, CHANGES_REQUESTED, CANCEL, OPEN_DIALOG, STOP, RETRY] }
         value: { type: string, maxLength: 256 }
       required: [delivery_id, callback_token, action]
     MattermostResponse:
@@ -294,6 +398,18 @@ components:
         sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         created_at: { type: string, format: date-time }
       required: [artifact_id, provider_file_id, channel_id, name, size_bytes, media_type, sha256, created_at]
+    RuntimeOutputReference:
+      type: object
+      additionalProperties: false
+      properties:
+        artifact_id: { type: string, format: uuid }
+        artifact_version: { type: integer, minimum: 1 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        size_bytes: { type: integer, format: int64, minimum: 1, maximum: 268435456 }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        media_type: { type: string, minLength: 3, maxLength: 255 }
+        storage_ref: { type: string, minLength: 8, maxLength: 2048 }
+      required: [artifact_id, artifact_version, sha256, size_bytes, name, media_type, storage_ref]
     Error:
       type: object
       additionalProperties: false

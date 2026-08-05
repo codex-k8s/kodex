@@ -96,15 +96,6 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.AgentSessionCPURequest != "500m" || cfg.AgentSessionMemoryRequest != "1Gi" || cfg.AgentSessionMemoryLimit != "64Gi" || cfg.AgentUtilityMemoryLimit != "4Gi" || cfg.AgentDevShmSizeLimit != "8Gi" {
 		t.Fatalf("agent resource defaults = cpu-request:%q memory-request:%q session-limit:%q utility-limit:%q dev-shm:%q", cfg.AgentSessionCPURequest, cfg.AgentSessionMemoryRequest, cfg.AgentSessionMemoryLimit, cfg.AgentUtilityMemoryLimit, cfg.AgentDevShmSizeLimit)
 	}
-	if !cfg.RuntimeRetentionEnabled {
-		t.Fatal("RuntimeRetentionEnabled = false")
-	}
-	if cfg.RuntimeRetentionInterval != 30*time.Minute {
-		t.Fatalf("RuntimeRetentionInterval = %s", cfg.RuntimeRetentionInterval)
-	}
-	if cfg.RuntimeRetentionOlderThan != 24*time.Hour {
-		t.Fatalf("RuntimeRetentionOlderThan = %s", cfg.RuntimeRetentionOlderThan)
-	}
 	if cfg.AuthCheckJobTTLSeconds != 300 {
 		t.Fatalf("AuthCheckJobTTLSeconds = %d", cfg.AuthCheckJobTTLSeconds)
 	}
@@ -119,13 +110,6 @@ func TestConfigDefaults(t *testing.T) {
 	}
 	if cfg.ReadHeaderTimeout != 5*time.Second || cfg.ReadTimeout != 10*time.Second || cfg.IdleTimeout != time.Minute || cfg.MaxHeaderBytes != 1024*1024 || cfg.MaxMCPRequestBodyBytes != 1024*1024 {
 		t.Fatalf("HTTP boundary defaults = header:%s read:%s idle:%s max_header:%d max_mcp:%d", cfg.ReadHeaderTimeout, cfg.ReadTimeout, cfg.IdleTimeout, cfg.MaxHeaderBytes, cfg.MaxMCPRequestBodyBytes)
-	}
-}
-
-func TestConfigRejectsShortControlCenterReadToken(t *testing.T) {
-	t.Setenv("MATTERCODEX_CONTROL_CENTER_READ_TOKEN", "synthetic-short-token")
-	if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "MATTERCODEX_CONTROL_CENTER_READ_TOKEN") {
-		t.Fatalf("короткий Control Center token принят: %v", err)
 	}
 }
 
@@ -199,35 +183,6 @@ func TestConfigValidationRejectsBadTimeout(t *testing.T) {
 		CodexPackage:                    "@openai/codex@0.144.1",
 		RuntimeWorkspaceSize:            "1Gi",
 		RuntimeJobTTLSeconds:            86400,
-		AuthCheckJobTTLSeconds:          300,
-		RuntimeLogTailLines:             40,
-		AgentServiceAccount:             "matter-codex-agent-runner",
-		AgentClusterAdminServiceAccount: "matter-codex-agent-runner-cluster-admin",
-		CodexAuthSecretName:             "matter-codex-codex-auth",
-		GitHubSecretName:                "matter-codex-github",
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("Validate() error = nil")
-	}
-}
-
-func TestConfigValidationRejectsBadRuntimeRetention(t *testing.T) {
-	cfg := Config{
-		HTTPAddr:                        ":8080",
-		Locale:                          "en",
-		DefaultChannels:                 []string{"agents-control:Agents Control"},
-		ReadHeaderTimeout:               time.Second,
-		ShutdownTimeout:                 time.Second,
-		MaxSlashFormBytes:               1024,
-		MaxGitHubWebhookBytes:           1024,
-		RuntimeSmokeImage:               "busybox:1.36",
-		AgentRunnerImage:                "matter-codex-agent-runner:dev",
-		CodexPackage:                    "@openai/codex@0.144.1",
-		RuntimeWorkspaceSize:            "1Gi",
-		RuntimeJobTTLSeconds:            86400,
-		RuntimeRetentionEnabled:         true,
-		RuntimeRetentionInterval:        0,
-		RuntimeRetentionOlderThan:       24 * time.Hour,
 		AuthCheckJobTTLSeconds:          300,
 		RuntimeLogTailLines:             40,
 		AgentServiceAccount:             "matter-codex-agent-runner",

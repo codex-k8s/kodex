@@ -4,13 +4,10 @@ import controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi
 
 func AgentRunnerOperations() map[string]string {
 	return map[string]string{
-		"control.agent-runner.readiness":               controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.agent-work-claim.manage":              controlplanev1.ControlPlaneService_ManageWorkClaim_FullMethodName,
-		"control.turn.claim":                           controlplanev1.ControlPlaneService_ClaimTurn_FullMethodName,
-		"control.turn.renew":                           controlplanev1.ControlPlaneService_RenewTurn_FullMethodName,
-		"control.turn.complete":                        controlplanev1.ControlPlaneService_CompleteTurn_FullMethodName,
-		"control.integration-continuation.get":         controlplanev1.ControlPlaneService_GetIntegrationContinuation_FullMethodName,
-		"control.integration-continuation.acknowledge": controlplanev1.ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName,
+		"control.agent-runner.readiness":      controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.turn.claim":                  controlplanev1.ControlPlaneService_ClaimTurn_FullMethodName,
+		"control.agent-runtime-execution.get": controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
+		"control.runtime-execution.progress":  controlplanev1.ControlPlaneService_ReportRuntimeProgress_FullMethodName,
 	}
 }
 
@@ -45,17 +42,6 @@ func RuntimeControllerOperations() map[string]string {
 		"control.runtime-execution.reschedule":      controlplanev1.ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
 		"control.runtime-execution.expire":          controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
 		"control.runtime-execution.cleanup.consume": controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
-	}
-}
-
-// BotServiceRuntimeBindingOperations выдаёт legacy owner только закрытую
-// materialization-команду и readiness; generic mutation в профиль не входит.
-func BotServiceRuntimeBindingOperations() map[string]string {
-	return map[string]string{
-		"control.bot-service.readiness":               controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-execution.agent.materialize": controlplanev1.ControlPlaneService_MaterializeRuntimeAgentTurn_FullMethodName,
-		"control.runtime-execution.agent.resolve":     controlplanev1.ControlPlaneService_ResolveRuntimeAgentBindingIntent_FullMethodName,
-		"control.runtime-execution.agent.bind":        controlplanev1.ControlPlaneService_BindRuntimeAgentSession_FullMethodName,
 	}
 }
 
@@ -107,7 +93,6 @@ func IntegrationGatewayOperations() map[string]string {
 		"control.integration-execution.begin":      controlplanev1.ControlPlaneService_BeginIntegrationExecution_FullMethodName,
 		"control.integration-execution.complete":   controlplanev1.ControlPlaneService_CompleteIntegrationExecution_FullMethodName,
 		"control.integration-execution.fail":       controlplanev1.ControlPlaneService_FailIntegrationExecution_FullMethodName,
-		"control.integration-result.validate":      controlplanev1.ControlPlaneService_ValidateIntegrationResultAccess_FullMethodName,
 	}
 }
 
@@ -158,15 +143,20 @@ func InteractionGatewayOperations() map[string]string {
 		"control.owner-gate.deliver":                     controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
 		"control.owner-gate.expire":                      controlplanev1.ControlPlaneService_ExpireOwnerGate_FullMethodName,
 		"control.interaction.session.create":             controlplanev1.ControlPlaneService_ManageSession_FullMethodName,
+		"control.interaction.session.mcp.bind":           controlplanev1.ControlPlaneService_BindSessionMCP_FullMethodName,
 		"control.interaction.turn.enqueue":               controlplanev1.ControlPlaneService_EnqueueTurn_FullMethodName,
 		"control.interaction.artifact.register":          controlplanev1.ControlPlaneService_RegisterArtifact_FullMethodName,
 		"control.interaction.resource.read":              controlplanev1.ControlPlaneService_GetResource_FullMethodName,
 		"control.interaction.conversation.lifecycle":     controlplanev1.ControlPlaneService_ManageConversationLifecycle_FullMethodName,
 		"control.interaction.owner-gate.resolve":         controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
+		"control.interaction.runtime-action.manage":      controlplanev1.ControlPlaneService_ManageRuntimeAction_FullMethodName,
 		"control.interaction.delivery.claim":             controlplanev1.ControlPlaneService_ClaimInteractionDelivery_FullMethodName,
 		"control.interaction.delivery.readback.issue":    controlplanev1.ControlPlaneService_IssueInteractionDeliveryReadbackGrant_FullMethodName,
 		"control.interaction.delivery.readback.validate": controlplanev1.ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName,
 		"control.interaction.delivery.record":            controlplanev1.ControlPlaneService_RecordInteractionDelivery_FullMethodName,
+		"control.runtime-materialization.get":            controlplanev1.ControlPlaneService_GetRuntimeMaterialization_FullMethodName,
+		"control.runtime-output.authorize":               controlplanev1.ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName,
+		"control.runtime-output.register":                controlplanev1.ControlPlaneService_RegisterRuntimeOutput_FullMethodName,
 	}
 }
 

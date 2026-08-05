@@ -51,6 +51,8 @@
   "pod": {
     "service_account": "matter-codex-bot-service",
     "security_context": {
+      "fsGroup": 29000,
+      "fsGroupChangePolicy": "OnRootMismatch",
       "runAsGroup": 10001,
       "runAsNonRoot": true,
       "runAsUser": 10001,
@@ -59,6 +61,22 @@
       }
     },
     "init_containers": [
+      {
+        "name": "internal-rpc-authority-socket-init",
+        "security_context": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "readOnlyRootFilesystem": true,
+          "runAsGroup": 29000,
+          "runAsNonRoot": true,
+          "runAsUser": 29000
+        },
+        "secret_refs": null
+      },
       {
         "name": "wait-for-postgres",
         "security_context": {
@@ -86,7 +104,6 @@
           "readOnlyRootFilesystem": true
         },
         "secret_refs": [
-          "${MATTERCODEX_BOT_SERVICE_SECRET}/control-center-read-token",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-admin-token",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-bot-token",
           "${MATTERCODEX_BOT_SERVICE_SECRET}/mattermost-slash-token",
@@ -95,9 +112,54 @@
           "${MATTERCODEX_POSTGRES_SECRET}/bot-service-runtime-datasource",
           "${MATTERCODEX_POSTGRES_SECRET}/mattermost-datasource"
         ]
+      },
+      {
+        "name": "internal-rpc-authority-issuer",
+        "security_context": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "readOnlyRootFilesystem": true,
+          "runAsGroup": 29000,
+          "runAsNonRoot": true,
+          "runAsUser": 29001
+        },
+        "secret_refs": [
+          "internal-rpc-authority-bot-service-issuer-postgresql/username"
+        ]
       }
     ],
-    "secret_volumes": null
+    "secret_volumes": [
+      "${MATTERCODEX_BOT_SERVICE_CONTROL_PLANE_TLS_SECRET}",
+      "${MATTERCODEX_BOT_SERVICE_RUNTIME_TLS_SECRET}",
+      "internal-rpc-authority-bot-service-issuer-key",
+      "internal-rpc-authority-bot-service-issuer-postgresql",
+      "internal-rpc-authority-bot-service-manifest-trust",
+      "internal-rpc-authority-bot-service-proof-trust",
+      "internal-rpc-authority-snapshot"
+    ]
   },
-  "network_policies": []
+  "network_policies": [
+    "base/agent-runner/networkpolicy.yaml",
+    "base/control-api-gateway/networkpolicy.yaml",
+    "base/control-plane/networkpolicy.yaml",
+    "base/image-supply-chain/networkpolicy.yaml",
+    "base/integration-gateway/egress-proxy.yaml",
+    "base/integration-gateway/networkpolicy.yaml",
+    "base/integration-gateway/postgresql.yaml",
+    "base/interaction-gateway/networkpolicy.yaml",
+    "base/internal-rpc-authority-data/networkpolicy.yaml",
+    "base/internal-rpc-authority-publisher/networkpolicy.yaml",
+    "base/internal-rpc-authority-readback-attestor/networkpolicy.yaml",
+    "base/internal-rpc-authority-restore/networkpolicy.yaml",
+    "base/internal-rpc-authority/networkpolicy.yaml",
+    "base/runtime-controller/networkpolicy.yaml",
+    "bot-service/networkpolicy.yaml.tpl",
+    "components/internal-rpc-authority-control-api-gateway-issuer/networkpolicy.yaml",
+    "components/internal-rpc-authority-control-plane-verifier/networkpolicy.yaml",
+    "components/internal-rpc-authority-runtime-controller-issuer/networkpolicy.yaml"
+  ]
 }

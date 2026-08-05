@@ -634,43 +634,6 @@ func (transaction *transaction) CompleteExecution(ctx context.Context, completio
 	return transaction.scheduleContinuation(ctx, invocation.ID, action, finishedAt)
 }
 
-func (transaction *transaction) AcknowledgeResult(
-	ctx context.Context,
-	acknowledgement domainrepo.ResultAcknowledgement,
-) (entity.Result, error) {
-	var result entity.Result
-	var raw []byte
-	if err := transaction.tx.QueryRow(ctx, sqlResultAcknowledge, pgx.StrictNamedArgs{
-		"invocation_id":        acknowledgement.Binding.InvocationID,
-		"attempt_id":           acknowledgement.Binding.AttemptID,
-		"tenant_id":            transaction.tenantID,
-		"project_id":           transaction.projectID,
-		"outcome":              acknowledgement.Binding.Outcome,
-		"reference_sha256":     acknowledgement.Binding.ReferenceSHA256,
-		"continuation_id":      acknowledgement.Binding.ContinuationID,
-		"continuation_version": acknowledgement.Binding.ContinuationVersion,
-		"continuation_fence":   acknowledgement.Binding.ContinuationFence,
-		"delivery_version":     acknowledgement.DeliveryVersion,
-		"delivery_fence":       acknowledgement.DeliveryFence,
-		"idempotency_hash":     acknowledgement.IdempotencyHash,
-		"request_hash":         acknowledgement.RequestHash,
-		"acknowledged_at":      acknowledgement.AcknowledgedAt,
-	}).Scan(&raw, &result.DeliveryVersion, &result.DeliveryFence,
-		&result.AcknowledgedAt, &result.CompletedAt); err != nil {
-		return entity.Result{}, err
-	}
-	if json.Unmarshal(raw, &result) != nil || result.InvocationID != acknowledgement.Binding.InvocationID ||
-		result.AttemptID != acknowledgement.Binding.AttemptID ||
-		result.PayloadDigest != acknowledgement.Binding.ReferenceSHA256 ||
-		result.Status != acknowledgement.Binding.Outcome || result.AcknowledgedAt == nil {
-		return entity.Result{}, errs.ErrConflict
-	}
-	if err := transaction.appendAudit(ctx, acknowledgement.Audit); err != nil {
-		return entity.Result{}, err
-	}
-	return result, nil
-}
-
 func storedResultDigest(invocationID, attemptID string, status enum.InvocationStatus) string {
 	reference := "integration-gateway://invocations/" + invocationID + "/results/" + attemptID
 	digest := sha256.Sum256([]byte(reference + "\x00" + string(status)))

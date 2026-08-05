@@ -55,7 +55,6 @@ if mattercodex_bool "$CHECK_URL"; then
     "/metrics"
     "/mattermost/actions/agents"
     "/mattermost/dialogs/agents"
-    "/internal/agent-sessions/synthetic-smoke"
     "/mcp/sessions/synthetic-smoke"
     "/internal/synthetic-smoke"
   )

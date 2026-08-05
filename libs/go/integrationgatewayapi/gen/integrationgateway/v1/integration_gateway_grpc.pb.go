@@ -19,24 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IntegrationResultService_ResolveIntegrationResult_FullMethodName     = "/integrationgateway.v1.IntegrationResultService/ResolveIntegrationResult"
-	IntegrationResultService_AcknowledgeIntegrationResult_FullMethodName = "/integrationgateway.v1.IntegrationResultService/AcknowledgeIntegrationResult"
-	IntegrationResultService_CheckReadiness_FullMethodName               = "/integrationgateway.v1.IntegrationResultService/CheckReadiness"
+	IntegrationResultService_CheckReadiness_FullMethodName = "/integrationgateway.v1.IntegrationResultService/CheckReadiness"
 )
 
 // IntegrationResultServiceClient is the client API for IntegrationResultService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// IntegrationResultService предоставляет producer-owned version-pinned read
-// для результата integration invocation. Actor и result binding выводятся из
-// mTLS, signed authorization context и continuation access grant в metadata.
+// IntegrationResultService оставляет только рабочую readiness-границу gateway.
+// Результат integration invocation возвращается через авторитетный continuation
+// control-plane, поэтому отдельного runtime result authority здесь нет.
 type IntegrationResultServiceClient interface {
-	// ResolveIntegrationResult не принимает caller-selected resource IDs.
-	ResolveIntegrationResult(ctx context.Context, in *ResolveIntegrationResultRequest, opts ...grpc.CallOption) (*ResolveIntegrationResultResponse, error)
-	// AcknowledgeIntegrationResult подтверждает exact уже выданную версию.
-	AcknowledgeIntegrationResult(ctx context.Context, in *AcknowledgeIntegrationResultRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationResultResponse, error)
-	// CheckReadiness проверяет тот же authority/PostgreSQL path без чтения payload.
+	// CheckReadiness проверяет authority/PostgreSQL path без чтения payload.
 	CheckReadiness(ctx context.Context, in *IntegrationResultServiceCheckReadinessRequest, opts ...grpc.CallOption) (*IntegrationResultServiceCheckReadinessResponse, error)
 }
 
@@ -46,26 +40,6 @@ type integrationResultServiceClient struct {
 
 func NewIntegrationResultServiceClient(cc grpc.ClientConnInterface) IntegrationResultServiceClient {
 	return &integrationResultServiceClient{cc}
-}
-
-func (c *integrationResultServiceClient) ResolveIntegrationResult(ctx context.Context, in *ResolveIntegrationResultRequest, opts ...grpc.CallOption) (*ResolveIntegrationResultResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResolveIntegrationResultResponse)
-	err := c.cc.Invoke(ctx, IntegrationResultService_ResolveIntegrationResult_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *integrationResultServiceClient) AcknowledgeIntegrationResult(ctx context.Context, in *AcknowledgeIntegrationResultRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationResultResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AcknowledgeIntegrationResultResponse)
-	err := c.cc.Invoke(ctx, IntegrationResultService_AcknowledgeIntegrationResult_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *integrationResultServiceClient) CheckReadiness(ctx context.Context, in *IntegrationResultServiceCheckReadinessRequest, opts ...grpc.CallOption) (*IntegrationResultServiceCheckReadinessResponse, error) {
@@ -82,15 +56,11 @@ func (c *integrationResultServiceClient) CheckReadiness(ctx context.Context, in 
 // All implementations must embed UnimplementedIntegrationResultServiceServer
 // for forward compatibility.
 //
-// IntegrationResultService предоставляет producer-owned version-pinned read
-// для результата integration invocation. Actor и result binding выводятся из
-// mTLS, signed authorization context и continuation access grant в metadata.
+// IntegrationResultService оставляет только рабочую readiness-границу gateway.
+// Результат integration invocation возвращается через авторитетный continuation
+// control-plane, поэтому отдельного runtime result authority здесь нет.
 type IntegrationResultServiceServer interface {
-	// ResolveIntegrationResult не принимает caller-selected resource IDs.
-	ResolveIntegrationResult(context.Context, *ResolveIntegrationResultRequest) (*ResolveIntegrationResultResponse, error)
-	// AcknowledgeIntegrationResult подтверждает exact уже выданную версию.
-	AcknowledgeIntegrationResult(context.Context, *AcknowledgeIntegrationResultRequest) (*AcknowledgeIntegrationResultResponse, error)
-	// CheckReadiness проверяет тот же authority/PostgreSQL path без чтения payload.
+	// CheckReadiness проверяет authority/PostgreSQL path без чтения payload.
 	CheckReadiness(context.Context, *IntegrationResultServiceCheckReadinessRequest) (*IntegrationResultServiceCheckReadinessResponse, error)
 	mustEmbedUnimplementedIntegrationResultServiceServer()
 }
@@ -102,12 +72,6 @@ type IntegrationResultServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedIntegrationResultServiceServer struct{}
 
-func (UnimplementedIntegrationResultServiceServer) ResolveIntegrationResult(context.Context, *ResolveIntegrationResultRequest) (*ResolveIntegrationResultResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResolveIntegrationResult not implemented")
-}
-func (UnimplementedIntegrationResultServiceServer) AcknowledgeIntegrationResult(context.Context, *AcknowledgeIntegrationResultRequest) (*AcknowledgeIntegrationResultResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AcknowledgeIntegrationResult not implemented")
-}
 func (UnimplementedIntegrationResultServiceServer) CheckReadiness(context.Context, *IntegrationResultServiceCheckReadinessRequest) (*IntegrationResultServiceCheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
 }
@@ -131,42 +95,6 @@ func RegisterIntegrationResultServiceServer(s grpc.ServiceRegistrar, srv Integra
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&IntegrationResultService_ServiceDesc, srv)
-}
-
-func _IntegrationResultService_ResolveIntegrationResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResolveIntegrationResultRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(IntegrationResultServiceServer).ResolveIntegrationResult(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: IntegrationResultService_ResolveIntegrationResult_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IntegrationResultServiceServer).ResolveIntegrationResult(ctx, req.(*ResolveIntegrationResultRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _IntegrationResultService_AcknowledgeIntegrationResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AcknowledgeIntegrationResultRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(IntegrationResultServiceServer).AcknowledgeIntegrationResult(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: IntegrationResultService_AcknowledgeIntegrationResult_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IntegrationResultServiceServer).AcknowledgeIntegrationResult(ctx, req.(*AcknowledgeIntegrationResultRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _IntegrationResultService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -194,14 +122,6 @@ var IntegrationResultService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "integrationgateway.v1.IntegrationResultService",
 	HandlerType: (*IntegrationResultServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "ResolveIntegrationResult",
-			Handler:    _IntegrationResultService_ResolveIntegrationResult_Handler,
-		},
-		{
-			MethodName: "AcknowledgeIntegrationResult",
-			Handler:    _IntegrationResultService_AcknowledgeIntegrationResult_Handler,
-		},
 		{
 			MethodName: "CheckReadiness",
 			Handler:    _IntegrationResultService_CheckReadiness_Handler,

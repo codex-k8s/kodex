@@ -13,7 +13,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 )
 
-func TestResultGrantRoundTripAndDeterministicTamperRejection(t *testing.T) {
+func TestContinuationGrantRoundTripAndDeterministicTamperRejection(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	key := testKey(t, 3)
 	privateFile := writePrivate(t, key)
@@ -37,7 +37,7 @@ func TestResultGrantRoundTripAndDeterministicTamperRejection(t *testing.T) {
 		t.Fatalf("Sign() error = %v", err)
 	}
 	verified, err := verifier.Verify(context.Background(), compact)
-	if err != nil || verified.InvocationID != claims.InvocationID || verified.ReferenceSHA256 != claims.ReferenceSHA256 {
+	if err != nil || verified.InvocationID != claims.InvocationID || verified.ContinuationID != claims.ContinuationID {
 		t.Fatalf("Verify() = %#v, %v", verified, err)
 	}
 	parts := strings.Split(compact, ".")
@@ -131,8 +131,8 @@ func signForGeneration(t *testing.T, key internalrpcauth.ES256Key, generation ui
 func testConfig(generation uint64) Config {
 	return Config{
 		Issuer:   "https://control-plane.test/authority/integration-continuation",
-		Audience: "urn:mattercodex:integration-result-access", WorkloadID: "agent-runner",
-		CallerSPIFFEID: "spiffe://mattercodex.test/ns/system/sa/agent-runner",
+		Audience: "urn:mattercodex:integration-continuation", WorkloadID: "integration-gateway",
+		CallerSPIFFEID: "spiffe://mattercodex.test/ns/system/sa/integration-gateway",
 		Generation:     generation, MaximumTTL: 8 * 24 * time.Hour,
 	}
 }
@@ -140,15 +140,14 @@ func testConfig(generation uint64) Config {
 func testClaims(config Config, now time.Time) Claims {
 	return Claims{
 		Version: 1, Issuer: config.Issuer, Audience: config.Audience,
-		Purpose: PurposeResultAccess, Subject: "actor-1", OrganizationID: "tenant-1", ProjectID: "project-1",
+		Purpose: PurposeTransition, Subject: "actor-1", OrganizationID: "tenant-1", ProjectID: "project-1",
 		WorkloadID: config.WorkloadID, CallerSPIFFEID: config.CallerSPIFFEID,
 		SessionID: "session-1", TurnID: "turn-2", Attempt: 2, InputSHA256: digest64("a"),
 		RuntimeRevisionID: "revision-2", RuntimeRevisionVersion: 2, RuntimeRevisionSHA256: digest64("b"),
 		GrantGeneration: 7, ContinuationID: "continuation-1", ContinuationVersion: 4,
-		ContinuationFence: 4, InvocationID: "invocation-1", ResultAttemptID: "attempt-1",
-		Outcome: "SUCCEEDED", Reference: "integration-gateway://invocations/invocation-1/results/attempt-1",
-		ReferenceSHA256: digest64("c"), AllowedOperationIDs: []string{"integration.result.resolve"},
-		JTI: "grant-1", IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: now.Add(time.Hour).Unix(),
+		ContinuationFence: 4, InvocationID: "invocation-1",
+		AllowedOperationIDs: []string{"control.integration-execution.complete"},
+		JTI:                 "grant-1", IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: now.Add(time.Hour).Unix(),
 	}
 }
 

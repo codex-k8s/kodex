@@ -1,7 +1,6 @@
 package http
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -229,6 +228,13 @@ type sessionBarrierRunner struct {
 	integrityReads int
 }
 
+const (
+	testMCPExecutionID    = "11111111-1111-4111-8111-111111111111"
+	testMCPTurnID         = "22222222-2222-4222-8222-222222222222"
+	testMCPAttempt        = uint32(1)
+	testMCPBindingVersion = uint64(123456)
+)
+
 func (runner *sessionBarrierRunner) InspectSecretIntegrity(context.Context, runtimerepo.SecretIntegrityInput) (runtimerepo.SecretIntegrity, error) {
 	runner.integrityReads++
 	return runtimerepo.SecretIntegrity{ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1"}, nil
@@ -237,7 +243,8 @@ func (runner *sessionBarrierRunner) InspectSecretIntegrity(context.Context, runt
 func (runner *sessionBarrierRunner) GetMattermostBotTokenSecret(context.Context, string) (runtimerepo.MattermostBotTokenSecret, error) {
 	runner.secretReads++
 	return runtimerepo.MattermostBotTokenSecret{
-		Token: "session-token",
+		Token:       "session-token",
+		ExecutionID: testMCPExecutionID, TurnID: testMCPTurnID, Attempt: testMCPAttempt,
 		Integrity: runtimerepo.SecretIntegrity{
 			SecretName: "session-secret", SecretKey: "token", ContentSHA256: "synthetic-sha256", UID: "synthetic-uid", ResourceVersion: "1",
 		},
@@ -288,52 +295,6 @@ func (publisher *sessionBarrierPublisher) post(postID string) (statusservice.Mat
 		return statusservice.MattermostPostRef{}, publisher.postErrors[index]
 	}
 	return statusservice.MattermostPostRef{PostID: postID}, nil
-}
-
-func TestInternalAgentSessionHTTPRevocationBarrierPreventsTokenRead(t *testing.T) {
-	service, store, runner, _ := newSessionBarrierService(1)
-	router := NewRouter(RouterConfig{SessionService: service})
-	request := httptest.NewRequest(http.MethodGet, "/internal/agent-sessions/session-admin/snapshot", nil)
-	request.Header.Set("Authorization", "Bearer session-token")
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
-	}
-	guards := store.guardSnapshot()
-	if guards.calls != 1 || runner.secretReads != 0 {
-		t.Fatalf("HTTP barrier guards=%d secret_reads=%d", guards.calls, runner.secretReads)
-	}
-}
-
-func TestInternalAgentSessionProductionTransportBarrierMatrix(t *testing.T) {
-	tests := []struct {
-		name   string
-		method string
-		path   string
-		body   string
-	}{
-		{name: "snapshot", method: http.MethodGet, path: "snapshot"},
-		{name: "claim", method: http.MethodPost, path: "turns/claim"},
-		{name: "complete", method: http.MethodPost, path: "turns/complete", body: `{"turn_id":1,"status":"succeeded"}`},
-		{name: "status", method: http.MethodPost, path: "turns/status", body: `{"run_id":"run-1","phase":"running"}`},
-	}
-	for _, boundary := range []int{1, 2} {
-		for _, test := range tests {
-			t.Run(test.name+" boundary "+string(rune('0'+boundary)), func(t *testing.T) {
-				service, store, runner, publisher := newSessionBarrierService(boundary)
-				router := NewRouter(RouterConfig{SessionService: service})
-				request := httptest.NewRequest(test.method, "/internal/agent-sessions/session-admin/"+test.path, bytes.NewBufferString(test.body))
-				request.Header.Set("Authorization", "Bearer session-token")
-				recorder := httptest.NewRecorder()
-				router.ServeHTTP(recorder, request)
-				if recorder.Code < http.StatusBadRequest {
-					t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
-				}
-				assertSessionTransportBarrier(t, store, runner, publisher, boundary, boundary)
-			})
-		}
-	}
 }
 
 func TestMCPSessionRevocationBarrierPreventsPublishAndSystemFallback(t *testing.T) {
@@ -605,31 +566,13 @@ func assertMCPToolFailureWithoutStructuredOutput(t *testing.T, result *mcp.CallT
 
 func TestSessionProductionTransportAllowedControls(t *testing.T) {
 	for _, test := range []struct {
-		name           string
-		requireGuard   bool
-		wantHTTPGuards int
-		wantMCPGuards  int
+		name          string
+		requireGuard  bool
+		wantMCPGuards int
 	}{
 		{name: "ordinary"},
-		{name: "guarded cluster admin", requireGuard: true, wantHTTPGuards: 2, wantMCPGuards: 4},
+		{name: "guarded cluster admin", requireGuard: true, wantMCPGuards: 4},
 	} {
-		t.Run(test.name+" HTTP", func(t *testing.T) {
-			service, store, runner, _ := newSessionBarrierService(0)
-			store.requireGuard = test.requireGuard
-			if !test.requireGuard {
-				store.role.KubernetesAccess = "read-only"
-			}
-			router := NewRouter(RouterConfig{SessionService: service})
-			request := httptest.NewRequest(http.MethodGet, "/internal/agent-sessions/session-admin/snapshot", nil)
-			request.Header.Set("Authorization", "Bearer session-token")
-			recorder := httptest.NewRecorder()
-			router.ServeHTTP(recorder, request)
-			guards := store.guardSnapshot()
-			if recorder.Code != http.StatusOK || guards.calls != test.wantHTTPGuards || runner.secretReads != 1 || runner.integrityReads != max(0, test.wantHTTPGuards-1) {
-				t.Fatalf("status=%d guards=%d token_reads=%d integrity_reads=%d body=%s", recorder.Code, guards.calls, runner.secretReads, runner.integrityReads, recorder.Body.String())
-			}
-		})
-
 		t.Run(test.name+" MCP", func(t *testing.T) {
 			service, store, runner, publisher := newSessionBarrierService(0)
 			store.requireGuard = test.requireGuard
@@ -680,7 +623,15 @@ type bearerTransport struct {
 func (transport bearerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	clone := request.Clone(request.Context())
 	clone.Header.Set("Authorization", "Bearer "+transport.token)
+	setTestMCPExecutionHeaders(clone)
 	return transport.base.RoundTrip(clone)
+}
+
+func setTestMCPExecutionHeaders(request *http.Request) {
+	request.Header.Set("X-MatterCodex-Execution-ID", testMCPExecutionID)
+	request.Header.Set("X-MatterCodex-Turn-ID", testMCPTurnID)
+	request.Header.Set("X-MatterCodex-Attempt", "1")
+	request.Header.Set("X-MatterCodex-MCP-Binding-Version", "123456")
 }
 
 func newSessionBarrierService(denyAt int) (*statusservice.AgentSessionService, *sessionBarrierStore, *sessionBarrierRunner, *sessionBarrierPublisher) {
@@ -690,7 +641,9 @@ func newSessionBarrierService(denyAt int) (*statusservice.AgentSessionService, *
 		session: entity.AgentSession{
 			ID: 1, SessionKey: "session-admin", ProjectID: 1, ChatID: 1, RoleID: 1,
 			MattermostChannelID: "channel-admin", MattermostRootPostID: "root-admin",
-			Status: "running", ActiveTurnID: 1, ActiveRunID: "run-1", TokenSecretRef: "session-secret", ExpiresAt: now.Add(time.Hour),
+			Status: "running", ActiveTurnID: 1, ActiveRunID: "run-1", TokenSecretRef: "session-secret",
+			Capabilities: `{"transport":"control-plane","mcp_binding_version":123456,"execution_id":"11111111-1111-4111-8111-111111111111","turn_id":"22222222-2222-4222-8222-222222222222","attempt":1}`,
+			ExpiresAt:    now.Add(time.Hour), UpdatedAt: time.UnixMicro(int64(testMCPBindingVersion)).UTC(),
 		},
 		role: entity.AgentRole{ID: 1, ProjectID: 1, Name: "mattercodex-admin", KubernetesAccess: "cluster-admin", Enabled: true},
 		chat: entity.Chat{ID: 1, ProjectID: 1, Slug: "admin-chat", MattermostChannelID: "channel-admin"},

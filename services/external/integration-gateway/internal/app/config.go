@@ -19,9 +19,6 @@ type Config struct {
 	TLSPrivateKeyFile                 string        `env:"INTEGRATION_GATEWAY_TLS_PRIVATE_KEY_FILE"`
 	TLSClientCAFile                   string        `env:"INTEGRATION_GATEWAY_TLS_CLIENT_CA_FILE"`
 	TLSAllowedClientSPIFFEIDs         string        `env:"INTEGRATION_GATEWAY_TLS_ALLOWED_CLIENT_SPIFFE_IDS"`
-	ResultGrantPublicJWKFile          string        `env:"INTEGRATION_GATEWAY_RESULT_GRANT_PUBLIC_JWK_FILE"`
-	ResultGrantIssuer                 string        `env:"INTEGRATION_GATEWAY_RESULT_GRANT_ISSUER"`
-	ResultGrantSignerGeneration       uint64        `env:"INTEGRATION_GATEWAY_RESULT_GRANT_SIGNER_GENERATION"`
 	AuthorityVerifierUID              uint32        `env:"INTEGRATION_GATEWAY_AUTHORITY_VERIFIER_UID"`
 	AuthorityVerifierGID              uint32        `env:"INTEGRATION_GATEWAY_AUTHORITY_VERIFIER_GID"`
 	PostgresDSNFile                   string        `env:"INTEGRATION_GATEWAY_POSTGRES_DSN_FILE"`
@@ -69,9 +66,7 @@ func loadConfig() (Config, error) {
 		TLSClientCAFile:    "/var/run/config/mattercodex/integration-gateway/client-ca/ca.pem",
 		TLSAllowedClientSPIFFEIDs: "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner," +
 			"spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
-		ResultGrantPublicJWKFile:    "/var/run/config/mattercodex/integration-gateway/result-grant/continuation.public-keyset.json",
-		ResultGrantIssuer:           "https://control-plane.mattercodex-system.svc.cluster.local/authority/integration-continuation",
-		ResultGrantSignerGeneration: 1, AuthorityVerifierUID: 29001, AuthorityVerifierGID: 29000,
+		AuthorityVerifierUID: 29001, AuthorityVerifierGID: 29000,
 		PostgresDSNFile:        "/var/run/secrets/mattercodex/integration-gateway/postgres-runtime/dsn",
 		PostgresCAFile:         "/var/run/config/mattercodex/integration-gateway/postgres/ca.pem",
 		PostgresTLSServerName:  "integration-gateway-postgresql-rw.mattercodex-system.svc.cluster.local",
@@ -118,7 +113,7 @@ func (config Config) validate() error {
 		}
 	}
 	for _, path := range []string{
-		config.TLSCertificateFile, config.TLSPrivateKeyFile, config.TLSClientCAFile, config.ResultGrantPublicJWKFile, config.PostgresDSNFile,
+		config.TLSCertificateFile, config.TLSPrivateKeyFile, config.TLSClientCAFile, config.PostgresDSNFile,
 		config.PostgresCAFile, config.PostgresContextKeyFile, config.DefinitionDirectory,
 		config.CredentialDirectory, config.PayloadKeysetFile, config.ControlPlaneCAFile,
 		config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile,
@@ -128,7 +123,7 @@ func (config Config) validate() error {
 			return errors.New("integration gateway runtime path is invalid")
 		}
 	}
-	if config.TLSAllowedClientSPIFFEIDs == "" || config.ResultGrantIssuer == "" || config.ResultGrantSignerGeneration == 0 ||
+	if config.TLSAllowedClientSPIFFEIDs == "" ||
 		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 ||
 		config.PostgresMaxConnections < 2 || config.PostgresMaxConnections > 64 ||
 		config.PostgresPrincipalName == "" || config.PostgresPrincipalGeneration == 0 || config.PostgresContextKeyID == "" ||

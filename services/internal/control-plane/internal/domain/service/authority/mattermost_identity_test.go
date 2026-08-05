@@ -52,7 +52,7 @@ func TestCredentialMatchesExactProducerAndPurpose(t *testing.T) {
 		otherPurpose  string
 	}{
 		{"interaction", "interaction-gateway", "control-plane.interaction-gateway", "MATTERMOST_SIGNED_EVENT", "control-plane.owner-gate-delivery", "OWNER_GATE_DELIVERY_GRANT"},
-		{"agent runner", "agent-runner", "control-plane.agent-session", "AGENT_SESSION_GRANT", "control-plane.agent-result-access", "INTEGRATION_RESULT_ACCESS_GRANT"},
+		{"agent runner", "agent-runner", "control-plane.agent-session", "AGENT_SESSION_GRANT", "control-plane.integration-continuation", "INTEGRATION_CONTINUATION_GRANT"},
 		{"integration", "integration-gateway", "control-plane.integration-gateway", "AGENT_SESSION_GRANT", "control-plane.integration-continuation", "INTEGRATION_CONTINUATION_GRANT"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

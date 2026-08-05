@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	runtimerepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/runtime"
 	securityrepo "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/repository/security"
 	statusservice "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/domain/service"
@@ -23,7 +22,6 @@ import (
 	kubernetesintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/kubernetes"
 	mattermostintegration "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/integration/mattermost"
 	adminpostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/admin"
-	automationspostgres "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/automations"
 	"github.com/codex-k8s/matter-codex/services/external/bot-service/internal/repository/postgres/migrations"
 	httptransport "github.com/codex-k8s/matter-codex/services/external/bot-service/internal/transport/http"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,17 +33,11 @@ const serviceName = "matter-codex-bot-service"
 
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	runtimeRunner, runtimeConfigured := openRuntimeRunner(cfg, logger)
-	storage, automationStorage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
+	storage, closeStorage, err := openStorage(ctx, cfg, logger, runtimeRunner)
 	if err != nil {
 		return err
 	}
 	defer closeStorage()
-	runtimeBindingSvc, runtimeBindingBearer, closeRuntimeBinding, err := openRuntimeAgentBinding(ctx, cfg, storage)
-	if err != nil {
-		return err
-	}
-	defer closeRuntimeBinding()
-
 	localizer, err := texti18n.New(cfg.Locale)
 	if err != nil {
 		return fmt.Errorf("open localizer: %w", err)
@@ -98,26 +90,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	chatRunSvc := statusservice.NewChatRunService(statusservice.ChatRunServiceConfig{
 		Localizer:         localizer,
 		Store:             storage,
-		RuntimeRunner:     runtimeRunner,
 		ThreadPublisher:   threadPublisher,
 		BotServiceURL:     botServiceRuntimeURL(cfg),
 		MenuActionURL:     agentsActionURL(cfg),
 		MattermostSiteURL: cfg.MattermostSiteURL,
 		StorageReady:      storage != nil,
-		RuntimeReady:      runtimeConfigured,
+		RuntimeReady:      false,
 	})
-	automationSvc := statusservice.NewAutomationService(statusservice.AutomationServiceConfig{
-		Localizer:               localizer,
-		Repository:              automationStorage,
-		Catalog:                 storage,
-		Dispatcher:              chatRunSvc,
-		Publisher:               threadPublisher,
-		OwnerMattermostUsername: cfg.OwnerMattermostUsername,
-		StorageReady:            automationStorage != nil,
-		RuntimeReady:            runtimeConfigured,
-	})
-	chatRunSvc.SetAutomationRuntimeReconciler(automationSvc)
-	chatRunSvc.SetAutomationOwnerDecisionResolver(automationSvc)
 	slashSvc := statusservice.NewSlashCommandService(statusservice.SlashCommandServiceConfig{
 		Localizer:                localizer,
 		StatusService:            statusSvc,
@@ -128,7 +107,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		GitHubRepositoryProvider: gitHubAccountProvider,
 		GitHubAccountInspector:   gitHubAccountInspector,
 		ThreadRepositorySelector: chatRunSvc,
-		Automations:              automationSvc,
 		RuntimeRunner:            runtimeRunner,
 		DefaultTeamName:          cfg.DefaultTeamName,
 		OwnerMattermostUsername:  cfg.OwnerMattermostUsername,
@@ -143,6 +121,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		DatabaseConfigured:       cfg.DatabaseConfigured(),
 		StorageReady:             storage != nil,
 		RuntimeConfigured:        runtimeConfigured,
+		DisableLegacyRuntime:     true,
 		MattermostConfigured:     cfg.MattermostSiteURL != "",
 		ChannelManagerEnabled:    channelManager != nil,
 	})
@@ -150,49 +129,42 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		logger.Warn("system agent role bootstrap failed", "error", err)
 	}
 	sessionSvc := statusservice.NewAgentSessionService(statusservice.AgentSessionServiceConfig{
-		Localizer:                   localizer,
-		Store:                       storage,
-		RuntimeRunner:               runtimeRunner,
-		ThreadPublisher:             threadPublisher,
-		ConversationReader:          controlSurface,
-		RoleBotManager:              roleBotManager,
-		TurnDispatcher:              chatRunSvc,
-		AutomationCallbacks:         automationSvc,
-		AutomationRuntimeReconciler: automationSvc,
-		MenuActionURL:               agentsActionURL(cfg),
-		MattermostSiteURL:           cfg.MattermostSiteURL,
-		StorageReady:                storage != nil,
-		RuntimeReady:                runtimeConfigured,
-		CallbackMaxBytes:            cfg.CallbackMaxBytes,
-		CallbackMaxChunks:           cfg.CallbackMaxChunks,
-		CallbackMaxChunkBytes:       cfg.CallbackMaxChunkBytes,
-		CallbackPublishConcurrency:  cfg.CallbackPublishConcurrency,
-		CallbackPublishDeadline:     cfg.CallbackPublishDeadline,
+		Localizer:                  localizer,
+		Store:                      storage,
+		RuntimeRunner:              runtimeRunner,
+		ThreadPublisher:            threadPublisher,
+		ConversationReader:         controlSurface,
+		RoleBotManager:             roleBotManager,
+		MenuActionURL:              agentsActionURL(cfg),
+		MattermostSiteURL:          cfg.MattermostSiteURL,
+		StorageReady:               storage != nil,
+		RuntimeReady:               runtimeConfigured,
+		CallbackMaxBytes:           cfg.CallbackMaxBytes,
+		CallbackMaxChunks:          cfg.CallbackMaxChunks,
+		CallbackMaxChunkBytes:      cfg.CallbackMaxChunkBytes,
+		CallbackPublishConcurrency: cfg.CallbackPublishConcurrency,
+		CallbackPublishDeadline:    cfg.CallbackPublishDeadline,
 	})
-	chatRunSvc.SetTerminalReconciler(sessionSvc)
 
 	router := httptransport.NewRouter(httptransport.RouterConfig{
-		StatusService:          statusSvc,
-		SlashService:           slashSvc,
-		SessionService:         sessionSvc,
-		DialogOpener:           dialogOpener,
-		InteractionSecurity:    interactionSecurity,
-		Localizer:              localizer,
-		SlashToken:             cfg.MattermostSlashToken,
-		GitHubWebhookSecret:    cfg.GitHubWebhookSecret,
-		MaxSlashFormBytes:      cfg.MaxSlashFormBytes,
-		MaxGitHubWebhookBytes:  cfg.MaxGitHubWebhookBytes,
-		MaxMCPRequestBodyBytes: cfg.MaxMCPRequestBodyBytes,
-		PrometheusRegistry:     newPrometheusRegistry(),
-		MattermostSiteURL:      cfg.MattermostSiteURL,
-		MattermostInternalURL:  cfg.MattermostInternalURL,
-		ThreadPublisher:        threadPublisher,
-		Automations:            automationSvc,
-		ControlCenterReadToken: cfg.ControlCenterReadToken,
-		ControlCenterAssetsDir: cfg.ControlCenterAssetsDir,
-		Logger:                 logger,
-		RuntimeAgentBindings:   runtimeBindingSvc,
-		RuntimeBindingBearer:   runtimeBindingBearer,
+		StatusService:                   statusSvc,
+		SlashService:                    slashSvc,
+		SessionService:                  sessionSvc,
+		DialogOpener:                    dialogOpener,
+		InteractionSecurity:             interactionSecurity,
+		Localizer:                       localizer,
+		SlashToken:                      cfg.MattermostSlashToken,
+		GitHubWebhookSecret:             cfg.GitHubWebhookSecret,
+		MaxSlashFormBytes:               cfg.MaxSlashFormBytes,
+		MaxGitHubWebhookBytes:           cfg.MaxGitHubWebhookBytes,
+		MaxMCPRequestBodyBytes:          cfg.MaxMCPRequestBodyBytes,
+		PrometheusRegistry:              newPrometheusRegistry(),
+		MattermostSiteURL:               cfg.MattermostSiteURL,
+		MattermostInternalURL:           cfg.MattermostInternalURL,
+		ThreadPublisher:                 threadPublisher,
+		ControlCenterAssetsDir:          cfg.ControlCenterAssetsDir,
+		Logger:                          logger,
+		RuntimeMCPBindingClientSPIFFEID: cfg.RuntimeMCPBindingClientSPIFFEID,
 	})
 	server := newHTTPServer(cfg, router)
 	var runtimeServer *http.Server
@@ -234,56 +206,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			errCh <- nil
 		}()
 	}
-	if controlSurface != nil {
-		botUserID, err := controlSurface.BotUserID(ctx)
-		if err != nil {
-			logger.Warn("Mattermost chat listener disabled: bot user was not resolved", "error", err)
-		} else if listener, err := mattermostintegration.NewChatListener(mattermostintegration.ChatListenerConfig{
-			SiteURL:          cfg.MattermostAPIURL(),
-			Token:            cfg.MattermostBotToken,
-			BotUserID:        botUserID,
-			Handler:          chatRunSvc,
-			UserNameResolver: controlSurface,
-			Logger:           logger,
-		}); err != nil {
-			logger.Warn("Mattermost chat listener disabled: configuration is invalid", "error", err)
-		} else {
-			go listener.Run(ctx)
-		}
-	}
-	if runtimeConfigured && cfg.RuntimeRetentionEnabled {
-		go runRuntimeRetentionLoop(ctx, runtimeRunner, cfg.RuntimeRetentionInterval, cfg.RuntimeRetentionOlderThan, logger)
-	}
-	if runtimeConfigured && cfg.RuntimeSessionRepairEnabled {
-		go runAgentSessionRepairLoop(ctx, chatRunSvc, cfg.RuntimeSessionRepairInterval, cfg.RuntimeSessionRepairBatch, logger)
-	}
 	if storage != nil && cfg.InteractionCleanupEnabled {
 		go runInteractionCapabilityCleanupLoop(ctx, storage, cfg.InteractionCleanupInterval, cfg.InteractionCleanupRetention, cfg.InteractionCleanupBatch, logger)
 	}
-	if automationStorage != nil && threadPublisher != nil {
-		go runAutomationOwnerAttentionDeliveryLoop(ctx, automationSvc, cfg.AutomationDeliveryInterval, cfg.AutomationDeliveryConcurrency, logger)
-	}
-	workerCtx, cancelBindingWorker := context.WithCancel(ctx)
-	bindingWorkerDone := make(chan struct{})
-	if runtimeBindingSvc != nil {
-		go func() {
-			defer close(bindingWorkerDone)
-			runtimeBindingSvc.Run(workerCtx, logger)
-		}()
-	} else {
-		close(bindingWorkerDone)
-	}
-	defer func() {
-		cancelBindingWorker()
-		joinTimer := time.NewTimer(cfg.ShutdownTimeout)
-		defer joinTimer.Stop()
-		select {
-		case <-bindingWorkerDone:
-		case <-joinTimer.C:
-			logger.Error("runtime agent binding worker shutdown timed out")
-		}
-	}()
-
 	select {
 	case <-ctx.Done():
 		var shutdownErrors []error
@@ -305,62 +230,6 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 }
 
-func openRuntimeAgentBinding(
-	ctx context.Context,
-	cfg Config,
-	repository *adminpostgres.Repository,
-) (*statusservice.RuntimeAgentBindingService, string, func(), error) {
-	if !cfg.RuntimeBindingEnabled {
-		return nil, "", func() {}, nil
-	}
-	if repository == nil {
-		return nil, "", nil, fmt.Errorf("runtime agent binding requires PostgreSQL")
-	}
-	bearer, err := readBoundedCredential(cfg.RuntimeBindingIngressBearerFile)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("read runtime binding ingress bearer: %w", err)
-	}
-	startupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	client, err := controlplaneclient.Dial(startupCtx, controlplaneclient.Config{
-		Target: cfg.ControlPlaneTarget, TLSServerName: cfg.ControlPlaneTLSServerName,
-		CAFile:                cfg.ControlPlaneCAFile,
-		ClientCertificateFile: cfg.ControlPlaneClientCertificateFile,
-		ClientPrivateKeyFile:  cfg.ControlPlaneClientPrivateKeyFile,
-		ApplicationGrantFile:  cfg.ControlPlaneApplicationGrantFile,
-		ExpectedIssuerUID:     cfg.ControlPlaneExpectedIssuerUID,
-		ExpectedIssuerGID:     cfg.ControlPlaneExpectedIssuerGID,
-		DialTimeout:           2 * time.Second,
-		Operations:            controlplaneclient.BotServiceRuntimeBindingOperations(),
-	})
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("open runtime binding control-plane client: %w", err)
-	}
-	if err := client.Check(startupCtx); err != nil {
-		_ = client.Close()
-		return nil, "", nil, fmt.Errorf("runtime binding startup barrier: %w", err)
-	}
-	return statusservice.NewRuntimeAgentBindingService(repository, client.ControlPlane), bearer, func() {
-		_ = client.Close()
-	}, nil
-}
-
-func readBoundedCredential(path string) (string, error) {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 16<<10 || info.Mode().Perm()&0o007 != 0 {
-		return "", fmt.Errorf("credential file is unsafe")
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read credential file")
-	}
-	value := strings.TrimSpace(string(raw))
-	if len(value) < 32 || len(value) > 16<<10 {
-		return "", fmt.Errorf("credential is invalid")
-	}
-	return value, nil
-}
-
 func newRuntimeTLSServer(cfg Config, handler http.Handler) (*http.Server, error) {
 	caRaw, err := os.ReadFile(cfg.RuntimeTLSClientCAFile)
 	if err != nil || len(caRaw) == 0 || len(caRaw) > 1<<20 {
@@ -378,25 +247,6 @@ func newRuntimeTLSServer(cfg Config, handler http.Handler) (*http.Server, error)
 		ClientCAs:  clientCAs,
 	}
 	return server, nil
-}
-
-func runAutomationOwnerAttentionDeliveryLoop(ctx context.Context, svc *statusservice.AutomationService, interval time.Duration, concurrency int, logger *slog.Logger) {
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			delivered, err := svc.ReconcileOwnerAttentionDeliveries(ctx, concurrency)
-			if err != nil {
-				logger.Warn("automation owner attention recovery was incomplete", "delivered", delivered, "error", err)
-			} else if delivered > 0 {
-				logger.Info("automation owner attention deliveries recovered", "delivered", delivered)
-			}
-			timer.Reset(interval)
-		}
-	}
 }
 
 func newHTTPServer(cfg Config, handler http.Handler) *http.Server {
@@ -437,89 +287,6 @@ func cleanupInteractionCapabilities(ctx context.Context, repository securityrepo
 		DeleteBefore: now.UTC().Add(-retention),
 		Limit:        batch,
 	})
-}
-
-func runAgentSessionRepairLoop(ctx context.Context, svc *statusservice.ChatRunService, interval time.Duration, batch int, logger *slog.Logger) {
-	timer := time.NewTimer(15 * time.Second)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			result, err := svc.RepairAgentSessions(ctx, batch)
-			if err != nil {
-				logger.Warn("agent session repair failed", "error", err)
-			} else if agentSessionRepairDidWork(result) {
-				for _, failure := range result.Failures {
-					logger.Warn(
-						"agent session repair item failed",
-						"session_key", failure.SessionKey,
-						"phase", failure.Phase,
-						"error", failure.Error,
-					)
-				}
-				logger.Info(
-					"agent session repair applied",
-					"queued_sessions_ensured", result.QueuedSessionsEnsured,
-					"stale_sessions_reset", result.StaleSessionsReset,
-					"failed", result.Failed,
-				)
-			}
-			timer.Reset(interval)
-		}
-	}
-}
-
-func agentSessionRepairDidWork(result statusservice.AgentSessionRepairResult) bool {
-	return result.QueuedSessionsEnsured > 0 ||
-		result.StaleSessionsReset > 0 ||
-		result.Failed > 0
-}
-
-func runRuntimeRetentionLoop(ctx context.Context, runner runtimerepo.Runner, interval time.Duration, olderThan time.Duration, logger *slog.Logger) {
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			result, err := runner.CleanupExpiredRuns(ctx, runtimerepo.RetentionCleanupInput{
-				OlderThan: olderThan,
-				Now:       time.Now().UTC(),
-				DryRun:    false,
-			})
-			if err != nil {
-				logger.Warn("runtime retention cleanup failed", "error", err)
-			} else if retentionCleanupHasReport(result) {
-				logger.Info(
-					"runtime retention pass completed",
-					"older_than", result.OlderThan.String(),
-					"namespace", result.Namespace,
-					"session_data_mode", result.SessionDataMode,
-					"jobs_deleted", result.JobsDeleted,
-					"pvcs_deleted", result.PVCsDeleted,
-					"configmaps_deleted", result.ConfigMapsDeleted,
-					"session_pods_deleted", result.SessionPodsDeleted,
-					"session_pvcs_inventoried", result.SessionPVCsMatched,
-					"session_pvcs_deleted", result.SessionPVCsDeleted,
-					"session_secrets_inventoried", result.SessionSecretsMatched,
-					"session_secrets_deleted", result.SessionSecretsDeleted,
-				)
-			}
-			timer.Reset(interval)
-		}
-	}
-}
-
-func retentionCleanupHasReport(result runtimerepo.RetentionCleanupResult) bool {
-	return result.JobsDeleted > 0 ||
-		result.PVCsDeleted > 0 ||
-		result.ConfigMapsDeleted > 0 ||
-		result.SessionPodsDeleted > 0 ||
-		result.SessionPVCsMatched > 0 ||
-		result.SessionSecretsMatched > 0
 }
 
 func openRuntimeRunner(cfg Config, logger *slog.Logger) (runtimerepo.Runner, bool) {
@@ -618,58 +385,54 @@ func newPrometheusRegistry() *prometheus.Registry {
 	return registry
 }
 
-func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, *automationspostgres.Repository, func(), error) {
+func openStorage(ctx context.Context, cfg Config, logger *slog.Logger, runtimeRunner runtimerepo.Runner) (*adminpostgres.Repository, func(), error) {
 	if !cfg.DatabaseConfigured() {
 		logger.Warn("storage disabled: MATTERCODEX_DATABASE_DSN is not configured")
-		return nil, nil, func() {}, nil
+		return nil, func() {}, nil
 	}
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseDSN)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("parse storage pool config: %w", err)
+		return nil, nil, fmt.Errorf("parse storage pool config: %w", err)
 	}
 	if cfg.StorageMigrations {
 		if err := adminpostgres.ProvisionRuntimeDatabaseRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User, poolConfig.ConnConfig.Password); err != nil {
-			return nil, nil, nil, fmt.Errorf("provision runtime database role: %w", err)
+			return nil, nil, fmt.Errorf("provision runtime database role: %w", err)
 		}
 		if err := migrations.RunTo(ctx, cfg.MigrationsDatabaseDSN, 24); err != nil {
-			return nil, nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
+			return nil, nil, fmt.Errorf("run storage migrations through integrity staging schema: %w", err)
 		}
-		blockedSessions, err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
-		}
-		if blockedSessions > 0 {
-			logger.Warn("blocked cluster-admin sessions with missing runtime token secrets", "count", blockedSessions)
+		if err := prepareClusterAdminSecretIntegrity(ctx, cfg.MigrationsDatabaseDSN, runtimeRunner); err != nil {
+			return nil, nil, fmt.Errorf("prepare cluster-admin secret integrity: %w", err)
 		}
 		if err := migrations.RunForRuntimeRole(ctx, cfg.MigrationsDatabaseDSN, poolConfig.ConnConfig.User); err != nil {
-			return nil, nil, nil, fmt.Errorf("run storage migrations: %w", err)
+			return nil, nil, fmt.Errorf("run storage migrations: %w", err)
 		}
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("open storage pool: %w", err)
+		return nil, nil, fmt.Errorf("open storage pool: %w", err)
 	}
 	closePool := func() {
 		pool.Close()
 	}
 	if err := pool.Ping(ctx); err != nil {
 		closePool()
-		return nil, nil, nil, fmt.Errorf("ping storage: %w", err)
+		return nil, nil, fmt.Errorf("ping storage: %w", err)
 	}
 	if err := adminpostgres.ValidateRuntimeDatabaseRole(ctx, pool); err != nil {
 		closePool()
-		return nil, nil, nil, fmt.Errorf("validate runtime database role: %w", err)
+		return nil, nil, fmt.Errorf("validate runtime database role: %w", err)
 	}
 	repo := adminpostgres.NewRepository(pool)
 	seeded, err := statusservice.SeedDefaultAgentPromptTemplates(ctx, repo)
 	if err != nil {
 		closePool()
-		return nil, nil, nil, fmt.Errorf("seed default agent prompt templates: %w", err)
+		return nil, nil, fmt.Errorf("seed default agent prompt templates: %w", err)
 	}
 	if seeded > 0 {
 		logger.Info("seeded default agent prompt templates", "count", seeded)
 	}
-	return repo, automationspostgres.NewRepository(pool), closePool, nil
+	return repo, closePool, nil
 }
 
 type secretIntegrityStagingRow struct {
@@ -677,13 +440,12 @@ type secretIntegrityStagingRow struct {
 	id         int64
 	secretName string
 	secretKey  string
-	sessionKey string
 }
 
-func prepareClusterAdminSecretIntegrity(ctx context.Context, dsn string, runtimeRunner runtimerepo.Runner) (int, error) {
+func prepareClusterAdminSecretIntegrity(ctx context.Context, dsn string, runtimeRunner runtimerepo.Runner) error {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return 0, fmt.Errorf("open integrity staging database: %w", err)
+		return fmt.Errorf("open integrity staging database: %w", err)
 	}
 	defer db.Close()
 	rows, err := db.QueryContext(ctx, `
@@ -748,116 +510,38 @@ union all
 select 'matter_codex_mattermost_bot_identities', binding.id, binding.token_secret_ref, 'token', ''
 from matter_codex_mattermost_bot_identities binding
 join matter_codex_agent_roles role on role.id = binding.role_id
-where lower(trim(role.kubernetes_access)) = 'cluster-admin'
-union all
-select 'matter_codex_agent_sessions', session.id, session.token_secret_ref, 'token', session.session_key
-from matter_codex_agent_sessions session
-join matter_codex_agent_roles role on role.id = session.role_id
-where lower(trim(role.kubernetes_access)) = 'cluster-admin'
-	and trim(session.token_secret_ref) <> ''
-	and session.status not in ('blocked', 'closed')`)
+where lower(trim(role.kubernetes_access)) = 'cluster-admin'`)
 	if err != nil {
-		return 0, fmt.Errorf("list cluster-admin secret bindings: %w", err)
+		return fmt.Errorf("list cluster-admin secret bindings: %w", err)
 	}
 	defer rows.Close()
 	var bindings []secretIntegrityStagingRow
 	for rows.Next() {
 		var item secretIntegrityStagingRow
-		if err := rows.Scan(&item.tableName, &item.id, &item.secretName, &item.secretKey, &item.sessionKey); err != nil {
-			return 0, fmt.Errorf("scan cluster-admin secret binding: %w", err)
+		var historicalScope string
+		if err := rows.Scan(&item.tableName, &item.id, &item.secretName, &item.secretKey, &historicalScope); err != nil {
+			return fmt.Errorf("scan cluster-admin secret binding: %w", err)
 		}
 		bindings = append(bindings, item)
 	}
 	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("read cluster-admin secret bindings: %w", err)
+		return fmt.Errorf("read cluster-admin secret bindings: %w", err)
 	}
 	if len(bindings) > 0 && runtimeRunner == nil {
-		return 0, fmt.Errorf("Kubernetes runtime is required to stage frozen secret integrity")
+		return fmt.Errorf("Kubernetes runtime is required to stage frozen secret integrity")
 	}
-	blockedSessions := 0
 	for _, binding := range bindings {
 		integrity, err := runtimeRunner.InspectSecretIntegrity(ctx, runtimerepo.SecretIntegrityInput{
 			SecretName: binding.secretName,
 			SecretKey:  binding.secretKey,
 		})
 		if err != nil {
-			if binding.tableName == "matter_codex_agent_sessions" && errors.Is(err, runtimerepo.ErrSecretNotFound) {
-				if err := isolateClusterAdminSessionWithMissingToken(
-					ctx,
-					binding.id,
-					binding.sessionKey,
-					func(ctx context.Context, sessionID int64, isolate func(context.Context) error) error {
-						return blockClusterAdminSessionWithMissingToken(ctx, db, sessionID, isolate)
-					},
-					func(ctx context.Context, sessionKey string) error {
-						_, cleanupErr := runtimeRunner.CleanupAgentSession(ctx, sessionKey)
-						return cleanupErr
-					},
-				); err != nil {
-					return blockedSessions, err
-				}
-				blockedSessions++
-				continue
-			}
-			return blockedSessions, fmt.Errorf("inspect frozen secret binding %s/%d: %w", binding.tableName, binding.id, err)
+			return fmt.Errorf("inspect frozen secret binding %s/%d: %w", binding.tableName, binding.id, err)
 		}
 		statement := fmt.Sprintf(`update %s set secret_content_sha256 = $1, secret_resource_uid = $2, secret_resource_version = $3 where id = $4`, binding.tableName)
 		if _, err := db.ExecContext(ctx, statement, integrity.ContentSHA256, integrity.UID, integrity.ResourceVersion, binding.id); err != nil {
-			return blockedSessions, fmt.Errorf("store frozen secret metadata for %s/%d: %w", binding.tableName, binding.id, err)
+			return fmt.Errorf("store frozen secret metadata for %s/%d: %w", binding.tableName, binding.id, err)
 		}
-	}
-	return blockedSessions, nil
-}
-
-func isolateClusterAdminSessionWithMissingToken(
-	ctx context.Context,
-	sessionID int64,
-	sessionKey string,
-	block func(context.Context, int64, func(context.Context) error) error,
-	cleanup func(context.Context, string) error,
-) error {
-	sessionKey = strings.TrimSpace(sessionKey)
-	if sessionKey == "" {
-		return fmt.Errorf("cluster-admin session %d with missing token has no session key", sessionID)
-	}
-	return block(ctx, sessionID, func(ctx context.Context) error {
-		if err := cleanup(ctx, sessionKey); err != nil {
-			return fmt.Errorf("delete cluster-admin session %d pod: %w", sessionID, err)
-		}
-		return nil
-	})
-}
-
-func blockClusterAdminSessionWithMissingToken(
-	ctx context.Context,
-	db *sql.DB,
-	sessionID int64,
-	isolate func(context.Context) error,
-) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin missing cluster-admin session token recovery: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `
-update matter_codex_agent_sessions
-set status = 'blocked', active_turn_id = null, active_run_id = '', updated_at = now()
-where id = $1 and status not in ('blocked', 'closed')`, sessionID); err != nil {
-		return fmt.Errorf("block cluster-admin session %d with missing token: %w", sessionID, err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-update matter_codex_agent_session_turns
-set status = 'failed',
-	error_message = case when trim(error_message) = '' then 'cluster-admin session token secret is missing' else error_message end,
-	finished_at = coalesce(finished_at, now()), updated_at = now()
-where session_id = $1 and status in ('queued', 'running')`, sessionID); err != nil {
-		return fmt.Errorf("fail unfinished turns for cluster-admin session %d with missing token: %w", sessionID, err)
-	}
-	if err := isolate(ctx); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit missing cluster-admin session token recovery: %w", err)
 	}
 	return nil
 }

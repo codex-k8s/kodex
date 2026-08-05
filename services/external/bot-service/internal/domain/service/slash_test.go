@@ -102,6 +102,29 @@ func TestSlashEmptyTextReturnsMenuCard(t *testing.T) {
 	}
 }
 
+func TestStrategyResetDisablesLegacyRuntimeAndAutomationActions(t *testing.T) {
+	localizer := testLocalizer(t, texti18n.DefaultLocale)
+	svc := NewSlashCommandService(SlashCommandServiceConfig{
+		Localizer: localizer, StatusService: testStatusService(localizer),
+		MenuActionURL: "http://bot-service/mattermost/actions/agents", DisableLegacyRuntime: true,
+	})
+	menu := svc.HandleResponse(context.Background(), SlashCommand{})
+	if menu.Card == nil {
+		t.Fatal("strategy-reset menu card is missing")
+	}
+	for _, action := range menu.Card.Actions {
+		if action.Context["view"] == menuViewRuntime || action.Context["view"] == menuViewAutomations {
+			t.Fatalf("legacy runtime action remained in production menu: %#v", action)
+		}
+	}
+	stale := svc.HandleMenuAction(context.Background(), MenuActionCommand{
+		View: menuViewRuntime, Action: menuActionRuntimeSmoke, Resource: menuResourceRuntime,
+	})
+	if stale.StatusCode != 200 || !strings.Contains(strings.ToLower(stale.EphemeralText), "unavailable") {
+		t.Fatalf("stale legacy action was not rejected: %#v", stale)
+	}
+}
+
 func cardFieldValue(fields []MattermostCardField, title string) string {
 	for _, field := range fields {
 		if field.Title == title {
@@ -4855,6 +4878,12 @@ func (store *fakeAdminStore) UpdateAgentSessionRuntime(_ context.Context, input 
 	}
 	if input.TokenSecretRef != "" {
 		session.TokenSecretRef = input.TokenSecretRef
+	}
+	if input.ExpectedCapabilities != "" && session.Capabilities != input.ExpectedCapabilities {
+		return entity.AgentSession{}, adminrepo.ErrNotFound
+	}
+	if input.Capabilities != "" {
+		session.Capabilities = input.Capabilities
 	}
 	if input.ExtendTTLSeconds > 0 {
 		session.ExpiresAt = time.Now().Add(time.Duration(input.ExtendTTLSeconds) * time.Second)

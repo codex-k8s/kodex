@@ -1,3 +1,13 @@
+---
+id: RUNBOOK-MC-BOT-SERVICE
+title: Bot-Service Runbook
+type: runbook
+status: approved
+owner: sre
+version: 2.0.0
+updated: 2026-08-04
+---
+
 # Bot-Service Runbook
 
 ## Назначение
@@ -16,12 +26,22 @@
 - управлять через Mattermost dialog-кнопки metadata GitHub accounts: add/edit/delete account binding к существующему Kubernetes Secret без ввода raw token в Mattermost;
 - принимать GitHub webhook callback `/github/webhook` с HMAC validation;
 - автоматически регистрировать repo webhook при `/agents repo add github owner/name [default-branch]`, если GitHub token имеет hook write permission;
-- выполнять Kubernetes runtime smoke-команды `/agents runtime smoke|status|cleanup|prune` через client-go, Job, PVC и подготовленный agent-runner image;
-- выполнять Codex reviewer-команды `/agents review pr|status|cleanup`, запускающие отдельный Job/PVC для review существующего GitHub PR через OpenAI account, GitHub account и prompt template из agent profile;
 - применять storage migrations и хранить repository/profile/audit metadata в PostgreSQL;
 - создавать Mattermost repo-channel при добавлении repository;
 - хранить Mattermost bot/slash tokens только в Kubernetes Secret;
 - создавать базовую Mattermost control surface через `mmctl --local` внутри Mattermost pod: team, каналы и slash command.
+
+После strategy reset bot-service не является владельцем Turn, Process, Schedule
+или RuntimeExecution. Production composition не запускает его legacy
+Mattermost listener, Turn dispatcher, automation/delegation dispatcher,
+session repair/retention workers и terminal reconciler. Маршрут
+`/internal/agent-sessions/**`, automation history API, `/agents runtime` и
+`/agents review` отсутствуют либо закрыто возвращают unavailable, включая
+повтор старой card/dialog capability. Bot-service остаётся transport/action
+producer, выполняет device-code reauth по `/agents openai auth <account-name>`
+и создаёт execution-fenced MCP credential для owner graph control-plane.
+Исторические PostgreSQL tables не удаляются, но production-код их не использует
+как runtime authority.
 
 ## Env contract
 
@@ -36,9 +56,7 @@
 - `MATTERCODEX_MATTERMOST_BOT_TOKEN` - нужен для provisioning Mattermost team/channels/slash command;
 - `MATTERCODEX_MATTERMOST_ADMIN_TOKEN` - отдельный административный PAT только для создания и обслуживания bot identity ролей; bootstrap хранит его в Kubernetes Secret и не использует для публикации сообщений;
 - `MATTERCODEX_MATTERMOST_SLASH_TOKEN` - optional, обычно заполняется provisioning script в Kubernetes Secret;
-- `MATTERCODEX_CONTROL_CENTER_READ_TOKEN` - optional read-only bearer token для серверной истории `/api/control-center/v1/automation-runs`; deploy-скрипты сохраняют его только в Kubernetes Secret и не печатают значение;
 - `MATTERCODEX_CONTROL_CENTER_ASSETS_DIR` - optional, каталог собранного Vue Control Center внутри bot-service image;
-- `MATTERCODEX_AUTOMATION_DELIVERY_INTERVAL` и `MATTERCODEX_AUTOMATION_DELIVERY_CONCURRENCY` - optional bounds непрерывного worker доставки automation owner-attention; worker использует PostgreSQL claim/lease/fence и продвигает весь доступный backlog;
 - `MATTERCODEX_GITHUB_SECRET` - optional, имя Kubernetes Secret для reviewer/user GitHub account;
 - `MATTERCODEX_AGENT_GITHUB_SECRET` - optional, имя Kubernetes Secret для developer/agent GitHub account;
 - `MATTERCODEX_GITHUB_TOKEN` - optional, GitHub token для bot-service и reviewer account; deploy-скрипты также принимают legacy `GITHUB_PAT`;
@@ -97,13 +115,14 @@
 
 Скрипты печатают только статус наличия токенов, не значения.
 
-## Ручная проверка истории автоматизаций
+## Ручная проверка cutover Control Center
 
-1. Проверить только факт наличия ключей `control-center-read-token` и `MATTERCODEX_OWNER_MATTERMOST_USERNAME`, не выводя их значения.
-2. Открыть `/control-center/`, ввести read-only token и убедиться, что запрос `GET /api/control-center/v1/automation-runs` возвращает сохранённую историю.
-3. Выполнить callback `requires_human` и дождаться состояния `waiting_owner/open` с доставленной карточкой.
-4. Ответить сохранённым корневым инициатором в точном Mattermost-треде; не позднее следующего пятисекундного обновления проверить `succeeded/resolved`.
-5. Перезагрузить страницу, повторно ввести token и подтвердить, что состояние восстановилось из PostgreSQL, а не из `window` или browser storage.
+1. Открыть `/control-center/` и убедиться, что публикуются только статические assets.
+2. Проверить, что legacy `/api/control-center/v1/automation-runs` отсутствует в
+   route snapshot и production router.
+3. Проверить отсутствие `MATTERCODEX_CONTROL_CENTER_READ_TOKEN` в config,
+   Secret template и Deployment. Исторический UI не является владельцем
+   Schedule/Runtime state и не используется для проверки Issue #192.
 
 Foundation создаёт в том же `${MATTERCODEX_POSTGRES_SECRET}` три runtime-ключа: `bot-service-runtime-user`, `bot-service-runtime-password`, `bot-service-runtime-datasource`. Для существующего Secret скрипт сохраняет четыре исходных migration-owner ключа, добавляет отсутствующую полную runtime-тройку и закрыто прекращает работу при частично заполненной тройке. `bot-service` через migration DSN создаёт или ужесточает отдельный login, затем `000025` выдаёт только точные DML/sequence/function grants. Совпадение login, другой endpoint или отсутствие явного runtime password отклоняются до запуска сервиса; fallback на owner DSN отсутствует.
 
@@ -133,7 +152,7 @@ scripts/k8s/render-bot-service.sh --env-file .env --render-dir /tmp/matter-codex
 bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-render --expected-files 8 --expected-objects 18
 ```
 
-Проверка перечисляет каждый непустой YAML document как `Kind/name`, исключает пустые документы и сравнивает число объектов с результатами `kubectl create --dry-run=client --validate=false`. Для полного профиля с управляемым registry, Kaniko и runtime limits ожидаются 8 файлов и 18 объектов; число разделителей `---` доказательством не является. Команда не обращается к Kubernetes API и ничего не применяет.
+Проверка перечисляет каждый непустой YAML document как `Kind/name`, исключает пустые документы и сравнивает число объектов с результатами `kubectl create --dry-run=client --validate=false`. Для полного профиля с управляемым registry, Kaniko, runtime limits и двумя bot-service `NetworkPolicy` ожидаются 9 файлов и 20 объектов; число разделителей `---` доказательством не является. Команда не обращается к Kubernetes API и ничего не применяет.
 
 В render directory попадают:
 
@@ -146,7 +165,7 @@ bash scripts/k8s/verify-rendered-objects.sh --render-dir /tmp/matter-codex-bot-r
 - Service;
 - Ingress.
 
-Публичный Ingress использует точный список разрешённых маршрутов только для `/mattermost/slash/agents` и `/github/webhook`. Маршруты health/readiness, metrics, action/dialog callback, internal agent session и MCP доступны только через кластерный сервис Kubernetes. Mattermost получает action/dialog URL из `MATTERCODEX_BOT_SERVICE_INTERNAL_URL`, поэтому внешний Prefix `/` не требуется.
+Публичный Ingress использует точный список разрешённых маршрутов только для `/mattermost/slash/agents` и `/github/webhook`. Маршруты health/readiness, metrics, action/dialog callback, execution-scoped MCP binding и MCP доступны только через кластерный сервис Kubernetes. Legacy internal agent session route отсутствует. Mattermost получает action/dialog URL из `MATTERCODEX_BOT_SERVICE_INTERNAL_URL`, поэтому внешний Prefix `/` не требуется.
 
 При `--apply` remote deploy по умолчанию использует `MATTERCODEX_IMAGE_BUILD_STRATEGY=kaniko`: локально создается только tar build context, он передается по SSH во временный pod с PVC, а image собирается Kaniko Job внутри кластера и push'ится во встроенный MatterCodex registry. Kubelet тянет готовые image из этого registry через `MATTERCODEX_IMAGE_REGISTRY_PULL_HOST`. Гигабайтные `docker save` archive через локальную сеть не передаются.
 
@@ -419,87 +438,11 @@ Typed-команды остаются fallback-интерфейсом для т�
 
 Удаление в этом сценарии удаляет только запись `matter_codex_repositories`. Канал Mattermost и GitHub webhook не удаляются.
 
-Дополнительная проверка Kubernetes runner foundation:
-
-```text
-/agents token check
-/agents runtime smoke smoke-manual
-/agents runtime status smoke-manual
-/agents runtime cleanup smoke-manual
-/agents runtime prune 24h
-```
-
-Ожидаемый результат:
-
-- token check показывает `kubernetes runtime: configured`;
-- runtime smoke возвращает run id, Job и PVC без вывода секретов; Job использует `matter-codex-agent-runner`;
-- runtime status показывает Job/PVC, pod phase и короткий log tail smoke Job;
-- runtime cleanup удаляет Job и PVC.
-- runtime prune по умолчанию работает в dry-run режиме и показывает старые завершенные Job/PVC/ConfigMap. Session PVC и Secret токена показываются отдельно в режиме `inventory-only` с диагностическими причинами и не удаляются даже при `--apply`.
-
-Проверка runtime quota/limits после deploy:
-
-```text
-/agents runtime smoke quota-manual
-/agents runtime status quota-manual
-/agents runtime cleanup quota-manual
-```
-
-На кластере `kubectl -n <namespace> get resourcequota matter-codex-runtime-quota` и `kubectl -n <namespace> get limitrange matter-codex-runtime-container-defaults` должны показывать примененные объекты. Runtime smoke должен проходить с `smoke-ok`; это подтверждает, что defaults и quota не блокируют agent Job.
-
-Проверка apply-режима retention cleanup на завершенном smoke run:
-
-```text
-/agents runtime smoke prune-manual
-/agents runtime status prune-manual
-/agents runtime prune 1s
-/agents runtime prune 1s --apply
-/agents runtime status prune-manual
-```
-
-Ожидаемый результат:
-
-- первый `runtime prune 1s` показывает `mode: dry-run` и не удаляет ресурсы;
-- `runtime prune 1s --apply` удаляет завершенный Job/PVC/ConfigMap только если run уже завершен;
-- оба запуска показывают для session PVC/Secret режим `inventory-only`, нулевые счётчики удаления и причины `containment`; непроверенные PostgreSQL/S3 отражаются как `unknown_db` и `unknown_s3`, а не как утверждение о наличии архива;
-- активные Job не удаляются и учитываются как skipped;
-- после apply `runtime status prune-manual` возвращает, что run не найден.
-
-Ручная приёмка сдерживания сессионных данных выполняется только в изолированной тестовой установке:
-
-1. Создать старый синтетический session PVC и соответствующий синтетический token Secret без действующих учётных данных.
-2. Запустить `/agents runtime prune <возраст>` и затем `/agents runtime prune <возраст> --apply`.
-3. Повторить предварительный просмотр и убедиться, что PVC и Secret существуют в неизменном виде, их удаление равно нулю, а результат не утверждает наличие архива.
-4. Воспроизвести исчерпание квоты на создание session PVC и убедиться, что вызывающий код различает неустранимый вытеснением вид `AgentSessionCapacityError`, `ChatRunService` выполняет одну попытку создания PVC без вытеснения простаивающего pod и `CleanupAgentSession`, а сохранённые PVC/Secret не получают `delete` или `patch`.
-5. Проверить аудит: допустима запись инвентаризации, но отсутствует запись, утверждающая разрешённое или выполненное удаление session PVC/Secret.
-
-Эта проверка не является разрешением на промышленный deploy или Kubernetes apply.
-
-Дополнительная проверка Codex reviewer agent:
-
-Перед проверкой нужен authorized OpenAI account из профиля `reviewer`, настроенный GitHub account `primary` и существующий открытый GitHub PR.
-
-```text
-/agents openai list
-/agents review pr codex-k8s/matter-codex <pr-number> review-manual
-/agents review status review-manual
-```
-
-Ожидаемый результат:
-
-- review pr возвращает run id, PR number, Job и PVC;
-- в ответе review pr указан OpenAI account `primary`;
-- через некоторое время `review status` показывает pod phase и artifacts `pr-url`, `review-decision`, `review-submitted`;
-- Codex reviewer получает `gh` с env `GH_TOKEN`/`GITHUB_TOKEN`, `GITHUB_USERNAME`/`GITHUB_USER`, `GITHUB_EMAIL` и должен сам публиковать inline review comments от reviewer account; если он не отправил review сам, runner отправляет fallback summary review;
-- log tail не содержит значений OpenAI/GitHub/Mattermost секретов.
-
-После проверки удалить Kubernetes resources:
-
-```text
-/agents review cleanup review-manual
-```
-
-Cleanup удаляет только Kubernetes Job/PVC, а не GitHub review/comment.
+Для target runtime ручная проверка выполняется по
+`docs/runbooks/agent-runner.md`. Старые `/agents runtime` и `/agents review`
+не используются как smoke/recovery path и не должны создавать Job, Pod, Turn
+либо Schedule. Повтор старой card capability обязан вернуть unavailable без
+Kubernetes и PostgreSQL runtime effects.
 
 Проверка webhook reject без корректной подписи:
 
@@ -563,17 +506,23 @@ order by destination, publication;
 - `response_url` разрешён только для настроенного источника Mattermost. Проверяются протокол, hostname, port, DNS-адреса и каждое перенаправление; IP-литерал, loopback, link-local, metadata, произвольный приватный или кластерный адрес назначения и DNS rebinding не приводят к исходящему HTTP-запросу.
 - bot-service Deployment запускается non-root, с dropped Linux capabilities, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true` и `seccompProfile: RuntimeDefault`.
 - Ресурсы bot-service настраиваются через `MATTERCODEX_BOT_SERVICE_CPU_REQUEST`, `MATTERCODEX_BOT_SERVICE_MEMORY_REQUEST` и `MATTERCODEX_BOT_SERVICE_MEMORY_LIMIT`. Значения по умолчанию: requests `100m`/`512Mi`, memory limit `8Gi`, CPU limit отсутствует; увеличенный memory limit нужен для кратковременных пиков при приеме крупных Codex session snapshots.
-- bot-service получает namespace-scoped Role на создание/чтение/удаление runtime Job/PVC, чтение pod/log, `pods/exec` для чтения готового `auth.json` из auth Job и `create/get/list/update/patch/delete` для Secret. Сдерживание session retention использует для token Secret только инвентаризацию и не вызывает `patch` или `delete`; наличие namespace-wide разрешения не является разрешением доменного действия и не создаёт включающего пути. Wildcard API groups, resources и verbs не выдаются.
+- bot-service использует Kubernetes adapter только для device-code auth и
+  execution-fenced MCP Secret producer. Production composition не вызывает
+  legacy Job/PVC Turn cleanup, retention, repair, smoke либо reviewer effects.
+  Namespace-scoped Role не является источником runtime authority; wildcard API
+  groups, resources и verbs не выдаются.
 - Runtime namespace получает namespace-level ResourceQuota/LimitRange с owner-instance defaults и env overrides, потому что MVP namespace общий для Mattermost, bot-service и agent Job. CPU/memory requests сохраняют scheduler accounting; aggregate `limits.memory` quota отсутствует, CPU limits не задаются, но каждый agent/utility container имеет высокий индивидуальный memory ceiling и ограниченный `/dev/shm`. Оператор обязан контролировать node pressure и число одновременно работающих и прогретых pod.
 - ServiceAccount agent runner создается без automount token; smoke pod также явно отключает automount.
-- Codex smoke/auth/developer/reviewer Job запускаются без automount service account token и с non-root securityContext.
-- Codex developer/reviewer Job получает Codex `auth.json` выбранного OpenAI account и GitHub token/username/email выбранного GitHub account только через Kubernetes Secret volume mount.
-- Developer/reviewer prompt templates хранятся в PostgreSQL, редактируются через Mattermost и передаются agent pod как отрендеренный Markdown через ConfigMap.
-- `CODEX_HOME/config.toml` задает `shell_environment_policy` с минимальным environment для команд, которые запускает Codex: `gh` получает только нужные GitHub env, без Mattermost/OpenAI/Kubernetes secret values.
-- Codex agent внутри isolated Kubernetes Job запускается с `sandbox_mode = "danger-full-access"`, потому что `workspace-write` требует `bubblewrap`, который в текущем Kubernetes pod падает до выполнения shell-команд. Изоляционная граница MVP для agent run: отдельный pod, отдельный PVC, отключенный automount service account token и минимальные Secret volume mounts.
-- Developer runner реализован отдельным Go binary в подготовленном image и сам выполняет push/PR после `codex exec`; prompt contract запрещает Codex агенту пушить branch или создавать PR напрямую, но разрешает отвечать на review threads через `gh` при соответствующей задаче.
-- Reviewer runner реализован отдельным Go binary в подготовленном image и дает Codex reviewer доступ к `gh` для inline review comments; если Codex не отправил review сам, runner отправляет fallback summary review после `codex exec`.
-- В текущем наборе манифестов `NetworkPolicy` отсутствует. PR-0 не расширяет сеть и фиксирует это состояние снимком; изоляция исходящего трафика остаётся явным риском начального профиля до отдельного инфраструктурного изменения.
+- Device-code auth Job запускается без automount service account token и с
+  non-root securityContext. Agent turn исполняет отдельный deployable
+  `services/jobs/agent-runner`; его sandbox закрыто допускает только
+  `read-only` либо `workspace-write`, а `danger-full-access` и unknown mode
+  отклоняются до app-server.
+- Bot-service получает default-deny `NetworkPolicy`. Runtime TLS ingress 8443
+  разрешён только exact interaction-gateway и execution role Pod labels;
+  публичный ingress и monitoring разделены. Egress перечисляет DNS,
+  Kubernetes API, Mattermost, PostgreSQL, Vault и authority consumers по exact
+  namespace/pod selectors и ports; wildcard/port-only правило отсутствует.
 
 ## Сессии, role bots и `runs`
 

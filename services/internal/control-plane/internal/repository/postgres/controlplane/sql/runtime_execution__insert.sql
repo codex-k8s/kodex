@@ -35,6 +35,10 @@ INSERT INTO control_plane.runtime_executions (
     restore_target_pvc_name, restore_target_pvc_uid, restore_target_pvc_resource_version,
     rehydrate_proof_reference, rehydrate_proof_sha256,
     credential_snapshot_sha256, workload_ticket_sha256,
+    provider_binding_id, provider_binding_version, provider_binding_sha256,
+    codex_session_id, codex_archive_relative_path, codex_archive_sha256,
+    codex_archive_provenance, codex_delivery_recovery_source_execution_id,
+    materializations,
     created_at, updated_at
 ) VALUES (
     @id, @organization_id, @project_id, @process_id, @session_id, @thread_id,
@@ -86,5 +90,9 @@ INSERT INTO control_plane.runtime_executions (
     nullif(@restore_target_pvc_resource_version, ''),
     nullif(@rehydrate_proof_reference, ''), nullif(@rehydrate_proof_sha256, ''),
     @credential_snapshot_sha256, @workload_ticket_sha256,
+    @provider_binding_id, @provider_binding_version, @provider_binding_sha256,
+    nullif(@codex_session_id, ''), nullif(@codex_archive_relative_path, ''),
+    nullif(@codex_archive_sha256, ''), nullif(@codex_archive_provenance, ''),
+    nullif(@codex_delivery_recovery_source_execution_id, '')::uuid, @materializations,
     @created_at, @updated_at
 );

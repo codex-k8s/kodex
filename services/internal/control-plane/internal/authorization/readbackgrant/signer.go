@@ -20,8 +20,8 @@ const ProtectedType = "mattercodex-interaction-delivery-readback+jws"
 type Config struct {
 	Issuer, Audience, ProducerID, Purpose, WorkloadID, CallerSPIFFEID string
 	Operation, Permission, PrivateJWKFile, PublicKeysetFile           string
-	Generation                                                       uint64
-	MaximumTTL                                                       time.Duration
+	Generation                                                        uint64
+	MaximumTTL                                                        time.Duration
 }
 
 type Claims struct {
@@ -78,10 +78,10 @@ type State struct {
 }
 
 type Signer struct {
-	config Config
-	key    internalrpcauth.ES256Key
-	state  State
-	fence  Fence
+	config     Config
+	key        internalrpcauth.ES256Key
+	state      State
+	fence      Fence
 	identities []KeyIdentity
 }
 

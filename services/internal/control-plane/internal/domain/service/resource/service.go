@@ -40,6 +40,7 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 		ImmutableInputSHA256, EffectiveRuntimeSHA256              string
 		AgentBindingSHA256, CredentialSnapshotSHA256              string
 		WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
+		CodexDeliveryRecoverySourceExecutionID                    string
 		State                                                     string
 	}
 	issue := func(issuer, audience string, privateKey ed25519.PrivateKey) (string, error) {
@@ -53,7 +54,8 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 			execution.GrantGeneration, execution.ImmutableInputSHA256,
 			execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
 			execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
-			execution.ResourceClass, execution.ClusterAccessProfile, execution.State})
+			execution.ResourceClass, execution.ClusterAccessProfile,
+			execution.CodexDeliveryRecoverySourceExecutionID, execution.State})
 		if marshalErr != nil {
 			return "", marshalErr
 		}
@@ -105,6 +107,7 @@ const (
 	permissionRegisterArtifact        = "controlplane.artifact.register"
 	permissionScanArtifact            = "controlplane.artifact.scan"
 	permissionManageSession           = "controlplane.session.manage"
+	permissionBindSessionMCP          = "controlplane.session.mcp.bind"
 	permissionConversationLifecycle   = "controlplane.conversation.lifecycle"
 	permissionWriteMemory             = "controlplane.memory.write"
 	permissionWriteProjectMemory      = "controlplane.memory.project.write"
@@ -119,8 +122,9 @@ const (
 	permissionApplyGitConfiguration   = "controlplane.configuration.git.apply"
 	permissionDetachConfiguration     = "controlplane.configuration.detach"
 	permissionRuntimeClaim            = "controlplane.runtime_execution.claim"
-	permissionRuntimeAgentBind        = "controlplane.runtime_execution.agent.bind"
 	permissionRuntimeRead             = "controlplane.runtime_execution.read"
+	permissionRuntimeOutputStage      = "controlplane.runtime_execution.output.stage"
+	permissionRuntimeProgress         = "controlplane.runtime_execution.progress"
 	permissionRuntimeAdmit            = "controlplane.runtime_execution.admit"
 	permissionRuntimeHeartbeat        = "controlplane.runtime_execution.heartbeat"
 	permissionRuntimeIncident         = "controlplane.runtime_execution.incident"
@@ -133,6 +137,7 @@ const (
 	permissionRuntimeComplete         = "controlplane.runtime_execution.complete"
 	permissionRuntimeCancel           = "controlplane.runtime_execution.cancel"
 	permissionRuntimeRetry            = "controlplane.runtime_execution.retry"
+	permissionRuntimeOwnerAction      = "controlplane.runtime_execution.owner_action"
 	permissionRuntimeReschedule       = "controlplane.runtime_execution.reschedule"
 	permissionRuntimeExpire           = "controlplane.runtime_execution.expire"
 	permissionRuntimeArchive          = "controlplane.runtime_execution.archive"
@@ -177,8 +182,6 @@ type Config struct {
 	MemoryIndexerSPIFFEID      string
 	RuntimeControllerWorkload  string
 	RuntimeControllerSPIFFEID  string
-	BotServiceWorkload         string
-	BotServiceSPIFFEID         string
 	ArchiveWorkload            string
 	ArchiveSPIFFEID            string
 	IntegrationGatewayWorkload string
@@ -231,8 +234,6 @@ type Service struct {
 	memoryIndexerSPIFFEID      string
 	runtimeControllerWorkload  string
 	runtimeControllerSPIFFEID  string
-	botServiceWorkload         string
-	botServiceSPIFFEID         string
 	archiveWorkload            string
 	archiveSPIFFEID            string
 	integrationGatewayWorkload string
@@ -273,10 +274,6 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validSPIFFEID(config.MemoryIndexerSPIFFEID) ||
 		value.ValidateStableKey(config.RuntimeControllerWorkload) != nil ||
 		!validSPIFFEID(config.RuntimeControllerSPIFFEID) ||
-		value.ValidateStableKey(config.BotServiceWorkload) != nil ||
-		!validSPIFFEID(config.BotServiceSPIFFEID) ||
-		config.BotServiceWorkload == config.RuntimeControllerWorkload ||
-		config.BotServiceSPIFFEID == config.RuntimeControllerSPIFFEID ||
 		config.RuntimeControllerWorkload == agentRunnerWorkload ||
 		config.RuntimeControllerSPIFFEID == agentRunnerSPIFFEID ||
 		value.ValidateStableKey(config.ArchiveWorkload) != nil ||
@@ -328,8 +325,6 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		memoryIndexerSPIFFEID:      config.MemoryIndexerSPIFFEID,
 		runtimeControllerWorkload:  config.RuntimeControllerWorkload,
 		runtimeControllerSPIFFEID:  config.RuntimeControllerSPIFFEID,
-		botServiceWorkload:         config.BotServiceWorkload,
-		botServiceSPIFFEID:         config.BotServiceSPIFFEID,
 		archiveWorkload:            config.ArchiveWorkload,
 		archiveSPIFFEID:            config.ArchiveSPIFFEID,
 		integrationGatewayWorkload: config.IntegrationGatewayWorkload,
@@ -1622,6 +1617,11 @@ func validSHA256Text(input string) bool {
 		}
 	}
 	return true
+}
+
+func validOpaqueRuntimeIdentifier(input string) bool {
+	return len(input) >= 1 && len(input) <= 256 && strings.TrimSpace(input) == input &&
+		!strings.ContainsAny(input, "\x00\r\n")
 }
 
 func validImageDigest(input string) bool {

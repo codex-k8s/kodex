@@ -621,19 +621,17 @@ if mattercodex_bool "$BUILD_ONLY"; then
   exit 0
 fi
 
-if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ] || [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ] || [ -n "${MATTERCODEX_CONTROL_CENTER_READ_TOKEN:-}" ]; then
+if [ -n "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" ] || [ -n "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" ]; then
   export BOT_TOKEN_B64
   export SLASH_TOKEN_B64
   export ADMIN_TOKEN_B64
-  export CONTROL_CENTER_READ_TOKEN_B64
   BOT_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_BOT_TOKEN:-}" | base64 | tr -d '\n')"
   SLASH_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_SLASH_TOKEN:-}" | base64 | tr -d '\n')"
   ADMIN_TOKEN_B64="$(printf '%s' "${MATTERCODEX_MATTERMOST_ADMIN_TOKEN:-}" | base64 | tr -d '\n')"
-  CONTROL_CENTER_READ_TOKEN_B64="$(printf '%s' "${MATTERCODEX_CONTROL_CENTER_READ_TOKEN:-}" | base64 | tr -d '\n')"
   mattercodex_log "применяется bot-service secret на целевом сервере"
   apply_rendered_manifest_remote "$REPO_ROOT/deploy/k8s/bot-service/bot-service-secret.yaml.tpl" "$RENDER_DIR/05-bot-service-secret.yaml"
 else
-  mattercodex_log "Mattermost bot/slash и Control Center read token не заданы; bot-service secret не создается"
+  mattercodex_log "Mattermost bot/slash token не заданы; bot-service secret не создается"
 fi
 
 GITHUB_TOKEN_VALUE="${MATTERCODEX_GITHUB_TOKEN:-${GITHUB_PAT:-${GIT_BOT_TOKEN:-}}}"
@@ -723,6 +721,7 @@ if [ "$DRY_RUN_MODE" = "none" ]; then
 fi
 
 for manifest in \
+  "$RENDER_DIR/25-networkpolicy.yaml" \
   "$RENDER_DIR/30-deployment.yaml" \
   "$RENDER_DIR/40-service.yaml" \
   "$RENDER_DIR/50-ingress.yaml"; do

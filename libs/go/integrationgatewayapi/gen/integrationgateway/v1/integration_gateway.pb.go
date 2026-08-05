@@ -9,7 +9,6 @@ package integrationgatewayv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -22,370 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type IntegrationOutcome int32
-
-const (
-	IntegrationOutcome_INTEGRATION_OUTCOME_UNSPECIFIED IntegrationOutcome = 0
-	IntegrationOutcome_INTEGRATION_OUTCOME_SUCCEEDED   IntegrationOutcome = 1
-	IntegrationOutcome_INTEGRATION_OUTCOME_FAILED      IntegrationOutcome = 2
-	IntegrationOutcome_INTEGRATION_OUTCOME_UNKNOWN     IntegrationOutcome = 3
-)
-
-// Enum value maps for IntegrationOutcome.
-var (
-	IntegrationOutcome_name = map[int32]string{
-		0: "INTEGRATION_OUTCOME_UNSPECIFIED",
-		1: "INTEGRATION_OUTCOME_SUCCEEDED",
-		2: "INTEGRATION_OUTCOME_FAILED",
-		3: "INTEGRATION_OUTCOME_UNKNOWN",
-	}
-	IntegrationOutcome_value = map[string]int32{
-		"INTEGRATION_OUTCOME_UNSPECIFIED": 0,
-		"INTEGRATION_OUTCOME_SUCCEEDED":   1,
-		"INTEGRATION_OUTCOME_FAILED":      2,
-		"INTEGRATION_OUTCOME_UNKNOWN":     3,
-	}
-)
-
-func (x IntegrationOutcome) Enum() *IntegrationOutcome {
-	p := new(IntegrationOutcome)
-	*p = x
-	return p
-}
-
-func (x IntegrationOutcome) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (IntegrationOutcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_integrationgateway_v1_integration_gateway_proto_enumTypes[0].Descriptor()
-}
-
-func (IntegrationOutcome) Type() protoreflect.EnumType {
-	return &file_integrationgateway_v1_integration_gateway_proto_enumTypes[0]
-}
-
-func (x IntegrationOutcome) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use IntegrationOutcome.Descriptor instead.
-func (IntegrationOutcome) EnumDescriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{0}
-}
-
-type ResolveIntegrationResultRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResolveIntegrationResultRequest) Reset() {
-	*x = ResolveIntegrationResultRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResolveIntegrationResultRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResolveIntegrationResultRequest) ProtoMessage() {}
-
-func (x *ResolveIntegrationResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResolveIntegrationResultRequest.ProtoReflect.Descriptor instead.
-func (*ResolveIntegrationResultRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{0}
-}
-
-type ResolveIntegrationResultResponse struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	InvocationId          string                 `protobuf:"bytes,1,opt,name=invocation_id,json=invocationId,proto3" json:"invocation_id,omitempty"`
-	AttemptId             string                 `protobuf:"bytes,2,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
-	Outcome               IntegrationOutcome     `protobuf:"varint,3,opt,name=outcome,proto3,enum=integrationgateway.v1.IntegrationOutcome" json:"outcome,omitempty"`
-	Reference             string                 `protobuf:"bytes,4,opt,name=reference,proto3" json:"reference,omitempty"`
-	ReferenceSha256       string                 `protobuf:"bytes,5,opt,name=reference_sha256,json=referenceSha256,proto3" json:"reference_sha256,omitempty"`
-	StructuredOutcomeJson []byte                 `protobuf:"bytes,6,opt,name=structured_outcome_json,json=structuredOutcomeJson,proto3" json:"structured_outcome_json,omitempty"`
-	DeliveryVersion       uint64                 `protobuf:"varint,7,opt,name=delivery_version,json=deliveryVersion,proto3" json:"delivery_version,omitempty"`
-	DeliveryFence         uint64                 `protobuf:"varint,8,opt,name=delivery_fence,json=deliveryFence,proto3" json:"delivery_fence,omitempty"`
-	CompletedAt           *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
-}
-
-func (x *ResolveIntegrationResultResponse) Reset() {
-	*x = ResolveIntegrationResultResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResolveIntegrationResultResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResolveIntegrationResultResponse) ProtoMessage() {}
-
-func (x *ResolveIntegrationResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResolveIntegrationResultResponse.ProtoReflect.Descriptor instead.
-func (*ResolveIntegrationResultResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *ResolveIntegrationResultResponse) GetInvocationId() string {
-	if x != nil {
-		return x.InvocationId
-	}
-	return ""
-}
-
-func (x *ResolveIntegrationResultResponse) GetAttemptId() string {
-	if x != nil {
-		return x.AttemptId
-	}
-	return ""
-}
-
-func (x *ResolveIntegrationResultResponse) GetOutcome() IntegrationOutcome {
-	if x != nil {
-		return x.Outcome
-	}
-	return IntegrationOutcome_INTEGRATION_OUTCOME_UNSPECIFIED
-}
-
-func (x *ResolveIntegrationResultResponse) GetReference() string {
-	if x != nil {
-		return x.Reference
-	}
-	return ""
-}
-
-func (x *ResolveIntegrationResultResponse) GetReferenceSha256() string {
-	if x != nil {
-		return x.ReferenceSha256
-	}
-	return ""
-}
-
-func (x *ResolveIntegrationResultResponse) GetStructuredOutcomeJson() []byte {
-	if x != nil {
-		return x.StructuredOutcomeJson
-	}
-	return nil
-}
-
-func (x *ResolveIntegrationResultResponse) GetDeliveryVersion() uint64 {
-	if x != nil {
-		return x.DeliveryVersion
-	}
-	return 0
-}
-
-func (x *ResolveIntegrationResultResponse) GetDeliveryFence() uint64 {
-	if x != nil {
-		return x.DeliveryFence
-	}
-	return 0
-}
-
-func (x *ResolveIntegrationResultResponse) GetCompletedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.CompletedAt
-	}
-	return nil
-}
-
-type AcknowledgeIntegrationResultRequest struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	IdempotencyKey          string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	ExpectedDeliveryVersion uint64                 `protobuf:"varint,2,opt,name=expected_delivery_version,json=expectedDeliveryVersion,proto3" json:"expected_delivery_version,omitempty"`
-	ExpectedDeliveryFence   uint64                 `protobuf:"varint,3,opt,name=expected_delivery_fence,json=expectedDeliveryFence,proto3" json:"expected_delivery_fence,omitempty"`
-	ExpectedReferenceSha256 string                 `protobuf:"bytes,4,opt,name=expected_reference_sha256,json=expectedReferenceSha256,proto3" json:"expected_reference_sha256,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
-}
-
-func (x *AcknowledgeIntegrationResultRequest) Reset() {
-	*x = AcknowledgeIntegrationResultRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AcknowledgeIntegrationResultRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AcknowledgeIntegrationResultRequest) ProtoMessage() {}
-
-func (x *AcknowledgeIntegrationResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AcknowledgeIntegrationResultRequest.ProtoReflect.Descriptor instead.
-func (*AcknowledgeIntegrationResultRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *AcknowledgeIntegrationResultRequest) GetIdempotencyKey() string {
-	if x != nil {
-		return x.IdempotencyKey
-	}
-	return ""
-}
-
-func (x *AcknowledgeIntegrationResultRequest) GetExpectedDeliveryVersion() uint64 {
-	if x != nil {
-		return x.ExpectedDeliveryVersion
-	}
-	return 0
-}
-
-func (x *AcknowledgeIntegrationResultRequest) GetExpectedDeliveryFence() uint64 {
-	if x != nil {
-		return x.ExpectedDeliveryFence
-	}
-	return 0
-}
-
-func (x *AcknowledgeIntegrationResultRequest) GetExpectedReferenceSha256() string {
-	if x != nil {
-		return x.ExpectedReferenceSha256
-	}
-	return ""
-}
-
-type AcknowledgeIntegrationResultResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	InvocationId    string                 `protobuf:"bytes,1,opt,name=invocation_id,json=invocationId,proto3" json:"invocation_id,omitempty"`
-	AttemptId       string                 `protobuf:"bytes,2,opt,name=attempt_id,json=attemptId,proto3" json:"attempt_id,omitempty"`
-	Outcome         IntegrationOutcome     `protobuf:"varint,3,opt,name=outcome,proto3,enum=integrationgateway.v1.IntegrationOutcome" json:"outcome,omitempty"`
-	Reference       string                 `protobuf:"bytes,4,opt,name=reference,proto3" json:"reference,omitempty"`
-	ReferenceSha256 string                 `protobuf:"bytes,5,opt,name=reference_sha256,json=referenceSha256,proto3" json:"reference_sha256,omitempty"`
-	DeliveryVersion uint64                 `protobuf:"varint,6,opt,name=delivery_version,json=deliveryVersion,proto3" json:"delivery_version,omitempty"`
-	DeliveryFence   uint64                 `protobuf:"varint,7,opt,name=delivery_fence,json=deliveryFence,proto3" json:"delivery_fence,omitempty"`
-	AcknowledgedAt  *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=acknowledged_at,json=acknowledgedAt,proto3" json:"acknowledged_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *AcknowledgeIntegrationResultResponse) Reset() {
-	*x = AcknowledgeIntegrationResultResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AcknowledgeIntegrationResultResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AcknowledgeIntegrationResultResponse) ProtoMessage() {}
-
-func (x *AcknowledgeIntegrationResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AcknowledgeIntegrationResultResponse.ProtoReflect.Descriptor instead.
-func (*AcknowledgeIntegrationResultResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetInvocationId() string {
-	if x != nil {
-		return x.InvocationId
-	}
-	return ""
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetAttemptId() string {
-	if x != nil {
-		return x.AttemptId
-	}
-	return ""
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetOutcome() IntegrationOutcome {
-	if x != nil {
-		return x.Outcome
-	}
-	return IntegrationOutcome_INTEGRATION_OUTCOME_UNSPECIFIED
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetReference() string {
-	if x != nil {
-		return x.Reference
-	}
-	return ""
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetReferenceSha256() string {
-	if x != nil {
-		return x.ReferenceSha256
-	}
-	return ""
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetDeliveryVersion() uint64 {
-	if x != nil {
-		return x.DeliveryVersion
-	}
-	return 0
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetDeliveryFence() uint64 {
-	if x != nil {
-		return x.DeliveryFence
-	}
-	return 0
-}
-
-func (x *AcknowledgeIntegrationResultResponse) GetAcknowledgedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.AcknowledgedAt
-	}
-	return nil
-}
-
 type IntegrationResultServiceCheckReadinessRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -394,7 +29,7 @@ type IntegrationResultServiceCheckReadinessRequest struct {
 
 func (x *IntegrationResultServiceCheckReadinessRequest) Reset() {
 	*x = IntegrationResultServiceCheckReadinessRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[4]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -406,7 +41,7 @@ func (x *IntegrationResultServiceCheckReadinessRequest) String() string {
 func (*IntegrationResultServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *IntegrationResultServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[4]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -419,7 +54,7 @@ func (x *IntegrationResultServiceCheckReadinessRequest) ProtoReflect() protorefl
 
 // Deprecated: Use IntegrationResultServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*IntegrationResultServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{4}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{0}
 }
 
 type IntegrationResultServiceCheckReadinessResponse struct {
@@ -434,7 +69,7 @@ type IntegrationResultServiceCheckReadinessResponse struct {
 
 func (x *IntegrationResultServiceCheckReadinessResponse) Reset() {
 	*x = IntegrationResultServiceCheckReadinessResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[5]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -446,7 +81,7 @@ func (x *IntegrationResultServiceCheckReadinessResponse) String() string {
 func (*IntegrationResultServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *IntegrationResultServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[5]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -459,7 +94,7 @@ func (x *IntegrationResultServiceCheckReadinessResponse) ProtoReflect() protoref
 
 // Deprecated: Use IntegrationResultServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*IntegrationResultServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{5}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *IntegrationResultServiceCheckReadinessResponse) GetReady() bool {
@@ -494,48 +129,14 @@ var File_integrationgateway_v1_integration_gateway_proto protoreflect.FileDescri
 
 const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"\n" +
-	"/integrationgateway/v1/integration_gateway.proto\x12\x15integrationgateway.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"!\n" +
-	"\x1fResolveIntegrationResultRequest\"\xbd\x03\n" +
-	" ResolveIntegrationResultResponse\x12#\n" +
-	"\rinvocation_id\x18\x01 \x01(\tR\finvocationId\x12\x1d\n" +
-	"\n" +
-	"attempt_id\x18\x02 \x01(\tR\tattemptId\x12C\n" +
-	"\aoutcome\x18\x03 \x01(\x0e2).integrationgateway.v1.IntegrationOutcomeR\aoutcome\x12\x1c\n" +
-	"\treference\x18\x04 \x01(\tR\treference\x12)\n" +
-	"\x10reference_sha256\x18\x05 \x01(\tR\x0freferenceSha256\x126\n" +
-	"\x17structured_outcome_json\x18\x06 \x01(\fR\x15structuredOutcomeJson\x12)\n" +
-	"\x10delivery_version\x18\a \x01(\x04R\x0fdeliveryVersion\x12%\n" +
-	"\x0edelivery_fence\x18\b \x01(\x04R\rdeliveryFence\x12=\n" +
-	"\fcompleted_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\"\xfe\x01\n" +
-	"#AcknowledgeIntegrationResultRequest\x12'\n" +
-	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12:\n" +
-	"\x19expected_delivery_version\x18\x02 \x01(\x04R\x17expectedDeliveryVersion\x126\n" +
-	"\x17expected_delivery_fence\x18\x03 \x01(\x04R\x15expectedDeliveryFence\x12:\n" +
-	"\x19expected_reference_sha256\x18\x04 \x01(\tR\x17expectedReferenceSha256\"\x8f\x03\n" +
-	"$AcknowledgeIntegrationResultResponse\x12#\n" +
-	"\rinvocation_id\x18\x01 \x01(\tR\finvocationId\x12\x1d\n" +
-	"\n" +
-	"attempt_id\x18\x02 \x01(\tR\tattemptId\x12C\n" +
-	"\aoutcome\x18\x03 \x01(\x0e2).integrationgateway.v1.IntegrationOutcomeR\aoutcome\x12\x1c\n" +
-	"\treference\x18\x04 \x01(\tR\treference\x12)\n" +
-	"\x10reference_sha256\x18\x05 \x01(\tR\x0freferenceSha256\x12)\n" +
-	"\x10delivery_version\x18\x06 \x01(\x04R\x0fdeliveryVersion\x12%\n" +
-	"\x0edelivery_fence\x18\a \x01(\x04R\rdeliveryFence\x12C\n" +
-	"\x0facknowledged_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x0eacknowledgedAt\"/\n" +
+	"/integrationgateway/v1/integration_gateway.proto\x12\x15integrationgateway.v1\"/\n" +
 	"-IntegrationResultServiceCheckReadinessRequest\"\xbd\x01\n" +
 	".IntegrationResultServiceCheckReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x12%\n" +
 	"\x0eschema_version\x18\x02 \x01(\x04R\rschemaVersion\x12'\n" +
 	"\x0fauthority_ready\x18\x03 \x01(\bR\x0eauthorityReady\x12%\n" +
-	"\x0epostgres_ready\x18\x04 \x01(\bR\rpostgresReady*\x9d\x01\n" +
-	"\x12IntegrationOutcome\x12#\n" +
-	"\x1fINTEGRATION_OUTCOME_UNSPECIFIED\x10\x00\x12!\n" +
-	"\x1dINTEGRATION_OUTCOME_SUCCEEDED\x10\x01\x12\x1e\n" +
-	"\x1aINTEGRATION_OUTCOME_FAILED\x10\x02\x12\x1f\n" +
-	"\x1bINTEGRATION_OUTCOME_UNKNOWN\x10\x032\xe2\x03\n" +
-	"\x18IntegrationResultService\x12\x8b\x01\n" +
-	"\x18ResolveIntegrationResult\x126.integrationgateway.v1.ResolveIntegrationResultRequest\x1a7.integrationgateway.v1.ResolveIntegrationResultResponse\x12\x97\x01\n" +
-	"\x1cAcknowledgeIntegrationResult\x12:.integrationgateway.v1.AcknowledgeIntegrationResultRequest\x1a;.integrationgateway.v1.AcknowledgeIntegrationResultResponse\x12\x9d\x01\n" +
+	"\x0epostgres_ready\x18\x04 \x01(\bR\rpostgresReady2\xba\x01\n" +
+	"\x18IntegrationResultService\x12\x9d\x01\n" +
 	"\x0eCheckReadiness\x12D.integrationgateway.v1.IntegrationResultServiceCheckReadinessRequest\x1aE.integrationgateway.v1.IntegrationResultServiceCheckReadinessResponseBpZngithub.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1;integrationgatewayv1b\x06proto3"
 
 var (
@@ -550,34 +151,19 @@ func file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP() []byte {
 	return file_integrationgateway_v1_integration_gateway_proto_rawDescData
 }
 
-var file_integrationgateway_v1_integration_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_integrationgateway_v1_integration_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_integrationgateway_v1_integration_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_integrationgateway_v1_integration_gateway_proto_goTypes = []any{
-	(IntegrationOutcome)(0),                                // 0: integrationgateway.v1.IntegrationOutcome
-	(*ResolveIntegrationResultRequest)(nil),                // 1: integrationgateway.v1.ResolveIntegrationResultRequest
-	(*ResolveIntegrationResultResponse)(nil),               // 2: integrationgateway.v1.ResolveIntegrationResultResponse
-	(*AcknowledgeIntegrationResultRequest)(nil),            // 3: integrationgateway.v1.AcknowledgeIntegrationResultRequest
-	(*AcknowledgeIntegrationResultResponse)(nil),           // 4: integrationgateway.v1.AcknowledgeIntegrationResultResponse
-	(*IntegrationResultServiceCheckReadinessRequest)(nil),  // 5: integrationgateway.v1.IntegrationResultServiceCheckReadinessRequest
-	(*IntegrationResultServiceCheckReadinessResponse)(nil), // 6: integrationgateway.v1.IntegrationResultServiceCheckReadinessResponse
-	(*timestamppb.Timestamp)(nil),                          // 7: google.protobuf.Timestamp
+	(*IntegrationResultServiceCheckReadinessRequest)(nil),  // 0: integrationgateway.v1.IntegrationResultServiceCheckReadinessRequest
+	(*IntegrationResultServiceCheckReadinessResponse)(nil), // 1: integrationgateway.v1.IntegrationResultServiceCheckReadinessResponse
 }
 var file_integrationgateway_v1_integration_gateway_proto_depIdxs = []int32{
-	0, // 0: integrationgateway.v1.ResolveIntegrationResultResponse.outcome:type_name -> integrationgateway.v1.IntegrationOutcome
-	7, // 1: integrationgateway.v1.ResolveIntegrationResultResponse.completed_at:type_name -> google.protobuf.Timestamp
-	0, // 2: integrationgateway.v1.AcknowledgeIntegrationResultResponse.outcome:type_name -> integrationgateway.v1.IntegrationOutcome
-	7, // 3: integrationgateway.v1.AcknowledgeIntegrationResultResponse.acknowledged_at:type_name -> google.protobuf.Timestamp
-	1, // 4: integrationgateway.v1.IntegrationResultService.ResolveIntegrationResult:input_type -> integrationgateway.v1.ResolveIntegrationResultRequest
-	3, // 5: integrationgateway.v1.IntegrationResultService.AcknowledgeIntegrationResult:input_type -> integrationgateway.v1.AcknowledgeIntegrationResultRequest
-	5, // 6: integrationgateway.v1.IntegrationResultService.CheckReadiness:input_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessRequest
-	2, // 7: integrationgateway.v1.IntegrationResultService.ResolveIntegrationResult:output_type -> integrationgateway.v1.ResolveIntegrationResultResponse
-	4, // 8: integrationgateway.v1.IntegrationResultService.AcknowledgeIntegrationResult:output_type -> integrationgateway.v1.AcknowledgeIntegrationResultResponse
-	6, // 9: integrationgateway.v1.IntegrationResultService.CheckReadiness:output_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessResponse
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0, // 0: integrationgateway.v1.IntegrationResultService.CheckReadiness:input_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessRequest
+	1, // 1: integrationgateway.v1.IntegrationResultService.CheckReadiness:output_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessResponse
+	1, // [1:2] is the sub-list for method output_type
+	0, // [0:1] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_integrationgateway_v1_integration_gateway_proto_init() }
@@ -590,14 +176,13 @@ func file_integrationgateway_v1_integration_gateway_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_integrationgateway_v1_integration_gateway_proto_rawDesc), len(file_integrationgateway_v1_integration_gateway_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   6,
+			NumEnums:      0,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_integrationgateway_v1_integration_gateway_proto_goTypes,
 		DependencyIndexes: file_integrationgateway_v1_integration_gateway_proto_depIdxs,
-		EnumInfos:         file_integrationgateway_v1_integration_gateway_proto_enumTypes,
 		MessageInfos:      file_integrationgateway_v1_integration_gateway_proto_msgTypes,
 	}.Build()
 	File_integrationgateway_v1_integration_gateway_proto = out.File

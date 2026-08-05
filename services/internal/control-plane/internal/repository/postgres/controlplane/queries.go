@@ -84,6 +84,9 @@ var sqlProcessHasOpenWork string
 //go:embed sql/provider_binding__active_sessions.sql
 var sqlProviderBindingActiveSessions string
 
+//go:embed sql/runtime_execution__latest_session_codex_lineage.sql
+var sqlRuntimeExecutionLatestSessionCodexLineage string
+
 //go:embed sql/project__authorize.sql
 var sqlProjectAuthorize string
 
@@ -140,15 +143,6 @@ var sqlRuntimeExecutionGetByTurnForUpdate string
 
 //go:embed sql/runtime_execution__get_by_turn.sql
 var sqlRuntimeExecutionGetByTurn string
-
-//go:embed sql/runtime_agent_binding__get_for_update.sql
-var sqlRuntimeAgentBindingGetForUpdate string
-
-//go:embed sql/runtime_agent_binding__insert.sql
-var sqlRuntimeAgentBindingInsert string
-
-//go:embed sql/runtime_agent_binding__resolve_intent.sql
-var sqlRuntimeAgentBindingResolveIntent string
 
 //go:embed sql/resource_retention_policy__current.sql
 var sqlResourceRetentionPolicyCurrent string

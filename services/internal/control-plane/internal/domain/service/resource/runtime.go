@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +23,21 @@ import (
 var scheduleParser = cron.NewParser(
 	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
+var publicProviderAccountNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,47}[a-z0-9])?$`)
+
+func validUniqueRuntimeIDs(values []string) bool {
+	seen := make(map[string]struct{}, len(values))
+	for _, identifier := range values {
+		if value.ValidateID(identifier) != nil {
+			return false
+		}
+		if _, duplicate := seen[identifier]; duplicate {
+			return false
+		}
+		seen[identifier] = struct{}{}
+	}
+	return true
+}
 
 // EnqueueTurn атомарно увеличивает последовательность сессии и создаёт точную попытку.
 func (service *Service) EnqueueTurn(
@@ -37,18 +54,23 @@ func (service *Service) EnqueueTurn(
 		(input.ProcessRunID != "" && value.ValidateID(input.ProcessRunID) != nil) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	if len(input.InputArtifactIDs) > 32 || !validUniqueRuntimeIDs(input.InputArtifactIDs) {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
 	requestHash, err := canonicalHash(struct {
 		Identity         commandIdentity
 		SessionID        string
 		SourceRef        string
 		PromptArtifactID string
 		ProcessRunID     string
+		InputArtifactIDs []string
 	}{
 		identity(input.Principal),
 		input.SessionID,
 		input.SourceRef,
 		input.PromptArtifactID,
 		input.ProcessRunID,
+		slices.Clone(input.InputArtifactIDs),
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -186,6 +208,20 @@ func (service *Service) EnqueueTurn(
 			if err != nil {
 				return entity.Resource{}, err
 			}
+			inputArtifacts := make([]entity.EffectiveArtifactRef, 0, len(input.InputArtifactIDs))
+			for index, artifactID := range input.InputArtifactIDs {
+				artifact, spec, artifactErr := service.requireCleanArtifactResource(ctx, tx, input.Principal, artifactID)
+				if artifactErr != nil || artifact.ParentID != input.SessionID || spec.Direction != "INPUT" {
+					if artifactErr != nil {
+						return entity.Resource{}, artifactErr
+					}
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				inputArtifacts = append(inputArtifacts, entity.EffectiveArtifactRef{ArtifactID: artifact.ID,
+					Version: artifact.Version, SHA256: spec.SHA256,
+					RelativePath: fmt.Sprintf("inputs/%04d-%s", index+1, artifact.ID),
+					MediaType:    spec.MediaType, SizeBytes: spec.SizeBytes})
+			}
 			if input.ProcessRunID != "" {
 				process := enqueueProcessGraph.Process
 				processSpec, ok := process.Spec.(entity.ProcessRunSpec)
@@ -272,7 +308,7 @@ func (service *Service) EnqueueTurn(
 				return entity.Resource{}, err
 			}
 			turn, err := entity.New(
-				uuid.NewString(),
+				turnIDFromIdempotency(input.IdempotencyKey),
 				input.Principal.OrganizationID,
 				input.Principal.ProjectID,
 				input.SessionID,
@@ -293,6 +329,7 @@ func (service *Service) EnqueueTurn(
 						runtimeRevision.Spec.(entity.RuntimeRevisionSpec).ManifestSHA256,
 						input.ProcessRunID,
 					),
+					InputArtifacts: inputArtifacts,
 				},
 				now,
 			)
@@ -338,6 +375,14 @@ func (service *Service) EnqueueTurn(
 	)
 }
 
+func turnIDFromIdempotency(idempotencyKey string) string {
+	namespace, err := uuid.Parse(idempotencyKey)
+	if err != nil {
+		namespace = uuid.NameSpaceURL
+	}
+	return uuid.NewSHA1(namespace, []byte("control-plane-turn")).String()
+}
+
 // ClaimTurn выдаёт точной рабочей нагрузке одну ограниченную аренду.
 func (service *Service) ClaimTurn(
 	ctx context.Context,
@@ -381,12 +426,20 @@ func (service *Service) ClaimTurn(
 				return err
 			}
 			if err := requireOwnerGraphRuntimeDisposition(
-				authorityGraph, runtimeDispositionAbsent,
+				authorityGraph, runtimeDispositionAbsent, runtimeDispositionNonterminal,
 			); err != nil {
 				return err
 			}
 			authorityTurn := authorityGraph.Turn
 			authoritySpec, ok := authorityTurn.Spec.(entity.TurnSpec)
+			if authorityGraph.Runtime != nil &&
+				(authorityGraph.Runtime.State != "PENDING" || authorityGraph.Runtime.Version != 1 ||
+					authorityGraph.Runtime.Fence != 1 || authorityGraph.Runtime.TurnID != authorityTurn.ID ||
+					authorityGraph.Runtime.Attempt != authoritySpec.Attempt ||
+					authorityGraph.Runtime.GrantGeneration != input.Principal.AuthorityGrantGeneration ||
+					authorityGraph.Runtime.ImmutableInputSHA256 != input.Principal.AuthorityDigest) {
+				return errs.ErrStateConflict
+			}
 			if !ok || authorityTurn.Kind != enum.KindTurn ||
 				authorityTurn.OwnerActorID != input.Principal.ActorID ||
 				uint64(authoritySpec.Attempt) != input.Principal.AuthorityRevision ||
@@ -2240,11 +2293,23 @@ func (service *Service) createRuntimeRevision(
 	if !ok {
 		return entity.Resource{}, errs.ErrInternal
 	}
-	if _, err := add(
+	providerBinding, err := add(
 		sessionSpec.ProviderAccountBindingID,
 		enum.KindCredentialBinding,
-	); err != nil {
+	)
+	if err != nil {
 		return entity.Resource{}, err
+	}
+	providerSpec, ok := providerBinding.Spec.(entity.CredentialBindingSpec)
+	if !ok || providerSpec.Purpose != "provider-account" {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	providerAccountName := strings.ToLower(strings.TrimSpace(providerSpec.PrincipalRef))
+	if separator := strings.LastIndexByte(providerAccountName, ':'); separator >= 0 {
+		providerAccountName = providerAccountName[separator+1:]
+	}
+	if !publicProviderAccountNamePattern.MatchString(providerAccountName) {
+		return entity.Resource{}, errs.ErrStateConflict
 	}
 	if sessionSpec.ConversationID != "" {
 		if _, err := add(sessionSpec.ConversationID, enum.KindChat); err != nil {
@@ -2253,6 +2318,57 @@ func (service *Service) createRuntimeRevision(
 	}
 	credentialIDs := map[string]struct{}{
 		sessionSpec.ProviderAccountBindingID: {},
+	}
+	// Runtime authority выбирает инфраструктурные credentials из закрытого
+	// server-owned набора purpose. Request/Role не может назначить их сам.
+	requiredRuntimeCredentials := map[string]string{
+		"control-plane-application-grant":           "",
+		"runtime-materialization-application-grant": "",
+		"handoff-private-key":                       "",
+		"control-plane-client-tls":                  "",
+		"interaction-gateway-client-tls":            "",
+		"mcp-client-tls":                            "",
+	}
+	// Только interaction-session имеет существующий owner transport для MCP.
+	// Неинтерактивные producers не получают generic token вместо AgentSession:
+	// их revision остаётся без MCP binding до реализации собственного owner path.
+	if sessionSpec.ConversationID != "" {
+		mcpBindingID := sessionMCPBindingID(session.ID)
+		mcpBinding, exists := byID[mcpBindingID]
+		if !exists || mcpBinding.Kind != enum.KindCredentialBinding || mcpBinding.State != enum.StateActive ||
+			mcpBinding.ParentID != session.ID || sessionSpec.AgentSessionKey == "" || sessionSpec.AgentSessionID <= 0 ||
+			sessionSpec.AgentSessionBindingVersion == 0 || !validSHA256Text(sessionSpec.AgentSessionBindingSHA256) {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		mcpSpec, ok := mcpBinding.Spec.(entity.CredentialBindingSpec)
+		if !ok || mcpSpec.Purpose != "mcp-token" || mcpSpec.Revision != sessionSpec.AgentSessionBindingVersion ||
+			mcpSpec.PrincipalRef != "bot-agent-session:"+sessionSpec.AgentSessionKey ||
+			mcpSpec.Ownership.SourceRevision != sessionSpec.AgentSessionBindingVersion {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		credentialIDs[mcpBindingID] = struct{}{}
+	}
+	for _, item := range byID {
+		if item.Kind != enum.KindCredentialBinding || item.State != enum.StateActive {
+			continue
+		}
+		spec, ok := item.Spec.(entity.CredentialBindingSpec)
+		if !ok {
+			return entity.Resource{}, errs.ErrInternal
+		}
+		if _, required := requiredRuntimeCredentials[spec.Purpose]; !required {
+			continue
+		}
+		if spec.Ownership.ManagedBy != "GIT" || requiredRuntimeCredentials[spec.Purpose] != "" {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		requiredRuntimeCredentials[spec.Purpose] = item.ID
+	}
+	for _, identifier := range requiredRuntimeCredentials {
+		if identifier == "" {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		credentialIDs[identifier] = struct{}{}
 	}
 	integrationIDs := make([]string, 0, len(roleSpec.IntegrationIDs))
 	for _, identifier := range roleSpec.RepositoryWorkspaceIDs {
@@ -2328,12 +2444,13 @@ func (service *Service) createRuntimeRevision(
 		}
 	}
 	effectiveRuntimeSHA256, err := canonicalHash(struct {
-		OrganizationID          string
-		ProjectID               string
-		ImageDigest             string
-		AuthorityPolicyRevision uint64
-		AuthorityPolicySHA256   string
-		Components              []entity.EffectiveResourceRef
+		OrganizationID                                string
+		ProjectID                                     string
+		ImageDigest                                   string
+		AuthorityPolicyRevision                       uint64
+		AuthorityPolicySHA256                         string
+		Components                                    []entity.EffectiveResourceRef
+		CodexModel, CodexSandbox, CodexApprovalPolicy string
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -2341,6 +2458,7 @@ func (service *Service) createRuntimeRevision(
 		service.authorityPolicyRevision,
 		service.authorityPolicySHA256,
 		compatibleComponents,
+		"gpt-5.4", "workspace-write", "never",
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -2358,18 +2476,19 @@ func (service *Service) createRuntimeRevision(
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
 	manifestSHA256, err := canonicalHash(struct {
-		OrganizationID              string
-		ProjectID                   string
-		PredecessorRevisionID       string
-		ImageDigest                 string
-		AuthorityPolicyRevision     uint64
-		AuthorityPolicySHA256       string
-		Components                  []entity.EffectiveResourceRef
-		CreatedAt                   time.Time
-		SessionID                   string
-		RoleID                      string
-		ChatID                      string
-		ProviderCredentialBindingID string
+		OrganizationID                                   string
+		ProjectID                                        string
+		PredecessorRevisionID                            string
+		ImageDigest                                      string
+		AuthorityPolicyRevision                          uint64
+		AuthorityPolicySHA256                            string
+		Components                                       []entity.EffectiveResourceRef
+		CreatedAt                                        time.Time
+		SessionID                                        string
+		RoleID                                           string
+		ChatID                                           string
+		ProviderCredentialBindingID, ProviderAccountName string
+		CodexModel, CodexSandbox, CodexApprovalPolicy    string
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -2383,6 +2502,8 @@ func (service *Service) createRuntimeRevision(
 		role.ID,
 		sessionSpec.ConversationID,
 		sessionSpec.ProviderAccountBindingID,
+		providerAccountName,
+		"gpt-5.4", "workspace-write", "never",
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -2411,7 +2532,9 @@ func (service *Service) createRuntimeRevision(
 			RoleID:                      role.ID,
 			ChatID:                      sessionSpec.ConversationID,
 			ProviderCredentialBindingID: sessionSpec.ProviderAccountBindingID,
+			ProviderAccountName:         providerAccountName,
 			EffectiveRuntimeSHA256:      effectiveRuntimeSHA256,
+			CodexModel:                  "gpt-5.4", CodexSandbox: "workspace-write", CodexApprovalPolicy: "never",
 		},
 		now,
 	)
