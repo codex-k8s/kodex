@@ -410,6 +410,11 @@ applied -> pending -> reload -> exact peer readback -> applied
   принимает только exact digest и bounded подписанный claim admission owner,
   связанный с provenance, SBOM, vulnerability policy/version и проверенной
   signature identity; missing/stale/rejected evidence закрыто отклоняется.
+- Durable evidence сохраняет подписанный payload побайтно. Разбор и повторная
+  JSON-сериализация не могут быть storage boundary: один авторитетный OCI
+  manifest задаёт закрытый набор layers с exact title, media type, size и
+  digest, а recovery повторно проверяет descriptors, owner binding и detached
+  signature над восстановленными байтами.
 - Materializer недоверенного build input принадлежит deployable, получает
   отдельную pull-only mTLS/application identity и destination-bound egress.
   Он принимает только exact OCI manifest digest и single-layer descriptor,

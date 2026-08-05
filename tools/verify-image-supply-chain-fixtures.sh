@@ -216,6 +216,15 @@ grep -Fq 'IMAGE_OWNER_ADMISSION_RECEIPT_OCI_MANIFEST_DIGEST_FILE' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'signatureSHA256:$signature_sha' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'regctl artifact put "$@" "$evidence_tag"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq 'regctl artifact get "$evidence_reference" --file "$evidence_name"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+if rg -q -- '--slurpfile|admission\.evidence\.json' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  echo "admission evidence still reserializes signed payloads" >&2
+  exit 1
+fi
 if grep -Fq 'issuedAt' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
   echo "admission receipt contains non-deterministic issue time" >&2
@@ -237,39 +246,249 @@ if sed -n '/^  promote)/,/^  \*)/p' \
 fi
 promotion_body=$(sed -n '/^  promote)/,/^  \*)/p' \
   "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh")
-grep -Fq 'regctl artifact get "$evidence_reference"' <<<"$promotion_body"
+grep -Fq 'restore_evidence_entries "$evidence_reference"' <<<"$promotion_body"
+grep -Fq 'verify_recovered_evidence /work/evidence' <<<"$promotion_body"
+if grep -Eq 'cosign\.key|sign-blob' <<<"$promotion_body"; then
+  echo "promotion received evidence signing authority" >&2
+  exit 1
+fi
 grep -Fq 'image-admission-bridge authorize-promotion' <<<"$promotion_body"
 authorize_line=$(grep -n 'image-admission-bridge authorize-promotion' <<<"$promotion_body" | cut -d: -f1)
 copy_line=$(grep -n 'regctl image copy "$evidence_reference"' <<<"$promotion_body" | cut -d: -f1)
 [[ $authorize_line -lt $copy_line ]] || { echo "evidence was promoted before owner authorization" >&2; exit 1; }
 
-receipt_sha=$(jq -Sjc -n '{artifactId:"artifact-1",imageDigest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' |
-  sha256sum | awk '{print $1}')
-jq -Sjc -n --arg receipt "$receipt_sha" '{schema:"mattercodex.dev/image-admission-evidence/v1",
-  artifactId:"artifact-1",imageDigest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  admissionReceiptSHA256:$receipt,provenance:{version:1},nativeProvenance:[{version:1}],sbom:{version:1},vulnerability:{version:1},
-  signatureBinding:{version:1},admissionReceipt:{artifactId:"artifact-1",imageDigest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}' \
-  >"$temporary_directory/evidence.json"
-evidence_sha=$(sha256sum "$temporary_directory/evidence.json" | awk '{print $1}')
-jq -Sjc -n --arg payload "$evidence_sha" '{schemaVersion:2,
-  mediaType:"application/vnd.oci.image.manifest.v1+json",
-  artifactType:"application/vnd.mattercodex.image-admission-evidence.v1+json",
-  config:{mediaType:"application/vnd.oci.empty.v1+json",digest:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",size:2},
-  layers:[{mediaType:"application/octet-stream",digest:("sha256:"+$payload),size:1}]}' \
-  >"$temporary_directory/evidence-manifest.json"
-evidence_manifest_digest="sha256:$(sha256sum "$temporary_directory/evidence-manifest.json" | awk '{print $1}')"
-sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence \
-  artifact-1 sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$receipt_sha" \
-  "$temporary_directory/evidence.json" "$temporary_directory/evidence-manifest.json" "$evidence_manifest_digest"
-jq '.layers[0].digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
-  "$temporary_directory/evidence-manifest.json" >"$temporary_directory/evidence-manifest-unsafe.json"
-if sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence \
-  artifact-1 sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$receipt_sha" \
-  "$temporary_directory/evidence.json" "$temporary_directory/evidence-manifest-unsafe.json" \
-  "sha256:$(sha256sum "$temporary_directory/evidence-manifest-unsafe.json" | awk '{print $1}')" >/dev/null 2>&1; then
-  echo "OCI evidence manifest with foreign layer was accepted" >&2
+cat >"$temporary_directory/bin/cosign" <<'EOF'
+#!/bin/sh
+set -eu
+[ "${1:-}" = verify-blob ] || exit 1
+shift
+public_key=
+signature=
+payload=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --key) public_key=$2; shift 2 ;;
+    --signature) signature=$2; shift 2 ;;
+    --*) exit 1 ;;
+    *) payload=$1; shift ;;
+  esac
+done
+[ -r "$public_key" ] && [ -r "$signature" ] && [ -r "$payload" ] || exit 1
+decoded_signature=$(mktemp)
+trap 'rm -f -- "$decoded_signature"' EXIT HUP INT TERM
+base64 -d <"$signature" >"$decoded_signature"
+openssl dgst -sha256 -verify "$public_key" -signature "$decoded_signature" "$payload" >/dev/null
+EOF
+chmod 0555 "$temporary_directory/bin/cosign"
+cat >"$temporary_directory/bin/regctl" <<'EOF'
+#!/bin/sh
+set -eu
+[ "$#" -eq 5 ] && [ "$1" = artifact ] && [ "$2" = get ] &&
+  [ "$3" = "$FIXTURE_EVIDENCE_REFERENCE" ] && [ "$4" = --file ] || exit 1
+evidence_digest=$(jq -er --arg name "$5" '.layers[] |
+  select(.annotations["org.opencontainers.image.title"] == $name) | .digest' \
+  "$FIXTURE_EVIDENCE_MANIFEST")
+cat "$FIXTURE_EVIDENCE_BLOBS/${evidence_digest#sha256:}"
+EOF
+chmod 0555 "$temporary_directory/bin/regctl"
+
+evidence_entries_fixture() {
+  cat <<'EOF'
+image-digest.subject|application/vnd.mattercodex.image-digest.v1+text
+image-digest.sig|application/vnd.dev.cosign.signature.v1+text
+provenance.json|application/vnd.mattercodex.provenance-binding.v1+json
+provenance.sig|application/vnd.dev.cosign.signature.v1+text
+native-provenance.json|application/vnd.mattercodex.native-provenance.v1+json
+native-provenance.sig|application/vnd.dev.cosign.signature.v1+text
+sbom.json|application/spdx+json
+sbom.sig|application/vnd.dev.cosign.signature.v1+text
+vulnerability.json|application/vnd.mattercodex.vulnerability-report.v1+json
+vulnerability.sig|application/vnd.dev.cosign.signature.v1+text
+signature.binding.json|application/vnd.mattercodex.signature-binding.v1+json
+admission.receipt.json|application/vnd.mattercodex.admission-receipt.v1+json
+cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
+EOF
+}
+
+write_evidence_manifest_fixture() {
+  evidence_directory=$1
+  manifest_file=$2
+  layer_file=$manifest_file.layers
+  : >"$layer_file"
+  while IFS='|' read -r evidence_name evidence_media_type; do
+    evidence_path="$evidence_directory/$evidence_name"
+    evidence_digest="sha256:$(sha256sum "$evidence_path" | awk '{print $1}')"
+    evidence_size=$(wc -c <"$evidence_path" | tr -d ' ')
+    jq -cn --arg media "$evidence_media_type" --arg digest "$evidence_digest" \
+      --argjson size "$evidence_size" --arg title "$evidence_name" \
+      '{mediaType:$media,digest:$digest,size:$size,
+        annotations:{"org.opencontainers.image.title":$title}}' >>"$layer_file"
+  done <<EOF
+$(evidence_entries_fixture)
+EOF
+  jq -Ssc --arg artifact artifact-1 --arg image "$image_digest" \
+    --arg policy "$policy_revision" --arg policy_sha "$policy_sha256" \
+    '{schemaVersion:2,mediaType:"application/vnd.oci.image.manifest.v1+json",
+      artifactType:"application/vnd.mattercodex.image-admission-evidence.v2",
+      config:{mediaType:"application/vnd.mattercodex.image-admission-evidence.config.v2+json",
+        digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2},
+      layers:.,annotations:{
+        "mattercodex.dev/artifact-id":$artifact,
+        "mattercodex.dev/evidence-schema":"mattercodex.dev/image-admission-evidence/v2",
+        "mattercodex.dev/image-digest":$image,
+        "mattercodex.dev/policy-revision":$policy,
+        "mattercodex.dev/policy-sha256":$policy_sha}}' "$layer_file" >"$manifest_file"
+}
+
+sign_evidence_fixture() {
+  payload_file=$1
+  signature_file=$2
+  openssl dgst -sha256 -sign "$temporary_directory/evidence-private.pem" "$payload_file" |
+    base64 | tr -d '\n' >"$signature_file"
+  printf '\n' >>"$signature_file"
+}
+
+expect_evidence_failure() {
+  failure_name=$1
+  evidence_directory=$2
+  evidence_manifest=$3
+  evidence_manifest_digest="sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')"
+  if PATH="$temporary_directory/bin:$PATH" \
+    sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence \
+    artifact-1 "$image_digest" "$receipt_sha" "$evidence_directory" "$evidence_manifest" \
+    "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED >/dev/null 2>&1; then
+    echo "$failure_name was accepted" >&2
+    exit 1
+  fi
+}
+
+image_digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+evidence_source="$temporary_directory/evidence-source"
+evidence_blobs="$temporary_directory/evidence-blobs"
+evidence_recovered="$temporary_directory/evidence-recovered"
+mkdir "$evidence_source" "$evidence_blobs" "$evidence_recovered"
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
+  -out "$temporary_directory/evidence-private.pem" >/dev/null 2>&1
+openssl pkey -pubout -in "$temporary_directory/evidence-private.pem" \
+  -out "$evidence_source/cosign.pub" >/dev/null 2>&1
+printf '%s\n' "$image_digest" >"$evidence_source/image-digest.subject"
+cat >"$evidence_source/provenance.json" <<EOF
+{
+  "specSHA256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "schema": "mattercodex.dev/image-provenance-binding/v1",
+  "policySHA256": "$policy_sha256",
+  "manifestDigest": "$image_digest",
+  "immutableBuildSHA256": "2222222222222222222222222222222222222222222222222222222222222222",
+  "policyRevision": $policy_revision,
+  "builderId": "$builder_identity",
+  "buildType": "$build_type"
+}
+EOF
+cat >"$evidence_source/native-provenance.json" <<'EOF'
+[
+  { "predicate": { "runDetails": { "builder": { "id": "fixture" } } },
+    "subject": [{ "name": "role-image" }] }
+]
+EOF
+cat >"$evidence_source/sbom.json" <<'EOF'
+{
+  "packages": [ { "versionInfo": "1.0", "name": "fixture" } ],
+  "spdxVersion": "SPDX-2.3",
+  "name": "unsorted-fixture"
+}
+EOF
+cat >"$evidence_source/vulnerability.json" <<'EOF'
+{
+  "matches": [ ],
+  "descriptor": { "configuration": { "fail-on-severity": "high" }, "name": "grype" }
+}
+EOF
+for signed_name in image-digest provenance native-provenance sbom vulnerability; do
+  signed_file="$evidence_source/$signed_name.json"
+  [[ $signed_name == image-digest ]] && signed_file="$evidence_source/image-digest.subject"
+  sign_evidence_fixture "$signed_file" "$evidence_source/$signed_name.sig"
+done
+signature_identity=$(sha256sum "$evidence_source/cosign.pub" | awk '{print $1}')
+cat >"$evidence_source/signature.binding.json" <<EOF
+{
+  "verification": "cosign-key-v1", "version": "v1",
+  "verdict": "ACCEPTED", "signatureIdentity": "$signature_identity",
+  "policySHA256": "$policy_sha256", "policyRevision": "$policy_revision",
+  "imageDigest": "$image_digest"
+}
+EOF
+provenance_sha=$(sha256sum "$evidence_source/provenance.json" | awk '{print $1}')
+sbom_sha=$(sha256sum "$evidence_source/sbom.json" | awk '{print $1}')
+vulnerability_sha=$(sha256sum "$evidence_source/vulnerability.json" | awk '{print $1}')
+signature_sha=$(sha256sum "$evidence_source/signature.binding.json" | awk '{print $1}')
+cat >"$evidence_source/admission.receipt.json" <<EOF
+{
+  "verdict": "ACCEPTED",
+  "version": "v1", "artifactId": "artifact-1",
+  "signatureSHA256": "$signature_sha",
+  "imageDigest": "$image_digest",
+  "policySHA256": "$policy_sha256", "policyRevision": "$policy_revision",
+  "vulnerabilityEvidenceSHA256": "$vulnerability_sha",
+  "signatureIdentity": "$signature_identity",
+  "specSHA256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "sbomSHA256": "$sbom_sha",
+  "immutableBuildSHA256": "2222222222222222222222222222222222222222222222222222222222222222",
+  "provenanceSHA256": "$provenance_sha"
+}
+EOF
+receipt_sha=$(sha256sum "$evidence_source/admission.receipt.json" | awk '{print $1}')
+jq -S . "$evidence_source/admission.receipt.json" >"$temporary_directory/evidence-reencoded.json"
+if cmp -s "$evidence_source/admission.receipt.json" "$temporary_directory/evidence-reencoded.json"; then
+  echo "byte-preservation fixture unexpectedly uses canonical JSON" >&2
   exit 1
 fi
+
+evidence_manifest="$temporary_directory/evidence-manifest.json"
+write_evidence_manifest_fixture "$evidence_source" "$evidence_manifest"
+while IFS=$'\t' read -r evidence_name evidence_digest; do
+  cp "$evidence_source/$evidence_name" "$evidence_blobs/${evidence_digest#sha256:}"
+done < <(jq -r '.layers[] | [.annotations["org.opencontainers.image.title"],.digest] | @tsv' \
+  "$evidence_manifest")
+evidence_manifest_digest="sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')"
+evidence_reference="fixture.invalid/evidence@$evidence_manifest_digest"
+FIXTURE_EVIDENCE_REFERENCE="$evidence_reference" FIXTURE_EVIDENCE_MANIFEST="$evidence_manifest" \
+  FIXTURE_EVIDENCE_BLOBS="$evidence_blobs" PATH="$temporary_directory/bin:$PATH" \
+  sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence-recovery \
+  artifact-1 "$image_digest" "$receipt_sha" "$evidence_reference" "$evidence_manifest" \
+  "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED "$evidence_recovered"
+while IFS='|' read -r evidence_name evidence_media_type; do
+  cmp -s "$evidence_source/$evidence_name" "$evidence_recovered/$evidence_name" || {
+    echo "OCI evidence byte round-trip changed $evidence_name" >&2
+    exit 1
+  }
+done <<EOF
+$(evidence_entries_fixture)
+EOF
+[[ $(sha256sum "$evidence_recovered/admission.receipt.json" | awk '{print $1}') == "$receipt_sha" ]]
+[[ $(sha256sum "$evidence_recovered/signature.binding.json" | awk '{print $1}') == "$signature_sha" ]]
+
+cp -a "$evidence_recovered" "$temporary_directory/evidence-byte-mutated"
+printf ' ' >>"$temporary_directory/evidence-byte-mutated/sbom.json"
+expect_evidence_failure "mutated OCI evidence byte" "$temporary_directory/evidence-byte-mutated" "$evidence_manifest"
+jq '.layers[0].size += 1' "$evidence_manifest" >"$temporary_directory/evidence-descriptor-mismatch.json"
+expect_evidence_failure "mismatched OCI evidence descriptor" "$evidence_recovered" \
+  "$temporary_directory/evidence-descriptor-mismatch.json"
+jq 'del(.layers[0])' "$evidence_manifest" >"$temporary_directory/evidence-missing.json"
+expect_evidence_failure "OCI evidence manifest with missing layer" "$evidence_recovered" \
+  "$temporary_directory/evidence-missing.json"
+jq '.layers += [.layers[0]]' "$evidence_manifest" >"$temporary_directory/evidence-duplicate.json"
+expect_evidence_failure "OCI evidence manifest with duplicate layer" "$evidence_recovered" \
+  "$temporary_directory/evidence-duplicate.json"
+jq '.layers[0].annotations["org.opencontainers.image.title"] = "foreign.json"' \
+  "$evidence_manifest" >"$temporary_directory/evidence-foreign.json"
+expect_evidence_failure "OCI evidence manifest with foreign layer" "$evidence_recovered" \
+  "$temporary_directory/evidence-foreign.json"
+cp -a "$evidence_recovered" "$temporary_directory/evidence-signature-mutated"
+printf 'A' >>"$temporary_directory/evidence-signature-mutated/sbom.sig"
+write_evidence_manifest_fixture "$temporary_directory/evidence-signature-mutated" \
+  "$temporary_directory/evidence-signature-mutated.json"
+expect_evidence_failure "mutated detached evidence signature" \
+  "$temporary_directory/evidence-signature-mutated" "$temporary_directory/evidence-signature-mutated.json"
 
 auth=$(printf 'pull-reader:current-password' | base64 | tr -d '\n')
 jq -n --arg host "$pull_host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' \

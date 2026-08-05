@@ -90,9 +90,13 @@ owner-side расходован в одноразовую authorization до reg
 истечение заменяет claim с повышением generation/fence. До verdict admission
 owner публикует bounded evidence bundle (provenance, SBOM, vulnerability
 evidence, detached signatures и receipt) как immutable OCI artifact в
-выделенный evidence repository. Exact OCI manifest digest фиксируется owner-side;
-promotion заново читает bundle только по этому digest и после authorization
-копирует тот же manifest в закрытый promoted evidence repository. Authorization
+выделенный evidence repository. Единственный авторитетный OCI manifest содержит
+закрытый набор отдельных layers с точными media type, title, size и digest:
+подписанные payload сохраняются как исходные байты без JSON reserialization.
+Exact OCI manifest digest фиксируется owner-side; свежая promotion Job по этому
+digest восстанавливает каждый layer, сверяет descriptor и подпись над теми же
+байтами и только после authorization копирует тот же manifest в закрытый
+promoted evidence repository. Authorization
 связывает artifact/version/attempt/fence/generation/digests, имеет TTL не больше
 Job deadline и durable idempotency receipt. Совместный image/evidence manifest
 readback фиксируется owner-транзакцией по одноразовому token, а
@@ -128,7 +132,9 @@ endpoint. Отдельный evidence authorizer принимает OCI write т
 `image-admission` mTLS/application identity, только для закрытого evidence
 repository и без DELETE/admin; signer и promotion имеют соответственно key-only
 и read/target-copy полномочия. Job workspace не является recovery source:
-promotion восстанавливает все доказательства из durable OCI manifest digest.
+promotion восстанавливает все доказательства из durable OCI manifest digest;
+rollback или retry не зависит от прежнего `emptyDir` и не повторяет сериализацию
+подписанных данных.
 
 Node pull bootstrap запускается из version-pinned admission runtime, а как
 readback target использует уже обязательный trusted `agent-runner` exact digest
