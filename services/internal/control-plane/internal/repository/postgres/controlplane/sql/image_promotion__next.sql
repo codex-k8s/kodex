@@ -12,8 +12,17 @@ WHERE organization_id = @organization_id::uuid
   AND spec ->> 'policySha256' = @policy_sha256
   AND coalesce(spec ->> 'promotedReference', '') = ''
   AND (
-      coalesce(spec ->> 'promotionClaimJtiSha256', '') = ''
-      OR (spec ->> 'promotionClaimExpiresAt')::timestamptz <= @now
+      (
+          coalesce(spec ->> 'promotionAuthorizationTokenSha256', '') = ''
+          AND (
+              coalesce(spec ->> 'promotionClaimJtiSha256', '') = ''
+              OR (spec ->> 'promotionClaimExpiresAt')::timestamptz <= @now
+          )
+      )
+      OR (
+          coalesce(spec ->> 'promotionAuthorizationTokenSha256', '') <> ''
+          AND (spec ->> 'promotionAuthorizationExpiresAt')::timestamptz <= @now
+      )
   )
 ORDER BY created_at, id
 FOR UPDATE SKIP LOCKED

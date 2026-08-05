@@ -71,6 +71,8 @@ configure_client_role mattercodex-buildkit-probe mattercodex-buildkit-probe
 configure_client_role mattercodex-buildkit-client role-image-builder
 configure_client_role mattercodex-buildkit-base-pull mattercodex-buildkit-base-pull
 configure_client_role mattercodex-buildkit-staging-push mattercodex-buildkit-staging-push
+configure_client_role mattercodex-role-image-input-read role-image-builder-input-read
+configure_client_role mattercodex-image-registry-pull-probe mattercodex-image-registry-pull-probe
 configure_client_role mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
 configure_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe
 configure_client_role mattercodex-image-registry-promotion-probe mattercodex-image-registry-promotion-probe
@@ -80,7 +82,7 @@ configure_client_role image-admission image-admission
 configure_client_role image-promotion image-promotion
 configure_client_role mattercodex-registry-cleanup mattercodex-registry-cleanup
 vault write pki-public/roles/mattercodex-image-registry-pull \
-  allowed_domains="$registry_pull_host" allow_bare_domains=true \
+  allowed_domains="$registry_pull_host,mattercodex-image-registry,mattercodex-image-registry.mattercodex-system.svc,mattercodex-image-registry.mattercodex-system.svc.cluster.local" allow_bare_domains=true \
   allow_subdomains=false allow_glob_domains=false enforce_hostnames=true \
   require_cn=true server_flag=true client_flag=false key_type=rsa key_bits=3072 \
   key_usage="DigitalSignature,KeyEncipherment" ext_key_usage=ServerAuth \
@@ -112,20 +114,27 @@ write_issue_policy mattercodex-buildkit-pki-issue pki \
 write_ca_policy mattercodex-buildkit-pki-ca pki
 write_issue_policy role-image-builder-pki-issue pki mattercodex-buildkit-client
 write_ca_policy role-image-builder-pki-ca pki
-cat <<'HCL' | vault policy write role-image-builder-inputs - >/dev/null
-path "kv/data/mattercodex/role-image-builder/base-pull" {
-  capabilities = ["read"]
-}
-path "kv/data/mattercodex/role-image-builder/staging-push" {
-  capabilities = ["read"]
-}
+write_issue_policy role-image-builder-input-read-pki-issue pki mattercodex-role-image-input-read
+write_ca_policy role-image-builder-input-read-server-ca pki-public
+cat <<'HCL' | vault policy write role-image-builder-runtime - >/dev/null
 path "kv/data/mattercodex/role-image-builder/application-grant" {
+  capabilities = ["read"]
+}
+HCL
+cat <<'HCL' | vault policy write role-image-builder-inputs - >/dev/null
+path "kv/data/mattercodex/role-image-builder/input-read" {
   capabilities = ["read"]
 }
 HCL
 cat <<'HCL' | vault policy write mattercodex-image-registry-pull-pki - >/dev/null
 path "pki-public/issue/mattercodex-image-registry-pull" {
   capabilities = ["update"]
+}
+path "pki/issue/mattercodex-image-registry-pull-probe" {
+  capabilities = ["update"]
+}
+path "pki/cert/ca" {
+  capabilities = ["read"]
 }
 path "kv/data/mattercodex/image-registry/pull" {
   capabilities = ["read"]
@@ -142,9 +151,6 @@ path "pki/issue/mattercodex-image-registry-push-probe" {
   capabilities = ["update"]
 }
 path "pki/cert/ca" {
-  capabilities = ["read"]
-}
-path "kv/data/mattercodex/image-registry/push" {
   capabilities = ["read"]
 }
 HCL
@@ -197,7 +203,12 @@ vault write auth/kubernetes/role/mattercodex-buildkit \
 vault write auth/kubernetes/role/role-image-builder \
   bound_service_account_names=role-image-builder \
   bound_service_account_namespaces=mattercodex-system \
-  token_policies=role-image-builder-pki-issue,role-image-builder-pki-ca,role-image-builder-inputs \
+  token_policies=role-image-builder-pki-issue,role-image-builder-pki-ca,role-image-builder-runtime \
+  token_ttl=30m token_max_ttl=1h >/dev/null
+vault write auth/kubernetes/role/role-image-builder-input-read \
+  bound_service_account_names=role-image-builder \
+  bound_service_account_namespaces=mattercodex-system \
+  token_policies=role-image-builder-input-read-pki-issue,role-image-builder-input-read-server-ca,role-image-builder-inputs \
   token_ttl=30m token_max_ttl=1h >/dev/null
 configure_kubernetes_role mattercodex-image-registry-pull mattercodex-image-registry-pull mattercodex-image-registry-pull-pki
 vault write auth/kubernetes/role/mattercodex-image-registry-push \
@@ -274,6 +285,8 @@ verify_client_role mattercodex-buildkit-probe mattercodex-buildkit-probe
 verify_client_role mattercodex-buildkit-client role-image-builder
 verify_client_role mattercodex-buildkit-base-pull mattercodex-buildkit-base-pull
 verify_client_role mattercodex-buildkit-staging-push mattercodex-buildkit-staging-push
+verify_client_role mattercodex-role-image-input-read role-image-builder-input-read
+verify_client_role mattercodex-image-registry-pull-probe mattercodex-image-registry-pull-probe
 verify_client_role mattercodex-image-registry-push-probe mattercodex-image-registry-push-probe
 verify_client_role mattercodex-image-registry-admin-probe mattercodex-image-registry-admin-probe
 verify_client_role mattercodex-image-registry-promotion-probe mattercodex-image-registry-promotion-probe
@@ -287,7 +300,10 @@ vault read -format=json pki-public/roles/mattercodex-image-registry-pull |
     .data.server_flag == true and .data.client_flag == false and
     .data.allow_any_name == false and .data.allow_subdomains == false and
     .data.ttl == 3600 and .data.max_ttl == 7200 and
-    .data.allowed_domains == [$fqdn] and
+    (.data.allowed_domains | index($fqdn) != null) and
+    (.data.allowed_domains | index("mattercodex-image-registry") != null) and
+    (.data.allowed_domains | index("mattercodex-image-registry.mattercodex-system.svc") != null) and
+    (.data.allowed_domains | index("mattercodex-image-registry.mattercodex-system.svc.cluster.local") != null) and
     (.data.ext_key_usage | index("ServerAuth") != null) and
     (.data.ext_key_usage | index("ClientAuth") == null)
   ' >/dev/null

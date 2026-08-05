@@ -81,7 +81,9 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		return generated.ResourceSpecProjection{RoleImageRecipe: &generated.RoleImageRecipeProjection{
 			Input: input, Generation: int64(value.RoleImageRecipe.GetGeneration()),
 			SpecSha256: value.RoleImageRecipe.GetSpecSha256(), PolicyRevision: int64(value.RoleImageRecipe.GetPolicyRevision()),
-			PolicySha256: value.RoleImageRecipe.GetPolicySha256(),
+			PolicySha256:                value.RoleImageRecipe.GetPolicySha256(),
+			RoleRuntimeContractRevision: int64(value.RoleImageRecipe.GetRoleRuntimeContractRevision()),
+			RoleRuntimeContractSha256:   value.RoleImageRecipe.GetRoleRuntimeContractSha256(),
 		}}, nil
 	case *controlplanev1.ResourceSpec_ImageBuild:
 		recipeID, err := requiredUUID(value.ImageBuild.GetRecipeId())
@@ -96,7 +98,9 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 			StagingReference: optionalString(value.ImageBuild.GetStagingReference()), ManifestDigest: optionalString(value.ImageBuild.GetManifestDigest()),
 			ProvenanceSha256: optionalString(value.ImageBuild.GetProvenanceSha256()), ImmutableBuildSha256: value.ImageBuild.GetImmutableBuildSha256(),
 			ErrorCode: optionalString(value.ImageBuild.GetErrorCode()), AvailableAt: value.ImageBuild.GetAvailableAt().AsTime(),
-			MaximumAttempts: int(value.ImageBuild.GetMaximumAttempts()),
+			DiagnosticCode:    optionalString(value.ImageBuild.GetDiagnosticCode()),
+			DiagnosticSummary: optionalString(value.ImageBuild.GetDiagnosticSummary()),
+			MaximumAttempts:   int(value.ImageBuild.GetMaximumAttempts()),
 		}}, nil
 	case *controlplanev1.ResourceSpec_ImageArtifact:
 		recipeID, recipeErr := requiredUUID(value.ImageArtifact.GetRecipeId())
@@ -117,8 +121,10 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 			BaseImageDigest: value.ImageArtifact.GetBaseImageDigest(), SourceSha256: value.ImageArtifact.GetSourceSha256(),
 			ContextSha256: value.ImageArtifact.GetContextSha256(), BuilderSha256: value.ImageArtifact.GetBuilderSha256(),
 			FrontendSha256: value.ImageArtifact.GetFrontendSha256(), ToolchainSha256: value.ImageArtifact.GetToolchainSha256(),
-			Platforms:  platforms,
-			SbomSha256: optionalString(value.ImageArtifact.GetSbomSha256()), VulnerabilityEvidenceSha256: optionalString(value.ImageArtifact.GetVulnerabilityEvidenceSha256()),
+			RoleRuntimeContractRevision: int64(value.ImageArtifact.GetRoleRuntimeContractRevision()),
+			RoleRuntimeContractSha256:   value.ImageArtifact.GetRoleRuntimeContractSha256(),
+			Platforms:                   platforms,
+			SbomSha256:                  optionalString(value.ImageArtifact.GetSbomSha256()), VulnerabilityEvidenceSha256: optionalString(value.ImageArtifact.GetVulnerabilityEvidenceSha256()),
 			PolicyRevision: int64(value.ImageArtifact.GetPolicyRevision()), PolicySha256: value.ImageArtifact.GetPolicySha256(),
 			SignatureIdentity: optionalString(value.ImageArtifact.GetSignatureIdentity()), SignatureSha256: optionalString(value.ImageArtifact.GetSignatureSha256()),
 			AdmissionRevision: int64(value.ImageArtifact.GetAdmissionRevision()), AdmissionReceiptSha256: optionalString(value.ImageArtifact.GetAdmissionReceiptSha256()),
@@ -177,7 +183,9 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 			ImageAdmissionReceiptOciManifestDigest: value.RuntimeRevision.GetImageAdmissionReceiptOciManifestDigest(),
 			ImagePolicyRevision:                    int64(value.RuntimeRevision.GetImagePolicyRevision()), ImagePolicySha256: value.RuntimeRevision.GetImagePolicySha256(),
 			ImageSignatureSha256: value.RuntimeRevision.GetImageSignatureSha256(), ImagePromotionReadbackSha256: value.RuntimeRevision.GetImagePromotionReadbackSha256(),
-			PromptProfileId: prompt, PromptRevision: int64(value.RuntimeRevision.GetPromptRevision()),
+			RoleRuntimeContractRevision: int64(value.RuntimeRevision.GetRoleRuntimeContractRevision()),
+			RoleRuntimeContractSha256:   value.RuntimeRevision.GetRoleRuntimeContractSha256(),
+			PromptProfileId:             prompt, PromptRevision: int64(value.RuntimeRevision.GetPromptRevision()),
 			SessionId: sessionID, RoleId: roleID, ChatId: chatID,
 			EffectiveRuntimeSha256: value.RuntimeRevision.GetEffectiveRuntimeSha256(), AuthorityPolicyRevision: int64(value.RuntimeRevision.GetAuthorityPolicyRevision()),
 		}}, nil
@@ -282,7 +290,7 @@ func roleImageRecipeProjectionInput(input *controlplanev1.RoleImageRecipeInput) 
 			return generated.RoleImageRecipeStatusInput{}, errors.New("role image package manager is invalid")
 		}
 		result.Packages = append(result.Packages, generated.RoleImagePackage{
-			Manager: manager, Name: item.GetName(), Version: item.GetVersion(), Digest: item.GetDigest(),
+			Manager: manager, Name: item.GetName(), Version: item.GetVersion(), Digest: item.GetDigest(), SourceRef: item.GetSourceRef(),
 		})
 	}
 	for _, item := range input.GetTools() {

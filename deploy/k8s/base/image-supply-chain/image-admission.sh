@@ -43,9 +43,23 @@ require_policy() {
     fail "untrusted builder identity"
   [ "$EXPECTED_BUILD_TYPE" = "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md" ] ||
     fail "untrusted build type"
+  echo "$ROLE_RUNTIME_CONTRACT_REVISION" | grep -Eq '^[1-9][0-9]*$' || fail "invalid runtime contract revision"
+  echo "$ROLE_RUNTIME_CONTRACT_SHA256" | grep -Eq '^[a-f0-9]{64}$' || fail "invalid runtime contract digest"
+  echo "$TRUSTED_ROLE_BASE_REPOSITORY" | grep -Eq '^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$' ||
+    fail "trusted role base repository is invalid"
+  echo "$TRUSTED_ROLE_BASE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "trusted role base digest is invalid"
   for tool in base64 cmp cosign grype image-admission-bridge jq regctl sha256sum syft; do
     command -v "$tool" >/dev/null || fail "admission image is incomplete"
   done
+}
+
+verify_runtime_config() {
+  config_file=$1
+  jq -e '
+    .User == "10001:10001" and
+    .Entrypoint == ["/usr/local/bin/mattercodex-init", "entrypoint", "/usr/local/bin/matter-codex-agent-runner"] and
+    .Cmd == ["runtime-session"]
+  ' "$config_file" >/dev/null || fail "role runtime ABI mismatch"
 }
 
 load_owner_claim() {
@@ -73,6 +87,8 @@ load_owner_claim() {
     (.builderSHA256 | test("^[a-f0-9]{64}$")) and
     (.frontendSHA256 | test("^[a-f0-9]{64}$")) and
     (.toolchainSHA256 | test("^[a-f0-9]{64}$")) and
+    (.roleRuntimeContractRevision | type == "number" and . > 0) and
+    (.roleRuntimeContractSHA256 | test("^[a-f0-9]{64}$")) and
     (.platforms | type == "array" and length > 0 and length <= 8 and
       all(.[]; test("^linux/(amd64|arm64)(/[A-Za-z0-9][A-Za-z0-9._+~-]{0,127})?$")) and
       (unique | length) == length) and
@@ -92,6 +108,11 @@ load_owner_claim() {
   builder_sha256=$(jq -er .builderSHA256 /work/owner-claim.json)
   frontend_sha256=$(jq -er .frontendSHA256 /work/owner-claim.json)
   toolchain_sha256=$(jq -er .toolchainSHA256 /work/owner-claim.json)
+  runtime_contract_revision=$(jq -er .roleRuntimeContractRevision /work/owner-claim.json)
+  runtime_contract_sha256=$(jq -er .roleRuntimeContractSHA256 /work/owner-claim.json)
+  [ "$runtime_contract_revision" = "$ROLE_RUNTIME_CONTRACT_REVISION" ] || fail "runtime contract revision mismatch"
+  [ "$runtime_contract_sha256" = "$ROLE_RUNTIME_CONTRACT_SHA256" ] || fail "runtime contract digest mismatch"
+  [ "$base_image_digest" = "$TRUSTED_ROLE_BASE_DIGEST" ] || fail "trusted role base digest mismatch"
   jq -r '.platforms[]' /work/owner-claim.json | sort -u >/work/expected-platforms
   subject_name=${source_ref%@*}
   staging_host=${source_ref%%/*}
@@ -103,7 +124,8 @@ load_promotion_claim() {
     . as $claim |
     (.artifactId | type == "string" and length > 0) and
     (.version | type == "number" and . > 0) and
-    (.claim | type == "string" and length > 0) and
+    ((.claim | type == "string" and length > 0) or
+      ((.claim // "") == "" and (.authorizationToken | type == "string" and length > 0))) and
     (.fence | type == "number" and . > 0) and
     (.expiresAt | type == "string" and length > 0) and
     (.stagingReference | test("^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$")) and
@@ -201,10 +223,11 @@ verify_image_and_provenance() {
     echo "$platform_digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || fail "platform manifest digest is invalid"
     platform_ref="${subject_name}@${platform_digest}"
     regctl image inspect "$platform_ref" --format '{{json .Config.Labels}}' >/work/labels.json
+    regctl image inspect "$platform_ref" --format '{{json .Config}}' >/work/image-config.json
     jq -e --arg spec "$spec_sha256" --arg immutable "$immutable_build_sha256" \
       --arg source "$source_sha256" --arg context "$context_sha256" --arg base "$base_image_digest" \
       --arg builder "$builder_sha256" --arg frontend "$frontend_sha256" --arg toolchain "$toolchain_sha256" \
-      --arg policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" '
+      --arg policy "$POLICY_REVISION" --arg policy_sha "$POLICY_SHA256" --arg runtime "$runtime_contract_sha256" '
       ."mattercodex.dev/spec-sha256" == $spec and
       ."mattercodex.dev/immutable-build-sha256" == $immutable and
       ."mattercodex.dev/source-sha256" == $source and
@@ -214,8 +237,10 @@ verify_image_and_provenance() {
       ."mattercodex.dev/frontend-sha256" == $frontend and
       ."mattercodex.dev/toolchain-sha256" == $toolchain and
       ."mattercodex.dev/policy-revision" == $policy and
-      ."mattercodex.dev/policy-sha256" == $policy_sha
+      ."mattercodex.dev/policy-sha256" == $policy_sha and
+      ."mattercodex.dev/runtime-contract-sha256" == $runtime
     ' /work/labels.json >/dev/null || fail "build labels mismatch"
+    verify_runtime_config /work/image-config.json
     [ "$(jq --arg image "$platform_digest" '[.manifests[] |
       select(.platform.os == "unknown" and .platform.architecture == "unknown") |
       select(.annotations["vnd.docker.reference.digest"] == $image)] | length' /work/image-index.json)" = 1 ] ||
@@ -245,6 +270,12 @@ verify_image_and_provenance() {
   sha256sum /work/provenance.binding.json | awk '{print $1}' >/work/provenance.sha256
   [ "$(cat /work/provenance.sha256)" = "$expected_provenance_sha256" ] || fail "owner provenance digest mismatch"
 }
+
+if [ "${1:-}" = validate-runtime-config ]; then
+  [ "$#" -eq 2 ] && [ -r "$2" ] || fail "runtime config fixture is invalid"
+  verify_runtime_config "$2"
+  exit 0
+fi
 
 require_policy
 
@@ -351,6 +382,12 @@ case "${1:-}" in
       "$promotion_receipt" /work/staging.admission.receipt-manifest.json
     [ "sha256:$(sha256sum /work/staging.admission.receipt-manifest.json | awk '{print $1}')" = \
       "$staging_receipt_manifest_digest" ] || fail "staging admission receipt manifest mismatch"
+    # Owner проверяет expiry/revocation/fence до первой pull-visible копии.
+    image-admission-bridge authorize-promotion
+    load_promotion_claim
+    jq -e '(.authorizationToken | type == "string" and length > 0) and
+      (.authorizationExpiresAt | type == "string" and length > 0) and (.claim == "")' \
+      /work/owner-promotion.json >/dev/null || fail "owner promotion authorization is invalid"
     login_registry "$promotion_host" /identity/promotion.username /identity/promotion.password
     if current_digest=$(regctl image digest "$destination_tag" 2>/dev/null); then
       [ "$current_digest" = "$image_digest" ] || fail "immutable promotion tag already points to another digest"

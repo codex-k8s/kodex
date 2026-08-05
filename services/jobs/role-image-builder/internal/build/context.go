@@ -2,7 +2,6 @@ package build
 
 import (
 	"archive/tar"
-	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -21,25 +20,23 @@ const (
 
 var ErrInvalidContext = errors.New("image build context is invalid")
 
-// ExtractContext закрыто проверяет digest и каждый tar entry до передачи BuildKit.
+// ExtractContext открывает один snapshot и передаёт его однопроходной проверке.
 func ExtractContext(archivePath, destination, expectedContextSHA256, expectedSourceSHA256 string) error {
 	archive, err := os.Open(archivePath)
 	if err != nil {
 		return fmt.Errorf("%w: open archive", ErrInvalidContext)
 	}
 	defer archive.Close()
+	return ExtractContextReader(archive, destination, expectedContextSHA256, expectedSourceSHA256)
+}
+
+// ExtractContextReader хеширует те же bytes, которые tar.Reader извлекает в
+// private destination. До совпадения digest destination не передаётся BuildKit.
+func ExtractContextReader(archive io.Reader, destination, expectedContextSHA256, expectedSourceSHA256 string) error {
 	hash := sha256.New()
-	if _, err := io.Copy(hash, io.LimitReader(archive, maximumContextBytes+1)); err != nil {
-		return fmt.Errorf("%w: hash archive", ErrInvalidContext)
-	}
-	stat, err := archive.Stat()
-	if err != nil || stat.Size() > maximumContextBytes || hex.EncodeToString(hash.Sum(nil)) != expectedContextSHA256 {
-		return fmt.Errorf("%w: archive digest mismatch", ErrInvalidContext)
-	}
-	if _, err := archive.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("%w: rewind archive", ErrInvalidContext)
-	}
-	reader := tar.NewReader(bufio.NewReader(archive))
+	limited := &io.LimitedReader{R: archive, N: maximumContextBytes + 1}
+	hashed := io.TeeReader(limited, hash)
+	reader := tar.NewReader(hashed)
 	files, total := 0, int64(0)
 	sourceBindingFound := false
 	for {
@@ -96,6 +93,10 @@ func ExtractContext(archivePath, destination, expectedContextSHA256, expectedSou
 		default:
 			return fmt.Errorf("%w: links and special files are forbidden", ErrInvalidContext)
 		}
+	}
+	if _, err := io.Copy(io.Discard, hashed); err != nil || limited.N <= 0 ||
+		hex.EncodeToString(hash.Sum(nil)) != expectedContextSHA256 {
+		return fmt.Errorf("%w: archive digest mismatch", ErrInvalidContext)
 	}
 	if !sourceBindingFound {
 		return fmt.Errorf("%w: source binding is missing", ErrInvalidContext)

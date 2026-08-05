@@ -20,28 +20,34 @@ workload владеют evidence, verdict и переносом exact digest.
 4. Builder получает `ClaimImageBuild` без build ID в payload. Grant, lease и
    claim связаны с tenant/project/build/attempt/spec/input/generation/JTI/
    fence. Installation block возвращается только в этом ответе.
-5. Builder проверяет read-only digest-named context tar, отклоняет traversal,
-   symlink и special file, генерирует Dockerfile и обращается к вынесенному
-   rootless BuildKit по exact mTLS/SNI/CA. Base pull и staging push используют
-   разные Docker credentials. `builder_sha256` сверяется с exact BuildKit image,
-   а `toolchain_sha256` — с digest текущего builder image. Secret values доступны
-   только как BuildKit secret mounts и не входят в context или слой.
-6. BuildKit публикует staging artifact, native SLSA provenance и labels полного
+5. Trusted materializer по отдельной pull-only mTLS/application identity читает
+   context/package/tool из одного server-configured OCI repository. Exact
+   manifest содержит один слой утверждённого media type; descriptor и payload
+   size/digest проверяются потоково в private bounded `emptyDir`, после чего тот
+   же snapshot безопасно извлекается. Отсутствие optional secret refs не создаёт
+   обязательного volume. Secret values не входят в context, mounts или BuildKit.
+6. Builder генерирует Dockerfile и обращается к вынесенному rootless BuildKit по
+   exact mTLS/SNI/CA. Staging push credential/egress принадлежит только BuildKit;
+   builder client имеет лишь input pull и BuildKit egress. Недоверенный
+   installation block исполняется без credential material. После него protected
+   runtime binaries восстанавливаются из exact trusted base, а output закрепляет
+   exact ABI `USER`/entrypoint/commands и runtime contract revision/digest.
+7. BuildKit публикует staging artifact, native SLSA provenance и labels полного
    immutable tuple. Builder возвращает только bounded digest/status evidence.
-7. `image-admission` server-side claim связывает SBOM, vulnerability evidence,
+8. `image-admission` server-side claim связывает SBOM, vulnerability evidence,
    native provenance, signature и staging OCI receipt с exact artifact. Content
    и OCI manifest digests receipt записываются owner-side до verdict. Rejected evidence
    переводит artifact в `BLOCKED`; accepted evidence делает artifact доступным
    только специализированному promotion claim.
-8. Отдельный `image-promotion` Pod/ServiceAccount получает fenced одноразовый
+9. Отдельный `image-promotion` Pod/ServiceAccount получает fenced одноразовый
    server-selected claim без artifact ID из payload. Claim включает exact
    staging reference, admission revision и оба receipt digest; поэтому
    promotion восстанавливается без admission PVC. Workload копирует exact
-   image digest, воспроизводит admission receipt как OCI artifact с promoted
-   subject, выполняет readback обоих manifests и расходует claim через
-   `CompleteImagePromotion`. Builder не получает signer/promotion/node-pull
-   identity.
-9. Свежая `RuntimeRevision` разрешает recipe и artifact внутри owner boundary,
+   image digest, сначала расходует claim owner-side через
+   `AuthorizeImagePromotion`, воспроизводит admission receipt, выполняет readback
+   обоих manifests и завершает одноразовым authorization token. Builder не
+   получает signer/promotion/node-pull identity.
+10. Свежая `RuntimeRevision` разрешает recipe и artifact внутри owner boundary,
    закрыто проверяет все версии/digests и содержит единственный immutable
    `repository@sha256` reference. `runtime-controller`, credential materializer
    и admission webhook сравнивают именно этот reference и evidence binding.
@@ -69,8 +75,9 @@ workload владеют evidence, verdict и переносом exact digest.
 | admission rejected | staging OCI receipt и evidence фиксируются owner transaction, artifact переходит в `BLOCKED`; promotion неприменим |
 | claim promotion | `image-promotion`; server-side queue выбирает exact artifact и возвращает staging reference, admission revision, receipt digests, fence/generation/JTI и bounded expiry |
 | promotion expiry | следующий специализированный claim заменяет истёкший, повышает fence/generation и отзывает старый claim |
-| promotion/readback | `image-promotion`; exact destination digest и OCI admission-receipt subject/readback, затем artifact `ACTIVE` |
-| RuntimeRevision | `control-plane`; только current promoted artifact; missing/stale/mismatch закрыто отклоняется |
+| authorize promotion | `control-plane`; owner-side расходует current claim до registry copy и выдаёт bounded одноразовый token |
+| promotion/readback | `image-promotion`; exact destination digest и OCI admission-receipt subject/readback, затем completion по token и artifact `ACTIVE` |
+| RuntimeRevision | `control-plane`; только current promoted artifact с exact runtime ABI; missing/stale/mismatch закрыто отклоняется |
 
 Отдельные `renew admission`, `retry admission` и универсальный CRUD намеренно
 отсутствуют. Истёкший admission claim становится снова доступен через
@@ -81,28 +88,23 @@ server-side queue predicate; rejected artifact immutable и новый резу�
 
 ## Безопасность данных
 
-Installation block хранится только в PostgreSQL owner state, минует Redis и не
-попадает в status, audit payload, logs, provenance или admission receipt.
-Context contents и secret values также не логируются. Диагностика содержит
-только закрытые error codes и bounded stage/outcome labels.
+Installation block необязателен; canonical empty value — `""`. Он хранится
+только в PostgreSQL owner state и доступен через owner-scoped version-pinned
+full recipe readback, но отсутствует в обычном status, audit payload, logs,
+provenance и admission receipt. Secret refs возвращаются без values.
 
-Owner предварительно материализует `role-image-builder-build-secrets` без
-значений в Git: для каждого immutable `buildSecretRef` имя ключа равно
-hex-encoded SHA-256 полного reference, а значение доступно только как regular
-file `0400`. Builder повторно разрешает только этот digest-named путь и передаёт
-его BuildKit как `type=secret`; reference и value не входят в Dockerfile,
-context, layer, status или audit.
+Context/package/tool producers публикуют single-layer OCI artifacts в exact
+`roleImageInputRepository`; source OpenAPI/Proto передаёт immutable manifest ref
+и ожидаемый payload digest. Registry client identity, CA/SNI, basic credential и
+egress destination закреплены deployable. Materializer не следует redirect,
+ограничивает manifest/payload, проверяет media type/size/digest и очищает private
+workspace после attempt. Package/tool устанавливаются offline через закрытый
+список `apk|apt|dnf|pip|npm`; context доступен installation step read-only.
 
-Typed package/tool artifacts заранее материализуются в exact context как
-`.mattercodex/packages/<sha256>` и `.mattercodex/tools/<sha256>`. Builder до
-BuildKit повторно хеширует каждый regular file. Пакеты устанавливаются только
-offline через закрытый список `apk|apt|dnf|pip|npm`, tool blob копируется в
-`/usr/local/bin/<name>`. Весь source context доступен installation step как
-read-only bind mount и не копируется в image layer автоматически. Входной
-контракт PVC — regular tar `<context_sha256>.tar`, содержащий
-`.mattercodex/source.sha256` с exact source digest; producer workspace обязан
-атомарно материализовать его до owner-команды. Сам PVC не является owner state
-и не доказывает tenant, recipe или пригодность artifact.
+Достижимые фазы: `MATERIALIZATION`, `CONTEXT_VALIDATION`, `BASE_PULL`,
+`SOLVING`, `INSTALLATION`, `STAGING_PUSH`, `PROVENANCE`. Диагностика содержит
+только закрытые `errorCode`/`diagnosticCode` и bounded безопасный summary; raw
+BuildKit output и credential values отбрасываются.
 
 ## Локальная проверка
 

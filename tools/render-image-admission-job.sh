@@ -31,6 +31,10 @@ tools_digest=$(jq -er '.metadata.annotations["mattercodex.dev/admission-tools-sh
 required_tools=$(jq -er '.data.requiredTools' <<<"$intent")
 builder_identity=$(jq -er '.data.builderIdentity' <<<"$intent")
 build_type=$(jq -er '.data.buildType' <<<"$intent")
+trusted_role_base_repository=$(jq -er '.data.trustedRoleBaseRepository' <<<"$intent")
+trusted_role_base_digest=$(jq -er '.data.trustedRoleBaseDigest' <<<"$intent")
+role_runtime_contract_revision=$(jq -er '.data.roleRuntimeContractRevision' <<<"$intent")
+role_runtime_contract_sha256=$(jq -er '.data.roleRuntimeContractSHA256' <<<"$intent")
 jq -e '.immutable == true and .metadata.labels["mattercodex.dev/owner-intent"] == "true"' <<<"$intent" >/dev/null ||
   { echo "admission owner intent is not immutable" >&2; exit 78; }
 for image in "$tools_image" "$admission_image" "$authority_image"; do
@@ -52,12 +56,18 @@ done
   { echo "builder identity is invalid" >&2; exit 78; }
 [[ $build_type == https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md ]] ||
   { echo "build type is invalid" >&2; exit 78; }
+[[ $trusted_role_base_repository =~ ^[a-z0-9][a-z0-9.:-]*/[a-z0-9][a-z0-9./_-]*$ ]] ||
+  { echo "trusted role base repository is invalid" >&2; exit 78; }
+[[ $trusted_role_base_digest =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "trusted role base digest is invalid" >&2; exit 78; }
+[[ $role_runtime_contract_revision =~ ^[1-9][0-9]*$ ]] || { echo "runtime contract revision is invalid" >&2; exit 78; }
+[[ $role_runtime_contract_sha256 =~ ^[a-f0-9]{64}$ ]] || { echo "runtime contract digest is invalid" >&2; exit 78; }
 
 run_sha256=$(printf '%s\n' "$environment_name" "$run_id" "$admission_image" "$authority_image" "$tools_digest" \
   "$policy_revision" "$policy_sha256" "$promotion_repository" "$promoted_pull_repository" | sha256sum | awk '{print $1}')
 suffix=${run_sha256:0:32}
 claim_name="mc-admit-$suffix"
-deadline=2700
+# Claim TTL равен 15 минутам; каждый Job вместе с повторами завершается раньше.
+deadline=720
 
 cat <<EOF
 apiVersion: v1
@@ -205,6 +215,10 @@ EOF
             - {name: PROMOTED_PULL_REPOSITORY, value: "${promoted_pull_repository}"}
             - {name: EXPECTED_BUILDER_ID, value: "${builder_identity}"}
             - {name: EXPECTED_BUILD_TYPE, value: "${build_type}"}
+            - {name: TRUSTED_ROLE_BASE_REPOSITORY, value: "${trusted_role_base_repository}"}
+            - {name: TRUSTED_ROLE_BASE_DIGEST, value: "${trusted_role_base_digest}"}
+            - {name: ROLE_RUNTIME_CONTRACT_REVISION, value: "${role_runtime_contract_revision}"}
+            - {name: ROLE_RUNTIME_CONTRACT_SHA256, value: "${role_runtime_contract_sha256}"}
             - {name: HOME, value: /tmp}
 EOF
   if [[ $protected == true ]]; then

@@ -2315,7 +2315,9 @@ func (service *Service) createRuntimeRevision(
 	}
 	recipeSpec, ok := recipe.Spec.(entity.RoleImageRecipeSpec)
 	if !ok || recipeSpec.PolicyRevision != service.imagePolicyRevision ||
-		recipeSpec.PolicySHA256 != service.imagePolicySHA256 {
+		recipeSpec.PolicySHA256 != service.imagePolicySHA256 ||
+		recipeSpec.RoleRuntimeContractRevision != service.roleRuntimeContractRevision ||
+		recipeSpec.RoleRuntimeContractSHA256 != service.roleRuntimeContractSHA256 {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
 	imageTx, ok := tx.(domainrepo.ImageTransaction)
@@ -2331,6 +2333,8 @@ func (service *Service) createRuntimeRevision(
 	if !ok || imageArtifact.State != enum.StateActive ||
 		artifactSpec.SpecSHA256 != recipeSpec.SpecSHA256 ||
 		artifactSpec.PolicyRevision != recipeSpec.PolicyRevision || artifactSpec.PolicySHA256 != recipeSpec.PolicySHA256 ||
+		artifactSpec.RoleRuntimeContractRevision != recipeSpec.RoleRuntimeContractRevision ||
+		artifactSpec.RoleRuntimeContractSHA256 != recipeSpec.RoleRuntimeContractSHA256 ||
 		artifactSpec.AdmissionVerdict != entity.ImageAdmissionAccepted || artifactSpec.AdmissionRevision == 0 ||
 		!validSHA256Text(artifactSpec.AdmissionReceiptSHA256) || !validDigest(artifactSpec.AdmissionReceiptOCIManifestDigest) ||
 		!validSHA256Text(artifactSpec.SignatureSHA256) ||
@@ -2613,6 +2617,8 @@ func (service *Service) createRuntimeRevision(
 			ImagePolicySHA256:                      artifactSpec.PolicySHA256,
 			ImageSignatureSHA256:                   artifactSpec.SignatureSHA256,
 			ImagePromotionReadbackSHA256:           artifactSpec.PromotionReadbackSHA256,
+			RoleRuntimeContractRevision:            artifactSpec.RoleRuntimeContractRevision,
+			RoleRuntimeContractSHA256:              artifactSpec.RoleRuntimeContractSHA256,
 			PromptProfileID:                        prompt.ID,
 			PromptRevision:                         promptSpec.Revision,
 			CredentialBindingIDs:                   credentialList,

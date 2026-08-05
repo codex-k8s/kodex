@@ -19,31 +19,33 @@ type Config struct {
 }
 
 type Claim struct {
-	ArtifactID           string    `json:"artifactId"`
-	Version              uint64    `json:"version"`
-	Fence                uint64    `json:"fence"`
-	ClaimToken           string    `json:"claimToken"`
-	ExpiresAt            time.Time `json:"expiresAt"`
-	RecipeID             string    `json:"recipeId"`
-	RecipeVersion        uint64    `json:"recipeVersion"`
-	RecipeGeneration     uint64    `json:"recipeGeneration"`
-	SpecSHA256           string    `json:"specSHA256"`
-	BuildID              string    `json:"buildId"`
-	BuildVersion         uint64    `json:"buildVersion"`
-	BuildAttempt         uint32    `json:"buildAttempt"`
-	StagingReference     string    `json:"stagingReference"`
-	ManifestDigest       string    `json:"manifestDigest"`
-	ImmutableBuildSHA256 string    `json:"immutableBuildSHA256"`
-	ProvenanceSHA256     string    `json:"provenanceSHA256"`
-	BaseImageDigest      string    `json:"baseImageDigest"`
-	SourceSHA256         string    `json:"sourceSHA256"`
-	ContextSHA256        string    `json:"contextSHA256"`
-	BuilderSHA256        string    `json:"builderSHA256"`
-	FrontendSHA256       string    `json:"frontendSHA256"`
-	ToolchainSHA256      string    `json:"toolchainSHA256"`
-	Platforms            []string  `json:"platforms"`
-	PolicyRevision       uint64    `json:"policyRevision"`
-	PolicySHA256         string    `json:"policySHA256"`
+	ArtifactID                  string    `json:"artifactId"`
+	Version                     uint64    `json:"version"`
+	Fence                       uint64    `json:"fence"`
+	ClaimToken                  string    `json:"claimToken"`
+	ExpiresAt                   time.Time `json:"expiresAt"`
+	RecipeID                    string    `json:"recipeId"`
+	RecipeVersion               uint64    `json:"recipeVersion"`
+	RecipeGeneration            uint64    `json:"recipeGeneration"`
+	SpecSHA256                  string    `json:"specSHA256"`
+	BuildID                     string    `json:"buildId"`
+	BuildVersion                uint64    `json:"buildVersion"`
+	BuildAttempt                uint32    `json:"buildAttempt"`
+	StagingReference            string    `json:"stagingReference"`
+	ManifestDigest              string    `json:"manifestDigest"`
+	ImmutableBuildSHA256        string    `json:"immutableBuildSHA256"`
+	ProvenanceSHA256            string    `json:"provenanceSHA256"`
+	BaseImageDigest             string    `json:"baseImageDigest"`
+	SourceSHA256                string    `json:"sourceSHA256"`
+	ContextSHA256               string    `json:"contextSHA256"`
+	BuilderSHA256               string    `json:"builderSHA256"`
+	FrontendSHA256              string    `json:"frontendSHA256"`
+	ToolchainSHA256             string    `json:"toolchainSHA256"`
+	RoleRuntimeContractRevision uint64    `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSHA256   string    `json:"roleRuntimeContractSHA256"`
+	Platforms                   []string  `json:"platforms"`
+	PolicyRevision              uint64    `json:"policyRevision"`
+	PolicySHA256                string    `json:"policySHA256"`
 }
 
 type AdmissionEvidence struct {
@@ -66,6 +68,8 @@ type Promotion struct {
 	AdmissionReceiptOCIManifestDigest string    `json:"admissionReceiptOCIManifestDigest"`
 	PromotedReference                 string    `json:"promotedReference,omitempty"`
 	ReadbackSHA256                    string    `json:"readbackSHA256,omitempty"`
+	AuthorizationToken                string    `json:"authorizationToken,omitempty"`
+	AuthorizationExpiresAt            time.Time `json:"authorizationExpiresAt,omitempty"`
 }
 
 type Client struct {
@@ -128,7 +132,9 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 		PolicySHA256: spec.GetPolicySha256(), BaseImageDigest: spec.GetBaseImageDigest(),
 		SourceSHA256: spec.GetSourceSha256(), ContextSHA256: spec.GetContextSha256(),
 		BuilderSHA256: spec.GetBuilderSha256(), FrontendSHA256: spec.GetFrontendSha256(),
-		ToolchainSHA256: spec.GetToolchainSha256(), Platforms: platforms}, nil
+		ToolchainSHA256: spec.GetToolchainSha256(), Platforms: platforms,
+		RoleRuntimeContractRevision: spec.GetRoleRuntimeContractRevision(),
+		RoleRuntimeContractSHA256:   spec.GetRoleRuntimeContractSha256()}, nil
 }
 
 func (client *Client) Record(ctx context.Context, key string, claim Claim, evidence AdmissionEvidence) error {
@@ -187,7 +193,7 @@ func (client *Client) Complete(ctx context.Context, key string, promotion Promot
 	defer cancel()
 	response, err := client.shared.ControlPlane.CompleteImagePromotion(callCtx, &controlplanev1.CompleteImagePromotionRequest{
 		IdempotencyKey: key, ImageArtifactId: promotion.ArtifactID, ExpectedVersion: promotion.Version,
-		PromotionClaim: promotion.Claim, PromotedReference: promotion.PromotedReference,
+		AuthorizationToken: promotion.AuthorizationToken, PromotedReference: promotion.PromotedReference,
 		ManifestDigest: promotion.ManifestDigest, PromotionReadbackSha256: promotion.ReadbackSHA256,
 	})
 	if err != nil {
@@ -196,6 +202,28 @@ func (client *Client) Complete(ctx context.Context, key string, promotion Promot
 	if response.GetImageArtifact() == nil {
 		return errors.New("completed image promotion response is incomplete")
 	}
+	return nil
+}
+
+func (client *Client) AuthorizePromotion(ctx context.Context, key string, promotion *Promotion) error {
+	callCtx, cancel := context.WithTimeout(ctx, client.rpcDeadline)
+	defer cancel()
+	response, err := client.shared.ControlPlane.AuthorizeImagePromotion(callCtx,
+		&controlplanev1.AuthorizeImagePromotionRequest{IdempotencyKey: key,
+			ImageArtifactId: promotion.ArtifactID, ExpectedVersion: promotion.Version,
+			PromotionClaim: promotion.Claim, ManifestDigest: promotion.ManifestDigest})
+	if err != nil {
+		return err
+	}
+	artifact := response.GetImageArtifact()
+	if artifact == nil || artifact.GetVersion() <= promotion.Version || response.GetAuthorizationToken() == "" ||
+		response.GetAuthorizationExpiresAt() == nil {
+		return errors.New("image promotion authorization response is incomplete")
+	}
+	promotion.Version = artifact.GetVersion()
+	promotion.AuthorizationToken = response.GetAuthorizationToken()
+	promotion.AuthorizationExpiresAt = response.GetAuthorizationExpiresAt().AsTime()
+	promotion.Claim = ""
 	return nil
 }
 

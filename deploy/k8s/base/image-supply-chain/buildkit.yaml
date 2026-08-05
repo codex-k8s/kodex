@@ -18,6 +18,10 @@ spec:
         app.kubernetes.io/name: mattercodex-buildkit
         app.kubernetes.io/component: image-builder
     spec:
+      # Rootless process sandbox использует Kubernetes user namespaces. Кластер
+      # без этого поддерживаемого примитива обязан отклонить Pod без перехода в
+      # privileged либо noProcessSandbox режим.
+      hostUsers: false
       serviceAccountName: mattercodex-buildkit
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -37,21 +41,28 @@ spec:
           readinessProbe:
             exec:
               command:
-                - buildctl
-                - --addr
-                - tcp://127.0.0.1:1234
-                - --tlscacert
-                - /var/run/secrets/mattercodex/buildkit/tls/ca.pem
-                - --tlscert
-                - /var/run/secrets/mattercodex/buildkit/tls/probe.crt
-                - --tlskey
-                - /var/run/secrets/mattercodex/buildkit/tls/probe.key
-                - --tlsservername
-                - mattercodex-buildkit.mattercodex-system.svc.cluster.local
-                - debug
-                - workers
-            periodSeconds: 5
-            timeoutSeconds: 3
+                - /bin/sh
+                - -ec
+                - |
+                  work=$(mktemp -d)
+                  trap 'rm -rf "$work"' EXIT
+                  base=$(cat /var/run/config/mattercodex/image-policy/trustedRoleBaseRepository)
+                  base_digest=$(cat /var/run/config/mattercodex/image-policy/trustedRoleBaseDigest)
+                  frontend=$(cat /var/run/config/mattercodex/image-policy/frontendSHA256)
+                  printf '# syntax=%s@sha256:%s\nFROM %s@%s\nRUN ["/bin/sh","-c","test -x /usr/local/bin/mattercodex-init && test -x /usr/local/bin/matter-codex-agent-runner"]\n' \
+                    'mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/dockerfile' \
+                    "$frontend" "$base" "$base_digest" >"$work/Dockerfile"
+                  buildctl --addr tcp://127.0.0.1:1234 \
+                    --tlscacert /var/run/secrets/mattercodex/buildkit/tls/ca.pem \
+                    --tlscert /var/run/secrets/mattercodex/buildkit/tls/probe.crt \
+                    --tlskey /var/run/secrets/mattercodex/buildkit/tls/probe.key \
+                    --tlsservername mattercodex-buildkit.mattercodex-system.svc.cluster.local \
+                    build --frontend dockerfile.v0 --local context="$work" --local dockerfile="$work" \
+                    --opt filename=Dockerfile --opt platform=linux/amd64 \
+                    --output type=image,name=mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/readiness:rootless-probe,push=true \
+                    --no-cache >/dev/null
+            periodSeconds: 60
+            timeoutSeconds: 30
             failureThreshold: 6
           livenessProbe:
             exec:
@@ -86,6 +97,9 @@ spec:
             allowPrivilegeEscalation: false
             seccompProfile:
               type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+            procMount: Unmasked
             capabilities:
               drop:
                 - ALL
@@ -97,6 +111,9 @@ spec:
               readOnly: true
             - name: registry-ca
               mountPath: /var/run/config/mattercodex/image-registry
+              readOnly: true
+            - name: image-policy
+              mountPath: /var/run/config/mattercodex/image-policy
               readOnly: true
             - name: buildkit-tls
               mountPath: /var/run/secrets/mattercodex/buildkit/tls
@@ -113,6 +130,14 @@ spec:
           secret:
             secretName: mattercodex-image-registry-ca
             defaultMode: 0440
+        - name: image-policy
+          configMap:
+            name: mattercodex-image-admission-policy
+            defaultMode: 0440
+            items:
+              - {key: trustedRoleBaseRepository, path: trustedRoleBaseRepository}
+              - {key: trustedRoleBaseDigest, path: trustedRoleBaseDigest}
+              - {key: frontendSHA256, path: frontendSHA256}
         - name: buildkit-tls
           csi:
             driver: secrets-store.csi.k8s.io

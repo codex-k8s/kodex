@@ -14,10 +14,16 @@ data:
   authorityImage: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
   promotionRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles
   promotedPullRepository: registry-pull.invalid/mattercodex/roles
+  roleImageInputRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs
   policyRevision: "0"
   policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   builderIdentity: spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder
   buildType: https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md
+  trustedRoleBaseRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner
+  trustedRoleBaseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  frontendSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+  roleRuntimeContractRevision: "1"
+  roleRuntimeContractSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
   scannerIdentity: mattercodex-image-scanner
   signerIdentity: mattercodex-image-signer
   admissionOwnerIdentity: mattercodex-image-admission-owner

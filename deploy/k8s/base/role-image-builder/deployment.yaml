@@ -47,6 +47,18 @@ spec:
             - {name: ROLE_IMAGE_BUILDER_BUILDKIT_CA_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/ca.pem}
             - {name: ROLE_IMAGE_BUILDER_BUILDKIT_CERTIFICATE_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/tls.crt}
             - {name: ROLE_IMAGE_BUILDER_BUILDKIT_PRIVATE_KEY_FILE, value: /var/run/secrets/mattercodex/role-image-builder/buildkit/tls.key}
+            - name: ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
+            - name: ROLE_IMAGE_BUILDER_INPUT_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleImageInputRepository}}
+            - name: ROLE_IMAGE_BUILDER_TRUSTED_ROLE_BASE_DIGEST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
+            - name: ROLE_IMAGE_BUILDER_ROLE_RUNTIME_CONTRACT_REVISION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+            - name: ROLE_IMAGE_BUILDER_ROLE_RUNTIME_CONTRACT_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+            - name: ROLE_IMAGE_BUILDER_EXPECTED_FRONTEND_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: frontendSHA256}}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: otel-collector.observability.svc:4317}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/role-image-builder/observability/otel-ca.pem}
@@ -80,39 +92,27 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: contexts, mountPath: /var/run/mattercodex/image-contexts, readOnly: true}
             - {name: work, mountPath: /var/run/mattercodex/work}
-            - {name: build-secrets, mountPath: /var/run/secrets/mattercodex/role-image-builder/build-secrets, readOnly: true}
             - {name: buildkit-client, mountPath: /var/run/secrets/mattercodex/role-image-builder/buildkit, readOnly: true}
-            - {name: base-pull, mountPath: /var/run/secrets/mattercodex/role-image-builder/base-pull, readOnly: true}
-            - {name: staging-push, mountPath: /var/run/secrets/mattercodex/role-image-builder/staging-push, readOnly: true}
+            - {name: input-read, mountPath: /var/run/secrets/mattercodex/role-image-builder/input-read, readOnly: true}
             - {name: workload-tls, mountPath: /var/run/secrets/mattercodex/role-image-builder/workload-tls, readOnly: true}
             - {name: control-plane-ca, mountPath: /var/run/config/mattercodex/role-image-builder/control-plane, readOnly: true}
             - {name: application-grant, mountPath: /var/run/secrets/mattercodex/role-image-builder/application-grant, readOnly: true}
             - {name: otel-ca, mountPath: /var/run/config/mattercodex/role-image-builder/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/role-image-builder/observability, readOnly: true}
       volumes:
-        - name: contexts
-          persistentVolumeClaim: {claimName: role-image-build-contexts, readOnly: true}
         - name: work
           emptyDir: {sizeLimit: 2Gi}
-        - name: build-secrets
-          secret: {secretName: role-image-builder-build-secrets, defaultMode: 0400}
         - name: buildkit-client
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
             volumeAttributes: {secretProviderClass: role-image-builder-buildkit-client}
-        - name: base-pull
+        - name: input-read
           csi:
             driver: secrets-store.csi.k8s.io
             readOnly: true
-            volumeAttributes: {secretProviderClass: role-image-builder-base-pull}
-        - name: staging-push
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes: {secretProviderClass: role-image-builder-staging-push}
+            volumeAttributes: {secretProviderClass: role-image-builder-input-read}
         - name: workload-tls
           secret: {secretName: internal-rpc-authority-role-image-builder-workload-tls, defaultMode: 0440}
         - name: control-plane-ca

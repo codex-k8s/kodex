@@ -68,8 +68,10 @@ func TestRolePodProviderRuntimeCannotMountRunnerAuthority(t *testing.T) {
 		InteractionGatewayURL:           "https://interaction-gateway.mattercodex-system.svc.cluster.local:8443",
 		SessionMCPURL:                   "https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443",
 		AuthorityImage:                  "registry.example.test/internal-rpc-authority@sha256:" + strings.Repeat("c", 64),
+		PromotedRoleImageRepository:     "registry.example.test/agent-runner",
 	}}
-	revision := entity.Revision{ImageReference: "registry.example.test/agent-runner@sha256:" + strings.Repeat("d", 64)}
+	revision := entity.Revision{ImageReference: "registry.example.test/agent-runner@sha256:" + strings.Repeat("d", 64),
+		ImageManifestDigest: "sha256:" + strings.Repeat("d", 64)}
 	pod, err := adapter.rolePod(t.Context(), execution, revision)
 	if err != nil {
 		t.Fatalf("rolePod() error = %v", err)

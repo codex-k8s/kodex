@@ -168,20 +168,20 @@ go build ./...
 ```bash
 KUBERNETES_API_CIDRS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh)"
 KUBERNETES_API_PORTS="$(scripts/resolve-kubernetes-api-endpoint-cidrs.sh --output ports)"
-: "${RUNTIME_PROVIDER_EGRESS_CIDRS:?exact provider endpoints are required}"
 scripts/render-runtime-controller.sh \
   --environment staging \
   --controller-image-ref mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller@sha256:<digest> \
   --authority-image-ref ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:<digest> \
+  --registry-pull-host registry-pull.<environment-domain> \
   --kubernetes-api-cidrs "$KUBERNETES_API_CIDRS" \
   --kubernetes-api-ports "$KUBERNETES_API_PORTS" \
-  --provider-egress-cidrs "$RUNTIME_PROVIDER_EGRESS_CIDRS" \
   > /tmp/runtime-controller-staging.yaml
 ```
 
-Renderer fail-closed требует exact Service/EndpointSlice CIDR/ports и выданные
-environment provider `/32|/128` endpoints, затем добавляет отдельные policy для
-controller, workers, access profiles и provider TLS/443.
+Renderer fail-closed требует exact Service/EndpointSlice CIDR/ports и внешний
+node-reachable pull DNS, материализует его как exact escaped repository в
+`ValidatingAdmissionPolicy`, затем добавляет отдельные policy для controller,
+workers и access profiles.
 Render и deploy в этом unit не выполняются.
 
 ## Ручная проверка владельца

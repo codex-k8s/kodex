@@ -63,6 +63,11 @@ type Config struct {
 	ImageMaximumAttempts                uint32        `env:"CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS"`
 	StagingImageRepository              string        `env:"CONTROL_PLANE_STAGING_IMAGE_REPOSITORY"`
 	PromotedImageRepository             string        `env:"CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY"`
+	RoleImageInputRepository            string        `env:"CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY"`
+	TrustedRoleBaseRepository           string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY"`
+	TrustedRoleBaseDigest               string        `env:"CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST"`
+	RoleRuntimeContractRevision         uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
+	RoleRuntimeContractSHA256           string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
 	PendingRescheduleDelay              time.Duration `env:"CONTROL_PLANE_PENDING_RESCHEDULE_DELAY"`
 	OIDCTLSServerName                   string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
 	OIDCCAFile                          string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
@@ -130,6 +135,11 @@ func loadConfig() (Config, error) {
 		ImageMaximumAttempts:                3,
 		StagingImageRepository:              "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images",
 		PromotedImageRepository:             "registry-pull.invalid/mattercodex/roles",
+		RoleImageInputRepository:            "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs",
+		TrustedRoleBaseRepository:           "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/agent-runner",
+		TrustedRoleBaseDigest:               "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		RoleRuntimeContractRevision:         1,
+		RoleRuntimeContractSHA256:           "0000000000000000000000000000000000000000000000000000000000000000",
 		PendingRescheduleDelay:              30 * time.Second,
 		OIDCTLSServerName:                   "sso.mattercodex.local",
 		OIDCCAFile:                          "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
@@ -183,6 +193,9 @@ func (config Config) validate() error {
 		config.ImagePromotionClaimTTL < 30*time.Second || config.ImagePromotionClaimTTL > 15*time.Minute ||
 		config.ImageMaximumAttempts == 0 || config.ImageMaximumAttempts > 10 ||
 		!validRepository(config.StagingImageRepository) || !validRepository(config.PromotedImageRepository) ||
+		!validRepository(config.RoleImageInputRepository) ||
+		!validRepository(config.TrustedRoleBaseRepository) || !validManifestDigest(config.TrustedRoleBaseDigest) ||
+		config.RoleRuntimeContractRevision == 0 || !validSHA256(config.RoleRuntimeContractSHA256) ||
 		config.StagingImageRepository == config.PromotedImageRepository ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
 		config.ScheduleClaimLimit < 1 || config.ScheduleClaimLimit > 128 {
@@ -264,6 +277,10 @@ func validRepository(input string) bool {
 		!strings.ContainsAny(input, "@?# *") && strings.Contains(input, "/")
 }
 
+func validManifestDigest(input string) bool {
+	return strings.HasPrefix(input, "sha256:") && validSHA256(strings.TrimPrefix(input, "sha256:"))
+}
+
 func expectedOperations() map[string]string {
 	return map[string]string{
 		"control.project.create":                         controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
@@ -306,6 +323,7 @@ func expectedOperations() map[string]string {
 		"control.artifact.scan":                          controlplanev1.ControlPlaneService_RecordArtifactScan_FullMethodName,
 		"control.artifact-scanner.readiness":             controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.role-image-recipe.manage":               controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
+		"control.role-image-recipe.get":                  controlplanev1.ControlPlaneService_GetRoleImageRecipe_FullMethodName,
 		"control.image-build.manage":                     controlplanev1.ControlPlaneService_ManageImageBuild_FullMethodName,
 		"control.image-build.get":                        controlplanev1.ControlPlaneService_GetRoleImageBuild_FullMethodName,
 		"control.role-image-builder.readiness":           controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
@@ -319,6 +337,7 @@ func expectedOperations() map[string]string {
 		"control.image-admission.record":                 controlplanev1.ControlPlaneService_RecordImageAdmission_FullMethodName,
 		"control.image-promotion.readiness":              controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.image-promotion.claim":                  controlplanev1.ControlPlaneService_ClaimImagePromotion_FullMethodName,
+		"control.image-promotion.authorize":              controlplanev1.ControlPlaneService_AuthorizeImagePromotion_FullMethodName,
 		"control.image-promotion.complete":               controlplanev1.ControlPlaneService_CompleteImagePromotion_FullMethodName,
 		"control.owner-gate.deliver":                     controlplanev1.ControlPlaneService_RecordOwnerGateDelivery_FullMethodName,
 		"control.owner-gate.claim-delivery":              controlplanev1.ControlPlaneService_ClaimOwnerGateDelivery_FullMethodName,

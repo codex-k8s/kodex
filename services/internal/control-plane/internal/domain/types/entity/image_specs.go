@@ -22,17 +22,18 @@ var (
 )
 
 type RoleImagePackage struct {
-	Manager string `json:"manager"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Digest  string `json:"digest"`
+	Manager   string `json:"manager"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Digest    string `json:"digest"`
+	SourceRef string `json:"sourceRef"`
 }
 
 func (item RoleImagePackage) Validate() error {
 	if !imagePackageManagerPattern.MatchString(item.Manager) ||
 		!imageInputNamePattern.MatchString(item.Name) ||
 		!imageVersionPattern.MatchString(item.Version) ||
-		!validManifestDigest(item.Digest) {
+		!validManifestDigest(item.Digest) || !validImmutableOCIRef(item.SourceRef) {
 		return errors.New("role image package is invalid")
 	}
 	return nil
@@ -48,7 +49,7 @@ type RoleImageTool struct {
 func (item RoleImageTool) Validate() error {
 	if !imageToolNamePattern.MatchString(item.Name) ||
 		!imageVersionPattern.MatchString(item.Version) ||
-		!validExternalRef(item.SourceRef) || !validSHA256(item.SHA256) {
+		!validImmutableOCIRef(item.SourceRef) || !validSHA256(item.SHA256) {
 		return errors.New("role image tool is invalid")
 	}
 	return nil
@@ -91,8 +92,8 @@ func (input RoleImageRecipeInput) Validate() error {
 	if !validExternalRef(input.BaseImageReference) || strings.Contains(input.BaseImageReference, "@") ||
 		!validManifestDigest(input.BaseImageDigest) ||
 		!validExternalRef(input.SourceRef) || !imageVersionPattern.MatchString(input.SourceRevision) ||
-		!validSHA256(input.SourceSHA256) || !strings.HasPrefix(input.ContextRef, "oci://") || !validExternalRef(input.ContextRef) ||
-		!validSHA256(input.ContextSHA256) || !strings.HasSuffix(input.ContextRef, "@sha256:"+input.ContextSHA256) ||
+		!validSHA256(input.SourceSHA256) || !validImmutableOCIRef(input.ContextRef) ||
+		!validSHA256(input.ContextSHA256) ||
 		!validSHA256(input.BuilderSHA256) ||
 		!validSHA256(input.FrontendSHA256) || !validSHA256(input.ToolchainSHA256) ||
 		len(input.Platforms) == 0 || len(input.Platforms) > 8 ||
@@ -135,18 +136,21 @@ func (input RoleImageRecipeInput) Validate() error {
 }
 
 type RoleImageRecipeSpec struct {
-	Input          RoleImageRecipeInput `json:"input"`
-	Generation     uint64               `json:"generation"`
-	SpecSHA256     string               `json:"specSha256"`
-	PolicyRevision uint64               `json:"policyRevision"`
-	PolicySHA256   string               `json:"policySha256"`
+	Input                       RoleImageRecipeInput `json:"input"`
+	Generation                  uint64               `json:"generation"`
+	SpecSHA256                  string               `json:"specSha256"`
+	PolicyRevision              uint64               `json:"policyRevision"`
+	PolicySHA256                string               `json:"policySha256"`
+	RoleRuntimeContractRevision uint64               `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSHA256   string               `json:"roleRuntimeContractSha256"`
 }
 
 func (RoleImageRecipeSpec) Kind() enum.Kind { return enum.KindRoleImageRecipe }
 
 func (spec RoleImageRecipeSpec) Validate() error {
 	if spec.Input.Validate() != nil || spec.Generation == 0 || !validSHA256(spec.SpecSHA256) ||
-		spec.PolicyRevision == 0 || !validSHA256(spec.PolicySHA256) {
+		spec.PolicyRevision == 0 || !validSHA256(spec.PolicySHA256) ||
+		spec.RoleRuntimeContractRevision == 0 || !validSHA256(spec.RoleRuntimeContractSHA256) {
 		return errors.New("role image recipe specification is invalid")
 	}
 	return nil
@@ -157,8 +161,10 @@ type ImageBuildStage string
 const (
 	ImageBuildStageQueued            ImageBuildStage = "QUEUED"
 	ImageBuildStageContextValidation ImageBuildStage = "CONTEXT_VALIDATION"
+	ImageBuildStageMaterialization   ImageBuildStage = "MATERIALIZATION"
 	ImageBuildStageBasePull          ImageBuildStage = "BASE_PULL"
 	ImageBuildStageSolving           ImageBuildStage = "SOLVING"
+	ImageBuildStageInstallation      ImageBuildStage = "INSTALLATION"
 	ImageBuildStageStagingPush       ImageBuildStage = "STAGING_PUSH"
 	ImageBuildStageProvenance        ImageBuildStage = "PROVENANCE"
 	ImageBuildStageCompleted         ImageBuildStage = "COMPLETED"
@@ -170,8 +176,8 @@ const (
 
 func (stage ImageBuildStage) Valid() bool {
 	switch stage {
-	case ImageBuildStageQueued, ImageBuildStageContextValidation, ImageBuildStageBasePull,
-		ImageBuildStageSolving, ImageBuildStageStagingPush, ImageBuildStageProvenance,
+	case ImageBuildStageQueued, ImageBuildStageMaterialization, ImageBuildStageContextValidation, ImageBuildStageBasePull,
+		ImageBuildStageSolving, ImageBuildStageInstallation, ImageBuildStageStagingPush, ImageBuildStageProvenance,
 		ImageBuildStageCompleted, ImageBuildStageFailed, ImageBuildStageCancelled,
 		ImageBuildStageExpired, ImageBuildStageDeadLetter:
 		return true
@@ -198,6 +204,8 @@ type ImageBuildSpec struct {
 	ProvenanceSHA256     string          `json:"provenanceSha256,omitempty"`
 	ImmutableBuildSHA256 string          `json:"immutableBuildSha256"`
 	ErrorCode            string          `json:"errorCode,omitempty"`
+	DiagnosticCode       string          `json:"diagnosticCode,omitempty"`
+	DiagnosticSummary    string          `json:"diagnosticSummary,omitempty"`
 	AvailableAt          time.Time       `json:"availableAt"`
 	MaximumAttempts      uint32          `json:"maximumAttempts"`
 	LeaseTokenSHA256     string          `json:"leaseTokenSha256,omitempty"`
@@ -235,6 +243,11 @@ func (spec ImageBuildSpec) Validate() error {
 	}
 	if spec.ErrorCode != "" && !imageErrorCodePattern.MatchString(spec.ErrorCode) {
 		return errors.New("image build error code is invalid")
+	}
+	if (spec.DiagnosticCode == "") != (spec.DiagnosticSummary == "") ||
+		(spec.DiagnosticCode != "" && (!imageErrorCodePattern.MatchString(spec.DiagnosticCode) ||
+			len(spec.DiagnosticSummary) > 256 || !validDiagnosticSummary(spec.DiagnosticSummary))) {
+		return errors.New("image build diagnostic is invalid")
 	}
 	return nil
 }
@@ -275,12 +288,16 @@ type ImageArtifactSpec struct {
 	AdmissionRevision                 uint64                `json:"admissionRevision"`
 	AdmissionReceiptSHA256            string                `json:"admissionReceiptSha256,omitempty"`
 	AdmissionReceiptOCIManifestDigest string                `json:"admissionReceiptOciManifestDigest,omitempty"`
+	RoleRuntimeContractRevision       uint64                `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSHA256         string                `json:"roleRuntimeContractSha256"`
 	PromotionClaimJTISHA256           string                `json:"promotionClaimJtiSha256,omitempty"`
 	PromotionClaimExpiresAt           time.Time             `json:"promotionClaimExpiresAt,omitempty"`
 	PromotionClaimantWorkloadID       string                `json:"promotionClaimantWorkloadId,omitempty"`
 	PromotionClaimantSPIFFEID         string                `json:"promotionClaimantSpiffeId,omitempty"`
 	PromotionAuthorityGeneration      uint64                `json:"promotionAuthorityGeneration"`
 	PromotionFence                    uint64                `json:"promotionFence"`
+	PromotionAuthorizationTokenSHA256 string                `json:"promotionAuthorizationTokenSha256,omitempty"`
+	PromotionAuthorizationExpiresAt   time.Time             `json:"promotionAuthorizationExpiresAt,omitempty"`
 	PromotedReference                 string                `json:"promotedReference,omitempty"`
 	PromotionReadbackSHA256           string                `json:"promotionReadbackSha256,omitempty"`
 	PromotedAt                        time.Time             `json:"promotedAt,omitempty"`
@@ -302,7 +319,8 @@ func (spec ImageArtifactSpec) Validate() error {
 		!validSHA256(spec.ImmutableBuildSHA256) || !validManifestDigest(spec.BaseImageDigest) ||
 		!validSHA256(spec.SourceSHA256) || !validSHA256(spec.ContextSHA256) || !validSHA256(spec.BuilderSHA256) ||
 		!validSHA256(spec.FrontendSHA256) || !validSHA256(spec.ToolchainSHA256) || len(spec.Platforms) == 0 ||
-		len(spec.Platforms) > 8 || spec.PolicyRevision == 0 || !validSHA256(spec.PolicySHA256) {
+		len(spec.Platforms) > 8 || spec.PolicyRevision == 0 || !validSHA256(spec.PolicySHA256) ||
+		spec.RoleRuntimeContractRevision == 0 || !validSHA256(spec.RoleRuntimeContractSHA256) {
 		return errors.New("image artifact specification is invalid")
 	}
 	platformKeys := make([]string, 0, len(spec.Platforms))
@@ -334,6 +352,7 @@ func (spec ImageArtifactSpec) Validate() error {
 		return errors.New("image admission evidence is invalid")
 	}
 	promotionClaim := spec.PromotionClaimJTISHA256 != "" || !spec.PromotionClaimExpiresAt.IsZero()
+	promotionAuthorization := spec.PromotionAuthorizationTokenSHA256 != "" || !spec.PromotionAuthorizationExpiresAt.IsZero()
 	if promotionClaim && (spec.AdmissionVerdict != ImageAdmissionAccepted ||
 		!validSHA256(spec.PromotionClaimJTISHA256) || spec.PromotionClaimExpiresAt.IsZero() ||
 		!imageInputNamePattern.MatchString(spec.PromotionClaimantWorkloadID) ||
@@ -341,13 +360,19 @@ func (spec ImageArtifactSpec) Validate() error {
 		spec.PromotionAuthorityGeneration == 0 || spec.PromotionFence == 0) {
 		return errors.New("image promotion claim is invalid")
 	}
-	if !promotionClaim && (spec.PromotionClaimantWorkloadID != "" || spec.PromotionClaimantSPIFFEID != "") {
+	if !promotionClaim && !promotionAuthorization &&
+		(spec.PromotionClaimantWorkloadID != "" || spec.PromotionClaimantSPIFFEID != "") {
 		return errors.New("image promotion claimant is invalid")
+	}
+	if promotionAuthorization && (promotionClaim || !validSHA256(spec.PromotionAuthorizationTokenSHA256) ||
+		spec.PromotionAuthorizationExpiresAt.IsZero() || spec.PromotionClaimantWorkloadID == "" ||
+		spec.PromotionClaimantSPIFFEID == "") {
+		return errors.New("image promotion authorization is invalid")
 	}
 	promoted := spec.PromotedReference != "" || spec.PromotionReadbackSHA256 != "" || !spec.PromotedAt.IsZero()
 	if promoted && (spec.AdmissionVerdict != ImageAdmissionAccepted ||
 		!validImageReference(spec.PromotedReference) || !strings.HasSuffix(spec.PromotedReference, "@"+spec.ManifestDigest) ||
-		!validSHA256(spec.PromotionReadbackSHA256) || spec.PromotedAt.IsZero() || promotionClaim) {
+		!validSHA256(spec.PromotionReadbackSHA256) || spec.PromotedAt.IsZero() || promotionClaim || promotionAuthorization) {
 		return errors.New("image promotion evidence is invalid")
 	}
 	return nil
@@ -365,14 +390,38 @@ func validImageReference(input string) bool {
 	return len(parts[0]) >= 3 && !strings.ContainsAny(parts[0], "?# ") && validManifestDigest(parts[1])
 }
 
+func validImmutableOCIRef(input string) bool {
+	if !strings.HasPrefix(input, "oci://") || !validExternalRef(input) || strings.Count(input, "@") != 1 {
+		return false
+	}
+	parts := strings.SplitN(strings.TrimPrefix(input, "oci://"), "@", 2)
+	return len(parts) == 2 && strings.Contains(parts[0], "/") && !strings.ContainsAny(parts[0], "?# ") &&
+		validManifestDigest(parts[1])
+}
+
 func validInstallationBlock(input string) bool {
-	if len(input) == 0 || len(input) > 32768 || !utf8.ValidString(input) || strings.TrimSpace(input) == "" {
+	if input == "" {
+		return true
+	}
+	if len(input) > 32768 || !utf8.ValidString(input) || strings.TrimSpace(input) == "" {
 		return false
 	}
 	for _, symbol := range input {
 		if symbol == '\n' || symbol == '\t' {
 			continue
 		}
+		if symbol < 0x20 || symbol == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+func validDiagnosticSummary(input string) bool {
+	if input == "" || !utf8.ValidString(input) || strings.TrimSpace(input) != input {
+		return false
+	}
+	for _, symbol := range input {
 		if symbol < 0x20 || symbol == 0x7f {
 			return false
 		}

@@ -365,6 +365,12 @@ tools/render-control-plane.sh \
   <approved-vulnerability-policy-revision> \
   <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
+  <exact-node-ipv4-cidr> \
+  <exact-node-ipv6-cidr> \
+  sha256:<trusted-role-base-digest> \
+  <frontend-sha256> \
+  <role-runtime-contract-revision> \
+  <role-runtime-contract-sha256> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -401,9 +407,10 @@ generation входит в Pod templates registry и node-readback DaemonSet: co
 rotation обязательно создаёт новые Pod на каждом узле, а пропущенная либо
 рассинхронная generation не получает readiness.
 `services/jobs/role-image-builder` получает exact fenced attempt у
-`control-plane`, проверяет read-only digest-named `context.tar`, отправляет
-сборку во внешний rootless BuildKit и публикует только в staging. Он не
-монтирует signer, promotion, admin или node-pull identity. Отдельный
+`control-plane`, потоково материализует exact OCI context/package/tool в
+private `emptyDir`, отправляет сборку во внешний rootless BuildKit и не имеет
+staging-push credential/egress. Staging push identity принадлежит BuildKit;
+builder не монтирует signer, promotion, admin или node-pull identity. Отдельный
 `tools/render-image-admission-job.sh` не принимает artifact IDs/digests от
 caller: первая фаза получает server-owned claim, после чего scanner и signer
 проверяют exact staging digest, labels и native BuildKit provenance. Admission
@@ -439,6 +446,12 @@ tools/render-image-supply-chain.sh \
   <approved-vulnerability-policy-revision> \
   <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
+  <exact-node-ipv4-cidr> \
+  <exact-node-ipv6-cidr> \
+  sha256:<trusted-role-base-digest> \
+  <frontend-sha256> \
+  <role-runtime-contract-revision> \
+  <role-runtime-contract-sha256> \
   > /tmp/image-supply-chain-staging.yaml
 
 tools/render-image-admission-job.sh \

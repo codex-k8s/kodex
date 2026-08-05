@@ -29,6 +29,7 @@
           "control.schedule.occurrences.list",
           "control.schedule.recovery.resolve",
           "control.role-image-recipe.manage",
+          "control.role-image-recipe.get",
           "control.image-build.manage",
           "control.image-build.get",
           "control.readiness.check"
@@ -770,6 +771,7 @@
         "allowed_operation_ids": [
           "control.image-promotion.readiness",
           "control.image-promotion.claim",
+          "control.image-promotion.authorize",
           "control.image-promotion.complete"
         ],
         "application_credential": "IMAGE_PROMOTION_GRANT",
@@ -2921,6 +2923,24 @@
         "target_workload_id": "control-plane",
         "project_required": true,
         "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": ["OIDC_SESSION", "DOMAIN_STATE"],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/controlplane.v1.ControlPlaneService/GetRoleImageRecipe",
+        "local_caller": {"uid": 10001, "primary_gid": 10001, "shared_fs_gid": 29000},
+        "local_target": {"uid": 10001, "primary_gid": 10001, "shared_fs_gid": 29000},
+        "operation_id": "control.role-image-recipe.get",
+        "permission": "controlplane.role_image_recipe.read"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane",
+        "project_required": true,
+        "authority_proof_producer_id": "control-plane.oidc",
         "authority_sources": [
           "OIDC_SESSION",
           "DOMAIN_STATE"
@@ -3288,6 +3308,24 @@
         },
         "operation_id": "control.image-promotion.claim",
         "permission": "controlplane.image_promotion.claim"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane",
+        "project_required": true,
+        "authority_proof_producer_id": "control-plane.image-promotion",
+        "authority_sources": ["IMAGE_PROMOTION_CLAIM", "DOMAIN_STATE"],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion",
+        "caller_workload_id": "image-promotion",
+        "full_method": "/controlplane.v1.ControlPlaneService/AuthorizeImagePromotion",
+        "local_caller": {"uid": 10001, "primary_gid": 10001, "shared_fs_gid": 29000},
+        "local_target": {"uid": 10001, "primary_gid": 10001, "shared_fs_gid": 29000},
+        "operation_id": "control.image-promotion.authorize",
+        "permission": "controlplane.image_promotion.authorize"
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",

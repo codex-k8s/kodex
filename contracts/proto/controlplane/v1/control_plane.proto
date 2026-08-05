@@ -154,6 +154,9 @@ service ControlPlaneService {
   // ManageRoleImageRecipe — единственный owner path create/update/archive/restore/delete
   // и запуска сборки. Actor, tenant, owner, generation и policy назначает сервер.
   rpc ManageRoleImageRecipe(ManageRoleImageRecipeRequest) returns (ManageRoleImageRecipeResponse);
+  // GetRoleImageRecipe возвращает владельцу exact version полной редактируемой
+  // спецификации; secret references остаются ссылками, а значения не возвращаются.
+  rpc GetRoleImageRecipe(GetRoleImageRecipeRequest) returns (GetRoleImageRecipeResponse);
   // ClaimImageBuild выдаёт builder одну exact fenced attempt без идентификаторов
   // из payload и возвращает секретный installation block только в этом ответе.
   rpc ClaimImageBuild(ClaimImageBuildRequest) returns (ClaimImageBuildResponse);
@@ -174,7 +177,11 @@ service ControlPlaneService {
   // ClaimImagePromotion выдаёт promotion workload новый fenced one-time claim
   // для server-selected accepted artifact; истёкший claim заменяется.
   rpc ClaimImagePromotion(ClaimImagePromotionRequest) returns (ClaimImagePromotionResponse);
-  // CompleteImagePromotion расходует claim только после exact promoted readback.
+  // AuthorizeImagePromotion атомарно расходует current claim до любого
+  // pull-visible side effect и фиксирует durable exact publish authorization.
+  rpc AuthorizeImagePromotion(AuthorizeImagePromotionRequest) returns (AuthorizeImagePromotionResponse);
+  // CompleteImagePromotion принимает только предварительно сохранённую publish
+  // authorization после exact promoted readback.
   rpc CompleteImagePromotion(CompleteImagePromotionRequest) returns (CompleteImagePromotionResponse);
   // GetRoleImageBuild выполняет авторитетный version-pinned readback без secret input.
   rpc GetRoleImageBuild(GetRoleImageBuildRequest) returns (GetRoleImageBuildResponse);
@@ -768,6 +775,9 @@ message RuntimeRevisionSpec {
   string image_signature_sha256 = 36;
   string image_promotion_readback_sha256 = 37;
   string image_admission_receipt_oci_manifest_digest = 38;
+  // role_runtime_contract_* закрепляют проверенный runtime ABI promoted image.
+  uint64 role_runtime_contract_revision = 39;
+  string role_runtime_contract_sha256 = 40;
 }
 
 // RoleImagePackage — exact typed package input. Version и digest обязательны.
@@ -776,6 +786,8 @@ message RoleImagePackage {
   string name = 2;
   string version = 3;
   string digest = 4;
+  // source_ref — immutable OCI artifact reference, материализуемый trusted fetch path.
+  string source_ref = 5;
 }
 
 // RoleImageTool — exact external tool input without secret material.
@@ -808,7 +820,10 @@ message RoleImageRecipeInput {
   repeated RoleImagePlatform platforms = 10;
   repeated RoleImagePackage packages = 11;
   repeated RoleImageTool tools = 12;
+  // Пустая строка — каноническое значение отсутствующего аварийного блока.
   string installation_block = 13;
+  // Неизменяемые authority refs доступны только trusted materialization;
+  // значения не попадают в build context, mounts, logs или provenance.
   repeated string build_secret_refs = 14;
   string toolchain_sha256 = 15;
 }
@@ -820,6 +835,8 @@ message RoleImageRecipeSpec {
   string spec_sha256 = 3;
   uint64 policy_revision = 4;
   string policy_sha256 = 5;
+  uint64 role_runtime_contract_revision = 6;
+  string role_runtime_contract_sha256 = 7;
 }
 
 // ImageBuildSpec contains bounded status only; installation block, context
@@ -846,6 +863,9 @@ message ImageBuildSpec {
   uint32 maximum_attempts = 19;
   string lease_token_sha256 = 20;
   string claim_jti_sha256 = 21;
+  // diagnostic_code/summary — только закрытая redacted диагностика без raw output.
+  string diagnostic_code = 22;
+  string diagnostic_summary = 23;
 }
 
 enum ImageBuildStage {
@@ -861,6 +881,8 @@ enum ImageBuildStage {
   IMAGE_BUILD_STAGE_CANCELLED = 9;
   IMAGE_BUILD_STAGE_EXPIRED = 10;
   IMAGE_BUILD_STAGE_DEAD_LETTER = 11;
+  IMAGE_BUILD_STAGE_MATERIALIZATION = 12;
+  IMAGE_BUILD_STAGE_INSTALLATION = 13;
 }
 
 // ImageArtifactSpec binds all independent admission evidence to one digest.
@@ -907,6 +929,10 @@ message ImageArtifactSpec {
   uint64 promotion_authority_generation = 40;
   uint64 promotion_fence = 41;
   string admission_receipt_oci_manifest_digest = 42;
+  uint64 role_runtime_contract_revision = 43;
+  string role_runtime_contract_sha256 = 44;
+  string promotion_authorization_token_sha256 = 45;
+  google.protobuf.Timestamp promotion_authorization_expires_at = 46;
 }
 
 enum ImageAdmissionVerdict {
@@ -2216,6 +2242,15 @@ message ManageRoleImageRecipeResponse {
   bool reused = 4;
 }
 
+message GetRoleImageRecipeRequest {
+  string recipe_id = 1;
+  uint64 expected_version = 2;
+}
+
+message GetRoleImageRecipeResponse {
+  Resource recipe = 1;
+}
+
 // RoleImageBuildInput is available only in the exact active builder claim.
 message RoleImageBuildInput {
   string recipe_id = 1;
@@ -2240,6 +2275,8 @@ message RoleImageBuildInput {
   uint64 policy_revision = 20;
   string policy_sha256 = 21;
   string immutable_build_sha256 = 22;
+  uint64 role_runtime_contract_revision = 23;
+  string role_runtime_contract_sha256 = 24;
 }
 
 message ClaimImageBuildRequest {
@@ -2311,6 +2348,8 @@ message FailImageBuildRequest {
   uint64 expected_fence = 5;
   string lease_token = 6;
   string error_code = 7;
+  string diagnostic_code = 8;
+  string diagnostic_summary = 9;
 }
 
 message FailImageBuildResponse {
@@ -2386,11 +2425,25 @@ message ClaimImagePromotionResponse {
   google.protobuf.Timestamp claim_expires_at = 5;
 }
 
-message CompleteImagePromotionRequest {
+message AuthorizeImagePromotionRequest {
   string idempotency_key = 1;
   string image_artifact_id = 2;
   uint64 expected_version = 3;
   string promotion_claim = 4;
+  string manifest_digest = 5;
+}
+
+message AuthorizeImagePromotionResponse {
+  Resource image_artifact = 1;
+  string authorization_token = 2;
+  google.protobuf.Timestamp authorization_expires_at = 3;
+}
+
+message CompleteImagePromotionRequest {
+  string idempotency_key = 1;
+  string image_artifact_id = 2;
+  uint64 expected_version = 3;
+  string authorization_token = 4;
   string promoted_reference = 5;
   string manifest_digest = 6;
   string promotion_readback_sha256 = 7;

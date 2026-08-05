@@ -4,7 +4,7 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.3
+version: 1.2.4
 updated: 2026-08-05
 ---
 
@@ -58,7 +58,7 @@ runbook и ручная проверка входят в один Issue и од�
 | `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
 | `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
 | `automation-scheduler`   | job                             | bounded polling защищённых scheduler RPC и transient tracking выданных leases                                                              | cron/backoff/owner state, AI execution, Mattermost и Kubernetes          |
-| `role-image-builder`     | job                             | build specification hash, BuildKit execution, provenance и staging registry artifact                                                       | SBOM/vulnerability/signature admission, promotion и role business state |
+| `role-image-builder`     | job                             | trusted materialization, BuildKit execution, provenance и staging registry artifact                                                        | canonical build specification hash, SBOM/vulnerability/signature admission, promotion и role business state |
 | `image-admission`        | bounded job                     | SBOM, vulnerability-policy verdict, signature verification, admission receipt и одноразовый promotion claim exact digest                   | build execution, node pull и role business state                        |
 | `control-center`         | staff PWA                       | UI state                                                                                                                                   | business authority, secrets и прямой доступ к внутренним RPC            |
 
@@ -80,9 +80,10 @@ credential, audience, полным именем метода и permission. Ск
 
 `role-image-builder` материализуется как отдельный deployable
 `services/jobs/role-image-builder`. Он получает server-owned fenced attempt
-через protected RPC, читает только digest-named `context.tar`, использует
-client-only mTLS к вынесенному rootless BuildKit и scoped base-pull/staging-push
-credentials. Tenant, owner, recipe, generation, policy и artifact eligibility
+через protected RPC, потоково читает exact OCI context/package/tool в private
+`emptyDir`, использует pull-only input identity и client-only mTLS к вынесенному
+rootless BuildKit. Base-pull и staging-push identities, credentials и egress
+принадлежат только BuildKit. Tenant, owner, recipe, generation, policy и artifact eligibility
 назначает `control-plane`; installation block доступен builder только в
 immutable claim snapshot и не попадает в status/log/audit/provenance.
 Отдельный `render-image-admission-job.sh` сначала получает server-owned artifact

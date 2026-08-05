@@ -68,6 +68,7 @@ type Config struct {
 	SessionMCPURL                    string
 	ControllerImage                  string
 	AuthorityImage                   string
+	PromotedRoleImageRepository      string
 	StorageClass                     string
 	PVCSize                          string
 	ReadClusterRole                  string
@@ -120,6 +121,8 @@ func New(client kubernetes.Interface, config Config) (*Adapter, error) {
 		config.RunnerControlPlaneTarget == "" || config.RunnerControlPlaneTLSServerName == "" ||
 		config.InteractionGatewayURL == "" || config.SessionMCPURL == "" ||
 		config.ControllerImage == "" || config.AuthorityImage == "" ||
+		config.PromotedRoleImageRepository == "" ||
+		strings.ContainsAny(config.PromotedRoleImageRepository, "@?# \\r\\n\\t") ||
 		config.StorageClass == "" || config.PVCSize == "" || config.MaximumPods < 1 ||
 		config.MaximumOrganizationExecutions < 1 || config.MaximumOrganizationExecutions > config.MaximumPods ||
 		config.MaximumCPU < 1 || config.MaximumMemoryBytes < 1 ||
@@ -1183,6 +1186,9 @@ func (adapter *Adapter) rolePod(
 ) (*corev1.Pod, error) {
 	if !validWorkloadTicket(execution.WorkloadTicket) {
 		return nil, errs.ErrStateConflict
+	}
+	if revision.ImageReference != adapter.config.PromotedRoleImageRepository+"@"+revision.ImageManifestDigest {
+		return nil, errors.New("runtime role image reference is outside the promoted repository")
 	}
 	volumes := []corev1.Volume{
 		{Name: "session", VolumeSource: corev1.VolumeSource{

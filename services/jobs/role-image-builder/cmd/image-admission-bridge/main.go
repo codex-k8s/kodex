@@ -30,10 +30,10 @@ func main() {
 
 func run(ctx context.Context) error {
 	if len(os.Args) != 2 {
-		return errors.New("usage: image-admission-bridge claim|record|claim-promotion|complete")
+		return errors.New("usage: image-admission-bridge claim|record|claim-promotion|authorize-promotion|complete")
 	}
 	operation := os.Args[1]
-	promotionMode := operation == "claim-promotion" || operation == "complete"
+	promotionMode := operation == "claim-promotion" || operation == "authorize-promotion" || operation == "complete"
 	config, err := clientConfig(promotionMode)
 	if err != nil {
 		return err
@@ -105,6 +105,19 @@ func run(ctx context.Context) error {
 		promotionPath, pathErr := requiredPath("IMAGE_OWNER_PROMOTION_FILE")
 		if pathErr != nil {
 			return pathErr
+		}
+		return writeState(promotionPath, promotion)
+	case "authorize-promotion":
+		promotionPath, pathErr := requiredPath("IMAGE_OWNER_PROMOTION_FILE")
+		if pathErr != nil {
+			return pathErr
+		}
+		var promotion imageowner.Promotion
+		if err := readState(promotionPath, &promotion); err != nil {
+			return err
+		}
+		if err := client.AuthorizePromotion(ctx, idempotencyKey(operation, runID+"\x00"+promotion.ArtifactID), &promotion); err != nil {
+			return err
 		}
 		return writeState(promotionPath, promotion)
 	case "complete":

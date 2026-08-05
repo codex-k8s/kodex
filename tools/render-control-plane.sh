@@ -2,10 +2,10 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: render-control-plane.sh staging|production control-plane-sha256 authority-sha256 agent-runtime-sha256 registry-pull-fqdn admission-tools-image@sha256:digest admission-image@sha256:digest policy-revision policy-sha256 pull-credential-generation" >&2
+  echo "usage: render-control-plane.sh staging|production control-plane-sha256 authority-sha256 agent-runtime-sha256 registry-pull-fqdn admission-tools-image@sha256:digest admission-image@sha256:digest policy-revision policy-sha256 pull-credential-generation node-ipv4-cidr node-ipv6-cidr trusted-base-digest frontend-sha256 runtime-contract-revision runtime-contract-sha256" >&2
 }
 
-if [[ $# -ne 10 ]]; then
+if [[ $# -ne 16 ]]; then
   usage
   exit 2
 fi
@@ -20,6 +20,12 @@ admission_image=$7
 policy_revision=$8
 policy_sha256=$9
 pull_credential_generation=${10}
+node_ipv4_cidr=${11}
+node_ipv6_cidr=${12}
+trusted_base_digest=${13}
+frontend_sha256=${14}
+runtime_contract_revision=${15}
+runtime_contract_sha256=${16}
 
 case "$environment_name" in
   staging|production) ;;
@@ -59,6 +65,21 @@ fi
   echo "pull_credential_generation is invalid" >&2
   exit 2
 }
+if [[ ! $node_ipv4_cidr =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([1-9]|[12][0-9]|3[0-2])$ ]] ||
+  [[ ! $node_ipv6_cidr =~ : ]] || [[ ! $node_ipv6_cidr =~ /([1-9][0-9]{0,2})$ ]] ||
+  (( ${node_ipv6_cidr##*/} > 128 )); then
+  echo "exact node pull CIDRs are invalid" >&2
+  exit 2
+fi
+[[ $trusted_base_digest =~ ^sha256:[a-f0-9]{64}$ ]] &&
+  [[ $trusted_base_digest != sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  { echo "trusted_base_digest is invalid" >&2; exit 2; }
+for digest_name in frontend_sha256 runtime_contract_sha256; do
+  digest=${!digest_name}
+  [[ $digest =~ ^[a-f0-9]{64}$ ]] && [[ $digest != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+    { echo "$digest_name is invalid" >&2; exit 2; }
+done
+[[ $runtime_contract_revision =~ ^[1-9][0-9]*$ ]] || { echo "runtime_contract_revision is invalid" >&2; exit 2; }
 
 if [[ ! "$registry_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
   [[ "$registry_pull_host" != *.* ]] ||
@@ -136,6 +157,11 @@ if [[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "0"' "$raw_rende
   echo "canonical render does not contain the pull credential generation fence" >&2
   exit 1
 fi
+if [[ $(grep -F -c '192.0.2.0/32' "$raw_render" || true) -ne 2 ]] ||
+  [[ $(grep -F -c '2001:db8::/128' "$raw_render" || true) -ne 2 ]]; then
+  echo "canonical render does not contain the exact node ingress placeholders" >&2
+  exit 1
+fi
 
 sed \
   -e "s|$placeholder|$replacement|g" \
@@ -150,6 +176,12 @@ sed \
   -e "s|mattercodex.dev/pull-credential-generation: \"0\"|mattercodex.dev/pull-credential-generation: \"$pull_credential_generation\"|g" \
   -e "/name: PULL_CREDENTIAL_GENERATION/{n;s|value: \"0\"|value: \"$pull_credential_generation\"|;}" \
   -e "s|$registry_host_placeholder|$registry_pull_host|g" \
+  -e "s|192.0.2.0/32|$node_ipv4_cidr|g" \
+  -e "s|2001:db8::/128|$node_ipv6_cidr|g" \
+  -e "s|trustedRoleBaseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000|trustedRoleBaseDigest: $trusted_base_digest|g" \
+  -e "s|frontendSHA256: \"0000000000000000000000000000000000000000000000000000000000000000\"|frontendSHA256: \"$frontend_sha256\"|g" \
+  -e "s|roleRuntimeContractRevision: \"1\"|roleRuntimeContractRevision: \"$runtime_contract_revision\"|g" \
+  -e "s|roleRuntimeContractSHA256: \"0000000000000000000000000000000000000000000000000000000000000000\"|roleRuntimeContractSHA256: \"$runtime_contract_sha256\"|g" \
   "$raw_render" >"$final_render"
 
 if grep -F -q '@sha256:0000000000000000000000000000000000000000000000000000000000000000' "$final_render"; then
@@ -159,6 +191,10 @@ fi
 
 if grep -F -q "$registry_host_placeholder" "$final_render"; then
   echo "unresolved registry pull host remains in render" >&2
+  exit 1
+fi
+if grep -F -q '192.0.2.0/32' "$final_render" || grep -F -q '2001:db8::/128' "$final_render"; then
+  echo "unresolved node pull CIDR remains in render" >&2
   exit 1
 fi
 

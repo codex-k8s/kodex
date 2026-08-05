@@ -15,7 +15,7 @@ spec:
             summary: Role image builder is unavailable
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/role-image-builder.md
         - alert: RoleImageBuildFailures
-          expr: increase(mattercodex_role_image_builder_operations_total{operation="build",outcome="error"}[15m]) > 2
+          expr: sum(increase(mattercodex_role_image_builder_operations_total{operation=~"materialize|build",outcome=~"rejected|error"}[15m])) > 2
           for: 5m
           labels: {severity: warning}
           annotations:

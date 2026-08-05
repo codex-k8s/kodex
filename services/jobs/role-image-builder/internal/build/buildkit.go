@@ -1,6 +1,7 @@
 package build
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -19,9 +20,8 @@ import (
 )
 
 var (
-	ErrBuildKit       = errors.New("BuildKit execution failed")
-	digestPattern     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	registryHostRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]{1,5})?$`)
+	ErrBuildKit   = errors.New("BuildKit execution failed")
+	digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
 const (
@@ -32,32 +32,65 @@ const (
 
 type Config struct {
 	Binary, Address, TLSServerName, CAFile, CertificateFile, PrivateKeyFile string
-	ContextRoot, SecretRoot, WorkspaceRoot                                  string
-	BaseDockerConfig, StagingDockerConfig                                   string
+	InputDockerConfig, WorkspaceRoot                                        string
+	InputRegistryTLSServerName, InputRegistryCAFile                         string
+	InputRegistryCertificateFile, InputRegistryPrivateKeyFile               string
+	InputRepository, TrustedRoleBaseRepository, TrustedRoleBaseDigest       string
 	FrontendRepository, StagingRepository                                   string
-	ExpectedBuilderSHA256, ExpectedToolchainSHA256                          string
+	ExpectedBuilderSHA256, ExpectedFrontendSHA256, ExpectedToolchainSHA256  string
+	RoleRuntimeContractSHA256                                               string
+	RoleRuntimeContractRevision                                             uint64
 }
 
-type Executor struct{ config Config }
+type Executor struct {
+	config       Config
+	materializer *Materializer
+}
 
 type Prepared struct {
-	root, contextDirectory, dockerfile, installation, dockerConfig string
-	input                                                          *controlplanev1.RoleImageBuildInput
+	root, contextDirectory, dockerfile, installation string
+	input                                            *controlplanev1.RoleImageBuildInput
 }
 
+type Phase struct {
+	Stage   controlplanev1.ImageBuildStage
+	Percent uint32
+}
+
+type Failure struct {
+	ErrorCode, DiagnosticCode, DiagnosticSummary string
+}
+
+func (failure Failure) Error() string { return failure.ErrorCode }
+
 func New(config Config) (*Executor, error) {
-	if !filepath.IsAbs(config.Binary) || !filepath.IsAbs(config.ContextRoot) || !filepath.IsAbs(config.SecretRoot) ||
+	if !filepath.IsAbs(config.Binary) ||
 		!filepath.IsAbs(config.WorkspaceRoot) || !filepath.IsAbs(config.CAFile) || !filepath.IsAbs(config.CertificateFile) ||
-		!filepath.IsAbs(config.PrivateKeyFile) || !filepath.IsAbs(config.BaseDockerConfig) || !filepath.IsAbs(config.StagingDockerConfig) ||
+		!filepath.IsAbs(config.PrivateKeyFile) || !filepath.IsAbs(config.InputDockerConfig) ||
+		!filepath.IsAbs(config.InputRegistryCAFile) || !filepath.IsAbs(config.InputRegistryCertificateFile) ||
+		!filepath.IsAbs(config.InputRegistryPrivateKeyFile) || !validDNSName(config.InputRegistryTLSServerName) ||
 		!strings.HasPrefix(config.Address, "tcp://") || !validDNSName(config.TLSServerName) ||
-		!validRepository(config.FrontendRepository) || !validRepository(config.StagingRepository) ||
-		!plainSHA256(config.ExpectedBuilderSHA256) || !plainSHA256(config.ExpectedToolchainSHA256) {
+		!validRepository(config.InputRepository) || !validRepository(config.TrustedRoleBaseRepository) ||
+		!digestPattern.MatchString(config.TrustedRoleBaseDigest) || !validRepository(config.FrontendRepository) ||
+		!validRepository(config.StagingRepository) || !plainSHA256(config.ExpectedBuilderSHA256) ||
+		!plainSHA256(config.ExpectedFrontendSHA256) || !plainSHA256(config.ExpectedToolchainSHA256) ||
+		config.RoleRuntimeContractRevision == 0 || !plainSHA256(config.RoleRuntimeContractSHA256) {
 		return nil, errors.New("role image builder BuildKit configuration is invalid")
 	}
-	return &Executor{config: config}, nil
+	materializer, err := newMaterializer(MaterializerConfig{DockerConfig: config.InputDockerConfig,
+		Repository: config.InputRepository, TLSServerName: config.InputRegistryTLSServerName,
+		CAFile: config.InputRegistryCAFile, CertificateFile: config.InputRegistryCertificateFile,
+		PrivateKeyFile: config.InputRegistryPrivateKeyFile})
+	if err != nil {
+		return nil, err
+	}
+	return &Executor{config: config, materializer: materializer}, nil
 }
 
 func (executor *Executor) Check(ctx context.Context) error {
+	if err := executor.materializer.Check(ctx); err != nil {
+		return err
+	}
 	command := exec.CommandContext(ctx, executor.config.Binary,
 		"--addr", executor.config.Address, "--tlscacert", executor.config.CAFile,
 		"--tlscert", executor.config.CertificateFile, "--tlskey", executor.config.PrivateKeyFile,
@@ -66,65 +99,93 @@ func (executor *Executor) Check(ctx context.Context) error {
 	if err := command.Run(); err != nil {
 		return ErrBuildKit
 	}
+	root, err := os.MkdirTemp(executor.config.WorkspaceRoot, "buildkit-readiness-")
+	if err != nil {
+		return ErrBuildKit
+	}
+	defer os.RemoveAll(root)
+	dockerfile := []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s\nRUN [\"/bin/sh\",\"-c\",\"test -x /usr/local/bin/mattercodex-init && test -x /usr/local/bin/matter-codex-agent-runner\"]\n",
+		executor.config.FrontendRepository, executor.config.ExpectedFrontendSHA256,
+		executor.config.TrustedRoleBaseRepository, executor.config.TrustedRoleBaseDigest))
+	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), dockerfile, 0o600); err != nil {
+		return ErrBuildKit
+	}
+	command = exec.CommandContext(ctx, executor.config.Binary,
+		"--addr", executor.config.Address, "--tlscacert", executor.config.CAFile,
+		"--tlscert", executor.config.CertificateFile, "--tlskey", executor.config.PrivateKeyFile,
+		"--tlsservername", executor.config.TLSServerName, "build", "--frontend", "dockerfile.v0",
+		"--local", "context="+root, "--local", "dockerfile="+root, "--opt", "filename=Dockerfile",
+		"--opt", "platform=linux/amd64", "--output", "type=cacheonly", "--no-cache")
+	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.InputDockerConfig), "HOME="+root)
+	command.Stdout, command.Stderr = io.Discard, io.Discard
+	if err := command.Run(); err != nil {
+		return ErrBuildKit
+	}
 	return nil
 }
 
-func (executor *Executor) Prepare(input *controlplanev1.RoleImageBuildInput) (*Prepared, error) {
+func (executor *Executor) Prepare(
+	ctx context.Context,
+	input *controlplanev1.RoleImageBuildInput,
+	beforeContextValidation func() error,
+) (*Prepared, string, error) {
 	if input == nil || !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
 		!plainSHA256(input.GetSpecSha256()) || !plainSHA256(input.GetImmutableBuildSha256()) ||
-		!plainSHA256(input.GetFrontendSha256()) || !digestPattern.MatchString(input.GetBaseImageDigest()) ||
+		input.GetFrontendSha256() != executor.config.ExpectedFrontendSHA256 || !digestPattern.MatchString(input.GetBaseImageDigest()) ||
+		input.GetBaseImageReference() != executor.config.TrustedRoleBaseRepository ||
+		input.GetBaseImageDigest() != executor.config.TrustedRoleBaseDigest ||
 		input.GetBuilderSha256() != executor.config.ExpectedBuilderSHA256 ||
 		input.GetToolchainSha256() != executor.config.ExpectedToolchainSHA256 ||
+		input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
+		input.GetRoleRuntimeContractSha256() != executor.config.RoleRuntimeContractSHA256 ||
 		!strings.HasPrefix(input.GetContextRef(), "oci://") ||
-		!strings.HasSuffix(input.GetContextRef(), "@sha256:"+input.GetContextSha256()) ||
 		strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") {
-		return nil, ErrInvalidContext
+		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
 	}
 	root, err := os.MkdirTemp(executor.config.WorkspaceRoot, "image-build-")
 	if err != nil {
-		return nil, ErrInvalidContext
+		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
 	}
 	prepared := &Prepared{root: root, contextDirectory: filepath.Join(root, "context"),
 		dockerfile: filepath.Join(root, "dockerfile"), installation: filepath.Join(root, "installation"),
-		dockerConfig: filepath.Join(root, "docker"), input: input}
+		input: input}
 	cleanup := true
 	defer func() {
 		if cleanup {
 			_ = os.RemoveAll(root)
 		}
 	}()
-	if err := os.MkdirAll(prepared.contextDirectory, 0o700); err != nil {
-		return nil, ErrInvalidContext
-	}
-	archive := filepath.Join(executor.config.ContextRoot, input.GetContextSha256()+".tar")
-	if err := ExtractContext(archive, prepared.contextDirectory, input.GetContextSha256(), input.GetSourceSha256()); err != nil {
-		return nil, err
+	diagnostic, err := executor.materializer.Materialize(ctx, root, input, beforeContextValidation)
+	if err != nil {
+		return nil, diagnostic, err
 	}
 	if err := verifyPinnedInputs(prepared.contextDirectory, input); err != nil {
-		return nil, err
+		return nil, "INPUT_DIGEST_MISMATCH", err
 	}
 	if err := os.MkdirAll(prepared.dockerfile, 0o700); err != nil {
-		return nil, ErrInvalidContext
+		return nil, "ARCHIVE_REJECTED", ErrInvalidContext
 	}
 	if err := os.WriteFile(filepath.Join(prepared.dockerfile, "Dockerfile"), dockerfile(input, executor.config.FrontendRepository), 0o600); err != nil {
-		return nil, ErrInvalidContext
+		return nil, "ARCHIVE_REJECTED", ErrInvalidContext
 	}
 	if err := os.MkdirAll(prepared.installation, 0o700); err != nil {
-		return nil, ErrInvalidContext
+		return nil, "ARCHIVE_REJECTED", ErrInvalidContext
 	}
 	if err := os.WriteFile(filepath.Join(prepared.installation, "install.sh"), installationScript(input), 0o600); err != nil {
-		return nil, ErrInvalidContext
-	}
-	if err := executor.materializeDockerConfig(prepared.dockerConfig, input.GetBaseImageReference()); err != nil {
-		return nil, err
+		return nil, "ARCHIVE_REJECTED", ErrInvalidContext
 	}
 	cleanup = false
-	return prepared, nil
+	return prepared, "", nil
 }
 
 func (prepared *Prepared) Close() error { return os.RemoveAll(prepared.root) }
 
-func (executor *Executor) Build(ctx context.Context, prepared *Prepared, attempt uint32) (controlclient.BuildEvidence, error) {
+func (executor *Executor) Build(
+	ctx context.Context,
+	prepared *Prepared,
+	attempt uint32,
+	phases chan<- Phase,
+) (controlclient.BuildEvidence, error) {
 	metadataFile := filepath.Join(prepared.root, "metadata.json")
 	input := prepared.input
 	tag := fmt.Sprintf("%s:spec-%s-attempt-%d", executor.config.StagingRepository, input.GetSpecSha256()[:20], attempt)
@@ -153,37 +214,51 @@ func (executor *Executor) Build(ctx context.Context, prepared *Prepared, attempt
 		"--opt", "label:mattercodex.dev/immutable-build-sha256=" + input.GetImmutableBuildSha256(),
 		"--opt", fmt.Sprintf("label:mattercodex.dev/policy-revision=%d", input.GetPolicyRevision()),
 		"--opt", "label:mattercodex.dev/policy-sha256=" + input.GetPolicySha256(),
-		"--opt", "attest:provenance=mode=min,builder-id=" + expectedBuilderID,
+		"--opt", "attest:provenance=mode=min,builder-id=" + expectedBuilderID, "--progress=rawjson",
 		"--output", "type=image,name=" + tag + ",push=true", "--metadata-file", metadataFile}
-	for index, reference := range input.GetBuildSecretRefs() {
-		digest := sha256.Sum256([]byte(reference))
-		path := filepath.Join(executor.config.SecretRoot, hex.EncodeToString(digest[:]))
-		if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
-			return controlclient.BuildEvidence{}, ErrInvalidContext
-		}
-		args = append(args, "--secret", fmt.Sprintf("id=secret-%02d,src=%s", index, path))
-	}
 	command := exec.CommandContext(ctx, executor.config.Binary, args...)
-	command.Env = append(os.Environ(), "DOCKER_CONFIG="+prepared.dockerConfig, "HOME="+prepared.root)
-	command.Stdout, command.Stderr = ioDiscard{}, ioDiscard{}
-	if err := command.Run(); err != nil {
-		return controlclient.BuildEvidence{}, ErrBuildKit
+	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.InputDockerConfig), "HOME="+prepared.root)
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph was rejected"}
+	}
+	command.Stderr = io.Discard
+	if err := command.Start(); err != nil {
+		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph did not start"}
+	}
+	lastStage := controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 64<<10), 1<<20)
+	for scanner.Scan() {
+		stage := phaseFromRawJSON(scanner.Bytes())
+		if stage == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED || stage == lastStage {
+			continue
+		}
+		lastStage = stage
+		select {
+		case phases <- phaseProgress(stage):
+		default:
+		}
+	}
+	waitErr := command.Wait()
+	if scanner.Err() != nil || waitErr != nil {
+		return controlclient.BuildEvidence{}, failureForStage(lastStage)
 	}
 	metadata, err := os.ReadFile(metadataFile)
 	if err != nil || len(metadata) == 0 || len(metadata) > 1<<20 {
-		return controlclient.BuildEvidence{}, ErrBuildKit
+		return controlclient.BuildEvidence{}, Failure{"PROVENANCE_INVALID", "PROVENANCE_REJECTED", "Build metadata was rejected"}
 	}
 	var document map[string]json.RawMessage
 	if json.Unmarshal(metadata, &document) != nil {
-		return controlclient.BuildEvidence{}, ErrBuildKit
+		return controlclient.BuildEvidence{}, Failure{"PROVENANCE_INVALID", "PROVENANCE_REJECTED", "Build metadata was rejected"}
 	}
 	var digest string
 	if json.Unmarshal(document["containerimage.digest"], &digest) != nil || !digestPattern.MatchString(digest) {
-		return controlclient.BuildEvidence{}, ErrBuildKit
+		return controlclient.BuildEvidence{}, Failure{"STAGING_PUSH_FAILED", "STAGING_EXPORT_REJECTED", "Staging digest was rejected"}
 	}
 	provenanceSHA256, err := provenanceBindingSHA256(input, digest)
 	if err != nil {
-		return controlclient.BuildEvidence{}, ErrBuildKit
+		return controlclient.BuildEvidence{}, Failure{"PROVENANCE_INVALID", "PROVENANCE_REJECTED", "Provenance binding was rejected"}
 	}
 	return controlclient.BuildEvidence{StagingReference: executor.config.StagingRepository + "@" + digest,
 		ManifestDigest: digest, ProvenanceSHA256: provenanceSHA256,
@@ -213,13 +288,10 @@ func dockerfile(input *controlplanev1.RoleImageBuildInput, frontendRepository st
 		"--mount=type=bind,target=/workspace/source,readonly",
 		"--mount=type=bind,from=mattercodex-install,source=install.sh,target=/run/mattercodex/install.sh,readonly",
 	}
-	for index, reference := range input.GetBuildSecretRefs() {
-		digest := sha256.Sum256([]byte(reference))
-		mounts = append(mounts, fmt.Sprintf("--mount=type=secret,id=secret-%02d,target=/run/secrets/mattercodex/%s", index, hex.EncodeToString(digest[:8])))
-	}
-	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s\nRUN %s /bin/sh /run/mattercodex/install.sh\nLABEL mattercodex.dev/spec-sha256=%q\n",
+	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\nFROM %s@%s\nRUN %s /bin/sh /run/mattercodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/mattercodex-init /usr/local/bin/mattercodex-init\nCOPY --from=trusted-runtime /usr/local/bin/matter-codex-agent-runner /usr/local/bin/matter-codex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/mattercodex-init\",\"entrypoint\",\"/usr/local/bin/matter-codex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL mattercodex.dev/spec-sha256=%q mattercodex.dev/runtime-contract-sha256=%q\n",
 		frontendRepository, input.GetFrontendSha256(), input.GetBaseImageReference(), input.GetBaseImageDigest(),
-		strings.Join(mounts, " "), input.GetSpecSha256()))
+		input.GetBaseImageReference(), input.GetBaseImageDigest(), strings.Join(mounts, " "), input.GetSpecSha256(),
+		input.GetRoleRuntimeContractSha256()))
 }
 
 func installationScript(input *controlplanev1.RoleImageBuildInput) []byte {
@@ -296,48 +368,58 @@ func supportedPackageManager(value string) bool {
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
 
-func (executor *Executor) materializeDockerConfig(directory, baseReference string) error {
-	baseHost := strings.SplitN(baseReference, "/", 2)[0]
-	frontendHost := strings.SplitN(executor.config.FrontendRepository, "/", 2)[0]
-	stagingHost := strings.SplitN(executor.config.StagingRepository, "/", 2)[0]
-	if !registryHostRegex.MatchString(baseHost) || !registryHostRegex.MatchString(frontendHost) ||
-		!registryHostRegex.MatchString(stagingHost) || baseHost != frontendHost || baseHost == stagingHost {
-		return errors.New("base pull and staging push registry scopes are invalid")
+func phaseFromRawJSON(raw []byte) controlplanev1.ImageBuildStage {
+	var event struct {
+		Name     string `json:"name"`
+		Vertexes []struct {
+			Name string `json:"name"`
+		} `json:"vertexes"`
 	}
-	baseAuth, err := singleRegistryAuth(executor.config.BaseDockerConfig, baseHost)
-	if err != nil {
-		return err
+	if json.Unmarshal(raw, &event) != nil {
+		return controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED
 	}
-	stagingAuth, err := singleRegistryAuth(executor.config.StagingDockerConfig, stagingHost)
-	if err != nil {
-		return err
+	names := []string{event.Name}
+	for _, vertex := range event.Vertexes {
+		names = append(names, vertex.Name)
 	}
-	document := map[string]any{"auths": map[string]json.RawMessage{baseHost: baseAuth, stagingHost: stagingAuth}}
-	raw, err := json.Marshal(document)
-	if err != nil {
-		return errors.New("encode bounded registry credentials")
+	result := controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED
+	for _, rawName := range names {
+		name := strings.ToLower(rawName)
+		switch {
+		case strings.Contains(name, "exporting to image") || strings.Contains(name, "pushing layers"):
+			return controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH
+		case strings.Contains(name, "/run/mattercodex/install.sh"):
+			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION
+		case strings.Contains(name, "load metadata for") && result == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED:
+			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL
+		case name != "" && result == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED:
+			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING
+		}
 	}
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return errors.New("create Docker credential directory")
-	}
-	if err := os.WriteFile(filepath.Join(directory, "config.json"), raw, 0o600); err != nil {
-		return errors.New("write bounded registry credentials")
-	}
-	return nil
+	return result
 }
 
-func singleRegistryAuth(path, expectedHost string) (json.RawMessage, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil || len(raw) == 0 || len(raw) > 64<<10 {
-		return nil, errors.New("read bounded registry credential")
+func phaseProgress(stage controlplanev1.ImageBuildStage) Phase {
+	percent := map[controlplanev1.ImageBuildStage]uint32{
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL:    35,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING:      45,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION: 60,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH: 80,
+	}[stage]
+	return Phase{Stage: stage, Percent: percent}
+}
+
+func failureForStage(stage controlplanev1.ImageBuildStage) Failure {
+	switch stage {
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL:
+		return Failure{"BASE_PULL_FAILED", "BASE_RESOLUTION_REJECTED", "Trusted base pull failed"}
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION:
+		return Failure{"INSTALLATION_FAILED", "INSTALL_COMMAND_REJECTED", "Installation step failed"}
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH:
+		return Failure{"STAGING_PUSH_FAILED", "STAGING_EXPORT_REJECTED", "Staging export failed"}
+	default:
+		return Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build solve failed"}
 	}
-	var document struct {
-		Auths map[string]json.RawMessage `json:"auths"`
-	}
-	if json.Unmarshal(raw, &document) != nil || len(document.Auths) != 1 || len(document.Auths[expectedHost]) == 0 {
-		return nil, errors.New("registry credential scope is invalid")
-	}
-	return document.Auths[expectedHost], nil
 }
 
 func validDNSName(value string) bool {

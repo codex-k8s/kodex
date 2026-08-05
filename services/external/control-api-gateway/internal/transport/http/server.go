@@ -60,6 +60,7 @@ type ControlPlane interface {
 	ListScheduleOccurrences(context.Context, *controlplanev1.ListScheduleOccurrencesRequest, ...grpc.CallOption) (*controlplanev1.ListScheduleOccurrencesResponse, error)
 	ResolveScheduleRecovery(context.Context, *controlplanev1.ResolveScheduleRecoveryRequest, ...grpc.CallOption) (*controlplanev1.ResolveScheduleRecoveryResponse, error)
 	ManageRoleImageRecipe(context.Context, *controlplanev1.ManageRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.ManageRoleImageRecipeResponse, error)
+	GetRoleImageRecipe(context.Context, *controlplanev1.GetRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageRecipeResponse, error)
 	ManageImageBuild(context.Context, *controlplanev1.ManageImageBuildRequest, ...grpc.CallOption) (*controlplanev1.ManageImageBuildResponse, error)
 	GetRoleImageBuild(context.Context, *controlplanev1.GetRoleImageBuildRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageBuildResponse, error)
 }
@@ -606,6 +607,39 @@ func (server *Server) ManageRoleImageRecipe(writer http.ResponseWriter, request 
 	writeJSON(writer, http.StatusOK, result)
 }
 
+func (server *Server) GetRoleImageRecipe(
+	writer http.ResponseWriter,
+	request *http.Request,
+	recipeID openapi_types.UUID,
+	params generated.GetRoleImageRecipeParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.GetRoleImageRecipe(request.Context(), &controlplanev1.GetRoleImageRecipeRequest{
+		RecipeId: recipeID.String(), ExpectedVersion: version,
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	resource, err := ConvertResource(response.GetRecipe())
+	spec := response.GetRecipe().GetSpec().GetRoleImageRecipe()
+	input, inputErr := roleImageRecipeReadbackInput(spec.GetInput())
+	if err != nil || inputErr != nil || spec == nil {
+		server.writeInternal(writer, request.Context(), errors.New("role image recipe readback is invalid"))
+		return
+	}
+	result := generated.RoleImageRecipeReadback{Recipe: resource, Input: input,
+		Generation: int64(spec.GetGeneration()), SpecSha256: spec.GetSpecSha256(),
+		PolicyRevision: int64(spec.GetPolicyRevision()), PolicySha256: spec.GetPolicySha256(),
+		RoleRuntimeContractRevision: int64(spec.GetRoleRuntimeContractRevision()),
+		RoleRuntimeContractSha256:   spec.GetRoleRuntimeContractSha256()}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", resource.Version))
+	writeJSON(writer, http.StatusOK, result)
+}
+
 func (server *Server) ManageImageBuild(writer http.ResponseWriter, request *http.Request, params generated.ManageImageBuildParams) {
 	version, ok := requireETag(writer, params.IfMatch)
 	if !ok {
@@ -1111,7 +1145,7 @@ func roleImageRecipeInput(input generated.RoleImageRecipeInput) *controlplanev1.
 	}
 	for _, item := range input.Packages {
 		result.Packages = append(result.Packages, &controlplanev1.RoleImagePackage{
-			Manager: string(item.Manager), Name: item.Name, Version: item.Version, Digest: item.Digest,
+			Manager: string(item.Manager), Name: item.Name, Version: item.Version, Digest: item.Digest, SourceRef: item.SourceRef,
 		})
 	}
 	for _, item := range input.Tools {
@@ -1120,6 +1154,21 @@ func roleImageRecipeInput(input generated.RoleImageRecipeInput) *controlplanev1.
 		})
 	}
 	return result
+}
+
+func roleImageRecipeReadbackInput(input *controlplanev1.RoleImageRecipeInput) (generated.RoleImageRecipeInput, error) {
+	status, err := roleImageRecipeProjectionInput(input)
+	if err != nil {
+		return generated.RoleImageRecipeInput{}, err
+	}
+	return generated.RoleImageRecipeInput{
+		BaseImageReference: status.BaseImageReference, BaseImageDigest: status.BaseImageDigest,
+		SourceRef: status.SourceRef, SourceRevision: status.SourceRevision, SourceSha256: status.SourceSha256,
+		ContextRef: status.ContextRef, ContextSha256: status.ContextSha256, BuilderSha256: status.BuilderSha256,
+		FrontendSha256: status.FrontendSha256, Platforms: status.Platforms, Packages: status.Packages,
+		Tools: status.Tools, InstallationBlock: input.GetInstallationBlock(),
+		BuildSecretRefs: append([]string(nil), input.GetBuildSecretRefs()...), ToolchainSha256: status.ToolchainSha256,
+	}, nil
 }
 
 func resourceKind(input generated.ResourceKind) (controlplanev1.ResourceKind, bool) {

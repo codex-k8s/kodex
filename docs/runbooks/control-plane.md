@@ -40,7 +40,8 @@ Service и имеют независимые Vault identities; pull endpoint ф�
    каждом schedulable node, его image использует exact pull FQDN и digest;
 3. проверить BuildKit `debug workers` probe с exact SNI/CA и отдельным probe
    client certificate; Deployment `role-image-builder` обязан использовать
-   отдельные BuildKit/base-pull/staging-push identities, label сам по себе
+   только BuildKit client и input-read identities, а base-pull/staging-push
+   identities и egress обязаны оставаться внутри BuildKit; label сам по себе
    полномочий не даёт;
 4. проверить retention job: он оставляет три лексикографически последних
    immutable tag вида `vYYYYMMDDHHMMSS-<git-sha>` и удаляет четвёртый и старше;
@@ -66,8 +67,9 @@ registry-pull.<environment-domain>` тем же
 3. дождаться registry pod и LoadBalancer address, затем сверить DNS→address и
    TLS chain/SNI без `insecure`/добавления CA на узлы;
 4. Deployment `role-image-builder` получает server-owned fenced attempt,
-   использует client-only BuildKit mTLS и scoped staging-push, но не содержит
-   signer/promotion identity и не имеет egress к promotion endpoint;
+   использует input-read и client-only BuildKit mTLS, но не получает
+   staging-push/signer/promotion credential и не имеет egress к push либо
+   promotion endpoint; staging-push принадлежит только BuildKit;
 5. пять последовательно ожидающих Job из
    `tools/render-image-admission-job.sh` начинают с protected owner claim,
    проверяют exact BuildKit provenance/labels/digest, формируют SBOM, применяют
@@ -101,6 +103,12 @@ tools/render-control-plane.sh \
   <approved-vulnerability-policy-revision> \
   <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
+  <exact-node-ipv4-cidr> \
+  <exact-node-ipv6-cidr> \
+  sha256:<trusted-role-base-digest> \
+  <frontend-sha256> \
+  <role-runtime-contract-revision> \
+  <role-runtime-contract-sha256> \
   > /tmp/control-plane-staging.yaml
 ```
 
@@ -117,6 +125,12 @@ tools/render-image-supply-chain.sh \
   <approved-vulnerability-policy-revision> \
   <approved-vulnerability-policy-sha256> \
   <forward-only-pull-credential-generation> \
+  <exact-node-ipv4-cidr> \
+  <exact-node-ipv6-cidr> \
+  sha256:<trusted-role-base-digest> \
+  <frontend-sha256> \
+  <role-runtime-contract-revision> \
+  <role-runtime-contract-sha256> \
   > /tmp/image-supply-chain-staging.yaml
 
 tools/render-image-admission-job.sh \

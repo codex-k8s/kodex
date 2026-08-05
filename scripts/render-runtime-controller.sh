@@ -7,12 +7,13 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --environment staging|production --controller-image-ref <repository@sha256:digest> --authority-image-ref <repository@sha256:digest> --kubernetes-api-cidrs <ip/32[,ipv6/128]> --kubernetes-api-ports <443[,endpoint-port]>\n' "$0" >&2
+  printf 'Usage: %s --environment staging|production --controller-image-ref <repository@sha256:digest> --authority-image-ref <repository@sha256:digest> --registry-pull-host <external-fqdn> --kubernetes-api-cidrs <ip/32[,ipv6/128]> --kubernetes-api-ports <443[,endpoint-port]>\n' "$0" >&2
 }
 
 environment_name=""
 controller_image=""
 authority_image=""
+registry_pull_host=""
 api_cidrs_raw=""
 api_ports_raw=""
 while (($# > 0)); do
@@ -20,6 +21,7 @@ while (($# > 0)); do
     --environment) environment_name="${2:-}"; shift 2 ;;
     --controller-image-ref) controller_image="${2:-}"; shift 2 ;;
     --authority-image-ref) authority_image="${2:-}"; shift 2 ;;
+    --registry-pull-host) registry_pull_host="${2:-}"; shift 2 ;;
     --kubernetes-api-cidrs) api_cidrs_raw="${2:-}"; shift 2 ;;
     --kubernetes-api-ports) api_ports_raw="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
@@ -36,6 +38,9 @@ validate_image() {
 }
 validate_image "$controller_image" "mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/runtime-controller"
 validate_image "$authority_image" "ghcr.io/codex-k8s/matter-codex/internal-rpc-authority"
+[[ "$registry_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] && [[ "$registry_pull_host" == *.* ]] &&
+  [[ "$registry_pull_host" != *.svc ]] && [[ "$registry_pull_host" != *.svc.cluster.local ]] ||
+  fail "registry pull host must be an exact node-reachable DNS name"
 
 IFS=',' read -r -a api_cidrs <<<"$api_cidrs_raw"
 IFS=',' read -r -a api_ports <<<"$api_ports_raw"
@@ -59,7 +64,14 @@ controller_placeholder="mattercodex-image-registry.mattercodex-system.svc.cluste
 authority_placeholder="ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:$(printf '0%.0s' {1..64})"
 [[ "$(grep -Fc "$controller_placeholder" <<<"$rendered" || true)" == 12 ]] || fail "render has an unexpected controller placeholder count"
 [[ "$(grep -Fc "$authority_placeholder" <<<"$rendered" || true)" == 3 ]] || fail "render has an unexpected authority placeholder count"
-sed -e "s|$controller_placeholder|$controller_image|g" -e "s|$authority_placeholder|$authority_image|g" <<<"$rendered"
+[[ "$(grep -Fc 'registry-pull-placeholder/mattercodex/roles@sha256:' <<<"$rendered" || true)" == 1 ]] ||
+  fail "render has no exact promoted role repository placeholder"
+registry_pull_pattern=${registry_pull_host//./\\\\\\\\.}
+materialized=$(sed -e "s|$controller_placeholder|$controller_image|g" \
+  -e "s|$authority_placeholder|$authority_image|g" \
+  -e "s|registry-pull-placeholder|$registry_pull_pattern|g" <<<"$rendered")
+grep -Fq 'registry-pull-placeholder' <<<"$materialized" && fail "promoted role repository remains unresolved"
+printf '%s\n' "$materialized"
 
 emit_policy() {
   local name="$1" selector="$2"

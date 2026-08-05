@@ -1179,7 +1179,8 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 			ContextRef: "oci://example.test/context@sha256:" + digest, ContextSHA256: digest, BuilderSHA256: digest,
 			FrontendSHA256: digest, Platforms: []entity.RoleImagePlatform{{OS: "linux", Architecture: "amd64"}},
 			InstallationBlock: "true", ToolchainSHA256: digest,
-		}, Generation: 1, SpecSHA256: digest, PolicyRevision: 1, PolicySHA256: digest}, now,
+		}, Generation: 1, SpecSHA256: digest, PolicyRevision: 1, PolicySHA256: digest,
+			RoleRuntimeContractRevision: 1, RoleRuntimeContractSHA256: digest}, now,
 	)
 	if err != nil {
 		t.Fatalf("create role image recipe: %v", err)
@@ -1209,8 +1210,9 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 			AdmissionVerdict: entity.ImageAdmissionAccepted, SignatureIdentity: "test-signer", SignatureSHA256: digest,
 			AdmissionRevision: 1, AdmissionReceiptSHA256: digest,
 			AdmissionReceiptOCIManifestDigest: "sha256:" + digest,
-			PromotedReference:                 "registry.example.test/promoted/role@sha256:" + digest,
-			PromotionReadbackSHA256:           digest, PromotedAt: now}, now,
+			RoleRuntimeContractRevision:       1, RoleRuntimeContractSHA256: digest,
+			PromotedReference:       "registry.example.test/promoted/role@sha256:" + digest,
+			PromotionReadbackSHA256: digest, PromotedAt: now}, now,
 	)
 	if err != nil {
 		t.Fatalf("create role image artifact: %v", err)
@@ -1283,7 +1285,8 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 			ImageAdmissionReceiptOCIManifestDigest: "sha256:" + digest,
 			ImagePolicyRevision:                    1, ImagePolicySHA256: digest, ImageSignatureSHA256: digest,
 			ImagePromotionReadbackSHA256: digest,
-			PromptProfileID:              promptID, PromptRevision: 1,
+			RoleRuntimeContractRevision:  1, RoleRuntimeContractSHA256: digest,
+			PromptProfileID: promptID, PromptRevision: 1,
 			CredentialBindingIDs:   credentialIDs,
 			AuthorityPolicyVersion: 1, AuthorityPolicySHA256: digest,
 			Components: components, CreatedAt: now, SessionID: sessionID,
@@ -1389,8 +1392,12 @@ func newCurrentTupleFixture(t *testing.T) currentTupleFixture {
 		ImagePolicyRevision: 1, ImagePolicySHA256: digest,
 		ImageBuildLeaseDuration: time.Minute, ImageAdmissionClaimTTL: time.Minute,
 		ImagePromotionClaimTTL: time.Minute, ImageMaximumAttempts: 3,
-		StagingImageRepository:  "registry.example.test/staging/roles",
-		PromotedImageRepository: "registry.example.test/promoted/roles",
+		StagingImageRepository:      "registry.example.test/staging/roles",
+		PromotedImageRepository:     "registry.example.test/promoted/roles",
+		RoleImageInputRepository:    "registry.example.test/role-image-inputs",
+		TrustedRoleBaseRepository:   "registry.example.test/base/runtime",
+		TrustedRoleBaseDigest:       "sha256:" + digest,
+		RoleRuntimeContractRevision: 1, RoleRuntimeContractSHA256: digest,
 		ImageBuilderWorkload:    "role-image-builder",
 		ImageBuilderSPIFFEID:    "spiffe://mattercodex.local/ns/mattercodex-system/sa/role-image-builder",
 		ImageAdmissionWorkload:  "image-admission",

@@ -53,6 +53,27 @@ func (server *Server) ManageRoleImageRecipe(
 	return response, nil
 }
 
+func (server *Server) GetRoleImageRecipe(
+	ctx context.Context,
+	request *controlplanev1.GetRoleImageRecipeRequest,
+) (*controlplanev1.GetRoleImageRecipeResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_GetRoleImageRecipe_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	result, err := server.service.GetRoleImageRecipe(ctx, resource.GetRoleImageRecipeInput{
+		Principal: principal, RecipeID: request.GetRecipeId(), ExpectedVersion: request.GetExpectedVersion(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	recipe, err := toProtoResource(result)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.GetRoleImageRecipeResponse{Recipe: recipe}, nil
+}
+
 func (server *Server) ClaimImageBuild(
 	ctx context.Context,
 	request *controlplanev1.ClaimImageBuildRequest,
@@ -91,6 +112,8 @@ func roleImageBuildInput(claim resource.ImageBuildClaim) *controlplanev1.RoleIma
 		Tools: input.GetTools(), InstallationBlock: input.GetInstallationBlock(), BuildSecretRefs: input.GetBuildSecretRefs(),
 		ToolchainSha256: input.GetToolchainSha256(), PolicyRevision: claim.PolicyRevision,
 		PolicySha256: claim.PolicySHA256, ImmutableBuildSha256: spec.ImmutableBuildSHA256,
+		RoleRuntimeContractRevision: claim.RoleRuntimeContractRevision,
+		RoleRuntimeContractSha256:   claim.RoleRuntimeContractSHA256,
 	}
 }
 
@@ -184,7 +207,8 @@ func (server *Server) FailImageBuild(
 		ImageBuildLeaseInput: resource.ImageBuildLeaseInput{Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
 			ImageBuildID: request.GetImageBuildId(), ExpectedVersion: request.GetExpectedVersion(),
 			ExpectedAttempt: request.GetExpectedAttempt(), ExpectedFence: request.GetExpectedFence(), LeaseToken: request.GetLeaseToken()},
-		ErrorCode: request.GetErrorCode(),
+		ErrorCode: request.GetErrorCode(), DiagnosticCode: request.GetDiagnosticCode(),
+		DiagnosticSummary: request.GetDiagnosticSummary(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -306,7 +330,7 @@ func (server *Server) CompleteImagePromotion(
 	}
 	result, err := server.service.CompleteImagePromotion(ctx, resource.CompleteImagePromotionInput{
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), ImageArtifactID: request.GetImageArtifactId(),
-		ExpectedVersion: request.GetExpectedVersion(), PromotionClaim: request.GetPromotionClaim(),
+		ExpectedVersion: request.GetExpectedVersion(), AuthorizationToken: request.GetAuthorizationToken(),
 		PromotedReference: request.GetPromotedReference(), ManifestDigest: request.GetManifestDigest(),
 		PromotionReadbackSHA256: request.GetPromotionReadbackSha256(),
 	})
@@ -318,6 +342,31 @@ func (server *Server) CompleteImagePromotion(
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
 	return &controlplanev1.CompleteImagePromotionResponse{ImageArtifact: artifact}, nil
+}
+
+func (server *Server) AuthorizeImagePromotion(
+	ctx context.Context,
+	request *controlplanev1.AuthorizeImagePromotionRequest,
+) (*controlplanev1.AuthorizeImagePromotionResponse, error) {
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_AuthorizeImagePromotion_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	result, err := server.service.AuthorizeImagePromotion(ctx, resource.AuthorizeImagePromotionInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), ImageArtifactID: request.GetImageArtifactId(),
+		ExpectedVersion: request.GetExpectedVersion(), PromotionClaim: request.GetPromotionClaim(),
+		ManifestDigest: request.GetManifestDigest(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	artifact, err := toProtoResource(result.ImageArtifact)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.AuthorizeImagePromotionResponse{ImageArtifact: artifact,
+		AuthorizationToken:     result.AuthorizationToken,
+		AuthorizationExpiresAt: timestamppb.New(result.AuthorizationExpiresAt)}, nil
 }
 
 func (server *Server) GetRoleImageBuild(

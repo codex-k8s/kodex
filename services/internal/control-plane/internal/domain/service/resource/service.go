@@ -118,8 +118,10 @@ const (
 	permissionClaimImageAdmission     = "controlplane.image_admission.claim"
 	permissionRecordImageAdmission    = "controlplane.image_admission.record"
 	permissionClaimImagePromotion     = "controlplane.image_promotion.claim"
+	permissionAuthorizeImagePromotion = "controlplane.image_promotion.authorize"
 	permissionCompleteImagePromotion  = "controlplane.image_promotion.complete"
 	permissionReadImageBuild          = "controlplane.image_build.read"
+	permissionReadRoleImageRecipe     = "controlplane.role_image_recipe.read"
 	permissionManageSession           = "controlplane.session.manage"
 	permissionBindSessionMCP          = "controlplane.session.mcp.bind"
 	permissionConversationLifecycle   = "controlplane.conversation.lifecycle"
@@ -177,49 +179,54 @@ const (
 
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
 type Config struct {
-	LeaseSigningKey            []byte
-	RuntimeAdmissionSigningKey ed25519.PrivateKey
-	RuntimeArchiveSigningKey   ed25519.PrivateKey
-	RuntimeRestoreSigningKey   ed25519.PrivateKey
-	TurnLeaseDuration          time.Duration
-	MaximumScheduleClaims      int
-	ImagePolicyRevision        uint64
-	ImagePolicySHA256          string
-	ImageBuildLeaseDuration    time.Duration
-	ImageAdmissionClaimTTL     time.Duration
-	ImagePromotionClaimTTL     time.Duration
-	ImageMaximumAttempts       uint32
-	StagingImageRepository     string
-	PromotedImageRepository    string
-	ImageBuilderWorkload       string
-	ImageBuilderSPIFFEID       string
-	ImageAdmissionWorkload     string
-	ImageAdmissionSPIFFEID     string
-	ImagePromotionWorkload     string
-	ImagePromotionSPIFFEID     string
-	AuthorityPolicyRevision    uint64
-	AuthorityPolicySHA256      string
-	OwnerGateDeliveryWorkload  string
-	OwnerGateDeliverySPIFFEID  string
-	ScannerWorkload            string
-	ScannerSPIFFEID            string
-	SchedulerWorkload          string
-	SchedulerSPIFFEID          string
-	MemoryIndexerWorkload      string
-	MemoryIndexerSPIFFEID      string
-	RuntimeControllerWorkload  string
-	RuntimeControllerSPIFFEID  string
-	ArchiveWorkload            string
-	ArchiveSPIFFEID            string
-	IntegrationGatewayWorkload string
-	IntegrationGatewaySPIFFEID string
-	RestoreVerifierWorkload    string
-	RestoreVerifierSPIFFEID    string
-	CleanupAuthorizerWorkload  string
-	CleanupAuthorizerSPIFFEID  string
-	PendingRescheduleDelay     time.Duration
-	InteractionReadbackIssuer  InteractionReadbackIssuer
-	Observer                   Observer
+	LeaseSigningKey             []byte
+	RuntimeAdmissionSigningKey  ed25519.PrivateKey
+	RuntimeArchiveSigningKey    ed25519.PrivateKey
+	RuntimeRestoreSigningKey    ed25519.PrivateKey
+	TurnLeaseDuration           time.Duration
+	MaximumScheduleClaims       int
+	ImagePolicyRevision         uint64
+	ImagePolicySHA256           string
+	ImageBuildLeaseDuration     time.Duration
+	ImageAdmissionClaimTTL      time.Duration
+	ImagePromotionClaimTTL      time.Duration
+	ImageMaximumAttempts        uint32
+	StagingImageRepository      string
+	PromotedImageRepository     string
+	RoleImageInputRepository    string
+	TrustedRoleBaseRepository   string
+	TrustedRoleBaseDigest       string
+	RoleRuntimeContractRevision uint64
+	RoleRuntimeContractSHA256   string
+	ImageBuilderWorkload        string
+	ImageBuilderSPIFFEID        string
+	ImageAdmissionWorkload      string
+	ImageAdmissionSPIFFEID      string
+	ImagePromotionWorkload      string
+	ImagePromotionSPIFFEID      string
+	AuthorityPolicyRevision     uint64
+	AuthorityPolicySHA256       string
+	OwnerGateDeliveryWorkload   string
+	OwnerGateDeliverySPIFFEID   string
+	ScannerWorkload             string
+	ScannerSPIFFEID             string
+	SchedulerWorkload           string
+	SchedulerSPIFFEID           string
+	MemoryIndexerWorkload       string
+	MemoryIndexerSPIFFEID       string
+	RuntimeControllerWorkload   string
+	RuntimeControllerSPIFFEID   string
+	ArchiveWorkload             string
+	ArchiveSPIFFEID             string
+	IntegrationGatewayWorkload  string
+	IntegrationGatewaySPIFFEID  string
+	RestoreVerifierWorkload     string
+	RestoreVerifierSPIFFEID     string
+	CleanupAuthorizerWorkload   string
+	CleanupAuthorizerSPIFFEID   string
+	PendingRescheduleDelay      time.Duration
+	InteractionReadbackIssuer   InteractionReadbackIssuer
+	Observer                    Observer
 }
 
 type InteractionReadbackClaims struct {
@@ -241,51 +248,56 @@ type InteractionReadbackIssuer interface {
 
 // Service владеет прикладными переходами; адаптер только сохраняет намерение.
 type Service struct {
-	repository                 domainrepo.Repository
-	leaseSigningKey            []byte
-	runtimeAdmissionSigningKey ed25519.PrivateKey
-	runtimeArchiveSigningKey   ed25519.PrivateKey
-	runtimeRestoreSigningKey   ed25519.PrivateKey
-	turnLeaseDuration          time.Duration
-	maximumScheduleClaims      int
-	imagePolicyRevision        uint64
-	imagePolicySHA256          string
-	imageBuildLeaseDuration    time.Duration
-	imageAdmissionClaimTTL     time.Duration
-	imagePromotionClaimTTL     time.Duration
-	imageMaximumAttempts       uint32
-	stagingImageRepository     string
-	promotedImageRepository    string
-	imageBuilderWorkload       string
-	imageBuilderSPIFFEID       string
-	imageAdmissionWorkload     string
-	imageAdmissionSPIFFEID     string
-	imagePromotionWorkload     string
-	imagePromotionSPIFFEID     string
-	authorityPolicyRevision    uint64
-	authorityPolicySHA256      string
-	ownerGateDeliveryWorkload  string
-	ownerGateDeliverySPIFFEID  string
-	scannerWorkload            string
-	scannerSPIFFEID            string
-	schedulerWorkload          string
-	schedulerSPIFFEID          string
-	memoryIndexerWorkload      string
-	memoryIndexerSPIFFEID      string
-	runtimeControllerWorkload  string
-	runtimeControllerSPIFFEID  string
-	archiveWorkload            string
-	archiveSPIFFEID            string
-	integrationGatewayWorkload string
-	integrationGatewaySPIFFEID string
-	restoreVerifierWorkload    string
-	restoreVerifierSPIFFEID    string
-	cleanupAuthorizerWorkload  string
-	cleanupAuthorizerSPIFFEID  string
-	pendingRescheduleDelay     time.Duration
-	observer                   Observer
-	interactionReadbackIssuer  InteractionReadbackIssuer
-	now                        func() time.Time
+	repository                  domainrepo.Repository
+	leaseSigningKey             []byte
+	runtimeAdmissionSigningKey  ed25519.PrivateKey
+	runtimeArchiveSigningKey    ed25519.PrivateKey
+	runtimeRestoreSigningKey    ed25519.PrivateKey
+	turnLeaseDuration           time.Duration
+	maximumScheduleClaims       int
+	imagePolicyRevision         uint64
+	imagePolicySHA256           string
+	imageBuildLeaseDuration     time.Duration
+	imageAdmissionClaimTTL      time.Duration
+	imagePromotionClaimTTL      time.Duration
+	imageMaximumAttempts        uint32
+	stagingImageRepository      string
+	promotedImageRepository     string
+	roleImageInputRepository    string
+	trustedRoleBaseRepository   string
+	trustedRoleBaseDigest       string
+	roleRuntimeContractRevision uint64
+	roleRuntimeContractSHA256   string
+	imageBuilderWorkload        string
+	imageBuilderSPIFFEID        string
+	imageAdmissionWorkload      string
+	imageAdmissionSPIFFEID      string
+	imagePromotionWorkload      string
+	imagePromotionSPIFFEID      string
+	authorityPolicyRevision     uint64
+	authorityPolicySHA256       string
+	ownerGateDeliveryWorkload   string
+	ownerGateDeliverySPIFFEID   string
+	scannerWorkload             string
+	scannerSPIFFEID             string
+	schedulerWorkload           string
+	schedulerSPIFFEID           string
+	memoryIndexerWorkload       string
+	memoryIndexerSPIFFEID       string
+	runtimeControllerWorkload   string
+	runtimeControllerSPIFFEID   string
+	archiveWorkload             string
+	archiveSPIFFEID             string
+	integrationGatewayWorkload  string
+	integrationGatewaySPIFFEID  string
+	restoreVerifierWorkload     string
+	restoreVerifierSPIFFEID     string
+	cleanupAuthorizerWorkload   string
+	cleanupAuthorizerSPIFFEID   string
+	pendingRescheduleDelay      time.Duration
+	observer                    Observer
+	interactionReadbackIssuer   InteractionReadbackIssuer
+	now                         func() time.Time
 }
 
 // New создаёт сервис только с полноценными устойчивыми границами.
@@ -298,6 +310,7 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		bytes.Equal(config.RuntimeAdmissionSigningKey, config.RuntimeRestoreSigningKey) ||
 		bytes.Equal(config.RuntimeArchiveSigningKey, config.RuntimeRestoreSigningKey) ||
 		config.TurnLeaseDuration < 30*time.Second ||
+		!validImageRepository(config.RoleImageInputRepository) ||
 		config.TurnLeaseDuration > 30*time.Minute ||
 		config.MaximumScheduleClaims < 1 ||
 		config.MaximumScheduleClaims > 100 ||
@@ -309,6 +322,8 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		!validImageRepository(config.StagingImageRepository) ||
 		!validImageRepository(config.PromotedImageRepository) ||
 		config.StagingImageRepository == config.PromotedImageRepository ||
+		!validImageRepository(config.TrustedRoleBaseRepository) || !validDigest(config.TrustedRoleBaseDigest) ||
+		config.RoleRuntimeContractRevision == 0 || !validSHA256Text(config.RoleRuntimeContractSHA256) ||
 		value.ValidateStableKey(config.ImageBuilderWorkload) != nil || !validSPIFFEID(config.ImageBuilderSPIFFEID) ||
 		value.ValidateStableKey(config.ImageAdmissionWorkload) != nil || !validSPIFFEID(config.ImageAdmissionSPIFFEID) ||
 		value.ValidateStableKey(config.ImagePromotionWorkload) != nil || !validSPIFFEID(config.ImagePromotionSPIFFEID) ||
@@ -359,51 +374,56 @@ func New(repository domainrepo.Repository, config Config) (*Service, error) {
 		return nil, errors.New("control-plane service configuration is invalid")
 	}
 	return &Service{
-		repository:                 repository,
-		leaseSigningKey:            slices.Clone(config.LeaseSigningKey),
-		runtimeAdmissionSigningKey: slices.Clone(config.RuntimeAdmissionSigningKey),
-		runtimeArchiveSigningKey:   slices.Clone(config.RuntimeArchiveSigningKey),
-		runtimeRestoreSigningKey:   slices.Clone(config.RuntimeRestoreSigningKey),
-		turnLeaseDuration:          config.TurnLeaseDuration,
-		maximumScheduleClaims:      config.MaximumScheduleClaims,
-		imagePolicyRevision:        config.ImagePolicyRevision,
-		imagePolicySHA256:          config.ImagePolicySHA256,
-		imageBuildLeaseDuration:    config.ImageBuildLeaseDuration,
-		imageAdmissionClaimTTL:     config.ImageAdmissionClaimTTL,
-		imagePromotionClaimTTL:     config.ImagePromotionClaimTTL,
-		imageMaximumAttempts:       config.ImageMaximumAttempts,
-		stagingImageRepository:     config.StagingImageRepository,
-		promotedImageRepository:    config.PromotedImageRepository,
-		imageBuilderWorkload:       config.ImageBuilderWorkload,
-		imageBuilderSPIFFEID:       config.ImageBuilderSPIFFEID,
-		imageAdmissionWorkload:     config.ImageAdmissionWorkload,
-		imageAdmissionSPIFFEID:     config.ImageAdmissionSPIFFEID,
-		imagePromotionWorkload:     config.ImagePromotionWorkload,
-		imagePromotionSPIFFEID:     config.ImagePromotionSPIFFEID,
-		authorityPolicyRevision:    config.AuthorityPolicyRevision,
-		authorityPolicySHA256:      config.AuthorityPolicySHA256,
-		ownerGateDeliveryWorkload:  config.OwnerGateDeliveryWorkload,
-		ownerGateDeliverySPIFFEID:  config.OwnerGateDeliverySPIFFEID,
-		scannerWorkload:            config.ScannerWorkload,
-		scannerSPIFFEID:            config.ScannerSPIFFEID,
-		schedulerWorkload:          config.SchedulerWorkload,
-		schedulerSPIFFEID:          config.SchedulerSPIFFEID,
-		memoryIndexerWorkload:      config.MemoryIndexerWorkload,
-		memoryIndexerSPIFFEID:      config.MemoryIndexerSPIFFEID,
-		runtimeControllerWorkload:  config.RuntimeControllerWorkload,
-		runtimeControllerSPIFFEID:  config.RuntimeControllerSPIFFEID,
-		archiveWorkload:            config.ArchiveWorkload,
-		archiveSPIFFEID:            config.ArchiveSPIFFEID,
-		integrationGatewayWorkload: config.IntegrationGatewayWorkload,
-		integrationGatewaySPIFFEID: config.IntegrationGatewaySPIFFEID,
-		restoreVerifierWorkload:    config.RestoreVerifierWorkload,
-		restoreVerifierSPIFFEID:    config.RestoreVerifierSPIFFEID,
-		cleanupAuthorizerWorkload:  config.CleanupAuthorizerWorkload,
-		cleanupAuthorizerSPIFFEID:  config.CleanupAuthorizerSPIFFEID,
-		pendingRescheduleDelay:     config.PendingRescheduleDelay,
-		observer:                   config.Observer,
-		interactionReadbackIssuer:  config.InteractionReadbackIssuer,
-		now:                        time.Now,
+		repository:                  repository,
+		leaseSigningKey:             slices.Clone(config.LeaseSigningKey),
+		runtimeAdmissionSigningKey:  slices.Clone(config.RuntimeAdmissionSigningKey),
+		runtimeArchiveSigningKey:    slices.Clone(config.RuntimeArchiveSigningKey),
+		runtimeRestoreSigningKey:    slices.Clone(config.RuntimeRestoreSigningKey),
+		turnLeaseDuration:           config.TurnLeaseDuration,
+		maximumScheduleClaims:       config.MaximumScheduleClaims,
+		imagePolicyRevision:         config.ImagePolicyRevision,
+		imagePolicySHA256:           config.ImagePolicySHA256,
+		imageBuildLeaseDuration:     config.ImageBuildLeaseDuration,
+		imageAdmissionClaimTTL:      config.ImageAdmissionClaimTTL,
+		imagePromotionClaimTTL:      config.ImagePromotionClaimTTL,
+		imageMaximumAttempts:        config.ImageMaximumAttempts,
+		stagingImageRepository:      config.StagingImageRepository,
+		promotedImageRepository:     config.PromotedImageRepository,
+		roleImageInputRepository:    config.RoleImageInputRepository,
+		trustedRoleBaseRepository:   config.TrustedRoleBaseRepository,
+		trustedRoleBaseDigest:       config.TrustedRoleBaseDigest,
+		roleRuntimeContractRevision: config.RoleRuntimeContractRevision,
+		roleRuntimeContractSHA256:   config.RoleRuntimeContractSHA256,
+		imageBuilderWorkload:        config.ImageBuilderWorkload,
+		imageBuilderSPIFFEID:        config.ImageBuilderSPIFFEID,
+		imageAdmissionWorkload:      config.ImageAdmissionWorkload,
+		imageAdmissionSPIFFEID:      config.ImageAdmissionSPIFFEID,
+		imagePromotionWorkload:      config.ImagePromotionWorkload,
+		imagePromotionSPIFFEID:      config.ImagePromotionSPIFFEID,
+		authorityPolicyRevision:     config.AuthorityPolicyRevision,
+		authorityPolicySHA256:       config.AuthorityPolicySHA256,
+		ownerGateDeliveryWorkload:   config.OwnerGateDeliveryWorkload,
+		ownerGateDeliverySPIFFEID:   config.OwnerGateDeliverySPIFFEID,
+		scannerWorkload:             config.ScannerWorkload,
+		scannerSPIFFEID:             config.ScannerSPIFFEID,
+		schedulerWorkload:           config.SchedulerWorkload,
+		schedulerSPIFFEID:           config.SchedulerSPIFFEID,
+		memoryIndexerWorkload:       config.MemoryIndexerWorkload,
+		memoryIndexerSPIFFEID:       config.MemoryIndexerSPIFFEID,
+		runtimeControllerWorkload:   config.RuntimeControllerWorkload,
+		runtimeControllerSPIFFEID:   config.RuntimeControllerSPIFFEID,
+		archiveWorkload:             config.ArchiveWorkload,
+		archiveSPIFFEID:             config.ArchiveSPIFFEID,
+		integrationGatewayWorkload:  config.IntegrationGatewayWorkload,
+		integrationGatewaySPIFFEID:  config.IntegrationGatewaySPIFFEID,
+		restoreVerifierWorkload:     config.RestoreVerifierWorkload,
+		restoreVerifierSPIFFEID:     config.RestoreVerifierSPIFFEID,
+		cleanupAuthorizerWorkload:   config.CleanupAuthorizerWorkload,
+		cleanupAuthorizerSPIFFEID:   config.CleanupAuthorizerSPIFFEID,
+		pendingRescheduleDelay:      config.PendingRescheduleDelay,
+		observer:                    config.Observer,
+		interactionReadbackIssuer:   config.InteractionReadbackIssuer,
+		now:                         time.Now,
 	}, nil
 }
 

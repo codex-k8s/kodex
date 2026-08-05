@@ -34,15 +34,18 @@ func TestPromotedImageReuseDoesNotCrossOwnerBoundary(t *testing.T) {
 
 func TestRoleImageCanonicalHashCoversInstallationAndNormalizesSets(t *testing.T) {
 	digest := strings.Repeat("a", 64)
-	service := &Service{imagePolicyRevision: 7, imagePolicySHA256: strings.Repeat("b", 64)}
+	service := &Service{imagePolicyRevision: 7, imagePolicySHA256: strings.Repeat("b", 64),
+		trustedRoleBaseRepository: "registry.example.test/base/runtime", trustedRoleBaseDigest: "sha256:" + digest,
+		roleImageInputRepository:    "example.test/inputs",
+		roleRuntimeContractRevision: 1, roleRuntimeContractSHA256: strings.Repeat("c", 64)}
 	input := entity.RoleImageRecipeInput{
 		BaseImageReference: "registry.example.test/base/runtime", BaseImageDigest: "sha256:" + digest,
 		SourceRef: "git://example.test/runtime", SourceRevision: "v1", SourceSHA256: digest,
-		ContextRef: "oci://example.test/context@sha256:" + digest, ContextSHA256: digest,
+		ContextRef: "oci://example.test/inputs@sha256:" + digest, ContextSHA256: digest,
 		BuilderSHA256: digest, FrontendSHA256: digest, ToolchainSHA256: digest,
 		Platforms:         []entity.RoleImagePlatform{{OS: "linux", Architecture: "arm64"}, {OS: "linux", Architecture: "amd64"}},
-		Packages:          []entity.RoleImagePackage{{Manager: "apt", Name: "jq", Version: "1.7", Digest: "sha256:" + digest}},
-		Tools:             []entity.RoleImageTool{{Name: "cosign", Version: "3.0.2", SourceRef: "https://example.test/cosign", SHA256: digest}},
+		Packages:          []entity.RoleImagePackage{{Manager: "apt", Name: "jq", Version: "1.7", Digest: "sha256:" + digest, SourceRef: "oci://example.test/inputs@sha256:" + digest}},
+		Tools:             []entity.RoleImageTool{{Name: "cosign", Version: "3.0.2", SourceRef: "oci://example.test/inputs@sha256:" + digest, SHA256: digest}},
 		InstallationBlock: "printf 'first\\n'", BuildSecretRefs: []string{"vault-versioned://builder/token/v1"},
 	}
 	first, err := service.newRoleImageRecipeSpec(canonicalRoleImageInput(input), 1)
@@ -65,6 +68,15 @@ func TestRoleImageCanonicalHashCoversInstallationAndNormalizesSets(t *testing.T)
 	}
 	if changed.SpecSHA256 == first.SpecSHA256 {
 		t.Fatal("installation block did not change the specification hash")
+	}
+	reordered.InstallationBlock = ""
+	empty, err := service.newRoleImageRecipeSpec(canonicalRoleImageInput(reordered), 4)
+	if err != nil {
+		t.Fatalf("canonical empty installation block rejected: %v", err)
+	}
+	secondEmpty, err := service.newRoleImageRecipeSpec(canonicalRoleImageInput(reordered), 5)
+	if err != nil || secondEmpty.SpecSHA256 != empty.SpecSHA256 {
+		t.Fatal("canonical empty installation block hash is unstable")
 	}
 }
 
@@ -147,7 +159,7 @@ func TestImageBuildIdempotencyBindsFailurePayload(t *testing.T) {
 		t.Fatalf("fail image build: %v", err)
 	}
 	if _, err := fixture.service.FailImageBuild(t.Context(), FailImageBuildInput{
-		ImageBuildLeaseInput: base, ErrorCode: "BUILDKIT_FAILED",
+		ImageBuildLeaseInput: base, ErrorCode: "SOLVE_FAILED",
 	}); !errors.Is(err, errs.ErrIdempotencyConflict) {
 		t.Fatalf("changed failure payload reused semantic receipt: %v", err)
 	}
@@ -198,15 +210,136 @@ func TestExpiredPromotionClaimIsFencedBeforeExternalCompletion(t *testing.T) {
 		t.Fatal("replacement promotion claim did not advance fence, generation, and resource version")
 	}
 
-	completePrincipal := principal
-	completePrincipal.Permission = permissionCompleteImagePromotion
+	authorizePrincipal := principal
+	authorizePrincipal.Permission = permissionAuthorizeImagePromotion
 	digest := spec.ManifestDigest
-	if _, err := fixture.service.CompleteImagePromotion(t.Context(), CompleteImagePromotionInput{
-		Principal: completePrincipal, IdempotencyKey: "complete-expired-promotion",
+	if _, err := fixture.service.AuthorizeImagePromotion(t.Context(), AuthorizeImagePromotionInput{
+		Principal: authorizePrincipal, IdempotencyKey: "authorize-expired-promotion",
 		ImageArtifactID: artifact.ID, ExpectedVersion: first.ImageArtifact.Version,
-		PromotionClaim: first.PromotionClaim, PromotedReference: "registry.example.test/promoted/roles@" + digest,
-		ManifestDigest: digest, PromotionReadbackSHA256: strings.Repeat("f", 64),
+		PromotionClaim: first.PromotionClaim, ManifestDigest: digest,
 	}); err == nil {
-		t.Fatal("expired superseded promotion claim completed the artifact")
+		t.Fatal("expired superseded promotion claim authorized a side effect")
+	}
+}
+
+func TestPromotionClaimIsConsumedBeforeRegistrySideEffect(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	var artifact entity.Resource
+	for _, candidate := range fixture.tx.resources {
+		if candidate.Kind == enum.KindImageArtifact {
+			artifact = candidate
+			break
+		}
+	}
+	spec := artifact.Spec.(entity.ImageArtifactSpec)
+	spec.PromotedReference, spec.PromotionReadbackSHA256 = "", ""
+	spec.PromotedAt = time.Time{}
+	artifact.Spec, artifact.State = spec, enum.StateWaitingExternal
+	fixture.tx.resources[artifact.ID] = artifact
+
+	principal := fixture.principal(permissionClaimImagePromotion, "image-promotion",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion")
+	principal.AuthoritySource = "IMAGE_PROMOTION_CLAIM"
+	claim, err := fixture.service.ClaimImagePromotion(t.Context(), ClaimImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-claim-consume",
+	})
+	if err != nil {
+		t.Fatalf("claim promotion: %v", err)
+	}
+	principal.Permission = permissionAuthorizeImagePromotion
+	authorized, err := fixture.service.AuthorizeImagePromotion(t.Context(), AuthorizeImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-authorize-consume", ImageArtifactID: artifact.ID,
+		ExpectedVersion: claim.ImageArtifact.Version, PromotionClaim: claim.PromotionClaim, ManifestDigest: spec.ManifestDigest,
+	})
+	if err != nil {
+		t.Fatalf("authorize promotion: %v", err)
+	}
+	if authorized.AuthorizationToken == "" || !fixture.tx.now.Before(authorized.AuthorizationExpiresAt) {
+		t.Fatal("promotion authorization is not bounded")
+	}
+	principal.Permission = permissionClaimImagePromotion
+	claimReplay, err := fixture.service.ClaimImagePromotion(t.Context(), ClaimImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-claim-consume",
+	})
+	if err != nil || claimReplay.PromotionClaim != claim.PromotionClaim {
+		t.Fatalf("durable promotion claim replay failed after authorization: %v", err)
+	}
+	principal.Permission = permissionAuthorizeImagePromotion
+	authorizedReplay, err := fixture.service.AuthorizeImagePromotion(t.Context(), AuthorizeImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-authorize-consume", ImageArtifactID: artifact.ID,
+		ExpectedVersion: claimReplay.ImageArtifact.Version, PromotionClaim: claimReplay.PromotionClaim,
+		ManifestDigest: spec.ManifestDigest,
+	})
+	if err != nil || authorizedReplay.AuthorizationToken != authorized.AuthorizationToken {
+		t.Fatalf("durable promotion authorization replay failed: %v", err)
+	}
+	if _, err := fixture.service.AuthorizeImagePromotion(t.Context(), AuthorizeImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-authorize-replay", ImageArtifactID: artifact.ID,
+		ExpectedVersion: claim.ImageArtifact.Version, PromotionClaim: claim.PromotionClaim, ManifestDigest: spec.ManifestDigest,
+	}); err == nil {
+		t.Fatal("consumed promotion claim authorized a second side effect")
+	}
+	principal.Permission = permissionCompleteImagePromotion
+	if _, err := fixture.service.CompleteImagePromotion(t.Context(), CompleteImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-complete-after-authorize",
+		ImageArtifactID: artifact.ID, ExpectedVersion: authorized.ImageArtifact.Version,
+		AuthorizationToken: authorized.AuthorizationToken,
+		PromotedReference:  fixture.service.promotedImageRepository + "@" + spec.ManifestDigest,
+		ManifestDigest:     spec.ManifestDigest, PromotionReadbackSHA256: strings.Repeat("f", 64),
+	}); err != nil {
+		t.Fatalf("complete authorized promotion: %v", err)
+	}
+	principal.Permission = permissionAuthorizeImagePromotion
+	if _, err := fixture.service.AuthorizeImagePromotion(t.Context(), AuthorizeImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-authorize-consume", ImageArtifactID: artifact.ID,
+		ExpectedVersion: claim.ImageArtifact.Version, PromotionClaim: claim.PromotionClaim, ManifestDigest: spec.ManifestDigest,
+	}); err == nil {
+		t.Fatal("completed promotion replay reissued external side-effect authority")
+	}
+}
+
+func TestExpiredPromotionAuthorizationIsReclaimedWithHigherFence(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	var artifact entity.Resource
+	for _, candidate := range fixture.tx.resources {
+		if candidate.Kind == enum.KindImageArtifact {
+			artifact = candidate
+			break
+		}
+	}
+	spec := artifact.Spec.(entity.ImageArtifactSpec)
+	spec.PromotedReference, spec.PromotionReadbackSHA256 = "", ""
+	spec.PromotedAt = time.Time{}
+	artifact.Spec, artifact.State = spec, enum.StateWaitingExternal
+	fixture.tx.resources[artifact.ID] = artifact
+
+	principal := fixture.principal(permissionClaimImagePromotion, "image-promotion",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/image-promotion")
+	principal.AuthoritySource = "IMAGE_PROMOTION_CLAIM"
+	claim, err := fixture.service.ClaimImagePromotion(t.Context(), ClaimImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-claim-before-crash",
+	})
+	if err != nil {
+		t.Fatalf("claim promotion: %v", err)
+	}
+	principal.Permission = permissionAuthorizeImagePromotion
+	authorized, err := fixture.service.AuthorizeImagePromotion(t.Context(), AuthorizeImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-authorize-before-crash", ImageArtifactID: artifact.ID,
+		ExpectedVersion: claim.ImageArtifact.Version, PromotionClaim: claim.PromotionClaim, ManifestDigest: spec.ManifestDigest,
+	})
+	if err != nil {
+		t.Fatalf("authorize promotion: %v", err)
+	}
+	fixture.tx.now = authorized.AuthorizationExpiresAt.Add(time.Microsecond)
+	principal.Permission = permissionClaimImagePromotion
+	reclaimed, err := fixture.service.ClaimImagePromotion(t.Context(), ClaimImagePromotionInput{
+		Principal: principal, IdempotencyKey: "promotion-claim-after-authorization-expiry",
+	})
+	if err != nil {
+		t.Fatalf("reclaim expired authorization: %v", err)
+	}
+	if reclaimed.Fence <= claim.Fence || reclaimed.AuthorityGeneration <= claim.AuthorityGeneration ||
+		reclaimed.ImageArtifact.Version <= authorized.ImageArtifact.Version {
+		t.Fatal("expired promotion authorization did not advance fence, generation, and version")
 	}
 }

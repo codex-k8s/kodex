@@ -25,7 +25,7 @@ func (metrics *Metrics) Observe(operation, outcome string) {
 
 func validOperation(value string) bool {
 	switch value {
-	case "claim", "context", "renew", "build", "complete":
+	case "claim", "materialize", "context", "renew", "build", "complete":
 		return true
 	default:
 		return false

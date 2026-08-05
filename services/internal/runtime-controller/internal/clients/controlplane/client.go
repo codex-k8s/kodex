@@ -32,12 +32,18 @@ type Config struct {
 	Mode                                                                       Mode
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
 	ApplicationGrantFile                                                       string
+	ExpectedRoleImageRepository                                                string
+	ExpectedRoleRuntimeContractRevision                                        uint64
+	ExpectedRoleRuntimeContractSHA256                                          string
 	ExpectedIssuerUID, ExpectedIssuerGID                                       uint32
 	DialTimeout                                                                time.Duration
 }
 
 type Client struct {
-	shared *sharedclient.Client
+	shared                              *sharedclient.Client
+	expectedRoleImageRepository         string
+	expectedRoleRuntimeContractRevision uint64
+	expectedRoleRuntimeContractSHA256   string
 }
 
 func Dial(ctx context.Context, config Config) (*Client, error) {
@@ -69,7 +75,15 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{shared: client}, nil
+	if config.ExpectedRoleImageRepository == "" || strings.ContainsAny(config.ExpectedRoleImageRepository, "@?# \\r\\n\\t") ||
+		config.ExpectedRoleRuntimeContractRevision == 0 || len(config.ExpectedRoleRuntimeContractSHA256) != 64 ||
+		strings.Trim(config.ExpectedRoleRuntimeContractSHA256, "0123456789abcdef") != "" {
+		_ = client.Close()
+		return nil, errors.New("runtime role image contract is invalid")
+	}
+	return &Client{shared: client, expectedRoleImageRepository: config.ExpectedRoleImageRepository,
+		expectedRoleRuntimeContractRevision: config.ExpectedRoleRuntimeContractRevision,
+		expectedRoleRuntimeContractSHA256:   config.ExpectedRoleRuntimeContractSHA256}, nil
 }
 
 func (client *Client) Check(ctx context.Context) error { return client.shared.Check(ctx) }
@@ -130,7 +144,9 @@ func (client *Client) GetRevision(
 		ImageAdmissionReceiptOCIManifestDigest: spec.GetImageAdmissionReceiptOciManifestDigest(),
 		ImagePolicyRevision:                    spec.GetImagePolicyRevision(), ImagePolicySHA256: spec.GetImagePolicySha256(),
 		ImageSignatureSHA256: spec.GetImageSignatureSha256(), ImagePromotionReadbackSHA256: spec.GetImagePromotionReadbackSha256(),
-		SessionID: spec.GetSessionId(), RoleID: spec.GetRoleId(), ChatID: spec.GetChatId(),
+		RoleRuntimeContractRevision: spec.GetRoleRuntimeContractRevision(),
+		RoleRuntimeContractSHA256:   spec.GetRoleRuntimeContractSha256(),
+		SessionID:                   spec.GetSessionId(), RoleID: spec.GetRoleId(), ChatID: spec.GetChatId(),
 		ProviderCredentialBindingID: spec.GetProviderCredentialBindingId(),
 		ProviderAccountName:         spec.GetProviderAccountName(),
 		PromptProfileID:             spec.GetPromptProfileId(), PromptRevision: spec.GetPromptRevision(),
@@ -140,6 +156,11 @@ func (client *Client) GetRevision(
 		CodexApprovalPolicy:  spec.GetCodexApprovalPolicy(),
 		CredentialBindingIDs: append([]string(nil), spec.GetCredentialBindingIds()...),
 		IntegrationIDs:       append([]string(nil), spec.GetIntegrationIds()...),
+	}
+	if revision.ImageReference != client.expectedRoleImageRepository+"@"+revision.ImageManifestDigest ||
+		revision.RoleRuntimeContractRevision != client.expectedRoleRuntimeContractRevision ||
+		revision.RoleRuntimeContractSHA256 != client.expectedRoleRuntimeContractSHA256 {
+		return entity.Revision{}, errs.ErrStateConflict
 	}
 	if contract := spec.GetScheduledResultContract(); contract != nil {
 		revision.ScheduledResultContract = &entity.ScheduledResultContract{

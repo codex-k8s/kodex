@@ -67,11 +67,18 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	executor, err := build.New(build.Config{
 		Binary: config.BuildKitBinary, Address: config.BuildKitAddress, TLSServerName: config.BuildKitTLSServerName,
 		CAFile: config.BuildKitCAFile, CertificateFile: config.BuildKitCertificateFile, PrivateKeyFile: config.BuildKitPrivateKeyFile,
-		ContextRoot: config.ContextRoot, SecretRoot: config.SecretRoot, WorkspaceRoot: config.WorkspaceRoot,
-		BaseDockerConfig: config.BaseDockerConfig, StagingDockerConfig: config.StagingDockerConfig,
+		InputDockerConfig:            config.InputDockerConfig,
+		InputRegistryTLSServerName:   config.InputRegistryTLSServerName,
+		InputRegistryCAFile:          config.InputRegistryCAFile,
+		InputRegistryCertificateFile: config.InputRegistryCertificateFile,
+		InputRegistryPrivateKeyFile:  config.InputRegistryPrivateKeyFile,
+		WorkspaceRoot:                config.WorkspaceRoot, InputRepository: config.InputRepository,
+		TrustedRoleBaseRepository: config.TrustedRoleBaseRepository, TrustedRoleBaseDigest: config.TrustedRoleBaseDigest,
 		FrontendRepository: config.FrontendRepository,
 		StagingRepository:  config.StagingRepository, ExpectedBuilderSHA256: config.ExpectedBuilderSHA256,
-		ExpectedToolchainSHA256: config.ExpectedToolchainSHA256,
+		ExpectedFrontendSHA256: config.ExpectedFrontendSHA256, ExpectedToolchainSHA256: config.ExpectedToolchainSHA256,
+		RoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
+		RoleRuntimeContractSHA256:   config.RoleRuntimeContractSHA256,
 	})
 	if err != nil {
 		return err

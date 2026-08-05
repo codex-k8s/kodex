@@ -86,6 +86,16 @@ spec:
               value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
             - name: CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY
               value: registry-pull.invalid/mattercodex/roles
+            - name: CONTROL_PLANE_ROLE_IMAGE_INPUT_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleImageInputRepository}}
+            - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_REPOSITORY
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseRepository}}
+            - name: CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: trustedRoleBaseDigest}}
+            - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractRevision}}
+            - name: CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256
+              valueFrom: {configMapKeyRef: {name: mattercodex-image-admission-policy, key: roleRuntimeContractSHA256}}
           ports:
             - name: grpc
               containerPort: 8443

@@ -33,9 +33,15 @@ spec:
   ingress:
     - from:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 192.0.2.0/32
         - ipBlock:
-            cidr: ::/0
+            cidr: 2001:db8::/128
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-buildkit
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: role-image-builder
       ports:
         - protocol: TCP
           port: 5000
@@ -58,9 +64,6 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-buildkit
-        - podSelector:
-            matchLabels:
-              mattercodex.dev/image-build-client: "true"
         - podSelector:
             matchExpressions:
               - key: mattercodex.dev/image-admission-phase
@@ -200,10 +203,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-image-registry
-              mattercodex.dev/registry-scope: push
+              mattercodex.dev/registry-scope: pull
       ports:
         - protocol: TCP
-          port: 5001
+          port: 5000
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

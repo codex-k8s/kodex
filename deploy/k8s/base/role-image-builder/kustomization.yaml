@@ -3,7 +3,6 @@ kind: Kustomization
 namespace: mattercodex-system
 resources:
   - configmap.yaml
-  - context-pvc.yaml
   - deployment.yaml
   - serviceaccount.yaml
   - service.yaml

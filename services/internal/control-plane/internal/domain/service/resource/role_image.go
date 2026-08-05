@@ -273,21 +273,47 @@ func (service *Service) newRoleImageRecipeSpec(
 	input entity.RoleImageRecipeInput,
 	generation uint64,
 ) (entity.RoleImageRecipeSpec, error) {
+	if input.BaseImageReference != service.trustedRoleBaseRepository || input.BaseImageDigest != service.trustedRoleBaseDigest {
+		return entity.RoleImageRecipeSpec{}, errs.ErrInvalidInput
+	}
+	if !exactRoleImageInputRef(input.ContextRef, service.roleImageInputRepository) {
+		return entity.RoleImageRecipeSpec{}, errs.ErrInvalidInput
+	}
+	for _, item := range input.Packages {
+		if !exactRoleImageInputRef(item.SourceRef, service.roleImageInputRepository) {
+			return entity.RoleImageRecipeSpec{}, errs.ErrInvalidInput
+		}
+	}
+	for _, item := range input.Tools {
+		if !exactRoleImageInputRef(item.SourceRef, service.roleImageInputRepository) {
+			return entity.RoleImageRecipeSpec{}, errs.ErrInvalidInput
+		}
+	}
 	specSHA256, err := canonicalHash(struct {
-		Input          entity.RoleImageRecipeInput
-		PolicyRevision uint64
-		PolicySHA256   string
-	}{input, service.imagePolicyRevision, service.imagePolicySHA256})
+		Input                   entity.RoleImageRecipeInput
+		PolicyRevision          uint64
+		PolicySHA256            string
+		RuntimeContractRevision uint64
+		RuntimeContractSHA256   string
+	}{input, service.imagePolicyRevision, service.imagePolicySHA256,
+		service.roleRuntimeContractRevision, service.roleRuntimeContractSHA256})
 	if err != nil {
 		return entity.RoleImageRecipeSpec{}, errs.ErrInvalidInput
 	}
 	spec := entity.RoleImageRecipeSpec{Input: input, Generation: generation,
 		SpecSHA256: specSHA256, PolicyRevision: service.imagePolicyRevision,
-		PolicySHA256: service.imagePolicySHA256}
+		PolicySHA256:                service.imagePolicySHA256,
+		RoleRuntimeContractRevision: service.roleRuntimeContractRevision,
+		RoleRuntimeContractSHA256:   service.roleRuntimeContractSHA256}
 	if spec.Validate() != nil {
 		return entity.RoleImageRecipeSpec{}, errs.ErrInvalidInput
 	}
 	return spec, nil
+}
+
+func exactRoleImageInputRef(reference, repository string) bool {
+	prefix := "oci://" + repository + "@sha256:"
+	return strings.HasPrefix(reference, prefix) && len(reference) == len(prefix)+64
 }
 
 func (service *Service) insertImageBuild(
@@ -429,14 +455,16 @@ type ClaimImageBuildInput struct {
 }
 
 type ImageBuildClaim struct {
-	ImageBuild          entity.Resource
-	RecipeInput         entity.RoleImageRecipeInput
-	PolicyRevision      uint64
-	PolicySHA256        string
-	LeaseToken          string
-	Fence               uint64
-	AuthorityGeneration uint64
-	LeaseExpiresAt      time.Time
+	ImageBuild                  entity.Resource
+	RecipeInput                 entity.RoleImageRecipeInput
+	PolicyRevision              uint64
+	PolicySHA256                string
+	RoleRuntimeContractRevision uint64
+	RoleRuntimeContractSHA256   string
+	LeaseToken                  string
+	Fence                       uint64
+	AuthorityGeneration         uint64
+	LeaseExpiresAt              time.Time
 }
 
 func (service *Service) ClaimImageBuild(ctx context.Context, input ClaimImageBuildInput) (ImageBuildClaim, error) {
@@ -538,7 +566,9 @@ func (service *Service) imageBuildClaimReadback(
 	}
 	return ImageBuildClaim{ImageBuild: build, RecipeInput: recipeSpec.Input,
 		PolicyRevision: recipeSpec.PolicyRevision, PolicySHA256: recipeSpec.PolicySHA256,
-		LeaseToken: token, Fence: spec.Fence, AuthorityGeneration: spec.AuthorityGeneration,
+		RoleRuntimeContractRevision: recipeSpec.RoleRuntimeContractRevision,
+		RoleRuntimeContractSHA256:   recipeSpec.RoleRuntimeContractSHA256,
+		LeaseToken:                  token, Fence: spec.Fence, AuthorityGeneration: spec.AuthorityGeneration,
 		LeaseExpiresAt: spec.LeaseExpiresAt}, nil
 }
 
@@ -677,7 +707,9 @@ func (service *Service) CompleteImageBuild(
 
 type FailImageBuildInput struct {
 	ImageBuildLeaseInput
-	ErrorCode string
+	ErrorCode         string
+	DiagnosticCode    string
+	DiagnosticSummary string
 }
 
 func (service *Service) FailImageBuild(ctx context.Context, input FailImageBuildInput) (entity.Resource, error) {
@@ -685,10 +717,14 @@ func (service *Service) FailImageBuild(ctx context.Context, input FailImageBuild
 		service.imageBuilderWorkload, service.imageBuilderSPIFFEID); err != nil {
 		return entity.Resource{}, err
 	}
-	if !validImageBuildErrorCode(input.ErrorCode) {
+	if !validImageBuildErrorCode(input.ErrorCode) || !validImageBuildDiagnostic(input.DiagnosticCode, input.DiagnosticSummary) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	payloadHash, err := canonicalHash(struct{ ErrorCode string }{input.ErrorCode})
+	payloadHash, err := canonicalHash(struct {
+		ErrorCode         string
+		DiagnosticCode    string
+		DiagnosticSummary string
+	}{input.ErrorCode, input.DiagnosticCode, input.DiagnosticSummary})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -696,6 +732,7 @@ func (service *Service) FailImageBuild(ctx context.Context, input FailImageBuild
 		"fail_image_build", payloadHash,
 		func(spec *entity.ImageBuildSpec, _ entity.Resource, _ time.Time) (enum.State, error) {
 			spec.Stage, spec.ErrorCode = entity.ImageBuildStageFailed, input.ErrorCode
+			spec.DiagnosticCode, spec.DiagnosticSummary = input.DiagnosticCode, input.DiagnosticSummary
 			clearImageBuildClaim(spec)
 			return enum.StateFailed, nil
 		})
@@ -788,6 +825,8 @@ func (service *Service) mutateImageBuildLease(
 					FrontendSHA256: recipeSpec.Input.FrontendSHA256, ToolchainSHA256: recipeSpec.Input.ToolchainSHA256,
 					Platforms:      slices.Clone(recipeSpec.Input.Platforms),
 					PolicyRevision: recipeSpec.PolicyRevision, PolicySHA256: recipeSpec.PolicySHA256,
+					RoleRuntimeContractRevision: recipeSpec.RoleRuntimeContractRevision,
+					RoleRuntimeContractSHA256:   recipeSpec.RoleRuntimeContractSHA256,
 				}
 				artifact, createErr := entity.New(artifactID, next.OrganizationID, next.ProjectID, next.ID,
 					next.OwnerActorID, enum.KindImageArtifact, "Артефакт "+recipe.Name, artifactSpec, now)
@@ -890,6 +929,7 @@ func (service *Service) ManageImageBuild(ctx context.Context, input ManageImageB
 				spec.AuthorityGeneration++
 				clearImageBuildClaim(&spec)
 				spec.Stage, spec.ProgressPercent, spec.ErrorCode = entity.ImageBuildStageQueued, 0, ""
+				spec.DiagnosticCode, spec.DiagnosticSummary = "", ""
 				spec.StagingReference, spec.ManifestDigest, spec.ProvenanceSHA256 = "", "", ""
 				spec.AvailableAt, target = now, enum.StateQueued
 			case ImageBuildExpire:
@@ -1154,8 +1194,12 @@ func (service *Service) ClaimImagePromotion(
 			if !ok || current.Kind != enum.KindImageArtifact || current.State != enum.StateWaitingExternal ||
 				spec.AdmissionVerdict != entity.ImageAdmissionAccepted || spec.PromotedReference != "" ||
 				spec.PolicyRevision != service.imagePolicyRevision || spec.PolicySHA256 != service.imagePolicySHA256 ||
-				(spec.PromotionClaimJTISHA256 != "" && now.Before(spec.PromotionClaimExpiresAt)) {
+				(spec.PromotionClaimJTISHA256 != "" && now.Before(spec.PromotionClaimExpiresAt)) ||
+				(spec.PromotionAuthorizationTokenSHA256 != "" && now.Before(spec.PromotionAuthorizationExpiresAt)) {
 				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if spec.PromotionAuthorizationTokenSHA256 != "" {
+				clearPromotionClaim(&spec)
 			}
 			spec.PromotionAuthorityGeneration++
 			if spec.PromotionAuthorityGeneration < input.Principal.AuthorityGeneration {
@@ -1180,11 +1224,6 @@ func (service *Service) ClaimImagePromotion(
 	if err != nil {
 		return ImagePromotionClaim{}, err
 	}
-	current, currentErr := service.repository.Get(ctx, artifact.OrganizationID, artifact.ProjectID,
-		artifact.ID, enum.KindImageArtifact)
-	if currentErr != nil || current.Version != artifact.Version {
-		return ImagePromotionClaim{}, errs.ErrIdempotencyConflict
-	}
 	spec, ok := artifact.Spec.(entity.ImageArtifactSpec)
 	if !ok || spec.PromotionClaimantWorkloadID != input.Principal.CallerWorkload ||
 		spec.PromotionClaimantSPIFFEID != input.Principal.CallerSPIFFEID {
@@ -1204,7 +1243,7 @@ type CompleteImagePromotionInput struct {
 	IdempotencyKey          string
 	ImageArtifactID         string
 	ExpectedVersion         uint64
-	PromotionClaim          string
+	AuthorizationToken      string
 	PromotedReference       string
 	ManifestDigest          string
 	PromotionReadbackSHA256 string
@@ -1219,7 +1258,7 @@ func (service *Service) CompleteImagePromotion(
 		return entity.Resource{}, err
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.ImageArtifactID) != nil ||
-		input.ExpectedVersion == 0 || input.PromotionClaim == "" || !validDigest(input.ManifestDigest) ||
+		input.ExpectedVersion == 0 || input.AuthorizationToken == "" || !validDigest(input.ManifestDigest) ||
 		input.PromotedReference != service.promotedImageRepository+"@"+input.ManifestDigest ||
 		!validSHA256Text(input.PromotionReadbackSHA256) {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -1232,7 +1271,7 @@ func (service *Service) CompleteImagePromotion(
 		Ref      string
 		Digest   string
 		Readback string
-	}{identity(input.Principal), input.ImageArtifactID, input.ExpectedVersion, hashString(input.PromotionClaim),
+	}{identity(input.Principal), input.ImageArtifactID, input.ExpectedVersion, hashString(input.AuthorizationToken),
 		input.PromotedReference, input.ManifestDigest, input.PromotionReadbackSHA256})
 	return service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 		"complete_image_promotion", requestHash, func(tx domainrepo.Transaction) (entity.Resource, error) {
@@ -1248,14 +1287,16 @@ func (service *Service) CompleteImagePromotion(
 			if !ok || current.State != enum.StateWaitingExternal || current.Version != input.ExpectedVersion ||
 				spec.AdmissionVerdict != entity.ImageAdmissionAccepted || spec.ManifestDigest != input.ManifestDigest ||
 				spec.PolicyRevision != service.imagePolicyRevision || spec.PolicySHA256 != service.imagePolicySHA256 ||
-				spec.PromotedReference != "" || !now.Before(spec.PromotionClaimExpiresAt) ||
+				spec.PromotedReference != "" || !now.Before(spec.PromotionAuthorizationExpiresAt) ||
 				spec.PromotionClaimantWorkloadID != input.Principal.CallerWorkload ||
 				spec.PromotionClaimantSPIFFEID != input.Principal.CallerSPIFFEID ||
-				service.verifyPromotionClaim(input.PromotionClaim, current, spec, now) != nil {
+				spec.PromotionAuthorizationTokenSHA256 != hashString(input.AuthorizationToken) {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
 			spec.PromotedReference, spec.PromotionReadbackSHA256 = input.PromotedReference, input.PromotionReadbackSHA256
 			spec.PromotedAt = now.UTC().Truncate(time.Microsecond)
+			spec.PromotionAuthorizationTokenSHA256 = ""
+			spec.PromotionAuthorizationExpiresAt = time.Time{}
 			clearPromotionClaim(&spec)
 			updated, err := current.ReplaceAndTransition(spec, enum.StateActive, now)
 			if err != nil {
@@ -1266,6 +1307,127 @@ func (service *Service) CompleteImagePromotion(
 			}
 			return updated, service.appendMutationRecords(ctx, tx, input.Principal, "complete_image_promotion", updated)
 		})
+}
+
+type AuthorizeImagePromotionInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ImageArtifactID string
+	ExpectedVersion uint64
+	PromotionClaim  string
+	ManifestDigest  string
+}
+
+type AuthorizeImagePromotionResult struct {
+	ImageArtifact          entity.Resource
+	AuthorizationToken     string
+	AuthorizationExpiresAt time.Time
+}
+
+// AuthorizeImagePromotion потребляет owner claim в одной транзакции до registry copy.
+func (service *Service) AuthorizeImagePromotion(
+	ctx context.Context,
+	input AuthorizeImagePromotionInput,
+) (AuthorizeImagePromotionResult, error) {
+	if err := authorizeImageWorkload(input.Principal, permissionAuthorizeImagePromotion,
+		service.imagePromotionWorkload, service.imagePromotionSPIFFEID); err != nil {
+		return AuthorizeImagePromotionResult{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.ImageArtifactID) != nil ||
+		input.ExpectedVersion == 0 || input.PromotionClaim == "" || !validDigest(input.ManifestDigest) {
+		return AuthorizeImagePromotionResult{}, errs.ErrInvalidInput
+	}
+	requestHash, _ := canonicalHash(struct {
+		Identity    commandIdentity
+		ID          string
+		Version     uint64
+		ClaimSHA256 string
+		Digest      string
+	}{identity(input.Principal), input.ImageArtifactID, input.ExpectedVersion,
+		hashString(input.PromotionClaim), input.ManifestDigest})
+	artifact, err := service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
+		"authorize_image_promotion", requestHash, func(tx domainrepo.Transaction) (entity.Resource, error) {
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			current, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, input.ImageArtifactID)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			spec, ok := current.Spec.(entity.ImageArtifactSpec)
+			if !ok || current.State != enum.StateWaitingExternal || current.Version != input.ExpectedVersion ||
+				spec.AdmissionVerdict != entity.ImageAdmissionAccepted || spec.ManifestDigest != input.ManifestDigest ||
+				spec.PromotedReference != "" || spec.PromotionAuthorizationTokenSHA256 != "" ||
+				spec.PromotionClaimantWorkloadID != input.Principal.CallerWorkload ||
+				spec.PromotionClaimantSPIFFEID != input.Principal.CallerSPIFFEID ||
+				service.verifyPromotionClaim(input.PromotionClaim, current, spec, now) != nil {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			token := service.imageToken("promotion-authorize", current.ID, spec.ManifestDigest,
+				spec.BuildAttempt, spec.PromotionFence, spec.PromotionAuthorityGeneration, input.IdempotencyKey)
+			spec.PromotionAuthorizationTokenSHA256 = hashString(token)
+			spec.PromotionAuthorizationExpiresAt = spec.PromotionClaimExpiresAt
+			spec.PromotionClaimJTISHA256 = ""
+			spec.PromotionClaimExpiresAt = time.Time{}
+			updated, err := current.Update(current.Name, spec, now)
+			if err != nil {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if err := tx.Update(ctx, updated, current.Version); err != nil {
+				return entity.Resource{}, err
+			}
+			return updated, service.appendMutationRecords(ctx, tx, input.Principal, "authorize_image_promotion", updated)
+		})
+	if err != nil {
+		return AuthorizeImagePromotionResult{}, err
+	}
+	spec := artifact.Spec.(entity.ImageArtifactSpec)
+	token := service.imageToken("promotion-authorize", artifact.ID, spec.ManifestDigest,
+		spec.BuildAttempt, spec.PromotionFence, spec.PromotionAuthorityGeneration, input.IdempotencyKey)
+	if hashString(token) != spec.PromotionAuthorizationTokenSHA256 {
+		return AuthorizeImagePromotionResult{}, errs.ErrStateConflict
+	}
+	current, currentErr := service.repository.Get(ctx, artifact.OrganizationID, artifact.ProjectID,
+		artifact.ID, enum.KindImageArtifact)
+	currentSpec, currentOK := current.Spec.(entity.ImageArtifactSpec)
+	if currentErr != nil || !currentOK || current.Version != artifact.Version ||
+		currentSpec.PromotionAuthorizationTokenSHA256 != spec.PromotionAuthorizationTokenSHA256 ||
+		currentSpec.PromotionFence != spec.PromotionFence ||
+		currentSpec.PromotionAuthorityGeneration != spec.PromotionAuthorityGeneration ||
+		!service.now().Before(currentSpec.PromotionAuthorizationExpiresAt) {
+		return AuthorizeImagePromotionResult{}, errs.ErrStateConflict
+	}
+	return AuthorizeImagePromotionResult{ImageArtifact: artifact, AuthorizationToken: token,
+		AuthorizationExpiresAt: spec.PromotionAuthorizationExpiresAt}, nil
+}
+
+type GetRoleImageRecipeInput struct {
+	Principal       value.Principal
+	RecipeID        string
+	ExpectedVersion uint64
+}
+
+func (service *Service) GetRoleImageRecipe(ctx context.Context, input GetRoleImageRecipeInput) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionReadRoleImageRecipe); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateID(input.RecipeID) != nil || input.ExpectedVersion == 0 {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	found, err := service.repository.Get(ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.RecipeID, enum.KindRoleImageRecipe)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if found.OwnerActorID != input.Principal.ActorID {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	if found.Version != input.ExpectedVersion {
+		return entity.Resource{}, errs.ErrVersionMismatch
+	}
+	return found, nil
 }
 
 type GetRoleImageBuildInput struct {
@@ -1409,8 +1571,8 @@ func canonicalRoleImageInput(input entity.RoleImageRecipeInput) entity.RoleImage
 			right.OS+"/"+right.Architecture+"/"+right.Variant)
 	})
 	slices.SortFunc(result.Packages, func(left, right entity.RoleImagePackage) int {
-		return strings.Compare(left.Manager+"/"+left.Name+"/"+left.Version+"/"+left.Digest,
-			right.Manager+"/"+right.Name+"/"+right.Version+"/"+right.Digest)
+		return strings.Compare(left.Manager+"/"+left.Name+"/"+left.Version+"/"+left.Digest+"/"+left.SourceRef,
+			right.Manager+"/"+right.Name+"/"+right.Version+"/"+right.Digest+"/"+right.SourceRef)
 	})
 	slices.SortFunc(result.Tools, func(left, right entity.RoleImageTool) int {
 		return strings.Compare(left.Name+"/"+left.Version+"/"+left.SourceRef+"/"+left.SHA256,
@@ -1431,6 +1593,8 @@ func clearPromotionClaim(spec *entity.ImageArtifactSpec) {
 	spec.PromotionClaimExpiresAt = time.Time{}
 	spec.PromotionClaimantWorkloadID = ""
 	spec.PromotionClaimantSPIFFEID = ""
+	spec.PromotionAuthorizationTokenSHA256 = ""
+	spec.PromotionAuthorizationExpiresAt = time.Time{}
 }
 
 func authorizeImageWorkload(principal value.Principal, permission, workload, spiffeID string) error {
@@ -1470,7 +1634,7 @@ func validImageBuildOwnerAction(action ImageBuildOwnerAction) bool {
 
 func validImageBuildErrorCode(code string) bool {
 	switch code {
-	case "CONTEXT_INVALID", "BASE_PULL_FAILED", "BUILDKIT_FAILED", "STAGING_PUSH_FAILED",
+	case "MATERIALIZATION_FAILED", "CONTEXT_INVALID", "BASE_PULL_FAILED", "SOLVE_FAILED", "INSTALLATION_FAILED", "STAGING_PUSH_FAILED",
 		"PROVENANCE_INVALID", "LEASE_LOST", "DEPENDENCY_UNAVAILABLE", "BUILD_CANCELLED":
 		return true
 	default:
@@ -1478,9 +1642,27 @@ func validImageBuildErrorCode(code string) bool {
 	}
 }
 
+func validImageBuildDiagnostic(code, summary string) bool {
+	if code == "" && summary == "" {
+		return true
+	}
+	if summary == "" || len(summary) > 256 || strings.TrimSpace(summary) != summary || strings.ContainsAny(summary, "\r\n\x00") {
+		return false
+	}
+	switch code {
+	case "INPUT_FETCH_REJECTED", "INPUT_DIGEST_MISMATCH", "ARCHIVE_REJECTED", "BASE_RESOLUTION_REJECTED",
+		"BUILD_GRAPH_REJECTED", "INSTALL_COMMAND_REJECTED", "STAGING_EXPORT_REJECTED", "PROVENANCE_REJECTED",
+		"DEPENDENCY_TIMEOUT", "LEASE_REVOKED":
+		return true
+	default:
+		return false
+	}
+}
+
 func buildProgressStage(stage entity.ImageBuildStage) bool {
-	return stage == entity.ImageBuildStageContextValidation || stage == entity.ImageBuildStageBasePull ||
-		stage == entity.ImageBuildStageSolving || stage == entity.ImageBuildStageStagingPush ||
+	return stage == entity.ImageBuildStageMaterialization || stage == entity.ImageBuildStageContextValidation ||
+		stage == entity.ImageBuildStageBasePull || stage == entity.ImageBuildStageSolving ||
+		stage == entity.ImageBuildStageInstallation || stage == entity.ImageBuildStageStagingPush ||
 		stage == entity.ImageBuildStageProvenance
 }
 
@@ -1488,16 +1670,20 @@ func imageBuildStageOrder(stage entity.ImageBuildStage) int {
 	switch stage {
 	case entity.ImageBuildStageQueued:
 		return 0
-	case entity.ImageBuildStageContextValidation:
+	case entity.ImageBuildStageMaterialization:
 		return 1
-	case entity.ImageBuildStageBasePull:
+	case entity.ImageBuildStageContextValidation:
 		return 2
-	case entity.ImageBuildStageSolving:
+	case entity.ImageBuildStageBasePull:
 		return 3
-	case entity.ImageBuildStageStagingPush:
+	case entity.ImageBuildStageSolving:
 		return 4
-	case entity.ImageBuildStageProvenance:
+	case entity.ImageBuildStageInstallation:
 		return 5
+	case entity.ImageBuildStageStagingPush:
+		return 6
+	case entity.ImageBuildStageProvenance:
+		return 7
 	default:
 		return 100
 	}

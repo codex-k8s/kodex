@@ -30,6 +30,9 @@ type Config struct {
 	SessionMCPURL                    string        `env:"RUNTIME_SESSION_MCP_URL"`
 	ControllerImage                  string        `env:"RUNTIME_CONTROLLER_IMAGE"`
 	AuthorityImage                   string        `env:"RUNTIME_AUTHORITY_IMAGE"`
+	PromotedRoleImageRepository      string        `env:"RUNTIME_PROMOTED_ROLE_IMAGE_REPOSITORY"`
+	RoleRuntimeContractRevision      uint64        `env:"RUNTIME_ROLE_RUNTIME_CONTRACT_REVISION"`
+	RoleRuntimeContractSHA256        string        `env:"RUNTIME_ROLE_RUNTIME_CONTRACT_SHA256"`
 	StorageClass                     string        `env:"RUNTIME_STORAGE_CLASS"`
 	PVCSize                          string        `env:"RUNTIME_PVC_SIZE"`
 	ReadClusterRole                  string        `env:"RUNTIME_READ_CLUSTER_ROLE"`
@@ -169,6 +172,8 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSDurable != "RUNTIME_CONTROLLER_V1" ||
 		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.PostgresPrincipal == "" ||
 		config.MaximumCPUMilli < 1 || config.MaximumMemoryBytes < 1 ||
+		!validRepository(config.PromotedRoleImageRepository) || config.RoleRuntimeContractRevision == 0 ||
+		!validSHA256(config.RoleRuntimeContractSHA256) ||
 		!validPinnedImage(config.ControllerImage) || !validPinnedImage(config.AuthorityImage) {
 		return errors.New("runtime-controller bounded configuration is invalid")
 	}
@@ -184,6 +189,16 @@ func (config Config) validate() error {
 		return errors.New("runtime-controller duration is invalid")
 	}
 	return nil
+}
+
+func validRepository(value string) bool {
+	return value != "" && !strings.ContainsAny(value, "@?# \\r\\n\\t") &&
+		strings.Contains(value, "/") && !strings.HasSuffix(value, "/")
+}
+
+func validSHA256(value string) bool {
+	return len(value) == 64 && strings.Trim(value, "0123456789abcdef") == "" &&
+		value != strings.Repeat("0", 64)
 }
 
 func validPinnedImage(value string) bool {

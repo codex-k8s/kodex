@@ -434,6 +434,8 @@ type RuntimeRevisionSpec struct {
 	ImagePolicySHA256                      string                      `json:"imagePolicySha256"`
 	ImageSignatureSHA256                   string                      `json:"imageSignatureSha256"`
 	ImagePromotionReadbackSHA256           string                      `json:"imagePromotionReadbackSha256"`
+	RoleRuntimeContractRevision            uint64                      `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSHA256              string                      `json:"roleRuntimeContractSha256"`
 	PromptProfileID                        string                      `json:"promptProfileId"`
 	PromptRevision                         uint64                      `json:"promptRevision"`
 	CredentialBindingIDs                   []string                    `json:"credentialBindingIds"`
@@ -468,7 +470,8 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		!validSHA256(spec.ImageAdmissionReceiptSHA256) ||
 		!validManifestDigest(spec.ImageAdmissionReceiptOCIManifestDigest) || spec.ImagePolicyRevision == 0 ||
 		!validSHA256(spec.ImagePolicySHA256) || !validSHA256(spec.ImageSignatureSHA256) ||
-		!validSHA256(spec.ImagePromotionReadbackSHA256) ||
+		!validSHA256(spec.ImagePromotionReadbackSHA256) || spec.RoleRuntimeContractRevision == 0 ||
+		!validSHA256(spec.RoleRuntimeContractSHA256) ||
 		value.ValidateID(spec.PromptProfileID) != nil ||
 		spec.PromptRevision == 0 ||
 		len(spec.CredentialBindingIDs) > 64 || len(spec.IntegrationIDs) > 64 ||

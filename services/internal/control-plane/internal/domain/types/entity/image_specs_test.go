@@ -44,8 +44,9 @@ func TestImageArtifactSpecRequiresCompleteExactPromotionEvidence(t *testing.T) {
 		SignatureIdentity: "sha256:" + strings.Repeat("8", 64), SignatureSHA256: strings.Repeat("9", 64),
 		AdmissionRevision: 1, AdmissionReceiptSHA256: strings.Repeat("a", 64),
 		AdmissionReceiptOCIManifestDigest: "sha256:" + strings.Repeat("c", 64),
-		PromotedReference:                 "registry.example.test/promoted/role@sha256:" + digest,
-		PromotionReadbackSHA256:           strings.Repeat("b", 64), PromotedAt: now,
+		RoleRuntimeContractRevision:       1, RoleRuntimeContractSHA256: strings.Repeat("d", 64),
+		PromotedReference:       "registry.example.test/promoted/role@sha256:" + digest,
+		PromotionReadbackSHA256: strings.Repeat("b", 64), PromotedAt: now,
 	}
 	if err := spec.Validate(); err != nil {
 		t.Fatalf("valid promoted artifact rejected: %v", err)

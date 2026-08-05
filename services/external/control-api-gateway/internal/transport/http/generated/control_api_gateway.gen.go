@@ -201,6 +201,8 @@ const (
 	ImageBuildStageDEADLETTER        ImageBuildStage = "DEAD_LETTER"
 	ImageBuildStageEXPIRED           ImageBuildStage = "EXPIRED"
 	ImageBuildStageFAILED            ImageBuildStage = "FAILED"
+	ImageBuildStageINSTALLATION      ImageBuildStage = "INSTALLATION"
+	ImageBuildStageMATERIALIZATION   ImageBuildStage = "MATERIALIZATION"
 	ImageBuildStagePROVENANCE        ImageBuildStage = "PROVENANCE"
 	ImageBuildStageQUEUED            ImageBuildStage = "QUEUED"
 	ImageBuildStageSOLVING           ImageBuildStage = "SOLVING"
@@ -223,6 +225,10 @@ func (e ImageBuildStage) Valid() bool {
 	case ImageBuildStageEXPIRED:
 		return true
 	case ImageBuildStageFAILED:
+		return true
+	case ImageBuildStageINSTALLATION:
+		return true
+	case ImageBuildStageMATERIALIZATION:
 		return true
 	case ImageBuildStagePROVENANCE:
 		return true
@@ -876,6 +882,8 @@ type ImageArtifactProjection struct {
 	RecipeGeneration                  int64                  `json:"recipeGeneration"`
 	RecipeId                          openapi_types.UUID     `json:"recipeId"`
 	RecipeVersion                     int64                  `json:"recipeVersion"`
+	RoleRuntimeContractRevision       int64                  `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSha256         string                 `json:"roleRuntimeContractSha256"`
 	SbomSha256                        *string                `json:"sbomSha256,omitempty"`
 	SignatureIdentity                 *string                `json:"signatureIdentity,omitempty"`
 	SignatureSha256                   *string                `json:"signatureSha256,omitempty"`
@@ -890,6 +898,8 @@ type ImageArtifactProjection struct {
 type ImageBuildProjection struct {
 	Attempt              int                `json:"attempt"`
 	AvailableAt          time.Time          `json:"availableAt"`
+	DiagnosticCode       *string            `json:"diagnosticCode,omitempty"`
+	DiagnosticSummary    *string            `json:"diagnosticSummary,omitempty"`
 	ErrorCode            *string            `json:"errorCode,omitempty"`
 	ImmutableBuildSha256 string             `json:"immutableBuildSha256"`
 	ManifestDigest       *string            `json:"manifestDigest,omitempty"`
@@ -1160,10 +1170,11 @@ type ResourceSpecProjection struct {
 
 // RoleImagePackage defines model for RoleImagePackage.
 type RoleImagePackage struct {
-	Digest  string                  `json:"digest"`
-	Manager RoleImagePackageManager `json:"manager"`
-	Name    string                  `json:"name"`
-	Version string                  `json:"version"`
+	Digest    string                  `json:"digest"`
+	Manager   RoleImagePackageManager `json:"manager"`
+	Name      string                  `json:"name"`
+	SourceRef string                  `json:"sourceRef"`
+	Version   string                  `json:"version"`
 }
 
 // RoleImagePackageManager defines model for RoleImagePackageManager.
@@ -1184,21 +1195,23 @@ type RoleImagePlatformOS string
 
 // RoleImageRecipeInput defines model for RoleImageRecipeInput.
 type RoleImageRecipeInput struct {
-	BaseImageDigest    string              `json:"baseImageDigest"`
-	BaseImageReference string              `json:"baseImageReference"`
-	BuildSecretRefs    []string            `json:"buildSecretRefs"`
-	BuilderSha256      string              `json:"builderSha256"`
-	ContextRef         string              `json:"contextRef"`
-	ContextSha256      string              `json:"contextSha256"`
-	FrontendSha256     string              `json:"frontendSha256"`
-	InstallationBlock  string              `json:"installationBlock"`
-	Packages           []RoleImagePackage  `json:"packages"`
-	Platforms          []RoleImagePlatform `json:"platforms"`
-	SourceRef          string              `json:"sourceRef"`
-	SourceRevision     string              `json:"sourceRevision"`
-	SourceSha256       string              `json:"sourceSha256"`
-	ToolchainSha256    string              `json:"toolchainSha256"`
-	Tools              []RoleImageTool     `json:"tools"`
+	BaseImageDigest    string `json:"baseImageDigest"`
+	BaseImageReference string `json:"baseImageReference"`
+
+	// BuildSecretRefs Необязательные immutable authority refs только для trusted materializer; значения не передаются installation/build layer.
+	BuildSecretRefs   []string            `json:"buildSecretRefs"`
+	BuilderSha256     string              `json:"builderSha256"`
+	ContextRef        string              `json:"contextRef"`
+	ContextSha256     string              `json:"contextSha256"`
+	FrontendSha256    string              `json:"frontendSha256"`
+	InstallationBlock string              `json:"installationBlock"`
+	Packages          []RoleImagePackage  `json:"packages"`
+	Platforms         []RoleImagePlatform `json:"platforms"`
+	SourceRef         string              `json:"sourceRef"`
+	SourceRevision    string              `json:"sourceRevision"`
+	SourceSha256      string              `json:"sourceSha256"`
+	ToolchainSha256   string              `json:"toolchainSha256"`
+	Tools             []RoleImageTool     `json:"tools"`
 }
 
 // RoleImageRecipeProjection defines model for RoleImageRecipeProjection.
@@ -1206,10 +1219,24 @@ type RoleImageRecipeProjection struct {
 	Generation int64 `json:"generation"`
 
 	// Input Безопасная read/status проекция без installation block и build secret references.
-	Input          RoleImageRecipeStatusInput `json:"input"`
-	PolicyRevision int64                      `json:"policyRevision"`
-	PolicySha256   string                     `json:"policySha256"`
-	SpecSha256     string                     `json:"specSha256"`
+	Input                       RoleImageRecipeStatusInput `json:"input"`
+	PolicyRevision              int64                      `json:"policyRevision"`
+	PolicySha256                string                     `json:"policySha256"`
+	RoleRuntimeContractRevision int64                      `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSha256   string                     `json:"roleRuntimeContractSha256"`
+	SpecSha256                  string                     `json:"specSha256"`
+}
+
+// RoleImageRecipeReadback Полный version-pinned owner readback без значений credentials.
+type RoleImageRecipeReadback struct {
+	Generation                  int64                `json:"generation"`
+	Input                       RoleImageRecipeInput `json:"input"`
+	PolicyRevision              int64                `json:"policyRevision"`
+	PolicySha256                string               `json:"policySha256"`
+	Recipe                      Resource             `json:"recipe"`
+	RoleRuntimeContractRevision int64                `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSha256   string               `json:"roleRuntimeContractSha256"`
+	SpecSha256                  string               `json:"specSha256"`
 }
 
 // RoleImageRecipeResult defines model for RoleImageRecipeResult.
@@ -1311,6 +1338,8 @@ type RuntimeRevisionProjection struct {
 	RoleImageRecipeId                      openapi_types.UUID  `json:"roleImageRecipeId"`
 	RoleImageRecipeVersion                 int64               `json:"roleImageRecipeVersion"`
 	RoleImageSpecSha256                    string              `json:"roleImageSpecSha256"`
+	RoleRuntimeContractRevision            int64               `json:"roleRuntimeContractRevision"`
+	RoleRuntimeContractSha256              string              `json:"roleRuntimeContractSha256"`
 	SessionId                              openapi_types.UUID  `json:"sessionId"`
 }
 
@@ -1597,6 +1626,11 @@ type ManageRoleImageRecipeParams struct {
 	IfMatch        *string        `json:"If-Match,omitempty"`
 }
 
+// GetRoleImageRecipeParams defines parameters for GetRoleImageRecipe.
+type GetRoleImageRecipeParams struct {
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	State     *[]LifecycleState `form:"state,omitempty" json:"state,omitempty"`
@@ -1725,6 +1759,9 @@ type ServerInterface interface {
 	// Выполнить закрытую owner-команду RoleImageRecipe
 	// (POST /role-image-recipes/commands)
 	ManageRoleImageRecipe(w http.ResponseWriter, r *http.Request, params ManageRoleImageRecipeParams)
+	// Прочитать exact version полной редактируемой RoleImageRecipe specification
+	// (GET /role-image-recipes/{recipeId})
+	GetRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeId openapi_types.UUID, params GetRoleImageRecipeParams)
 	// Получить авторитетную проекцию запусков
 	// (GET /runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
@@ -3272,6 +3309,66 @@ func (siw *ServerInterfaceWrapper) ManageRoleImageRecipe(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// GetRoleImageRecipe operation middleware
+func (siw *ServerInterfaceWrapper) GetRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeId" -------------
+	var recipeId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeId", r.PathValue("recipeId"), &recipeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRoleImageRecipeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRoleImageRecipe(w, r, recipeId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -3906,6 +4003,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/resources/{resourceId}", wrapper.UpdateResource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources/{resourceId}/transition", wrapper.TransitionResource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/role-image-recipes/commands", wrapper.ManageRoleImageRecipe)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/role-image-recipes/{recipeId}", wrapper.GetRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs", wrapper.ListRuns)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences", wrapper.ListScheduleOccurrences)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences/{occurrenceId}/recovery", wrapper.ResolveScheduleRecovery)

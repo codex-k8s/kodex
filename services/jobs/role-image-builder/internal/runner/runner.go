@@ -40,18 +40,31 @@ func (runner *Runner) Cycle(ctx context.Context) error {
 		return err
 	}
 	runner.metrics.Observe("claim", "success")
-	prepared, err := runner.executor.Prepare(claim.Input)
-	if err != nil {
-		runner.metrics.Observe("context", "rejected")
-		return errors.Join(err, runner.client.Fail(ctx, claim, uuid.NewString(), "CONTEXT_INVALID"))
-	}
-	defer prepared.Close()
 	if err := runner.client.Report(ctx, &claim, uuid.NewString(),
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_CONTEXT_VALIDATION, 15); err != nil {
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_MATERIALIZATION, 5); err != nil {
 		return err
 	}
+	prepared, diagnostic, err := runner.executor.Prepare(ctx, claim.Input, func() error {
+		return runner.client.Report(ctx, &claim, uuid.NewString(),
+			controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_CONTEXT_VALIDATION, 15)
+	})
+	if err != nil {
+		if diagnostic == "CONTEXT_REPORT_REJECTED" {
+			return err
+		}
+		runner.metrics.Observe("materialize", "rejected")
+		errorCode := "MATERIALIZATION_FAILED"
+		if diagnostic == "ARCHIVE_REJECTED" {
+			errorCode = "CONTEXT_INVALID"
+		}
+		return errors.Join(err, runner.client.Fail(ctx, claim, uuid.NewString(), errorCode,
+			diagnostic, "Immutable build input was rejected"))
+	}
+	defer prepared.Close()
+	runner.metrics.Observe("materialize", "success")
+	runner.metrics.Observe("context", "success")
 	if err := runner.client.Report(ctx, &claim, uuid.NewString(),
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING, 30); err != nil {
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING, 25); err != nil {
 		return err
 	}
 	buildContext, cancelBuild := context.WithCancel(ctx)
@@ -61,8 +74,9 @@ func (runner *Runner) Cycle(ctx context.Context) error {
 		err      error
 	}
 	result := make(chan buildResult, 1)
+	phases := make(chan build.Phase, 8)
 	go func() {
-		evidence, buildErr := runner.executor.Build(buildContext, prepared, claim.Attempt)
+		evidence, buildErr := runner.executor.Build(buildContext, prepared, claim.Attempt, phases)
 		result <- buildResult{evidence: evidence, err: buildErr}
 	}()
 	ticker := time.NewTicker(runner.config.RenewInterval)
@@ -72,7 +86,14 @@ func (runner *Runner) Cycle(ctx context.Context) error {
 		case <-ctx.Done():
 			cancelBuild()
 			<-result
-			return errors.Join(ctx.Err(), runner.client.Fail(context.WithoutCancel(ctx), claim, uuid.NewString(), "BUILD_CANCELLED"))
+			return errors.Join(ctx.Err(), runner.client.Fail(context.WithoutCancel(ctx), claim, uuid.NewString(),
+				"BUILD_CANCELLED", "LEASE_REVOKED", "Build was cancelled"))
+		case phase := <-phases:
+			if err := runner.client.Report(ctx, &claim, uuid.NewString(), phase.Stage, phase.Percent); err != nil {
+				cancelBuild()
+				<-result
+				return err
+			}
 		case <-ticker.C:
 			if renewErr := runner.client.Renew(ctx, &claim, uuid.NewString()); renewErr != nil {
 				cancelBuild()
@@ -84,7 +105,11 @@ func (runner *Runner) Cycle(ctx context.Context) error {
 		case completed := <-result:
 			if completed.err != nil {
 				runner.metrics.Observe("build", "error")
-				return errors.Join(completed.err, runner.client.Fail(ctx, claim, uuid.NewString(), "BUILDKIT_FAILED"))
+				failure := build.Failure{ErrorCode: "SOLVE_FAILED", DiagnosticCode: "BUILD_GRAPH_REJECTED",
+					DiagnosticSummary: "Build solve failed"}
+				_ = errors.As(completed.err, &failure)
+				return errors.Join(completed.err, runner.client.Fail(ctx, claim, uuid.NewString(), failure.ErrorCode,
+					failure.DiagnosticCode, failure.DiagnosticSummary))
 			}
 			runner.metrics.Observe("build", "success")
 			if err := runner.client.Report(ctx, &claim, uuid.NewString(),

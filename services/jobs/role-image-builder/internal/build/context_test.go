@@ -55,11 +55,12 @@ func TestExtractContextRejectsTraversalLinksAndSourceMismatch(t *testing.T) {
 	}
 }
 
-func TestDockerfileBindsInstallationBlockAndHidesSecretReference(t *testing.T) {
+func TestDockerfileKeepsInstallationStepPhysicallySecretFreeAndRestoresRuntimeABI(t *testing.T) {
 	input := &controlplanev1.RoleImageBuildInput{
 		FrontendSha256: strings.Repeat("a", 64), BaseImageReference: "registry.example/base/runtime",
 		BaseImageDigest: "sha256:" + strings.Repeat("b", 64), SpecSha256: strings.Repeat("c", 64),
-		InstallationBlock: "echo first", BuildSecretRefs: []string{"vault-versioned://builder/token/v1"},
+		RoleRuntimeContractSha256: strings.Repeat("d", 64),
+		InstallationBlock:         "echo first", BuildSecretRefs: []string{"vault-versioned://builder/token/v1"},
 	}
 	first := installationScript(input)
 	dockerfileRaw := dockerfile(input, "registry.example.test/mattercodex/dockerfile")
@@ -68,10 +69,32 @@ func TestDockerfileBindsInstallationBlockAndHidesSecretReference(t *testing.T) {
 	if bytes.Equal(first, second) {
 		t.Fatal("installation block did not affect BuildKit input")
 	}
-	if bytes.Contains(dockerfileRaw, []byte(input.BuildSecretRefs[0])) || !bytes.Contains(dockerfileRaw, []byte("type=secret")) ||
+	if bytes.Contains(dockerfileRaw, []byte(input.BuildSecretRefs[0])) || bytes.Contains(dockerfileRaw, []byte("type=secret")) ||
 		bytes.Contains(dockerfileRaw, first) || !bytes.Contains(dockerfileRaw, []byte("from=mattercodex-install")) ||
-		bytes.Contains(dockerfileRaw, []byte("COPY .")) || !bytes.Contains(dockerfileRaw, []byte("target=/workspace/source,readonly")) {
-		t.Fatal("Dockerfile exposed a secret reference or omitted the secret mount")
+		bytes.Contains(dockerfileRaw, []byte("COPY .")) || !bytes.Contains(dockerfileRaw, []byte("target=/workspace/source,readonly")) ||
+		!bytes.Contains(dockerfileRaw, []byte("COPY --from=trusted-runtime /usr/local/bin/mattercodex-init")) ||
+		!bytes.Contains(dockerfileRaw, []byte("ENTRYPOINT [\"/usr/local/bin/mattercodex-init\",\"entrypoint\",\"/usr/local/bin/matter-codex-agent-runner\"]")) {
+		t.Fatal("Dockerfile exposed credentials or omitted the protected runtime ABI")
+	}
+}
+
+func TestExtractContextHashesTrailingAndMutatedBytesFromTheSameStream(t *testing.T) {
+	sourceSHA := strings.Repeat("a", 64)
+	raw := tarBytes(t, []tarEntry{{name: ".mattercodex/source.sha256", body: sourceSHA, kind: tar.TypeReg}})
+	digest := sha256.Sum256(raw)
+	for name, input := range map[string][]byte{
+		"trailing": append(append([]byte(nil), raw...), []byte("tampered")...),
+		"mutated":  append(append([]byte(nil), raw[:len(raw)/2]...), bytes.Repeat([]byte{'x'}, len(raw)-len(raw)/2)...),
+	} {
+		t.Run(name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "context")
+			if err := os.Mkdir(destination, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := ExtractContextReader(bytes.NewReader(input), destination, hex.EncodeToString(digest[:]), sourceSHA); err == nil {
+				t.Fatal("changed bytes were accepted after streaming extraction")
+			}
+		})
 	}
 }
 

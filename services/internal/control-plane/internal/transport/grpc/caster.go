@@ -335,6 +335,8 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ImagePolicySHA256:                      value.RuntimeRevision.GetImagePolicySha256(),
 			ImageSignatureSHA256:                   value.RuntimeRevision.GetImageSignatureSha256(),
 			ImagePromotionReadbackSHA256:           value.RuntimeRevision.GetImagePromotionReadbackSha256(),
+			RoleRuntimeContractRevision:            value.RuntimeRevision.GetRoleRuntimeContractRevision(),
+			RoleRuntimeContractSHA256:              value.RuntimeRevision.GetRoleRuntimeContractSha256(),
 			SessionID:                              value.RuntimeRevision.GetSessionId(),
 			RoleID:                                 value.RuntimeRevision.GetRoleId(),
 			ChatID:                                 value.RuntimeRevision.GetChatId(),
@@ -626,9 +628,11 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		}
 		return entity.RoleImageRecipeSpec{
 			Input: input, Generation: value.RoleImageRecipe.GetGeneration(),
-			SpecSHA256:     value.RoleImageRecipe.GetSpecSha256(),
-			PolicyRevision: value.RoleImageRecipe.GetPolicyRevision(),
-			PolicySHA256:   value.RoleImageRecipe.GetPolicySha256(),
+			SpecSHA256:                  value.RoleImageRecipe.GetSpecSha256(),
+			PolicyRevision:              value.RoleImageRecipe.GetPolicyRevision(),
+			PolicySHA256:                value.RoleImageRecipe.GetPolicySha256(),
+			RoleRuntimeContractRevision: value.RoleImageRecipe.GetRoleRuntimeContractRevision(),
+			RoleRuntimeContractSHA256:   value.RoleImageRecipe.GetRoleRuntimeContractSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_ImageBuild:
 		leaseExpiresAt, err := optionalTime(value.ImageBuild.GetLeaseExpiresAt())
@@ -650,6 +654,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProvenanceSHA256: value.ImageBuild.GetProvenanceSha256(), ImmutableBuildSHA256: value.ImageBuild.GetImmutableBuildSha256(),
 			ErrorCode: value.ImageBuild.GetErrorCode(), AvailableAt: availableAt, MaximumAttempts: value.ImageBuild.GetMaximumAttempts(),
 			LeaseTokenSHA256: value.ImageBuild.GetLeaseTokenSha256(), ClaimJTISHA256: value.ImageBuild.GetClaimJtiSha256(),
+			DiagnosticCode: value.ImageBuild.GetDiagnosticCode(), DiagnosticSummary: value.ImageBuild.GetDiagnosticSummary(),
 		}, nil
 	case *controlplanev1.ResourceSpec_ImageArtifact:
 		promotionClaimExpiresAt, err := optionalTime(value.ImageArtifact.GetPromotionClaimExpiresAt())
@@ -661,6 +666,10 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			return nil, err
 		}
 		admissionClaimExpiresAt, err := optionalTime(value.ImageArtifact.GetAdmissionClaimExpiresAt())
+		if err != nil {
+			return nil, err
+		}
+		promotionAuthorizationExpiresAt, err := optionalTime(value.ImageArtifact.GetPromotionAuthorizationExpiresAt())
 		if err != nil {
 			return nil, err
 		}
@@ -681,11 +690,15 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			SignatureIdentity: value.ImageArtifact.GetSignatureIdentity(), SignatureSHA256: value.ImageArtifact.GetSignatureSha256(),
 			AdmissionRevision: value.ImageArtifact.GetAdmissionRevision(), AdmissionReceiptSHA256: value.ImageArtifact.GetAdmissionReceiptSha256(),
 			AdmissionReceiptOCIManifestDigest: value.ImageArtifact.GetAdmissionReceiptOciManifestDigest(),
+			RoleRuntimeContractRevision:       value.ImageArtifact.GetRoleRuntimeContractRevision(),
+			RoleRuntimeContractSHA256:         value.ImageArtifact.GetRoleRuntimeContractSha256(),
 			PromotionClaimJTISHA256:           value.ImageArtifact.GetPromotionClaimJtiSha256(), PromotionClaimExpiresAt: promotionClaimExpiresAt,
 			PromotionClaimantWorkloadID:  value.ImageArtifact.GetPromotionClaimantWorkloadId(),
 			PromotionClaimantSPIFFEID:    value.ImageArtifact.GetPromotionClaimantSpiffeId(),
 			PromotionAuthorityGeneration: value.ImageArtifact.GetPromotionAuthorityGeneration(), PromotionFence: value.ImageArtifact.GetPromotionFence(),
-			PromotedReference: value.ImageArtifact.GetPromotedReference(), PromotionReadbackSHA256: value.ImageArtifact.GetPromotionReadbackSha256(),
+			PromotionAuthorizationTokenSHA256: value.ImageArtifact.GetPromotionAuthorizationTokenSha256(),
+			PromotionAuthorizationExpiresAt:   promotionAuthorizationExpiresAt,
+			PromotedReference:                 value.ImageArtifact.GetPromotedReference(), PromotionReadbackSHA256: value.ImageArtifact.GetPromotionReadbackSha256(),
 			PromotedAt: promotedAt, AdmissionClaimantWorkloadID: value.ImageArtifact.GetAdmissionClaimantWorkloadId(),
 			AdmissionAuthorityGeneration: value.ImageArtifact.GetAdmissionAuthorityGeneration(), AdmissionFence: value.ImageArtifact.GetAdmissionFence(),
 			AdmissionClaimTokenSHA256: value.ImageArtifact.GetAdmissionClaimTokenSha256(), AdmissionClaimExpiresAt: admissionClaimExpiresAt,
@@ -870,6 +883,8 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ImagePolicySha256:                      value.ImagePolicySHA256,
 				ImageSignatureSha256:                   value.ImageSignatureSHA256,
 				ImagePromotionReadbackSha256:           value.ImagePromotionReadbackSHA256,
+				RoleRuntimeContractRevision:            value.RoleRuntimeContractRevision,
+				RoleRuntimeContractSha256:              value.RoleRuntimeContractSHA256,
 				SessionId:                              value.SessionID,
 				RoleId:                                 value.RoleID,
 				ChatId:                                 value.ChatID,
@@ -1108,7 +1123,9 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 			RoleImageRecipe: &controlplanev1.RoleImageRecipeSpec{
 				Input: roleImageInputToProto(value.Input), Generation: value.Generation,
 				SpecSha256: value.SpecSHA256, PolicyRevision: value.PolicyRevision,
-				PolicySha256: value.PolicySHA256,
+				PolicySha256:                value.PolicySHA256,
+				RoleRuntimeContractRevision: value.RoleRuntimeContractRevision,
+				RoleRuntimeContractSha256:   value.RoleRuntimeContractSHA256,
 			},
 		}
 	case entity.ImageBuildSpec:
@@ -1123,6 +1140,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ProvenanceSha256: value.ProvenanceSHA256, ImmutableBuildSha256: value.ImmutableBuildSHA256,
 				ErrorCode: value.ErrorCode, AvailableAt: timestamppb.New(value.AvailableAt), MaximumAttempts: value.MaximumAttempts,
 				LeaseTokenSha256: value.LeaseTokenSHA256, ClaimJtiSha256: value.ClaimJTISHA256,
+				DiagnosticCode: value.DiagnosticCode, DiagnosticSummary: value.DiagnosticSummary,
 			},
 		}
 	case entity.ImageArtifactSpec:
@@ -1143,11 +1161,15 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				SignatureIdentity: value.SignatureIdentity, SignatureSha256: value.SignatureSHA256,
 				AdmissionRevision: value.AdmissionRevision, AdmissionReceiptSha256: value.AdmissionReceiptSHA256,
 				AdmissionReceiptOciManifestDigest: value.AdmissionReceiptOCIManifestDigest,
+				RoleRuntimeContractRevision:       value.RoleRuntimeContractRevision,
+				RoleRuntimeContractSha256:         value.RoleRuntimeContractSHA256,
 				PromotionClaimJtiSha256:           value.PromotionClaimJTISHA256, PromotionClaimExpiresAt: optionalTimestamp(value.PromotionClaimExpiresAt),
 				PromotionClaimantWorkloadId:  value.PromotionClaimantWorkloadID,
 				PromotionClaimantSpiffeId:    value.PromotionClaimantSPIFFEID,
 				PromotionAuthorityGeneration: value.PromotionAuthorityGeneration, PromotionFence: value.PromotionFence,
-				PromotedReference: value.PromotedReference, PromotionReadbackSha256: value.PromotionReadbackSHA256,
+				PromotionAuthorizationTokenSha256: value.PromotionAuthorizationTokenSHA256,
+				PromotionAuthorizationExpiresAt:   optionalTimestamp(value.PromotionAuthorizationExpiresAt),
+				PromotedReference:                 value.PromotedReference, PromotionReadbackSha256: value.PromotionReadbackSHA256,
 				PromotedAt: optionalTimestamp(value.PromotedAt), AdmissionClaimantWorkloadId: value.AdmissionClaimantWorkloadID,
 				AdmissionAuthorityGeneration: value.AdmissionAuthorityGeneration, AdmissionFence: value.AdmissionFence,
 				AdmissionClaimTokenSha256: value.AdmissionClaimTokenSHA256, AdmissionClaimExpiresAt: optionalTimestamp(value.AdmissionClaimExpiresAt),
@@ -1226,7 +1248,7 @@ func roleImageInputFromProto(input *controlplanev1.RoleImageRecipeInput) (entity
 	}
 	for _, item := range input.GetPackages() {
 		result.Packages = append(result.Packages, entity.RoleImagePackage{
-			Manager: item.GetManager(), Name: item.GetName(), Version: item.GetVersion(), Digest: item.GetDigest(),
+			Manager: item.GetManager(), Name: item.GetName(), Version: item.GetVersion(), Digest: item.GetDigest(), SourceRef: item.GetSourceRef(),
 		})
 	}
 	for _, item := range input.GetTools() {
@@ -1256,7 +1278,7 @@ func roleImageInputToProto(input entity.RoleImageRecipeInput) *controlplanev1.Ro
 	}
 	for _, item := range input.Packages {
 		result.Packages = append(result.Packages, &controlplanev1.RoleImagePackage{
-			Manager: item.Manager, Name: item.Name, Version: item.Version, Digest: item.Digest,
+			Manager: item.Manager, Name: item.Name, Version: item.Version, Digest: item.Digest, SourceRef: item.SourceRef,
 		})
 	}
 	for _, item := range input.Tools {

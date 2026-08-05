@@ -45,6 +45,14 @@ spec:
       ports: [{protocol: TCP, port: 1234}]
     - to:
         - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: mattercodex-system}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mattercodex-image-registry
+              mattercodex.dev/registry-scope: pull
+      ports: [{protocol: TCP, port: 5000}]
+    - to:
+        - namespaceSelector:
             matchLabels: {kubernetes.io/metadata.name: observability}
           podSelector:
             matchLabels: {app.kubernetes.io/name: opentelemetry-collector}

@@ -80,11 +80,18 @@ authority_digest=sha256:abababababababababababababababababababababababababababab
 tools_image="registry.example.test/mattercodex/admission-tools@$tools_digest"
 admission_image="registry.example.test/mattercodex/image-admission@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 policy_sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+trusted_base_digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+frontend_sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+runtime_contract_sha256=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 pull_host=registry.nodes.example.test
 "$repository_root/tools/render-image-supply-chain.sh" staging \
-  "$control_digest" "$authority_digest" "$pull_host" "$tools_image" "$admission_image" 7 "$policy_sha256" 3 >"$temporary_directory/supply.yaml"
+  "$control_digest" "$authority_digest" "$pull_host" "$tools_image" "$admission_image" 7 "$policy_sha256" 3 \
+  10.42.0.0/24 fd42::/64 "$trusted_base_digest" "$frontend_sha256" 1 "$runtime_contract_sha256" \
+  >"$temporary_directory/supply.yaml"
 [[ $(grep -F -c "common_name: $pull_host" "$temporary_directory/supply.yaml") -eq 2 ]]
-[[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 3 ]]
+[[ $(grep -F -c 'value: require-and-verify-client-cert' "$temporary_directory/supply.yaml") -eq 4 ]]
+[[ $(grep -F -c '10.42.0.0/24' "$temporary_directory/supply.yaml") -eq 2 ]]
+[[ $(grep -F -c 'fd42::/64' "$temporary_directory/supply.yaml") -eq 2 ]]
 [[ $(grep -F -c "$tools_image" "$temporary_directory/supply.yaml") -ge 5 ]]
 grep -Fq 'openssl x509 -in /identity/tls.crt -checkend 900' "$temporary_directory/supply.yaml"
 grep -Fq 'DOCKER_CONFIG_FILE' "$temporary_directory/supply.yaml"
@@ -92,14 +99,29 @@ grep -Fq "$pull_host/mattercodex/control-plane@$control_digest" "$temporary_dire
 [[ $(grep -F -c 'mattercodex.dev/pull-credential-generation: "3"' \
   "$temporary_directory/supply.yaml") -eq 2 ]]
 grep -Fq 'docker-content-digest:' "$repository_root/deploy/k8s/base/image-supply-chain/registry-readiness.sh"
-grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' "$temporary_directory/supply.yaml"
+grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'base-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
 grep -Fq 'staging-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
+grep -Fq 'staging/readiness:rootless-probe,push=true' \
+  "$repository_root/deploy/k8s/base/image-supply-chain/buildkit.yaml"
 grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
   "$repository_root/deploy/k8s/base/image-supply-chain/cleanup.sh"
+if rg -q 'staging-push|STAGING_DOCKER' \
+  "$repository_root/deploy/k8s/base/role-image-builder"; then
+  echo "builder still receives staging push authority" >&2
+  exit 1
+fi
+if yq eval-all 'select(.kind == "NetworkPolicy" and .metadata.name == "role-image-builder-exact-egress") |
+  .spec.egress[].ports[]?.port' \
+  "$repository_root/deploy/k8s/base/role-image-builder/networkpolicy.yaml" | grep -Fxq 5001; then
+  echo "builder still has staging push egress" >&2
+  exit 1
+fi
 if "$repository_root/tools/render-image-supply-chain.sh" staging \
   "$control_digest" "$authority_digest" registry-pull.mattercodex-system.svc.cluster.local \
-  "$tools_image" "$admission_image" 7 "$policy_sha256" 3 >/dev/null 2>&1; then
+  "$tools_image" "$admission_image" 7 "$policy_sha256" 3 10.42.0.0/24 fd42::/64 \
+  "$trusted_base_digest" "$frontend_sha256" 1 "$runtime_contract_sha256" >/dev/null 2>&1; then
   echo "internal Service DNS was accepted as node pull SAN" >&2
   exit 1
 fi
@@ -109,7 +131,7 @@ cat >"$temporary_directory/bin/kubectl" <<EOF
 #!/bin/sh
 policy_revision=\${FIXTURE_POLICY_REVISION:-7}
 cat <<JSON
-{"immutable":true,"metadata":{"labels":{"mattercodex.dev/owner-intent":"true"},"annotations":{"mattercodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/mattercodex/internal-rpc-authority@$authority_digest","promotionRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles","promotedPullRepository":"registry.example.test/mattercodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft"}}
+{"immutable":true,"metadata":{"labels":{"mattercodex.dev/owner-intent":"true"},"annotations":{"mattercodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/mattercodex/internal-rpc-authority@$authority_digest","promotionRepository":"mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles","promotedPullRepository":"registry.example.test/mattercodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/mattercodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft"}}
 JSON
 EOF
 chmod 0555 "$temporary_directory/bin/kubectl"
@@ -193,6 +215,19 @@ if PATH="$temporary_directory/bin:$PATH" \
   attacker.invalid/tools@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
   >/dev/null 2>&1; then
   echo "caller-selected admission tools image was accepted" >&2
+  exit 1
+fi
+
+jq -n '{User:"10001:10001",
+  Entrypoint:["/usr/local/bin/mattercodex-init","entrypoint","/usr/local/bin/matter-codex-agent-runner"],
+  Cmd:["runtime-session"]}' >"$temporary_directory/runtime-config.json"
+sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" \
+  validate-runtime-config "$temporary_directory/runtime-config.json"
+jq '.Entrypoint = ["/bin/sh"]' "$temporary_directory/runtime-config.json" \
+  >"$temporary_directory/unsafe-runtime-config.json"
+if sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" \
+  validate-runtime-config "$temporary_directory/unsafe-runtime-config.json" >/dev/null 2>&1; then
+  echo "unsafe role runtime ABI was accepted" >&2
   exit 1
 fi
 

@@ -330,6 +330,8 @@ type Revision struct {
 	ImagePolicySHA256                             string
 	ImageSignatureSHA256                          string
 	ImagePromotionReadbackSHA256                  string
+	RoleRuntimeContractRevision                   uint64
+	RoleRuntimeContractSHA256                     string
 	SessionID, RoleID, ChatID                     string
 	ProviderCredentialBindingID                   string
 	ProviderAccountName                           string
@@ -411,7 +413,8 @@ func (revision Revision) ValidateFor(execution Execution) error {
 		!validManifestDigest(revision.ImageAdmissionReceiptOCIManifestDigest) ||
 		revision.ImagePolicyRevision == 0 || !sha256Pattern.MatchString(revision.ImagePolicySHA256) ||
 		!sha256Pattern.MatchString(revision.ImageSignatureSHA256) ||
-		!sha256Pattern.MatchString(revision.ImagePromotionReadbackSHA256) {
+		!sha256Pattern.MatchString(revision.ImagePromotionReadbackSHA256) ||
+		revision.RoleRuntimeContractRevision == 0 || !sha256Pattern.MatchString(revision.RoleRuntimeContractSHA256) {
 		return errors.New("runtime revision does not match execution")
 	}
 	if (execution.ScheduleOccurrenceID == "") != (revision.ScheduledResultContract == nil) ||

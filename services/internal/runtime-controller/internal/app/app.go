@@ -66,10 +66,13 @@ func Run(
 	state.controlPlane, err = controlplane.Dial(startup, controlplane.Config{
 		Mode: controlplane.ModeController, Target: config.ControlPlaneTarget,
 		TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
-		ClientCertificateFile: config.ControlPlaneCertificateFile,
-		ClientPrivateKeyFile:  config.ControlPlanePrivateKeyFile,
-		ApplicationGrantFile:  config.ApplicationGrantFile,
-		ExpectedIssuerUID:     29001, ExpectedIssuerGID: 29000, DialTimeout: 2 * time.Second,
+		ClientCertificateFile:               config.ControlPlaneCertificateFile,
+		ClientPrivateKeyFile:                config.ControlPlanePrivateKeyFile,
+		ApplicationGrantFile:                config.ApplicationGrantFile,
+		ExpectedRoleImageRepository:         config.PromotedRoleImageRepository,
+		ExpectedRoleRuntimeContractRevision: config.RoleRuntimeContractRevision,
+		ExpectedRoleRuntimeContractSHA256:   config.RoleRuntimeContractSHA256,
+		ExpectedIssuerUID:                   29001, ExpectedIssuerGID: 29000, DialTimeout: 2 * time.Second,
 	})
 	if err != nil {
 		return err
@@ -92,7 +95,8 @@ func Run(
 		RunnerControlPlaneTLSServerName: config.RunnerControlPlaneTLSServerName,
 		InteractionGatewayURL:           config.InteractionGatewayURL, SessionMCPURL: config.SessionMCPURL,
 		ControllerImage: config.ControllerImage, AuthorityImage: config.AuthorityImage,
-		StorageClass: config.StorageClass, PVCSize: config.PVCSize,
+		PromotedRoleImageRepository: config.PromotedRoleImageRepository,
+		StorageClass:                config.StorageClass, PVCSize: config.PVCSize,
 		ReadClusterRole:  config.ReadClusterRole,
 		AdminClusterRole: config.AdminClusterRole, ArchiveServiceAccount: config.ArchiveServiceAccount,
 		RestoreServiceAccount: config.RestoreServiceAccount, CleanupServiceAccount: config.CleanupServiceAccount,

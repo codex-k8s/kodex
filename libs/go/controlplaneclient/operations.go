@@ -51,6 +51,7 @@ func ImagePromotionOperations() map[string]string {
 	return map[string]string{
 		"control.image-promotion.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.image-promotion.claim":     controlplanev1.ControlPlaneService_ClaimImagePromotion_FullMethodName,
+		"control.image-promotion.authorize": controlplanev1.ControlPlaneService_AuthorizeImagePromotion_FullMethodName,
 		"control.image-promotion.complete":  controlplanev1.ControlPlaneService_CompleteImagePromotion_FullMethodName,
 	}
 }
@@ -154,6 +155,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"control.schedule.occurrences.list":  controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
 		"control.schedule.recovery.resolve":  controlplanev1.ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
 		"control.role-image-recipe.manage":   controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
+		"control.role-image-recipe.get":      controlplanev1.ControlPlaneService_GetRoleImageRecipe_FullMethodName,
 		"control.image-build.manage":         controlplanev1.ControlPlaneService_ManageImageBuild_FullMethodName,
 		"control.image-build.get":            controlplanev1.ControlPlaneService_GetRoleImageBuild_FullMethodName,
 	}

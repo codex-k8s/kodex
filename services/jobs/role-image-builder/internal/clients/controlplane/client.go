@@ -153,11 +153,12 @@ func (client *Client) Complete(ctx context.Context, claim Claim, key string, evi
 	return nil
 }
 
-func (client *Client) Fail(ctx context.Context, claim Claim, key, errorCode string) error {
+func (client *Client) Fail(ctx context.Context, claim Claim, key, errorCode, diagnosticCode, diagnosticSummary string) error {
 	return client.call(ctx, func(callCtx context.Context) error {
 		_, callErr := client.shared.ControlPlane.FailImageBuild(callCtx, &controlplanev1.FailImageBuildRequest{
 			IdempotencyKey: key, ImageBuildId: claim.BuildID, ExpectedVersion: claim.Version,
 			ExpectedAttempt: claim.Attempt, ExpectedFence: claim.Fence, LeaseToken: claim.LeaseToken, ErrorCode: errorCode,
+			DiagnosticCode: diagnosticCode, DiagnosticSummary: diagnosticSummary,
 		})
 		return callErr
 	})
