@@ -1634,7 +1634,7 @@ func validImageBuildOwnerAction(action ImageBuildOwnerAction) bool {
 
 func validImageBuildErrorCode(code string) bool {
 	switch code {
-	case "MATERIALIZATION_FAILED", "CONTEXT_INVALID", "BASE_PULL_FAILED", "SOLVE_FAILED", "INSTALLATION_FAILED", "STAGING_PUSH_FAILED",
+	case "MATERIALIZATION_FAILED", "CONTEXT_INVALID", "BASE_PULL_FAILED", "SOLVE_FAILED", "INSTALLATION_FAILED", "RUNTIME_FINALIZATION_FAILED", "STAGING_PUSH_FAILED",
 		"PROVENANCE_INVALID", "LEASE_LOST", "DEPENDENCY_UNAVAILABLE", "BUILD_CANCELLED":
 		return true
 	default:
@@ -1651,7 +1651,7 @@ func validImageBuildDiagnostic(code, summary string) bool {
 	}
 	switch code {
 	case "INPUT_FETCH_REJECTED", "INPUT_DIGEST_MISMATCH", "ARCHIVE_REJECTED", "BASE_RESOLUTION_REJECTED",
-		"BUILD_GRAPH_REJECTED", "INSTALL_COMMAND_REJECTED", "STAGING_EXPORT_REJECTED", "PROVENANCE_REJECTED",
+		"BUILD_GRAPH_REJECTED", "INSTALL_COMMAND_REJECTED", "RUNTIME_FINALIZATION_REJECTED", "STAGING_EXPORT_REJECTED", "PROVENANCE_REJECTED",
 		"DEPENDENCY_TIMEOUT", "LEASE_REVOKED":
 		return true
 	default:
@@ -1662,7 +1662,8 @@ func validImageBuildDiagnostic(code, summary string) bool {
 func buildProgressStage(stage entity.ImageBuildStage) bool {
 	return stage == entity.ImageBuildStageMaterialization || stage == entity.ImageBuildStageContextValidation ||
 		stage == entity.ImageBuildStageBasePull || stage == entity.ImageBuildStageSolving ||
-		stage == entity.ImageBuildStageInstallation || stage == entity.ImageBuildStageStagingPush ||
+		stage == entity.ImageBuildStageInstallation || stage == entity.ImageBuildStageTrustedRuntimeFinalization ||
+		stage == entity.ImageBuildStageStagingPush ||
 		stage == entity.ImageBuildStageProvenance
 }
 
@@ -1680,10 +1681,12 @@ func imageBuildStageOrder(stage entity.ImageBuildStage) int {
 		return 4
 	case entity.ImageBuildStageInstallation:
 		return 5
-	case entity.ImageBuildStageStagingPush:
+	case entity.ImageBuildStageTrustedRuntimeFinalization:
 		return 6
-	case entity.ImageBuildStageProvenance:
+	case entity.ImageBuildStageStagingPush:
 		return 7
+	case entity.ImageBuildStageProvenance:
+		return 8
 	default:
 		return 100
 	}

@@ -32,9 +32,11 @@ const (
 
 type Config struct {
 	Binary, Address, TLSServerName, CAFile, CertificateFile, PrivateKeyFile string
-	InputDockerConfig, WorkspaceRoot                                        string
+	InputDockerConfig, BuildKitPullDockerConfig, WorkspaceRoot              string
 	InputRegistryTLSServerName, InputRegistryCAFile                         string
 	InputRegistryCertificateFile, InputRegistryPrivateKeyFile               string
+	CredentialVaultAddress, CredentialVaultTLSServerName                    string
+	CredentialVaultCAFile, CredentialVaultTokenFile, CredentialVaultRole    string
 	InputRepository, TrustedRoleBaseRepository, TrustedRoleBaseDigest       string
 	FrontendRepository, StagingRepository                                   string
 	ExpectedBuilderSHA256, ExpectedFrontendSHA256, ExpectedToolchainSHA256  string
@@ -67,6 +69,7 @@ func New(config Config) (*Executor, error) {
 	if !filepath.IsAbs(config.Binary) ||
 		!filepath.IsAbs(config.WorkspaceRoot) || !filepath.IsAbs(config.CAFile) || !filepath.IsAbs(config.CertificateFile) ||
 		!filepath.IsAbs(config.PrivateKeyFile) || !filepath.IsAbs(config.InputDockerConfig) ||
+		!filepath.IsAbs(config.BuildKitPullDockerConfig) ||
 		!filepath.IsAbs(config.InputRegistryCAFile) || !filepath.IsAbs(config.InputRegistryCertificateFile) ||
 		!filepath.IsAbs(config.InputRegistryPrivateKeyFile) || !validDNSName(config.InputRegistryTLSServerName) ||
 		!strings.HasPrefix(config.Address, "tcp://") || !validDNSName(config.TLSServerName) ||
@@ -80,7 +83,12 @@ func New(config Config) (*Executor, error) {
 	materializer, err := newMaterializer(MaterializerConfig{DockerConfig: config.InputDockerConfig,
 		Repository: config.InputRepository, TLSServerName: config.InputRegistryTLSServerName,
 		CAFile: config.InputRegistryCAFile, CertificateFile: config.InputRegistryCertificateFile,
-		PrivateKeyFile: config.InputRegistryPrivateKeyFile})
+		PrivateKeyFile:               config.InputRegistryPrivateKeyFile,
+		CredentialVaultAddress:       config.CredentialVaultAddress,
+		CredentialVaultTLSServerName: config.CredentialVaultTLSServerName,
+		CredentialVaultCAFile:        config.CredentialVaultCAFile,
+		CredentialVaultTokenFile:     config.CredentialVaultTokenFile,
+		CredentialVaultRole:          config.CredentialVaultRole})
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +124,7 @@ func (executor *Executor) Check(ctx context.Context) error {
 		"--tlsservername", executor.config.TLSServerName, "build", "--frontend", "dockerfile.v0",
 		"--local", "context="+root, "--local", "dockerfile="+root, "--opt", "filename=Dockerfile",
 		"--opt", "platform=linux/amd64", "--output", "type=cacheonly", "--no-cache")
-	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.InputDockerConfig), "HOME="+root)
+	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.BuildKitPullDockerConfig), "HOME="+root)
 	command.Stdout, command.Stderr = io.Discard, io.Discard
 	if err := command.Run(); err != nil {
 		return ErrBuildKit
@@ -217,7 +225,7 @@ func (executor *Executor) Build(
 		"--opt", "attest:provenance=mode=min,builder-id=" + expectedBuilderID, "--progress=rawjson",
 		"--output", "type=image,name=" + tag + ",push=true", "--metadata-file", metadataFile}
 	command := exec.CommandContext(ctx, executor.config.Binary, args...)
-	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.InputDockerConfig), "HOME="+prepared.root)
+	command.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Dir(executor.config.BuildKitPullDockerConfig), "HOME="+prepared.root)
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return controlclient.BuildEvidence{}, Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build graph was rejected"}
@@ -231,7 +239,8 @@ func (executor *Executor) Build(
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
 		stage := phaseFromRawJSON(scanner.Bytes())
-		if stage == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED || stage == lastStage {
+		if stage == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED ||
+			buildStageOrder(stage) <= buildStageOrder(lastStage) {
 			continue
 		}
 		lastStage = stage
@@ -390,6 +399,8 @@ func phaseFromRawJSON(raw []byte) controlplanev1.ImageBuildStage {
 			return controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH
 		case strings.Contains(name, "/run/mattercodex/install.sh"):
 			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION
+		case strings.Contains(name, "copy --from=trusted-runtime"):
+			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION
 		case strings.Contains(name, "load metadata for") && result == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED:
 			result = controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL
 		case name != "" && result == controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED:
@@ -401,10 +412,11 @@ func phaseFromRawJSON(raw []byte) controlplanev1.ImageBuildStage {
 
 func phaseProgress(stage controlplanev1.ImageBuildStage) Phase {
 	percent := map[controlplanev1.ImageBuildStage]uint32{
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL:    35,
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING:      45,
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION: 60,
-		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH: 80,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL:                    35,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING:                      45,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION:                 60,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION: 70,
+		controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH:                 80,
 	}[stage]
 	return Phase{Stage: stage, Percent: percent}
 }
@@ -415,10 +427,29 @@ func failureForStage(stage controlplanev1.ImageBuildStage) Failure {
 		return Failure{"BASE_PULL_FAILED", "BASE_RESOLUTION_REJECTED", "Trusted base pull failed"}
 	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION:
 		return Failure{"INSTALLATION_FAILED", "INSTALL_COMMAND_REJECTED", "Installation step failed"}
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION:
+		return Failure{"RUNTIME_FINALIZATION_FAILED", "RUNTIME_FINALIZATION_REJECTED", "Trusted runtime finalization failed"}
 	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH:
 		return Failure{"STAGING_PUSH_FAILED", "STAGING_EXPORT_REJECTED", "Staging export failed"}
 	default:
 		return Failure{"SOLVE_FAILED", "BUILD_GRAPH_REJECTED", "Build solve failed"}
+	}
+}
+
+func buildStageOrder(stage controlplanev1.ImageBuildStage) int {
+	switch stage {
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL:
+		return 1
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING:
+		return 2
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION:
+		return 3
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION:
+		return 4
+	case controlplanev1.ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH:
+		return 5
+	default:
+		return 0
 	}
 }
 

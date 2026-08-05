@@ -128,11 +128,29 @@ func (input RoleImageRecipeInput) Validate() error {
 	secretRefs := slices.Clone(input.BuildSecretRefs)
 	slices.Sort(secretRefs)
 	for index, reference := range secretRefs {
-		if !validImmutableSecretRef(reference) || (index > 0 && reference == secretRefs[index-1]) {
+		if !validRoleImageBuildSecretRef(reference) || (index > 0 && reference == secretRefs[index-1]) {
 			return errors.New("role image build secret reference is invalid")
 		}
 	}
 	return nil
+}
+
+func validRoleImageBuildSecretRef(reference string) bool {
+	value := strings.TrimPrefix(reference, "vault-versioned://")
+	if value == reference || len(value) < 4 || len(value) > 400 || strings.ContainsAny(value, "?# .\\\r\n\t") {
+		return false
+	}
+	path, version, found := strings.Cut(value, "/v")
+	if !found || path == "" || version == "" || strings.Contains(version, "/") || strings.Trim(version, "0123456789") != "" ||
+		strings.TrimLeft(version, "0") == "" || strings.HasPrefix(path, "/") || strings.HasSuffix(path, "/") {
+		return false
+	}
+	for _, character := range path {
+		if !(character >= 'a' && character <= 'z') && !(character >= '0' && character <= '9') && character != '-' && character != '/' {
+			return false
+		}
+	}
+	return true
 }
 
 type RoleImageRecipeSpec struct {
@@ -159,25 +177,27 @@ func (spec RoleImageRecipeSpec) Validate() error {
 type ImageBuildStage string
 
 const (
-	ImageBuildStageQueued            ImageBuildStage = "QUEUED"
-	ImageBuildStageContextValidation ImageBuildStage = "CONTEXT_VALIDATION"
-	ImageBuildStageMaterialization   ImageBuildStage = "MATERIALIZATION"
-	ImageBuildStageBasePull          ImageBuildStage = "BASE_PULL"
-	ImageBuildStageSolving           ImageBuildStage = "SOLVING"
-	ImageBuildStageInstallation      ImageBuildStage = "INSTALLATION"
-	ImageBuildStageStagingPush       ImageBuildStage = "STAGING_PUSH"
-	ImageBuildStageProvenance        ImageBuildStage = "PROVENANCE"
-	ImageBuildStageCompleted         ImageBuildStage = "COMPLETED"
-	ImageBuildStageFailed            ImageBuildStage = "FAILED"
-	ImageBuildStageCancelled         ImageBuildStage = "CANCELLED"
-	ImageBuildStageExpired           ImageBuildStage = "EXPIRED"
-	ImageBuildStageDeadLetter        ImageBuildStage = "DEAD_LETTER"
+	ImageBuildStageQueued                     ImageBuildStage = "QUEUED"
+	ImageBuildStageContextValidation          ImageBuildStage = "CONTEXT_VALIDATION"
+	ImageBuildStageMaterialization            ImageBuildStage = "MATERIALIZATION"
+	ImageBuildStageBasePull                   ImageBuildStage = "BASE_PULL"
+	ImageBuildStageSolving                    ImageBuildStage = "SOLVING"
+	ImageBuildStageInstallation               ImageBuildStage = "INSTALLATION"
+	ImageBuildStageTrustedRuntimeFinalization ImageBuildStage = "TRUSTED_RUNTIME_FINALIZATION"
+	ImageBuildStageStagingPush                ImageBuildStage = "STAGING_PUSH"
+	ImageBuildStageProvenance                 ImageBuildStage = "PROVENANCE"
+	ImageBuildStageCompleted                  ImageBuildStage = "COMPLETED"
+	ImageBuildStageFailed                     ImageBuildStage = "FAILED"
+	ImageBuildStageCancelled                  ImageBuildStage = "CANCELLED"
+	ImageBuildStageExpired                    ImageBuildStage = "EXPIRED"
+	ImageBuildStageDeadLetter                 ImageBuildStage = "DEAD_LETTER"
 )
 
 func (stage ImageBuildStage) Valid() bool {
 	switch stage {
 	case ImageBuildStageQueued, ImageBuildStageMaterialization, ImageBuildStageContextValidation, ImageBuildStageBasePull,
-		ImageBuildStageSolving, ImageBuildStageInstallation, ImageBuildStageStagingPush, ImageBuildStageProvenance,
+		ImageBuildStageSolving, ImageBuildStageInstallation, ImageBuildStageTrustedRuntimeFinalization,
+		ImageBuildStageStagingPush, ImageBuildStageProvenance,
 		ImageBuildStageCompleted, ImageBuildStageFailed, ImageBuildStageCancelled,
 		ImageBuildStageExpired, ImageBuildStageDeadLetter:
 		return true

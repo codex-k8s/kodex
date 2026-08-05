@@ -194,19 +194,20 @@ func (e ImageAdmissionVerdict) Valid() bool {
 
 // Defines values for ImageBuildStage.
 const (
-	ImageBuildStageBASEPULL          ImageBuildStage = "BASE_PULL"
-	ImageBuildStageCANCELLED         ImageBuildStage = "CANCELLED"
-	ImageBuildStageCOMPLETED         ImageBuildStage = "COMPLETED"
-	ImageBuildStageCONTEXTVALIDATION ImageBuildStage = "CONTEXT_VALIDATION"
-	ImageBuildStageDEADLETTER        ImageBuildStage = "DEAD_LETTER"
-	ImageBuildStageEXPIRED           ImageBuildStage = "EXPIRED"
-	ImageBuildStageFAILED            ImageBuildStage = "FAILED"
-	ImageBuildStageINSTALLATION      ImageBuildStage = "INSTALLATION"
-	ImageBuildStageMATERIALIZATION   ImageBuildStage = "MATERIALIZATION"
-	ImageBuildStagePROVENANCE        ImageBuildStage = "PROVENANCE"
-	ImageBuildStageQUEUED            ImageBuildStage = "QUEUED"
-	ImageBuildStageSOLVING           ImageBuildStage = "SOLVING"
-	ImageBuildStageSTAGINGPUSH       ImageBuildStage = "STAGING_PUSH"
+	ImageBuildStageBASEPULL                   ImageBuildStage = "BASE_PULL"
+	ImageBuildStageCANCELLED                  ImageBuildStage = "CANCELLED"
+	ImageBuildStageCOMPLETED                  ImageBuildStage = "COMPLETED"
+	ImageBuildStageCONTEXTVALIDATION          ImageBuildStage = "CONTEXT_VALIDATION"
+	ImageBuildStageDEADLETTER                 ImageBuildStage = "DEAD_LETTER"
+	ImageBuildStageEXPIRED                    ImageBuildStage = "EXPIRED"
+	ImageBuildStageFAILED                     ImageBuildStage = "FAILED"
+	ImageBuildStageINSTALLATION               ImageBuildStage = "INSTALLATION"
+	ImageBuildStageMATERIALIZATION            ImageBuildStage = "MATERIALIZATION"
+	ImageBuildStagePROVENANCE                 ImageBuildStage = "PROVENANCE"
+	ImageBuildStageQUEUED                     ImageBuildStage = "QUEUED"
+	ImageBuildStageSOLVING                    ImageBuildStage = "SOLVING"
+	ImageBuildStageSTAGINGPUSH                ImageBuildStage = "STAGING_PUSH"
+	ImageBuildStageTRUSTEDRUNTIMEFINALIZATION ImageBuildStage = "TRUSTED_RUNTIME_FINALIZATION"
 )
 
 // Valid indicates whether the value is a known member of the ImageBuildStage enum.
@@ -237,6 +238,8 @@ func (e ImageBuildStage) Valid() bool {
 	case ImageBuildStageSOLVING:
 		return true
 	case ImageBuildStageSTAGINGPUSH:
+		return true
+	case ImageBuildStageTRUSTEDRUNTIMEFINALIZATION:
 		return true
 	default:
 		return false

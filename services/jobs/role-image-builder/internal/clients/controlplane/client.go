@@ -80,6 +80,7 @@ func (client *Client) Claim(ctx context.Context, key string) (Claim, error) {
 	if resource == nil || input == nil || build == nil || resource.GetId() == "" || resource.GetVersion() == 0 ||
 		build.GetAttempt() == 0 || response.GetFence() == 0 || response.GetLeaseToken() == "" ||
 		response.GetLeaseExpiresAt() == nil || input.GetRecipeId() != build.GetRecipeId() ||
+		input.GetProjectId() == "" || input.GetProjectId() != resource.GetProjectId() ||
 		input.GetRecipeVersion() != build.GetRecipeVersion() || input.GetRecipeGeneration() != build.GetRecipeGeneration() ||
 		input.GetSpecSha256() != build.GetSpecSha256() || input.GetImmutableBuildSha256() != build.GetImmutableBuildSha256() {
 		return Claim{}, errors.New("claimed image build tuple is incomplete")

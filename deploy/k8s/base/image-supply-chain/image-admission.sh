@@ -114,6 +114,10 @@ load_owner_claim() {
   [ "$runtime_contract_sha256" = "$ROLE_RUNTIME_CONTRACT_SHA256" ] || fail "runtime contract digest mismatch"
   [ "$base_image_digest" = "$TRUSTED_ROLE_BASE_DIGEST" ] || fail "trusted role base digest mismatch"
   jq -r '.platforms[]' /work/owner-claim.json | sort -u >/work/expected-platforms
+  staging_write_host=${source_ref%%/*}
+  [ "$staging_write_host" = "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001" ] ||
+    fail "unexpected staging write host"
+  source_ref="mattercodex-image-registry-staging-read.mattercodex-system.svc.cluster.local:5004/${source_ref#*/}"
   subject_name=${source_ref%@*}
   staging_host=${source_ref%%/*}
 }
@@ -140,6 +144,10 @@ load_promotion_claim() {
   image_digest=$(jq -er .manifestDigest /work/owner-promotion.json)
   promotion_receipt=$(jq -er .admissionReceiptSHA256 /work/owner-promotion.json)
   staging_receipt_manifest_digest=$(jq -er .admissionReceiptOCIManifestDigest /work/owner-promotion.json)
+  staging_write_host=${source_ref%%/*}
+  [ "$staging_write_host" = "mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001" ] ||
+    fail "unexpected staging write host"
+  source_ref="mattercodex-image-registry-staging-read.mattercodex-system.svc.cluster.local:5004/${source_ref#*/}"
   subject_name=${source_ref%@*}
   staging_host=${source_ref%%/*}
 }
@@ -307,13 +315,11 @@ case "${1:-}" in
       login_registry "$staging_host" /identity/username /identity/password
       verify_image_and_provenance
       export COSIGN_PASSWORD="$(cat /identity/cosign.password)"
-      cosign sign --yes --key /identity/cosign.key "$source_ref"
-      cosign attest --yes --key /identity/cosign.key --type https://mattercodex.dev/attestation/provenance/v1 \
-        --predicate /work/provenance.json "$source_ref"
-      cosign attest --yes --key /identity/cosign.key --type https://mattercodex.dev/attestation/sbom/v1 \
-        --predicate /work/sbom.json "$source_ref"
-      cosign attest --yes --key /identity/cosign.key --type https://mattercodex.dev/attestation/vulnerability/v1 \
-        --predicate /work/vulnerability.json "$source_ref"
+      printf '%s\n' "$image_digest" >/work/image-digest.subject
+      cosign sign-blob --yes --key /identity/cosign.key --output-signature /work/image-digest.sig /work/image-digest.subject
+      for evidence in provenance sbom vulnerability; do
+        cosign sign-blob --yes --key /identity/cosign.key --output-signature "/work/$evidence.sig" "/work/$evidence.json"
+      done
     fi
     write_marker signature.complete
     ;;
@@ -324,10 +330,10 @@ case "${1:-}" in
     signature_identity=not-applicable-rejected
     if [ "$verdict" = ACCEPTED ]; then
       login_registry "$staging_host" /identity/username /identity/password
-      cosign verify --key /identity/cosign.pub "$source_ref" >/work/signature-verification.json
+      cosign verify-blob --key /identity/cosign.pub --signature /work/image-digest.sig /work/image-digest.subject \
+        >/work/signature-verification.json
       for evidence in provenance sbom vulnerability; do
-        cosign verify-attestation --key /identity/cosign.pub \
-          --type "https://mattercodex.dev/attestation/$evidence/v1" "$source_ref" \
+        cosign verify-blob --key /identity/cosign.pub --signature "/work/$evidence.sig" "/work/$evidence.json" \
           >"/work/$evidence-verification.json"
       done
       signature_identity=$(sha256sum /identity/cosign.pub | awk '{print $1}')
@@ -350,10 +356,9 @@ case "${1:-}" in
         verdict:$verdict,signatureIdentity:$signature,signatureSHA256:$signature_sha}' \
       >/work/admission.receipt.json
     sha256sum /work/admission.receipt.json | awk '{print $1}' >/work/admission.receipt.sha256
-    login_registry "$staging_host" /identity/username /identity/password
-    staging_receipt_tag="${subject_name}:admission-receipt-${artifact_id}"
-    publish_or_verify_receipt "$source_ref" "$staging_receipt_tag" /work/admission.receipt.json \
-      "$(cat /work/admission.receipt.sha256)" /work/admission.receipt-manifest.json
+    jq -Sjc -n --arg subject "$image_digest" --arg receipt "$(cat /work/admission.receipt.sha256)" \
+      '{schema:"mattercodex.dev/local-admission-receipt/v1",subjectDigest:$subject,receiptSHA256:$receipt}' \
+      >/work/admission.receipt-manifest.json
     printf 'sha256:%s\n' "$(sha256sum /work/admission.receipt-manifest.json | awk '{print $1}')" \
       >/work/admission.receipt-manifest.digest
     IMAGE_OWNER_SBOM_SHA256_FILE=/work/sbom.sha256 \
@@ -370,17 +375,13 @@ case "${1:-}" in
     load_promotion_claim
     promotion_host=${PROMOTION_REPOSITORY%%/*}
     destination_tag="${PROMOTION_REPOSITORY}:artifact-${artifact_id}"
-    staging_receipt_tag="${subject_name}:admission-receipt-${artifact_id}"
     promoted_receipt_tag="${PROMOTION_REPOSITORY}:admission-receipt-${artifact_id}"
     promotion_reference="${PROMOTION_REPOSITORY}@${image_digest}"
     promoted_reference="${PROMOTED_PULL_REPOSITORY}@${image_digest}"
     login_registry "$staging_host" /identity/staging.username /identity/staging.password
-    regctl artifact get "$staging_receipt_tag" >/work/admission.receipt.json
     [ "$(sha256sum /work/admission.receipt.json | awk '{print $1}')" = "$promotion_receipt" ] ||
       fail "staging admission receipt payload mismatch"
-    publish_or_verify_receipt "$source_ref" "$staging_receipt_tag" /work/admission.receipt.json \
-      "$promotion_receipt" /work/staging.admission.receipt-manifest.json
-    [ "sha256:$(sha256sum /work/staging.admission.receipt-manifest.json | awk '{print $1}')" = \
+    [ "sha256:$(sha256sum /work/admission.receipt-manifest.json | awk '{print $1}')" = \
       "$staging_receipt_manifest_digest" ] || fail "staging admission receipt manifest mismatch"
     # Owner проверяет expiry/revocation/fence до первой pull-visible копии.
     image-admission-bridge authorize-promotion

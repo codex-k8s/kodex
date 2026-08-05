@@ -107,6 +107,58 @@ func TestRolePodProviderRuntimeCannotMountRunnerAuthority(t *testing.T) {
 	}
 }
 
+func TestPodMatchesExactExecutableShape(t *testing.T) {
+	t.Parallel()
+	expected := &corev1.Pod{Spec: corev1.PodSpec{
+		ServiceAccountName: "runtime-access", AutomountServiceAccountToken: boolPointer(false),
+		EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever,
+		TerminationGracePeriodSeconds: int64Pointer(30),
+		SecurityContext:               &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true)},
+		InitContainers: []corev1.Container{
+			{Name: "authority-init", Image: "registry/authority@sha256:" + strings.Repeat("a", 64), Command: []string{"/authority-init"}, Args: []string{"prepare"}},
+			{Name: "workspace-init", Image: "registry/role@sha256:" + strings.Repeat("b", 64), Command: []string{"/mattercodex-init"}, Args: []string{"runtime-init-workspace"}},
+		},
+		Containers: []corev1.Container{
+			{Name: "role-runtime", Image: "registry/role@sha256:" + strings.Repeat("b", 64), Command: []string{"/mattercodex-init"}, Args: []string{"runtime-session"}},
+			{Name: "provider-runtime", Image: "registry/role@sha256:" + strings.Repeat("b", 64), Command: []string{"/mattercodex-init"}, Args: []string{"runtime-provider"}},
+			{Name: "authority", Image: "registry/authority@sha256:" + strings.Repeat("a", 64), Command: []string{"/authority"}, Args: []string{"serve"}},
+		},
+		Volumes: []corev1.Volume{{Name: "runtime-config"}},
+	}}
+	if !podMatches(expected.DeepCopy(), expected) {
+		t.Fatal("canonical 2 init + 3 main Pod was rejected")
+	}
+	mutations := map[string]func(*corev1.Pod){
+		"remove-init": func(pod *corev1.Pod) { pod.Spec.InitContainers = pod.Spec.InitContainers[:1] },
+		"add-init": func(pod *corev1.Pod) {
+			pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{Name: "extra"})
+		},
+		"reorder-init": func(pod *corev1.Pod) {
+			pod.Spec.InitContainers[0], pod.Spec.InitContainers[1] = pod.Spec.InitContainers[1], pod.Spec.InitContainers[0]
+		},
+		"remove-main": func(pod *corev1.Pod) { pod.Spec.Containers = pod.Spec.Containers[:2] },
+		"add-main": func(pod *corev1.Pod) {
+			pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{Name: "extra"})
+		},
+		"reorder-main": func(pod *corev1.Pod) {
+			pod.Spec.Containers[0], pod.Spec.Containers[1] = pod.Spec.Containers[1], pod.Spec.Containers[0]
+		},
+		"image-drift": func(pod *corev1.Pod) {
+			pod.Spec.Containers[0].Image = "registry/other@sha256:" + strings.Repeat("c", 64)
+		},
+		"command-drift":      func(pod *corev1.Pod) { pod.Spec.Containers[0].Command = []string{"/bin/sh"} },
+		"args-drift":         func(pod *corev1.Pod) { pod.Spec.Containers[0].Args = []string{"other"} },
+		"init-command-drift": func(pod *corev1.Pod) { pod.Spec.InitContainers[0].Command = []string{"/bin/sh"} },
+	}
+	for name, mutate := range mutations {
+		actual := expected.DeepCopy()
+		mutate(actual)
+		if podMatches(actual, expected) {
+			t.Fatalf("%s drift was accepted", name)
+		}
+	}
+}
+
 func TestAdmissionAndRBACSelectOnlyExactRuntimeProfile(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..", "..", "deploy", "k8s", "base", "runtime-controller")
 	admission, err := os.ReadFile(filepath.Join(root, "workload-admission.yaml"))

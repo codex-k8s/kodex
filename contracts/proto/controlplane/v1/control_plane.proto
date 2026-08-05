@@ -822,7 +822,8 @@ message RoleImageRecipeInput {
   repeated RoleImageTool tools = 12;
   // Пустая строка — каноническое значение отсутствующего аварийного блока.
   string installation_block = 13;
-  // Неизменяемые authority refs доступны только trusted materialization;
+  // Version-pinned vault-versioned refs доступны только trusted materialization;
+  // binding обязан совпасть с project/recipe/version/generation/sourceRef, а
   // значения не попадают в build context, mounts, logs или provenance.
   repeated string build_secret_refs = 14;
   string toolchain_sha256 = 15;
@@ -883,6 +884,7 @@ enum ImageBuildStage {
   IMAGE_BUILD_STAGE_DEAD_LETTER = 11;
   IMAGE_BUILD_STAGE_MATERIALIZATION = 12;
   IMAGE_BUILD_STAGE_INSTALLATION = 13;
+  IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION = 14;
 }
 
 // ImageArtifactSpec binds all independent admission evidence to one digest.
@@ -2277,6 +2279,8 @@ message RoleImageBuildInput {
   string immutable_build_sha256 = 22;
   uint64 role_runtime_contract_revision = 23;
   string role_runtime_contract_sha256 = 24;
+  // project_id назначен control-plane и связывает trusted credential resolution.
+  string project_id = 25;
 }
 
 message ClaimImageBuildRequest {

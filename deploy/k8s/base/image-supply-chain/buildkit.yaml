@@ -46,6 +46,7 @@ spec:
                 - |
                   work=$(mktemp -d)
                   trap 'rm -rf "$work"' EXIT
+                  export DOCKER_CONFIG=/var/run/secrets/mattercodex/buildkit/tls
                   base=$(cat /var/run/config/mattercodex/image-policy/trustedRoleBaseRepository)
                   base_digest=$(cat /var/run/config/mattercodex/image-policy/trustedRoleBaseDigest)
                   frontend=$(cat /var/run/config/mattercodex/image-policy/frontendSHA256)

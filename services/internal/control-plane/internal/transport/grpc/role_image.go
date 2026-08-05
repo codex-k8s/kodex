@@ -114,6 +114,7 @@ func roleImageBuildInput(claim resource.ImageBuildClaim) *controlplanev1.RoleIma
 		PolicySha256: claim.PolicySHA256, ImmutableBuildSha256: spec.ImmutableBuildSHA256,
 		RoleRuntimeContractRevision: claim.RoleRuntimeContractRevision,
 		RoleRuntimeContractSha256:   claim.RoleRuntimeContractSHA256,
+		ProjectId:                   claim.ImageBuild.ProjectID,
 	}
 }
 

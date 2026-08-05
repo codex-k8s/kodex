@@ -33,6 +33,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/image-admission-bridge ./cmd/image-admission-bridge
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/registry-write-authorizer ./cmd/registry-write-authorizer
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/registry-pull-authorizer ./cmd/registry-pull-authorizer
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/node-pull-bootstrap ./cmd/node-pull-bootstrap
 
 FROM moby/buildkit:v0.24.0-rootless@sha256:995077ff90af1afff56ff23018699d7511d122b2b111041f2011bd12afd5c0fe AS runtime
 COPY --from=build --chmod=0555 /out/role-image-builder /usr/local/bin/role-image-builder
@@ -42,4 +51,7 @@ ENTRYPOINT ["/usr/local/bin/role-image-builder"]
 ARG ADMISSION_TOOLS_IMAGE=admission-tools.invalid/mattercodex/image-admission-tools@sha256:0000000000000000000000000000000000000000000000000000000000000000
 FROM ${ADMISSION_TOOLS_IMAGE} AS admission-runtime
 COPY --from=build --chmod=0555 /out/image-admission-bridge /usr/local/bin/image-admission-bridge
+COPY --from=build --chmod=0555 /out/registry-write-authorizer /usr/local/bin/registry-write-authorizer
+COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/registry-pull-authorizer
+COPY --from=build --chmod=0555 /out/node-pull-bootstrap /usr/local/bin/node-pull-bootstrap
 USER 10001:10001

@@ -1234,20 +1234,21 @@ func (ProcessContinuationKind) EnumDescriptor() ([]byte, []int) {
 type ImageBuildStage int32
 
 const (
-	ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED        ImageBuildStage = 0
-	ImageBuildStage_IMAGE_BUILD_STAGE_QUEUED             ImageBuildStage = 1
-	ImageBuildStage_IMAGE_BUILD_STAGE_CONTEXT_VALIDATION ImageBuildStage = 2
-	ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL          ImageBuildStage = 3
-	ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING            ImageBuildStage = 4
-	ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH       ImageBuildStage = 5
-	ImageBuildStage_IMAGE_BUILD_STAGE_PROVENANCE         ImageBuildStage = 6
-	ImageBuildStage_IMAGE_BUILD_STAGE_COMPLETED          ImageBuildStage = 7
-	ImageBuildStage_IMAGE_BUILD_STAGE_FAILED             ImageBuildStage = 8
-	ImageBuildStage_IMAGE_BUILD_STAGE_CANCELLED          ImageBuildStage = 9
-	ImageBuildStage_IMAGE_BUILD_STAGE_EXPIRED            ImageBuildStage = 10
-	ImageBuildStage_IMAGE_BUILD_STAGE_DEAD_LETTER        ImageBuildStage = 11
-	ImageBuildStage_IMAGE_BUILD_STAGE_MATERIALIZATION    ImageBuildStage = 12
-	ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION       ImageBuildStage = 13
+	ImageBuildStage_IMAGE_BUILD_STAGE_UNSPECIFIED                  ImageBuildStage = 0
+	ImageBuildStage_IMAGE_BUILD_STAGE_QUEUED                       ImageBuildStage = 1
+	ImageBuildStage_IMAGE_BUILD_STAGE_CONTEXT_VALIDATION           ImageBuildStage = 2
+	ImageBuildStage_IMAGE_BUILD_STAGE_BASE_PULL                    ImageBuildStage = 3
+	ImageBuildStage_IMAGE_BUILD_STAGE_SOLVING                      ImageBuildStage = 4
+	ImageBuildStage_IMAGE_BUILD_STAGE_STAGING_PUSH                 ImageBuildStage = 5
+	ImageBuildStage_IMAGE_BUILD_STAGE_PROVENANCE                   ImageBuildStage = 6
+	ImageBuildStage_IMAGE_BUILD_STAGE_COMPLETED                    ImageBuildStage = 7
+	ImageBuildStage_IMAGE_BUILD_STAGE_FAILED                       ImageBuildStage = 8
+	ImageBuildStage_IMAGE_BUILD_STAGE_CANCELLED                    ImageBuildStage = 9
+	ImageBuildStage_IMAGE_BUILD_STAGE_EXPIRED                      ImageBuildStage = 10
+	ImageBuildStage_IMAGE_BUILD_STAGE_DEAD_LETTER                  ImageBuildStage = 11
+	ImageBuildStage_IMAGE_BUILD_STAGE_MATERIALIZATION              ImageBuildStage = 12
+	ImageBuildStage_IMAGE_BUILD_STAGE_INSTALLATION                 ImageBuildStage = 13
+	ImageBuildStage_IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION ImageBuildStage = 14
 )
 
 // Enum value maps for ImageBuildStage.
@@ -1267,22 +1268,24 @@ var (
 		11: "IMAGE_BUILD_STAGE_DEAD_LETTER",
 		12: "IMAGE_BUILD_STAGE_MATERIALIZATION",
 		13: "IMAGE_BUILD_STAGE_INSTALLATION",
+		14: "IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION",
 	}
 	ImageBuildStage_value = map[string]int32{
-		"IMAGE_BUILD_STAGE_UNSPECIFIED":        0,
-		"IMAGE_BUILD_STAGE_QUEUED":             1,
-		"IMAGE_BUILD_STAGE_CONTEXT_VALIDATION": 2,
-		"IMAGE_BUILD_STAGE_BASE_PULL":          3,
-		"IMAGE_BUILD_STAGE_SOLVING":            4,
-		"IMAGE_BUILD_STAGE_STAGING_PUSH":       5,
-		"IMAGE_BUILD_STAGE_PROVENANCE":         6,
-		"IMAGE_BUILD_STAGE_COMPLETED":          7,
-		"IMAGE_BUILD_STAGE_FAILED":             8,
-		"IMAGE_BUILD_STAGE_CANCELLED":          9,
-		"IMAGE_BUILD_STAGE_EXPIRED":            10,
-		"IMAGE_BUILD_STAGE_DEAD_LETTER":        11,
-		"IMAGE_BUILD_STAGE_MATERIALIZATION":    12,
-		"IMAGE_BUILD_STAGE_INSTALLATION":       13,
+		"IMAGE_BUILD_STAGE_UNSPECIFIED":                  0,
+		"IMAGE_BUILD_STAGE_QUEUED":                       1,
+		"IMAGE_BUILD_STAGE_CONTEXT_VALIDATION":           2,
+		"IMAGE_BUILD_STAGE_BASE_PULL":                    3,
+		"IMAGE_BUILD_STAGE_SOLVING":                      4,
+		"IMAGE_BUILD_STAGE_STAGING_PUSH":                 5,
+		"IMAGE_BUILD_STAGE_PROVENANCE":                   6,
+		"IMAGE_BUILD_STAGE_COMPLETED":                    7,
+		"IMAGE_BUILD_STAGE_FAILED":                       8,
+		"IMAGE_BUILD_STAGE_CANCELLED":                    9,
+		"IMAGE_BUILD_STAGE_EXPIRED":                      10,
+		"IMAGE_BUILD_STAGE_DEAD_LETTER":                  11,
+		"IMAGE_BUILD_STAGE_MATERIALIZATION":              12,
+		"IMAGE_BUILD_STAGE_INSTALLATION":                 13,
+		"IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION": 14,
 	}
 )
 
@@ -4205,7 +4208,8 @@ type RoleImageRecipeInput struct {
 	Tools              []*RoleImageTool       `protobuf:"bytes,12,rep,name=tools,proto3" json:"tools,omitempty"`
 	// Пустая строка — каноническое значение отсутствующего аварийного блока.
 	InstallationBlock string `protobuf:"bytes,13,opt,name=installation_block,json=installationBlock,proto3" json:"installation_block,omitempty"`
-	// Неизменяемые authority refs доступны только trusted materialization;
+	// Version-pinned vault-versioned refs доступны только trusted materialization;
+	// binding обязан совпасть с project/recipe/version/generation/sourceRef, а
 	// значения не попадают в build context, mounts, logs или provenance.
 	BuildSecretRefs []string `protobuf:"bytes,14,rep,name=build_secret_refs,json=buildSecretRefs,proto3" json:"build_secret_refs,omitempty"`
 	ToolchainSha256 string   `protobuf:"bytes,15,opt,name=toolchain_sha256,json=toolchainSha256,proto3" json:"toolchain_sha256,omitempty"`
@@ -16209,8 +16213,10 @@ type RoleImageBuildInput struct {
 	ImmutableBuildSha256        string                 `protobuf:"bytes,22,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
 	RoleRuntimeContractRevision uint64                 `protobuf:"varint,23,opt,name=role_runtime_contract_revision,json=roleRuntimeContractRevision,proto3" json:"role_runtime_contract_revision,omitempty"`
 	RoleRuntimeContractSha256   string                 `protobuf:"bytes,24,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// project_id назначен control-plane и связывает trusted credential resolution.
+	ProjectId     string `protobuf:"bytes,25,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RoleImageBuildInput) Reset() {
@@ -16407,6 +16413,13 @@ func (x *RoleImageBuildInput) GetRoleRuntimeContractRevision() uint64 {
 func (x *RoleImageBuildInput) GetRoleRuntimeContractSha256() string {
 	if x != nil {
 		return x.RoleRuntimeContractSha256
+	}
+	return ""
+}
+
+func (x *RoleImageBuildInput) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
 	}
 	return ""
 }
@@ -26865,7 +26878,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12)\n" +
 	"\x10expected_version\x18\x02 \x01(\x04R\x0fexpectedVersion\"O\n" +
 	"\x1aGetRoleImageRecipeResponse\x121\n" +
-	"\x06recipe\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x06recipe\"\xd1\b\n" +
+	"\x06recipe\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x06recipe\"\xf0\b\n" +
 	"\x13RoleImageBuildInput\x12\x1b\n" +
 	"\trecipe_id\x18\x01 \x01(\tR\brecipeId\x12%\n" +
 	"\x0erecipe_version\x18\x02 \x01(\x04R\rrecipeVersion\x12+\n" +
@@ -26894,7 +26907,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\rpolicy_sha256\x18\x15 \x01(\tR\fpolicySha256\x124\n" +
 	"\x16immutable_build_sha256\x18\x16 \x01(\tR\x14immutableBuildSha256\x12C\n" +
 	"\x1erole_runtime_contract_revision\x18\x17 \x01(\x04R\x1broleRuntimeContractRevision\x12?\n" +
-	"\x1crole_runtime_contract_sha256\x18\x18 \x01(\tR\x19roleRuntimeContractSha256\"A\n" +
+	"\x1crole_runtime_contract_sha256\x18\x18 \x01(\tR\x19roleRuntimeContractSha256\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x19 \x01(\tR\tprojectId\"A\n" +
 	"\x16ClaimImageBuildRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\xc1\x02\n" +
 	"\x17ClaimImageBuildResponse\x12:\n" +
@@ -27836,7 +27851,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x17ProcessContinuationKind\x12)\n" +
 	"%PROCESS_CONTINUATION_KIND_UNSPECIFIED\x10\x00\x12(\n" +
 	"$PROCESS_CONTINUATION_KIND_OWNER_GATE\x10\x01\x12)\n" +
-	"%PROCESS_CONTINUATION_KIND_INTEGRATION\x10\x02*\xef\x03\n" +
+	"%PROCESS_CONTINUATION_KIND_INTEGRATION\x10\x02*\xa3\x04\n" +
 	"\x0fImageBuildStage\x12!\n" +
 	"\x1dIMAGE_BUILD_STAGE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18IMAGE_BUILD_STAGE_QUEUED\x10\x01\x12(\n" +
@@ -27852,7 +27867,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12!\n" +
 	"\x1dIMAGE_BUILD_STAGE_DEAD_LETTER\x10\v\x12%\n" +
 	"!IMAGE_BUILD_STAGE_MATERIALIZATION\x10\f\x12\"\n" +
-	"\x1eIMAGE_BUILD_STAGE_INSTALLATION\x10\r*\x8c\x01\n" +
+	"\x1eIMAGE_BUILD_STAGE_INSTALLATION\x10\r\x122\n" +
+	".IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION\x10\x0e*\x8c\x01\n" +
 	"\x15ImageAdmissionVerdict\x12'\n" +
 	"#IMAGE_ADMISSION_VERDICT_UNSPECIFIED\x10\x00\x12$\n" +
 	" IMAGE_ADMISSION_VERDICT_ACCEPTED\x10\x01\x12$\n" +

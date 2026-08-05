@@ -35,7 +35,8 @@ values.
   `INPUT_FETCH_REJECTED`, `INPUT_DIGEST_MISMATCH` и `ARCHIVE_REJECTED`; проверить
   exact OCI manifest/layer media type, size/digest, mTLS SNI/CA и pull-only
   identity. Содержимое и credential не печатать.
-- `BASE_PULL_FAILED`, `SOLVE_FAILED`, `INSTALLATION_FAILED` или
+- `BASE_PULL_FAILED`, `SOLVE_FAILED`, `INSTALLATION_FAILED`,
+  `RUNTIME_FINALIZATION_FAILED` или
   `STAGING_PUSH_FAILED`: сверить соответствующую достигнутую фазу, rootless
   readiness, trusted base/ABI и раздельные registry scopes. Raw BuildKit output
   и insecure fallback запрещены.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/value"
 )
 
 const serviceName = "runtime-controller"
@@ -172,7 +173,7 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSDurable != "RUNTIME_CONTROLLER_V1" ||
 		config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.PostgresPrincipal == "" ||
 		config.MaximumCPUMilli < 1 || config.MaximumMemoryBytes < 1 ||
-		!validRepository(config.PromotedRoleImageRepository) || config.RoleRuntimeContractRevision == 0 ||
+		!value.ValidImageRepository(config.PromotedRoleImageRepository) || config.RoleRuntimeContractRevision == 0 ||
 		!validSHA256(config.RoleRuntimeContractSHA256) ||
 		!validPinnedImage(config.ControllerImage) || !validPinnedImage(config.AuthorityImage) {
 		return errors.New("runtime-controller bounded configuration is invalid")
@@ -189,11 +190,6 @@ func (config Config) validate() error {
 		return errors.New("runtime-controller duration is invalid")
 	}
 	return nil
-}
-
-func validRepository(value string) bool {
-	return value != "" && !strings.ContainsAny(value, "@?# \\r\\n\\t") &&
-		strings.Contains(value, "/") && !strings.HasSuffix(value, "/")
 }
 
 func validSHA256(value string) bool {

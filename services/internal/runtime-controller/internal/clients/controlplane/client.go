@@ -13,6 +13,7 @@ import (
 	runtimerepo "github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/repository/runtime"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -75,7 +76,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if config.ExpectedRoleImageRepository == "" || strings.ContainsAny(config.ExpectedRoleImageRepository, "@?# \\r\\n\\t") ||
+	if !value.ValidImageRepository(config.ExpectedRoleImageRepository) ||
 		config.ExpectedRoleRuntimeContractRevision == 0 || len(config.ExpectedRoleRuntimeContractSHA256) != 64 ||
 		strings.Trim(config.ExpectedRoleRuntimeContractSHA256, "0123456789abcdef") != "" {
 		_ = client.Close()

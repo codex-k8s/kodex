@@ -102,7 +102,7 @@ workspace после attempt. Package/tool устанавливаются offlin
 список `apk|apt|dnf|pip|npm`; context доступен installation step read-only.
 
 Достижимые фазы: `MATERIALIZATION`, `CONTEXT_VALIDATION`, `BASE_PULL`,
-`SOLVING`, `INSTALLATION`, `STAGING_PUSH`, `PROVENANCE`. Диагностика содержит
+`SOLVING`, `INSTALLATION`, `TRUSTED_RUNTIME_FINALIZATION`, `STAGING_PUSH`, `PROVENANCE`. Диагностика содержит
 только закрытые `errorCode`/`diagnosticCode` и bounded безопасный summary; raw
 BuildKit output и credential values отбрасываются.
 

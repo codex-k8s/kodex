@@ -101,10 +101,34 @@ digest-named пути, повторно хешируются до BuildKit, ус
 source context подключается к installation step read-only и не входит в layers.
 
 Фазы сборки достижимы и закрыты: `MATERIALIZATION`, `CONTEXT_VALIDATION`,
-`BASE_PULL`, `SOLVING`, `INSTALLATION`, `STAGING_PUSH`, `PROVENANCE`.
+`BASE_PULL`, `SOLVING`, `INSTALLATION`, `TRUSTED_RUNTIME_FINALIZATION`,
+`STAGING_PUSH`, `PROVENANCE`. Финализация означает только server-owned перенос
+защищённых runtime-компонентов после пользовательской установки и не считается
+возвратом в общую фазу `SOLVING`.
 `ImageBuild` сохраняет только bounded `errorCode`, `diagnosticCode` и безопасный
 summary до 256 байт. Raw BuildKit output, installation text, context paths и
 credential values в status/log/audit/provenance не публикуются.
+
+`buildSecretRefs` использует только форму
+`vault-versioned://<bounded-path>/v<version>`. Trusted materializer получает
+короткий Vault token через свой projected ServiceAccount token и принимает
+binding лишь при точном совпадении `projectId`, `recipeId`, recipe
+version/generation и одного `sourceRef`. Credential живёт только в памяти HTTP
+клиента; untrusted `RUN`, context, cache и owner state его не получают.
+
+BuildKit frontend/base pull использует отдельные `pki-public` CA/SNI и
+pull-only Docker config; тот же путь выполняют readiness и production
+`buildctl`. Staging write проходит через отдельный trust root и server-side
+authorizer, допускающий только CN BuildKit, методы OCI push и два закрытых
+repository. Scan/sign/admit/promote читают staging через отдельный read-only
+endpoint; подписи и admission receipt до owner authorization остаются в
+Job-owned immutable workspace.
+
+Node pull bootstrap запускается из внешнего bootstrap image до protected pull,
+выпускает в Vault короткую per-node certificate identity с exact node IP и
+generation, атомарно обновляет containerd `hosts.toml`, затем проверяет реальный
+CRI `PullImage` exact digest. Общий node password, anonymous fallback и
+ручная host-настройка не используются.
 
 ## Сквозная карта authority и lifecycle
 

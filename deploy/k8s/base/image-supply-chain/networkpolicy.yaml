@@ -64,11 +64,6 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-buildkit
-        - podSelector:
-            matchExpressions:
-              - key: mattercodex.dev/image-admission-phase
-                operator: In
-                values: [scan, sign, admit, promote]
       ports:
         - protocol: TCP
           port: 5001
@@ -237,9 +232,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-image-registry
-              mattercodex.dev/registry-scope: push
+              mattercodex.dev/registry-scope: staging-read
       ports:
-        - {protocol: TCP, port: 5001}
+        - {protocol: TCP, port: 5004}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -264,9 +259,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mattercodex-image-registry
-              mattercodex.dev/registry-scope: push
+              mattercodex.dev/registry-scope: staging-read
       ports:
-        - {protocol: TCP, port: 5001}
+        - {protocol: TCP, port: 5004}
     - to:
         - podSelector:
             matchLabels:
@@ -274,6 +269,26 @@ spec:
               mattercodex.dev/registry-scope: promotion
       ports:
         - {protocol: TCP, port: 5003}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattercodex-image-registry-staging-read
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mattercodex-image-registry
+      mattercodex.dev/registry-scope: staging-read
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: mattercodex.dev/image-admission-phase
+                operator: In
+                values: [scan, sign, admit, promote]
+      ports: [{protocol: TCP, port: 5004}]
+  egress: []
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

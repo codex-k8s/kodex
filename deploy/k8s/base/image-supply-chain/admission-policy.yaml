@@ -14,6 +14,8 @@ data:
   authorityImage: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
   promotionRepository: mattercodex-image-registry-promotion.mattercodex-system.svc.cluster.local:5003/mattercodex/roles
   promotedPullRepository: registry-pull.invalid/mattercodex/roles
+  pullCredentialGeneration: "0"
+  nodeReadbackImage: registry-pull.invalid/mattercodex/roles@sha256:0000000000000000000000000000000000000000000000000000000000000000
   roleImageInputRepository: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/role-image-inputs
   policyRevision: "0"
   policySHA256: "0000000000000000000000000000000000000000000000000000000000000000"
