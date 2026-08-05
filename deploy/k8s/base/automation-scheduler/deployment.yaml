@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: automation-scheduler
+  labels:
+    app.kubernetes.io/name: automation-scheduler
+    app.kubernetes.io/component: scheduler-job
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: automation-scheduler
+      app.kubernetes.io/component: scheduler-job
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: automation-scheduler
+        app.kubernetes.io/component: scheduler-job
+    spec:
+      serviceAccountName: automation-scheduler
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 35
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: automation-scheduler
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/automation-scheduler@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: automation-scheduler-runtime
+          env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['mattercodex.dev/environment']"
+            - name: AUTOMATION_SCHEDULER_CONTROL_PLANE_CA_FILE
+              value: /var/run/config/mattercodex/automation-scheduler/control-plane/ca.pem
+            - name: AUTOMATION_SCHEDULER_CONTROL_PLANE_CERTIFICATE_FILE
+              value: /var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.crt
+            - name: AUTOMATION_SCHEDULER_CONTROL_PLANE_PRIVATE_KEY_FILE
+              value: /var/run/secrets/mattercodex/automation-scheduler/workload-tls/tls.key
+            - name: AUTOMATION_SCHEDULER_APPLICATION_GRANT_FILE
+              value: /var/run/secrets/mattercodex/automation-scheduler/application-grant/application-grant.jws
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector.observability.svc:4317
+            - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
+              value: otel-collector.observability.svc.cluster.local
+            - name: OTEL_EXPORTER_OTLP_CA_FILE
+              value: /var/run/config/mattercodex/automation-scheduler/observability/otel-ca.pem
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+            - name: SENTRY_DSN_FILE
+              value: /var/run/secrets/mattercodex/automation-scheduler/observability/sentry-dsn
+            - name: SENTRY_EXPECTED_HOST
+              value: sentry-relay.observability.svc:8443
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          startupProbe: &technicalProbe
+            httpGet:
+              path: /livez
+              port: metrics
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            <<: *technicalProbe
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: metrics
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: workload-tls
+              mountPath: /var/run/secrets/mattercodex/automation-scheduler/workload-tls
+              readOnly: true
+            - name: control-plane-ca
+              mountPath: /var/run/config/mattercodex/automation-scheduler/control-plane
+              readOnly: true
+            - name: application-grant
+              mountPath: /var/run/secrets/mattercodex/automation-scheduler/application-grant
+              readOnly: true
+            - name: otel-ca
+              mountPath: /var/run/config/mattercodex/automation-scheduler/observability
+              readOnly: true
+            - name: sentry-dsn
+              mountPath: /var/run/secrets/mattercodex/automation-scheduler/observability
+              readOnly: true
+      volumes:
+        - name: workload-tls
+          secret:
+            secretName: internal-rpc-authority-automation-scheduler-workload-tls
+            defaultMode: 0440
+        - name: control-plane-ca
+          configMap:
+            name: mattercodex-internal-ca
+            defaultMode: 0440
+        - name: application-grant
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: automation-scheduler-application-grant
+        - name: otel-ca
+          configMap:
+            name: mattercodex-otel-ca
+            defaultMode: 0440
+        - name: sentry-dsn
+          secret:
+            secretName: mattercodex-sentry
+            defaultMode: 0440

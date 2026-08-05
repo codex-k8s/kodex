@@ -5,3 +5,5 @@ immutable input, grant, retry и terminal result принадлежат доме
 
 - [agent-runner](agent-runner/README.md) исполняет один claimed Turn и signed
   runtime handoff без transport и orchestration authority.
+- [automation-scheduler](automation-scheduler/README.md) ограниченно будит
+  server-owned schedule lifecycle через защищённый control-plane path.

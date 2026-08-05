@@ -356,25 +356,71 @@ type ManageScheduleInput struct {
 	DetachGitManagement bool
 }
 
+type RunScheduleNowInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ScheduleID      string
+	ExpectedVersion uint64
+}
+
 type ClaimScheduleOccurrenceInput struct {
 	Principal      value.Principal
 	IdempotencyKey string
 }
 
+type ScheduleOccurrenceClaimDisposition string
+
+const (
+	ScheduleOccurrenceClaimReserved     ScheduleOccurrenceClaimDisposition = "RESERVED"
+	ScheduleOccurrenceClaimMaterialized ScheduleOccurrenceClaimDisposition = "MATERIALIZED"
+	ScheduleOccurrenceClaimRetired      ScheduleOccurrenceClaimDisposition = "RETIRED"
+)
+
 type ScheduleOccurrenceResult struct {
-	Occurrence domainrepo.ScheduleOccurrence
-	LeaseToken string
+	Occurrence                      domainrepo.ScheduleOccurrence
+	MaterializationCapability       string
+	MaterializationIdempotencyKey   string
+	CapabilityExpiresAt             time.Time
+	ProjectID                       string
+	Disposition                     ScheduleOccurrenceClaimDisposition
+}
+
+type MaterializeScheduleOccurrenceInput struct {
+	Principal                 value.Principal
+	IdempotencyKey            string
+	OccurrenceID              string
+	ProjectID                 string
+	ExpectedAttempt           uint32
+	MaterializationCapability string
+}
+
+type MaterializeScheduleOccurrenceResult struct {
+	Occurrence           domainrepo.ScheduleOccurrence
+	CompletionCapability string
 }
 
 type CompleteScheduleOccurrenceInput struct {
-	Principal        value.Principal
-	IdempotencyKey   string
-	OccurrenceID     string
-	LeaseToken       string
-	ExpectedAttempt  uint32
-	TerminalState    string
-	Outcome          string
-	ResultArtifactID string
+	Principal            value.Principal
+	IdempotencyKey       string
+	OccurrenceID         string
+	CompletionCapability string
+	ExpectedAttempt      uint32
+	TerminalState        string
+	Outcome              string
+	ResultArtifactID     string
+	ProjectID            string
+}
+
+type ResolveScheduleRecoveryInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ScheduleID      string
+	OccurrenceID    string
+	ExpectedVersion uint64
+	ExpectedAttempt uint32
+	Action          string
+	EvidenceSHA256  string
+	ReasonCode      string
 }
 
 type CancelScheduleOccurrenceInput struct {
@@ -612,6 +658,7 @@ type RecordRuntimeIncidentInput struct {
 type CompleteRuntimeExecutionInput struct {
 	RuntimeExecutionInput
 	Outcome, TerminalReference, TerminalSHA256                            string
+	ScheduledOutcome                                                      string
 	Outputs                                                               []RuntimeOutput
 	CodexSessionID, ArchiveRelativePath, ArchiveSHA256, ArchiveProvenance string
 }
@@ -860,4 +907,5 @@ type AcknowledgeIntegrationContinuationInput struct {
 // Observer получает только закрытые вид и действие после устойчивой фиксации.
 type Observer interface {
 	ObserveMutation(kind enum.Kind, action string)
+	ObserveScheduleMaintenance(effect string)
 }

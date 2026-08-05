@@ -56,11 +56,14 @@ const (
 	ControlPlaneService_ManageMemoryRecord_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
 	ControlPlaneService_ManageWorkClaim_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
 	ControlPlaneService_ManageSchedule_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ManageSchedule"
+	ControlPlaneService_RunScheduleNow_FullMethodName                           = "/controlplane.v1.ControlPlaneService/RunScheduleNow"
 	ControlPlaneService_ClaimDueSchedules_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
 	ControlPlaneService_ClaimScheduleOccurrence_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ClaimScheduleOccurrence"
+	ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName            = "/controlplane.v1.ControlPlaneService/MaterializeScheduleOccurrence"
 	ControlPlaneService_CompleteScheduleOccurrence_FullMethodName               = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
 	ControlPlaneService_CancelScheduleOccurrence_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CancelScheduleOccurrence"
 	ControlPlaneService_ListScheduleOccurrences_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ListScheduleOccurrences"
+	ControlPlaneService_ResolveScheduleRecovery_FullMethodName                  = "/controlplane.v1.ControlPlaneService/ResolveScheduleRecovery"
 	ControlPlaneService_StartProcess_FullMethodName                             = "/controlplane.v1.ControlPlaneService/StartProcess"
 	ControlPlaneService_CancelProcess_FullMethodName                            = "/controlplane.v1.ControlPlaneService/CancelProcess"
 	ControlPlaneService_CompleteProcess_FullMethodName                          = "/controlplane.v1.ControlPlaneService/CompleteProcess"
@@ -209,17 +212,24 @@ type ControlPlaneServiceClient interface {
 	ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(ctx context.Context, in *ManageScheduleRequest, opts ...grpc.CallOption) (*ManageScheduleResponse, error)
+	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
+	// плановый watermark расписания.
+	RunScheduleNow(ctx context.Context, in *RunScheduleNowRequest, opts ...grpc.CallOption) (*RunScheduleNowResponse, error)
 	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
 	// среды исполнения.
 	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
 	// ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	ClaimScheduleOccurrence(ctx context.Context, in *ClaimScheduleOccurrenceRequest, opts ...grpc.CallOption) (*ClaimScheduleOccurrenceResponse, error)
+	// MaterializeScheduleOccurrence расходует одноразовую exact-occurrence capability.
+	MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error)
 	// CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CompleteScheduleOccurrence(ctx context.Context, in *CompleteScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CompleteScheduleOccurrenceResponse, error)
 	// CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CancelScheduleOccurrence(ctx context.Context, in *CancelScheduleOccurrenceRequest, opts ...grpc.CallOption) (*CancelScheduleOccurrenceResponse, error)
 	// ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
 	ListScheduleOccurrences(ctx context.Context, in *ListScheduleOccurrencesRequest, opts ...grpc.CallOption) (*ListScheduleOccurrencesResponse, error)
+	// ResolveScheduleRecovery — единственный owner repair/cancel/skip path RECOVERY_BLOCKED.
+	ResolveScheduleRecovery(ctx context.Context, in *ResolveScheduleRecoveryRequest, opts ...grpc.CallOption) (*ResolveScheduleRecoveryResponse, error)
 	// StartProcess выполняет версионированную операцию ControlPlaneService.
 	StartProcess(ctx context.Context, in *StartProcessRequest, opts ...grpc.CallOption) (*StartProcessResponse, error)
 	// CancelProcess выполняет версионированную операцию ControlPlaneService.
@@ -722,6 +732,16 @@ func (c *controlPlaneServiceClient) ManageSchedule(ctx context.Context, in *Mana
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) RunScheduleNow(ctx context.Context, in *RunScheduleNowRequest, opts ...grpc.CallOption) (*RunScheduleNowResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RunScheduleNowResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RunScheduleNow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimDueSchedulesResponse)
@@ -736,6 +756,16 @@ func (c *controlPlaneServiceClient) ClaimScheduleOccurrence(ctx context.Context,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimScheduleOccurrenceResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ClaimScheduleOccurrence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeScheduleOccurrenceResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -766,6 +796,16 @@ func (c *controlPlaneServiceClient) ListScheduleOccurrences(ctx context.Context,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListScheduleOccurrencesResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ListScheduleOccurrences_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ResolveScheduleRecovery(ctx context.Context, in *ResolveScheduleRecoveryRequest, opts ...grpc.CallOption) (*ResolveScheduleRecoveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveScheduleRecoveryResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveScheduleRecovery_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1404,17 +1444,24 @@ type ControlPlaneServiceServer interface {
 	ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error)
+	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
+	// плановый watermark расписания.
+	RunScheduleNow(context.Context, *RunScheduleNowRequest) (*RunScheduleNowResponse, error)
 	// ClaimDueSchedules материализует наступившие QUEUED-запуски без запуска
 	// среды исполнения.
 	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
 	// ClaimScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	ClaimScheduleOccurrence(context.Context, *ClaimScheduleOccurrenceRequest) (*ClaimScheduleOccurrenceResponse, error)
+	// MaterializeScheduleOccurrence расходует одноразовую exact-occurrence capability.
+	MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error)
 	// CompleteScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error)
 	// CancelScheduleOccurrence выполняет версионированную операцию ControlPlaneService.
 	CancelScheduleOccurrence(context.Context, *CancelScheduleOccurrenceRequest) (*CancelScheduleOccurrenceResponse, error)
 	// ListScheduleOccurrences выполняет версионированную операцию ControlPlaneService.
 	ListScheduleOccurrences(context.Context, *ListScheduleOccurrencesRequest) (*ListScheduleOccurrencesResponse, error)
+	// ResolveScheduleRecovery — единственный owner repair/cancel/skip path RECOVERY_BLOCKED.
+	ResolveScheduleRecovery(context.Context, *ResolveScheduleRecoveryRequest) (*ResolveScheduleRecoveryResponse, error)
 	// StartProcess выполняет версионированную операцию ControlPlaneService.
 	StartProcess(context.Context, *StartProcessRequest) (*StartProcessResponse, error)
 	// CancelProcess выполняет версионированную операцию ControlPlaneService.
@@ -1658,11 +1705,17 @@ func (UnimplementedControlPlaneServiceServer) ManageWorkClaim(context.Context, *
 func (UnimplementedControlPlaneServiceServer) ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageSchedule not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) RunScheduleNow(context.Context, *RunScheduleNowRequest) (*RunScheduleNowResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RunScheduleNow not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimDueSchedules not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ClaimScheduleOccurrence(context.Context, *ClaimScheduleOccurrenceRequest) (*ClaimScheduleOccurrenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimScheduleOccurrence not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeScheduleOccurrence not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CompleteScheduleOccurrence(context.Context, *CompleteScheduleOccurrenceRequest) (*CompleteScheduleOccurrenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteScheduleOccurrence not implemented")
@@ -1672,6 +1725,9 @@ func (UnimplementedControlPlaneServiceServer) CancelScheduleOccurrence(context.C
 }
 func (UnimplementedControlPlaneServiceServer) ListScheduleOccurrences(context.Context, *ListScheduleOccurrencesRequest) (*ListScheduleOccurrencesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListScheduleOccurrences not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ResolveScheduleRecovery(context.Context, *ResolveScheduleRecoveryRequest) (*ResolveScheduleRecoveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveScheduleRecovery not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) StartProcess(context.Context, *StartProcessRequest) (*StartProcessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartProcess not implemented")
@@ -2522,6 +2578,24 @@ func _ControlPlaneService_ManageSchedule_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_RunScheduleNow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunScheduleNowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RunScheduleNow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RunScheduleNow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RunScheduleNow(ctx, req.(*RunScheduleNowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ClaimDueSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimDueSchedulesRequest)
 	if err := dec(in); err != nil {
@@ -2554,6 +2628,24 @@ func _ControlPlaneService_ClaimScheduleOccurrence_Handler(srv interface{}, ctx c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ClaimScheduleOccurrence(ctx, req.(*ClaimScheduleOccurrenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_MaterializeScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeScheduleOccurrenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).MaterializeScheduleOccurrence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).MaterializeScheduleOccurrence(ctx, req.(*MaterializeScheduleOccurrenceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2608,6 +2700,24 @@ func _ControlPlaneService_ListScheduleOccurrences_Handler(srv interface{}, ctx c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ListScheduleOccurrences(ctx, req.(*ListScheduleOccurrencesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ResolveScheduleRecovery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveScheduleRecoveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ResolveScheduleRecovery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ResolveScheduleRecovery(ctx, req.(*ResolveScheduleRecoveryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3740,12 +3850,20 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ManageSchedule_Handler,
 		},
 		{
+			MethodName: "RunScheduleNow",
+			Handler:    _ControlPlaneService_RunScheduleNow_Handler,
+		},
+		{
 			MethodName: "ClaimDueSchedules",
 			Handler:    _ControlPlaneService_ClaimDueSchedules_Handler,
 		},
 		{
 			MethodName: "ClaimScheduleOccurrence",
 			Handler:    _ControlPlaneService_ClaimScheduleOccurrence_Handler,
+		},
+		{
+			MethodName: "MaterializeScheduleOccurrence",
+			Handler:    _ControlPlaneService_MaterializeScheduleOccurrence_Handler,
 		},
 		{
 			MethodName: "CompleteScheduleOccurrence",
@@ -3758,6 +3876,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListScheduleOccurrences",
 			Handler:    _ControlPlaneService_ListScheduleOccurrences_Handler,
+		},
+		{
+			MethodName: "ResolveScheduleRecovery",
+			Handler:    _ControlPlaneService_ResolveScheduleRecovery_Handler,
 		},
 		{
 			MethodName: "StartProcess",

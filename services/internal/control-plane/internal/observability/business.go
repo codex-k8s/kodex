@@ -8,7 +8,8 @@ import (
 
 // BusinessMetrics реализует domain observer без aggregate/tenant labels.
 type BusinessMetrics struct {
-	mutations *prometheus.CounterVec
+	mutations           *prometheus.CounterVec
+	scheduleMaintenance *prometheus.CounterVec
 }
 
 // NewBusinessMetrics регистрирует закрытые kind/action labels.
@@ -21,10 +22,22 @@ func NewBusinessMetrics(
 		Name:      "mutations_total",
 		Help:      "Total number of durably committed control-plane mutations.",
 	}, []string{"kind", "action"})
-	if err := register(mutations); err != nil {
+	scheduleMaintenance := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "mattercodex", Subsystem: "control_plane",
+		Name: "schedule_maintenance_total",
+		Help: "Total number of independently committed schedule maintenance effects.",
+	}, []string{"effect"})
+	if err := register(mutations, scheduleMaintenance); err != nil {
 		return nil, err
 	}
-	return &BusinessMetrics{mutations: mutations}, nil
+	return &BusinessMetrics{mutations: mutations, scheduleMaintenance: scheduleMaintenance}, nil
+}
+
+func (metrics *BusinessMetrics) ObserveScheduleMaintenance(effect string) {
+	switch effect {
+	case "requeue", "dead_letter", "overlap_skip", "quarantine", "blocked_recovery", "repair", "reservation_expired":
+		metrics.scheduleMaintenance.WithLabelValues(effect).Inc()
+	}
 }
 
 // ObserveMutation учитывает только уже проверенные enum/action.

@@ -44,7 +44,6 @@ resolution, idempotency или replay protection. Payload, labels и NATS envelo
 control-plane owner transaction + outbox
   -> CONTROL_PLANE exact subjects:
        control_plane.runtime_configuration_changed
-       control_plane.schedule_changed
   -> JetStream durable RUNTIME_CONTROLLER_V1
   -> postgresinbox.Acquire(canonical envelope)
        duplicate/stale => durable ACK без gRPC hydration

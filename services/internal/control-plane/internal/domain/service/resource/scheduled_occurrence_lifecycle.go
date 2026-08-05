@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -38,12 +39,13 @@ func materializeScheduledOccurrence(
 	claim scheduledOccurrenceClaimBinding,
 	now time.Time,
 ) error {
-	if occurrence == nil || occurrence.State != "QUEUED" ||
+	if occurrence == nil || occurrence.State != "RESERVED" ||
 		occurrence.Attempt == 0 || occurrence.EffectiveInputSHA256 != snapshotSHA256 ||
 		!validSHA256Text(snapshotSHA256) || occurrenceHasExecutionBinding(*occurrence) ||
-		occurrence.ClaimantWorkloadID != "" || occurrence.AuthorityGeneration != 0 ||
-		occurrence.TokenHash != "" || occurrence.ClaimKeySHA256 != "" ||
-		!occurrence.LeaseExpiresAt.IsZero() || !validScheduledExecutionBinding(execution) ||
+		occurrence.ClaimantWorkloadID != claim.WorkloadID ||
+		occurrence.AuthorityGeneration != claim.AuthorityGeneration ||
+		occurrence.TokenHash == "" || occurrence.ClaimKeySHA256 != claim.ClaimKeySHA256 ||
+		occurrence.LeaseExpiresAt.IsZero() || !validScheduledExecutionBinding(execution) ||
 		value.ValidateStableKey(claim.WorkloadID) != nil ||
 		claim.AuthorityGeneration == 0 || !validSHA256Text(claim.TokenSHA256) ||
 		!validSHA256Text(claim.ClaimKeySHA256) || !claim.LeaseExpiresAt.After(now) {
@@ -56,6 +58,7 @@ func materializeScheduledOccurrence(
 	occurrence.ClaimKeySHA256 = claim.ClaimKeySHA256
 	occurrence.LeaseExpiresAt = claim.LeaseExpiresAt
 	setScheduledExecutionBinding(occurrence, execution)
+	occurrence.Version++
 	occurrence.Outcome = ""
 	occurrence.ResultArtifactID = ""
 	occurrence.UpdatedAt = now
@@ -72,12 +75,111 @@ func validateQueuedScheduledOccurrence(
 		occurrence.Attempt == 0 || occurrence.EffectiveInputSHA256 != spec.EffectiveInputSHA ||
 		!validSHA256Text(occurrence.EffectiveInputSHA256) ||
 		occurrenceHasExecutionBinding(occurrence) ||
-		occurrence.ClaimantWorkloadID != "" || occurrence.AuthorityGeneration != 0 ||
+		occurrence.ClaimantWorkloadID != "" ||
 		occurrence.TokenHash != "" || occurrence.ClaimKeySHA256 != "" ||
 		!occurrence.LeaseExpiresAt.IsZero() {
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+// deadLetterQueuedScheduleOccurrence изолирует только не материализованную
+// queued-строку после отката неуспешной owner transaction. Повторная проверка
+// receipt, blocker и execution binding не позволяет quarantine затронуть
+// конкурентно созданный либо уже исполняемый graph.
+func (service *Service) deadLetterQueuedScheduleOccurrence(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	principal value.Principal,
+	candidate domainrepo.ScheduleOccurrence,
+	claimKeyHash string,
+) error {
+	err := service.repository.Transact(
+		ctx,
+		scope,
+		func(tx domainrepo.Transaction) error {
+			occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				candidate.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if occurrence.Attempt != candidate.Attempt || occurrence.State != "QUEUED" ||
+				occurrenceHasExecutionBinding(occurrence) || occurrence.ClaimantWorkloadID != "" ||
+				occurrence.TokenHash != "" ||
+				occurrence.ClaimKeySHA256 != "" || !occurrence.LeaseExpiresAt.IsZero() {
+				return errs.ErrStateConflict
+			}
+			schedule, err := tx.GetForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				occurrence.ScheduleID,
+			)
+			if err != nil {
+				return err
+			}
+			if schedule.Kind != enum.KindSchedule || schedule.State != enum.StateActive {
+				return errs.ErrStateConflict
+			}
+			blocking, err := tx.HasBlockingScheduleExecution(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				occurrence.ScheduleID,
+				occurrence.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if blocking {
+				return errs.ErrStateConflict
+			}
+			_, receiptErr := tx.GetReceipt(
+				ctx,
+				principal.OrganizationID,
+				"claim_schedule_occurrence",
+				claimKeyHash,
+			)
+			switch {
+			case receiptErr == nil:
+				return errs.ErrStateConflict
+			case errors.Is(receiptErr, errs.ErrNotFound):
+			default:
+				return receiptErr
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			occurrence.State = "DEAD_LETTER"
+			occurrence.Outcome = "materialization_invalid"
+			occurrence.ResultArtifactID = ""
+			occurrence.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+			if err := tx.UpdateScheduleOccurrence(
+				ctx,
+				occurrence,
+				candidate.Attempt,
+				"",
+			); err != nil {
+				return err
+			}
+			return appendScheduleOccurrenceAudit(
+				ctx,
+				tx,
+				principal,
+				"dead_letter_invalid_schedule_occurrence",
+				occurrence,
+			)
+		},
+	)
+	if err == nil {
+		service.observer.ObserveScheduleMaintenance("quarantine")
+	}
+	return err
 }
 
 func rebindScheduledOccurrence(
@@ -212,9 +314,17 @@ func (service *Service) applyScheduledTerminalDisposition(
 	default:
 		return domainrepo.ScheduleOccurrence{}, errs.ErrStateConflict
 	}
+	closedOutcome, err := closedScheduledTerminalOutcome(terminalState, outcome)
+	if err != nil {
+		return domainrepo.ScheduleOccurrence{}, err
+	}
+	outcome = closedOutcome
 
 	expectedAttempt := occurrence.Attempt
 	expectedToken := occurrence.TokenHash
+	if err := service.revokeIssuedScheduleCapability(ctx, tx, expectedToken, now); err != nil {
+		return domainrepo.ScheduleOccurrence{}, err
+	}
 	if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
 		OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
 		State: terminalState, Outcome: outcome,
@@ -252,6 +362,7 @@ func (service *Service) applyScheduledTerminalDisposition(
 		occurrence.LeaseExpiresAt = time.Time{}
 		occurrence.UpdatedAt = now
 	}
+	occurrence.Version++
 	if err := tx.UpdateScheduleOccurrence(
 		ctx, occurrence, expectedAttempt, expectedToken,
 	); err != nil {
@@ -263,6 +374,45 @@ func (service *Service) applyScheduledTerminalDisposition(
 		return domainrepo.ScheduleOccurrence{}, err
 	}
 	return occurrence, nil
+}
+
+func (service *Service) revokeIssuedScheduleCapability(
+	ctx context.Context, tx domainrepo.Transaction, tokenSHA256 string, now time.Time,
+) error {
+	if tokenSHA256 == "" {
+		return nil
+	}
+	capability, err := tx.GetScheduleOccurrenceCapabilityForUpdate(ctx, tokenSHA256)
+	if errors.Is(err, errs.ErrNotFound) {
+		// Pre-migration claimed graphs do not have capability rows and continue
+		// through the same owner watchdog transition.
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if capability.State != "ISSUED" {
+		return nil
+	}
+	capability.State, capability.RevokedAt = "REVOKED", now
+	return tx.UpdateScheduleOccurrenceCapability(ctx, capability, "ISSUED")
+}
+
+func closedScheduledTerminalOutcome(terminalState, outcome string) (string, error) {
+	if terminalState == "SUCCEEDED" {
+		switch outcome {
+		case "no_action", "action_taken":
+			return outcome, nil
+		case "owner_gate_approved":
+			return "action_taken", nil
+		default:
+			return "", errs.ErrStateConflict
+		}
+	}
+	if terminalState == "FAILED" || terminalState == "CANCELLED" || terminalState == "EXPIRED" {
+		return "failed", nil
+	}
+	return "", errs.ErrStateConflict
 }
 
 func setScheduledExecutionBinding(
@@ -278,6 +428,19 @@ func setScheduledExecutionBinding(
 	occurrence.ExecutionRuntimeRevisionID = binding.RuntimeRevisionID
 	occurrence.ExecutionRuntimeRevisionVersion = binding.RuntimeRevisionVersion
 	occurrence.EffectiveInputSHA256 = binding.InputSHA256
+}
+
+func scheduledExecutionBinding(
+	occurrence domainrepo.ScheduleOccurrence,
+) scheduledOccurrenceExecutionBinding {
+	return scheduledOccurrenceExecutionBinding{
+		SessionID: occurrence.ExecutionSessionID, SessionVersion: occurrence.ExecutionSessionVersion,
+		TurnID: occurrence.ExecutionTurnID, TurnVersion: occurrence.ExecutionTurnVersion,
+		ProcessRunID: occurrence.ExecutionProcessRunID, ProcessVersion: occurrence.ExecutionProcessVersion,
+		RuntimeRevisionID:      occurrence.ExecutionRuntimeRevisionID,
+		RuntimeRevisionVersion: occurrence.ExecutionRuntimeRevisionVersion,
+		InputSHA256:            occurrence.EffectiveInputSHA256,
+	}
 }
 
 func clearScheduledExecutionBinding(occurrence *domainrepo.ScheduleOccurrence) {

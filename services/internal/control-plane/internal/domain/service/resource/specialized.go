@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +34,11 @@ func (service *Service) ManageSchedule(
 	case "CREATE", "UPDATE", "ACTIVATE", "PAUSE", "ARCHIVE", "DELETE":
 	default:
 		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	// next_run_at является owner-side PostgreSQL watermark и не входит в
+	// caller-owned intent create/update.
+	if input.Action == "CREATE" || input.Action == "UPDATE" {
+		input.Spec.NextRunAt = time.Time{}
 	}
 	requestHash, err := canonicalHash(struct {
 		Identity        commandIdentity
@@ -91,9 +97,20 @@ func (service *Service) ManageSchedule(
 		return lifecycleReceiptReplay, nil
 	}
 	apply := func(tx domainrepo.Transaction) (entity.Resource, error) {
-		now := service.now().UTC().Truncate(time.Microsecond)
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		now = now.UTC().Truncate(time.Microsecond)
 		current := lockedCurrent
 		if input.Action == "CREATE" || input.Action == "UPDATE" {
+			if input.Action == "UPDATE" {
+				currentSpec, ok := current.Spec.(entity.ScheduleSpec)
+				if !ok {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				input.Spec.NextRunAt = currentSpec.NextRunAt
+			}
 			if input.Action == "CREATE" {
 				if input.DetachGitManagement {
 					return entity.Resource{}, errs.ErrInvalidInput
@@ -217,6 +234,12 @@ func (service *Service) ManageSchedule(
 			if err != nil {
 				return entity.Resource{}, errs.ErrInternal
 			}
+			if input.Action == "CREATE" {
+				input.Spec.NextRunAt, err = firstScheduleRun(input.Spec, now)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+			}
 			if input.Spec.Validate() != nil {
 				return entity.Resource{}, errs.ErrInvalidInput
 			}
@@ -266,6 +289,11 @@ func (service *Service) ManageSchedule(
 			}
 		}
 		if input.Action == "UPDATE" {
+			currentSpec, currentOK := current.Spec.(entity.ScheduleSpec)
+			if !currentOK {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			input.Spec.NextRunAt = currentSpec.NextRunAt
 			nextSpec, err := configurationUpdateSpec(
 				ctx,
 				tx,
@@ -281,6 +309,14 @@ func (service *Service) ManageSchedule(
 			input.Spec, ok = nextSpec.(entity.ScheduleSpec)
 			if !ok {
 				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if input.Spec.Cron != currentSpec.Cron ||
+				input.Spec.Interval != currentSpec.Interval ||
+				input.Spec.Timezone != currentSpec.Timezone {
+				input.Spec.NextRunAt, err = firstScheduleRun(input.Spec, now)
+				if err != nil {
+					return entity.Resource{}, err
+				}
 			}
 		} else {
 			if input.DetachGitManagement {
@@ -352,6 +388,107 @@ func (service *Service) ManageSchedule(
 	)
 }
 
+func firstScheduleRun(spec entity.ScheduleSpec, now time.Time) (time.Time, error) {
+	return nextScheduleRun(spec, now, now)
+}
+
+// RunScheduleNow создаёт отдельную немедленную occurrence и не меняет
+// server-owned плановый watermark Schedule.NextRunAt.
+func (service *Service) RunScheduleNow(
+	ctx context.Context,
+	input RunScheduleNowInput,
+) (domainrepo.ScheduleOccurrence, error) {
+	if err := authorize(input.Principal, permissionManageSchedule); err != nil {
+		return domainrepo.ScheduleOccurrence{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.ScheduleID) != nil || input.ExpectedVersion == 0 {
+		return domainrepo.ScheduleOccurrence{}, errs.ErrInvalidInput
+	}
+	requestHash, err := semanticCommandHash(input.Principal, struct {
+		ScheduleID      string
+		ExpectedVersion uint64
+	}{input.ScheduleID, input.ExpectedVersion})
+	if err != nil {
+		return domainrepo.ScheduleOccurrence{}, errs.ErrInvalidInput
+	}
+	keyHash := hashString(input.IdempotencyKey)
+	var result domainrepo.ScheduleOccurrence
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		schedule, err := tx.GetForUpdate(
+			ctx, input.Principal.OrganizationID, input.Principal.ProjectID, input.ScheduleID,
+		)
+		if err != nil {
+			return err
+		}
+		spec, ok := schedule.Spec.(entity.ScheduleSpec)
+		if !ok || schedule.Kind != enum.KindSchedule || schedule.State != enum.StateActive {
+			return errs.ErrStateConflict
+		}
+		if schedule.Version != input.ExpectedVersion {
+			return errs.ErrVersionMismatch
+		}
+		if err := requireLifecycleOwner(input.Principal, schedule); err != nil {
+			return err
+		}
+		receipt, receiptErr := tx.GetReceipt(ctx, input.Principal.OrganizationID, "run_schedule_now", keyHash)
+		if receiptErr == nil {
+			if receipt.RequestHash != requestHash || json.Unmarshal(receipt.Payload, &result) != nil {
+				return errs.ErrIdempotencyConflict
+			}
+			return nil
+		}
+		if !errors.Is(receiptErr, errs.ErrNotFound) {
+			return receiptErr
+		}
+		open, err := tx.HasOpenScheduleOccurrence(ctx, schedule.OrganizationID, schedule.ProjectID, schedule.ID)
+		if err != nil {
+			return err
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		now = now.UTC().Truncate(time.Microsecond)
+		state, outcome := scheduleOccurrenceDisposition(spec, now, now, open)
+		result = domainrepo.ScheduleOccurrence{
+			ID:         uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:manual-schedule:"+schedule.ID+":"+keyHash)).String(),
+			Version:    1,
+			ScheduleID: schedule.ID, OrganizationID: schedule.OrganizationID, ProjectID: schedule.ProjectID,
+			ScheduledFor: now, TargetResourceID: spec.TargetResourceID, TargetKind: spec.TargetKind,
+			TargetVersion: spec.TargetVersion, EffectiveInputSHA256: spec.EffectiveInputSHA,
+			PromptProfileID: spec.PromptProfileID, PromptRevision: spec.PromptRevision,
+			RuntimeRevisionID: spec.RuntimeRevisionID, SessionPolicy: spec.SessionPolicy,
+			RoomID: spec.RoomID, NotificationPolicy: spec.NotificationPolicy,
+			MaximumExecution: spec.MaximumExecutionDuration, Coalesce: spec.Coalesce,
+			OverlapPolicy: spec.OverlapPolicy, MaximumAttempts: spec.MaximumAttempts,
+			InitialBackoff: spec.InitialBackoff, MaximumBackoff: spec.MaximumBackoff,
+			DeadLetterAt: now.Add(spec.DeadLetterAfter), State: state, Attempt: 1,
+			AvailableAt: now, Outcome: outcome, CreatedAt: now, UpdatedAt: now,
+		}
+		if err := tx.SaveScheduleOccurrence(ctx, result); err != nil {
+			return err
+		}
+		if err := appendScheduleOccurrenceAudit(ctx, tx, input.Principal, "run_schedule_now", result); err != nil {
+			return err
+		}
+		payload, err := json.Marshal(result)
+		if err != nil {
+			return errs.ErrInternal
+		}
+		return tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID, Scope: "run_schedule_now", KeyHash: keyHash,
+			RequestHash: requestHash, Payload: payload, CreatedAt: now,
+		})
+	})
+	return result, err
+}
+
 func scheduleEffectiveInput(
 	spec entity.ScheduleSpec,
 	targetProjectionSHA256 string,
@@ -390,31 +527,408 @@ func scheduleEffectiveInput(
 	})
 }
 
-type scheduleOccurrenceReceipt struct {
-	Occurrence domainrepo.ScheduleOccurrence `json:"occurrence"`
-	LeaseToken string                        `json:"leaseToken,omitempty"`
+func scheduledProcessRef(spec entity.ScheduleSpec) string {
+	if spec.TargetType == "PLAYBOOK" {
+		return spec.PlaybookRef
+	}
+	return "agent-role:" + spec.TargetResourceID
 }
 
-// ClaimScheduleOccurrence выдаёт точному планировщику ограниченную аренду одной попытки.
+func scheduledProcessRevision(spec entity.ScheduleSpec) uint64 {
+	if spec.TargetType == "PLAYBOOK" {
+		return spec.PlaybookVersion
+	}
+	return spec.TargetVersion
+}
+
+type scheduleOccurrenceReceipt struct {
+	Occurrence domainrepo.ScheduleOccurrence `json:"occurrence"`
+}
+
+const (
+	materializeScheduleOccurrenceMethod = "/controlplane.v1.ControlPlaneService/MaterializeScheduleOccurrence"
+	completeScheduleOccurrenceMethod    = "/controlplane.v1.ControlPlaneService/CompleteScheduleOccurrence"
+)
+
+func (service *Service) scheduleCapabilityToken(capability domainrepo.ScheduleOccurrenceCapability) string {
+	return service.leaseToken(
+		capability.ID+"\x00"+capability.OccurrenceID+"\x00"+capability.ImmutableInputSHA256,
+		capability.AuthorityGeneration,
+		capability.Attempt,
+		capability.AuthorityGeneration,
+		capability.WorkloadID,
+		capability.FullMethod,
+	)
+}
+
+func schedulerMaterializationKey(claimKey, occurrenceID string) string {
+	return hashString("materialize\x00" + claimKey + "\x00" + occurrenceID + "\x00")
+}
+
+func scheduleMaterializationRequestHash(input MaterializeScheduleOccurrenceInput) (string, error) {
+	return canonicalHash(struct {
+		Identity                       commandIdentity
+		OccurrenceID, CapabilitySHA256 string
+		ExpectedAttempt                uint32
+	}{
+		identity(input.Principal), input.OccurrenceID,
+		hashString(input.MaterializationCapability), input.ExpectedAttempt,
+	})
+}
+
+// ClaimScheduleOccurrence резервирует одну due occurrence и выдаёт capability
+// только на её materialization. Этот RPC не создаёт исполняемый owner graph.
 func (service *Service) ClaimScheduleOccurrence(
 	ctx context.Context,
 	input ClaimScheduleOccurrenceInput,
 ) (ScheduleOccurrenceResult, error) {
-	if err := authorize(input.Principal, permissionExecuteSchedule); err != nil {
+	return service.claimScheduleOccurrence(ctx, input, service.maximumScheduleClaims)
+}
+
+func (service *Service) claimScheduleOccurrence(
+	ctx context.Context,
+	input ClaimScheduleOccurrenceInput,
+	isolationRemaining int,
+) (ScheduleOccurrenceResult, error) {
+	if err := authorize(input.Principal, permissionClaimSchedule); err != nil {
 		return ScheduleOccurrenceResult{}, err
 	}
 	if input.Principal.CallerWorkload != service.schedulerWorkload ||
-		input.Principal.CallerSPIFFEID != service.schedulerSPIFFEID {
+		input.Principal.CallerSPIFFEID != service.schedulerSPIFFEID ||
+		input.Principal.ProjectID != "" ||
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil {
 		return ScheduleOccurrenceResult{}, errs.ErrPermissionDenied
 	}
-	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil {
-		return ScheduleOccurrenceResult{}, errs.ErrInvalidInput
-	}
-	requestHash, err := canonicalHash(struct {
-		Identity commandIdentity
-	}{identity(input.Principal)})
+	partitionHash, err := semanticCommandHash(input.Principal, struct{ Operation string }{"CLAIM"})
 	if err != nil {
 		return ScheduleOccurrenceResult{}, errs.ErrInvalidInput
+	}
+	projectID, err := service.selectAutomationProject(
+		ctx, input.Principal, "CLAIM", input.IdempotencyKey, partitionHash,
+	)
+	if err != nil {
+		return ScheduleOccurrenceResult{}, err
+	}
+	input.Principal.ProjectID = projectID
+	requestHash, err := semanticCommandHash(input.Principal, struct{ Operation string }{"CLAIM"})
+	if err != nil {
+		return ScheduleOccurrenceResult{}, errs.ErrInvalidInput
+	}
+	keyHash := hashString(input.IdempotencyKey)
+	scope := domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID, ActorID: input.Principal.ActorID,
+	}
+
+	var result ScheduleOccurrenceResult
+	replay := func(tx domainrepo.Transaction) error {
+		var found bool
+		var replayErr error
+		result, found, replayErr = service.replayScheduleOccurrenceClaim(
+			ctx, tx, input, requestHash, keyHash,
+		)
+		if replayErr != nil || found {
+			return replayErr
+		}
+		return nil
+	}
+	if err := service.repository.Transact(ctx, scope, replay); err != nil || result.Disposition != "" {
+		return result, err
+	}
+	if err := service.recoverExpiredScheduleOccurrences(ctx, scope, input.Principal); err != nil {
+		return ScheduleOccurrenceResult{}, err
+	}
+	if err := service.skipOverlappedScheduleOccurrences(ctx, scope, input.Principal); err != nil {
+		return ScheduleOccurrenceResult{}, err
+	}
+	candidateForIsolation := domainrepo.ScheduleOccurrence{}
+	err = service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
+		if err := replay(tx); err != nil || result.Disposition != "" {
+			return err
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		occurrence, err := tx.NextScheduleOccurrence(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, now)
+		if err != nil {
+			if errors.Is(err, errs.ErrNotFound) {
+				_, receiptErr := tx.GetReceipt(ctx, input.Principal.OrganizationID,
+					"claim_schedule_occurrence", keyHash)
+				if receiptErr == nil {
+					return errs.ErrStateConflict
+				}
+				if !errors.Is(receiptErr, errs.ErrNotFound) {
+					return receiptErr
+				}
+			}
+			return err
+		}
+		candidateForIsolation = occurrence
+		now, err = tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		schedule, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, occurrence.ScheduleID)
+		if err != nil {
+			return err
+		}
+		blocking, err := tx.HasBlockingScheduleExecution(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, schedule.ID, occurrence.ID)
+		if err != nil {
+			return err
+		}
+		spec, ok := schedule.Spec.(entity.ScheduleSpec)
+		if blocking || !ok || schedule.State != enum.StateActive ||
+			validateQueuedScheduledOccurrence(occurrence, schedule) != nil ||
+			spec.TargetResourceID != occurrence.TargetResourceID ||
+			spec.TargetKind != occurrence.TargetKind || spec.TargetVersion != occurrence.TargetVersion ||
+			spec.PromptProfileID != occurrence.PromptProfileID ||
+			spec.PromptRevision != occurrence.PromptRevision ||
+			spec.RuntimeRevisionID != occurrence.RuntimeRevisionID ||
+			spec.SessionPolicy != occurrence.SessionPolicy || spec.RoomID != occurrence.RoomID {
+			return errs.ErrStateConflict
+		}
+		generation := occurrence.AuthorityGeneration + 1
+		if generation == 0 {
+			return errs.ErrStateConflict
+		}
+		capability := domainrepo.ScheduleOccurrenceCapability{
+			ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte(occurrence.ID+"\x00"+
+				strconv.FormatUint(uint64(occurrence.Attempt), 10)+"\x00"+
+				strconv.FormatUint(generation, 10)+"\x00"+materializeScheduleOccurrenceMethod)).String(),
+			OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+			OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
+			AuthorityGeneration: generation, ImmutableInputSHA256: occurrence.EffectiveInputSHA256,
+			FullMethod: materializeScheduleOccurrenceMethod, WorkloadID: input.Principal.CallerWorkload,
+			CallerSPIFFEID: input.Principal.CallerSPIFFEID, State: "ISSUED", IssuedAt: now,
+			ExpiresAt: now.Add(2 * time.Minute),
+		}
+		capability.TokenSHA256 = hashString(service.scheduleCapabilityToken(capability))
+		if err := tx.InsertScheduleOccurrenceCapability(ctx, capability); err != nil {
+			return err
+		}
+		expectedAttempt := occurrence.Attempt
+		occurrence.State = "RESERVED"
+		occurrence.Version++
+		occurrence.ClaimantWorkloadID = input.Principal.CallerWorkload
+		occurrence.AuthorityGeneration = generation
+		occurrence.TokenHash = capability.TokenSHA256
+		occurrence.ClaimKeySHA256 = keyHash
+		occurrence.LeaseExpiresAt = capability.ExpiresAt
+		occurrence.UpdatedAt = now
+		if err := tx.UpdateScheduleOccurrence(ctx, occurrence, expectedAttempt, ""); err != nil {
+			return err
+		}
+		if err := appendScheduleOccurrenceAudit(ctx, tx, input.Principal,
+			"reserve_schedule_occurrence", occurrence); err != nil {
+			return err
+		}
+		payload, err := json.Marshal(scheduleOccurrenceReceipt{Occurrence: occurrence})
+		if err != nil {
+			return errs.ErrInternal
+		}
+		if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: input.Principal.OrganizationID,
+			ProjectID:      input.Principal.ProjectID, Scope: "claim_schedule_occurrence",
+			KeyHash: keyHash, RequestHash: requestHash, Payload: payload, CreatedAt: now,
+		}); err != nil {
+			return err
+		}
+		result = ScheduleOccurrenceResult{
+			Occurrence:                      occurrence,
+			MaterializationCapability:       service.scheduleCapabilityToken(capability),
+			MaterializationIdempotencyKey:   schedulerMaterializationKey(input.IdempotencyKey, occurrence.ID),
+			CapabilityExpiresAt:             capability.ExpiresAt, ProjectID: projectID,
+			Disposition: ScheduleOccurrenceClaimReserved,
+		}
+		return nil
+	})
+	if err == nil || candidateForIsolation.ID == "" || isolationRemaining < 1 ||
+		(!errors.Is(err, errs.ErrStateConflict) && !errors.Is(err, errs.ErrNotFound) &&
+			!errors.Is(err, errs.ErrInvalidInput)) {
+		return result, err
+	}
+	isolationErr := service.deadLetterQueuedScheduleOccurrence(ctx, scope, input.Principal,
+		candidateForIsolation, keyHash)
+	if isolationErr != nil {
+		return ScheduleOccurrenceResult{}, err
+	}
+	input.Principal.ProjectID = ""
+	return service.claimScheduleOccurrence(ctx, input, isolationRemaining-1)
+}
+
+// replayScheduleOccurrenceClaim возвращает только доказанный authoritative
+// stage того же semantic key. RETIRED не является пустым успехом: receipt,
+// owner occurrence и монотонный tuple проверяются до disposition.
+func (service *Service) replayScheduleOccurrenceClaim(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input ClaimScheduleOccurrenceInput,
+	requestHash, keyHash string,
+) (ScheduleOccurrenceResult, bool, error) {
+	receipt, err := tx.GetReceipt(ctx, input.Principal.OrganizationID,
+		"claim_schedule_occurrence", keyHash)
+	if errors.Is(err, errs.ErrNotFound) {
+		_, boundErr := tx.GetScheduleOccurrenceByClaimKey(ctx,
+			input.Principal.OrganizationID, input.Principal.ProjectID, keyHash)
+		if errors.Is(boundErr, errs.ErrNotFound) {
+			return ScheduleOccurrenceResult{}, false, nil
+		}
+		if boundErr != nil {
+			return ScheduleOccurrenceResult{}, false, boundErr
+		}
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if receipt.RequestHash != requestHash {
+		return ScheduleOccurrenceResult{}, false, errs.ErrIdempotencyConflict
+	}
+	var stored scheduleOccurrenceReceipt
+	if json.Unmarshal(receipt.Payload, &stored) != nil ||
+		stored.Occurrence.ID == "" || stored.Occurrence.State != "RESERVED" ||
+		stored.Occurrence.OrganizationID != input.Principal.OrganizationID ||
+		stored.Occurrence.ProjectID != input.Principal.ProjectID ||
+		stored.Occurrence.ClaimKeySHA256 != keyHash ||
+		stored.Occurrence.AuthorityGeneration == 0 || stored.Occurrence.Attempt == 0 {
+		return ScheduleOccurrenceResult{}, false, errs.ErrInternal
+	}
+	current, err := tx.GetScheduleOccurrenceForUpdate(ctx,
+		input.Principal.OrganizationID, input.Principal.ProjectID, stored.Occurrence.ID)
+	if errors.Is(err, errs.ErrNotFound) {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if current.Version < stored.Occurrence.Version || current.Attempt < stored.Occurrence.Attempt {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	retired := ScheduleOccurrenceResult{
+		ProjectID: input.Principal.ProjectID, Disposition: ScheduleOccurrenceClaimRetired,
+	}
+	if current.ClaimKeySHA256 != keyHash || current.Attempt != stored.Occurrence.Attempt ||
+		(current.State != "RESERVED" && current.State != "CLAIMED") {
+		return retired, true, nil
+	}
+	capability, err := tx.GetScheduleOccurrenceCapabilityByOccurrenceForUpdate(
+		ctx, current.ID, current.Attempt, materializeScheduleOccurrenceMethod,
+		stored.Occurrence.AuthorityGeneration,
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if capability.OrganizationID != input.Principal.OrganizationID ||
+		capability.ProjectID != input.Principal.ProjectID || capability.OccurrenceID != current.ID ||
+		capability.Attempt != current.Attempt ||
+		capability.AuthorityGeneration != stored.Occurrence.AuthorityGeneration ||
+		capability.ImmutableInputSHA256 != stored.Occurrence.EffectiveInputSHA256 ||
+		capability.FullMethod != materializeScheduleOccurrenceMethod ||
+		capability.WorkloadID != input.Principal.CallerWorkload ||
+		capability.CallerSPIFFEID != input.Principal.CallerSPIFFEID {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	token := service.scheduleCapabilityToken(capability)
+	if hashString(token) != capability.TokenSHA256 {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	if current.State == "RESERVED" {
+		if capability.State != "ISSUED" || current.AuthorityGeneration != capability.AuthorityGeneration ||
+			current.TokenHash != capability.TokenSHA256 ||
+			current.ClaimantWorkloadID != capability.WorkloadID ||
+			!current.LeaseExpiresAt.Equal(capability.ExpiresAt) {
+			return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return ScheduleOccurrenceResult{}, false, err
+		}
+		if !capability.ExpiresAt.After(now) {
+			return retired, true, nil
+		}
+		return ScheduleOccurrenceResult{
+			Occurrence:                      current,
+			MaterializationCapability:       token,
+			MaterializationIdempotencyKey:   schedulerMaterializationKey(input.IdempotencyKey, current.ID),
+			CapabilityExpiresAt:             capability.ExpiresAt,
+			ProjectID: input.Principal.ProjectID, Disposition: ScheduleOccurrenceClaimReserved,
+		}, true, nil
+	}
+	if capability.State != "CONSUMED" ||
+		current.AuthorityGeneration != capability.AuthorityGeneration {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	materializePrincipal := input.Principal
+	materializePrincipal.Permission = permissionUseScheduleCapability
+	materializeInput := MaterializeScheduleOccurrenceInput{
+		Principal:      materializePrincipal,
+		IdempotencyKey: schedulerMaterializationKey(input.IdempotencyKey, current.ID),
+		OccurrenceID:   current.ID, ProjectID: current.ProjectID,
+		ExpectedAttempt: current.Attempt, MaterializationCapability: token,
+	}
+	materializeHash, err := scheduleMaterializationRequestHash(materializeInput)
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, errs.ErrInternal
+	}
+	materialized, found, err := service.replayScheduleOccurrenceMaterialization(
+		ctx, tx, materializeInput, materializeHash, hashString(materializeInput.IdempotencyKey),
+	)
+	if errors.Is(err, errs.ErrNotFound) {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if !found || materialized.Occurrence.ID != current.ID ||
+		materialized.Occurrence.Attempt != current.Attempt {
+		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	now, err := tx.CurrentTime(ctx)
+	if err != nil {
+		return ScheduleOccurrenceResult{}, false, err
+	}
+	if !current.LeaseExpiresAt.After(now) {
+		return retired, true, nil
+	}
+	return ScheduleOccurrenceResult{
+		Occurrence:                      current,
+		MaterializationCapability:       token,
+		MaterializationIdempotencyKey:   materializeInput.IdempotencyKey,
+		CapabilityExpiresAt:             capability.ExpiresAt,
+		ProjectID: input.Principal.ProjectID, Disposition: ScheduleOccurrenceClaimMaterialized,
+	}, true, nil
+}
+
+// MaterializeScheduleOccurrence атомарно создаёт owner graph только по exact
+// одноразовой server-issued capability зарезервированной occurrence.
+func (service *Service) MaterializeScheduleOccurrence(
+	ctx context.Context,
+	input MaterializeScheduleOccurrenceInput,
+) (MaterializeScheduleOccurrenceResult, error) {
+	if err := authorize(input.Principal, permissionUseScheduleCapability); err != nil {
+		return MaterializeScheduleOccurrenceResult{}, err
+	}
+	if input.Principal.CallerWorkload != service.schedulerWorkload ||
+		input.Principal.CallerSPIFFEID != service.schedulerSPIFFEID ||
+		input.Principal.ProjectID != "" {
+		return MaterializeScheduleOccurrenceResult{}, errs.ErrPermissionDenied
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.OccurrenceID) != nil || value.ValidateID(input.ProjectID) != nil ||
+		input.ExpectedAttempt == 0 || len(input.MaterializationCapability) != 64 {
+		return MaterializeScheduleOccurrenceResult{}, errs.ErrInvalidInput
+	}
+	input.Principal.ProjectID = input.ProjectID
+	requestHash, err := scheduleMaterializationRequestHash(input)
+	if err != nil {
+		return MaterializeScheduleOccurrenceResult{}, errs.ErrInvalidInput
 	}
 	keyHash := hashString(input.IdempotencyKey)
 	scope := domainrepo.Scope{
@@ -422,40 +936,13 @@ func (service *Service) ClaimScheduleOccurrence(
 		ProjectID:      input.Principal.ProjectID,
 		ActorID:        input.Principal.ActorID,
 	}
-	var result ScheduleOccurrenceResult
+	var result MaterializeScheduleOccurrenceResult
 	err = service.repository.Transact(
 		ctx,
 		scope,
 		func(tx domainrepo.Transaction) error {
-			result = ScheduleOccurrenceResult{}
-			replayed, found, replayErr := service.replayScheduleOccurrenceClaim(
-				ctx, tx, input, requestHash, keyHash,
-			)
-			if replayErr == nil && found {
-				result = replayed
-			}
-			return replayErr
-		},
-	)
-	if err != nil || result.LeaseToken != "" {
-		return result, err
-	}
-	if err := service.recoverExpiredScheduleOccurrences(
-		ctx, scope, input.Principal,
-	); err != nil {
-		return ScheduleOccurrenceResult{}, err
-	}
-	if err := service.skipOverlappedScheduleOccurrences(
-		ctx, scope, input.Principal,
-	); err != nil {
-		return ScheduleOccurrenceResult{}, err
-	}
-	err = service.repository.Transact(
-		ctx,
-		scope,
-		func(tx domainrepo.Transaction) error {
-			result = ScheduleOccurrenceResult{}
-			replayed, found, replayErr := service.replayScheduleOccurrenceClaim(
+			result = MaterializeScheduleOccurrenceResult{}
+			replayed, found, replayErr := service.replayScheduleOccurrenceMaterialization(
 				ctx, tx, input, requestHash, keyHash,
 			)
 			if replayErr != nil {
@@ -469,31 +956,34 @@ func (service *Service) ClaimScheduleOccurrence(
 			if err != nil {
 				return err
 			}
-			occurrence, err := tx.NextScheduleOccurrence(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				candidateNow,
+			capability, err := tx.GetScheduleOccurrenceCapabilityForUpdate(
+				ctx, hashString(input.MaterializationCapability),
 			)
 			if err != nil {
-				if errors.Is(err, errs.ErrNotFound) {
-					_, receiptErr := tx.GetReceipt(
-						ctx,
-						input.Principal.OrganizationID,
-						"claim_schedule_occurrence",
-						keyHash,
-					)
-					switch {
-					case receiptErr == nil:
-						// Закрытый/superseded binding не раскрывает receipt и
-						// отличается от обычного отсутствия scheduler work.
-						return errs.ErrStateConflict
-					case errors.Is(receiptErr, errs.ErrNotFound):
-					default:
-						return receiptErr
-					}
-				}
 				return err
+			}
+			if capability.State != "ISSUED" || !capability.ExpiresAt.After(candidateNow) ||
+				capability.OrganizationID != input.Principal.OrganizationID ||
+				capability.ProjectID != input.ProjectID || capability.OccurrenceID != input.OccurrenceID ||
+				capability.Attempt != input.ExpectedAttempt ||
+				capability.FullMethod != materializeScheduleOccurrenceMethod ||
+				capability.WorkloadID != input.Principal.CallerWorkload ||
+				capability.CallerSPIFFEID != input.Principal.CallerSPIFFEID ||
+				capability.TokenSHA256 != hashString(input.MaterializationCapability) {
+				return errs.ErrPermissionDenied
+			}
+			occurrence, err := tx.GetScheduleOccurrenceForUpdate(ctx,
+				input.Principal.OrganizationID, input.Principal.ProjectID, input.OccurrenceID)
+			if err != nil {
+				return err
+			}
+			if occurrence.State != "RESERVED" || occurrence.Attempt != input.ExpectedAttempt ||
+				occurrence.AuthorityGeneration != capability.AuthorityGeneration ||
+				occurrence.EffectiveInputSHA256 != capability.ImmutableInputSHA256 ||
+				occurrence.TokenHash != capability.TokenSHA256 ||
+				occurrence.ClaimantWorkloadID != capability.WorkloadID ||
+				!occurrence.LeaseExpiresAt.Equal(capability.ExpiresAt) {
+				return errs.ErrStateConflict
 			}
 			schedule, err := tx.GetForUpdate(
 				ctx,
@@ -616,21 +1106,23 @@ func (service *Service) ClaimScheduleOccurrence(
 			if pinnedInputSHA256 != occurrence.EffectiveInputSHA256 {
 				return errs.ErrStateConflict
 			}
-			if err := validateQueuedScheduledOccurrence(occurrence, schedule); err != nil {
-				return err
+			if occurrence.ScheduleID != schedule.ID || occurrence.State != "RESERVED" ||
+				occurrenceHasExecutionBinding(occurrence) ||
+				occurrence.EffectiveInputSHA256 != scheduleSpec.EffectiveInputSHA {
+				return errs.ErrStateConflict
 			}
 			scheduleSnapshotInputSHA256 := pinnedInputSHA256
 			claimNow, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
 			}
-			if occurrence.State != "QUEUED" || occurrence.AvailableAt.After(claimNow) {
+			if occurrence.AvailableAt.After(claimNow) || !capability.ExpiresAt.After(claimNow) {
 				return errs.ErrStateConflict
 			}
 			_, receiptErr := tx.GetReceipt(
 				ctx,
 				input.Principal.OrganizationID,
-				"claim_schedule_occurrence",
+				"materialize_schedule_occurrence",
 				keyHash,
 			)
 			switch {
@@ -660,13 +1152,29 @@ func (service *Service) ClaimScheduleOccurrence(
 				input.Principal,
 				session,
 				sessionSpec,
+				entity.NewScheduledResultContractRef(),
 			)
 			if err != nil {
 				return err
 			}
-			processID := ""
-			if scheduleSpec.TargetType == "PLAYBOOK" {
-				processID = uuid.NewString()
+			processID := uuid.NewString()
+			var previousProcess entity.Resource
+			if occurrence.Attempt > 1 {
+				previousRun, err := tx.GetScheduledRunForUpdate(
+					ctx, occurrence.ID, occurrence.Attempt-1,
+				)
+				if err != nil || value.ValidateID(previousRun.ProcessRunID) != nil {
+					return errs.ErrStateConflict
+				}
+				previousProcess, err = tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, previousRun.ProcessRunID)
+				previousSpec, ok := previousProcess.Spec.(entity.ProcessRunSpec)
+				if err != nil || !ok || previousProcess.Kind != enum.KindProcessRun ||
+					previousSpec.ScheduleID != schedule.ID || previousSpec.OccurrenceID != occurrence.ID ||
+					!previousProcess.State.Terminal() {
+					return errs.ErrStateConflict
+				}
+				processID = previousProcess.ID
 			}
 			sessionSpec.LastTurnSequence++
 			updatedSession, err := session.Update(
@@ -701,13 +1209,14 @@ func (service *Service) ClaimScheduleOccurrence(
 				enum.KindTurn,
 				"Scheduled turn "+occurrence.ID,
 				entity.TurnSpec{
-					SessionID:         session.ID,
-					Sequence:          sessionSpec.LastTurnSequence,
-					SourceRef:         sourceRef,
-					PromptArtifactID:  scheduleSpec.PromptArtifactID,
-					RuntimeRevisionID: runtimeRevision.ID,
-					ProcessRunID:      processID,
-					Attempt:           1,
+					SessionID:               session.ID,
+					Sequence:                sessionSpec.LastTurnSequence,
+					SourceRef:               sourceRef,
+					PromptArtifactID:        scheduleSpec.PromptArtifactID,
+					RuntimeRevisionID:       runtimeRevision.ID,
+					ProcessRunID:            processID,
+					Attempt:                 occurrence.Attempt,
+					ScheduledResultContract: entity.NewScheduledResultContractRef(),
 					EffectiveInputSHA256: hashRuntimeInput(
 						sourceRef,
 						promptArtifact.SHA256,
@@ -728,7 +1237,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				TurnID:              turn.ID,
 				Attempt:             turnSpec.Attempt,
 				WorkloadID:          "unassigned",
-				AuthorityGeneration: input.Principal.AuthorityGeneration,
+				AuthorityGeneration: capability.AuthorityGeneration,
 				State:               "QUEUED",
 				InputSHA256:         turnSpec.EffectiveInputSHA256,
 				LeaseFence:          turn.Version,
@@ -747,44 +1256,64 @@ func (service *Service) ClaimScheduleOccurrence(
 			}
 			var scheduledProcess entity.Resource
 			if processID != "" {
-				process, err := entity.New(
-					processID,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					schedule.ID,
-					schedule.OwnerActorID,
-					enum.KindProcessRun,
-					"Scheduled process "+occurrence.ID,
-					entity.ProcessRunSpec{
-						PlaybookRef:                   scheduleSpec.PlaybookRef,
-						PolicyRevision:                scheduleSpec.PlaybookVersion,
-						RootTriggerRef:                sourceRef,
-						RootInitiatorActorID:          schedule.OwnerActorID,
-						RootSessionID:                 session.ID,
-						RootSessionVersion:            updatedSession.Version,
-						RootTurnID:                    turn.ID,
-						RootTurnVersion:               turn.Version,
-						RootAttempt:                   1,
-						ImmutableInputSHA256:          turnSpec.EffectiveInputSHA256,
-						RuntimeRevisionID:             runtimeRevision.ID,
-						ScheduleID:                    schedule.ID,
-						OccurrenceID:                  occurrence.ID,
-						CurrentSessionID:              session.ID,
-						CurrentSessionVersion:         updatedSession.Version,
-						CurrentTurnID:                 turn.ID,
-						CurrentTurnVersion:            turn.Version,
-						CurrentAttempt:                1,
-						CurrentRuntimeRevisionID:      runtimeRevision.ID,
-						CurrentRuntimeRevisionVersion: runtimeRevision.Version,
-						CurrentInputSHA256:            turnSpec.EffectiveInputSHA256,
-					},
-					claimNow,
-				)
-				if err != nil {
-					return errs.ErrInternal
-				}
-				if err := tx.Insert(ctx, process); err != nil {
-					return err
+				process := previousProcess
+				if process.ID == "" {
+					process, err = entity.New(
+						processID,
+						input.Principal.OrganizationID,
+						input.Principal.ProjectID,
+						schedule.ID,
+						schedule.OwnerActorID,
+						enum.KindProcessRun,
+						"Scheduled process "+occurrence.ID,
+						entity.ProcessRunSpec{
+							PlaybookRef:                   scheduledProcessRef(scheduleSpec),
+							PolicyRevision:                scheduledProcessRevision(scheduleSpec),
+							RootTriggerRef:                sourceRef,
+							RootInitiatorActorID:          schedule.OwnerActorID,
+							RootSessionID:                 session.ID,
+							RootSessionVersion:            updatedSession.Version,
+							RootTurnID:                    turn.ID,
+							RootTurnVersion:               turn.Version,
+							RootAttempt:                   1,
+							ImmutableInputSHA256:          turnSpec.EffectiveInputSHA256,
+							RuntimeRevisionID:             runtimeRevision.ID,
+							ScheduleID:                    schedule.ID,
+							OccurrenceID:                  occurrence.ID,
+							CurrentSessionID:              session.ID,
+							CurrentSessionVersion:         updatedSession.Version,
+							CurrentTurnID:                 turn.ID,
+							CurrentTurnVersion:            turn.Version,
+							CurrentAttempt:                occurrence.Attempt,
+							CurrentRuntimeRevisionID:      runtimeRevision.ID,
+							CurrentRuntimeRevisionVersion: runtimeRevision.Version,
+							CurrentInputSHA256:            turnSpec.EffectiveInputSHA256,
+						},
+						claimNow,
+					)
+					if err != nil {
+						return errs.ErrInternal
+					}
+					if err := tx.Insert(ctx, process); err != nil {
+						return err
+					}
+				} else {
+					processSpec := process.Spec.(entity.ProcessRunSpec)
+					setCurrentExecution(&processSpec, executionTuple{
+						SessionID: session.ID, SessionVersion: updatedSession.Version,
+						TurnID: turn.ID, TurnVersion: turn.Version, Attempt: turnSpec.Attempt,
+						RuntimeRevisionID:      runtimeRevision.ID,
+						RuntimeRevisionVersion: runtimeRevision.Version,
+						InputSHA256:            turnSpec.EffectiveInputSHA256,
+					})
+					processSpec.Outcome, processSpec.ResultArtifactID = "", ""
+					process, err = process.ReplaceAndTransition(processSpec, enum.StateRunning, claimNow)
+					if err != nil {
+						return errs.ErrStateConflict
+					}
+					if err := tx.Update(ctx, process, previousProcess.Version); err != nil {
+						return err
+					}
 				}
 				scheduledProcess = process
 				if err := service.appendMutationRecords(
@@ -797,14 +1326,26 @@ func (service *Service) ClaimScheduleOccurrence(
 					return err
 				}
 			}
-			token := service.leaseToken(
-				occurrence.ID,
-				uint64(occurrence.Attempt),
-				occurrence.Attempt,
-				input.Principal.AuthorityGeneration,
-				input.Principal.CallerWorkload,
-				input.IdempotencyKey,
-			)
+			completionCapability := domainrepo.ScheduleOccurrenceCapability{
+				ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte(occurrence.ID+"\x00"+
+					strconv.FormatUint(uint64(occurrence.Attempt), 10)+"\x00"+
+					strconv.FormatUint(capability.AuthorityGeneration, 10)+"\x00"+
+					completeScheduleOccurrenceMethod)).String(),
+				OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+				OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
+				AuthorityGeneration:  capability.AuthorityGeneration,
+				ImmutableInputSHA256: turnSpec.EffectiveInputSHA256,
+				FullMethod:           completeScheduleOccurrenceMethod,
+				WorkloadID:           input.Principal.CallerWorkload,
+				CallerSPIFFEID:       input.Principal.CallerSPIFFEID,
+				State:                "ISSUED", IssuedAt: claimNow,
+				ExpiresAt: claimNow.Add(occurrence.MaximumExecution),
+			}
+			token := service.scheduleCapabilityToken(completionCapability)
+			completionCapability.TokenSHA256 = hashString(token)
+			if err := tx.InsertScheduleOccurrenceCapability(ctx, completionCapability); err != nil {
+				return err
+			}
 			expectedAttempt := occurrence.Attempt
 			if err := materializeScheduledOccurrence(
 				&occurrence,
@@ -819,9 +1360,10 @@ func (service *Service) ClaimScheduleOccurrence(
 				},
 				scheduledOccurrenceClaimBinding{
 					WorkloadID:          input.Principal.CallerWorkload,
-					AuthorityGeneration: input.Principal.AuthorityGeneration,
-					TokenSHA256:         hashString(token), ClaimKeySHA256: keyHash,
-					LeaseExpiresAt: claimNow.Add(occurrence.MaximumExecution),
+					AuthorityGeneration: capability.AuthorityGeneration,
+					TokenSHA256:         completionCapability.TokenSHA256,
+					ClaimKeySHA256:      occurrence.ClaimKeySHA256,
+					LeaseExpiresAt:      completionCapability.ExpiresAt,
 				},
 				claimNow,
 			); err != nil {
@@ -833,6 +1375,11 @@ func (service *Service) ClaimScheduleOccurrence(
 				expectedAttempt,
 				"",
 			); err != nil {
+				return err
+			}
+			capability.State = "CONSUMED"
+			capability.ConsumedAt = claimNow
+			if err := tx.UpdateScheduleOccurrenceCapability(ctx, capability, "ISSUED"); err != nil {
 				return err
 			}
 			if err := tx.SaveScheduledRun(ctx, domainrepo.ScheduledRun{
@@ -858,21 +1405,18 @@ func (service *Service) ClaimScheduleOccurrence(
 				return err
 			}
 			if err := appendScheduleOccurrenceAudit(
-				ctx, tx, input.Principal, "claim_schedule_occurrence", occurrence,
+				ctx, tx, input.Principal, "materialize_schedule_occurrence", occurrence,
 			); err != nil {
 				return err
 			}
-			payload, err := json.Marshal(scheduleOccurrenceReceipt{
-				Occurrence: occurrence,
-				LeaseToken: token,
-			})
+			payload, err := json.Marshal(scheduleOccurrenceReceipt{Occurrence: occurrence})
 			if err != nil {
 				return errs.ErrInternal
 			}
 			if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
 				OrganizationID: input.Principal.OrganizationID,
 				ProjectID:      input.Principal.ProjectID,
-				Scope:          "claim_schedule_occurrence",
+				Scope:          "materialize_schedule_occurrence",
 				KeyHash:        keyHash,
 				RequestHash:    requestHash,
 				Payload:        payload,
@@ -880,9 +1424,8 @@ func (service *Service) ClaimScheduleOccurrence(
 			}); err != nil {
 				return err
 			}
-			result = ScheduleOccurrenceResult{
-				Occurrence: occurrence,
-				LeaseToken: token,
+			result = MaterializeScheduleOccurrenceResult{
+				Occurrence: occurrence, CompletionCapability: token,
 			}
 			return nil
 		},
@@ -890,86 +1433,126 @@ func (service *Service) ClaimScheduleOccurrence(
 	return result, err
 }
 
-func (service *Service) replayScheduleOccurrenceClaim(
+func (service *Service) replayScheduleOccurrenceMaterialization(
 	ctx context.Context,
 	tx domainrepo.Transaction,
-	input ClaimScheduleOccurrenceInput,
+	input MaterializeScheduleOccurrenceInput,
 	requestHash, keyHash string,
-) (ScheduleOccurrenceResult, bool, error) {
-	bound, err := tx.GetScheduleOccurrenceByClaimKey(
-		ctx,
-		input.Principal.OrganizationID,
-		input.Principal.ProjectID,
-		keyHash,
+) (MaterializeScheduleOccurrenceResult, bool, error) {
+	capability, err := tx.GetScheduleOccurrenceCapabilityForUpdate(
+		ctx, hashString(input.MaterializationCapability),
 	)
 	if errors.Is(err, errs.ErrNotFound) {
-		return ScheduleOccurrenceResult{}, false, nil
+		return MaterializeScheduleOccurrenceResult{}, false, nil
 	}
 	if err != nil {
-		return ScheduleOccurrenceResult{}, false, err
+		return MaterializeScheduleOccurrenceResult{}, false, err
 	}
-	if bound.ExecutionTurnID == "" {
-		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	if capability.OrganizationID != input.Principal.OrganizationID ||
+		capability.ProjectID != input.ProjectID || capability.OccurrenceID != input.OccurrenceID ||
+		capability.Attempt != input.ExpectedAttempt ||
+		capability.FullMethod != materializeScheduleOccurrenceMethod ||
+		capability.WorkloadID != input.Principal.CallerWorkload ||
+		capability.CallerSPIFFEID != input.Principal.CallerSPIFFEID ||
+		capability.TokenSHA256 != hashString(input.MaterializationCapability) {
+		return MaterializeScheduleOccurrenceResult{}, false, errs.ErrPermissionDenied
 	}
-	graph, err := service.lockOwnerGraphByTurn(
-		ctx, tx, input.Principal, bound.ExecutionTurnID,
-	)
+	if capability.State == "ISSUED" {
+		return MaterializeScheduleOccurrenceResult{}, false, nil
+	}
+	if capability.State != "CONSUMED" {
+		return MaterializeScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	receipt, err := tx.GetReceipt(ctx, input.Principal.OrganizationID,
+		"materialize_schedule_occurrence", keyHash)
 	if err != nil {
-		return ScheduleOccurrenceResult{}, false, err
-	}
-	if err := requireOwnerGraphRuntimeDisposition(
-		graph, runtimeDispositionAbsent,
-	); err != nil {
-		return ScheduleOccurrenceResult{}, false, err
-	}
-	now, err := tx.CurrentTime(ctx)
-	if err != nil {
-		return ScheduleOccurrenceResult{}, false, err
-	}
-	current := graph.Occurrence
-	if current.ID != bound.ID || current.State != "CLAIMED" ||
-		current.ClaimKeySHA256 != keyHash ||
-		current.ClaimantWorkloadID != input.Principal.CallerWorkload ||
-		current.AuthorityGeneration != input.Principal.AuthorityGeneration ||
-		current.TokenHash == "" || !current.LeaseExpiresAt.After(now) {
-		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
-	}
-	receipt, err := tx.GetReceipt(
-		ctx,
-		input.Principal.OrganizationID,
-		"claim_schedule_occurrence",
-		keyHash,
-	)
-	if err != nil {
-		return ScheduleOccurrenceResult{}, false, err
+		return MaterializeScheduleOccurrenceResult{}, false, err
 	}
 	if receipt.RequestHash != requestHash {
-		return ScheduleOccurrenceResult{}, false, errs.ErrIdempotencyConflict
+		return MaterializeScheduleOccurrenceResult{}, false, errs.ErrIdempotencyConflict
+	}
+	current, err := tx.GetScheduleOccurrenceForUpdate(ctx, input.Principal.OrganizationID,
+		input.Principal.ProjectID, input.OccurrenceID)
+	if err != nil {
+		return MaterializeScheduleOccurrenceResult{}, false, err
+	}
+	if current.State != "CLAIMED" || current.Attempt != input.ExpectedAttempt ||
+		current.AuthorityGeneration != capability.AuthorityGeneration {
+		return MaterializeScheduleOccurrenceResult{}, false, errs.ErrStateConflict
 	}
 	var payload scheduleOccurrenceReceipt
 	if json.Unmarshal(receipt.Payload, &payload) != nil ||
-		payload.Occurrence.ID != current.ID ||
-		payload.Occurrence.Attempt != current.Attempt ||
-		payload.Occurrence.ClaimKeySHA256 != keyHash ||
-		payload.LeaseToken == "" {
-		return ScheduleOccurrenceResult{}, false, errs.ErrInternal
+		payload.Occurrence.ID != current.ID || payload.Occurrence.Attempt != current.Attempt {
+		return MaterializeScheduleOccurrenceResult{}, false, errs.ErrInternal
 	}
-	expectedToken := service.leaseToken(
-		current.ID,
-		uint64(current.Attempt),
-		current.Attempt,
+	completionCapability, err := tx.GetScheduleOccurrenceCapabilityByOccurrenceForUpdate(
+		ctx, current.ID, current.Attempt, completeScheduleOccurrenceMethod,
 		current.AuthorityGeneration,
-		input.Principal.CallerWorkload,
-		input.IdempotencyKey,
 	)
-	if payload.LeaseToken != expectedToken ||
-		current.TokenHash != hashString(expectedToken) {
-		return ScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	if err != nil || completionCapability.State != "ISSUED" {
+		return MaterializeScheduleOccurrenceResult{}, false, errs.ErrStateConflict
 	}
-	return ScheduleOccurrenceResult{
-		Occurrence: current,
-		LeaseToken: expectedToken,
+	expectedToken := service.scheduleCapabilityToken(completionCapability)
+	if current.TokenHash != hashString(expectedToken) {
+		return MaterializeScheduleOccurrenceResult{}, false, errs.ErrStateConflict
+	}
+	return MaterializeScheduleOccurrenceResult{
+		Occurrence: current, CompletionCapability: expectedToken,
 	}, true, nil
+}
+
+type automationProjectReceipt struct {
+	ProjectID string `json:"projectId"`
+}
+
+func (service *Service) selectAutomationProject(
+	ctx context.Context,
+	principal value.Principal,
+	operation, idempotencyKey, requestHash string,
+) (string, error) {
+	if principal.ProjectID != "" || (operation != "DUE" && operation != "CLAIM") {
+		return "", errs.ErrPermissionDenied
+	}
+	keyHash := hashString(idempotencyKey)
+	scopeName := "automation_scheduler_partition_" + strings.ToLower(operation)
+	var result automationProjectReceipt
+	err := service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: principal.OrganizationID, ActorID: principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		receipt, receiptErr := tx.GetReceipt(ctx, principal.OrganizationID, scopeName, keyHash)
+		if receiptErr == nil {
+			if receipt.RequestHash != requestHash || json.Unmarshal(receipt.Payload, &result) != nil ||
+				value.ValidateID(result.ProjectID) != nil {
+				return errs.ErrIdempotencyConflict
+			}
+			return nil
+		}
+		if !errors.Is(receiptErr, errs.ErrNotFound) {
+			return receiptErr
+		}
+		projectID, err := tx.NextAutomationProject(ctx, principal.OrganizationID, operation)
+		if err != nil {
+			return err
+		}
+		result.ProjectID = projectID
+		payload, err := json.Marshal(result)
+		if err != nil {
+			return errs.ErrInternal
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		return tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: principal.OrganizationID,
+			Scope:          scopeName, KeyHash: keyHash, RequestHash: requestHash,
+			Payload: payload, CreatedAt: now,
+		})
+	})
+	if err != nil {
+		return "", err
+	}
+	return result.ProjectID, nil
 }
 
 // recoverExpiredScheduleOccurrences фиксирует каждую независимую watchdog
@@ -1002,9 +1585,33 @@ func (service *Service) recoverExpiredScheduleOccurrences(
 	}
 	for _, candidate := range candidates {
 		candidate := candidate
-		if candidate.ExecutionTurnID == "" {
-			return errs.ErrStateConflict
+		if candidate.State == "RESERVED" {
+			if err := service.releaseExpiredScheduleReservation(ctx, scope, principal, candidate); err != nil &&
+				!errors.Is(err, errs.ErrStateConflict) && !errors.Is(err, errs.ErrNotFound) {
+				return err
+			}
+			continue
 		}
+		if candidate.ExecutionTurnID == "" {
+			repaired, repairErr := service.repairBrokenScheduleRecovery(
+				ctx, scope, principal, candidate,
+			)
+			if repairErr != nil && !errors.Is(repairErr, errs.ErrStateConflict) &&
+				!errors.Is(repairErr, errs.ErrNotFound) {
+				return repairErr
+			}
+			if repaired {
+				continue
+			}
+			if err := service.recordBlockedScheduleRecovery(
+				ctx, scope, principal, candidate,
+			); err != nil && !errors.Is(err, errs.ErrStateConflict) &&
+				!errors.Is(err, errs.ErrNotFound) {
+				return err
+			}
+			continue
+		}
+		maintenanceEffect := ""
 		if err := service.repository.Transact(
 			ctx,
 			scope,
@@ -1022,15 +1629,312 @@ func (service *Service) recoverExpiredScheduleOccurrences(
 				if err != nil {
 					return err
 				}
-				return service.recoverExpiredScheduleOccurrence(
+				if err := service.recoverExpiredScheduleOccurrence(
 					ctx, tx, principal, graph, now,
+				); err != nil {
+					return err
+				}
+				recovered, err := tx.GetScheduleOccurrenceForUpdate(
+					ctx,
+					principal.OrganizationID,
+					principal.ProjectID,
+					candidate.ID,
 				)
+				if err != nil {
+					return err
+				}
+				switch recovered.State {
+				case "QUEUED":
+					maintenanceEffect = "requeue"
+				case "DEAD_LETTER":
+					maintenanceEffect = "dead_letter"
+				}
+				return nil
 			},
 		); err != nil {
-			return err
+			if !errors.Is(err, errs.ErrStateConflict) &&
+				!errors.Is(err, errs.ErrNotFound) &&
+				!errors.Is(err, errs.ErrInvalidInput) &&
+				!errors.Is(err, errs.ErrVersionMismatch) {
+				return err
+			}
+			if incidentErr := service.recordBlockedScheduleRecovery(
+				ctx, scope, principal, candidate,
+			); incidentErr != nil &&
+				!errors.Is(incidentErr, errs.ErrStateConflict) &&
+				!errors.Is(incidentErr, errs.ErrNotFound) {
+				return incidentErr
+			}
+		} else if maintenanceEffect != "" {
+			service.observer.ObserveScheduleMaintenance(maintenanceEffect)
 		}
 	}
 	return nil
+}
+
+func (service *Service) releaseExpiredScheduleReservation(
+	ctx context.Context, scope domainrepo.Scope, principal value.Principal,
+	candidate domainrepo.ScheduleOccurrence,
+) error {
+	committed := false
+	err := service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
+		occurrence, err := tx.GetScheduleOccurrenceForUpdate(ctx, principal.OrganizationID,
+			principal.ProjectID, candidate.ID)
+		if err != nil {
+			return err
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		if occurrence.State != "RESERVED" || occurrence.Attempt != candidate.Attempt ||
+			occurrenceHasExecutionBinding(occurrence) || occurrence.LeaseExpiresAt.After(now) {
+			return errs.ErrStateConflict
+		}
+		expectedToken := occurrence.TokenHash
+		if err := service.revokeIssuedScheduleCapability(ctx, tx, expectedToken, now); err != nil {
+			return err
+		}
+		occurrence.State = "QUEUED"
+		occurrence.Version++
+		occurrence.ClaimantWorkloadID, occurrence.TokenHash, occurrence.ClaimKeySHA256 = "", "", ""
+		// Поколение является durable high-watermark этой attempt. Сброс здесь
+		// повторно выдал бы тот же deterministic capability JTI после expiry.
+		occurrence.LeaseExpiresAt = time.Time{}
+		occurrence.AvailableAt = now.UTC().Truncate(time.Microsecond)
+		occurrence.UpdatedAt = occurrence.AvailableAt
+		if err := tx.UpdateScheduleOccurrence(ctx, occurrence, candidate.Attempt, expectedToken); err != nil {
+			return err
+		}
+		if err := appendScheduleOccurrenceAudit(ctx, tx, principal,
+			"release_expired_schedule_reservation", occurrence); err != nil {
+			return err
+		}
+		committed = true
+		return nil
+	})
+	if err == nil && committed {
+		service.observer.ObserveScheduleMaintenance("reservation_expired")
+	}
+	return err
+}
+
+// repairBrokenScheduleRecovery восстанавливает binding только из coherent
+// ScheduledRun либо dead-letter-ит доказанно не материализованную строку.
+func (service *Service) repairBrokenScheduleRecovery(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	principal value.Principal,
+	candidate domainrepo.ScheduleOccurrence,
+) (bool, error) {
+	repaired := false
+	err := service.repository.Transact(ctx, scope, func(tx domainrepo.Transaction) error {
+		occurrence, err := tx.GetScheduleOccurrenceForUpdate(ctx, principal.OrganizationID,
+			principal.ProjectID, candidate.ID)
+		if err != nil {
+			return err
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		if occurrence.State != "CLAIMED" || occurrence.Attempt != candidate.Attempt ||
+			occurrence.ExecutionTurnID != "" || occurrence.LeaseExpiresAt.After(now) {
+			return errs.ErrStateConflict
+		}
+		run, runErr := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
+		if errors.Is(runErr, errs.ErrNotFound) {
+			blocking, err := tx.HasBlockingScheduleExecution(ctx, principal.OrganizationID,
+				principal.ProjectID, occurrence.ScheduleID, occurrence.ID)
+			if err != nil {
+				return err
+			}
+			if blocking {
+				return errs.ErrStateConflict
+			}
+			expectedToken := occurrence.TokenHash
+			occurrence.State, occurrence.Outcome = "DEAD_LETTER", "recovery_graph_absent"
+			occurrence.ResultArtifactID = ""
+			occurrence.ClaimantWorkloadID, occurrence.TokenHash, occurrence.ClaimKeySHA256 = "", "", ""
+			occurrence.AuthorityGeneration = 0
+			occurrence.LeaseExpiresAt = time.Time{}
+			clearScheduledExecutionBinding(&occurrence)
+			occurrence.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+			if err := tx.UpdateScheduleOccurrence(ctx, occurrence, candidate.Attempt, expectedToken); err != nil {
+				return err
+			}
+			if err := appendScheduleOccurrenceAudit(ctx, tx, principal,
+				"dead_letter_absent_schedule_graph", occurrence); err != nil {
+				return err
+			}
+			repaired = true
+			return nil
+		}
+		if runErr != nil {
+			return runErr
+		}
+		binding := scheduledOccurrenceExecutionBinding{
+			SessionID: run.CurrentSessionID, SessionVersion: run.CurrentSessionVersion,
+			TurnID: run.CurrentTurnID, TurnVersion: run.CurrentTurnVersion,
+			ProcessRunID: run.CurrentProcessRunID, ProcessVersion: run.CurrentProcessVersion,
+			RuntimeRevisionID:      run.CurrentRuntimeRevisionID,
+			RuntimeRevisionVersion: run.CurrentRuntimeRevisionVersion,
+			InputSHA256:            run.CurrentInputSHA256,
+		}
+		if run.State != "CLAIMED" || !validScheduledExecutionBinding(binding) ||
+			run.OccurrenceID != occurrence.ID || run.Attempt != occurrence.Attempt {
+			return errs.ErrStateConflict
+		}
+		setScheduledExecutionBinding(&occurrence, binding)
+		occurrence.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+		if err := tx.UpdateScheduleOccurrence(ctx, occurrence, candidate.Attempt, candidate.TokenHash); err != nil {
+			return err
+		}
+		if err := appendScheduleOccurrenceAudit(ctx, tx, principal,
+			"repair_schedule_occurrence_binding", occurrence); err != nil {
+			return err
+		}
+		repaired = true
+		return nil
+	})
+	if err == nil && repaired {
+		service.observer.ObserveScheduleMaintenance("repair")
+	}
+	return repaired, err
+}
+
+type blockedScheduleRecoveryReceipt struct {
+	OccurrenceID string `json:"occurrenceId"`
+	Attempt      uint32 `json:"attempt"`
+}
+
+// recordBlockedScheduleRecovery сохраняет один audit для повреждённого
+// expired graph, не пытаясь частично терминализировать возможно исполняемую
+// Session/Turn/ProcessRun связку. Receipt делает повторные watchdog polls
+// идемпотентными, а остальные schedule rows продолжают обрабатываться.
+func (service *Service) recordBlockedScheduleRecovery(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	principal value.Principal,
+	candidate domainrepo.ScheduleOccurrence,
+) error {
+	keyHash := hashString("schedule_recovery_blocked\x00" + candidate.ID + "\x00" +
+		strconv.FormatUint(uint64(candidate.Attempt), 10))
+	committed := false
+	err := service.repository.Transact(
+		ctx,
+		scope,
+		func(tx domainrepo.Transaction) error {
+			occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				candidate.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if occurrence.State != "CLAIMED" || occurrence.Attempt != candidate.Attempt {
+				return errs.ErrStateConflict
+			}
+			if _, err := tx.GetForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				occurrence.ScheduleID,
+			); err != nil {
+				return err
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			if occurrence.LeaseExpiresAt.After(now) {
+				return errs.ErrStateConflict
+			}
+			var run *domainrepo.ScheduledRun
+			lockedRun, runErr := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
+			if runErr == nil {
+				run = &lockedRun
+			} else if !errors.Is(runErr, errs.ErrNotFound) {
+				return runErr
+			}
+			semanticHash, err := canonicalHash(struct {
+				OccurrenceID, ScheduleID string
+				Version                  uint64
+				Attempt                  uint32
+				Binding                  scheduledOccurrenceExecutionBinding
+				Run                      *domainrepo.ScheduledRun
+			}{
+				occurrence.ID, occurrence.ScheduleID, occurrence.Version, occurrence.Attempt,
+				scheduledExecutionBinding(occurrence), run,
+			})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			_, receiptErr := tx.GetReceipt(
+				ctx,
+				principal.OrganizationID,
+				"schedule_recovery_blocked",
+				keyHash,
+			)
+			switch {
+			case receiptErr == nil:
+				return nil
+			case errors.Is(receiptErr, errs.ErrNotFound):
+			default:
+				return receiptErr
+			}
+			expectedToken := occurrence.TokenHash
+			if err := service.revokeIssuedScheduleCapability(ctx, tx, expectedToken, now); err != nil {
+				return err
+			}
+			occurrence.State, occurrence.Outcome = "RECOVERY_BLOCKED", "invalid_owner_graph"
+			occurrence.RecoveryEvidenceSHA256 = semanticHash
+			occurrence.RecoveryBlockedAt = now.UTC().Truncate(time.Microsecond)
+			occurrence.Version++
+			occurrence.ClaimantWorkloadID, occurrence.TokenHash, occurrence.ClaimKeySHA256 = "", "", ""
+			occurrence.AuthorityGeneration = 0
+			occurrence.LeaseExpiresAt = time.Time{}
+			occurrence.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+			if err := tx.UpdateScheduleOccurrence(ctx, occurrence, candidate.Attempt, expectedToken); err != nil {
+				return err
+			}
+			if err := appendScheduleOccurrenceAudit(
+				ctx,
+				tx,
+				principal,
+				"block_invalid_schedule_occurrence_recovery",
+				occurrence,
+			); err != nil {
+				return err
+			}
+			payload, err := json.Marshal(blockedScheduleRecoveryReceipt{
+				OccurrenceID: occurrence.ID,
+				Attempt:      occurrence.Attempt,
+			})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
+				OrganizationID: principal.OrganizationID,
+				ProjectID:      principal.ProjectID,
+				Scope:          "schedule_recovery_blocked",
+				KeyHash:        keyHash,
+				RequestHash:    semanticHash,
+				Payload:        payload,
+				CreatedAt:      now,
+			}); err != nil {
+				return err
+			}
+			committed = true
+			return nil
+		},
+	)
+	if err == nil && committed {
+		service.observer.ObserveScheduleMaintenance("blocked_recovery")
+	}
+	return err
 }
 
 // skipOverlappedScheduleOccurrences коммитит terminal SKIPPED и его audit как
@@ -1040,7 +1944,8 @@ func (service *Service) skipOverlappedScheduleOccurrences(
 	scope domainrepo.Scope,
 	principal value.Principal,
 ) error {
-	return service.repository.Transact(
+	skippedCount := 0
+	err := service.repository.Transact(
 		ctx,
 		scope,
 		func(tx domainrepo.Transaction) error {
@@ -1053,6 +1958,7 @@ func (service *Service) skipOverlappedScheduleOccurrences(
 				principal.OrganizationID,
 				principal.ProjectID,
 				now,
+				16,
 			)
 			if err != nil {
 				return err
@@ -1063,10 +1969,17 @@ func (service *Service) skipOverlappedScheduleOccurrences(
 				); err != nil {
 					return err
 				}
+				skippedCount++
 			}
 			return nil
 		},
 	)
+	if err == nil {
+		for range skippedCount {
+			service.observer.ObserveScheduleMaintenance("overlap_skip")
+		}
+	}
+	return err
 }
 
 func (service *Service) prepareScheduleSession(
@@ -1158,21 +2071,26 @@ func (service *Service) CompleteScheduleOccurrence(
 	ctx context.Context,
 	input CompleteScheduleOccurrenceInput,
 ) (domainrepo.ScheduleOccurrence, error) {
-	if err := authorize(input.Principal, permissionExecuteSchedule); err != nil {
+	if err := authorize(input.Principal, permissionUseScheduleCapability); err != nil {
 		return domainrepo.ScheduleOccurrence{}, err
 	}
 	if input.Principal.CallerWorkload != service.schedulerWorkload ||
-		input.Principal.CallerSPIFFEID != service.schedulerSPIFFEID {
+		input.Principal.CallerSPIFFEID != service.schedulerSPIFFEID ||
+		input.Principal.ProjectID != "" {
 		return domainrepo.ScheduleOccurrence{}, errs.ErrPermissionDenied
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		value.ValidateID(input.OccurrenceID) != nil ||
-		len(input.LeaseToken) != 64 ||
+		value.ValidateID(input.ProjectID) != nil ||
+		len(input.CompletionCapability) != 64 ||
 		input.ExpectedAttempt == 0 ||
 		input.TerminalState != "" || input.Outcome != "" ||
 		input.ResultArtifactID != "" {
 		return domainrepo.ScheduleOccurrence{}, errs.ErrInvalidInput
 	}
+	// ProjectID используется только как locator. Доступ к эффекту даёт exact
+	// lease, чей hash и occurrence tuple проверяются после RLS lookup.
+	input.Principal.ProjectID = input.ProjectID
 	requestHash, err := canonicalHash(struct {
 		Identity        commandIdentity
 		OccurrenceID    string
@@ -1181,7 +2099,7 @@ func (service *Service) CompleteScheduleOccurrence(
 	}{
 		identity(input.Principal),
 		input.OccurrenceID,
-		hashString(input.LeaseToken),
+		hashString(input.CompletionCapability),
 		input.ExpectedAttempt,
 	})
 	if err != nil {
@@ -1197,6 +2115,23 @@ func (service *Service) CompleteScheduleOccurrence(
 			ActorID:        input.Principal.ActorID,
 		},
 		func(tx domainrepo.Transaction) error {
+			capability, err := tx.GetScheduleOccurrenceCapabilityForUpdate(
+				ctx, hashString(input.CompletionCapability),
+			)
+			if err != nil {
+				return err
+			}
+			if capability.OrganizationID != input.Principal.OrganizationID ||
+				capability.ProjectID != input.ProjectID ||
+				capability.OccurrenceID != input.OccurrenceID ||
+				capability.Attempt != input.ExpectedAttempt ||
+				capability.FullMethod != completeScheduleOccurrenceMethod ||
+				capability.WorkloadID != input.Principal.CallerWorkload ||
+				capability.CallerSPIFFEID != input.Principal.CallerSPIFFEID ||
+				capability.TokenSHA256 != hashString(input.CompletionCapability) ||
+				(capability.State != "ISSUED" && capability.State != "CONSUMED") {
+				return errs.ErrPermissionDenied
+			}
 			candidate, err := tx.GetScheduleOccurrence(
 				ctx,
 				input.Principal.OrganizationID,
@@ -1207,6 +2142,9 @@ func (service *Service) CompleteScheduleOccurrence(
 				return err
 			}
 			if candidate.State == "QUEUED" {
+				if capability.State != "CONSUMED" {
+					return errs.ErrStateConflict
+				}
 				occurrence, lockErr := tx.GetScheduleOccurrenceForUpdate(
 					ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
 					candidate.ID,
@@ -1252,6 +2190,9 @@ func (service *Service) CompleteScheduleOccurrence(
 				"complete_schedule_occurrence", keyHash,
 			)
 			if receiptErr == nil {
+				if capability.State != "CONSUMED" {
+					return errs.ErrStateConflict
+				}
 				if receipt.RequestHash != requestHash {
 					return errs.ErrIdempotencyConflict
 				}
@@ -1275,10 +2216,12 @@ func (service *Service) CompleteScheduleOccurrence(
 			}
 			if occurrence.State != "CLAIMED" ||
 				occurrence.Attempt != input.ExpectedAttempt ||
-				occurrence.TokenHash != hashString(input.LeaseToken) ||
+				occurrence.TokenHash != hashString(input.CompletionCapability) ||
 				occurrence.ClaimantWorkloadID != input.Principal.CallerWorkload ||
-				occurrence.AuthorityGeneration != input.Principal.AuthorityGeneration ||
-				!occurrence.LeaseExpiresAt.After(decisionNow) {
+				occurrence.AuthorityGeneration != capability.AuthorityGeneration ||
+				capability.ImmutableInputSHA256 != graph.Run.CurrentInputSHA256 ||
+				capability.State != "ISSUED" || !capability.ExpiresAt.After(decisionNow) ||
+				!occurrence.LeaseExpiresAt.Equal(capability.ExpiresAt) {
 				return errs.ErrStateConflict
 			}
 			if value.ValidateID(occurrence.ExecutionSessionID) != nil ||
@@ -1331,6 +2274,11 @@ func (service *Service) CompleteScheduleOccurrence(
 				}
 			}
 			now := decisionNow.UTC().Truncate(time.Microsecond)
+			capability.State = "CONSUMED"
+			capability.ConsumedAt = decisionNow
+			if err := tx.UpdateScheduleOccurrenceCapability(ctx, capability, "ISSUED"); err != nil {
+				return err
+			}
 			occurrence, err = service.applyScheduledTerminalDisposition(
 				ctx, tx, input.Principal, schedule, occurrence, run,
 				terminalState, outcome, resultArtifactID, now,
@@ -1396,6 +2344,343 @@ func replayRequeuedScheduleCompletion(
 	return occurrence, nil
 }
 
+// ResolveScheduleRecovery — отдельный owner-only путь для bounded incident
+// state. Он либо восстанавливает точный binding из неизменяемого ScheduledRun,
+// либо закрывает доказанно отсутствующий graph; потенциально живой graph не
+// терминализируется частично.
+func (service *Service) ResolveScheduleRecovery(
+	ctx context.Context,
+	input ResolveScheduleRecoveryInput,
+) (domainrepo.ScheduleOccurrence, error) {
+	if err := authorize(input.Principal, permissionRecoverSchedule); err != nil {
+		return domainrepo.ScheduleOccurrence{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.ScheduleID) != nil || value.ValidateID(input.OccurrenceID) != nil || input.ExpectedVersion == 0 ||
+		input.ExpectedAttempt == 0 || !validSHA256Text(input.EvidenceSHA256) ||
+		(input.Action != "REPAIR" && input.Action != "CANCEL" && input.Action != "SKIP") ||
+		value.ValidateStableKey(input.ReasonCode) != nil {
+		return domainrepo.ScheduleOccurrence{}, errs.ErrInvalidInput
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity                 commandIdentity
+		ScheduleID, OccurrenceID string
+		Version                  uint64
+		Attempt                  uint32
+		Action, Evidence, Reason string
+	}{
+		identity(input.Principal), input.ScheduleID, input.OccurrenceID, input.ExpectedVersion,
+		input.ExpectedAttempt, input.Action, input.EvidenceSHA256, input.ReasonCode,
+	})
+	if err != nil {
+		return domainrepo.ScheduleOccurrence{}, errs.ErrInvalidInput
+	}
+	keyHash := hashString(input.IdempotencyKey)
+	var result domainrepo.ScheduleOccurrence
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+		ActorID: input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		occurrence, err := tx.GetScheduleOccurrenceForUpdate(ctx,
+			input.Principal.OrganizationID, input.Principal.ProjectID, input.OccurrenceID)
+		if err != nil {
+			return err
+		}
+		receipt, receiptErr := tx.GetReceipt(ctx, input.Principal.OrganizationID,
+			"resolve_schedule_recovery", keyHash)
+		if receiptErr == nil {
+			if receipt.RequestHash != requestHash {
+				return errs.ErrIdempotencyConflict
+			}
+			var payload scheduleOccurrenceReceipt
+			if json.Unmarshal(receipt.Payload, &payload) != nil || payload.Occurrence != occurrence {
+				return errs.ErrStateConflict
+			}
+			result = occurrence
+			return nil
+		}
+		if !errors.Is(receiptErr, errs.ErrNotFound) {
+			return receiptErr
+		}
+		schedule, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, occurrence.ScheduleID)
+		if err != nil {
+			return err
+		}
+		if requireLifecycleOwner(input.Principal, schedule) != nil ||
+			occurrence.ScheduleID != input.ScheduleID ||
+			occurrence.State != "RECOVERY_BLOCKED" ||
+			occurrence.Version != input.ExpectedVersion || occurrence.Attempt != input.ExpectedAttempt ||
+			occurrence.RecoveryEvidenceSHA256 != input.EvidenceSHA256 {
+			return errs.ErrStateConflict
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		run, runErr := tx.GetScheduledRunForUpdate(ctx, occurrence.ID, occurrence.Attempt)
+		switch input.Action {
+		case "REPAIR":
+			if runErr != nil || run.State != "CLAIMED" {
+				return errs.ErrStateConflict
+			}
+			binding := scheduledOccurrenceExecutionBinding{
+				SessionID: run.CurrentSessionID, SessionVersion: run.CurrentSessionVersion,
+				TurnID: run.CurrentTurnID, TurnVersion: run.CurrentTurnVersion,
+				ProcessRunID: run.CurrentProcessRunID, ProcessVersion: run.CurrentProcessVersion,
+				RuntimeRevisionID:      run.CurrentRuntimeRevisionID,
+				RuntimeRevisionVersion: run.CurrentRuntimeRevisionVersion,
+				InputSHA256:            run.CurrentInputSHA256,
+			}
+			if !validScheduledExecutionBinding(binding) {
+				return errs.ErrStateConflict
+			}
+			session, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, binding.SessionID)
+			if err != nil || session.Kind != enum.KindSession || session.Version != binding.SessionVersion ||
+				session.OwnerActorID != schedule.OwnerActorID {
+				return errs.ErrStateConflict
+			}
+			turn, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, binding.TurnID)
+			turnSpec, ok := turn.Spec.(entity.TurnSpec)
+			if err != nil || !ok || turn.Kind != enum.KindTurn || turn.Version != binding.TurnVersion ||
+				turnSpec.SessionID != binding.SessionID || turnSpec.Attempt != run.CurrentTurnAttempt ||
+				turnSpec.RuntimeRevisionID != binding.RuntimeRevisionID ||
+				turnSpec.EffectiveInputSHA256 != binding.InputSHA256 {
+				return errs.ErrStateConflict
+			}
+			revision, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, binding.RuntimeRevisionID)
+			if err != nil || revision.Kind != enum.KindRuntimeRevision ||
+				revision.Version != binding.RuntimeRevisionVersion {
+				return errs.ErrStateConflict
+			}
+			if binding.ProcessRunID != "" {
+				process, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, binding.ProcessRunID)
+				if err != nil || process.Kind != enum.KindProcessRun ||
+					process.Version != binding.ProcessVersion || process.OwnerActorID != schedule.OwnerActorID {
+					return errs.ErrStateConflict
+				}
+			}
+			// REPAIR возвращает строку в watchdog lifecycle, а не выдаёт
+			// scheduler новый секрет через owner HTTP path. Поэтому owner
+			// фиксирует краткоживущую exact completion capability только как
+			// durable fence; следующий bounded poll истечёт её и завершит уже
+			// повторно разрешённый canonical graph.
+			generation := occurrence.Version + 1
+			expiresAt := now.Add(time.Millisecond)
+			capability := domainrepo.ScheduleOccurrenceCapability{
+				ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte(occurrence.ID+"\x00"+
+					strconv.FormatUint(uint64(occurrence.Attempt), 10)+"\x00"+
+					strconv.FormatUint(generation, 10)+"\x00"+completeScheduleOccurrenceMethod)).String(),
+				OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+				OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
+				AuthorityGeneration: generation, ImmutableInputSHA256: binding.InputSHA256,
+				FullMethod: completeScheduleOccurrenceMethod, WorkloadID: service.schedulerWorkload,
+				CallerSPIFFEID: service.schedulerSPIFFEID, State: "ISSUED", IssuedAt: now,
+				ExpiresAt: expiresAt,
+			}
+			capability.TokenSHA256 = hashString(service.scheduleCapabilityToken(capability))
+			if err := tx.InsertScheduleOccurrenceCapability(ctx, capability); err != nil {
+				return err
+			}
+			occurrence.State = "CLAIMED"
+			setScheduledExecutionBinding(&occurrence, binding)
+			occurrence.ClaimantWorkloadID = service.schedulerWorkload
+			occurrence.AuthorityGeneration = generation
+			occurrence.TokenHash = capability.TokenSHA256
+			occurrence.ClaimKeySHA256 = hashString(input.IdempotencyKey + "\x00watchdog")
+			occurrence.LeaseExpiresAt = expiresAt
+		case "CANCEL", "SKIP":
+			if runErr == nil {
+				if err := service.cancelBlockedScheduleRecoveryGraph(
+					ctx, tx, input.Principal, schedule, occurrence, run, input.ReasonCode, now,
+				); err != nil {
+					return err
+				}
+			} else {
+				if !errors.Is(runErr, errs.ErrNotFound) {
+					return runErr
+				}
+				blocking, err := tx.HasBlockingScheduleExecution(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, occurrence.ScheduleID, occurrence.ID)
+				if err != nil || blocking {
+					return errs.ErrStateConflict
+				}
+			}
+			if input.Action == "CANCEL" {
+				occurrence.State, occurrence.Outcome = "CANCELLED", "failed"
+			} else {
+				occurrence.State, occurrence.Outcome = "SKIPPED", "recovery_operator_skip"
+			}
+			clearScheduledExecutionBinding(&occurrence)
+			occurrence.ClaimantWorkloadID, occurrence.TokenHash, occurrence.ClaimKeySHA256 = "", "", ""
+			occurrence.AuthorityGeneration = 0
+			occurrence.LeaseExpiresAt = time.Time{}
+		}
+		occurrence.RecoveryEvidenceSHA256 = ""
+		occurrence.RecoveryBlockedAt = time.Time{}
+		occurrence.Version++
+		occurrence.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+		if err := tx.UpdateScheduleOccurrence(ctx, occurrence, input.ExpectedAttempt, ""); err != nil {
+			return err
+		}
+		if err := appendScheduleOccurrenceAudit(ctx, tx, input.Principal,
+			"resolve_schedule_recovery_"+strings.ToLower(input.Action), occurrence); err != nil {
+			return err
+		}
+		payload, err := json.Marshal(scheduleOccurrenceReceipt{Occurrence: occurrence})
+		if err != nil {
+			return errs.ErrInternal
+		}
+		if err := tx.SaveReceipt(ctx, domainrepo.Receipt{
+			OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+			Scope: "resolve_schedule_recovery", KeyHash: keyHash, RequestHash: requestHash,
+			Payload: payload, CreatedAt: now,
+		}); err != nil {
+			return err
+		}
+		result = occurrence
+		return nil
+	})
+	return result, err
+}
+
+func (service *Service) cancelBlockedScheduleRecoveryGraph(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	schedule entity.Resource,
+	occurrence domainrepo.ScheduleOccurrence,
+	run domainrepo.ScheduledRun,
+	reason string,
+	now time.Time,
+) error {
+	if run.OccurrenceID != occurrence.ID || run.Attempt != occurrence.Attempt ||
+		(run.State != "CLAIMED" && run.State != "WAITING_OWNER" && run.State != "CONTINUATION") ||
+		value.ValidateID(run.CurrentTurnID) != nil || value.ValidateID(run.CurrentSessionID) != nil ||
+		value.ValidateID(run.CurrentRuntimeRevisionID) != nil ||
+		value.ValidateID(run.CurrentProcessRunID) != nil || !validSHA256Text(run.CurrentInputSHA256) {
+		return errs.ErrStateConflict
+	}
+	var runtime *RuntimeExecution
+	lockedRuntime, runtimeErr := tx.GetRuntimeExecutionByTurnForUpdate(
+		ctx, run.CurrentTurnID, run.CurrentTurnAttempt,
+	)
+	if runtimeErr == nil {
+		runtime = &lockedRuntime
+	} else if !errors.Is(runtimeErr, errs.ErrNotFound) {
+		return runtimeErr
+	}
+	session, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, run.CurrentSessionID)
+	if err != nil {
+		return err
+	}
+	turn, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, run.CurrentTurnID)
+	if err != nil {
+		return err
+	}
+	process, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, run.CurrentProcessRunID)
+	if err != nil {
+		return err
+	}
+	revision, err := tx.GetForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, run.CurrentRuntimeRevisionID,
+	)
+	if err != nil {
+		return err
+	}
+	turnSpec, turnOK := turn.Spec.(entity.TurnSpec)
+	processSpec, processOK := process.Spec.(entity.ProcessRunSpec)
+	current, currentErr := currentExecution(processSpec)
+	if session.ID != run.CurrentSessionID || session.Kind != enum.KindSession ||
+		session.OwnerActorID != schedule.OwnerActorID || turn.ID != run.CurrentTurnID ||
+		!turnOK || turn.Kind != enum.KindTurn || turn.OwnerActorID != schedule.OwnerActorID ||
+		turnSpec.SessionID != session.ID || turnSpec.ProcessRunID != run.CurrentProcessRunID ||
+		turnSpec.RuntimeRevisionID != run.CurrentRuntimeRevisionID ||
+		turnSpec.Attempt != run.CurrentTurnAttempt ||
+		turnSpec.EffectiveInputSHA256 != run.CurrentInputSHA256 ||
+		revision.ID != run.CurrentRuntimeRevisionID || revision.Kind != enum.KindRuntimeRevision ||
+		process.ID != run.CurrentProcessRunID || !processOK || process.Kind != enum.KindProcessRun ||
+		process.OwnerActorID != schedule.OwnerActorID || processSpec.ScheduleID != schedule.ID ||
+		processSpec.OccurrenceID != occurrence.ID || currentErr != nil ||
+		!executionMatchesTurn(current, turn, turnSpec) || turn.State.Terminal() || process.State.Terminal() {
+		return errs.ErrStateConflict
+	}
+	if runtime != nil && (runtime.OrganizationID != principal.OrganizationID ||
+		runtime.ProjectID != principal.ProjectID || runtime.SessionID != session.ID ||
+		runtime.TurnID != turn.ID || runtime.ProcessID != process.ID ||
+		runtime.Attempt != turnSpec.Attempt || runtime.ImmutableInputSHA256 != turnSpec.EffectiveInputSHA256) {
+		return errs.ErrStateConflict
+	}
+	if runtime == nil {
+		if _, err := tx.GetRuntimeExecutionByTurn(ctx, turn.ID, turnSpec.Attempt); err == nil {
+			return errs.ErrStateConflict
+		} else if !errors.Is(err, errs.ErrNotFound) {
+			return err
+		}
+	}
+	children, err := tx.HasActiveChildProcesses(ctx, process.OrganizationID, process.ProjectID, process.ID)
+	if err != nil || children {
+		return errs.ErrStateConflict
+	}
+	if _, err := service.cancelTurnExecution(ctx, tx, principal, turn, reason, now); err != nil {
+		return err
+	}
+	if turn.State == enum.StateWaitingOwner || process.State == enum.StateWaitingOwner {
+		gate, err := tx.ActiveOwnerGateForProcess(ctx, process.OrganizationID, process.ProjectID, process.ID)
+		if err != nil {
+			return err
+		}
+		cancelledGate, err := gate.Transition(enum.StateCancelled, now)
+		if err != nil {
+			return errs.ErrStateConflict
+		}
+		if err := tx.Update(ctx, cancelledGate, gate.Version); err != nil {
+			return err
+		}
+		if err := service.appendMutationRecords(ctx, tx, principal,
+			"resolve_schedule_recovery_cancel_gate", cancelledGate); err != nil {
+			return err
+		}
+	}
+	cancelledProcess, err := process.Transition(enum.StateCancelled, now)
+	if err != nil {
+		return errs.ErrStateConflict
+	}
+	if err := tx.Update(ctx, cancelledProcess, process.Version); err != nil {
+		return err
+	}
+	if err := service.revokeExecutionClaims(
+		ctx, tx, principal, process.ID, turn.ID, reason, now,
+	); err != nil {
+		return err
+	}
+	if err := service.appendMutationRecords(ctx, tx, principal,
+		"resolve_schedule_recovery_cancel_process", cancelledProcess); err != nil {
+		return err
+	}
+	if session.ParentID == schedule.ID && !session.State.Terminal() {
+		cancelledSession, err := session.Transition(enum.StateCancelled, now)
+		if err != nil {
+			return errs.ErrStateConflict
+		}
+		if err := tx.Update(ctx, cancelledSession, session.Version); err != nil {
+			return err
+		}
+		if err := service.appendMutationRecords(ctx, tx, principal,
+			"resolve_schedule_recovery_cancel_session", cancelledSession); err != nil {
+			return err
+		}
+	}
+	return tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
+		OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
+		State: "CANCELLED", Outcome: "failed", FinishedAt: now,
+	})
+}
+
 // CancelScheduleOccurrence отзывает ожидающий или текущий запуск без исполнения.
 func (service *Service) CancelScheduleOccurrence(
 	ctx context.Context,
@@ -1445,7 +2730,7 @@ func (service *Service) CancelScheduleOccurrence(
 			}
 			var graph lockedOwnerGraph
 			var occurrence domainrepo.ScheduleOccurrence
-			queuedSubset := candidate.State == "QUEUED" ||
+			queuedSubset := candidate.State == "QUEUED" || candidate.State == "RESERVED" ||
 				(candidate.State == "CANCELLED" && candidate.ExecutionTurnID == "")
 			if queuedSubset {
 				occurrence, err = tx.GetScheduleOccurrenceForUpdate(
@@ -1468,7 +2753,7 @@ func (service *Service) CancelScheduleOccurrence(
 				return errs.ErrStateConflict
 			}
 			if occurrence.Attempt != input.ExpectedAttempt ||
-				(occurrence.State != "QUEUED" && occurrence.State != "CLAIMED" &&
+				(occurrence.State != "QUEUED" && occurrence.State != "RESERVED" && occurrence.State != "CLAIMED" &&
 					occurrence.State != "WAITING_OWNER" &&
 					occurrence.State != "CONTINUATION" &&
 					occurrence.State != "CANCELLED") {
@@ -1524,14 +2809,18 @@ func (service *Service) CancelScheduleOccurrence(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
-			if occurrence.State != "QUEUED" && occurrence.State != "CLAIMED" &&
+			if occurrence.State != "QUEUED" && occurrence.State != "RESERVED" && occurrence.State != "CLAIMED" &&
 				occurrence.State != "WAITING_OWNER" &&
 				occurrence.State != "CONTINUATION" {
 				return errs.ErrStateConflict
 			}
 			expectedToken := occurrence.TokenHash
-			now := service.now().UTC().Truncate(time.Microsecond)
-			if occurrence.State != "QUEUED" {
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			now = now.UTC().Truncate(time.Microsecond)
+			if occurrence.State != "QUEUED" && occurrence.State != "RESERVED" {
 				run := graph.Run
 				if validateScheduledRunBinding(occurrence, run) != nil ||
 					run.State != occurrence.State {
@@ -1642,18 +2931,30 @@ func (service *Service) CancelScheduleOccurrence(
 				}
 				if err := tx.FinishScheduledRun(ctx, domainrepo.ScheduledRun{
 					OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
-					State: "CANCELLED", Outcome: input.ReasonCode, FinishedAt: now,
+					State: "CANCELLED", Outcome: "failed", FinishedAt: now,
 				}); err != nil {
 					return err
 				}
 			}
+			if occurrence.State == "RESERVED" && expectedToken != "" {
+				capability, err := tx.GetScheduleOccurrenceCapabilityForUpdate(ctx, expectedToken)
+				if err != nil || capability.State != "ISSUED" ||
+					capability.FullMethod != materializeScheduleOccurrenceMethod {
+					return errs.ErrStateConflict
+				}
+				capability.State, capability.RevokedAt = "REVOKED", now
+				if err := tx.UpdateScheduleOccurrenceCapability(ctx, capability, "ISSUED"); err != nil {
+					return err
+				}
+			}
 			occurrence.State = "CANCELLED"
-			occurrence.Outcome = input.ReasonCode
+			occurrence.Outcome = "failed"
 			occurrence.ClaimantWorkloadID = ""
 			occurrence.AuthorityGeneration = 0
 			occurrence.TokenHash = ""
 			occurrence.ClaimKeySHA256 = ""
 			occurrence.LeaseExpiresAt = time.Time{}
+			occurrence.Version++
 			occurrence.UpdatedAt = now
 			if err := tx.UpdateScheduleOccurrence(
 				ctx,
@@ -2853,20 +4154,28 @@ func (service *Service) RequestOwnerGate(
 				return err
 			}
 			deliveryID := uuid.NewString()
+			notificationRoomID := ""
+			if processSpec.OccurrenceID != "" {
+				if graph.Occurrence.ID != processSpec.OccurrenceID || graph.Occurrence.RoomID == "" {
+					return errs.ErrStateConflict
+				}
+				notificationRoomID = graph.Occurrence.RoomID
+			}
 			deliveryPayloadSHA256, err := canonicalHash(struct {
-				Version          int
-				DeliveryID       string
-				OwnerGateID      string
-				ProcessRunID     string
-				SessionID        string
-				TurnID           string
-				Attempt          uint32
-				ResultSHA256     string
-				ImmutableInput   string
-				RecipientActorID string
-				ExpiresAt        time.Time
-				ScheduleID       string
-				OccurrenceID     string
+				Version            int
+				DeliveryID         string
+				OwnerGateID        string
+				ProcessRunID       string
+				SessionID          string
+				TurnID             string
+				Attempt            uint32
+				ResultSHA256       string
+				ImmutableInput     string
+				RecipientActorID   string
+				ExpiresAt          time.Time
+				ScheduleID         string
+				OccurrenceID       string
+				NotificationRoomID string
 			}{
 				1,
 				deliveryID,
@@ -2876,11 +4185,12 @@ func (service *Service) RequestOwnerGate(
 				executionTurnID,
 				executionAttempt,
 				artifact.SHA256,
-				processSpec.ImmutableInputSHA256,
+				gateTurnSpec.EffectiveInputSHA256,
 				processSpec.RootInitiatorActorID,
 				input.ExpiresAt.UTC().Truncate(time.Microsecond),
 				processSpec.ScheduleID,
 				processSpec.OccurrenceID,
+				notificationRoomID,
 			})
 			if err != nil {
 				return errs.ErrInternal
@@ -2902,7 +4212,7 @@ func (service *Service) RequestOwnerGate(
 					SessionID:             executionSessionID,
 					TurnID:                executionTurnID,
 					Attempt:               executionAttempt,
-					ImmutableInputSHA256:  processSpec.ImmutableInputSHA256,
+					ImmutableInputSHA256:  gateTurnSpec.EffectiveInputSHA256,
 					RecipientActorID:      processSpec.RootInitiatorActorID,
 					DeliveryWorkloadID:    service.ownerGateDeliveryWorkload,
 					DeliverySPIFFEID:      service.ownerGateDeliverySPIFFEID,
@@ -2910,6 +4220,7 @@ func (service *Service) RequestOwnerGate(
 					DeliveryPayloadSHA256: deliveryPayloadSHA256,
 					ScheduleID:            processSpec.ScheduleID,
 					OccurrenceID:          processSpec.OccurrenceID,
+					NotificationRoomID:    notificationRoomID,
 				},
 				now,
 			)
@@ -2944,6 +4255,8 @@ func (service *Service) RequestOwnerGate(
 				}
 				expectedToken := occurrence.TokenHash
 				occurrence.State = "WAITING_OWNER"
+				occurrence.Outcome = "requires_human"
+				occurrence.ResultArtifactID = input.ResultArtifactID
 				occurrence.ClaimantWorkloadID = ""
 				occurrence.AuthorityGeneration = 0
 				occurrence.TokenHash = ""
@@ -2954,9 +4267,10 @@ func (service *Service) RequestOwnerGate(
 				); err != nil {
 					return err
 				}
-				if err := tx.WaitScheduledRun(
-					ctx, occurrence.ID, occurrence.Attempt,
-				); err != nil {
+				if err := tx.WaitScheduledRun(ctx, domainrepo.ScheduledRun{
+					OccurrenceID: occurrence.ID, Attempt: occurrence.Attempt,
+					Outcome: "requires_human", ResultArtifactID: input.ResultArtifactID,
+				}); err != nil {
 					return err
 				}
 				schedule := graph.Schedule

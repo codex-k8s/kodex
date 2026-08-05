@@ -240,6 +240,9 @@ var sqlIntegrationContinuationUpdate string
 //go:embed sql/schedule__due.sql
 var sqlScheduleDue string
 
+//go:embed sql/automation_scheduler_project__next.sql
+var sqlAutomationSchedulerProjectNext string
+
 //go:embed sql/schedule_occurrence__get.sql
 var sqlScheduleOccurrenceGet string
 
@@ -275,6 +278,18 @@ var sqlScheduleOccurrenceSkipOverlap string
 
 //go:embed sql/schedule_occurrence__update.sql
 var sqlScheduleOccurrenceUpdate string
+
+//go:embed sql/schedule_capability__insert.sql
+var sqlScheduleCapabilityInsert string
+
+//go:embed sql/schedule_capability__get_for_update.sql
+var sqlScheduleCapabilityGetForUpdate string
+
+//go:embed sql/schedule_capability__get_by_occurrence_for_update.sql
+var sqlScheduleCapabilityGetByOccurrenceForUpdate string
+
+//go:embed sql/schedule_capability__update.sql
+var sqlScheduleCapabilityUpdate string
 
 //go:embed sql/scheduled_run__save.sql
 var sqlScheduledRunSave string

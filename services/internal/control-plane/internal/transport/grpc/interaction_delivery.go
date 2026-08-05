@@ -42,8 +42,30 @@ func (server *Server) ClaimInteractionDelivery(ctx context.Context,
 		OrganizationId:             work.OrganizationID, ProjectId: work.ProjectID,
 		ArtifactName: work.ArtifactName, ArtifactStorageRef: work.ArtifactStorageRef,
 		ArtifactSizeBytes: work.ArtifactSizeBytes, ArtifactMediaType: work.ArtifactMediaType,
-		InlinePayload: slices.Clone(work.InlinePayload),
+		InlinePayload:      slices.Clone(work.InlinePayload),
+		NotificationRoomId: work.NotificationRoomID,
+		NotificationPolicy: toProtoScheduleNotificationPolicy(work.NotificationPolicy),
+		ScheduledOutcome:   toProtoScheduledOutcome(work.ScheduledOutcome),
 	}, nil
+}
+
+func toProtoScheduledOutcome(value string) controlplanev1.ScheduledOutcome {
+	return map[string]controlplanev1.ScheduledOutcome{
+		"no_action":      controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_NO_ACTION,
+		"action_taken":   controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_ACTION_TAKEN,
+		"requires_human": controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_REQUIRES_HUMAN,
+		"failed":         controlplanev1.ScheduledOutcome_SCHEDULED_OUTCOME_FAILED,
+	}[value]
+}
+
+func toProtoScheduleNotificationPolicy(value string) controlplanev1.ScheduleNotificationPolicy {
+	return map[string]controlplanev1.ScheduleNotificationPolicy{
+		"ALWAYS":               controlplanev1.ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ALWAYS,
+		"ON_ACTION":            controlplanev1.ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_ACTION,
+		"ON_FAILURE":           controlplanev1.ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_FAILURE,
+		"ON_ACTION_OR_FAILURE": controlplanev1.ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE,
+		"AUDIT_ONLY":           controlplanev1.ScheduleNotificationPolicy_SCHEDULE_NOTIFICATION_POLICY_AUDIT_ONLY,
+	}[value]
 }
 
 func (server *Server) IssueInteractionDeliveryReadbackGrant(ctx context.Context,

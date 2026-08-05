@@ -141,7 +141,7 @@ func TestRuntimeContinuationStrictNamedArgumentsMatchSQL(t *testing.T) {
 			name: "schedule skip overlap", sql: sqlScheduleOccurrenceSkipOverlap,
 			args: pgx.StrictNamedArgs{
 				"organization_id": "", "project_id": "", "now": time.Time{},
-				"open_execution_states": []string{},
+				"limit": 16, "open_execution_states": []string{},
 			},
 		},
 		{
@@ -262,7 +262,7 @@ func TestScheduledContinuationRemainsOpenAndUnclaimable(t *testing.T) {
 		}
 	}
 	states := scheduleOpenExecutionStates()
-	if strings.Join(states, ",") != "CLAIMED,WAITING_OWNER,CONTINUATION" {
+	if strings.Join(states, ",") != "RESERVED,CLAIMED,WAITING_OWNER,CONTINUATION" {
 		t.Fatalf("unexpected closed schedule execution state set: %v", states)
 	}
 }

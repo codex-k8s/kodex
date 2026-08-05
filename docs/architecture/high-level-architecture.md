@@ -25,7 +25,7 @@ flowchart LR
     CP --> PG[(PostgreSQL)]
     CP --> OB[(Transactional Outbox)]
     OB --> NATS[NATS JetStream]
-    AS[Планировщик автоматизаций] --> PG
+    AS[Планировщик автоматизаций] -- generated protected gRPC --> CP
     NATS --> RC[Контроллер среды выполнения]
     RC --> K8S[Kubernetes API]
     K8S --> AR[Pod агента]

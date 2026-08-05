@@ -313,7 +313,10 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProviderAccountName:         value.RuntimeRevision.GetProviderAccountName(),
 			EffectiveRuntimeSHA256:      value.RuntimeRevision.GetEffectiveRuntimeSha256(),
 			CodexModel:                  value.RuntimeRevision.GetCodexModel(), CodexSandbox: value.RuntimeRevision.GetCodexSandbox(),
-			CodexApprovalPolicy:    value.RuntimeRevision.GetCodexApprovalPolicy(),
+			CodexApprovalPolicy: value.RuntimeRevision.GetCodexApprovalPolicy(),
+			ScheduledResultContract: scheduledResultContractFromProto(
+				value.RuntimeRevision.GetScheduledResultContract(),
+			),
 			PromptProfileID:        value.RuntimeRevision.GetPromptProfileId(),
 			PromptRevision:         value.RuntimeRevision.GetPromptRevision(),
 			CredentialBindingIDs:   value.RuntimeRevision.GetCredentialBindingIds(),
@@ -366,6 +369,9 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			AgentTurnBindingVersion: value.Turn.GetAgentTurnBindingVersion(),
 			AgentTurnBindingSHA256:  value.Turn.GetAgentTurnBindingSha256(),
 			InputArtifacts:          inputArtifacts,
+			ScheduledResultContract: scheduledResultContractFromProto(
+				value.Turn.GetScheduledResultContract(),
+			),
 		}, nil
 	case *controlplanev1.ResourceSpec_ProcessRun:
 		return entity.ProcessRunSpec{
@@ -423,7 +429,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		if err != nil {
 			return nil, err
 		}
-		nextRunAt, err := requiredTime(value.Schedule.GetNextRunAt())
+		nextRunAt, err := optionalTime(value.Schedule.GetNextRunAt())
 		if err != nil {
 			return nil, err
 		}
@@ -532,6 +538,7 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ContinuationTurnID:       value.OwnerGate.GetContinuationTurnId(),
 			ContinuationTurnVersion:  value.OwnerGate.GetContinuationTurnVersion(),
 			ContinuationInputSHA256:  value.OwnerGate.GetContinuationInputSha256(),
+			NotificationRoomID:       value.OwnerGate.GetNotificationRoomId(),
 		}, nil
 	case *controlplanev1.ResourceSpec_MemoryRecord:
 		return entity.MemoryRecordSpec{
@@ -754,6 +761,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				EffectiveRuntimeSha256:      value.EffectiveRuntimeSHA256,
 				CodexModel:                  value.CodexModel, CodexSandbox: value.CodexSandbox,
 				CodexApprovalPolicy:     value.CodexApprovalPolicy,
+				ScheduledResultContract: scheduledResultContractToProto(value.ScheduledResultContract),
 				PromptProfileId:         value.PromptProfileID,
 				PromptRevision:          value.PromptRevision,
 				CredentialBindingIds:    value.CredentialBindingIDs,
@@ -810,6 +818,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				AgentTurnBindingVersion:  value.AgentTurnBindingVersion,
 				AgentTurnBindingSha256:   value.AgentTurnBindingSHA256,
 				InputArtifacts:           inputArtifacts,
+				ScheduledResultContract:  scheduledResultContractToProto(value.ScheduledResultContract),
 			},
 		}
 	case entity.ProcessRunSpec:
@@ -929,6 +938,7 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ContinuationTurnId:       value.ContinuationTurnID,
 				ContinuationTurnVersion:  value.ContinuationTurnVersion,
 				ContinuationInputSha256:  value.ContinuationInputSHA256,
+				NotificationRoomId:       value.NotificationRoomID,
 			},
 		}
 	case entity.MemoryRecordSpec:
@@ -1111,6 +1121,30 @@ func configurationOwnershipToProto(
 		),
 		SourceRef:      ownership.SourceRef,
 		SourceRevision: ownership.SourceRevision,
+	}
+}
+
+func scheduledResultContractFromProto(
+	contract *controlplanev1.ScheduledResultContract,
+) *entity.ScheduledResultContractRef {
+	if contract == nil {
+		return nil
+	}
+	return &entity.ScheduledResultContractRef{
+		Schema: contract.GetSchema(), Path: contract.GetPath(), Format: contract.GetFormat(),
+		SchemaSHA256: contract.GetSchemaSha256(), MaximumBytes: contract.GetMaximumBytes(),
+	}
+}
+
+func scheduledResultContractToProto(
+	contract *entity.ScheduledResultContractRef,
+) *controlplanev1.ScheduledResultContract {
+	if contract == nil {
+		return nil
+	}
+	return &controlplanev1.ScheduledResultContract{
+		Schema: contract.Schema, Path: contract.Path, Format: contract.Format,
+		SchemaSha256: contract.SchemaSHA256, MaximumBytes: contract.MaximumBytes,
 	}
 }
 

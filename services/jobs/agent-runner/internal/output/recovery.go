@@ -43,6 +43,7 @@ type RecoveryJournal struct {
 	ArchiveExecutionID  string                     `json:"archive_execution_id"`
 	SourceAttempt       uint32                     `json:"source_attempt"`
 	OriginalOutcome     string                     `json:"original_outcome"`
+	ScheduledOutcome    string                     `json:"scheduled_outcome,omitempty"`
 	TerminalMarkdown    string                     `json:"terminal_markdown"`
 	CodexSessionID      string                     `json:"codex_session_id"`
 	ArchiveRelativePath string                     `json:"archive_relative_path"`
@@ -62,7 +63,8 @@ func AuthorizeRecovery(input model.Input, journal RecoveryJournal, found bool) e
 		return nil
 	}
 	if !found || journal.SourceExecutionID != input.CodexDeliveryRecoverySourceExecutionID ||
-		journal.TurnID != input.TurnID || journal.SourceAttempt >= input.Attempt {
+		journal.TurnID != input.TurnID || journal.SourceAttempt >= input.Attempt ||
+		(input.ScheduleOccurrenceID == "") != (journal.ScheduledOutcome == "") {
 		if !found {
 			return ErrRecoveryJournalUnavailable
 		}
@@ -304,6 +306,9 @@ func validateRecovery(journal RecoveryJournal) error {
 	if journal.Schema != recoverySchema || uuid.Validate(journal.TurnID) != nil ||
 		uuid.Validate(journal.SourceExecutionID) != nil || uuid.Validate(journal.ArchiveExecutionID) != nil || journal.SourceAttempt == 0 ||
 		(journal.OriginalOutcome != "SUCCEEDED" && journal.OriginalOutcome != "FAILED" && journal.OriginalOutcome != "BLOCKED") ||
+		(journal.ScheduledOutcome != "" && journal.ScheduledOutcome != "no_action" &&
+			journal.ScheduledOutcome != "action_taken" && journal.ScheduledOutcome != "requires_human" &&
+			journal.ScheduledOutcome != "failed") ||
 		journal.TerminalMarkdown == "" || len(journal.TerminalMarkdown) > maximumMarkdownBytes ||
 		!utf8.ValidString(journal.TerminalMarkdown) || len(journal.Failed) == 0 ||
 		len(journal.Failed)+len(journal.Existing) > runtimecontract.MaximumOutputs-1 ||

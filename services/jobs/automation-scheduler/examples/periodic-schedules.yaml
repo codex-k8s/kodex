@@ -1,0 +1,90 @@
+version: 1
+kind: automation-scheduler-examples
+examples:
+  mailbox_manager:
+    requirement: USR-SCH-001
+    description: Почасовая проверка заявок почтовым менеджером.
+    manage_schedule:
+      action: ADMINISTRATIVE_ACTION_CREATE
+      name: Почасовой менеджер входящих заявок
+      spec:
+        target_resource_id: TARGET_PLAYBOOK_UUID
+        interval: 3600s
+        timezone: Europe/Moscow
+        calendar: GREGORIAN
+        overlap_policy: SCHEDULE_OVERLAP_POLICY_FORBID
+        misfire_policy: SCHEDULE_MISFIRE_POLICY_RUN_ONCE
+        delivery_policy: EXACTLY_ONCE_EFFECT
+        target_kind: RESOURCE_KIND_ROLE
+        target_version: 1
+        target_type: SCHEDULE_TARGET_TYPE_PLAYBOOK
+        playbook_ref: mattercodex.mailbox-manager
+        playbook_version: 1
+        prompt_profile_id: PROMPT_PROFILE_UUID
+        prompt_revision: 1
+        prompt_artifact_id: CLEAN_PROMPT_ARTIFACT_UUID
+        runtime_revision_id: PINNED_RUNTIME_REVISION_UUID
+        session_policy: SCHEDULE_SESSION_POLICY_NEW
+        room_id: RUNS_ROOM_UUID
+        notification_policy: SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE
+        maximum_attempts: 3
+        initial_backoff: 30s
+        maximum_backoff: 300s
+        dead_letter_after: 86400s
+        maximum_execution_duration: 1800s
+        coalesce: true
+        ownership:
+          managed_by: CONFIGURATION_MANAGER_UI
+    pinned_target_rules:
+      result_contract:
+        schema: mattercodex.scheduled-result.v1
+        path: .matter-codex/outbox/scheduled-result.v1.json
+        empty_result: '{"schema":"mattercodex.scheduled-result.v1","outcome":"no_action","summary":"Новых заявок нет","artifact_refs":[]}'
+      empty_mailbox_result: no_action
+      action_result: отдельное обсуждение на каждую новую заявку
+      secret_source: credential binding, а не schedule payload
+  daily_improver:
+    requirement: USR-SCH-002
+    description: Один ежедневный batch долговечных улучшений без рекурсивного запуска.
+    manage_schedule:
+      action: ADMINISTRATIVE_ACTION_CREATE
+      name: Ежедневный improver
+      spec:
+        target_resource_id: TARGET_PLAYBOOK_UUID
+        cron: "0 19 * * *"
+        timezone: Etc/UTC
+        calendar: GREGORIAN
+        overlap_policy: SCHEDULE_OVERLAP_POLICY_FORBID
+        misfire_policy: SCHEDULE_MISFIRE_POLICY_RUN_ONCE
+        delivery_policy: EXACTLY_ONCE_EFFECT
+        target_kind: RESOURCE_KIND_ROLE
+        target_version: 1
+        target_type: SCHEDULE_TARGET_TYPE_PLAYBOOK
+        playbook_ref: mattercodex.daily-improver
+        playbook_version: 1
+        prompt_profile_id: PROMPT_PROFILE_UUID
+        prompt_revision: 1
+        prompt_artifact_id: CLEAN_PROMPT_ARTIFACT_UUID
+        runtime_revision_id: PINNED_RUNTIME_REVISION_UUID
+        session_policy: SCHEDULE_SESSION_POLICY_NEW
+        room_id: RUNS_ROOM_UUID
+        notification_policy: SCHEDULE_NOTIFICATION_POLICY_ON_ACTION_OR_FAILURE
+        maximum_attempts: 2
+        initial_backoff: 300s
+        maximum_backoff: 1800s
+        dead_letter_after: 86400s
+        maximum_execution_duration: 7200s
+        coalesce: true
+        ownership:
+          managed_by: CONFIGURATION_MANAGER_GIT
+          source_ref: git:config/automations/daily-improver
+          source_revision: 1
+    pinned_target_rules:
+      result_contract:
+        schema: mattercodex.scheduled-result.v1
+        path: .matter-codex/outbox/scheduled-result.v1.json
+        empty_result: '{"schema":"mattercodex.scheduled-result.v1","outcome":"no_action","summary":"Подходящих улучшений нет","artifact_refs":[]}'
+      source_selection: merged PR без label improved
+      completion_effect: добавить label improved только после обработки
+      no_change_result: no_action без нового PR
+      recursion_guard: исключить PR, созданный mattercodex.daily-improver

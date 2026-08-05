@@ -390,7 +390,6 @@ func Run(
 		Stream:          config.NATSStream,
 		Subjects: []string{
 			"control_plane.runtime_configuration_changed",
-			"control_plane.schedule_changed",
 		},
 		Replicas:        config.NATSReplicas,
 		MaxMessageBytes: 256 << 10,

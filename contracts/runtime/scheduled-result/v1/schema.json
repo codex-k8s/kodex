@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.mattercodex.dev/runtime/scheduled-result/v1/schema.json",
+  "title": "MatterCodex scheduled result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "outcome", "summary", "artifact_refs"],
+  "properties": {
+    "schema": {
+      "const": "mattercodex.scheduled-result.v1"
+    },
+    "outcome": {
+      "enum": ["no_action", "action_taken", "requires_human", "failed"]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "artifact_refs": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      }
+    }
+  }
+}

@@ -285,6 +285,7 @@ func (service *Service) EnqueueTurn(
 				input.Principal,
 				session,
 				sessionSpec,
+				nil,
 			)
 			if err != nil {
 				return entity.Resource{}, err
@@ -1140,7 +1141,7 @@ func (service *Service) CompleteTurn(
 			); err != nil {
 				return entity.Resource{}, err
 			}
-			if err := service.enqueueInteractionTerminalDelivery(ctx, tx, graph.Session, updated, spec, nil); err != nil {
+			if err := service.enqueueInteractionTerminalDelivery(ctx, tx, graph.Session, updated, spec, nil, ""); err != nil {
 				return entity.Resource{}, err
 			}
 			if err := service.completeProcessFromTurn(
@@ -1535,6 +1536,25 @@ func (service *Service) ClaimDueSchedules(
 		input.Limit < 1 || input.Limit > service.maximumScheduleClaims {
 		return ClaimDueSchedulesResult{}, errs.ErrInvalidInput
 	}
+	if input.Principal.CallerWorkload != service.schedulerWorkload ||
+		input.Principal.CallerSPIFFEID != service.schedulerSPIFFEID ||
+		input.Principal.ProjectID != "" {
+		return ClaimDueSchedulesResult{}, errs.ErrPermissionDenied
+	}
+	partitionHash, err := semanticCommandHash(input.Principal, struct {
+		Operation string
+		Limit     int
+	}{"DUE", input.Limit})
+	if err != nil {
+		return ClaimDueSchedulesResult{}, errs.ErrInvalidInput
+	}
+	projectID, err := service.selectAutomationProject(
+		ctx, input.Principal, "DUE", input.IdempotencyKey, partitionHash,
+	)
+	if err != nil {
+		return ClaimDueSchedulesResult{}, err
+	}
+	input.Principal.ProjectID = projectID
 	requestHash, err := canonicalHash(struct {
 		Identity commandIdentity
 		Limit    int
@@ -1569,7 +1589,11 @@ func (service *Service) ClaimDueSchedules(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			now = now.UTC().Truncate(time.Microsecond)
 			schedules, err := tx.DueSchedules(
 				ctx,
 				input.Principal.OrganizationID,
@@ -1654,6 +1678,7 @@ func (service *Service) ClaimDueSchedules(
 					Outcome:              outcome,
 				}
 				if err := tx.SaveScheduleOccurrence(ctx, domainrepo.ScheduleOccurrence{
+					Version:              1,
 					ID:                   occurrence.OccurrenceID,
 					ScheduleID:           occurrence.ScheduleID,
 					OrganizationID:       schedule.OrganizationID,
@@ -1865,13 +1890,13 @@ func (service *Service) ResolveOwnerGate(
 			executionMatches := executionErr == nil &&
 				execution.SessionID == gateSpec.SessionID &&
 				execution.TurnID == gateSpec.TurnID &&
-				execution.Attempt == gateSpec.Attempt
+				execution.Attempt == gateSpec.Attempt &&
+				execution.InputSHA256 == gateSpec.ImmutableInputSHA256
 			if !ok || process.Kind != enum.KindProcessRun ||
 				process.Version != input.ProcessExpectedVersion ||
 				process.State != enum.StateWaitingOwner ||
 				processSpec.RootInitiatorActorID != gateSpec.RootInitiatorActorID ||
 				!executionMatches ||
-				processSpec.ImmutableInputSHA256 != gateSpec.ImmutableInputSHA256 ||
 				processSpec.ScheduleID != gateSpec.ScheduleID ||
 				processSpec.OccurrenceID != gateSpec.OccurrenceID {
 				return errs.ErrStateConflict
@@ -1904,7 +1929,11 @@ func (service *Service) ResolveOwnerGate(
 				relatedOccurrence = occurrence
 				relatedSchedule = schedule
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			now = now.UTC().Truncate(time.Microsecond)
 			if !gateSpec.ExpiresAt.After(now) {
 				result, err = service.expireOwnerGateGraph(
 					ctx, tx, input.Principal, gate, graph, now,
@@ -1995,11 +2024,14 @@ func (service *Service) ResolveOwnerGate(
 					return errs.ErrStateConflict
 				}
 				expectedToken := relatedOccurrence.TokenHash
-				relatedOccurrence.Outcome = gateTurnSpec.Outcome
+				scheduledOutcome := "failed"
+				if input.Decision == "APPROVED" {
+					scheduledOutcome = "action_taken"
+				}
+				relatedOccurrence.Outcome = scheduledOutcome
 				relatedOccurrence.ResultArtifactID = gateTurnSpec.ResultArtifactID
 				if gateTarget == enum.StateExpired {
 					relatedOccurrence.State = "FAILED"
-					relatedOccurrence.Outcome = "owner_gate_expired"
 				} else if processTarget.Terminal() {
 					relatedOccurrence.State = string(processTarget)
 				}
@@ -2023,7 +2055,7 @@ func (service *Service) ResolveOwnerGate(
 						OccurrenceID:     relatedOccurrence.ID,
 						Attempt:          relatedOccurrence.Attempt,
 						State:            relatedOccurrence.State,
-						Outcome:          relatedOccurrence.Outcome,
+						Outcome:          scheduledOutcome,
 						ResultArtifactID: relatedOccurrence.ResultArtifactID,
 						FinishedAt:       now,
 					}); err != nil {
@@ -2242,6 +2274,7 @@ func (service *Service) createRuntimeRevision(
 	principal value.Principal,
 	session entity.Resource,
 	sessionSpec entity.SessionSpec,
+	scheduledResultContract *entity.ScheduledResultContractRef,
 ) (entity.Resource, error) {
 	resources, err := tx.ListSnapshotResources(
 		ctx,
@@ -2451,6 +2484,7 @@ func (service *Service) createRuntimeRevision(
 		AuthorityPolicySHA256                         string
 		Components                                    []entity.EffectiveResourceRef
 		CodexModel, CodexSandbox, CodexApprovalPolicy string
+		ScheduledResultContract                       *entity.ScheduledResultContractRef
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -2458,7 +2492,7 @@ func (service *Service) createRuntimeRevision(
 		service.authorityPolicyRevision,
 		service.authorityPolicySHA256,
 		compatibleComponents,
-		"gpt-5.4", "workspace-write", "never",
+		"gpt-5.4", "workspace-write", "never", scheduledResultContract,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -2489,6 +2523,7 @@ func (service *Service) createRuntimeRevision(
 		ChatID                                           string
 		ProviderCredentialBindingID, ProviderAccountName string
 		CodexModel, CodexSandbox, CodexApprovalPolicy    string
+		ScheduledResultContract                          *entity.ScheduledResultContractRef
 	}{
 		principal.OrganizationID,
 		principal.ProjectID,
@@ -2503,7 +2538,7 @@ func (service *Service) createRuntimeRevision(
 		sessionSpec.ConversationID,
 		sessionSpec.ProviderAccountBindingID,
 		providerAccountName,
-		"gpt-5.4", "workspace-write", "never",
+		"gpt-5.4", "workspace-write", "never", scheduledResultContract,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -2535,6 +2570,7 @@ func (service *Service) createRuntimeRevision(
 			ProviderAccountName:         providerAccountName,
 			EffectiveRuntimeSHA256:      effectiveRuntimeSHA256,
 			CodexModel:                  "gpt-5.4", CodexSandbox: "workspace-write", CodexApprovalPolicy: "never",
+			ScheduledResultContract: scheduledResultContract,
 		},
 		now,
 	)

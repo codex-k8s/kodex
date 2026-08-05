@@ -13,7 +13,7 @@
 
 | Dependency | Version | Scope | Why |
 |---|---:|---|---|
-| `github.com/caarlos0/env/v11` | `v11.3.1` | Config | typed env -> struct parsing без самописного env loader в сервисе |
+| `github.com/caarlos0/env/v11` | `v11.4.1` | Config | typed env -> struct parsing без самописного env loader в сервисе |
 | `github.com/fsnotify/fsnotify` | `v1.10.1` | Runtime security | fail-closed события create/write/delete/rename/replace и ошибки очереди для per-run credential guard |
 | `github.com/google/go-github/v88` | `v88.0.0` | GitHub SDK | repository access, branch/PR operations и webhook payload helpers без ручной REST-обвязки |
 | `github.com/jackc/pgx/v5` | `v5.10.0` | PostgreSQL | storage repositories через `pgxpool`; `stdlib` driver для goose |

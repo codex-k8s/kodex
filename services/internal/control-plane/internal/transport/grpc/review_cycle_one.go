@@ -396,6 +396,26 @@ func (server *Server) ManageSchedule(
 	return &controlplanev1.ManageScheduleResponse{Schedule: encoded}, nil
 }
 
+func (server *Server) RunScheduleNow(
+	ctx context.Context,
+	request *controlplanev1.RunScheduleNowRequest,
+) (*controlplanev1.RunScheduleNowResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_RunScheduleNow_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	occurrence, err := server.service.RunScheduleNow(ctx, resource.RunScheduleNowInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		ScheduleID: request.GetScheduleId(), ExpectedVersion: request.GetExpectedVersion(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.RunScheduleNowResponse{Occurrence: toProtoOccurrence(occurrence)}, nil
+}
+
 func (server *Server) ClaimScheduleOccurrence(
 	ctx context.Context,
 	request *controlplanev1.ClaimScheduleOccurrenceRequest,
@@ -417,9 +437,60 @@ func (server *Server) ClaimScheduleOccurrence(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	return &controlplanev1.ClaimScheduleOccurrenceResponse{
-		Occurrence: toProtoOccurrence(claimed.Occurrence),
-		LeaseToken: claimed.LeaseToken,
+	disposition := toProtoScheduleOccurrenceClaimDisposition(claimed.Disposition)
+	if disposition == controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_UNSPECIFIED {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	response := &controlplanev1.ClaimScheduleOccurrenceResponse{
+		ProjectId: claimed.ProjectID, Disposition: disposition,
+	}
+	if claimed.Disposition != resource.ScheduleOccurrenceClaimRetired {
+		response.Occurrence = toProtoOccurrence(claimed.Occurrence)
+		response.MaterializationCapability = claimed.MaterializationCapability
+		response.MaterializationIdempotencyKey = claimed.MaterializationIdempotencyKey
+		response.CapabilityExpiresAt = timestamppb.New(claimed.CapabilityExpiresAt)
+	}
+	return response, nil
+}
+
+func toProtoScheduleOccurrenceClaimDisposition(
+	disposition resource.ScheduleOccurrenceClaimDisposition,
+) controlplanev1.ScheduleOccurrenceClaimDisposition {
+	switch disposition {
+	case resource.ScheduleOccurrenceClaimReserved:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RESERVED
+	case resource.ScheduleOccurrenceClaimMaterialized:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_MATERIALIZED
+	case resource.ScheduleOccurrenceClaimRetired:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_RETIRED
+	default:
+		return controlplanev1.ScheduleOccurrenceClaimDisposition_SCHEDULE_OCCURRENCE_CLAIM_DISPOSITION_UNSPECIFIED
+	}
+}
+
+func (server *Server) MaterializeScheduleOccurrence(
+	ctx context.Context,
+	request *controlplanev1.MaterializeScheduleOccurrenceRequest,
+) (*controlplanev1.MaterializeScheduleOccurrenceResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_MaterializeScheduleOccurrence_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	materialized, err := server.service.MaterializeScheduleOccurrence(ctx,
+		resource.MaterializeScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			OccurrenceID: request.GetOccurrenceId(), ProjectID: request.GetProjectId(),
+			ExpectedAttempt:           request.GetExpectedAttempt(),
+			MaterializationCapability: request.GetMaterializationCapability(),
+		})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.MaterializeScheduleOccurrenceResponse{
+		Occurrence:           toProtoOccurrence(materialized.Occurrence),
+		CompletionCapability: materialized.CompletionCapability,
 	}, nil
 }
 
@@ -437,11 +508,12 @@ func (server *Server) CompleteScheduleOccurrence(
 	completed, err := server.service.CompleteScheduleOccurrence(
 		ctx,
 		resource.CompleteScheduleOccurrenceInput{
-			Principal:       principal,
-			IdempotencyKey:  request.GetIdempotencyKey(),
-			OccurrenceID:    request.GetOccurrenceId(),
-			LeaseToken:      request.GetLeaseToken(),
-			ExpectedAttempt: request.GetExpectedAttempt(),
+			Principal:            principal,
+			IdempotencyKey:       request.GetIdempotencyKey(),
+			OccurrenceID:         request.GetOccurrenceId(),
+			CompletionCapability: request.GetCompletionCapability(),
+			ExpectedAttempt:      request.GetExpectedAttempt(),
+			ProjectID:            request.GetProjectId(),
 		},
 	)
 	if err != nil {
@@ -450,6 +522,34 @@ func (server *Server) CompleteScheduleOccurrence(
 	return &controlplanev1.CompleteScheduleOccurrenceResponse{
 		Occurrence: toProtoOccurrence(completed),
 	}, nil
+}
+
+func (server *Server) ResolveScheduleRecovery(
+	ctx context.Context,
+	request *controlplanev1.ResolveScheduleRecoveryRequest,
+) (*controlplanev1.ResolveScheduleRecoveryResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	action := map[controlplanev1.ScheduleRecoveryAction]string{
+		controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_REPAIR: "REPAIR",
+		controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_CANCEL: "CANCEL",
+		controlplanev1.ScheduleRecoveryAction_SCHEDULE_RECOVERY_ACTION_SKIP:   "SKIP",
+	}[request.GetAction()]
+	recovered, err := server.service.ResolveScheduleRecovery(ctx,
+		resource.ResolveScheduleRecoveryInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ScheduleID: request.GetScheduleId(), OccurrenceID: request.GetOccurrenceId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedAttempt: request.GetExpectedAttempt(), Action: action,
+			EvidenceSHA256: request.GetEvidenceSha256(), ReasonCode: request.GetReasonCode(),
+		})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.ResolveScheduleRecoveryResponse{Occurrence: toProtoOccurrence(recovered)}, nil
 }
 
 func (server *Server) CancelScheduleOccurrence(
@@ -747,6 +847,8 @@ func toProtoOccurrence(
 		ExecutionProcessVersion:         occurrence.ExecutionProcessVersion,
 		ExecutionRuntimeRevisionId:      occurrence.ExecutionRuntimeRevisionID,
 		ExecutionRuntimeRevisionVersion: occurrence.ExecutionRuntimeRevisionVersion,
+		Version:                         occurrence.Version,
+		RecoveryEvidenceSha256:          occurrence.RecoveryEvidenceSHA256,
 	}
 	if !occurrence.LeaseExpiresAt.IsZero() &&
 		!occurrence.LeaseExpiresAt.Equal(time.Unix(0, 0)) {

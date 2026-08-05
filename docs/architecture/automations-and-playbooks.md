@@ -4,8 +4,8 @@ title: Автоматизации и управляемые процессы
 type: architecture
 status: approved
 owner: architect
-version: 1.0.1
-updated: 2026-07-30
+version: 1.0.2
+updated: 2026-08-05
 ---
 
 # Автоматизации и управляемые процессы
@@ -83,23 +83,72 @@ updated: 2026-07-30
 
 ## Долговечное планирование
 
-Пользовательские расписания хранятся в PostgreSQL. Планировщик выбирает наступившие записи через `FOR UPDATE SKIP LOCKED`, создает экземпляр расписания и задание очереди в одной транзакции. Уникальный `(schedule_id, scheduled_for)` предотвращает дубли.
+Пользовательские расписания хранятся в PostgreSQL. `automation-scheduler`
+ограниченно вызывает специализированный RPC, а авторитетный `control-plane`
+выбирает наступившие записи через `FOR UPDATE SKIP LOCKED`, создаёт экземпляр
+расписания и корневой execution graph в owner-транзакциях. Уникальный
+`(schedule_id, scheduled_for)` предотвращает дубли.
 
-River рассматривается как очередь выполнения в PostgreSQL для транзакционной постановки заданий и повторов. Его планировщик в памяти не является источником истины; следующий запуск и правила пропущенных запусков реализуются доменной моделью. Cron разбирается готовой библиотекой, а не собственным синтаксическим анализатором.
+Первый и последующие `next_run_at` вычисляет `control-plane` из
+cron/interval/timezone по PostgreSQL time; caller timestamp не является
+authority. Специализированный `RunScheduleNow` под owner/version/idempotency
+lock создаёт отдельную немедленную occurrence и не двигает плановый watermark.
+Scheduler application grant ограничен организацией и разрешает только due/
+reservation: exact project выбирает durable server-owned cursor. Исполняемый
+graph создаёт отдельная one-time capability exact project/occurrence/attempt/
+immutable input/generation/full method/workload/SPIFFE; completion получает
+другую capability с durable issue/consume/revoke/readback. Eligibility paused/FORBID/open graph применяется до
+bounded `LIMIT`, поэтому штатная строка не создаёт global head-of-line blocker.
+
+В target rebuild очередь occurrence и retry принадлежит `control-plane`;
+`automation-scheduler` не использует River и его in-memory scheduler. Следующий
+запуск и правила пропущенных запусков реализуются доменной моделью. Cron
+разбирается готовой библиотекой внутри owner path, а не собственным
+синтаксическим анализатором job.
+
+Повтор execution одной occurrence сохраняет один root `ProcessRun`; новая
+attempt получает fresh Turn, RuntimeRevision и grant, а immutable
+`ScheduledRun` хранит историю попыток. Short-lived bearer JTI/revision/digest
+остаются transport replay metadata и не меняют semantic receipt уже
+проверенного workload intent.
 
 Kubernetes CronJob не используется для пользовательских расписаний: он не знает о сессиях, привязке поставщика, правах, согласованиях и доставке Mattermost.
 
 ## Выполнение без чата
 
-`ScheduledRun` может не иметь `ConversationBinding`. При `no_action` результат остается в аудите. При выполненном действии или ошибке система создает сообщение Mattermost согласно политике доставки. Агент может через MCP создать отдельные обсуждения и делегированные запуски.
+`ScheduledRun` может не иметь `ConversationBinding`. Результат принимает только
+закрытые значения `no_action`, `action_taken`, `requires_human`, `failed`.
+`no_action` и `audit_only` остаются в аудите без Mattermost delivery. Для
+разрешённого policy исхода `control-plane` сохраняет durable delivery вместе с
+точным schedule RoomID; `interaction-gateway` не заменяет его actor-default
+маршрутом. Это правило одинаково для primary Markdown и всех FILE/IMAGE.
+Runner до старта получает из server-owned `RuntimeRevision` и `Turn` immutable
+`mattercodex.scheduled-result.v1` manifest через generated control-plane read path;
+отсутствующий, неизвестный, дублированный, oversized или неверный JSON fail
+closed и не превращается в `action_taken`. Агент может через MCP создать отдельные обсуждения и делегированные
+запуски.
 
 ## Ручной шлюз запуска по расписанию
 
-Первый принятый callback с итогом `requires_human` атомарно переводит `ScheduledRun`, его occurrence и связанный `ProcessRun` в `waiting_owner`. В той же транзакции создаётся единственный server-owned `OwnerAttentionRequest`, связанный с точными `ScheduledRun`, runtime turn и сохранённым `ProcessRun`. Корневой инициатор и policy revision читаются только из сохранённого process context; имя роли, пользователь из callback и текущая активная policy не предоставляют полномочий.
+Первый принятый runtime result с итогом `requires_human` атомарно переводит
+`RuntimeExecution`, `Turn`, `ScheduledRun`, occurrence и связанный `ProcessRun`
+в `WAITING_OWNER/SUSPENDED`. В той же транзакции создаётся единственный
+server-owned `OwnerGate`, связанный с exact attempt/input/result и schedule
+RoomID. Корневой инициатор и policy revision читаются только из сохранённого
+process context; payload, имя роли и текущая активная policy не предоставляют
+полномочий.
 
-Публикация карточки выполняется после транзакции по сохранённому server-owned payload и устойчивому delivery id. До внешнего POST automation worker атомарно получает долговечный claim с lease и fence. Потерянный HTTP-ответ, повтор callback и перезапуск bot-service сверяют либо допубликовывают ту же логическую карточку без второго запроса внимания; непрерывный ограниченный worker проходит весь доступный backlog, а не только стартовый пакет. Пока post binding не сохранён, MCP возвращает `waiting_owner`, открытое решение, состояние доставки `pending` и следующее действие `retry_same_callback`, а не ложный успех.
+Публикацию карточки после owner transaction выполняет bounded worker
+`interaction-gateway` по сохранённым delivery ID/payload/room. До внешнего POST
+он получает долговечный claim с lease и fence. Потерянный HTTP-ответ и restart
+повторяют ту же logical delivery без второго OwnerGate; scheduler Mattermost не
+вызывает.
 
-Только сообщение сохранённого корневого инициатора в точном канале и корневом треде после сохранения точного post binding разрешает открытый automation-запрос. Generic owner-attention использует независимый namespace и не может выбрать или изменить automation-запрос. Разрешение, перевод `ScheduledRun` и occurrence в `succeeded`, `finished_at` и audit входят в одну транзакцию. Повтор того же сообщения идемпотентен; другой actor, тред или post не закрывает шлюз.
+Только решение сохранённого корневого инициатора после exact delivery binding
+разрешает открытый gate. Решение либо expiry одной owner transaction закрывает
+Gate, Turn, ProcessRun, occurrence и ScheduledRun либо создаёт server-owned
+continuation с fresh Turn/RuntimeRevision. Повтор решения идемпотентен; другой
+actor, route, post либо stale attempt/input не закрывает шлюз.
 
 ## Процесс ручной приемки результата
 

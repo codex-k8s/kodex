@@ -198,8 +198,8 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 		{"runtime.go", "ClaimTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "", "tx.NextQueuedTurn", true},
 		{"runtime.go", "RenewTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
 		{"specialized.go", "RequestOwnerGate", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
-		{"specialized.go", "ClaimScheduleOccurrence", "tx.NextScheduleOccurrence", "tx.CurrentTime", "", "", true},
-		{"specialized.go", "replayScheduleOccurrenceClaim", "service.lockOwnerGraphByTurn", "tx.CurrentTime", "tx.GetReceipt", "", false},
+		{"specialized.go", "claimScheduleOccurrence", "tx.NextScheduleOccurrence", "tx.CurrentTime", "", "", true},
+		{"specialized.go", "MaterializeScheduleOccurrence", "tx.GetScheduleOccurrenceCapabilityForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", true},
 		{"runtime_continuation.go", "integrationSessionContext", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
 		{"runtime_continuation.go", "resolveSelectedIntegrationBinding", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
 		{"runtime_continuation.go", "validatePinnedIntegrationContinuation", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
@@ -257,7 +257,6 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 		lock     string
 	}{
 		{"runtime.go", "ClaimTurn", "tx.GetTurnLeaseForUpdate"},
-		{"specialized.go", "replayScheduleOccurrenceClaim", "service.lockOwnerGraphByTurn"},
 	} {
 		source := productionFunctionSource(t, claim.file, claim.function)
 		lock := strings.Index(source, claim.lock)
@@ -267,10 +266,17 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 			t.Fatalf("%s can expose a receipt before post-lock deadline validation", claim.function)
 		}
 	}
+	replay := productionFunctionSource(t, "specialized.go", "replayScheduleOccurrenceMaterialization")
+	capabilityLock := strings.Index(replay, "tx.GetScheduleOccurrenceCapabilityForUpdate")
+	consumedState := strings.Index(replay, "capability.State != \"CONSUMED\"")
+	receipt := strings.Index(replay, "tx.GetReceipt")
+	if capabilityLock < 0 || consumedState < capabilityLock || receipt < consumedState {
+		t.Fatal("schedule materialization replay exposes receipt before exact consumed capability lock")
+	}
 }
 
 func TestSchedulerMaintenanceCommitsBeforeCandidateSelection(t *testing.T) {
-	claim := productionFunctionSource(t, "specialized.go", "ClaimScheduleOccurrence")
+	claim := productionFunctionSource(t, "specialized.go", "claimScheduleOccurrence")
 	for _, required := range []string{
 		"service.recoverExpiredScheduleOccurrences",
 		"service.skipOverlappedScheduleOccurrences",
@@ -306,10 +312,29 @@ func TestSchedulerMaintenanceCommitsBeforeCandidateSelection(t *testing.T) {
 	}
 	scheduleLock := strings.Index(claim[next:], "tx.GetForUpdate")
 	cardinality := strings.Index(claim[next:], "tx.HasBlockingScheduleExecution")
-	firstEffect := strings.Index(claim[next:], "service.prepareScheduleSession")
+	firstEffect := strings.Index(claim[next:], "tx.InsertScheduleOccurrenceCapability")
 	if scheduleLock < 0 || cardinality < scheduleLock ||
 		firstEffect < 0 || cardinality > firstEffect {
 		t.Fatal("schedule cardinality is not rechecked after schedule lock and before graph effects")
+	}
+}
+
+func TestExpiredReservationGenerationHighWatermarkHasStorageClosure(t *testing.T) {
+	migration, err := os.ReadFile(
+		"../../../../cmd/cli/migrations/20260805000200_automation_scheduler_final.sql",
+	)
+	if err != nil {
+		t.Fatalf("read scheduler capability migration: %v", err)
+	}
+	source := string(migration)
+	for _, required := range []string{
+		"authority_generation IS NULL",
+		"state = 'QUEUED' AND authority_generation > 0",
+		"UNIQUE (occurrence_id, attempt, full_method, authority_generation)",
+	} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("expired reservation generation closure is absent: %s", required)
+		}
 	}
 }
 
@@ -665,25 +690,25 @@ func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 		mustDisposition      bool
 		receiptAfterResolver bool
 	}{
-		"ManageWorkClaim":            {"cycle_two.go", true, true, false},
-		"ManageSession":              {"cycle_two.go", true, true, false},
-		"StartProcess":               {"specialized.go", true, true, false},
-		"EnqueueTurn":                {"runtime.go", true, true, false},
-		"CompleteProcess":            {"specialized.go", true, true, false},
-		"CancelProcess":              {"specialized.go", true, true, false},
-		"CompleteTurn":               {"runtime.go", true, true, false},
-		"RetryTurn":                  {"runtime.go", true, true, false},
-		"CancelTurn":                 {"runtime.go", true, true, false},
-		"ClaimTurn":                  {"runtime.go", false, true, true},
-		"RenewTurn":                  {"runtime.go", false, true, true},
-		"RequestOwnerGate":           {"specialized.go", false, true, true},
-		"ResolveOwnerGate":           {"runtime.go", false, true, true},
-		"ExpireOwnerGate":            {"final_owner_wave.go", false, true, true},
-		"CompleteScheduleOccurrence": {"specialized.go", false, true, true},
-		"CancelScheduleOccurrence":   {"specialized.go", false, true, true},
-		"ClaimScheduleOccurrence":    {"specialized.go", false, true, true},
-		"ClaimOwnerGateDelivery":     {"cycle_two.go", false, true, true},
-		"RecordOwnerGateDelivery":    {"cycle_two.go", true, true, false},
+		"ManageWorkClaim":               {"cycle_two.go", true, true, false},
+		"ManageSession":                 {"cycle_two.go", true, true, false},
+		"StartProcess":                  {"specialized.go", true, true, false},
+		"EnqueueTurn":                   {"runtime.go", true, true, false},
+		"CompleteProcess":               {"specialized.go", true, true, false},
+		"CancelProcess":                 {"specialized.go", true, true, false},
+		"CompleteTurn":                  {"runtime.go", true, true, false},
+		"RetryTurn":                     {"runtime.go", true, true, false},
+		"CancelTurn":                    {"runtime.go", true, true, false},
+		"ClaimTurn":                     {"runtime.go", false, true, true},
+		"RenewTurn":                     {"runtime.go", false, true, true},
+		"RequestOwnerGate":              {"specialized.go", false, true, true},
+		"ResolveOwnerGate":              {"runtime.go", false, true, true},
+		"ExpireOwnerGate":               {"final_owner_wave.go", false, true, true},
+		"CompleteScheduleOccurrence":    {"specialized.go", false, true, true},
+		"CancelScheduleOccurrence":      {"specialized.go", false, true, true},
+		"MaterializeScheduleOccurrence": {"specialized.go", false, false, true},
+		"ClaimOwnerGateDelivery":        {"cycle_two.go", false, true, true},
+		"RecordOwnerGateDelivery":       {"cycle_two.go", true, true, false},
 	}
 	files := map[string]*ast.File{}
 	fset := token.NewFileSet()
@@ -733,6 +758,7 @@ func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 			resolver = append(resolver, calls["prelockScheduledGraphByTurn"]...)
 			resolver = append(resolver, calls["lockOwnerGateAfterGraph"]...)
 			resolver = append(resolver, calls["replayScheduleOccurrenceClaim"]...)
+			resolver = append(resolver, calls["replayScheduleOccurrenceMaterialization"]...)
 			if len(resolver) == 0 {
 				t.Fatal("canonical owner graph resolver is absent")
 			}

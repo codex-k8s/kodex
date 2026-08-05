@@ -302,6 +302,7 @@ func (client *Client) ClaimOwnerGate(ctx context.Context, idempotencyKey string)
 		ProjectID: resource.GetProjectId(), ProcessRunID: spec.GetProcessRunId(), SessionID: spec.GetSessionId(),
 		TurnID: spec.GetTurnId(), Attempt: spec.GetAttempt(), ImmutableInputSHA256: spec.GetImmutableInputSha256(),
 		RecipientActorID: spec.GetRecipientActorId(), ClaimToken: response.GetDeliveryClaimToken(),
+		ScheduleID: spec.GetScheduleId(), NotificationRoomID: spec.GetNotificationRoomId(),
 		ClaimFence: spec.GetDeliveryFence(), ClaimExpiresAt: response.GetDeliveryClaimExpiresAt().AsTime(),
 		ResultRef: spec.GetResultRef(), Summary: spec.GetResultSha256(),
 	}, nil
@@ -432,7 +433,10 @@ func (client *Client) ClaimInteractionDelivery(ctx context.Context, idempotencyK
 		ArtifactStorageRef: response.GetArtifactStorageRef(), ArtifactSizeBytes: response.GetArtifactSizeBytes(),
 		ArtifactMediaType: response.GetArtifactMediaType(), Fence: response.GetDeliveryFence(),
 		LeaseToken: response.GetDeliveryLeaseToken(), LeaseExpiresAt: response.GetDeliveryLeaseExpiresAt().AsTime(),
-		ReadbackCredential: response.GetDeliveryReadbackCredential(), InlinePayload: slices.Clone(response.GetInlinePayload())}, nil
+		ReadbackCredential: response.GetDeliveryReadbackCredential(), InlinePayload: slices.Clone(response.GetInlinePayload()),
+		NotificationRoomID: response.GetNotificationRoomId(),
+		NotificationPolicy: stringWithoutPrefix(response.GetNotificationPolicy().String(), "SCHEDULE_NOTIFICATION_POLICY_"),
+		ScheduledOutcome:   stringWithoutPrefix(response.GetScheduledOutcome().String(), "SCHEDULED_OUTCOME_")}, nil
 }
 
 func (client *Client) RecordInteractionDelivery(ctx context.Context, idempotencyKey string,

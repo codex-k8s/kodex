@@ -364,10 +364,15 @@ RuntimeExecution disposition, workload, generation, attempt, fence, token и
 PostgreSQL expiry. Для нового claim до выдачи token обязана завершиться
 current-tuple propagation; replay проверяет уже сохранённую полную binding и не
 увеличивает версии повторно. `ClaimScheduleOccurrence` использует server-owned
-`claim_key_sha256`: сначала по нему разрешается current occurrence и полный
-graph, затем сверяются workload/generation/token/deadline и только потом
-допустим replay. После runtime claim, terminal, expiry или rebind прежний
-LeaseToken не возвращается.
+`claim_key_sha256` только для reservation и не создаёт execution graph.
+`MaterializeScheduleOccurrence`/`CompleteScheduleOccurrence` сначала блокируют
+one-time capability exact project/occurrence/attempt/input/generation/full
+method/workload/SPIFFE, затем current occurrence/graph и receipt. После consume,
+revoke, terminal, expiry или rebind прежняя capability не возвращается.
+`RECOVERY_BLOCKED` исключён из bounded watchdog selector; owner repair сверяет
+exact evidence/version/attempt, а cancel/skip повторно разрешает и блокирует
+весь доступный Session/Turn/ProcessRun/RuntimeRevision/runtime graph до единого
+закрытия. Частичный terminal и прямой SQL запрещены.
 
 После `AdmitRuntimeExecution` и каждого `HeartbeatRuntimeExecution` сверить в
 одном readback равные deadlines RuntimeExecution и TurnLease. Они продлеваются
@@ -567,11 +572,10 @@ Outbox delivered receipt очищается не ранее 31 дня, то ес
 lease expiry и error class. Payload может содержать business metadata и не
 должен попадать в Issue.
 
-Для scheduled `ClaimTurn` сверить, что Schedule outbox имеет sequence только
-реальных версий `CREATE`, due watermark и `ManageSchedule` transition.
-Propagation новой Turn/Process version и изменения occurrence/run не меняют
-Schedule и потому не создают `control_plane.schedule_changed`; они сохраняют
-audit и authoritative read в той же transaction. Дубликат
+Для scheduled path сверить, что `automation-scheduler` не объявлен consumer
+outbox/NATS: due watermark, occurrence/run и `ManageSchedule` доступны только
+через authoritative protected gRPC. Все переходы сохраняют audit и readback в
+owner transaction, но не создают `control_plane.schedule_changed`. Дубликат
 `(aggregate_type, aggregate_id, event_sequence)` означает дефект producer и
 полный rollback команды, а не повод удалять outbox row или делать no-op bump
 Schedule. Для Turn/Session/RuntimeRevision каждый опубликованный

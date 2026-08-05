@@ -155,7 +155,8 @@ func (verifier *Verifier) Authenticate(
 		parsed.CallerSPIFFEID != verifier.config.CallerSPIFFEID ||
 		value.ValidateID(parsed.Subject) != nil ||
 		value.ValidateID(parsed.OrganizationID) != nil ||
-		value.ValidateID(parsed.ProjectID) != nil ||
+		(parsed.ProjectID == "" && verifier.config.WorkloadID != "automation-scheduler") ||
+		(parsed.ProjectID != "" && value.ValidateID(parsed.ProjectID) != nil) ||
 		value.ValidateID(parsed.JTI) != nil ||
 		parsed.Revision == 0 ||
 		notBefore.Before(issuedAt.Add(-maximumClockSkew)) ||

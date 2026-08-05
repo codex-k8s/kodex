@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.1
-updated: 2026-07-31
+version: 1.2.2
+updated: 2026-08-05
 ---
 
 # Границы сервисов и структура репозитория
@@ -57,7 +57,7 @@ runbook и ручная проверка входят в один Issue и од�
 | `interaction-gateway`    | external gateway                | Mattermost transport, idempotency, cards, bot identities и file delivery                                                                   | sessions, processes, schedules и Kubernetes state                       |
 | `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
 | `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
-| `automation-scheduler`   | job                             | due occurrence selection, overlap/misfire policy и enqueue                                                                                 | AI execution, Mattermost transport и aggregate state других доменов     |
+| `automation-scheduler`   | job                             | bounded polling защищённых scheduler RPC и transient tracking выданных leases                                                              | cron/backoff/owner state, AI execution, Mattermost и Kubernetes          |
 | `role-image-builder`     | job                             | build specification hash, BuildKit execution, provenance и staging registry artifact                                                       | SBOM/vulnerability/signature admission, promotion и role business state |
 | `image-admission`        | bounded job                     | SBOM, vulnerability-policy verdict, signature verification, admission receipt и одноразовый promotion claim exact digest                   | build execution, node pull и role business state                        |
 | `control-center`         | staff PWA                       | UI state                                                                                                                                   | business authority, secrets и прямой доступ к внутренним RPC            |

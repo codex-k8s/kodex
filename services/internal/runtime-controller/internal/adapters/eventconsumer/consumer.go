@@ -41,7 +41,6 @@ const (
 
 var streamSubjects = []string{
 	"control_plane.runtime_configuration_changed",
-	"control_plane.schedule_changed",
 }
 
 type Config struct {

@@ -1483,8 +1483,11 @@ func (wrapped *transaction) EnqueueInteractionDelivery(
 		"artifact_id": work.ArtifactID, "artifact_version": work.ArtifactVersion,
 		"artifact_sha256": work.ArtifactSHA256, "artifact_name": work.ArtifactName,
 		"artifact_storage_ref": work.ArtifactStorageRef, "artifact_size_bytes": work.ArtifactSizeBytes,
-		"artifact_media_type": work.ArtifactMediaType,
-		"inline_payload":      work.InlinePayload,
+		"artifact_media_type":  work.ArtifactMediaType,
+		"inline_payload":       work.InlinePayload,
+		"notification_room_id": work.NotificationRoomID,
+		"notification_policy":  work.NotificationPolicy,
+		"scheduled_outcome":    work.ScheduledOutcome,
 	})
 	if err != nil {
 		return mapError(err)
@@ -1506,7 +1509,7 @@ func (wrapped *transaction) ClaimInteractionDelivery(ctx context.Context, organi
 		&work.RuntimeRevisionVersion, &work.ImmutableInputSHA256, &work.Kind, &work.LifecycleState,
 		&work.Outcome, &work.ArtifactID, &work.ArtifactVersion, &work.ArtifactSHA256,
 		&work.ArtifactName, &work.ArtifactStorageRef, &work.ArtifactSizeBytes, &work.ArtifactMediaType,
-		&work.InlinePayload,
+		&work.InlinePayload, &work.NotificationRoomID, &work.NotificationPolicy, &work.ScheduledOutcome,
 		&work.Fence, &work.LeaseExpiresAt)
 	return work, mapError(err)
 }
@@ -1675,6 +1678,16 @@ func (wrapped *transaction) DueSchedules(
 	return resources, mapError(rows.Err())
 }
 
+func (wrapped *transaction) NextAutomationProject(
+	ctx context.Context, organizationID, operation string,
+) (string, error) {
+	var projectID string
+	err := wrapped.tx.QueryRow(ctx, sqlAutomationSchedulerProjectNext, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "operation": operation,
+	}).Scan(&projectID)
+	return projectID, mapError(err)
+}
+
 func (wrapped *transaction) SaveScheduleOccurrence(
 	ctx context.Context,
 	occurrence domainrepo.ScheduleOccurrence,
@@ -1706,10 +1719,13 @@ func (wrapped *transaction) SaveScheduleOccurrence(
 			"maximum_backoff_ms":                 occurrence.MaximumBackoff.Milliseconds(),
 			"dead_letter_at":                     occurrence.DeadLetterAt,
 			"state":                              occurrence.State,
+			"version":                            occurrence.Version,
 			"attempt":                            occurrence.Attempt,
 			"available_at":                       occurrence.AvailableAt,
 			"outcome":                            occurrence.Outcome,
 			"result_artifact_id":                 occurrence.ResultArtifactID,
+			"recovery_evidence_sha256":           occurrence.RecoveryEvidenceSHA256,
+			"recovery_blocked_at":                occurrence.RecoveryBlockedAt,
 			"execution_session_id":               occurrence.ExecutionSessionID,
 			"execution_session_version":          occurrence.ExecutionSessionVersion,
 			"execution_turn_id":                  occurrence.ExecutionTurnID,
@@ -1771,6 +1787,7 @@ func (wrapped *transaction) SkipOverlappedScheduleOccurrences(
 	ctx context.Context,
 	organizationID, projectID string,
 	now time.Time,
+	limit int,
 ) ([]domainrepo.ScheduleOccurrence, error) {
 	rows, err := wrapped.tx.Query(
 		ctx,
@@ -1779,6 +1796,7 @@ func (wrapped *transaction) SkipOverlappedScheduleOccurrences(
 			"organization_id":       organizationID,
 			"project_id":            projectID,
 			"now":                   now,
+			"limit":                 limit,
 			"open_execution_states": scheduleOpenExecutionStates(),
 		},
 	)
@@ -1844,7 +1862,7 @@ func (wrapped *transaction) NextScheduleOccurrence(
 }
 
 func scheduleOpenExecutionStates() []string {
-	return []string{"CLAIMED", "WAITING_OWNER", "CONTINUATION"}
+	return []string{"RESERVED", "CLAIMED", "WAITING_OWNER", "CONTINUATION"}
 }
 
 func (wrapped *transaction) UpdateScheduleOccurrence(
@@ -1875,6 +1893,7 @@ func scheduleOccurrenceUpdateArgs(
 	return pgx.StrictNamedArgs{
 		"id":                                 occurrence.ID,
 		"state":                              occurrence.State,
+		"version":                            occurrence.Version,
 		"attempt":                            occurrence.Attempt,
 		"effective_input_sha256":             occurrence.EffectiveInputSHA256,
 		"claimant_workload_id":               occurrence.ClaimantWorkloadID,
@@ -1885,6 +1904,8 @@ func scheduleOccurrenceUpdateArgs(
 		"available_at":                       occurrence.AvailableAt,
 		"outcome":                            occurrence.Outcome,
 		"result_artifact_id":                 occurrence.ResultArtifactID,
+		"recovery_evidence_sha256":           occurrence.RecoveryEvidenceSHA256,
+		"recovery_blocked_at":                occurrence.RecoveryBlockedAt,
 		"execution_session_id":               occurrence.ExecutionSessionID,
 		"execution_session_version":          occurrence.ExecutionSessionVersion,
 		"execution_turn_id":                  occurrence.ExecutionTurnID,
@@ -1957,6 +1978,58 @@ func (wrapped *transaction) GetScheduleOccurrenceByClaimKey(
 			"claim_key_sha256": claimKeySHA256,
 		},
 	))
+}
+
+func (wrapped *transaction) InsertScheduleOccurrenceCapability(
+	ctx context.Context, capability domainrepo.ScheduleOccurrenceCapability,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlScheduleCapabilityInsert, pgx.StrictNamedArgs{
+		"id": capability.ID, "organization_id": capability.OrganizationID,
+		"project_id": capability.ProjectID, "occurrence_id": capability.OccurrenceID,
+		"attempt": capability.Attempt, "immutable_input_sha256": capability.ImmutableInputSHA256,
+		"authority_generation": capability.AuthorityGeneration, "full_method": capability.FullMethod,
+		"workload_id": capability.WorkloadID, "caller_spiffe_id": capability.CallerSPIFFEID,
+		"token_sha256": capability.TokenSHA256, "state": capability.State,
+		"issued_at": capability.IssuedAt, "expires_at": capability.ExpiresAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) GetScheduleOccurrenceCapabilityForUpdate(
+	ctx context.Context, tokenSHA256 string,
+) (domainrepo.ScheduleOccurrenceCapability, error) {
+	return scanScheduleOccurrenceCapability(wrapped.tx.QueryRow(ctx, sqlScheduleCapabilityGetForUpdate,
+		pgx.StrictNamedArgs{"token_sha256": tokenSHA256}))
+}
+
+func (wrapped *transaction) GetScheduleOccurrenceCapabilityByOccurrenceForUpdate(
+	ctx context.Context, occurrenceID string, attempt uint32, fullMethod string, generation uint64,
+) (domainrepo.ScheduleOccurrenceCapability, error) {
+	return scanScheduleOccurrenceCapability(wrapped.tx.QueryRow(ctx, sqlScheduleCapabilityGetByOccurrenceForUpdate,
+		pgx.StrictNamedArgs{"occurrence_id": occurrenceID, "attempt": attempt,
+			"full_method": fullMethod, "authority_generation": generation}))
+}
+
+func (wrapped *transaction) UpdateScheduleOccurrenceCapability(ctx context.Context,
+	capability domainrepo.ScheduleOccurrenceCapability, expectedState string,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlScheduleCapabilityUpdate, pgx.StrictNamedArgs{
+		"id": capability.ID, "state": capability.State, "consumed_at": capability.ConsumedAt,
+		"revoked_at": capability.RevokedAt, "expected_state": expectedState,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (wrapped *transaction) SaveScheduledRun(
@@ -2056,13 +2129,13 @@ func scanScheduledRun(row pgx.Row) (domainrepo.ScheduledRun, error) {
 
 func (wrapped *transaction) WaitScheduledRun(
 	ctx context.Context,
-	occurrenceID string,
-	attempt uint32,
+	run domainrepo.ScheduledRun,
 ) error {
 	tag, err := wrapped.tx.Exec(
 		ctx,
 		sqlScheduledRunWaitOwner,
-		pgx.StrictNamedArgs{"occurrence_id": occurrenceID, "attempt": attempt},
+		pgx.StrictNamedArgs{"occurrence_id": run.OccurrenceID, "attempt": run.Attempt,
+			"outcome": run.Outcome, "result_artifact_id": run.ResultArtifactID},
 	)
 	if err != nil {
 		return mapError(err)
@@ -2124,6 +2197,7 @@ func (wrapped *transaction) ContinueScheduledRun(
 		pgx.StrictNamedArgs{
 			"occurrence_id":                         run.OccurrenceID,
 			"attempt":                               run.Attempt,
+			"outcome":                               run.Outcome,
 			"continuation_turn_id":                  run.ContinuationTurnID,
 			"continuation_turn_version":             run.ContinuationTurnVersion,
 			"continuation_runtime_revision_id":      run.ContinuationRuntimeRevisionID,
@@ -3023,7 +3097,8 @@ func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamed
 		"project_id": execution.ProjectID, "process_id": execution.ProcessID,
 		"session_id": execution.SessionID, "thread_id": execution.ThreadID,
 		"role_id": execution.RoleID, "turn_id": execution.TurnID,
-		"attempt": execution.Attempt, "runtime_revision_id": execution.RuntimeRevisionID,
+		"schedule_occurrence_id": execution.ScheduleOccurrenceID,
+		"attempt":                execution.Attempt, "runtime_revision_id": execution.RuntimeRevisionID,
 		"runtime_revision_version": execution.RuntimeRevisionVersion,
 		"runtime_revision_sha256":  execution.RuntimeRevisionSHA256,
 		"immutable_input_sha256":   execution.ImmutableInputSHA256,
@@ -3259,7 +3334,7 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 	err := row.Scan(
 		&execution.ID, &execution.OrganizationID, &execution.ProjectID,
 		&execution.ProcessID, &execution.SessionID, &execution.ThreadID,
-		&execution.RoleID, &execution.TurnID, &execution.Attempt,
+		&execution.RoleID, &execution.TurnID, &execution.ScheduleOccurrenceID, &execution.Attempt,
 		&execution.RuntimeRevisionID, &execution.RuntimeRevisionVersion,
 		&execution.RuntimeRevisionSHA256, &execution.ImmutableInputSHA256,
 		&execution.ResourceClass, &execution.ClusterAccessProfile,
@@ -3477,6 +3552,7 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		&maximumBackoffMS,
 		&occurrence.DeadLetterAt,
 		&occurrence.State,
+		&occurrence.Version,
 		&occurrence.Attempt,
 		&occurrence.ClaimantWorkloadID,
 		&occurrence.AuthorityGeneration,
@@ -3486,6 +3562,8 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		&occurrence.AvailableAt,
 		&occurrence.Outcome,
 		&occurrence.ResultArtifactID,
+		&occurrence.RecoveryEvidenceSHA256,
+		&occurrence.RecoveryBlockedAt,
 		&occurrence.ExecutionSessionID,
 		&occurrence.ExecutionSessionVersion,
 		&occurrence.ExecutionTurnID,
@@ -3503,9 +3581,10 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 	occurrence.MaximumExecution = time.Duration(maximumExecutionMS) * time.Millisecond
 	if err != nil || !occurrence.TargetKind.Valid() ||
 		occurrence.ID == "" || occurrence.ScheduleID == "" ||
-		occurrence.TargetVersion == 0 ||
+		occurrence.TargetVersion == 0 || occurrence.Version == 0 ||
 		!validDigest(occurrence.EffectiveInputSHA256) ||
 		(occurrence.ClaimKeySHA256 != "" && !validDigest(occurrence.ClaimKeySHA256)) ||
+		(occurrence.RecoveryEvidenceSHA256 != "" && !validDigest(occurrence.RecoveryEvidenceSHA256)) ||
 		value.ValidateID(occurrence.PromptProfileID) != nil ||
 		occurrence.PromptRevision == 0 ||
 		value.ValidateID(occurrence.RuntimeRevisionID) != nil ||
@@ -3541,6 +3620,24 @@ func scanScheduleOccurrence(row rowScanner) (domainrepo.ScheduleOccurrence, erro
 		return domainrepo.ScheduleOccurrence{}, errs.ErrInternal
 	}
 	return occurrence, nil
+}
+
+func scanScheduleOccurrenceCapability(row rowScanner) (domainrepo.ScheduleOccurrenceCapability, error) {
+	var capability domainrepo.ScheduleOccurrenceCapability
+	err := row.Scan(&capability.ID, &capability.OrganizationID, &capability.ProjectID,
+		&capability.OccurrenceID, &capability.Attempt, &capability.ImmutableInputSHA256,
+		&capability.AuthorityGeneration, &capability.FullMethod, &capability.WorkloadID,
+		&capability.CallerSPIFFEID, &capability.TokenSHA256, &capability.State,
+		&capability.IssuedAt, &capability.ExpiresAt, &capability.ConsumedAt, &capability.RevokedAt)
+	if err != nil || value.ValidateID(capability.ID) != nil || value.ValidateID(capability.OccurrenceID) != nil ||
+		capability.Attempt == 0 || capability.AuthorityGeneration == 0 ||
+		!validDigest(capability.ImmutableInputSHA256) || !validDigest(capability.TokenSHA256) {
+		if err != nil {
+			return domainrepo.ScheduleOccurrenceCapability{}, mapError(err)
+		}
+		return domainrepo.ScheduleOccurrenceCapability{}, errs.ErrInternal
+	}
+	return capability, nil
 }
 
 func validDigest(value string) bool {

@@ -215,6 +215,10 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		if readErr != nil || len(prompt) == 0 || len(prompt) > 1<<20 || !utf8.Valid(prompt) {
 			return errors.New("read immutable turn prompt")
 		}
+		prompt, err = appendScheduledResultContract(prompt, input)
+		if err != nil {
+			return err
+		}
 		result, err = executeWithCapacityRetry(runContext, input, prompt, mcpProxy.SocketPath(),
 			mcpProxy.LocalBearerToken(), client, lease, state)
 		if err != nil {
@@ -256,8 +260,13 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 	}
 	outputs := built.Outputs
 	originalOutcome := outcome
+	scheduledOutcome, err := output.ScheduledOutcome(input, outcome)
+	if err != nil {
+		return err
+	}
 	if recovering {
 		originalOutcome = recovery.OriginalOutcome
+		scheduledOutcome = recovery.ScheduledOutcome
 	}
 	if len(built.Failed) != 0 {
 		archiveExecutionID := input.ExecutionID
@@ -266,8 +275,9 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		}
 		journal := output.RecoveryJournal{TurnID: input.TurnID, SourceExecutionID: input.ExecutionID,
 			ArchiveExecutionID: archiveExecutionID, SourceAttempt: input.Attempt,
-			OriginalOutcome: originalOutcome, TerminalMarkdown: string(outputs[0].Payload),
-			CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
+			OriginalOutcome: originalOutcome, ScheduledOutcome: scheduledOutcome,
+			TerminalMarkdown: string(outputs[0].Payload),
+			CodexSessionID:   result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
 			ArchiveSHA256: result.ArchiveSHA256, Existing: slices.Clone(outputs[1:]), Failed: built.Failed}
 		if err := output.SaveRecovery(input, journal); err != nil {
 			return errors.New("save runtime output recovery")
@@ -298,9 +308,11 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		ExecutionID: input.ExecutionID, ExecutionVersion: execution.Version, Fence: execution.Fence,
 		GrantGeneration: input.GrantGeneration, RuntimeRevisionSHA256: input.RuntimeRevisionSHA256,
 		EffectiveRuntimeSHA256: input.EffectiveRuntimeSHA256, ImmutableInputSHA256: input.ImmutableInputSHA256,
-		SessionID: input.SessionID, TurnID: input.TurnID, Attempt: input.Attempt,
+		SessionID: input.SessionID, TurnID: input.TurnID,
+		ScheduleOccurrenceID: input.ScheduleOccurrenceID, Attempt: input.Attempt,
 		ProviderBindingID: input.ProviderBindingID, ProviderBindingVersion: input.ProviderBindingVersion,
 		ProviderBindingSHA256: input.ProviderBindingSHA256, Outcome: outcome,
+		ScheduledOutcome:  scheduledOutcome,
 		TerminalReference: terminalReference,
 		TerminalSHA256:    hex.EncodeToString(terminalDigest[:]), Outputs: outputs, CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath,
@@ -315,6 +327,27 @@ func runTurn(baseContext, ctx context.Context, input model.Input, state *health)
 		}
 	}
 	return publishErr
+}
+
+func appendScheduledResultContract(prompt []byte, input model.Input) ([]byte, error) {
+	if input.ScheduleOccurrenceID == "" {
+		return prompt, nil
+	}
+	if input.ScheduledResultContract == nil || input.ScheduledResultContract.Validate() != nil {
+		return nil, errors.New("scheduled result contract is unavailable")
+	}
+	instruction := fmt.Sprintf(`
+
+## Обязательный контракт результата расписания
+
+До завершения запиши ровно один JSON-документ по пути %s. Schema: %s; format: %s; schema SHA-256: %s; максимум %d bytes. Обязательные поля: schema, outcome, summary, artifact_refs. outcome — только no_action, action_taken, requires_human или failed. summary — UTF-8 строка не длиннее 2000 символов. artifact_refs — не более 32 уникальных имён из [A-Za-z0-9][A-Za-z0-9._-]* без путей. При пустом результате используй no_action. Не добавляй route, room, tenant или notification policy: ими владеет control-plane.
+`, input.ScheduledResultContract.Path, input.ScheduledResultContract.Schema,
+		input.ScheduledResultContract.Format, input.ScheduledResultContract.SchemaSHA256,
+		input.ScheduledResultContract.MaximumBytes)
+	if len(prompt)+len(instruction) > 1<<20 {
+		return nil, errors.New("scheduled prompt manifest is too large")
+	}
+	return append(slices.Clone(prompt), []byte(instruction)...), nil
 }
 
 func waitForAdmission(ctx context.Context, client *controlplane.Client) (controlplane.Execution, error) {

@@ -23,6 +23,7 @@ SELECT
     occurrence.maximum_backoff_ms,
     occurrence.dead_letter_at,
     occurrence.state,
+    occurrence.version,
     occurrence.attempt,
     coalesce(occurrence.claimant_workload_id, ''),
     coalesce(occurrence.authority_generation, 0),
@@ -32,6 +33,8 @@ SELECT
     occurrence.available_at,
     coalesce(occurrence.outcome, ''),
     coalesce(occurrence.result_artifact_id::text, ''),
+    coalesce(occurrence.recovery_evidence_sha256, ''),
+    coalesce(occurrence.recovery_blocked_at, 'epoch'::timestamptz),
     coalesce(occurrence.execution_session_id::text, ''),
     coalesce(occurrence.execution_session_version, 0),
     coalesce(occurrence.execution_turn_id::text, ''),
@@ -45,7 +48,7 @@ SELECT
 FROM control_plane.schedule_occurrences AS occurrence
 WHERE occurrence.organization_id = @organization_id::uuid
   AND occurrence.project_id = @project_id::uuid
-  AND occurrence.state = 'CLAIMED'
+  AND occurrence.state IN ('RESERVED', 'CLAIMED')
   AND occurrence.lease_expires_at <= @now
 ORDER BY occurrence.lease_expires_at, occurrence.scheduled_for, occurrence.id
 LIMIT 16

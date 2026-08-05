@@ -1,6 +1,7 @@
 -- name: ScheduledRunContinue
 UPDATE control_plane.scheduled_runs
 SET state = 'CONTINUATION',
+    outcome = @outcome,
     continuation_turn_id = @continuation_turn_id::uuid,
     continuation_turn_version = @continuation_turn_version,
     continuation_runtime_revision_id = @continuation_runtime_revision_id::uuid,

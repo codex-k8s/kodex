@@ -31,6 +31,20 @@ func TestSignedHandoffV2RejectsTampering(t *testing.T) {
 	if err := handoff.Validate(); err != nil {
 		t.Fatalf("handoff fixture is invalid: %v", err)
 	}
+	scheduled := handoff
+	scheduled.ScheduleOccurrenceID = "00000000-0000-4000-8000-000000000010"
+	scheduled.ScheduledOutcome = "requires_human"
+	if err := scheduled.Validate(); err != nil {
+		t.Fatalf("scheduled handoff fixture is invalid: %v", err)
+	}
+	scheduled.Outcome = "FAILED"
+	if err := scheduled.Validate(); err == nil {
+		t.Fatal("scheduled human outcome with failed runtime was accepted")
+	}
+	scheduled.ScheduledOutcome = "failed"
+	if err := scheduled.Validate(); err != nil {
+		t.Fatalf("scheduled failed outcome was rejected: %v", err)
+	}
 	invalidProvenance := handoff
 	invalidProvenance.ArchiveProvenance = strings.Replace(invalidProvenance.ArchiveProvenance,
 		"00000000-0000-4000-8000-000000000006", "not-an-execution", 1)

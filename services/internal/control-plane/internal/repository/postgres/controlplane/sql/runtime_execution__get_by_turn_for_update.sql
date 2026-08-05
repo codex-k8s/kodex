@@ -1,6 +1,6 @@
 -- name: RuntimeExecutionGetByTurnForUpdate :one
 SELECT id, organization_id, project_id, process_id, session_id, thread_id,
-       role_id, turn_id, attempt, runtime_revision_id,
+       role_id, turn_id, coalesce(schedule_occurrence_id::text, ''), attempt, runtime_revision_id,
        runtime_revision_version, runtime_revision_sha256,
        immutable_input_sha256, resource_class, cluster_access_profile,
        workload_id, workload_spiffe_id, grant_generation, version, fence,

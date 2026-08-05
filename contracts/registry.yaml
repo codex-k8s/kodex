@@ -43,7 +43,6 @@ packages:
     source: contracts/asyncapi/control-plane/v1/asyncapi.yaml
     consumers:
       - runtime-controller
-      - automation-scheduler
   - id: control-plane-v1
     format: proto
     owner: control-plane
@@ -65,6 +64,14 @@ packages:
     owner: runtime-controller
     source: contracts/runtime-controller/v2/agent-runner-input.schema.json
     consumers:
+      - runtime-controller
+      - agent-runner
+  - id: scheduled-result-v1
+    format: json-schema
+    owner: control-plane
+    source: contracts/runtime/scheduled-result/v1/schema.json
+    consumers:
+      - control-plane
       - runtime-controller
       - agent-runner
   - id: internal-rpc-authority-v1

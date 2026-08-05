@@ -68,24 +68,17 @@ func (service *Service) ListScheduleOccurrences(
 	if input.Principal.ProjectID == "" || input.Filter.Validate() != nil {
 		return nil, errs.ErrInvalidInput
 	}
-	occurrences, err := service.repository.ListScheduleOccurrences(ctx, input.Filter)
+	schedule, err := service.repository.Get(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Filter.ScheduleID, enum.KindSchedule,
+	)
 	if err != nil {
 		return nil, err
 	}
-	filtered := occurrences[:0]
-	for _, occurrence := range occurrences {
-		schedule, getErr := service.repository.Get(
-			ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-			occurrence.ScheduleID, enum.KindSchedule,
-		)
-		if getErr != nil {
-			return nil, getErr
-		}
-		if schedule.OwnerActorID == input.Principal.ActorID {
-			filtered = append(filtered, occurrence)
-		}
+	if schedule.OwnerActorID != input.Principal.ActorID {
+		return nil, errs.ErrNotFound
 	}
-	return filtered, nil
+	return service.repository.ListScheduleOccurrences(ctx, input.Filter)
 }
 
 func (service *Service) ListAudit(
