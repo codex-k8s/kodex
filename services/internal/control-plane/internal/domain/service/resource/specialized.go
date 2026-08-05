@@ -400,6 +400,18 @@ func (service *Service) ClaimScheduleOccurrence(
 	ctx context.Context,
 	input ClaimScheduleOccurrenceInput,
 ) (ScheduleOccurrenceResult, error) {
+	return service.claimScheduleOccurrence(
+		ctx,
+		input,
+		service.maximumScheduleClaims,
+	)
+}
+
+func (service *Service) claimScheduleOccurrence(
+	ctx context.Context,
+	input ClaimScheduleOccurrenceInput,
+	isolationRemaining int,
+) (ScheduleOccurrenceResult, error) {
 	if err := authorize(input.Principal, permissionExecuteSchedule); err != nil {
 		return ScheduleOccurrenceResult{}, err
 	}
@@ -450,6 +462,7 @@ func (service *Service) ClaimScheduleOccurrence(
 	); err != nil {
 		return ScheduleOccurrenceResult{}, err
 	}
+	candidateForIsolation := domainrepo.ScheduleOccurrence{}
 	err = service.repository.Transact(
 		ctx,
 		scope,
@@ -495,6 +508,7 @@ func (service *Service) ClaimScheduleOccurrence(
 				}
 				return err
 			}
+			candidateForIsolation = occurrence
 			schedule, err := tx.GetForUpdate(
 				ctx,
 				input.Principal.OrganizationID,
@@ -887,7 +901,31 @@ func (service *Service) ClaimScheduleOccurrence(
 			return nil
 		},
 	)
-	return result, err
+	if err == nil {
+		return result, nil
+	}
+	if candidateForIsolation.ID == "" || isolationRemaining < 1 ||
+		(!errors.Is(err, errs.ErrStateConflict) &&
+			!errors.Is(err, errs.ErrNotFound) &&
+			!errors.Is(err, errs.ErrInvalidInput)) {
+		return ScheduleOccurrenceResult{}, err
+	}
+	isolationErr := service.deadLetterQueuedScheduleOccurrence(
+		ctx,
+		scope,
+		input.Principal,
+		candidateForIsolation,
+		keyHash,
+	)
+	if isolationErr != nil &&
+		!errors.Is(isolationErr, errs.ErrStateConflict) &&
+		!errors.Is(isolationErr, errs.ErrNotFound) {
+		return ScheduleOccurrenceResult{}, isolationErr
+	}
+	if isolationErr != nil {
+		return ScheduleOccurrenceResult{}, err
+	}
+	return service.claimScheduleOccurrence(ctx, input, isolationRemaining-1)
 }
 
 func (service *Service) replayScheduleOccurrenceClaim(
@@ -1003,7 +1041,13 @@ func (service *Service) recoverExpiredScheduleOccurrences(
 	for _, candidate := range candidates {
 		candidate := candidate
 		if candidate.ExecutionTurnID == "" {
-			return errs.ErrStateConflict
+			if err := service.recordBlockedScheduleRecovery(
+				ctx, scope, principal, candidate,
+			); err != nil && !errors.Is(err, errs.ErrStateConflict) &&
+				!errors.Is(err, errs.ErrNotFound) {
+				return err
+			}
+			continue
 		}
 		if err := service.repository.Transact(
 			ctx,
@@ -1027,10 +1071,120 @@ func (service *Service) recoverExpiredScheduleOccurrences(
 				)
 			},
 		); err != nil {
-			return err
+			if !errors.Is(err, errs.ErrStateConflict) &&
+				!errors.Is(err, errs.ErrNotFound) &&
+				!errors.Is(err, errs.ErrInvalidInput) &&
+				!errors.Is(err, errs.ErrVersionMismatch) {
+				return err
+			}
+			if incidentErr := service.recordBlockedScheduleRecovery(
+				ctx, scope, principal, candidate,
+			); incidentErr != nil &&
+				!errors.Is(incidentErr, errs.ErrStateConflict) &&
+				!errors.Is(incidentErr, errs.ErrNotFound) {
+				return incidentErr
+			}
 		}
 	}
 	return nil
+}
+
+type blockedScheduleRecoveryReceipt struct {
+	OccurrenceID string `json:"occurrenceId"`
+	Attempt      uint32 `json:"attempt"`
+}
+
+// recordBlockedScheduleRecovery сохраняет один audit для повреждённого
+// expired graph, не пытаясь частично терминализировать возможно исполняемую
+// Session/Turn/ProcessRun связку. Receipt делает повторные watchdog polls
+// идемпотентными, а остальные schedule rows продолжают обрабатываться.
+func (service *Service) recordBlockedScheduleRecovery(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	principal value.Principal,
+	candidate domainrepo.ScheduleOccurrence,
+) error {
+	semanticHash, err := canonicalHash(struct {
+		OccurrenceID string
+		Attempt      uint32
+	}{candidate.ID, candidate.Attempt})
+	if err != nil {
+		return errs.ErrInternal
+	}
+	keyHash := hashString("schedule_recovery_blocked\x00" + semanticHash)
+	return service.repository.Transact(
+		ctx,
+		scope,
+		func(tx domainrepo.Transaction) error {
+			occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				candidate.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if occurrence.State != "CLAIMED" || occurrence.Attempt != candidate.Attempt {
+				return errs.ErrStateConflict
+			}
+			if _, err := tx.GetForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				occurrence.ScheduleID,
+			); err != nil {
+				return err
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			if occurrence.LeaseExpiresAt.After(now) {
+				return errs.ErrStateConflict
+			}
+			_, receiptErr := tx.GetReceipt(
+				ctx,
+				principal.OrganizationID,
+				"schedule_recovery_blocked",
+				keyHash,
+			)
+			switch {
+			case receiptErr == nil:
+				return nil
+			case errors.Is(receiptErr, errs.ErrNotFound):
+			default:
+				return receiptErr
+			}
+			auditOccurrence := occurrence
+			auditOccurrence.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+			if err := appendScheduleOccurrenceAudit(
+				ctx,
+				tx,
+				principal,
+				"block_invalid_schedule_occurrence_recovery",
+				auditOccurrence,
+			); err != nil {
+				return err
+			}
+			payload, err := json.Marshal(blockedScheduleRecoveryReceipt{
+				OccurrenceID: occurrence.ID,
+				Attempt:      occurrence.Attempt,
+			})
+			if err != nil {
+				return errs.ErrInternal
+			}
+			return tx.SaveReceipt(ctx, domainrepo.Receipt{
+				OrganizationID: principal.OrganizationID,
+				ProjectID:      principal.ProjectID,
+				Scope:          "schedule_recovery_blocked",
+				KeyHash:        keyHash,
+				RequestHash:    semanticHash,
+				Payload:        payload,
+				CreatedAt:      now,
+			})
+		},
+	)
 }
 
 // skipOverlappedScheduleOccurrences коммитит terminal SKIPPED и его audit как

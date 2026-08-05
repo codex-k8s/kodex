@@ -192,6 +192,14 @@ func applyWorkloadProfile(config *Config) error {
 	}
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
+			"automation-scheduler": {
+				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/automation-scheduler",
+				vaultRole:                 "internal-rpc-authority-automation-scheduler",
+				readbackCredentialPath:    "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/readback-credential",
+				readbackPossessionPath:    "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/readback-possession",
+				restoreRoleCredentialPath: "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-credential",
+				restoreACKPath:            "kv/data/mattercodex/internal-rpc-authority/automation-scheduler/issuer/restore-ack",
+			},
 			"control-api-gateway": {
 				spiffeID:                  "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
 				vaultRole:                 "internal-rpc-authority-control-api-gateway",

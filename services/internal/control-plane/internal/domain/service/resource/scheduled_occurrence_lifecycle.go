@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -78,6 +79,101 @@ func validateQueuedScheduledOccurrence(
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+// deadLetterQueuedScheduleOccurrence изолирует только не материализованную
+// queued-строку после отката неуспешной owner transaction. Повторная проверка
+// receipt, blocker и execution binding не позволяет quarantine затронуть
+// конкурентно созданный либо уже исполняемый graph.
+func (service *Service) deadLetterQueuedScheduleOccurrence(
+	ctx context.Context,
+	scope domainrepo.Scope,
+	principal value.Principal,
+	candidate domainrepo.ScheduleOccurrence,
+	claimKeyHash string,
+) error {
+	return service.repository.Transact(
+		ctx,
+		scope,
+		func(tx domainrepo.Transaction) error {
+			occurrence, err := tx.GetScheduleOccurrenceForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				candidate.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if occurrence.Attempt != candidate.Attempt || occurrence.State != "QUEUED" ||
+				occurrenceHasExecutionBinding(occurrence) || occurrence.ClaimantWorkloadID != "" ||
+				occurrence.AuthorityGeneration != 0 || occurrence.TokenHash != "" ||
+				occurrence.ClaimKeySHA256 != "" || !occurrence.LeaseExpiresAt.IsZero() {
+				return errs.ErrStateConflict
+			}
+			schedule, err := tx.GetForUpdate(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				occurrence.ScheduleID,
+			)
+			if err != nil {
+				return err
+			}
+			if schedule.Kind != enum.KindSchedule || schedule.State != enum.StateActive {
+				return errs.ErrStateConflict
+			}
+			blocking, err := tx.HasBlockingScheduleExecution(
+				ctx,
+				principal.OrganizationID,
+				principal.ProjectID,
+				occurrence.ScheduleID,
+				occurrence.ID,
+			)
+			if err != nil {
+				return err
+			}
+			if blocking {
+				return errs.ErrStateConflict
+			}
+			_, receiptErr := tx.GetReceipt(
+				ctx,
+				principal.OrganizationID,
+				"claim_schedule_occurrence",
+				claimKeyHash,
+			)
+			switch {
+			case receiptErr == nil:
+				return errs.ErrStateConflict
+			case errors.Is(receiptErr, errs.ErrNotFound):
+			default:
+				return receiptErr
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			occurrence.State = "DEAD_LETTER"
+			occurrence.Outcome = "materialization_invalid"
+			occurrence.ResultArtifactID = ""
+			occurrence.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+			if err := tx.UpdateScheduleOccurrence(
+				ctx,
+				occurrence,
+				candidate.Attempt,
+				"",
+			); err != nil {
+				return err
+			}
+			return appendScheduleOccurrenceAudit(
+				ctx,
+				tx,
+				principal,
+				"dead_letter_invalid_schedule_occurrence",
+				occurrence,
+			)
+		},
+	)
 }
 
 func rebindScheduledOccurrence(

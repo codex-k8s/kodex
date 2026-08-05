@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -586,6 +587,7 @@ func (tx *currentTupleTestTransaction) NextScheduleOccurrence(
 	organizationID, projectID string,
 	now time.Time,
 ) (domainrepo.ScheduleOccurrence, error) {
+	candidates := make([]domainrepo.ScheduleOccurrence, 0)
 	for _, occurrence := range tx.occurrences {
 		if occurrence.OrganizationID == organizationID && occurrence.ProjectID == projectID &&
 			occurrence.State == "QUEUED" && !occurrence.AvailableAt.After(now) {
@@ -599,8 +601,20 @@ func (tx *currentTupleTestTransaction) NextScheduleOccurrence(
 			if blocking {
 				continue
 			}
-			return occurrence, nil
+			candidates = append(candidates, occurrence)
 		}
+	}
+	sort.Slice(candidates, func(left, right int) bool {
+		if !candidates[left].AvailableAt.Equal(candidates[right].AvailableAt) {
+			return candidates[left].AvailableAt.Before(candidates[right].AvailableAt)
+		}
+		if !candidates[left].ScheduledFor.Equal(candidates[right].ScheduledFor) {
+			return candidates[left].ScheduledFor.Before(candidates[right].ScheduledFor)
+		}
+		return candidates[left].ID < candidates[right].ID
+	})
+	if len(candidates) > 0 {
+		return candidates[0], nil
 	}
 	return domainrepo.ScheduleOccurrence{}, errs.ErrNotFound
 }
@@ -1976,6 +1990,61 @@ func TestScheduleRecoveryCommitsBeforeNoNextCandidate(t *testing.T) {
 	}
 }
 
+func TestInvalidExpiredOccurrenceRecoveryDoesNotBlockBacklog(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	valid := fixture.createNextDueOccurrence(t, produced, "behind-invalid-recovery")
+	invalid := fixture.tx.occurrences[produced.claim.Occurrence.ID]
+	invalid.ExecutionTurnID = ""
+	invalid.LeaseExpiresAt = fixture.tx.now.Add(-time.Microsecond)
+	fixture.tx.occurrences[invalid.ID] = invalid
+
+	schedule := fixture.tx.resources[valid.ScheduleID]
+	spec := schedule.Spec.(entity.ScheduleSpec)
+	principal := fixture.principalFor(
+		permissionExecuteSchedule,
+		"scheduler",
+		"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+		schedule.ID,
+		schedule.Version,
+		spec.EffectiveInputSHA,
+		fixture.grant,
+	)
+	auditsBefore := len(fixture.tx.audits)
+	claimed, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(),
+		ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "claim-behind-invalid-recovery",
+		},
+	)
+	if err != nil || claimed.Occurrence.ID != valid.ID || claimed.LeaseToken == "" {
+		t.Fatalf("invalid recovery row blocked valid backlog: %v %+v", err, claimed)
+	}
+	if len(fixture.tx.audits) <= auditsBefore {
+		t.Fatal("blocked recovery audit is missing")
+	}
+	blockedAudits := 0
+	for _, audit := range fixture.tx.audits[auditsBefore:] {
+		if audit.ResourceID == invalid.ID &&
+			audit.Action == "block_invalid_schedule_occurrence_recovery" {
+			blockedAudits++
+		}
+	}
+	if blockedAudits != 1 {
+		t.Fatalf("blocked recovery audit cardinality is %d", blockedAudits)
+	}
+
+	auditsAfter := len(fixture.tx.audits)
+	if _, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(),
+		ClaimScheduleOccurrenceInput{
+			Principal: principal, IdempotencyKey: "repeat-invalid-recovery",
+		},
+	); !errors.Is(err, errs.ErrNotFound) || len(fixture.tx.audits) != auditsAfter {
+		t.Fatalf("blocked recovery replay repeated audit or exposed work: %v", err)
+	}
+}
+
 func TestSkipOverlapCommitsBeforeNoNextCandidate(t *testing.T) {
 	fixture := newCurrentTupleFixture(t)
 	produced := fixture.produceScheduledGraph(t)
@@ -2018,6 +2087,58 @@ func TestSkipOverlapCommitsBeforeNoNextCandidate(t *testing.T) {
 	); !errors.Is(err, errs.ErrNotFound) || len(fixture.tx.audits) != auditsAfter ||
 		len(fixture.tx.events) != eventsBefore {
 		t.Fatalf("repeat after committed skip created another effect: %v", err)
+	}
+}
+
+func TestInvalidQueuedOccurrenceDoesNotBlockNextSchedule(t *testing.T) {
+	fixture := newCurrentTupleFixture(t)
+	produced := fixture.produceScheduledGraph(t)
+	invalid := fixture.createNextDueOccurrence(t, produced, "invalid-row")
+	valid := fixture.createNextDueOccurrence(t, produced, "valid-row")
+
+	invalid.PromptProfileID = uuid.NewString()
+	invalid.AvailableAt = fixture.tx.now.Add(-2 * time.Second)
+	invalid.ScheduledFor = invalid.AvailableAt
+	fixture.tx.occurrences[invalid.ID] = invalid
+	valid.AvailableAt = fixture.tx.now.Add(-time.Second)
+	valid.ScheduledFor = valid.AvailableAt
+	fixture.tx.occurrences[valid.ID] = valid
+
+	schedule := fixture.tx.resources[valid.ScheduleID]
+	spec := schedule.Spec.(entity.ScheduleSpec)
+	auditsBefore := len(fixture.tx.audits)
+	result, err := fixture.service.ClaimScheduleOccurrence(
+		context.Background(),
+		ClaimScheduleOccurrenceInput{
+			Principal: fixture.principalFor(
+				permissionExecuteSchedule,
+				"scheduler",
+				"spiffe://mattercodex.local/ns/mattercodex-system/sa/scheduler",
+				schedule.ID,
+				schedule.Version,
+				spec.EffectiveInputSHA,
+				fixture.grant,
+			),
+			IdempotencyKey: "claim-after-invalid-row",
+		},
+	)
+	if err != nil || result.Occurrence.ID != valid.ID || result.LeaseToken == "" {
+		t.Fatalf("valid occurrence behind invalid row was not claimed: %v %+v", err, result)
+	}
+	isolated := fixture.tx.occurrences[invalid.ID]
+	if isolated.State != "DEAD_LETTER" || isolated.Outcome != "materialization_invalid" ||
+		occurrenceHasExecutionBinding(isolated) || len(fixture.tx.audits) <= auditsBefore {
+		t.Fatalf("invalid occurrence was not isolated by owner transaction: %+v", isolated)
+	}
+	foundIsolationAudit := false
+	for _, audit := range fixture.tx.audits[auditsBefore:] {
+		if audit.ResourceID == invalid.ID &&
+			audit.Action == "dead_letter_invalid_schedule_occurrence" {
+			foundIsolationAudit = true
+		}
+	}
+	if !foundIsolationAudit {
+		t.Fatal("invalid occurrence isolation audit is missing")
 	}
 }
 
@@ -2339,7 +2460,7 @@ func TestScheduledDigestLifecycleUsesClosedHelpers(t *testing.T) {
 	checks := []struct {
 		file, function, helper string
 	}{
-		{"specialized.go", "ClaimScheduleOccurrence", "materializeScheduledOccurrence"},
+		{"specialized.go", "claimScheduleOccurrence", "materializeScheduledOccurrence"},
 		{"specialized.go", "CompleteScheduleOccurrence", "applyScheduledTerminalDisposition"},
 		{"final_owner_wave.go", "recoverExpiredScheduleOccurrence", "applyScheduledTerminalDisposition"},
 		{"current_execution.go", "prepareRetriedExecution", "rebindScheduledOccurrence"},

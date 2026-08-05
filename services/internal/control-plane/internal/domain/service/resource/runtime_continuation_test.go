@@ -198,7 +198,7 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 		{"runtime.go", "ClaimTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "", "tx.NextQueuedTurn", true},
 		{"runtime.go", "RenewTurn", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
 		{"specialized.go", "RequestOwnerGate", "tx.GetTurnLeaseForUpdate", "tx.CurrentTime", "tx.GetReceipt", "", false},
-		{"specialized.go", "ClaimScheduleOccurrence", "tx.NextScheduleOccurrence", "tx.CurrentTime", "", "", true},
+		{"specialized.go", "claimScheduleOccurrence", "tx.NextScheduleOccurrence", "tx.CurrentTime", "", "", true},
 		{"specialized.go", "replayScheduleOccurrenceClaim", "service.lockOwnerGraphByTurn", "tx.CurrentTime", "tx.GetReceipt", "", false},
 		{"runtime_continuation.go", "integrationSessionContext", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
 		{"runtime_continuation.go", "resolveSelectedIntegrationBinding", "tx.GetForUpdate", "tx.CurrentTime", "", "", true},
@@ -270,7 +270,7 @@ func TestDeadlineSensitiveAuthorityUsesPostLockDatabaseTime(t *testing.T) {
 }
 
 func TestSchedulerMaintenanceCommitsBeforeCandidateSelection(t *testing.T) {
-	claim := productionFunctionSource(t, "specialized.go", "ClaimScheduleOccurrence")
+	claim := productionFunctionSource(t, "specialized.go", "claimScheduleOccurrence")
 	for _, required := range []string{
 		"service.recoverExpiredScheduleOccurrences",
 		"service.skipOverlappedScheduleOccurrences",
@@ -681,7 +681,7 @@ func TestSharedGraphEntryPointsUseCanonicalResolver(t *testing.T) {
 		"ExpireOwnerGate":            {"final_owner_wave.go", false, true, true},
 		"CompleteScheduleOccurrence": {"specialized.go", false, true, true},
 		"CancelScheduleOccurrence":   {"specialized.go", false, true, true},
-		"ClaimScheduleOccurrence":    {"specialized.go", false, true, true},
+		"claimScheduleOccurrence":    {"specialized.go", false, true, true},
 		"ClaimOwnerGateDelivery":     {"cycle_two.go", false, true, true},
 		"RecordOwnerGateDelivery":    {"cycle_two.go", true, true, false},
 	}

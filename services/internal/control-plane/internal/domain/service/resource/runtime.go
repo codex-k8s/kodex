@@ -1569,7 +1569,11 @@ func (service *Service) ClaimDueSchedules(
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
 				return receiptErr
 			}
-			now := service.now().UTC().Truncate(time.Microsecond)
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return err
+			}
+			now = now.UTC().Truncate(time.Microsecond)
 			schedules, err := tx.DueSchedules(
 				ctx,
 				input.Principal.OrganizationID,

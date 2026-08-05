@@ -89,6 +89,11 @@ issuer profiles `runtime-restore-verifier` и `runtime-cleanup-authorizer` не
 остаётся fail-closed. `control-api-gateway` не входит ни в один из этих
 профилей и не может тем же trust path подтвердить restore и разрешить cleanup.
 
+Issue #193 материализует отдельный consumer scheduler profile в
+`services/jobs/automation-scheduler` и `deploy/k8s/base/automation-scheduler`.
+Он использует generated protected client и не получает прямой PostgreSQL,
+Mattermost либо Kubernetes authority.
+
 Публикуются только два факта с утверждёнными потребителями:
 
 | Факт                                          | Условие                                                                                               | Потребитель            | Доставка                                  |
