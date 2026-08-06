@@ -83,6 +83,8 @@ const (
 	auditKindTurnLease          = "TURN_LEASE"
 
 	permissionCreate                  = "controlplane.resource.create"
+	permissionProjectUpdate           = "controlplane.project.update"
+	permissionProjectDelete           = "controlplane.project.delete"
 	permissionUpdate                  = "controlplane.resource.update"
 	permissionTransition              = "controlplane.resource.transition"
 	permissionDelete                  = "controlplane.resource.delete"
@@ -165,6 +167,8 @@ const (
 	permissionRuntimeCleanupExpire    = "controlplane.runtime_execution.cleanup.expire"
 	permissionRuntimeRetentionManage  = "controlplane.runtime_retention.manage"
 	permissionRuntimeRetentionRead    = "controlplane.runtime_retention.read"
+	permissionBackupRead              = "controlplane.backup.read"
+	permissionBackupRestore           = "controlplane.backup.restore"
 	permissionIntegrationResolve      = "controlplane.integration_session.read"
 	permissionIntegrationSuspend      = "controlplane.integration_continuation.suspend"
 	permissionIntegrationDecide       = "controlplane.integration_continuation.decide"
@@ -1129,6 +1133,7 @@ func scheduleResourceMutationAction(action string) bool {
 	case "create_schedule", "claim_due_schedule",
 		"manage_schedule_UPDATE", "manage_schedule_ACTIVATE",
 		"manage_schedule_PAUSE", "manage_schedule_ARCHIVE",
+		"manage_schedule_DELETE_ARCHIVE", "manage_schedule_DELETE_PENDING",
 		"manage_schedule_DELETE":
 		return true
 	default:

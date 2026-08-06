@@ -577,29 +577,34 @@ func (spec SessionSpec) Validate() error {
 }
 
 type TurnSpec struct {
-	SessionID               string                      `json:"sessionId"`
-	Sequence                uint64                      `json:"sequence"`
-	SourceRef               string                      `json:"sourceRef"`
-	PromptArtifactID        string                      `json:"promptArtifactId"`
-	RuntimeRevisionID       string                      `json:"runtimeRevisionId"`
-	ProcessRunID            string                      `json:"processRunId,omitempty"`
-	Attempt                 uint32                      `json:"attempt"`
-	Outcome                 string                      `json:"outcome,omitempty"`
-	ResultArtifactID        string                      `json:"resultArtifactId,omitempty"`
-	ResultArtifactVersion   uint64                      `json:"resultArtifactVersion,omitempty"`
-	ResultArtifactSHA256    string                      `json:"resultArtifactSha256,omitempty"`
-	EffectiveInputSHA256    string                      `json:"effectiveInputSha256"`
-	PredecessorTurnID       string                      `json:"predecessorTurnId,omitempty"`
-	OwnerFeedback           string                      `json:"ownerFeedback,omitempty"`
-	OwnerFeedbackGateID     string                      `json:"ownerFeedbackGateId,omitempty"`
-	OwnerFeedbackVersion    uint64                      `json:"ownerFeedbackGateVersion,omitempty"`
-	OwnerFeedbackSHA256     string                      `json:"ownerFeedbackSha256,omitempty"`
-	AgentSessionTurnID      int64                       `json:"agentSessionTurnId,omitempty"`
-	AgentRunID              string                      `json:"agentRunId,omitempty"`
-	AgentTurnBindingVersion uint64                      `json:"agentTurnBindingVersion,omitempty"`
-	AgentTurnBindingSHA256  string                      `json:"agentTurnBindingSha256,omitempty"`
-	InputArtifacts          []EffectiveArtifactRef      `json:"inputArtifacts,omitempty"`
-	ScheduledResultContract *ScheduledResultContractRef `json:"scheduledResultContract,omitempty"`
+	SessionID                     string                      `json:"sessionId"`
+	Sequence                      uint64                      `json:"sequence"`
+	SourceRef                     string                      `json:"sourceRef"`
+	PromptArtifactID              string                      `json:"promptArtifactId"`
+	RuntimeRevisionID             string                      `json:"runtimeRevisionId"`
+	ProcessRunID                  string                      `json:"processRunId,omitempty"`
+	Attempt                       uint32                      `json:"attempt"`
+	Outcome                       string                      `json:"outcome,omitempty"`
+	ResultArtifactID              string                      `json:"resultArtifactId,omitempty"`
+	ResultArtifactVersion         uint64                      `json:"resultArtifactVersion,omitempty"`
+	ResultArtifactSHA256          string                      `json:"resultArtifactSha256,omitempty"`
+	EffectiveInputSHA256          string                      `json:"effectiveInputSha256"`
+	PredecessorTurnID             string                      `json:"predecessorTurnId,omitempty"`
+	OwnerFeedback                 string                      `json:"ownerFeedback,omitempty"`
+	OwnerFeedbackGateID           string                      `json:"ownerFeedbackGateId,omitempty"`
+	OwnerFeedbackVersion          uint64                      `json:"ownerFeedbackGateVersion,omitempty"`
+	OwnerFeedbackSHA256           string                      `json:"ownerFeedbackSha256,omitempty"`
+	AgentSessionTurnID            int64                       `json:"agentSessionTurnId,omitempty"`
+	AgentRunID                    string                      `json:"agentRunId,omitempty"`
+	AgentTurnBindingVersion       uint64                      `json:"agentTurnBindingVersion,omitempty"`
+	AgentTurnBindingSHA256        string                      `json:"agentTurnBindingSha256,omitempty"`
+	RestoreOperationID            string                      `json:"restoreOperationId,omitempty"`
+	RestoreSourceExecutionID      string                      `json:"restoreSourceExecutionId,omitempty"`
+	RestoreSourceVersion          uint64                      `json:"restoreSourceVersion,omitempty"`
+	RestoreSourceArchiveSHA256    string                      `json:"restoreSourceArchiveSha256,omitempty"`
+	RestoreSourceProvenanceSHA256 string                      `json:"restoreSourceProvenanceSha256,omitempty"`
+	InputArtifacts                []EffectiveArtifactRef      `json:"inputArtifacts,omitempty"`
+	ScheduledResultContract       *ScheduledResultContractRef `json:"scheduledResultContract,omitempty"`
 }
 
 const (
@@ -672,6 +677,8 @@ func (spec TurnSpec) Validate() error {
 		spec.ResultArtifactID,
 		spec.PredecessorTurnID,
 		spec.OwnerFeedbackGateID,
+		spec.RestoreOperationID,
+		spec.RestoreSourceExecutionID,
 	} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
 			return errors.New("turn binding is invalid")
@@ -697,6 +704,14 @@ func (spec TurnSpec) Validate() error {
 		len(spec.AgentRunID) > 256 || spec.AgentTurnBindingVersion == 0 ||
 		!validSHA256(spec.AgentTurnBindingSHA256)) {
 		return errors.New("agent turn binding is invalid")
+	}
+	restoreBinding := spec.RestoreOperationID != "" || spec.RestoreSourceExecutionID != "" ||
+		spec.RestoreSourceVersion != 0 || spec.RestoreSourceArchiveSHA256 != "" ||
+		spec.RestoreSourceProvenanceSHA256 != ""
+	if restoreBinding && (spec.RestoreOperationID == "" || spec.RestoreSourceExecutionID == "" ||
+		spec.RestoreSourceVersion == 0 || !validSHA256(spec.RestoreSourceArchiveSHA256) ||
+		!validSHA256(spec.RestoreSourceProvenanceSHA256)) {
+		return errors.New("turn restore binding is invalid")
 	}
 	if len(spec.InputArtifacts) > 4096 {
 		return errors.New("turn input artifact set is invalid")

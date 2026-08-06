@@ -223,6 +223,36 @@ func (repository *Repository) ListRuntimeIncidents(
 	return repository.source.ListRuntimeIncidents(ctx, filter)
 }
 
+// Backup и restore operation не кэшируются: owner readback должен видеть
+// текущее eligibility/retention и фактическое состояние target execution.
+func (repository *Repository) ListBackups(
+	ctx context.Context,
+	organizationID, projectID, actorID, afterID string,
+	limit int,
+) ([]domainrepo.Backup, error) {
+	return repository.source.ListBackups(
+		ctx, organizationID, projectID, actorID, afterID, limit,
+	)
+}
+
+func (repository *Repository) GetBackup(
+	ctx context.Context,
+	organizationID, projectID, actorID, backupID string,
+) (domainrepo.Backup, error) {
+	return repository.source.GetBackup(
+		ctx, organizationID, projectID, actorID, backupID,
+	)
+}
+
+func (repository *Repository) GetRuntimeRestoreOperation(
+	ctx context.Context,
+	organizationID, projectID, actorID, operationID string,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	return repository.source.GetRuntimeRestoreOperation(
+		ctx, organizationID, projectID, actorID, operationID,
+	)
+}
+
 func (repository *Repository) ListScheduleOccurrences(
 	ctx context.Context,
 	filter query.ScheduleOccurrenceFilter,

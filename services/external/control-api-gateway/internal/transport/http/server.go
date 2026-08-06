@@ -22,6 +22,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
@@ -41,6 +42,8 @@ var (
 type ControlPlane interface {
 	CreateProject(context.Context, *controlplanev1.CreateProjectRequest, ...grpc.CallOption) (*controlplanev1.CreateProjectResponse, error)
 	ListProjects(context.Context, *controlplanev1.ListProjectsRequest, ...grpc.CallOption) (*controlplanev1.ListProjectsResponse, error)
+	UpdateProject(context.Context, *controlplanev1.UpdateProjectRequest, ...grpc.CallOption) (*controlplanev1.UpdateProjectResponse, error)
+	DeleteProject(context.Context, *controlplanev1.DeleteProjectRequest, ...grpc.CallOption) (*controlplanev1.DeleteProjectResponse, error)
 	CreateResource(context.Context, *controlplanev1.CreateResourceRequest, ...grpc.CallOption) (*controlplanev1.CreateResourceResponse, error)
 	UpdateResource(context.Context, *controlplanev1.UpdateResourceRequest, ...grpc.CallOption) (*controlplanev1.UpdateResourceResponse, error)
 	TransitionResource(context.Context, *controlplanev1.TransitionResourceRequest, ...grpc.CallOption) (*controlplanev1.TransitionResourceResponse, error)
@@ -59,6 +62,12 @@ type ControlPlane interface {
 	RunScheduleNow(context.Context, *controlplanev1.RunScheduleNowRequest, ...grpc.CallOption) (*controlplanev1.RunScheduleNowResponse, error)
 	ListScheduleOccurrences(context.Context, *controlplanev1.ListScheduleOccurrencesRequest, ...grpc.CallOption) (*controlplanev1.ListScheduleOccurrencesResponse, error)
 	ResolveScheduleRecovery(context.Context, *controlplanev1.ResolveScheduleRecoveryRequest, ...grpc.CallOption) (*controlplanev1.ResolveScheduleRecoveryResponse, error)
+	ManageSchedule(context.Context, *controlplanev1.ManageScheduleRequest, ...grpc.CallOption) (*controlplanev1.ManageScheduleResponse, error)
+	ResolveOwnerGate(context.Context, *controlplanev1.ResolveOwnerGateRequest, ...grpc.CallOption) (*controlplanev1.ResolveOwnerGateResponse, error)
+	ListBackups(context.Context, *controlplanev1.ListBackupsRequest, ...grpc.CallOption) (*controlplanev1.ListBackupsResponse, error)
+	GetBackup(context.Context, *controlplanev1.GetBackupRequest, ...grpc.CallOption) (*controlplanev1.GetBackupResponse, error)
+	RestoreBackup(context.Context, *controlplanev1.RestoreBackupRequest, ...grpc.CallOption) (*controlplanev1.RestoreBackupResponse, error)
+	GetRestoreOperation(context.Context, *controlplanev1.GetRestoreOperationRequest, ...grpc.CallOption) (*controlplanev1.GetRestoreOperationResponse, error)
 	ManageRoleImageRecipe(context.Context, *controlplanev1.ManageRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.ManageRoleImageRecipeResponse, error)
 	GetRoleImageRecipe(context.Context, *controlplanev1.GetRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageRecipeResponse, error)
 	ManageImageBuild(context.Context, *controlplanev1.ManageImageBuildRequest, ...grpc.CallOption) (*controlplanev1.ManageImageBuildResponse, error)
@@ -339,6 +348,415 @@ func (server *Server) CreateProject(writer http.ResponseWriter, request *http.Re
 		Spec: &controlplanev1.ProjectSpec{Slug: body.Spec.Slug, Description: value(body.Spec.Description), Locale: body.Spec.Locale, Ownership: uiOwnership()},
 	})
 	server.writeResourceResponse(writer, request.Context(), http.StatusCreated, response.GetProject(), err, true)
+}
+
+func (server *Server) UpdateProject(
+	writer http.ResponseWriter,
+	request *http.Request,
+	projectID openapi_types.UUID,
+	params generated.UpdateProjectParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	var body generated.UpdateProject
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	response, err := server.control.UpdateProject(request.Context(), &controlplanev1.UpdateProjectRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), ProjectId: projectID.String(),
+		ExpectedVersion: version, Name: body.Name,
+		Spec: &controlplanev1.ProjectSpec{
+			Slug: body.Spec.Slug, Description: value(body.Spec.Description),
+			Locale: body.Spec.Locale, Ownership: uiOwnership(),
+		},
+	})
+	server.writeResourceResponse(
+		writer, request.Context(), http.StatusOK, response.GetProject(), err, true,
+	)
+}
+
+func (server *Server) DeleteProject(
+	writer http.ResponseWriter,
+	request *http.Request,
+	projectID openapi_types.UUID,
+	params generated.DeleteProjectParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.DeleteProject(request.Context(), &controlplanev1.DeleteProjectRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), ProjectId: projectID.String(),
+		ExpectedVersion: version,
+	})
+	server.writeResourceResponse(
+		writer, request.Context(), http.StatusOK, response.GetProject(), err, true,
+	)
+}
+
+func (server *Server) CreateSchedule(
+	writer http.ResponseWriter,
+	request *http.Request,
+	params generated.CreateScheduleParams,
+) {
+	var body generated.CreateSchedule
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	spec, ok := scheduleSpec(body.Input)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.ManageSchedule(request.Context(), &controlplanev1.ManageScheduleRequest{
+		IdempotencyKey: params.IdempotencyKey.String(),
+		Action:         controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_CREATE,
+		Name:           body.Name, Spec: spec,
+	})
+	server.writeResourceResponse(
+		writer, request.Context(), http.StatusCreated, response.GetSchedule(), err, true,
+	)
+}
+
+func (server *Server) UpdateSchedule(
+	writer http.ResponseWriter,
+	request *http.Request,
+	scheduleID openapi_types.UUID,
+	params generated.UpdateScheduleParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	var body generated.UpdateSchedule
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	spec, ok := scheduleSpec(body.Input)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.ManageSchedule(request.Context(), &controlplanev1.ManageScheduleRequest{
+		IdempotencyKey: params.IdempotencyKey.String(),
+		Action:         controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_UPDATE,
+		ScheduleId:     scheduleID.String(), ExpectedVersion: version,
+		Name: body.Name, Spec: spec,
+	})
+	server.writeResourceResponse(
+		writer, request.Context(), http.StatusOK, response.GetSchedule(), err, true,
+	)
+}
+
+func (server *Server) DeleteSchedule(
+	writer http.ResponseWriter,
+	request *http.Request,
+	scheduleID openapi_types.UUID,
+	params generated.DeleteScheduleParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.ManageSchedule(request.Context(), &controlplanev1.ManageScheduleRequest{
+		IdempotencyKey: params.IdempotencyKey.String(),
+		Action:         controlplanev1.AdministrativeAction_ADMINISTRATIVE_ACTION_DELETE,
+		ScheduleId:     scheduleID.String(), ExpectedVersion: version,
+	})
+	server.writeResourceResponse(
+		writer, request.Context(), http.StatusOK, response.GetSchedule(), err, true,
+	)
+}
+
+func scheduleSpec(input generated.ScheduleInput) (*controlplanev1.ScheduleSpec, bool) {
+	overlap, overlapOK := controlplanev1.ScheduleOverlapPolicy_value["SCHEDULE_OVERLAP_POLICY_"+string(input.OverlapPolicy)]
+	misfire, misfireOK := controlplanev1.ScheduleMisfirePolicy_value["SCHEDULE_MISFIRE_POLICY_"+string(input.MisfirePolicy)]
+	session, sessionOK := controlplanev1.ScheduleSessionPolicy_value["SCHEDULE_SESSION_POLICY_"+string(input.SessionPolicy)]
+	notification, notificationOK := controlplanev1.ScheduleNotificationPolicy_value["SCHEDULE_NOTIFICATION_POLICY_"+string(input.NotificationPolicy)]
+	target, targetOK := controlplanev1.ScheduleTargetType_value["SCHEDULE_TARGET_TYPE_"+string(input.TargetType)]
+	if !overlapOK || !misfireOK || !sessionOK || !notificationOK || !targetOK {
+		return nil, false
+	}
+	result := &controlplanev1.ScheduleSpec{
+		TargetResourceId: input.TargetResourceId.String(), Cron: value(input.Cron),
+		Timezone:      input.Timezone,
+		OverlapPolicy: controlplanev1.ScheduleOverlapPolicy(overlap),
+		MisfirePolicy: controlplanev1.ScheduleMisfirePolicy(misfire),
+		MisfireGrace:  durationpb.New(time.Duration(input.MisfireGraceSeconds) * time.Second),
+		Calendar:      string(input.Calendar), DeliveryPolicy: string(input.DeliveryPolicy),
+		MaximumAttempts: uint32(input.MaximumAttempts),
+		InitialBackoff:  durationpb.New(time.Duration(input.InitialBackoffSeconds) * time.Second),
+		MaximumBackoff:  durationpb.New(time.Duration(input.MaximumBackoffSeconds) * time.Second),
+		DeadLetterAfter: durationpb.New(time.Duration(input.DeadLetterAfterSeconds) * time.Second),
+		PromptProfileId: input.PromptProfileId.String(), PromptRevision: uint64(input.PromptRevision),
+		SessionPolicy: controlplanev1.ScheduleSessionPolicy(session), RoomId: uuidValue(input.RoomId),
+		NotificationPolicy: controlplanev1.ScheduleNotificationPolicy(notification),
+		MaximumExecutionDuration: durationpb.New(
+			time.Duration(input.MaximumExecutionSeconds) * time.Second,
+		),
+		Coalesce: input.Coalesce, RuntimeRevisionId: input.RuntimeRevisionId.String(),
+		TargetType: controlplanev1.ScheduleTargetType(target), PlaybookRef: value(input.PlaybookRef),
+		PlaybookVersion:    uint64Value(input.PlaybookVersion),
+		PromptArtifactId:   input.PromptArtifactId.String(),
+		ExecutionSessionId: uuidValue(input.ExecutionSessionId), Ownership: uiOwnership(),
+	}
+	if input.IntervalSeconds != nil {
+		result.Interval = durationpb.New(time.Duration(*input.IntervalSeconds) * time.Second)
+	}
+	return result, true
+}
+
+func (server *Server) ResolveOwnerGate(
+	writer http.ResponseWriter,
+	request *http.Request,
+	ownerGateID openapi_types.UUID,
+	params generated.ResolveOwnerGateParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	var body generated.ResolveOwnerGate
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	decisionValue, ok := controlplanev1.OwnerGateDecision_value["OWNER_GATE_DECISION_"+string(body.Decision)]
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.ResolveOwnerGate(request.Context(), &controlplanev1.ResolveOwnerGateRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), OwnerGateId: ownerGateID.String(),
+		ExpectedVersion: version, Decision: controlplanev1.OwnerGateDecision(decisionValue),
+		Reason: body.Reason, ProcessRunId: body.ProcessRunId.String(),
+		ProcessExpectedVersion: uint64(body.ProcessExpectedVersion),
+		SessionId:              body.SessionId.String(), TurnId: body.TurnId.String(),
+		Attempt: uint32(body.Attempt), ImmutableInputSha256: body.ImmutableInputSha256,
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, true)
+		return
+	}
+	if response.GetOwnerGate() == nil || response.GetProcessRun() == nil ||
+		response.GetOwnerGate().GetId() != ownerGateID.String() ||
+		response.GetProcessRun().GetId() != body.ProcessRunId.String() {
+		server.writeInternal(writer, request.Context(), errors.New("owner gate response is invalid"))
+		return
+	}
+	ownerGate, err := ConvertResource(response.GetOwnerGate())
+	if err != nil {
+		server.writeInternal(writer, request.Context(), err)
+		return
+	}
+	processRun, err := ConvertResource(response.GetProcessRun())
+	if err != nil {
+		server.writeInternal(writer, request.Context(), err)
+		return
+	}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", ownerGate.Version))
+	writeJSON(writer, http.StatusOK, generated.ResolveOwnerGateResult{
+		OwnerGate: ownerGate, ProcessRun: processRun,
+	})
+}
+
+func (server *Server) ListBackups(
+	writer http.ResponseWriter,
+	request *http.Request,
+	params generated.ListBackupsParams,
+) {
+	limit, ok := pageSize(params.PageSize)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.ListBackups(request.Context(), &controlplanev1.ListBackupsRequest{
+		PageSize: limit, PageToken: value(params.PageToken),
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	page := generated.BackupPage{Backups: make([]generated.Backup, 0, len(response.GetBackups()))}
+	for _, backup := range response.GetBackups() {
+		projected, projectErr := backupProjection(backup)
+		if projectErr != nil {
+			server.writeInternal(writer, request.Context(), projectErr)
+			return
+		}
+		page.Backups = append(page.Backups, projected)
+	}
+	if response.GetNextPageToken() != "" {
+		page.NextPageToken = stringPointer(response.GetNextPageToken())
+	}
+	writeJSON(writer, http.StatusOK, page)
+}
+
+func (server *Server) GetBackup(
+	writer http.ResponseWriter,
+	request *http.Request,
+	backupID openapi_types.UUID,
+) {
+	response, err := server.control.GetBackup(request.Context(), &controlplanev1.GetBackupRequest{
+		BackupId: backupID.String(),
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	projected, err := backupProjection(response.GetBackup())
+	if err != nil || projected.BackupId != backupID {
+		server.writeInternal(writer, request.Context(), errors.New("backup response is invalid"))
+		return
+	}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", projected.SourceVersion))
+	writeJSON(writer, http.StatusOK, projected)
+}
+
+func (server *Server) RestoreBackup(
+	writer http.ResponseWriter,
+	request *http.Request,
+	backupID openapi_types.UUID,
+	params generated.RestoreBackupParams,
+) {
+	version, ok := requireETag(writer, params.IfMatch)
+	if !ok {
+		return
+	}
+	var body generated.RestoreBackup
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	response, err := server.control.RestoreBackup(request.Context(), &controlplanev1.RestoreBackupRequest{
+		IdempotencyKey: params.IdempotencyKey.String(), BackupId: backupID.String(),
+		ExpectedSourceVersion: version, ArchiveSha256: body.ArchiveSha256,
+		ProvenanceSha256: body.ProvenanceSha256, Scope: string(body.Scope),
+		ScopeId: body.ScopeId.String(),
+	})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, true)
+		return
+	}
+	projected, err := restoreOperationProjection(response.GetOperation())
+	if err != nil || projected.BackupId != backupID || projected.SourceVersion != int64(version) {
+		server.writeInternal(writer, request.Context(), errors.New("restore operation response is invalid"))
+		return
+	}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", projected.Version))
+	writer.Header().Set("Location", "/api/v1/restore-operations/"+projected.RestoreOperationId.String())
+	writeJSON(writer, http.StatusAccepted, projected)
+}
+
+func (server *Server) GetRestoreOperation(
+	writer http.ResponseWriter,
+	request *http.Request,
+	operationID openapi_types.UUID,
+) {
+	response, err := server.control.GetRestoreOperation(
+		request.Context(), &controlplanev1.GetRestoreOperationRequest{
+			RestoreOperationId: operationID.String(),
+		},
+	)
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	projected, err := restoreOperationProjection(response.GetOperation())
+	if err != nil || projected.RestoreOperationId != operationID {
+		server.writeInternal(writer, request.Context(), errors.New("restore operation response is invalid"))
+		return
+	}
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", projected.Version))
+	writeJSON(writer, http.StatusOK, projected)
+}
+
+func backupProjection(input *controlplanev1.Backup) (generated.Backup, error) {
+	if input == nil || input.GetSourceVersion() == 0 || input.GetCreatedAt() == nil ||
+		input.GetUpdatedAt() == nil || !input.GetCreatedAt().IsValid() || !input.GetUpdatedAt().IsValid() {
+		return generated.Backup{}, errors.New("backup projection is incomplete")
+	}
+	backupID, err := uuid.Parse(input.GetBackupId())
+	if err != nil {
+		return generated.Backup{}, err
+	}
+	scopeID, err := uuid.Parse(input.GetScopeId())
+	if err != nil {
+		return generated.Backup{}, err
+	}
+	state := generated.BackupState(strings.TrimPrefix(input.GetState().String(), "BACKUP_STATE_"))
+	scope := generated.BackupScope(input.GetScope())
+	if !state.Valid() || !scope.Valid() {
+		return generated.Backup{}, errors.New("backup projection enum is invalid")
+	}
+	result := generated.Backup{
+		BackupId: backupID, SourceVersion: int64(input.GetSourceVersion()),
+		SourceRuntimeRevisionSha256: input.GetSourceRuntimeRevisionSha256(),
+		SourceImmutableInputSha256:  input.GetSourceImmutableInputSha256(),
+		ArchiveSha256:               input.GetArchiveSha256(), ProvenanceSha256: input.GetProvenanceSha256(),
+		State: state, Scope: scope, ScopeId: scopeID, Restorable: input.GetRestorable(),
+		CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime(),
+	}
+	if input.GetAvailableAt() != nil {
+		if !input.GetAvailableAt().IsValid() {
+			return generated.Backup{}, errors.New("backup available timestamp is invalid")
+		}
+		available := input.GetAvailableAt().AsTime()
+		result.AvailableAt = &available
+	}
+	if input.GetRetainUntil() != nil {
+		if !input.GetRetainUntil().IsValid() {
+			return generated.Backup{}, errors.New("backup retention timestamp is invalid")
+		}
+		retainUntil := input.GetRetainUntil().AsTime()
+		result.RetainUntil = &retainUntil
+	}
+	return result, nil
+}
+
+func restoreOperationProjection(
+	input *controlplanev1.RestoreOperation,
+) (generated.RestoreOperation, error) {
+	if input == nil || input.GetVersion() == 0 || input.GetSourceVersion() == 0 ||
+		input.GetTargetAttempt() == 0 || input.GetCreatedAt() == nil || input.GetUpdatedAt() == nil ||
+		!input.GetCreatedAt().IsValid() || !input.GetUpdatedAt().IsValid() {
+		return generated.RestoreOperation{}, errors.New("restore operation projection is incomplete")
+	}
+	operationID, err := uuid.Parse(input.GetRestoreOperationId())
+	if err != nil {
+		return generated.RestoreOperation{}, err
+	}
+	backupID, err := uuid.Parse(input.GetBackupId())
+	if err != nil {
+		return generated.RestoreOperation{}, err
+	}
+	scopeID, err := uuid.Parse(input.GetScopeId())
+	if err != nil {
+		return generated.RestoreOperation{}, err
+	}
+	targetTurnID, err := uuid.Parse(input.GetTargetTurnId())
+	if err != nil {
+		return generated.RestoreOperation{}, err
+	}
+	state := generated.RestoreOperationState(strings.TrimPrefix(
+		input.GetState().String(), "RESTORE_OPERATION_STATE_",
+	))
+	scope := generated.RestoreOperationScope(input.GetScope())
+	if !state.Valid() || !scope.Valid() {
+		return generated.RestoreOperation{}, errors.New("restore operation enum is invalid")
+	}
+	result := generated.RestoreOperation{
+		RestoreOperationId: operationID, Version: int64(input.GetVersion()), State: state,
+		BackupId: backupID, SourceVersion: int64(input.GetSourceVersion()),
+		ArchiveSha256: input.GetArchiveSha256(), ProvenanceSha256: input.GetProvenanceSha256(),
+		Scope: scope, ScopeId: scopeID, TargetTurnId: targetTurnID,
+		TargetAttempt: int(input.GetTargetAttempt()),
+		CreatedAt:     input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime(),
+	}
+	if input.GetErrorCode() != "" {
+		result.ErrorCode = stringPointer(input.GetErrorCode())
+	}
+	return result, nil
 }
 
 func (server *Server) ListResources(writer http.ResponseWriter, request *http.Request, params generated.ListResourcesParams) {
@@ -1007,6 +1425,13 @@ func uuidValue(pointer *uuid.UUID) string {
 		return ""
 	}
 	return pointer.String()
+}
+
+func uint64Value(pointer *int64) uint64 {
+	if pointer == nil || *pointer < 0 {
+		return 0
+	}
+	return uint64(*pointer)
 }
 
 func uiOwnership() *controlplanev1.ConfigurationOwnership {

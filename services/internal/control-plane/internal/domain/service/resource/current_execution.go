@@ -33,6 +33,7 @@ func (service *Service) prepareRetriedExecution(
 	principal value.Principal,
 	graph lockedOwnerGraph,
 	spec entity.TurnSpec,
+	restore *domainrepo.RuntimeRestoreOperation,
 	now time.Time,
 ) (entity.Resource, entity.TurnSpec, error) {
 	turn := graph.Turn
@@ -65,6 +66,16 @@ func (service *Service) prepareRetriedExecution(
 	)
 	if err != nil {
 		return entity.Resource{}, entity.TurnSpec{}, err
+	}
+	if restore != nil {
+		spec.RestoreOperationID = restore.ID
+		spec.RestoreSourceExecutionID = restore.BackupID
+		spec.RestoreSourceVersion = restore.SourceVersion
+		spec.RestoreSourceArchiveSHA256 = restore.ArchiveSHA256
+		spec.RestoreSourceProvenanceSHA256 = restore.ProvenanceSHA256
+		if spec.Validate() != nil {
+			return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
+		}
 	}
 	previousAttempt := spec.Attempt - 1
 	// Interaction-gateway уже создал server-owned Session/Turn. Retry не
@@ -273,6 +284,11 @@ func prepareRetryTurnSpec(
 	spec.ResultArtifactID = ""
 	spec.ResultArtifactVersion = 0
 	spec.ResultArtifactSHA256 = ""
+	spec.RestoreOperationID = ""
+	spec.RestoreSourceExecutionID = ""
+	spec.RestoreSourceVersion = 0
+	spec.RestoreSourceArchiveSHA256 = ""
+	spec.RestoreSourceProvenanceSHA256 = ""
 	return spec, nil
 }
 

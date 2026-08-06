@@ -132,6 +132,12 @@ var sqlResourceGetIncludingDeleted string
 //go:embed sql/resource__get_for_update.sql
 var sqlResourceGetForUpdate string
 
+//go:embed sql/resource__get_including_deleted_for_update.sql
+var sqlResourceGetIncludingDeletedForUpdate string
+
+//go:embed sql/project__has_live_resources.sql
+var sqlProjectHasLiveResources string
+
 //go:embed sql/resource__insert.sql
 var sqlResourceInsert string
 
@@ -209,6 +215,24 @@ var sqlRuntimeExecutionUpdate string
 
 //go:embed sql/runtime_execution__next_expired.sql
 var sqlRuntimeExecutionNextExpired string
+
+//go:embed sql/runtime_backup__list.sql
+var sqlRuntimeBackupList string
+
+//go:embed sql/runtime_backup__get.sql
+var sqlRuntimeBackupGet string
+
+//go:embed sql/runtime_restore_operation__insert.sql
+var sqlRuntimeRestoreOperationInsert string
+
+//go:embed sql/runtime_restore_operation__get.sql
+var sqlRuntimeRestoreOperationGet string
+
+//go:embed sql/runtime_restore_operation__get_by_backup.sql
+var sqlRuntimeRestoreOperationGetByBackup string
+
+//go:embed sql/runtime_restore_operation__owner_get.sql
+var sqlRuntimeRestoreOperationOwnerGet string
 
 //go:embed sql/runtime_incident__insert.sql
 var sqlRuntimeIncidentInsert string

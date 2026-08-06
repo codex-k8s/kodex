@@ -8,4 +8,6 @@ type RoleImageRecipeProjection struct {
   SpecSha256 string
   PolicyRevision int
   PolicySha256 string
+  RoleRuntimeContractRevision int
+  RoleRuntimeContractSha256 string
 }

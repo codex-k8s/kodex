@@ -493,6 +493,74 @@ func (repository *Repository) ListRuntimeIncidents(
 	return incidents, err
 }
 
+func (repository *Repository) ListBackups(
+	ctx context.Context,
+	organizationID, projectID, actorID, afterID string,
+	limit int,
+) ([]domainrepo.Backup, error) {
+	var backups []domainrepo.Backup
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlRuntimeBackupList, pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"actor_id":        actorID,
+			"after_id":        afterID,
+			"limit":           limit,
+		})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			backup, scanErr := scanBackup(rows)
+			if scanErr != nil {
+				return scanErr
+			}
+			backups = append(backups, backup)
+		}
+		return rows.Err()
+	})
+	return backups, err
+}
+
+func (repository *Repository) GetBackup(
+	ctx context.Context,
+	organizationID, projectID, actorID, backupID string,
+) (domainrepo.Backup, error) {
+	var backup domainrepo.Backup
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		var scanErr error
+		backup, scanErr = scanBackup(tx.QueryRow(ctx, sqlRuntimeBackupGet, pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"actor_id":        actorID,
+			"backup_id":       backupID,
+		}))
+		return scanErr
+	})
+	return backup, err
+}
+
+func (repository *Repository) GetRuntimeRestoreOperation(
+	ctx context.Context,
+	organizationID, projectID, actorID, operationID string,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	var operation domainrepo.RuntimeRestoreOperation
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		var scanErr error
+		operation, scanErr = scanRuntimeRestoreOperation(tx.QueryRow(
+			ctx, sqlRuntimeRestoreOperationOwnerGet, pgx.StrictNamedArgs{
+				"organization_id": organizationID,
+				"project_id":      projectID,
+				"actor_id":        actorID,
+				"id":              operationID,
+			},
+		))
+		return scanErr
+	})
+	return operation, err
+}
+
 func (repository *Repository) ListTombstones(
 	ctx context.Context,
 	filter domainquery.TombstoneFilter,
@@ -820,6 +888,33 @@ func (wrapped *transaction) GetForUpdate(
 			"resource_id":     resourceID,
 		},
 	))
+}
+
+func (wrapped *transaction) GetForUpdateIncludingDeleted(
+	ctx context.Context,
+	organizationID, projectID, resourceID string,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(
+		ctx,
+		sqlResourceGetIncludingDeletedForUpdate,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"resource_id":     resourceID,
+		},
+	))
+}
+
+func (wrapped *transaction) ProjectHasLiveResources(
+	ctx context.Context,
+	organizationID, projectID string,
+) (bool, error) {
+	var live bool
+	err := wrapped.tx.QueryRow(ctx, sqlProjectHasLiveResources, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+	}).Scan(&live)
+	return live, mapError(err)
 }
 
 func (wrapped *transaction) Get(
@@ -2775,6 +2870,55 @@ func (wrapped *transaction) UpdateRuntimeExecution(
 	return nil
 }
 
+func (wrapped *transaction) InsertRuntimeRestoreOperation(
+	ctx context.Context,
+	operation domainrepo.RuntimeRestoreOperation,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationInsert, pgx.StrictNamedArgs{
+		"id":                  operation.ID,
+		"organization_id":     operation.OrganizationID,
+		"project_id":          operation.ProjectID,
+		"owner_actor_id":      operation.OwnerActorID,
+		"backup_execution_id": operation.BackupID,
+		"source_version":      operation.SourceVersion,
+		"source_fence":        operation.SourceFence,
+		"archive_sha256":      operation.ArchiveSHA256,
+		"provenance_sha256":   operation.ProvenanceSHA256,
+		"session_id":          operation.SessionID,
+		"target_turn_id":      operation.TargetTurnID,
+		"target_attempt":      operation.TargetAttempt,
+		"target_execution_id": operation.TargetExecutionID,
+		"created_at":          operation.CreatedAt,
+		"updated_at":          operation.UpdatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) GetRuntimeRestoreOperation(
+	ctx context.Context,
+	operationID string,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	return scanRuntimeRestoreOperation(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeRestoreOperationGet, pgx.StrictNamedArgs{"id": operationID},
+	))
+}
+
+func (wrapped *transaction) GetRuntimeRestoreOperationByBackup(
+	ctx context.Context,
+	backupID string,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	return scanRuntimeRestoreOperation(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeRestoreOperationGetByBackup,
+		pgx.StrictNamedArgs{"backup_execution_id": backupID},
+	))
+}
+
 func (wrapped *transaction) NextExpiredRuntimeExecution(
 	ctx context.Context,
 	organizationID, projectID, turnID string,
@@ -3326,6 +3470,53 @@ func integrationContinuationUpdateArgs(
 
 type rowScanner interface {
 	Scan(...any) error
+}
+
+func scanBackup(row rowScanner) (domainrepo.Backup, error) {
+	var backup domainrepo.Backup
+	err := row.Scan(
+		&backup.ID, &backup.OrganizationID, &backup.ProjectID, &backup.SessionID,
+		&backup.SourceVersion, &backup.SourceFence,
+		&backup.SourceRuntimeRevisionSHA256, &backup.SourceImmutableInputSHA256,
+		&backup.ArchiveSHA256, &backup.ProvenanceSHA256,
+		&backup.RuntimeState, &backup.State, &backup.Restorable,
+		&backup.CreatedAt, &backup.AvailableAt, &backup.RetainUntil, &backup.UpdatedAt,
+	)
+	if err != nil {
+		return domainrepo.Backup{}, mapError(err)
+	}
+	backup.CreatedAt = backup.CreatedAt.UTC()
+	backup.AvailableAt = nullableEpoch(backup.AvailableAt)
+	backup.RetainUntil = nullableEpoch(backup.RetainUntil)
+	backup.UpdatedAt = backup.UpdatedAt.UTC()
+	return backup, nil
+}
+
+func scanRuntimeRestoreOperation(row rowScanner) (domainrepo.RuntimeRestoreOperation, error) {
+	var operation domainrepo.RuntimeRestoreOperation
+	err := row.Scan(
+		&operation.ID, &operation.OrganizationID, &operation.ProjectID,
+		&operation.OwnerActorID, &operation.BackupID, &operation.SourceVersion,
+		&operation.SourceFence,
+		&operation.ArchiveSHA256, &operation.ProvenanceSHA256,
+		&operation.SessionID, &operation.TargetTurnID, &operation.TargetAttempt,
+		&operation.TargetExecutionID, &operation.TargetExecutionVersion,
+		&operation.TargetExecutionState, &operation.TargetRestoreAssignmentState,
+		&operation.CreatedAt, &operation.UpdatedAt,
+	)
+	if err != nil {
+		return domainrepo.RuntimeRestoreOperation{}, mapError(err)
+	}
+	operation.CreatedAt = operation.CreatedAt.UTC()
+	operation.UpdatedAt = operation.UpdatedAt.UTC()
+	return operation, nil
+}
+
+func nullableEpoch(value time.Time) time.Time {
+	if value.Equal(time.Unix(0, 0).UTC()) {
+		return time.Time{}
+	}
+	return value.UTC()
 }
 
 func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {

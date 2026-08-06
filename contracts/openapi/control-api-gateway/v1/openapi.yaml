@@ -15,6 +15,8 @@ tags:
   - { name: resources, description: Управление ресурсами через control-plane. }
   - { name: projections, description: Авторитетные read-only проекции. }
   - { name: schedules, description: Специализированные owner-команды расписаний. }
+  - { name: owner-gates, description: Специализированные решения owner gate. }
+  - { name: backups, description: Безопасные backup projections и restore commands. }
   - { name: role-images, description: Специализированные owner-команды image recipe/build. }
 paths:
   /session:
@@ -94,6 +96,62 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [projects]
+      summary: Обновить exact owner project после tenant resolution
+      operationId: updateProject
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateProject' } } }
+      responses:
+        '200':
+          description: Авторитетная новая версия project.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [projects]
+      summary: Терминально удалить пустой exact owner project
+      operationId: deleteProject
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '200':
+          description: Terminal tombstone readback удалённого project.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -371,6 +429,87 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /schedules:
+    post:
+      tags: [schedules]
+      summary: Создать server-owned schedule специализированной командой
+      operationId: createSchedule
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateSchedule' } } }
+      responses:
+        '201':
+          description: Schedule создан с server-assigned ID, owner и watermark.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /schedules/{scheduleId}:
+    parameters:
+      - name: scheduleId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [schedules]
+      summary: Обновить locked owner schedule специализированной командой
+      operationId: updateSchedule
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateSchedule' } } }
+      responses:
+        '200':
+          description: Авторитетная новая версия schedule.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [schedules]
+      summary: Удалить locked schedule при закрытом execution graph
+      operationId: deleteSchedule
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '200':
+          description: Авторитетное terminal состояние schedule.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /schedules/{scheduleId}/run-now:
     post:
       tags: [schedules]
@@ -456,6 +595,137 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /owner-gates/{ownerGateId}/resolution:
+    post:
+      tags: [owner-gates]
+      summary: Принять решение по exact delivered OwnerGate
+      operationId: resolveOwnerGate
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: ownerGateId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResolveOwnerGate' } } }
+      responses:
+        '200':
+          description: Gate и process readback одной owner transaction.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ResolveOwnerGateResult' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /backups:
+    get:
+      tags: [backups]
+      summary: Получить безопасную страницу owner backups
+      operationId: listBackups
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Страница безопасных backup metadata без storage locator, private evidence и credentials.
+          content: { application/json: { schema: { $ref: '#/components/schemas/BackupPage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /backups/{backupId}:
+    get:
+      tags: [backups]
+      summary: Прочитать exact owner backup
+      operationId: getBackup
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: backupId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Version-pinned безопасная backup projection.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Backup' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /backups/{backupId}/restore:
+    post:
+      tags: [backups]
+      summary: Создать server-owned restore operation для exact eligible backup
+      operationId: restoreBackup
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: backupId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/CSRFToken' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RestoreBackup' } } }
+      responses:
+        '202':
+          description: Restore operation и новая attempt устойчиво созданы.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Location: { schema: { type: string, format: uri-reference } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RestoreOperation' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /restore-operations/{restoreOperationId}:
+    get:
+      tags: [backups]
+      summary: Прочитать authoritative restore readback
+      operationId: getRestoreOperation
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: restoreOperationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Текущее versioned состояние restore graph.
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RestoreOperation' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -710,6 +980,78 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         spec: { $ref: '#/components/schemas/ProjectSpec' }
       required: [name, spec]
+    UpdateProject:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        spec: { $ref: '#/components/schemas/ProjectSpec' }
+      required: [name, spec]
+    ScheduleOverlapPolicy:
+      type: string
+      enum: [FORBID, SKIP, QUEUE]
+    ScheduleMisfirePolicy:
+      type: string
+      enum: [SKIP, RUN_ONCE, CATCH_UP, WITHIN_GRACE]
+    ScheduleSessionPolicy:
+      type: string
+      enum: [NEW, PERSISTENT, ROLLING]
+    ScheduleNotificationPolicy:
+      type: string
+      enum: [ALWAYS, ON_ACTION, ON_FAILURE, ON_ACTION_OR_FAILURE, AUDIT_ONLY]
+    ScheduleTargetType:
+      type: string
+      enum: [AGENT, PLAYBOOK]
+    ScheduleInput:
+      type: object
+      additionalProperties: false
+      properties:
+        targetResourceId: { type: string, format: uuid }
+        cron: { type: string, minLength: 1, maxLength: 128 }
+        intervalSeconds: { type: integer, format: int64, minimum: 60, maximum: 31536000 }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
+        overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
+        misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
+        misfireGraceSeconds: { type: integer, format: int64, minimum: 0, maximum: 86400 }
+        deliveryPolicy: { type: string, enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT] }
+        maximumAttempts: { type: integer, minimum: 1, maximum: 100 }
+        initialBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        maximumBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        deadLetterAfterSeconds: { type: integer, format: int64, minimum: 1, maximum: 2592000 }
+        promptProfileId: { type: string, format: uuid }
+        promptRevision: { type: integer, format: int64, minimum: 1 }
+        sessionPolicy: { $ref: '#/components/schemas/ScheduleSessionPolicy' }
+        roomId: { type: string, format: uuid }
+        notificationPolicy: { $ref: '#/components/schemas/ScheduleNotificationPolicy' }
+        maximumExecutionSeconds: { type: integer, format: int64, minimum: 60, maximum: 86400 }
+        coalesce: { type: boolean }
+        runtimeRevisionId: { type: string, format: uuid }
+        targetType: { $ref: '#/components/schemas/ScheduleTargetType' }
+        playbookRef: { type: string, minLength: 1, maxLength: 512 }
+        playbookVersion: { type: integer, format: int64, minimum: 1 }
+        promptArtifactId: { type: string, format: uuid }
+        executionSessionId: { type: string, format: uuid }
+      required: [targetResourceId, timezone, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, promptProfileId, promptRevision, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, runtimeRevisionId, targetType, promptArtifactId]
+      oneOf:
+        - required: [cron]
+          not: { required: [intervalSeconds] }
+        - required: [intervalSeconds]
+          not: { required: [cron] }
+    CreateSchedule:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        input: { $ref: '#/components/schemas/ScheduleInput' }
+      required: [name, input]
+    UpdateSchedule:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        input: { $ref: '#/components/schemas/ScheduleInput' }
+      required: [name, input]
     ChatSpec:
       type: object
       additionalProperties: false
@@ -1241,6 +1583,91 @@ components:
         attempt: { type: integer, minimum: 1 }
         immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
       required: [processRunId, resultSha256, expiresAt, decision, sessionId, turnId, attempt, immutableInputSha256]
+    ResolveOwnerGateDecision:
+      type: string
+      enum: [APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED]
+    ResolveOwnerGate:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: { $ref: '#/components/schemas/ResolveOwnerGateDecision' }
+        reason: { type: string, minLength: 1, maxLength: 2048 }
+        processRunId: { type: string, format: uuid }
+        processExpectedVersion: { type: integer, format: int64, minimum: 1 }
+        sessionId: { type: string, format: uuid }
+        turnId: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1, maximum: 100 }
+        immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      required: [decision, reason, processRunId, processExpectedVersion, sessionId, turnId, attempt, immutableInputSha256]
+    ResolveOwnerGateResult:
+      type: object
+      additionalProperties: false
+      properties:
+        ownerGate: { $ref: '#/components/schemas/Resource' }
+        processRun: { $ref: '#/components/schemas/Resource' }
+      required: [ownerGate, processRun]
+    BackupState:
+      type: string
+      enum: [VERIFYING, RETENTION_PENDING, AVAILABLE, RESTORING, RESTORED, EXPIRED, UNAVAILABLE]
+    Backup:
+      type: object
+      additionalProperties: false
+      description: Безопасный read model без DSN, object key, credential, private reference/evidence или worker grant.
+      properties:
+        backupId: { type: string, format: uuid }
+        sourceVersion: { type: integer, format: int64, minimum: 1 }
+        sourceRuntimeRevisionSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sourceImmutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        archiveSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        provenanceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        state: { $ref: '#/components/schemas/BackupState' }
+        scope: { type: string, enum: [SESSION] }
+        scopeId: { type: string, format: uuid }
+        restorable: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        availableAt: { type: string, format: date-time }
+        retainUntil: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [backupId, sourceVersion, sourceRuntimeRevisionSha256, sourceImmutableInputSha256, archiveSha256, provenanceSha256, state, scope, scopeId, restorable, createdAt, updatedAt]
+    BackupPage:
+      type: object
+      additionalProperties: false
+      properties:
+        backups: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Backup' } }
+        nextPageToken: { type: string }
+      required: [backups]
+    RestoreBackup:
+      type: object
+      additionalProperties: false
+      properties:
+        archiveSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        provenanceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        scope: { type: string, enum: [SESSION] }
+        scopeId: { type: string, format: uuid }
+      required: [archiveSha256, provenanceSha256, scope, scopeId]
+    RestoreOperationState:
+      type: string
+      enum: [QUEUED, ASSIGNED, MATERIALIZING, READY, RUNNING, SUCCEEDED, FAILED, CANCELLED, EXPIRED]
+    RestoreOperation:
+      type: object
+      additionalProperties: false
+      description: Versioned readback без archive locator, PVC tuple, credential, grant или private evidence.
+      properties:
+        restoreOperationId: { type: string, format: uuid }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/RestoreOperationState' }
+        backupId: { type: string, format: uuid }
+        sourceVersion: { type: integer, format: int64, minimum: 1 }
+        archiveSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        provenanceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        scope: { type: string, enum: [SESSION] }
+        scopeId: { type: string, format: uuid }
+        targetTurnId: { type: string, format: uuid }
+        targetAttempt: { type: integer, minimum: 1, maximum: 100 }
+        errorCode: { type: string, maxLength: 96 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [restoreOperationId, version, state, backupId, sourceVersion, archiveSha256, provenanceSha256, scope, scopeId, targetTurnId, targetAttempt, createdAt, updatedAt]
     MemoryRecordProjection:
       title: MemoryRecordProjection
       type: object
@@ -1444,7 +1871,7 @@ components:
     ConfigurationChangeAction:
       title: ConfigurationChangeAction
       type: string
-      enum: [create, update, transition, delete, detach_access_configuration, copy_access_configuration, create_schedule, manage_schedule_UPDATE, manage_schedule_ACTIVATE, manage_schedule_PAUSE, manage_schedule_ARCHIVE, manage_schedule_DELETE]
+      enum: [create, update, transition, delete, update_project, delete_project_pending, delete_project, detach_access_configuration, copy_access_configuration, create_schedule, manage_schedule_UPDATE, manage_schedule_ACTIVATE, manage_schedule_PAUSE, manage_schedule_ARCHIVE, manage_schedule_DELETE_ARCHIVE, manage_schedule_DELETE_PENDING, manage_schedule_DELETE]
     ConfigurationChangeOutcome:
       title: ConfigurationChangeOutcome
       type: string

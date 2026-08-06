@@ -50,6 +50,22 @@ type DeleteInput struct {
 	Administrative  bool
 }
 
+type UpdateProjectInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ProjectID       string
+	ExpectedVersion uint64
+	Name            string
+	Spec            entity.ProjectSpec
+}
+
+type DeleteProjectInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ProjectID       string
+	ExpectedVersion uint64
+}
+
 type GetInput struct {
 	Principal       value.Principal
 	ResourceID      string
@@ -770,6 +786,34 @@ type AdmitRuntimeExecutionResult struct {
 type RetryRuntimeExecutionResult struct {
 	Previous RuntimeExecution
 	Turn     entity.Resource
+	Restore  *domainrepo.RuntimeRestoreOperation
+}
+
+type ListBackupsInput struct {
+	Principal value.Principal
+	AfterID   string
+	Limit     int
+}
+
+type GetBackupInput struct {
+	Principal value.Principal
+	BackupID  string
+}
+
+type RestoreBackupInput struct {
+	Principal             value.Principal
+	IdempotencyKey        string
+	BackupID              string
+	ExpectedSourceVersion uint64
+	ArchiveSHA256         string
+	ProvenanceSHA256      string
+	Scope                 string
+	ScopeID               string
+}
+
+type GetRestoreOperationInput struct {
+	Principal   value.Principal
+	OperationID string
 }
 
 type ManageRuntimeActionInput struct {

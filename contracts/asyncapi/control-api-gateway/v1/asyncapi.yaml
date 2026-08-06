@@ -1,7 +1,7 @@
 asyncapi: 3.0.0
 info:
   title: MatterCodex Control API Realtime
-  version: 1.0.0
+  version: 1.1.0
   description: >-
     Защищённый WebSocket snapshot/rejoin contract. Gateway не подписывается на
     NATS и не хранит проекции: каждый snapshot получается через owner-scoped

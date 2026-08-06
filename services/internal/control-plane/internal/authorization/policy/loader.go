@@ -190,7 +190,7 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 			FullMethod:                   candidate.FullMethod,
 			Permission:                   candidate.Permission,
 			ProjectRequired:              candidate.ProjectRequired,
-			TenantOwnerOnly:              candidate.OperationID == "control.project.create",
+			TenantOwnerOnly:              tenantOwnerOperation(candidate.OperationID),
 			CallerWorkload:               producer.CallerWorkload,
 			CallerSPIFFEID:               producer.CallerSPIFFEID,
 			ActorKind:                    producerActorKind(producer),
@@ -212,6 +212,15 @@ func Load(path string, expected map[string]string) (Loaded, error) {
 		Producers:                    producers,
 		Operations:                   operations,
 	}, nil
+}
+
+func tenantOwnerOperation(operationID string) bool {
+	switch operationID {
+	case "control.project.create", "control.project.update", "control.project.delete":
+		return true
+	default:
+		return false
+	}
 }
 
 func validTarget(candidate binding) bool {

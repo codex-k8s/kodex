@@ -576,7 +576,7 @@ func (service *Service) ClaimTurn(
 					return err
 				}
 				requeued, staleSpec, err := service.prepareRetriedExecution(
-					ctx, tx, input.Principal, graph, staleSpec, recoveryNow,
+					ctx, tx, input.Principal, graph, staleSpec, nil, recoveryNow,
 				)
 				if err != nil {
 					return errs.ErrStateConflict
@@ -1398,7 +1398,7 @@ func (service *Service) RetryTurn(
 				return entity.Resource{}, err
 			}
 			retried, spec, err := service.prepareRetriedExecution(
-				ctx, tx, input.Principal, graph, spec, now,
+				ctx, tx, input.Principal, graph, spec, nil, now,
 			)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
