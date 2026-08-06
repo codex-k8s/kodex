@@ -4,8 +4,8 @@ title: Базовый продуктовый контракт MatterCodex
 type: product-index
 status: approved
 owner: product
-version: 0.1.0
-updated: 2026-07-16
+version: 0.1.1
+updated: 2026-08-06
 ---
 
 # Базовый продуктовый контракт MatterCodex
@@ -61,6 +61,7 @@ MatterCodex — платформа управления ИИ-сотрудник�
 | `PRD-MC-003` | `docs/product/business-processes.md` | Основные процессы платформы. |
 | `PRD-MC-004` | `docs/product/user-scenarios.md` | Стабильные пользовательские сценарии. |
 | `PRD-MC-005` | `docs/product/requirements.md` | Функциональные и нефункциональные требования. |
+| `UX-MC-001` | `docs/product/control-center/mockups/README.md` | Утвержденное визуальное направление Control Center. |
 
 ## Границы первого промышленного контура
 

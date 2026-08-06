@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin: 0; background: #e7e9e9; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+  a { color: #2F6FE0; text-decoration: none; }
+  a:hover { color: #1f57bd; text-decoration: underline; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #d5d8d8; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div style="min-height:100vh;overflow-x:auto;box-sizing:border-box;padding:32px;">
+<div style="width:1600px;height:1000px;margin:0 auto;display:flex;background:#f5f6f6;color:#1c2024;letter-spacing:0;box-shadow:0 24px 64px rgba(20,24,26,0.16);border-radius:4px;overflow:hidden;">
+
+  <nav style="width:240px;flex-shrink:0;display:flex;flex-direction:column;background:#ffffff;border-right:1px solid #e3e5e5;">
+    <div style="height:56px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid #edeeee;">
+      <div style="width:26px;height:26px;border-radius:6px;background:#0f8577;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#fff;font-size:13px;font-weight:700;">M</span>
+      </div>
+      <span style="font-size:15px;font-weight:700;color:#171a1e;">MatterCodex</span>
+    </div>
+
+    <div style="flex:1;overflow:auto;padding:12px 12px;display:flex;flex-direction:column;gap:2px;">
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
+        <span>Обзор</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;background:#e8f4f2;color:#0f6b60;font-size:13.5px;font-weight:600;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+        <span>Рабочие области</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"></rect><line x1="12" y1="2" x2="12" y2="8"></line><circle cx="12" cy="4" r="1"></circle><circle cx="9" cy="14" r="1"></circle><circle cx="15" cy="14" r="1"></circle><line x1="9" y1="18" x2="15" y2="18"></line></svg>
+        <span>ИИ-сотрудники</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"></path><path d="M9 8V2"></path><path d="M15 8V2"></path><path d="M18 8v3a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"></path></svg>
+        <span>Интеграции</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line></svg>
+        <span>Инструкции</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        <span>Автоматизации</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        <span>Запуски</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        <span>Эксплуатация</span>
+        <span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:#c99429;flex-shrink:0;"></span>
+      </div>
+    </div>
+
+    <div style="flex-shrink:0;border-top:1px solid #edeeee;padding:10px 12px;display:flex;flex-direction:column;gap:2px;">
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:6px;color:#565d64;font-size:13.5px;font-weight:500;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="4.2" y1="4.2" x2="6.3" y2="6.3"></line><line x1="17.7" y1="17.7" x2="19.8" y2="19.8"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line><line x1="4.2" y1="19.8" x2="6.3" y2="17.7"></line><line x1="17.7" y1="6.3" x2="19.8" y2="4.2"></line></svg>
+        <span>Настройки</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 10px;margin-top:4px;border-radius:6px;border:1px solid #edeeee;">
+        <div style="width:28px;height:28px;border-radius:50%;background:#e8f4f2;color:#0f6b60;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;flex-shrink:0;">ВП</div>
+        <div style="min-width:0;flex:1;">
+          <div style="font-size:12.5px;font-weight:600;color:#20242b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Владелец платформы</div>
+          <div style="font-size:11px;color:#8a9198;">Владелец</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a9198" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+
+    <div style="height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid #e3e5e5;background:#ffffff;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:11px;font-size:11.5px;font-weight:600;color:#2455b0;background:#e9f0fc;border:1px solid #cfdff8;">Staging</span>
+        <div style="width:320px;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:6px;background:#f3f4f4;border:1px solid #e3e5e5;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8a9198" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span style="font-size:12.5px;color:#9aa0a6;">Поиск по платформе</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span>
+          <span style="font-size:12.5px;color:#565d64;">Реальное время</span>
+        </div>
+        <div style="width:1px;height:18px;background:#e3e5e5;"></div>
+        <div title="Уведомления" style="position:relative;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#565d64" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <span style="position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:#c53a34;border:1.5px solid #fff;"></span>
+        </div>
+        <div style="width:1px;height:18px;background:#e3e5e5;"></div>
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <div style="width:26px;height:26px;border-radius:50%;background:#e8f4f2;color:#0f6b60;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">ВП</div>
+          <span style="font-size:12.5px;font-weight:500;color:#20242b;">Владелец платформы</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a9198" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-height:0;overflow:auto;padding:22px 32px 26px;display:flex;flex-direction:column;gap:14px;">
+
+      <div style="flex-shrink:0;">
+        <div style="font-size:12.5px;color:#8a9198;margin-bottom:8px;">Рабочие области / <span style="color:#3a4046;font-weight:600;">MatterCodex</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0;">
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#171a1e;">MatterCodex</h1>
+            <span style="display:inline-flex;align-items:center;height:21px;padding:0 9px;border-radius:10.5px;font-size:11.5px;font-weight:600;color:#1a8f5a;background:#e7f6ee;border:1px solid #c7e9d6;">Активна</span>
+            <span style="font-size:12.5px;color:#8a9198;">Mattermost: <span style="color:#3a4046;font-weight:600;">matter-codex</span></span>
+            <span style="color:#d8dbdb;">·</span>
+            <span style="font-size:12.5px;color:#8a9198;">Локаль: <span style="color:#3a4046;font-weight:600;">Русский</span></span>
+            <span style="color:#d8dbdb;">·</span>
+            <span style="font-size:12.5px;color:#8a9198;">Владелец конфигурации: <span style="color:#3a4046;font-weight:600;">Интерфейс</span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+            <button style="display:flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:7px;border:1px solid #d8dbdb;background:#fff;color:#20242b;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#565d64" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              Открыть в Mattermost
+            </button>
+            <div title="Изменить рабочую область" style="width:34px;height:34px;border-radius:7px;border:1px solid #d8dbdb;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#565d64" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:26px;border-bottom:1px solid #e3e5e5;">
+        <div style="padding:0 0 10px;border-bottom:2px solid #0f8577;font-size:13.5px;font-weight:700;color:#0f6b60;">Обзор</div>
+        <div style="padding:0 0 10px;border-bottom:2px solid transparent;font-size:13.5px;font-weight:500;color:#6b7278;">Сотрудники</div>
+        <div style="padding:0 0 10px;border-bottom:2px solid transparent;font-size:13.5px;font-weight:500;color:#6b7278;">Чаты</div>
+        <div style="padding:0 0 10px;border-bottom:2px solid transparent;font-size:13.5px;font-weight:500;color:#6b7278;">Интеграции</div>
+        <div style="padding:0 0 10px;border-bottom:2px solid transparent;font-size:13.5px;font-weight:500;color:#6b7278;">Репозитории</div>
+        <div style="padding:0 0 10px;border-bottom:2px solid transparent;font-size:13.5px;font-weight:500;color:#6b7278;">Автоматизации</div>
+      </div>
+
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:28px;padding:12px 22px;background:#fff;border:1px solid #e3e5e5;border-radius:8px;">
+        <div style="display:flex;align-items:baseline;gap:7px;"><span style="font-size:18px;font-weight:700;color:#171a1e;">9</span><span style="font-size:12.5px;color:#6b7278;">ИИ-сотрудников</span></div>
+        <div style="width:1px;height:20px;background:#ebeded;"></div>
+        <div style="display:flex;align-items:baseline;gap:7px;"><span style="font-size:18px;font-weight:700;color:#171a1e;">3</span><span style="font-size:12.5px;color:#6b7278;">чата Mattermost</span></div>
+        <div style="width:1px;height:20px;background:#ebeded;"></div>
+        <div style="display:flex;align-items:baseline;gap:7px;"><span style="font-size:18px;font-weight:700;color:#171a1e;">2</span><span style="font-size:12.5px;color:#6b7278;">активных запуска</span></div>
+        <div style="width:1px;height:20px;background:#ebeded;"></div>
+        <div style="display:flex;align-items:baseline;gap:7px;"><span style="font-size:18px;font-weight:700;color:#171a1e;">1</span><span style="font-size:12.5px;color:#6b7278;">решение ждет владельца</span></div>
+      </div>
+
+      <div style="flex:1;min-height:0;display:flex;gap:16px;">
+
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
+
+          <div style="flex-shrink:0;background:#fff;border:1px solid #e3e5e5;border-radius:8px;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0f0;">
+              <span style="font-size:14px;font-weight:700;color:#171a1e;">ИИ-сотрудники</span>
+              <button style="display:flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:6px;border:1px solid #d8dbdb;background:#fff;color:#20242b;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3a4046" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Добавить сотрудника
+              </button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;padding:14px 18px;">
+              <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid #eef0f0;border-radius:7px;background:#fafbfb;min-width:172px;">
+                <div style="width:30px;height:30px;border-radius:50%;background:#e8f4f2;color:#0f6b60;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">МН</div>
+                <div style="min-width:0;"><div style="font-size:12.5px;font-weight:600;color:#20242b;">Менеджер</div><div style="display:flex;align-items:center;gap:5px;margin-top:2px;"><span style="width:6px;height:6px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span><span style="font-size:11.5px;color:#6b7278;">Работает</span></div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid #eef0f0;border-radius:7px;background:#fafbfb;min-width:172px;">
+                <div style="width:30px;height:30px;border-radius:50%;background:#e8f4f2;color:#0f6b60;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">РЗ</div>
+                <div style="min-width:0;"><div style="font-size:12.5px;font-weight:600;color:#20242b;">Разработчик</div><div style="display:flex;align-items:center;gap:5px;margin-top:2px;"><span style="width:6px;height:6px;border-radius:50%;background:#a7acaf;flex-shrink:0;"></span><span style="font-size:11.5px;color:#6b7278;">В очереди</span></div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid #eef0f0;border-radius:7px;background:#fafbfb;min-width:172px;">
+                <div style="width:30px;height:30px;border-radius:50%;background:#e8f4f2;color:#0f6b60;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">РВ</div>
+                <div style="min-width:0;"><div style="font-size:12.5px;font-weight:600;color:#20242b;">Ревьювер</div><div style="display:flex;align-items:center;gap:5px;margin-top:2px;"><span style="width:6px;height:6px;border-radius:50%;background:#c99429;flex-shrink:0;"></span><span style="font-size:11.5px;color:#9a6400;">Ждет ответа</span></div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid #eef0f0;border-radius:7px;background:#fafbfb;min-width:172px;">
+                <div style="width:30px;height:30px;border-radius:50%;background:#e8f4f2;color:#0f6b60;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">АН</div>
+                <div style="min-width:0;"><div style="font-size:12.5px;font-weight:600;color:#20242b;">Аналитик</div><div style="display:flex;align-items:center;gap:5px;margin-top:2px;"><span style="width:6px;height:6px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span><span style="font-size:11.5px;color:#6b7278;">Работает</span></div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid #eef0f0;border-radius:7px;background:#fafbfb;min-width:172px;">
+                <div style="width:30px;height:30px;border-radius:50%;background:#eef0f1;color:#5b6470;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">ДВ</div>
+                <div style="min-width:0;"><div style="font-size:12.5px;font-weight:600;color:#20242b;">DevOps-инженер</div><div style="display:flex;align-items:center;gap:5px;margin-top:2px;"><span style="width:6px;height:6px;border-radius:50%;background:#a7acaf;flex-shrink:0;"></span><span style="font-size:11.5px;color:#6b7278;">Приостановлен</span></div></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;padding:9px 12px;border:1px dashed #dcdfdf;border-radius:7px;min-width:100px;">
+                <span style="font-size:12px;color:#8a9198;">+4 ещё</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="flex-shrink:0;background:#fff;border:1px solid #e3e5e5;border-radius:8px;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0f0;">
+              <span style="font-size:14px;font-weight:700;color:#171a1e;">Чаты Mattermost</span>
+              <button style="display:flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:6px;border:1px solid #d8dbdb;background:#fff;color:#20242b;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3a4046" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Создать чат
+              </button>
+            </div>
+            <div style="display:grid;grid-template-columns:1.4fr 2fr 1fr 0.7fr 1.1fr;gap:10px;padding:8px 18px;background:#fafbfb;border-bottom:1px solid #eef0f0;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#8a9198;">Название</span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#8a9198;">Назначение</span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#8a9198;">Агент по умолчанию</span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#8a9198;">Участники</span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#8a9198;">Активность</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1.4fr 2fr 1fr 0.7fr 1.1fr;gap:10px;align-items:center;padding:11px 18px;border-bottom:1px solid #f2f3f3;">
+              <span style="font-size:13px;font-weight:600;color:#20242b;">Общие обновления</span>
+              <span style="font-size:12.5px;color:#6b7278;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Статусы и объявления по платформе</span>
+              <span style="font-size:12.5px;color:#3a4046;">Менеджер</span>
+              <span style="font-size:12.5px;color:#3a4046;">12</span>
+              <span style="font-size:12.5px;color:#6b7278;">3 сообщения сегодня</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1.4fr 2fr 1fr 0.7fr 1.1fr;gap:10px;align-items:center;padding:11px 18px;border-bottom:1px solid #f2f3f3;">
+              <span style="font-size:13px;font-weight:600;color:#20242b;">Ревью кода</span>
+              <span style="font-size:12.5px;color:#6b7278;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Автоматические комментарии ревью</span>
+              <span style="font-size:12.5px;color:#3a4046;">Ревьювер</span>
+              <span style="font-size:12.5px;color:#3a4046;">6</span>
+              <span style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#1a8f5a;"><span style="width:6px;height:6px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span>Активен сейчас</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1.4fr 2fr 1fr 0.7fr 1.1fr;gap:10px;align-items:center;padding:11px 18px;">
+              <span style="font-size:13px;font-weight:600;color:#20242b;">Инциденты</span>
+              <span style="font-size:12.5px;color:#6b7278;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Эскалации и алерты</span>
+              <span style="font-size:12.5px;color:#3a4046;">Аналитик</span>
+              <span style="font-size:12.5px;color:#3a4046;">8</span>
+              <span style="font-size:12.5px;color:#6b7278;">Вчера, 21:04</span>
+            </div>
+          </div>
+
+          <div style="flex-shrink:0;background:#fff;border:1px solid #e3e5e5;border-radius:8px;overflow:hidden;">
+            <div style="padding:12px 18px;border-bottom:1px solid #eef0f0;">
+              <span style="font-size:14px;font-weight:700;color:#171a1e;">Интеграции и репозитории</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #f4f5f5;">
+              <div style="display:flex;align-items:center;gap:10px;"><span style="width:7px;height:7px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span><span style="font-size:13px;color:#20242b;">GitHub</span><span style="font-size:12px;color:#8a9198;">Доступ к репозиториям для агентов</span></div>
+              <span style="display:inline-flex;align-items:center;height:19px;padding:0 8px;border-radius:9.5px;font-size:11px;font-weight:600;color:#1a8f5a;background:#e7f6ee;border:1px solid #c7e9d6;">Подключено</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #f4f5f5;">
+              <div style="display:flex;align-items:center;gap:10px;"><span style="width:7px;height:7px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span><span style="font-size:13px;color:#20242b;">S3-хранилище</span><span style="font-size:12px;color:#8a9198;">Файлы и результаты агентов</span></div>
+              <span style="display:inline-flex;align-items:center;height:19px;padding:0 8px;border-radius:9.5px;font-size:11px;font-weight:600;color:#1a8f5a;background:#e7f6ee;border:1px solid #c7e9d6;">Подключено</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #eef0f0;">
+              <div style="display:flex;align-items:center;gap:10px;"><span style="width:7px;height:7px;border-radius:50%;background:#a7acaf;flex-shrink:0;"></span><span style="font-size:13px;color:#20242b;">Тестовая CRM</span><span style="font-size:12px;color:#8a9198;">Демо-стенд для тестовых процессов</span></div>
+              <span style="display:inline-flex;align-items:center;height:19px;padding:0 8px;border-radius:9.5px;font-size:11px;font-weight:600;color:#5b6470;background:#eef0f1;border:1px solid #e2e5e6;">Не настроено</span>
+            </div>
+            <div style="padding:10px 18px;display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:9px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#565d64" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                <span style="font-size:13px;color:#20242b;">matter-codex</span>
+                <span style="font-size:12px;color:#8a9198;">— основной репозиторий</span>
+              </div>
+              <span style="display:inline-flex;align-items:center;height:19px;padding:0 8px;border-radius:9.5px;font-size:11px;font-weight:600;color:#5b6470;background:#eef0f1;border:1px solid #e2e5e6;">Необязательно</span>
+            </div>
+          </div>
+
+          <div style="flex-shrink:0;background:#fff;border:1px solid #e3e5e5;border-radius:8px;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0f0;">
+              <span style="font-size:14px;font-weight:700;color:#171a1e;">Последние запуски</span>
+              <a href="#" style="font-size:12.5px;font-weight:600;">Вся история →</a>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #f4f5f5;">
+              <span style="font-size:13px;color:#20242b;">Согласование плана публикаций</span>
+              <div style="display:flex;align-items:center;gap:14px;">
+                <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#1a8f5a;font-weight:600;"><span style="width:6px;height:6px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span>Работает</span>
+                <span style="font-size:12px;color:#8a9198;width:70px;text-align:right;">18 мин</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;">
+              <span style="font-size:13px;color:#20242b;">Подготовка отчета по метрикам</span>
+              <div style="display:flex;align-items:center;gap:14px;">
+                <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#1a8f5a;font-weight:600;"><span style="width:6px;height:6px;border-radius:50%;background:#1a8f5a;flex-shrink:0;"></span>Работает</span>
+                <span style="font-size:12px;color:#8a9198;width:70px;text-align:right;">7 мин</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="width:300px;flex-shrink:0;">
+          <div style="background:#fff;border:1px solid #e3e5e5;border-radius:8px;overflow:hidden;">
+            <div style="padding:12px 18px;border-bottom:1px solid #eef0f0;">
+              <span style="font-size:14px;font-weight:700;color:#171a1e;">Готовность рабочей области</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 18px;border-bottom:1px solid #f4f5f5;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a8f5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <span style="font-size:13px;color:#20242b;">Учетная запись модели</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 18px;border-bottom:1px solid #f4f5f5;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a8f5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <span style="font-size:13px;color:#20242b;">Сотрудники назначены</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 18px;border-bottom:1px solid #f4f5f5;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a8f5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <span style="font-size:13px;color:#20242b;">Mattermost подключен</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 18px;border-bottom:1px solid #f4f5f5;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9a6400" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              <span style="font-size:13px;color:#20242b;">Интеграции: одна не настроена</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 18px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a8f5a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <span style="font-size:13px;color:#20242b;">Резервное копирование настроено</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>
