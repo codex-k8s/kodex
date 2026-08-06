@@ -87,6 +87,7 @@ const (
 	auditKindTurnLease          = "TURN_LEASE"
 
 	permissionCreate                  = "controlplane.resource.create"
+	permissionProjectCreate           = "controlplane.project.create"
 	permissionProjectUpdate           = "controlplane.project.update"
 	permissionProjectDelete           = "controlplane.project.delete"
 	permissionUpdate                  = "controlplane.resource.update"
@@ -445,6 +446,17 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 	if err := authorize(input.Principal, permission); err != nil {
 		return entity.Resource{}, err
 	}
+	return service.create(ctx, input, false)
+}
+
+// create выполняет общую атомарную запись после выбора закрытой специализированной
+// authority. specializedProject выставляется только CreateProject и никогда
+// не принимается из generic transport request.
+func (service *Service) create(
+	ctx context.Context,
+	input CreateInput,
+	specializedProject bool,
+) (entity.Resource, error) {
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		!input.Kind.Valid() || input.Kind == enum.KindTurn ||
 		(input.Kind == enum.KindProject) != input.TenantProject ||
@@ -454,8 +466,7 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 		(input.ParentID != "" && value.ValidateID(input.ParentID) != nil) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	if accessKind(input.Kind) != input.Administrative ||
-		(!input.Administrative && protectedCreateKind(input.Kind)) {
+	if !createCommandAllowed(input.Kind, input.Administrative, specializedProject) {
 		return entity.Resource{}, errs.ErrPermissionDenied
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
@@ -497,11 +508,15 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	receiptScope := "create"
+	if specializedProject {
+		receiptScope = "create_project"
+	}
 	return service.withResourceReceipt(
 		ctx,
 		input.Principal,
 		input.IdempotencyKey,
-		"create",
+		receiptScope,
 		requestHash,
 		func(tx domainrepo.Transaction) (entity.Resource, error) {
 			if err := validateConfigurationCreate(
@@ -533,7 +548,7 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (entity.R
 				ctx,
 				tx,
 				input.Principal,
-				"create",
+				receiptScope,
 				resource,
 			)
 		},
@@ -1361,6 +1376,15 @@ func accessKind(kind enum.Kind) bool {
 	return kind == enum.KindTeam ||
 		kind == enum.KindRole ||
 		kind == enum.KindPromptProfile
+}
+
+// createCommandAllowed связывает защищённый PROJECT только со
+// специализированной командой. Универсальный и административный create не могут
+// выставить specializedProject через transport.
+func createCommandAllowed(kind enum.Kind, administrative, specializedProject bool) bool {
+	return specializedProject == (kind == enum.KindProject) &&
+		accessKind(kind) == administrative &&
+		(administrative || !protectedCreateKind(kind) || specializedProject)
 }
 
 func protectedCreateKind(kind enum.Kind) bool {

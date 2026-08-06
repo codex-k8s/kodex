@@ -100,5 +100,53 @@ func VerifyForAudience(compact string, publicKey ed25519.PublicKey, execution en
 		payload.State != string(execution.State) {
 		return Payload{}, errors.New("runtime workload ticket tuple mismatch")
 	}
+	if execution.RestoreOperationID != "" {
+		authoritySHA256, authorityErr := restoreSourceAuthoritySHA256(execution)
+		if authorityErr != nil || authoritySHA256 != payload.RestoreSourceAuthoritySHA256 {
+			return Payload{}, errors.New("runtime restore source authority mismatch")
+		}
+	}
 	return payload, nil
+}
+
+// restoreSourceAuthoritySHA256 независимо пересчитывает тот же canonical
+// private tuple, который control-plane подписал до перехода source в RETRIED.
+// Значения локального digest поля в расчёте не участвуют.
+func restoreSourceAuthoritySHA256(execution entity.Execution) (string, error) {
+	if execution.RestoreSourceExecutionID == "" || execution.RestoreSourceVersion == 0 ||
+		execution.RestoreSourceFence == 0 || execution.RestoreSourceProofReference == "" ||
+		execution.RestoreSourceArchiveRetainUntil.IsZero() {
+		return "", errors.New("runtime restore source tuple is incomplete")
+	}
+	payload, err := json.Marshal(struct {
+		ExecutionID, SessionID, RuntimeRevisionSHA256, ImmutableInputSHA256 string
+		ArchiveReference, ArchiveSHA256, ArchiveObjectKey, ArchiveVersionID string
+		ArchiveKMSKeyARN, ArchiveObjectLockMode, ProvenanceSHA256           string
+		RestoreProofReference, RestoreProofSHA256, RetentionPolicyID        string
+		Version, Fence, RetentionPolicyVersion                              uint64
+		ArchiveRetainUntil                                                  time.Time
+	}{
+		execution.RestoreSourceExecutionID, execution.SessionID,
+		execution.RestoreSourceRuntimeRevisionSHA256,
+		execution.RestoreSourceImmutableInputSHA256,
+		execution.RestoreSourceArchiveReference,
+		execution.RestoreSourceArchiveSHA256,
+		execution.RestoreSourceArchiveObjectKey,
+		execution.RestoreSourceArchiveVersionID,
+		execution.RestoreSourceArchiveKMSKeyARN,
+		execution.RestoreSourceArchiveObjectLockMode,
+		execution.RestoreSourceProvenanceSHA256,
+		execution.RestoreSourceProofReference,
+		execution.RestoreSourceProofSHA256,
+		execution.RestoreSourceRetentionPolicyID,
+		execution.RestoreSourceVersion,
+		execution.RestoreSourceFence,
+		execution.RestoreSourceRetentionPolicyVersion,
+		execution.RestoreSourceArchiveRetainUntil.UTC().Truncate(time.Microsecond),
+	})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:]), nil
 }

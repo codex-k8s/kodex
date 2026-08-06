@@ -25,11 +25,17 @@ func TestValidateRestoreRuntimeSourcePinsEligibleArchive(t *testing.T) {
 	intent := restoreRuntimeIntent{
 		BackupID: execution.ID, SessionID: execution.SessionID,
 		SourceVersion: execution.Version, SourceFence: execution.Fence,
-		ArchiveSHA256:    execution.ArchiveSHA256,
-		ProvenanceSHA256: execution.ArchiveProvenanceSHA256,
+		ExpectedBackupVersion: execution.Version,
+		ArchiveSHA256:         execution.ArchiveSHA256,
+		ProvenanceSHA256:      execution.ArchiveProvenanceSHA256,
 	}
 	if err := validateRestoreRuntimeSource(execution, execution, intent, now); err != nil {
 		t.Fatalf("valid source rejected: %v", err)
+	}
+	staleProjection := intent
+	staleProjection.ExpectedBackupVersion++
+	if err := validateRestoreRuntimeSource(execution, execution, staleProjection, now); err == nil {
+		t.Fatal("stale dynamic backup version accepted for a new restore command")
 	}
 
 	tests := []struct {
@@ -83,6 +89,25 @@ func TestProtectedRegistriesCloseProjectGenericLifecycle(t *testing.T) {
 	if !protectedCreateKind(enum.KindProject) || !protectedMutationKind(enum.KindProject) ||
 		!protectedTransitionKind(enum.KindProject) || !ownerBoundLifecycleKind(enum.KindProject) {
 		t.Fatal("PROJECT generic lifecycle bypass remains open")
+	}
+}
+
+func TestCreateProjectRequiresSpecializedCommand(t *testing.T) {
+	t.Parallel()
+	if createCommandAllowed(enum.KindProject, false, false) {
+		t.Fatal("generic PROJECT create must be denied")
+	}
+	if createCommandAllowed(enum.KindProject, true, false) {
+		t.Fatal("administrative PROJECT create must be denied")
+	}
+	if !createCommandAllowed(enum.KindProject, false, true) {
+		t.Fatal("specialized PROJECT create must be allowed")
+	}
+	if createCommandAllowed(enum.KindSchedule, false, true) {
+		t.Fatal("specialized PROJECT authority must not create SCHEDULE")
+	}
+	if !createCommandAllowed(enum.KindChat, false, false) {
+		t.Fatal("ordinary generic create must remain available")
 	}
 }
 

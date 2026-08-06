@@ -2270,6 +2270,9 @@ message Backup {
   google.protobuf.Timestamp retain_until = 13;
   google.protobuf.Timestamp updated_at = 14;
   string restore_operation_id = 15;
+  // version — монотонная версия публичной проекции, отдельная от immutable
+  // source_version. Она меняется вместе с generation/target lifecycle.
+  uint64 version = 16;
 }
 
 message ListBackupsRequest {
@@ -2298,6 +2301,9 @@ message RestoreBackupRequest {
   string provenance_sha256 = 5;
   string scope = 6;
   string scope_id = 7;
+  // expected_backup_version проверяет ETag динамической публичной проекции;
+  // exact source identity передаётся отдельно в expected_source_version.
+  uint64 expected_backup_version = 8;
 }
 
 enum RestoreOperationState {
@@ -2855,6 +2861,10 @@ message RuntimeExecution {
   string restore_operation_id = 104;
   uint64 restore_operation_generation = 105;
   string restore_source_authority_sha256 = 106;
+  // Полный private source tuple нужен verifier-у для независимого пересчёта
+  // restore_source_authority_sha256 и не выходит в browser API.
+  uint64 restore_source_fence = 107;
+  string restore_source_proof_reference = 108;
 }
 
 message RuntimeMaterialization {

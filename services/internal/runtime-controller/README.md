@@ -65,7 +65,10 @@ journal не состоялся, новый server-owned claim key возвра�
 exact session/turn/attempt/grant/revision/input `PENDING` без второго перехода.
 После crash/defer controller повторно получает exact RuntimeRevision,
 проверяет immutable organization/provider quota snapshot и replay-ит тот же
-`AdmitRuntimeExecution`. Lease token восстанавливается только из owner receipt
+`AdmitRuntimeExecution` до материализации PVC, ConfigMap, credential broker или
+Pod. Для restore эта owner transaction сверяет current operation/generation с
+durable revoke watermark и одноразово потребляет generation; Bind принимает
+только уже consumed current generation. Lease token восстанавливается только из owner receipt
 и не сохраняется в Kubernetes Secret, ConfigMap, annotation, log или metric.
 
 Capacity учитывает durable pending/admitted/running journals, Pod requests,
@@ -81,9 +84,11 @@ control-plane/interaction-gateway/MCP TLS bindings и пути immutable executi
 credentials. Для повторной доставки частично опубликованного terminal owner
 добавляет exact `codex_delivery_recovery_source_execution_id`; локальный
 journal без этого server-owned marker либо marker без retained journal закрыто
-останавливают запуск до provider effect. Первый `PENDING` Pod создаётся до admission; runner захватывает
-Turn lease своей exact identity, после чего повторный reconcile выполняет
-`AdmitRuntimeExecution`. Identity runtime-controller не подменяет runner.
+останавливают запуск до provider effect. Kubernetes materialization начинается
+только с `ADMITTED` owner readback и lease. Restore ticket дополнительно
+проверяется независимым пересчётом полного private source tuple; digest из
+snapshot не принимается как доказательство сам по себе. Identity
+runtime-controller не подменяет runner.
 Terminal Pod phase не завершает turn: runner обязан записать signed v2 envelope
 в controller-owned ConfigMap. Exit без handoff создаёт incident.
 Role Pod становится Ready только после materialization, Turn claim,

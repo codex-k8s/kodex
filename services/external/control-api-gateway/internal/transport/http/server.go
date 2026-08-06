@@ -607,7 +607,7 @@ func (server *Server) GetBackup(
 		server.writeInternal(writer, request.Context(), errors.New("backup response is invalid"))
 		return
 	}
-	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", projected.SourceVersion))
+	writer.Header().Set("ETag", fmt.Sprintf("\"%d\"", projected.Version))
 	writeJSON(writer, http.StatusOK, projected)
 }
 
@@ -627,7 +627,8 @@ func (server *Server) RestoreBackup(
 	}
 	response, err := server.control.RestoreBackup(request.Context(), &controlplanev1.RestoreBackupRequest{
 		IdempotencyKey: params.IdempotencyKey.String(), BackupId: backupID.String(),
-		ExpectedSourceVersion: version, ArchiveSha256: body.ArchiveSha256,
+		ExpectedBackupVersion: version, ExpectedSourceVersion: uint64(body.SourceVersion),
+		ArchiveSha256:    body.ArchiveSha256,
 		ProvenanceSha256: body.ProvenanceSha256, Scope: string(body.Scope),
 		ScopeId: body.ScopeId.String(),
 	})
@@ -636,7 +637,7 @@ func (server *Server) RestoreBackup(
 		return
 	}
 	projected, err := restoreOperationProjection(response.GetOperation())
-	if err != nil || projected.BackupId != backupID || projected.SourceVersion != int64(version) {
+	if err != nil || projected.BackupId != backupID || projected.SourceVersion != body.SourceVersion {
 		server.writeInternal(writer, request.Context(), errors.New("restore operation response is invalid"))
 		return
 	}
@@ -703,7 +704,7 @@ func (server *Server) ListRestoreOperations(
 }
 
 func backupProjection(input *controlplanev1.Backup) (generated.Backup, error) {
-	if input == nil || input.GetSourceVersion() == 0 || input.GetCreatedAt() == nil ||
+	if input == nil || input.GetVersion() == 0 || input.GetSourceVersion() == 0 || input.GetCreatedAt() == nil ||
 		input.GetUpdatedAt() == nil || !input.GetCreatedAt().IsValid() || !input.GetUpdatedAt().IsValid() {
 		return generated.Backup{}, errors.New("backup projection is incomplete")
 	}
@@ -721,7 +722,7 @@ func backupProjection(input *controlplanev1.Backup) (generated.Backup, error) {
 		return generated.Backup{}, errors.New("backup projection enum is invalid")
 	}
 	result := generated.Backup{
-		BackupId: backupID, SourceVersion: int64(input.GetSourceVersion()),
+		BackupId: backupID, Version: int64(input.GetVersion()), SourceVersion: int64(input.GetSourceVersion()),
 		SourceRuntimeRevisionSha256: input.GetSourceRuntimeRevisionSha256(),
 		SourceImmutableInputSha256:  input.GetSourceImmutableInputSha256(),
 		ArchiveSha256:               input.GetArchiveSha256(), ProvenanceSha256: input.GetProvenanceSha256(),

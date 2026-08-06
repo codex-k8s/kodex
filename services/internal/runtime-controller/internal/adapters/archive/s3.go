@@ -358,6 +358,9 @@ func (store *Store) RestoreToAndProve(
 		target.RestoreSourceArchiveReference != source.ArchiveReference ||
 		target.RestoreSourceArchiveSHA256 != source.ArchiveSHA256 ||
 		target.RestoreSourceVersion != source.Version ||
+		target.RestoreSourceFence != source.Fence ||
+		target.RestoreSourceProofReference != source.RestoreProofReference ||
+		target.RestoreSourceProofSHA256 != source.RestoreProofSHA256 ||
 		target.RestoreSourceArchiveObjectKey != source.ArchiveObjectKey ||
 		target.RestoreSourceArchiveVersionID != source.ArchiveVersionID ||
 		target.RestoreSourceArchiveKMSKeyARN != source.ArchiveKMSKeyARN ||

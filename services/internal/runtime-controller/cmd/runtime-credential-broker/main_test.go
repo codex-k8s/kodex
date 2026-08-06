@@ -53,8 +53,18 @@ func TestExactS3PolicyBindsRestoreVersionAndForbidsBroadActions(t *testing.T) {
 	execution := entity.Execution{
 		ID: uuid.NewString(), OrganizationID: uuid.NewString(), ProjectID: uuid.NewString(),
 		SessionID: uuid.NewString(), RestoreSourceExecutionID: uuid.NewString(),
-		RestoreSourceArchiveReference: "s3://runtime-bucket/runtime/archive.tar.gz?versionId=exact-version",
 	}
+	objectKey := strings.Join([]string{"runtime", execution.OrganizationID, execution.ProjectID,
+		execution.SessionID, execution.RestoreSourceExecutionID, "archive.tar.gz"}, "/")
+	execution.RestoreSourceArchiveReference = "s3://runtime-bucket/" + objectKey + "?versionId=exact-version"
+	execution.RestoreSourceArchiveObjectKey = objectKey
+	execution.RestoreSourceArchiveVersionID = "exact-version"
+	execution.RestoreSourceArchiveKMSKeyARN = "arn:aws:kms:region:account:key/key-id"
+	execution.RestoreSourceArchiveObjectLockMode = "COMPLIANCE"
+	execution.RestoreSourceArchiveRetainUntil = time.Now().UTC().Add(time.Hour)
+	execution.RestoreSourceProofReference = "proof://restore"
+	execution.RestoreSourceProofSHA256 = strings.Repeat("a", 64)
+	execution.RestoreSourceProvenanceSHA256 = strings.Repeat("b", 64)
 	policy, sourceExecutionID, err := exactS3Policy(execution, "restore")
 	if err != nil {
 		t.Fatal(err)

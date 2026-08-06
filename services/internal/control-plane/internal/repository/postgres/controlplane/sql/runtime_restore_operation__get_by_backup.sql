@@ -6,9 +6,12 @@ SELECT operation.id::text, operation.organization_id::text,
        operation.session_id::text, operation.generation, operation.consumed_generation,
        operation.revoked_generation, operation.target_turn_id::text,
        operation.target_attempt, operation.target_execution_id::text,
-       coalesce(target.version, 0), coalesce(target.state, ''),
+       coalesce(target.version, 0), target_turn.version, coalesce(target.state, ''),
        coalesce(target.restore_assignment_state, ''), coalesce(target_turn.state, ''),
-       operation.created_at, coalesce(target.updated_at, operation.updated_at)
+       operation.created_at,
+       greatest(operation.updated_at,
+                coalesce(target.updated_at, operation.updated_at),
+                target_turn.updated_at)
 FROM control_plane.runtime_restore_operations AS operation
 LEFT JOIN control_plane.runtime_executions AS target
   ON target.organization_id = operation.organization_id

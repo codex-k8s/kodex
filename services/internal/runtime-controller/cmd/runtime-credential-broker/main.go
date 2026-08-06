@@ -1406,8 +1406,22 @@ func exactS3Policy(execution entity.Execution, action string) (map[string]any, s
 		proofObject := strings.Join([]string{"runtime-restore-proof", execution.OrganizationID, execution.ProjectID, execution.SessionID, sourceExecutionID, "restore-proof.json"}, "/")
 		archiveARN, writeARN = "arn:aws:s3:::"+bucket+"/"+archiveObject, "arn:aws:s3:::"+bucket+"/"+proofObject
 		versionID := exactVersionID(archiveReference)
-		if versionID == "" {
+		parsedReference, parseErr := url.Parse(archiveReference)
+		if parseErr != nil || versionID == "" {
 			return nil, "", errors.New("runtime restore archive version is invalid")
+		}
+		if execution.RestoreSourceExecutionID != "" &&
+			(parsedReference.Scheme != "s3" || parsedReference.Host != bucket ||
+				strings.TrimPrefix(parsedReference.Path, "/") != archiveObject ||
+				execution.RestoreSourceArchiveObjectKey != archiveObject ||
+				execution.RestoreSourceArchiveVersionID != versionID ||
+				execution.RestoreSourceArchiveKMSKeyARN != kmsKeyARN ||
+				execution.RestoreSourceArchiveObjectLockMode != "COMPLIANCE" ||
+				!execution.RestoreSourceArchiveRetainUntil.After(time.Now().UTC()) ||
+				execution.RestoreSourceProofReference == "" ||
+				!validSHA256(execution.RestoreSourceProofSHA256) ||
+				!validSHA256(execution.RestoreSourceProvenanceSHA256)) {
+			return nil, "", errors.New("runtime restore archive authority is invalid")
 		}
 		statements = append(statements,
 			map[string]any{"Effect": "Allow", "Action": []string{"s3:GetObjectVersion", "s3:GetObjectRetention"}, "Resource": archiveARN,

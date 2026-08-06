@@ -34,6 +34,13 @@ SELECT execution.id::text, execution.organization_id::text,
        execution.project_id::text, execution.session_id::text,
        coalesce(operation.source_version, execution.version),
        coalesce(operation.source_fence, execution.fence),
+       CASE
+         WHEN operation.id IS NULL THEN execution.version
+         ELSE execution.version
+              + operation.generation * 4294967296
+              + coalesce(target.version, 0)
+              + target_turn.version
+       END,
        execution.runtime_revision_sha256, execution.immutable_input_sha256,
        execution.archive_sha256, coalesce(execution.archive_provenance_sha256, ''),
        execution.state,
@@ -57,7 +64,9 @@ SELECT execution.id::text, execution.organization_id::text,
        execution.created_at,
        coalesce(execution.cleanup_consumed_at, 'epoch'::timestamptz),
        coalesce(execution.archive_retain_until, 'epoch'::timestamptz),
-       execution.updated_at
+       greatest(execution.updated_at, coalesce(operation.updated_at, execution.updated_at),
+                coalesce(target.updated_at, execution.updated_at),
+                coalesce(target_turn.updated_at, execution.updated_at))
 FROM control_plane.runtime_executions AS execution
 JOIN control_plane.resources AS turn
   ON turn.organization_id = execution.organization_id

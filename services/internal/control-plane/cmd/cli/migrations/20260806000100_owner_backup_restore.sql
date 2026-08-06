@@ -5,6 +5,46 @@ RESET ROLE;
 SET ROLE control_plane_owner;
 SET search_path = pg_catalog, control_plane;
 
+ALTER TABLE control_plane.runtime_executions
+    ADD COLUMN restore_source_fence bigint
+        CHECK (restore_source_fence BETWEEN 1 AND 9007199254740991),
+    ADD COLUMN restore_source_proof_reference text;
+
+ALTER TABLE control_plane.runtime_executions
+    DROP CONSTRAINT runtime_executions_restore_source_v4_ck,
+    ADD CONSTRAINT runtime_executions_restore_source_v5_ck CHECK (
+        (restore_source_execution_id IS NULL AND restore_source_archive_reference IS NULL
+            AND restore_source_archive_sha256 IS NULL
+            AND restore_source_runtime_revision_sha256 IS NULL
+            AND restore_source_immutable_input_sha256 IS NULL
+            AND restore_source_proof_reference IS NULL
+            AND restore_source_proof_sha256 IS NULL
+            AND restore_source_version IS NULL AND restore_source_fence IS NULL
+            AND restore_source_archive_object_key IS NULL
+            AND restore_source_archive_version_id IS NULL
+            AND restore_source_archive_kms_key_arn IS NULL
+            AND restore_source_archive_object_lock_mode IS NULL
+            AND restore_source_archive_retain_until IS NULL
+            AND restore_source_retention_policy_id IS NULL
+            AND restore_source_retention_policy_version IS NULL
+            AND restore_source_provenance_sha256 IS NULL)
+        OR (restore_source_execution_id IS NOT NULL AND restore_source_archive_reference IS NOT NULL
+            AND restore_source_archive_sha256 IS NOT NULL
+            AND restore_source_runtime_revision_sha256 IS NOT NULL
+            AND restore_source_immutable_input_sha256 IS NOT NULL
+            AND restore_source_proof_reference IS NOT NULL
+            AND restore_source_proof_sha256 IS NOT NULL
+            AND restore_source_version > 0 AND restore_source_fence > 0
+            AND restore_source_archive_object_key IS NOT NULL
+            AND restore_source_archive_version_id IS NOT NULL
+            AND restore_source_archive_kms_key_arn IS NOT NULL
+            AND restore_source_archive_object_lock_mode = 'COMPLIANCE'
+            AND restore_source_archive_retain_until IS NOT NULL
+            AND restore_source_retention_policy_id IS NOT NULL
+            AND restore_source_retention_policy_version > 0
+            AND restore_source_provenance_sha256 IS NOT NULL)
+    );
+
 CREATE TABLE control_plane.runtime_restore_operations (
     id uuid PRIMARY KEY,
     organization_id uuid NOT NULL,

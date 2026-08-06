@@ -16161,8 +16161,11 @@ type Backup struct {
 	RetainUntil                 *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=retain_until,json=retainUntil,proto3" json:"retain_until,omitempty"`
 	UpdatedAt                   *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	RestoreOperationId          string                 `protobuf:"bytes,15,opt,name=restore_operation_id,json=restoreOperationId,proto3" json:"restore_operation_id,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// version — монотонная версия публичной проекции, отдельная от immutable
+	// source_version. Она меняется вместе с generation/target lifecycle.
+	Version       uint64 `protobuf:"varint,16,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Backup) Reset() {
@@ -16298,6 +16301,13 @@ func (x *Backup) GetRestoreOperationId() string {
 		return x.RestoreOperationId
 	}
 	return ""
+}
+
+func (x *Backup) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 type ListBackupsRequest struct {
@@ -16501,6 +16511,9 @@ type RestoreBackupRequest struct {
 	ProvenanceSha256      string                 `protobuf:"bytes,5,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
 	Scope                 string                 `protobuf:"bytes,6,opt,name=scope,proto3" json:"scope,omitempty"`
 	ScopeId               string                 `protobuf:"bytes,7,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	// expected_backup_version проверяет ETag динамической публичной проекции;
+	// exact source identity передаётся отдельно в expected_source_version.
+	ExpectedBackupVersion uint64 `protobuf:"varint,8,opt,name=expected_backup_version,json=expectedBackupVersion,proto3" json:"expected_backup_version,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -16582,6 +16595,13 @@ func (x *RestoreBackupRequest) GetScopeId() string {
 		return x.ScopeId
 	}
 	return ""
+}
+
+func (x *RestoreBackupRequest) GetExpectedBackupVersion() uint64 {
+	if x != nil {
+		return x.ExpectedBackupVersion
+	}
+	return 0
 }
 
 // RestoreOperation — safe readback server-owned target attempt. Внутренние
@@ -19735,8 +19755,12 @@ type RuntimeExecution struct {
 	RestoreOperationId           string `protobuf:"bytes,104,opt,name=restore_operation_id,json=restoreOperationId,proto3" json:"restore_operation_id,omitempty"`
 	RestoreOperationGeneration   uint64 `protobuf:"varint,105,opt,name=restore_operation_generation,json=restoreOperationGeneration,proto3" json:"restore_operation_generation,omitempty"`
 	RestoreSourceAuthoritySha256 string `protobuf:"bytes,106,opt,name=restore_source_authority_sha256,json=restoreSourceAuthoritySha256,proto3" json:"restore_source_authority_sha256,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	// Полный private source tuple нужен verifier-у для независимого пересчёта
+	// restore_source_authority_sha256 и не выходит в browser API.
+	RestoreSourceFence          uint64 `protobuf:"varint,107,opt,name=restore_source_fence,json=restoreSourceFence,proto3" json:"restore_source_fence,omitempty"`
+	RestoreSourceProofReference string `protobuf:"bytes,108,opt,name=restore_source_proof_reference,json=restoreSourceProofReference,proto3" json:"restore_source_proof_reference,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *RuntimeExecution) Reset() {
@@ -20507,6 +20531,20 @@ func (x *RuntimeExecution) GetRestoreOperationGeneration() uint64 {
 func (x *RuntimeExecution) GetRestoreSourceAuthoritySha256() string {
 	if x != nil {
 		return x.RestoreSourceAuthoritySha256
+	}
+	return ""
+}
+
+func (x *RuntimeExecution) GetRestoreSourceFence() uint64 {
+	if x != nil {
+		return x.RestoreSourceFence
+	}
+	return 0
+}
+
+func (x *RuntimeExecution) GetRestoreSourceProofReference() string {
+	if x != nil {
+		return x.RestoreSourceProofReference
 	}
 	return ""
 }
@@ -28177,7 +28215,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"owner_gate\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\townerGate\x12:\n" +
 	"\vprocess_run\x18\x02 \x01(\v2\x19.controlplane.v1.ResourceR\n" +
-	"processRun\"\xd3\x05\n" +
+	"processRun\"\xed\x05\n" +
 	"\x06Backup\x12\x1b\n" +
 	"\tbackup_id\x18\x01 \x01(\tR\bbackupId\x12%\n" +
 	"\x0esource_version\x18\x02 \x01(\x04R\rsourceVersion\x12C\n" +
@@ -28198,7 +28236,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\fretain_until\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\vretainUntil\x129\n" +
 	"\n" +
 	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x120\n" +
-	"\x14restore_operation_id\x18\x0f \x01(\tR\x12restoreOperationId\"P\n" +
+	"\x14restore_operation_id\x18\x0f \x01(\tR\x12restoreOperationId\x12\x18\n" +
+	"\aversion\x18\x10 \x01(\x04R\aversion\"P\n" +
 	"\x12ListBackupsRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\rR\bpageSize\x12\x1d\n" +
 	"\n" +
@@ -28209,7 +28248,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10GetBackupRequest\x12\x1b\n" +
 	"\tbackup_id\x18\x01 \x01(\tR\bbackupId\"D\n" +
 	"\x11GetBackupResponse\x12/\n" +
-	"\x06backup\x18\x01 \x01(\v2\x17.controlplane.v1.BackupR\x06backup\"\x99\x02\n" +
+	"\x06backup\x18\x01 \x01(\v2\x17.controlplane.v1.BackupR\x06backup\"\xd1\x02\n" +
 	"\x14RestoreBackupRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12\x1b\n" +
 	"\tbackup_id\x18\x02 \x01(\tR\bbackupId\x126\n" +
@@ -28217,7 +28256,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0earchive_sha256\x18\x04 \x01(\tR\rarchiveSha256\x12+\n" +
 	"\x11provenance_sha256\x18\x05 \x01(\tR\x10provenanceSha256\x12\x14\n" +
 	"\x05scope\x18\x06 \x01(\tR\x05scope\x12\x19\n" +
-	"\bscope_id\x18\a \x01(\tR\ascopeId\"\xcf\x05\n" +
+	"\bscope_id\x18\a \x01(\tR\ascopeId\x126\n" +
+	"\x17expected_backup_version\x18\b \x01(\x04R\x15expectedBackupVersion\"\xcf\x05\n" +
 	"\x10RestoreOperation\x120\n" +
 	"\x14restore_operation_id\x18\x01 \x01(\tR\x12restoreOperationId\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12<\n" +
@@ -28479,7 +28519,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1dRecordMemoryEmbeddingResponse\x12(\n" +
 	"\x10memory_record_id\x18\x01 \x01(\tR\x0ememoryRecordId\x12)\n" +
 	"\x10resource_version\x18\x02 \x01(\x04R\x0fresourceVersion\x12+\n" +
-	"\x11projection_sha256\x18\x03 \x01(\tR\x10projectionSha256\"\x831\n" +
+	"\x11projection_sha256\x18\x03 \x01(\tR\x10projectionSha256\"\xfa1\n" +
 	"\x10RuntimeExecution\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1d\n" +
@@ -28594,7 +28634,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"+codex_delivery_recovery_source_execution_id\x18f \x01(\tR&codexDeliveryRecoverySourceExecutionId\x120\n" +
 	"\x14restore_operation_id\x18h \x01(\tR\x12restoreOperationId\x12@\n" +
 	"\x1crestore_operation_generation\x18i \x01(\x04R\x1arestoreOperationGeneration\x12E\n" +
-	"\x1frestore_source_authority_sha256\x18j \x01(\tR\x1crestoreSourceAuthoritySha256\"\x94\x02\n" +
+	"\x1frestore_source_authority_sha256\x18j \x01(\tR\x1crestoreSourceAuthoritySha256\x120\n" +
+	"\x14restore_source_fence\x18k \x01(\x04R\x12restoreSourceFence\x12C\n" +
+	"\x1erestore_source_proof_reference\x18l \x01(\tR\x1brestoreSourceProofReference\"\x94\x02\n" +
 	"\x16RuntimeMaterialization\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1f\n" +
 	"\vartifact_id\x18\x02 \x01(\tR\n" +

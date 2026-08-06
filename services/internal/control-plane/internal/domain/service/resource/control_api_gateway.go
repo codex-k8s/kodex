@@ -14,6 +14,27 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreateProject — закрытая organization-scoped команда. Она единственная
+// может пройти protected create registry для PROJECT; ID, owner, project scope,
+// начальное состояние и OCC-версия назначаются общей owner transaction.
+func (service *Service) CreateProject(
+	ctx context.Context,
+	input CreateProjectInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionProjectCreate); err != nil {
+		return entity.Resource{}, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) ||
+		input.Principal.ProjectID != "" {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	return service.create(ctx, CreateInput{
+		Principal: input.Principal, IdempotencyKey: input.IdempotencyKey,
+		Kind: enum.KindProject, Name: input.Name, Spec: input.Spec,
+		TenantProject: true,
+	}, true)
+}
+
 func (service *Service) trustedOwnedProject(
 	ctx context.Context,
 	principal value.Principal,
@@ -445,7 +466,8 @@ func (service *Service) RestoreBackup(
 	if !service.controlAPIGatewayPrincipal(input.Principal) ||
 		input.Principal.ProjectID == "" ||
 		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
-		value.ValidateID(input.BackupID) != nil || input.ExpectedSourceVersion == 0 ||
+		value.ValidateID(input.BackupID) != nil || input.ExpectedBackupVersion == 0 ||
+		input.ExpectedSourceVersion == 0 ||
 		!validSHA256Text(input.ArchiveSHA256) ||
 		!validSHA256Text(input.ProvenanceSHA256) || input.Scope != "SESSION" ||
 		value.ValidateID(input.ScopeID) != nil {
@@ -458,11 +480,10 @@ func (service *Service) RestoreBackup(
 	if err != nil {
 		return domainrepo.RuntimeRestoreOperation{}, err
 	}
-	available := backup.Restorable && backup.State == "AVAILABLE"
-	existingOperation := !backup.Restorable &&
-		(backup.State == "RESTORING" || backup.State == "RESTORED")
-	if (!available && !existingOperation) ||
-		backup.SourceVersion != input.ExpectedSourceVersion ||
+	// Dynamic eligibility проверяется внутри той же lifecycle transaction после
+	// lookup receipt. Поэтому terminal replay с исходным ETag не блокируется
+	// изменившимся readback state/version, а новый command всё равно fail-closed.
+	if backup.SourceVersion != input.ExpectedSourceVersion ||
 		backup.ArchiveSHA256 != input.ArchiveSHA256 ||
 		backup.ProvenanceSHA256 != input.ProvenanceSHA256 ||
 		backup.SessionID != input.ScopeID || backup.SourceFence == 0 {
@@ -476,6 +497,7 @@ func (service *Service) RestoreBackup(
 		BackupID: backup.ID, SourceVersion: backup.SourceVersion,
 		SourceFence: backup.SourceFence, ArchiveSHA256: backup.ArchiveSHA256,
 		ProvenanceSHA256: backup.ProvenanceSHA256, SessionID: backup.SessionID,
+		ExpectedBackupVersion: input.ExpectedBackupVersion,
 	})
 	if err != nil {
 		return domainrepo.RuntimeRestoreOperation{}, err

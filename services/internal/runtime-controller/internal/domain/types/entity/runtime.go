@@ -50,8 +50,9 @@ type Execution struct {
 	CleanupDeletionProofSHA256                                                    string
 	RestoreSourceExecutionID, RestoreSourceArchiveReference                       string
 	RestoreSourceArchiveSHA256, RestoreSourceRuntimeRevisionSHA256                string
-	RestoreSourceImmutableInputSHA256, RestoreSourceProofSHA256                   string
-	RestoreSourceVersion                                                          uint64
+	RestoreSourceImmutableInputSHA256, RestoreSourceProofReference                string
+	RestoreSourceProofSHA256                                                      string
+	RestoreSourceVersion, RestoreSourceFence                                      uint64
 	RestoreSourceArchiveObjectKey, RestoreSourceArchiveVersionID                  string
 	RestoreSourceArchiveKMSKeyARN, RestoreSourceArchiveObjectLockMode             string
 	RestoreSourceArchiveRetainUntil                                               time.Time
@@ -229,8 +230,9 @@ func validRestoreTarget(execution Execution) bool {
 func validRestoreSource(execution Execution) bool {
 	empty := execution.RestoreSourceExecutionID == "" && execution.RestoreSourceArchiveReference == "" &&
 		execution.RestoreSourceArchiveSHA256 == "" && execution.RestoreSourceRuntimeRevisionSHA256 == "" &&
-		execution.RestoreSourceImmutableInputSHA256 == "" && execution.RestoreSourceProofSHA256 == "" &&
-		execution.RestoreSourceVersion == 0 && execution.RestoreSourceArchiveObjectKey == "" &&
+		execution.RestoreSourceImmutableInputSHA256 == "" && execution.RestoreSourceProofReference == "" &&
+		execution.RestoreSourceProofSHA256 == "" && execution.RestoreSourceVersion == 0 &&
+		execution.RestoreSourceFence == 0 && execution.RestoreSourceArchiveObjectKey == "" &&
 		execution.RestoreSourceArchiveVersionID == "" && execution.RestoreSourceArchiveKMSKeyARN == "" &&
 		execution.RestoreSourceArchiveObjectLockMode == "" && execution.RestoreSourceArchiveRetainUntil.IsZero() &&
 		execution.RestoreSourceRetentionPolicyID == "" && execution.RestoreSourceRetentionPolicyVersion == 0 &&
@@ -241,7 +243,9 @@ func validRestoreSource(execution Execution) bool {
 		sha256Pattern.MatchString(execution.RestoreSourceArchiveSHA256) &&
 		sha256Pattern.MatchString(execution.RestoreSourceRuntimeRevisionSHA256) &&
 		sha256Pattern.MatchString(execution.RestoreSourceImmutableInputSHA256) &&
-		sha256Pattern.MatchString(execution.RestoreSourceProofSHA256) && execution.RestoreSourceVersion > 0 &&
+		execution.RestoreSourceProofReference != "" &&
+		sha256Pattern.MatchString(execution.RestoreSourceProofSHA256) &&
+		execution.RestoreSourceVersion > 0 && execution.RestoreSourceFence > 0 &&
 		execution.RestoreSourceArchiveObjectKey != "" && execution.RestoreSourceArchiveVersionID != "" &&
 		strings.HasPrefix(execution.RestoreSourceArchiveKMSKeyARN, "arn:") &&
 		execution.RestoreSourceArchiveObjectLockMode == "COMPLIANCE" &&

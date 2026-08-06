@@ -332,8 +332,10 @@ type RuntimeExecution struct {
 	RestoreSourceArchiveSHA256             string
 	RestoreSourceRuntimeRevisionSHA256     string
 	RestoreSourceImmutableInputSHA256      string
+	RestoreSourceProofReference            string
 	RestoreSourceProofSHA256               string
 	RestoreSourceVersion                   uint64
+	RestoreSourceFence                     uint64
 	RestoreSourceArchiveObjectKey          string
 	RestoreSourceArchiveVersionID          string
 	RestoreSourceArchiveKMSKeyARN          string
@@ -392,7 +394,7 @@ type Backup struct {
 	SourceRuntimeRevisionSHA256, SourceImmutableInputSHA256 string
 	ArchiveSHA256, ProvenanceSHA256                         string
 	RuntimeState, State                                     string
-	SourceVersion, SourceFence                              uint64
+	Version, SourceVersion, SourceFence                     uint64
 	Restorable                                              bool
 	CreatedAt, AvailableAt, RetainUntil, UpdatedAt          time.Time
 }
@@ -407,7 +409,7 @@ type RuntimeRestoreOperation struct {
 	SourceVersion, SourceFence                           uint64
 	Generation, ConsumedGeneration, RevokedGeneration    uint64
 	TargetAttempt                                        uint32
-	TargetExecutionVersion                               uint64
+	TargetExecutionVersion, TargetTurnVersion            uint64
 	TargetExecutionState, TargetRestoreAssignmentState   string
 	TargetTurnState                                      string
 	CreatedAt, UpdatedAt                                 time.Time

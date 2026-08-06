@@ -1167,6 +1167,12 @@ func sameAdmissionLineage(request, current entity.Execution) bool {
 		request.RuntimeRevisionVersion == current.RuntimeRevisionVersion &&
 		request.RuntimeRevisionSHA256 == current.RuntimeRevisionSHA256 &&
 		request.ImmutableInputSHA256 == current.ImmutableInputSHA256 &&
+		request.RestoreOperationID == current.RestoreOperationID &&
+		request.RestoreOperationGeneration == current.RestoreOperationGeneration &&
+		request.RestoreSourceAuthoritySHA256 == current.RestoreSourceAuthoritySHA256 &&
+		request.RestoreSourceExecutionID == current.RestoreSourceExecutionID &&
+		request.RestoreSourceVersion == current.RestoreSourceVersion &&
+		request.RestoreSourceFence == current.RestoreSourceFence &&
 		request.GrantGeneration == current.GrantGeneration && request.Version <= current.Version &&
 		request.Fence <= current.Fence
 }

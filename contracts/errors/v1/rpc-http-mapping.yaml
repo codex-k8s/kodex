@@ -50,6 +50,7 @@ groups:
       - ListBackups
       - GetBackup
       - GetRestoreOperation
+      - ListRestoreOperations
       - GetResource
       - ListResources
       - SearchResources

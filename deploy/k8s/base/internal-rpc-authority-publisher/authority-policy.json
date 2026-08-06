@@ -919,7 +919,7 @@
           "uid": 10001
         },
         "operation_id": "control.project.create",
-        "permission": "controlplane.resource.create",
+        "permission": "controlplane.project.create",
         "project_required": false,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
         "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
@@ -3512,6 +3512,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 19,
+  "policy_revision": 20,
   "v": 1
 }

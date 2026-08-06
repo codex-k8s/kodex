@@ -26,9 +26,7 @@ func TestVerifyForAudienceBindsIndependentIssuerAndExactTuple(t *testing.T) {
 		EffectiveRuntimeSHA256: strings.Repeat("c", 64), AgentBindingSHA256: strings.Repeat("d", 64),
 		CredentialSnapshotSHA256: strings.Repeat("e", 64), WorkloadTicketSHA256: strings.Repeat("f", 64),
 		CodexDeliveryRecoverySourceExecutionID: "77777777-7777-4777-8777-777777777777",
-		RestoreOperationID:                     "88888888-8888-4888-8888-888888888888", RestoreOperationGeneration: 3,
-		RestoreSourceAuthoritySHA256: strings.Repeat("9", 64),
-		Version:                      7, Fence: 8, GrantGeneration: 9, ResourceClass: enum.ResourceStandard,
+		Version:                                7, Fence: 8, GrantGeneration: 9, ResourceClass: enum.ResourceStandard,
 		AccessProfile: enum.AccessProjectRead, State: enum.ExecutionPending,
 	}
 	privateKey := ed25519.NewKeyFromSeed([]byte("runtime-archive-signing-test-key"))
@@ -44,14 +42,54 @@ func TestVerifyForAudienceBindsIndependentIssuerAndExactTuple(t *testing.T) {
 		t.Fatal("stale exact tuple was accepted")
 	}
 	execution.Fence--
-	execution.RestoreSourceAuthoritySHA256 = strings.Repeat("8", 64)
-	if _, err := VerifyForAudience(compact, privateKey.Public().(ed25519.PublicKey), execution, "mattercodex-runtime-s3-archive", now.Add(time.Minute)); err == nil {
-		t.Fatal("restore source authority substitution was accepted")
-	}
-	execution.RestoreSourceAuthoritySHA256 = strings.Repeat("9", 64)
 	execution.CodexDeliveryRecoverySourceExecutionID = "88888888-8888-4888-8888-888888888888"
 	if _, err := VerifyForAudience(compact, privateKey.Public().(ed25519.PublicKey), execution, "mattercodex-runtime-s3-archive", now.Add(time.Minute)); err == nil {
 		t.Fatal("delivery recovery execution substitution was accepted")
+	}
+}
+
+func TestVerifyForAudienceRecomputesPrivateRestoreSourceTuple(t *testing.T) {
+	now := time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC)
+	execution := entity.Execution{
+		ID: "11111111-1111-4111-8111-111111111111", OrganizationID: "22222222-2222-4222-8222-222222222222",
+		ProjectID: "33333333-3333-4333-8333-333333333333", SessionID: "44444444-4444-4444-8444-444444444444",
+		TurnID: "55555555-5555-4555-8555-555555555555", Attempt: 2,
+		RuntimeRevisionID: "66666666-6666-4666-8666-666666666666", RuntimeRevisionVersion: 3,
+		RuntimeRevisionSHA256: strings.Repeat("a", 64), ImmutableInputSHA256: strings.Repeat("b", 64),
+		EffectiveRuntimeSHA256: strings.Repeat("c", 64), AgentBindingSHA256: strings.Repeat("d", 64),
+		CredentialSnapshotSHA256: strings.Repeat("e", 64), WorkloadTicketSHA256: strings.Repeat("f", 64),
+		RestoreOperationID: "88888888-8888-4888-8888-888888888888", RestoreOperationGeneration: 3,
+		RestoreSourceExecutionID: "99999999-9999-4999-8999-999999999999",
+		RestoreSourceVersion:     7, RestoreSourceFence: 11,
+		RestoreSourceRuntimeRevisionSHA256: strings.Repeat("1", 64),
+		RestoreSourceImmutableInputSHA256:  strings.Repeat("2", 64),
+		RestoreSourceArchiveReference:      "s3://runtime/runtime/source/archive.tar.gz?versionId=v1",
+		RestoreSourceArchiveSHA256:         strings.Repeat("3", 64), RestoreSourceArchiveObjectKey: "runtime/source/archive.tar.gz",
+		RestoreSourceArchiveVersionID: "v1", RestoreSourceArchiveKMSKeyARN: "arn:aws:kms:region:account:key/id",
+		RestoreSourceArchiveObjectLockMode: "COMPLIANCE", RestoreSourceArchiveRetainUntil: now.Add(24 * time.Hour),
+		RestoreSourceProvenanceSHA256: strings.Repeat("4", 64), RestoreSourceProofReference: "proof://restore",
+		RestoreSourceProofSHA256: strings.Repeat("5", 64), RestoreSourceRetentionPolicyID: "policy",
+		RestoreSourceRetentionPolicyVersion: 3,
+		Version:                             7, Fence: 8, GrantGeneration: 9, ResourceClass: enum.ResourceStandard,
+		AccessProfile: enum.AccessProjectRead, State: enum.ExecutionAdmitted,
+	}
+	digest, err := restoreSourceAuthoritySHA256(execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execution.RestoreSourceAuthoritySHA256 = digest
+	seed := sha256.Sum256([]byte("runtime-restore-authority-test-key"))
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	compact := signTestTicket(t, privateKey, execution,
+		"mattercodex-control-plane-s3-restore", "mattercodex-runtime-s3-restore", now)
+	if _, err := VerifyForAudience(compact, privateKey.Public().(ed25519.PublicKey), execution,
+		"mattercodex-runtime-s3-restore", now.Add(time.Minute)); err != nil {
+		t.Fatalf("exact restore tuple rejected: %v", err)
+	}
+	execution.RestoreSourceArchiveVersionID = "v2"
+	if _, err := VerifyForAudience(compact, privateKey.Public().(ed25519.PublicKey), execution,
+		"mattercodex-runtime-s3-restore", now.Add(time.Minute)); err == nil {
+		t.Fatal("private restore source substitution was accepted")
 	}
 }
 

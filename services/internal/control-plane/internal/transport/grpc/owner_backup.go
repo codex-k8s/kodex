@@ -82,8 +82,9 @@ func (server *Server) RestoreBackup(
 	}
 	operation, err := server.service.RestoreBackup(ctx, resource.RestoreBackupInput{
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
-		BackupID: request.GetBackupId(), ExpectedSourceVersion: request.GetExpectedSourceVersion(),
-		ArchiveSHA256: request.GetArchiveSha256(), ProvenanceSHA256: request.GetProvenanceSha256(),
+		BackupID: request.GetBackupId(), ExpectedBackupVersion: request.GetExpectedBackupVersion(),
+		ExpectedSourceVersion: request.GetExpectedSourceVersion(),
+		ArchiveSHA256:         request.GetArchiveSha256(), ProvenanceSHA256: request.GetProvenanceSha256(),
 		Scope: request.GetScope(), ScopeID: request.GetScopeId(),
 	})
 	if err != nil {
@@ -170,7 +171,8 @@ func backupToProto(backup domainrepo.Backup) (*controlplanev1.Backup, error) {
 	}
 	state := states[backup.State]
 	if state == controlplanev1.BackupState_BACKUP_STATE_UNSPECIFIED ||
-		backup.ID == "" || backup.SourceVersion == 0 || backup.SessionID == "" ||
+		backup.ID == "" || backup.Version == 0 || backup.Version > 9007199254740991 ||
+		backup.SourceVersion == 0 || backup.SessionID == "" ||
 		backup.Restorable != (backup.State == "AVAILABLE") ||
 		!validPublicSHA256(backup.SourceRuntimeRevisionSHA256) ||
 		!validPublicSHA256(backup.SourceImmutableInputSHA256) ||
@@ -179,7 +181,7 @@ func backupToProto(backup domainrepo.Backup) (*controlplanev1.Backup, error) {
 		return nil, errs.ErrInternal
 	}
 	result := &controlplanev1.Backup{
-		BackupId: backup.ID, SourceVersion: backup.SourceVersion,
+		BackupId: backup.ID, Version: backup.Version, SourceVersion: backup.SourceVersion,
 		SourceRuntimeRevisionSha256: backup.SourceRuntimeRevisionSHA256,
 		SourceImmutableInputSha256:  backup.SourceImmutableInputSHA256,
 		ArchiveSha256:               backup.ArchiveSHA256, ProvenanceSha256: backup.ProvenanceSHA256,
@@ -206,13 +208,16 @@ func restoreOperationToProto(
 		operation.ID == "" || operation.SourceVersion == 0 || operation.SessionID == "" ||
 		operation.TargetTurnID == "" || operation.TargetAttempt == 0 || operation.Generation == 0 ||
 		operation.Generation > 100 || operation.TargetExecutionVersion >= versionWindow-1 ||
+		operation.TargetTurnVersion >= versionWindow-1 ||
+		operation.TargetExecutionVersion+operation.TargetTurnVersion >= versionWindow-1 ||
 		!validPublicSHA256(operation.ArchiveSHA256) ||
 		!validPublicSHA256(operation.ProvenanceSHA256) {
 		return nil, errs.ErrInternal
 	}
 	// Generation занимает непересекающееся окно: successor никогда не
 	// уменьшает public version, а lifecycle target остаётся versioned внутри окна.
-	version := (operation.Generation-1)*versionWindow + operation.TargetExecutionVersion + 1
+	version := (operation.Generation-1)*versionWindow +
+		operation.TargetExecutionVersion + operation.TargetTurnVersion + 1
 	partial := (operation.TargetRestoreAssignmentState == "BOUND" || operation.TargetRestoreAssignmentState == "CONSUMED") &&
 		(operation.TargetExecutionState == "FAILED" || operation.TargetExecutionState == "CANCELLED" ||
 			operation.TargetExecutionState == "EXPIRED")
@@ -301,9 +306,10 @@ func restoreOperationNextAction(
 		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_RETRYING:
 		return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_WAIT
 	case controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_FAILED,
-		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_CANCELLED,
 		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_EXPIRED:
-		if operation.TargetExecutionID == "" || operation.TargetExecutionState == "" {
+		if operation.TargetExecutionID == "" || operation.TargetExecutionState == "" ||
+			operation.TargetAttempt >= 100 ||
+			(operation.TargetExecutionState != "FAILED" && operation.TargetExecutionState != "EXPIRED") {
 			return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_NONE
 		}
 		return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_RETRY_RUNTIME

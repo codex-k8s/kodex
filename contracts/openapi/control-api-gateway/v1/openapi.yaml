@@ -1662,6 +1662,7 @@ components:
       description: Безопасный read model без DSN, object key, credential, private reference/evidence или worker grant.
       properties:
         backupId: { type: string, format: uuid }
+        version: { type: integer, format: int64, minimum: 1 }
         sourceVersion: { type: integer, format: int64, minimum: 1 }
         sourceRuntimeRevisionSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         sourceImmutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
@@ -1676,7 +1677,7 @@ components:
         retainUntil: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         restoreOperationId: { type: string, format: uuid }
-      required: [backupId, sourceVersion, sourceRuntimeRevisionSha256, sourceImmutableInputSha256, archiveSha256, provenanceSha256, state, scope, scopeId, restorable, createdAt, updatedAt]
+      required: [backupId, version, sourceVersion, sourceRuntimeRevisionSha256, sourceImmutableInputSha256, archiveSha256, provenanceSha256, state, scope, scopeId, restorable, createdAt, updatedAt]
     BackupPage:
       type: object
       additionalProperties: false
@@ -1688,11 +1689,12 @@ components:
       type: object
       additionalProperties: false
       properties:
+        sourceVersion: { type: integer, format: int64, minimum: 1 }
         archiveSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         provenanceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         scope: { type: string, enum: [SESSION] }
         scopeId: { type: string, format: uuid }
-      required: [archiveSha256, provenanceSha256, scope, scopeId]
+      required: [sourceVersion, archiveSha256, provenanceSha256, scope, scopeId]
     RestoreOperationState:
       type: string
       enum: [QUEUED, ASSIGNED, MATERIALIZING, READY, RUNNING, SUCCEEDED, FAILED, CANCELLED, EXPIRED, RETRYING]

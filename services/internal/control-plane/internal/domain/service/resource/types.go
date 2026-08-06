@@ -21,6 +21,13 @@ type CreateInput struct {
 	Administrative bool
 }
 
+type CreateProjectInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+	Name           string
+	Spec           entity.ProjectSpec
+}
+
 type UpdateInput struct {
 	Principal           value.Principal
 	IdempotencyKey      string
@@ -799,6 +806,7 @@ type RestoreBackupInput struct {
 	Principal             value.Principal
 	IdempotencyKey        string
 	BackupID              string
+	ExpectedBackupVersion uint64
 	ExpectedSourceVersion uint64
 	ArchiveSHA256         string
 	ProvenanceSHA256      string

@@ -124,6 +124,7 @@ func RunRehydrate(ctx context.Context) error {
 	source := target
 	source.ID = target.RestoreSourceExecutionID
 	source.Version = target.RestoreSourceVersion
+	source.Fence = target.RestoreSourceFence
 	source.RuntimeRevisionSHA256 = target.RestoreSourceRuntimeRevisionSHA256
 	source.ImmutableInputSHA256 = target.RestoreSourceImmutableInputSHA256
 	source.ArchiveReference = target.RestoreSourceArchiveReference
@@ -134,13 +135,16 @@ func RunRehydrate(ctx context.Context) error {
 	source.ArchiveObjectLockMode = target.RestoreSourceArchiveObjectLockMode
 	source.ArchiveRetainUntil = target.RestoreSourceArchiveRetainUntil
 	source.ArchiveProvenanceSHA256 = target.RestoreSourceProvenanceSHA256
+	source.RestoreProofReference = target.RestoreSourceProofReference
+	source.RestoreProofSHA256 = target.RestoreSourceProofSHA256
 	source.RetentionPolicyID = target.RestoreSourceRetentionPolicyID
 	source.RetentionPolicyVersion = target.RestoreSourceRetentionPolicyVersion
 	source.State = enum.ExecutionSucceeded
 	source.RestoreSourceExecutionID, source.RestoreSourceArchiveReference = "", ""
 	source.RestoreSourceArchiveSHA256, source.RestoreSourceRuntimeRevisionSHA256 = "", ""
-	source.RestoreSourceImmutableInputSHA256, source.RestoreSourceProofSHA256 = "", ""
-	source.RestoreSourceVersion = 0
+	source.RestoreSourceImmutableInputSHA256, source.RestoreSourceProofReference = "", ""
+	source.RestoreSourceProofSHA256 = ""
+	source.RestoreSourceVersion, source.RestoreSourceFence = 0, 0
 	source.RestoreSourceArchiveObjectKey, source.RestoreSourceArchiveVersionID = "", ""
 	source.RestoreSourceArchiveKMSKeyARN, source.RestoreSourceArchiveObjectLockMode = "", ""
 	source.RestoreSourceArchiveRetainUntil = time.Time{}

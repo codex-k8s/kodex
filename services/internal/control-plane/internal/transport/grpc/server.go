@@ -75,13 +75,13 @@ func (server *Server) CreateProject(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
-	created, err := server.service.Create(ctx, resource.CreateInput{
-		Principal:      principal,
-		IdempotencyKey: request.GetIdempotencyKey(),
-		Kind:           enum.KindProject,
-		Name:           request.GetName(),
-		Spec:           spec,
-		TenantProject:  true,
+	projectSpec, ok := spec.(entity.ProjectSpec)
+	if !ok {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	created, err := server.service.CreateProject(ctx, resource.CreateProjectInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		Name: request.GetName(), Spec: projectSpec,
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

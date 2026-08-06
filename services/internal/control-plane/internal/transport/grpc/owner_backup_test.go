@@ -14,7 +14,7 @@ func TestBackupProjectionExcludesPrivateRuntimeEvidence(t *testing.T) {
 	now := time.Date(2026, time.August, 6, 12, 0, 0, 0, time.UTC)
 	backup := domainrepo.Backup{
 		ID: "b2331810-56a3-451b-b08a-bc307a2b44ad", SessionID: "c546a470-cf00-426d-956d-2e3548526634",
-		SourceVersion: 9, SourceRuntimeRevisionSHA256: strings.Repeat("a", 64),
+		Version: 9, SourceVersion: 9, SourceRuntimeRevisionSHA256: strings.Repeat("a", 64),
 		SourceImmutableInputSHA256: strings.Repeat("b", 64), ArchiveSHA256: strings.Repeat("c", 64),
 		ProvenanceSHA256: strings.Repeat("d", 64), State: "AVAILABLE", Restorable: true,
 		CreatedAt: now, AvailableAt: now, RetainUntil: now.Add(time.Hour), UpdatedAt: now,
@@ -103,6 +103,20 @@ func TestRestoreOperationNextActionIsSafeForPreTargetTerminal(t *testing.T) {
 	); got != controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_RETRY_RUNTIME {
 		t.Fatalf("materialized next action = %s, want RETRY_RUNTIME", got)
 	}
+	materialized.TargetExecutionState = "CANCELLED"
+	if got := restoreOperationNextAction(
+		materialized,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_CANCELLED,
+	); got != controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_NONE {
+		t.Fatalf("cancelled next action = %s, want NONE", got)
+	}
+	materialized.TargetExecutionState, materialized.TargetAttempt = "FAILED", 100
+	if got := restoreOperationNextAction(
+		materialized,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_FAILED,
+	); got != controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_NONE {
+		t.Fatalf("attempt-cap next action = %s, want NONE", got)
+	}
 }
 
 func TestRestoreOperationVersionGrowsAcrossSuccessorGeneration(t *testing.T) {
@@ -112,7 +126,8 @@ func TestRestoreOperationVersionGrowsAcrossSuccessorGeneration(t *testing.T) {
 		SourceVersion: 9, SessionID: "c546a470-cf00-426d-956d-2e3548526634",
 		ArchiveSHA256: strings.Repeat("a", 64), ProvenanceSHA256: strings.Repeat("b", 64),
 		TargetTurnID: "d18a68b1-4ab8-4890-979c-7604b8de2f89", TargetAttempt: 2,
-		Generation: 1, TargetExecutionVersion: 41, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		Generation: 1, TargetExecutionVersion: 41, TargetTurnVersion: 7,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	first, err := restoreOperationToProto(base)
 	if err != nil {
@@ -125,5 +140,28 @@ func TestRestoreOperationVersionGrowsAcrossSuccessorGeneration(t *testing.T) {
 	}
 	if successor.GetVersion() <= first.GetVersion() {
 		t.Fatalf("successor version = %d, first = %d", successor.GetVersion(), first.GetVersion())
+	}
+}
+
+func TestRestoreOperationVersionGrowsOnPreTargetTurnChange(t *testing.T) {
+	t.Parallel()
+	operation := domainrepo.RuntimeRestoreOperation{
+		ID: "7d47e1f6-617e-4166-a825-6287bbdd25de", BackupID: "b2331810-56a3-451b-b08a-bc307a2b44ad",
+		SourceVersion: 9, SessionID: "c546a470-cf00-426d-956d-2e3548526634",
+		ArchiveSHA256: strings.Repeat("a", 64), ProvenanceSHA256: strings.Repeat("b", 64),
+		TargetTurnID: "d18a68b1-4ab8-4890-979c-7604b8de2f89", TargetAttempt: 2,
+		Generation: 1, TargetTurnVersion: 7, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	queued, err := restoreOperationToProto(operation)
+	if err != nil {
+		t.Fatalf("queued restoreOperationToProto() error = %v", err)
+	}
+	operation.TargetTurnVersion++
+	cancelled, err := restoreOperationToProto(operation)
+	if err != nil {
+		t.Fatalf("cancelled restoreOperationToProto() error = %v", err)
+	}
+	if cancelled.GetVersion() <= queued.GetVersion() {
+		t.Fatalf("cancelled version = %d, queued = %d", cancelled.GetVersion(), queued.GetVersion())
 	}
 }

@@ -484,17 +484,19 @@ func (service *Service) ClaimRuntimeExecution(
 			if err != nil {
 				return err
 			}
-			restoreSource, restoreErr := tx.LatestSessionRuntimeArchiveForRestore(
-				ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
-			)
-			if restoreErr != nil && !errors.Is(restoreErr, errs.ErrNotFound) {
-				return restoreErr
-			}
+			var restoreSource RuntimeExecution
+			var restoreErr error
 			if resolved.TurnSpec.RestoreOperationID != "" {
 				operation, operationErr := tx.GetRuntimeRestoreOperation(
 					ctx, resolved.TurnSpec.RestoreOperationID,
 				)
-				if operationErr != nil || restoreErr != nil ||
+				if operationErr == nil {
+					restoreSource, restoreErr = tx.GetRuntimeExecutionForUpdate(ctx, operation.BackupID)
+				}
+				sourceAuthoritySHA256, authorityErr := runtimeRestoreOperationSourceAuthoritySHA256(
+					restoreSource, operation,
+				)
+				if operationErr != nil || restoreErr != nil || authorityErr != nil ||
 					operation.OwnerActorID != principal.ActorID ||
 					operation.BackupID != resolved.TurnSpec.RestoreSourceExecutionID ||
 					operation.SourceVersion != resolved.TurnSpec.RestoreSourceVersion ||
@@ -514,11 +516,22 @@ func (service *Service) ClaimRuntimeExecution(
 					restoreSource.Fence != operation.SourceFence+1 ||
 					restoreSource.State != "RETRIED" ||
 					restoreSource.ArchiveSHA256 != operation.ArchiveSHA256 ||
-					restoreSource.ArchiveProvenanceSHA256 != operation.ProvenanceSHA256 {
+					restoreSource.ArchiveProvenanceSHA256 != operation.ProvenanceSHA256 ||
+					sourceAuthoritySHA256 != operation.SourceAuthoritySHA256 {
 					if operationErr != nil && !errors.Is(operationErr, errs.ErrNotFound) {
 						return operationErr
 					}
+					if restoreErr != nil && !errors.Is(restoreErr, errs.ErrNotFound) {
+						return restoreErr
+					}
 					return errs.ErrStateConflict
+				}
+			} else {
+				restoreSource, restoreErr = tx.LatestSessionRuntimeArchiveForRestore(
+					ctx, principal.OrganizationID, principal.ProjectID, resolved.Session.ID,
+				)
+				if restoreErr != nil && !errors.Is(restoreErr, errs.ErrNotFound) {
+					return restoreErr
 				}
 			}
 			lineage, lineageErr := latestSessionCodexLineage(
@@ -672,13 +685,26 @@ func (service *Service) ClaimRuntimeExecution(
 				CreatedAt:                    now, UpdatedAt: now,
 			}
 			if restoreErr == nil {
+				sourceVersion, sourceFence := restoreSource.Version, restoreSource.Fence
+				if resolved.TurnSpec.RestoreOperationID != "" {
+					sourceVersion = resolved.TurnSpec.RestoreSourceVersion
+					operation, operationErr := tx.GetRuntimeRestoreOperation(
+						ctx, resolved.TurnSpec.RestoreOperationID,
+					)
+					if operationErr != nil {
+						return operationErr
+					}
+					sourceFence = operation.SourceFence
+				}
 				result.RestoreSourceExecutionID = restoreSource.ID
 				result.RestoreSourceArchiveReference = restoreSource.ArchiveReference
 				result.RestoreSourceArchiveSHA256 = restoreSource.ArchiveSHA256
 				result.RestoreSourceRuntimeRevisionSHA256 = restoreSource.RuntimeRevisionSHA256
 				result.RestoreSourceImmutableInputSHA256 = restoreSource.ImmutableInputSHA256
+				result.RestoreSourceProofReference = restoreSource.RestoreProofReference
 				result.RestoreSourceProofSHA256 = restoreSource.RestoreProofSHA256
-				result.RestoreSourceVersion = restoreSource.Version
+				result.RestoreSourceVersion = sourceVersion
+				result.RestoreSourceFence = sourceFence
 				result.RestoreSourceArchiveObjectKey = restoreSource.ArchiveObjectKey
 				result.RestoreSourceArchiveVersionID = restoreSource.ArchiveVersionID
 				result.RestoreSourceArchiveKMSKeyARN = restoreSource.ArchiveKMSKeyARN
@@ -783,8 +809,13 @@ func hydrateRuntimeRestoreAuthority(
 		operation.SourceAuthoritySHA256 != spec.RestoreSourceAuthoritySHA256 ||
 		operation.BackupID != spec.RestoreSourceExecutionID ||
 		operation.SourceVersion != spec.RestoreSourceVersion ||
+		operation.BackupID != execution.RestoreSourceExecutionID ||
+		operation.SourceVersion != execution.RestoreSourceVersion ||
+		operation.SourceFence != execution.RestoreSourceFence ||
 		operation.ArchiveSHA256 != spec.RestoreSourceArchiveSHA256 ||
-		operation.ProvenanceSHA256 != spec.RestoreSourceProvenanceSHA256 {
+		operation.ArchiveSHA256 != execution.RestoreSourceArchiveSHA256 ||
+		operation.ProvenanceSHA256 != spec.RestoreSourceProvenanceSHA256 ||
+		operation.ProvenanceSHA256 != execution.RestoreSourceProvenanceSHA256 {
 		return errs.ErrStateConflict
 	}
 	execution.RestoreOperationID = operation.ID
@@ -1004,9 +1035,18 @@ func (service *Service) AdmitRuntimeExecution(
 			receiptExecution = locked.Execution
 			receiptTurnLease = turnLease
 			receiptNow = activeNow
-			return runtimeMutationReceiptDisposition(
+			disposition, err := runtimeMutationReceiptDisposition(
 				locked.Execution, input, []string{"PENDING"}, []string{"ADMITTED"}, 1,
 			)
+			if err != nil {
+				return 0, err
+			}
+			if err := requireRuntimeRestoreAdmission(
+				ctx, tx, locked, disposition != lifecycleReceiptApply,
+			); err != nil {
+				return 0, err
+			}
+			return disposition, nil
 		},
 		func() error {
 			if err := validateAdmitRuntimeReceipt(
@@ -1018,10 +1058,13 @@ func (service *Service) AdmitRuntimeExecution(
 			return nil
 		},
 		func(tx domainrepo.Transaction) error {
-			execution, err := tx.GetRuntimeExecutionForUpdate(ctx, input.ExecutionID)
+			locked, err := service.lockRuntimeReceiptAuthority(
+				ctx, tx, input.Principal, input.ExecutionID,
+			)
 			if err != nil {
 				return err
 			}
+			execution := locked.Execution
 			if err := matchRuntimeMutation(execution, input, "PENDING"); err != nil {
 				return err
 			}
@@ -1030,6 +1073,23 @@ func (service *Service) AdmitRuntimeExecution(
 			)
 			if err != nil {
 				return err
+			}
+			locked.Now = now
+			if err := requireRuntimeRestoreAdmission(ctx, tx, locked, false); err != nil {
+				return err
+			}
+			turnSpec, ok := locked.Graph.Turn.Spec.(entity.TurnSpec)
+			if !ok {
+				return errs.ErrStateConflict
+			}
+			if turnSpec.RestoreOperationID != "" {
+				if err := tx.ConsumeRuntimeRestoreOperation(
+					ctx, turnSpec.RestoreOperationID, turnSpec.RestoreOperationGeneration,
+					locked.Graph.Turn.ID, turnSpec.Attempt,
+					turnSpec.RestoreSourceAuthoritySHA256, now,
+				); err != nil {
+					return err
+				}
 			}
 			leaseToken := uuid.NewString() + uuid.NewString()[0:28]
 			expectedVersion, expectedFence := execution.Version, execution.Fence
@@ -1315,6 +1375,60 @@ type lockedRuntimeReceipt struct {
 	Execution RuntimeExecution
 	Graph     lockedOwnerGraph
 	Now       time.Time
+}
+
+// requireRuntimeRestoreAdmission сверяет current owner operation/generation с
+// durable revoke watermark. consumed=true используется только для exact replay
+// уже принятого admission; fresh admission обязан быть ещё не поглощён.
+func requireRuntimeRestoreAdmission(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	locked lockedRuntimeReceipt,
+	consumed bool,
+) error {
+	spec, ok := locked.Graph.Turn.Spec.(entity.TurnSpec)
+	if !ok {
+		return errs.ErrStateConflict
+	}
+	if spec.RestoreOperationID == "" {
+		if locked.Execution.RestoreOperationID != "" ||
+			locked.Execution.RestoreOperationGeneration != 0 ||
+			locked.Execution.RestoreSourceAuthoritySHA256 != "" {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	operation, err := tx.GetRuntimeRestoreOperation(ctx, spec.RestoreOperationID)
+	if err != nil {
+		return err
+	}
+	if operation.OrganizationID != locked.Execution.OrganizationID ||
+		operation.ProjectID != locked.Execution.ProjectID ||
+		operation.OwnerActorID != locked.Graph.Turn.OwnerActorID ||
+		operation.SessionID != locked.Execution.SessionID ||
+		operation.TargetTurnID != locked.Execution.TurnID ||
+		operation.TargetAttempt != locked.Execution.Attempt ||
+		operation.TargetExecutionID != locked.Execution.ID ||
+		operation.Generation != spec.RestoreOperationGeneration ||
+		operation.Generation != locked.Execution.RestoreOperationGeneration ||
+		operation.SourceAuthoritySHA256 != spec.RestoreSourceAuthoritySHA256 ||
+		operation.SourceAuthoritySHA256 != locked.Execution.RestoreSourceAuthoritySHA256 ||
+		operation.BackupID != locked.Execution.RestoreSourceExecutionID ||
+		operation.SourceVersion != locked.Execution.RestoreSourceVersion ||
+		operation.SourceFence != locked.Execution.RestoreSourceFence ||
+		operation.ArchiveSHA256 != locked.Execution.RestoreSourceArchiveSHA256 ||
+		operation.ProvenanceSHA256 != locked.Execution.RestoreSourceProvenanceSHA256 ||
+		operation.RevokedGeneration >= operation.Generation {
+		return errs.ErrStateConflict
+	}
+	if consumed {
+		if operation.ConsumedGeneration != operation.Generation {
+			return errs.ErrStateConflict
+		}
+	} else if operation.ConsumedGeneration >= operation.Generation {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (service *Service) lockRuntimeReceiptAuthority(
@@ -1802,6 +1916,7 @@ func (service *Service) RetryRuntimeExecution(
 type restoreRuntimeIntent struct {
 	BackupID, ArchiveSHA256, ProvenanceSHA256 string
 	SourceVersion, SourceFence                uint64
+	ExpectedBackupVersion                     uint64
 	SessionID                                 string
 }
 
@@ -2137,6 +2252,7 @@ func validateRestoreRuntimeSource(
 	if execution.ID != intent.BackupID || latest.ID != execution.ID ||
 		execution.SessionID != intent.SessionID || latest.SessionID != execution.SessionID ||
 		execution.Version != intent.SourceVersion || latest.Version != execution.Version ||
+		intent.ExpectedBackupVersion != execution.Version ||
 		execution.Fence != intent.SourceFence || latest.Fence != execution.Fence ||
 		execution.ArchiveSHA256 != intent.ArchiveSHA256 ||
 		execution.ArchiveProvenanceSHA256 != intent.ProvenanceSHA256 ||
@@ -2176,6 +2292,18 @@ func runtimeRestoreSourceAuthoritySHA256(execution RuntimeExecution) (string, er
 		execution.RetentionPolicyID, execution.Version, execution.Fence,
 		execution.RetentionPolicyVersion, execution.ArchiveRetainUntil.UTC().Truncate(time.Microsecond),
 	})
+}
+
+func runtimeRestoreOperationSourceAuthoritySHA256(
+	execution RuntimeExecution,
+	operation domainrepo.RuntimeRestoreOperation,
+) (string, error) {
+	if execution.ID == "" || operation.SourceVersion == 0 || operation.SourceFence == 0 {
+		return "", errs.ErrStateConflict
+	}
+	execution.Version = operation.SourceVersion
+	execution.Fence = operation.SourceFence
+	return runtimeRestoreSourceAuthoritySHA256(execution)
 }
 
 func restoreOperationMatchesTurn(
@@ -2752,10 +2880,12 @@ func (service *Service) BindRuntimeRestoreTarget(
 			receipt = execution
 			switch {
 			case execution.Version == input.ExpectedVersion && execution.Fence == input.ExpectedFence &&
+				execution.State == "ADMITTED" &&
 				execution.RestoreAssignmentState == "ASSIGNED" &&
 				execution.RestoreAssignmentGeneration == input.ExpectedAssignmentGeneration:
 				return lifecycleReceiptApply, nil
 			case execution.Version == input.ExpectedVersion+1 && execution.Fence == input.ExpectedFence+1 &&
+				execution.State == "ADMITTED" &&
 				execution.RestoreAssignmentState == "BOUND" &&
 				execution.RestoreAssignmentGeneration == input.ExpectedAssignmentGeneration &&
 				execution.RestoreTargetPVCName == input.PVCName && execution.RestoreTargetPVCUID == input.PVCUID &&
@@ -2773,7 +2903,7 @@ func (service *Service) BindRuntimeRestoreTarget(
 			}
 			execution := locked.Execution
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil ||
-				execution.State != "PENDING" || execution.RestoreAssignmentState != "ASSIGNED" ||
+				execution.State != "ADMITTED" || execution.RestoreAssignmentState != "ASSIGNED" ||
 				execution.RestoreAssignmentGeneration != input.ExpectedAssignmentGeneration {
 				return errs.ErrStateConflict
 			}
@@ -2788,10 +2918,7 @@ func (service *Service) BindRuntimeRestoreTarget(
 				!validSHA256Text(turnSpec.RestoreSourceAuthoritySHA256) {
 				return errs.ErrStateConflict
 			}
-			if err := tx.ConsumeRuntimeRestoreOperation(
-				ctx, turnSpec.RestoreOperationID, turnSpec.RestoreOperationGeneration,
-				locked.Graph.Turn.ID, turnSpec.Attempt, turnSpec.RestoreSourceAuthoritySHA256, now,
-			); err != nil {
+			if err := requireRuntimeRestoreAdmission(ctx, tx, locked, true); err != nil {
 				return err
 			}
 			execution.Version++

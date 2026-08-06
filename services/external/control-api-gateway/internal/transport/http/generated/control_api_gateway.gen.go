@@ -1180,6 +1180,7 @@ type Backup struct {
 	SourceVersion               int64               `json:"sourceVersion"`
 	State                       BackupState         `json:"state"`
 	UpdatedAt                   time.Time           `json:"updatedAt"`
+	Version                     int64               `json:"version"`
 }
 
 // BackupScope defines model for Backup.Scope.
@@ -1663,6 +1664,7 @@ type RestoreBackup struct {
 	ProvenanceSha256 string             `json:"provenanceSha256"`
 	Scope            RestoreBackupScope `json:"scope"`
 	ScopeId          openapi_types.UUID `json:"scopeId"`
+	SourceVersion    int64              `json:"sourceVersion"`
 }
 
 // RestoreBackupScope defines model for RestoreBackup.Scope.

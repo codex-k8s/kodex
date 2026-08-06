@@ -123,14 +123,6 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 		service.observer.Observe("capacity", "deferred")
 		return errs.ErrCapacityDeferred
 	}
-	status, err := service.cluster.Materialize(ctx, execution, revision, "", journal)
-	if err != nil {
-		if errors.Is(err, errs.ErrDependency) {
-			service.observer.Observe("bootstrap", "materializing")
-			return nil
-		}
-		return err
-	}
 	admitted, err := service.controlPlane.Admit(
 		ctx, journal.AdmitIdempotencyKey, execution,
 	)
@@ -144,9 +136,19 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
 		return err
 	}
+	journal.Execution = admitted.Execution
+	journal.LeaseToken = admitted.LeaseToken
+	status, err := service.cluster.Materialize(
+		ctx, admitted.Execution, revision, admitted.LeaseToken, journal,
+	)
+	if err != nil {
+		if errors.Is(err, errs.ErrDependency) {
+			service.observer.Observe("bootstrap", "materializing")
+			return nil
+		}
+		return err
+	}
 	if status.Ready {
-		journal.Execution = admitted.Execution
-		journal.LeaseToken = admitted.LeaseToken
 		return service.heartbeat(ctx, journal)
 	}
 	service.observer.Observe("reconcile", "materialized")
@@ -346,6 +348,26 @@ func sameExecutionLineage(left, right entity.Execution) bool {
 		left.AgentBindingSHA256 == right.AgentBindingSHA256 &&
 		left.CredentialSnapshotSHA256 == right.CredentialSnapshotSHA256 &&
 		left.WorkloadTicketSHA256 == right.WorkloadTicketSHA256 &&
+		left.RestoreOperationID == right.RestoreOperationID &&
+		left.RestoreOperationGeneration == right.RestoreOperationGeneration &&
+		left.RestoreSourceAuthoritySHA256 == right.RestoreSourceAuthoritySHA256 &&
+		left.RestoreSourceExecutionID == right.RestoreSourceExecutionID &&
+		left.RestoreSourceVersion == right.RestoreSourceVersion &&
+		left.RestoreSourceFence == right.RestoreSourceFence &&
+		left.RestoreSourceArchiveReference == right.RestoreSourceArchiveReference &&
+		left.RestoreSourceArchiveSHA256 == right.RestoreSourceArchiveSHA256 &&
+		left.RestoreSourceArchiveObjectKey == right.RestoreSourceArchiveObjectKey &&
+		left.RestoreSourceArchiveVersionID == right.RestoreSourceArchiveVersionID &&
+		left.RestoreSourceArchiveKMSKeyARN == right.RestoreSourceArchiveKMSKeyARN &&
+		left.RestoreSourceArchiveObjectLockMode == right.RestoreSourceArchiveObjectLockMode &&
+		left.RestoreSourceArchiveRetainUntil.Equal(right.RestoreSourceArchiveRetainUntil) &&
+		left.RestoreSourceRuntimeRevisionSHA256 == right.RestoreSourceRuntimeRevisionSHA256 &&
+		left.RestoreSourceImmutableInputSHA256 == right.RestoreSourceImmutableInputSHA256 &&
+		left.RestoreSourceProofReference == right.RestoreSourceProofReference &&
+		left.RestoreSourceProofSHA256 == right.RestoreSourceProofSHA256 &&
+		left.RestoreSourceRetentionPolicyID == right.RestoreSourceRetentionPolicyID &&
+		left.RestoreSourceRetentionPolicyVersion == right.RestoreSourceRetentionPolicyVersion &&
+		left.RestoreSourceProvenanceSHA256 == right.RestoreSourceProvenanceSHA256 &&
 		left.ResourceClass == right.ResourceClass && left.AccessProfile == right.AccessProfile &&
 		left.WorkloadID == right.WorkloadID && left.WorkloadSPIFFEID == right.WorkloadSPIFFEID &&
 		left.GrantGeneration == right.GrantGeneration
@@ -389,14 +411,6 @@ func (service *Service) resumeAdmission(
 		service.observer.Observe("capacity", "deferred")
 		return errs.ErrCapacityDeferred
 	}
-	_, err = service.cluster.Materialize(ctx, journal.Execution, revision, "", journal)
-	if errors.Is(err, errs.ErrDependency) {
-		service.observer.Observe("bootstrap", "materializing")
-		return nil
-	}
-	if err != nil {
-		return err
-	}
 	admitted, err := service.controlPlane.Admit(
 		ctx, journal.AdmitIdempotencyKey, journal.AdmissionRequest,
 	)
@@ -408,7 +422,14 @@ func (service *Service) resumeAdmission(
 	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
 		return err
 	}
-	return nil
+	_, err = service.cluster.Materialize(
+		ctx, admitted.Execution, revision, admitted.LeaseToken, journal,
+	)
+	if errors.Is(err, errs.ErrDependency) {
+		service.observer.Observe("bootstrap", "materializing")
+		return nil
+	}
+	return err
 }
 
 func (service *Service) heartbeat(ctx context.Context, journal runtimerepo.Journal) error {
