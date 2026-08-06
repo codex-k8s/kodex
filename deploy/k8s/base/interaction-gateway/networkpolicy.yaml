@@ -25,13 +25,16 @@ spec:
         - podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
       ports: [{protocol: TCP, port: 8443}]
     - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: control-api-gateway, app.kubernetes.io/component: external-gateway}}
+      ports: [{protocol: TCP, port: 9443}]
+    - from:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
           podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
       ports: [{protocol: TCP, port: 8443}]
     - from:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
           podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
-      ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}]
+      ports: [{protocol: TCP, port: 9090}, {protocol: TCP, port: 9091}, {protocol: TCP, port: 9092}]
   egress:
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}

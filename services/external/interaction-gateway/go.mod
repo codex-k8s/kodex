@@ -8,6 +8,7 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/i18n v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0
@@ -20,6 +21,7 @@ require (
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/prometheus/client_golang v1.23.2
 	google.golang.org/grpc v1.82.1
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 )
 
 require (
@@ -111,7 +113,6 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a // indirect
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/ini.v1 v1.67.2 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -127,6 +128,8 @@ replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go
 replace github.com/codex-k8s/matter-codex/libs/go/httpserver => ../../../libs/go/httpserver
 
 replace github.com/codex-k8s/matter-codex/libs/go/i18n => ../../../libs/go/i18n
+
+replace github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi => ../../../libs/go/interactiongatewayapi
 
 replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 

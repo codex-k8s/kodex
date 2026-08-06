@@ -4,8 +4,8 @@ title: Interaction gateway
 type: runbook
 status: approved
 owner: manager
-version: 1.2.0
-updated: 2026-08-04
+version: 1.3.0
+updated: 2026-08-06
 ---
 
 # Interaction gateway
@@ -18,12 +18,14 @@ updated: 2026-08-04
   provider receipt либо domain acknowledgement;
 - `InteractionGatewayInboundFailures` — inbound не проходит mapping, artifact
   scan или control-plane command;
+- `InteractionGatewayTeamRecoveryFailures` — неоднозначный Mattermost Team
+  effect не подтверждён exact provider readback и требует диагностики;
 - `InteractionGatewayPostgresqlUnavailable` — недостаточно готовых CNPG Pod.
 
 ## Диагностика
 
-1. Проверить `/readyz` и метрики gateway/authority issuer без чтения значений
-   Secret.
+1. Проверить `/readyz` и метрики gateway, authority issuer и authority verifier
+   без чтения значений Secret.
 2. Проверить готовность CNPG, control-plane, Mattermost REST/WebSocket и S3
    bucket по тем же TLS identities, которые использует рабочий путь.
 3. Для delivery прочитать защищённый
@@ -49,6 +51,17 @@ updated: 2026-08-04
 9. Для result больше Mattermost upload limit сверить `CLEAN`, exact private S3
    metadata/project prefix и одноразовый download audit. Direct S3 URL быть не
    должно; gateway повторно проверяет Mattermost User/channel membership.
+10. При Team create сверить immutable normalized intent, request SHA-256,
+    operation fence/lease и момент `EFFECT_PENDING`. После неоднозначного
+    ответа `CreateTeam` запрещено повторять provider mutation: recovery читает
+    только exact slug через `GetTeamByName`, проверяет display/type,
+    owner membership и time fence. Доказанный snapshot получает монотонный
+    project provider generation; mismatch или истёкшее окно переводятся в
+    `REPAIR_REQUIRED`.
+11. Raw Mattermost Team ID допустим только в RLS-scoped selector/operation
+    checkpoint. gRPC DTO, логи, метрики и provider receipt его не раскрывают;
+    selector/cursor повторно разрешаются в actor/organization/project scope.
+    До принятия #234 состояние `PROVIDER_ACCEPTED` не означает Workspace bind.
 
 ## Ротация ключей и PostgreSQL identity
 

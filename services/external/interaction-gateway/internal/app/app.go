@@ -15,22 +15,30 @@ import (
 
 	"github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/matter-codex/libs/go/httpserver"
+	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
+	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	controlclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/clients/controlplane"
 	domainerrs "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/errs"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/gateway"
+	domainteam "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/team"
 	botclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/botservice"
 	mattermostclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/mattermost"
 	objectclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/objectstore"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/observability"
 	postgresgateway "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/gateway"
+	postgresteam "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/team"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/mattermostevent"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/readbackgrant"
+	teamgrpc "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/grpc/team"
 	apihttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/api"
 	generatedhttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	stdgrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -49,9 +57,12 @@ type state struct {
 	workers    *serviceruntime.WorkerGroup
 	public     *http.Server
 	publicConn net.Listener
+	teamServer *stdgrpc.Server
+	teamConn   net.Listener
 	technical  *httpserver.Server
 	pool       *pgxpool.Pool
 	control    *controlplaneclient.Client
+	authority  *authorityclient.LocalConnection
 }
 
 func Run(lifecycle context.Context, shutdownBase context.Context, version string) (resultErr error) {
@@ -118,7 +129,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 			organizationID = boundary.OrganizationID
 		}
 		if boundary.OrganizationID != organizationID {
-			return errors.New("Mattermost mapping spans multiple PostgreSQL tenant principals")
+			return errors.New("mattermost mapping spans multiple PostgreSQL tenant principals")
 		}
 		projectSet[boundary.ProjectID] = struct{}{}
 	}
@@ -133,6 +144,35 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		OrganizationID:      organizationID, AllowedProjectIDs: projectIDs,
 		CleanupBase: shutdownBase, CleanupTimeout: config.Gateway.ShutdownTimeout,
 	})
+	if err != nil {
+		return err
+	}
+	teamRepository, err := postgresteam.New(current.pool, postgresteam.Config{
+		PrincipalGeneration: config.Gateway.PostgresPrincipalGeneration,
+		OrganizationID:      organizationID, AllowedProjectIDs: projectIDs,
+	})
+	if err != nil {
+		return err
+	}
+	teamService, err := domainteam.New(teamRepository, mattermost, current.business, domainteam.Config{
+		InstanceID: config.Gateway.InstanceID, Lease: config.Gateway.TeamOperationLease,
+		SelectorTTL: config.Gateway.TeamSelectorTTL, RecoveryInterval: config.Gateway.TeamRecoveryInterval,
+		RecoveryWindow: config.Gateway.TeamRecoveryWindow,
+	})
+	if err != nil {
+		return err
+	}
+	current.authority, err = authorityclient.DialLocal(startup, authorityclient.LocalConfig{
+		SocketPath:        authorityclient.VerifierSocketPath,
+		ExpectedServerUID: config.Gateway.AuthorityVerifierUID,
+		ExpectedServerGID: config.Gateway.AuthorityVerifierGID,
+		DialTimeout:       2 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	authorityChecker := authorityVerifierChecker{client: current.authority.Verifier()}
+	teamTransport, err := teamgrpc.New(teamService)
 	if err != nil {
 		return err
 	}
@@ -224,6 +264,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		name string
 		run  func(context.Context) error
 	}{{"PostgreSQL", repository.Check}, {"control-plane", control.Check}, {"Mattermost event", service.CheckInteraction},
+		{"Mattermost Team", teamService.Check}, {"internal authority verifier", authorityChecker.Check},
 		{"bot-service runtime transport", bot.Check}, {"S3", objects.Check}, {"delivery readback", readbackCheck}} {
 		if err := check.run(startup); err != nil {
 			return errors.New("startup barrier: " + check.name + " working path is not ready")
@@ -256,6 +297,20 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		return errors.New("listen interaction HTTPS server")
 	}
 	current.publicConn = tls.NewListener(listener, publicTLSConfig)
+	teamTLSConfig, err := teamRPCTLS(config.Gateway)
+	if err != nil {
+		return err
+	}
+	current.teamServer = stdgrpc.NewServer(
+		stdgrpc.Creds(credentials.NewTLS(teamTLSConfig)),
+		stdgrpc.MaxRecvMsgSize(64<<10), stdgrpc.MaxSendMsgSize(512<<10),
+		stdgrpc.ChainUnaryInterceptor(authorityclient.VerifierUnaryServerInterceptor(current.authority.Verifier())),
+	)
+	interactiongatewayv1.RegisterMattermostTeamServiceServer(current.teamServer, teamTransport)
+	current.teamConn, err = net.Listen("tcp", config.Gateway.TeamRPCListen)
+	if err != nil {
+		return errors.New("listen Mattermost team gRPC server")
+	}
 	current.technical, err = httpserver.New(httpserver.Config{
 		Address: config.Gateway.TechnicalListen, ReadHeaderTimeout: 2 * time.Second,
 		ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second,
@@ -271,6 +326,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	current.metrics.SetReady(true)
 	current.workers = serviceruntime.StartWorkers(lifecycle,
 		publicWorker(current.public, current.publicConn, shutdownBase, config.Gateway.ShutdownTimeout),
+		teamRPCWorker(current.teamServer, current.teamConn, config.Gateway.ShutdownTimeout),
 		technicalWorker(current.technical, shutdownBase, config.Gateway.ShutdownTimeout),
 		webSocketWorker(service, current.business, current.logger, config.Gateway.RetryBase),
 		periodicWorker("inbound", config.Gateway.WorkerInterval, config.Gateway.OperationTimeout, current.business, current.logger,
@@ -285,7 +341,10 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 			func(ctx context.Context) (bool, error) { return service.ClaimInteractionDelivery(ctx) }),
 		periodicWorker("expiry", config.Gateway.ExpiryInterval, config.Gateway.OperationTimeout, current.business, current.logger,
 			func(ctx context.Context) (bool, error) { return true, service.ExpireOwnerGate(ctx) }),
-		readinessWorker(repository.Check, control.Check, service.CheckInteraction, mattermost.Check, bot.Check, objects.Check, readbackCheck,
+		periodicWorker("team_recovery", config.Gateway.TeamRecoveryInterval, config.Gateway.OperationTimeout, current.business, current.logger,
+			teamService.ProcessRecovery),
+		readinessWorker(repository.Check, control.Check, service.CheckInteraction, mattermost.Check, teamService.Check,
+			authorityChecker.Check, bot.Check, objects.Check, readbackCheck,
 			current.readiness, current.metrics, current.business, current.logger,
 			config.Gateway.ReadinessInterval, config.Gateway.OperationTimeout),
 	)
@@ -378,6 +437,33 @@ func technicalWorker(server *httpserver.Server, shutdownBase context.Context, ti
 	}
 }
 
+func teamRPCWorker(server *stdgrpc.Server, listener net.Listener, timeout time.Duration) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		stopped := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				graceful := make(chan struct{})
+				go func() { server.GracefulStop(); close(graceful) }()
+				timer := time.NewTimer(timeout)
+				defer timer.Stop()
+				select {
+				case <-graceful:
+				case <-timer.C:
+					server.Stop()
+				}
+			case <-stopped:
+			}
+		}()
+		err := server.Serve(listener)
+		close(stopped)
+		if errors.Is(err, stdgrpc.ErrServerStopped) || errors.Is(err, net.ErrClosed) {
+			return nil
+		}
+		return err
+	}
+}
+
 func webSocketWorker(service *domainservice.Service, metrics *internalobservability.Metrics,
 	logger *slog.Logger, retry time.Duration) serviceruntime.Worker {
 	return func(ctx context.Context) error {
@@ -433,6 +519,8 @@ func readinessWorker(
 	controlCheck func(context.Context) error,
 	interactionCheck func(context.Context) error,
 	mattermostCheck func(context.Context) error,
+	teamCheck func(context.Context) error,
+	authorityCheck func(context.Context) error,
 	botCheck func(context.Context) error,
 	objectCheck func(context.Context) error,
 	readbackCheck func(context.Context) error,
@@ -444,7 +532,7 @@ func readinessWorker(
 	timeout time.Duration,
 ) serviceruntime.Worker {
 	checkFunctions := []func(context.Context) error{repositoryCheck, controlCheck, interactionCheck, mattermostCheck,
-		botCheck, objectCheck, readbackCheck}
+		teamCheck, authorityCheck, botCheck, objectCheck, readbackCheck}
 	return periodicWorker("readiness", interval, timeout, business, logger, func(ctx context.Context) (bool, error) {
 		for _, check := range checkFunctions {
 			if err := check(ctx); err != nil {
@@ -457,6 +545,21 @@ func readinessWorker(
 		metrics.SetReady(true)
 		return true, nil
 	})
+}
+
+type authorityVerifierChecker struct {
+	client internalrpcauthorityv1.AuthorizationVerifierServiceClient
+}
+
+func (checker authorityVerifierChecker) Check(ctx context.Context) error {
+	response, err := checker.client.CheckReadiness(ctx,
+		&internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest{})
+	if err != nil || !response.GetReady() || !response.GetReplayStoreReady() ||
+		response.GetSourceRevision() == 0 || response.GetPolicyRevision() == 0 ||
+		response.GetSignerGeneration() == 0 || response.GetSnapshotDigestSha256() == "" {
+		return errors.New("local authorization verifier is unavailable")
+	}
+	return nil
 }
 
 func wait(ctx context.Context, duration time.Duration) bool {
@@ -490,11 +593,17 @@ func (current *state) shutdown(base context.Context) error {
 	if current.publicConn != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close public listener", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { _ = current.publicConn.Close(); return nil }})
 	}
+	if current.teamConn != nil {
+		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close Mattermost team gRPC listener", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { _ = current.teamConn.Close(); return nil }})
+	}
 	if current.technical != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "shutdown technical server", Timeout: current.config.Gateway.ShutdownTimeout, Run: current.technical.Shutdown})
 	}
 	if current.control != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close control-plane client", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { return current.control.Close() }})
+	}
+	if current.authority != nil {
+		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close authority verifier client", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { return current.authority.Close() }})
 	}
 	if current.pool != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close PostgreSQL", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { current.pool.Close(); return nil }})

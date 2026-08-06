@@ -257,6 +257,23 @@ func (current *index) resolveDelivery(projectID, actorID string) (entity.Boundar
 	return entity.Boundary{}, errors.New("mattermost delivery target is outside the server-owned mapping")
 }
 
+func (current *index) resolveOwner(principal entity.TeamPrincipal) (ActorBinding, error) {
+	var resolved ActorBinding
+	for _, actor := range current.actors {
+		if actor.ActorID != principal.ActorID || actor.OrganizationID != principal.OrganizationID || actor.ProjectID != principal.ProjectID {
+			continue
+		}
+		if resolved.ActorID != "" {
+			return ActorBinding{}, errors.New("mattermost owner mapping is ambiguous")
+		}
+		resolved = actor
+	}
+	if resolved.ActorID == "" {
+		return ActorBinding{}, errors.New("mattermost owner is outside the server-owned mapping")
+	}
+	return resolved, nil
+}
+
 func (current *index) resolveRoomDelivery(projectID, chatID, actorID string) (entity.Boundary, error) {
 	var actor ActorBinding
 	for _, candidate := range current.actors {

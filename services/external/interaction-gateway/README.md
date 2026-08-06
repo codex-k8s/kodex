@@ -4,7 +4,7 @@ title: Interaction gateway
 type: service
 status: approved
 owner: manager
-version: 1.4.0
+version: 1.5.0
 updated: 2026-08-06
 ---
 
@@ -43,13 +43,14 @@ Legacy `services/external/bot-service` не используется и не и�
 
 ## Contract-first матрица Workspace↔Mattermost Team
 
-Защищённый внутренний интерфейс принадлежит `interaction-gateway` и состоит
-только из специализированных RPC `ListMattermostTeams`,
-`CreateMattermostTeam`, `LinkMattermostTeam`,
-`GetMattermostTeamBinding`, `RelinkMattermostTeam`,
-`UnlinkMattermostTeam` и `CheckMattermostTeamReadiness`. Универсальный
-provider proxy, передача raw Mattermost Team ID и изменение mapping через
-существующий inbound OpenAPI запрещены.
+Реализованный interaction-owned source contract находится в
+`contracts/proto/interactiongateway/v1/interaction_gateway.proto` и состоит
+из специализированных RPC `ListMattermostTeams`, `CreateMattermostTeam`,
+`GetMattermostTeamProviderReadback` и `CheckReadiness`. Универсальный provider
+proxy, передача raw Mattermost Team ID и изменение mapping через существующий
+inbound OpenAPI запрещены. `bind|relink|unlink`, joined mapping read и
+control-api consumer намеренно отсутствуют до принятия owner contract #234;
+локального mock, placeholder consumer или копии owner contract нет.
 
 Actor, organization и project отсутствуют в request DTO. Их передаёт только
 проверенный application authorization context от `internal-rpc-authority`:
@@ -60,20 +61,30 @@ permission, JTI/replay reservation и server-resolved actor/tenant/project.
 
 | Сценарий | Будущий owner endpoint #237 | Internal RPC и permission | Mattermost effect/readback | Control-plane #234, OCC и receipt | Durable результат, event/read path и readiness |
 | --- | --- | --- | --- | --- | --- |
-| Catalog | `GET /workspaces/{workspace}/mattermost/teams` | `ListMattermostTeams`, `interaction.team.catalog.read`; actor/org/project только из verified context | server-resolved Mattermost User; `GetTeamsForUser`, затем для каждой выдаваемой Team `GetTeam` и `GetTeamMember`; page не больше 200 | owner eligibility project проверяется точным защищённым query #234 до provider выдачи; mutation/receipt отсутствуют | bounded safe page: display name, slug, masked status, timestamps и opaque selector; cursor и selector принадлежат серверу, сырые Team ID отсутствуют; authoritative read path — fresh provider readback |
+| Catalog | `GET /workspaces/{workspace}/mattermost/teams` | `ListMattermostTeams`, `interaction.team.catalog.read`; actor/org/project только из verified context | server-resolved Mattermost User; `GetTeamsForUser`, затем для каждой выдаваемой Team `GetTeam` и `GetTeamMember`; page не больше 100 | owner eligibility project будет проверяться точным защищённым query #234 до provider выдачи; mutation/receipt отсутствуют | bounded safe page: display name, slug, masked status, timestamps и opaque selector; cursor и selector принадлежат серверу, сырые Team ID отсутствуют; authoritative read path — fresh provider readback |
 | Create | `POST /workspaces/{workspace}/mattermost-team` | `CreateMattermostTeam`, `interaction.team.create`; request содержит только display name, slug intent и idempotency key | до `CreateTeam` фиксируется intent; после ответа или возможного эффекта выполняются `GetTeamByName`, exact digest/readback и membership check | после exact provider proof вызывается специализированный bind #234 с server-resolved project, expected mapping version, тем же semantic scope и provider receipt digest | `PENDING -> PROVIDER_ACCEPTED -> BOUND|REPAIR_REQUIRED`; state/checkpoint/receipt сохраняются до/после каждого effect; event interaction-gateway не публикует, итог читается этим RPC и `GetMattermostTeamBinding`; readiness не создаёт Team |
 | Link existing | `PUT /workspaces/{workspace}/mattermost-team` | `LinkMattermostTeam`, `interaction.team.link`; caller передаёт только opaque selector, expected mapping version и idempotency key | selector разрешается из durable actor/org/project scope; gateway заново читает `GetTeam` и `GetTeamMember` | специализированный bind #234 проверяет authoritative owner и весь dependent graph до OCC; gateway не копирует graph rules | `PENDING -> PROVIDER_ACCEPTED -> BOUND|REPAIR_REQUIRED`; receipt хранит безопасные digests и version, raw provider payload отсутствует; configuration event принадлежит #234 |
 | Get/readback | `GET /workspaces/{workspace}/mattermost-team` | `GetMattermostTeamBinding`, `interaction.team.binding.read` | Team ID берётся только из current mapping #234, затем `GetTeam` и actor `GetTeamMember`; deleted/forbidden/lost membership fail closed | versioned authoritative mapping read #234; hidden/foreign Workspace неотличим от not found | joined snapshot связывает mapping generation/version/digest с fresh masked provider status; отдельного события нет; этот RPC является защищённым authoritative read path |
 | Relink | `POST /workspaces/{workspace}/mattermost-team/relink` | `RelinkMattermostTeam`, `interaction.team.relink`; opaque selector, expected version, idempotency key | fresh Team и membership readback до owner transition | специализированный relink #234 блокирует полный Chat/Session/Turn/delivery graph, закрывает прежнюю generation и создаёт монотонную новую | gateway сохраняет provider proof/receipt; stale/revoked generation не обслуживается inbound/delivery; event и audit принадлежат owner transaction #234 |
 | Unlink | `DELETE /workspaces/{workspace}/mattermost-team` | `UnlinkMattermostTeam`, `interaction.team.unlink`; expected version и idempotency key | provider mutation отсутствует; перед transition gateway подтверждает current Team status и membership | специализированный unlink #234 блокирует полный graph и закрывает current generation; открытый graph либо stale version отклоняются | provider checkpoint и безопасный authoritative result сохраняются; event и audit принадлежат #234, readback возвращает `UNBOUND`; readiness использует тот же protected owner/provider read path |
 
-Точные имена, поля и generated client control-plane не объявляются локально:
-до принятия #234 interaction-owned provider/domain/storage/transport path
-фиксирует durable provider proof и возвращает `REPAIR_REQUIRED`, если owner
-transition нельзя доказанно завершить. Перед ready SHA ветка обязана получить
+Точные имена, поля и generated client control-plane не объявляются локально.
+До принятия #234 interaction-owned provider/domain/storage/transport path
+останавливается на durable `PROVIDER_ACCEPTED`; `REPAIR_REQUIRED` означает,
+что provider effect нельзя доказанно восстановить, и не маскирует отсутствие
+owner transition. Перед ready SHA ветка обязана получить
 принятый source Proto #234 из нового `origin/main`, подключить его generated
 client и заменить этот dependency checkpoint точными method/field/permission
 профилями без production mock или альтернативного owner contract.
+
+Create фиксирует normalized intent и lease/fence в PostgreSQL до единственного
+`CreateTeam`. Между durable `EFFECT_PENDING` и provider POST есть явная
+crash-граница: после timeout или restart worker выполняет только
+`GetTeamByName`, exact slug/display/type, membership и time-fence readback.
+Слепой второй POST запрещён. Подтверждённый provider snapshot атомарно создаёт
+opaque selector, receipt digest и монотонный project-scoped provider
+generation. Повтор того же idempotency key и semantic digest возвращает
+сохранённую operation; другой digest конфликтует до обращения к Mattermost.
 
 ### State/effect matrix
 
@@ -204,6 +215,16 @@ OpenAPI генерируется корневой целью `make gen-openapi-g
 forward-only создают только gateway-owned transport state, signed runtime
 context, credential fence и RLS policy.
 
+Proto `interactiongateway.v1` генерируется корневой командой `buf generate` в
+`libs/go/interactiongatewayapi`. Team RPC слушает `:9443`, требует TLS 1.3 с
+exact control-api SPIFFE и verified application authorization context от
+локального authority verifier. Startup/readiness проверяют RLS-scoped DML,
+Mattermost catalog и membership тем же runtime transport; recovery worker
+запускается только после barrier и завершается до PostgreSQL.
+Server-owned primary bot credential должен иметь только необходимые для этого
+пути Mattermost права на Team catalog/create и membership readback/add; значение
+credential не попадает в конфигурацию, ответы, логи или provider receipt.
+
 ## Ручная проверка
 
 1. Опубликовать environment-owned mapping в immutable staging/production Vault
@@ -227,5 +248,14 @@ context, credential fence и RLS policy.
 9. Проверить result больше 64 MiB: карточка содержит gateway-mediated grant,
    чужой/повторный User получает закрытый отказ, а точный actor единожды получает
    object с совпавшим SHA-256 без `UploadFile` и direct S3 URL.
+10. Вызвать Team catalog с verified control-api context: убедиться, что DTO
+    содержит только opaque selector и безопасный snapshot без Mattermost Team
+    ID. Повторить create с тем же UUID key и эквивалентным normalized intent —
+    второй Team не создаётся; тот же key с другим intent получает conflict.
+11. Оборвать ответ `CreateTeam` после возможного принятия и перезапустить Pod:
+    operation остаётся `AMBIGUOUS`, worker использует только provider readback
+    и переводит её в `PROVIDER_ACCEPTED` либо `REPAIR_REQUIRED` без второго
+    provider effect. До принятого #234 отсутствие bind consumer ожидаемо и не
+    является ready состоянием PR.
 
 Rollback описан в [runbook](../../../docs/runbooks/interaction-gateway.md).

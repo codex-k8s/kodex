@@ -14,6 +14,7 @@ type Metrics struct {
 	inbound         *prometheus.CounterVec
 	deliveries      *prometheus.CounterVec
 	externalEffects *prometheus.CounterVec
+	teamOperations  *prometheus.CounterVec
 }
 
 func New(register func(...prometheus.Collector) error) (*Metrics, error) {
@@ -42,11 +43,20 @@ func New(register func(...prometheus.Collector) error) (*Metrics, error) {
 			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "external_effects_total",
 			Help: "Total number of confirmed external Mattermost effects.",
 		}, []string{"effect", "outcome"}),
+		teamOperations: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "mattermost_team_operations_total",
+			Help: "Total number of bounded Mattermost Team provider operation outcomes.",
+		}, []string{"operation", "outcome"}),
 	}
-	if err := register(metrics.httpRequests, metrics.httpDuration, metrics.workerCycles, metrics.inbound, metrics.deliveries, metrics.externalEffects); err != nil {
+	if err := register(metrics.httpRequests, metrics.httpDuration, metrics.workerCycles, metrics.inbound,
+		metrics.deliveries, metrics.externalEffects, metrics.teamOperations); err != nil {
 		return nil, err
 	}
 	return metrics, nil
+}
+
+func (metrics *Metrics) ObserveTeamOperation(operation, outcome string) {
+	metrics.teamOperations.WithLabelValues(normalizeTeamOperation(operation), normalizeOutcome(outcome)).Inc()
 }
 
 func (metrics *Metrics) ObserveExternalEffect(effect, outcome string) {
@@ -55,7 +65,7 @@ func (metrics *Metrics) ObserveExternalEffect(effect, outcome string) {
 
 func normalizeEffect(value string) string {
 	switch value {
-	case "upload_file", "create_post", "update_post":
+	case "upload_file", "create_post", "update_post", "create_team":
 		return value
 	default:
 		return "unknown"
@@ -91,7 +101,16 @@ func normalizeRoute(value string) string {
 
 func normalizeWorker(value string) string {
 	switch value {
-	case "websocket", "inbound", "delivery", "turn_delivery", "owner_gate", "expiry", "readiness":
+	case "websocket", "inbound", "delivery", "turn_delivery", "owner_gate", "owner_delivery", "expiry", "team_recovery", "readiness":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func normalizeTeamOperation(value string) string {
+	switch value {
+	case "catalog", "create", "readback", "recovery":
 		return value
 	default:
 		return "unknown"
@@ -119,7 +138,7 @@ func normalizeDelivery(value string) string {
 
 func normalizeOutcome(value string) string {
 	switch value {
-	case "success", "failure", "idle", "ignored", "replay", "retry", "dead_letter":
+	case "success", "failure", "idle", "ignored", "replay", "retry", "dead_letter", "ambiguous":
 		return value
 	default:
 		return "unknown"

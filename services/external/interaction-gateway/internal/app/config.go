@@ -22,6 +22,7 @@ type Config struct {
 
 type GatewayConfig struct {
 	HTTPListen                  string        `env:"HTTP_LISTEN" envDefault:":8443"`
+	TeamRPCListen               string        `env:"TEAM_RPC_LISTEN" envDefault:":9443"`
 	TechnicalListen             string        `env:"TECHNICAL_LISTEN" envDefault:":9090"`
 	TLSCertificateFile          string        `env:"TLS_CERTIFICATE_FILE,required"`
 	TLSPrivateKeyFile           string        `env:"TLS_PRIVATE_KEY_FILE,required"`
@@ -29,6 +30,9 @@ type GatewayConfig struct {
 	MattermostClientSPIFFE      string        `env:"MATTERMOST_CLIENT_SPIFFE_ID,required"`
 	ReadbackClientSPIFFEIDs     []string      `env:"READBACK_CLIENT_SPIFFE_IDS,required" envSeparator:","`
 	MaterializationClientSPIFFE string        `env:"MATERIALIZATION_CLIENT_SPIFFE_ID,required"`
+	TeamRPCClientSPIFFE         string        `env:"TEAM_RPC_CLIENT_SPIFFE_ID,required"`
+	AuthorityVerifierUID        uint32        `env:"AUTHORITY_VERIFIER_UID" envDefault:"29002"`
+	AuthorityVerifierGID        uint32        `env:"AUTHORITY_VERIFIER_GID" envDefault:"29000"`
 	SlashTokenFile              string        `env:"SLASH_TOKEN_FILE,required"`
 	PostgresDSNFile             string        `env:"POSTGRES_DSN_FILE,required"`
 	PostgresCAFile              string        `env:"POSTGRES_CA_FILE,required"`
@@ -60,6 +64,10 @@ type GatewayConfig struct {
 	MaximumConnections          int           `env:"MAXIMUM_CONNECTIONS" envDefault:"128"`
 	InboundLease                time.Duration `env:"INBOUND_LEASE" envDefault:"30s"`
 	DeliveryLease               time.Duration `env:"DELIVERY_LEASE" envDefault:"30s"`
+	TeamOperationLease          time.Duration `env:"TEAM_OPERATION_LEASE" envDefault:"30s"`
+	TeamSelectorTTL             time.Duration `env:"TEAM_SELECTOR_TTL" envDefault:"15m"`
+	TeamRecoveryInterval        time.Duration `env:"TEAM_RECOVERY_INTERVAL" envDefault:"5s"`
+	TeamRecoveryWindow          time.Duration `env:"TEAM_RECOVERY_WINDOW" envDefault:"5m"`
 	ScanPollInterval            time.Duration `env:"SCAN_POLL_INTERVAL" envDefault:"5s"`
 	RetryBase                   time.Duration `env:"RETRY_BASE" envDefault:"2s"`
 	WorkerInterval              time.Duration `env:"WORKER_INTERVAL" envDefault:"500ms"`
@@ -132,7 +140,7 @@ func loadConfig() (Config, error) {
 
 func (config Config) validate() error {
 	gateway := config.Gateway
-	for _, address := range []string{gateway.HTTPListen, gateway.TechnicalListen} {
+	for _, address := range []string{gateway.HTTPListen, gateway.TeamRPCListen, gateway.TechnicalListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return errors.New("interaction gateway listen address is invalid")
 		}
@@ -174,12 +182,18 @@ func (config Config) validate() error {
 	expectedPostgresUser := "interaction_gateway_runtime_g" + strconv.FormatUint(gateway.PostgresPrincipalGeneration, 10)
 	if !strings.HasPrefix(gateway.MattermostClientSPIFFE, "spiffe://") ||
 		!strings.HasPrefix(gateway.MaterializationClientSPIFFE, "spiffe://") ||
+		gateway.TeamRPCClientSPIFFE != "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway" ||
+		gateway.AuthorityVerifierUID == 0 || gateway.AuthorityVerifierGID == 0 ||
 		len(gateway.ReadbackClientSPIFFEIDs) == 0 || len(gateway.ReadbackClientSPIFFEIDs) > 8 ||
 		gateway.InstanceID == "" || gateway.RetentionRef == "" || gateway.EventIssuer == "" || gateway.EventAudience == "" ||
 		gateway.PostgresPrincipalGeneration == 0 || gateway.PostgresExpectedUser != expectedPostgresUser ||
 		gateway.PostgresMaxConnections < 2 || gateway.PostgresMaxConnections > 64 ||
 		gateway.MaximumConnections < 16 || gateway.MaximumConnections > 1024 ||
 		gateway.WorkerInterval < 50*time.Millisecond || gateway.OwnerGateInterval < 100*time.Millisecond ||
+		gateway.TeamOperationLease <= gateway.OperationTimeout ||
+		gateway.TeamSelectorTTL < time.Minute || gateway.TeamSelectorTTL > 24*time.Hour ||
+		gateway.TeamRecoveryInterval < time.Second || gateway.TeamRecoveryInterval > time.Minute ||
+		gateway.TeamRecoveryWindow <= gateway.TeamRecoveryInterval || gateway.TeamRecoveryWindow > time.Hour ||
 		gateway.ExpiryInterval < time.Second || gateway.ReadinessInterval < time.Second ||
 		gateway.OperationTimeout < time.Second || gateway.OperationTimeout > time.Minute ||
 		gateway.InboundLease <= gateway.OperationTimeout || gateway.DeliveryLease <= gateway.OperationTimeout ||

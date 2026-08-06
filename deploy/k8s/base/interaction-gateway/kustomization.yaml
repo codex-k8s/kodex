@@ -19,6 +19,7 @@ configMapGenerator:
   - name: interaction-gateway-runtime
     literals:
       - INTERACTION_GATEWAY_HTTP_LISTEN=:8443
+      - INTERACTION_GATEWAY_TEAM_RPC_LISTEN=:9443
       - INTERACTION_GATEWAY_TECHNICAL_LISTEN=:9090
       - INTERACTION_GATEWAY_TLS_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
       - INTERACTION_GATEWAY_TLS_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
@@ -26,6 +27,9 @@ configMapGenerator:
       - INTERACTION_GATEWAY_MATTERMOST_CLIENT_SPIFFE_ID=spiffe://mattercodex.local/ns/mattermost/sa/mattermost
       - INTERACTION_GATEWAY_READBACK_CLIENT_SPIFFE_IDS=spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane
       - INTERACTION_GATEWAY_MATERIALIZATION_CLIENT_SPIFFE_ID=spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner
+      - INTERACTION_GATEWAY_TEAM_RPC_CLIENT_SPIFFE_ID=spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway
+      - INTERACTION_GATEWAY_AUTHORITY_VERIFIER_UID=29002
+      - INTERACTION_GATEWAY_AUTHORITY_VERIFIER_GID=29000
       - INTERACTION_GATEWAY_SLASH_TOKEN_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/slash-token
       - INTERACTION_GATEWAY_POSTGRES_DSN_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/postgres-dsn
       - INTERACTION_GATEWAY_POSTGRES_CA_FILE=/var/run/config/mattercodex/interaction-gateway/postgres/ca.pem
@@ -47,6 +51,10 @@ configMapGenerator:
       - INTERACTION_GATEWAY_ARTIFACT_DOWNLOAD_BASE_URL=https://interaction-artifacts.mattercodex.dev
       - INTERACTION_GATEWAY_ARTIFACT_DOWNLOAD_TTL=5m
       - INTERACTION_GATEWAY_RETENTION_REF=interaction-input-30d
+      - INTERACTION_GATEWAY_TEAM_OPERATION_LEASE=30s
+      - INTERACTION_GATEWAY_TEAM_SELECTOR_TTL=15m
+      - INTERACTION_GATEWAY_TEAM_RECOVERY_INTERVAL=5s
+      - INTERACTION_GATEWAY_TEAM_RECOVERY_WINDOW=5m
       - INTERACTION_GATEWAY_MATTERMOST_SITE_URL=https://mattermost.mattermost.svc.cluster.local
       - INTERACTION_GATEWAY_MATTERMOST_TLS_SERVER_NAME=mattermost.mattermost.svc.cluster.local
       - INTERACTION_GATEWAY_MATTERMOST_CA_FILE=/var/run/config/mattercodex/interaction-gateway/mattermost/ca.pem
