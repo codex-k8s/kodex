@@ -85,14 +85,16 @@ SPIFFE ID, полный метод, audience или полномочие зак�
 `AutomationSchedulerOperations`,
 `ArtifactScannerOperations`, `RuntimeControllerOperations`,
 `RuntimeOwnerOperations`, `RuntimeRestoreVerifierOperations`,
+`RuntimeRestoreEffectOperations`,
 `RuntimeCleanupAuthorizerOperations`, `IntegrationGatewayOperations`,
 `OwnerGateDeliveryOperations`,
 `MemoryIndexerOperations`). Consumer
 Deployments не принадлежат Issue #187 и здесь не подменяются фиктивными
-развёртываемыми компонентами. В частности, внешние deployable/readback и
-issuer profiles `runtime-restore-verifier` и `runtime-cleanup-authorizer` не
-материализованы Issue #221: до их отдельной поставки destructive cleanup path
-остаётся fail-closed. `control-api-gateway` не входит ни в один из этих
+развёртываемыми компонентами. Issue #231 материализует exact
+`runtime-restore-verifier` и `runtime-restore-effect` profiles; последний
+доступен только S3 restore exchanger и перед STS повторно сверяет durable
+revoke watermark. `runtime-cleanup-authorizer` остаётся отдельным закрытым
+профилем. `control-api-gateway` не входит ни в один из этих
 профилей и не может тем же trust path подтвердить restore и разрешить cleanup.
 
 Issue #193 материализует отдельный consumer scheduler profile в

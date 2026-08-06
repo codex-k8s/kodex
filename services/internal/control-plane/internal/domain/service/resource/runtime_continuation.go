@@ -1122,6 +1122,107 @@ func (service *Service) AdmitRuntimeExecution(
 	return result, err
 }
 
+// AuthorizeRuntimeRestoreEffect — server-owned linearization point между
+// current restore generation/revoke watermark и первым внешним эффектом.
+// Exact replay повторно сверяет current owner state и не переживает revoke.
+func (service *Service) AuthorizeRuntimeRestoreEffect(
+	ctx context.Context,
+	input RuntimeRestoreEffectInput,
+) (RuntimeExecution, error) {
+	permission := ""
+	wantWorkload, wantSPIFFEID := "", ""
+	switch input.Effect {
+	case "KUBERNETES_MATERIALIZATION":
+		permission = permissionRuntimeRestoreMaterialize
+		wantWorkload, wantSPIFFEID = service.runtimeControllerWorkload, service.runtimeControllerSPIFFEID
+	case "S3_CREDENTIAL":
+		permission = permissionRuntimeRestoreCredential
+		wantWorkload, wantSPIFFEID = runtimeRestoreEffectWorkload, runtimeRestoreEffectSPIFFEID
+	default:
+		return RuntimeExecution{}, errs.ErrInvalidInput
+	}
+	if err := validateRuntimeMutation(service, input.RuntimeExecutionInput, permission, false); err != nil {
+		return RuntimeExecution{}, err
+	}
+	if input.Principal.CallerWorkload != wantWorkload || input.Principal.CallerSPIFFEID != wantSPIFFEID {
+		return RuntimeExecution{}, errs.ErrPermissionDenied
+	}
+	if value.ValidateID(input.RestoreOperationID) != nil || input.RestoreOperationGeneration == 0 ||
+		!validSHA256Text(input.RestoreSourceAuthoritySHA256) {
+		return RuntimeExecution{}, errs.ErrInvalidInput
+	}
+	effectSHA256, err := semanticCommandHash(input.Principal, struct {
+		Runtime                      runtimeExecutionIntent
+		RestoreOperationID           string
+		RestoreOperationGeneration   uint64
+		RestoreSourceAuthoritySHA256 string
+		Effect                       string
+	}{runtimeIntent(input.RuntimeExecutionInput), input.RestoreOperationID,
+		input.RestoreOperationGeneration, input.RestoreSourceAuthoritySHA256, input.Effect})
+	if err != nil {
+		return RuntimeExecution{}, errs.ErrInvalidInput
+	}
+	var result RuntimeExecution
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		locked, lockErr := service.lockRuntimeReceiptAuthority(ctx, tx, input.Principal, input.ExecutionID)
+		if lockErr != nil {
+			return lockErr
+		}
+		execution := locked.Execution
+		if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput, "ADMITTED"); err != nil {
+			return err
+		}
+		if _, _, err := service.requireActiveRuntimeLeaseGraph(ctx, tx, input.Principal, execution); err != nil {
+			return err
+		}
+		if err := requireRuntimeRestoreAdmission(ctx, tx, locked, true); err != nil {
+			return err
+		}
+		operation, err := tx.GetRuntimeRestoreOperation(ctx, input.RestoreOperationID)
+		if err != nil {
+			return err
+		}
+		if err := validateRuntimeRestoreEffectAuthority(execution, operation, input); err != nil {
+			return err
+		}
+		applied, err := tx.AuthorizeRuntimeRestoreEffect(ctx, operation.ID, execution.ID,
+			operation.Generation, operation.SourceAuthoritySHA256, input.Effect, effectSHA256, locked.Now)
+		if err != nil {
+			return err
+		}
+		result = execution
+		if !applied {
+			return nil
+		}
+		return service.appendLifecycleAudit(ctx, tx, input.Principal,
+			"authorize_runtime_restore_"+strings.ToLower(input.Effect), execution.ID,
+			"RUNTIME_EXECUTION", execution.Version, locked.Now)
+	})
+	return result, err
+}
+
+func validateRuntimeRestoreEffectAuthority(
+	execution RuntimeExecution,
+	operation domainrepo.RuntimeRestoreOperation,
+	input RuntimeRestoreEffectInput,
+) error {
+	if execution.State != "ADMITTED" || execution.RestoreOperationID != input.RestoreOperationID ||
+		execution.RestoreOperationGeneration != input.RestoreOperationGeneration ||
+		execution.RestoreSourceAuthoritySHA256 != input.RestoreSourceAuthoritySHA256 ||
+		operation.ID != input.RestoreOperationID || operation.TargetExecutionID != execution.ID ||
+		operation.Generation != input.RestoreOperationGeneration ||
+		operation.ConsumedGeneration != operation.Generation ||
+		operation.RevokedGeneration >= operation.Generation ||
+		operation.SourceAuthoritySHA256 != input.RestoreSourceAuthoritySHA256 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
 func (service *Service) HeartbeatRuntimeExecution(
 	ctx context.Context,
 	input RuntimeExecutionInput,

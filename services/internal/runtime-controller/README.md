@@ -67,8 +67,13 @@ exact session/turn/attempt/grant/revision/input `PENDING` без второго 
 проверяет immutable organization/provider quota snapshot и replay-ит тот же
 `AdmitRuntimeExecution` до материализации PVC, ConfigMap, credential broker или
 Pod. Для restore эта owner transaction сверяет current operation/generation с
-durable revoke watermark и одноразово потребляет generation; Bind принимает
-только уже consumed current generation. Lease token восстанавливается только из owner receipt
+durable revoke watermark и одноразово потребляет generation. До journal/PVC/Pod
+controller отдельно расходует durable `KUBERNETES_MATERIALIZATION` effect slot,
+а `runtime-s3-restore-exchanger` непосредственно перед Vault/STS — отдельный
+`S3_CREDENTIAL` slot через exact mTLS/application grant/issuer profile. Оба пути
+при каждом replay снова сверяют current generation/digest и watermark; signed
+restore ticket принимается только в `ADMITTED`, а Bind — только для уже consumed
+current generation. Lease token восстанавливается только из owner receipt
 и не сохраняется в Kubernetes Secret, ConfigMap, annotation, log или metric.
 
 Capacity учитывает durable pending/admitted/running journals, Pod requests,

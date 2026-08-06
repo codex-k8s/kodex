@@ -234,6 +234,9 @@ service ControlPlaneService {
   rpc RegisterRuntimeOutput(RegisterRuntimeOutputRequest) returns (RegisterRuntimeOutputResponse);
   // AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
   rpc AdmitRuntimeExecution(AdmitRuntimeExecutionRequest) returns (AdmitRuntimeExecutionResponse);
+  // AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
+  // с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
+  rpc AuthorizeRuntimeRestoreEffect(AuthorizeRuntimeRestoreEffectRequest) returns (AuthorizeRuntimeRestoreEffectResponse);
   // HeartbeatRuntimeExecution продлевает только текущую lease/fence.
   rpc HeartbeatRuntimeExecution(HeartbeatRuntimeExecutionRequest) returns (HeartbeatRuntimeExecutionResponse);
   // RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
@@ -3039,6 +3042,27 @@ message AdmitRuntimeExecutionRequest {
 message AdmitRuntimeExecutionResponse {
   RuntimeExecution execution = 1;
   string lease_token = 2;
+}
+
+enum RuntimeRestoreEffect {
+  RUNTIME_RESTORE_EFFECT_UNSPECIFIED = 0;
+  RUNTIME_RESTORE_EFFECT_KUBERNETES_MATERIALIZATION = 1;
+  RUNTIME_RESTORE_EFFECT_S3_CREDENTIAL = 2;
+}
+
+message AuthorizeRuntimeRestoreEffectRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string restore_operation_id = 5;
+  uint64 restore_operation_generation = 6;
+  string restore_source_authority_sha256 = 7;
+  RuntimeRestoreEffect effect = 8;
+}
+
+message AuthorizeRuntimeRestoreEffectResponse {
+  RuntimeExecution execution = 1;
 }
 
 message HeartbeatRuntimeExecutionRequest {

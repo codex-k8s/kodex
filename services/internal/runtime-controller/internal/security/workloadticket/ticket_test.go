@@ -86,6 +86,14 @@ func TestVerifyForAudienceRecomputesPrivateRestoreSourceTuple(t *testing.T) {
 		"mattercodex-runtime-s3-restore", now.Add(time.Minute)); err != nil {
 		t.Fatalf("exact restore tuple rejected: %v", err)
 	}
+	pending := execution
+	pending.State = enum.ExecutionPending
+	pendingCompact := signTestTicket(t, privateKey, pending,
+		"mattercodex-control-plane-s3-restore", "mattercodex-runtime-s3-restore", now)
+	if _, err := VerifyForAudience(pendingCompact, privateKey.Public().(ed25519.PublicKey), pending,
+		"mattercodex-runtime-s3-restore", now.Add(time.Minute)); err == nil {
+		t.Fatal("PENDING restore ticket was accepted for an external effect")
+	}
 	execution.RestoreSourceArchiveVersionID = "v2"
 	if _, err := VerifyForAudience(compact, privateKey.Public().(ed25519.PublicKey), execution,
 		"mattercodex-runtime-s3-restore", now.Add(time.Minute)); err == nil {

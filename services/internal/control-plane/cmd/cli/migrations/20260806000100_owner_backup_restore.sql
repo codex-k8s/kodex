@@ -60,11 +60,23 @@ CREATE TABLE control_plane.runtime_restore_operations (
     generation bigint NOT NULL CHECK (generation BETWEEN 1 AND 100),
     consumed_generation bigint NOT NULL DEFAULT 0 CHECK (consumed_generation BETWEEN 0 AND generation),
     revoked_generation bigint NOT NULL DEFAULT 0 CHECK (revoked_generation BETWEEN 0 AND generation),
+    materialization_effect_generation bigint NOT NULL DEFAULT 0
+        CHECK (materialization_effect_generation BETWEEN 0 AND generation),
+    materialization_effect_sha256 text,
+    credential_effect_generation bigint NOT NULL DEFAULT 0
+        CHECK (credential_effect_generation BETWEEN 0 AND generation),
+    credential_effect_sha256 text,
     target_turn_id uuid NOT NULL,
     target_attempt integer NOT NULL CHECK (target_attempt BETWEEN 1 AND 100),
     target_execution_id uuid NOT NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL CHECK (updated_at >= created_at),
+    CHECK ((materialization_effect_generation = 0 AND materialization_effect_sha256 IS NULL)
+        OR (materialization_effect_generation > 0
+            AND materialization_effect_sha256 ~ '^[a-f0-9]{64}$')),
+    CHECK ((credential_effect_generation = 0 AND credential_effect_sha256 IS NULL)
+        OR (credential_effect_generation > 0
+            AND credential_effect_sha256 ~ '^[a-f0-9]{64}$')),
     UNIQUE (organization_id, project_id, backup_execution_id),
     UNIQUE (organization_id, project_id, target_execution_id),
     FOREIGN KEY (organization_id, project_id, session_id)

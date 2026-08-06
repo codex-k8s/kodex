@@ -745,6 +745,14 @@ type RuntimeRestoreTargetInput struct {
 	PVCResourceVersion           string
 }
 
+type RuntimeRestoreEffectInput struct {
+	RuntimeExecutionInput
+	RestoreOperationID           string
+	RestoreOperationGeneration   uint64
+	RestoreSourceAuthoritySHA256 string
+	Effect                       string
+}
+
 type RuntimeRehydrateInput struct {
 	RuntimeExecutionInput
 	AssignmentGeneration uint64

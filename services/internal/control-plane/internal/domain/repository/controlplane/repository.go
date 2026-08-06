@@ -679,6 +679,7 @@ type Transaction interface {
 	AdvanceRuntimeRestoreOperation(context.Context, RuntimeRestoreOperation, uint64) error
 	ConsumeRuntimeRestoreOperation(context.Context, string, uint64, string, uint32, string, time.Time) error
 	RevokeRuntimeRestoreOperation(context.Context, string, uint64, time.Time) error
+	AuthorizeRuntimeRestoreEffect(context.Context, string, string, uint64, string, string, string, time.Time) (bool, error)
 	NextExpiredRuntimeExecution(
 		context.Context, string, string, string, uint32,
 	) (RuntimeExecution, error)

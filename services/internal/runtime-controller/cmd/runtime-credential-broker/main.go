@@ -26,6 +26,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	ststypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	sharedclient "github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/security/workloadticket"
 	"github.com/google/uuid"
@@ -41,15 +43,19 @@ import (
 const runtimeConfigFile = "/var/run/config/mattercodex/runtime/runtime.json"
 
 const (
-	vaultTokenFile        = "/var/run/secrets/tokens/vault"
-	workloadTicketKeyFile = "/var/run/config/mattercodex/runtime-workload-ticket/public-key.hex"
-	brokerTLSCAFile       = "/var/run/config/mattercodex/runtime-credential-authority/ca.pem"
-	brokerTLSCertFile     = "/var/run/config/mattercodex/runtime-credential-authority/tls.crt"
-	brokerTLSKeyFile      = "/var/run/config/mattercodex/runtime-credential-authority/tls.key"
-	s3KMSKeyARNFile       = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/kms-key-arn"
-	s3ArchiveRoleARNFile  = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/archive-role-arn"
-	s3RestoreRoleARNFile  = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/restore-role-arn"
-	maximumSTSTTL         = 15 * time.Minute
+	vaultTokenFile         = "/var/run/secrets/tokens/vault"
+	workloadTicketKeyFile  = "/var/run/config/mattercodex/runtime-workload-ticket/public-key.hex"
+	brokerTLSCAFile        = "/var/run/config/mattercodex/runtime-credential-authority/ca.pem"
+	brokerTLSCertFile      = "/var/run/config/mattercodex/runtime-credential-authority/tls.crt"
+	brokerTLSKeyFile       = "/var/run/config/mattercodex/runtime-credential-authority/tls.key"
+	s3KMSKeyARNFile        = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/kms-key-arn"
+	s3ArchiveRoleARNFile   = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/archive-role-arn"
+	s3RestoreRoleARNFile   = "/var/run/secrets/mattercodex/runtime-credential-broker/s3/restore-role-arn"
+	maximumSTSTTL          = 15 * time.Minute
+	restoreEffectCAFile    = "/var/run/config/mattercodex/runtime-restore-effect/control-plane/ca.pem"
+	restoreEffectCertFile  = "/var/run/secrets/mattercodex/runtime-restore-effect/workload-tls/tls.crt"
+	restoreEffectKeyFile   = "/var/run/secrets/mattercodex/runtime-restore-effect/workload-tls/tls.key"
+	restoreEffectGrantFile = "/var/run/secrets/mattercodex/runtime-restore-effect/application-grant/application-grant.jws"
 )
 
 type runtimeSnapshot struct {
@@ -98,6 +104,21 @@ func run(ctx context.Context) error {
 	}
 	if strings.HasPrefix(os.Args[1], "check-") {
 		return checkAuthorityFiles(strings.TrimPrefix(os.Args[1], "check-"))
+	}
+	if strings.HasPrefix(os.Args[1], "ready-") {
+		mode := strings.TrimPrefix(os.Args[1], "ready-")
+		if err := checkAuthorityFiles(mode); err != nil {
+			return err
+		}
+		if mode != "s3-restore" {
+			return nil
+		}
+		client, err := dialRestoreEffectClient(ctx)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+		return client.Check(ctx)
 	}
 	if os.Args[1] == "copy-credential" {
 		return runCredentialCopy(ctx)
@@ -447,6 +468,17 @@ func runAuthority(ctx context.Context, mode string) error {
 	if err != nil {
 		return errors.New("create credential authority Kubernetes client")
 	}
+	var restoreEffects *sharedclient.Client
+	if mode == "s3-restore" {
+		restoreEffects, err = dialRestoreEffectClient(ctx)
+		if err != nil {
+			return err
+		}
+		defer restoreEffects.Close()
+		if err := restoreEffects.Check(ctx); err != nil {
+			return errors.New("restore effect authority is unavailable")
+		}
+	}
 	tlsConfig, err := exactMTLSServerConfig(brokerTLSCAFile, brokerTLSCertFile, brokerTLSKeyFile)
 	if err != nil {
 		return err
@@ -464,9 +496,15 @@ func runAuthority(ctx context.Context, mode string) error {
 			http.Error(writer, "credential authority dependency is unavailable", http.StatusServiceUnavailable)
 			return
 		}
+		if restoreEffects != nil {
+			if effectErr := restoreEffects.Check(probeCtx); effectErr != nil {
+				http.Error(writer, "restore effect authority is unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
 		writer.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/v1/materialize", authorityHandler(client, namespace, mode, allowedClients))
+	mux.HandleFunc("/v1/materialize", authorityHandler(client, restoreEffects, namespace, mode, allowedClients))
 	server := &http.Server{Addr: listen, Handler: mux, TLSConfig: tlsConfig,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 30 * time.Second}
 	errChannel := make(chan error, 1)
@@ -504,6 +542,10 @@ func checkAuthorityFiles(mode string) error {
 		} else {
 			paths = append(paths, s3RestoreRoleARNFile)
 		}
+	}
+	if mode == "s3-restore" {
+		paths = append(paths, restoreEffectCAFile, restoreEffectCertFile,
+			restoreEffectKeyFile, restoreEffectGrantFile)
 	}
 	for _, path := range paths {
 		if path == "" {
@@ -546,6 +588,7 @@ func exactMTLSServerConfig(caFile, certificateFile, privateKeyFile string) (*tls
 
 func authorityHandler(
 	client kubernetes.Interface,
+	restoreEffects *sharedclient.Client,
 	namespace, mode string,
 	allowedClients map[string]struct{},
 ) http.HandlerFunc {
@@ -579,6 +622,14 @@ func authorityHandler(
 			http.Error(writer, "credential authority bearer is invalid", http.StatusForbidden)
 			return
 		}
+		if mode == "s3-restore" {
+			if restoreEffects == nil || authorizeRestoreCredentialEffect(
+				request.Context(), restoreEffects, snapshot.Execution,
+			) != nil {
+				http.Error(writer, "restore effect authorization was rejected", http.StatusConflict)
+				return
+			}
+		}
 		requestDigest := sha256.Sum256(append([]byte(mode+"\x00"), raw...))
 		digest := hex.EncodeToString(requestDigest[:])
 		if rejoined, receiptErr := rejoinAuthorityReceipt(request.Context(), client, namespace, snapshot.Execution, mode, digest); receiptErr != nil {
@@ -599,6 +650,53 @@ func authorityHandler(
 		}
 		writer.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func dialRestoreEffectClient(ctx context.Context) (*sharedclient.Client, error) {
+	target := requiredEnv("RUNTIME_RESTORE_EFFECT_CONTROL_PLANE_TARGET")
+	serverName := requiredEnv("RUNTIME_RESTORE_EFFECT_CONTROL_PLANE_TLS_SERVER_NAME")
+	if target == "" || serverName == "" {
+		return nil, errors.New("restore effect control-plane configuration is invalid")
+	}
+	return sharedclient.Dial(ctx, sharedclient.Config{
+		Target: target, TLSServerName: serverName, CAFile: restoreEffectCAFile,
+		ClientCertificateFile: restoreEffectCertFile, ClientPrivateKeyFile: restoreEffectKeyFile,
+		ApplicationGrantFile: restoreEffectGrantFile, ExpectedIssuerUID: 29001,
+		ExpectedIssuerGID: 29000, DialTimeout: 2 * time.Second,
+		Operations: sharedclient.RuntimeRestoreEffectOperations(),
+	})
+}
+
+func authorizeRestoreCredentialEffect(
+	ctx context.Context,
+	client *sharedclient.Client,
+	execution entity.Execution,
+) error {
+	if string(execution.State) != "ADMITTED" || execution.RestoreOperationID == "" ||
+		execution.RestoreOperationGeneration == 0 || !validSHA256(execution.RestoreSourceAuthoritySHA256) {
+		return errors.New("restore effect tuple is invalid")
+	}
+	key := uuid.NewSHA1(uuid.NameSpaceOID, []byte("runtime-restore-s3-credential:"+
+		execution.RestoreOperationID+":"+strconv.FormatUint(execution.RestoreOperationGeneration, 10))).String()
+	response, err := client.ControlPlane.AuthorizeRuntimeRestoreEffect(ctx,
+		&controlplanev1.AuthorizeRuntimeRestoreEffectRequest{
+			IdempotencyKey: key, ExecutionId: execution.ID,
+			ExpectedVersion: execution.Version, ExpectedFence: execution.Fence,
+			RestoreOperationId:           execution.RestoreOperationID,
+			RestoreOperationGeneration:   execution.RestoreOperationGeneration,
+			RestoreSourceAuthoritySha256: execution.RestoreSourceAuthoritySHA256,
+			Effect:                       controlplanev1.RuntimeRestoreEffect_RUNTIME_RESTORE_EFFECT_S3_CREDENTIAL,
+		})
+	if err != nil {
+		return err
+	}
+	current := response.GetExecution()
+	if current == nil || current.GetExecutionId() != execution.ID || current.GetVersion() != execution.Version ||
+		current.GetFence() != execution.Fence ||
+		current.GetState() != controlplanev1.RuntimeExecutionState_RUNTIME_EXECUTION_STATE_ADMITTED {
+		return errors.New("restore effect readback mismatch")
+	}
+	return nil
 }
 
 func allowedPeer(certificate *x509.Certificate, allowed map[string]struct{}) bool {

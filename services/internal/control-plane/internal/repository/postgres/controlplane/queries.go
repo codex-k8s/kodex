@@ -246,6 +246,9 @@ var sqlRuntimeRestoreOperationConsume string
 //go:embed sql/runtime_restore_operation__revoke.sql
 var sqlRuntimeRestoreOperationRevoke string
 
+//go:embed sql/runtime_restore_effect__authorize.sql
+var sqlRuntimeRestoreEffectAuthorize string
+
 //go:embed sql/runtime_incident__insert.sql
 var sqlRuntimeIncidentInsert string
 

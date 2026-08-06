@@ -2992,6 +2992,25 @@ func (wrapped *transaction) RevokeRuntimeRestoreOperation(
 	return nil
 }
 
+func (wrapped *transaction) AuthorizeRuntimeRestoreEffect(
+	ctx context.Context,
+	operationID, targetExecutionID string,
+	generation uint64,
+	sourceAuthoritySHA256, effect, effectSHA256 string,
+	updatedAt time.Time,
+) (bool, error) {
+	var applied bool
+	err := wrapped.tx.QueryRow(ctx, sqlRuntimeRestoreEffectAuthorize, pgx.StrictNamedArgs{
+		"id": operationID, "target_execution_id": targetExecutionID,
+		"generation": generation, "source_authority_sha256": sourceAuthoritySHA256,
+		"effect": effect, "effect_sha256": effectSHA256, "updated_at": updatedAt,
+	}).Scan(&applied)
+	if err != nil {
+		return false, mapError(err)
+	}
+	return applied, nil
+}
+
 func (wrapped *transaction) GetRuntimeRestoreOperation(
 	ctx context.Context,
 	operationID string,
@@ -3568,14 +3587,16 @@ type rowScanner interface {
 
 func scanBackup(row rowScanner) (domainrepo.Backup, error) {
 	var backup domainrepo.Backup
+	var freshnessBase, latestExpired time.Time
+	var archiveCount, expiredCount int64
 	err := row.Scan(
 		&backup.ID, &backup.OrganizationID, &backup.ProjectID, &backup.SessionID,
 		&backup.SourceVersion, &backup.SourceFence,
-		&backup.Version,
+		&freshnessBase, &latestExpired, &archiveCount, &expiredCount,
 		&backup.SourceRuntimeRevisionSHA256, &backup.SourceImmutableInputSHA256,
 		&backup.ArchiveSHA256, &backup.ProvenanceSHA256,
 		&backup.RuntimeState, &backup.State, &backup.Restorable, &backup.RestoreOperationID,
-		&backup.CreatedAt, &backup.AvailableAt, &backup.RetainUntil, &backup.UpdatedAt,
+		&backup.CreatedAt, &backup.AvailableAt, &backup.RetainUntil,
 	)
 	if err != nil {
 		return domainrepo.Backup{}, mapError(err)
@@ -3583,8 +3604,39 @@ func scanBackup(row rowScanner) (domainrepo.Backup, error) {
 	backup.CreatedAt = backup.CreatedAt.UTC()
 	backup.AvailableAt = nullableEpoch(backup.AvailableAt)
 	backup.RetainUntil = nullableEpoch(backup.RetainUntil)
-	backup.UpdatedAt = backup.UpdatedAt.UTC()
+	if archiveCount <= 0 || expiredCount < 0 {
+		return domainrepo.Backup{}, errs.ErrStateConflict
+	}
+	backup.Version, backup.UpdatedAt, err = backupProjectionFreshness(
+		freshnessBase, nullableEpoch(latestExpired), uint64(archiveCount), uint64(expiredCount),
+	)
+	if err != nil {
+		return domainrepo.Backup{}, err
+	}
 	return backup, nil
+}
+
+// backupProjectionFreshness превращает единый session-scoped timestamp,
+// монотонное число архивов и retention deadlines в согласованные version/updatedAt.
+func backupProjectionFreshness(
+	base, latestExpired time.Time,
+	archiveCount, expiredCount uint64,
+) (uint64, time.Time, error) {
+	base = base.UTC()
+	if latestExpired.After(base) {
+		base = latestExpired.UTC()
+	}
+	maximumCounter := uint64((24 * time.Hour) / time.Microsecond)
+	if base.IsZero() || archiveCount == 0 || archiveCount > maximumCounter ||
+		expiredCount > maximumCounter-archiveCount {
+		return 0, time.Time{}, errs.ErrStateConflict
+	}
+	updatedAt := base.Add(time.Duration(archiveCount+expiredCount) * time.Microsecond)
+	version := updatedAt.UnixMicro()
+	if version <= 0 || version > 9007199254740991 {
+		return 0, time.Time{}, errs.ErrStateConflict
+	}
+	return uint64(version), updatedAt, nil
 }
 
 func scanRuntimeRestoreOperation(row rowScanner) (domainrepo.RuntimeRestoreOperation, error) {

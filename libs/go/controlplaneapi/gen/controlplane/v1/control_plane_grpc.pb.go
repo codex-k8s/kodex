@@ -112,6 +112,7 @@ const (
 	ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName                   = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeOutput"
 	ControlPlaneService_RegisterRuntimeOutput_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RegisterRuntimeOutput"
 	ControlPlaneService_AdmitRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
+	ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName            = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeRestoreEffect"
 	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
 	ControlPlaneService_RecordRuntimeIncident_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident"
 	ControlPlaneService_CompleteRuntimeExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
@@ -364,6 +365,9 @@ type ControlPlaneServiceClient interface {
 	RegisterRuntimeOutput(ctx context.Context, in *RegisterRuntimeOutputRequest, opts ...grpc.CallOption) (*RegisterRuntimeOutputResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
 	AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error)
+	// AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
+	// с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
+	AuthorizeRuntimeRestoreEffect(ctx context.Context, in *AuthorizeRuntimeRestoreEffectRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeRestoreEffectResponse, error)
 	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
 	HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error)
 	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
@@ -1362,6 +1366,16 @@ func (c *controlPlaneServiceClient) AdmitRuntimeExecution(ctx context.Context, i
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) AuthorizeRuntimeRestoreEffect(ctx context.Context, in *AuthorizeRuntimeRestoreEffectRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeRestoreEffectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeRuntimeRestoreEffectResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HeartbeatRuntimeExecutionResponse)
@@ -1855,6 +1869,9 @@ type ControlPlaneServiceServer interface {
 	RegisterRuntimeOutput(context.Context, *RegisterRuntimeOutputRequest) (*RegisterRuntimeOutputResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
 	AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error)
+	// AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
+	// с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
+	AuthorizeRuntimeRestoreEffect(context.Context, *AuthorizeRuntimeRestoreEffectRequest) (*AuthorizeRuntimeRestoreEffectResponse, error)
 	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
 	HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error)
 	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
@@ -2201,6 +2218,9 @@ func (UnimplementedControlPlaneServiceServer) RegisterRuntimeOutput(context.Cont
 }
 func (UnimplementedControlPlaneServiceServer) AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdmitRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeRestoreEffect(context.Context, *AuthorizeRuntimeRestoreEffectRequest) (*AuthorizeRuntimeRestoreEffectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeRestoreEffect not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HeartbeatRuntimeExecution not implemented")
@@ -3978,6 +3998,24 @@ func _ControlPlaneService_AdmitRuntimeExecution_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_AuthorizeRuntimeRestoreEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeRuntimeRestoreEffectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeRestoreEffect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeRestoreEffect(ctx, req.(*AuthorizeRuntimeRestoreEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_HeartbeatRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HeartbeatRuntimeExecutionRequest)
 	if err := dec(in); err != nil {
@@ -4842,6 +4880,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdmitRuntimeExecution",
 			Handler:    _ControlPlaneService_AdmitRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "AuthorizeRuntimeRestoreEffect",
+			Handler:    _ControlPlaneService_AuthorizeRuntimeRestoreEffect_Handler,
 		},
 		{
 			MethodName: "HeartbeatRuntimeExecution",

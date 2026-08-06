@@ -101,6 +101,9 @@ func VerifyForAudience(compact string, publicKey ed25519.PublicKey, execution en
 		return Payload{}, errors.New("runtime workload ticket tuple mismatch")
 	}
 	if execution.RestoreOperationID != "" {
+		if audience != "mattercodex-runtime-s3-archive" && string(execution.State) != "ADMITTED" {
+			return Payload{}, errors.New("runtime restore workload ticket state is invalid")
+		}
 		authoritySHA256, authorityErr := restoreSourceAuthoritySHA256(execution)
 		if authorityErr != nil || authoritySHA256 != payload.RestoreSourceAuthoritySHA256 {
 			return Payload{}, errors.New("runtime restore source authority mismatch")

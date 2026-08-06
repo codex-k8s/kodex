@@ -174,6 +174,42 @@ func (server *Server) AdmitRuntimeExecution(
 	}, nil
 }
 
+func (server *Server) AuthorizeRuntimeRestoreEffect(
+	ctx context.Context,
+	request *controlplanev1.AuthorizeRuntimeRestoreEffectRequest,
+) (*controlplanev1.AuthorizeRuntimeRestoreEffectResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	effect := ""
+	switch request.GetEffect() {
+	case controlplanev1.RuntimeRestoreEffect_RUNTIME_RESTORE_EFFECT_KUBERNETES_MATERIALIZATION:
+		effect = "KUBERNETES_MATERIALIZATION"
+	case controlplanev1.RuntimeRestoreEffect_RUNTIME_RESTORE_EFFECT_S3_CREDENTIAL:
+		effect = "S3_CREDENTIAL"
+	}
+	execution, err := server.service.AuthorizeRuntimeRestoreEffect(ctx, resource.RuntimeRestoreEffectInput{
+		RuntimeExecutionInput: resource.RuntimeExecutionInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+			ExecutionID: request.GetExecutionId(), ExpectedVersion: request.GetExpectedVersion(),
+			ExpectedFence: request.GetExpectedFence(),
+		},
+		RestoreOperationID:           request.GetRestoreOperationId(),
+		RestoreOperationGeneration:   request.GetRestoreOperationGeneration(),
+		RestoreSourceAuthoritySHA256: request.GetRestoreSourceAuthoritySha256(),
+		Effect:                       effect,
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	return &controlplanev1.AuthorizeRuntimeRestoreEffectResponse{
+		Execution: toProtoRuntimeExecution(execution),
+	}, nil
+}
+
 func (server *Server) HeartbeatRuntimeExecution(
 	ctx context.Context,
 	request *controlplanev1.HeartbeatRuntimeExecutionRequest,

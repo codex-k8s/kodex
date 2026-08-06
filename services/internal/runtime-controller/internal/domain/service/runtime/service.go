@@ -133,6 +133,9 @@ func (service *Service) ReconcileNext(ctx context.Context) error {
 		admitted.Execution.State != enum.ExecutionAdmitted || admitted.LeaseToken == "" {
 		return errs.ErrStateConflict
 	}
+	if err := service.authorizeRestoreMaterialization(ctx, admitted.Execution); err != nil {
+		return err
+	}
 	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
 		return err
 	}
@@ -286,6 +289,11 @@ func (service *Service) recoverAdmission(
 		(admitted.Execution.State != enum.ExecutionAdmitted && admitted.Execution.State != enum.ExecutionRunning) {
 		return runtimerepo.Journal{}, errs.ErrStateConflict
 	}
+	if admitted.Execution.State == enum.ExecutionAdmitted {
+		if err := service.authorizeRestoreMaterialization(ctx, admitted.Execution); err != nil {
+			return runtimerepo.Journal{}, err
+		}
+	}
 	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
 		return runtimerepo.Journal{}, err
 	}
@@ -419,6 +427,9 @@ func (service *Service) resumeAdmission(
 	}
 	journal.Execution = admitted.Execution
 	journal.LeaseToken = admitted.LeaseToken
+	if err := service.authorizeRestoreMaterialization(ctx, admitted.Execution); err != nil {
+		return err
+	}
 	if err := service.cluster.UpdateJournal(ctx, admitted.Execution, admitted.LeaseToken); err != nil {
 		return err
 	}
@@ -430,6 +441,19 @@ func (service *Service) resumeAdmission(
 		return nil
 	}
 	return err
+}
+
+func (service *Service) authorizeRestoreMaterialization(ctx context.Context, execution entity.Execution) error {
+	if execution.RestoreOperationID == "" {
+		return nil
+	}
+	if execution.State != enum.ExecutionAdmitted || execution.RestoreOperationGeneration == 0 ||
+		execution.RestoreSourceAuthoritySHA256 == "" {
+		return errs.ErrStateConflict
+	}
+	key := uuid.NewSHA1(uuid.NameSpaceOID, []byte("runtime-restore-materialize:"+
+		execution.RestoreOperationID+":"+strconv.FormatUint(execution.RestoreOperationGeneration, 10))).String()
+	return service.controlPlane.AuthorizeRestoreEffect(ctx, key, execution, "KUBERNETES_MATERIALIZATION")
 }
 
 func (service *Service) heartbeat(ctx context.Context, journal runtimerepo.Journal) error {
