@@ -82,6 +82,7 @@ const (
 	ControlPlaneService_GetBackup_FullMethodName                                = "/controlplane.v1.ControlPlaneService/GetBackup"
 	ControlPlaneService_RestoreBackup_FullMethodName                            = "/controlplane.v1.ControlPlaneService/RestoreBackup"
 	ControlPlaneService_GetRestoreOperation_FullMethodName                      = "/controlplane.v1.ControlPlaneService/GetRestoreOperation"
+	ControlPlaneService_ListRestoreOperations_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ListRestoreOperations"
 	ControlPlaneService_RegisterArtifact_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
 	ControlPlaneService_RecordArtifactScan_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
 	ControlPlaneService_ManageRoleImageRecipe_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageRoleImageRecipe"
@@ -290,6 +291,9 @@ type ControlPlaneServiceClient interface {
 	RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error)
 	// GetRestoreOperation возвращает единый versioned readback restore graph.
 	GetRestoreOperation(ctx context.Context, in *GetRestoreOperationRequest, opts ...grpc.CallOption) (*GetRestoreOperationResponse, error)
+	// ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
+	// включая фильтр по backup после потери HTTP Location.
+	ListRestoreOperations(ctx context.Context, in *ListRestoreOperationsRequest, opts ...grpc.CallOption) (*ListRestoreOperationsResponse, error)
 	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
@@ -1058,6 +1062,16 @@ func (c *controlPlaneServiceClient) GetRestoreOperation(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ListRestoreOperations(ctx context.Context, in *ListRestoreOperationsRequest, opts ...grpc.CallOption) (*ListRestoreOperationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRestoreOperationsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListRestoreOperations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterArtifactResponse)
@@ -1768,6 +1782,9 @@ type ControlPlaneServiceServer interface {
 	RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error)
 	// GetRestoreOperation возвращает единый versioned readback restore graph.
 	GetRestoreOperation(context.Context, *GetRestoreOperationRequest) (*GetRestoreOperationResponse, error)
+	// ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
+	// включая фильтр по backup после потери HTTP Location.
+	ListRestoreOperations(context.Context, *ListRestoreOperationsRequest) (*ListRestoreOperationsResponse, error)
 	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
@@ -2094,6 +2111,9 @@ func (UnimplementedControlPlaneServiceServer) RestoreBackup(context.Context, *Re
 }
 func (UnimplementedControlPlaneServiceServer) GetRestoreOperation(context.Context, *GetRestoreOperationRequest) (*GetRestoreOperationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRestoreOperation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListRestoreOperations(context.Context, *ListRestoreOperationsRequest) (*ListRestoreOperationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRestoreOperations not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterArtifact not implemented")
@@ -3418,6 +3438,24 @@ func _ControlPlaneService_GetRestoreOperation_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ListRestoreOperations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRestoreOperationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListRestoreOperations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListRestoreOperations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListRestoreOperations(ctx, req.(*ListRestoreOperationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_RegisterArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RegisterArtifactRequest)
 	if err := dec(in); err != nil {
@@ -4684,6 +4722,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRestoreOperation",
 			Handler:    _ControlPlaneService_GetRestoreOperation_Handler,
+		},
+		{
+			MethodName: "ListRestoreOperations",
+			Handler:    _ControlPlaneService_ListRestoreOperations_Handler,
 		},
 		{
 			MethodName: "RegisterArtifact",

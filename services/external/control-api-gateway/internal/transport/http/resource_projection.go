@@ -211,14 +211,57 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 	case *controlplanev1.ResourceSpec_Schedule:
 		ownership, err := projectionOwnership(value.Schedule.GetOwnership(), version)
 		target, targetErr := requiredUUID(value.Schedule.GetTargetResourceId())
+		promptProfile, promptErr := requiredUUID(value.Schedule.GetPromptProfileId())
+		runtimeRevision, runtimeErr := requiredUUID(value.Schedule.GetRuntimeRevisionId())
+		promptArtifact, artifactErr := requiredUUID(value.Schedule.GetPromptArtifactId())
+		room, roomErr := optionalUUID(value.Schedule.GetRoomId())
+		executionSession, sessionErr := optionalUUID(value.Schedule.GetExecutionSessionId())
 		kind := generated.ResourceKind(strings.TrimPrefix(value.Schedule.GetTargetKind().String(), "RESOURCE_KIND_"))
-		if err != nil || targetErr != nil || !kind.Valid() || value.Schedule.GetNextRunAt() == nil {
+		overlap := generated.ScheduleOverlapPolicy(strings.TrimPrefix(value.Schedule.GetOverlapPolicy().String(), "SCHEDULE_OVERLAP_POLICY_"))
+		misfire := generated.ScheduleMisfirePolicy(strings.TrimPrefix(value.Schedule.GetMisfirePolicy().String(), "SCHEDULE_MISFIRE_POLICY_"))
+		sessionPolicy := generated.ScheduleSessionPolicy(strings.TrimPrefix(value.Schedule.GetSessionPolicy().String(), "SCHEDULE_SESSION_POLICY_"))
+		notification := generated.ScheduleNotificationPolicy(strings.TrimPrefix(value.Schedule.GetNotificationPolicy().String(), "SCHEDULE_NOTIFICATION_POLICY_"))
+		targetType := generated.ScheduleTargetType(strings.TrimPrefix(value.Schedule.GetTargetType().String(), "SCHEDULE_TARGET_TYPE_"))
+		if err != nil || targetErr != nil || promptErr != nil || runtimeErr != nil || artifactErr != nil ||
+			roomErr != nil || sessionErr != nil || !kind.Valid() || !overlap.Valid() || !misfire.Valid() ||
+			!sessionPolicy.Valid() || !notification.Valid() || !targetType.Valid() ||
+			value.Schedule.GetNextRunAt() == nil || value.Schedule.GetMisfireGrace() == nil ||
+			value.Schedule.GetInitialBackoff() == nil || value.Schedule.GetMaximumBackoff() == nil ||
+			value.Schedule.GetDeadLetterAfter() == nil || value.Schedule.GetMaximumExecutionDuration() == nil {
 			return generated.ResourceSpecProjection{}, errors.New("schedule projection is invalid")
 		}
 		cron := optionalString(value.Schedule.GetCron())
-		return generated.ResourceSpecProjection{Schedule: &generated.ScheduleProjection{TargetResourceId: target, TargetKind: kind, TargetVersion: int64(value.Schedule.GetTargetVersion()), Cron: cron, Timezone: value.Schedule.GetTimezone(), NextRunAt: value.Schedule.GetNextRunAt().AsTime(), MaximumAttempts: int(value.Schedule.GetMaximumAttempts()), Ownership: ownership}}, nil
+		var interval *int64
+		if value.Schedule.GetInterval() != nil {
+			seconds := int64(value.Schedule.GetInterval().AsDuration() / time.Second)
+			interval = &seconds
+		}
+		playbookRef := optionalString(value.Schedule.GetPlaybookRef())
+		var playbookVersion *int64
+		if value.Schedule.GetPlaybookVersion() != 0 {
+			converted := int64(value.Schedule.GetPlaybookVersion())
+			playbookVersion = &converted
+		}
+		return generated.ResourceSpecProjection{Schedule: &generated.ScheduleProjection{
+			TargetResourceId: target, TargetKind: kind, TargetVersion: int64(value.Schedule.GetTargetVersion()),
+			Cron: cron, IntervalSeconds: interval, Timezone: value.Schedule.GetTimezone(),
+			NextRunAt: value.Schedule.GetNextRunAt().AsTime(), Calendar: generated.ScheduleProjectionCalendar(value.Schedule.GetCalendar()),
+			OverlapPolicy: overlap, MisfirePolicy: misfire,
+			MisfireGraceSeconds:    int64(value.Schedule.GetMisfireGrace().AsDuration() / time.Second),
+			DeliveryPolicy:         generated.ScheduleProjectionDeliveryPolicy(value.Schedule.GetDeliveryPolicy()),
+			MaximumAttempts:        int(value.Schedule.GetMaximumAttempts()),
+			InitialBackoffSeconds:  int64(value.Schedule.GetInitialBackoff().AsDuration() / time.Second),
+			MaximumBackoffSeconds:  int64(value.Schedule.GetMaximumBackoff().AsDuration() / time.Second),
+			DeadLetterAfterSeconds: int64(value.Schedule.GetDeadLetterAfter().AsDuration() / time.Second),
+			PromptProfileId:        promptProfile, PromptRevision: int64(value.Schedule.GetPromptRevision()),
+			SessionPolicy: sessionPolicy, RoomId: room, NotificationPolicy: notification,
+			MaximumExecutionSeconds: int64(value.Schedule.GetMaximumExecutionDuration().AsDuration() / time.Second),
+			Coalesce:                value.Schedule.GetCoalesce(), RuntimeRevisionId: runtimeRevision, TargetType: targetType,
+			PlaybookRef: playbookRef, PlaybookVersion: playbookVersion, PromptArtifactId: promptArtifact,
+			ExecutionSessionId: executionSession, Ownership: ownership,
+		}}, nil
 	case *controlplanev1.ResourceSpec_OwnerGate:
-		return ownerGateProjection(value.OwnerGate)
+		return ownerGateProjection(resource, value.OwnerGate)
 	case *controlplanev1.ResourceSpec_MemoryRecord:
 		role, err := optionalUUID(value.MemoryRecord.GetRoleId())
 		if err != nil {
@@ -374,7 +417,7 @@ func processRunProjection(value *controlplanev1.ProcessRunSpec) (generated.Resou
 	return generated.ResourceSpecProjection{ProcessRun: &generated.ProcessRunProjection{ParentProcessRunId: parent, PlaybookRef: value.GetPlaybookRef(), PolicyRevision: int64(value.GetPolicyRevision()), RootTriggerRef: value.GetRootTriggerRef(), RootSessionId: rootSession, RootTurnId: rootTurn, RootAttempt: int(value.GetRootAttempt()), ImmutableInputSha256: value.GetImmutableInputSha256(), RuntimeRevisionId: runtimeID, CurrentSessionId: currentSession, CurrentTurnId: currentTurn, CurrentAttempt: attempt}}, nil
 }
 
-func ownerGateProjection(value *controlplanev1.OwnerGateSpec) (generated.ResourceSpecProjection, error) {
+func ownerGateProjection(resource *controlplanev1.Resource, value *controlplanev1.OwnerGateSpec) (generated.ResourceSpecProjection, error) {
 	processID, err := requiredUUID(value.GetProcessRunId())
 	if err != nil {
 		return generated.ResourceSpecProjection{}, err
@@ -394,7 +437,32 @@ func ownerGateProjection(value *controlplanev1.OwnerGateSpec) (generated.Resourc
 	if value.GetExpiresAt() == nil || !decision.Valid() {
 		return generated.ResourceSpecProjection{}, errors.New("owner gate projection is invalid")
 	}
-	return generated.ResourceSpecProjection{OwnerGate: &generated.OwnerGateProjection{ProcessRunId: processID, ResultSha256: value.GetResultSha256(), ExpiresAt: value.GetExpiresAt().AsTime(), Decision: decision, SessionId: sessionID, TurnId: turnID, Attempt: int(value.GetAttempt()), ImmutableInputSha256: value.GetImmutableInputSha256()}}, nil
+	deliveryState := generated.OwnerGateProjectionDeliveryStateAWAITINGDELIVERYPROOF
+	nextAction := generated.OwnerGateProjectionNextActionWAITFORDELIVERY
+	resolvable := false
+	var deliveredAt *time.Time
+	if value.GetDeliveredAt() != nil {
+		item := value.GetDeliveredAt().AsTime()
+		deliveredAt = &item
+	}
+	state := strings.TrimPrefix(resource.GetState().String(), "LIFECYCLE_STATE_")
+	if state == "EXPIRED" {
+		deliveryState = generated.OwnerGateProjectionDeliveryStateEXPIRED
+		nextAction = generated.OwnerGateProjectionNextActionREADTERMINAL
+	} else if state != "WAITING_OWNER" {
+		deliveryState = generated.OwnerGateProjectionDeliveryStateTERMINAL
+		nextAction = generated.OwnerGateProjectionNextActionREADTERMINAL
+	} else if value.GetDeliveryProviderReceiptSha256() != "" && deliveredAt != nil {
+		deliveryState = generated.OwnerGateProjectionDeliveryStateREADY
+		nextAction = generated.OwnerGateProjectionNextActionRESOLVE
+		resolvable = true
+	}
+	return generated.ResourceSpecProjection{OwnerGate: &generated.OwnerGateProjection{
+		ProcessRunId: processID, ResultSha256: value.GetResultSha256(), ExpiresAt: value.GetExpiresAt().AsTime(),
+		Decision: decision, SessionId: sessionID, TurnId: turnID, Attempt: int(value.GetAttempt()),
+		ImmutableInputSha256: value.GetImmutableInputSha256(), DeliveryState: deliveryState,
+		Resolvable: resolvable, DeliveredAt: deliveredAt, NextAction: nextAction,
+	}}, nil
 }
 
 func workClaimProjection(value *controlplanev1.WorkClaimSpec) (generated.ResourceSpecProjection, error) {

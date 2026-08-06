@@ -16,7 +16,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 18 {
+	if loaded.Revision != 19 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
 	}
 	for _, producerID := range []string{

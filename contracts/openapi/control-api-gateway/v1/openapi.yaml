@@ -729,6 +729,28 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /restore-operations:
+    get:
+      tags: [backups]
+      summary: Обнаружить связанные owner restore operations после потери Location
+      operationId: listRestoreOperations
+      security: [{ ownerSession: [] }]
+      parameters:
+        - name: backupId
+          in: query
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Owner-scoped страница безопасных restore readbacks с однозначной связью с backup.
+          content: { application/json: { schema: { $ref: '#/components/schemas/RestoreOperationPage' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /access-resources:
     post:
       tags: [resources]
@@ -1524,11 +1546,38 @@ components:
         targetKind: { $ref: '#/components/schemas/ResourceKind' }
         targetVersion: { type: integer, format: int64, minimum: 1 }
         cron: { type: string }
+        intervalSeconds: { type: integer, format: int64, minimum: 60, maximum: 31536000 }
         timezone: { type: string }
         nextRunAt: { type: string, format: date-time }
+        calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
+        overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
+        misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
+        misfireGraceSeconds: { type: integer, format: int64, minimum: 0, maximum: 86400 }
+        deliveryPolicy: { type: string, enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT] }
         maximumAttempts: { type: integer, minimum: 1 }
+        initialBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        maximumBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        deadLetterAfterSeconds: { type: integer, format: int64, minimum: 1, maximum: 2592000 }
+        promptProfileId: { type: string, format: uuid }
+        promptRevision: { type: integer, format: int64, minimum: 1 }
+        sessionPolicy: { $ref: '#/components/schemas/ScheduleSessionPolicy' }
+        roomId: { type: string, format: uuid }
+        notificationPolicy: { $ref: '#/components/schemas/ScheduleNotificationPolicy' }
+        maximumExecutionSeconds: { type: integer, format: int64, minimum: 60, maximum: 86400 }
+        coalesce: { type: boolean }
+        runtimeRevisionId: { type: string, format: uuid }
+        targetType: { $ref: '#/components/schemas/ScheduleTargetType' }
+        playbookRef: { type: string }
+        playbookVersion: { type: integer, format: int64, minimum: 1 }
+        promptArtifactId: { type: string, format: uuid }
+        executionSessionId: { type: string, format: uuid }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
-      required: [targetResourceId, targetKind, targetVersion, timezone, nextRunAt, maximumAttempts, ownership]
+      required: [targetResourceId, targetKind, targetVersion, timezone, nextRunAt, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, promptProfileId, promptRevision, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, runtimeRevisionId, targetType, promptArtifactId, ownership]
+      oneOf:
+        - required: [cron]
+          not: { required: [intervalSeconds] }
+        - required: [intervalSeconds]
+          not: { required: [cron] }
     ScheduleOccurrenceState:
       title: ScheduleOccurrenceState
       type: string
@@ -1582,7 +1631,11 @@ components:
         turnId: { type: string, format: uuid }
         attempt: { type: integer, minimum: 1 }
         immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-      required: [processRunId, resultSha256, expiresAt, decision, sessionId, turnId, attempt, immutableInputSha256]
+        deliveryState: { type: string, enum: [AWAITING_DELIVERY_PROOF, READY, TERMINAL, EXPIRED] }
+        resolvable: { type: boolean }
+        deliveredAt: { type: string, format: date-time }
+        nextAction: { type: string, enum: [WAIT_FOR_DELIVERY, RESOLVE, READ_TERMINAL, NONE] }
+      required: [processRunId, resultSha256, expiresAt, decision, sessionId, turnId, attempt, immutableInputSha256, deliveryState, resolvable, nextAction]
     ResolveOwnerGateDecision:
       type: string
       enum: [APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED]
@@ -1592,13 +1645,7 @@ components:
       properties:
         decision: { $ref: '#/components/schemas/ResolveOwnerGateDecision' }
         reason: { type: string, minLength: 1, maxLength: 2048 }
-        processRunId: { type: string, format: uuid }
-        processExpectedVersion: { type: integer, format: int64, minimum: 1 }
-        sessionId: { type: string, format: uuid }
-        turnId: { type: string, format: uuid }
-        attempt: { type: integer, minimum: 1, maximum: 100 }
-        immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-      required: [decision, reason, processRunId, processExpectedVersion, sessionId, turnId, attempt, immutableInputSha256]
+      required: [decision, reason]
     ResolveOwnerGateResult:
       type: object
       additionalProperties: false
@@ -1608,7 +1655,7 @@ components:
       required: [ownerGate, processRun]
     BackupState:
       type: string
-      enum: [VERIFYING, RETENTION_PENDING, AVAILABLE, RESTORING, RESTORED, EXPIRED, UNAVAILABLE]
+      enum: [VERIFYING, RETENTION_PENDING, AVAILABLE, RESTORING, RESTORED, RESTORE_FAILED, RESTORE_CANCELLED, RESTORE_EXPIRED, EXPIRED, UNAVAILABLE]
     Backup:
       type: object
       additionalProperties: false
@@ -1628,6 +1675,7 @@ components:
         availableAt: { type: string, format: date-time }
         retainUntil: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        restoreOperationId: { type: string, format: uuid }
       required: [backupId, sourceVersion, sourceRuntimeRevisionSha256, sourceImmutableInputSha256, archiveSha256, provenanceSha256, state, scope, scopeId, restorable, createdAt, updatedAt]
     BackupPage:
       type: object
@@ -1647,7 +1695,10 @@ components:
       required: [archiveSha256, provenanceSha256, scope, scopeId]
     RestoreOperationState:
       type: string
-      enum: [QUEUED, ASSIGNED, MATERIALIZING, READY, RUNNING, SUCCEEDED, FAILED, CANCELLED, EXPIRED]
+      enum: [QUEUED, ASSIGNED, MATERIALIZING, READY, RUNNING, SUCCEEDED, FAILED, CANCELLED, EXPIRED, RETRYING]
+    RestoreOperationNextAction:
+      type: string
+      enum: [WAIT, RETRY_RUNTIME, READ_BACKUP, NONE]
     RestoreOperation:
       type: object
       additionalProperties: false
@@ -1664,10 +1715,20 @@ components:
         scopeId: { type: string, format: uuid }
         targetTurnId: { type: string, format: uuid }
         targetAttempt: { type: integer, minimum: 1, maximum: 100 }
+        generation: { type: integer, format: int64, minimum: 1 }
+        partial: { type: boolean }
+        nextAction: { $ref: '#/components/schemas/RestoreOperationNextAction' }
         errorCode: { type: string, maxLength: 96 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [restoreOperationId, version, state, backupId, sourceVersion, archiveSha256, provenanceSha256, scope, scopeId, targetTurnId, targetAttempt, createdAt, updatedAt]
+      required: [restoreOperationId, version, state, backupId, sourceVersion, archiveSha256, provenanceSha256, scope, scopeId, targetTurnId, targetAttempt, generation, partial, nextAction, createdAt, updatedAt]
+    RestoreOperationPage:
+      type: object
+      additionalProperties: false
+      properties:
+        operations: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RestoreOperation' } }
+        nextPageToken: { type: string }
+      required: [operations]
     MemoryRecordProjection:
       title: MemoryRecordProjection
       type: object

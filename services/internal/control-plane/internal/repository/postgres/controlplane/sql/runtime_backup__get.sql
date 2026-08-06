@@ -38,7 +38,13 @@ SELECT execution.id::text, execution.organization_id::text,
        execution.archive_sha256, coalesce(execution.archive_provenance_sha256, ''),
        execution.state,
        CASE
-         WHEN operation.id IS NOT NULL AND target.restore_assignment_state = 'CONSUMED' THEN 'RESTORED'
+         WHEN operation.id IS NOT NULL AND target.state = 'SUCCEEDED' THEN 'RESTORED'
+         WHEN operation.id IS NOT NULL
+              AND coalesce(target.state, target_turn.state) = 'FAILED' THEN 'RESTORE_FAILED'
+         WHEN operation.id IS NOT NULL
+              AND coalesce(target.state, target_turn.state) = 'CANCELLED' THEN 'RESTORE_CANCELLED'
+         WHEN operation.id IS NOT NULL
+              AND coalesce(target.state, target_turn.state) = 'EXPIRED' THEN 'RESTORE_EXPIRED'
          WHEN operation.id IS NOT NULL THEN 'RESTORING'
          WHEN execution.archive_retain_until <= clock_timestamp() THEN 'EXPIRED'
          WHEN execution.restore_proof_sha256 IS NULL THEN 'VERIFYING'
@@ -47,6 +53,7 @@ SELECT execution.id::text, execution.organization_id::text,
          ELSE 'UNAVAILABLE'
        END,
        (eligible.id IS NOT NULL AND eligible.position = 1 AND operation.id IS NULL),
+       coalesce(operation.id::text, ''),
        execution.created_at,
        coalesce(execution.cleanup_consumed_at, 'epoch'::timestamptz),
        coalesce(execution.archive_retain_until, 'epoch'::timestamptz),
@@ -68,6 +75,10 @@ LEFT JOIN control_plane.runtime_executions AS target
   ON target.organization_id = operation.organization_id
  AND target.project_id = operation.project_id
  AND target.id = operation.target_execution_id
+LEFT JOIN control_plane.resources AS target_turn
+  ON target_turn.organization_id = operation.organization_id
+ AND target_turn.project_id = operation.project_id
+ AND target_turn.id = operation.target_turn_id
 WHERE execution.organization_id = @organization_id::uuid
   AND execution.project_id = @project_id::uuid
   AND execution.archive_reference IS NOT NULL

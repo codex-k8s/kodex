@@ -234,6 +234,18 @@ var sqlRuntimeRestoreOperationGetByBackup string
 //go:embed sql/runtime_restore_operation__owner_get.sql
 var sqlRuntimeRestoreOperationOwnerGet string
 
+//go:embed sql/runtime_restore_operation__owner_list.sql
+var sqlRuntimeRestoreOperationOwnerList string
+
+//go:embed sql/runtime_restore_operation__advance.sql
+var sqlRuntimeRestoreOperationAdvance string
+
+//go:embed sql/runtime_restore_operation__consume.sql
+var sqlRuntimeRestoreOperationConsume string
+
+//go:embed sql/runtime_restore_operation__revoke.sql
+var sqlRuntimeRestoreOperationRevoke string
+
 //go:embed sql/runtime_incident__insert.sql
 var sqlRuntimeIncidentInsert string
 

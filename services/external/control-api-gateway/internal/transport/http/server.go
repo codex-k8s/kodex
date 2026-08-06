@@ -68,6 +68,7 @@ type ControlPlane interface {
 	GetBackup(context.Context, *controlplanev1.GetBackupRequest, ...grpc.CallOption) (*controlplanev1.GetBackupResponse, error)
 	RestoreBackup(context.Context, *controlplanev1.RestoreBackupRequest, ...grpc.CallOption) (*controlplanev1.RestoreBackupResponse, error)
 	GetRestoreOperation(context.Context, *controlplanev1.GetRestoreOperationRequest, ...grpc.CallOption) (*controlplanev1.GetRestoreOperationResponse, error)
+	ListRestoreOperations(context.Context, *controlplanev1.ListRestoreOperationsRequest, ...grpc.CallOption) (*controlplanev1.ListRestoreOperationsResponse, error)
 	ManageRoleImageRecipe(context.Context, *controlplanev1.ManageRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.ManageRoleImageRecipeResponse, error)
 	GetRoleImageRecipe(context.Context, *controlplanev1.GetRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageRecipeResponse, error)
 	ManageImageBuild(context.Context, *controlplanev1.ManageImageBuildRequest, ...grpc.CallOption) (*controlplanev1.ManageImageBuildResponse, error)
@@ -530,18 +531,14 @@ func (server *Server) ResolveOwnerGate(
 	response, err := server.control.ResolveOwnerGate(request.Context(), &controlplanev1.ResolveOwnerGateRequest{
 		IdempotencyKey: params.IdempotencyKey.String(), OwnerGateId: ownerGateID.String(),
 		ExpectedVersion: version, Decision: controlplanev1.OwnerGateDecision(decisionValue),
-		Reason: body.Reason, ProcessRunId: body.ProcessRunId.String(),
-		ProcessExpectedVersion: uint64(body.ProcessExpectedVersion),
-		SessionId:              body.SessionId.String(), TurnId: body.TurnId.String(),
-		Attempt: uint32(body.Attempt), ImmutableInputSha256: body.ImmutableInputSha256,
+		Reason: body.Reason,
 	})
 	if err != nil {
 		server.writeRPCError(writer, request.Context(), err, true)
 		return
 	}
 	if response.GetOwnerGate() == nil || response.GetProcessRun() == nil ||
-		response.GetOwnerGate().GetId() != ownerGateID.String() ||
-		response.GetProcessRun().GetId() != body.ProcessRunId.String() {
+		response.GetOwnerGate().GetId() != ownerGateID.String() {
 		server.writeInternal(writer, request.Context(), errors.New("owner gate response is invalid"))
 		return
 	}
@@ -671,6 +668,40 @@ func (server *Server) GetRestoreOperation(
 	writeJSON(writer, http.StatusOK, projected)
 }
 
+func (server *Server) ListRestoreOperations(
+	writer http.ResponseWriter,
+	request *http.Request,
+	params generated.ListRestoreOperationsParams,
+) {
+	limit, ok := pageSize(params.PageSize)
+	if !ok {
+		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
+		return
+	}
+	response, err := server.control.ListRestoreOperations(
+		request.Context(), &controlplanev1.ListRestoreOperationsRequest{
+			BackupId: uuidValue(params.BackupId), PageSize: limit, PageToken: value(params.PageToken),
+		},
+	)
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	page := generated.RestoreOperationPage{Operations: make([]generated.RestoreOperation, 0, len(response.GetOperations()))}
+	for _, operation := range response.GetOperations() {
+		projected, projectErr := restoreOperationProjection(operation)
+		if projectErr != nil {
+			server.writeInternal(writer, request.Context(), projectErr)
+			return
+		}
+		page.Operations = append(page.Operations, projected)
+	}
+	if response.GetNextPageToken() != "" {
+		page.NextPageToken = stringPointer(response.GetNextPageToken())
+	}
+	writeJSON(writer, http.StatusOK, page)
+}
+
 func backupProjection(input *controlplanev1.Backup) (generated.Backup, error) {
 	if input == nil || input.GetSourceVersion() == 0 || input.GetCreatedAt() == nil ||
 		input.GetUpdatedAt() == nil || !input.GetCreatedAt().IsValid() || !input.GetUpdatedAt().IsValid() {
@@ -697,6 +728,13 @@ func backupProjection(input *controlplanev1.Backup) (generated.Backup, error) {
 		State: state, Scope: scope, ScopeId: scopeID, Restorable: input.GetRestorable(),
 		CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime(),
 	}
+	if input.GetRestoreOperationId() != "" {
+		operationID, parseErr := uuid.Parse(input.GetRestoreOperationId())
+		if parseErr != nil {
+			return generated.Backup{}, parseErr
+		}
+		result.RestoreOperationId = &operationID
+	}
 	if input.GetAvailableAt() != nil {
 		if !input.GetAvailableAt().IsValid() {
 			return generated.Backup{}, errors.New("backup available timestamp is invalid")
@@ -717,7 +755,7 @@ func backupProjection(input *controlplanev1.Backup) (generated.Backup, error) {
 func restoreOperationProjection(
 	input *controlplanev1.RestoreOperation,
 ) (generated.RestoreOperation, error) {
-	if input == nil || input.GetVersion() == 0 || input.GetSourceVersion() == 0 ||
+	if input == nil || input.GetVersion() == 0 || input.GetSourceVersion() == 0 || input.GetGeneration() == 0 ||
 		input.GetTargetAttempt() == 0 || input.GetCreatedAt() == nil || input.GetUpdatedAt() == nil ||
 		!input.GetCreatedAt().IsValid() || !input.GetUpdatedAt().IsValid() {
 		return generated.RestoreOperation{}, errors.New("restore operation projection is incomplete")
@@ -742,7 +780,10 @@ func restoreOperationProjection(
 		input.GetState().String(), "RESTORE_OPERATION_STATE_",
 	))
 	scope := generated.RestoreOperationScope(input.GetScope())
-	if !state.Valid() || !scope.Valid() {
+	nextAction := generated.RestoreOperationNextAction(strings.TrimPrefix(
+		input.GetNextAction().String(), "RESTORE_OPERATION_NEXT_ACTION_",
+	))
+	if !state.Valid() || !scope.Valid() || !nextAction.Valid() {
 		return generated.RestoreOperation{}, errors.New("restore operation enum is invalid")
 	}
 	result := generated.RestoreOperation{
@@ -750,8 +791,9 @@ func restoreOperationProjection(
 		BackupId: backupID, SourceVersion: int64(input.GetSourceVersion()),
 		ArchiveSha256: input.GetArchiveSha256(), ProvenanceSha256: input.GetProvenanceSha256(),
 		Scope: scope, ScopeId: scopeID, TargetTurnId: targetTurnID,
-		TargetAttempt: int(input.GetTargetAttempt()),
-		CreatedAt:     input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime(),
+		TargetAttempt: int(input.GetTargetAttempt()), Generation: int64(input.GetGeneration()),
+		Partial: input.GetPartial(), NextAction: nextAction,
+		CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime(),
 	}
 	if input.GetErrorCode() != "" {
 		result.ErrorCode = stringPointer(input.GetErrorCode())

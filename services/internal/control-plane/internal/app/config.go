@@ -327,6 +327,7 @@ func expectedOperations() map[string]string {
 		"control.backup.get":                             controlplanev1.ControlPlaneService_GetBackup_FullMethodName,
 		"control.backup.restore":                         controlplanev1.ControlPlaneService_RestoreBackup_FullMethodName,
 		"control.restore-operation.get":                  controlplanev1.ControlPlaneService_GetRestoreOperation_FullMethodName,
+		"control.restore-operation.list":                 controlplanev1.ControlPlaneService_ListRestoreOperations_FullMethodName,
 		"control.artifact.scan":                          controlplanev1.ControlPlaneService_RecordArtifactScan_FullMethodName,
 		"control.artifact-scanner.readiness":             controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.role-image-recipe.manage":               controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,

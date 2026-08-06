@@ -57,6 +57,8 @@ type Execution struct {
 	RestoreSourceArchiveRetainUntil                                               time.Time
 	RestoreSourceRetentionPolicyID, RestoreSourceProvenanceSHA256                 string
 	RestoreSourceRetentionPolicyVersion                                           uint64
+	RestoreOperationID, RestoreSourceAuthoritySHA256                              string
+	RestoreOperationGeneration                                                    uint64
 	RetentionPolicyID                                                             string
 	RetentionPolicyVersion, PVCRetentionSeconds, ArchiveRetentionSeconds          uint64
 	ArchiveRetainUntil                                                            time.Time
@@ -232,7 +234,8 @@ func validRestoreSource(execution Execution) bool {
 		execution.RestoreSourceArchiveVersionID == "" && execution.RestoreSourceArchiveKMSKeyARN == "" &&
 		execution.RestoreSourceArchiveObjectLockMode == "" && execution.RestoreSourceArchiveRetainUntil.IsZero() &&
 		execution.RestoreSourceRetentionPolicyID == "" && execution.RestoreSourceRetentionPolicyVersion == 0 &&
-		execution.RestoreSourceProvenanceSHA256 == ""
+		execution.RestoreSourceProvenanceSHA256 == "" && execution.RestoreOperationID == "" &&
+		execution.RestoreOperationGeneration == 0 && execution.RestoreSourceAuthoritySHA256 == ""
 	present := uuid.Validate(execution.RestoreSourceExecutionID) == nil &&
 		execution.RestoreSourceArchiveReference != "" &&
 		sha256Pattern.MatchString(execution.RestoreSourceArchiveSHA256) &&
@@ -244,7 +247,9 @@ func validRestoreSource(execution Execution) bool {
 		execution.RestoreSourceArchiveObjectLockMode == "COMPLIANCE" &&
 		!execution.RestoreSourceArchiveRetainUntil.IsZero() &&
 		execution.RestoreSourceRetentionPolicyID != "" && execution.RestoreSourceRetentionPolicyVersion > 0 &&
-		sha256Pattern.MatchString(execution.RestoreSourceProvenanceSHA256)
+		sha256Pattern.MatchString(execution.RestoreSourceProvenanceSHA256) &&
+		uuid.Validate(execution.RestoreOperationID) == nil && execution.RestoreOperationGeneration > 0 &&
+		sha256Pattern.MatchString(execution.RestoreSourceAuthoritySHA256)
 	return empty || present
 }
 

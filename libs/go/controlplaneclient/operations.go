@@ -161,6 +161,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"control.backup.get":                 controlplanev1.ControlPlaneService_GetBackup_FullMethodName,
 		"control.backup.restore":             controlplanev1.ControlPlaneService_RestoreBackup_FullMethodName,
 		"control.restore-operation.get":      controlplanev1.ControlPlaneService_GetRestoreOperation_FullMethodName,
+		"control.restore-operation.list":     controlplanev1.ControlPlaneService_ListRestoreOperations_FullMethodName,
 		"control.role-image-recipe.manage":   controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
 		"control.role-image-recipe.get":      controlplanev1.ControlPlaneService_GetRoleImageRecipe_FullMethodName,
 		"control.image-build.manage":         controlplanev1.ControlPlaneService_ManageImageBuild_FullMethodName,

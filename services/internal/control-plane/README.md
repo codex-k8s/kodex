@@ -17,8 +17,10 @@ Project/Schedule/OwnerGate/Backup/Restore path Issue
 - неизменяемыми ревизиями среды исполнения;
 - immutable runtime execution snapshot, lease/fence, архивной ссылкой,
   независимым restore proof и bounded cleanup authorization;
-- безопасной owner backup projection и immutable restore operation,
-  связывающей exact archive source с server-owned fresh attempt;
+- безопасной owner backup projection и discoverable restore operation,
+  связывающей полный приватный archive/source tuple с server-owned fresh
+  attempt через `source_authority_sha256`, монотонное поколение и
+  consume/revoke watermark;
 - typed integration approval/execution continuation и её version-pinned
   authoritative read/rejoin;
 - сессиями, ходами и родословной процессов;
@@ -212,7 +214,11 @@ authority.
 OwnerGate delivery claim хранит только server-side hash idempotency key:
 unlocked candidate проходит тот же graph resolver, Gate блокируется последним,
 и receipt читается после workload/SPIFFE/deadline/current-claim проверки.
-После delivery, expiry или decision старый ClaimToken не возвращается.
+Готовность решения появляется только после provider read-after-write receipt;
+browser не передаёт Mattermost locator либо process/session/turn tuple. После
+delivery, expiry или decision старый ClaimToken не возвращается, а replay
+`CHANGES_REQUESTED` возвращает сохранённый receipt и после законного
+продвижения созданного continuation.
 `ClaimTurn`/`RenewTurn` также разрешают exact Turn и lease до receipt. Scheduler
 claim сохраняет отдельный server-owned claim-key hash в occurrence: retry
 сначала восстанавливает current graph по этой привязке, и только live exact

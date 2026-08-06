@@ -73,6 +73,15 @@ func (service *Service) prepareRetriedExecution(
 		spec.RestoreSourceVersion = restore.SourceVersion
 		spec.RestoreSourceArchiveSHA256 = restore.ArchiveSHA256
 		spec.RestoreSourceProvenanceSHA256 = restore.ProvenanceSHA256
+		spec.RestoreOperationGeneration = restore.Generation
+		spec.RestoreSourceAuthoritySHA256 = restore.SourceAuthoritySHA256
+		spec.EffectiveInputSHA256, err = canonicalHash(struct {
+			BaseSHA256, RestoreOperationID, RestoreSourceAuthoritySHA256 string
+			RestoreOperationGeneration                                   uint64
+		}{spec.EffectiveInputSHA256, restore.ID, restore.SourceAuthoritySHA256, restore.Generation})
+		if err != nil {
+			return entity.Resource{}, entity.TurnSpec{}, errs.ErrInternal
+		}
 		if spec.Validate() != nil {
 			return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 		}
@@ -289,6 +298,8 @@ func prepareRetryTurnSpec(
 	spec.RestoreSourceVersion = 0
 	spec.RestoreSourceArchiveSHA256 = ""
 	spec.RestoreSourceProvenanceSHA256 = ""
+	spec.RestoreOperationGeneration = 0
+	spec.RestoreSourceAuthoritySHA256 = ""
 	return spec, nil
 }
 

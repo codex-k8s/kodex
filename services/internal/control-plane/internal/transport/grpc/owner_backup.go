@@ -119,6 +119,42 @@ func (server *Server) GetRestoreOperation(
 	return &controlplanev1.GetRestoreOperationResponse{Operation: projected}, nil
 }
 
+func (server *Server) ListRestoreOperations(
+	ctx context.Context,
+	request *controlplanev1.ListRestoreOperationsRequest,
+) (*controlplanev1.ListRestoreOperationsResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_ListRestoreOperations_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	limit := int(request.GetPageSize())
+	if limit == 0 {
+		limit = 50
+	}
+	operations, err := server.service.ListRestoreOperations(ctx, resource.ListRestoreOperationsInput{
+		Principal: principal, BackupID: request.GetBackupId(), AfterID: request.GetPageToken(), Limit: limit,
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	response := &controlplanev1.ListRestoreOperationsResponse{
+		Operations: make([]*controlplanev1.RestoreOperation, 0, len(operations)),
+	}
+	for _, operation := range operations {
+		projected, projectErr := restoreOperationToProto(operation)
+		if projectErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectErr)
+		}
+		response.Operations = append(response.Operations, projected)
+	}
+	if len(operations) == limit {
+		response.NextPageToken = operations[len(operations)-1].ID
+	}
+	return response, nil
+}
+
 func backupToProto(backup domainrepo.Backup) (*controlplanev1.Backup, error) {
 	states := map[string]controlplanev1.BackupState{
 		"VERIFYING":         controlplanev1.BackupState_BACKUP_STATE_VERIFYING,
@@ -126,6 +162,9 @@ func backupToProto(backup domainrepo.Backup) (*controlplanev1.Backup, error) {
 		"AVAILABLE":         controlplanev1.BackupState_BACKUP_STATE_AVAILABLE,
 		"RESTORING":         controlplanev1.BackupState_BACKUP_STATE_RESTORING,
 		"RESTORED":          controlplanev1.BackupState_BACKUP_STATE_RESTORED,
+		"RESTORE_FAILED":    controlplanev1.BackupState_BACKUP_STATE_RESTORE_FAILED,
+		"RESTORE_CANCELLED": controlplanev1.BackupState_BACKUP_STATE_RESTORE_CANCELLED,
+		"RESTORE_EXPIRED":   controlplanev1.BackupState_BACKUP_STATE_RESTORE_EXPIRED,
 		"EXPIRED":           controlplanev1.BackupState_BACKUP_STATE_EXPIRED,
 		"UNAVAILABLE":       controlplanev1.BackupState_BACKUP_STATE_UNAVAILABLE,
 	}
@@ -146,6 +185,7 @@ func backupToProto(backup domainrepo.Backup) (*controlplanev1.Backup, error) {
 		ArchiveSha256:               backup.ArchiveSHA256, ProvenanceSha256: backup.ProvenanceSHA256,
 		State: state, Scope: "SESSION", ScopeId: backup.SessionID, Restorable: backup.Restorable,
 		CreatedAt: timestamppb.New(backup.CreatedAt), UpdatedAt: timestamppb.New(backup.UpdatedAt),
+		RestoreOperationId: backup.RestoreOperationID,
 	}
 	result.AvailableAt = optionalTimestamp(backup.AvailableAt)
 	result.RetainUntil = optionalTimestamp(backup.RetainUntil)
@@ -160,24 +200,29 @@ func backupToProto(backup domainrepo.Backup) (*controlplanev1.Backup, error) {
 func restoreOperationToProto(
 	operation domainrepo.RuntimeRestoreOperation,
 ) (*controlplanev1.RestoreOperation, error) {
+	const versionWindow uint64 = 1 << 32
 	state, errorCode := restoreOperationState(operation)
 	if state == controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_UNSPECIFIED ||
 		operation.ID == "" || operation.SourceVersion == 0 || operation.SessionID == "" ||
-		operation.TargetTurnID == "" || operation.TargetAttempt == 0 ||
+		operation.TargetTurnID == "" || operation.TargetAttempt == 0 || operation.Generation == 0 ||
+		operation.Generation > 100 || operation.TargetExecutionVersion >= versionWindow-1 ||
 		!validPublicSHA256(operation.ArchiveSHA256) ||
 		!validPublicSHA256(operation.ProvenanceSHA256) {
 		return nil, errs.ErrInternal
 	}
-	version := uint64(1)
-	if operation.TargetExecutionVersion != 0 {
-		version += operation.TargetExecutionVersion
-	}
+	// Generation занимает непересекающееся окно: successor никогда не
+	// уменьшает public version, а lifecycle target остаётся versioned внутри окна.
+	version := (operation.Generation-1)*versionWindow + operation.TargetExecutionVersion + 1
+	partial := (operation.TargetRestoreAssignmentState == "BOUND" || operation.TargetRestoreAssignmentState == "CONSUMED") &&
+		(operation.TargetExecutionState == "FAILED" || operation.TargetExecutionState == "CANCELLED" ||
+			operation.TargetExecutionState == "EXPIRED")
 	result := &controlplanev1.RestoreOperation{
 		RestoreOperationId: operation.ID, Version: version, State: state,
 		BackupId: operation.BackupID, SourceVersion: operation.SourceVersion,
 		ArchiveSha256: operation.ArchiveSHA256, ProvenanceSha256: operation.ProvenanceSHA256,
 		Scope: "SESSION", ScopeId: operation.SessionID, TargetTurnId: operation.TargetTurnID,
 		TargetAttempt: operation.TargetAttempt, ErrorCode: errorCode,
+		Generation: operation.Generation, Partial: partial, NextAction: restoreOperationNextAction(operation, state),
 		CreatedAt: timestamppb.New(operation.CreatedAt), UpdatedAt: timestamppb.New(operation.UpdatedAt),
 	}
 	if !result.CreatedAt.IsValid() || !result.UpdatedAt.IsValid() {
@@ -203,7 +248,19 @@ func restoreOperationState(
 ) (controlplanev1.RestoreOperationState, string) {
 	switch operation.TargetExecutionState {
 	case "":
-		return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_QUEUED, ""
+		switch operation.TargetTurnState {
+		case "FAILED":
+			return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_FAILED, "RESTORE_TARGET_FAILED_BEFORE_CLAIM"
+		case "CANCELLED":
+			return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_CANCELLED, ""
+		case "EXPIRED":
+			return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_EXPIRED, ""
+		default:
+			if operation.Generation > 1 {
+				return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_RETRYING, ""
+			}
+			return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_QUEUED, ""
+		}
 	case "PENDING":
 		switch operation.TargetRestoreAssignmentState {
 		case "ASSIGNED":
@@ -225,6 +282,34 @@ func restoreOperationState(
 		return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_CANCELLED, ""
 	case "EXPIRED":
 		return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_EXPIRED, ""
+	case "RETRIED":
+		return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_RETRYING, ""
 	}
 	return controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_UNSPECIFIED, ""
+}
+
+func restoreOperationNextAction(
+	operation domainrepo.RuntimeRestoreOperation,
+	state controlplanev1.RestoreOperationState,
+) controlplanev1.RestoreOperationNextAction {
+	switch state {
+	case controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_QUEUED,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_ASSIGNED,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_MATERIALIZING,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_READY,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_RUNNING,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_RETRYING:
+		return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_WAIT
+	case controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_FAILED,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_CANCELLED,
+		controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_EXPIRED:
+		if operation.TargetExecutionID == "" || operation.TargetExecutionState == "" {
+			return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_NONE
+		}
+		return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_RETRY_RUNTIME
+	case controlplanev1.RestoreOperationState_RESTORE_OPERATION_STATE_SUCCEEDED:
+		return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_READ_BACKUP
+	default:
+		return controlplanev1.RestoreOperationNextAction_RESTORE_OPERATION_NEXT_ACTION_NONE
+	}
 }

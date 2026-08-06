@@ -504,18 +504,12 @@ type OwnerGateResult struct {
 }
 
 type ResolveOwnerGateInput struct {
-	Principal              value.Principal
-	IdempotencyKey         string
-	OwnerGateID            string
-	ExpectedVersion        uint64
-	Decision               string
-	Reason                 string
-	ProcessRunID           string
-	ProcessExpectedVersion uint64
-	SessionID              string
-	TurnID                 string
-	Attempt                uint32
-	ImmutableInputSHA256   string
+	Principal       value.Principal
+	IdempotencyKey  string
+	OwnerGateID     string
+	ExpectedVersion uint64
+	Decision        string
+	Reason          string
 }
 
 type RecordOwnerGateDeliveryInput struct {
@@ -530,6 +524,7 @@ type RecordOwnerGateDeliveryInput struct {
 	MattermostPostID      string
 	MattermostChannelID   string
 	MattermostRootPostID  string
+	ProviderReceiptSHA256 string
 }
 
 type ClaimOwnerGateDeliveryInput struct {
@@ -814,6 +809,13 @@ type RestoreBackupInput struct {
 type GetRestoreOperationInput struct {
 	Principal   value.Principal
 	OperationID string
+}
+
+type ListRestoreOperationsInput struct {
+	Principal value.Principal
+	BackupID  string
+	AfterID   string
+	Limit     int
 }
 
 type ManageRuntimeActionInput struct {

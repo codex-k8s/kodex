@@ -365,6 +365,9 @@ type RuntimeExecution struct {
 	RehydrateProofSHA256                   string
 	CredentialSnapshotSHA256               string
 	WorkloadTicketSHA256                   string
+	RestoreOperationID                     string
+	RestoreOperationGeneration             uint64
+	RestoreSourceAuthoritySHA256           string
 	ProviderBindingID                      string
 	ProviderBindingVersion                 uint64
 	ProviderBindingSHA256                  string
@@ -385,6 +388,7 @@ type RuntimeExecution struct {
 // credential, private reference/evidence и worker grant в этот тип не входят.
 type Backup struct {
 	ID, OrganizationID, ProjectID, SessionID                string
+	RestoreOperationID                                      string
 	SourceRuntimeRevisionSHA256, SourceImmutableInputSHA256 string
 	ArchiveSHA256, ProvenanceSHA256                         string
 	RuntimeState, State                                     string
@@ -399,10 +403,13 @@ type RuntimeRestoreOperation struct {
 	ID, OrganizationID, ProjectID, OwnerActorID          string
 	BackupID, SessionID, TargetTurnID, TargetExecutionID string
 	ArchiveSHA256, ProvenanceSHA256                      string
+	SourceAuthoritySHA256                                string
 	SourceVersion, SourceFence                           uint64
+	Generation, ConsumedGeneration, RevokedGeneration    uint64
 	TargetAttempt                                        uint32
 	TargetExecutionVersion                               uint64
 	TargetExecutionState, TargetRestoreAssignmentState   string
+	TargetTurnState                                      string
 	CreatedAt, UpdatedAt                                 time.Time
 }
 
@@ -667,6 +674,9 @@ type Transaction interface {
 	InsertRuntimeRestoreOperation(context.Context, RuntimeRestoreOperation) error
 	GetRuntimeRestoreOperation(context.Context, string) (RuntimeRestoreOperation, error)
 	GetRuntimeRestoreOperationByBackup(context.Context, string) (RuntimeRestoreOperation, error)
+	AdvanceRuntimeRestoreOperation(context.Context, RuntimeRestoreOperation, uint64) error
+	ConsumeRuntimeRestoreOperation(context.Context, string, uint64, string, uint32, string, time.Time) error
+	RevokeRuntimeRestoreOperation(context.Context, string, uint64, time.Time) error
 	NextExpiredRuntimeExecution(
 		context.Context, string, string, string, uint32,
 	) (RuntimeExecution, error)
@@ -773,6 +783,7 @@ type Repository interface {
 	ListBackups(context.Context, string, string, string, string, int) ([]Backup, error)
 	GetBackup(context.Context, string, string, string, string) (Backup, error)
 	GetRuntimeRestoreOperation(context.Context, string, string, string, string) (RuntimeRestoreOperation, error)
+	ListRuntimeRestoreOperations(context.Context, string, string, string, string, string, int) ([]RuntimeRestoreOperation, error)
 	ListTombstones(context.Context, query.TombstoneFilter) ([]Tombstone, error)
 	ListScheduleOccurrences(context.Context, query.ScheduleOccurrenceFilter) ([]ScheduleOccurrence, error)
 	Diagnostics(context.Context, Scope) (Diagnostics, error)

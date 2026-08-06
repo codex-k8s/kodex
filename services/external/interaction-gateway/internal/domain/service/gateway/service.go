@@ -1320,6 +1320,7 @@ func (service *Service) acknowledgeDelivery(ctx context.Context, delivery entity
 			GateVersion: gate.GateVersion, DeliveryID: delivery.ID, PayloadSHA256: gate.DeliveryPayloadSHA256,
 			ClaimToken: gate.ClaimToken, ClaimFence: gate.ClaimFence, PostID: delivery.ProviderPostID,
 			ChannelID: delivery.ChannelID, RootPostID: delivery.RootPostID,
+			ProviderReceiptSHA256: delivery.ProviderReceiptSHA256,
 		}); err != nil {
 			return err
 		}

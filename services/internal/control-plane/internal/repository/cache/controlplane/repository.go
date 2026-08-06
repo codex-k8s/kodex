@@ -253,6 +253,16 @@ func (repository *Repository) GetRuntimeRestoreOperation(
 	)
 }
 
+func (repository *Repository) ListRuntimeRestoreOperations(
+	ctx context.Context,
+	organizationID, projectID, actorID, backupID, afterID string,
+	limit int,
+) ([]domainrepo.RuntimeRestoreOperation, error) {
+	return repository.source.ListRuntimeRestoreOperations(
+		ctx, organizationID, projectID, actorID, backupID, afterID, limit,
+	)
+}
+
 func (repository *Repository) ListScheduleOccurrences(
 	ctx context.Context,
 	filter query.ScheduleOccurrenceFilter,

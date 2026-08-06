@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 )
 
 func TestValidateRestoreRuntimeSourcePinsEligibleArchive(t *testing.T) {
@@ -47,5 +50,59 @@ func TestValidateRestoreRuntimeSourcePinsEligibleArchive(t *testing.T) {
 				t.Fatal("invalid restore source accepted")
 			}
 		})
+	}
+}
+
+func TestRestoreSourceAuthorityPinsPrivateTuple(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.August, 6, 12, 0, 0, 0, time.UTC)
+	execution := RuntimeExecution{
+		ID: "2d990875-d278-4325-98bb-07a0bf61b9d7", SessionID: "d7490930-7232-46cd-8cf7-052c31db6f4b",
+		Version: 7, Fence: 11, RuntimeRevisionSHA256: strings.Repeat("1", 64),
+		ImmutableInputSHA256: strings.Repeat("2", 64), ArchiveReference: "archive-reference",
+		ArchiveSHA256: strings.Repeat("3", 64), ArchiveObjectKey: "private/object/key",
+		ArchiveVersionID: "version-a", ArchiveKMSKeyARN: "arn:aws:kms:region:account:key/id",
+		ArchiveObjectLockMode: "COMPLIANCE", ArchiveProvenanceSHA256: strings.Repeat("4", 64),
+		RestoreProofReference: "proof-reference", RestoreProofSHA256: strings.Repeat("5", 64),
+		RetentionPolicyID: "policy", RetentionPolicyVersion: 3, ArchiveRetainUntil: now.Add(time.Hour),
+	}
+	digest, err := runtimeRestoreSourceAuthoritySHA256(execution)
+	if err != nil || !validSHA256Text(digest) {
+		t.Fatalf("authority digest: %q %v", digest, err)
+	}
+	changed := execution
+	changed.ArchiveVersionID = "version-b"
+	changedDigest, err := runtimeRestoreSourceAuthoritySHA256(changed)
+	if err != nil || changedDigest == digest {
+		t.Fatal("private source version is not bound to restore authority")
+	}
+}
+
+func TestProtectedRegistriesCloseProjectGenericLifecycle(t *testing.T) {
+	t.Parallel()
+	if !protectedCreateKind(enum.KindProject) || !protectedMutationKind(enum.KindProject) ||
+		!protectedTransitionKind(enum.KindProject) || !ownerBoundLifecycleKind(enum.KindProject) {
+		t.Fatal("PROJECT generic lifecycle bypass remains open")
+	}
+}
+
+func TestOwnerGateChangesRequestedReceiptSurvivesContinuationProgress(t *testing.T) {
+	t.Parallel()
+	storedSpec := entity.ProcessRunSpec{
+		RootInitiatorActorID: "actor", RootSessionID: "session", RootTurnID: "root-turn",
+		ContinuationTurnID: "continuation", ContinuationTurnVersion: 2,
+		ContinuationInputSHA256: strings.Repeat("a", 64),
+	}
+	currentSpec := storedSpec
+	currentSpec.Outcome = "continuation_completed"
+	stored := entity.Resource{ID: "process", OrganizationID: "organization", ProjectID: "project",
+		OwnerActorID: "actor", Kind: enum.KindProcessRun, Version: 7, Spec: storedSpec}
+	current := stored
+	current.Version = 10
+	current.Spec = currentSpec
+	gate := entity.OwnerGateSpec{Decision: "CHANGES_REQUESTED", ContinuationTurnID: "continuation",
+		ContinuationTurnVersion: 2, ContinuationInputSHA256: strings.Repeat("a", 64)}
+	if err := ownerGateReceiptProcessValid(current, stored, gate); err != nil {
+		t.Fatalf("valid advanced continuation rejected: %v", err)
 	}
 }

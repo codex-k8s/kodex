@@ -124,21 +124,22 @@ issuer. Payload identity не используется.
 | Schedule `CREATE` | server-owned `ACTIVE` version 1; один aggregate | project authority из signed context; ID/owner/state/watermark назначает control-plane; semantic receipt | один audit/event; caller не задаёт lineage или lifecycle |
 | Schedule `UPDATE` | `ACTIVE|PAUSED` N → N+1 без смены lifecycle | locked owner Schedule и полный occurrence/run graph предшествуют OCC/receipt | один audit/event; open run/occurrence, archived/terminal state закрыто отклоняются |
 | Schedule `DELETE` | `ACTIVE|PAUSED`: три перехода; `ARCHIVED`: два; `DELETION_PENDING`: один; итог `DELETED` | locked owner Schedule + отсутствие open occurrence/run; replay принимает только terminal version в пределах фактической цепочки | по одному audit/event на `ARCHIVED`, `DELETION_PENDING`, `DELETED`; delete нельзя отменить или продолжить частично другой командой |
-| OwnerGate `APPROVED` | delivered `WAITING_OWNER` gate/turn/process → `SUCCEEDED`; один полный graph commit | exact gate/process/session/turn/attempt/input tuple и recipient actor; PostgreSQL deadline проверяется после locks; receipt после eligibility | старые gate/claim/lease/grant закрываются; gate, turn, process и schedule occurrence получают audit/event; readback содержит gate+process |
+| OwnerGate до delivery proof | `WAITING_OWNER`, `deliveryState=AWAITING_DELIVERY_PROOF`, `resolvable=false` | только server-owned delivery claim; Mattermost locator не принимается browser endpoint | `nextAction=WAIT_FOR_DELIVERY`; попытка решения закрыто отклоняется, graph не меняется |
+| OwnerGate `APPROVED` | provider-readback `WAITING_OWNER` gate/turn/process → `SUCCEEDED`; один полный graph commit | provider receipt digest точно связан с delivery/payload/post/channel/root/fence; process/session/turn/attempt/input разрешаются из Gate и owner graph, а не из browser body | старые gate/claim/lease/grant закрываются; gate, turn, process и schedule occurrence получают audit/event; readback содержит gate+process |
 | OwnerGate `REJECTED|CANCELLED` | gate/turn/process переходят соответственно в `FAILED` либо `CANCELLED` | та же exact owner graph authority; open dependent work запрещает terminal commit | одна owner transaction закрывает связанные authority; повтор возвращает тот же terminal readback |
 | OwnerGate `CHANGES_REQUESTED` | старый gate terminal `SUCCEEDED`, старый turn terminal; fresh revision/input/turn/attempt создаются server-side | reason входит в immutable feedback binding, actor/root/process lineage не принимаются из payload | продолжение создаёт новый grant; прежние lease/claim закрыты; audit/event фиксируют старый terminal и fresh continuation |
-| OwnerGate expiry | просроченный delivered graph закрывается по PostgreSQL clock даже вместо позднего решения | gate блокируется после полного graph и deadline повторно проверяется | `EXPIRED` gate, failed turn/process и terminal occurrence; поздний decision не воскресает graph |
-| Backup projection | `VERIFYING` → `RETENTION_PENDING` → `AVAILABLE`; далее `RESTORING|RESTORED`, либо `EXPIRED|UNAVAILABLE` | verified owner predicate + exact project/session + latest eligible archive; status/read не используют caller eligibility | read-only, отдельного backup event нет; version-pinned REST list/get — authoritative path; private locator/evidence/grant отсутствуют |
+| OwnerGate expiry | до или после delivery proof просроченный graph закрывается по PostgreSQL clock даже вместо позднего решения | gate блокируется после полного graph и deadline повторно проверяется | `deliveryState=EXPIRED`, `resolvable=false`, `nextAction=READ_TERMINAL`; поздний decision не воскресает graph |
+| Backup projection | `VERIFYING` → `RETENTION_PENDING` → `AVAILABLE`; далее `RESTORING|RESTORED|RESTORE_FAILED|RESTORE_CANCELLED|RESTORE_EXPIRED`, либо `EXPIRED|UNAVAILABLE` | verified owner predicate + exact project/session + latest eligible archive; status/read не используют caller eligibility | read-only, отдельного backup event нет; list/get возвращают `restoreOperationId`, а `/restore-operations?backupId=` восстанавливает readback после потери Location; private locator/evidence/grant отсутствуют |
 | Restore `CREATE` | eligible source `FAILED|EXPIRED` execution N/fence F → `RETRIED` N+1/F+1; fresh Turn/RuntimeRevision/attempt и operation version 1 | owner backup resolution → safe digest/scope/OCC → source+owner graph locks → latest archive/retention by DB clock → receipt; operation/target назначает сервер | source retry, fresh turn, operation, audit и Turn event одной transaction; restore-operation event отсутствует, authoritative `GET` обязателен |
-| Restore claim/materialization | `QUEUED` → `ASSIGNED` → `MATERIALIZING` → `READY` → `RUNNING` | runtime-controller предъявляет exact method/workload/SPIFFE/turn/attempt/grant; operation и pinned source tuple проверяются до копирования private archive/PVC data | старый grant не принимается; materialization state читается только из target execution |
-| Restore terminal | target → `SUCCEEDED|FAILED|CANCELLED|EXPIRED`; operation выводит тот же terminal state | target execution остаётся единственным владельцем lifecycle/version/fence | cancel/expiry закрывают lease/grant вместе с graph; runtime retry создаёт новую attempt/grant и не переписывает immutable restore operation; повтор restore того же backup не создаёт вторую operation |
+| Restore claim/materialization | `QUEUED` → `ASSIGNED` → `MATERIALIZING` → `READY` → `RUNNING` | полный приватный source locator/version/fence/proof tuple свёрнут в `sourceAuthoritySHA256`; operation ID, generation и digest входят в EffectiveInput, WorkloadTicket и signed restore ticket; первый Bind атомарно потребляет exact generation | старый/reused ticket закрыто отклоняется; materialization state читается только из current target execution |
+| Restore terminal/retry | cancel до runtime claim выводится из owner Turn; после claim target → `SUCCEEDED|FAILED|CANCELLED|EXPIRED`; штатный retry → `RETRYING` и successor generation | target execution остаётся владельцем lifecycle/version/fence; terminal/cancel атомарно повышает operation revoke watermark, retry сохраняет immutable source binding и назначает новый target/generation | только `SUCCEEDED` даёт backup `RESTORED`; неуспешная материализация имеет `partial=true`, error и `nextAction=RETRY_RUNTIME`; успешная — `READ_BACKUP`; повтор restore того же backup не создаёт вторую operation |
 
 ## Материализация рабочего пути
 
 | Часть | Исполняемая материализация |
 | --- | --- |
 | Producer profile | существующий `control-plane.oidc`: OIDC bearer metadata, resolver exact mTLS SPIFFE, server-resolved actor/tenant/project/ownership и durable owner-session fence |
-| Client operation profile | `controlplaneclient.ControlAPIGatewayOperations`; exact 36 materialized methods, включая project update/delete, Schedule, OwnerGate, backup/restore, session/search/detach/copy/incidents, специализированные TLS prepare/confirm/check и readiness, без broad lifecycle permissions |
+| Client operation profile | `controlplaneclient.ControlAPIGatewayOperations`; exact 37 materialized methods, включая project update/delete, Schedule, OwnerGate, backup/restore discovery, session/search/detach/copy/incidents, специализированные TLS prepare/confirm/check и readiness, без broad lifecycle permissions |
 | Generated adapters | OpenAPI std HTTP server/models, named structural AsyncAPI Go models, strict handwritten WebSocket JSON adapter и generated control-plane gRPC client |
 | Consumer effect | typed REST page либо connection-local atomic complete replace-snapshot; browser не подтверждает domain effect и не влияет на state owner |
 | Readiness | OIDC/session/TLS state прочитаны; local served material разрешён read-only `CheckGatewayPublicTLS` как APPLIED, PENDING до confirm recovery либо неистёкший PREVIOUS; `controlplaneclient.Check` проходит resolver → local issuer → protected `CheckReadiness`; loopback TLS readback сверяет exact peer digest/expiry и не продвигает watermark |
@@ -194,16 +195,46 @@ destinations. Правил только по порту, wildcard egress, plaint
 
 1. Выполнить update Project с текущим `ETag`, проверить новый `ETag`, сохранение
    server-owned owner/ownership и `412` для прежней версии.
-2. Создать, обновить и удалить Schedule; проверить server-assigned ID/owner,
-   terminal `DELETED`, а также `409` при незакрытом occurrence/run.
-3. Разрешить доставленный OwnerGate и проверить согласованные версии gate и
-   process; повторить тот же `Idempotency-Key` и получить тот же readback.
-4. Прочитать список и single backup, убедиться, что JSON не содержит DSN,
+2. Создать Schedule, затем в новой browser session прочитать его через owner
+   resource GET. Не используя локальный cache/defaults, собрать `PUT` из `name`
+   и полного `ScheduleProjection`: cron либо interval, calendar, overlap,
+   misfire/grace, delivery/retry/backoff/dead-letter, prompt/session/room,
+   notification, coalesce, runtime/target/playbook/artifact bindings. Изменить
+   timezone, проверить сохранение остальных полей, новый `ETag`, затем удалить;
+   проверить `409` при незакрытом occurrence/run.
+3. Вызвать generic create/update/transition/delete для `PROJECT`, `SCHEDULE` и
+   `OWNER_GATE`: ожидать закрытый отказ без версии/audit/event. Затем удалить
+   пустой Project через `DELETE /projects/{id}` и получить `409`, если есть
+   live resources.
+4. Для нового OwnerGate до Mattermost read-after-write проверить
+   `AWAITING_DELIVERY_PROOF`, `resolvable=false`, `WAIT_FOR_DELIVERY`; решение
+   не должно менять graph. После provider proof проверить `READY`, `RESOLVE`.
+5. На отдельных gates выполнить `APPROVED`, `REJECTED`, `CANCELLED` и
+   `CHANGES_REQUESTED`. Для первых трёх проверить terminal gate/process и
+   `READ_TERMINAL`; для `CHANGES_REQUESTED` — fresh continuation tuple. После
+   продвижения continuation повторить исходный `Idempotency-Key`: должен
+   вернуться сохранённый receipt, а не conflict.
+6. Довести gate до expiry как до, так и после delivery proof; проверить
+   `EXPIRED`, `resolvable=false`, `READ_TERMINAL`. Позднее решение должно
+   вернуть terminal readback/закрытый conflict и не создавать continuation.
+7. Прочитать список и single backup, убедиться, что JSON не содержит DSN,
    `archiveReference`, object key, credential, PVC, proof/evidence или grant.
-5. Только после отдельного разрешения на фактический restore вызвать команду с
-   exact `ETag`, archive/provenance digests и `SESSION` scope; затем читать
-   `Location` до terminal состояния. В рамках Issue #231 эта операция агентом
-   не запускалась.
+8. Только после отдельного разрешения на фактический restore вызвать команду с
+   exact `ETag`, archive/provenance digests и `SESSION` scope. Потерять
+   `Location`, затем восстановить operation через `Backup.restoreOperationId`
+   и `GET /restore-operations?backupId=...`; обе ссылки должны дать один ID.
+9. Для cancel до runtime claim ожидать `CANCELLED`, `partial=false`, `NONE`:
+   без созданного runtime автоматический retry закрыто запрещён. Для expiry
+   после claim, но до `BOUND`, ожидать `EXPIRED`, `partial=false` и
+   `RETRY_RUNTIME`. Для `FAILED|CANCELLED|EXPIRED` после `BOUND|CONSUMED`
+   ожидать `partial=true`, соответствующий backup `RESTORE_*` и не `RESTORED`.
+   При штатном retry проверить рост `generation`, сохранение backup/source
+   binding, новый target attempt и `RETRYING|QUEUED`; старый ticket должен быть
+   отозван. Только target `SUCCEEDED` даёт `RESTORED` и `READ_BACKUP`.
+
+Фактический backup/restore в рамках Issue #231 агентом не запускался; пункты
+8–9 являются ручной acceptance matrix для отдельно разрешённого окружения, а
+не разрешением на destructive действие.
 
 ## Rollback
 

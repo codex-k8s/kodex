@@ -561,6 +561,33 @@ func (repository *Repository) GetRuntimeRestoreOperation(
 	return operation, err
 }
 
+func (repository *Repository) ListRuntimeRestoreOperations(
+	ctx context.Context,
+	organizationID, projectID, actorID, backupID, afterID string,
+	limit int,
+) ([]domainrepo.RuntimeRestoreOperation, error) {
+	var operations []domainrepo.RuntimeRestoreOperation
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlRuntimeRestoreOperationOwnerList, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID, "actor_id": actorID,
+			"backup_id": backupID, "after_id": afterID, "limit": limit,
+		})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			operation, scanErr := scanRuntimeRestoreOperation(rows)
+			if scanErr != nil {
+				return scanErr
+			}
+			operations = append(operations, operation)
+		}
+		return rows.Err()
+	})
+	return operations, err
+}
+
 func (repository *Repository) ListTombstones(
 	ctx context.Context,
 	filter domainquery.TombstoneFilter,
@@ -2875,21 +2902,86 @@ func (wrapped *transaction) InsertRuntimeRestoreOperation(
 	operation domainrepo.RuntimeRestoreOperation,
 ) error {
 	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationInsert, pgx.StrictNamedArgs{
-		"id":                  operation.ID,
-		"organization_id":     operation.OrganizationID,
-		"project_id":          operation.ProjectID,
-		"owner_actor_id":      operation.OwnerActorID,
-		"backup_execution_id": operation.BackupID,
-		"source_version":      operation.SourceVersion,
-		"source_fence":        operation.SourceFence,
-		"archive_sha256":      operation.ArchiveSHA256,
-		"provenance_sha256":   operation.ProvenanceSHA256,
-		"session_id":          operation.SessionID,
-		"target_turn_id":      operation.TargetTurnID,
-		"target_attempt":      operation.TargetAttempt,
-		"target_execution_id": operation.TargetExecutionID,
-		"created_at":          operation.CreatedAt,
-		"updated_at":          operation.UpdatedAt,
+		"id":                      operation.ID,
+		"organization_id":         operation.OrganizationID,
+		"project_id":              operation.ProjectID,
+		"owner_actor_id":          operation.OwnerActorID,
+		"backup_execution_id":     operation.BackupID,
+		"source_version":          operation.SourceVersion,
+		"source_fence":            operation.SourceFence,
+		"archive_sha256":          operation.ArchiveSHA256,
+		"provenance_sha256":       operation.ProvenanceSHA256,
+		"source_authority_sha256": operation.SourceAuthoritySHA256,
+		"session_id":              operation.SessionID,
+		"generation":              operation.Generation,
+		"consumed_generation":     operation.ConsumedGeneration,
+		"revoked_generation":      operation.RevokedGeneration,
+		"target_turn_id":          operation.TargetTurnID,
+		"target_attempt":          operation.TargetAttempt,
+		"target_execution_id":     operation.TargetExecutionID,
+		"created_at":              operation.CreatedAt,
+		"updated_at":              operation.UpdatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) AdvanceRuntimeRestoreOperation(
+	ctx context.Context,
+	operation domainrepo.RuntimeRestoreOperation,
+	expectedGeneration uint64,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationAdvance, pgx.StrictNamedArgs{
+		"id": operation.ID, "generation": operation.Generation,
+		"expected_generation": expectedGeneration, "target_turn_id": operation.TargetTurnID,
+		"target_attempt": operation.TargetAttempt, "target_execution_id": operation.TargetExecutionID,
+		"updated_at": operation.UpdatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) ConsumeRuntimeRestoreOperation(
+	ctx context.Context,
+	operationID string,
+	generation uint64,
+	targetTurnID string,
+	targetAttempt uint32,
+	sourceAuthoritySHA256 string,
+	updatedAt time.Time,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationConsume, pgx.StrictNamedArgs{
+		"id": operationID, "generation": generation, "target_turn_id": targetTurnID,
+		"target_attempt": targetAttempt, "source_authority_sha256": sourceAuthoritySHA256,
+		"updated_at": updatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) RevokeRuntimeRestoreOperation(
+	ctx context.Context,
+	operationID string,
+	generation uint64,
+	updatedAt time.Time,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationRevoke, pgx.StrictNamedArgs{
+		"id": operationID, "generation": generation, "updated_at": updatedAt,
 	})
 	if err != nil {
 		return mapError(err)
@@ -3479,7 +3571,7 @@ func scanBackup(row rowScanner) (domainrepo.Backup, error) {
 		&backup.SourceVersion, &backup.SourceFence,
 		&backup.SourceRuntimeRevisionSHA256, &backup.SourceImmutableInputSHA256,
 		&backup.ArchiveSHA256, &backup.ProvenanceSHA256,
-		&backup.RuntimeState, &backup.State, &backup.Restorable,
+		&backup.RuntimeState, &backup.State, &backup.Restorable, &backup.RestoreOperationID,
 		&backup.CreatedAt, &backup.AvailableAt, &backup.RetainUntil, &backup.UpdatedAt,
 	)
 	if err != nil {
@@ -3498,10 +3590,11 @@ func scanRuntimeRestoreOperation(row rowScanner) (domainrepo.RuntimeRestoreOpera
 		&operation.ID, &operation.OrganizationID, &operation.ProjectID,
 		&operation.OwnerActorID, &operation.BackupID, &operation.SourceVersion,
 		&operation.SourceFence,
-		&operation.ArchiveSHA256, &operation.ProvenanceSHA256,
-		&operation.SessionID, &operation.TargetTurnID, &operation.TargetAttempt,
+		&operation.ArchiveSHA256, &operation.ProvenanceSHA256, &operation.SourceAuthoritySHA256,
+		&operation.SessionID, &operation.Generation, &operation.ConsumedGeneration,
+		&operation.RevokedGeneration, &operation.TargetTurnID, &operation.TargetAttempt,
 		&operation.TargetExecutionID, &operation.TargetExecutionVersion,
-		&operation.TargetExecutionState, &operation.TargetRestoreAssignmentState,
+		&operation.TargetExecutionState, &operation.TargetRestoreAssignmentState, &operation.TargetTurnState,
 		&operation.CreatedAt, &operation.UpdatedAt,
 	)
 	if err != nil {

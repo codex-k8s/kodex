@@ -29,6 +29,8 @@ type Payload struct {
 	AgentBindingSHA256, CredentialSnapshotSHA256              string
 	WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
 	CodexDeliveryRecoverySourceExecutionID                    string
+	RestoreOperationID, RestoreSourceAuthoritySHA256          string
+	RestoreOperationGeneration                                uint64
 	State                                                     string
 }
 
@@ -92,6 +94,9 @@ func VerifyForAudience(compact string, publicKey ed25519.PublicKey, execution en
 		payload.ResourceClass != string(execution.ResourceClass) ||
 		payload.ClusterAccessProfile != string(execution.AccessProfile) ||
 		payload.CodexDeliveryRecoverySourceExecutionID != execution.CodexDeliveryRecoverySourceExecutionID ||
+		payload.RestoreOperationID != execution.RestoreOperationID ||
+		payload.RestoreOperationGeneration != execution.RestoreOperationGeneration ||
+		payload.RestoreSourceAuthoritySHA256 != execution.RestoreSourceAuthoritySHA256 ||
 		payload.State != string(execution.State) {
 		return Payload{}, errors.New("runtime workload ticket tuple mismatch")
 	}

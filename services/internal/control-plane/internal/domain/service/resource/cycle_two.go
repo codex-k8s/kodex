@@ -1457,7 +1457,8 @@ func (service *Service) RecordOwnerGateDelivery(
 		input.DeliveryFence == 0 ||
 		!validRuntimeReference(input.MattermostPostID) ||
 		!validRuntimeReference(input.MattermostChannelID) ||
-		!validRuntimeReference(input.MattermostRootPostID) {
+		!validRuntimeReference(input.MattermostRootPostID) ||
+		!validSHA256Text(input.ProviderReceiptSHA256) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
@@ -1470,11 +1471,12 @@ func (service *Service) RecordOwnerGateDelivery(
 		MattermostPostID      string
 		MattermostChannelID   string
 		MattermostRootPostID  string
+		ProviderReceiptSHA256 string
 	}{
 		input.OwnerGateID, input.ExpectedVersion, input.DeliveryID,
 		input.DeliveryPayloadSHA256, hashString(input.DeliveryClaimToken),
 		input.DeliveryFence, input.MattermostPostID, input.MattermostChannelID,
-		input.MattermostRootPostID,
+		input.MattermostRootPostID, input.ProviderReceiptSHA256,
 	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -1528,6 +1530,7 @@ func (service *Service) RecordOwnerGateDelivery(
 				spec.MattermostPostID == input.MattermostPostID &&
 				spec.MattermostChannelID == input.MattermostChannelID &&
 				spec.MattermostRootPostID == input.MattermostRootPostID &&
+				spec.DeliveryProviderReceiptSHA256 == input.ProviderReceiptSHA256 &&
 				!spec.DeliveredAt.IsZero() {
 				return lifecycleReceiptReplay, nil
 			}
@@ -1541,6 +1544,7 @@ func (service *Service) RecordOwnerGateDelivery(
 			spec.MattermostPostID = input.MattermostPostID
 			spec.MattermostChannelID = input.MattermostChannelID
 			spec.MattermostRootPostID = input.MattermostRootPostID
+			spec.DeliveryProviderReceiptSHA256 = input.ProviderReceiptSHA256
 			spec.DeliveredAt = lockedNow
 			updated, err := gate.Update(gate.Name, spec, spec.DeliveredAt)
 			if err != nil {

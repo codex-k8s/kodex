@@ -560,18 +560,9 @@ func (server *Server) ResolveOwnerGate(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	resolved, err := server.service.ResolveOwnerGate(ctx, resource.ResolveOwnerGateInput{
-		Principal:              principal,
-		IdempotencyKey:         request.GetIdempotencyKey(),
-		OwnerGateID:            request.GetOwnerGateId(),
-		ExpectedVersion:        request.GetExpectedVersion(),
-		Decision:               ownerDecisionString(request.GetDecision()),
-		Reason:                 request.GetReason(),
-		ProcessRunID:           request.GetProcessRunId(),
-		ProcessExpectedVersion: request.GetProcessExpectedVersion(),
-		SessionID:              request.GetSessionId(),
-		TurnID:                 request.GetTurnId(),
-		Attempt:                request.GetAttempt(),
-		ImmutableInputSHA256:   request.GetImmutableInputSha256(),
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		OwnerGateID: request.GetOwnerGateId(), ExpectedVersion: request.GetExpectedVersion(),
+		Decision: ownerDecisionString(request.GetDecision()), Reason: request.GetReason(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

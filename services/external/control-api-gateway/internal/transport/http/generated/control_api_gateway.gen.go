@@ -89,7 +89,10 @@ func (e BackupScope) Valid() bool {
 const (
 	BackupStateAVAILABLE        BackupState = "AVAILABLE"
 	BackupStateEXPIRED          BackupState = "EXPIRED"
+	BackupStateRESTORECANCELLED BackupState = "RESTORE_CANCELLED"
 	BackupStateRESTORED         BackupState = "RESTORED"
+	BackupStateRESTOREEXPIRED   BackupState = "RESTORE_EXPIRED"
+	BackupStateRESTOREFAILED    BackupState = "RESTORE_FAILED"
 	BackupStateRESTORING        BackupState = "RESTORING"
 	BackupStateRETENTIONPENDING BackupState = "RETENTION_PENDING"
 	BackupStateUNAVAILABLE      BackupState = "UNAVAILABLE"
@@ -103,7 +106,13 @@ func (e BackupState) Valid() bool {
 		return true
 	case BackupStateEXPIRED:
 		return true
+	case BackupStateRESTORECANCELLED:
+		return true
 	case BackupStateRESTORED:
+		return true
+	case BackupStateRESTOREEXPIRED:
+		return true
+	case BackupStateRESTOREFAILED:
 		return true
 	case BackupStateRESTORING:
 		return true
@@ -502,6 +511,54 @@ func (e OwnerGateDecision) Valid() bool {
 	}
 }
 
+// Defines values for OwnerGateProjectionDeliveryState.
+const (
+	OwnerGateProjectionDeliveryStateAWAITINGDELIVERYPROOF OwnerGateProjectionDeliveryState = "AWAITING_DELIVERY_PROOF"
+	OwnerGateProjectionDeliveryStateEXPIRED               OwnerGateProjectionDeliveryState = "EXPIRED"
+	OwnerGateProjectionDeliveryStateREADY                 OwnerGateProjectionDeliveryState = "READY"
+	OwnerGateProjectionDeliveryStateTERMINAL              OwnerGateProjectionDeliveryState = "TERMINAL"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateProjectionDeliveryState enum.
+func (e OwnerGateProjectionDeliveryState) Valid() bool {
+	switch e {
+	case OwnerGateProjectionDeliveryStateAWAITINGDELIVERYPROOF:
+		return true
+	case OwnerGateProjectionDeliveryStateEXPIRED:
+		return true
+	case OwnerGateProjectionDeliveryStateREADY:
+		return true
+	case OwnerGateProjectionDeliveryStateTERMINAL:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerGateProjectionNextAction.
+const (
+	OwnerGateProjectionNextActionNONE            OwnerGateProjectionNextAction = "NONE"
+	OwnerGateProjectionNextActionREADTERMINAL    OwnerGateProjectionNextAction = "READ_TERMINAL"
+	OwnerGateProjectionNextActionRESOLVE         OwnerGateProjectionNextAction = "RESOLVE"
+	OwnerGateProjectionNextActionWAITFORDELIVERY OwnerGateProjectionNextAction = "WAIT_FOR_DELIVERY"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateProjectionNextAction enum.
+func (e OwnerGateProjectionNextAction) Valid() bool {
+	switch e {
+	case OwnerGateProjectionNextActionNONE:
+		return true
+	case OwnerGateProjectionNextActionREADTERMINAL:
+		return true
+	case OwnerGateProjectionNextActionRESOLVE:
+		return true
+	case OwnerGateProjectionNextActionWAITFORDELIVERY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProjectLocale.
 const (
 	En ProjectLocale = "en"
@@ -685,6 +742,30 @@ func (e RestoreOperationScope) Valid() bool {
 	}
 }
 
+// Defines values for RestoreOperationNextAction.
+const (
+	RestoreOperationNextActionNONE         RestoreOperationNextAction = "NONE"
+	RestoreOperationNextActionREADBACKUP   RestoreOperationNextAction = "READ_BACKUP"
+	RestoreOperationNextActionRETRYRUNTIME RestoreOperationNextAction = "RETRY_RUNTIME"
+	RestoreOperationNextActionWAIT         RestoreOperationNextAction = "WAIT"
+)
+
+// Valid indicates whether the value is a known member of the RestoreOperationNextAction enum.
+func (e RestoreOperationNextAction) Valid() bool {
+	switch e {
+	case RestoreOperationNextActionNONE:
+		return true
+	case RestoreOperationNextActionREADBACKUP:
+		return true
+	case RestoreOperationNextActionRETRYRUNTIME:
+		return true
+	case RestoreOperationNextActionWAIT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RestoreOperationState.
 const (
 	RestoreOperationStateASSIGNED      RestoreOperationState = "ASSIGNED"
@@ -694,6 +775,7 @@ const (
 	RestoreOperationStateMATERIALIZING RestoreOperationState = "MATERIALIZING"
 	RestoreOperationStateQUEUED        RestoreOperationState = "QUEUED"
 	RestoreOperationStateREADY         RestoreOperationState = "READY"
+	RestoreOperationStateRETRYING      RestoreOperationState = "RETRYING"
 	RestoreOperationStateRUNNING       RestoreOperationState = "RUNNING"
 	RestoreOperationStateSUCCEEDED     RestoreOperationState = "SUCCEEDED"
 )
@@ -714,6 +796,8 @@ func (e RestoreOperationState) Valid() bool {
 	case RestoreOperationStateQUEUED:
 		return true
 	case RestoreOperationStateREADY:
+		return true
+	case RestoreOperationStateRETRYING:
 		return true
 	case RestoreOperationStateRUNNING:
 		return true
@@ -807,16 +891,16 @@ func (e RuntimeIncidentKind) Valid() bool {
 
 // Defines values for ScheduleInputCalendar.
 const (
-	BUSINESS  ScheduleInputCalendar = "BUSINESS"
-	GREGORIAN ScheduleInputCalendar = "GREGORIAN"
+	ScheduleInputCalendarBUSINESS  ScheduleInputCalendar = "BUSINESS"
+	ScheduleInputCalendarGREGORIAN ScheduleInputCalendar = "GREGORIAN"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleInputCalendar enum.
 func (e ScheduleInputCalendar) Valid() bool {
 	switch e {
-	case BUSINESS:
+	case ScheduleInputCalendarBUSINESS:
 		return true
-	case GREGORIAN:
+	case ScheduleInputCalendarGREGORIAN:
 		return true
 	default:
 		return false
@@ -825,16 +909,16 @@ func (e ScheduleInputCalendar) Valid() bool {
 
 // Defines values for ScheduleInputDeliveryPolicy.
 const (
-	ATLEASTONCE       ScheduleInputDeliveryPolicy = "AT_LEAST_ONCE"
-	EXACTLYONCEEFFECT ScheduleInputDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+	ScheduleInputDeliveryPolicyATLEASTONCE       ScheduleInputDeliveryPolicy = "AT_LEAST_ONCE"
+	ScheduleInputDeliveryPolicyEXACTLYONCEEFFECT ScheduleInputDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleInputDeliveryPolicy enum.
 func (e ScheduleInputDeliveryPolicy) Valid() bool {
 	switch e {
-	case ATLEASTONCE:
+	case ScheduleInputDeliveryPolicyATLEASTONCE:
 		return true
-	case EXACTLYONCEEFFECT:
+	case ScheduleInputDeliveryPolicyEXACTLYONCEEFFECT:
 		return true
 	default:
 		return false
@@ -894,43 +978,43 @@ func (e ScheduleNotificationPolicy) Valid() bool {
 
 // Defines values for ScheduleOccurrenceState.
 const (
-	CANCELLED       ScheduleOccurrenceState = "CANCELLED"
-	CLAIMED         ScheduleOccurrenceState = "CLAIMED"
-	CONTINUATION    ScheduleOccurrenceState = "CONTINUATION"
-	DEADLETTER      ScheduleOccurrenceState = "DEAD_LETTER"
-	FAILED          ScheduleOccurrenceState = "FAILED"
-	QUEUED          ScheduleOccurrenceState = "QUEUED"
-	RECOVERYBLOCKED ScheduleOccurrenceState = "RECOVERY_BLOCKED"
-	RESERVED        ScheduleOccurrenceState = "RESERVED"
-	SKIPPED         ScheduleOccurrenceState = "SKIPPED"
-	SUCCEEDED       ScheduleOccurrenceState = "SUCCEEDED"
-	WAITINGOWNER    ScheduleOccurrenceState = "WAITING_OWNER"
+	ScheduleOccurrenceStateCANCELLED       ScheduleOccurrenceState = "CANCELLED"
+	ScheduleOccurrenceStateCLAIMED         ScheduleOccurrenceState = "CLAIMED"
+	ScheduleOccurrenceStateCONTINUATION    ScheduleOccurrenceState = "CONTINUATION"
+	ScheduleOccurrenceStateDEADLETTER      ScheduleOccurrenceState = "DEAD_LETTER"
+	ScheduleOccurrenceStateFAILED          ScheduleOccurrenceState = "FAILED"
+	ScheduleOccurrenceStateQUEUED          ScheduleOccurrenceState = "QUEUED"
+	ScheduleOccurrenceStateRECOVERYBLOCKED ScheduleOccurrenceState = "RECOVERY_BLOCKED"
+	ScheduleOccurrenceStateRESERVED        ScheduleOccurrenceState = "RESERVED"
+	ScheduleOccurrenceStateSKIPPED         ScheduleOccurrenceState = "SKIPPED"
+	ScheduleOccurrenceStateSUCCEEDED       ScheduleOccurrenceState = "SUCCEEDED"
+	ScheduleOccurrenceStateWAITINGOWNER    ScheduleOccurrenceState = "WAITING_OWNER"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleOccurrenceState enum.
 func (e ScheduleOccurrenceState) Valid() bool {
 	switch e {
-	case CANCELLED:
+	case ScheduleOccurrenceStateCANCELLED:
 		return true
-	case CLAIMED:
+	case ScheduleOccurrenceStateCLAIMED:
 		return true
-	case CONTINUATION:
+	case ScheduleOccurrenceStateCONTINUATION:
 		return true
-	case DEADLETTER:
+	case ScheduleOccurrenceStateDEADLETTER:
 		return true
-	case FAILED:
+	case ScheduleOccurrenceStateFAILED:
 		return true
-	case QUEUED:
+	case ScheduleOccurrenceStateQUEUED:
 		return true
-	case RECOVERYBLOCKED:
+	case ScheduleOccurrenceStateRECOVERYBLOCKED:
 		return true
-	case RESERVED:
+	case ScheduleOccurrenceStateRESERVED:
 		return true
-	case SKIPPED:
+	case ScheduleOccurrenceStateSKIPPED:
 		return true
-	case SUCCEEDED:
+	case ScheduleOccurrenceStateSUCCEEDED:
 		return true
-	case WAITINGOWNER:
+	case ScheduleOccurrenceStateWAITINGOWNER:
 		return true
 	default:
 		return false
@@ -952,6 +1036,42 @@ func (e ScheduleOverlapPolicy) Valid() bool {
 	case ScheduleOverlapPolicyQUEUE:
 		return true
 	case ScheduleOverlapPolicySKIP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleProjectionCalendar.
+const (
+	ScheduleProjectionCalendarBUSINESS  ScheduleProjectionCalendar = "BUSINESS"
+	ScheduleProjectionCalendarGREGORIAN ScheduleProjectionCalendar = "GREGORIAN"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleProjectionCalendar enum.
+func (e ScheduleProjectionCalendar) Valid() bool {
+	switch e {
+	case ScheduleProjectionCalendarBUSINESS:
+		return true
+	case ScheduleProjectionCalendarGREGORIAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleProjectionDeliveryPolicy.
+const (
+	ScheduleProjectionDeliveryPolicyATLEASTONCE       ScheduleProjectionDeliveryPolicy = "AT_LEAST_ONCE"
+	ScheduleProjectionDeliveryPolicyEXACTLYONCEEFFECT ScheduleProjectionDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleProjectionDeliveryPolicy enum.
+func (e ScheduleProjectionDeliveryPolicy) Valid() bool {
+	switch e {
+	case ScheduleProjectionDeliveryPolicyATLEASTONCE:
+		return true
+	case ScheduleProjectionDeliveryPolicyEXACTLYONCEEFFECT:
 		return true
 	default:
 		return false
@@ -1045,20 +1165,21 @@ type AuditPage struct {
 
 // Backup Безопасный read model без DSN, object key, credential, private reference/evidence или worker grant.
 type Backup struct {
-	ArchiveSha256               string             `json:"archiveSha256"`
-	AvailableAt                 *time.Time         `json:"availableAt,omitempty"`
-	BackupId                    openapi_types.UUID `json:"backupId"`
-	CreatedAt                   time.Time          `json:"createdAt"`
-	ProvenanceSha256            string             `json:"provenanceSha256"`
-	Restorable                  bool               `json:"restorable"`
-	RetainUntil                 *time.Time         `json:"retainUntil,omitempty"`
-	Scope                       BackupScope        `json:"scope"`
-	ScopeId                     openapi_types.UUID `json:"scopeId"`
-	SourceImmutableInputSha256  string             `json:"sourceImmutableInputSha256"`
-	SourceRuntimeRevisionSha256 string             `json:"sourceRuntimeRevisionSha256"`
-	SourceVersion               int64              `json:"sourceVersion"`
-	State                       BackupState        `json:"state"`
-	UpdatedAt                   time.Time          `json:"updatedAt"`
+	ArchiveSha256               string              `json:"archiveSha256"`
+	AvailableAt                 *time.Time          `json:"availableAt,omitempty"`
+	BackupId                    openapi_types.UUID  `json:"backupId"`
+	CreatedAt                   time.Time           `json:"createdAt"`
+	ProvenanceSha256            string              `json:"provenanceSha256"`
+	Restorable                  bool                `json:"restorable"`
+	RestoreOperationId          *openapi_types.UUID `json:"restoreOperationId,omitempty"`
+	RetainUntil                 *time.Time          `json:"retainUntil,omitempty"`
+	Scope                       BackupScope         `json:"scope"`
+	ScopeId                     openapi_types.UUID  `json:"scopeId"`
+	SourceImmutableInputSha256  string              `json:"sourceImmutableInputSha256"`
+	SourceRuntimeRevisionSha256 string              `json:"sourceRuntimeRevisionSha256"`
+	SourceVersion               int64               `json:"sourceVersion"`
+	State                       BackupState         `json:"state"`
+	UpdatedAt                   time.Time           `json:"updatedAt"`
 }
 
 // BackupScope defines model for Backup.Scope.
@@ -1338,15 +1459,25 @@ type OwnerGateDecision string
 
 // OwnerGateProjection defines model for OwnerGateProjection.
 type OwnerGateProjection struct {
-	Attempt              int                `json:"attempt"`
-	Decision             OwnerGateDecision  `json:"decision"`
-	ExpiresAt            time.Time          `json:"expiresAt"`
-	ImmutableInputSha256 string             `json:"immutableInputSha256"`
-	ProcessRunId         openapi_types.UUID `json:"processRunId"`
-	ResultSha256         string             `json:"resultSha256"`
-	SessionId            openapi_types.UUID `json:"sessionId"`
-	TurnId               openapi_types.UUID `json:"turnId"`
+	Attempt              int                              `json:"attempt"`
+	Decision             OwnerGateDecision                `json:"decision"`
+	DeliveredAt          *time.Time                       `json:"deliveredAt,omitempty"`
+	DeliveryState        OwnerGateProjectionDeliveryState `json:"deliveryState"`
+	ExpiresAt            time.Time                        `json:"expiresAt"`
+	ImmutableInputSha256 string                           `json:"immutableInputSha256"`
+	NextAction           OwnerGateProjectionNextAction    `json:"nextAction"`
+	ProcessRunId         openapi_types.UUID               `json:"processRunId"`
+	Resolvable           bool                             `json:"resolvable"`
+	ResultSha256         string                           `json:"resultSha256"`
+	SessionId            openapi_types.UUID               `json:"sessionId"`
+	TurnId               openapi_types.UUID               `json:"turnId"`
 }
+
+// OwnerGateProjectionDeliveryState defines model for OwnerGateProjection.DeliveryState.
+type OwnerGateProjectionDeliveryState string
+
+// OwnerGateProjectionNextAction defines model for OwnerGateProjection.NextAction.
+type OwnerGateProjectionNextAction string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -1445,14 +1576,8 @@ type RepositoryWorkspaceSpec struct {
 
 // ResolveOwnerGate defines model for ResolveOwnerGate.
 type ResolveOwnerGate struct {
-	Attempt                int                      `json:"attempt"`
-	Decision               ResolveOwnerGateDecision `json:"decision"`
-	ImmutableInputSha256   string                   `json:"immutableInputSha256"`
-	ProcessExpectedVersion int64                    `json:"processExpectedVersion"`
-	ProcessRunId           openapi_types.UUID       `json:"processRunId"`
-	Reason                 string                   `json:"reason"`
-	SessionId              openapi_types.UUID       `json:"sessionId"`
-	TurnId                 openapi_types.UUID       `json:"turnId"`
+	Decision ResolveOwnerGateDecision `json:"decision"`
+	Reason   string                   `json:"reason"`
 }
 
 // ResolveOwnerGateDecision defines model for ResolveOwnerGateDecision.
@@ -1545,24 +1670,36 @@ type RestoreBackupScope string
 
 // RestoreOperation Versioned readback без archive locator, PVC tuple, credential, grant или private evidence.
 type RestoreOperation struct {
-	ArchiveSha256      string                `json:"archiveSha256"`
-	BackupId           openapi_types.UUID    `json:"backupId"`
-	CreatedAt          time.Time             `json:"createdAt"`
-	ErrorCode          *string               `json:"errorCode,omitempty"`
-	ProvenanceSha256   string                `json:"provenanceSha256"`
-	RestoreOperationId openapi_types.UUID    `json:"restoreOperationId"`
-	Scope              RestoreOperationScope `json:"scope"`
-	ScopeId            openapi_types.UUID    `json:"scopeId"`
-	SourceVersion      int64                 `json:"sourceVersion"`
-	State              RestoreOperationState `json:"state"`
-	TargetAttempt      int                   `json:"targetAttempt"`
-	TargetTurnId       openapi_types.UUID    `json:"targetTurnId"`
-	UpdatedAt          time.Time             `json:"updatedAt"`
-	Version            int64                 `json:"version"`
+	ArchiveSha256      string                     `json:"archiveSha256"`
+	BackupId           openapi_types.UUID         `json:"backupId"`
+	CreatedAt          time.Time                  `json:"createdAt"`
+	ErrorCode          *string                    `json:"errorCode,omitempty"`
+	Generation         int64                      `json:"generation"`
+	NextAction         RestoreOperationNextAction `json:"nextAction"`
+	Partial            bool                       `json:"partial"`
+	ProvenanceSha256   string                     `json:"provenanceSha256"`
+	RestoreOperationId openapi_types.UUID         `json:"restoreOperationId"`
+	Scope              RestoreOperationScope      `json:"scope"`
+	ScopeId            openapi_types.UUID         `json:"scopeId"`
+	SourceVersion      int64                      `json:"sourceVersion"`
+	State              RestoreOperationState      `json:"state"`
+	TargetAttempt      int                        `json:"targetAttempt"`
+	TargetTurnId       openapi_types.UUID         `json:"targetTurnId"`
+	UpdatedAt          time.Time                  `json:"updatedAt"`
+	Version            int64                      `json:"version"`
 }
 
 // RestoreOperationScope defines model for RestoreOperation.Scope.
 type RestoreOperationScope string
+
+// RestoreOperationNextAction defines model for RestoreOperationNextAction.
+type RestoreOperationNextAction string
+
+// RestoreOperationPage defines model for RestoreOperationPage.
+type RestoreOperationPage struct {
+	NextPageToken *string            `json:"nextPageToken,omitempty"`
+	Operations    []RestoreOperation `json:"operations"`
+}
 
 // RestoreOperationState defines model for RestoreOperationState.
 type RestoreOperationState string
@@ -1820,15 +1957,50 @@ type ScheduleOverlapPolicy string
 
 // ScheduleProjection defines model for ScheduleProjection.
 type ScheduleProjection struct {
-	Cron             *string                          `json:"cron,omitempty"`
-	MaximumAttempts  int                              `json:"maximumAttempts"`
-	NextRunAt        time.Time                        `json:"nextRunAt"`
-	Ownership        ConfigurationOwnershipProjection `json:"ownership"`
-	TargetKind       ResourceKind                     `json:"targetKind"`
-	TargetResourceId openapi_types.UUID               `json:"targetResourceId"`
-	TargetVersion    int64                            `json:"targetVersion"`
-	Timezone         string                           `json:"timezone"`
+	Calendar                ScheduleProjectionCalendar       `json:"calendar"`
+	Coalesce                bool                             `json:"coalesce"`
+	Cron                    *string                          `json:"cron,omitempty"`
+	DeadLetterAfterSeconds  int64                            `json:"deadLetterAfterSeconds"`
+	DeliveryPolicy          ScheduleProjectionDeliveryPolicy `json:"deliveryPolicy"`
+	ExecutionSessionId      *openapi_types.UUID              `json:"executionSessionId,omitempty"`
+	InitialBackoffSeconds   int64                            `json:"initialBackoffSeconds"`
+	IntervalSeconds         *int64                           `json:"intervalSeconds,omitempty"`
+	MaximumAttempts         int                              `json:"maximumAttempts"`
+	MaximumBackoffSeconds   int64                            `json:"maximumBackoffSeconds"`
+	MaximumExecutionSeconds int64                            `json:"maximumExecutionSeconds"`
+	MisfireGraceSeconds     int64                            `json:"misfireGraceSeconds"`
+	MisfirePolicy           ScheduleMisfirePolicy            `json:"misfirePolicy"`
+	NextRunAt               time.Time                        `json:"nextRunAt"`
+	NotificationPolicy      ScheduleNotificationPolicy       `json:"notificationPolicy"`
+	OverlapPolicy           ScheduleOverlapPolicy            `json:"overlapPolicy"`
+	Ownership               ConfigurationOwnershipProjection `json:"ownership"`
+	PlaybookRef             *string                          `json:"playbookRef,omitempty"`
+	PlaybookVersion         *int64                           `json:"playbookVersion,omitempty"`
+	PromptArtifactId        openapi_types.UUID               `json:"promptArtifactId"`
+	PromptProfileId         openapi_types.UUID               `json:"promptProfileId"`
+	PromptRevision          int64                            `json:"promptRevision"`
+	RoomId                  *openapi_types.UUID              `json:"roomId,omitempty"`
+	RuntimeRevisionId       openapi_types.UUID               `json:"runtimeRevisionId"`
+	SessionPolicy           ScheduleSessionPolicy            `json:"sessionPolicy"`
+	TargetKind              ResourceKind                     `json:"targetKind"`
+	TargetResourceId        openapi_types.UUID               `json:"targetResourceId"`
+	TargetType              ScheduleTargetType               `json:"targetType"`
+	TargetVersion           int64                            `json:"targetVersion"`
+	Timezone                string                           `json:"timezone"`
+	union                   json.RawMessage
 }
+
+// ScheduleProjectionCalendar defines model for ScheduleProjection.Calendar.
+type ScheduleProjectionCalendar string
+
+// ScheduleProjectionDeliveryPolicy defines model for ScheduleProjection.DeliveryPolicy.
+type ScheduleProjectionDeliveryPolicy string
+
+// ScheduleProjection0 defines model for .
+type ScheduleProjection0 = interface{}
+
+// ScheduleProjection1 defines model for .
+type ScheduleProjection1 = interface{}
 
 // ScheduleSessionPolicy defines model for ScheduleSessionPolicy.
 type ScheduleSessionPolicy string
@@ -2117,6 +2289,13 @@ type TransitionResourceParams struct {
 	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// ListRestoreOperationsParams defines parameters for ListRestoreOperations.
+type ListRestoreOperationsParams struct {
+	BackupId  *openapi_types.UUID `form:"backupId,omitempty" json:"backupId,omitempty"`
+	PageSize  *PageSize           `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken          `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ManageRoleImageRecipeParams defines parameters for ManageRoleImageRecipe.
@@ -2642,6 +2821,461 @@ func (t *ScheduleInput) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsScheduleProjection0 returns the union data inside the ScheduleProjection as a ScheduleProjection0
+func (t ScheduleProjection) AsScheduleProjection0() (ScheduleProjection0, error) {
+	var body ScheduleProjection0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScheduleProjection0 overwrites any union data inside the ScheduleProjection as the provided ScheduleProjection0
+func (t *ScheduleProjection) FromScheduleProjection0(v ScheduleProjection0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScheduleProjection0 performs a merge with any union data inside the ScheduleProjection, using the provided ScheduleProjection0
+func (t *ScheduleProjection) MergeScheduleProjection0(v ScheduleProjection0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsScheduleProjection1 returns the union data inside the ScheduleProjection as a ScheduleProjection1
+func (t ScheduleProjection) AsScheduleProjection1() (ScheduleProjection1, error) {
+	var body ScheduleProjection1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScheduleProjection1 overwrites any union data inside the ScheduleProjection as the provided ScheduleProjection1
+func (t *ScheduleProjection) FromScheduleProjection1(v ScheduleProjection1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScheduleProjection1 performs a merge with any union data inside the ScheduleProjection, using the provided ScheduleProjection1
+func (t *ScheduleProjection) MergeScheduleProjection1(v ScheduleProjection1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ScheduleProjection) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["calendar"], err = json.Marshal(t.Calendar)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'calendar': %w", err)
+	}
+
+	object["coalesce"], err = json.Marshal(t.Coalesce)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'coalesce': %w", err)
+	}
+
+	if t.Cron != nil {
+		object["cron"], err = json.Marshal(t.Cron)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'cron': %w", err)
+		}
+	}
+
+	object["deadLetterAfterSeconds"], err = json.Marshal(t.DeadLetterAfterSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'deadLetterAfterSeconds': %w", err)
+	}
+
+	object["deliveryPolicy"], err = json.Marshal(t.DeliveryPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'deliveryPolicy': %w", err)
+	}
+
+	if t.ExecutionSessionId != nil {
+		object["executionSessionId"], err = json.Marshal(t.ExecutionSessionId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'executionSessionId': %w", err)
+		}
+	}
+
+	object["initialBackoffSeconds"], err = json.Marshal(t.InitialBackoffSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'initialBackoffSeconds': %w", err)
+	}
+
+	if t.IntervalSeconds != nil {
+		object["intervalSeconds"], err = json.Marshal(t.IntervalSeconds)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'intervalSeconds': %w", err)
+		}
+	}
+
+	object["maximumAttempts"], err = json.Marshal(t.MaximumAttempts)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumAttempts': %w", err)
+	}
+
+	object["maximumBackoffSeconds"], err = json.Marshal(t.MaximumBackoffSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumBackoffSeconds': %w", err)
+	}
+
+	object["maximumExecutionSeconds"], err = json.Marshal(t.MaximumExecutionSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumExecutionSeconds': %w", err)
+	}
+
+	object["misfireGraceSeconds"], err = json.Marshal(t.MisfireGraceSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'misfireGraceSeconds': %w", err)
+	}
+
+	object["misfirePolicy"], err = json.Marshal(t.MisfirePolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'misfirePolicy': %w", err)
+	}
+
+	object["nextRunAt"], err = json.Marshal(t.NextRunAt)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'nextRunAt': %w", err)
+	}
+
+	object["notificationPolicy"], err = json.Marshal(t.NotificationPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'notificationPolicy': %w", err)
+	}
+
+	object["overlapPolicy"], err = json.Marshal(t.OverlapPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'overlapPolicy': %w", err)
+	}
+
+	object["ownership"], err = json.Marshal(t.Ownership)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'ownership': %w", err)
+	}
+
+	if t.PlaybookRef != nil {
+		object["playbookRef"], err = json.Marshal(t.PlaybookRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'playbookRef': %w", err)
+		}
+	}
+
+	if t.PlaybookVersion != nil {
+		object["playbookVersion"], err = json.Marshal(t.PlaybookVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'playbookVersion': %w", err)
+		}
+	}
+
+	object["promptArtifactId"], err = json.Marshal(t.PromptArtifactId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptArtifactId': %w", err)
+	}
+
+	object["promptProfileId"], err = json.Marshal(t.PromptProfileId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptProfileId': %w", err)
+	}
+
+	object["promptRevision"], err = json.Marshal(t.PromptRevision)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptRevision': %w", err)
+	}
+
+	if t.RoomId != nil {
+		object["roomId"], err = json.Marshal(t.RoomId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'roomId': %w", err)
+		}
+	}
+
+	object["runtimeRevisionId"], err = json.Marshal(t.RuntimeRevisionId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'runtimeRevisionId': %w", err)
+	}
+
+	object["sessionPolicy"], err = json.Marshal(t.SessionPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'sessionPolicy': %w", err)
+	}
+
+	object["targetKind"], err = json.Marshal(t.TargetKind)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetKind': %w", err)
+	}
+
+	object["targetResourceId"], err = json.Marshal(t.TargetResourceId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetResourceId': %w", err)
+	}
+
+	object["targetType"], err = json.Marshal(t.TargetType)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetType': %w", err)
+	}
+
+	object["targetVersion"], err = json.Marshal(t.TargetVersion)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetVersion': %w", err)
+	}
+
+	object["timezone"], err = json.Marshal(t.Timezone)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'timezone': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *ScheduleProjection) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["calendar"]; found {
+		err = json.Unmarshal(raw, &t.Calendar)
+		if err != nil {
+			return fmt.Errorf("error reading 'calendar': %w", err)
+		}
+	}
+
+	if raw, found := object["coalesce"]; found {
+		err = json.Unmarshal(raw, &t.Coalesce)
+		if err != nil {
+			return fmt.Errorf("error reading 'coalesce': %w", err)
+		}
+	}
+
+	if raw, found := object["cron"]; found {
+		err = json.Unmarshal(raw, &t.Cron)
+		if err != nil {
+			return fmt.Errorf("error reading 'cron': %w", err)
+		}
+	}
+
+	if raw, found := object["deadLetterAfterSeconds"]; found {
+		err = json.Unmarshal(raw, &t.DeadLetterAfterSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'deadLetterAfterSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["deliveryPolicy"]; found {
+		err = json.Unmarshal(raw, &t.DeliveryPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'deliveryPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["executionSessionId"]; found {
+		err = json.Unmarshal(raw, &t.ExecutionSessionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'executionSessionId': %w", err)
+		}
+	}
+
+	if raw, found := object["initialBackoffSeconds"]; found {
+		err = json.Unmarshal(raw, &t.InitialBackoffSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'initialBackoffSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["intervalSeconds"]; found {
+		err = json.Unmarshal(raw, &t.IntervalSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'intervalSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumAttempts"]; found {
+		err = json.Unmarshal(raw, &t.MaximumAttempts)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumAttempts': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumBackoffSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MaximumBackoffSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumBackoffSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumExecutionSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MaximumExecutionSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumExecutionSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["misfireGraceSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MisfireGraceSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'misfireGraceSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["misfirePolicy"]; found {
+		err = json.Unmarshal(raw, &t.MisfirePolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'misfirePolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["nextRunAt"]; found {
+		err = json.Unmarshal(raw, &t.NextRunAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'nextRunAt': %w", err)
+		}
+	}
+
+	if raw, found := object["notificationPolicy"]; found {
+		err = json.Unmarshal(raw, &t.NotificationPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'notificationPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["overlapPolicy"]; found {
+		err = json.Unmarshal(raw, &t.OverlapPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'overlapPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["ownership"]; found {
+		err = json.Unmarshal(raw, &t.Ownership)
+		if err != nil {
+			return fmt.Errorf("error reading 'ownership': %w", err)
+		}
+	}
+
+	if raw, found := object["playbookRef"]; found {
+		err = json.Unmarshal(raw, &t.PlaybookRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'playbookRef': %w", err)
+		}
+	}
+
+	if raw, found := object["playbookVersion"]; found {
+		err = json.Unmarshal(raw, &t.PlaybookVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'playbookVersion': %w", err)
+		}
+	}
+
+	if raw, found := object["promptArtifactId"]; found {
+		err = json.Unmarshal(raw, &t.PromptArtifactId)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptArtifactId': %w", err)
+		}
+	}
+
+	if raw, found := object["promptProfileId"]; found {
+		err = json.Unmarshal(raw, &t.PromptProfileId)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptProfileId': %w", err)
+		}
+	}
+
+	if raw, found := object["promptRevision"]; found {
+		err = json.Unmarshal(raw, &t.PromptRevision)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptRevision': %w", err)
+		}
+	}
+
+	if raw, found := object["roomId"]; found {
+		err = json.Unmarshal(raw, &t.RoomId)
+		if err != nil {
+			return fmt.Errorf("error reading 'roomId': %w", err)
+		}
+	}
+
+	if raw, found := object["runtimeRevisionId"]; found {
+		err = json.Unmarshal(raw, &t.RuntimeRevisionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'runtimeRevisionId': %w", err)
+		}
+	}
+
+	if raw, found := object["sessionPolicy"]; found {
+		err = json.Unmarshal(raw, &t.SessionPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'sessionPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["targetKind"]; found {
+		err = json.Unmarshal(raw, &t.TargetKind)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetKind': %w", err)
+		}
+	}
+
+	if raw, found := object["targetResourceId"]; found {
+		err = json.Unmarshal(raw, &t.TargetResourceId)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetResourceId': %w", err)
+		}
+	}
+
+	if raw, found := object["targetType"]; found {
+		err = json.Unmarshal(raw, &t.TargetType)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetType': %w", err)
+		}
+	}
+
+	if raw, found := object["targetVersion"]; found {
+		err = json.Unmarshal(raw, &t.TargetVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetVersion': %w", err)
+		}
+	}
+
+	if raw, found := object["timezone"]; found {
+		err = json.Unmarshal(raw, &t.Timezone)
+		if err != nil {
+			return fmt.Errorf("error reading 'timezone': %w", err)
+		}
+	}
+
+	return err
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Выполнить специализированную access command
@@ -2716,6 +3350,9 @@ type ServerInterface interface {
 	// Выполнить допустимый lifecycle transition
 	// (POST /resources/{resourceId}/transition)
 	TransitionResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params TransitionResourceParams)
+	// Обнаружить связанные owner restore operations после потери Location
+	// (GET /restore-operations)
+	ListRestoreOperations(w http.ResponseWriter, r *http.Request, params ListRestoreOperationsParams)
 	// Прочитать authoritative restore readback
 	// (GET /restore-operations/{restoreOperationId})
 	GetRestoreOperation(w http.ResponseWriter, r *http.Request, restoreOperationId openapi_types.UUID)
@@ -4696,6 +5333,71 @@ func (siw *ServerInterfaceWrapper) TransitionResource(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListRestoreOperations operation middleware
+func (siw *ServerInterfaceWrapper) ListRestoreOperations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRestoreOperationsParams
+
+	// ------------- Optional query parameter "backupId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "backupId", r.URL.Query(), &params.BackupId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "backupId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRestoreOperations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRestoreOperation operation middleware
 func (siw *ServerInterfaceWrapper) GetRestoreOperation(w http.ResponseWriter, r *http.Request) {
 
@@ -5806,6 +6508,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/{resourceId}", wrapper.GetResource)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/resources/{resourceId}", wrapper.UpdateResource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources/{resourceId}/transition", wrapper.TransitionResource)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/restore-operations", wrapper.ListRestoreOperations)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/restore-operations/{restoreOperationId}", wrapper.GetRestoreOperation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/role-image-recipes/commands", wrapper.ManageRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/role-image-recipes/{recipeId}", wrapper.GetRoleImageRecipe)

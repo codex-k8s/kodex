@@ -158,6 +158,9 @@ service ControlPlaneService {
   rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse);
   // GetRestoreOperation возвращает единый versioned readback restore graph.
   rpc GetRestoreOperation(GetRestoreOperationRequest) returns (GetRestoreOperationResponse);
+  // ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
+  // включая фильтр по backup после потери HTTP Location.
+  rpc ListRestoreOperations(ListRestoreOperationsRequest) returns (ListRestoreOperationsResponse);
 
   // RegisterArtifact выполняет версионированную операцию ControlPlaneService.
   rpc RegisterArtifact(RegisterArtifactRequest) returns (RegisterArtifactResponse);
@@ -1041,6 +1044,10 @@ message TurnSpec {
   uint64 restore_source_version = 26;
   string restore_source_archive_sha256 = 27;
   string restore_source_provenance_sha256 = 28;
+  uint64 restore_operation_generation = 29;
+  // restore_source_authority_sha256 — digest полного server-owned source
+  // locator/version/fence/proof tuple; приватные locator значения не выдаются.
+  string restore_source_authority_sha256 = 30;
 }
 
 message EffectiveArtifactRef {
@@ -1170,6 +1177,9 @@ message OwnerGateSpec {
   string continuation_input_sha256 = 29;
   // notification_room_id — exact server-owned route scheduled owner gate.
   string notification_room_id = 30;
+  // Digest exact Mattermost read-after-write receipt. Сам receipt и provider
+  // locators остаются внутренними; browser видит только delivery readiness.
+  string delivery_provider_receipt_sha256 = 31;
 }
 
 // MemoryRecordSpec описывает версионированное сообщение контракта control-plane.
@@ -2124,6 +2134,9 @@ message RecordOwnerGateDeliveryRequest {
   string mattermost_post_id = 8;
   string mattermost_channel_id = 9;
   string mattermost_root_post_id = 10;
+  // provider_receipt_sha256 получен только после exact Mattermost read-after-write
+  // и связывает provider-owned effect с owner delivery claim.
+  string provider_receipt_sha256 = 11;
 }
 
 // RecordOwnerGateDeliveryResponse описывает версионированное сообщение контракта control-plane.
@@ -2216,12 +2229,7 @@ message ResolveOwnerGateRequest {
   uint64 expected_version = 3;
   OwnerGateDecision decision = 4;
   string reason = 5;
-  string process_run_id = 6;
-  uint64 process_expected_version = 7;
-  string session_id = 8;
-  string turn_id = 9;
-  uint32 attempt = 10;
-  string immutable_input_sha256 = 11;
+  reserved 6 to 11;
 }
 
 // ResolveOwnerGateResponse описывает версионированное сообщение контракта control-plane.
@@ -2239,6 +2247,9 @@ enum BackupState {
   BACKUP_STATE_RESTORED = 5;
   BACKUP_STATE_EXPIRED = 6;
   BACKUP_STATE_UNAVAILABLE = 7;
+  BACKUP_STATE_RESTORE_FAILED = 8;
+  BACKUP_STATE_RESTORE_CANCELLED = 9;
+  BACKUP_STATE_RESTORE_EXPIRED = 10;
 }
 
 // Backup — безопасная проекция immutable runtime archive. Storage locator,
@@ -2258,6 +2269,7 @@ message Backup {
   google.protobuf.Timestamp available_at = 12;
   google.protobuf.Timestamp retain_until = 13;
   google.protobuf.Timestamp updated_at = 14;
+  string restore_operation_id = 15;
 }
 
 message ListBackupsRequest {
@@ -2299,6 +2311,15 @@ enum RestoreOperationState {
   RESTORE_OPERATION_STATE_FAILED = 7;
   RESTORE_OPERATION_STATE_CANCELLED = 8;
   RESTORE_OPERATION_STATE_EXPIRED = 9;
+  RESTORE_OPERATION_STATE_RETRYING = 10;
+}
+
+enum RestoreOperationNextAction {
+  RESTORE_OPERATION_NEXT_ACTION_UNSPECIFIED = 0;
+  RESTORE_OPERATION_NEXT_ACTION_WAIT = 1;
+  RESTORE_OPERATION_NEXT_ACTION_RETRY_RUNTIME = 2;
+  RESTORE_OPERATION_NEXT_ACTION_READ_BACKUP = 3;
+  RESTORE_OPERATION_NEXT_ACTION_NONE = 4;
 }
 
 // RestoreOperation — safe readback server-owned target attempt. Внутренние
@@ -2318,6 +2339,9 @@ message RestoreOperation {
   string error_code = 12;
   google.protobuf.Timestamp created_at = 13;
   google.protobuf.Timestamp updated_at = 14;
+  uint64 generation = 15;
+  bool partial = 16;
+  RestoreOperationNextAction next_action = 17;
 }
 
 message RestoreBackupResponse {
@@ -2330,6 +2354,17 @@ message GetRestoreOperationRequest {
 
 message GetRestoreOperationResponse {
   RestoreOperation operation = 1;
+}
+
+message ListRestoreOperationsRequest {
+  string backup_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListRestoreOperationsResponse {
+  repeated RestoreOperation operations = 1;
+  string next_page_token = 2;
 }
 
 // RegisterArtifactRequest описывает версионированное сообщение контракта control-plane.
@@ -2815,6 +2850,11 @@ message RuntimeExecution {
   // exact protected journal либо вернуть bounded FAILED при его утрате;
   // повторно запускать provider запрещено.
   string codex_delivery_recovery_source_execution_id = 102;
+  // Restore authority fields вычисляются из owner Turn/operation при claim и
+  // входят в workload/restore ticket; они не принимаются от workload.
+  string restore_operation_id = 104;
+  uint64 restore_operation_generation = 105;
+  string restore_source_authority_sha256 = 106;
 }
 
 message RuntimeMaterialization {

@@ -83,16 +83,17 @@ type SessionMCPBindingInput struct {
 }
 
 type RecordDeliveryInput struct {
-	IdempotencyKey string
-	GateID         string
-	GateVersion    uint64
-	DeliveryID     string
-	PayloadSHA256  string
-	ClaimToken     string
-	ClaimFence     uint64
-	PostID         string
-	ChannelID      string
-	RootPostID     string
+	IdempotencyKey        string
+	GateID                string
+	GateVersion           uint64
+	DeliveryID            string
+	PayloadSHA256         string
+	ClaimToken            string
+	ClaimFence            uint64
+	PostID                string
+	ChannelID             string
+	RootPostID            string
+	ProviderReceiptSHA256 string
 }
 
 type InteractionDeliveryWork struct {

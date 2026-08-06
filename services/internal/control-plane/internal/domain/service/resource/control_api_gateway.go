@@ -506,6 +506,25 @@ func (service *Service) GetRestoreOperation(
 	)
 }
 
+func (service *Service) ListRestoreOperations(
+	ctx context.Context,
+	input ListRestoreOperationsInput,
+) ([]domainrepo.RuntimeRestoreOperation, error) {
+	if err := authorize(input.Principal, permissionBackupRead); err != nil {
+		return nil, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) || input.Principal.ProjectID == "" ||
+		(input.BackupID != "" && value.ValidateID(input.BackupID) != nil) ||
+		(input.AfterID != "" && value.ValidateID(input.AfterID) != nil) ||
+		input.Limit < 1 || input.Limit > 100 {
+		return nil, errs.ErrInvalidInput
+	}
+	return service.repository.ListRuntimeRestoreOperations(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Principal.ActorID, input.BackupID, input.AfterID, input.Limit,
+	)
+}
+
 func (service *Service) AdmitOwnerSession(
 	ctx context.Context,
 	input OwnerSessionInput,

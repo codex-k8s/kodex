@@ -15,7 +15,11 @@ CREATE TABLE control_plane.runtime_restore_operations (
     source_fence bigint NOT NULL CHECK (source_fence BETWEEN 1 AND 9007199254740991),
     archive_sha256 text NOT NULL CHECK (archive_sha256 ~ '^[a-f0-9]{64}$'),
     provenance_sha256 text NOT NULL CHECK (provenance_sha256 ~ '^[a-f0-9]{64}$'),
+    source_authority_sha256 text NOT NULL CHECK (source_authority_sha256 ~ '^[a-f0-9]{64}$'),
     session_id uuid NOT NULL,
+    generation bigint NOT NULL CHECK (generation BETWEEN 1 AND 100),
+    consumed_generation bigint NOT NULL DEFAULT 0 CHECK (consumed_generation BETWEEN 0 AND generation),
+    revoked_generation bigint NOT NULL DEFAULT 0 CHECK (revoked_generation BETWEEN 0 AND generation),
     target_turn_id uuid NOT NULL,
     target_attempt integer NOT NULL CHECK (target_attempt BETWEEN 1 AND 100),
     target_execution_id uuid NOT NULL,
@@ -51,7 +55,7 @@ CREATE POLICY runtime_restore_operations_runtime_scope
         AND owner_actor_id = (control_plane.runtime_scope()).actor_id
     );
 REVOKE ALL ON control_plane.runtime_restore_operations FROM PUBLIC;
-GRANT SELECT, INSERT ON control_plane.runtime_restore_operations TO control_plane_runtime;
+GRANT SELECT, INSERT, UPDATE ON control_plane.runtime_restore_operations TO control_plane_runtime;
 
 UPDATE control_plane.schema_state
 SET version = 20260806000100, migrated_at = clock_timestamp()

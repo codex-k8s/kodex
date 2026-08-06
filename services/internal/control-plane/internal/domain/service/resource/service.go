@@ -42,6 +42,8 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 		AgentBindingSHA256, CredentialSnapshotSHA256              string
 		WorkloadTicketSHA256, ResourceClass, ClusterAccessProfile string
 		CodexDeliveryRecoverySourceExecutionID                    string
+		RestoreOperationID, RestoreSourceAuthoritySHA256          string
+		RestoreOperationGeneration                                uint64
 		State                                                     string
 	}
 	issue := func(issuer, audience string, privateKey ed25519.PrivateKey) (string, error) {
@@ -56,7 +58,9 @@ func (service *Service) issueRuntimeWorkloadTicket(execution *RuntimeExecution) 
 			execution.EffectiveRuntimeSHA256, execution.AgentBindingSHA256,
 			execution.CredentialSnapshotSHA256, execution.WorkloadTicketSHA256,
 			execution.ResourceClass, execution.ClusterAccessProfile,
-			execution.CodexDeliveryRecoverySourceExecutionID, execution.State})
+			execution.CodexDeliveryRecoverySourceExecutionID,
+			execution.RestoreOperationID, execution.RestoreSourceAuthoritySHA256,
+			execution.RestoreOperationGeneration, execution.State})
 		if marshalErr != nil {
 			return "", marshalErr
 		}
@@ -1361,7 +1365,7 @@ func accessKind(kind enum.Kind) bool {
 
 func protectedCreateKind(kind enum.Kind) bool {
 	switch kind {
-	case enum.KindRuntimeRevision, enum.KindProcessRun, enum.KindSchedule,
+	case enum.KindProject, enum.KindRuntimeRevision, enum.KindProcessRun, enum.KindSchedule,
 		enum.KindOwnerGate, enum.KindArtifact, enum.KindSession,
 		enum.KindMemoryRecord, enum.KindWorkClaim, enum.KindRoleImageRecipe,
 		enum.KindImageBuild, enum.KindImageArtifact:
@@ -1373,7 +1377,7 @@ func protectedCreateKind(kind enum.Kind) bool {
 
 func protectedMutationKind(kind enum.Kind) bool {
 	switch kind {
-	case enum.KindRuntimeRevision, enum.KindSession, enum.KindTurn,
+	case enum.KindProject, enum.KindRuntimeRevision, enum.KindSession, enum.KindTurn,
 		enum.KindProcessRun, enum.KindSchedule, enum.KindOwnerGate,
 		enum.KindArtifact, enum.KindMemoryRecord, enum.KindWorkClaim,
 		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact:
@@ -1389,7 +1393,7 @@ func protectedTransitionKind(kind enum.Kind) bool {
 
 func ownerBoundLifecycleKind(kind enum.Kind) bool {
 	switch kind {
-	case enum.KindSession, enum.KindTurn, enum.KindProcessRun,
+	case enum.KindProject, enum.KindSession, enum.KindTurn, enum.KindProcessRun,
 		enum.KindSchedule, enum.KindOwnerGate, enum.KindWorkClaim,
 		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact:
 		return true

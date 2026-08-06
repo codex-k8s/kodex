@@ -1,4 +1,4 @@
--- name: RuntimeRestoreOperationGetByBackup :one
+-- name: RuntimeRestoreOperationOwnerList :many
 SELECT operation.id::text, operation.organization_id::text,
        operation.project_id::text, operation.owner_actor_id::text,
        operation.backup_execution_id::text, operation.source_version, operation.source_fence,
@@ -18,4 +18,10 @@ JOIN control_plane.resources AS target_turn
   ON target_turn.organization_id = operation.organization_id
  AND target_turn.project_id = operation.project_id
  AND target_turn.id = operation.target_turn_id
-WHERE operation.backup_execution_id = @backup_execution_id::uuid;
+WHERE operation.organization_id = @organization_id::uuid
+  AND operation.project_id = @project_id::uuid
+  AND operation.owner_actor_id = @actor_id::uuid
+  AND (@backup_id = '' OR operation.backup_execution_id = @backup_id::uuid)
+  AND (@after_id = '' OR operation.id > @after_id::uuid)
+ORDER BY operation.id
+LIMIT @limit;
