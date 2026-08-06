@@ -14,6 +14,248 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreateProject — закрытая organization-scoped команда. Она единственная
+// может пройти protected create registry для PROJECT; ID, owner, project scope,
+// начальное состояние и OCC-версия назначаются общей owner transaction.
+func (service *Service) CreateProject(
+	ctx context.Context,
+	input CreateProjectInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionProjectCreate); err != nil {
+		return entity.Resource{}, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) ||
+		input.Principal.ProjectID != "" {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	return service.create(ctx, CreateInput{
+		Principal: input.Principal, IdempotencyKey: input.IdempotencyKey,
+		Kind: enum.KindProject, Name: input.Name, Spec: input.Spec,
+		TenantProject: true,
+	}, true)
+}
+
+func (service *Service) trustedOwnedProject(
+	ctx context.Context,
+	principal value.Principal,
+	projectID string,
+) (value.Principal, entity.Resource, error) {
+	if principal.ProjectID != "" || value.ValidateID(projectID) != nil {
+		return value.Principal{}, entity.Resource{}, errs.ErrInvalidInput
+	}
+	project, err := service.repository.GetIncludingDeleted(
+		ctx, principal.OrganizationID, projectID, projectID, enum.KindProject,
+	)
+	if err != nil {
+		return value.Principal{}, entity.Resource{}, err
+	}
+	if project.ID != projectID || project.ProjectID != projectID ||
+		project.Kind != enum.KindProject || project.OwnerActorID != principal.ActorID {
+		return value.Principal{}, entity.Resource{}, errs.ErrNotFound
+	}
+	principal.ProjectID = projectID
+	return principal, project, nil
+}
+
+// UpdateProject сначала разрешает locator в tenant owner boundary, затем
+// повторно блокирует exact project и только после owner/OCC читает receipt.
+func (service *Service) UpdateProject(
+	ctx context.Context,
+	input UpdateProjectInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionProjectUpdate); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.ProjectID) != nil || input.ExpectedVersion == 0 ||
+		value.ValidateName(input.Name) != nil || input.Spec.Validate() != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	trusted, _, err := service.trustedOwnedProject(ctx, input.Principal, input.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity        commandIdentity
+		ProjectID       string
+		ExpectedVersion uint64
+		Name            string
+		Spec            entity.ProjectSpec
+	}{identity(trusted), input.ProjectID, input.ExpectedVersion, input.Name, input.Spec})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	var locked entity.Resource
+	var result entity.Resource
+	err = service.withLifecycleReceipt(
+		ctx, trusted, input.IdempotencyKey, "update_project", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, lockErr := tx.GetForUpdateIncludingDeleted(
+				ctx, trusted.OrganizationID, trusted.ProjectID, input.ProjectID,
+			)
+			if lockErr != nil {
+				return 0, lockErr
+			}
+			if current.Kind != enum.KindProject || current.ProjectID != current.ID ||
+				requireLifecycleOwner(trusted, current) != nil {
+				return 0, errs.ErrNotFound
+			}
+			if current.Version == input.ExpectedVersion && !current.State.Terminal() &&
+				current.State != enum.StateDeletionPending {
+				locked = current
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version == input.ExpectedVersion+1 && !current.State.Terminal() &&
+				current.State != enum.StateDeletionPending {
+				locked = current
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func() error {
+			if result.ID != locked.ID || result.Version != locked.Version ||
+				result.State != locked.State || result.OwnerActorID != trusted.ActorID {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
+			current := locked
+			if err := authorizeGitManagedMutation(ctx, tx, trusted, current.Spec); err != nil {
+				return err
+			}
+			currentSpec, ok := current.Spec.(entity.ProjectSpec)
+			if !ok {
+				return errs.ErrStateConflict
+			}
+			input.Spec.Ownership = currentSpec.Ownership
+			now, timeErr := tx.CurrentTime(ctx)
+			if timeErr != nil {
+				return timeErr
+			}
+			updated, updateErr := current.Update(input.Name, input.Spec, now)
+			if updateErr != nil {
+				return errs.ErrStateConflict
+			}
+			if updateErr = tx.Update(ctx, updated, current.Version); updateErr != nil {
+				return updateErr
+			}
+			if updateErr = service.appendMutationRecords(
+				ctx, tx, trusted, "update_project", updated,
+			); updateErr != nil {
+				return updateErr
+			}
+			result = updated
+			return nil
+		},
+	)
+	return result, err
+}
+
+// DeleteProject терминально закрывает только пустой owner project. Оба
+// перехода и события фиксируются одной транзакцией; повтор читает tombstone.
+func (service *Service) DeleteProject(
+	ctx context.Context,
+	input DeleteProjectInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionProjectDelete); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.ProjectID) != nil || input.ExpectedVersion == 0 {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	trusted, _, err := service.trustedOwnedProject(ctx, input.Principal, input.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity        commandIdentity
+		ProjectID       string
+		ExpectedVersion uint64
+	}{identity(trusted), input.ProjectID, input.ExpectedVersion})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	var locked entity.Resource
+	var result entity.Resource
+	err = service.withLifecycleReceipt(
+		ctx, trusted, input.IdempotencyKey, "delete_project", requestHash, &result,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, lockErr := tx.GetForUpdateIncludingDeleted(
+				ctx, trusted.OrganizationID, trusted.ProjectID, input.ProjectID,
+			)
+			if lockErr != nil {
+				return 0, lockErr
+			}
+			if current.Kind != enum.KindProject || current.ProjectID != current.ID ||
+				requireLifecycleOwner(trusted, current) != nil {
+				return 0, errs.ErrNotFound
+			}
+			locked = current
+			if current.Version == input.ExpectedVersion &&
+				(current.State == enum.StateActive || current.State == enum.StatePaused ||
+					current.State == enum.StateArchived) {
+				live, liveErr := tx.ProjectHasLiveResources(ctx, current.OrganizationID, current.ID)
+				if liveErr != nil {
+					return 0, liveErr
+				}
+				if live {
+					return 0, errs.ErrStateConflict
+				}
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version == input.ExpectedVersion+2 && current.State == enum.StateDeleted {
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func() error {
+			if result.ID != locked.ID || result.Version != locked.Version ||
+				result.State != enum.StateDeleted || result.OwnerActorID != trusted.ActorID {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
+			if err := authorizeGitManagedMutation(ctx, tx, trusted, locked.Spec); err != nil {
+				return err
+			}
+			now, timeErr := tx.CurrentTime(ctx)
+			if timeErr != nil {
+				return timeErr
+			}
+			pending, transitionErr := locked.Transition(enum.StateDeletionPending, now)
+			if transitionErr != nil {
+				return errs.ErrStateConflict
+			}
+			if transitionErr = tx.Update(ctx, pending, locked.Version); transitionErr != nil {
+				return transitionErr
+			}
+			if transitionErr = service.appendMutationRecords(
+				ctx, tx, trusted, "delete_project_pending", pending,
+			); transitionErr != nil {
+				return transitionErr
+			}
+			deleted, transitionErr := pending.Transition(enum.StateDeleted, now)
+			if transitionErr != nil {
+				return errs.ErrStateConflict
+			}
+			if transitionErr = tx.Update(ctx, deleted, pending.Version); transitionErr != nil {
+				return transitionErr
+			}
+			if transitionErr = service.appendMutationRecords(
+				ctx, tx, trusted, "delete_project", deleted,
+			); transitionErr != nil {
+				return transitionErr
+			}
+			result = deleted
+			return nil
+		},
+	)
+	return result, err
+}
+
 func accessConfigurationKind(kind enum.Kind) bool {
 	switch kind {
 	case enum.KindTeam, enum.KindRole, enum.KindPromptProfile:
@@ -172,6 +414,137 @@ func (service *Service) ListRuntimeIncidents(
 		return nil, errs.ErrInvalidInput
 	}
 	return service.repository.ListRuntimeIncidents(ctx, input.Filter)
+}
+
+func (service *Service) controlAPIGatewayPrincipal(principal value.Principal) bool {
+	return principal.CallerWorkload == controlAPIGatewayWorkload &&
+		principal.CallerSPIFFEID == controlAPIGatewaySPIFFEID
+}
+
+func (service *Service) ListBackups(
+	ctx context.Context,
+	input ListBackupsInput,
+) ([]domainrepo.Backup, error) {
+	if err := authorize(input.Principal, permissionBackupRead); err != nil {
+		return nil, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) ||
+		input.Principal.ProjectID == "" || input.Limit < 1 || input.Limit > 100 ||
+		(input.AfterID != "" && value.ValidateID(input.AfterID) != nil) {
+		return nil, errs.ErrInvalidInput
+	}
+	return service.repository.ListBackups(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Principal.ActorID, input.AfterID, input.Limit,
+	)
+}
+
+func (service *Service) GetBackup(
+	ctx context.Context,
+	input GetBackupInput,
+) (domainrepo.Backup, error) {
+	if err := authorize(input.Principal, permissionBackupRead); err != nil {
+		return domainrepo.Backup{}, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) ||
+		input.Principal.ProjectID == "" || value.ValidateID(input.BackupID) != nil {
+		return domainrepo.Backup{}, errs.ErrInvalidInput
+	}
+	return service.repository.GetBackup(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Principal.ActorID, input.BackupID,
+	)
+}
+
+func (service *Service) RestoreBackup(
+	ctx context.Context,
+	input RestoreBackupInput,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	if err := authorize(input.Principal, permissionBackupRestore); err != nil {
+		return domainrepo.RuntimeRestoreOperation{}, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) ||
+		input.Principal.ProjectID == "" ||
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.BackupID) != nil || input.ExpectedBackupVersion == 0 ||
+		input.ExpectedSourceVersion == 0 ||
+		!validSHA256Text(input.ArchiveSHA256) ||
+		!validSHA256Text(input.ProvenanceSHA256) || input.Scope != "SESSION" ||
+		value.ValidateID(input.ScopeID) != nil {
+		return domainrepo.RuntimeRestoreOperation{}, errs.ErrInvalidInput
+	}
+	backup, err := service.repository.GetBackup(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Principal.ActorID, input.BackupID,
+	)
+	if err != nil {
+		return domainrepo.RuntimeRestoreOperation{}, err
+	}
+	// Dynamic eligibility проверяется внутри той же lifecycle transaction после
+	// lookup receipt. Поэтому terminal replay с исходным ETag не блокируется
+	// изменившимся readback state/version, а новый command всё равно fail-closed.
+	if backup.SourceVersion != input.ExpectedSourceVersion ||
+		backup.ArchiveSHA256 != input.ArchiveSHA256 ||
+		backup.ProvenanceSHA256 != input.ProvenanceSHA256 ||
+		backup.SessionID != input.ScopeID || backup.SourceFence == 0 {
+		return domainrepo.RuntimeRestoreOperation{}, errs.ErrStateConflict
+	}
+	retried, err := service.retryRuntimeExecution(ctx, RuntimeExecutionInput{
+		Principal: input.Principal, IdempotencyKey: input.IdempotencyKey,
+		ExecutionID: backup.ID, ExpectedVersion: backup.SourceVersion,
+		ExpectedFence: backup.SourceFence,
+	}, &restoreRuntimeIntent{
+		BackupID: backup.ID, SourceVersion: backup.SourceVersion,
+		SourceFence: backup.SourceFence, ArchiveSHA256: backup.ArchiveSHA256,
+		ProvenanceSHA256: backup.ProvenanceSHA256, SessionID: backup.SessionID,
+		ExpectedBackupVersion: input.ExpectedBackupVersion,
+	})
+	if err != nil {
+		return domainrepo.RuntimeRestoreOperation{}, err
+	}
+	if retried.Restore == nil {
+		return domainrepo.RuntimeRestoreOperation{}, errs.ErrInternal
+	}
+	return service.repository.GetRuntimeRestoreOperation(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Principal.ActorID, retried.Restore.ID,
+	)
+}
+
+func (service *Service) GetRestoreOperation(
+	ctx context.Context,
+	input GetRestoreOperationInput,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	if err := authorize(input.Principal, permissionBackupRead); err != nil {
+		return domainrepo.RuntimeRestoreOperation{}, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) ||
+		input.Principal.ProjectID == "" || value.ValidateID(input.OperationID) != nil {
+		return domainrepo.RuntimeRestoreOperation{}, errs.ErrInvalidInput
+	}
+	return service.repository.GetRuntimeRestoreOperation(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Principal.ActorID, input.OperationID,
+	)
+}
+
+func (service *Service) ListRestoreOperations(
+	ctx context.Context,
+	input ListRestoreOperationsInput,
+) ([]domainrepo.RuntimeRestoreOperation, error) {
+	if err := authorize(input.Principal, permissionBackupRead); err != nil {
+		return nil, err
+	}
+	if !service.controlAPIGatewayPrincipal(input.Principal) || input.Principal.ProjectID == "" ||
+		(input.BackupID != "" && value.ValidateID(input.BackupID) != nil) ||
+		(input.AfterID != "" && value.ValidateID(input.AfterID) != nil) ||
+		input.Limit < 1 || input.Limit > 100 {
+		return nil, errs.ErrInvalidInput
+	}
+	return service.repository.ListRuntimeRestoreOperations(
+		ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		input.Principal.ActorID, input.BackupID, input.AfterID, input.Limit,
+	)
 }
 
 func (service *Service) AdmitOwnerSession(

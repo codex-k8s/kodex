@@ -31,8 +31,9 @@ SELECT id, organization_id, project_id, process_id, session_id, thread_id,
        coalesce(restore_source_archive_sha256, ''),
        coalesce(restore_source_runtime_revision_sha256, ''),
        coalesce(restore_source_immutable_input_sha256, ''),
+       coalesce(restore_source_proof_reference, ''),
        coalesce(restore_source_proof_sha256, ''),
-       coalesce(restore_source_version, 0),
+       coalesce(restore_source_version, 0), coalesce(restore_source_fence, 0),
        coalesce(restore_source_archive_object_key, ''),
        coalesce(restore_source_archive_version_id, ''),
        coalesce(restore_source_archive_kms_key_arn, ''),
@@ -66,6 +67,7 @@ WHERE organization_id = @organization_id
   AND archive_sha256 IS NOT NULL
   AND restore_proof_sha256 IS NOT NULL
   AND cleanup_deletion_proof_sha256 IS NOT NULL
+  AND archive_retain_until > clock_timestamp()
   AND NOT EXISTS (
       SELECT 1
       FROM control_plane.runtime_executions AS target

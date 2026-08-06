@@ -58,18 +58,28 @@ func ImagePromotionOperations() map[string]string {
 
 func RuntimeControllerOperations() map[string]string {
 	return map[string]string{
-		"control.runtime-controller.readiness":      controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
-		"control.runtime-resource.get":              controlplanev1.ControlPlaneService_GetResource_FullMethodName,
-		"control.runtime-revision.get":              controlplanev1.ControlPlaneService_GetRuntimeRevision_FullMethodName,
-		"control.runtime-execution.claim":           controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
-		"control.runtime-execution.get":             controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
-		"control.runtime-execution.admit":           controlplanev1.ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
-		"control.runtime-execution.heartbeat":       controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
-		"control.runtime-execution.incident":        controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
-		"control.runtime-execution.complete":        controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
-		"control.runtime-execution.reschedule":      controlplanev1.ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
-		"control.runtime-execution.expire":          controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
-		"control.runtime-execution.cleanup.consume": controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
+		"control.runtime-controller.readiness":          controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-resource.get":                  controlplanev1.ControlPlaneService_GetResource_FullMethodName,
+		"control.runtime-revision.get":                  controlplanev1.ControlPlaneService_GetRuntimeRevision_FullMethodName,
+		"control.runtime-execution.claim":               controlplanev1.ControlPlaneService_ClaimRuntimeExecution_FullMethodName,
+		"control.runtime-execution.get":                 controlplanev1.ControlPlaneService_GetRuntimeExecution_FullMethodName,
+		"control.runtime-execution.admit":               controlplanev1.ControlPlaneService_AdmitRuntimeExecution_FullMethodName,
+		"control.runtime-execution.restore.materialize": controlplanev1.ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
+		"control.runtime-execution.heartbeat":           controlplanev1.ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName,
+		"control.runtime-execution.incident":            controlplanev1.ControlPlaneService_RecordRuntimeIncident_FullMethodName,
+		"control.runtime-execution.complete":            controlplanev1.ControlPlaneService_CompleteRuntimeExecution_FullMethodName,
+		"control.runtime-execution.reschedule":          controlplanev1.ControlPlaneService_RescheduleRuntimeExecution_FullMethodName,
+		"control.runtime-execution.expire":              controlplanev1.ControlPlaneService_ExpireRuntimeExecution_FullMethodName,
+		"control.runtime-execution.cleanup.consume":     controlplanev1.ControlPlaneService_ConsumeRuntimeCleanupAuthorization_FullMethodName,
+	}
+}
+
+// RuntimeRestoreEffectOperations выдаёт S3 restore exchanger только readiness
+// и exact current-generation credential effect authorization.
+func RuntimeRestoreEffectOperations() map[string]string {
+	return map[string]string{
+		"control.runtime-restore-effect.readiness":     controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.runtime-execution.restore.credential": controlplanev1.ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
 	}
 }
 
@@ -132,6 +142,8 @@ func ControlAPIGatewayOperations() map[string]string {
 		"control.readiness.check":            controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.project.create":             controlplanev1.ControlPlaneService_CreateProject_FullMethodName,
 		"control.project.list":               controlplanev1.ControlPlaneService_ListProjects_FullMethodName,
+		"control.project.update":             controlplanev1.ControlPlaneService_UpdateProject_FullMethodName,
+		"control.project.delete":             controlplanev1.ControlPlaneService_DeleteProject_FullMethodName,
 		"control.resource.create":            controlplanev1.ControlPlaneService_CreateResource_FullMethodName,
 		"control.resource.update":            controlplanev1.ControlPlaneService_UpdateResource_FullMethodName,
 		"control.resource.transition":        controlplanev1.ControlPlaneService_TransitionResource_FullMethodName,
@@ -154,6 +166,12 @@ func ControlAPIGatewayOperations() map[string]string {
 		"control.schedule.run-now":           controlplanev1.ControlPlaneService_RunScheduleNow_FullMethodName,
 		"control.schedule.occurrences.list":  controlplanev1.ControlPlaneService_ListScheduleOccurrences_FullMethodName,
 		"control.schedule.recovery.resolve":  controlplanev1.ControlPlaneService_ResolveScheduleRecovery_FullMethodName,
+		"control.owner-gate.resolve":         controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
+		"control.backup.list":                controlplanev1.ControlPlaneService_ListBackups_FullMethodName,
+		"control.backup.get":                 controlplanev1.ControlPlaneService_GetBackup_FullMethodName,
+		"control.backup.restore":             controlplanev1.ControlPlaneService_RestoreBackup_FullMethodName,
+		"control.restore-operation.get":      controlplanev1.ControlPlaneService_GetRestoreOperation_FullMethodName,
+		"control.restore-operation.list":     controlplanev1.ControlPlaneService_ListRestoreOperations_FullMethodName,
 		"control.role-image-recipe.manage":   controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,
 		"control.role-image-recipe.get":      controlplanev1.ControlPlaneService_GetRoleImageRecipe_FullMethodName,
 		"control.image-build.manage":         controlplanev1.ControlPlaneService_ManageImageBuild_FullMethodName,

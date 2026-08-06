@@ -6,4 +6,5 @@ type RoleImagePackage struct {
   Name string
   Version string
   Digest string
+  SourceRef string
 }

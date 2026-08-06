@@ -127,6 +127,17 @@ func (service *Service) cancelTurnExecutionForOwner(
 	if err := tx.FinishTurnAttempt(ctx, attempt); err != nil {
 		return entity.Resource{}, err
 	}
+	if spec.RestoreOperationID != "" {
+		if spec.RestoreOperationGeneration == 0 ||
+			!validSHA256Text(spec.RestoreSourceAuthoritySHA256) {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		if err := tx.RevokeRuntimeRestoreOperation(
+			ctx, spec.RestoreOperationID, spec.RestoreOperationGeneration, now,
+		); err != nil {
+			return entity.Resource{}, err
+		}
+	}
 	if err := service.revokeExecutionClaimsForOwner(
 		ctx, tx, principal, ownerActorID, spec.ProcessRunID, turn.ID, reason, now,
 	); err != nil {

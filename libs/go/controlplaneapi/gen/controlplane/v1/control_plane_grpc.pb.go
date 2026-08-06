@@ -21,6 +21,8 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	ControlPlaneService_CreateProject_FullMethodName                            = "/controlplane.v1.ControlPlaneService/CreateProject"
 	ControlPlaneService_ListProjects_FullMethodName                             = "/controlplane.v1.ControlPlaneService/ListProjects"
+	ControlPlaneService_UpdateProject_FullMethodName                            = "/controlplane.v1.ControlPlaneService/UpdateProject"
+	ControlPlaneService_DeleteProject_FullMethodName                            = "/controlplane.v1.ControlPlaneService/DeleteProject"
 	ControlPlaneService_CreateResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/CreateResource"
 	ControlPlaneService_UpdateResource_FullMethodName                           = "/controlplane.v1.ControlPlaneService/UpdateResource"
 	ControlPlaneService_TransitionResource_FullMethodName                       = "/controlplane.v1.ControlPlaneService/TransitionResource"
@@ -76,6 +78,11 @@ const (
 	ControlPlaneService_ValidateInteractionDeliveryReadbackGrant_FullMethodName = "/controlplane.v1.ControlPlaneService/ValidateInteractionDeliveryReadbackGrant"
 	ControlPlaneService_RecordInteractionDelivery_FullMethodName                = "/controlplane.v1.ControlPlaneService/RecordInteractionDelivery"
 	ControlPlaneService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.ControlPlaneService/ResolveOwnerGate"
+	ControlPlaneService_ListBackups_FullMethodName                              = "/controlplane.v1.ControlPlaneService/ListBackups"
+	ControlPlaneService_GetBackup_FullMethodName                                = "/controlplane.v1.ControlPlaneService/GetBackup"
+	ControlPlaneService_RestoreBackup_FullMethodName                            = "/controlplane.v1.ControlPlaneService/RestoreBackup"
+	ControlPlaneService_GetRestoreOperation_FullMethodName                      = "/controlplane.v1.ControlPlaneService/GetRestoreOperation"
+	ControlPlaneService_ListRestoreOperations_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ListRestoreOperations"
 	ControlPlaneService_RegisterArtifact_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
 	ControlPlaneService_RecordArtifactScan_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
 	ControlPlaneService_ManageRoleImageRecipe_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageRoleImageRecipe"
@@ -105,6 +112,7 @@ const (
 	ControlPlaneService_AuthorizeRuntimeOutput_FullMethodName                   = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeOutput"
 	ControlPlaneService_RegisterRuntimeOutput_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RegisterRuntimeOutput"
 	ControlPlaneService_AdmitRuntimeExecution_FullMethodName                    = "/controlplane.v1.ControlPlaneService/AdmitRuntimeExecution"
+	ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName            = "/controlplane.v1.ControlPlaneService/AuthorizeRuntimeRestoreEffect"
 	ControlPlaneService_HeartbeatRuntimeExecution_FullMethodName                = "/controlplane.v1.ControlPlaneService/HeartbeatRuntimeExecution"
 	ControlPlaneService_RecordRuntimeIncident_FullMethodName                    = "/controlplane.v1.ControlPlaneService/RecordRuntimeIncident"
 	ControlPlaneService_CompleteRuntimeExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/CompleteRuntimeExecution"
@@ -146,6 +154,10 @@ type ControlPlaneServiceClient interface {
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	// ListProjects выполняет версионированную операцию ControlPlaneService.
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
+	// UpdateProject изменяет только exact owner project после tenant resolution.
+	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
+	// DeleteProject атомарно завершает lifecycle пустого owner project.
+	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
 	// CreateResource выполняет версионированную операцию ControlPlaneService.
 	CreateResource(ctx context.Context, in *CreateResourceRequest, opts ...grpc.CallOption) (*CreateResourceResponse, error)
 	// UpdateResource выполняет версионированную операцию ControlPlaneService.
@@ -272,6 +284,17 @@ type ControlPlaneServiceClient interface {
 	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
 	// ходом и попыткой.
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
+	// ListBackups возвращает безопасную owner-проекцию runtime archive evidence.
+	ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*ListBackupsResponse, error)
+	// GetBackup возвращает exact version backup без storage/worker authority.
+	GetBackup(ctx context.Context, in *GetBackupRequest, opts ...grpc.CallOption) (*GetBackupResponse, error)
+	// RestoreBackup создаёт отдельную server-owned restore operation.
+	RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error)
+	// GetRestoreOperation возвращает единый versioned readback restore graph.
+	GetRestoreOperation(ctx context.Context, in *GetRestoreOperationRequest, opts ...grpc.CallOption) (*GetRestoreOperationResponse, error)
+	// ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
+	// включая фильтр по backup после потери HTTP Location.
+	ListRestoreOperations(ctx context.Context, in *ListRestoreOperationsRequest, opts ...grpc.CallOption) (*ListRestoreOperationsResponse, error)
 	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
@@ -342,6 +365,9 @@ type ControlPlaneServiceClient interface {
 	RegisterRuntimeOutput(ctx context.Context, in *RegisterRuntimeOutputRequest, opts ...grpc.CallOption) (*RegisterRuntimeOutputResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
 	AdmitRuntimeExecution(ctx context.Context, in *AdmitRuntimeExecutionRequest, opts ...grpc.CallOption) (*AdmitRuntimeExecutionResponse, error)
+	// AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
+	// с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
+	AuthorizeRuntimeRestoreEffect(ctx context.Context, in *AuthorizeRuntimeRestoreEffectRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeRestoreEffectResponse, error)
 	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
 	HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error)
 	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
@@ -424,6 +450,26 @@ func (c *controlPlaneServiceClient) ListProjects(ctx context.Context, in *ListPr
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListProjectsResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ListProjects_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateProjectResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_UpdateProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteProjectResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -980,6 +1026,56 @@ func (c *controlPlaneServiceClient) ResolveOwnerGate(ctx context.Context, in *Re
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*ListBackupsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBackupsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListBackups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetBackup(ctx context.Context, in *GetBackupRequest, opts ...grpc.CallOption) (*GetBackupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBackupResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreBackupResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RestoreBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetRestoreOperation(ctx context.Context, in *GetRestoreOperationRequest, opts ...grpc.CallOption) (*GetRestoreOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRestoreOperationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetRestoreOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListRestoreOperations(ctx context.Context, in *ListRestoreOperationsRequest, opts ...grpc.CallOption) (*ListRestoreOperationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRestoreOperationsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListRestoreOperations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterArtifactResponse)
@@ -1270,6 +1366,16 @@ func (c *controlPlaneServiceClient) AdmitRuntimeExecution(ctx context.Context, i
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) AuthorizeRuntimeRestoreEffect(ctx context.Context, in *AuthorizeRuntimeRestoreEffectRequest, opts ...grpc.CallOption) (*AuthorizeRuntimeRestoreEffectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeRuntimeRestoreEffectResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) HeartbeatRuntimeExecution(ctx context.Context, in *HeartbeatRuntimeExecutionRequest, opts ...grpc.CallOption) (*HeartbeatRuntimeExecutionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HeartbeatRuntimeExecutionResponse)
@@ -1552,6 +1658,10 @@ type ControlPlaneServiceServer interface {
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	// ListProjects выполняет версионированную операцию ControlPlaneService.
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
+	// UpdateProject изменяет только exact owner project после tenant resolution.
+	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
+	// DeleteProject атомарно завершает lifecycle пустого owner project.
+	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
 	// CreateResource выполняет версионированную операцию ControlPlaneService.
 	CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error)
 	// UpdateResource выполняет версионированную операцию ControlPlaneService.
@@ -1678,6 +1788,17 @@ type ControlPlaneServiceServer interface {
 	// ResolveOwnerGate связывает решение с точными шлюзом, процессом, сессией,
 	// ходом и попыткой.
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
+	// ListBackups возвращает безопасную owner-проекцию runtime archive evidence.
+	ListBackups(context.Context, *ListBackupsRequest) (*ListBackupsResponse, error)
+	// GetBackup возвращает exact version backup без storage/worker authority.
+	GetBackup(context.Context, *GetBackupRequest) (*GetBackupResponse, error)
+	// RestoreBackup создаёт отдельную server-owned restore operation.
+	RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error)
+	// GetRestoreOperation возвращает единый versioned readback restore graph.
+	GetRestoreOperation(context.Context, *GetRestoreOperationRequest) (*GetRestoreOperationResponse, error)
+	// ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
+	// включая фильтр по backup после потери HTTP Location.
+	ListRestoreOperations(context.Context, *ListRestoreOperationsRequest) (*ListRestoreOperationsResponse, error)
 	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
@@ -1748,6 +1869,9 @@ type ControlPlaneServiceServer interface {
 	RegisterRuntimeOutput(context.Context, *RegisterRuntimeOutputRequest) (*RegisterRuntimeOutputResponse, error)
 	// AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
 	AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error)
+	// AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
+	// с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
+	AuthorizeRuntimeRestoreEffect(context.Context, *AuthorizeRuntimeRestoreEffectRequest) (*AuthorizeRuntimeRestoreEffectResponse, error)
 	// HeartbeatRuntimeExecution продлевает только текущую lease/fence.
 	HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error)
 	// RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
@@ -1821,6 +1945,12 @@ func (UnimplementedControlPlaneServiceServer) CreateProject(context.Context, *Cr
 }
 func (UnimplementedControlPlaneServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateProject not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteProject not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CreateResource(context.Context, *CreateResourceRequest) (*CreateResourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateResource not implemented")
@@ -1987,6 +2117,21 @@ func (UnimplementedControlPlaneServiceServer) RecordInteractionDelivery(context.
 func (UnimplementedControlPlaneServiceServer) ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveOwnerGate not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) ListBackups(context.Context, *ListBackupsRequest) (*ListBackupsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBackups not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetBackup(context.Context, *GetBackupRequest) (*GetBackupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBackup not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreBackup not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetRestoreOperation(context.Context, *GetRestoreOperationRequest) (*GetRestoreOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRestoreOperation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListRestoreOperations(context.Context, *ListRestoreOperationsRequest) (*ListRestoreOperationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRestoreOperations not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterArtifact not implemented")
 }
@@ -2073,6 +2218,9 @@ func (UnimplementedControlPlaneServiceServer) RegisterRuntimeOutput(context.Cont
 }
 func (UnimplementedControlPlaneServiceServer) AdmitRuntimeExecution(context.Context, *AdmitRuntimeExecutionRequest) (*AdmitRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdmitRuntimeExecution not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AuthorizeRuntimeRestoreEffect(context.Context, *AuthorizeRuntimeRestoreEffectRequest) (*AuthorizeRuntimeRestoreEffectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeRuntimeRestoreEffect not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) HeartbeatRuntimeExecution(context.Context, *HeartbeatRuntimeExecutionRequest) (*HeartbeatRuntimeExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HeartbeatRuntimeExecution not implemented")
@@ -2208,6 +2356,42 @@ func _ControlPlaneService_ListProjects_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ListProjects(ctx, req.(*ListProjectsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_UpdateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).UpdateProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_UpdateProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).UpdateProject(ctx, req.(*UpdateProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_DeleteProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).DeleteProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_DeleteProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).DeleteProject(ctx, req.(*DeleteProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3202,6 +3386,96 @@ func _ControlPlaneService_ResolveOwnerGate_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ListBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBackupsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListBackups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListBackups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListBackups(ctx, req.(*ListBackupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetBackup(ctx, req.(*GetBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_RestoreBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RestoreBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RestoreBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RestoreBackup(ctx, req.(*RestoreBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetRestoreOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRestoreOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetRestoreOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetRestoreOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetRestoreOperation(ctx, req.(*GetRestoreOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListRestoreOperations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRestoreOperationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListRestoreOperations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListRestoreOperations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListRestoreOperations(ctx, req.(*ListRestoreOperationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_RegisterArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RegisterArtifactRequest)
 	if err := dec(in); err != nil {
@@ -3724,6 +3998,24 @@ func _ControlPlaneService_AdmitRuntimeExecution_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_AuthorizeRuntimeRestoreEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeRuntimeRestoreEffectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeRestoreEffect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AuthorizeRuntimeRestoreEffect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AuthorizeRuntimeRestoreEffect(ctx, req.(*AuthorizeRuntimeRestoreEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_HeartbeatRuntimeExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HeartbeatRuntimeExecutionRequest)
 	if err := dec(in); err != nil {
@@ -4226,6 +4518,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ListProjects_Handler,
 		},
 		{
+			MethodName: "UpdateProject",
+			Handler:    _ControlPlaneService_UpdateProject_Handler,
+		},
+		{
+			MethodName: "DeleteProject",
+			Handler:    _ControlPlaneService_DeleteProject_Handler,
+		},
+		{
 			MethodName: "CreateResource",
 			Handler:    _ControlPlaneService_CreateResource_Handler,
 		},
@@ -4446,6 +4746,26 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ResolveOwnerGate_Handler,
 		},
 		{
+			MethodName: "ListBackups",
+			Handler:    _ControlPlaneService_ListBackups_Handler,
+		},
+		{
+			MethodName: "GetBackup",
+			Handler:    _ControlPlaneService_GetBackup_Handler,
+		},
+		{
+			MethodName: "RestoreBackup",
+			Handler:    _ControlPlaneService_RestoreBackup_Handler,
+		},
+		{
+			MethodName: "GetRestoreOperation",
+			Handler:    _ControlPlaneService_GetRestoreOperation_Handler,
+		},
+		{
+			MethodName: "ListRestoreOperations",
+			Handler:    _ControlPlaneService_ListRestoreOperations_Handler,
+		},
+		{
 			MethodName: "RegisterArtifact",
 			Handler:    _ControlPlaneService_RegisterArtifact_Handler,
 		},
@@ -4560,6 +4880,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdmitRuntimeExecution",
 			Handler:    _ControlPlaneService_AdmitRuntimeExecution_Handler,
+		},
+		{
+			MethodName: "AuthorizeRuntimeRestoreEffect",
+			Handler:    _ControlPlaneService_AuthorizeRuntimeRestoreEffect_Handler,
 		},
 		{
 			MethodName: "HeartbeatRuntimeExecution",

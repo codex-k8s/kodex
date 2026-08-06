@@ -5,9 +5,12 @@ type ImageBuildStage uint
 
 const (
   ImageBuildStageQueued ImageBuildStage = iota
+  ImageBuildStageMaterialization
   ImageBuildStageContextValidation
   ImageBuildStageBasePull
   ImageBuildStageSolving
+  ImageBuildStageInstallation
+  ImageBuildStageTrustedRuntimeFinalization
   ImageBuildStageStagingPush
   ImageBuildStageProvenance
   ImageBuildStageCompleted
@@ -25,12 +28,15 @@ func (op ImageBuildStage) Value() any {
 	return ImageBuildStageValues[op]
 }
 
-var ImageBuildStageValues = []any{"QUEUED","CONTEXT_VALIDATION","BASE_PULL","SOLVING","STAGING_PUSH","PROVENANCE","COMPLETED","FAILED","CANCELLED","EXPIRED","DEAD_LETTER"}
+var ImageBuildStageValues = []any{"QUEUED","MATERIALIZATION","CONTEXT_VALIDATION","BASE_PULL","SOLVING","INSTALLATION","TRUSTED_RUNTIME_FINALIZATION","STAGING_PUSH","PROVENANCE","COMPLETED","FAILED","CANCELLED","EXPIRED","DEAD_LETTER"}
 var ValuesToImageBuildStage = map[any]ImageBuildStage{
   ImageBuildStageValues[ImageBuildStageQueued]: ImageBuildStageQueued,
+  ImageBuildStageValues[ImageBuildStageMaterialization]: ImageBuildStageMaterialization,
   ImageBuildStageValues[ImageBuildStageContextValidation]: ImageBuildStageContextValidation,
   ImageBuildStageValues[ImageBuildStageBasePull]: ImageBuildStageBasePull,
   ImageBuildStageValues[ImageBuildStageSolving]: ImageBuildStageSolving,
+  ImageBuildStageValues[ImageBuildStageInstallation]: ImageBuildStageInstallation,
+  ImageBuildStageValues[ImageBuildStageTrustedRuntimeFinalization]: ImageBuildStageTrustedRuntimeFinalization,
   ImageBuildStageValues[ImageBuildStageStagingPush]: ImageBuildStageStagingPush,
   ImageBuildStageValues[ImageBuildStageProvenance]: ImageBuildStageProvenance,
   ImageBuildStageValues[ImageBuildStageCompleted]: ImageBuildStageCompleted,

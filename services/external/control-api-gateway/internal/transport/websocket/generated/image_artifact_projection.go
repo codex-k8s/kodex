@@ -19,6 +19,8 @@ type ImageArtifactProjection struct {
   BuilderSha256 string
   FrontendSha256 string
   ToolchainSha256 string
+  RoleRuntimeContractRevision int
+  RoleRuntimeContractSha256 string
   Platforms []RoleImagePlatform
   SbomSha256 string
   VulnerabilityEvidenceSha256 string

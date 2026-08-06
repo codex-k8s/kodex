@@ -2288,6 +2288,7 @@ func TestScheduledProducerClaimTurnRuntimePathPreservesDigestAndOutboxSemantics(
 			gateSpec.MattermostPostID = "post-scheduled-owner-gate"
 			gateSpec.MattermostChannelID = "channel-scheduled-owner-gate"
 			gateSpec.MattermostRootPostID = "root-scheduled-owner-gate"
+			gateSpec.DeliveryProviderReceiptSHA256 = hashString("scheduled-owner-gate-provider-readback")
 			gateSpec.DeliveredAt = fixture.tx.now
 			deliveredGate, err := gate.Update(gate.Name, gateSpec, fixture.tx.now)
 			if err != nil {
@@ -2300,9 +2301,6 @@ func TestScheduledProducerClaimTurnRuntimePathPreservesDigestAndOutboxSemantics(
 				Principal: decisionPrincipal, IdempotencyKey: "approve-scheduled-owner-gate",
 				OwnerGateID: deliveredGate.ID, ExpectedVersion: deliveredGate.Version,
 				Decision: "APPROVED", Reason: "Результат принят владельцем.",
-				ProcessRunID: waitingProcess.ID, ProcessExpectedVersion: waitingProcess.Version,
-				SessionID: gateSpec.SessionID, TurnID: gateSpec.TurnID, Attempt: gateSpec.Attempt,
-				ImmutableInputSHA256: gateSpec.ImmutableInputSHA256,
 			})
 			if err != nil {
 				t.Fatalf("approve scheduled owner gate: %v", err)

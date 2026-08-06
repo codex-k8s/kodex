@@ -21,6 +21,13 @@ type CreateInput struct {
 	Administrative bool
 }
 
+type CreateProjectInput struct {
+	Principal      value.Principal
+	IdempotencyKey string
+	Name           string
+	Spec           entity.ProjectSpec
+}
+
 type UpdateInput struct {
 	Principal           value.Principal
 	IdempotencyKey      string
@@ -48,6 +55,22 @@ type DeleteInput struct {
 	ResourceID      string
 	ExpectedVersion uint64
 	Administrative  bool
+}
+
+type UpdateProjectInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ProjectID       string
+	ExpectedVersion uint64
+	Name            string
+	Spec            entity.ProjectSpec
+}
+
+type DeleteProjectInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ProjectID       string
+	ExpectedVersion uint64
 }
 
 type GetInput struct {
@@ -488,18 +511,12 @@ type OwnerGateResult struct {
 }
 
 type ResolveOwnerGateInput struct {
-	Principal              value.Principal
-	IdempotencyKey         string
-	OwnerGateID            string
-	ExpectedVersion        uint64
-	Decision               string
-	Reason                 string
-	ProcessRunID           string
-	ProcessExpectedVersion uint64
-	SessionID              string
-	TurnID                 string
-	Attempt                uint32
-	ImmutableInputSHA256   string
+	Principal       value.Principal
+	IdempotencyKey  string
+	OwnerGateID     string
+	ExpectedVersion uint64
+	Decision        string
+	Reason          string
 }
 
 type RecordOwnerGateDeliveryInput struct {
@@ -514,6 +531,7 @@ type RecordOwnerGateDeliveryInput struct {
 	MattermostPostID      string
 	MattermostChannelID   string
 	MattermostRootPostID  string
+	ProviderReceiptSHA256 string
 }
 
 type ClaimOwnerGateDeliveryInput struct {
@@ -727,6 +745,14 @@ type RuntimeRestoreTargetInput struct {
 	PVCResourceVersion           string
 }
 
+type RuntimeRestoreEffectInput struct {
+	RuntimeExecutionInput
+	RestoreOperationID           string
+	RestoreOperationGeneration   uint64
+	RestoreSourceAuthoritySHA256 string
+	Effect                       string
+}
+
 type RuntimeRehydrateInput struct {
 	RuntimeExecutionInput
 	AssignmentGeneration uint64
@@ -770,6 +796,42 @@ type AdmitRuntimeExecutionResult struct {
 type RetryRuntimeExecutionResult struct {
 	Previous RuntimeExecution
 	Turn     entity.Resource
+	Restore  *domainrepo.RuntimeRestoreOperation
+}
+
+type ListBackupsInput struct {
+	Principal value.Principal
+	AfterID   string
+	Limit     int
+}
+
+type GetBackupInput struct {
+	Principal value.Principal
+	BackupID  string
+}
+
+type RestoreBackupInput struct {
+	Principal             value.Principal
+	IdempotencyKey        string
+	BackupID              string
+	ExpectedBackupVersion uint64
+	ExpectedSourceVersion uint64
+	ArchiveSHA256         string
+	ProvenanceSHA256      string
+	Scope                 string
+	ScopeID               string
+}
+
+type GetRestoreOperationInput struct {
+	Principal   value.Principal
+	OperationID string
+}
+
+type ListRestoreOperationsInput struct {
+	Principal value.Principal
+	BackupID  string
+	AfterID   string
+	Limit     int
 }
 
 type ManageRuntimeActionInput struct {

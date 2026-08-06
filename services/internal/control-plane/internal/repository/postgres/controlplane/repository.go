@@ -493,6 +493,101 @@ func (repository *Repository) ListRuntimeIncidents(
 	return incidents, err
 }
 
+func (repository *Repository) ListBackups(
+	ctx context.Context,
+	organizationID, projectID, actorID, afterID string,
+	limit int,
+) ([]domainrepo.Backup, error) {
+	var backups []domainrepo.Backup
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlRuntimeBackupList, pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"actor_id":        actorID,
+			"after_id":        afterID,
+			"limit":           limit,
+		})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			backup, scanErr := scanBackup(rows)
+			if scanErr != nil {
+				return scanErr
+			}
+			backups = append(backups, backup)
+		}
+		return rows.Err()
+	})
+	return backups, err
+}
+
+func (repository *Repository) GetBackup(
+	ctx context.Context,
+	organizationID, projectID, actorID, backupID string,
+) (domainrepo.Backup, error) {
+	var backup domainrepo.Backup
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		var scanErr error
+		backup, scanErr = scanBackup(tx.QueryRow(ctx, sqlRuntimeBackupGet, pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"actor_id":        actorID,
+			"backup_id":       backupID,
+		}))
+		return scanErr
+	})
+	return backup, err
+}
+
+func (repository *Repository) GetRuntimeRestoreOperation(
+	ctx context.Context,
+	organizationID, projectID, actorID, operationID string,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	var operation domainrepo.RuntimeRestoreOperation
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		var scanErr error
+		operation, scanErr = scanRuntimeRestoreOperation(tx.QueryRow(
+			ctx, sqlRuntimeRestoreOperationOwnerGet, pgx.StrictNamedArgs{
+				"organization_id": organizationID,
+				"project_id":      projectID,
+				"actor_id":        actorID,
+				"id":              operationID,
+			},
+		))
+		return scanErr
+	})
+	return operation, err
+}
+
+func (repository *Repository) ListRuntimeRestoreOperations(
+	ctx context.Context,
+	organizationID, projectID, actorID, backupID, afterID string,
+	limit int,
+) ([]domainrepo.RuntimeRestoreOperation, error) {
+	var operations []domainrepo.RuntimeRestoreOperation
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlRuntimeRestoreOperationOwnerList, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID, "actor_id": actorID,
+			"backup_id": backupID, "after_id": afterID, "limit": limit,
+		})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			operation, scanErr := scanRuntimeRestoreOperation(rows)
+			if scanErr != nil {
+				return scanErr
+			}
+			operations = append(operations, operation)
+		}
+		return rows.Err()
+	})
+	return operations, err
+}
+
 func (repository *Repository) ListTombstones(
 	ctx context.Context,
 	filter domainquery.TombstoneFilter,
@@ -820,6 +915,33 @@ func (wrapped *transaction) GetForUpdate(
 			"resource_id":     resourceID,
 		},
 	))
+}
+
+func (wrapped *transaction) GetForUpdateIncludingDeleted(
+	ctx context.Context,
+	organizationID, projectID, resourceID string,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(
+		ctx,
+		sqlResourceGetIncludingDeletedForUpdate,
+		pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"project_id":      projectID,
+			"resource_id":     resourceID,
+		},
+	))
+}
+
+func (wrapped *transaction) ProjectHasLiveResources(
+	ctx context.Context,
+	organizationID, projectID string,
+) (bool, error) {
+	var live bool
+	err := wrapped.tx.QueryRow(ctx, sqlProjectHasLiveResources, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+	}).Scan(&live)
+	return live, mapError(err)
 }
 
 func (wrapped *transaction) Get(
@@ -2775,6 +2897,139 @@ func (wrapped *transaction) UpdateRuntimeExecution(
 	return nil
 }
 
+func (wrapped *transaction) InsertRuntimeRestoreOperation(
+	ctx context.Context,
+	operation domainrepo.RuntimeRestoreOperation,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationInsert, pgx.StrictNamedArgs{
+		"id":                      operation.ID,
+		"organization_id":         operation.OrganizationID,
+		"project_id":              operation.ProjectID,
+		"owner_actor_id":          operation.OwnerActorID,
+		"backup_execution_id":     operation.BackupID,
+		"source_version":          operation.SourceVersion,
+		"source_fence":            operation.SourceFence,
+		"archive_sha256":          operation.ArchiveSHA256,
+		"provenance_sha256":       operation.ProvenanceSHA256,
+		"source_authority_sha256": operation.SourceAuthoritySHA256,
+		"session_id":              operation.SessionID,
+		"generation":              operation.Generation,
+		"consumed_generation":     operation.ConsumedGeneration,
+		"revoked_generation":      operation.RevokedGeneration,
+		"target_turn_id":          operation.TargetTurnID,
+		"target_attempt":          operation.TargetAttempt,
+		"target_execution_id":     operation.TargetExecutionID,
+		"created_at":              operation.CreatedAt,
+		"updated_at":              operation.UpdatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) AdvanceRuntimeRestoreOperation(
+	ctx context.Context,
+	operation domainrepo.RuntimeRestoreOperation,
+	expectedGeneration uint64,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationAdvance, pgx.StrictNamedArgs{
+		"id": operation.ID, "generation": operation.Generation,
+		"expected_generation": expectedGeneration, "target_turn_id": operation.TargetTurnID,
+		"target_attempt": operation.TargetAttempt, "target_execution_id": operation.TargetExecutionID,
+		"updated_at": operation.UpdatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) ConsumeRuntimeRestoreOperation(
+	ctx context.Context,
+	operationID string,
+	generation uint64,
+	targetTurnID string,
+	targetAttempt uint32,
+	sourceAuthoritySHA256 string,
+	updatedAt time.Time,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationConsume, pgx.StrictNamedArgs{
+		"id": operationID, "generation": generation, "target_turn_id": targetTurnID,
+		"target_attempt": targetAttempt, "source_authority_sha256": sourceAuthoritySHA256,
+		"updated_at": updatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) RevokeRuntimeRestoreOperation(
+	ctx context.Context,
+	operationID string,
+	generation uint64,
+	updatedAt time.Time,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlRuntimeRestoreOperationRevoke, pgx.StrictNamedArgs{
+		"id": operationID, "generation": generation, "updated_at": updatedAt,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) AuthorizeRuntimeRestoreEffect(
+	ctx context.Context,
+	operationID, targetExecutionID string,
+	generation uint64,
+	sourceAuthoritySHA256, effect, effectSHA256 string,
+	updatedAt time.Time,
+) (bool, error) {
+	var applied bool
+	err := wrapped.tx.QueryRow(ctx, sqlRuntimeRestoreEffectAuthorize, pgx.StrictNamedArgs{
+		"id": operationID, "target_execution_id": targetExecutionID,
+		"generation": generation, "source_authority_sha256": sourceAuthoritySHA256,
+		"effect": effect, "effect_sha256": effectSHA256, "updated_at": updatedAt,
+	}).Scan(&applied)
+	if err != nil {
+		return false, mapError(err)
+	}
+	return applied, nil
+}
+
+func (wrapped *transaction) GetRuntimeRestoreOperation(
+	ctx context.Context,
+	operationID string,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	return scanRuntimeRestoreOperation(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeRestoreOperationGet, pgx.StrictNamedArgs{"id": operationID},
+	))
+}
+
+func (wrapped *transaction) GetRuntimeRestoreOperationByBackup(
+	ctx context.Context,
+	backupID string,
+) (domainrepo.RuntimeRestoreOperation, error) {
+	return scanRuntimeRestoreOperation(wrapped.tx.QueryRow(
+		ctx, sqlRuntimeRestoreOperationGetByBackup,
+		pgx.StrictNamedArgs{"backup_execution_id": backupID},
+	))
+}
+
 func (wrapped *transaction) NextExpiredRuntimeExecution(
 	ctx context.Context,
 	organizationID, projectID, turnID string,
@@ -3143,8 +3398,10 @@ func runtimeExecutionArgs(execution domainrepo.RuntimeExecution) pgx.StrictNamed
 		"restore_source_archive_sha256":               execution.RestoreSourceArchiveSHA256,
 		"restore_source_runtime_revision_sha256":      execution.RestoreSourceRuntimeRevisionSHA256,
 		"restore_source_immutable_input_sha256":       execution.RestoreSourceImmutableInputSHA256,
+		"restore_source_proof_reference":              execution.RestoreSourceProofReference,
 		"restore_source_proof_sha256":                 execution.RestoreSourceProofSHA256,
 		"restore_source_version":                      execution.RestoreSourceVersion,
+		"restore_source_fence":                        execution.RestoreSourceFence,
 		"restore_source_archive_object_key":           execution.RestoreSourceArchiveObjectKey,
 		"restore_source_archive_version_id":           execution.RestoreSourceArchiveVersionID,
 		"restore_source_archive_kms_key_arn":          execution.RestoreSourceArchiveKMSKeyARN,
@@ -3328,6 +3585,89 @@ type rowScanner interface {
 	Scan(...any) error
 }
 
+func scanBackup(row rowScanner) (domainrepo.Backup, error) {
+	var backup domainrepo.Backup
+	var freshnessBase, latestExpired time.Time
+	var archiveCount, expiredCount int64
+	err := row.Scan(
+		&backup.ID, &backup.OrganizationID, &backup.ProjectID, &backup.SessionID,
+		&backup.SourceVersion, &backup.SourceFence,
+		&freshnessBase, &latestExpired, &archiveCount, &expiredCount,
+		&backup.SourceRuntimeRevisionSHA256, &backup.SourceImmutableInputSHA256,
+		&backup.ArchiveSHA256, &backup.ProvenanceSHA256,
+		&backup.RuntimeState, &backup.State, &backup.Restorable, &backup.RestoreOperationID,
+		&backup.CreatedAt, &backup.AvailableAt, &backup.RetainUntil,
+	)
+	if err != nil {
+		return domainrepo.Backup{}, mapError(err)
+	}
+	backup.CreatedAt = backup.CreatedAt.UTC()
+	backup.AvailableAt = nullableEpoch(backup.AvailableAt)
+	backup.RetainUntil = nullableEpoch(backup.RetainUntil)
+	if archiveCount <= 0 || expiredCount < 0 {
+		return domainrepo.Backup{}, errs.ErrStateConflict
+	}
+	backup.Version, backup.UpdatedAt, err = backupProjectionFreshness(
+		freshnessBase, nullableEpoch(latestExpired), uint64(archiveCount), uint64(expiredCount),
+	)
+	if err != nil {
+		return domainrepo.Backup{}, err
+	}
+	return backup, nil
+}
+
+// backupProjectionFreshness превращает единый session-scoped timestamp,
+// монотонное число архивов и retention deadlines в согласованные version/updatedAt.
+func backupProjectionFreshness(
+	base, latestExpired time.Time,
+	archiveCount, expiredCount uint64,
+) (uint64, time.Time, error) {
+	base = base.UTC()
+	if latestExpired.After(base) {
+		base = latestExpired.UTC()
+	}
+	maximumCounter := uint64((24 * time.Hour) / time.Microsecond)
+	if base.IsZero() || archiveCount == 0 || archiveCount > maximumCounter ||
+		expiredCount > maximumCounter-archiveCount {
+		return 0, time.Time{}, errs.ErrStateConflict
+	}
+	updatedAt := base.Add(time.Duration(archiveCount+expiredCount) * time.Microsecond)
+	version := updatedAt.UnixMicro()
+	if version <= 0 || version > 9007199254740991 {
+		return 0, time.Time{}, errs.ErrStateConflict
+	}
+	return uint64(version), updatedAt, nil
+}
+
+func scanRuntimeRestoreOperation(row rowScanner) (domainrepo.RuntimeRestoreOperation, error) {
+	var operation domainrepo.RuntimeRestoreOperation
+	err := row.Scan(
+		&operation.ID, &operation.OrganizationID, &operation.ProjectID,
+		&operation.OwnerActorID, &operation.BackupID, &operation.SourceVersion,
+		&operation.SourceFence,
+		&operation.ArchiveSHA256, &operation.ProvenanceSHA256, &operation.SourceAuthoritySHA256,
+		&operation.SessionID, &operation.Generation, &operation.ConsumedGeneration,
+		&operation.RevokedGeneration, &operation.TargetTurnID, &operation.TargetAttempt,
+		&operation.TargetExecutionID, &operation.TargetExecutionVersion,
+		&operation.TargetTurnVersion,
+		&operation.TargetExecutionState, &operation.TargetRestoreAssignmentState, &operation.TargetTurnState,
+		&operation.CreatedAt, &operation.UpdatedAt,
+	)
+	if err != nil {
+		return domainrepo.RuntimeRestoreOperation{}, mapError(err)
+	}
+	operation.CreatedAt = operation.CreatedAt.UTC()
+	operation.UpdatedAt = operation.UpdatedAt.UTC()
+	return operation, nil
+}
+
+func nullableEpoch(value time.Time) time.Time {
+	if value.Equal(time.Unix(0, 0).UTC()) {
+		return time.Time{}
+	}
+	return value.UTC()
+}
+
 func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 	var execution domainrepo.RuntimeExecution
 	var materializationsRaw []byte
@@ -3358,8 +3698,9 @@ func scanRuntimeExecution(row rowScanner) (domainrepo.RuntimeExecution, error) {
 		&execution.CleanupDeletionProofSHA256,
 		&execution.RestoreSourceExecutionID, &execution.RestoreSourceArchiveReference,
 		&execution.RestoreSourceArchiveSHA256, &execution.RestoreSourceRuntimeRevisionSHA256,
-		&execution.RestoreSourceImmutableInputSHA256, &execution.RestoreSourceProofSHA256,
-		&execution.RestoreSourceVersion, &execution.RestoreSourceArchiveObjectKey,
+		&execution.RestoreSourceImmutableInputSHA256, &execution.RestoreSourceProofReference,
+		&execution.RestoreSourceProofSHA256, &execution.RestoreSourceVersion,
+		&execution.RestoreSourceFence, &execution.RestoreSourceArchiveObjectKey,
 		&execution.RestoreSourceArchiveVersionID, &execution.RestoreSourceArchiveKMSKeyARN,
 		&execution.RestoreSourceArchiveObjectLockMode, &execution.RestoreSourceArchiveRetainUntil,
 		&execution.RestoreSourceRetentionPolicyID, &execution.RestoreSourceRetentionPolicyVersion,

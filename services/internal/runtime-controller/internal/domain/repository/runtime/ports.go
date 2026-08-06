@@ -20,6 +20,7 @@ type ControlPlane interface {
 	GetExecution(context.Context, string, uint64) (entity.Execution, error)
 	GetRevision(context.Context, string, uint64) (entity.Revision, error)
 	Admit(context.Context, string, entity.Execution) (AdmitResult, error)
+	AuthorizeRestoreEffect(context.Context, string, entity.Execution, string) error
 	Reschedule(context.Context, string, entity.Execution) (entity.Execution, error)
 	Heartbeat(context.Context, string, entity.Execution, string) (entity.Execution, error)
 	Complete(context.Context, string, entity.Execution, string, string, string, string, *entity.RuntimeHandoff) (entity.Execution, error)

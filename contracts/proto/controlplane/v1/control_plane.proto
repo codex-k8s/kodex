@@ -15,6 +15,10 @@ service ControlPlaneService {
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   // ListProjects выполняет версионированную операцию ControlPlaneService.
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  // UpdateProject изменяет только exact owner project после tenant resolution.
+  rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
+  // DeleteProject атомарно завершает lifecycle пустого owner project.
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
   // CreateResource выполняет версионированную операцию ControlPlaneService.
   rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse);
   // UpdateResource выполняет версионированную операцию ControlPlaneService.
@@ -146,6 +150,18 @@ service ControlPlaneService {
   // ходом и попыткой.
   rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
 
+  // ListBackups возвращает безопасную owner-проекцию runtime archive evidence.
+  rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse);
+  // GetBackup возвращает exact version backup без storage/worker authority.
+  rpc GetBackup(GetBackupRequest) returns (GetBackupResponse);
+  // RestoreBackup создаёт отдельную server-owned restore operation.
+  rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse);
+  // GetRestoreOperation возвращает единый versioned readback restore graph.
+  rpc GetRestoreOperation(GetRestoreOperationRequest) returns (GetRestoreOperationResponse);
+  // ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
+  // включая фильтр по backup после потери HTTP Location.
+  rpc ListRestoreOperations(ListRestoreOperationsRequest) returns (ListRestoreOperationsResponse);
+
   // RegisterArtifact выполняет версионированную операцию ControlPlaneService.
   rpc RegisterArtifact(RegisterArtifactRequest) returns (RegisterArtifactResponse);
   // RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
@@ -218,6 +234,9 @@ service ControlPlaneService {
   rpc RegisterRuntimeOutput(RegisterRuntimeOutputRequest) returns (RegisterRuntimeOutputResponse);
   // AdmitRuntimeExecution выдаёт одну fenced lease точному runtime-controller.
   rpc AdmitRuntimeExecution(AdmitRuntimeExecutionRequest) returns (AdmitRuntimeExecutionResponse);
+  // AuthorizeRuntimeRestoreEffect атомарно сверяет current restore generation
+  // с durable revoke watermark и расходует exact effect slot до внешнего эффекта.
+  rpc AuthorizeRuntimeRestoreEffect(AuthorizeRuntimeRestoreEffectRequest) returns (AuthorizeRuntimeRestoreEffectResponse);
   // HeartbeatRuntimeExecution продлевает только текущую lease/fence.
   rpc HeartbeatRuntimeExecution(HeartbeatRuntimeExecutionRequest) returns (HeartbeatRuntimeExecutionResponse);
   // RecordRuntimeIncident сохраняет bounded watchdog incident без смены authority.
@@ -301,6 +320,28 @@ message ListProjectsRequest {
 message ListProjectsResponse {
   repeated Resource projects = 1;
   string next_page_token = 2;
+}
+
+message UpdateProjectRequest {
+  string idempotency_key = 1;
+  string project_id = 2;
+  uint64 expected_version = 3;
+  string name = 4;
+  ProjectSpec spec = 5;
+}
+
+message UpdateProjectResponse {
+  Resource project = 1;
+}
+
+message DeleteProjectRequest {
+  string idempotency_key = 1;
+  string project_id = 2;
+  uint64 expected_version = 3;
+}
+
+message DeleteProjectResponse {
+  Resource project = 1;
 }
 
 // ResourceKind — закрытый перечень агрегатов, принадлежащих control-plane.
@@ -1000,6 +1041,16 @@ message TurnSpec {
   string result_artifact_sha256 = 21;
   repeated EffectiveArtifactRef input_artifacts = 22;
   ScheduledResultContract scheduled_result_contract = 23;
+  // Restore binding назначается только специализированной owner-командой.
+  string restore_operation_id = 24;
+  string restore_source_execution_id = 25;
+  uint64 restore_source_version = 26;
+  string restore_source_archive_sha256 = 27;
+  string restore_source_provenance_sha256 = 28;
+  uint64 restore_operation_generation = 29;
+  // restore_source_authority_sha256 — digest полного server-owned source
+  // locator/version/fence/proof tuple; приватные locator значения не выдаются.
+  string restore_source_authority_sha256 = 30;
 }
 
 message EffectiveArtifactRef {
@@ -1129,6 +1180,9 @@ message OwnerGateSpec {
   string continuation_input_sha256 = 29;
   // notification_room_id — exact server-owned route scheduled owner gate.
   string notification_room_id = 30;
+  // Digest exact Mattermost read-after-write receipt. Сам receipt и provider
+  // locators остаются внутренними; browser видит только delivery readiness.
+  string delivery_provider_receipt_sha256 = 31;
 }
 
 // MemoryRecordSpec описывает версионированное сообщение контракта control-plane.
@@ -2083,6 +2137,9 @@ message RecordOwnerGateDeliveryRequest {
   string mattermost_post_id = 8;
   string mattermost_channel_id = 9;
   string mattermost_root_post_id = 10;
+  // provider_receipt_sha256 получен только после exact Mattermost read-after-write
+  // и связывает provider-owned effect с owner delivery claim.
+  string provider_receipt_sha256 = 11;
 }
 
 // RecordOwnerGateDeliveryResponse описывает версионированное сообщение контракта control-plane.
@@ -2175,18 +2232,148 @@ message ResolveOwnerGateRequest {
   uint64 expected_version = 3;
   OwnerGateDecision decision = 4;
   string reason = 5;
-  string process_run_id = 6;
-  uint64 process_expected_version = 7;
-  string session_id = 8;
-  string turn_id = 9;
-  uint32 attempt = 10;
-  string immutable_input_sha256 = 11;
+  reserved 6 to 11;
 }
 
 // ResolveOwnerGateResponse описывает версионированное сообщение контракта control-plane.
 message ResolveOwnerGateResponse {
   Resource owner_gate = 1;
   Resource process_run = 2;
+}
+
+enum BackupState {
+  BACKUP_STATE_UNSPECIFIED = 0;
+  BACKUP_STATE_VERIFYING = 1;
+  BACKUP_STATE_RETENTION_PENDING = 2;
+  BACKUP_STATE_AVAILABLE = 3;
+  BACKUP_STATE_RESTORING = 4;
+  BACKUP_STATE_RESTORED = 5;
+  BACKUP_STATE_EXPIRED = 6;
+  BACKUP_STATE_UNAVAILABLE = 7;
+  BACKUP_STATE_RESTORE_FAILED = 8;
+  BACKUP_STATE_RESTORE_CANCELLED = 9;
+  BACKUP_STATE_RESTORE_EXPIRED = 10;
+}
+
+// Backup — безопасная проекция immutable runtime archive. Storage locator,
+// credential, worker proof/evidence и grant намеренно отсутствуют.
+message Backup {
+  string backup_id = 1;
+  uint64 source_version = 2;
+  string source_runtime_revision_sha256 = 3;
+  string source_immutable_input_sha256 = 4;
+  string archive_sha256 = 5;
+  string provenance_sha256 = 6;
+  BackupState state = 7;
+  string scope = 8;
+  string scope_id = 9;
+  bool restorable = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp available_at = 12;
+  google.protobuf.Timestamp retain_until = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  string restore_operation_id = 15;
+  // version — монотонная версия публичной проекции, отдельная от immutable
+  // source_version. Она меняется вместе с generation/target lifecycle.
+  uint64 version = 16;
+}
+
+message ListBackupsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListBackupsResponse {
+  repeated Backup backups = 1;
+  string next_page_token = 2;
+}
+
+message GetBackupRequest {
+  string backup_id = 1;
+}
+
+message GetBackupResponse {
+  Backup backup = 1;
+}
+
+message RestoreBackupRequest {
+  string idempotency_key = 1;
+  string backup_id = 2;
+  uint64 expected_source_version = 3;
+  string archive_sha256 = 4;
+  string provenance_sha256 = 5;
+  string scope = 6;
+  string scope_id = 7;
+  // expected_backup_version проверяет ETag динамической публичной проекции;
+  // exact source identity передаётся отдельно в expected_source_version.
+  uint64 expected_backup_version = 8;
+}
+
+enum RestoreOperationState {
+  RESTORE_OPERATION_STATE_UNSPECIFIED = 0;
+  RESTORE_OPERATION_STATE_QUEUED = 1;
+  RESTORE_OPERATION_STATE_ASSIGNED = 2;
+  RESTORE_OPERATION_STATE_MATERIALIZING = 3;
+  RESTORE_OPERATION_STATE_READY = 4;
+  RESTORE_OPERATION_STATE_RUNNING = 5;
+  RESTORE_OPERATION_STATE_SUCCEEDED = 6;
+  RESTORE_OPERATION_STATE_FAILED = 7;
+  RESTORE_OPERATION_STATE_CANCELLED = 8;
+  RESTORE_OPERATION_STATE_EXPIRED = 9;
+  RESTORE_OPERATION_STATE_RETRYING = 10;
+}
+
+enum RestoreOperationNextAction {
+  RESTORE_OPERATION_NEXT_ACTION_UNSPECIFIED = 0;
+  RESTORE_OPERATION_NEXT_ACTION_WAIT = 1;
+  RESTORE_OPERATION_NEXT_ACTION_RETRY_RUNTIME = 2;
+  RESTORE_OPERATION_NEXT_ACTION_READ_BACKUP = 3;
+  RESTORE_OPERATION_NEXT_ACTION_NONE = 4;
+}
+
+// RestoreOperation — safe readback server-owned target attempt. Внутренние
+// archive locator, PVC tuple, workload grant и private evidence не выдаются.
+message RestoreOperation {
+  string restore_operation_id = 1;
+  uint64 version = 2;
+  RestoreOperationState state = 3;
+  string backup_id = 4;
+  uint64 source_version = 5;
+  string archive_sha256 = 6;
+  string provenance_sha256 = 7;
+  string scope = 8;
+  string scope_id = 9;
+  string target_turn_id = 10;
+  uint32 target_attempt = 11;
+  string error_code = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  uint64 generation = 15;
+  bool partial = 16;
+  RestoreOperationNextAction next_action = 17;
+}
+
+message RestoreBackupResponse {
+  RestoreOperation operation = 1;
+}
+
+message GetRestoreOperationRequest {
+  string restore_operation_id = 1;
+}
+
+message GetRestoreOperationResponse {
+  RestoreOperation operation = 1;
+}
+
+message ListRestoreOperationsRequest {
+  string backup_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListRestoreOperationsResponse {
+  repeated RestoreOperation operations = 1;
+  string next_page_token = 2;
 }
 
 // RegisterArtifactRequest описывает версионированное сообщение контракта control-plane.
@@ -2672,6 +2859,15 @@ message RuntimeExecution {
   // exact protected journal либо вернуть bounded FAILED при его утрате;
   // повторно запускать provider запрещено.
   string codex_delivery_recovery_source_execution_id = 102;
+  // Restore authority fields вычисляются из owner Turn/operation при claim и
+  // входят в workload/restore ticket; они не принимаются от workload.
+  string restore_operation_id = 104;
+  uint64 restore_operation_generation = 105;
+  string restore_source_authority_sha256 = 106;
+  // Полный private source tuple нужен verifier-у для независимого пересчёта
+  // restore_source_authority_sha256 и не выходит в browser API.
+  uint64 restore_source_fence = 107;
+  string restore_source_proof_reference = 108;
 }
 
 message RuntimeMaterialization {
@@ -2846,6 +3042,27 @@ message AdmitRuntimeExecutionRequest {
 message AdmitRuntimeExecutionResponse {
   RuntimeExecution execution = 1;
   string lease_token = 2;
+}
+
+enum RuntimeRestoreEffect {
+  RUNTIME_RESTORE_EFFECT_UNSPECIFIED = 0;
+  RUNTIME_RESTORE_EFFECT_KUBERNETES_MATERIALIZATION = 1;
+  RUNTIME_RESTORE_EFFECT_S3_CREDENTIAL = 2;
+}
+
+message AuthorizeRuntimeRestoreEffectRequest {
+  string idempotency_key = 1;
+  string execution_id = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string restore_operation_id = 5;
+  uint64 restore_operation_generation = 6;
+  string restore_source_authority_sha256 = 7;
+  RuntimeRestoreEffect effect = 8;
+}
+
+message AuthorizeRuntimeRestoreEffectResponse {
+  RuntimeExecution execution = 1;
 }
 
 message HeartbeatRuntimeExecutionRequest {

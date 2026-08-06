@@ -75,7 +75,16 @@ func (service *Service) ManageSchedule(
 		if err := requireLifecycleOwner(input.Principal, current); err != nil {
 			return 0, err
 		}
-		if current.Version != input.ExpectedVersion &&
+		if input.Action == "DELETE" {
+			if current.Version == input.ExpectedVersion &&
+				(current.State == enum.StateActive || current.State == enum.StatePaused ||
+					current.State == enum.StateArchived || current.State == enum.StateDeletionPending) {
+				// apply ниже закрывает полный terminal graph одной транзакцией.
+			} else if current.State != enum.StateDeleted || current.Version <= input.ExpectedVersion ||
+				current.Version > input.ExpectedVersion+3 {
+				return 0, errs.ErrVersionMismatch
+			}
+		} else if current.Version != input.ExpectedVersion &&
 			current.Version != input.ExpectedVersion+1 {
 			return 0, errs.ErrVersionMismatch
 		}
@@ -331,6 +340,49 @@ func (service *Service) ManageSchedule(
 				return entity.Resource{}, err
 			}
 		}
+		if input.Action == "DELETE" {
+			deleted := current
+			if deleted.State == enum.StateActive || deleted.State == enum.StatePaused {
+				archived, transitionErr := deleted.Transition(enum.StateArchived, now)
+				if transitionErr != nil {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if transitionErr = tx.Update(ctx, archived, deleted.Version); transitionErr != nil {
+					return entity.Resource{}, transitionErr
+				}
+				if transitionErr = service.appendMutationRecords(
+					ctx, tx, input.Principal, "manage_schedule_DELETE_ARCHIVE", archived,
+				); transitionErr != nil {
+					return entity.Resource{}, transitionErr
+				}
+				deleted = archived
+			}
+			if deleted.State == enum.StateArchived {
+				pending, transitionErr := deleted.Transition(enum.StateDeletionPending, now)
+				if transitionErr != nil {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if transitionErr = tx.Update(ctx, pending, deleted.Version); transitionErr != nil {
+					return entity.Resource{}, transitionErr
+				}
+				if transitionErr = service.appendMutationRecords(
+					ctx, tx, input.Principal, "manage_schedule_DELETE_PENDING", pending,
+				); transitionErr != nil {
+					return entity.Resource{}, transitionErr
+				}
+				deleted = pending
+			}
+			terminal, transitionErr := deleted.Transition(enum.StateDeleted, now)
+			if transitionErr != nil {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if transitionErr = tx.Update(ctx, terminal, deleted.Version); transitionErr != nil {
+				return entity.Resource{}, transitionErr
+			}
+			return terminal, service.appendMutationRecords(
+				ctx, tx, input.Principal, "manage_schedule_DELETE", terminal,
+			)
+		}
 		var updated entity.Resource
 		switch input.Action {
 		case "UPDATE":
@@ -345,14 +397,6 @@ func (service *Service) ManageSchedule(
 			updated, err = current.Transition(enum.StatePaused, now)
 		case "ARCHIVE":
 			updated, err = current.Transition(enum.StateArchived, now)
-		case "DELETE":
-			if current.State == enum.StateArchived {
-				updated, err = current.Transition(enum.StateDeletionPending, now)
-			} else if current.State == enum.StateDeletionPending {
-				updated, err = current.Transition(enum.StateDeleted, now)
-			} else {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
 		}
 		if err != nil {
 			return entity.Resource{}, errs.ErrStateConflict

@@ -7,6 +7,7 @@ package generated
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -69,6 +70,63 @@ func (e ArtifactScanStatus) Valid() bool {
 	}
 }
 
+// Defines values for BackupScope.
+const (
+	BackupScopeSESSION BackupScope = "SESSION"
+)
+
+// Valid indicates whether the value is a known member of the BackupScope enum.
+func (e BackupScope) Valid() bool {
+	switch e {
+	case BackupScopeSESSION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BackupState.
+const (
+	BackupStateAVAILABLE        BackupState = "AVAILABLE"
+	BackupStateEXPIRED          BackupState = "EXPIRED"
+	BackupStateRESTORECANCELLED BackupState = "RESTORE_CANCELLED"
+	BackupStateRESTORED         BackupState = "RESTORED"
+	BackupStateRESTOREEXPIRED   BackupState = "RESTORE_EXPIRED"
+	BackupStateRESTOREFAILED    BackupState = "RESTORE_FAILED"
+	BackupStateRESTORING        BackupState = "RESTORING"
+	BackupStateRETENTIONPENDING BackupState = "RETENTION_PENDING"
+	BackupStateUNAVAILABLE      BackupState = "UNAVAILABLE"
+	BackupStateVERIFYING        BackupState = "VERIFYING"
+)
+
+// Valid indicates whether the value is a known member of the BackupState enum.
+func (e BackupState) Valid() bool {
+	switch e {
+	case BackupStateAVAILABLE:
+		return true
+	case BackupStateEXPIRED:
+		return true
+	case BackupStateRESTORECANCELLED:
+		return true
+	case BackupStateRESTORED:
+		return true
+	case BackupStateRESTOREEXPIRED:
+		return true
+	case BackupStateRESTOREFAILED:
+		return true
+	case BackupStateRESTORING:
+		return true
+	case BackupStateRETENTIONPENDING:
+		return true
+	case BackupStateUNAVAILABLE:
+		return true
+	case BackupStateVERIFYING:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatRoomType.
 const (
 	COORDINATION ChatRoomType = "COORDINATION"
@@ -95,46 +153,61 @@ func (e ChatRoomType) Valid() bool {
 
 // Defines values for ConfigurationChangeAction.
 const (
-	CopyAccessConfiguration   ConfigurationChangeAction = "copy_access_configuration"
-	Create                    ConfigurationChangeAction = "create"
-	CreateSchedule            ConfigurationChangeAction = "create_schedule"
-	Delete                    ConfigurationChangeAction = "delete"
-	DetachAccessConfiguration ConfigurationChangeAction = "detach_access_configuration"
-	ManageScheduleACTIVATE    ConfigurationChangeAction = "manage_schedule_ACTIVATE"
-	ManageScheduleARCHIVE     ConfigurationChangeAction = "manage_schedule_ARCHIVE"
-	ManageScheduleDELETE      ConfigurationChangeAction = "manage_schedule_DELETE"
-	ManageSchedulePAUSE       ConfigurationChangeAction = "manage_schedule_PAUSE"
-	ManageScheduleUPDATE      ConfigurationChangeAction = "manage_schedule_UPDATE"
-	Transition                ConfigurationChangeAction = "transition"
-	Update                    ConfigurationChangeAction = "update"
+	ConfigurationChangeActionCopyAccessConfiguration     ConfigurationChangeAction = "copy_access_configuration"
+	ConfigurationChangeActionCreate                      ConfigurationChangeAction = "create"
+	ConfigurationChangeActionCreateSchedule              ConfigurationChangeAction = "create_schedule"
+	ConfigurationChangeActionDelete                      ConfigurationChangeAction = "delete"
+	ConfigurationChangeActionDeleteProject               ConfigurationChangeAction = "delete_project"
+	ConfigurationChangeActionDeleteProjectPending        ConfigurationChangeAction = "delete_project_pending"
+	ConfigurationChangeActionDetachAccessConfiguration   ConfigurationChangeAction = "detach_access_configuration"
+	ConfigurationChangeActionManageScheduleACTIVATE      ConfigurationChangeAction = "manage_schedule_ACTIVATE"
+	ConfigurationChangeActionManageScheduleARCHIVE       ConfigurationChangeAction = "manage_schedule_ARCHIVE"
+	ConfigurationChangeActionManageScheduleDELETE        ConfigurationChangeAction = "manage_schedule_DELETE"
+	ConfigurationChangeActionManageScheduleDELETEARCHIVE ConfigurationChangeAction = "manage_schedule_DELETE_ARCHIVE"
+	ConfigurationChangeActionManageScheduleDELETEPENDING ConfigurationChangeAction = "manage_schedule_DELETE_PENDING"
+	ConfigurationChangeActionManageSchedulePAUSE         ConfigurationChangeAction = "manage_schedule_PAUSE"
+	ConfigurationChangeActionManageScheduleUPDATE        ConfigurationChangeAction = "manage_schedule_UPDATE"
+	ConfigurationChangeActionTransition                  ConfigurationChangeAction = "transition"
+	ConfigurationChangeActionUpdate                      ConfigurationChangeAction = "update"
+	ConfigurationChangeActionUpdateProject               ConfigurationChangeAction = "update_project"
 )
 
 // Valid indicates whether the value is a known member of the ConfigurationChangeAction enum.
 func (e ConfigurationChangeAction) Valid() bool {
 	switch e {
-	case CopyAccessConfiguration:
+	case ConfigurationChangeActionCopyAccessConfiguration:
 		return true
-	case Create:
+	case ConfigurationChangeActionCreate:
 		return true
-	case CreateSchedule:
+	case ConfigurationChangeActionCreateSchedule:
 		return true
-	case Delete:
+	case ConfigurationChangeActionDelete:
 		return true
-	case DetachAccessConfiguration:
+	case ConfigurationChangeActionDeleteProject:
 		return true
-	case ManageScheduleACTIVATE:
+	case ConfigurationChangeActionDeleteProjectPending:
 		return true
-	case ManageScheduleARCHIVE:
+	case ConfigurationChangeActionDetachAccessConfiguration:
 		return true
-	case ManageScheduleDELETE:
+	case ConfigurationChangeActionManageScheduleACTIVATE:
 		return true
-	case ManageSchedulePAUSE:
+	case ConfigurationChangeActionManageScheduleARCHIVE:
 		return true
-	case ManageScheduleUPDATE:
+	case ConfigurationChangeActionManageScheduleDELETE:
 		return true
-	case Transition:
+	case ConfigurationChangeActionManageScheduleDELETEARCHIVE:
 		return true
-	case Update:
+	case ConfigurationChangeActionManageScheduleDELETEPENDING:
+		return true
+	case ConfigurationChangeActionManageSchedulePAUSE:
+		return true
+	case ConfigurationChangeActionManageScheduleUPDATE:
+		return true
+	case ConfigurationChangeActionTransition:
+		return true
+	case ConfigurationChangeActionUpdate:
+		return true
+	case ConfigurationChangeActionUpdateProject:
 		return true
 	default:
 		return false
@@ -438,6 +511,54 @@ func (e OwnerGateDecision) Valid() bool {
 	}
 }
 
+// Defines values for OwnerGateProjectionDeliveryState.
+const (
+	OwnerGateProjectionDeliveryStateAWAITINGDELIVERYPROOF OwnerGateProjectionDeliveryState = "AWAITING_DELIVERY_PROOF"
+	OwnerGateProjectionDeliveryStateEXPIRED               OwnerGateProjectionDeliveryState = "EXPIRED"
+	OwnerGateProjectionDeliveryStateREADY                 OwnerGateProjectionDeliveryState = "READY"
+	OwnerGateProjectionDeliveryStateTERMINAL              OwnerGateProjectionDeliveryState = "TERMINAL"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateProjectionDeliveryState enum.
+func (e OwnerGateProjectionDeliveryState) Valid() bool {
+	switch e {
+	case OwnerGateProjectionDeliveryStateAWAITINGDELIVERYPROOF:
+		return true
+	case OwnerGateProjectionDeliveryStateEXPIRED:
+		return true
+	case OwnerGateProjectionDeliveryStateREADY:
+		return true
+	case OwnerGateProjectionDeliveryStateTERMINAL:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerGateProjectionNextAction.
+const (
+	OwnerGateProjectionNextActionNONE            OwnerGateProjectionNextAction = "NONE"
+	OwnerGateProjectionNextActionREADTERMINAL    OwnerGateProjectionNextAction = "READ_TERMINAL"
+	OwnerGateProjectionNextActionRESOLVE         OwnerGateProjectionNextAction = "RESOLVE"
+	OwnerGateProjectionNextActionWAITFORDELIVERY OwnerGateProjectionNextAction = "WAIT_FOR_DELIVERY"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateProjectionNextAction enum.
+func (e OwnerGateProjectionNextAction) Valid() bool {
+	switch e {
+	case OwnerGateProjectionNextActionNONE:
+		return true
+	case OwnerGateProjectionNextActionREADTERMINAL:
+		return true
+	case OwnerGateProjectionNextActionRESOLVE:
+		return true
+	case OwnerGateProjectionNextActionWAITFORDELIVERY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProjectLocale.
 const (
 	En ProjectLocale = "en"
@@ -468,6 +589,30 @@ func (e ProviderPoolPolicy) Valid() bool {
 	case LeastUsed:
 		return true
 	case Weighted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolveOwnerGateDecision.
+const (
+	ResolveOwnerGateDecisionAPPROVED         ResolveOwnerGateDecision = "APPROVED"
+	ResolveOwnerGateDecisionCANCELLED        ResolveOwnerGateDecision = "CANCELLED"
+	ResolveOwnerGateDecisionCHANGESREQUESTED ResolveOwnerGateDecision = "CHANGES_REQUESTED"
+	ResolveOwnerGateDecisionREJECTED         ResolveOwnerGateDecision = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the ResolveOwnerGateDecision enum.
+func (e ResolveOwnerGateDecision) Valid() bool {
+	switch e {
+	case ResolveOwnerGateDecisionAPPROVED:
+		return true
+	case ResolveOwnerGateDecisionCANCELLED:
+		return true
+	case ResolveOwnerGateDecisionCHANGESREQUESTED:
+		return true
+	case ResolveOwnerGateDecisionREJECTED:
 		return true
 	default:
 		return false
@@ -567,6 +712,102 @@ func (e ResourceKind) Valid() bool {
 	}
 }
 
+// Defines values for RestoreBackupScope.
+const (
+	RestoreBackupScopeSESSION RestoreBackupScope = "SESSION"
+)
+
+// Valid indicates whether the value is a known member of the RestoreBackupScope enum.
+func (e RestoreBackupScope) Valid() bool {
+	switch e {
+	case RestoreBackupScopeSESSION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RestoreOperationScope.
+const (
+	SESSION RestoreOperationScope = "SESSION"
+)
+
+// Valid indicates whether the value is a known member of the RestoreOperationScope enum.
+func (e RestoreOperationScope) Valid() bool {
+	switch e {
+	case SESSION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RestoreOperationNextAction.
+const (
+	RestoreOperationNextActionNONE         RestoreOperationNextAction = "NONE"
+	RestoreOperationNextActionREADBACKUP   RestoreOperationNextAction = "READ_BACKUP"
+	RestoreOperationNextActionRETRYRUNTIME RestoreOperationNextAction = "RETRY_RUNTIME"
+	RestoreOperationNextActionWAIT         RestoreOperationNextAction = "WAIT"
+)
+
+// Valid indicates whether the value is a known member of the RestoreOperationNextAction enum.
+func (e RestoreOperationNextAction) Valid() bool {
+	switch e {
+	case RestoreOperationNextActionNONE:
+		return true
+	case RestoreOperationNextActionREADBACKUP:
+		return true
+	case RestoreOperationNextActionRETRYRUNTIME:
+		return true
+	case RestoreOperationNextActionWAIT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RestoreOperationState.
+const (
+	RestoreOperationStateASSIGNED      RestoreOperationState = "ASSIGNED"
+	RestoreOperationStateCANCELLED     RestoreOperationState = "CANCELLED"
+	RestoreOperationStateEXPIRED       RestoreOperationState = "EXPIRED"
+	RestoreOperationStateFAILED        RestoreOperationState = "FAILED"
+	RestoreOperationStateMATERIALIZING RestoreOperationState = "MATERIALIZING"
+	RestoreOperationStateQUEUED        RestoreOperationState = "QUEUED"
+	RestoreOperationStateREADY         RestoreOperationState = "READY"
+	RestoreOperationStateRETRYING      RestoreOperationState = "RETRYING"
+	RestoreOperationStateRUNNING       RestoreOperationState = "RUNNING"
+	RestoreOperationStateSUCCEEDED     RestoreOperationState = "SUCCEEDED"
+)
+
+// Valid indicates whether the value is a known member of the RestoreOperationState enum.
+func (e RestoreOperationState) Valid() bool {
+	switch e {
+	case RestoreOperationStateASSIGNED:
+		return true
+	case RestoreOperationStateCANCELLED:
+		return true
+	case RestoreOperationStateEXPIRED:
+		return true
+	case RestoreOperationStateFAILED:
+		return true
+	case RestoreOperationStateMATERIALIZING:
+		return true
+	case RestoreOperationStateQUEUED:
+		return true
+	case RestoreOperationStateREADY:
+		return true
+	case RestoreOperationStateRETRYING:
+		return true
+	case RestoreOperationStateRUNNING:
+		return true
+	case RestoreOperationStateSUCCEEDED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleImagePackageManager.
 const (
 	Apk RoleImagePackageManager = "apk"
@@ -648,6 +889,93 @@ func (e RuntimeIncidentKind) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleInputCalendar.
+const (
+	ScheduleInputCalendarBUSINESS  ScheduleInputCalendar = "BUSINESS"
+	ScheduleInputCalendarGREGORIAN ScheduleInputCalendar = "GREGORIAN"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputCalendar enum.
+func (e ScheduleInputCalendar) Valid() bool {
+	switch e {
+	case ScheduleInputCalendarBUSINESS:
+		return true
+	case ScheduleInputCalendarGREGORIAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleInputDeliveryPolicy.
+const (
+	ScheduleInputDeliveryPolicyATLEASTONCE       ScheduleInputDeliveryPolicy = "AT_LEAST_ONCE"
+	ScheduleInputDeliveryPolicyEXACTLYONCEEFFECT ScheduleInputDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputDeliveryPolicy enum.
+func (e ScheduleInputDeliveryPolicy) Valid() bool {
+	switch e {
+	case ScheduleInputDeliveryPolicyATLEASTONCE:
+		return true
+	case ScheduleInputDeliveryPolicyEXACTLYONCEEFFECT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleMisfirePolicy.
+const (
+	ScheduleMisfirePolicyCATCHUP     ScheduleMisfirePolicy = "CATCH_UP"
+	ScheduleMisfirePolicyRUNONCE     ScheduleMisfirePolicy = "RUN_ONCE"
+	ScheduleMisfirePolicySKIP        ScheduleMisfirePolicy = "SKIP"
+	ScheduleMisfirePolicyWITHINGRACE ScheduleMisfirePolicy = "WITHIN_GRACE"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleMisfirePolicy enum.
+func (e ScheduleMisfirePolicy) Valid() bool {
+	switch e {
+	case ScheduleMisfirePolicyCATCHUP:
+		return true
+	case ScheduleMisfirePolicyRUNONCE:
+		return true
+	case ScheduleMisfirePolicySKIP:
+		return true
+	case ScheduleMisfirePolicyWITHINGRACE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleNotificationPolicy.
+const (
+	ALWAYS            ScheduleNotificationPolicy = "ALWAYS"
+	AUDITONLY         ScheduleNotificationPolicy = "AUDIT_ONLY"
+	ONACTION          ScheduleNotificationPolicy = "ON_ACTION"
+	ONACTIONORFAILURE ScheduleNotificationPolicy = "ON_ACTION_OR_FAILURE"
+	ONFAILURE         ScheduleNotificationPolicy = "ON_FAILURE"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleNotificationPolicy enum.
+func (e ScheduleNotificationPolicy) Valid() bool {
+	switch e {
+	case ALWAYS:
+		return true
+	case AUDITONLY:
+		return true
+	case ONACTION:
+		return true
+	case ONACTIONORFAILURE:
+		return true
+	case ONFAILURE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleOccurrenceState.
 const (
 	ScheduleOccurrenceStateCANCELLED       ScheduleOccurrenceState = "CANCELLED"
@@ -687,6 +1015,102 @@ func (e ScheduleOccurrenceState) Valid() bool {
 	case ScheduleOccurrenceStateSUCCEEDED:
 		return true
 	case ScheduleOccurrenceStateWAITINGOWNER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleOverlapPolicy.
+const (
+	ScheduleOverlapPolicyFORBID ScheduleOverlapPolicy = "FORBID"
+	ScheduleOverlapPolicyQUEUE  ScheduleOverlapPolicy = "QUEUE"
+	ScheduleOverlapPolicySKIP   ScheduleOverlapPolicy = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleOverlapPolicy enum.
+func (e ScheduleOverlapPolicy) Valid() bool {
+	switch e {
+	case ScheduleOverlapPolicyFORBID:
+		return true
+	case ScheduleOverlapPolicyQUEUE:
+		return true
+	case ScheduleOverlapPolicySKIP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleProjectionCalendar.
+const (
+	ScheduleProjectionCalendarBUSINESS  ScheduleProjectionCalendar = "BUSINESS"
+	ScheduleProjectionCalendarGREGORIAN ScheduleProjectionCalendar = "GREGORIAN"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleProjectionCalendar enum.
+func (e ScheduleProjectionCalendar) Valid() bool {
+	switch e {
+	case ScheduleProjectionCalendarBUSINESS:
+		return true
+	case ScheduleProjectionCalendarGREGORIAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleProjectionDeliveryPolicy.
+const (
+	ScheduleProjectionDeliveryPolicyATLEASTONCE       ScheduleProjectionDeliveryPolicy = "AT_LEAST_ONCE"
+	ScheduleProjectionDeliveryPolicyEXACTLYONCEEFFECT ScheduleProjectionDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleProjectionDeliveryPolicy enum.
+func (e ScheduleProjectionDeliveryPolicy) Valid() bool {
+	switch e {
+	case ScheduleProjectionDeliveryPolicyATLEASTONCE:
+		return true
+	case ScheduleProjectionDeliveryPolicyEXACTLYONCEEFFECT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleSessionPolicy.
+const (
+	NEW        ScheduleSessionPolicy = "NEW"
+	PERSISTENT ScheduleSessionPolicy = "PERSISTENT"
+	ROLLING    ScheduleSessionPolicy = "ROLLING"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleSessionPolicy enum.
+func (e ScheduleSessionPolicy) Valid() bool {
+	switch e {
+	case NEW:
+		return true
+	case PERSISTENT:
+		return true
+	case ROLLING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleTargetType.
+const (
+	AGENT    ScheduleTargetType = "AGENT"
+	PLAYBOOK ScheduleTargetType = "PLAYBOOK"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleTargetType enum.
+func (e ScheduleTargetType) Valid() bool {
+	switch e {
+	case AGENT:
+		return true
+	case PLAYBOOK:
 		return true
 	default:
 		return false
@@ -738,6 +1162,38 @@ type AuditPage struct {
 	Events        []AuditEvent `json:"events"`
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
+
+// Backup Безопасный read model без DSN, object key, credential, private reference/evidence или worker grant.
+type Backup struct {
+	ArchiveSha256               string              `json:"archiveSha256"`
+	AvailableAt                 *time.Time          `json:"availableAt,omitempty"`
+	BackupId                    openapi_types.UUID  `json:"backupId"`
+	CreatedAt                   time.Time           `json:"createdAt"`
+	ProvenanceSha256            string              `json:"provenanceSha256"`
+	Restorable                  bool                `json:"restorable"`
+	RestoreOperationId          *openapi_types.UUID `json:"restoreOperationId,omitempty"`
+	RetainUntil                 *time.Time          `json:"retainUntil,omitempty"`
+	Scope                       BackupScope         `json:"scope"`
+	ScopeId                     openapi_types.UUID  `json:"scopeId"`
+	SourceImmutableInputSha256  string              `json:"sourceImmutableInputSha256"`
+	SourceRuntimeRevisionSha256 string              `json:"sourceRuntimeRevisionSha256"`
+	SourceVersion               int64               `json:"sourceVersion"`
+	State                       BackupState         `json:"state"`
+	UpdatedAt                   time.Time           `json:"updatedAt"`
+	Version                     int64               `json:"version"`
+}
+
+// BackupScope defines model for Backup.Scope.
+type BackupScope string
+
+// BackupPage defines model for BackupPage.
+type BackupPage struct {
+	Backups       []Backup `json:"backups"`
+	NextPageToken *string  `json:"nextPageToken,omitempty"`
+}
+
+// BackupState defines model for BackupState.
+type BackupState string
 
 // ChatProjection defines model for ChatProjection.
 type ChatProjection struct {
@@ -815,6 +1271,12 @@ type CreateResource struct {
 	Name     string              `json:"name"`
 	ParentId *openapi_types.UUID `json:"parentId,omitempty"`
 	Spec     ResourceSpecInput   `json:"spec"`
+}
+
+// CreateSchedule defines model for CreateSchedule.
+type CreateSchedule struct {
+	Input ScheduleInput `json:"input"`
+	Name  string        `json:"name"`
 }
 
 // CredentialBindingProjection defines model for CredentialBindingProjection.
@@ -998,15 +1460,25 @@ type OwnerGateDecision string
 
 // OwnerGateProjection defines model for OwnerGateProjection.
 type OwnerGateProjection struct {
-	Attempt              int                `json:"attempt"`
-	Decision             OwnerGateDecision  `json:"decision"`
-	ExpiresAt            time.Time          `json:"expiresAt"`
-	ImmutableInputSha256 string             `json:"immutableInputSha256"`
-	ProcessRunId         openapi_types.UUID `json:"processRunId"`
-	ResultSha256         string             `json:"resultSha256"`
-	SessionId            openapi_types.UUID `json:"sessionId"`
-	TurnId               openapi_types.UUID `json:"turnId"`
+	Attempt              int                              `json:"attempt"`
+	Decision             OwnerGateDecision                `json:"decision"`
+	DeliveredAt          *time.Time                       `json:"deliveredAt,omitempty"`
+	DeliveryState        OwnerGateProjectionDeliveryState `json:"deliveryState"`
+	ExpiresAt            time.Time                        `json:"expiresAt"`
+	ImmutableInputSha256 string                           `json:"immutableInputSha256"`
+	NextAction           OwnerGateProjectionNextAction    `json:"nextAction"`
+	ProcessRunId         openapi_types.UUID               `json:"processRunId"`
+	Resolvable           bool                             `json:"resolvable"`
+	ResultSha256         string                           `json:"resultSha256"`
+	SessionId            openapi_types.UUID               `json:"sessionId"`
+	TurnId               openapi_types.UUID               `json:"turnId"`
 }
+
+// OwnerGateProjectionDeliveryState defines model for OwnerGateProjection.DeliveryState.
+type OwnerGateProjectionDeliveryState string
+
+// OwnerGateProjectionNextAction defines model for OwnerGateProjection.NextAction.
+type OwnerGateProjectionNextAction string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -1103,6 +1575,21 @@ type RepositoryWorkspaceSpec struct {
 	WorkspaceMode       string              `json:"workspaceMode"`
 }
 
+// ResolveOwnerGate defines model for ResolveOwnerGate.
+type ResolveOwnerGate struct {
+	Decision ResolveOwnerGateDecision `json:"decision"`
+	Reason   string                   `json:"reason"`
+}
+
+// ResolveOwnerGateDecision defines model for ResolveOwnerGateDecision.
+type ResolveOwnerGateDecision string
+
+// ResolveOwnerGateResult defines model for ResolveOwnerGateResult.
+type ResolveOwnerGateResult struct {
+	OwnerGate  Resource `json:"ownerGate"`
+	ProcessRun Resource `json:"processRun"`
+}
+
 // ResolveScheduleRecovery defines model for ResolveScheduleRecovery.
 type ResolveScheduleRecovery struct {
 	Action                 ResolveScheduleRecoveryAction `json:"action"`
@@ -1170,6 +1657,54 @@ type ResourceSpecProjection struct {
 	Turn                *TurnProjection                `json:"turn,omitempty"`
 	WorkClaim           *WorkClaimProjection           `json:"workClaim,omitempty"`
 }
+
+// RestoreBackup defines model for RestoreBackup.
+type RestoreBackup struct {
+	ArchiveSha256    string             `json:"archiveSha256"`
+	ProvenanceSha256 string             `json:"provenanceSha256"`
+	Scope            RestoreBackupScope `json:"scope"`
+	ScopeId          openapi_types.UUID `json:"scopeId"`
+	SourceVersion    int64              `json:"sourceVersion"`
+}
+
+// RestoreBackupScope defines model for RestoreBackup.Scope.
+type RestoreBackupScope string
+
+// RestoreOperation Versioned readback без archive locator, PVC tuple, credential, grant или private evidence.
+type RestoreOperation struct {
+	ArchiveSha256      string                     `json:"archiveSha256"`
+	BackupId           openapi_types.UUID         `json:"backupId"`
+	CreatedAt          time.Time                  `json:"createdAt"`
+	ErrorCode          *string                    `json:"errorCode,omitempty"`
+	Generation         int64                      `json:"generation"`
+	NextAction         RestoreOperationNextAction `json:"nextAction"`
+	Partial            bool                       `json:"partial"`
+	ProvenanceSha256   string                     `json:"provenanceSha256"`
+	RestoreOperationId openapi_types.UUID         `json:"restoreOperationId"`
+	Scope              RestoreOperationScope      `json:"scope"`
+	ScopeId            openapi_types.UUID         `json:"scopeId"`
+	SourceVersion      int64                      `json:"sourceVersion"`
+	State              RestoreOperationState      `json:"state"`
+	TargetAttempt      int                        `json:"targetAttempt"`
+	TargetTurnId       openapi_types.UUID         `json:"targetTurnId"`
+	UpdatedAt          time.Time                  `json:"updatedAt"`
+	Version            int64                      `json:"version"`
+}
+
+// RestoreOperationScope defines model for RestoreOperation.Scope.
+type RestoreOperationScope string
+
+// RestoreOperationNextAction defines model for RestoreOperationNextAction.
+type RestoreOperationNextAction string
+
+// RestoreOperationPage defines model for RestoreOperationPage.
+type RestoreOperationPage struct {
+	NextPageToken *string            `json:"nextPageToken,omitempty"`
+	Operations    []RestoreOperation `json:"operations"`
+}
+
+// RestoreOperationState defines model for RestoreOperationState.
+type RestoreOperationState string
 
 // RoleImagePackage defines model for RoleImagePackage.
 type RoleImagePackage struct {
@@ -1343,6 +1878,55 @@ type RuntimeRevisionProjection struct {
 	SessionId                              openapi_types.UUID  `json:"sessionId"`
 }
 
+// ScheduleInput defines model for ScheduleInput.
+type ScheduleInput struct {
+	Calendar                ScheduleInputCalendar       `json:"calendar"`
+	Coalesce                bool                        `json:"coalesce"`
+	Cron                    *string                     `json:"cron,omitempty"`
+	DeadLetterAfterSeconds  int64                       `json:"deadLetterAfterSeconds"`
+	DeliveryPolicy          ScheduleInputDeliveryPolicy `json:"deliveryPolicy"`
+	ExecutionSessionId      *openapi_types.UUID         `json:"executionSessionId,omitempty"`
+	InitialBackoffSeconds   int64                       `json:"initialBackoffSeconds"`
+	IntervalSeconds         *int64                      `json:"intervalSeconds,omitempty"`
+	MaximumAttempts         int                         `json:"maximumAttempts"`
+	MaximumBackoffSeconds   int64                       `json:"maximumBackoffSeconds"`
+	MaximumExecutionSeconds int64                       `json:"maximumExecutionSeconds"`
+	MisfireGraceSeconds     int64                       `json:"misfireGraceSeconds"`
+	MisfirePolicy           ScheduleMisfirePolicy       `json:"misfirePolicy"`
+	NotificationPolicy      ScheduleNotificationPolicy  `json:"notificationPolicy"`
+	OverlapPolicy           ScheduleOverlapPolicy       `json:"overlapPolicy"`
+	PlaybookRef             *string                     `json:"playbookRef,omitempty"`
+	PlaybookVersion         *int64                      `json:"playbookVersion,omitempty"`
+	PromptArtifactId        openapi_types.UUID          `json:"promptArtifactId"`
+	PromptProfileId         openapi_types.UUID          `json:"promptProfileId"`
+	PromptRevision          int64                       `json:"promptRevision"`
+	RoomId                  *openapi_types.UUID         `json:"roomId,omitempty"`
+	RuntimeRevisionId       openapi_types.UUID          `json:"runtimeRevisionId"`
+	SessionPolicy           ScheduleSessionPolicy       `json:"sessionPolicy"`
+	TargetResourceId        openapi_types.UUID          `json:"targetResourceId"`
+	TargetType              ScheduleTargetType          `json:"targetType"`
+	Timezone                string                      `json:"timezone"`
+	union                   json.RawMessage
+}
+
+// ScheduleInputCalendar defines model for ScheduleInput.Calendar.
+type ScheduleInputCalendar string
+
+// ScheduleInputDeliveryPolicy defines model for ScheduleInput.DeliveryPolicy.
+type ScheduleInputDeliveryPolicy string
+
+// ScheduleInput0 defines model for .
+type ScheduleInput0 = interface{}
+
+// ScheduleInput1 defines model for .
+type ScheduleInput1 = interface{}
+
+// ScheduleMisfirePolicy defines model for ScheduleMisfirePolicy.
+type ScheduleMisfirePolicy string
+
+// ScheduleNotificationPolicy defines model for ScheduleNotificationPolicy.
+type ScheduleNotificationPolicy string
+
 // ScheduleOccurrence defines model for ScheduleOccurrence.
 type ScheduleOccurrence struct {
 	Attempt                int                     `json:"attempt"`
@@ -1370,17 +1954,61 @@ type ScheduleOccurrencePage struct {
 // ScheduleOccurrenceState defines model for ScheduleOccurrenceState.
 type ScheduleOccurrenceState string
 
+// ScheduleOverlapPolicy defines model for ScheduleOverlapPolicy.
+type ScheduleOverlapPolicy string
+
 // ScheduleProjection defines model for ScheduleProjection.
 type ScheduleProjection struct {
-	Cron             *string                          `json:"cron,omitempty"`
-	MaximumAttempts  int                              `json:"maximumAttempts"`
-	NextRunAt        time.Time                        `json:"nextRunAt"`
-	Ownership        ConfigurationOwnershipProjection `json:"ownership"`
-	TargetKind       ResourceKind                     `json:"targetKind"`
-	TargetResourceId openapi_types.UUID               `json:"targetResourceId"`
-	TargetVersion    int64                            `json:"targetVersion"`
-	Timezone         string                           `json:"timezone"`
+	Calendar                ScheduleProjectionCalendar       `json:"calendar"`
+	Coalesce                bool                             `json:"coalesce"`
+	Cron                    *string                          `json:"cron,omitempty"`
+	DeadLetterAfterSeconds  int64                            `json:"deadLetterAfterSeconds"`
+	DeliveryPolicy          ScheduleProjectionDeliveryPolicy `json:"deliveryPolicy"`
+	ExecutionSessionId      *openapi_types.UUID              `json:"executionSessionId,omitempty"`
+	InitialBackoffSeconds   int64                            `json:"initialBackoffSeconds"`
+	IntervalSeconds         *int64                           `json:"intervalSeconds,omitempty"`
+	MaximumAttempts         int                              `json:"maximumAttempts"`
+	MaximumBackoffSeconds   int64                            `json:"maximumBackoffSeconds"`
+	MaximumExecutionSeconds int64                            `json:"maximumExecutionSeconds"`
+	MisfireGraceSeconds     int64                            `json:"misfireGraceSeconds"`
+	MisfirePolicy           ScheduleMisfirePolicy            `json:"misfirePolicy"`
+	NextRunAt               time.Time                        `json:"nextRunAt"`
+	NotificationPolicy      ScheduleNotificationPolicy       `json:"notificationPolicy"`
+	OverlapPolicy           ScheduleOverlapPolicy            `json:"overlapPolicy"`
+	Ownership               ConfigurationOwnershipProjection `json:"ownership"`
+	PlaybookRef             *string                          `json:"playbookRef,omitempty"`
+	PlaybookVersion         *int64                           `json:"playbookVersion,omitempty"`
+	PromptArtifactId        openapi_types.UUID               `json:"promptArtifactId"`
+	PromptProfileId         openapi_types.UUID               `json:"promptProfileId"`
+	PromptRevision          int64                            `json:"promptRevision"`
+	RoomId                  *openapi_types.UUID              `json:"roomId,omitempty"`
+	RuntimeRevisionId       openapi_types.UUID               `json:"runtimeRevisionId"`
+	SessionPolicy           ScheduleSessionPolicy            `json:"sessionPolicy"`
+	TargetKind              ResourceKind                     `json:"targetKind"`
+	TargetResourceId        openapi_types.UUID               `json:"targetResourceId"`
+	TargetType              ScheduleTargetType               `json:"targetType"`
+	TargetVersion           int64                            `json:"targetVersion"`
+	Timezone                string                           `json:"timezone"`
+	union                   json.RawMessage
 }
+
+// ScheduleProjectionCalendar defines model for ScheduleProjection.Calendar.
+type ScheduleProjectionCalendar string
+
+// ScheduleProjectionDeliveryPolicy defines model for ScheduleProjection.DeliveryPolicy.
+type ScheduleProjectionDeliveryPolicy string
+
+// ScheduleProjection0 defines model for .
+type ScheduleProjection0 = interface{}
+
+// ScheduleProjection1 defines model for .
+type ScheduleProjection1 = interface{}
+
+// ScheduleSessionPolicy defines model for ScheduleSessionPolicy.
+type ScheduleSessionPolicy string
+
+// ScheduleTargetType defines model for ScheduleTargetType.
+type ScheduleTargetType string
 
 // SessionProjection defines model for SessionProjection.
 type SessionProjection struct {
@@ -1426,11 +2054,23 @@ type TurnProjection struct {
 	SourceRef            string              `json:"sourceRef"`
 }
 
+// UpdateProject defines model for UpdateProject.
+type UpdateProject struct {
+	Name string      `json:"name"`
+	Spec ProjectSpec `json:"spec"`
+}
+
 // UpdateResource defines model for UpdateResource.
 type UpdateResource struct {
 	Kind MutableResourceKind `json:"kind"`
 	Name string              `json:"name"`
 	Spec ResourceSpecInput   `json:"spec"`
+}
+
+// UpdateSchedule defines model for UpdateSchedule.
+type UpdateSchedule struct {
+	Input ScheduleInput `json:"input"`
+	Name  string        `json:"name"`
 }
 
 // WorkClaimProjection defines model for WorkClaimProjection.
@@ -1533,6 +2173,19 @@ type ListAuditEventsParams struct {
 	PageToken    *PageToken          `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListBackupsParams defines parameters for ListBackups.
+type ListBackupsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// RestoreBackupParams defines parameters for RestoreBackup.
+type RestoreBackupParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // ListConfigurationChangesParams defines parameters for ListConfigurationChanges.
 type ListConfigurationChangesParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -1557,6 +2210,13 @@ type ListIncidentsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ResolveOwnerGateParams defines parameters for ResolveOwnerGate.
+type ResolveOwnerGateParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // ListProjectsParams defines parameters for ListProjects.
 type ListProjectsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -1567,6 +2227,20 @@ type ListProjectsParams struct {
 type CreateProjectParams struct {
 	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// DeleteProjectParams defines parameters for DeleteProject.
+type DeleteProjectParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// UpdateProjectParams defines parameters for UpdateProject.
+type UpdateProjectParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // ListResourcesParams defines parameters for ListResources.
@@ -1619,6 +2293,13 @@ type TransitionResourceParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 }
 
+// ListRestoreOperationsParams defines parameters for ListRestoreOperations.
+type ListRestoreOperationsParams struct {
+	BackupId  *openapi_types.UUID `form:"backupId,omitempty" json:"backupId,omitempty"`
+	PageSize  *PageSize           `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken          `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ManageRoleImageRecipeParams defines parameters for ManageRoleImageRecipe.
 type ManageRoleImageRecipeParams struct {
 	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
@@ -1636,6 +2317,26 @@ type ListRunsParams struct {
 	State     *[]LifecycleState `form:"state,omitempty" json:"state,omitempty"`
 	PageSize  *PageSize         `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken        `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreateScheduleParams defines parameters for CreateSchedule.
+type CreateScheduleParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// DeleteScheduleParams defines parameters for DeleteSchedule.
+type DeleteScheduleParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// UpdateScheduleParams defines parameters for UpdateSchedule.
+type UpdateScheduleParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // ListScheduleOccurrencesParams defines parameters for ListScheduleOccurrences.
@@ -1679,11 +2380,20 @@ type CopyAccessResourceJSONRequestBody = CopyAccessResource
 // DetachAccessResourceJSONRequestBody defines body for DetachAccessResource for application/json ContentType.
 type DetachAccessResourceJSONRequestBody = DetachAccessResource
 
+// RestoreBackupJSONRequestBody defines body for RestoreBackup for application/json ContentType.
+type RestoreBackupJSONRequestBody = RestoreBackup
+
 // ManageImageBuildJSONRequestBody defines body for ManageImageBuild for application/json ContentType.
 type ManageImageBuildJSONRequestBody = ManageImageBuild
 
+// ResolveOwnerGateJSONRequestBody defines body for ResolveOwnerGate for application/json ContentType.
+type ResolveOwnerGateJSONRequestBody = ResolveOwnerGate
+
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProject
+
+// UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
+type UpdateProjectJSONRequestBody = UpdateProject
 
 // CreateResourceJSONRequestBody defines body for CreateResource for application/json ContentType.
 type CreateResourceJSONRequestBody = CreateResource
@@ -1697,8 +2407,876 @@ type TransitionResourceJSONRequestBody = TransitionResource
 // ManageRoleImageRecipeJSONRequestBody defines body for ManageRoleImageRecipe for application/json ContentType.
 type ManageRoleImageRecipeJSONRequestBody = ManageRoleImageRecipe
 
+// CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
+type CreateScheduleJSONRequestBody = CreateSchedule
+
+// UpdateScheduleJSONRequestBody defines body for UpdateSchedule for application/json ContentType.
+type UpdateScheduleJSONRequestBody = UpdateSchedule
+
 // ResolveScheduleRecoveryJSONRequestBody defines body for ResolveScheduleRecovery for application/json ContentType.
 type ResolveScheduleRecoveryJSONRequestBody = ResolveScheduleRecovery
+
+// AsScheduleInput0 returns the union data inside the ScheduleInput as a ScheduleInput0
+func (t ScheduleInput) AsScheduleInput0() (ScheduleInput0, error) {
+	var body ScheduleInput0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScheduleInput0 overwrites any union data inside the ScheduleInput as the provided ScheduleInput0
+func (t *ScheduleInput) FromScheduleInput0(v ScheduleInput0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScheduleInput0 performs a merge with any union data inside the ScheduleInput, using the provided ScheduleInput0
+func (t *ScheduleInput) MergeScheduleInput0(v ScheduleInput0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsScheduleInput1 returns the union data inside the ScheduleInput as a ScheduleInput1
+func (t ScheduleInput) AsScheduleInput1() (ScheduleInput1, error) {
+	var body ScheduleInput1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScheduleInput1 overwrites any union data inside the ScheduleInput as the provided ScheduleInput1
+func (t *ScheduleInput) FromScheduleInput1(v ScheduleInput1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScheduleInput1 performs a merge with any union data inside the ScheduleInput, using the provided ScheduleInput1
+func (t *ScheduleInput) MergeScheduleInput1(v ScheduleInput1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ScheduleInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["calendar"], err = json.Marshal(t.Calendar)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'calendar': %w", err)
+	}
+
+	object["coalesce"], err = json.Marshal(t.Coalesce)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'coalesce': %w", err)
+	}
+
+	if t.Cron != nil {
+		object["cron"], err = json.Marshal(t.Cron)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'cron': %w", err)
+		}
+	}
+
+	object["deadLetterAfterSeconds"], err = json.Marshal(t.DeadLetterAfterSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'deadLetterAfterSeconds': %w", err)
+	}
+
+	object["deliveryPolicy"], err = json.Marshal(t.DeliveryPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'deliveryPolicy': %w", err)
+	}
+
+	if t.ExecutionSessionId != nil {
+		object["executionSessionId"], err = json.Marshal(t.ExecutionSessionId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'executionSessionId': %w", err)
+		}
+	}
+
+	object["initialBackoffSeconds"], err = json.Marshal(t.InitialBackoffSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'initialBackoffSeconds': %w", err)
+	}
+
+	if t.IntervalSeconds != nil {
+		object["intervalSeconds"], err = json.Marshal(t.IntervalSeconds)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'intervalSeconds': %w", err)
+		}
+	}
+
+	object["maximumAttempts"], err = json.Marshal(t.MaximumAttempts)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumAttempts': %w", err)
+	}
+
+	object["maximumBackoffSeconds"], err = json.Marshal(t.MaximumBackoffSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumBackoffSeconds': %w", err)
+	}
+
+	object["maximumExecutionSeconds"], err = json.Marshal(t.MaximumExecutionSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumExecutionSeconds': %w", err)
+	}
+
+	object["misfireGraceSeconds"], err = json.Marshal(t.MisfireGraceSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'misfireGraceSeconds': %w", err)
+	}
+
+	object["misfirePolicy"], err = json.Marshal(t.MisfirePolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'misfirePolicy': %w", err)
+	}
+
+	object["notificationPolicy"], err = json.Marshal(t.NotificationPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'notificationPolicy': %w", err)
+	}
+
+	object["overlapPolicy"], err = json.Marshal(t.OverlapPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'overlapPolicy': %w", err)
+	}
+
+	if t.PlaybookRef != nil {
+		object["playbookRef"], err = json.Marshal(t.PlaybookRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'playbookRef': %w", err)
+		}
+	}
+
+	if t.PlaybookVersion != nil {
+		object["playbookVersion"], err = json.Marshal(t.PlaybookVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'playbookVersion': %w", err)
+		}
+	}
+
+	object["promptArtifactId"], err = json.Marshal(t.PromptArtifactId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptArtifactId': %w", err)
+	}
+
+	object["promptProfileId"], err = json.Marshal(t.PromptProfileId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptProfileId': %w", err)
+	}
+
+	object["promptRevision"], err = json.Marshal(t.PromptRevision)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptRevision': %w", err)
+	}
+
+	if t.RoomId != nil {
+		object["roomId"], err = json.Marshal(t.RoomId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'roomId': %w", err)
+		}
+	}
+
+	object["runtimeRevisionId"], err = json.Marshal(t.RuntimeRevisionId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'runtimeRevisionId': %w", err)
+	}
+
+	object["sessionPolicy"], err = json.Marshal(t.SessionPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'sessionPolicy': %w", err)
+	}
+
+	object["targetResourceId"], err = json.Marshal(t.TargetResourceId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetResourceId': %w", err)
+	}
+
+	object["targetType"], err = json.Marshal(t.TargetType)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetType': %w", err)
+	}
+
+	object["timezone"], err = json.Marshal(t.Timezone)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'timezone': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *ScheduleInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["calendar"]; found {
+		err = json.Unmarshal(raw, &t.Calendar)
+		if err != nil {
+			return fmt.Errorf("error reading 'calendar': %w", err)
+		}
+	}
+
+	if raw, found := object["coalesce"]; found {
+		err = json.Unmarshal(raw, &t.Coalesce)
+		if err != nil {
+			return fmt.Errorf("error reading 'coalesce': %w", err)
+		}
+	}
+
+	if raw, found := object["cron"]; found {
+		err = json.Unmarshal(raw, &t.Cron)
+		if err != nil {
+			return fmt.Errorf("error reading 'cron': %w", err)
+		}
+	}
+
+	if raw, found := object["deadLetterAfterSeconds"]; found {
+		err = json.Unmarshal(raw, &t.DeadLetterAfterSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'deadLetterAfterSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["deliveryPolicy"]; found {
+		err = json.Unmarshal(raw, &t.DeliveryPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'deliveryPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["executionSessionId"]; found {
+		err = json.Unmarshal(raw, &t.ExecutionSessionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'executionSessionId': %w", err)
+		}
+	}
+
+	if raw, found := object["initialBackoffSeconds"]; found {
+		err = json.Unmarshal(raw, &t.InitialBackoffSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'initialBackoffSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["intervalSeconds"]; found {
+		err = json.Unmarshal(raw, &t.IntervalSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'intervalSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumAttempts"]; found {
+		err = json.Unmarshal(raw, &t.MaximumAttempts)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumAttempts': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumBackoffSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MaximumBackoffSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumBackoffSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumExecutionSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MaximumExecutionSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumExecutionSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["misfireGraceSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MisfireGraceSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'misfireGraceSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["misfirePolicy"]; found {
+		err = json.Unmarshal(raw, &t.MisfirePolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'misfirePolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["notificationPolicy"]; found {
+		err = json.Unmarshal(raw, &t.NotificationPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'notificationPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["overlapPolicy"]; found {
+		err = json.Unmarshal(raw, &t.OverlapPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'overlapPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["playbookRef"]; found {
+		err = json.Unmarshal(raw, &t.PlaybookRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'playbookRef': %w", err)
+		}
+	}
+
+	if raw, found := object["playbookVersion"]; found {
+		err = json.Unmarshal(raw, &t.PlaybookVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'playbookVersion': %w", err)
+		}
+	}
+
+	if raw, found := object["promptArtifactId"]; found {
+		err = json.Unmarshal(raw, &t.PromptArtifactId)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptArtifactId': %w", err)
+		}
+	}
+
+	if raw, found := object["promptProfileId"]; found {
+		err = json.Unmarshal(raw, &t.PromptProfileId)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptProfileId': %w", err)
+		}
+	}
+
+	if raw, found := object["promptRevision"]; found {
+		err = json.Unmarshal(raw, &t.PromptRevision)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptRevision': %w", err)
+		}
+	}
+
+	if raw, found := object["roomId"]; found {
+		err = json.Unmarshal(raw, &t.RoomId)
+		if err != nil {
+			return fmt.Errorf("error reading 'roomId': %w", err)
+		}
+	}
+
+	if raw, found := object["runtimeRevisionId"]; found {
+		err = json.Unmarshal(raw, &t.RuntimeRevisionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'runtimeRevisionId': %w", err)
+		}
+	}
+
+	if raw, found := object["sessionPolicy"]; found {
+		err = json.Unmarshal(raw, &t.SessionPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'sessionPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["targetResourceId"]; found {
+		err = json.Unmarshal(raw, &t.TargetResourceId)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetResourceId': %w", err)
+		}
+	}
+
+	if raw, found := object["targetType"]; found {
+		err = json.Unmarshal(raw, &t.TargetType)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetType': %w", err)
+		}
+	}
+
+	if raw, found := object["timezone"]; found {
+		err = json.Unmarshal(raw, &t.Timezone)
+		if err != nil {
+			return fmt.Errorf("error reading 'timezone': %w", err)
+		}
+	}
+
+	return err
+}
+
+// AsScheduleProjection0 returns the union data inside the ScheduleProjection as a ScheduleProjection0
+func (t ScheduleProjection) AsScheduleProjection0() (ScheduleProjection0, error) {
+	var body ScheduleProjection0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScheduleProjection0 overwrites any union data inside the ScheduleProjection as the provided ScheduleProjection0
+func (t *ScheduleProjection) FromScheduleProjection0(v ScheduleProjection0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScheduleProjection0 performs a merge with any union data inside the ScheduleProjection, using the provided ScheduleProjection0
+func (t *ScheduleProjection) MergeScheduleProjection0(v ScheduleProjection0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsScheduleProjection1 returns the union data inside the ScheduleProjection as a ScheduleProjection1
+func (t ScheduleProjection) AsScheduleProjection1() (ScheduleProjection1, error) {
+	var body ScheduleProjection1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromScheduleProjection1 overwrites any union data inside the ScheduleProjection as the provided ScheduleProjection1
+func (t *ScheduleProjection) FromScheduleProjection1(v ScheduleProjection1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeScheduleProjection1 performs a merge with any union data inside the ScheduleProjection, using the provided ScheduleProjection1
+func (t *ScheduleProjection) MergeScheduleProjection1(v ScheduleProjection1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ScheduleProjection) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	object["calendar"], err = json.Marshal(t.Calendar)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'calendar': %w", err)
+	}
+
+	object["coalesce"], err = json.Marshal(t.Coalesce)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'coalesce': %w", err)
+	}
+
+	if t.Cron != nil {
+		object["cron"], err = json.Marshal(t.Cron)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'cron': %w", err)
+		}
+	}
+
+	object["deadLetterAfterSeconds"], err = json.Marshal(t.DeadLetterAfterSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'deadLetterAfterSeconds': %w", err)
+	}
+
+	object["deliveryPolicy"], err = json.Marshal(t.DeliveryPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'deliveryPolicy': %w", err)
+	}
+
+	if t.ExecutionSessionId != nil {
+		object["executionSessionId"], err = json.Marshal(t.ExecutionSessionId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'executionSessionId': %w", err)
+		}
+	}
+
+	object["initialBackoffSeconds"], err = json.Marshal(t.InitialBackoffSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'initialBackoffSeconds': %w", err)
+	}
+
+	if t.IntervalSeconds != nil {
+		object["intervalSeconds"], err = json.Marshal(t.IntervalSeconds)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'intervalSeconds': %w", err)
+		}
+	}
+
+	object["maximumAttempts"], err = json.Marshal(t.MaximumAttempts)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumAttempts': %w", err)
+	}
+
+	object["maximumBackoffSeconds"], err = json.Marshal(t.MaximumBackoffSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumBackoffSeconds': %w", err)
+	}
+
+	object["maximumExecutionSeconds"], err = json.Marshal(t.MaximumExecutionSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'maximumExecutionSeconds': %w", err)
+	}
+
+	object["misfireGraceSeconds"], err = json.Marshal(t.MisfireGraceSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'misfireGraceSeconds': %w", err)
+	}
+
+	object["misfirePolicy"], err = json.Marshal(t.MisfirePolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'misfirePolicy': %w", err)
+	}
+
+	object["nextRunAt"], err = json.Marshal(t.NextRunAt)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'nextRunAt': %w", err)
+	}
+
+	object["notificationPolicy"], err = json.Marshal(t.NotificationPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'notificationPolicy': %w", err)
+	}
+
+	object["overlapPolicy"], err = json.Marshal(t.OverlapPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'overlapPolicy': %w", err)
+	}
+
+	object["ownership"], err = json.Marshal(t.Ownership)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'ownership': %w", err)
+	}
+
+	if t.PlaybookRef != nil {
+		object["playbookRef"], err = json.Marshal(t.PlaybookRef)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'playbookRef': %w", err)
+		}
+	}
+
+	if t.PlaybookVersion != nil {
+		object["playbookVersion"], err = json.Marshal(t.PlaybookVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'playbookVersion': %w", err)
+		}
+	}
+
+	object["promptArtifactId"], err = json.Marshal(t.PromptArtifactId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptArtifactId': %w", err)
+	}
+
+	object["promptProfileId"], err = json.Marshal(t.PromptProfileId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptProfileId': %w", err)
+	}
+
+	object["promptRevision"], err = json.Marshal(t.PromptRevision)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'promptRevision': %w", err)
+	}
+
+	if t.RoomId != nil {
+		object["roomId"], err = json.Marshal(t.RoomId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'roomId': %w", err)
+		}
+	}
+
+	object["runtimeRevisionId"], err = json.Marshal(t.RuntimeRevisionId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'runtimeRevisionId': %w", err)
+	}
+
+	object["sessionPolicy"], err = json.Marshal(t.SessionPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'sessionPolicy': %w", err)
+	}
+
+	object["targetKind"], err = json.Marshal(t.TargetKind)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetKind': %w", err)
+	}
+
+	object["targetResourceId"], err = json.Marshal(t.TargetResourceId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetResourceId': %w", err)
+	}
+
+	object["targetType"], err = json.Marshal(t.TargetType)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetType': %w", err)
+	}
+
+	object["targetVersion"], err = json.Marshal(t.TargetVersion)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'targetVersion': %w", err)
+	}
+
+	object["timezone"], err = json.Marshal(t.Timezone)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'timezone': %w", err)
+	}
+
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *ScheduleProjection) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["calendar"]; found {
+		err = json.Unmarshal(raw, &t.Calendar)
+		if err != nil {
+			return fmt.Errorf("error reading 'calendar': %w", err)
+		}
+	}
+
+	if raw, found := object["coalesce"]; found {
+		err = json.Unmarshal(raw, &t.Coalesce)
+		if err != nil {
+			return fmt.Errorf("error reading 'coalesce': %w", err)
+		}
+	}
+
+	if raw, found := object["cron"]; found {
+		err = json.Unmarshal(raw, &t.Cron)
+		if err != nil {
+			return fmt.Errorf("error reading 'cron': %w", err)
+		}
+	}
+
+	if raw, found := object["deadLetterAfterSeconds"]; found {
+		err = json.Unmarshal(raw, &t.DeadLetterAfterSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'deadLetterAfterSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["deliveryPolicy"]; found {
+		err = json.Unmarshal(raw, &t.DeliveryPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'deliveryPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["executionSessionId"]; found {
+		err = json.Unmarshal(raw, &t.ExecutionSessionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'executionSessionId': %w", err)
+		}
+	}
+
+	if raw, found := object["initialBackoffSeconds"]; found {
+		err = json.Unmarshal(raw, &t.InitialBackoffSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'initialBackoffSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["intervalSeconds"]; found {
+		err = json.Unmarshal(raw, &t.IntervalSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'intervalSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumAttempts"]; found {
+		err = json.Unmarshal(raw, &t.MaximumAttempts)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumAttempts': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumBackoffSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MaximumBackoffSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumBackoffSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["maximumExecutionSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MaximumExecutionSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'maximumExecutionSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["misfireGraceSeconds"]; found {
+		err = json.Unmarshal(raw, &t.MisfireGraceSeconds)
+		if err != nil {
+			return fmt.Errorf("error reading 'misfireGraceSeconds': %w", err)
+		}
+	}
+
+	if raw, found := object["misfirePolicy"]; found {
+		err = json.Unmarshal(raw, &t.MisfirePolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'misfirePolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["nextRunAt"]; found {
+		err = json.Unmarshal(raw, &t.NextRunAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'nextRunAt': %w", err)
+		}
+	}
+
+	if raw, found := object["notificationPolicy"]; found {
+		err = json.Unmarshal(raw, &t.NotificationPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'notificationPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["overlapPolicy"]; found {
+		err = json.Unmarshal(raw, &t.OverlapPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'overlapPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["ownership"]; found {
+		err = json.Unmarshal(raw, &t.Ownership)
+		if err != nil {
+			return fmt.Errorf("error reading 'ownership': %w", err)
+		}
+	}
+
+	if raw, found := object["playbookRef"]; found {
+		err = json.Unmarshal(raw, &t.PlaybookRef)
+		if err != nil {
+			return fmt.Errorf("error reading 'playbookRef': %w", err)
+		}
+	}
+
+	if raw, found := object["playbookVersion"]; found {
+		err = json.Unmarshal(raw, &t.PlaybookVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'playbookVersion': %w", err)
+		}
+	}
+
+	if raw, found := object["promptArtifactId"]; found {
+		err = json.Unmarshal(raw, &t.PromptArtifactId)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptArtifactId': %w", err)
+		}
+	}
+
+	if raw, found := object["promptProfileId"]; found {
+		err = json.Unmarshal(raw, &t.PromptProfileId)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptProfileId': %w", err)
+		}
+	}
+
+	if raw, found := object["promptRevision"]; found {
+		err = json.Unmarshal(raw, &t.PromptRevision)
+		if err != nil {
+			return fmt.Errorf("error reading 'promptRevision': %w", err)
+		}
+	}
+
+	if raw, found := object["roomId"]; found {
+		err = json.Unmarshal(raw, &t.RoomId)
+		if err != nil {
+			return fmt.Errorf("error reading 'roomId': %w", err)
+		}
+	}
+
+	if raw, found := object["runtimeRevisionId"]; found {
+		err = json.Unmarshal(raw, &t.RuntimeRevisionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'runtimeRevisionId': %w", err)
+		}
+	}
+
+	if raw, found := object["sessionPolicy"]; found {
+		err = json.Unmarshal(raw, &t.SessionPolicy)
+		if err != nil {
+			return fmt.Errorf("error reading 'sessionPolicy': %w", err)
+		}
+	}
+
+	if raw, found := object["targetKind"]; found {
+		err = json.Unmarshal(raw, &t.TargetKind)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetKind': %w", err)
+		}
+	}
+
+	if raw, found := object["targetResourceId"]; found {
+		err = json.Unmarshal(raw, &t.TargetResourceId)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetResourceId': %w", err)
+		}
+	}
+
+	if raw, found := object["targetType"]; found {
+		err = json.Unmarshal(raw, &t.TargetType)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetType': %w", err)
+		}
+	}
+
+	if raw, found := object["targetVersion"]; found {
+		err = json.Unmarshal(raw, &t.TargetVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'targetVersion': %w", err)
+		}
+	}
+
+	if raw, found := object["timezone"]; found {
+		err = json.Unmarshal(raw, &t.Timezone)
+		if err != nil {
+			return fmt.Errorf("error reading 'timezone': %w", err)
+		}
+	}
+
+	return err
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1714,6 +3292,15 @@ type ServerInterface interface {
 	// Получить audit metadata
 	// (GET /audit)
 	ListAuditEvents(w http.ResponseWriter, r *http.Request, params ListAuditEventsParams)
+	// Получить безопасную страницу owner backups
+	// (GET /backups)
+	ListBackups(w http.ResponseWriter, r *http.Request, params ListBackupsParams)
+	// Прочитать exact owner backup
+	// (GET /backups/{backupId})
+	GetBackup(w http.ResponseWriter, r *http.Request, backupId openapi_types.UUID)
+	// Создать server-owned restore operation для exact eligible backup
+	// (POST /backups/{backupId}/restore)
+	RestoreBackup(w http.ResponseWriter, r *http.Request, backupId openapi_types.UUID, params RestoreBackupParams)
 	// Получить проекцию изменений конфигурации
 	// (GET /configuration-changes)
 	ListConfigurationChanges(w http.ResponseWriter, r *http.Request, params ListConfigurationChangesParams)
@@ -1729,12 +3316,21 @@ type ServerInterface interface {
 	// Получить авторитетную проекцию инцидентов
 	// (GET /incidents)
 	ListIncidents(w http.ResponseWriter, r *http.Request, params ListIncidentsParams)
+	// Принять решение по exact delivered OwnerGate
+	// (POST /owner-gates/{ownerGateId}/resolution)
+	ResolveOwnerGate(w http.ResponseWriter, r *http.Request, ownerGateId openapi_types.UUID, params ResolveOwnerGateParams)
 	// Получить доступные owner проекты
 	// (GET /projects)
 	ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams)
 	// Создать проект с назначенным сервером owner
 	// (POST /projects)
 	CreateProject(w http.ResponseWriter, r *http.Request, params CreateProjectParams)
+	// Терминально удалить пустой exact owner project
+	// (DELETE /projects/{projectId})
+	DeleteProject(w http.ResponseWriter, r *http.Request, projectId openapi_types.UUID, params DeleteProjectParams)
+	// Обновить exact owner project после tenant resolution
+	// (PUT /projects/{projectId})
+	UpdateProject(w http.ResponseWriter, r *http.Request, projectId openapi_types.UUID, params UpdateProjectParams)
 	// Получить авторитетную страницу ресурсов
 	// (GET /resources)
 	ListResources(w http.ResponseWriter, r *http.Request, params ListResourcesParams)
@@ -1756,6 +3352,12 @@ type ServerInterface interface {
 	// Выполнить допустимый lifecycle transition
 	// (POST /resources/{resourceId}/transition)
 	TransitionResource(w http.ResponseWriter, r *http.Request, resourceId ResourceID, params TransitionResourceParams)
+	// Обнаружить связанные owner restore operations после потери Location
+	// (GET /restore-operations)
+	ListRestoreOperations(w http.ResponseWriter, r *http.Request, params ListRestoreOperationsParams)
+	// Прочитать authoritative restore readback
+	// (GET /restore-operations/{restoreOperationId})
+	GetRestoreOperation(w http.ResponseWriter, r *http.Request, restoreOperationId openapi_types.UUID)
 	// Выполнить закрытую owner-команду RoleImageRecipe
 	// (POST /role-image-recipes/commands)
 	ManageRoleImageRecipe(w http.ResponseWriter, r *http.Request, params ManageRoleImageRecipeParams)
@@ -1765,6 +3367,15 @@ type ServerInterface interface {
 	// Получить авторитетную проекцию запусков
 	// (GET /runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
+	// Создать server-owned schedule специализированной командой
+	// (POST /schedules)
+	CreateSchedule(w http.ResponseWriter, r *http.Request, params CreateScheduleParams)
+	// Удалить locked schedule при закрытом execution graph
+	// (DELETE /schedules/{scheduleId})
+	DeleteSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params DeleteScheduleParams)
+	// Обновить locked owner schedule специализированной командой
+	// (PUT /schedules/{scheduleId})
+	UpdateSchedule(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params UpdateScheduleParams)
 	// Получить ограниченную owner-visible историю запусков расписания
 	// (GET /schedules/{scheduleId}/occurrences)
 	ListScheduleOccurrences(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params ListScheduleOccurrencesParams)
@@ -2187,6 +3798,196 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListBackups operation middleware
+func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBackupsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBackups(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBackup operation middleware
+func (siw *ServerInterfaceWrapper) GetBackup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "backupId" -------------
+	var backupId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "backupId", r.PathValue("backupId"), &backupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBackup(w, r, backupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreBackup operation middleware
+func (siw *ServerInterfaceWrapper) RestoreBackup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "backupId" -------------
+	var backupId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "backupId", r.PathValue("backupId"), &backupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreBackupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreBackup(w, r, backupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListConfigurationChanges operation middleware
 func (siw *ServerInterfaceWrapper) ListConfigurationChanges(w http.ResponseWriter, r *http.Request) {
 
@@ -2468,6 +4269,112 @@ func (siw *ServerInterfaceWrapper) ListIncidents(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ResolveOwnerGate operation middleware
+func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ownerGateId" -------------
+	var ownerGateId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ownerGateId", r.PathValue("ownerGateId"), &ownerGateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ownerGateId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResolveOwnerGateParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveOwnerGate(w, r, ownerGateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProjects operation middleware
 func (siw *ServerInterfaceWrapper) ListProjects(w http.ResponseWriter, r *http.Request) {
 
@@ -2585,6 +4492,218 @@ func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateProject(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteProject operation middleware
+func (siw *ServerInterfaceWrapper) DeleteProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", r.PathValue("projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteProjectParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteProject(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateProject operation middleware
+func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", r.PathValue("projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateProjectParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateProject(w, r, projectId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3216,6 +5335,103 @@ func (siw *ServerInterfaceWrapper) TransitionResource(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ListRestoreOperations operation middleware
+func (siw *ServerInterfaceWrapper) ListRestoreOperations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRestoreOperationsParams
+
+	// ------------- Optional query parameter "backupId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "backupId", r.URL.Query(), &params.BackupId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "backupId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "backupId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRestoreOperations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRestoreOperation operation middleware
+func (siw *ServerInterfaceWrapper) GetRestoreOperation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "restoreOperationId" -------------
+	var restoreOperationId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "restoreOperationId", r.PathValue("restoreOperationId"), &restoreOperationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "restoreOperationId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRestoreOperation(w, r, restoreOperationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ManageRoleImageRecipe operation middleware
 func (siw *ServerInterfaceWrapper) ManageRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
 
@@ -3425,6 +5641,292 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRuns(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSchedule operation middleware
+func (siw *ServerInterfaceWrapper) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSchedule(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSchedule operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSchedule(w, r, scheduleId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSchedule operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleId" -------------
+	var scheduleId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleId", r.PathValue("scheduleId"), &scheduleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSchedule(w, r, scheduleId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3988,13 +6490,19 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources/{resourceId}/copy", wrapper.CopyAccessResource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/access-resources/{resourceId}/detach", wrapper.DetachAccessResource)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAuditEvents)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/backups", wrapper.ListBackups)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/backups/{backupId}", wrapper.GetBackup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/backups/{backupId}/restore", wrapper.RestoreBackup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/configuration-changes", wrapper.ListConfigurationChanges)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/image-builds/commands", wrapper.ManageImageBuild)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/image-builds/{imageBuildId}", wrapper.GetRoleImageBuild)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/incidents", wrapper.ListIncidents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/owner-gates/{ownerGateId}/resolution", wrapper.ResolveOwnerGate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/projects", wrapper.ListProjects)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/projects", wrapper.CreateProject)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/projects/{projectId}", wrapper.DeleteProject)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/projects/{projectId}", wrapper.UpdateProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources", wrapper.ListResources)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources", wrapper.CreateResource)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/search", wrapper.SearchResources)
@@ -4002,9 +6510,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resources/{resourceId}", wrapper.GetResource)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/resources/{resourceId}", wrapper.UpdateResource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/resources/{resourceId}/transition", wrapper.TransitionResource)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/restore-operations", wrapper.ListRestoreOperations)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/restore-operations/{restoreOperationId}", wrapper.GetRestoreOperation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/role-image-recipes/commands", wrapper.ManageRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/role-image-recipes/{recipeId}", wrapper.GetRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/runs", wrapper.ListRuns)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules", wrapper.CreateSchedule)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/schedules/{scheduleId}", wrapper.DeleteSchedule)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/schedules/{scheduleId}", wrapper.UpdateSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences", wrapper.ListScheduleOccurrences)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/occurrences/{occurrenceId}/recovery", wrapper.ResolveScheduleRecovery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/schedules/{scheduleId}/run-now", wrapper.RunScheduleNow)

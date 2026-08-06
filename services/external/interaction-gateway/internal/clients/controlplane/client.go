@@ -316,7 +316,7 @@ func (client *Client) RecordOwnerGateDelivery(ctx context.Context, _ string, inp
 		DeliveryId: input.DeliveryID, DeliveryPayloadSha256: input.PayloadSHA256,
 		DeliveryClaimToken: input.ClaimToken, DeliveryFence: input.ClaimFence,
 		MattermostPostId: input.PostID, MattermostChannelId: input.ChannelID,
-		MattermostRootPostId: input.RootPostID,
+		MattermostRootPostId: input.RootPostID, ProviderReceiptSha256: input.ProviderReceiptSHA256,
 	})
 	if err != nil || response.GetOwnerGate() == nil {
 		return errors.New("record control-plane owner gate delivery")
@@ -331,25 +331,13 @@ func (client *Client) ResolveOwnerGate(ctx context.Context, grant string, input 
 	if err != nil {
 		return err
 	}
-	processVersion := input.ProcessVersion
-	if processVersion == 0 {
-		read, readErr := client.client.ControlPlane.GetResource(protected, &controlplanev1.GetResourceRequest{
-			ResourceId: input.ProcessRunID, ExpectedKind: controlplanev1.ResourceKind_RESOURCE_KIND_PROCESS_RUN,
-		})
-		if readErr != nil || read.GetResource() == nil || read.GetResource().GetVersion() == 0 {
-			return errors.New("read control-plane process for owner decision")
-		}
-		processVersion = read.GetResource().GetVersion()
-	}
 	decision, ok := ownerDecision(input.Decision)
 	if !ok {
 		return errors.New("owner decision is invalid")
 	}
 	response, err := client.client.ControlPlane.ResolveOwnerGate(protected, &controlplanev1.ResolveOwnerGateRequest{
 		IdempotencyKey: input.IdempotencyKey, OwnerGateId: input.GateID, ExpectedVersion: input.GateVersion,
-		Decision: decision, Reason: input.Reason, ProcessRunId: input.ProcessRunID,
-		ProcessExpectedVersion: processVersion, SessionId: input.SessionID, TurnId: input.TurnID,
-		Attempt: input.Attempt, ImmutableInputSha256: input.ImmutableInputSHA256,
+		Decision: decision, Reason: input.Reason,
 	})
 	if err != nil {
 		switch status.Code(err) {

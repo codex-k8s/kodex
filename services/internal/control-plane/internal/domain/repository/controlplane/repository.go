@@ -332,8 +332,10 @@ type RuntimeExecution struct {
 	RestoreSourceArchiveSHA256             string
 	RestoreSourceRuntimeRevisionSHA256     string
 	RestoreSourceImmutableInputSHA256      string
+	RestoreSourceProofReference            string
 	RestoreSourceProofSHA256               string
 	RestoreSourceVersion                   uint64
+	RestoreSourceFence                     uint64
 	RestoreSourceArchiveObjectKey          string
 	RestoreSourceArchiveVersionID          string
 	RestoreSourceArchiveKMSKeyARN          string
@@ -365,6 +367,9 @@ type RuntimeExecution struct {
 	RehydrateProofSHA256                   string
 	CredentialSnapshotSHA256               string
 	WorkloadTicketSHA256                   string
+	RestoreOperationID                     string
+	RestoreOperationGeneration             uint64
+	RestoreSourceAuthoritySHA256           string
 	ProviderBindingID                      string
 	ProviderBindingVersion                 uint64
 	ProviderBindingSHA256                  string
@@ -379,6 +384,35 @@ type RuntimeExecution struct {
 	RestoreWorkloadTicket                  string `json:"-"`
 	CreatedAt                              time.Time
 	UpdatedAt                              time.Time
+}
+
+// Backup — безопасный owner read model runtime archive. Поля storage locator,
+// credential, private reference/evidence и worker grant в этот тип не входят.
+type Backup struct {
+	ID, OrganizationID, ProjectID, SessionID                string
+	RestoreOperationID                                      string
+	SourceRuntimeRevisionSHA256, SourceImmutableInputSHA256 string
+	ArchiveSHA256, ProvenanceSHA256                         string
+	RuntimeState, State                                     string
+	Version, SourceVersion, SourceFence                     uint64
+	Restorable                                              bool
+	CreatedAt, AvailableAt, RetainUntil, UpdatedAt          time.Time
+}
+
+// RuntimeRestoreOperation закрепляет server-owned source/target lineage.
+// Текущее состояние выводится из target RuntimeExecution тем же read path.
+type RuntimeRestoreOperation struct {
+	ID, OrganizationID, ProjectID, OwnerActorID          string
+	BackupID, SessionID, TargetTurnID, TargetExecutionID string
+	ArchiveSHA256, ProvenanceSHA256                      string
+	SourceAuthoritySHA256                                string
+	SourceVersion, SourceFence                           uint64
+	Generation, ConsumedGeneration, RevokedGeneration    uint64
+	TargetAttempt                                        uint32
+	TargetExecutionVersion, TargetTurnVersion            uint64
+	TargetExecutionState, TargetRestoreAssignmentState   string
+	TargetTurnState                                      string
+	CreatedAt, UpdatedAt                                 time.Time
 }
 
 // CodexLineage — последняя подтверждённая control-plane terminal lineage.
@@ -594,6 +628,8 @@ type Transaction interface {
 	SaveReceipt(context.Context, Receipt) error
 	Get(context.Context, string, string, string) (entity.Resource, error)
 	GetForUpdate(context.Context, string, string, string) (entity.Resource, error)
+	GetForUpdateIncludingDeleted(context.Context, string, string, string) (entity.Resource, error)
+	ProjectHasLiveResources(context.Context, string, string) (bool, error)
 	Insert(context.Context, entity.Resource) error
 	Update(context.Context, entity.Resource, uint64) error
 	AppendAudit(context.Context, Audit) error
@@ -637,6 +673,13 @@ type Transaction interface {
 	GetCurrentResourceRetentionPolicy(context.Context, string, string) (ResourceRetentionPolicy, error)
 	InsertRuntimeExecution(context.Context, RuntimeExecution) error
 	UpdateRuntimeExecution(context.Context, RuntimeExecution, uint64, uint64) error
+	InsertRuntimeRestoreOperation(context.Context, RuntimeRestoreOperation) error
+	GetRuntimeRestoreOperation(context.Context, string) (RuntimeRestoreOperation, error)
+	GetRuntimeRestoreOperationByBackup(context.Context, string) (RuntimeRestoreOperation, error)
+	AdvanceRuntimeRestoreOperation(context.Context, RuntimeRestoreOperation, uint64) error
+	ConsumeRuntimeRestoreOperation(context.Context, string, uint64, string, uint32, string, time.Time) error
+	RevokeRuntimeRestoreOperation(context.Context, string, uint64, time.Time) error
+	AuthorizeRuntimeRestoreEffect(context.Context, string, string, uint64, string, string, string, time.Time) (bool, error)
 	NextExpiredRuntimeExecution(
 		context.Context, string, string, string, uint32,
 	) (RuntimeExecution, error)
@@ -740,6 +783,10 @@ type Repository interface {
 	ListEligibleProjects(context.Context, string, string, string, int) ([]entity.Resource, error)
 	ListAudit(context.Context, query.AuditFilter) ([]Audit, error)
 	ListRuntimeIncidents(context.Context, query.RuntimeIncidentFilter) ([]RuntimeIncident, error)
+	ListBackups(context.Context, string, string, string, string, int) ([]Backup, error)
+	GetBackup(context.Context, string, string, string, string) (Backup, error)
+	GetRuntimeRestoreOperation(context.Context, string, string, string, string) (RuntimeRestoreOperation, error)
+	ListRuntimeRestoreOperations(context.Context, string, string, string, string, string, int) ([]RuntimeRestoreOperation, error)
 	ListTombstones(context.Context, query.TombstoneFilter) ([]Tombstone, error)
 	ListScheduleOccurrences(context.Context, query.ScheduleOccurrenceFilter) ([]ScheduleOccurrence, error)
 	Diagnostics(context.Context, Scope) (Diagnostics, error)

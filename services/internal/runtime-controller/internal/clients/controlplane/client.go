@@ -278,6 +278,38 @@ func (client *Client) Admit(
 	return runtimerepo.AdmitResult{Execution: updated, LeaseToken: response.GetLeaseToken()}, err
 }
 
+func (client *Client) AuthorizeRestoreEffect(
+	ctx context.Context, key string, execution entity.Execution, effect string,
+) error {
+	value := controlplanev1.RuntimeRestoreEffect_RUNTIME_RESTORE_EFFECT_UNSPECIFIED
+	switch effect {
+	case "KUBERNETES_MATERIALIZATION":
+		value = controlplanev1.RuntimeRestoreEffect_RUNTIME_RESTORE_EFFECT_KUBERNETES_MATERIALIZATION
+	case "S3_CREDENTIAL":
+		value = controlplanev1.RuntimeRestoreEffect_RUNTIME_RESTORE_EFFECT_S3_CREDENTIAL
+	default:
+		return errs.ErrInvalidInput
+	}
+	response, err := client.shared.ControlPlane.AuthorizeRuntimeRestoreEffect(ctx,
+		&controlplanev1.AuthorizeRuntimeRestoreEffectRequest{
+			IdempotencyKey: key, ExecutionId: execution.ID,
+			ExpectedVersion: execution.Version, ExpectedFence: execution.Fence,
+			RestoreOperationId:           execution.RestoreOperationID,
+			RestoreOperationGeneration:   execution.RestoreOperationGeneration,
+			RestoreSourceAuthoritySha256: execution.RestoreSourceAuthoritySHA256,
+			Effect:                       value,
+		})
+	if err != nil {
+		return mapError(err)
+	}
+	updated, err := castExecution(response.GetExecution())
+	if err != nil || updated.ID != execution.ID || updated.Version != execution.Version ||
+		updated.Fence != execution.Fence || updated.State != execution.State {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
 func (client *Client) Reschedule(
 	ctx context.Context, key string, execution entity.Execution,
 ) (entity.Execution, error) {
@@ -549,10 +581,13 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		CodexArchiveSHA256:       source.GetCodexArchiveSha256(), CodexArchiveProvenance: source.GetCodexArchiveProvenance(),
 		CodexDeliveryRecoverySourceExecutionID: source.GetCodexDeliveryRecoverySourceExecutionId(),
 		WorkloadTicket:                         source.GetWorkloadTicket(), ArchiveWorkloadTicket: source.GetArchiveWorkloadTicket(),
-		RestoreWorkloadTicket: source.GetRestoreWorkloadTicket(),
-		ResourceClass:         enum.ResourceClass(trimEnum(source.GetResourceClass().String(), "RUNTIME_RESOURCE_CLASS_")),
-		AccessProfile:         enum.AccessProfile(trimEnum(source.GetClusterAccessProfile().String(), "CLUSTER_ACCESS_PROFILE_")),
-		WorkloadID:            source.GetWorkloadId(), WorkloadSPIFFEID: source.GetWorkloadSpiffeId(),
+		RestoreWorkloadTicket:        source.GetRestoreWorkloadTicket(),
+		RestoreOperationID:           source.GetRestoreOperationId(),
+		RestoreOperationGeneration:   source.GetRestoreOperationGeneration(),
+		RestoreSourceAuthoritySHA256: source.GetRestoreSourceAuthoritySha256(),
+		ResourceClass:                enum.ResourceClass(trimEnum(source.GetResourceClass().String(), "RUNTIME_RESOURCE_CLASS_")),
+		AccessProfile:                enum.AccessProfile(trimEnum(source.GetClusterAccessProfile().String(), "CLUSTER_ACCESS_PROFILE_")),
+		WorkloadID:                   source.GetWorkloadId(), WorkloadSPIFFEID: source.GetWorkloadSpiffeId(),
 		GrantGeneration: source.GetGrantGeneration(), Version: source.GetVersion(), Fence: source.GetFence(),
 		State:   enum.ExecutionState(trimEnum(source.GetState().String(), "RUNTIME_EXECUTION_STATE_")),
 		LeaseID: source.GetLeaseId(), ArchiveReference: source.GetArchiveReference(),
@@ -570,8 +605,10 @@ func castExecution(source *controlplanev1.RuntimeExecution) (entity.Execution, e
 		RestoreSourceArchiveSHA256:          source.GetRestoreSourceArchiveSha256(),
 		RestoreSourceRuntimeRevisionSHA256:  source.GetRestoreSourceRuntimeRevisionSha256(),
 		RestoreSourceImmutableInputSHA256:   source.GetRestoreSourceImmutableInputSha256(),
+		RestoreSourceProofReference:         source.GetRestoreSourceProofReference(),
 		RestoreSourceProofSHA256:            source.GetRestoreSourceProofSha256(),
 		RestoreSourceVersion:                source.GetRestoreSourceVersion(),
+		RestoreSourceFence:                  source.GetRestoreSourceFence(),
 		RestoreSourceArchiveObjectKey:       source.GetRestoreSourceArchiveObjectKey(),
 		RestoreSourceArchiveVersionID:       source.GetRestoreSourceArchiveVersionId(),
 		RestoreSourceArchiveKMSKeyARN:       source.GetRestoreSourceArchiveKmsKeyArn(),

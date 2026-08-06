@@ -132,8 +132,8 @@ func TestProjectionClosedEnumsFailBeforeWebSocketMarshal(t *testing.T) {
 	}{
 		{name: "incident kind", items: SnapshotItems{Incidents: []httpgenerated.RuntimeIncident{{Kind: "UNKNOWN"}}}},
 		{name: "configuration action", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: "UNKNOWN", Outcome: httpgenerated.Succeeded, ResourceKind: httpgenerated.ResourceKindPROJECT}}}},
-		{name: "configuration outcome", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.Create, Outcome: "", ResourceKind: httpgenerated.ResourceKindPROJECT}}}},
-		{name: "configuration resource kind", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.Create, Outcome: httpgenerated.Succeeded, ResourceKind: "UNKNOWN"}}}},
+		{name: "configuration outcome", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.ConfigurationChangeActionCreate, Outcome: "", ResourceKind: httpgenerated.ResourceKindPROJECT}}}},
+		{name: "configuration resource kind", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.ConfigurationChangeActionCreate, Outcome: httpgenerated.Succeeded, ResourceKind: "UNKNOWN"}}}},
 	}
 	for _, test := range otherCases {
 		t.Run(test.name, func(t *testing.T) {

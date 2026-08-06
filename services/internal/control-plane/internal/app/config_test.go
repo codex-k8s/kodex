@@ -16,12 +16,13 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 17 {
+	if loaded.Revision != 21 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
 	}
 	for _, producerID := range []string{
 		"control-plane.runtime-controller",
 		"control-plane.runtime-restore-verifier",
+		"control-plane.runtime-restore-effect",
 		"control-plane.runtime-cleanup-authorizer",
 		"control-plane.integration-gateway",
 		"control-plane.integration-continuation",
@@ -36,14 +37,18 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		}
 	}
 	securityBindings := map[string]string{
-		"control.runtime-execution.restore.verify":    "runtime-restore-verifier",
-		"control.runtime-execution.cleanup.authorize": "runtime-cleanup-authorizer",
-		"control.runtime-execution.cleanup.expire":    "runtime-cleanup-authorizer",
-		"control.runtime-execution.cleanup.consume":   "runtime-controller",
-		"control.image-build.complete":                "role-image-builder",
-		"control.image-admission.record":              "image-admission",
-		"control.image-promotion.claim":               "image-promotion",
-		"control.image-promotion.complete":            "image-promotion",
+		"control.runtime-execution.restore.verify":      "runtime-restore-verifier",
+		"control.runtime-execution.restore.bind":        "runtime-restore-verifier",
+		"control.runtime-execution.rehydrate.complete":  "runtime-restore-verifier",
+		"control.runtime-execution.restore.materialize": "runtime-controller",
+		"control.runtime-execution.restore.credential":  "runtime-s3-restore-exchanger",
+		"control.runtime-execution.cleanup.authorize":   "runtime-cleanup-authorizer",
+		"control.runtime-execution.cleanup.expire":      "runtime-cleanup-authorizer",
+		"control.runtime-execution.cleanup.consume":     "runtime-controller",
+		"control.image-build.complete":                  "role-image-builder",
+		"control.image-admission.record":                "image-admission",
+		"control.image-promotion.claim":                 "image-promotion",
+		"control.image-promotion.complete":              "image-promotion",
 	}
 	for operationID, workload := range securityBindings {
 		operation, ok := loaded.Operations[operationID]

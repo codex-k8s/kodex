@@ -14,6 +14,8 @@ type ImageBuildProjection struct {
   ProvenanceSha256 string
   ImmutableBuildSha256 string
   ErrorCode string
+  DiagnosticCode string
+  DiagnosticSummary string
   AvailableAt string
   MaximumAttempts int
 }

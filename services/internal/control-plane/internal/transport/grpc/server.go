@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"google.golang.org/grpc/codes"
@@ -74,13 +75,13 @@ func (server *Server) CreateProject(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
-	created, err := server.service.Create(ctx, resource.CreateInput{
-		Principal:      principal,
-		IdempotencyKey: request.GetIdempotencyKey(),
-		Kind:           enum.KindProject,
-		Name:           request.GetName(),
-		Spec:           spec,
-		TenantProject:  true,
+	projectSpec, ok := spec.(entity.ProjectSpec)
+	if !ok {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	created, err := server.service.CreateProject(ctx, resource.CreateProjectInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		Name: request.GetName(), Spec: projectSpec,
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -90,6 +91,65 @@ func (server *Server) CreateProject(
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
 	return &controlplanev1.CreateProjectResponse{Project: encoded}, nil
+}
+
+func (server *Server) UpdateProject(
+	ctx context.Context,
+	request *controlplanev1.UpdateProjectRequest,
+) (*controlplanev1.UpdateProjectResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_UpdateProject_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	spec, err := fromProtoSpec(&controlplanev1.ResourceSpec{
+		Value: &controlplanev1.ResourceSpec_Project{Project: request.GetSpec()},
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	projectSpec, ok := spec.(entity.ProjectSpec)
+	if !ok {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	updated, err := server.service.UpdateProject(ctx, resource.UpdateProjectInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		ProjectID: request.GetProjectId(), ExpectedVersion: request.GetExpectedVersion(),
+		Name: request.GetName(), Spec: projectSpec,
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	encoded, err := toProtoResource(updated)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.UpdateProjectResponse{Project: encoded}, nil
+}
+
+func (server *Server) DeleteProject(
+	ctx context.Context,
+	request *controlplanev1.DeleteProjectRequest,
+) (*controlplanev1.DeleteProjectResponse, error) {
+	principal, err := authorization.Principal(
+		ctx, controlplanev1.ControlPlaneService_DeleteProject_FullMethodName,
+	)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	deleted, err := server.service.DeleteProject(ctx, resource.DeleteProjectInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		ProjectID: request.GetProjectId(), ExpectedVersion: request.GetExpectedVersion(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	encoded, err := toProtoResource(deleted)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.DeleteProjectResponse{Project: encoded}, nil
 }
 
 func (server *Server) ListProjects(
@@ -500,18 +560,9 @@ func (server *Server) ResolveOwnerGate(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	resolved, err := server.service.ResolveOwnerGate(ctx, resource.ResolveOwnerGateInput{
-		Principal:              principal,
-		IdempotencyKey:         request.GetIdempotencyKey(),
-		OwnerGateID:            request.GetOwnerGateId(),
-		ExpectedVersion:        request.GetExpectedVersion(),
-		Decision:               ownerDecisionString(request.GetDecision()),
-		Reason:                 request.GetReason(),
-		ProcessRunID:           request.GetProcessRunId(),
-		ProcessExpectedVersion: request.GetProcessExpectedVersion(),
-		SessionID:              request.GetSessionId(),
-		TurnID:                 request.GetTurnId(),
-		Attempt:                request.GetAttempt(),
-		ImmutableInputSHA256:   request.GetImmutableInputSha256(),
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
+		OwnerGateID: request.GetOwnerGateId(), ExpectedVersion: request.GetExpectedVersion(),
+		Decision: ownerDecisionString(request.GetDecision()), Reason: request.GetReason(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

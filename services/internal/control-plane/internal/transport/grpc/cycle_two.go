@@ -204,6 +204,7 @@ func (server *Server) RecordOwnerGateDelivery(
 			MattermostPostID:      request.GetMattermostPostId(),
 			MattermostChannelID:   request.GetMattermostChannelId(),
 			MattermostRootPostID:  request.GetMattermostRootPostId(),
+			ProviderReceiptSHA256: request.GetProviderReceiptSha256(),
 		},
 	)
 	if err != nil {

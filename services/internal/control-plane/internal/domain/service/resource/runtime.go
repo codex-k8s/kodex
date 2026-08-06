@@ -576,7 +576,7 @@ func (service *Service) ClaimTurn(
 					return err
 				}
 				requeued, staleSpec, err := service.prepareRetriedExecution(
-					ctx, tx, input.Principal, graph, staleSpec, recoveryNow,
+					ctx, tx, input.Principal, graph, staleSpec, nil, recoveryNow,
 				)
 				if err != nil {
 					return errs.ErrStateConflict
@@ -1398,7 +1398,7 @@ func (service *Service) RetryTurn(
 				return entity.Resource{}, err
 			}
 			retried, spec, err := service.prepareRetriedExecution(
-				ctx, tx, input.Principal, graph, spec, now,
+				ctx, tx, input.Principal, graph, spec, nil, now,
 			)
 			if err != nil {
 				return entity.Resource{}, errs.ErrStateConflict
@@ -1745,41 +1745,23 @@ func (service *Service) ResolveOwnerGate(
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		value.ValidateID(input.OwnerGateID) != nil ||
 		input.ExpectedVersion == 0 ||
-		value.ValidateID(input.ProcessRunID) != nil ||
-		input.ProcessExpectedVersion == 0 ||
-		value.ValidateID(input.SessionID) != nil ||
-		value.ValidateID(input.TurnID) != nil ||
-		input.Attempt == 0 ||
-		!validSHA256Text(input.ImmutableInputSHA256) ||
 		(input.Decision != "APPROVED" && input.Decision != "REJECTED" &&
 			input.Decision != "CHANGES_REQUESTED" && input.Decision != "CANCELLED") ||
 		len(input.Reason) < 1 || len(input.Reason) > 2048 {
 		return OwnerGateResult{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity               commandIdentity
-		OwnerGateID            string
-		ExpectedVersion        uint64
-		Decision               string
-		Reason                 string
-		ProcessRunID           string
-		ProcessExpectedVersion uint64
-		SessionID              string
-		TurnID                 string
-		Attempt                uint32
-		ImmutableInputSHA256   string
+		Identity        commandIdentity
+		OwnerGateID     string
+		ExpectedVersion uint64
+		Decision        string
+		Reason          string
 	}{
 		identity(input.Principal),
 		input.OwnerGateID,
 		input.ExpectedVersion,
 		input.Decision,
 		input.Reason,
-		input.ProcessRunID,
-		input.ProcessExpectedVersion,
-		input.SessionID,
-		input.TurnID,
-		input.Attempt,
-		input.ImmutableInputSHA256,
 	})
 	if err != nil {
 		return OwnerGateResult{}, errs.ErrInvalidInput
@@ -1806,10 +1788,7 @@ func (service *Service) ResolveOwnerGate(
 			candidateSpec, ok := gateCandidate.Spec.(entity.OwnerGateSpec)
 			if !ok || gateCandidate.Kind != enum.KindOwnerGate ||
 				(gateCandidate.Version != input.ExpectedVersion &&
-					gateCandidate.Version != input.ExpectedVersion+1) ||
-				candidateSpec.ProcessRunID != input.ProcessRunID ||
-				candidateSpec.SessionID != input.SessionID ||
-				candidateSpec.TurnID != input.TurnID {
+					gateCandidate.Version != input.ExpectedVersion+1) {
 				return errs.ErrNotFound
 			}
 			graph, err := service.lockOwnerGraphByTurn(
@@ -1835,16 +1814,12 @@ func (service *Service) ResolveOwnerGate(
 			}
 			gateSpec, ok := gate.Spec.(entity.OwnerGateSpec)
 			if !ok ||
-				gateSpec.ProcessRunID != input.ProcessRunID ||
-				gateSpec.SessionID != input.SessionID ||
-				gateSpec.TurnID != input.TurnID ||
-				gateSpec.Attempt != input.Attempt ||
-				gateSpec.ImmutableInputSHA256 != input.ImmutableInputSHA256 ||
 				gateSpec.RecipientActorID != input.Principal.ActorID ||
 				gateSpec.MattermostPostID == "" ||
 				gateSpec.MattermostChannelID == "" ||
 				gateSpec.MattermostRootPostID == "" ||
 				gateSpec.DeliveredAt.IsZero() ||
+				!validSHA256Text(gateSpec.DeliveryProviderReceiptSHA256) ||
 				gateSpec.DeliveryFence == 0 ||
 				!validSHA256Text(gateSpec.DeliveryClaimTokenSHA256) {
 				return errs.ErrNotFound
@@ -1874,10 +1849,10 @@ func (service *Service) ResolveOwnerGate(
 					return errs.ErrInternal
 				}
 				if resourceReceiptMatchesCurrent(gate, receipt.Result) != nil ||
-					resourceReceiptMatchesCurrent(process, payload.Process) != nil {
+					ownerGateReceiptProcessValid(process, payload.Process, gateSpec) != nil {
 					return errs.ErrStateConflict
 				}
-				result = OwnerGateResult{OwnerGate: gate, Process: process}
+				result = OwnerGateResult{OwnerGate: gate, Process: payload.Process}
 				return nil
 			}
 			if !errors.Is(receiptErr, errs.ErrNotFound) {
@@ -1893,7 +1868,6 @@ func (service *Service) ResolveOwnerGate(
 				execution.Attempt == gateSpec.Attempt &&
 				execution.InputSHA256 == gateSpec.ImmutableInputSHA256
 			if !ok || process.Kind != enum.KindProcessRun ||
-				process.Version != input.ProcessExpectedVersion ||
 				process.State != enum.StateWaitingOwner ||
 				processSpec.RootInitiatorActorID != gateSpec.RootInitiatorActorID ||
 				!executionMatches ||
@@ -2163,6 +2137,39 @@ func ownerGateTarget(decision string) enum.State {
 	default:
 		return enum.StateCancelled
 	}
+}
+
+// ownerGateReceiptProcessValid сохраняет exact replay результата команды.
+// CHANGES_REQUESTED законно создаёт continuation, поэтому последующее owner
+// состояние может продвинуться; immutable receipt при этом не аннулируется.
+func ownerGateReceiptProcessValid(
+	current entity.Resource,
+	stored entity.Resource,
+	gate entity.OwnerGateSpec,
+) error {
+	if current.ID == "" || stored.ID == "" || current.ID != stored.ID ||
+		current.Kind != enum.KindProcessRun || stored.Kind != enum.KindProcessRun ||
+		current.OrganizationID != stored.OrganizationID ||
+		current.ProjectID != stored.ProjectID ||
+		current.OwnerActorID != stored.OwnerActorID || current.Version < stored.Version {
+		return errs.ErrStateConflict
+	}
+	if gate.Decision != "CHANGES_REQUESTED" {
+		return resourceReceiptMatchesCurrent(current, stored)
+	}
+	storedSpec, storedOK := stored.Spec.(entity.ProcessRunSpec)
+	currentSpec, currentOK := current.Spec.(entity.ProcessRunSpec)
+	if !storedOK || !currentOK || gate.ContinuationTurnID == "" ||
+		gate.ContinuationTurnVersion == 0 || !validSHA256Text(gate.ContinuationInputSHA256) ||
+		storedSpec.RootInitiatorActorID != currentSpec.RootInitiatorActorID ||
+		storedSpec.RootSessionID != currentSpec.RootSessionID ||
+		storedSpec.RootTurnID != currentSpec.RootTurnID ||
+		storedSpec.ContinuationTurnID != gate.ContinuationTurnID ||
+		storedSpec.ContinuationTurnVersion != gate.ContinuationTurnVersion ||
+		storedSpec.ContinuationInputSHA256 != gate.ContinuationInputSHA256 {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func scheduleOccurrenceDisposition(

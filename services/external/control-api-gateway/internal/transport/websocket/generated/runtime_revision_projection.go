@@ -20,6 +20,8 @@ type RuntimeRevisionProjection struct {
   ImagePolicySha256 string
   ImageSignatureSha256 string
   ImagePromotionReadbackSha256 string
+  RoleRuntimeContractRevision int
+  RoleRuntimeContractSha256 string
   PromptProfileId string
   PromptRevision int
   SessionId string

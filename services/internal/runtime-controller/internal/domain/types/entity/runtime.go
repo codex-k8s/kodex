@@ -50,13 +50,16 @@ type Execution struct {
 	CleanupDeletionProofSHA256                                                    string
 	RestoreSourceExecutionID, RestoreSourceArchiveReference                       string
 	RestoreSourceArchiveSHA256, RestoreSourceRuntimeRevisionSHA256                string
-	RestoreSourceImmutableInputSHA256, RestoreSourceProofSHA256                   string
-	RestoreSourceVersion                                                          uint64
+	RestoreSourceImmutableInputSHA256, RestoreSourceProofReference                string
+	RestoreSourceProofSHA256                                                      string
+	RestoreSourceVersion, RestoreSourceFence                                      uint64
 	RestoreSourceArchiveObjectKey, RestoreSourceArchiveVersionID                  string
 	RestoreSourceArchiveKMSKeyARN, RestoreSourceArchiveObjectLockMode             string
 	RestoreSourceArchiveRetainUntil                                               time.Time
 	RestoreSourceRetentionPolicyID, RestoreSourceProvenanceSHA256                 string
 	RestoreSourceRetentionPolicyVersion                                           uint64
+	RestoreOperationID, RestoreSourceAuthoritySHA256                              string
+	RestoreOperationGeneration                                                    uint64
 	RetentionPolicyID                                                             string
 	RetentionPolicyVersion, PVCRetentionSeconds, ArchiveRetentionSeconds          uint64
 	ArchiveRetainUntil                                                            time.Time
@@ -227,24 +230,30 @@ func validRestoreTarget(execution Execution) bool {
 func validRestoreSource(execution Execution) bool {
 	empty := execution.RestoreSourceExecutionID == "" && execution.RestoreSourceArchiveReference == "" &&
 		execution.RestoreSourceArchiveSHA256 == "" && execution.RestoreSourceRuntimeRevisionSHA256 == "" &&
-		execution.RestoreSourceImmutableInputSHA256 == "" && execution.RestoreSourceProofSHA256 == "" &&
-		execution.RestoreSourceVersion == 0 && execution.RestoreSourceArchiveObjectKey == "" &&
+		execution.RestoreSourceImmutableInputSHA256 == "" && execution.RestoreSourceProofReference == "" &&
+		execution.RestoreSourceProofSHA256 == "" && execution.RestoreSourceVersion == 0 &&
+		execution.RestoreSourceFence == 0 && execution.RestoreSourceArchiveObjectKey == "" &&
 		execution.RestoreSourceArchiveVersionID == "" && execution.RestoreSourceArchiveKMSKeyARN == "" &&
 		execution.RestoreSourceArchiveObjectLockMode == "" && execution.RestoreSourceArchiveRetainUntil.IsZero() &&
 		execution.RestoreSourceRetentionPolicyID == "" && execution.RestoreSourceRetentionPolicyVersion == 0 &&
-		execution.RestoreSourceProvenanceSHA256 == ""
+		execution.RestoreSourceProvenanceSHA256 == "" && execution.RestoreOperationID == "" &&
+		execution.RestoreOperationGeneration == 0 && execution.RestoreSourceAuthoritySHA256 == ""
 	present := uuid.Validate(execution.RestoreSourceExecutionID) == nil &&
 		execution.RestoreSourceArchiveReference != "" &&
 		sha256Pattern.MatchString(execution.RestoreSourceArchiveSHA256) &&
 		sha256Pattern.MatchString(execution.RestoreSourceRuntimeRevisionSHA256) &&
 		sha256Pattern.MatchString(execution.RestoreSourceImmutableInputSHA256) &&
-		sha256Pattern.MatchString(execution.RestoreSourceProofSHA256) && execution.RestoreSourceVersion > 0 &&
+		execution.RestoreSourceProofReference != "" &&
+		sha256Pattern.MatchString(execution.RestoreSourceProofSHA256) &&
+		execution.RestoreSourceVersion > 0 && execution.RestoreSourceFence > 0 &&
 		execution.RestoreSourceArchiveObjectKey != "" && execution.RestoreSourceArchiveVersionID != "" &&
 		strings.HasPrefix(execution.RestoreSourceArchiveKMSKeyARN, "arn:") &&
 		execution.RestoreSourceArchiveObjectLockMode == "COMPLIANCE" &&
 		!execution.RestoreSourceArchiveRetainUntil.IsZero() &&
 		execution.RestoreSourceRetentionPolicyID != "" && execution.RestoreSourceRetentionPolicyVersion > 0 &&
-		sha256Pattern.MatchString(execution.RestoreSourceProvenanceSHA256)
+		sha256Pattern.MatchString(execution.RestoreSourceProvenanceSHA256) &&
+		uuid.Validate(execution.RestoreOperationID) == nil && execution.RestoreOperationGeneration > 0 &&
+		sha256Pattern.MatchString(execution.RestoreSourceAuthoritySHA256)
 	return empty || present
 }
 
