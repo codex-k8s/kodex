@@ -64,6 +64,9 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 - политика полномочий: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
 - две lifecycle/authority matrix и сквозная карта:
   `services/internal/control-plane/runtime-continuation-contract.md`.
+- закрытый реестр owner-конфигурации, карты сценариев, execution graph и полная
+  lifecycle/authority matrix Issue #234:
+  `services/internal/control-plane/owner-configuration-contract.md`.
 
 Внешнее отображение принадлежит будущему `control-api-gateway`; этот компонент
 публикует только внутренний gRPC. Политика deny-by-default регистрирует
