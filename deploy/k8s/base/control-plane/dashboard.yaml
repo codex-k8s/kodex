@@ -133,6 +133,17 @@ data:
               "legendFormat": "{{kind}} {{action}}"
             }
           ]
+        },
+        {
+          "id": 10,
+          "title": "Owner configuration and recovery mutations",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (kind, action) (rate(mattercodex_control_plane_mutations_total{kind=~\"ROLE_DEFINITION|AGENT|AGENT_ASSIGNMENT|INSTRUCTION_SET|PROVIDER_CONNECTION_REFERENCE|PROVIDER_POOL|WORKSPACE_BACKUP|WORKSPACE_RESTORE|WORKSPACE_MATTERMOST_MAPPING\"}[5m]))",
+              "legendFormat": "{{kind}} {{action}}"
+            }
+          ]
         }
       ],
       "schemaVersion": 39,

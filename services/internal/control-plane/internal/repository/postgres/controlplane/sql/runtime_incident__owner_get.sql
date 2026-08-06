@@ -1,5 +1,5 @@
-SELECT incident.id, incident.organization_id, incident.project_id,
-    incident.execution_id, incident.execution_fence, incident.kind,
+SELECT incident.id::text, incident.organization_id::text, incident.project_id::text,
+    incident.execution_id::text, incident.execution_fence, incident.kind,
     incident.evidence_sha256, incident.workload_id, incident.occurred_at,
     incident.version, incident.state, coalesce(incident.action_reason_code, ''),
     incident.updated_at
@@ -17,9 +17,4 @@ JOIN control_plane.resources AS process
  AND process.owner_actor_id = @actor_id::uuid
 WHERE incident.organization_id = @organization_id::uuid
   AND incident.project_id = @project_id::uuid
-  AND incident.id > coalesce(
-      nullif(@after_id, '')::uuid,
-      '00000000-0000-0000-0000-000000000000'::uuid
-  )
-ORDER BY incident.id
-LIMIT @limit;
+  AND incident.id = @incident_id::uuid;

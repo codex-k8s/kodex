@@ -54,6 +54,24 @@ func fromProtoKind(kind controlplanev1.ResourceKind) enum.Kind {
 		return enum.KindImageBuild
 	case controlplanev1.ResourceKind_RESOURCE_KIND_IMAGE_ARTIFACT:
 		return enum.KindImageArtifact
+	case controlplanev1.ResourceKind_RESOURCE_KIND_ROLE_DEFINITION:
+		return enum.KindRoleDefinition
+	case controlplanev1.ResourceKind_RESOURCE_KIND_AGENT:
+		return enum.KindAgent
+	case controlplanev1.ResourceKind_RESOURCE_KIND_AGENT_ASSIGNMENT:
+		return enum.KindAgentAssignment
+	case controlplanev1.ResourceKind_RESOURCE_KIND_INSTRUCTION_SET:
+		return enum.KindInstructionSet
+	case controlplanev1.ResourceKind_RESOURCE_KIND_PROVIDER_CONNECTION_REFERENCE:
+		return enum.KindProviderReference
+	case controlplanev1.ResourceKind_RESOURCE_KIND_PROVIDER_POOL:
+		return enum.KindProviderPool
+	case controlplanev1.ResourceKind_RESOURCE_KIND_WORKSPACE_BACKUP:
+		return enum.KindWorkspaceBackup
+	case controlplanev1.ResourceKind_RESOURCE_KIND_WORKSPACE_RESTORE:
+		return enum.KindWorkspaceRestore
+	case controlplanev1.ResourceKind_RESOURCE_KIND_WORKSPACE_MATTERMOST_MAPPING:
+		return enum.KindWorkspaceMapping
 	default:
 		return ""
 	}
@@ -101,6 +119,24 @@ func toProtoKind(kind enum.Kind) controlplanev1.ResourceKind {
 		return controlplanev1.ResourceKind_RESOURCE_KIND_IMAGE_BUILD
 	case enum.KindImageArtifact:
 		return controlplanev1.ResourceKind_RESOURCE_KIND_IMAGE_ARTIFACT
+	case enum.KindRoleDefinition:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_ROLE_DEFINITION
+	case enum.KindAgent:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_AGENT
+	case enum.KindAgentAssignment:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_AGENT_ASSIGNMENT
+	case enum.KindInstructionSet:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_INSTRUCTION_SET
+	case enum.KindProviderReference:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_PROVIDER_CONNECTION_REFERENCE
+	case enum.KindProviderPool:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_PROVIDER_POOL
+	case enum.KindWorkspaceBackup:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_WORKSPACE_BACKUP
+	case enum.KindWorkspaceRestore:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_WORKSPACE_RESTORE
+	case enum.KindWorkspaceMapping:
+		return controlplanev1.ResourceKind_RESOURCE_KIND_WORKSPACE_MATTERMOST_MAPPING
 	default:
 		return controlplanev1.ResourceKind_RESOURCE_KIND_UNSPECIFIED
 	}
@@ -357,10 +393,27 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			AuthorityPolicySHA256:  value.RuntimeRevision.GetAuthorityPolicySha256(),
 			Components:             components,
 			CreatedAt:              createdAt,
+			AgentID:                value.RuntimeRevision.GetAgentId(),
+			AgentVersion:           value.RuntimeRevision.GetAgentVersion(),
+			AgentSHA256:            value.RuntimeRevision.GetAgentSha256(),
+			RoleDefinitionID:       value.RuntimeRevision.GetRoleDefinitionId(),
+			RoleDefinitionVersion:  value.RuntimeRevision.GetRoleDefinitionVersion(),
+			RoleDefinitionSHA256:   value.RuntimeRevision.GetRoleDefinitionSha256(),
+			InstructionSetID:       value.RuntimeRevision.GetInstructionSetId(),
+			InstructionSetVersion:  value.RuntimeRevision.GetInstructionSetVersion(),
+			InstructionSetSHA256:   value.RuntimeRevision.GetInstructionSetSha256(),
+			ProviderPoolID:         value.RuntimeRevision.GetProviderPoolId(),
+			ProviderPoolVersion:    value.RuntimeRevision.GetProviderPoolVersion(),
+			ProviderPoolSHA256:     value.RuntimeRevision.GetProviderPoolSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Session:
 		return entity.SessionSpec{
 			AgentID:                    value.Session.GetAgentId(),
+			AgentVersion:               value.Session.GetAgentVersion(),
+			AgentSHA256:                value.Session.GetAgentSha256(),
+			ProviderPoolID:             value.Session.GetProviderPoolId(),
+			ProviderPoolVersion:        value.Session.GetProviderPoolVersion(),
+			ProviderPoolSHA256:         value.Session.GetProviderPoolSha256(),
 			ProviderAccountBindingID:   value.Session.GetProviderAccountBindingId(),
 			ConversationID:             value.Session.GetConversationId(),
 			ArchiveRef:                 value.Session.GetArchiveRef(),
@@ -525,11 +578,23 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 				value.Schedule.GetTargetType().String(),
 				"SCHEDULE_TARGET_TYPE_",
 			),
-			PlaybookRef:        value.Schedule.GetPlaybookRef(),
-			PlaybookVersion:    value.Schedule.GetPlaybookVersion(),
-			PromptArtifactID:   value.Schedule.GetPromptArtifactId(),
-			ExecutionSessionID: value.Schedule.GetExecutionSessionId(),
-			Ownership:          configurationOwnershipFromProto(value.Schedule.GetOwnership()),
+			PlaybookRef:             value.Schedule.GetPlaybookRef(),
+			PlaybookVersion:         value.Schedule.GetPlaybookVersion(),
+			PromptArtifactID:        value.Schedule.GetPromptArtifactId(),
+			ExecutionSessionID:      value.Schedule.GetExecutionSessionId(),
+			Ownership:               configurationOwnershipFromProto(value.Schedule.GetOwnership()),
+			AgentID:                 value.Schedule.GetAgentId(),
+			AgentVersion:            value.Schedule.GetAgentVersion(),
+			AgentSHA256:             value.Schedule.GetAgentSha256(),
+			InstructionSetID:        value.Schedule.GetInstructionSetId(),
+			InstructionSetVersion:   value.Schedule.GetInstructionSetVersion(),
+			InstructionSetSHA256:    value.Schedule.GetInstructionSetSha256(),
+			RuntimeSelectionRef:     value.Schedule.GetRuntimeSelectionRef(),
+			RuntimeSelectionVersion: value.Schedule.GetRuntimeSelectionVersion(),
+			RuntimeSelectionSHA256:  value.Schedule.GetRuntimeSelectionSha256(),
+			ProviderPoolID:          value.Schedule.GetProviderPoolId(),
+			ProviderPoolVersion:     value.Schedule.GetProviderPoolVersion(),
+			ProviderPoolSHA256:      value.Schedule.GetProviderPoolSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_OwnerGate:
 		expiresAt, err := requiredTime(value.OwnerGate.GetExpiresAt())
@@ -711,6 +776,24 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			AdmissionAuthorityGeneration: value.ImageArtifact.GetAdmissionAuthorityGeneration(), AdmissionFence: value.ImageArtifact.GetAdmissionFence(),
 			AdmissionClaimTokenSHA256: value.ImageArtifact.GetAdmissionClaimTokenSha256(), AdmissionClaimExpiresAt: admissionClaimExpiresAt,
 		}, nil
+	case *controlplanev1.ResourceSpec_RoleDefinition:
+		return roleDefinitionFromProto(value.RoleDefinition), nil
+	case *controlplanev1.ResourceSpec_Agent:
+		return agentFromProto(value.Agent), nil
+	case *controlplanev1.ResourceSpec_AgentAssignment:
+		return agentAssignmentFromProto(value.AgentAssignment), nil
+	case *controlplanev1.ResourceSpec_InstructionSet:
+		return instructionSetFromProto(value.InstructionSet), nil
+	case *controlplanev1.ResourceSpec_ProviderConnectionReference:
+		return providerReferenceFromProto(value.ProviderConnectionReference)
+	case *controlplanev1.ResourceSpec_ProviderPool:
+		return providerPoolFromProto(value.ProviderPool)
+	case *controlplanev1.ResourceSpec_WorkspaceBackup:
+		return workspaceBackupFromProto(value.WorkspaceBackup)
+	case *controlplanev1.ResourceSpec_WorkspaceRestore:
+		return workspaceRestoreFromProto(value.WorkspaceRestore), nil
+	case *controlplanev1.ResourceSpec_WorkspaceMattermostMapping:
+		return workspaceMappingFromProto(value.WorkspaceMattermostMapping)
 	default:
 		return nil, errors.New("resource specification is unknown")
 	}
@@ -911,12 +994,29 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				AuthorityPolicySha256:   value.AuthorityPolicySHA256,
 				Components:              components,
 				CreatedAt:               timestamppb.New(value.CreatedAt),
+				AgentId:                 value.AgentID,
+				AgentVersion:            value.AgentVersion,
+				AgentSha256:             value.AgentSHA256,
+				RoleDefinitionId:        value.RoleDefinitionID,
+				RoleDefinitionVersion:   value.RoleDefinitionVersion,
+				RoleDefinitionSha256:    value.RoleDefinitionSHA256,
+				InstructionSetId:        value.InstructionSetID,
+				InstructionSetVersion:   value.InstructionSetVersion,
+				InstructionSetSha256:    value.InstructionSetSHA256,
+				ProviderPoolId:          value.ProviderPoolID,
+				ProviderPoolVersion:     value.ProviderPoolVersion,
+				ProviderPoolSha256:      value.ProviderPoolSHA256,
 			},
 		}
 	case entity.SessionSpec:
 		result.Value = &controlplanev1.ResourceSpec_Session{
 			Session: &controlplanev1.SessionSpec{
 				AgentId:                    value.AgentID,
+				AgentVersion:               value.AgentVersion,
+				AgentSha256:                value.AgentSHA256,
+				ProviderPoolId:             value.ProviderPoolID,
+				ProviderPoolVersion:        value.ProviderPoolVersion,
+				ProviderPoolSha256:         value.ProviderPoolSHA256,
 				ProviderAccountBindingId:   value.ProviderAccountBindingID,
 				ConversationId:             value.ConversationID,
 				ArchiveRef:                 value.ArchiveRef,
@@ -1051,6 +1151,18 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				PromptArtifactId:         value.PromptArtifactID,
 				ExecutionSessionId:       value.ExecutionSessionID,
 				Ownership:                configurationOwnershipToProto(value.Ownership),
+				AgentId:                  value.AgentID,
+				AgentVersion:             value.AgentVersion,
+				AgentSha256:              value.AgentSHA256,
+				InstructionSetId:         value.InstructionSetID,
+				InstructionSetVersion:    value.InstructionSetVersion,
+				InstructionSetSha256:     value.InstructionSetSHA256,
+				RuntimeSelectionRef:      value.RuntimeSelectionRef,
+				RuntimeSelectionVersion:  value.RuntimeSelectionVersion,
+				RuntimeSelectionSha256:   value.RuntimeSelectionSHA256,
+				ProviderPoolId:           value.ProviderPoolID,
+				ProviderPoolVersion:      value.ProviderPoolVersion,
+				ProviderPoolSha256:       value.ProviderPoolSHA256,
 			},
 		}
 	case entity.OwnerGateSpec:
@@ -1191,6 +1303,24 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				AdmissionClaimTokenSha256: value.AdmissionClaimTokenSHA256, AdmissionClaimExpiresAt: optionalTimestamp(value.AdmissionClaimExpiresAt),
 			},
 		}
+	case entity.RoleDefinitionSpec:
+		result.Value = &controlplanev1.ResourceSpec_RoleDefinition{RoleDefinition: roleDefinitionToProto(value)}
+	case entity.AgentSpec:
+		result.Value = &controlplanev1.ResourceSpec_Agent{Agent: agentToProto(value)}
+	case entity.AgentAssignmentSpec:
+		result.Value = &controlplanev1.ResourceSpec_AgentAssignment{AgentAssignment: agentAssignmentToProto(value)}
+	case entity.InstructionSetSpec:
+		result.Value = &controlplanev1.ResourceSpec_InstructionSet{InstructionSet: instructionSetToProto(value)}
+	case entity.ProviderConnectionReferenceSpec:
+		result.Value = &controlplanev1.ResourceSpec_ProviderConnectionReference{ProviderConnectionReference: providerReferenceToProto(value)}
+	case entity.ProviderPoolSpec:
+		result.Value = &controlplanev1.ResourceSpec_ProviderPool{ProviderPool: providerPoolToProto(value)}
+	case entity.WorkspaceBackupSpec:
+		result.Value = &controlplanev1.ResourceSpec_WorkspaceBackup{WorkspaceBackup: workspaceBackupToProto(value)}
+	case entity.WorkspaceRestoreSpec:
+		result.Value = &controlplanev1.ResourceSpec_WorkspaceRestore{WorkspaceRestore: workspaceRestoreToProto(value)}
+	case entity.WorkspaceMattermostMappingSpec:
+		result.Value = &controlplanev1.ResourceSpec_WorkspaceMattermostMapping{WorkspaceMattermostMapping: workspaceMappingToProto(value)}
 	default:
 		return nil, errors.New("domain resource specification is unknown")
 	}

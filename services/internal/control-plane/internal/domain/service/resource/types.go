@@ -108,6 +108,155 @@ type CopyAccessResourceInput struct {
 	Name                  string
 }
 
+type ManageProtectedConfigurationInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	Kind            enum.Kind
+	Action          string
+	ResourceID      string
+	ExpectedVersion uint64
+	Name            string
+	Spec            entity.Spec
+	TargetVersion   uint64
+	TargetSHA256    string
+	ReferenceKeys   []string
+}
+
+type ProtectedResourceHistoryInput struct {
+	Principal     value.Principal
+	ResourceID    string
+	Kind          enum.Kind
+	BeforeVersion uint64
+	Limit         int
+}
+
+type CompareInstructionVersionsInput struct {
+	Principal        value.Principal
+	InstructionSetID string
+	LeftVersion      uint64
+	RightVersion     uint64
+}
+
+type CompareInstructionVersionsResult struct {
+	Left             domainrepo.ProtectedResourceHistory
+	Right            domainrepo.ProtectedResourceHistory
+	ContentEqual     bool
+	ComparisonSHA256 string
+}
+
+type BindScheduleConfigurationInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	ScheduleID              string
+	ExpectedVersion         uint64
+	AgentStableKey          string
+	InstructionSetStableKey string
+	RuntimeSelectionRef     string
+	RuntimeSelectionVersion uint64
+	RuntimeSelectionSHA256  string
+	ProviderPoolStableKey   string
+}
+
+type ManageRunInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ProcessRunID    string
+	ExpectedVersion uint64
+	Action          string
+	ReasonCode      string
+}
+
+type ManageRunResult struct {
+	ProcessRun    entity.Resource
+	SuccessorTurn entity.Resource
+}
+
+type RunDetailResult struct {
+	ProcessRun      entity.Resource
+	Session         entity.Resource
+	Turn            entity.Resource
+	RuntimeRevision entity.Resource
+	Runtime         *domainrepo.RuntimeExecution
+	Incidents       []domainrepo.RuntimeIncident
+}
+
+type RunLineageResult struct {
+	RootSessionID, RootTurnID, ParentProcessRunID string
+	CurrentSessionID                              string
+	CurrentSessionVersion                         uint64
+	CurrentTurnID                                 string
+	CurrentTurnVersion                            uint64
+	CurrentAttempt                                uint32
+	RuntimeRevisionID                             string
+	RuntimeRevisionVersion                        uint64
+	ImmutableInputSHA256                          string
+}
+
+type ManageWorkspaceMappingInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	Action                  string
+	MappingID               string
+	ExpectedVersion         uint64
+	ExpectedGeneration      uint64
+	WorkspaceStableKey      string
+	ProviderTeamRef         string
+	ProviderReadbackReceipt string
+	Name                    string
+}
+
+type ManageWorkspaceBackupInput struct {
+	Principal          value.Principal
+	IdempotencyKey     string
+	Action             string
+	BackupID           string
+	ExpectedVersion    uint64
+	Scope              string
+	WorkspaceStableKey string
+	Name               string
+	TerminalReasonCode string
+	RetainUntil        time.Time
+}
+
+type ManageWorkspaceRestoreInput struct {
+	Principal             value.Principal
+	IdempotencyKey        string
+	Action                string
+	RestoreID             string
+	ExpectedVersion       uint64
+	BackupID              string
+	ExpectedBackupVersion uint64
+	MembershipSHA256      string
+	Name                  string
+	TerminalReasonCode    string
+}
+
+type ManageRuntimeIncidentInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	IncidentID      string
+	ExpectedVersion uint64
+	Action          string
+	ReasonCode      string
+}
+
+type ManageRuntimeIncidentResult struct {
+	Incident      domainrepo.RuntimeIncident
+	SuccessorTurn entity.Resource
+}
+
+type GetRuntimeIncidentInput struct {
+	Principal  value.Principal
+	IncidentID string
+}
+
+type ListRuntimeIncidentHistoryInput struct {
+	Principal     value.Principal
+	IncidentID    string
+	BeforeVersion uint64
+	Limit         int
+}
+
 type ListAuditInput struct {
 	Principal value.Principal
 	Filter    query.AuditFilter
@@ -280,6 +429,7 @@ type ManageSessionInput struct {
 	ExpectedVersion                      uint64
 	Name                                 string
 	RoleID                               string
+	AgentStableKey                       string
 	ConversationID                       string
 	ArchiveRef                           string
 	ReasonCode                           string

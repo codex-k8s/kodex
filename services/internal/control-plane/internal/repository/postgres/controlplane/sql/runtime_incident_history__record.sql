@@ -1,8 +1,10 @@
-SELECT incident.id, incident.organization_id, incident.project_id,
-    incident.execution_id, incident.execution_fence, incident.kind,
-    incident.evidence_sha256, incident.workload_id, incident.occurred_at,
-    incident.version, incident.state, coalesce(incident.action_reason_code, ''),
-    incident.updated_at
+INSERT INTO control_plane.runtime_incident_history (
+    organization_id, project_id, incident_id, version, owner_actor_id,
+    state, action, reason_code, occurred_at
+)
+SELECT incident.organization_id, incident.project_id, incident.id,
+    incident.version, process.owner_actor_id, incident.state,
+    'record', 'incident_recorded', incident.occurred_at
 FROM control_plane.runtime_execution_incidents AS incident
 JOIN control_plane.runtime_executions AS execution
   ON execution.organization_id = incident.organization_id
@@ -13,13 +15,6 @@ JOIN control_plane.resources AS process
  AND process.project_id = execution.project_id
  AND process.id = execution.process_id
  AND process.kind = 'PROCESS_RUN'
- AND process.state <> 'DELETED'
- AND process.owner_actor_id = @actor_id::uuid
 WHERE incident.organization_id = @organization_id::uuid
   AND incident.project_id = @project_id::uuid
-  AND incident.id > coalesce(
-      nullif(@after_id, '')::uuid,
-      '00000000-0000-0000-0000-000000000000'::uuid
-  )
-ORDER BY incident.id
-LIMIT @limit;
+  AND incident.id = @incident_id::uuid;

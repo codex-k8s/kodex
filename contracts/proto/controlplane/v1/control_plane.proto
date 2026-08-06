@@ -35,6 +35,56 @@ service ControlPlaneService {
   // CopyAccessResource создаёт UI-owned копию Git-owned TEAM/ROLE/PROMPT_PROFILE
   // из авторитетной закреплённой версии источника.
   rpc CopyAccessResource(CopyAccessResourceRequest) returns (CopyAccessResourceResponse);
+  // ManageRoleDefinition — закрытый create/update/archive/delete реестр.
+  rpc ManageRoleDefinition(ManageRoleDefinitionRequest) returns (ManageRoleDefinitionResponse);
+  // ManageAgent — закрытый create/update/archive/delete реестр Agent.
+  rpc ManageAgent(ManageAgentRequest) returns (ManageAgentResponse);
+  // ManageAgentAssignment разрешает только assign/unassign server-owned связи.
+  rpc ManageAgentAssignment(ManageAgentAssignmentRequest) returns (ManageAgentAssignmentResponse);
+  // ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
+  rpc ManageInstructionSet(ManageInstructionSetRequest) returns (ManageInstructionSetResponse);
+  // CompareInstructionSetVersions сравнивает две exact immutable версии.
+  rpc CompareInstructionSetVersions(CompareInstructionSetVersionsRequest) returns (CompareInstructionSetVersionsResponse);
+  // ManageProviderConnectionReference принимает только metadata проверенного provider receipt.
+  rpc ManageProviderConnectionReference(ManageProviderConnectionReferenceRequest) returns (ManageProviderConnectionReferenceResponse);
+  // ManageProviderPool фиксирует version-pinned eligibility/weight snapshot.
+  rpc ManageProviderPool(ManageProviderPoolRequest) returns (ManageProviderPoolResponse);
+  // GetRoleDefinition возвращает typed owner projection.
+  rpc GetRoleDefinition(GetRoleDefinitionRequest) returns (GetRoleDefinitionResponse);
+  // ListRoleDefinitions возвращает typed owner collection.
+  rpc ListRoleDefinitions(ListRoleDefinitionsRequest) returns (ListRoleDefinitionsResponse);
+  // ListRoleDefinitionHistory возвращает immutable snapshots агрегата.
+  rpc ListRoleDefinitionHistory(ListRoleDefinitionHistoryRequest) returns (ListRoleDefinitionHistoryResponse);
+  // GetAgent возвращает typed owner projection.
+  rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
+  // ListAgents возвращает typed owner collection.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  // ListAgentHistory возвращает immutable snapshots агрегата.
+  rpc ListAgentHistory(ListAgentHistoryRequest) returns (ListAgentHistoryResponse);
+  // GetAgentAssignment возвращает typed owner projection.
+  rpc GetAgentAssignment(GetAgentAssignmentRequest) returns (GetAgentAssignmentResponse);
+  // ListAgentAssignments возвращает typed owner collection.
+  rpc ListAgentAssignments(ListAgentAssignmentsRequest) returns (ListAgentAssignmentsResponse);
+  // ListAgentAssignmentHistory возвращает immutable snapshots агрегата.
+  rpc ListAgentAssignmentHistory(ListAgentAssignmentHistoryRequest) returns (ListAgentAssignmentHistoryResponse);
+  // GetInstructionSet возвращает текущую typed owner projection.
+  rpc GetInstructionSet(GetInstructionSetRequest) returns (GetInstructionSetResponse);
+  // ListInstructionSets возвращает typed owner collection.
+  rpc ListInstructionSets(ListInstructionSetsRequest) returns (ListInstructionSetsResponse);
+  // ListInstructionSetHistory возвращает immutable content versions.
+  rpc ListInstructionSetHistory(ListInstructionSetHistoryRequest) returns (ListInstructionSetHistoryResponse);
+  // GetProviderConnectionReference возвращает только masked metadata.
+  rpc GetProviderConnectionReference(GetProviderConnectionReferenceRequest) returns (GetProviderConnectionReferenceResponse);
+  // ListProviderConnectionReferences возвращает только masked metadata.
+  rpc ListProviderConnectionReferences(ListProviderConnectionReferencesRequest) returns (ListProviderConnectionReferencesResponse);
+  // ListProviderConnectionReferenceHistory возвращает metadata snapshots без provider payload.
+  rpc ListProviderConnectionReferenceHistory(ListProviderConnectionReferenceHistoryRequest) returns (ListProviderConnectionReferenceHistoryResponse);
+  // GetProviderPool возвращает immutable eligibility snapshot.
+  rpc GetProviderPool(GetProviderPoolRequest) returns (GetProviderPoolResponse);
+  // ListProviderPools возвращает typed owner collection.
+  rpc ListProviderPools(ListProviderPoolsRequest) returns (ListProviderPoolsResponse);
+  // ListProviderPoolHistory возвращает immutable snapshots агрегата.
+  rpc ListProviderPoolHistory(ListProviderPoolHistoryRequest) returns (ListProviderPoolHistoryResponse);
   // GetResource выполняет версионированную операцию ControlPlaneService.
   rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
   // ListResources выполняет версионированную операцию ControlPlaneService.
@@ -102,6 +152,8 @@ service ControlPlaneService {
 
   // ManageSchedule изменяет расписание только через закрытые действия сервера.
   rpc ManageSchedule(ManageScheduleRequest) returns (ManageScheduleResponse);
+  // BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
+  rpc BindScheduleConfiguration(BindScheduleConfigurationRequest) returns (BindScheduleConfigurationResponse);
   // RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
   // плановый watermark расписания.
   rpc RunScheduleNow(RunScheduleNowRequest) returns (RunScheduleNowResponse);
@@ -127,6 +179,16 @@ service ControlPlaneService {
   rpc CancelProcess(CancelProcessRequest) returns (CancelProcessResponse);
   // CompleteProcess завершает процесс по авторитетному terminal-ходу.
   rpc CompleteProcess(CompleteProcessRequest) returns (CompleteProcessResponse);
+  // ManageRun закрыто отменяет либо повторяет полный Process/Session/Turn/Runtime graph.
+  rpc ManageRun(ManageRunRequest) returns (ManageRunResponse);
+  // GetRunDetail возвращает exact current graph без authority-bearing token.
+  rpc GetRunDetail(GetRunDetailRequest) returns (GetRunDetailResponse);
+  // ListRunTimeline возвращает bounded typed audit timeline.
+  rpc ListRunTimeline(ListRunTimelineRequest) returns (ListRunTimelineResponse);
+  // GetRunLineage возвращает server-owned root/parent/current lineage.
+  rpc GetRunLineage(GetRunLineageRequest) returns (GetRunLineageResponse);
+  // ListRunArtifacts возвращает typed metadata без artifact bytes.
+  rpc ListRunArtifacts(ListRunArtifactsRequest) returns (ListRunArtifactsResponse);
   // RequestOwnerGate выполняет версионированную операцию ControlPlaneService.
   rpc RequestOwnerGate(RequestOwnerGateRequest) returns (RequestOwnerGateResponse);
   // ClaimOwnerGateDelivery выдаёт gateway одно ограниченное право доставки
@@ -161,6 +223,32 @@ service ControlPlaneService {
   // ListRestoreOperations возвращает owner-scoped discovery/rejoin path,
   // включая фильтр по backup после потери HTTP Location.
   rpc ListRestoreOperations(ListRestoreOperationsRequest) returns (ListRestoreOperationsResponse);
+  // ManageWorkspaceBackup владеет WORKSPACE/ALL_WORKSPACES snapshot lifecycle.
+  rpc ManageWorkspaceBackup(ManageWorkspaceBackupRequest) returns (ManageWorkspaceBackupResponse);
+  // GetWorkspaceBackup возвращает exact immutable membership и terminal state.
+  rpc GetWorkspaceBackup(GetWorkspaceBackupRequest) returns (GetWorkspaceBackupResponse);
+  // ListWorkspaceBackups возвращает owner-scoped discovery/rejoin path.
+  rpc ListWorkspaceBackups(ListWorkspaceBackupsRequest) returns (ListWorkspaceBackupsResponse);
+  // ManageWorkspaceRestore владеет fresh attempt/generation/revoke lifecycle.
+  rpc ManageWorkspaceRestore(ManageWorkspaceRestoreRequest) returns (ManageWorkspaceRestoreResponse);
+  // GetWorkspaceRestore возвращает exact version-pinned restore envelope.
+  rpc GetWorkspaceRestore(GetWorkspaceRestoreRequest) returns (GetWorkspaceRestoreResponse);
+  // ListWorkspaceRestores возвращает owner-scoped discovery/rejoin path.
+  rpc ListWorkspaceRestores(ListWorkspaceRestoresRequest) returns (ListWorkspaceRestoresResponse);
+
+  // ManageRuntimeIncident применяет закрытые acknowledge/retry/release/close действия.
+  rpc ManageRuntimeIncident(ManageRuntimeIncidentRequest) returns (ManageRuntimeIncidentResponse);
+  // GetRuntimeIncident возвращает exact version incident projection.
+  rpc GetRuntimeIncident(GetRuntimeIncidentRequest) returns (GetRuntimeIncidentResponse);
+  // ListRuntimeIncidentHistory возвращает immutable action history.
+  rpc ListRuntimeIncidentHistory(ListRuntimeIncidentHistoryRequest) returns (ListRuntimeIncidentHistoryResponse);
+
+  // ManageWorkspaceMattermostMapping принимает только authority-registered provider readback receipt.
+  rpc ManageWorkspaceMattermostMapping(ManageWorkspaceMattermostMappingRequest) returns (ManageWorkspaceMattermostMappingResponse);
+  // GetWorkspaceMattermostMapping возвращает mapping metadata без provider credentials.
+  rpc GetWorkspaceMattermostMapping(GetWorkspaceMattermostMappingRequest) returns (GetWorkspaceMattermostMappingResponse);
+  // ListWorkspaceMattermostMappings возвращает owner-scoped mapping catalog.
+  rpc ListWorkspaceMattermostMappings(ListWorkspaceMattermostMappingsRequest) returns (ListWorkspaceMattermostMappingsResponse);
 
   // RegisterArtifact выполняет версионированную операцию ControlPlaneService.
   rpc RegisterArtifact(RegisterArtifactRequest) returns (RegisterArtifactResponse);
@@ -388,6 +476,24 @@ enum ResourceKind {
   RESOURCE_KIND_IMAGE_BUILD = 19;
   // RESOURCE_KIND_IMAGE_ARTIFACT — admitted/promoted immutable image metadata.
   RESOURCE_KIND_IMAGE_ARTIFACT = 20;
+  // RESOURCE_KIND_ROLE_DEFINITION — reusable authority-free role policy.
+  RESOURCE_KIND_ROLE_DEFINITION = 21;
+  // RESOURCE_KIND_AGENT — executable owner configuration with pinned references.
+  RESOURCE_KIND_AGENT = 22;
+  // RESOURCE_KIND_AGENT_ASSIGNMENT — server-owned Agent↔Workspace binding.
+  RESOURCE_KIND_AGENT_ASSIGNMENT = 23;
+  // RESOURCE_KIND_INSTRUCTION_SET — managed immutable instruction versions.
+  RESOURCE_KIND_INSTRUCTION_SET = 24;
+  // RESOURCE_KIND_PROVIDER_CONNECTION_REFERENCE — masked provider metadata only.
+  RESOURCE_KIND_PROVIDER_CONNECTION_REFERENCE = 25;
+  // RESOURCE_KIND_PROVIDER_POOL — immutable eligibility and weight snapshot.
+  RESOURCE_KIND_PROVIDER_POOL = 26;
+  // RESOURCE_KIND_WORKSPACE_BACKUP — immutable WORKSPACE/ALL_WORKSPACES membership.
+  RESOURCE_KIND_WORKSPACE_BACKUP = 27;
+  // RESOURCE_KIND_WORKSPACE_RESTORE — full-envelope restore attempt.
+  RESOURCE_KIND_WORKSPACE_RESTORE = 28;
+  // RESOURCE_KIND_WORKSPACE_MATTERMOST_MAPPING — owner mapping backed by provider receipt.
+  RESOURCE_KIND_WORKSPACE_MATTERMOST_MAPPING = 29;
 }
 
 // LifecycleState задаёт закрытое перечисление контракта control-plane.
@@ -727,6 +833,220 @@ message PromptProfileSpec {
   uint64 content_artifact_version = 12;
 }
 
+// RoleDefinitionSpec отделяет reusable policy от исполняемого Agent.
+message RoleDefinitionSpec {
+  string stable_key = 1;
+  string description = 2;
+  repeated string capabilities = 3;
+  repeated string allowed_target_role_definition_ids = 4;
+  string role_image_recipe_id = 5;
+  uint64 role_image_recipe_version = 6;
+  string role_image_recipe_sha256 = 7;
+  ConfigurationOwnership ownership = 10;
+}
+
+// AgentSpec хранит только server-resolved exact references и digests.
+message AgentSpec {
+  string stable_key = 1;
+  string role_definition_id = 2;
+  uint64 role_definition_version = 3;
+  string role_definition_sha256 = 4;
+  string instruction_set_id = 5;
+  uint64 instruction_set_version = 6;
+  string instruction_set_sha256 = 7;
+  string provider_pool_id = 8;
+  uint64 provider_pool_version = 9;
+  string provider_pool_sha256 = 10;
+  string runtime_profile_ref = 11;
+  uint64 runtime_profile_version = 12;
+  string runtime_profile_sha256 = 13;
+  repeated string capabilities = 14;
+  ConfigurationOwnership ownership = 20;
+}
+
+// AgentAssignmentSpec — отдельный server-owned aggregate назначения.
+message AgentAssignmentSpec {
+  string agent_id = 1;
+  uint64 agent_version = 2;
+  string agent_sha256 = 3;
+  string workspace_id = 4;
+  uint64 workspace_version = 5;
+  string workspace_sha256 = 6;
+  string room_id = 7;
+  string root_actor_id = 8;
+  uint64 assignment_generation = 9;
+}
+
+enum InstructionVersionState {
+  INSTRUCTION_VERSION_STATE_UNSPECIFIED = 0;
+  INSTRUCTION_VERSION_STATE_DRAFT = 1;
+  INSTRUCTION_VERSION_STATE_VALIDATED = 2;
+  INSTRUCTION_VERSION_STATE_PUBLISHED = 3;
+  INSTRUCTION_VERSION_STATE_REJECTED = 4;
+  INSTRUCTION_VERSION_STATE_ARCHIVED = 5;
+}
+
+// InstructionSetSpec содержит текущую immutable content version.
+message InstructionSetSpec {
+  string stable_key = 1;
+  string locale = 2;
+  uint64 current_version = 3;
+  uint64 published_version = 4;
+  string content = 5;
+  string content_sha256 = 6;
+  InstructionVersionState version_state = 7;
+  string validation_sha256 = 8;
+  uint64 rollback_of_version = 9;
+  ConfigurationOwnership ownership = 10;
+}
+
+enum ProviderConnectionStatus {
+  PROVIDER_CONNECTION_STATUS_UNSPECIFIED = 0;
+  PROVIDER_CONNECTION_STATUS_AVAILABLE = 1;
+  PROVIDER_CONNECTION_STATUS_DEGRADED = 2;
+  PROVIDER_CONNECTION_STATUS_INELIGIBLE = 3;
+  PROVIDER_CONNECTION_STATUS_ARCHIVED = 4;
+}
+
+// ProviderConnectionReferenceSpec исключает token, device code и provider payload.
+message ProviderConnectionReferenceSpec {
+  string stable_key = 1;
+  string provider = 2;
+  string server_reference = 3;
+  uint64 reference_version = 4;
+  string reference_sha256 = 5;
+  string masked_label = 6;
+  ProviderConnectionStatus masked_status = 7;
+  repeated string capabilities = 8;
+  bool eligible = 9;
+  google.protobuf.Timestamp observed_at = 10;
+  string receipt_id = 11;
+  uint64 receipt_version = 12;
+  string receipt_sha256 = 13;
+}
+
+message ProviderPoolBinding {
+  string provider_connection_reference_id = 1;
+  uint64 reference_version = 2;
+  string reference_sha256 = 3;
+  uint32 weight = 4;
+  bool eligible = 5;
+  ProviderConnectionStatus masked_status = 6;
+  // provider_connection_stable_key используется только как owner-friendly input;
+  // сохранённый snapshot возвращает server-resolved ID/version/digest.
+  string provider_connection_stable_key = 7;
+}
+
+// ProviderPoolSpec хранит точный immutable eligibility snapshot.
+message ProviderPoolSpec {
+  string stable_key = 1;
+  string policy = 2;
+  uint64 policy_revision = 3;
+  google.protobuf.Duration observation_max_age = 4;
+  repeated ProviderPoolBinding bindings = 5;
+  string eligibility_snapshot_sha256 = 6;
+  ConfigurationOwnership ownership = 10;
+}
+
+enum WorkspaceBackupScope {
+  WORKSPACE_BACKUP_SCOPE_UNSPECIFIED = 0;
+  WORKSPACE_BACKUP_SCOPE_WORKSPACE = 1;
+  WORKSPACE_BACKUP_SCOPE_ALL_WORKSPACES = 2;
+}
+
+enum WorkspaceBackupState {
+  WORKSPACE_BACKUP_STATE_UNSPECIFIED = 0;
+  WORKSPACE_BACKUP_STATE_VERIFYING = 1;
+  WORKSPACE_BACKUP_STATE_AVAILABLE = 2;
+  WORKSPACE_BACKUP_STATE_FAILED = 3;
+  WORKSPACE_BACKUP_STATE_CANCELLED = 4;
+  WORKSPACE_BACKUP_STATE_EXPIRED = 5;
+}
+
+message WorkspaceBackupMember {
+  string workspace_id = 1;
+  uint64 workspace_version = 2;
+  string workspace_sha256 = 3;
+  string session_id = 4;
+  uint64 source_version = 5;
+  string runtime_revision_sha256 = 6;
+  string immutable_input_sha256 = 7;
+  string archive_sha256 = 8;
+  string provenance_sha256 = 9;
+  string source_execution_id = 10;
+}
+
+// WorkspaceBackupSpec — immutable membership snapshot полного envelope.
+message WorkspaceBackupSpec {
+  WorkspaceBackupScope scope = 1;
+  string scope_id = 2;
+  repeated WorkspaceBackupMember members = 3;
+  string membership_sha256 = 4;
+  WorkspaceBackupState backup_state = 5;
+  uint32 attempt = 6;
+  uint64 generation = 7;
+  uint64 revoked_generation = 8;
+  string terminal_reason_code = 9;
+  google.protobuf.Timestamp retain_until = 10;
+}
+
+enum WorkspaceRestoreState {
+  WORKSPACE_RESTORE_STATE_UNSPECIFIED = 0;
+  WORKSPACE_RESTORE_STATE_QUEUED = 1;
+  WORKSPACE_RESTORE_STATE_RUNNING = 2;
+  WORKSPACE_RESTORE_STATE_SUCCEEDED = 3;
+  WORKSPACE_RESTORE_STATE_FAILED = 4;
+  WORKSPACE_RESTORE_STATE_CANCELLED = 5;
+  WORKSPACE_RESTORE_STATE_EXPIRED = 6;
+}
+
+message WorkspaceRestoreMember {
+  string source_session_id = 1;
+  string target_turn_id = 2;
+  uint64 target_turn_version = 3;
+  uint32 target_attempt = 4;
+  string runtime_revision_id = 5;
+  uint64 runtime_revision_version = 6;
+  string immutable_input_sha256 = 7;
+  string grant_sha256 = 8;
+  WorkspaceRestoreState state = 9;
+  string source_execution_id = 10;
+}
+
+// WorkspaceRestoreSpec связывает full-envelope fresh attempt и revoke watermark.
+message WorkspaceRestoreSpec {
+  string backup_id = 1;
+  uint64 backup_version = 2;
+  string membership_sha256 = 3;
+  repeated WorkspaceRestoreMember members = 4;
+  WorkspaceRestoreState restore_state = 5;
+  uint32 attempt = 6;
+  uint64 generation = 7;
+  uint64 revoked_generation = 8;
+  bool partial = 9;
+  string terminal_reason_code = 10;
+}
+
+enum WorkspaceMattermostMappingState {
+  WORKSPACE_MATTERMOST_MAPPING_STATE_UNSPECIFIED = 0;
+  WORKSPACE_MATTERMOST_MAPPING_STATE_BOUND = 1;
+  WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED = 2;
+}
+
+// WorkspaceMattermostMappingSpec хранит только refs и digest provider receipt.
+message WorkspaceMattermostMappingSpec {
+  string workspace_id = 1;
+  uint64 workspace_version = 2;
+  string workspace_sha256 = 3;
+  string provider_team_ref = 4;
+  string provider_receipt_id = 5;
+  uint64 provider_receipt_version = 6;
+  string provider_receipt_sha256 = 7;
+  uint64 mapping_generation = 8;
+  WorkspaceMattermostMappingState mapping_state = 9;
+  google.protobuf.Timestamp provider_observed_at = 10;
+}
+
 // CredentialBindingSpec описывает версионированное сообщение контракта control-plane.
 message CredentialBindingSpec {
   string purpose = 1;
@@ -821,6 +1141,18 @@ message RuntimeRevisionSpec {
   // role_runtime_contract_* закрепляют проверенный runtime ABI promoted image.
   uint64 role_runtime_contract_revision = 39;
   string role_runtime_contract_sha256 = 40;
+  string agent_id = 41;
+  uint64 agent_version = 42;
+  string agent_sha256 = 43;
+  string role_definition_id = 44;
+  uint64 role_definition_version = 45;
+  string role_definition_sha256 = 46;
+  string instruction_set_id = 47;
+  uint64 instruction_set_version = 48;
+  string instruction_set_sha256 = 49;
+  string provider_pool_id = 50;
+  uint64 provider_pool_version = 51;
+  string provider_pool_sha256 = 52;
 }
 
 // RoleImagePackage — exact typed package input. Version и digest обязательны.
@@ -1012,6 +1344,11 @@ message SessionSpec {
   int64 agent_session_id = 7;
   uint64 agent_session_binding_version = 8;
   string agent_session_binding_sha256 = 9;
+  uint64 agent_version = 10;
+  string agent_sha256 = 11;
+  string provider_pool_id = 12;
+  uint64 provider_pool_version = 13;
+  string provider_pool_sha256 = 14;
 }
 
 // TurnSpec описывает версионированное сообщение контракта control-plane.
@@ -1145,6 +1482,18 @@ message ScheduleSpec {
   string prompt_artifact_id = 29;
   string execution_session_id = 30;
   ConfigurationOwnership ownership = 31;
+  string agent_id = 32;
+  uint64 agent_version = 33;
+  string agent_sha256 = 34;
+  string instruction_set_id = 35;
+  uint64 instruction_set_version = 36;
+  string instruction_set_sha256 = 37;
+  string runtime_selection_ref = 38;
+  uint64 runtime_selection_version = 39;
+  string runtime_selection_sha256 = 40;
+  string provider_pool_id = 41;
+  uint64 provider_pool_version = 42;
+  string provider_pool_sha256 = 43;
 }
 
 // OwnerGateSpec описывает версионированное сообщение контракта control-plane.
@@ -1250,6 +1599,15 @@ message ResourceSpec {
     RoleImageRecipeSpec role_image_recipe = 18;
     ImageBuildSpec image_build = 19;
     ImageArtifactSpec image_artifact = 20;
+    RoleDefinitionSpec role_definition = 21;
+    AgentSpec agent = 22;
+    AgentAssignmentSpec agent_assignment = 23;
+    InstructionSetSpec instruction_set = 24;
+    ProviderConnectionReferenceSpec provider_connection_reference = 25;
+    ProviderPoolSpec provider_pool = 26;
+    WorkspaceBackupSpec workspace_backup = 27;
+    WorkspaceRestoreSpec workspace_restore = 28;
+    WorkspaceMattermostMappingSpec workspace_mattermost_mapping = 29;
   }
 }
 
@@ -1368,6 +1726,310 @@ message CopyAccessResourceResponse {
   Resource resource = 1;
 }
 
+enum ProtectedConfigurationAction {
+  PROTECTED_CONFIGURATION_ACTION_UNSPECIFIED = 0;
+  PROTECTED_CONFIGURATION_ACTION_CREATE = 1;
+  PROTECTED_CONFIGURATION_ACTION_UPDATE = 2;
+  PROTECTED_CONFIGURATION_ACTION_ARCHIVE = 3;
+  PROTECTED_CONFIGURATION_ACTION_DELETE = 4;
+}
+
+enum AgentAssignmentAction {
+  AGENT_ASSIGNMENT_ACTION_UNSPECIFIED = 0;
+  AGENT_ASSIGNMENT_ACTION_ASSIGN = 1;
+  AGENT_ASSIGNMENT_ACTION_UNASSIGN = 2;
+}
+
+enum InstructionSetAction {
+  INSTRUCTION_SET_ACTION_UNSPECIFIED = 0;
+  INSTRUCTION_SET_ACTION_CREATE = 1;
+  INSTRUCTION_SET_ACTION_UPDATE = 2;
+  INSTRUCTION_SET_ACTION_VALIDATE = 3;
+  INSTRUCTION_SET_ACTION_PUBLISH = 4;
+  INSTRUCTION_SET_ACTION_ROLLBACK = 5;
+  INSTRUCTION_SET_ACTION_DETACH = 6;
+  INSTRUCTION_SET_ACTION_COPY = 7;
+  INSTRUCTION_SET_ACTION_ARCHIVE = 8;
+  INSTRUCTION_SET_ACTION_DELETE = 9;
+}
+
+enum ProviderConnectionReferenceAction {
+  PROVIDER_CONNECTION_REFERENCE_ACTION_UNSPECIFIED = 0;
+  PROVIDER_CONNECTION_REFERENCE_ACTION_REGISTER = 1;
+  PROVIDER_CONNECTION_REFERENCE_ACTION_REFRESH = 2;
+  PROVIDER_CONNECTION_REFERENCE_ACTION_ARCHIVE = 3;
+}
+
+enum ProviderPoolAction {
+  PROVIDER_POOL_ACTION_UNSPECIFIED = 0;
+  PROVIDER_POOL_ACTION_CREATE = 1;
+  PROVIDER_POOL_ACTION_UPDATE = 2;
+  PROVIDER_POOL_ACTION_ARCHIVE = 3;
+  PROVIDER_POOL_ACTION_DELETE = 4;
+}
+
+message ManageRoleDefinitionRequest {
+  string idempotency_key = 1;
+  ProtectedConfigurationAction action = 2;
+  string role_definition_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  RoleDefinitionSpec spec = 6;
+}
+
+message ManageRoleDefinitionResponse {
+  Resource role_definition = 1;
+}
+
+message ManageAgentRequest {
+  string idempotency_key = 1;
+  ProtectedConfigurationAction action = 2;
+  string agent_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  AgentSpec spec = 6;
+  string role_definition_stable_key = 7;
+  string instruction_set_stable_key = 8;
+  string provider_pool_stable_key = 9;
+}
+
+message ManageAgentResponse {
+  Resource agent = 1;
+}
+
+message ManageAgentAssignmentRequest {
+  string idempotency_key = 1;
+  AgentAssignmentAction action = 2;
+  string assignment_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  string agent_stable_key = 6;
+  string workspace_stable_key = 7;
+  string room_stable_key = 8;
+}
+
+message ManageAgentAssignmentResponse {
+  Resource assignment = 1;
+}
+
+message ManageInstructionSetRequest {
+  string idempotency_key = 1;
+  InstructionSetAction action = 2;
+  string instruction_set_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  InstructionSetSpec spec = 6;
+  uint64 target_version = 7;
+  string target_version_sha256 = 8;
+}
+
+message ManageInstructionSetResponse {
+  Resource instruction_set = 1;
+}
+
+message CompareInstructionSetVersionsRequest {
+  string instruction_set_id = 1;
+  uint64 left_version = 2;
+  uint64 right_version = 3;
+}
+
+message CompareInstructionSetVersionsResponse {
+  ProtectedResourceHistoryEntry left = 1;
+  ProtectedResourceHistoryEntry right = 2;
+  bool content_equal = 3;
+  string comparison_sha256 = 4;
+}
+
+message ManageProviderConnectionReferenceRequest {
+  string idempotency_key = 1;
+  ProviderConnectionReferenceAction action = 2;
+  string provider_connection_reference_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  ProviderConnectionReferenceSpec spec = 6;
+}
+
+message ManageProviderConnectionReferenceResponse {
+  Resource provider_connection_reference = 1;
+}
+
+message ManageProviderPoolRequest {
+  string idempotency_key = 1;
+  ProviderPoolAction action = 2;
+  string provider_pool_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  ProviderPoolSpec spec = 6;
+}
+
+message ManageProviderPoolResponse {
+  Resource provider_pool = 1;
+}
+
+message ProtectedResourceHistoryEntry {
+  Resource resource = 1;
+  string action = 2;
+  string snapshot_sha256 = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+}
+
+message ListProtectedResourceHistoryResponse {
+  repeated ProtectedResourceHistoryEntry entries = 1;
+  string next_page_token = 2;
+}
+
+message GetRoleDefinitionRequest {
+  string role_definition_id = 1;
+}
+message GetRoleDefinitionResponse {
+  Resource role_definition = 1;
+}
+message ListRoleDefinitionsRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListRoleDefinitionsResponse {
+  repeated Resource role_definitions = 1;
+  string next_page_token = 2;
+}
+message ListRoleDefinitionHistoryRequest {
+  string role_definition_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListRoleDefinitionHistoryResponse {
+  repeated ProtectedResourceHistoryEntry entries = 1;
+  string next_page_token = 2;
+}
+
+message GetAgentRequest {
+  string agent_id = 1;
+}
+message GetAgentResponse {
+  Resource agent = 1;
+}
+message ListAgentsRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListAgentsResponse {
+  repeated Resource agents = 1;
+  string next_page_token = 2;
+}
+message ListAgentHistoryRequest {
+  string agent_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListAgentHistoryResponse {
+  repeated ProtectedResourceHistoryEntry entries = 1;
+  string next_page_token = 2;
+}
+
+message GetAgentAssignmentRequest {
+  string assignment_id = 1;
+}
+message GetAgentAssignmentResponse {
+  Resource assignment = 1;
+}
+message ListAgentAssignmentsRequest {
+  string agent_id = 1;
+  string workspace_id = 2;
+  repeated LifecycleState states = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}
+message ListAgentAssignmentsResponse {
+  repeated Resource assignments = 1;
+  string next_page_token = 2;
+}
+message ListAgentAssignmentHistoryRequest {
+  string assignment_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListAgentAssignmentHistoryResponse {
+  repeated ProtectedResourceHistoryEntry entries = 1;
+  string next_page_token = 2;
+}
+
+message GetInstructionSetRequest {
+  string instruction_set_id = 1;
+}
+message GetInstructionSetResponse {
+  Resource instruction_set = 1;
+}
+message ListInstructionSetsRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListInstructionSetsResponse {
+  repeated Resource instruction_sets = 1;
+  string next_page_token = 2;
+}
+message ListInstructionSetHistoryRequest {
+  string instruction_set_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListInstructionSetHistoryResponse {
+  repeated ProtectedResourceHistoryEntry entries = 1;
+  string next_page_token = 2;
+}
+
+message GetProviderConnectionReferenceRequest {
+  string provider_connection_reference_id = 1;
+}
+message GetProviderConnectionReferenceResponse {
+  Resource provider_connection_reference = 1;
+}
+message ListProviderConnectionReferencesRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListProviderConnectionReferencesResponse {
+  repeated Resource provider_connection_references = 1;
+  string next_page_token = 2;
+}
+message ListProviderConnectionReferenceHistoryRequest {
+  string provider_connection_reference_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListProviderConnectionReferenceHistoryResponse {
+  repeated ProtectedResourceHistoryEntry entries = 1;
+  string next_page_token = 2;
+}
+
+message GetProviderPoolRequest {
+  string provider_pool_id = 1;
+}
+message GetProviderPoolResponse {
+  Resource provider_pool = 1;
+}
+message ListProviderPoolsRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListProviderPoolsResponse {
+  repeated Resource provider_pools = 1;
+  string next_page_token = 2;
+}
+message ListProviderPoolHistoryRequest {
+  string provider_pool_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListProviderPoolHistoryResponse {
+  repeated ProtectedResourceHistoryEntry entries = 1;
+  string next_page_token = 2;
+}
+
 // GetResourceRequest описывает версионированное сообщение контракта control-plane.
 message GetResourceRequest {
   string resource_id = 1;
@@ -1421,6 +2083,66 @@ message RuntimeIncident {
   string evidence_sha256 = 5;
   string workload_id = 6;
   google.protobuf.Timestamp occurred_at = 7;
+  uint64 version = 8;
+  RuntimeIncidentState state = 9;
+  string action_reason_code = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+enum RuntimeIncidentState {
+  RUNTIME_INCIDENT_STATE_UNSPECIFIED = 0;
+  RUNTIME_INCIDENT_STATE_OPEN = 1;
+  RUNTIME_INCIDENT_STATE_ACKNOWLEDGED = 2;
+  RUNTIME_INCIDENT_STATE_RETRYING = 3;
+  RUNTIME_INCIDENT_STATE_RELEASED = 4;
+  RUNTIME_INCIDENT_STATE_CLOSED = 5;
+}
+
+enum RuntimeIncidentAction {
+  RUNTIME_INCIDENT_ACTION_UNSPECIFIED = 0;
+  RUNTIME_INCIDENT_ACTION_ACKNOWLEDGE = 1;
+  RUNTIME_INCIDENT_ACTION_RETRY = 2;
+  RUNTIME_INCIDENT_ACTION_RELEASE = 3;
+  RUNTIME_INCIDENT_ACTION_CLOSE = 4;
+}
+
+message ManageRuntimeIncidentRequest {
+  string idempotency_key = 1;
+  string incident_id = 2;
+  uint64 expected_version = 3;
+  RuntimeIncidentAction action = 4;
+  string reason_code = 5;
+}
+
+message ManageRuntimeIncidentResponse {
+  RuntimeIncident incident = 1;
+  Resource successor_turn = 2;
+}
+
+message GetRuntimeIncidentRequest {
+  string incident_id = 1;
+}
+message GetRuntimeIncidentResponse {
+  RuntimeIncident incident = 1;
+}
+
+message RuntimeIncidentHistoryEntry {
+  uint64 version = 1;
+  RuntimeIncidentState state = 2;
+  RuntimeIncidentAction action = 3;
+  string reason_code = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+}
+
+message ListRuntimeIncidentHistoryRequest {
+  string incident_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListRuntimeIncidentHistoryResponse {
+  repeated RuntimeIncidentHistoryEntry entries = 1;
+  string next_page_token = 2;
 }
 
 message ListRuntimeIncidentsRequest {
@@ -1732,6 +2454,8 @@ message ManageSessionRequest {
   // preferred_provider_credential_binding_id выбирает только элемент
   // проверенного сервером разрешения роли; произвольная привязка отклоняется.
   string preferred_provider_credential_binding_id = 10;
+  // agent_stable_key разрешается control-plane; caller не передаёт UUID Agent.
+  string agent_stable_key = 11;
 }
 
 // ManageSessionResponse описывает версионированное сообщение контракта control-plane.
@@ -1836,6 +2560,22 @@ message ManageScheduleRequest {
 
 // ManageScheduleResponse описывает версионированное сообщение контракта control-plane.
 message ManageScheduleResponse {
+  Resource schedule = 1;
+}
+
+message BindScheduleConfigurationRequest {
+  string idempotency_key = 1;
+  string schedule_id = 2;
+  uint64 expected_version = 3;
+  string agent_stable_key = 4;
+  string instruction_set_stable_key = 5;
+  string runtime_selection_ref = 6;
+  uint64 runtime_selection_version = 7;
+  string runtime_selection_sha256 = 8;
+  string provider_pool_stable_key = 9;
+}
+
+message BindScheduleConfigurationResponse {
   Resource schedule = 1;
 }
 
@@ -2041,6 +2781,77 @@ message CompleteProcessRequest {
 // CompleteProcessResponse возвращает авторитетный terminal-процесс.
 message CompleteProcessResponse {
   Resource process_run = 1;
+}
+
+enum RunAction {
+  RUN_ACTION_UNSPECIFIED = 0;
+  RUN_ACTION_CANCEL = 1;
+  RUN_ACTION_RETRY = 2;
+}
+
+message ManageRunRequest {
+  string idempotency_key = 1;
+  string process_run_id = 2;
+  uint64 expected_version = 3;
+  RunAction action = 4;
+  string reason_code = 5;
+}
+
+message ManageRunResponse {
+  Resource process_run = 1;
+  Resource successor_turn = 2;
+}
+
+message GetRunDetailRequest {
+  string process_run_id = 1;
+}
+message GetRunDetailResponse {
+  Resource process_run = 1;
+  Resource session = 2;
+  Resource turn = 3;
+  Resource runtime_revision = 4;
+  RuntimeExecution runtime_execution = 5;
+  repeated RuntimeIncident incidents = 6;
+}
+
+message ListRunTimelineRequest {
+  string process_run_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListRunTimelineResponse {
+  repeated AuditEvent events = 1;
+  string next_page_token = 2;
+}
+
+message GetRunLineageRequest {
+  string process_run_id = 1;
+}
+message RunLineage {
+  string root_session_id = 1;
+  string root_turn_id = 2;
+  string parent_process_run_id = 3;
+  string current_session_id = 4;
+  uint64 current_session_version = 5;
+  string current_turn_id = 6;
+  uint64 current_turn_version = 7;
+  uint32 current_attempt = 8;
+  string runtime_revision_id = 9;
+  uint64 runtime_revision_version = 10;
+  string immutable_input_sha256 = 11;
+}
+message GetRunLineageResponse {
+  RunLineage lineage = 1;
+}
+
+message ListRunArtifactsRequest {
+  string process_run_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListRunArtifactsResponse {
+  repeated Resource artifacts = 1;
+  string next_page_token = 2;
 }
 
 // ListOutboxFailuresRequest задаёт ограниченную UUID-пагинацию.
@@ -2276,6 +3087,12 @@ message Backup {
   // version — монотонная версия публичной проекции, отдельная от immutable
   // source_version. Она меняется вместе с generation/target lifecycle.
   uint64 version = 16;
+  repeated WorkspaceBackupMember members = 17;
+  string membership_sha256 = 18;
+  uint32 attempt = 19;
+  uint64 generation = 20;
+  uint64 revoked_generation = 21;
+  string terminal_reason_code = 22;
 }
 
 message ListBackupsRequest {
@@ -2351,6 +3168,10 @@ message RestoreOperation {
   uint64 generation = 15;
   bool partial = 16;
   RestoreOperationNextAction next_action = 17;
+  repeated WorkspaceRestoreMember members = 18;
+  string membership_sha256 = 19;
+  uint64 revoked_generation = 20;
+  string terminal_reason_code = 21;
 }
 
 message RestoreBackupResponse {
@@ -2373,6 +3194,137 @@ message ListRestoreOperationsRequest {
 
 message ListRestoreOperationsResponse {
   repeated RestoreOperation operations = 1;
+  string next_page_token = 2;
+}
+
+enum WorkspaceBackupAction {
+  WORKSPACE_BACKUP_ACTION_UNSPECIFIED = 0;
+  WORKSPACE_BACKUP_ACTION_CREATE = 1;
+  WORKSPACE_BACKUP_ACTION_CANCEL = 2;
+  WORKSPACE_BACKUP_ACTION_RETRY = 3;
+  WORKSPACE_BACKUP_ACTION_COMPLETE = 4;
+  WORKSPACE_BACKUP_ACTION_FAIL = 5;
+  WORKSPACE_BACKUP_ACTION_EXPIRE = 6;
+}
+
+message ManageWorkspaceBackupRequest {
+  string idempotency_key = 1;
+  WorkspaceBackupAction action = 2;
+  string backup_id = 3;
+  uint64 expected_version = 4;
+  WorkspaceBackupScope scope = 5;
+  string workspace_stable_key = 6;
+  string name = 7;
+  string terminal_reason_code = 8;
+  google.protobuf.Timestamp retain_until = 9;
+}
+
+message ManageWorkspaceBackupResponse {
+  Resource backup = 1;
+}
+
+message GetWorkspaceBackupRequest {
+  string backup_id = 1;
+}
+
+message GetWorkspaceBackupResponse {
+  Resource backup = 1;
+}
+
+message ListWorkspaceBackupsRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListWorkspaceBackupsResponse {
+  repeated Resource backups = 1;
+  string next_page_token = 2;
+}
+
+enum WorkspaceRestoreAction {
+  WORKSPACE_RESTORE_ACTION_UNSPECIFIED = 0;
+  WORKSPACE_RESTORE_ACTION_CREATE = 1;
+  WORKSPACE_RESTORE_ACTION_CANCEL = 2;
+  WORKSPACE_RESTORE_ACTION_RETRY = 3;
+  WORKSPACE_RESTORE_ACTION_COMPLETE = 4;
+  WORKSPACE_RESTORE_ACTION_FAIL = 5;
+  WORKSPACE_RESTORE_ACTION_EXPIRE = 6;
+}
+
+message ManageWorkspaceRestoreRequest {
+  string idempotency_key = 1;
+  WorkspaceRestoreAction action = 2;
+  string restore_id = 3;
+  uint64 expected_version = 4;
+  string backup_id = 5;
+  uint64 expected_backup_version = 6;
+  string membership_sha256 = 7;
+  string name = 8;
+  string terminal_reason_code = 9;
+}
+
+message ManageWorkspaceRestoreResponse {
+  Resource restore = 1;
+}
+
+message GetWorkspaceRestoreRequest {
+  string restore_id = 1;
+}
+
+message GetWorkspaceRestoreResponse {
+  Resource restore = 1;
+}
+
+message ListWorkspaceRestoresRequest {
+  string backup_id = 1;
+  repeated LifecycleState states = 2;
+  uint32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListWorkspaceRestoresResponse {
+  repeated Resource restores = 1;
+  string next_page_token = 2;
+}
+
+enum WorkspaceMattermostMappingAction {
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED = 0;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND = 1;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK = 2;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK = 3;
+}
+
+message ManageWorkspaceMattermostMappingRequest {
+  string idempotency_key = 1;
+  WorkspaceMattermostMappingAction action = 2;
+  string mapping_id = 3;
+  uint64 expected_version = 4;
+  uint64 expected_generation = 5;
+  string workspace_stable_key = 6;
+  string provider_team_ref = 7;
+  string provider_readback_receipt = 8;
+  string name = 9;
+}
+
+message ManageWorkspaceMattermostMappingResponse {
+  Resource mapping = 1;
+}
+
+message GetWorkspaceMattermostMappingRequest {
+  string mapping_id = 1;
+}
+message GetWorkspaceMattermostMappingResponse {
+  Resource mapping = 1;
+}
+message ListWorkspaceMattermostMappingsRequest {
+  string workspace_id = 1;
+  repeated WorkspaceMattermostMappingState states = 2;
+  uint32 page_size = 3;
+  string page_token = 4;
+}
+message ListWorkspaceMattermostMappingsResponse {
+  repeated Resource mappings = 1;
   string next_page_token = 2;
 }
 

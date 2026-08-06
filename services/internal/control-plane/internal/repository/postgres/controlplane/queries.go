@@ -135,6 +135,12 @@ var sqlResourceGetForUpdate string
 //go:embed sql/resource__get_including_deleted_for_update.sql
 var sqlResourceGetIncludingDeletedForUpdate string
 
+//go:embed sql/resource__get_by_stable_key_for_update.sql
+var sqlResourceGetByStableKeyForUpdate string
+
+//go:embed sql/resource__get_by_name_for_update.sql
+var sqlResourceGetByNameForUpdate string
+
 //go:embed sql/project__has_live_resources.sql
 var sqlProjectHasLiveResources string
 
@@ -254,6 +260,36 @@ var sqlRuntimeIncidentInsert string
 
 //go:embed sql/runtime_incident__list.sql
 var sqlRuntimeIncidentList string
+
+//go:embed sql/runtime_incident__get_for_update.sql
+var sqlRuntimeIncidentGetForUpdate string
+
+//go:embed sql/runtime_incident__owner_get.sql
+var sqlRuntimeIncidentOwnerGet string
+
+//go:embed sql/runtime_incident__update.sql
+var sqlRuntimeIncidentUpdate string
+
+//go:embed sql/runtime_incident_history__insert.sql
+var sqlRuntimeIncidentHistoryInsert string
+
+//go:embed sql/runtime_incident_history__record.sql
+var sqlRuntimeIncidentHistoryRecord string
+
+//go:embed sql/runtime_incident_history__list.sql
+var sqlRuntimeIncidentHistoryList string
+
+//go:embed sql/protected_history__insert.sql
+var sqlProtectedHistoryInsert string
+
+//go:embed sql/protected_history__list.sql
+var sqlProtectedHistoryList string
+
+//go:embed sql/protected_history__get_version.sql
+var sqlProtectedHistoryGetVersion string
+
+//go:embed sql/instruction_history__get_content_version.sql
+var sqlInstructionHistoryGetContentVersion string
 
 //go:embed sql/owner_session__admit.sql
 var sqlOwnerSessionAdmit string

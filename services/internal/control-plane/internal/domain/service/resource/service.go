@@ -182,6 +182,18 @@ const (
 	permissionIntegrationExecute        = "controlplane.integration_continuation.execute"
 	permissionIntegrationRead           = "controlplane.integration_continuation.read"
 	permissionIntegrationAcknowledge    = "controlplane.integration_continuation.acknowledge"
+	permissionRoleDefinitionManage      = "controlplane.role_definition.manage"
+	permissionAgentManage               = "controlplane.agent.manage"
+	permissionAgentAssignmentManage     = "controlplane.agent_assignment.manage"
+	permissionInstructionSetManage      = "controlplane.instruction_set.manage"
+	permissionProviderReferenceManage   = "controlplane.provider_reference.manage"
+	permissionProviderPoolManage        = "controlplane.provider_pool.manage"
+	permissionScheduleBind              = "controlplane.schedule.bind"
+	permissionRunManage                 = "controlplane.run.manage"
+	permissionRuntimeIncidentManage     = "controlplane.runtime_execution.incident.manage"
+	permissionWorkspaceBackupManage     = "controlplane.workspace_backup.manage"
+	permissionWorkspaceRestoreManage    = "controlplane.workspace_restore.manage"
+	permissionWorkspaceMappingManage    = "controlplane.workspace_mapping.manage"
 	agentRunnerWorkload                 = "agent-runner"
 	agentRunnerSPIFFEID                 = "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
 	controlAPIGatewayWorkload           = "control-api-gateway"
@@ -903,6 +915,7 @@ func (service *Service) List(ctx context.Context, input ListInput) ([]entity.Res
 	}
 	input.Filter.OrganizationID = input.Principal.OrganizationID
 	input.Filter.ProjectID = input.Principal.ProjectID
+	input.Filter.ActorID = input.Principal.ActorID
 	if err := input.Filter.Validate(); err != nil {
 		return nil, errs.ErrInvalidInput
 	}
@@ -1097,6 +1110,47 @@ func (service *Service) withResourceReceipt(
 		service.observer.ObserveMutation(result.Kind, scope)
 	}
 	return result, err
+}
+
+// withOwnerLockedResourceReceipt всегда разрешает существующий источник внутри
+// проверенной owner boundary до чтения idempotency receipt. Тот же intent может
+// вернуть исторический receipt и после последующего перехода ресурса.
+func (service *Service) withOwnerLockedResourceReceipt(
+	ctx context.Context,
+	principal value.Principal,
+	idempotencyKey, scope, requestHash, sourceResourceID string,
+	sourceKind enum.Kind,
+	expectedSourceVersion uint64,
+	validateStored func(entity.Resource) error,
+	apply resourceMutation,
+) (entity.Resource, error) {
+	return service.withValidatedResourceReceipt(ctx, principal, idempotencyKey,
+		scope, requestHash,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, err := tx.GetForUpdateIncludingDeleted(ctx, principal.OrganizationID,
+				principal.ProjectID, sourceResourceID)
+			if err != nil {
+				return 0, err
+			}
+			if current.Kind != sourceKind || current.OwnerActorID != principal.ActorID {
+				return 0, errs.ErrNotFound
+			}
+			if current.Version < expectedSourceVersion {
+				return 0, errs.ErrVersionMismatch
+			}
+			if current.Version == expectedSourceVersion {
+				return lifecycleReceiptApplyOrReplay, nil
+			}
+			return lifecycleReceiptReplay, nil
+		},
+		func(_ domainrepo.Transaction, stored entity.Resource) error {
+			if err := stored.Validate(); err != nil {
+				return errs.ErrInternal
+			}
+			return validateStored(stored)
+		},
+		apply,
+	)
 }
 
 func (service *Service) appendMutationRecords(
@@ -1377,9 +1431,7 @@ func validateTemporalCreation(spec entity.Spec, now time.Time) error {
 }
 
 func accessKind(kind enum.Kind) bool {
-	return kind == enum.KindTeam ||
-		kind == enum.KindRole ||
-		kind == enum.KindPromptProfile
+	return kind == enum.KindTeam
 }
 
 // createCommandAllowed связывает защищённый PROJECT только со
@@ -1396,7 +1448,10 @@ func protectedCreateKind(kind enum.Kind) bool {
 	case enum.KindProject, enum.KindRuntimeRevision, enum.KindProcessRun, enum.KindSchedule,
 		enum.KindOwnerGate, enum.KindArtifact, enum.KindSession,
 		enum.KindMemoryRecord, enum.KindWorkClaim, enum.KindRoleImageRecipe,
-		enum.KindImageBuild, enum.KindImageArtifact:
+		enum.KindImageBuild, enum.KindImageArtifact, enum.KindRole, enum.KindPromptProfile,
+		enum.KindRoleDefinition, enum.KindAgent, enum.KindAgentAssignment,
+		enum.KindInstructionSet, enum.KindProviderReference, enum.KindProviderPool,
+		enum.KindWorkspaceBackup, enum.KindWorkspaceRestore, enum.KindWorkspaceMapping:
 		return true
 	default:
 		return false
@@ -1408,7 +1463,11 @@ func protectedMutationKind(kind enum.Kind) bool {
 	case enum.KindProject, enum.KindRuntimeRevision, enum.KindSession, enum.KindTurn,
 		enum.KindProcessRun, enum.KindSchedule, enum.KindOwnerGate,
 		enum.KindArtifact, enum.KindMemoryRecord, enum.KindWorkClaim,
-		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact:
+		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact,
+		enum.KindRole, enum.KindPromptProfile, enum.KindRoleDefinition, enum.KindAgent,
+		enum.KindAgentAssignment, enum.KindInstructionSet, enum.KindProviderReference,
+		enum.KindProviderPool, enum.KindWorkspaceBackup, enum.KindWorkspaceRestore,
+		enum.KindWorkspaceMapping:
 		return true
 	default:
 		return false
@@ -1423,7 +1482,10 @@ func ownerBoundLifecycleKind(kind enum.Kind) bool {
 	switch kind {
 	case enum.KindProject, enum.KindSession, enum.KindTurn, enum.KindProcessRun,
 		enum.KindSchedule, enum.KindOwnerGate, enum.KindWorkClaim,
-		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact:
+		enum.KindRoleImageRecipe, enum.KindImageBuild, enum.KindImageArtifact,
+		enum.KindRoleDefinition, enum.KindAgent, enum.KindAgentAssignment,
+		enum.KindInstructionSet, enum.KindProviderReference, enum.KindProviderPool,
+		enum.KindWorkspaceBackup, enum.KindWorkspaceRestore, enum.KindWorkspaceMapping:
 		return true
 	default:
 		return false
@@ -1886,7 +1948,14 @@ func configurationUpdateSpec(
 	switch currentOwnership.ManagedBy {
 	case "UI":
 		if nextOwnership.ManagedBy == "UI" {
-			return next, nil
+			// SourceRef/SourceRevision — server-owned copy/detach lineage. Обычный
+			// UI update не может стереть или переписать происхождение.
+			if nextOwnership.SourceRef != "" &&
+				(nextOwnership.SourceRef != currentOwnership.SourceRef ||
+					nextOwnership.SourceRevision != currentOwnership.SourceRevision) {
+				return nil, errs.ErrStateConflict
+			}
+			return entity.WithConfigurationOwnership(next, currentOwnership)
 		}
 		if nextOwnership.ManagedBy != "GIT" {
 			return nil, errs.ErrStateConflict

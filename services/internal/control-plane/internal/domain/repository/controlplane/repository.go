@@ -46,6 +46,14 @@ type Audit struct {
 	OccurredAt      time.Time
 }
 
+// ProtectedResourceHistory хранит immutable snapshot специализированной команды.
+type ProtectedResourceHistory struct {
+	Resource       entity.Resource
+	Action         string
+	SnapshotSHA256 string
+	OccurredAt     time.Time
+}
+
 // TurnLease защищает одну попытку выполнения хода.
 type TurnLease struct {
 	TurnID              string
@@ -473,6 +481,21 @@ type RuntimeIncident struct {
 	EvidenceSHA256 string
 	WorkloadID     string
 	OccurredAt     time.Time
+	Version        uint64
+	State          string
+	ReasonCode     string
+	UpdatedAt      time.Time
+}
+
+// RuntimeIncidentHistory фиксирует каждое специализированное owner action.
+type RuntimeIncidentHistory struct {
+	IncidentID   string
+	Version      uint64
+	State        string
+	Action       string
+	ReasonCode   string
+	OccurredAt   time.Time
+	OwnerActorID string
 }
 
 // OwnerSessionState — verifying-side durable current OIDC session fence.
@@ -762,6 +785,19 @@ type Transaction interface {
 	ActiveOwnerGateForProcess(context.Context, string, string, string) (entity.Resource, error)
 }
 
+// ProtectedTransaction — узкий порт owner-конфигурации Issue #234. Он не
+// расширяет legacy Transaction и не превращает generic CRUD в protected API.
+type ProtectedTransaction interface {
+	GetByStableKeyForUpdate(context.Context, string, string, enum.Kind, string) (entity.Resource, error)
+	GetByNameForUpdate(context.Context, string, string, enum.Kind, string) (entity.Resource, error)
+	AppendProtectedResourceHistory(context.Context, ProtectedResourceHistory) error
+	GetProtectedResourceHistoryVersion(context.Context, string, uint64) (ProtectedResourceHistory, error)
+	GetInstructionHistoryContentVersion(context.Context, string, uint64) (ProtectedResourceHistory, error)
+	GetRuntimeIncidentForUpdate(context.Context, string) (RuntimeIncident, error)
+	UpdateRuntimeIncident(context.Context, RuntimeIncident, uint64) error
+	AppendRuntimeIncidentHistory(context.Context, RuntimeIncidentHistory) error
+}
+
 // ImageTransaction materialизует только специализированный image lifecycle.
 // Отдельный порт не расширяет generic CRUD и сохраняет закрытый реестр команд.
 type ImageTransaction interface {
@@ -793,4 +829,11 @@ type Repository interface {
 	CacheEpoch(context.Context, string, string) (uint64, error)
 	Check(context.Context) error
 	Close()
+}
+
+// ProtectedRepository — typed read/history boundary Issue #234.
+type ProtectedRepository interface {
+	ListProtectedResourceHistory(context.Context, string, string, string, string, uint64, int) ([]ProtectedResourceHistory, error)
+	GetRuntimeIncident(context.Context, string, string, string, string) (RuntimeIncident, error)
+	ListRuntimeIncidentHistory(context.Context, string, string, string, string, uint64, int) ([]RuntimeIncidentHistory, error)
 }

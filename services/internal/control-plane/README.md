@@ -7,11 +7,15 @@
 integration-continuation контуром Issue
 [#221](https://github.com/codex-k8s/matter-codex/issues/221) и owner
 Project/Schedule/OwnerGate/Backup/Restore path Issue
-[#231](https://github.com/codex-k8s/matter-codex/issues/231).
+[#231](https://github.com/codex-k8s/matter-codex/issues/231) и полной
+owner-конфигурацией Issue
+[#234](https://github.com/codex-k8s/matter-codex/issues/234).
 
 Сервис владеет:
 
 - проектами, командами, чатами, ролями и профилями запросов;
+- отдельными `RoleDefinition`, `Agent`, `AgentAssignment`, версионируемыми
+  `InstructionSet`, masked provider refs/pools и Workspace↔Mattermost mapping;
 - метаданными привязок учётных данных, репозиториев, рабочих пространств и
   интеграций;
 - неизменяемыми ревизиями среды исполнения;
@@ -25,6 +29,8 @@ Project/Schedule/OwnerGate/Backup/Restore path Issue
   authoritative read/rejoin;
 - сессиями, ходами и родословной процессов;
 - расписаниями, шлюзами владельца, памятью и заявками на работу;
+- owner readback и закрытыми действиями Run/Incident, а также полным
+  `WORKSPACE|ALL_WORKSPACES` backup/restore envelope;
 - метаданными артефактов, но не их байтами.
 
 Значения секретов остаются во внешнем хранилище Vault/Kubernetes.
@@ -78,6 +84,9 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 сканированием байтов, а `control-plane` — метаданными и автоматом состояний.
 Неизвестные производитель, назначение учётных данных, рабочая нагрузка,
 SPIFFE ID, полный метод, audience или полномочие закрыто отклоняются.
+Новые owner operations входят в policy revision 22. Mutation provider
+reference и Workspace↔Mattermost mapping принадлежат только точному
+`integration-gateway`; OIDC-профиль имеет для них лишь безопасные typed reads.
 
 `controlplaneclient` выполняет полный путь потребителя: точный mTLS к
 `control-plane`, проверку прикладного разрешения конкретной рабочей нагрузки
@@ -334,6 +343,9 @@ Redis хранит только ограниченные снимки ресур
 Метрики не содержат ID организации или ресурса и используют закрытые labels.
 Dashboard — `mattercodex-control-plane`. Alerts ведут на абсолютный HTTPS URL
 runbook.
+Новые protected команды учитываются в `mutations_total` только через закрытый
+набор `kind/action`; отдельная панель показывает owner configuration и recovery
+mutations без tenant/resource labels.
 
 ## Конфигурация
 

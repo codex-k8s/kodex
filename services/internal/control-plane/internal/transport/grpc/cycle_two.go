@@ -40,6 +40,7 @@ func (server *Server) ManageSession(
 		ExpectedVersion:                      request.GetExpectedVersion(),
 		Name:                                 request.GetName(),
 		RoleID:                               request.GetRoleId(),
+		AgentStableKey:                       request.GetAgentStableKey(),
 		ConversationID:                       request.GetConversationId(),
 		ArchiveRef:                           request.GetArchiveRef(),
 		ReasonCode:                           request.GetReasonCode(),

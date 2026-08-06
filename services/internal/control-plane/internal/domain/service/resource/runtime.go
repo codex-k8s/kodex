@@ -2295,6 +2295,10 @@ func (service *Service) createRuntimeRevision(
 	for _, item := range resources {
 		byID[item.ID] = item
 	}
+	if agent, ok := byID[sessionSpec.AgentID]; ok && agent.Kind == enum.KindAgent {
+		return service.createAgentRuntimeRevision(ctx, tx, principal, session, sessionSpec,
+			scheduledResultContract, resources, agent)
+	}
 	selected := make(map[string]entity.Resource)
 	add := func(identifier string, kind enum.Kind) (entity.Resource, error) {
 		item, ok := byID[identifier]

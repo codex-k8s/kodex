@@ -55,6 +55,7 @@ type transaction struct {
 	tx             pgx.Tx
 	organizationID string
 	projectID      string
+	actorID        string
 }
 
 // AdmitMattermostEventKeyset фиксирует verifier-owned monotonic fence до
@@ -164,6 +165,7 @@ func (repository *Repository) Transact(
 			tx:             tx,
 			organizationID: scope.OrganizationID,
 			projectID:      scope.ProjectID,
+			actorID:        scope.ActorID,
 		}
 		if err := repository.setScope(ctx, tx, scope); err != nil {
 			_ = tx.Rollback(ctx)
@@ -479,13 +481,10 @@ func (repository *Repository) ListRuntimeIncidents(
 			}
 			defer rows.Close()
 			for rows.Next() {
-				var incident domainrepo.RuntimeIncident
-				if err := rows.Scan(&incident.ID, &incident.OrganizationID, &incident.ProjectID,
-					&incident.ExecutionID, &incident.ExecutionFence, &incident.Kind,
-					&incident.EvidenceSHA256, &incident.WorkloadID, &incident.OccurredAt); err != nil {
-					return err
+				incident, scanErr := scanRuntimeIncident(rows)
+				if scanErr != nil {
+					return scanErr
 				}
-				incident.OccurredAt = incident.OccurredAt.UTC()
 				incidents = append(incidents, incident)
 			}
 			return rows.Err()
@@ -3061,7 +3060,21 @@ func (wrapped *transaction) InsertRuntimeIncident(
 		"workload_id":     incident.WorkloadID,
 		"occurred_at":     incident.OccurredAt,
 	})
-	return mapError(err)
+	if err != nil {
+		return mapError(err)
+	}
+	commandTag, err := wrapped.tx.Exec(ctx, sqlRuntimeIncidentHistoryRecord, pgx.StrictNamedArgs{
+		"organization_id": incident.OrganizationID,
+		"project_id":      incident.ProjectID,
+		"incident_id":     incident.ID,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if commandTag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (wrapped *transaction) AdmitOwnerSession(

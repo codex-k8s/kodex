@@ -133,115 +133,184 @@ func (service *Service) ManageSchedule(
 					return entity.Resource{}, err
 				}
 			}
-			target, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.Spec.TargetResourceID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			if target.State != enum.StateActive ||
-				target.Kind != enum.KindRole {
-				return entity.Resource{}, errs.ErrNotFound
-			}
-			input.Spec.TargetKind = target.Kind
-			input.Spec.TargetVersion = target.Version
-			targetProjectionSHA256, err := entity.ProjectionSHA256(target)
-			if err != nil {
-				return entity.Resource{}, errs.ErrInternal
-			}
-			promptArtifact, err := service.requireCleanArtifact(
-				ctx,
-				tx,
-				input.Principal,
-				input.Spec.PromptArtifactID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			prompt, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.Spec.PromptProfileID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
-			if !ok || prompt.Kind != enum.KindPromptProfile ||
-				prompt.State != enum.StateActive ||
-				promptSpec.Revision != input.Spec.PromptRevision {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			revision, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				input.Spec.RuntimeRevisionID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
-			if !ok || revision.Kind != enum.KindRuntimeRevision ||
-				revision.State != enum.StateActive ||
-				revisionSpec.PromptProfileID != prompt.ID ||
-				revisionSpec.PromptRevision != promptSpec.Revision ||
-				revisionSpec.RoleID != target.ID {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			if input.Spec.RoomID != "" {
-				room, err := tx.GetForUpdate(
+			if input.Spec.TargetKind == enum.KindAgent {
+				target, getErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, input.Spec.TargetResourceID)
+				if getErr != nil {
+					return entity.Resource{}, getErr
+				}
+				agentSpec, ok := target.Spec.(entity.AgentSpec)
+				if !ok || target.Kind != enum.KindAgent || target.State != enum.StateActive ||
+					target.OwnerActorID != input.Principal.ActorID || target.Version != input.Spec.TargetVersion ||
+					input.Spec.AgentID != target.ID || input.Spec.AgentVersion != target.Version {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				targetSHA, digestErr := entity.ProjectionSHA256(target)
+				if digestErr != nil || targetSHA != input.Spec.AgentSHA256 {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				instruction, getErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, input.Spec.InstructionSetID)
+				if getErr != nil {
+					return entity.Resource{}, getErr
+				}
+				instructionSpec, ok := instruction.Spec.(entity.InstructionSetSpec)
+				instructionSHA, digestErr := entity.ProjectionSHA256(instruction)
+				if !ok || digestErr != nil || instruction.Kind != enum.KindInstructionSet ||
+					instruction.State != enum.StateActive || instructionSpec.VersionState != "PUBLISHED" ||
+					instruction.Version != input.Spec.InstructionSetVersion ||
+					instructionSHA != input.Spec.InstructionSetSHA256 || agentSpec.InstructionSetID != instruction.ID ||
+					agentSpec.InstructionSetVersion != instruction.Version {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				pool, getErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, input.Spec.ProviderPoolID)
+				if getErr != nil {
+					return entity.Resource{}, getErr
+				}
+				poolSHA, digestErr := entity.ProjectionSHA256(pool)
+				if digestErr != nil || pool.Kind != enum.KindProviderPool || pool.State != enum.StateActive ||
+					pool.Version != input.Spec.ProviderPoolVersion || poolSHA != input.Spec.ProviderPoolSHA256 ||
+					agentSpec.ProviderPoolID != pool.ID || agentSpec.ProviderPoolVersion != pool.Version ||
+					agentSpec.RuntimeProfileRef != input.Spec.RuntimeSelectionRef ||
+					agentSpec.RuntimeProfileVersion != input.Spec.RuntimeSelectionVersion ||
+					agentSpec.RuntimeProfileSHA256 != input.Spec.RuntimeSelectionSHA256 {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if input.Spec.SessionPolicy != "NEW" {
+					session, sessionErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+						input.Principal.ProjectID, input.Spec.ExecutionSessionID)
+					if sessionErr != nil {
+						return entity.Resource{}, sessionErr
+					}
+					sessionSpec, sessionOK := session.Spec.(entity.SessionSpec)
+					if !sessionOK || session.Kind != enum.KindSession || session.State != enum.StateActive ||
+						session.OwnerActorID != input.Principal.ActorID || sessionSpec.AgentID != target.ID ||
+						sessionSpec.ConversationID != input.Spec.RoomID {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
+				}
+				promptArtifact, artifactErr := service.requireCleanArtifact(
+					ctx, tx, input.Principal, input.Spec.PromptArtifactID,
+				)
+				if artifactErr != nil {
+					return entity.Resource{}, artifactErr
+				}
+				input.Spec.EffectiveInputSHA, err = targetScheduleEffectiveInput(input.Spec, promptArtifact.SHA256)
+				if err != nil {
+					return entity.Resource{}, errs.ErrInternal
+				}
+			} else {
+				target, err := tx.GetForUpdate(
 					ctx,
 					input.Principal.OrganizationID,
 					input.Principal.ProjectID,
-					input.Spec.RoomID,
+					input.Spec.TargetResourceID,
 				)
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				if room.Kind != enum.KindChat || room.State != enum.StateActive {
+				if target.State != enum.StateActive ||
+					target.Kind != enum.KindRole {
 					return entity.Resource{}, errs.ErrNotFound
 				}
-				if revisionSpec.ChatID != room.ID {
-					return entity.Resource{}, errs.ErrStateConflict
+				input.Spec.TargetKind = target.Kind
+				input.Spec.TargetVersion = target.Version
+				targetProjectionSHA256, err := entity.ProjectionSHA256(target)
+				if err != nil {
+					return entity.Resource{}, errs.ErrInternal
 				}
-			} else if revisionSpec.ChatID != "" {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			if input.Spec.SessionPolicy != "NEW" {
-				session, err := tx.GetForUpdate(
+				promptArtifact, err := service.requireCleanArtifact(
 					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.Spec.ExecutionSessionID,
+					tx,
+					input.Principal,
+					input.Spec.PromptArtifactID,
 				)
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				sessionSpec, ok := session.Spec.(entity.SessionSpec)
-				if !ok || session.Kind != enum.KindSession ||
-					session.State != enum.StateActive ||
-					session.OwnerActorID != input.Principal.ActorID ||
-					sessionSpec.AgentID != target.ID ||
-					sessionSpec.ProviderAccountBindingID !=
-						revisionSpec.ProviderCredentialBindingID ||
-					sessionSpec.ConversationID != input.Spec.RoomID {
+				prompt, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.Spec.PromptProfileID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
+				if !ok || prompt.Kind != enum.KindPromptProfile ||
+					prompt.State != enum.StateActive ||
+					promptSpec.Revision != input.Spec.PromptRevision {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-			}
-			input.Spec.EffectiveInputSHA, err = scheduleEffectiveInput(
-				input.Spec,
-				targetProjectionSHA256,
-				promptArtifact.SHA256,
-				revision.Version,
-				revisionSpec.ManifestSHA256,
-			)
-			if err != nil {
-				return entity.Resource{}, errs.ErrInternal
+				revision, err := tx.GetForUpdate(
+					ctx,
+					input.Principal.OrganizationID,
+					input.Principal.ProjectID,
+					input.Spec.RuntimeRevisionID,
+				)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
+				if !ok || revision.Kind != enum.KindRuntimeRevision ||
+					revision.State != enum.StateActive ||
+					revisionSpec.PromptProfileID != prompt.ID ||
+					revisionSpec.PromptRevision != promptSpec.Revision ||
+					revisionSpec.RoleID != target.ID {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if input.Spec.RoomID != "" {
+					room, err := tx.GetForUpdate(
+						ctx,
+						input.Principal.OrganizationID,
+						input.Principal.ProjectID,
+						input.Spec.RoomID,
+					)
+					if err != nil {
+						return entity.Resource{}, err
+					}
+					if room.Kind != enum.KindChat || room.State != enum.StateActive {
+						return entity.Resource{}, errs.ErrNotFound
+					}
+					if revisionSpec.ChatID != room.ID {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
+				} else if revisionSpec.ChatID != "" {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				if input.Spec.SessionPolicy != "NEW" {
+					session, err := tx.GetForUpdate(
+						ctx,
+						input.Principal.OrganizationID,
+						input.Principal.ProjectID,
+						input.Spec.ExecutionSessionID,
+					)
+					if err != nil {
+						return entity.Resource{}, err
+					}
+					sessionSpec, ok := session.Spec.(entity.SessionSpec)
+					if !ok || session.Kind != enum.KindSession ||
+						session.State != enum.StateActive ||
+						session.OwnerActorID != input.Principal.ActorID ||
+						sessionSpec.AgentID != target.ID ||
+						sessionSpec.ProviderAccountBindingID !=
+							revisionSpec.ProviderCredentialBindingID ||
+						sessionSpec.ConversationID != input.Spec.RoomID {
+						return entity.Resource{}, errs.ErrStateConflict
+					}
+				}
+				input.Spec.EffectiveInputSHA, err = scheduleEffectiveInput(
+					input.Spec,
+					targetProjectionSHA256,
+					promptArtifact.SHA256,
+					revision.Version,
+					revisionSpec.ManifestSHA256,
+				)
+				if err != nil {
+					return entity.Resource{}, errs.ErrInternal
+				}
 			}
 			if input.Action == "CREATE" {
 				input.Spec.NextRunAt, err = firstScheduleRun(input.Spec, now)
@@ -1083,36 +1152,81 @@ func (service *Service) MaterializeScheduleOccurrence(
 				target.State == enum.StateDeleted {
 				return errs.ErrStateConflict
 			}
-			prompt, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				occurrence.PromptProfileID,
+			promptArtifact, err := service.requireCleanArtifact(
+				ctx, tx, input.Principal, scheduleSpec.PromptArtifactID,
 			)
 			if err != nil {
 				return err
 			}
-			promptSpec, ok := prompt.Spec.(entity.PromptProfileSpec)
-			if !ok || prompt.Kind != enum.KindPromptProfile ||
-				prompt.State != enum.StateActive ||
-				promptSpec.Revision != occurrence.PromptRevision {
-				return errs.ErrStateConflict
+			var revisionSpec entity.RuntimeRevisionSpec
+			var pinnedInputSHA256 string
+			if scheduleSpec.TargetKind == enum.KindAgent {
+				agentSpec, agentOK := target.Spec.(entity.AgentSpec)
+				if !agentOK || target.State != enum.StateActive || scheduleSpec.AgentID != target.ID ||
+					scheduleSpec.AgentVersion != target.Version || scheduleSpec.AgentSHA256 != targetDigest ||
+					agentSpec.InstructionSetID != scheduleSpec.InstructionSetID ||
+					agentSpec.InstructionSetVersion != scheduleSpec.InstructionSetVersion ||
+					agentSpec.InstructionSetSHA256 != scheduleSpec.InstructionSetSHA256 ||
+					agentSpec.ProviderPoolID != scheduleSpec.ProviderPoolID ||
+					agentSpec.ProviderPoolVersion != scheduleSpec.ProviderPoolVersion ||
+					agentSpec.ProviderPoolSHA256 != scheduleSpec.ProviderPoolSHA256 ||
+					agentSpec.RuntimeProfileRef != scheduleSpec.RuntimeSelectionRef ||
+					agentSpec.RuntimeProfileVersion != scheduleSpec.RuntimeSelectionVersion ||
+					agentSpec.RuntimeProfileSHA256 != scheduleSpec.RuntimeSelectionSHA256 {
+					return errs.ErrStateConflict
+				}
+				instruction, instructionErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, scheduleSpec.InstructionSetID)
+				if instructionErr != nil {
+					return instructionErr
+				}
+				instructionSpec, instructionOK := instruction.Spec.(entity.InstructionSetSpec)
+				instructionSHA256, digestErr := entity.ProjectionSHA256(instruction)
+				if !instructionOK || digestErr != nil || instruction.Kind != enum.KindInstructionSet ||
+					instruction.State != enum.StateActive || instructionSpec.VersionState != "PUBLISHED" ||
+					instruction.Version != scheduleSpec.InstructionSetVersion ||
+					instructionSHA256 != scheduleSpec.InstructionSetSHA256 {
+					return errs.ErrStateConflict
+				}
+				pool, poolErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, scheduleSpec.ProviderPoolID)
+				if poolErr != nil {
+					return poolErr
+				}
+				poolSHA256, digestErr := entity.ProjectionSHA256(pool)
+				if digestErr != nil || pool.Kind != enum.KindProviderPool || pool.State != enum.StateActive ||
+					pool.Version != scheduleSpec.ProviderPoolVersion || poolSHA256 != scheduleSpec.ProviderPoolSHA256 {
+					return errs.ErrStateConflict
+				}
+				pinnedInputSHA256, err = targetScheduleEffectiveInput(scheduleSpec, promptArtifact.SHA256)
+			} else {
+				prompt, promptErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, occurrence.PromptProfileID)
+				if promptErr != nil {
+					return promptErr
+				}
+				promptSpec, promptOK := prompt.Spec.(entity.PromptProfileSpec)
+				if !promptOK || prompt.Kind != enum.KindPromptProfile || prompt.State != enum.StateActive ||
+					promptSpec.Revision != occurrence.PromptRevision {
+					return errs.ErrStateConflict
+				}
+				revision, revisionErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, occurrence.RuntimeRevisionID)
+				if revisionErr != nil {
+					return revisionErr
+				}
+				var revisionOK bool
+				revisionSpec, revisionOK = revision.Spec.(entity.RuntimeRevisionSpec)
+				if !revisionOK || revision.Kind != enum.KindRuntimeRevision || revision.State != enum.StateActive ||
+					revisionSpec.PromptProfileID != occurrence.PromptProfileID ||
+					revisionSpec.PromptRevision != occurrence.PromptRevision {
+					return errs.ErrStateConflict
+				}
+				pinnedInputSHA256, err = scheduleEffectiveInput(scheduleSpec, targetDigest,
+					promptArtifact.SHA256, revision.Version, revisionSpec.ManifestSHA256)
 			}
-			revision, err := tx.GetForUpdate(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				occurrence.RuntimeRevisionID,
-			)
 			if err != nil {
-				return err
-			}
-			revisionSpec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
-			if !ok || revision.Kind != enum.KindRuntimeRevision ||
-				revision.State != enum.StateActive ||
-				revisionSpec.PromptProfileID != occurrence.PromptProfileID ||
-				revisionSpec.PromptRevision != occurrence.PromptRevision {
-				return errs.ErrStateConflict
+				return errs.ErrInternal
 			}
 			if occurrence.RoomID != "" {
 				room, roomErr := tx.GetForUpdate(
@@ -1127,25 +1241,6 @@ func (service *Service) MaterializeScheduleOccurrence(
 				if room.Kind != enum.KindChat || room.State != enum.StateActive {
 					return errs.ErrStateConflict
 				}
-			}
-			promptArtifact, err := service.requireCleanArtifact(
-				ctx,
-				tx,
-				input.Principal,
-				scheduleSpec.PromptArtifactID,
-			)
-			if err != nil {
-				return err
-			}
-			pinnedInputSHA256, err := scheduleEffectiveInput(
-				scheduleSpec,
-				targetDigest,
-				promptArtifact.SHA256,
-				revision.Version,
-				revisionSpec.ManifestSHA256,
-			)
-			if err != nil {
-				return errs.ErrInternal
 			}
 			if pinnedInputSHA256 != occurrence.EffectiveInputSHA256 {
 				return errs.ErrStateConflict
@@ -2050,10 +2145,49 @@ func (service *Service) prepareScheduleSession(
 			session.State != enum.StateActive ||
 			session.OwnerActorID != schedule.OwnerActorID ||
 			sessionSpec.AgentID != spec.TargetResourceID ||
-			sessionSpec.ProviderAccountBindingID !=
-				revisionSpec.ProviderCredentialBindingID ||
 			sessionSpec.ConversationID != spec.RoomID {
 			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+		}
+		if spec.TargetKind == enum.KindAgent {
+			if sessionSpec.AgentVersion != spec.AgentVersion || sessionSpec.AgentSHA256 != spec.AgentSHA256 ||
+				sessionSpec.ProviderPoolID != spec.ProviderPoolID ||
+				sessionSpec.ProviderPoolVersion != spec.ProviderPoolVersion ||
+				sessionSpec.ProviderPoolSHA256 != spec.ProviderPoolSHA256 ||
+				sessionSpec.ProviderAccountBindingID != "" {
+				return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+			}
+		} else if sessionSpec.ProviderAccountBindingID != revisionSpec.ProviderCredentialBindingID {
+			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+		}
+		return session, sessionSpec, nil
+	}
+	if spec.TargetKind == enum.KindAgent {
+		agent, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, spec.AgentID)
+		if err != nil {
+			return entity.Resource{}, entity.SessionSpec{}, err
+		}
+		agentSHA256, digestErr := entity.ProjectionSHA256(agent)
+		if digestErr != nil || agent.Kind != enum.KindAgent || agent.State != enum.StateActive ||
+			agent.OwnerActorID != schedule.OwnerActorID || agent.Version != spec.AgentVersion ||
+			agentSHA256 != spec.AgentSHA256 {
+			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+		}
+		sessionSpec := entity.SessionSpec{
+			AgentID: agent.ID, AgentVersion: agent.Version, AgentSHA256: agentSHA256,
+			ProviderPoolID: spec.ProviderPoolID, ProviderPoolVersion: spec.ProviderPoolVersion,
+			ProviderPoolSHA256: spec.ProviderPoolSHA256, ConversationID: spec.RoomID,
+		}
+		session, err := entity.New(uuid.NewString(), principal.OrganizationID, principal.ProjectID,
+			schedule.ID, schedule.OwnerActorID, enum.KindSession, "Scheduled session "+schedule.ID,
+			sessionSpec, now)
+		if err != nil {
+			return entity.Resource{}, entity.SessionSpec{}, errs.ErrInternal
+		}
+		if err := tx.Insert(ctx, session); err != nil {
+			return entity.Resource{}, entity.SessionSpec{}, err
+		}
+		if err := service.appendMutationRecords(ctx, tx, principal, "schedule_create_agent_session", session); err != nil {
+			return entity.Resource{}, entity.SessionSpec{}, err
 		}
 		return session, sessionSpec, nil
 	}
