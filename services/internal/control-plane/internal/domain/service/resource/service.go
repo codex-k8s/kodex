@@ -184,6 +184,7 @@ const (
 	permissionIntegrationAcknowledge    = "controlplane.integration_continuation.acknowledge"
 	permissionRoleDefinitionManage      = "controlplane.role_definition.manage"
 	permissionAgentManage               = "controlplane.agent.manage"
+	permissionAgentBotIdentityManage    = "controlplane.agent.bot_identity.manage"
 	permissionAgentAssignmentManage     = "controlplane.agent_assignment.manage"
 	permissionInstructionSetManage      = "controlplane.instruction_set.manage"
 	permissionProviderReferenceManage   = "controlplane.provider_reference.manage"
@@ -193,6 +194,8 @@ const (
 	permissionRuntimeIncidentManage     = "controlplane.runtime_execution.incident.manage"
 	permissionWorkspaceBackupManage     = "controlplane.workspace_backup.manage"
 	permissionWorkspaceRestoreManage    = "controlplane.workspace_restore.manage"
+	permissionWorkspaceBackupTerminal   = "controlplane.workspace_backup.terminal"
+	permissionWorkspaceRestoreTerminal  = "controlplane.workspace_restore.terminal"
 	permissionWorkspaceMappingManage    = "controlplane.workspace_mapping.manage"
 	agentRunnerWorkload                 = "agent-runner"
 	agentRunnerSPIFFEID                 = "spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner"
@@ -200,6 +203,8 @@ const (
 	controlAPIGatewaySPIFFEID           = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
 	runtimeRestoreEffectWorkload        = "runtime-s3-restore-exchanger"
 	runtimeRestoreEffectSPIFFEID        = "spiffe://mattercodex.local/ns/mattercodex-system/sa/runtime-s3-restore-exchanger"
+	recoveryReconcilerWorkload          = "control-plane-recovery-reconciler"
+	recoveryReconcilerSPIFFEID          = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane-recovery-reconciler"
 )
 
 // Config задаёт критичную для безопасности ограниченную политику выполнения.
@@ -887,6 +892,15 @@ func (service *Service) Get(ctx context.Context, input GetInput) (entity.Resourc
 		input.ResourceID,
 		input.Kind,
 	)
+	if errors.Is(err, errs.ErrNotFound) && input.Principal.CallerWorkload == service.runtimeControllerWorkload &&
+		(input.Kind == enum.KindRole || input.Kind == enum.KindPromptProfile) && input.ExpectedVersion != 0 {
+		projectionRepository, ok := service.repository.(domainrepo.RuntimeProjectionRepository)
+		if !ok {
+			return entity.Resource{}, errs.ErrUnavailable
+		}
+		resource, err = projectionRepository.GetDerivedRuntimeResource(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, input.ResourceID, input.Kind, input.ExpectedVersion)
+	}
 	if err != nil {
 		return entity.Resource{}, err
 	}
@@ -1835,12 +1849,6 @@ func validOpaqueRuntimeIdentifier(input string) bool {
 		!strings.ContainsAny(input, "\x00\r\n")
 }
 
-func validImageDigest(input string) bool {
-	return strings.HasPrefix(input, "sha256:") &&
-		input != "sha256:0000000000000000000000000000000000000000000000000000000000000000" &&
-		validSHA256Text(strings.TrimPrefix(input, "sha256:"))
-}
-
 func validSPIFFEID(input string) bool {
 	return strings.HasPrefix(input, "spiffe://mattercodex.local/") &&
 		len(input) <= 512 && !strings.ContainsAny(input, " \t\r\n")
@@ -1890,9 +1898,13 @@ func validateConfigurationCreate(
 	}
 	ownership := configured.ConfigurationOwnership()
 	if ownership.ManagedBy == "UI" {
+		if ownership.SourceRef != "" || ownership.SourceRevision != 0 || ownership.SourceSHA256 != "" {
+			return errs.ErrInvalidInput
+		}
 		return nil
 	}
-	if ownership.ManagedBy != "GIT" {
+	if ownership.ManagedBy != "GIT" || ownership.Validate() != nil ||
+		!validSHA256Text(ownership.SourceSHA256) {
 		return errs.ErrInvalidInput
 	}
 	return requireDurablePermission(
@@ -1957,13 +1969,12 @@ func configurationUpdateSpec(
 			}
 			return entity.WithConfigurationOwnership(next, currentOwnership)
 		}
-		if nextOwnership.ManagedBy != "GIT" {
-			return nil, errs.ErrStateConflict
-		}
+		return nil, errs.ErrStateConflict
 	case "GIT":
 		if nextOwnership.ManagedBy != "GIT" ||
 			nextOwnership.SourceRef != currentOwnership.SourceRef ||
-			nextOwnership.SourceRevision <= currentOwnership.SourceRevision {
+			nextOwnership.SourceRevision <= currentOwnership.SourceRevision ||
+			nextOwnership.SourceSHA256 == currentOwnership.SourceSHA256 {
 			return nil, errs.ErrStateConflict
 		}
 	default:

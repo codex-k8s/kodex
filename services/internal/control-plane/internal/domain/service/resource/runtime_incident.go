@@ -7,6 +7,7 @@ import (
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 )
 
@@ -44,6 +45,7 @@ func (service *Service) ManageRuntimeIncident(
 	var result ManageRuntimeIncidentResult
 	var lockedIncident domainrepo.RuntimeIncident
 	var lockedExecution RuntimeExecution
+	var lockedOwnerActorID string
 	var targetState string
 	err = service.withLifecycleReceipt(ctx, input.Principal, input.IdempotencyKey,
 		"manage_runtime_incident_"+input.Action, requestHash, &result,
@@ -61,7 +63,7 @@ func (service *Service) ManageRuntimeIncident(
 				return 0, err
 			}
 			graph, err := service.lockOwnerGraphByTurn(ctx, tx, input.Principal, execution.TurnID)
-			if err != nil || graph.Process.OwnerActorID != input.Principal.ActorID ||
+			if err != nil || graph.Process.OwnerActorID == "" ||
 				graph.Process.ID != execution.ProcessID || graph.Turn.ID != execution.TurnID ||
 				incident.ExecutionFence > execution.Fence {
 				if err != nil {
@@ -70,6 +72,7 @@ func (service *Service) ManageRuntimeIncident(
 				return 0, errs.ErrNotFound
 			}
 			lockedIncident, lockedExecution = incident, execution
+			lockedOwnerActorID = graph.Process.OwnerActorID
 			replayState := map[string]string{
 				"acknowledge": "ACKNOWLEDGED", "retry": "RETRYING",
 				"release": "RELEASED", "close": "CLOSED",
@@ -117,6 +120,11 @@ func (service *Service) ManageRuntimeIncident(
 			if input.Action == "retry" && result.SuccessorTurn.ID == "" {
 				return errs.ErrStateConflict
 			}
+			if input.Action == "release" && (result.ReleasedExecution == nil ||
+				result.ReleasedExecution.State != "CANCELLED" ||
+				result.ReleasedExecution.TerminalReference != input.ReasonCode) {
+				return errs.ErrStateConflict
+			}
 			return nil
 		},
 		func(tx domainrepo.Transaction) error {
@@ -126,11 +134,23 @@ func (service *Service) ManageRuntimeIncident(
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
 			if input.Action == "retry" {
-				retried, err := service.retryWorkspaceExecution(ctx, tx, input.Principal, lockedExecution, nil, now)
+				ownerPrincipal := input.Principal
+				ownerPrincipal.ActorID = lockedOwnerActorID
+				retried, err := service.retryWorkspaceExecution(ctx, tx, ownerPrincipal, lockedExecution, nil, now)
 				if err != nil {
 					return err
 				}
 				result.SuccessorTurn = retried.Turn
+			}
+			if input.Action == "release" {
+				released, err := service.terminateRuntimeGraphForOwner(
+					ctx, tx, input.Principal, lockedOwnerActorID, lockedExecution, input.ReasonCode,
+					"release_runtime_incident_graph", now,
+				)
+				if err != nil {
+					return err
+				}
+				result.ReleasedExecution = &released
 			}
 			updated := lockedIncident
 			updated.Version++
@@ -141,7 +161,7 @@ func (service *Service) ManageRuntimeIncident(
 			if err := protected.AppendRuntimeIncidentHistory(ctx, domainrepo.RuntimeIncidentHistory{
 				IncidentID: updated.ID, Version: updated.Version, State: updated.State,
 				Action: input.Action, ReasonCode: input.ReasonCode, OccurredAt: now,
-				OwnerActorID: input.Principal.ActorID,
+				OwnerActorID: lockedOwnerActorID,
 			}); err != nil {
 				return err
 			}
@@ -153,6 +173,61 @@ func (service *Service) ManageRuntimeIncident(
 			return nil
 		})
 	return result, err
+}
+
+// terminateRuntimeGraphForOwner закрывает Turn,
+// Process, lease/grants/claims и сам RuntimeExecution в одной owner-транзакции.
+// actionPrincipal остаётся оператором для audit, а ownerActorID берётся только
+// из уже заблокированного Process graph и не доверяется caller payload.
+func (service *Service) terminateRuntimeGraphForOwner(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	actionPrincipal value.Principal,
+	ownerActorID string,
+	execution RuntimeExecution,
+	reason string,
+	auditAction string,
+	now time.Time,
+) (RuntimeExecution, error) {
+	if ownerActorID == "" || runtimeTerminal(execution.State) ||
+		(execution.State != "ADMITTED" && execution.State != "RUNNING") {
+		return RuntimeExecution{}, errs.ErrStateConflict
+	}
+	ownerPrincipal := actionPrincipal
+	ownerPrincipal.ActorID = ownerActorID
+	closedTurn, err := service.closeRuntimeGraph(
+		ctx, tx, ownerPrincipal, execution, enum.StateCancelled, reason, now, nil,
+	)
+	if err != nil {
+		return RuntimeExecution{}, err
+	}
+	if err := service.completeRuntimeProcessFromTurn(ctx, tx, ownerPrincipal, closedTurn); err != nil {
+		return RuntimeExecution{}, err
+	}
+	expectedVersion, expectedFence := execution.Version, execution.Fence
+	execution.Version++
+	execution.Fence++
+	execution.State = "CANCELLED"
+	if err := pinRuntimeRetention(&execution, now); err != nil {
+		return RuntimeExecution{}, err
+	}
+	execution.TerminalOutcome = "CANCELLED"
+	execution.TerminalReference = reason
+	execution.TerminalSHA256 = hashString(reason)
+	execution.LeaseID = ""
+	execution.LeaseTokenSHA256 = ""
+	execution.LeaseExpiresAt = time.Time{}
+	execution.UpdatedAt = now
+	if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
+		return RuntimeExecution{}, err
+	}
+	if err := service.appendLifecycleAudit(
+		ctx, tx, actionPrincipal, auditAction, execution.ID,
+		"RUNTIME_EXECUTION", execution.Version, now,
+	); err != nil {
+		return RuntimeExecution{}, err
+	}
+	return execution, nil
 }
 
 func (service *Service) GetRuntimeIncident(

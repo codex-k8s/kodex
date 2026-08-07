@@ -2,6 +2,8 @@ package resource
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -24,9 +26,7 @@ func (service *Service) BindScheduleConfiguration(
 		value.ValidateID(input.ScheduleID) != nil || input.ExpectedVersion == 0 ||
 		value.ValidateStableKey(input.AgentStableKey) != nil ||
 		value.ValidateStableKey(input.InstructionSetStableKey) != nil ||
-		value.ValidateStableKey(input.ProviderPoolStableKey) != nil ||
-		!validExternalRefText(input.RuntimeSelectionRef) ||
-		input.RuntimeSelectionVersion == 0 || !validSHA256Text(input.RuntimeSelectionSHA256) {
+		value.ValidateStableKey(input.ProviderPoolStableKey) != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
@@ -35,13 +35,9 @@ func (service *Service) BindScheduleConfiguration(
 		ExpectedVersion         uint64
 		AgentStableKey          string
 		InstructionSetStableKey string
-		RuntimeSelectionRef     string
-		RuntimeSelectionVersion uint64
-		RuntimeSelectionSHA256  string
 		ProviderPoolStableKey   string
 	}{identity(input.Principal), input.ScheduleID, input.ExpectedVersion, input.AgentStableKey,
-		input.InstructionSetStableKey, input.RuntimeSelectionRef, input.RuntimeSelectionVersion,
-		input.RuntimeSelectionSHA256, input.ProviderPoolStableKey})
+		input.InstructionSetStableKey, input.ProviderPoolStableKey})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -63,6 +59,10 @@ func (service *Service) BindScheduleConfiguration(
 		}
 		if schedule.State != enum.StateActive && schedule.State != enum.StatePaused {
 			return entity.Resource{}, errs.ErrStateConflict
+		}
+		workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, input.Principal)
+		if err != nil {
+			return entity.Resource{}, err
 		}
 		open, err := tx.HasOpenScheduleOccurrence(ctx, schedule.OrganizationID, schedule.ProjectID, schedule.ID)
 		if err != nil {
@@ -87,14 +87,14 @@ func (service *Service) BindScheduleConfiguration(
 		}
 		agentSpec, agentOK := agent.Spec.(entity.AgentSpec)
 		instructionSpec, instructionOK := instruction.Spec.(entity.InstructionSetSpec)
-		if !agentOK || !instructionOK || instructionSpec.VersionState != "PUBLISHED" ||
+		if !agentOK || !agentSpec.Enabled || agent.State != enum.StateActive || !instructionOK || instructionSpec.VersionState != "PUBLISHED" ||
 			agentSpec.InstructionSetID != instruction.ID ||
 			agentSpec.InstructionSetVersion != instruction.Version ||
-			agentSpec.ProviderPoolID != pool.ID || agentSpec.ProviderPoolVersion != pool.Version ||
-			agentSpec.RuntimeProfileRef != input.RuntimeSelectionRef ||
-			agentSpec.RuntimeProfileVersion != input.RuntimeSelectionVersion ||
-			agentSpec.RuntimeProfileSHA256 != input.RuntimeSelectionSHA256 {
+			agentSpec.ProviderPoolID != pool.ID || agentSpec.ProviderPoolVersion != pool.Version {
 			return entity.Resource{}, errs.ErrStateConflict
+		}
+		if _, _, err := lockAgentRuntimeProfile(ctx, tx, input.Principal, agentSpec); err != nil {
+			return entity.Resource{}, err
 		}
 		agentID, agentVersion, agentSHA, err := protectedTuple(agent)
 		if err != nil {
@@ -112,6 +112,15 @@ func (service *Service) BindScheduleConfiguration(
 		if !ok {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
+		assignment, err := lockActiveAgentAssignment(ctx, tx, input.Principal,
+			agent.ID, agent.Version, agentSHA, workspace.Version, workspaceSHA, spec.RoomID)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		assignmentSHA, err := entity.ProjectionSHA256(assignment)
+		if err != nil {
+			return entity.Resource{}, errs.ErrInternal
+		}
 		spec.TargetResourceID, spec.TargetKind, spec.TargetVersion = agentID, enum.KindAgent, agentVersion
 		spec.PromptProfileID, spec.PromptRevision, spec.RuntimeRevisionID = "", 0, ""
 		spec.AgentID, spec.AgentVersion, spec.AgentSHA256 = agentID, agentVersion, agentSHA
@@ -119,7 +128,9 @@ func (service *Service) BindScheduleConfiguration(
 			instructionID, instructionVersion, instructionSHA
 		spec.ProviderPoolID, spec.ProviderPoolVersion, spec.ProviderPoolSHA256 = poolID, poolVersion, poolSHA
 		spec.RuntimeSelectionRef, spec.RuntimeSelectionVersion, spec.RuntimeSelectionSHA256 =
-			input.RuntimeSelectionRef, input.RuntimeSelectionVersion, input.RuntimeSelectionSHA256
+			agentSpec.RuntimeProfileRef, agentSpec.RuntimeProfileVersion, agentSpec.RuntimeProfileSHA256
+		spec.AgentAssignmentID, spec.AgentAssignmentVersion, spec.AgentAssignmentSHA256 =
+			assignment.ID, assignment.Version, assignmentSHA
 		promptArtifact, artifactErr := service.requireCleanArtifact(ctx, tx, input.Principal, spec.PromptArtifactID)
 		if artifactErr != nil {
 			return entity.Resource{}, artifactErr
@@ -163,6 +174,8 @@ func targetScheduleEffectiveInput(spec entity.ScheduleSpec, promptArtifactSHA256
 		RuntimeSelectionVersion                     uint64
 		ProviderPoolID, ProviderPoolSHA256          string
 		ProviderPoolVersion                         uint64
+		AgentAssignmentID, AgentAssignmentSHA256    string
+		AgentAssignmentVersion                      uint64
 		PromptArtifactSHA256                        string
 		TargetType, PlaybookRef                     string
 		PlaybookVersion                             uint64
@@ -171,10 +184,97 @@ func targetScheduleEffectiveInput(spec entity.ScheduleSpec, promptArtifactSHA256
 		spec.InstructionSetID, spec.InstructionSetSHA256, spec.InstructionSetVersion,
 		spec.RuntimeSelectionRef, spec.RuntimeSelectionSHA256, spec.RuntimeSelectionVersion,
 		spec.ProviderPoolID, spec.ProviderPoolSHA256, spec.ProviderPoolVersion,
+		spec.AgentAssignmentID, spec.AgentAssignmentSHA256, spec.AgentAssignmentVersion,
 		promptArtifactSHA256,
 		spec.TargetType, spec.PlaybookRef, spec.PlaybookVersion, spec.SessionPolicy, spec.RoomID})
 }
 
-func validExternalRefText(reference string) bool {
-	return len(reference) >= 3 && len(reference) <= 1024
+func lockActiveAgentAssignment(ctx context.Context, tx domainrepo.Transaction, principal value.Principal,
+	agentID string, agentVersion uint64, agentSHA256 string,
+	workspaceVersion uint64, workspaceSHA256, roomID string,
+) (entity.Resource, error) {
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	ids := make([]string, 0)
+	for _, candidate := range resources {
+		spec, ok := candidate.Spec.(entity.AgentAssignmentSpec)
+		if ok && candidate.Kind == enum.KindAgentAssignment && candidate.State == enum.StateActive &&
+			candidate.OwnerActorID == principal.ActorID && spec.RootActorID == principal.ActorID &&
+			spec.AgentID == agentID && spec.AgentVersion == agentVersion && spec.AgentSHA256 == agentSHA256 &&
+			spec.WorkspaceID == principal.ProjectID && spec.WorkspaceVersion == workspaceVersion &&
+			spec.WorkspaceSHA256 == workspaceSHA256 && spec.RoomID == roomID {
+			ids = append(ids, candidate.ID)
+		}
+	}
+	if len(ids) != 1 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	slices.Sort(ids)
+	assignment, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, ids[0])
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	spec, ok := assignment.Spec.(entity.AgentAssignmentSpec)
+	if !ok || assignment.Kind != enum.KindAgentAssignment || assignment.State != enum.StateActive ||
+		assignment.OwnerActorID != principal.ActorID || spec.RootActorID != principal.ActorID ||
+		spec.AgentID != agentID || spec.AgentVersion != agentVersion || spec.AgentSHA256 != agentSHA256 ||
+		spec.WorkspaceID != principal.ProjectID || spec.WorkspaceVersion != workspaceVersion ||
+		spec.WorkspaceSHA256 != workspaceSHA256 || spec.RoomID != roomID {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return assignment, nil
+}
+
+func lockActiveWorkspace(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+) (entity.Resource, string, error) {
+	workspace, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, principal.ProjectID)
+	if err != nil {
+		return entity.Resource{}, "", err
+	}
+	if workspace.ID != principal.ProjectID || workspace.ProjectID != principal.ProjectID ||
+		workspace.OrganizationID != principal.OrganizationID || workspace.OwnerActorID != principal.ActorID ||
+		workspace.Kind != enum.KindProject || workspace.State != enum.StateActive {
+		return entity.Resource{}, "", errs.ErrNotFound
+	}
+	digest, err := entity.ProjectionSHA256(workspace)
+	if err != nil {
+		return entity.Resource{}, "", errs.ErrInternal
+	}
+	return workspace, digest, nil
+}
+
+func lockAgentRuntimeProfile(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	agentSpec entity.AgentSpec,
+) (entity.Resource, string, error) {
+	const prefix = "control-plane://runtime-profile/"
+	if !strings.HasPrefix(agentSpec.RuntimeProfileRef, prefix) {
+		return entity.Resource{}, "", errs.ErrStateConflict
+	}
+	profileID := strings.TrimPrefix(agentSpec.RuntimeProfileRef, prefix)
+	if value.ValidateID(profileID) != nil || agentSpec.RuntimeProfileVersion == 0 ||
+		!validSHA256Text(agentSpec.RuntimeProfileSHA256) {
+		return entity.Resource{}, "", errs.ErrStateConflict
+	}
+	profile, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, profileID)
+	if err != nil {
+		return entity.Resource{}, "", err
+	}
+	digest, err := entity.ProjectionSHA256(profile)
+	if err != nil {
+		return entity.Resource{}, "", errs.ErrInternal
+	}
+	if profile.Kind != enum.KindRoleImageRecipe || profile.State != enum.StateActive ||
+		profile.OwnerActorID != principal.ActorID || profile.Version != agentSpec.RuntimeProfileVersion ||
+		digest != agentSpec.RuntimeProfileSHA256 {
+		return entity.Resource{}, "", errs.ErrStateConflict
+	}
+	return profile, digest, nil
 }

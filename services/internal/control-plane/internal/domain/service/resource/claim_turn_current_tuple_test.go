@@ -2417,11 +2417,11 @@ func TestScheduleArchiveSucceedsOnlyAfterTerminalGraph(t *testing.T) {
 	if err != nil || archived.State != enum.StateArchived {
 		t.Fatalf("ARCHIVE after terminal graph: %v %+v", err, archived)
 	}
-	deletionPending, err := fixture.manageScheduleAction(
+	deleted, err := fixture.manageScheduleAction(
 		"DELETE", produced.schedule.ID, "delete-terminal-graph",
 	)
-	if err != nil || deletionPending.State != enum.StateDeletionPending {
-		t.Fatalf("DELETE after terminal archive: %v %+v", err, deletionPending)
+	if err != nil || deleted.State != enum.StateDeleted {
+		t.Fatalf("DELETE after terminal archive: %v %+v", err, deleted)
 	}
 }
 

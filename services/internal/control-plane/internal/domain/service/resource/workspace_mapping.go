@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -13,7 +14,7 @@ import (
 )
 
 // ManageWorkspaceMapping сохраняет только server-resolved workspace и
-// metadata signed provider readback, принадлежащего integration-gateway.
+// metadata signed provider readback, принадлежащего interaction-gateway.
 func (service *Service) ManageWorkspaceMapping(
 	ctx context.Context,
 	input ManageWorkspaceMappingInput,
@@ -23,32 +24,35 @@ func (service *Service) ManageWorkspaceMapping(
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
 		(input.Action != "bind" && input.Action != "relink" && input.Action != "unlink") ||
-		input.Principal.CallerWorkload != service.integrationGatewayWorkload ||
-		input.Principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
-		input.Principal.AuthoritySource != "DOMAIN_STATE" ||
-		input.Principal.AuthorityReference != input.ProviderReadbackReceipt ||
-		input.Principal.AuthorityRevision == 0 || !validSHA256Text(input.Principal.AuthorityDigest) ||
-		!validExternalRefText(input.ProviderTeamRef) {
+		!service.interactionGatewayPrincipal(input.Principal) ||
+		input.Principal.AuthoritySource != "PROVIDER_READBACK" ||
+		input.Principal.AuthorityReference != input.ProviderReceipt.ReceiptID ||
+		input.Principal.AuthorityRevision != input.ProviderReceipt.ReceiptRevision ||
+		!validSHA256Text(input.Principal.AuthorityDigest) {
 		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	if err := validateProviderReceipt(input.Principal, input.ProviderReceipt,
+		"MATTERMOST_PROVIDER_READBACK_RECEIPT", input.Action,
+		"workspace_mattermost_mapping", "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping", service.now().UTC()); err != nil {
+		return entity.Resource{}, err
 	}
 	if input.Action == "bind" {
 		if input.MappingID != "" || input.ExpectedVersion != 0 || input.ExpectedGeneration != 0 ||
-			value.ValidateName(input.Name) != nil || value.ValidateStableKey(input.WorkspaceStableKey) != nil {
+			value.ValidateName(input.Name) != nil {
 			return entity.Resource{}, errs.ErrInvalidInput
 		}
 	} else if value.ValidateID(input.MappingID) != nil || input.ExpectedVersion == 0 || input.ExpectedGeneration == 0 ||
-		input.WorkspaceStableKey != "" || input.Name != "" {
+		input.Name != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity                             commandIdentity
-		Action, MappingID                    string
-		ExpectedVersion, ExpectedGeneration  uint64
-		WorkspaceStableKey, ProviderTeamRef  string
-		ProviderReadbackReceipt, DisplayName string
+		Identity                            commandIdentity
+		Action, MappingID                   string
+		ExpectedVersion, ExpectedGeneration uint64
+		ProviderReceipt                     value.ProviderEffectReceipt
+		DisplayName                         string
 	}{identity(input.Principal), input.Action, input.MappingID, input.ExpectedVersion,
-		input.ExpectedGeneration, input.WorkspaceStableKey, input.ProviderTeamRef,
-		input.ProviderReadbackReceipt, input.Name})
+		input.ExpectedGeneration, input.ProviderReceipt, input.Name})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -58,24 +62,39 @@ func (service *Service) ManageWorkspaceMapping(
 			return entity.Resource{}, errs.ErrInternal
 		}
 		now := service.now().UTC().Truncate(time.Microsecond)
-		if input.Action == "bind" {
-			workspace, err := protected.GetByNameForUpdate(ctx, input.Principal.OrganizationID,
-				input.Principal.ProjectID, enum.KindRepositoryWorkspace, input.WorkspaceStableKey)
-			if err != nil || workspace.State != enum.StateActive {
-				return entity.Resource{}, errs.ErrNotFound
-			}
-			workspaceID, workspaceVersion, workspaceSHA, err := protectedTuple(workspace)
+		workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, input.Principal)
+		if err != nil || input.ProviderReceipt.WorkspaceID != workspace.ID {
 			if err != nil {
 				return entity.Resource{}, err
+			}
+			return entity.Resource{}, errs.ErrNotFound
+		}
+		if input.Action == "bind" {
+			existing, listErr := tx.ListSnapshotResources(ctx,
+				input.Principal.OrganizationID, input.Principal.ProjectID)
+			if listErr != nil {
+				return entity.Resource{}, listErr
+			}
+			for _, candidate := range existing {
+				spec, ok := candidate.Spec.(entity.WorkspaceMattermostMappingSpec)
+				if ok && candidate.Kind == enum.KindWorkspaceMapping && spec.WorkspaceID == workspace.ID {
+					if _, lockErr := tx.GetForUpdateIncludingDeleted(ctx, input.Principal.OrganizationID,
+						input.Principal.ProjectID, candidate.ID); lockErr != nil {
+						return entity.Resource{}, lockErr
+					}
+					return entity.Resource{}, errs.ErrStateConflict
+				}
 			}
 			created, err := entity.New(uuid.NewString(), input.Principal.OrganizationID,
 				input.Principal.ProjectID, workspace.ID, input.Principal.ActorID,
 				enum.KindWorkspaceMapping, input.Name, entity.WorkspaceMattermostMappingSpec{
-					WorkspaceID: workspaceID, WorkspaceVersion: workspaceVersion, WorkspaceSHA256: workspaceSHA,
-					ProviderTeamRef: input.ProviderTeamRef, ProviderReceiptID: input.Principal.AuthorityReference,
-					ProviderReceiptVersion: input.Principal.AuthorityRevision,
-					ProviderReceiptSHA256:  input.Principal.AuthorityDigest,
-					MappingGeneration:      1, MappingState: "BOUND", ProviderObservedAt: now,
+					WorkspaceID: workspace.ID, WorkspaceVersion: workspace.Version, WorkspaceSHA256: workspaceSHA,
+					ProviderTeamRef: input.ProviderReceipt.ProviderTeamRef, ProviderReceiptID: input.Principal.AuthorityReference,
+					ProviderReceiptVersion:   input.Principal.AuthorityRevision,
+					ProviderReceiptSHA256:    input.Principal.AuthorityDigest,
+					ProviderEffectVersion:    input.ProviderReceipt.EffectVersion,
+					ProviderEffectGeneration: input.ProviderReceipt.EffectGeneration,
+					MappingGeneration:        1, MappingState: "BOUND", ProviderObservedAt: now,
 				}, now)
 			if err != nil {
 				return entity.Resource{}, errs.ErrInvalidInput
@@ -101,19 +120,28 @@ func (service *Service) ManageWorkspaceMapping(
 			return entity.Resource{}, errs.ErrVersionMismatch
 		}
 		if input.Principal.AuthorityRevision <= spec.ProviderReceiptVersion ||
-			(input.Action == "unlink" && input.ProviderTeamRef != spec.ProviderTeamRef) {
+			input.ProviderReceipt.EffectVersion <= spec.ProviderEffectVersion ||
+			input.ProviderReceipt.EffectGeneration <= spec.ProviderEffectGeneration ||
+			input.ProviderReceipt.WorkspaceID != spec.WorkspaceID || spec.WorkspaceID != workspace.ID ||
+			(input.Action == "unlink" && input.ProviderReceipt.ProviderTeamRef != spec.ProviderTeamRef) {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
+		if err := lockAndRejectOpenWorkspaceGraph(ctx, tx, input.Principal, spec.WorkspaceID); err != nil {
+			return entity.Resource{}, err
+		}
 		spec.MappingGeneration++
+		spec.WorkspaceVersion, spec.WorkspaceSHA256 = workspace.Version, workspaceSHA
 		spec.ProviderReceiptID, spec.ProviderReceiptVersion, spec.ProviderReceiptSHA256 =
 			input.Principal.AuthorityReference, input.Principal.AuthorityRevision, input.Principal.AuthorityDigest
+		spec.ProviderEffectVersion, spec.ProviderEffectGeneration =
+			input.ProviderReceipt.EffectVersion, input.ProviderReceipt.EffectGeneration
 		spec.ProviderObservedAt = now
 		var updated entity.Resource
 		if input.Action == "relink" {
 			if current.State != enum.StateActive || spec.MappingState != "BOUND" {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			spec.ProviderTeamRef = input.ProviderTeamRef
+			spec.ProviderTeamRef = input.ProviderReceipt.ProviderTeamRef
 			updated, err = current.Update(current.Name, spec, now)
 		} else {
 			if current.State != enum.StateActive || spec.MappingState != "BOUND" {
@@ -146,6 +174,107 @@ func (service *Service) ManageWorkspaceMapping(
 			}
 			return nil
 		}, apply)
+}
+
+func validateProviderReceipt(principal value.Principal, receipt value.ProviderEffectReceipt,
+	purpose, action, effect, fullMethod string, now time.Time,
+) error {
+	if receipt.Validate(now) != nil || receipt.Purpose != purpose || receipt.WorkloadID != principal.CallerWorkload ||
+		receipt.CallerSPIFFEID != principal.CallerSPIFFEID || receipt.FullMethod != fullMethod ||
+		receipt.ActorID != principal.ActorID || receipt.OrganizationID != principal.OrganizationID ||
+		receipt.ProjectID != principal.ProjectID || receipt.Action != action || receipt.Effect != effect ||
+		receipt.ReceiptID != principal.AuthorityReference || receipt.ReceiptRevision != principal.AuthorityRevision {
+		return errs.ErrPermissionDenied
+	}
+	digest, err := canonicalHash(receipt)
+	if err != nil || digest != principal.AuthorityDigest {
+		return errs.ErrPermissionDenied
+	}
+	return nil
+}
+
+func lockAndRejectOpenWorkspaceGraph(ctx context.Context, tx domainrepo.Transaction,
+	principal value.Principal, workspaceID string,
+) error {
+	// Query первым берёт общий workspace advisory lock. Resource insert и
+	// delivery enqueue используют тот же ключ, поэтому после snapshot новый
+	// materialized graph уже не может появиться до конца transaction.
+	openDeliveries, err := tx.WorkspaceHasOpenInteractionDeliveries(
+		ctx, principal.OrganizationID, principal.ProjectID,
+	)
+	if err != nil {
+		return err
+	}
+	if openDeliveries {
+		return errs.ErrStateConflict
+	}
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	if err != nil {
+		return err
+	}
+	ids := make([]string, 0, len(resources))
+	for _, item := range resources {
+		if item.ID != workspaceID && (item.Kind == enum.KindChat || item.Kind == enum.KindSession ||
+			item.Kind == enum.KindTurn || item.Kind == enum.KindAgent) {
+			ids = append(ids, item.ID)
+		}
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		item, lockErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, id)
+		if lockErr != nil {
+			return lockErr
+		}
+		if agent, ok := item.Spec.(entity.AgentSpec); ok && item.Kind == enum.KindAgent {
+			if agent.BotMaskedStatus == "AVAILABLE" {
+				return errs.ErrStateConflict
+			}
+			continue
+		}
+		if item.State != enum.StateArchived && !item.State.Terminal() {
+			return errs.ErrStateConflict
+		}
+	}
+	return nil
+}
+
+func lockWorkspaceMappingForProviderTeam(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	providerTeamRef string,
+) (entity.Resource, error) {
+	if providerTeamRef == "" {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	ids := make([]string, 0, 1)
+	for _, item := range resources {
+		spec, ok := item.Spec.(entity.WorkspaceMattermostMappingSpec)
+		if ok && item.Kind == enum.KindWorkspaceMapping && item.State == enum.StateActive &&
+			item.OwnerActorID == principal.ActorID && spec.WorkspaceID == principal.ProjectID &&
+			spec.MappingState == "BOUND" && spec.ProviderTeamRef == providerTeamRef {
+			ids = append(ids, item.ID)
+		}
+	}
+	slices.Sort(ids)
+	if len(ids) != 1 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	mapping, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, ids[0])
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	spec, ok := mapping.Spec.(entity.WorkspaceMattermostMappingSpec)
+	if !ok || mapping.Kind != enum.KindWorkspaceMapping || mapping.State != enum.StateActive ||
+		mapping.OwnerActorID != principal.ActorID || spec.WorkspaceID != principal.ProjectID ||
+		spec.MappingState != "BOUND" || spec.ProviderTeamRef != providerTeamRef {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return mapping, nil
 }
 
 func (service *Service) appendWorkspaceMappingRecords(

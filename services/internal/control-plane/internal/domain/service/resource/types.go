@@ -110,6 +110,7 @@ type CopyAccessResourceInput struct {
 
 type ManageProtectedConfigurationInput struct {
 	Principal       value.Principal
+	FullMethod      string
 	IdempotencyKey  string
 	Kind            enum.Kind
 	Action          string
@@ -120,6 +121,7 @@ type ManageProtectedConfigurationInput struct {
 	TargetVersion   uint64
 	TargetSHA256    string
 	ReferenceKeys   []string
+	ProviderReceipt value.ProviderEffectReceipt
 }
 
 type ProtectedResourceHistoryInput struct {
@@ -151,9 +153,6 @@ type BindScheduleConfigurationInput struct {
 	ExpectedVersion         uint64
 	AgentStableKey          string
 	InstructionSetStableKey string
-	RuntimeSelectionRef     string
-	RuntimeSelectionVersion uint64
-	RuntimeSelectionSHA256  string
 	ProviderPoolStableKey   string
 }
 
@@ -193,16 +192,14 @@ type RunLineageResult struct {
 }
 
 type ManageWorkspaceMappingInput struct {
-	Principal               value.Principal
-	IdempotencyKey          string
-	Action                  string
-	MappingID               string
-	ExpectedVersion         uint64
-	ExpectedGeneration      uint64
-	WorkspaceStableKey      string
-	ProviderTeamRef         string
-	ProviderReadbackReceipt string
-	Name                    string
+	Principal          value.Principal
+	IdempotencyKey     string
+	Action             string
+	MappingID          string
+	ExpectedVersion    uint64
+	ExpectedGeneration uint64
+	ProviderReceipt    value.ProviderEffectReceipt
+	Name               string
 }
 
 type ManageWorkspaceBackupInput struct {
@@ -212,7 +209,6 @@ type ManageWorkspaceBackupInput struct {
 	BackupID           string
 	ExpectedVersion    uint64
 	Scope              string
-	WorkspaceStableKey string
 	Name               string
 	TerminalReasonCode string
 	RetainUntil        time.Time
@@ -231,6 +227,17 @@ type ManageWorkspaceRestoreInput struct {
 	TerminalReasonCode    string
 }
 
+type ReconcileWorkspaceRecoveryInput struct {
+	Principal          value.Principal
+	IdempotencyKey     string
+	ResourceID         string
+	ExpectedVersion    uint64
+	ExpectedAttempt    uint32
+	ExpectedGeneration uint64
+	Outcome            string
+	TerminalReasonCode string
+}
+
 type ManageRuntimeIncidentInput struct {
 	Principal       value.Principal
 	IdempotencyKey  string
@@ -241,8 +248,9 @@ type ManageRuntimeIncidentInput struct {
 }
 
 type ManageRuntimeIncidentResult struct {
-	Incident      domainrepo.RuntimeIncident
-	SuccessorTurn entity.Resource
+	Incident          domainrepo.RuntimeIncident
+	SuccessorTurn     entity.Resource
+	ReleasedExecution *RuntimeExecution
 }
 
 type GetRuntimeIncidentInput struct {
@@ -422,18 +430,16 @@ type RetryTurnInput struct {
 type CancelTurnInput = RetryTurnInput
 
 type ManageSessionInput struct {
-	Principal                            value.Principal
-	IdempotencyKey                       string
-	Action                               string
-	SessionID                            string
-	ExpectedVersion                      uint64
-	Name                                 string
-	RoleID                               string
-	AgentStableKey                       string
-	ConversationID                       string
-	ArchiveRef                           string
-	ReasonCode                           string
-	PreferredProviderCredentialBindingID string
+	Principal       value.Principal
+	IdempotencyKey  string
+	Action          string
+	SessionID       string
+	ExpectedVersion uint64
+	Name            string
+	AgentStableKey  string
+	ConversationID  string
+	ArchiveRef      string
+	ReasonCode      string
 }
 
 type BindSessionMCPInput struct {

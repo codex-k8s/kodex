@@ -6,7 +6,7 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 	t.Parallel()
 
 	operations := ControlAPIGatewayOperations()
-	if len(operations) != 78 {
+	if len(operations) != 82 {
 		t.Fatalf("control-api-gateway operation set must contain exact materialized methods: %d", len(operations))
 	}
 	for _, operation := range []string{
@@ -29,11 +29,15 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 		"control.image-build.manage",
 		"control.image-build.get",
 		"control.role-definition.manage",
+		"control.role-definition.git.reconcile",
 		"control.agent.manage",
+		"control.agent.git.reconcile",
 		"control.agent-assignment.manage",
 		"control.instruction-set.manage",
+		"control.instruction-set.git.reconcile",
 		"control.provider-reference.get",
 		"control.provider-pool.manage",
+		"control.provider-pool.git.reconcile",
 		"control.schedule.bind",
 		"control.run.manage",
 		"control.run.timeline",
@@ -51,20 +55,17 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 	}
 }
 
-func TestIntegrationGatewayOperationSetContainsOnlyRegisteredMappingSeam(t *testing.T) {
+func TestIntegrationGatewayOperationSetContainsOnlyProviderSeam(t *testing.T) {
 	t.Parallel()
 
 	operations := IntegrationGatewayOperations()
-	if len(operations) != 16 {
+	if len(operations) != 13 {
 		t.Fatalf("integration-gateway operation set must contain exact methods: %d", len(operations))
 	}
 	for _, operation := range []string{
 		"control.integration.provider-reference.manage",
 		"control.integration.provider-reference.get",
 		"control.integration.provider-reference.list",
-		"control.integration.workspace-mapping.manage",
-		"control.integration.workspace-mapping.get",
-		"control.integration.workspace-mapping.list",
 	} {
 		if operations[operation] == "" {
 			t.Fatalf("specialized integration operation is absent: %s", operation)
@@ -72,6 +73,24 @@ func TestIntegrationGatewayOperationSetContainsOnlyRegisteredMappingSeam(t *test
 	}
 	if _, exists := operations["control.provider-pool.manage"]; exists {
 		t.Fatal("integration gateway must not manage owner provider pools")
+	}
+	if _, exists := operations["control.integration.workspace-mapping.manage"]; exists {
+		t.Fatal("integration gateway must not own Mattermost mapping")
+	}
+}
+
+func TestInteractionGatewayOperationSetOwnsMattermostProviderSeams(t *testing.T) {
+	t.Parallel()
+	operations := InteractionGatewayOperations()
+	for _, operation := range []string{
+		"control.interaction.agent-bot.manage",
+		"control.interaction.workspace-mapping.manage",
+		"control.interaction.workspace-mapping.get",
+		"control.interaction.workspace-mapping.list",
+	} {
+		if operations[operation] == "" {
+			t.Fatalf("specialized interaction operation is absent: %s", operation)
+		}
 	}
 }
 

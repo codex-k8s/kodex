@@ -49,21 +49,24 @@ func (metrics *BusinessMetrics) ObserveMutation(kind enum.Kind, action string) {
 	case "create", "update", "transition", "delete",
 		"enqueue_turn", "claim_turn", "complete_turn",
 		"claim_schedules", "resolve_owner_gate",
-		"role_definition_create", "role_definition_update", "role_definition_archive", "role_definition_delete",
-		"agent_create", "agent_update", "agent_archive", "agent_delete",
+		"role_definition_create", "role_definition_update", "role_definition_reconcile_git", "role_definition_archive", "role_definition_delete",
+		"agent_create", "agent_update", "agent_reconcile_git", "agent_pause", "agent_resume", "agent_enable", "agent_disable",
+		"agent_bind_bot", "agent_rebind_bot", "agent_revoke_bot", "agent_archive", "agent_delete",
 		"agent_assignment_assign", "agent_assignment_unassign",
-		"instruction_set_create", "instruction_set_update", "instruction_set_validate",
+		"instruction_set_create", "instruction_set_update", "instruction_set_reconcile_git", "instruction_set_validate",
 		"instruction_set_publish", "instruction_set_rollback", "instruction_set_detach",
 		"instruction_set_copy", "instruction_set_archive", "instruction_set_delete",
 		"provider_reference_register", "provider_reference_refresh", "provider_reference_archive",
-		"provider_pool_create", "provider_pool_update", "provider_pool_archive", "provider_pool_delete",
+		"provider_pool_create", "provider_pool_update", "provider_pool_reconcile_git", "provider_pool_archive", "provider_pool_delete",
 		"bind_schedule_configuration",
 		"manage_workspace_mapping_bind", "manage_workspace_mapping_relink", "manage_workspace_mapping_unlink",
 		"manage_workspace_backup_create", "manage_workspace_backup_cancel", "manage_workspace_backup_retry",
 		"manage_workspace_backup_complete", "manage_workspace_backup_fail", "manage_workspace_backup_expire",
 		"manage_workspace_restore_create", "manage_workspace_restore_cancel", "manage_workspace_restore_retry",
 		"manage_workspace_restore_start", "manage_workspace_restore_complete", "manage_workspace_restore_fail",
-		"manage_workspace_restore_expire":
+		"manage_workspace_restore_expire",
+		"manage_runtime_incident_acknowledge", "manage_runtime_incident_retry",
+		"manage_runtime_incident_release", "manage_runtime_incident_close":
 		metrics.mutations.WithLabelValues(string(kind), action).Inc()
 	}
 }

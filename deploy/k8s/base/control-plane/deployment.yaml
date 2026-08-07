@@ -82,6 +82,8 @@ spec:
               value: 15m
             - name: CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS
               value: "3"
+            - name: CONTROL_PLANE_RECOVERY_POLL_INTERVAL
+              value: 1s
             - name: CONTROL_PLANE_STAGING_IMAGE_REPOSITORY
               value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
             - name: CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY

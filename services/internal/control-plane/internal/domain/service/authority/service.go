@@ -167,6 +167,8 @@ func (service *Service) Resolve(
 		BoundContinuationVersion    uint64
 		BoundContinuationFence      uint64
 		BoundInvocationID           string
+		ProviderReceiptFullMethod   string
+		ProviderReceiptPurpose      string
 	}{
 		input.Identity.ProducerID,
 		input.Identity.CredentialPurpose,
@@ -192,6 +194,8 @@ func (service *Service) Resolve(
 		input.Identity.BoundContinuationVersion,
 		input.Identity.BoundContinuationFence,
 		input.Identity.BoundInvocationID,
+		input.Identity.ProviderReceiptFullMethod,
+		input.Identity.ProviderReceiptPurpose,
 	})
 	if err != nil {
 		return authoritytype.Proof{}, errs.ErrInternal
@@ -402,7 +406,9 @@ func (service *Service) Resolve(
 }
 
 func credentialMatches(operation Operation, identity authoritytype.ApplicationIdentity) bool {
-	return identity.CallerWorkload == operation.CallerWorkload &&
+	providerReceiptMatches := identity.ProviderReceiptFullMethod == "" ||
+		(identity.ProviderReceiptFullMethod == operation.FullMethod && identity.ProviderReceiptPurpose == operation.CredentialPurpose)
+	return providerReceiptMatches && identity.CallerWorkload == operation.CallerWorkload &&
 		identity.CallerSPIFFEID == operation.CallerSPIFFEID &&
 		identity.ProducerID == operation.ProducerID &&
 		identity.CredentialPurpose == operation.CredentialPurpose &&
@@ -472,6 +478,9 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 			identity.BoundSignerServedGeneration != identity.BoundSignerHighWatermark ||
 			!validDigest(identity.BoundSignerKeysetSHA256) || identity.BoundSignerGeneration == 0) {
 		return errors.New("integration continuation grant binding is invalid")
+	}
+	if (identity.ProviderReceiptFullMethod == "") != (identity.ProviderReceiptPurpose == "") {
+		return errors.New("provider receipt binding is invalid")
 	}
 	return nil
 }

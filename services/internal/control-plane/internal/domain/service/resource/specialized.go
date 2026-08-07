@@ -149,6 +149,24 @@ func (service *Service) ManageSchedule(
 				if digestErr != nil || targetSHA != input.Spec.AgentSHA256 {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
+				if _, _, profileErr := lockAgentRuntimeProfile(ctx, tx, input.Principal, agentSpec); profileErr != nil {
+					return entity.Resource{}, profileErr
+				}
+				workspace, workspaceSHA, workspaceErr := lockActiveWorkspace(ctx, tx, input.Principal)
+				if workspaceErr != nil {
+					return entity.Resource{}, workspaceErr
+				}
+				assignment, assignmentErr := lockActiveAgentAssignment(ctx, tx, input.Principal,
+					target.ID, target.Version, targetSHA, workspace.Version, workspaceSHA, input.Spec.RoomID)
+				if assignmentErr != nil {
+					return entity.Resource{}, assignmentErr
+				}
+				assignmentSHA, assignmentDigestErr := entity.ProjectionSHA256(assignment)
+				if assignmentDigestErr != nil || input.Spec.AgentAssignmentID != assignment.ID ||
+					input.Spec.AgentAssignmentVersion != assignment.Version ||
+					input.Spec.AgentAssignmentSHA256 != assignmentSHA {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
 				instruction, getErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
 					input.Principal.ProjectID, input.Spec.InstructionSetID)
 				if getErr != nil {
@@ -186,6 +204,10 @@ func (service *Service) ManageSchedule(
 					sessionSpec, sessionOK := session.Spec.(entity.SessionSpec)
 					if !sessionOK || session.Kind != enum.KindSession || session.State != enum.StateActive ||
 						session.OwnerActorID != input.Principal.ActorID || sessionSpec.AgentID != target.ID ||
+						sessionSpec.AgentVersion != target.Version || sessionSpec.AgentSHA256 != targetSHA ||
+						sessionSpec.AgentAssignmentID != assignment.ID ||
+						sessionSpec.AgentAssignmentVersion != assignment.Version ||
+						sessionSpec.AgentAssignmentSHA256 != assignmentSHA ||
 						sessionSpec.ConversationID != input.Spec.RoomID {
 						return entity.Resource{}, errs.ErrStateConflict
 					}
@@ -1161,8 +1183,15 @@ func (service *Service) MaterializeScheduleOccurrence(
 			var revisionSpec entity.RuntimeRevisionSpec
 			var pinnedInputSHA256 string
 			if scheduleSpec.TargetKind == enum.KindAgent {
+				workspace, workspaceSHA, workspaceErr := lockActiveWorkspace(ctx, tx, input.Principal)
+				if workspaceErr != nil {
+					return workspaceErr
+				}
 				agentSpec, agentOK := target.Spec.(entity.AgentSpec)
-				if !agentOK || target.State != enum.StateActive || scheduleSpec.AgentID != target.ID ||
+				if _, _, profileErr := lockAgentRuntimeProfile(ctx, tx, input.Principal, agentSpec); profileErr != nil {
+					return profileErr
+				}
+				if !agentOK || !agentSpec.Enabled || target.State != enum.StateActive || scheduleSpec.AgentID != target.ID ||
 					scheduleSpec.AgentVersion != target.Version || scheduleSpec.AgentSHA256 != targetDigest ||
 					agentSpec.InstructionSetID != scheduleSpec.InstructionSetID ||
 					agentSpec.InstructionSetVersion != scheduleSpec.InstructionSetVersion ||
@@ -1173,6 +1202,23 @@ func (service *Service) MaterializeScheduleOccurrence(
 					agentSpec.RuntimeProfileRef != scheduleSpec.RuntimeSelectionRef ||
 					agentSpec.RuntimeProfileVersion != scheduleSpec.RuntimeSelectionVersion ||
 					agentSpec.RuntimeProfileSHA256 != scheduleSpec.RuntimeSelectionSHA256 {
+					return errs.ErrStateConflict
+				}
+				assignment, assignmentErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, scheduleSpec.AgentAssignmentID)
+				if assignmentErr != nil {
+					return assignmentErr
+				}
+				assignmentSpec, assignmentOK := assignment.Spec.(entity.AgentAssignmentSpec)
+				assignmentSHA, digestErr := entity.ProjectionSHA256(assignment)
+				if !assignmentOK || digestErr != nil || assignment.Kind != enum.KindAgentAssignment ||
+					assignment.State != enum.StateActive || assignment.Version != scheduleSpec.AgentAssignmentVersion ||
+					assignment.OwnerActorID != input.Principal.ActorID || assignmentSpec.RootActorID != input.Principal.ActorID ||
+					assignmentSHA != scheduleSpec.AgentAssignmentSHA256 || assignmentSpec.AgentID != target.ID ||
+					assignmentSpec.AgentVersion != target.Version || assignmentSpec.AgentSHA256 != targetDigest ||
+					assignmentSpec.WorkspaceID != input.Principal.ProjectID ||
+					assignmentSpec.WorkspaceVersion != workspace.Version || assignmentSpec.WorkspaceSHA256 != workspaceSHA ||
+					assignmentSpec.RoomID != scheduleSpec.RoomID {
 					return errs.ErrStateConflict
 				}
 				instruction, instructionErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,

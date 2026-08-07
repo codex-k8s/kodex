@@ -2,8 +2,13 @@ package resource
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"io"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -191,37 +196,96 @@ func (service *Service) resolveRun(ctx context.Context, principal value.Principa
 	return process, tuple, nil
 }
 
-func (service *Service) ListRunTimeline(ctx context.Context, principal value.Principal, processRunID, afterID string, limit int) ([]domainrepo.Audit, error) {
+type runTimelineCursor struct {
+	OccurredAt time.Time `json:"occurredAt"`
+	ID         string    `json:"id"`
+}
+
+func (service *Service) ListRunTimeline(
+	ctx context.Context,
+	principal value.Principal,
+	processRunID, pageToken string,
+	limit int,
+) ([]domainrepo.Audit, string, error) {
 	if err := authorize(principal, permissionAuditRead); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if limit < 1 || limit > 100 || afterID != "" && value.ValidateID(afterID) != nil {
-		return nil, errs.ErrInvalidInput
+	if limit < 1 || limit > 100 {
+		return nil, "", errs.ErrInvalidInput
+	}
+	cursor, err := decodeRunTimelineCursor(pageToken)
+	if err != nil {
+		return nil, "", err
 	}
 	process, tuple, err := service.resolveRun(ctx, principal, processRunID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	ids := []string{process.ID, tuple.SessionID, tuple.TurnID, tuple.RuntimeRevisionID}
-	result := make([]domainrepo.Audit, 0, limit)
-	for _, id := range ids {
-		if id == "" {
-			continue
+	ids := make([]string, 0, 4)
+	for _, id := range []string{process.ID, tuple.SessionID, tuple.TurnID, tuple.RuntimeRevisionID} {
+		if id != "" {
+			ids = append(ids, id)
 		}
-		entries, listErr := service.repository.ListAudit(ctx, query.AuditFilter{OrganizationID: principal.OrganizationID,
-			ProjectID: principal.ProjectID, ResourceID: id, AfterID: afterID, Limit: limit})
-		if listErr != nil {
-			return nil, listErr
+	}
+	slices.Sort(ids)
+	ids = slices.Compact(ids)
+	repository, ok := service.repository.(domainrepo.RunTimelineRepository)
+	if !ok {
+		return nil, "", errs.ErrInternal
+	}
+	result, err := repository.ListRunTimelineAudit(
+		ctx, principal.OrganizationID, principal.ProjectID, principal.ActorID,
+		ids, cursor.OccurredAt, cursor.ID, limit,
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(result) == limit {
+		next, err = encodeRunTimelineCursor(runTimelineCursor{
+			OccurredAt: result[len(result)-1].OccurredAt,
+			ID:         result[len(result)-1].ID,
+		})
+		if err != nil {
+			return nil, "", err
 		}
-		result = append(result, entries...)
 	}
-	slices.SortFunc(result, func(left, right domainrepo.Audit) int {
-		return compareText(left.ID, right.ID)
-	})
-	if len(result) > limit {
-		result = result[:limit]
+	return result, next, nil
+}
+
+func decodeRunTimelineCursor(token string) (runTimelineCursor, error) {
+	if token == "" {
+		return runTimelineCursor{}, nil
 	}
-	return result, nil
+	if len(token) > 512 {
+		return runTimelineCursor{}, errs.ErrInvalidInput
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return runTimelineCursor{}, errs.ErrInvalidInput
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	var cursor runTimelineCursor
+	if err := decoder.Decode(&cursor); err != nil || cursor.OccurredAt.IsZero() ||
+		value.ValidateID(cursor.ID) != nil {
+		return runTimelineCursor{}, errs.ErrInvalidInput
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return runTimelineCursor{}, errs.ErrInvalidInput
+	}
+	return cursor, nil
+}
+
+func encodeRunTimelineCursor(cursor runTimelineCursor) (string, error) {
+	if cursor.OccurredAt.IsZero() || value.ValidateID(cursor.ID) != nil {
+		return "", errs.ErrInternal
+	}
+	raw, err := json.Marshal(cursor)
+	if err != nil {
+		return "", errs.ErrInternal
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 func (service *Service) ListRunArtifacts(ctx context.Context, principal value.Principal, processRunID, afterID string, limit int) ([]entity.Resource, error) {

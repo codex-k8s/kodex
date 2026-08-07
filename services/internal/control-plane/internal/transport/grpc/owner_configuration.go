@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -11,8 +12,45 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func providerEffectReceiptFromProto(receipt *controlplanev1.ProviderEffectReadbackReceipt) (value.ProviderEffectReceipt, error) {
+	if receipt == nil {
+		return value.ProviderEffectReceipt{}, nil
+	}
+	issuedAt, err := requiredTime(receipt.GetIssuedAt())
+	if err != nil {
+		return value.ProviderEffectReceipt{}, err
+	}
+	notBefore, err := requiredTime(receipt.GetNotBefore())
+	if err != nil {
+		return value.ProviderEffectReceipt{}, err
+	}
+	expiresAt, err := requiredTime(receipt.GetExpiresAt())
+	if err != nil {
+		return value.ProviderEffectReceipt{}, err
+	}
+	result := value.ProviderEffectReceipt{
+		ContractVersion: receipt.GetContractVersion(), Issuer: receipt.GetIssuer(), Purpose: receipt.GetPurpose(),
+		WorkloadID: receipt.GetWorkloadId(), CallerSPIFFEID: receipt.GetCallerSpiffeId(), FullMethod: receipt.GetFullMethod(),
+		ActorID: receipt.GetActorId(), OrganizationID: receipt.GetOrganizationId(), ProjectID: receipt.GetProjectId(),
+		WorkspaceID: receipt.GetWorkspaceId(), ProviderTeamRef: receipt.GetProviderTeamRef(), ProviderObjectRef: receipt.GetProviderObjectRef(),
+		Action: receipt.GetAction(), Effect: receipt.GetEffect(), EffectVersion: receipt.GetEffectVersion(),
+		EffectGeneration: receipt.GetEffectGeneration(), EffectSHA256: receipt.GetEffectSha256(), ReceiptID: receipt.GetReceiptId(),
+		ReceiptRevision: receipt.GetReceiptRevision(), IssuedAt: issuedAt, NotBefore: notBefore, ExpiresAt: expiresAt,
+		CredentialBindingID: receipt.GetCredentialBindingId(), CredentialBindingVersion: receipt.GetCredentialBindingVersion(),
+		CredentialBindingSHA256: receipt.GetCredentialBindingSha256(), ProviderUsername: receipt.GetProviderUsername(),
+		MaskedStatus: receipt.GetMaskedStatus(),
+		Provider:     receipt.GetProvider(), MaskedLabel: receipt.GetMaskedLabel(), Capabilities: receipt.GetCapabilities(),
+		Eligible: receipt.GetEligible(),
+	}
+	if result.ContractVersion == 0 {
+		return value.ProviderEffectReceipt{}, errors.New("provider receipt is empty")
+	}
+	return result, nil
+}
 
 func (server *Server) manageProtectedConfiguration(
 	ctx context.Context,
@@ -24,6 +62,7 @@ func (server *Server) manageProtectedConfiguration(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	input.Principal = principal
+	input.FullMethod = fullMethod
 	managed, err := server.service.ManageProtectedConfiguration(ctx, input)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -53,6 +92,23 @@ func (server *Server) ManageRoleDefinition(
 	return &controlplanev1.ManageRoleDefinitionResponse{RoleDefinition: managed}, nil
 }
 
+func (server *Server) ReconcileGitRoleDefinition(
+	ctx context.Context,
+	request *controlplanev1.ReconcileGitRoleDefinitionRequest,
+) (*controlplanev1.ReconcileGitRoleDefinitionResponse, error) {
+	managed, err := server.manageProtectedConfiguration(ctx,
+		controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
+		resource.ManageProtectedConfigurationInput{
+			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindRoleDefinition, Action: "reconcile_git",
+			ResourceID: request.GetRoleDefinitionId(), ExpectedVersion: request.GetExpectedVersion(),
+			Name: request.GetName(), Spec: roleDefinitionFromProto(request.GetSpec()),
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ReconcileGitRoleDefinitionResponse{RoleDefinition: managed}, nil
+}
+
 func (server *Server) ManageAgent(
 	ctx context.Context,
 	request *controlplanev1.ManageAgentRequest,
@@ -73,6 +129,57 @@ func (server *Server) ManageAgent(
 	return &controlplanev1.ManageAgentResponse{Agent: managed}, nil
 }
 
+func (server *Server) ReconcileGitAgent(
+	ctx context.Context,
+	request *controlplanev1.ReconcileGitAgentRequest,
+) (*controlplanev1.ReconcileGitAgentResponse, error) {
+	managed, err := server.manageProtectedConfiguration(ctx,
+		controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName,
+		resource.ManageProtectedConfigurationInput{
+			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindAgent, Action: "reconcile_git",
+			ResourceID: request.GetAgentId(), ExpectedVersion: request.GetExpectedVersion(),
+			Name: request.GetName(), Spec: agentFromProto(request.GetSpec()),
+			ReferenceKeys: []string{request.GetRoleDefinitionStableKey(), request.GetInstructionSetStableKey(),
+				request.GetProviderPoolStableKey()},
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ReconcileGitAgentResponse{Agent: managed}, nil
+}
+
+func (server *Server) ManageAgentMattermostBotIdentity(
+	ctx context.Context,
+	request *controlplanev1.ManageAgentMattermostBotIdentityRequest,
+) (*controlplanev1.ManageAgentMattermostBotIdentityResponse, error) {
+	receipt, castErr := providerEffectReceiptFromProto(request.GetProviderReceipt())
+	if castErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
+	action := ""
+	switch request.GetAction() {
+	case controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND:
+		action = "bind_bot"
+	case controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND:
+		action = "rebind_bot"
+	case controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE:
+		action = "revoke_bot"
+	default:
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
+	managed, err := server.manageProtectedConfiguration(ctx,
+		controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
+		resource.ManageProtectedConfigurationInput{
+			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindAgent,
+			Action: action, ResourceID: request.GetAgentId(), ExpectedVersion: request.GetExpectedVersion(),
+			ProviderReceipt: receipt,
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ManageAgentMattermostBotIdentityResponse{Agent: managed}, nil
+}
+
 func (server *Server) ManageAgentAssignment(
 	ctx context.Context,
 	request *controlplanev1.ManageAgentAssignmentRequest,
@@ -84,7 +191,7 @@ func (server *Server) ManageAgentAssignment(
 			Action:     trimEnum(request.GetAction().String(), "AGENT_ASSIGNMENT_ACTION_"),
 			ResourceID: request.GetAssignmentId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: entity.AgentAssignmentSpec{},
-			ReferenceKeys: []string{request.GetAgentStableKey(), request.GetWorkspaceStableKey(), request.GetRoomStableKey()},
+			ReferenceKeys: []string{request.GetAgentStableKey(), request.GetRoomStableKey()},
 		})
 	if err != nil {
 		return nil, err
@@ -103,7 +210,7 @@ func (server *Server) ManageInstructionSet(
 			Action:     trimEnum(request.GetAction().String(), "INSTRUCTION_SET_ACTION_"),
 			ResourceID: request.GetInstructionSetId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: instructionSetFromProto(request.GetSpec()),
-			TargetVersion: request.GetTargetVersion(), TargetSHA256: request.GetTargetVersionSha256(),
+			TargetVersion: request.GetTargetVersion(),
 		})
 	if err != nil {
 		return nil, err
@@ -111,10 +218,31 @@ func (server *Server) ManageInstructionSet(
 	return &controlplanev1.ManageInstructionSetResponse{InstructionSet: managed}, nil
 }
 
+func (server *Server) ReconcileGitInstructionSet(
+	ctx context.Context,
+	request *controlplanev1.ReconcileGitInstructionSetRequest,
+) (*controlplanev1.ReconcileGitInstructionSetResponse, error) {
+	managed, err := server.manageProtectedConfiguration(ctx,
+		controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
+		resource.ManageProtectedConfigurationInput{
+			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindInstructionSet, Action: "reconcile_git",
+			ResourceID: request.GetInstructionSetId(), ExpectedVersion: request.GetExpectedVersion(),
+			Name: request.GetName(), Spec: instructionSetFromProto(request.GetSpec()),
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ReconcileGitInstructionSetResponse{InstructionSet: managed}, nil
+}
+
 func (server *Server) ManageProviderConnectionReference(
 	ctx context.Context,
 	request *controlplanev1.ManageProviderConnectionReferenceRequest,
 ) (*controlplanev1.ManageProviderConnectionReferenceResponse, error) {
+	receipt, receiptErr := providerEffectReceiptFromProto(request.GetProviderReceipt())
+	if receiptErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
 	action := trimEnum(request.GetAction().String(), "PROVIDER_CONNECTION_REFERENCE_ACTION_")
 	var spec entity.Spec = entity.ProviderConnectionReferenceSpec{}
 	if action == "register" || action == "refresh" {
@@ -130,7 +258,7 @@ func (server *Server) ManageProviderConnectionReference(
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindProviderReference,
 			Action:     action,
 			ResourceID: request.GetProviderConnectionReferenceId(), ExpectedVersion: request.GetExpectedVersion(),
-			Name: request.GetName(), Spec: spec,
+			Name: request.GetName(), Spec: spec, ProviderReceipt: receipt,
 		})
 	if err != nil {
 		return nil, err
@@ -162,6 +290,31 @@ func (server *Server) ManageProviderPool(
 		return nil, err
 	}
 	return &controlplanev1.ManageProviderPoolResponse{ProviderPool: managed}, nil
+}
+
+func (server *Server) ReconcileGitProviderPool(
+	ctx context.Context,
+	request *controlplanev1.ReconcileGitProviderPoolRequest,
+) (*controlplanev1.ReconcileGitProviderPoolResponse, error) {
+	spec, castErr := providerPoolFromProto(request.GetSpec())
+	if castErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
+	keys := make([]string, 0, len(request.GetSpec().GetBindings()))
+	for _, binding := range request.GetSpec().GetBindings() {
+		keys = append(keys, binding.GetProviderConnectionStableKey())
+	}
+	managed, err := server.manageProtectedConfiguration(ctx,
+		controlplanev1.ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
+		resource.ManageProtectedConfigurationInput{
+			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindProviderPool, Action: "reconcile_git",
+			ResourceID: request.GetProviderPoolId(), ExpectedVersion: request.GetExpectedVersion(),
+			Name: request.GetName(), Spec: spec, ReferenceKeys: keys,
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.ReconcileGitProviderPoolResponse{ProviderPool: managed}, nil
 }
 
 func (server *Server) getProtectedConfiguration(
@@ -416,8 +569,7 @@ func (server *Server) BindScheduleConfiguration(
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
 		ScheduleID: request.GetScheduleId(), ExpectedVersion: request.GetExpectedVersion(),
 		AgentStableKey: request.GetAgentStableKey(), InstructionSetStableKey: request.GetInstructionSetStableKey(),
-		RuntimeSelectionRef: request.GetRuntimeSelectionRef(), RuntimeSelectionVersion: request.GetRuntimeSelectionVersion(),
-		RuntimeSelectionSHA256: request.GetRuntimeSelectionSha256(), ProviderPoolStableKey: request.GetProviderPoolStableKey(),
+		ProviderPoolStableKey: request.GetProviderPoolStableKey(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -437,13 +589,15 @@ func (server *Server) ManageWorkspaceMattermostMapping(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
+	receipt, castErr := providerEffectReceiptFromProto(request.GetProviderReceipt())
+	if castErr != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
 	managed, err := server.service.ManageWorkspaceMapping(ctx, resource.ManageWorkspaceMappingInput{
 		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(),
 		Action:    trimEnum(request.GetAction().String(), "WORKSPACE_MATTERMOST_MAPPING_ACTION_"),
 		MappingID: request.GetMappingId(), ExpectedVersion: request.GetExpectedVersion(),
-		ExpectedGeneration: request.GetExpectedGeneration(), WorkspaceStableKey: request.GetWorkspaceStableKey(),
-		ProviderTeamRef: request.GetProviderTeamRef(), ProviderReadbackReceipt: request.GetProviderReadbackReceipt(),
-		Name: request.GetName(),
+		ExpectedGeneration: request.GetExpectedGeneration(), ProviderReceipt: receipt, Name: request.GetName(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
@@ -517,7 +671,7 @@ func (server *Server) ManageWorkspaceBackup(
 		Action:   trimEnum(request.GetAction().String(), "WORKSPACE_BACKUP_ACTION_"),
 		BackupID: request.GetBackupId(), ExpectedVersion: request.GetExpectedVersion(),
 		Scope:              trimEnum(request.GetScope().String(), "WORKSPACE_BACKUP_SCOPE_"),
-		WorkspaceStableKey: request.GetWorkspaceStableKey(), Name: request.GetName(),
+		Name:               request.GetName(),
 		TerminalReasonCode: request.GetTerminalReasonCode(), RetainUntil: retainUntil,
 	})
 	if err != nil {
@@ -622,6 +776,9 @@ func (server *Server) ManageRuntimeIncident(
 		if err != nil {
 			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 		}
+	}
+	if result.ReleasedExecution != nil {
+		response.ReleasedExecution = toProtoRuntimeExecution(*result.ReleasedExecution)
 	}
 	return response, nil
 }
@@ -801,7 +958,7 @@ func (server *Server) ListRunTimeline(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	limit := pageSize(request.GetPageSize())
-	items, err := server.service.ListRunTimeline(ctx, principal, request.GetProcessRunId(), request.GetPageToken(), limit)
+	items, next, err := server.service.ListRunTimeline(ctx, principal, request.GetProcessRunId(), request.GetPageToken(), limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
@@ -813,9 +970,7 @@ func (server *Server) ListRunTimeline(
 			CorrelationId: item.CorrelationID, PolicyRevision: item.PolicyRevision,
 			OccurredAt: timestamppb.New(item.OccurredAt)})
 	}
-	if len(items) == limit {
-		response.NextPageToken = items[len(items)-1].ID
-	}
+	response.NextPageToken = next
 	return response, nil
 }
 

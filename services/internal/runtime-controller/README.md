@@ -4,8 +4,8 @@ title: Runtime controller
 type: service
 status: approved
 owner: backend
-version: 2.0.0
-updated: 2026-08-04
+version: 2.1.0
+updated: 2026-08-06
 ---
 
 # Runtime controller
@@ -75,6 +75,17 @@ controller отдельно расходует durable `KUBERNETES_MATERIALIZATI
 restore ticket принимается только в `ADMITTED`, а Bind — только для уже consumed
 current generation. Lease token восстанавливается только из owner receipt
 и не сохраняется в Kubernetes Secret, ConfigMap, annotation, log или metric.
+
+Для target Agent-графа Issue #234 поля `RoleID` и `PromptProfileID` указывают
+не на изменяемые legacy `RoleSpec`/`PromptProfileSpec`, а на server-owned
+immutable derived projection control-plane. Runtime-controller читает её тем же
+`GetResource(kind,id,expected_version)` path; control-plane сверяет exact
+source Agent/InstructionSet version и digest и не предоставляет projection
+никакого mutation API. `ProviderCredentialBindingID` остаётся непустым и
+указывает на выбранный из exact ProviderPool snapshot действующий
+`CredentialBinding`; поэтому существующая materialization и credential
+validation не получают caller fallback и не требуют второго авторитетного
+источника.
 
 Capacity учитывает durable pending/admitted/running journals, Pod requests,
 organization limit, server-owned provider binding и свежую observation,

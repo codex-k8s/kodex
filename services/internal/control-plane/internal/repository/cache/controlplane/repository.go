@@ -42,6 +42,8 @@ type Repository struct {
 }
 
 var _ domainrepo.Repository = (*Repository)(nil)
+var _ domainrepo.RuntimeProjectionRepository = (*Repository)(nil)
+var _ domainrepo.RunTimelineRepository = (*Repository)(nil)
 
 // New создаёт декоратор; при сбое кэша чтение всегда возвращается к PostgreSQL.
 func New(
@@ -70,6 +72,22 @@ func (repository *Repository) Transact(
 	callback func(domainrepo.Transaction) error,
 ) error {
 	return repository.source.Transact(ctx, scope, callback)
+}
+
+func (repository *Repository) ListRunTimelineAudit(
+	ctx context.Context,
+	organizationID, projectID, actorID string,
+	resourceIDs []string,
+	afterOccurredAt time.Time,
+	afterID string,
+	limit int,
+) ([]domainrepo.Audit, error) {
+	source, ok := repository.source.(domainrepo.RunTimelineRepository)
+	if !ok {
+		return nil, errors.New("run timeline source is unavailable")
+	}
+	return source.ListRunTimelineAudit(ctx, organizationID, projectID, actorID,
+		resourceIDs, afterOccurredAt, afterID, limit)
 }
 
 func (repository *Repository) Get(
@@ -138,6 +156,16 @@ func (repository *Repository) Get(
 		_ = repository.engine.Store(ctx, key, repaired)
 	}
 	return resource, nil
+}
+
+func (repository *Repository) GetDerivedRuntimeResource(ctx context.Context,
+	organizationID, projectID, resourceID string, kind enum.Kind, version uint64,
+) (entity.Resource, error) {
+	source, ok := repository.source.(domainrepo.RuntimeProjectionRepository)
+	if !ok {
+		return entity.Resource{}, errors.New("runtime projection repository is unavailable")
+	}
+	return source.GetDerivedRuntimeResource(ctx, organizationID, projectID, resourceID, kind, version)
 }
 
 // GetIncludingDeleted обходит projection cache: terminal tombstone нужен

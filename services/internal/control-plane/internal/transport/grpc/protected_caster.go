@@ -38,6 +38,11 @@ func agentFromProto(value *controlplanev1.AgentSpec) entity.AgentSpec {
 		ProviderPoolVersion: value.GetProviderPoolVersion(), ProviderPoolSHA256: value.GetProviderPoolSha256(),
 		RuntimeProfileRef: value.GetRuntimeProfileRef(), RuntimeProfileVersion: value.GetRuntimeProfileVersion(),
 		RuntimeProfileSHA256: value.GetRuntimeProfileSha256(), Capabilities: value.GetCapabilities(),
+		BotIdentityRef: value.GetBotIdentityRef(), BotUsername: value.GetBotUsername(),
+		BotProviderRevision: value.GetBotProviderRevision(), BotProviderGeneration: value.GetBotProviderGeneration(),
+		BotProviderTeamRef: value.GetBotProviderTeamRef(), BotMaskedStatus: value.GetBotMaskedStatus(),
+		BotReceiptID: value.GetBotReceiptId(), BotReceiptVersion: value.GetBotReceiptVersion(),
+		BotReceiptSHA256: value.GetBotReceiptSha256(), Enabled: value.GetEnabled(),
 		Ownership: configurationOwnershipFromProto(value.GetOwnership()),
 	}
 }
@@ -51,6 +56,11 @@ func agentToProto(value entity.AgentSpec) *controlplanev1.AgentSpec {
 		ProviderPoolVersion: value.ProviderPoolVersion, ProviderPoolSha256: value.ProviderPoolSHA256,
 		RuntimeProfileRef: value.RuntimeProfileRef, RuntimeProfileVersion: value.RuntimeProfileVersion,
 		RuntimeProfileSha256: value.RuntimeProfileSHA256, Capabilities: value.Capabilities,
+		BotIdentityRef: value.BotIdentityRef, BotUsername: value.BotUsername,
+		BotProviderRevision: value.BotProviderRevision, BotProviderGeneration: value.BotProviderGeneration,
+		BotProviderTeamRef: value.BotProviderTeamRef, BotMaskedStatus: value.BotMaskedStatus,
+		BotReceiptId: value.BotReceiptID, BotReceiptVersion: value.BotReceiptVersion,
+		BotReceiptSha256: value.BotReceiptSHA256, Enabled: value.Enabled,
 		Ownership: configurationOwnershipToProto(value.Ownership),
 	}
 }
@@ -79,6 +89,8 @@ func instructionSetFromProto(value *controlplanev1.InstructionSetSpec) entity.In
 		PublishedVersion: value.GetPublishedVersion(), Content: value.GetContent(), ContentSHA256: value.GetContentSha256(),
 		VersionState:     trimEnum(value.GetVersionState().String(), "INSTRUCTION_VERSION_STATE_"),
 		ValidationSHA256: value.GetValidationSha256(), RollbackOfVersion: value.GetRollbackOfVersion(),
+		ValidationSucceeded: value.GetValidationSucceeded(), ValidatedContentVersion: value.GetValidatedContentVersion(),
+		ValidatedContentSHA256: value.GetValidatedContentSha256(), ValidationErrors: validationErrorsFromProto(value.GetValidationErrors()),
 		Ownership: configurationOwnershipFromProto(value.GetOwnership()),
 	}
 }
@@ -89,6 +101,8 @@ func instructionSetToProto(value entity.InstructionSetSpec) *controlplanev1.Inst
 		PublishedVersion: value.PublishedVersion, Content: value.Content, ContentSha256: value.ContentSHA256,
 		VersionState: instructionVersionStateToProto(value.VersionState), ValidationSha256: value.ValidationSHA256,
 		RollbackOfVersion: value.RollbackOfVersion, Ownership: configurationOwnershipToProto(value.Ownership),
+		ValidationSucceeded: value.ValidationSucceeded, ValidatedContentVersion: value.ValidatedContentVersion,
+		ValidatedContentSha256: value.ValidatedContentSHA256, ValidationErrors: validationErrorsToProto(value.ValidationErrors),
 	}
 }
 
@@ -99,21 +113,45 @@ func providerReferenceFromProto(value *controlplanev1.ProviderConnectionReferenc
 	}
 	return entity.ProviderConnectionReferenceSpec{
 		StableKey: value.GetStableKey(), Provider: value.GetProvider(), ServerReference: value.GetServerReference(),
-		ReferenceVersion: value.GetReferenceVersion(), ReferenceSHA256: value.GetReferenceSha256(),
-		MaskedLabel: value.GetMaskedLabel(), MaskedStatus: trimEnum(value.GetMaskedStatus().String(), "PROVIDER_CONNECTION_STATUS_"),
+		ReferenceVersion: value.GetReferenceVersion(), ReferenceGeneration: value.GetReferenceGeneration(),
+		ReferenceSHA256: value.GetReferenceSha256(),
+		MaskedLabel:     value.GetMaskedLabel(), MaskedStatus: trimEnum(value.GetMaskedStatus().String(), "PROVIDER_CONNECTION_STATUS_"),
 		Capabilities: value.GetCapabilities(), Eligible: value.GetEligible(), ObservedAt: observedAt,
 		ReceiptID: value.GetReceiptId(), ReceiptVersion: value.GetReceiptVersion(), ReceiptSHA256: value.GetReceiptSha256(),
+		CredentialBindingID: value.GetCredentialBindingId(), CredentialBindingVersion: value.GetCredentialBindingVersion(),
+		CredentialBindingSHA256: value.GetCredentialBindingSha256(),
 	}, nil
 }
 
 func providerReferenceToProto(value entity.ProviderConnectionReferenceSpec) *controlplanev1.ProviderConnectionReferenceSpec {
 	return &controlplanev1.ProviderConnectionReferenceSpec{
 		StableKey: value.StableKey, Provider: value.Provider, ServerReference: value.ServerReference,
-		ReferenceVersion: value.ReferenceVersion, ReferenceSha256: value.ReferenceSHA256,
-		MaskedLabel: value.MaskedLabel, MaskedStatus: providerConnectionStatusToProto(value.MaskedStatus),
+		ReferenceVersion: value.ReferenceVersion, ReferenceGeneration: value.ReferenceGeneration,
+		ReferenceSha256: value.ReferenceSHA256,
+		MaskedLabel:     value.MaskedLabel, MaskedStatus: providerConnectionStatusToProto(value.MaskedStatus),
 		Capabilities: value.Capabilities, Eligible: value.Eligible, ObservedAt: timestamppb.New(value.ObservedAt),
 		ReceiptId: value.ReceiptID, ReceiptVersion: value.ReceiptVersion, ReceiptSha256: value.ReceiptSHA256,
+		CredentialBindingId: value.CredentialBindingID, CredentialBindingVersion: value.CredentialBindingVersion,
+		CredentialBindingSha256: value.CredentialBindingSHA256,
 	}
+}
+
+func validationErrorsFromProto(values []*controlplanev1.InstructionValidationError) []entity.InstructionValidationError {
+	result := make([]entity.InstructionValidationError, 0, len(values))
+	for _, item := range values {
+		result = append(result, entity.InstructionValidationError{Code: item.GetCode(), Field: item.GetField(),
+			Line: item.GetLine(), Column: item.GetColumn(), Message: item.GetMessage()})
+	}
+	return result
+}
+
+func validationErrorsToProto(values []entity.InstructionValidationError) []*controlplanev1.InstructionValidationError {
+	result := make([]*controlplanev1.InstructionValidationError, 0, len(values))
+	for _, item := range values {
+		result = append(result, &controlplanev1.InstructionValidationError{Code: item.Code, Field: item.Field,
+			Line: item.Line, Column: item.Column, Message: item.Message})
+	}
+	return result
 }
 
 func providerPoolFromProto(value *controlplanev1.ProviderPoolSpec) (entity.Spec, error) {
@@ -201,6 +239,7 @@ func workspaceRestoreFromProto(value *controlplanev1.WorkspaceRestoreSpec) entit
 	for _, member := range value.GetMembers() {
 		members = append(members, entity.WorkspaceRestoreMember{
 			SourceExecutionID: member.GetSourceExecutionId(),
+			WorkspaceID:       member.GetWorkspaceId(),
 			SourceSessionID:   member.GetSourceSessionId(), TargetTurnID: member.GetTargetTurnId(),
 			TargetTurnVersion: member.GetTargetTurnVersion(), TargetAttempt: member.GetTargetAttempt(),
 			RuntimeRevisionID: member.GetRuntimeRevisionId(), RuntimeRevisionVersion: member.GetRuntimeRevisionVersion(),
@@ -239,7 +278,8 @@ func workspaceMappingFromProto(value *controlplanev1.WorkspaceMattermostMappingS
 		WorkspaceID: value.GetWorkspaceId(), WorkspaceVersion: value.GetWorkspaceVersion(),
 		WorkspaceSHA256: value.GetWorkspaceSha256(), ProviderTeamRef: value.GetProviderTeamRef(),
 		ProviderReceiptID: value.GetProviderReceiptId(), ProviderReceiptVersion: value.GetProviderReceiptVersion(),
-		ProviderReceiptSHA256: value.GetProviderReceiptSha256(), MappingGeneration: value.GetMappingGeneration(),
+		ProviderReceiptSHA256: value.GetProviderReceiptSha256(), ProviderEffectVersion: value.GetProviderEffectVersion(),
+		ProviderEffectGeneration: value.GetProviderEffectGeneration(), MappingGeneration: value.GetMappingGeneration(),
 		MappingState:       trimEnum(value.GetMappingState().String(), "WORKSPACE_MATTERMOST_MAPPING_STATE_"),
 		ProviderObservedAt: observedAt,
 	}, nil
@@ -250,7 +290,8 @@ func workspaceMappingToProto(value entity.WorkspaceMattermostMappingSpec) *contr
 		WorkspaceId: value.WorkspaceID, WorkspaceVersion: value.WorkspaceVersion,
 		WorkspaceSha256: value.WorkspaceSHA256, ProviderTeamRef: value.ProviderTeamRef,
 		ProviderReceiptId: value.ProviderReceiptID, ProviderReceiptVersion: value.ProviderReceiptVersion,
-		ProviderReceiptSha256: value.ProviderReceiptSHA256, MappingGeneration: value.MappingGeneration,
+		ProviderReceiptSha256: value.ProviderReceiptSHA256, ProviderEffectVersion: value.ProviderEffectVersion,
+		ProviderEffectGeneration: value.ProviderEffectGeneration, MappingGeneration: value.MappingGeneration,
 		MappingState:       workspaceMappingStateToProto(value.MappingState),
 		ProviderObservedAt: timestamppb.New(value.ProviderObservedAt),
 	}
@@ -269,6 +310,7 @@ func workspaceBackupMemberToProto(value entity.WorkspaceBackupMember) *controlpl
 func workspaceRestoreMemberToProto(value entity.WorkspaceRestoreMember) *controlplanev1.WorkspaceRestoreMember {
 	return &controlplanev1.WorkspaceRestoreMember{
 		SourceExecutionId: value.SourceExecutionID,
+		WorkspaceId:       value.WorkspaceID,
 		SourceSessionId:   value.SourceSessionID, TargetTurnId: value.TargetTurnID,
 		TargetTurnVersion: value.TargetTurnVersion, TargetAttempt: value.TargetAttempt,
 		RuntimeRevisionId: value.RuntimeRevisionID, RuntimeRevisionVersion: value.RuntimeRevisionVersion,

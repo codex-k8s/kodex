@@ -31,12 +31,17 @@ const (
 	ControlPlaneService_DetachAccessResource_FullMethodName                     = "/controlplane.v1.ControlPlaneService/DetachAccessResource"
 	ControlPlaneService_CopyAccessResource_FullMethodName                       = "/controlplane.v1.ControlPlaneService/CopyAccessResource"
 	ControlPlaneService_ManageRoleDefinition_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageRoleDefinition"
+	ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName               = "/controlplane.v1.ControlPlaneService/ReconcileGitRoleDefinition"
 	ControlPlaneService_ManageAgent_FullMethodName                              = "/controlplane.v1.ControlPlaneService/ManageAgent"
+	ControlPlaneService_ReconcileGitAgent_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ReconcileGitAgent"
+	ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName         = "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity"
 	ControlPlaneService_ManageAgentAssignment_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageAgentAssignment"
 	ControlPlaneService_ManageInstructionSet_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageInstructionSet"
+	ControlPlaneService_ReconcileGitInstructionSet_FullMethodName               = "/controlplane.v1.ControlPlaneService/ReconcileGitInstructionSet"
 	ControlPlaneService_CompareInstructionSetVersions_FullMethodName            = "/controlplane.v1.ControlPlaneService/CompareInstructionSetVersions"
 	ControlPlaneService_ManageProviderConnectionReference_FullMethodName        = "/controlplane.v1.ControlPlaneService/ManageProviderConnectionReference"
 	ControlPlaneService_ManageProviderPool_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageProviderPool"
+	ControlPlaneService_ReconcileGitProviderPool_FullMethodName                 = "/controlplane.v1.ControlPlaneService/ReconcileGitProviderPool"
 	ControlPlaneService_GetRoleDefinition_FullMethodName                        = "/controlplane.v1.ControlPlaneService/GetRoleDefinition"
 	ControlPlaneService_ListRoleDefinitions_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ListRoleDefinitions"
 	ControlPlaneService_ListRoleDefinitionHistory_FullMethodName                = "/controlplane.v1.ControlPlaneService/ListRoleDefinitionHistory"
@@ -219,18 +224,28 @@ type ControlPlaneServiceClient interface {
 	CopyAccessResource(ctx context.Context, in *CopyAccessResourceRequest, opts ...grpc.CallOption) (*CopyAccessResourceResponse, error)
 	// ManageRoleDefinition — закрытый create/update/archive/delete реестр.
 	ManageRoleDefinition(ctx context.Context, in *ManageRoleDefinitionRequest, opts ...grpc.CallOption) (*ManageRoleDefinitionResponse, error)
-	// ManageAgent — закрытый create/update/archive/delete реестр Agent.
+	// ReconcileGitRoleDefinition — единственный Git-owned create/update path.
+	ReconcileGitRoleDefinition(ctx context.Context, in *ReconcileGitRoleDefinitionRequest, opts ...grpc.CallOption) (*ReconcileGitRoleDefinitionResponse, error)
+	// ManageAgent — закрытый UI lifecycle и pause/resume/enable/disable реестр Agent.
 	ManageAgent(ctx context.Context, in *ManageAgentRequest, opts ...grpc.CallOption) (*ManageAgentResponse, error)
+	// ReconcileGitAgent — единственный Git-owned create/update path Agent.
+	ReconcileGitAgent(ctx context.Context, in *ReconcileGitAgentRequest, opts ...grpc.CallOption) (*ReconcileGitAgentResponse, error)
+	// ManageAgentMattermostBotIdentity принимает только exact interaction-gateway readback.
+	ManageAgentMattermostBotIdentity(ctx context.Context, in *ManageAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*ManageAgentMattermostBotIdentityResponse, error)
 	// ManageAgentAssignment разрешает только assign/unassign server-owned связи.
 	ManageAgentAssignment(ctx context.Context, in *ManageAgentAssignmentRequest, opts ...grpc.CallOption) (*ManageAgentAssignmentResponse, error)
 	// ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
 	ManageInstructionSet(ctx context.Context, in *ManageInstructionSetRequest, opts ...grpc.CallOption) (*ManageInstructionSetResponse, error)
+	// ReconcileGitInstructionSet — единственный Git-owned content update path.
+	ReconcileGitInstructionSet(ctx context.Context, in *ReconcileGitInstructionSetRequest, opts ...grpc.CallOption) (*ReconcileGitInstructionSetResponse, error)
 	// CompareInstructionSetVersions сравнивает две exact immutable версии.
 	CompareInstructionSetVersions(ctx context.Context, in *CompareInstructionSetVersionsRequest, opts ...grpc.CallOption) (*CompareInstructionSetVersionsResponse, error)
 	// ManageProviderConnectionReference принимает только metadata проверенного provider receipt.
 	ManageProviderConnectionReference(ctx context.Context, in *ManageProviderConnectionReferenceRequest, opts ...grpc.CallOption) (*ManageProviderConnectionReferenceResponse, error)
 	// ManageProviderPool фиксирует version-pinned eligibility/weight snapshot.
 	ManageProviderPool(ctx context.Context, in *ManageProviderPoolRequest, opts ...grpc.CallOption) (*ManageProviderPoolResponse, error)
+	// ReconcileGitProviderPool — единственный Git-owned pool snapshot path.
+	ReconcileGitProviderPool(ctx context.Context, in *ReconcileGitProviderPoolRequest, opts ...grpc.CallOption) (*ReconcileGitProviderPoolResponse, error)
 	// GetRoleDefinition возвращает typed owner projection.
 	GetRoleDefinition(ctx context.Context, in *GetRoleDefinitionRequest, opts ...grpc.CallOption) (*GetRoleDefinitionResponse, error)
 	// ListRoleDefinitions возвращает typed owner collection.
@@ -685,10 +700,40 @@ func (c *controlPlaneServiceClient) ManageRoleDefinition(ctx context.Context, in
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ReconcileGitRoleDefinition(ctx context.Context, in *ReconcileGitRoleDefinitionRequest, opts ...grpc.CallOption) (*ReconcileGitRoleDefinitionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileGitRoleDefinitionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ManageAgent(ctx context.Context, in *ManageAgentRequest, opts ...grpc.CallOption) (*ManageAgentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageAgentResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ReconcileGitAgent(ctx context.Context, in *ReconcileGitAgentRequest, opts ...grpc.CallOption) (*ReconcileGitAgentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileGitAgentResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ManageAgentMattermostBotIdentity(ctx context.Context, in *ManageAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*ManageAgentMattermostBotIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageAgentMattermostBotIdentityResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -709,6 +754,16 @@ func (c *controlPlaneServiceClient) ManageInstructionSet(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageInstructionSetResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageInstructionSet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ReconcileGitInstructionSet(ctx context.Context, in *ReconcileGitInstructionSetRequest, opts ...grpc.CallOption) (*ReconcileGitInstructionSetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileGitInstructionSetResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitInstructionSet_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -739,6 +794,16 @@ func (c *controlPlaneServiceClient) ManageProviderPool(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageProviderPoolResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageProviderPool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ReconcileGitProviderPool(ctx context.Context, in *ReconcileGitProviderPoolRequest, opts ...grpc.CallOption) (*ReconcileGitProviderPoolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileGitProviderPoolResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReconcileGitProviderPool_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2239,18 +2304,28 @@ type ControlPlaneServiceServer interface {
 	CopyAccessResource(context.Context, *CopyAccessResourceRequest) (*CopyAccessResourceResponse, error)
 	// ManageRoleDefinition — закрытый create/update/archive/delete реестр.
 	ManageRoleDefinition(context.Context, *ManageRoleDefinitionRequest) (*ManageRoleDefinitionResponse, error)
-	// ManageAgent — закрытый create/update/archive/delete реестр Agent.
+	// ReconcileGitRoleDefinition — единственный Git-owned create/update path.
+	ReconcileGitRoleDefinition(context.Context, *ReconcileGitRoleDefinitionRequest) (*ReconcileGitRoleDefinitionResponse, error)
+	// ManageAgent — закрытый UI lifecycle и pause/resume/enable/disable реестр Agent.
 	ManageAgent(context.Context, *ManageAgentRequest) (*ManageAgentResponse, error)
+	// ReconcileGitAgent — единственный Git-owned create/update path Agent.
+	ReconcileGitAgent(context.Context, *ReconcileGitAgentRequest) (*ReconcileGitAgentResponse, error)
+	// ManageAgentMattermostBotIdentity принимает только exact interaction-gateway readback.
+	ManageAgentMattermostBotIdentity(context.Context, *ManageAgentMattermostBotIdentityRequest) (*ManageAgentMattermostBotIdentityResponse, error)
 	// ManageAgentAssignment разрешает только assign/unassign server-owned связи.
 	ManageAgentAssignment(context.Context, *ManageAgentAssignmentRequest) (*ManageAgentAssignmentResponse, error)
 	// ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
 	ManageInstructionSet(context.Context, *ManageInstructionSetRequest) (*ManageInstructionSetResponse, error)
+	// ReconcileGitInstructionSet — единственный Git-owned content update path.
+	ReconcileGitInstructionSet(context.Context, *ReconcileGitInstructionSetRequest) (*ReconcileGitInstructionSetResponse, error)
 	// CompareInstructionSetVersions сравнивает две exact immutable версии.
 	CompareInstructionSetVersions(context.Context, *CompareInstructionSetVersionsRequest) (*CompareInstructionSetVersionsResponse, error)
 	// ManageProviderConnectionReference принимает только metadata проверенного provider receipt.
 	ManageProviderConnectionReference(context.Context, *ManageProviderConnectionReferenceRequest) (*ManageProviderConnectionReferenceResponse, error)
 	// ManageProviderPool фиксирует version-pinned eligibility/weight snapshot.
 	ManageProviderPool(context.Context, *ManageProviderPoolRequest) (*ManageProviderPoolResponse, error)
+	// ReconcileGitProviderPool — единственный Git-owned pool snapshot path.
+	ReconcileGitProviderPool(context.Context, *ReconcileGitProviderPoolRequest) (*ReconcileGitProviderPoolResponse, error)
 	// GetRoleDefinition возвращает typed owner projection.
 	GetRoleDefinition(context.Context, *GetRoleDefinitionRequest) (*GetRoleDefinitionResponse, error)
 	// ListRoleDefinitions возвращает typed owner collection.
@@ -2621,14 +2696,26 @@ func (UnimplementedControlPlaneServiceServer) CopyAccessResource(context.Context
 func (UnimplementedControlPlaneServiceServer) ManageRoleDefinition(context.Context, *ManageRoleDefinitionRequest) (*ManageRoleDefinitionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageRoleDefinition not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) ReconcileGitRoleDefinition(context.Context, *ReconcileGitRoleDefinitionRequest) (*ReconcileGitRoleDefinitionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReconcileGitRoleDefinition not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ManageAgent(context.Context, *ManageAgentRequest) (*ManageAgentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageAgent not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ReconcileGitAgent(context.Context, *ReconcileGitAgentRequest) (*ReconcileGitAgentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReconcileGitAgent not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ManageAgentMattermostBotIdentity(context.Context, *ManageAgentMattermostBotIdentityRequest) (*ManageAgentMattermostBotIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageAgentMattermostBotIdentity not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ManageAgentAssignment(context.Context, *ManageAgentAssignmentRequest) (*ManageAgentAssignmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageAgentAssignment not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ManageInstructionSet(context.Context, *ManageInstructionSetRequest) (*ManageInstructionSetResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageInstructionSet not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ReconcileGitInstructionSet(context.Context, *ReconcileGitInstructionSetRequest) (*ReconcileGitInstructionSetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReconcileGitInstructionSet not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CompareInstructionSetVersions(context.Context, *CompareInstructionSetVersionsRequest) (*CompareInstructionSetVersionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompareInstructionSetVersions not implemented")
@@ -2638,6 +2725,9 @@ func (UnimplementedControlPlaneServiceServer) ManageProviderConnectionReference(
 }
 func (UnimplementedControlPlaneServiceServer) ManageProviderPool(context.Context, *ManageProviderPoolRequest) (*ManageProviderPoolResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageProviderPool not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ReconcileGitProviderPool(context.Context, *ReconcileGitProviderPoolRequest) (*ReconcileGitProviderPoolResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReconcileGitProviderPool not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetRoleDefinition(context.Context, *GetRoleDefinitionRequest) (*GetRoleDefinitionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRoleDefinition not implemented")
@@ -3314,6 +3404,24 @@ func _ControlPlaneService_ManageRoleDefinition_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ReconcileGitRoleDefinition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileGitRoleDefinitionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReconcileGitRoleDefinition(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReconcileGitRoleDefinition(ctx, req.(*ReconcileGitRoleDefinitionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ManageAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ManageAgentRequest)
 	if err := dec(in); err != nil {
@@ -3328,6 +3436,42 @@ func _ControlPlaneService_ManageAgent_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ManageAgent(ctx, req.(*ManageAgentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ReconcileGitAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileGitAgentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReconcileGitAgent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReconcileGitAgent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReconcileGitAgent(ctx, req.(*ReconcileGitAgentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ManageAgentMattermostBotIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageAgentMattermostBotIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageAgentMattermostBotIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageAgentMattermostBotIdentity(ctx, req.(*ManageAgentMattermostBotIdentityRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3364,6 +3508,24 @@ func _ControlPlaneService_ManageInstructionSet_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ManageInstructionSet(ctx, req.(*ManageInstructionSetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ReconcileGitInstructionSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileGitInstructionSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReconcileGitInstructionSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReconcileGitInstructionSet(ctx, req.(*ReconcileGitInstructionSetRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3418,6 +3580,24 @@ func _ControlPlaneService_ManageProviderPool_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ManageProviderPool(ctx, req.(*ManageProviderPoolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ReconcileGitProviderPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileGitProviderPoolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReconcileGitProviderPool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReconcileGitProviderPool(ctx, req.(*ReconcileGitProviderPoolRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6106,8 +6286,20 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ManageRoleDefinition_Handler,
 		},
 		{
+			MethodName: "ReconcileGitRoleDefinition",
+			Handler:    _ControlPlaneService_ReconcileGitRoleDefinition_Handler,
+		},
+		{
 			MethodName: "ManageAgent",
 			Handler:    _ControlPlaneService_ManageAgent_Handler,
+		},
+		{
+			MethodName: "ReconcileGitAgent",
+			Handler:    _ControlPlaneService_ReconcileGitAgent_Handler,
+		},
+		{
+			MethodName: "ManageAgentMattermostBotIdentity",
+			Handler:    _ControlPlaneService_ManageAgentMattermostBotIdentity_Handler,
 		},
 		{
 			MethodName: "ManageAgentAssignment",
@@ -6116,6 +6308,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ManageInstructionSet",
 			Handler:    _ControlPlaneService_ManageInstructionSet_Handler,
+		},
+		{
+			MethodName: "ReconcileGitInstructionSet",
+			Handler:    _ControlPlaneService_ReconcileGitInstructionSet_Handler,
 		},
 		{
 			MethodName: "CompareInstructionSetVersions",
@@ -6128,6 +6324,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ManageProviderPool",
 			Handler:    _ControlPlaneService_ManageProviderPool_Handler,
+		},
+		{
+			MethodName: "ReconcileGitProviderPool",
+			Handler:    _ControlPlaneService_ReconcileGitProviderPool_Handler,
 		},
 		{
 			MethodName: "GetRoleDefinition",

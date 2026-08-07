@@ -38,6 +38,8 @@ type ApplicationIdentity struct {
 	BoundSignerKeysetSHA256     string
 	BoundSignerGeneration       uint64
 	AllowedOperationIDs         []string
+	ProviderReceiptFullMethod   string
+	ProviderReceiptPurpose      string
 }
 
 type Provenance struct {

@@ -33,18 +33,16 @@ func (server *Server) ManageSession(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	changed, err := server.service.ManageSession(ctx, resource.ManageSessionInput{
-		Principal:                            principal,
-		IdempotencyKey:                       request.GetIdempotencyKey(),
-		Action:                               trimEnum(request.GetAction().String(), "SESSION_ACTION_"),
-		SessionID:                            request.GetSessionId(),
-		ExpectedVersion:                      request.GetExpectedVersion(),
-		Name:                                 request.GetName(),
-		RoleID:                               request.GetRoleId(),
-		AgentStableKey:                       request.GetAgentStableKey(),
-		ConversationID:                       request.GetConversationId(),
-		ArchiveRef:                           request.GetArchiveRef(),
-		ReasonCode:                           request.GetReasonCode(),
-		PreferredProviderCredentialBindingID: request.GetPreferredProviderCredentialBindingId(),
+		Principal:       principal,
+		IdempotencyKey:  request.GetIdempotencyKey(),
+		Action:          trimEnum(request.GetAction().String(), "SESSION_ACTION_"),
+		SessionID:       request.GetSessionId(),
+		ExpectedVersion: request.GetExpectedVersion(),
+		Name:            request.GetName(),
+		AgentStableKey:  request.GetAgentStableKey(),
+		ConversationID:  request.GetConversationId(),
+		ArchiveRef:      request.GetArchiveRef(),
+		ReasonCode:      request.GetReasonCode(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)

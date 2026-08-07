@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -15,7 +16,7 @@ import (
 )
 
 var workspaceBackupActions = map[string]struct{}{
-	"create": {}, "cancel": {}, "retry": {}, "complete": {}, "fail": {}, "expire": {},
+	"create": {}, "cancel": {}, "retry": {},
 }
 
 // ManageWorkspaceBackup фиксирует immutable membership WORKSPACE либо
@@ -34,26 +35,25 @@ func (service *Service) ManageWorkspaceBackup(
 	if input.Action == "create" {
 		if input.BackupID != "" || input.ExpectedVersion != 0 || value.ValidateName(input.Name) != nil ||
 			(input.Scope != "WORKSPACE" && input.Scope != "ALL_WORKSPACES") ||
-			(input.Scope == "WORKSPACE" && value.ValidateStableKey(input.WorkspaceStableKey) != nil) ||
-			(input.Scope == "ALL_WORKSPACES" && input.WorkspaceStableKey != "") || input.RetainUntil.IsZero() ||
+			input.RetainUntil.IsZero() ||
 			input.TerminalReasonCode != "" {
 			return entity.Resource{}, errs.ErrInvalidInput
 		}
 	} else if value.ValidateID(input.BackupID) != nil || input.ExpectedVersion == 0 ||
-		(input.Action != "retry" && input.Action != "complete" && value.ValidateStableKey(input.TerminalReasonCode) != nil) ||
-		(input.Action == "retry" || input.Action == "complete") && input.TerminalReasonCode != "" ||
-		input.Scope != "" || input.WorkspaceStableKey != "" || input.Name != "" ||
+		(input.Action != "retry" && value.ValidateStableKey(input.TerminalReasonCode) != nil) ||
+		input.Action == "retry" && input.TerminalReasonCode != "" ||
+		input.Scope != "" || input.Name != "" ||
 		(input.Action != "retry" && !input.RetainUntil.IsZero()) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := canonicalHash(struct {
-		Identity                                    commandIdentity
-		Action, BackupID, Scope, WorkspaceStableKey string
-		ExpectedVersion                             uint64
-		Name, TerminalReasonCode                    string
-		RetainUntil                                 time.Time
+		Identity                 commandIdentity
+		Action, BackupID, Scope  string
+		ExpectedVersion          uint64
+		Name, TerminalReasonCode string
+		RetainUntil              time.Time
 	}{identity(input.Principal), input.Action, input.BackupID, input.Scope,
-		input.WorkspaceStableKey, input.ExpectedVersion, input.Name, input.TerminalReasonCode,
+		input.ExpectedVersion, input.Name, input.TerminalReasonCode,
 		input.RetainUntil.UTC()})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -72,11 +72,42 @@ func (service *Service) ManageWorkspaceBackup(
 		scope, requestHash, input.BackupID, enum.KindWorkspaceBackup, input.ExpectedVersion,
 		func(stored entity.Resource) error {
 			if stored.ID != input.BackupID || stored.Kind != enum.KindWorkspaceBackup ||
-				stored.OwnerActorID != input.Principal.ActorID || stored.Version != input.ExpectedVersion+1 {
+				stored.OwnerActorID != input.Principal.ActorID || stored.Version <= input.ExpectedVersion ||
+				stored.Version > input.ExpectedVersion+2 {
 				return errs.ErrStateConflict
 			}
 			return nil
 		}, apply)
+}
+
+type workspaceRecoveryTerminalReceipt struct {
+	ResourceID     string
+	Version        uint64
+	State          enum.State
+	Attempt        uint32
+	Generation     uint64
+	SnapshotSHA256 string
+}
+
+func (service *Service) recoveryReconcilerPrincipal(principal value.Principal) bool {
+	return principal.CallerWorkload == recoveryReconcilerWorkload &&
+		principal.CallerSPIFFEID == recoveryReconcilerSPIFFEID
+}
+
+// ReconcileWorkspaceBackupTerminal отделяет internal COMPLETE/FAIL/EXPIRE от
+// owner-facing create/cancel/retry. Existing row сначала разрешается под lock;
+// owner actor берётся только из сохранённого backup.
+func (service *Service) ReconcileWorkspaceBackupTerminal(
+	ctx context.Context,
+	input ReconcileWorkspaceRecoveryInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionWorkspaceBackupTerminal); err != nil {
+		return entity.Resource{}, err
+	}
+	if !service.recoveryReconcilerPrincipal(input.Principal) {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	return service.reconcileWorkspaceRecoveryTerminal(ctx, input, enum.KindWorkspaceBackup)
 }
 
 func (service *Service) createWorkspaceBackup(
@@ -92,71 +123,56 @@ func (service *Service) createWorkspaceBackup(
 	if !input.RetainUntil.After(now) || input.RetainUntil.After(now.Add(365*24*time.Hour)) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	resources, err := tx.ListSnapshotResources(ctx, input.Principal.OrganizationID, input.Principal.ProjectID)
-	if err != nil {
-		return entity.Resource{}, err
+	recovery, ok := tx.(domainrepo.WorkspaceRecoveryTransaction)
+	if !ok {
+		return entity.Resource{}, errs.ErrInternal
 	}
-	workspaces := make(map[string]entity.Resource)
-	agentsByWorkspace := make(map[string]map[string]struct{})
-	for _, item := range resources {
-		if item.OwnerActorID != input.Principal.ActorID || item.State == enum.StateDeleted {
-			continue
+	coordinatorProjectID := input.Principal.ProjectID
+	workspaces := []entity.Resource{}
+	if input.Scope == "WORKSPACE" {
+		workspace, workspaceErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+			coordinatorProjectID, coordinatorProjectID)
+		if workspaceErr != nil || workspace.Kind != enum.KindProject ||
+			workspace.State != enum.StateActive || workspace.OwnerActorID != input.Principal.ActorID {
+			if workspaceErr != nil {
+				return entity.Resource{}, workspaceErr
+			}
+			return entity.Resource{}, errs.ErrNotFound
 		}
-		switch item.Kind {
-		case enum.KindRepositoryWorkspace:
-			if item.State == enum.StateActive && (input.Scope == "ALL_WORKSPACES" || item.Name == input.WorkspaceStableKey) {
-				workspaces[item.ID] = item
-			}
-		case enum.KindAgentAssignment:
-			spec, ok := item.Spec.(entity.AgentAssignmentSpec)
-			if ok && item.State == enum.StateActive {
-				if agentsByWorkspace[spec.WorkspaceID] == nil {
-					agentsByWorkspace[spec.WorkspaceID] = make(map[string]struct{})
-				}
-				agentsByWorkspace[spec.WorkspaceID][spec.AgentID] = struct{}{}
-			}
+		workspaces = append(workspaces, workspace)
+	} else {
+		if err := recovery.SwitchWorkspaceProject(ctx, ""); err != nil {
+			return entity.Resource{}, err
+		}
+		workspaces, err = recovery.OwnerWorkspaceProjectsForUpdate(
+			ctx, input.Principal.OrganizationID, input.Principal.ActorID,
+		)
+		if err != nil {
+			return entity.Resource{}, err
 		}
 	}
-	if len(workspaces) == 0 || input.Scope == "WORKSPACE" && len(workspaces) != 1 {
+	if len(workspaces) == 0 {
 		return entity.Resource{}, errs.ErrNotFound
 	}
 	members := make([]entity.WorkspaceBackupMember, 0)
-	for _, item := range resources {
-		if item.Kind != enum.KindSession || item.OwnerActorID != input.Principal.ActorID || item.State == enum.StateDeleted {
-			continue
+	for _, workspace := range workspaces {
+		if workspace.Kind != enum.KindProject || workspace.ID != workspace.ProjectID ||
+			workspace.OwnerActorID != input.Principal.ActorID || workspace.State != enum.StateActive {
+			return entity.Resource{}, errs.ErrNotFound
 		}
-		sessionSpec, ok := item.Spec.(entity.SessionSpec)
-		if !ok {
-			return entity.Resource{}, errs.ErrInternal
+		if err := recovery.SwitchWorkspaceProject(ctx, workspace.ID); err != nil {
+			return entity.Resource{}, err
 		}
-		for workspaceID, agents := range agentsByWorkspace {
-			if _, selected := workspaces[workspaceID]; !selected {
-				continue
-			}
-			if _, assigned := agents[sessionSpec.AgentID]; !assigned {
-				continue
-			}
-			source, sourceErr := tx.LatestSessionRuntimeArchiveForRestore(ctx,
-				input.Principal.OrganizationID, input.Principal.ProjectID, item.ID)
-			if sourceErr != nil {
-				if errors.Is(sourceErr, errs.ErrNotFound) {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-				return entity.Resource{}, sourceErr
-			}
-			workspace := workspaces[workspaceID]
-			workspaceSHA, digestErr := entity.ProjectionSHA256(workspace)
-			if digestErr != nil {
-				return entity.Resource{}, errs.ErrInternal
-			}
-			members = append(members, entity.WorkspaceBackupMember{
-				SourceExecutionID: source.ID, WorkspaceID: workspace.ID, WorkspaceVersion: workspace.Version,
-				WorkspaceSHA256: workspaceSHA, SessionID: item.ID, SourceVersion: source.Version,
-				RuntimeRevisionSHA256: source.RuntimeRevisionSHA256,
-				ImmutableInputSHA256:  source.ImmutableInputSHA256, ArchiveSHA256: source.ArchiveSHA256,
-				ProvenanceSHA256: source.ArchiveProvenanceSHA256,
-			})
+		workspaceMembers, memberErr := service.snapshotWorkspaceBackupMembers(
+			ctx, tx, input.Principal, workspace,
+		)
+		if memberErr != nil {
+			return entity.Resource{}, memberErr
 		}
+		members = append(members, workspaceMembers...)
+	}
+	if err := recovery.SwitchWorkspaceProject(ctx, coordinatorProjectID); err != nil {
+		return entity.Resource{}, err
 	}
 	if len(members) == 0 {
 		return entity.Resource{}, errs.ErrStateConflict
@@ -173,9 +189,7 @@ func (service *Service) createWorkspaceBackup(
 	}
 	scopeID := ""
 	if input.Scope == "WORKSPACE" {
-		for workspaceID := range workspaces {
-			scopeID = workspaceID
-		}
+		scopeID = coordinatorProjectID
 	}
 	created, err := entity.New(uuid.NewString(), input.Principal.OrganizationID, input.Principal.ProjectID,
 		"", input.Principal.ActorID, enum.KindWorkspaceBackup, input.Name, entity.WorkspaceBackupSpec{
@@ -190,6 +204,71 @@ func (service *Service) createWorkspaceBackup(
 	}
 	return created, appendOwnerStateAudit(ctx, tx, input.Principal, "manage_workspace_backup_create",
 		created.OrganizationID, created.ProjectID, created.ID, string(created.Kind), created.Version, now)
+}
+
+func (service *Service) snapshotWorkspaceBackupMembers(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	workspace entity.Resource,
+) ([]entity.WorkspaceBackupMember, error) {
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, workspace.ID)
+	if err != nil {
+		return nil, err
+	}
+	workspaceSHA, err := entity.ProjectionSHA256(workspace)
+	if err != nil {
+		return nil, errs.ErrInternal
+	}
+	type assignmentTuple struct {
+		version uint64
+		digest  string
+	}
+	activeAssignments := make(map[string]assignmentTuple)
+	for _, item := range resources {
+		assignment, ok := item.Spec.(entity.AgentAssignmentSpec)
+		if ok && item.Kind == enum.KindAgentAssignment && item.State == enum.StateActive &&
+			item.OwnerActorID == principal.ActorID && assignment.RootActorID == principal.ActorID &&
+			assignment.WorkspaceID == workspace.ID && assignment.WorkspaceVersion == workspace.Version &&
+			assignment.WorkspaceSHA256 == workspaceSHA {
+			assignmentSHA, digestErr := entity.ProjectionSHA256(item)
+			if digestErr != nil {
+				return nil, errs.ErrInternal
+			}
+			activeAssignments[item.ID] = assignmentTuple{version: item.Version, digest: assignmentSHA}
+		}
+	}
+	members := make([]entity.WorkspaceBackupMember, 0)
+	for _, item := range resources {
+		session, ok := item.Spec.(entity.SessionSpec)
+		if !ok || item.Kind != enum.KindSession || item.OwnerActorID != principal.ActorID ||
+			item.State == enum.StateDeleted {
+			continue
+		}
+		assignment, assigned := activeAssignments[session.AgentAssignmentID]
+		if !assigned || session.AgentAssignmentVersion != assignment.version ||
+			session.AgentAssignmentSHA256 != assignment.digest {
+			continue
+		}
+		source, sourceErr := tx.LatestSessionRuntimeArchiveForRestore(
+			ctx, principal.OrganizationID, workspace.ID, item.ID,
+		)
+		if sourceErr != nil {
+			if errors.Is(sourceErr, errs.ErrNotFound) {
+				return nil, errs.ErrStateConflict
+			}
+			return nil, sourceErr
+		}
+		members = append(members, entity.WorkspaceBackupMember{
+			SourceExecutionID: source.ID, WorkspaceID: workspace.ID,
+			WorkspaceVersion: workspace.Version, WorkspaceSHA256: workspaceSHA,
+			SessionID: item.ID, SourceVersion: source.Version,
+			RuntimeRevisionSHA256: source.RuntimeRevisionSHA256,
+			ImmutableInputSHA256:  source.ImmutableInputSHA256,
+			ArchiveSHA256:         source.ArchiveSHA256, ProvenanceSHA256: source.ArchiveProvenanceSHA256,
+		})
+	}
+	return members, nil
 }
 
 func compareText(left, right string) int {
@@ -233,6 +312,9 @@ func (service *Service) transitionWorkspaceBackup(
 	case "complete":
 		if current.State != enum.StateRunning || spec.BackupState != "VERIFYING" || !spec.RetainUntil.After(now) {
 			return entity.Resource{}, errs.ErrStateConflict
+		}
+		if err := service.requireWorkspaceBackupMembersValid(ctx, tx, input.Principal, spec.Members); err != nil {
+			return entity.Resource{}, err
 		}
 		spec.BackupState, spec.RevokedGeneration, target = "AVAILABLE", spec.Generation, enum.StateSucceeded
 	case "cancel":
@@ -282,6 +364,54 @@ func (service *Service) transitionWorkspaceBackup(
 		updated.OrganizationID, updated.ProjectID, updated.ID, string(updated.Kind), updated.Version, now)
 }
 
+func (service *Service) requireWorkspaceBackupMembersValid(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	members []entity.WorkspaceBackupMember,
+) error {
+	recovery, ok := tx.(domainrepo.WorkspaceRecoveryTransaction)
+	if !ok {
+		return errs.ErrInternal
+	}
+	coordinatorProjectID := principal.ProjectID
+	ordered := slices.Clone(members)
+	slices.SortFunc(ordered, func(left, right entity.WorkspaceBackupMember) int {
+		if left.WorkspaceID != right.WorkspaceID {
+			return compareText(left.WorkspaceID, right.WorkspaceID)
+		}
+		return compareText(left.SourceExecutionID, right.SourceExecutionID)
+	})
+	for _, member := range ordered {
+		if err := recovery.SwitchWorkspaceProject(ctx, member.WorkspaceID); err != nil {
+			return err
+		}
+		workspace, err := tx.GetForUpdate(ctx, principal.OrganizationID, member.WorkspaceID, member.WorkspaceID)
+		if err != nil {
+			return err
+		}
+		workspaceSHA, err := entity.ProjectionSHA256(workspace)
+		if err != nil || workspace.Kind != enum.KindProject || workspace.State != enum.StateActive ||
+			workspace.OwnerActorID != principal.ActorID || workspace.Version != member.WorkspaceVersion ||
+			workspaceSHA != member.WorkspaceSHA256 {
+			return errs.ErrStateConflict
+		}
+		execution, err := tx.GetRuntimeExecutionForUpdate(ctx, member.SourceExecutionID)
+		if err != nil {
+			return err
+		}
+		if execution.ProjectID != member.WorkspaceID || execution.SessionID != member.SessionID ||
+			execution.Version != member.SourceVersion ||
+			execution.RuntimeRevisionSHA256 != member.RuntimeRevisionSHA256 ||
+			execution.ImmutableInputSHA256 != member.ImmutableInputSHA256 ||
+			execution.ArchiveSHA256 != member.ArchiveSHA256 ||
+			execution.ArchiveProvenanceSHA256 != member.ProvenanceSHA256 {
+			return errs.ErrStateConflict
+		}
+	}
+	return recovery.SwitchWorkspaceProject(ctx, coordinatorProjectID)
+}
+
 func (service *Service) requireNoOpenWorkspaceRestore(
 	ctx context.Context,
 	tx domainrepo.Transaction,
@@ -316,7 +446,7 @@ func (service *Service) requireNoOpenWorkspaceRestore(
 }
 
 var workspaceRestoreActions = map[string]struct{}{
-	"create": {}, "cancel": {}, "retry": {}, "complete": {}, "fail": {}, "expire": {},
+	"create": {}, "cancel": {}, "retry": {},
 }
 
 // ManageWorkspaceRestore создаёт и завершает только полный materialized graph.
@@ -338,8 +468,8 @@ func (service *Service) ManageWorkspaceRestore(
 			return entity.Resource{}, errs.ErrInvalidInput
 		}
 	} else if value.ValidateID(input.RestoreID) != nil || input.ExpectedVersion == 0 ||
-		(input.Action != "retry" && input.Action != "complete" && value.ValidateStableKey(input.TerminalReasonCode) != nil) ||
-		(input.Action == "retry" || input.Action == "complete") && input.TerminalReasonCode != "" ||
+		(input.Action != "retry" && value.ValidateStableKey(input.TerminalReasonCode) != nil) ||
+		input.Action == "retry" && input.TerminalReasonCode != "" ||
 		input.BackupID != "" || input.ExpectedBackupVersion != 0 || input.MembershipSHA256 != "" || input.Name != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -376,11 +506,172 @@ func (service *Service) ManageWorkspaceRestore(
 		}, apply)
 }
 
+// ReconcileWorkspaceRestoreTerminal завершает envelope только после exact
+// readback всего материализованного member graph.
+func (service *Service) ReconcileWorkspaceRestoreTerminal(
+	ctx context.Context,
+	input ReconcileWorkspaceRecoveryInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionWorkspaceRestoreTerminal); err != nil {
+		return entity.Resource{}, err
+	}
+	if !service.recoveryReconcilerPrincipal(input.Principal) {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	return service.reconcileWorkspaceRecoveryTerminal(ctx, input, enum.KindWorkspaceRestore)
+}
+
+func (service *Service) reconcileWorkspaceRecoveryTerminal(
+	ctx context.Context,
+	input ReconcileWorkspaceRecoveryInput,
+	kind enum.Kind,
+) (entity.Resource, error) {
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil ||
+		value.ValidateID(input.ResourceID) != nil || input.ExpectedVersion == 0 ||
+		input.ExpectedAttempt == 0 || input.ExpectedGeneration == 0 ||
+		!slices.Contains([]string{"complete", "fail", "expire"}, input.Outcome) ||
+		(input.Outcome == "complete" && input.TerminalReasonCode != "") ||
+		(input.Outcome != "complete" && value.ValidateStableKey(input.TerminalReasonCode) != nil) {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	requestHash, err := canonicalHash(struct {
+		Identity                    commandIdentity
+		ResourceID, Kind, Outcome   string
+		ExpectedVersion, Generation uint64
+		Attempt                     uint32
+		TerminalReasonCode          string
+	}{identity(input.Principal), input.ResourceID, string(kind), input.Outcome,
+		input.ExpectedVersion, input.ExpectedGeneration, input.ExpectedAttempt,
+		input.TerminalReasonCode})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	var locked entity.Resource
+	var receipt workspaceRecoveryTerminalReceipt
+	var ownerActorID string
+	scope := "reconcile_" + strings.ToLower(string(kind)) + "_" + input.Outcome
+	err = service.withLifecycleReceipt(
+		ctx, input.Principal, input.IdempotencyKey, scope, requestHash, &receipt,
+		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			current, lockErr := tx.GetForUpdateIncludingDeleted(
+				ctx, input.Principal.OrganizationID, input.Principal.ProjectID, input.ResourceID,
+			)
+			if lockErr != nil {
+				return 0, lockErr
+			}
+			if current.Kind != kind || current.OwnerActorID == "" {
+				return 0, errs.ErrNotFound
+			}
+			attempt, generation, specErr := workspaceRecoveryAttemptGeneration(current)
+			if specErr != nil || attempt != input.ExpectedAttempt || generation != input.ExpectedGeneration {
+				return 0, errs.ErrStateConflict
+			}
+			locked, ownerActorID = current, current.OwnerActorID
+			if current.Version == input.ExpectedVersion {
+				return lifecycleReceiptApply, nil
+			}
+			if current.Version >= input.ExpectedVersion+1 && current.Version <= input.ExpectedVersion+2 &&
+				workspaceRecoveryTerminalMatches(current, input.Outcome, input.TerminalReasonCode) {
+				return lifecycleReceiptReplay, nil
+			}
+			return 0, errs.ErrVersionMismatch
+		},
+		func() error {
+			if receipt.ResourceID != locked.ID || receipt.Version != locked.Version ||
+				receipt.State != locked.State || receipt.Attempt != input.ExpectedAttempt ||
+				receipt.Generation != input.ExpectedGeneration {
+				return errs.ErrStateConflict
+			}
+			digest, digestErr := entity.ProjectionSHA256(locked)
+			if digestErr != nil || digest != receipt.SnapshotSHA256 {
+				return errs.ErrStateConflict
+			}
+			return nil
+		},
+		func(tx domainrepo.Transaction) error {
+			ownerPrincipal := input.Principal
+			ownerPrincipal.ActorID = ownerActorID
+			var updated entity.Resource
+			var transitionErr error
+			if kind == enum.KindWorkspaceBackup {
+				updated, transitionErr = service.transitionWorkspaceBackup(ctx, tx, ManageWorkspaceBackupInput{
+					Principal: ownerPrincipal, Action: input.Outcome, BackupID: input.ResourceID,
+					ExpectedVersion: input.ExpectedVersion, TerminalReasonCode: input.TerminalReasonCode,
+				})
+			} else {
+				updated, transitionErr = service.transitionWorkspaceRestore(ctx, tx, ManageWorkspaceRestoreInput{
+					Principal: ownerPrincipal, Action: input.Outcome, RestoreID: input.ResourceID,
+					ExpectedVersion: input.ExpectedVersion, TerminalReasonCode: input.TerminalReasonCode,
+				})
+			}
+			if transitionErr != nil {
+				return transitionErr
+			}
+			digest, digestErr := entity.ProjectionSHA256(updated)
+			if digestErr != nil {
+				return errs.ErrInternal
+			}
+			attempt, generation, specErr := workspaceRecoveryAttemptGeneration(updated)
+			if specErr != nil {
+				return specErr
+			}
+			receipt = workspaceRecoveryTerminalReceipt{ResourceID: updated.ID, Version: updated.Version,
+				State: updated.State, Attempt: attempt, Generation: generation, SnapshotSHA256: digest}
+			locked = updated
+			return appendOwnerStateAudit(ctx, tx, input.Principal, scope,
+				updated.OrganizationID, updated.ProjectID, updated.ID, string(updated.Kind), updated.Version, updated.UpdatedAt)
+		},
+	)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if locked.Version != receipt.Version {
+		locked, err = service.repository.GetIncludingDeleted(
+			ctx, input.Principal.OrganizationID, input.Principal.ProjectID, input.ResourceID, kind,
+		)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+	}
+	return locked, nil
+}
+
+func workspaceRecoveryAttemptGeneration(resource entity.Resource) (uint32, uint64, error) {
+	switch spec := resource.Spec.(type) {
+	case entity.WorkspaceBackupSpec:
+		return spec.Attempt, spec.Generation, nil
+	case entity.WorkspaceRestoreSpec:
+		return spec.Attempt, spec.Generation, nil
+	default:
+		return 0, 0, errs.ErrStateConflict
+	}
+}
+
+func workspaceRecoveryTerminalMatches(resource entity.Resource, outcome, reason string) bool {
+	state := map[string]enum.State{"complete": enum.StateSucceeded, "fail": enum.StateFailed, "expire": enum.StateExpired}[outcome]
+	if resource.State != state {
+		return false
+	}
+	switch spec := resource.Spec.(type) {
+	case entity.WorkspaceBackupSpec:
+		return spec.TerminalReasonCode == reason
+	case entity.WorkspaceRestoreSpec:
+		return spec.TerminalReasonCode == reason
+	default:
+		return false
+	}
+}
+
 func (service *Service) createWorkspaceRestore(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	input ManageWorkspaceRestoreInput,
 ) (entity.Resource, error) {
+	recovery, ok := tx.(domainrepo.WorkspaceRecoveryTransaction)
+	if !ok {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	coordinatorProjectID := input.Principal.ProjectID
 	backup, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, input.BackupID)
 	if err != nil {
 		return entity.Resource{}, err
@@ -401,10 +692,30 @@ func (service *Service) createWorkspaceRestore(
 	}
 	sources := slices.Clone(backupSpec.Members)
 	slices.SortFunc(sources, func(left, right entity.WorkspaceBackupMember) int {
+		if left.WorkspaceID != right.WorkspaceID {
+			return compareText(left.WorkspaceID, right.WorkspaceID)
+		}
 		return compareText(left.SourceExecutionID, right.SourceExecutionID)
 	})
 	members := make([]entity.WorkspaceRestoreMember, 0, len(sources))
 	for _, source := range sources {
+		if err := recovery.SwitchWorkspaceProject(ctx, source.WorkspaceID); err != nil {
+			return entity.Resource{}, err
+		}
+		memberPrincipal := input.Principal
+		memberPrincipal.ProjectID = source.WorkspaceID
+		workspace, workspaceErr := tx.GetForUpdate(
+			ctx, input.Principal.OrganizationID, source.WorkspaceID, source.WorkspaceID,
+		)
+		if workspaceErr != nil {
+			return entity.Resource{}, workspaceErr
+		}
+		workspaceSHA, digestErr := entity.ProjectionSHA256(workspace)
+		if digestErr != nil || workspace.Kind != enum.KindProject ||
+			workspace.OwnerActorID != input.Principal.ActorID || workspace.State != enum.StateActive ||
+			workspace.Version != source.WorkspaceVersion || workspaceSHA != source.WorkspaceSHA256 {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
 		execution, err := tx.GetRuntimeExecutionForUpdate(ctx, source.SourceExecutionID)
 		if err != nil {
 			return entity.Resource{}, err
@@ -416,7 +727,7 @@ func (service *Service) createWorkspaceRestore(
 			execution.ArchiveProvenanceSHA256 != source.ProvenanceSHA256 {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
-		result, err := service.retryWorkspaceExecution(ctx, tx, input.Principal, execution,
+		result, err := service.retryWorkspaceExecution(ctx, tx, memberPrincipal, execution,
 			&restoreRuntimeIntent{BackupID: execution.ID, SourceVersion: execution.Version,
 				SourceFence: execution.Fence, ExpectedBackupVersion: execution.Version,
 				ArchiveSHA256: execution.ArchiveSHA256, ProvenanceSHA256: execution.ArchiveProvenanceSHA256,
@@ -441,12 +752,16 @@ func (service *Service) createWorkspaceRestore(
 			return entity.Resource{}, errs.ErrInternal
 		}
 		members = append(members, entity.WorkspaceRestoreMember{
-			SourceExecutionID: source.SourceExecutionID, SourceSessionID: source.SessionID,
-			TargetTurnID: result.Turn.ID, TargetTurnVersion: result.Turn.Version,
+			SourceExecutionID: source.SourceExecutionID, WorkspaceID: source.WorkspaceID,
+			SourceSessionID: source.SessionID,
+			TargetTurnID:    result.Turn.ID, TargetTurnVersion: result.Turn.Version,
 			TargetAttempt: turnSpec.Attempt, RuntimeRevisionID: turnSpec.RuntimeRevisionID,
 			RuntimeRevisionVersion: 1,
 			ImmutableInputSHA256:   turnSpec.EffectiveInputSHA256, GrantSHA256: grantSHA256, State: "QUEUED",
 		})
+	}
+	if err := recovery.SwitchWorkspaceProject(ctx, coordinatorProjectID); err != nil {
+		return entity.Resource{}, err
 	}
 	created, err := entity.New(uuid.NewString(), input.Principal.OrganizationID, input.Principal.ProjectID,
 		backup.ID, input.Principal.ActorID, enum.KindWorkspaceRestore, input.Name, entity.WorkspaceRestoreSpec{
@@ -613,6 +928,11 @@ func (service *Service) transitionWorkspaceRestore(
 	tx domainrepo.Transaction,
 	input ManageWorkspaceRestoreInput,
 ) (entity.Resource, error) {
+	recovery, ok := tx.(domainrepo.WorkspaceRecoveryTransaction)
+	if !ok {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	coordinatorProjectID := input.Principal.ProjectID
 	current, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, input.RestoreID)
 	if err != nil {
 		return entity.Resource{}, err
@@ -648,14 +968,25 @@ func (service *Service) transitionWorkspaceRestore(
 		}
 		members := slices.Clone(spec.Members)
 		slices.SortFunc(members, func(left, right entity.WorkspaceRestoreMember) int {
+			if left.WorkspaceID != right.WorkspaceID {
+				return compareText(left.WorkspaceID, right.WorkspaceID)
+			}
 			return compareText(left.TargetTurnID, right.TargetTurnID)
 		})
 		for index := range members {
-			member, retryErr := service.retryWorkspaceRestoreMember(ctx, tx, input.Principal, members[index], now)
+			if err := recovery.SwitchWorkspaceProject(ctx, members[index].WorkspaceID); err != nil {
+				return entity.Resource{}, err
+			}
+			memberPrincipal := input.Principal
+			memberPrincipal.ProjectID = members[index].WorkspaceID
+			member, retryErr := service.retryWorkspaceRestoreMember(ctx, tx, memberPrincipal, members[index], now)
 			if retryErr != nil {
 				return entity.Resource{}, retryErr
 			}
 			members[index] = member
+		}
+		if err := recovery.SwitchWorkspaceProject(ctx, coordinatorProjectID); err != nil {
+			return entity.Resource{}, err
 		}
 		slices.SortFunc(members, func(left, right entity.WorkspaceRestoreMember) int {
 			return compareText(left.SourceExecutionID, right.SourceExecutionID)
@@ -703,17 +1034,28 @@ func (service *Service) transitionWorkspaceRestore(
 	}
 	members := slices.Clone(spec.Members)
 	slices.SortFunc(members, func(left, right entity.WorkspaceRestoreMember) int {
+		if left.WorkspaceID != right.WorkspaceID {
+			return compareText(left.WorkspaceID, right.WorkspaceID)
+		}
 		return compareText(left.TargetTurnID, right.TargetTurnID)
 	})
 	for index := range members {
+		if err := recovery.SwitchWorkspaceProject(ctx, members[index].WorkspaceID); err != nil {
+			return entity.Resource{}, err
+		}
+		memberPrincipal := input.Principal
+		memberPrincipal.ProjectID = members[index].WorkspaceID
 		if input.Action == "complete" {
-			if err := service.requireWorkspaceRestoreMemberSucceeded(ctx, tx, input.Principal, members[index]); err != nil {
+			if err := service.requireWorkspaceRestoreMemberSucceeded(ctx, tx, memberPrincipal, members[index]); err != nil {
 				return entity.Resource{}, err
 			}
-		} else if err := service.closeWorkspaceRestoreMember(ctx, tx, input.Principal, members[index], input.TerminalReasonCode, now); err != nil {
+		} else if err := service.closeWorkspaceRestoreMember(ctx, tx, memberPrincipal, members[index], input.TerminalReasonCode, now); err != nil {
 			return entity.Resource{}, err
 		}
 		members[index].State = memberState
+	}
+	if err := recovery.SwitchWorkspaceProject(ctx, coordinatorProjectID); err != nil {
+		return entity.Resource{}, err
 	}
 	slices.SortFunc(members, func(left, right entity.WorkspaceRestoreMember) int {
 		return compareText(left.SourceExecutionID, right.SourceExecutionID)
@@ -799,6 +1141,42 @@ func (service *Service) closeWorkspaceRestoreMember(
 		turnSpec.EffectiveInputSHA256 != member.ImmutableInputSHA256 {
 		return errs.ErrStateConflict
 	}
+	if graph.Runtime != nil && !runtimeTerminal(graph.Runtime.State) {
+		if graph.Runtime.State == "ADMITTED" || graph.Runtime.State == "RUNNING" {
+			_, err := service.terminateRuntimeGraphForOwner(
+				ctx, tx, principal, principal.ActorID, *graph.Runtime, reason,
+				"workspace_restore_cancel_runtime", now,
+			)
+			return err
+		}
+		if graph.Runtime.State != "PENDING" {
+			return errs.ErrStateConflict
+		}
+		closedTurn, err := service.cancelTurnExecution(ctx, tx, principal, graph.Turn, reason, now)
+		if err != nil {
+			return err
+		}
+		if err := service.completeRuntimeProcessFromTurn(ctx, tx, principal, closedTurn); err != nil {
+			return err
+		}
+		execution := *graph.Runtime
+		expectedVersion, expectedFence := execution.Version, execution.Fence
+		execution.Version++
+		execution.Fence++
+		execution.State = "CANCELLED"
+		if err := pinRuntimeRetention(&execution, now); err != nil {
+			return err
+		}
+		execution.TerminalOutcome, execution.TerminalReference = "CANCELLED", reason
+		execution.TerminalSHA256 = hashString(reason)
+		execution.LeaseID, execution.LeaseTokenSHA256, execution.LeaseExpiresAt = "", "", time.Time{}
+		execution.UpdatedAt = now
+		if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
+			return err
+		}
+		return service.appendLifecycleAudit(ctx, tx, principal, "workspace_restore_cancel_runtime",
+			execution.ID, "RUNTIME_EXECUTION", execution.Version, now)
+	}
 	if !graph.Turn.State.Terminal() {
 		if _, err := service.cancelTurnExecution(ctx, tx, principal, graph.Turn, reason, now); err != nil {
 			return err
@@ -837,7 +1215,7 @@ func (service *Service) retryWorkspaceRestoreMember(
 		if retryErr != nil {
 			return entity.WorkspaceRestoreMember{}, retryErr
 		}
-		return workspaceRestoreMemberFromRetry(member.SourceExecutionID, result)
+		return workspaceRestoreMemberFromRetry(member.SourceExecutionID, member.WorkspaceID, result)
 	}
 	if !errors.Is(err, errs.ErrNotFound) {
 		return entity.WorkspaceRestoreMember{}, err
@@ -884,10 +1262,13 @@ func (service *Service) retryWorkspaceRestoreMember(
 		return entity.WorkspaceRestoreMember{}, err
 	}
 	result := RetryRuntimeExecutionResult{Turn: retried, Restore: &operation}
-	return workspaceRestoreMemberFromRetry(member.SourceExecutionID, result)
+	return workspaceRestoreMemberFromRetry(member.SourceExecutionID, member.WorkspaceID, result)
 }
 
-func workspaceRestoreMemberFromRetry(sourceExecutionID string, result RetryRuntimeExecutionResult) (entity.WorkspaceRestoreMember, error) {
+func workspaceRestoreMemberFromRetry(
+	sourceExecutionID, workspaceID string,
+	result RetryRuntimeExecutionResult,
+) (entity.WorkspaceRestoreMember, error) {
 	if result.Restore == nil {
 		return entity.WorkspaceRestoreMember{}, errs.ErrInternal
 	}
@@ -904,6 +1285,7 @@ func workspaceRestoreMemberFromRetry(sourceExecutionID string, result RetryRunti
 		return entity.WorkspaceRestoreMember{}, errs.ErrInternal
 	}
 	return entity.WorkspaceRestoreMember{SourceExecutionID: sourceExecutionID,
+		WorkspaceID:     workspaceID,
 		SourceSessionID: result.Restore.SessionID, TargetTurnID: result.Turn.ID,
 		TargetTurnVersion: result.Turn.Version, TargetAttempt: spec.Attempt,
 		RuntimeRevisionID: spec.RuntimeRevisionID, RuntimeRevisionVersion: 1,

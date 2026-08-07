@@ -106,6 +106,49 @@ CREATE POLICY protected_resource_history_runtime_scope
 REVOKE ALL ON control_plane.protected_resource_history FROM PUBLIC;
 GRANT SELECT, INSERT ON control_plane.protected_resource_history TO control_plane_runtime;
 
+-- Read-only compatibility projection для уже развернутого runtime-controller.
+-- Таблица не входит в generic resources mutation path: source authority остаётся
+-- только у Agent/InstructionSet/ProviderConnectionReference.
+CREATE TABLE control_plane.runtime_derived_resources (
+    id uuid NOT NULL,
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    parent_id uuid,
+    owner_actor_id uuid NOT NULL,
+    kind text NOT NULL CHECK (kind IN ('ROLE', 'PROMPT_PROFILE')),
+    name text NOT NULL CHECK (length(name) BETWEEN 1 AND 160),
+    state text NOT NULL DEFAULT 'ACTIVE' CHECK (state = 'ACTIVE'),
+    version bigint NOT NULL CHECK (version BETWEEN 1 AND 9007199254740991),
+    spec jsonb NOT NULL CHECK (jsonb_typeof(spec) = 'object' AND octet_length(spec::text) <= 65536),
+    source_kind text NOT NULL CHECK (source_kind IN ('AGENT', 'INSTRUCTION_SET')),
+    source_id uuid NOT NULL,
+    source_version bigint NOT NULL CHECK (source_version BETWEEN 1 AND 9007199254740991),
+    source_sha256 text NOT NULL CHECK (source_sha256 ~ '^[a-f0-9]{64}$'),
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    PRIMARY KEY (organization_id, project_id, id, version),
+    UNIQUE (organization_id, project_id, source_kind, source_id, source_version)
+);
+CREATE INDEX runtime_derived_resources_read_idx
+    ON control_plane.runtime_derived_resources (organization_id, project_id, id, version);
+ALTER TABLE control_plane.runtime_derived_resources OWNER TO control_plane_owner;
+ALTER TABLE control_plane.runtime_derived_resources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_plane.runtime_derived_resources FORCE ROW LEVEL SECURITY;
+CREATE POLICY runtime_derived_resources_runtime_scope
+    ON control_plane.runtime_derived_resources
+    FOR ALL TO control_plane_runtime
+    USING (
+        organization_id = (control_plane.runtime_scope()).organization_id
+        AND project_id = (control_plane.runtime_scope()).project_id
+    )
+    WITH CHECK (
+        organization_id = (control_plane.runtime_scope()).organization_id
+        AND project_id = (control_plane.runtime_scope()).project_id
+        AND owner_actor_id = (control_plane.runtime_scope()).actor_id
+    );
+REVOKE ALL ON control_plane.runtime_derived_resources FROM PUBLIC;
+GRANT SELECT, INSERT ON control_plane.runtime_derived_resources TO control_plane_runtime;
+
 ALTER TABLE control_plane.runtime_execution_incidents
     ADD COLUMN version bigint NOT NULL DEFAULT 1
         CHECK (version BETWEEN 1 AND 9007199254740991),
@@ -173,12 +216,37 @@ CREATE POLICY runtime_incident_history_runtime_scope
     USING (
         organization_id = (control_plane.runtime_scope()).organization_id
         AND project_id = (control_plane.runtime_scope()).project_id
-        AND owner_actor_id = (control_plane.runtime_scope()).actor_id
+        AND (
+            owner_actor_id = (control_plane.runtime_scope()).actor_id
+            OR EXISTS (
+                SELECT 1
+                FROM control_plane.project_actor_permissions AS permission
+                WHERE permission.organization_id = runtime_incident_history.organization_id
+                  AND permission.project_id = runtime_incident_history.project_id
+                  AND permission.actor_id = (control_plane.runtime_scope()).actor_id
+                  AND permission.permission IN (
+                      'controlplane.runtime_execution.incident.read',
+                      'controlplane.runtime_execution.incident.manage'
+                  )
+            )
+        )
     )
     WITH CHECK (
         organization_id = (control_plane.runtime_scope()).organization_id
         AND project_id = (control_plane.runtime_scope()).project_id
-        AND owner_actor_id = (control_plane.runtime_scope()).actor_id
+        AND (
+            owner_actor_id = (control_plane.runtime_scope()).actor_id
+            OR EXISTS (
+                SELECT 1
+                FROM control_plane.project_actor_permissions AS permission
+                WHERE permission.organization_id = runtime_incident_history.organization_id
+                  AND permission.project_id = runtime_incident_history.project_id
+                  AND permission.actor_id = (control_plane.runtime_scope()).actor_id
+                  AND permission.permission IN (
+                      'controlplane.runtime_execution.incident.manage'
+                  )
+            )
+        )
     );
 REVOKE ALL ON control_plane.runtime_incident_history FROM PUBLIC;
 GRANT SELECT, INSERT ON control_plane.runtime_incident_history TO control_plane_runtime;
@@ -206,6 +274,202 @@ CREATE TRIGGER resources_legacy_configuration_freeze
         OR coalesce(OLD.kind, '') IN ('ROLE', 'PROMPT_PROFILE')
     )
     EXECUTE FUNCTION control_plane.reject_legacy_configuration_mutation();
+
+-- Organization-wide recovery остаётся одной physical transaction. Только
+-- runtime adapter, владеющий HMAC key, может переключить exact Project scope;
+-- organization, actor, session_user и generation обязаны совпасть с уже
+-- активированным контекстом текущей транзакции.
+CREATE FUNCTION control_plane.switch_runtime_workspace_context(
+    requested_organization_id uuid,
+    requested_project_id uuid,
+    requested_actor_id uuid,
+    requested_principal_name name,
+    requested_principal_generation bigint,
+    requested_key_id text,
+    requested_nonce uuid,
+    requested_expires_unix_micro bigint,
+    requested_signature bytea
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, control_plane
+AS $function$
+BEGIN
+    PERFORM 1
+      FROM control_plane.runtime_transaction_contexts AS current_context
+     WHERE current_context.backend_pid = pg_backend_pid()
+       AND current_context.transaction_id = txid_current()
+       AND current_context.principal_name = requested_principal_name
+       AND current_context.principal_generation = requested_principal_generation
+       AND current_context.organization_id = requested_organization_id
+       AND current_context.actor_id = requested_actor_id
+       AND current_context.expires_at > clock_timestamp()
+     FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'workspace recovery context is invalid'
+            USING ERRCODE = '28000';
+    END IF;
+
+    DELETE FROM control_plane.runtime_transaction_contexts
+     WHERE backend_pid = pg_backend_pid()
+       AND transaction_id = txid_current();
+
+    PERFORM control_plane.activate_runtime_context(
+        requested_organization_id,
+        requested_project_id,
+        requested_actor_id,
+        requested_principal_name,
+        requested_principal_generation,
+        requested_key_id,
+        requested_nonce,
+        requested_expires_unix_micro,
+        requested_signature
+    );
+END
+$function$;
+REVOKE ALL ON FUNCTION control_plane.switch_runtime_workspace_context(
+    uuid, uuid, uuid, name, bigint, text, uuid, bigint, bytea
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION control_plane.switch_runtime_workspace_context(
+    uuid, uuid, uuid, name, bigint, text, uuid, bigint, bytea
+) TO control_plane_runtime;
+
+-- Candidate discovery не выполняет effect и не держит lock между
+-- транзакциями. Exact version/attempt/generation повторно проверяет terminal
+-- command под owner locks; поэтому гонка всегда закрывается OCC-отказом.
+CREATE FUNCTION control_plane.next_workspace_recovery_candidate()
+RETURNS TABLE (
+    organization_id uuid,
+    project_id uuid,
+    owner_actor_id uuid,
+    resource_id uuid,
+    kind text,
+    version bigint,
+    attempt integer,
+    generation bigint,
+    outcome text,
+    terminal_reason_code text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, control_plane
+AS $function$
+BEGIN
+    IF NOT pg_has_role(session_user, 'control_plane_runtime', 'member') THEN
+        RAISE EXCEPTION 'workspace recovery caller is invalid'
+            USING ERRCODE = '28000';
+    END IF;
+    RETURN QUERY
+    WITH backup_candidates AS (
+        SELECT backup.organization_id,
+               backup.project_id,
+               backup.owner_actor_id,
+               backup.id AS resource_id,
+               backup.kind,
+               backup.version,
+               (backup.spec->>'attempt')::integer AS attempt,
+               (backup.spec->>'generation')::bigint AS generation,
+               CASE
+                   WHEN backup.state = 'RUNNING'
+                        AND backup.spec->>'backupState' = 'VERIFYING'
+                       THEN 'complete'
+                   WHEN backup.state = 'SUCCEEDED'
+                        AND backup.spec->>'backupState' = 'AVAILABLE'
+                        AND (backup.spec->>'retainUntil')::timestamptz <= clock_timestamp()
+                       THEN 'expire'
+               END AS outcome,
+               CASE
+                   WHEN backup.state = 'SUCCEEDED'
+                        AND (backup.spec->>'retainUntil')::timestamptz <= clock_timestamp()
+                       THEN 'backup_retention_expired'
+                   ELSE ''
+               END AS terminal_reason_code,
+               backup.updated_at
+          FROM control_plane.resources AS backup
+         WHERE backup.kind = 'WORKSPACE_BACKUP'
+           AND backup.state IN ('RUNNING', 'SUCCEEDED')
+    ),
+    restore_candidates AS (
+        SELECT restore.organization_id,
+               restore.project_id,
+               restore.owner_actor_id,
+               restore.id AS resource_id,
+               restore.kind,
+               restore.version,
+               (restore.spec->>'attempt')::integer AS attempt,
+               (restore.spec->>'generation')::bigint AS generation,
+               CASE
+                   WHEN (backup.spec->>'retainUntil')::timestamptz <= clock_timestamp()
+                       THEN 'expire'
+                   WHEN member_state.member_count > 0
+                        AND member_state.succeeded_count = member_state.member_count
+                       THEN 'complete'
+                   WHEN member_state.failed_count > 0
+                       THEN 'fail'
+               END AS outcome,
+               CASE
+                   WHEN (backup.spec->>'retainUntil')::timestamptz <= clock_timestamp()
+                       THEN 'backup_retention_expired'
+                   WHEN member_state.failed_count > 0
+                       THEN 'restore_member_failed'
+                   ELSE ''
+               END AS terminal_reason_code,
+               restore.updated_at
+          FROM control_plane.resources AS restore
+          JOIN control_plane.resources AS backup
+            ON backup.organization_id = restore.organization_id
+           AND backup.project_id = restore.project_id
+           AND backup.id = (restore.spec->>'backupId')::uuid
+           AND backup.kind = 'WORKSPACE_BACKUP'
+          CROSS JOIN LATERAL (
+              SELECT count(*)::bigint AS member_count,
+                     count(*) FILTER (
+                         WHERE turn.state = 'SUCCEEDED'
+                           AND execution.state = 'SUCCEEDED'
+                           AND execution.turn_id = turn.id
+                     )::bigint AS succeeded_count,
+                     count(*) FILTER (
+                         WHERE turn.state IN ('FAILED', 'CANCELLED', 'EXPIRED')
+                            OR execution.state IN ('FAILED', 'CANCELLED', 'EXPIRED')
+                     )::bigint AS failed_count
+                FROM jsonb_array_elements(restore.spec->'members') AS member(value)
+                LEFT JOIN control_plane.resources AS turn
+                  ON turn.organization_id = restore.organization_id
+                 AND turn.project_id = (member.value->>'workspaceId')::uuid
+                 AND turn.id = (member.value->>'targetTurnId')::uuid
+                 AND turn.kind = 'TURN'
+                LEFT JOIN control_plane.runtime_executions AS execution
+                  ON execution.organization_id = restore.organization_id
+                 AND execution.project_id = (member.value->>'workspaceId')::uuid
+                 AND execution.turn_id = (member.value->>'targetTurnId')::uuid
+                 AND execution.attempt = (member.value->>'targetAttempt')::integer
+          ) AS member_state
+         WHERE restore.kind = 'WORKSPACE_RESTORE'
+           AND restore.state IN ('QUEUED', 'RUNNING')
+    ),
+    candidates AS (
+        SELECT * FROM backup_candidates WHERE backup_candidates.outcome IS NOT NULL
+        UNION ALL
+        SELECT * FROM restore_candidates WHERE restore_candidates.outcome IS NOT NULL
+    )
+    SELECT candidate.organization_id,
+           candidate.project_id,
+           candidate.owner_actor_id,
+           candidate.resource_id,
+           candidate.kind,
+           candidate.version,
+           candidate.attempt,
+           candidate.generation,
+           candidate.outcome,
+           candidate.terminal_reason_code
+      FROM candidates AS candidate
+     ORDER BY candidate.updated_at, candidate.resource_id
+     LIMIT 1;
+END
+$function$;
+REVOKE ALL ON FUNCTION control_plane.next_workspace_recovery_candidate() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION control_plane.next_workspace_recovery_candidate()
+    TO control_plane_runtime;
 
 UPDATE control_plane.schema_state
 SET version = 20260806023400, migrated_at = clock_timestamp()

@@ -162,6 +162,12 @@ var sqlResourceUpdate string
 //go:embed sql/runtime_revision__components.sql
 var sqlRuntimeRevisionComponents string
 
+//go:embed sql/runtime_derived_resource__insert.sql
+var sqlRuntimeDerivedResourceInsert string
+
+//go:embed sql/runtime_derived_resource__get.sql
+var sqlRuntimeDerivedResourceGet string
+
 //go:embed sql/runtime_revision__latest.sql
 var sqlRuntimeRevisionLatest string
 
@@ -278,6 +284,24 @@ var sqlRuntimeIncidentHistoryRecord string
 
 //go:embed sql/runtime_incident_history__list.sql
 var sqlRuntimeIncidentHistoryList string
+
+//go:embed sql/interaction_delivery__workspace_open_for_update.sql
+var sqlInteractionDeliveryWorkspaceOpenForUpdate string
+
+//go:embed sql/audit__run_timeline.sql
+var sqlAuditRunTimeline string
+
+//go:embed sql/project__owner_list_for_update.sql
+var sqlProjectOwnerListForUpdate string
+
+//go:embed sql/transaction__switch_workspace_scope.sql
+var sqlTransactionSwitchWorkspaceScope string
+
+//go:embed sql/workspace_recovery__next_candidate.sql
+var sqlWorkspaceRecoveryNextCandidate string
+
+//go:embed sql/workspace_recovery__readiness.sql
+var sqlWorkspaceRecoveryReadiness string
 
 //go:embed sql/protected_history__insert.sql
 var sqlProtectedHistoryInsert string

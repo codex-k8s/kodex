@@ -315,9 +315,22 @@ func (service *Service) resolveBoundExecution(
 	if err != nil {
 		return resolvedExecution{}, errs.ErrInternal
 	}
-	role, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, sessionSpec.AgentID,
-	)
+	roleID, roleVersion := sessionSpec.AgentID, uint64(0)
+	targetAgent := sessionSpec.AgentVersion != 0
+	if targetAgent {
+		roleID, roleVersion = revisionSpec.RoleID, revisionComponentVersion(revisionSpec.Components, enum.KindRole, revisionSpec.RoleID)
+	}
+	var role entity.Resource
+	if targetAgent {
+		projectionTx, projectionOK := tx.(domainrepo.RuntimeProjectionTransaction)
+		if !projectionOK || roleVersion == 0 {
+			return resolvedExecution{}, errs.ErrInternal
+		}
+		role, err = projectionTx.GetDerivedRuntimeResource(ctx, principal.OrganizationID, principal.ProjectID,
+			roleID, enum.KindRole, roleVersion)
+	} else {
+		role, err = tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, roleID)
+	}
 	if err != nil {
 		return resolvedExecution{}, err
 	}
@@ -325,7 +338,11 @@ func (service *Service) resolveBoundExecution(
 	if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive {
 		return resolvedExecution{}, errs.ErrStateConflict
 	}
-	if revisionSpec.SessionID != session.ID || revisionSpec.RoleID != role.ID {
+	if revisionSpec.SessionID != session.ID || revisionSpec.RoleID != role.ID ||
+		(targetAgent && (revisionSpec.AgentID != sessionSpec.AgentID || revisionSpec.AgentVersion != sessionSpec.AgentVersion ||
+			revisionSpec.AgentSHA256 != sessionSpec.AgentSHA256 || revisionSpec.AgentAssignmentID != sessionSpec.AgentAssignmentID ||
+			revisionSpec.AgentAssignmentVersion != sessionSpec.AgentAssignmentVersion ||
+			revisionSpec.AgentAssignmentSHA256 != sessionSpec.AgentAssignmentSHA256)) {
 		return resolvedExecution{}, errs.ErrStateConflict
 	}
 	var roleComponent entity.EffectiveResourceRef
@@ -351,6 +368,15 @@ func (service *Service) resolveBoundExecution(
 	}
 	resolved.Runtime = graph.Runtime
 	return resolved, nil
+}
+
+func revisionComponentVersion(components []entity.EffectiveResourceRef, kind enum.Kind, resourceID string) uint64 {
+	for _, component := range components {
+		if component.Kind == kind && component.ResourceID == resourceID {
+			return component.Version
+		}
+	}
+	return 0
 }
 
 func runtimeResourcePolicy(role entity.RoleSpec) (string, string) {

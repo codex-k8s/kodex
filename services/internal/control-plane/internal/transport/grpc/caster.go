@@ -405,6 +405,9 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProviderPoolID:         value.RuntimeRevision.GetProviderPoolId(),
 			ProviderPoolVersion:    value.RuntimeRevision.GetProviderPoolVersion(),
 			ProviderPoolSHA256:     value.RuntimeRevision.GetProviderPoolSha256(),
+			AgentAssignmentID:      value.RuntimeRevision.GetAgentAssignmentId(),
+			AgentAssignmentVersion: value.RuntimeRevision.GetAgentAssignmentVersion(),
+			AgentAssignmentSHA256:  value.RuntimeRevision.GetAgentAssignmentSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_Session:
 		return entity.SessionSpec{
@@ -414,6 +417,9 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProviderPoolID:             value.Session.GetProviderPoolId(),
 			ProviderPoolVersion:        value.Session.GetProviderPoolVersion(),
 			ProviderPoolSHA256:         value.Session.GetProviderPoolSha256(),
+			AgentAssignmentID:          value.Session.GetAgentAssignmentId(),
+			AgentAssignmentVersion:     value.Session.GetAgentAssignmentVersion(),
+			AgentAssignmentSHA256:      value.Session.GetAgentAssignmentSha256(),
 			ProviderAccountBindingID:   value.Session.GetProviderAccountBindingId(),
 			ConversationID:             value.Session.GetConversationId(),
 			ArchiveRef:                 value.Session.GetArchiveRef(),
@@ -595,6 +601,9 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			ProviderPoolID:          value.Schedule.GetProviderPoolId(),
 			ProviderPoolVersion:     value.Schedule.GetProviderPoolVersion(),
 			ProviderPoolSHA256:      value.Schedule.GetProviderPoolSha256(),
+			AgentAssignmentID:       value.Schedule.GetAgentAssignmentId(),
+			AgentAssignmentVersion:  value.Schedule.GetAgentAssignmentVersion(),
+			AgentAssignmentSHA256:   value.Schedule.GetAgentAssignmentSha256(),
 		}, nil
 	case *controlplanev1.ResourceSpec_OwnerGate:
 		expiresAt, err := requiredTime(value.OwnerGate.GetExpiresAt())
@@ -1006,6 +1015,9 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ProviderPoolId:          value.ProviderPoolID,
 				ProviderPoolVersion:     value.ProviderPoolVersion,
 				ProviderPoolSha256:      value.ProviderPoolSHA256,
+				AgentAssignmentId:       value.AgentAssignmentID,
+				AgentAssignmentVersion:  value.AgentAssignmentVersion,
+				AgentAssignmentSha256:   value.AgentAssignmentSHA256,
 			},
 		}
 	case entity.SessionSpec:
@@ -1017,6 +1029,9 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ProviderPoolId:             value.ProviderPoolID,
 				ProviderPoolVersion:        value.ProviderPoolVersion,
 				ProviderPoolSha256:         value.ProviderPoolSHA256,
+				AgentAssignmentId:          value.AgentAssignmentID,
+				AgentAssignmentVersion:     value.AgentAssignmentVersion,
+				AgentAssignmentSha256:      value.AgentAssignmentSHA256,
 				ProviderAccountBindingId:   value.ProviderAccountBindingID,
 				ConversationId:             value.ConversationID,
 				ArchiveRef:                 value.ArchiveRef,
@@ -1163,6 +1178,9 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				ProviderPoolId:           value.ProviderPoolID,
 				ProviderPoolVersion:      value.ProviderPoolVersion,
 				ProviderPoolSha256:       value.ProviderPoolSHA256,
+				AgentAssignmentId:        value.AgentAssignmentID,
+				AgentAssignmentVersion:   value.AgentAssignmentVersion,
+				AgentAssignmentSha256:    value.AgentAssignmentSHA256,
 			},
 		}
 	case entity.OwnerGateSpec:
@@ -1551,6 +1569,7 @@ func configurationOwnershipFromProto(
 		),
 		SourceRef:      ownership.GetSourceRef(),
 		SourceRevision: ownership.GetSourceRevision(),
+		SourceSHA256:   ownership.GetSourceSha256(),
 	}
 }
 
@@ -1563,6 +1582,7 @@ func configurationOwnershipToProto(
 		),
 		SourceRef:      ownership.SourceRef,
 		SourceRevision: ownership.SourceRevision,
+		SourceSha256:   ownership.SourceSHA256,
 	}
 }
 

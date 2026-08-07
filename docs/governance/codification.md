@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 1.4.0
-updated: 2026-07-31
+version: 1.5.0
+updated: 2026-08-06
 ---
 
 # Кодификация документов и задач
@@ -129,5 +129,6 @@ updated: 2026-07-28
 | `RUN-MC-006`       | `docs/runbooks/internal-rpc-authority.md`                   |
 | `SVC-MC-013`       | `services/external/control-api-gateway/README.md`           |
 | `RUN-MC-013`       | `docs/runbooks/control-api-gateway.md`                      |
+| `SVC-MC-014`       | `services/internal/control-plane/owner-configuration-contract.md` |
 
 При добавлении управляемого документа реестр обновляется в том же PR.

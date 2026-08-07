@@ -69,6 +69,7 @@ type Config struct {
 	RoleRuntimeContractRevision         uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256           string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
 	PendingRescheduleDelay              time.Duration `env:"CONTROL_PLANE_PENDING_RESCHEDULE_DELAY"`
+	RecoveryPollInterval                time.Duration `env:"CONTROL_PLANE_RECOVERY_POLL_INTERVAL"`
 	OIDCTLSServerName                   string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
 	OIDCCAFile                          string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
 	ApplicationGrantTrustDir            string        `env:"CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR"`
@@ -141,6 +142,7 @@ func loadConfig() (Config, error) {
 		RoleRuntimeContractRevision:         1,
 		RoleRuntimeContractSHA256:           "0000000000000000000000000000000000000000000000000000000000000000",
 		PendingRescheduleDelay:              30 * time.Second,
+		RecoveryPollInterval:                time.Second,
 		OIDCTLSServerName:                   "sso.mattercodex.local",
 		OIDCCAFile:                          "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
 		ApplicationGrantTrustDir:            "/var/run/config/mattercodex/control-plane/application-grants",
@@ -253,6 +255,7 @@ func (config Config) validate() error {
 		config.CacheTimeout > time.Second ||
 		config.TurnLeaseDuration < 5*time.Second ||
 		config.TurnLeaseDuration > 5*time.Minute ||
+		config.RecoveryPollInterval < 100*time.Millisecond || config.RecoveryPollInterval > time.Minute ||
 		config.PendingRescheduleDelay < 5*time.Second || config.PendingRescheduleDelay > 5*time.Minute {
 		return errors.New("control-plane duration is invalid")
 	}
@@ -329,10 +332,13 @@ func expectedOperations() map[string]string {
 		"control.restore-operation.get":                  controlplanev1.ControlPlaneService_GetRestoreOperation_FullMethodName,
 		"control.restore-operation.list":                 controlplanev1.ControlPlaneService_ListRestoreOperations_FullMethodName,
 		"control.role-definition.manage":                 controlplanev1.ControlPlaneService_ManageRoleDefinition_FullMethodName,
+		"control.role-definition.git.reconcile":          controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
 		"control.role-definition.get":                    controlplanev1.ControlPlaneService_GetRoleDefinition_FullMethodName,
 		"control.role-definition.list":                   controlplanev1.ControlPlaneService_ListRoleDefinitions_FullMethodName,
 		"control.role-definition.history":                controlplanev1.ControlPlaneService_ListRoleDefinitionHistory_FullMethodName,
 		"control.agent.manage":                           controlplanev1.ControlPlaneService_ManageAgent_FullMethodName,
+		"control.agent.git.reconcile":                    controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName,
+		"control.interaction.agent-bot.manage":           controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
 		"control.agent.get":                              controlplanev1.ControlPlaneService_GetAgent_FullMethodName,
 		"control.agent.list":                             controlplanev1.ControlPlaneService_ListAgents_FullMethodName,
 		"control.agent.history":                          controlplanev1.ControlPlaneService_ListAgentHistory_FullMethodName,
@@ -341,6 +347,7 @@ func expectedOperations() map[string]string {
 		"control.agent-assignment.list":                  controlplanev1.ControlPlaneService_ListAgentAssignments_FullMethodName,
 		"control.agent-assignment.history":               controlplanev1.ControlPlaneService_ListAgentAssignmentHistory_FullMethodName,
 		"control.instruction-set.manage":                 controlplanev1.ControlPlaneService_ManageInstructionSet_FullMethodName,
+		"control.instruction-set.git.reconcile":          controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
 		"control.instruction-set.get":                    controlplanev1.ControlPlaneService_GetInstructionSet_FullMethodName,
 		"control.instruction-set.list":                   controlplanev1.ControlPlaneService_ListInstructionSets_FullMethodName,
 		"control.instruction-set.history":                controlplanev1.ControlPlaneService_ListInstructionSetHistory_FullMethodName,
@@ -349,6 +356,7 @@ func expectedOperations() map[string]string {
 		"control.provider-reference.list":                controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
 		"control.provider-reference.history":             controlplanev1.ControlPlaneService_ListProviderConnectionReferenceHistory_FullMethodName,
 		"control.provider-pool.manage":                   controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName,
+		"control.provider-pool.git.reconcile":            controlplanev1.ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
 		"control.provider-pool.get":                      controlplanev1.ControlPlaneService_GetProviderPool_FullMethodName,
 		"control.provider-pool.list":                     controlplanev1.ControlPlaneService_ListProviderPools_FullMethodName,
 		"control.provider-pool.history":                  controlplanev1.ControlPlaneService_ListProviderPoolHistory_FullMethodName,
@@ -372,9 +380,9 @@ func expectedOperations() map[string]string {
 		"control.integration.provider-reference.manage":  controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
 		"control.integration.provider-reference.get":     controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
 		"control.integration.provider-reference.list":    controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
-		"control.integration.workspace-mapping.manage":   controlplanev1.ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName,
-		"control.integration.workspace-mapping.get":      controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
-		"control.integration.workspace-mapping.list":     controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
+		"control.interaction.workspace-mapping.manage":   controlplanev1.ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName,
+		"control.interaction.workspace-mapping.get":      controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
+		"control.interaction.workspace-mapping.list":     controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
 		"control.artifact.scan":                          controlplanev1.ControlPlaneService_RecordArtifactScan_FullMethodName,
 		"control.artifact-scanner.readiness":             controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.role-image-recipe.manage":               controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,

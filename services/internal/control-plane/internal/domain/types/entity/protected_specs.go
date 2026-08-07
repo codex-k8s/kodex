@@ -57,6 +57,16 @@ type AgentSpec struct {
 	RuntimeProfileVersion uint64                 `json:"runtimeProfileVersion"`
 	RuntimeProfileSHA256  string                 `json:"runtimeProfileSha256"`
 	Capabilities          []string               `json:"capabilities"`
+	BotIdentityRef        string                 `json:"botIdentityRef,omitempty"`
+	BotUsername           string                 `json:"botUsername,omitempty"`
+	BotProviderRevision   uint64                 `json:"botProviderRevision,omitempty"`
+	BotProviderGeneration uint64                 `json:"botProviderGeneration,omitempty"`
+	BotProviderTeamRef    string                 `json:"botProviderTeamRef,omitempty"`
+	BotMaskedStatus       string                 `json:"botMaskedStatus,omitempty"`
+	BotReceiptID          string                 `json:"botReceiptId,omitempty"`
+	BotReceiptVersion     uint64                 `json:"botReceiptVersion,omitempty"`
+	BotReceiptSHA256      string                 `json:"botReceiptSha256,omitempty"`
+	Enabled               bool                   `json:"enabled"`
 	Ownership             ConfigurationOwnership `json:"ownership"`
 }
 
@@ -74,6 +84,15 @@ func (spec AgentSpec) Validate() error {
 		!validSHA256(spec.RuntimeProfileSHA256) || !validPermissions(spec.Capabilities, 64) ||
 		spec.Ownership.Validate() != nil {
 		return errors.New("agent specification is invalid")
+	}
+	botBound := spec.BotIdentityRef != "" || spec.BotUsername != "" || spec.BotProviderRevision != 0 ||
+		spec.BotProviderGeneration != 0 || spec.BotProviderTeamRef != "" ||
+		spec.BotMaskedStatus != "" || spec.BotReceiptID != "" || spec.BotReceiptVersion != 0 || spec.BotReceiptSHA256 != ""
+	if botBound && (!validExternalRef(spec.BotIdentityRef) || !validProviderUsername(spec.BotUsername) ||
+		spec.BotProviderRevision == 0 || spec.BotProviderGeneration == 0 || !validExternalRef(spec.BotProviderTeamRef) ||
+		(spec.BotMaskedStatus != "AVAILABLE" && spec.BotMaskedStatus != "REVOKED") ||
+		value.ValidateID(spec.BotReceiptID) != nil || spec.BotReceiptVersion == 0 || !validSHA256(spec.BotReceiptSHA256)) {
+		return errors.New("agent bot identity specification is invalid")
 	}
 	return nil
 }
@@ -104,16 +123,28 @@ func (spec AgentAssignmentSpec) Validate() error {
 
 // InstructionSetSpec содержит одну текущую immutable content version.
 type InstructionSetSpec struct {
-	StableKey         string                 `json:"stableKey"`
-	Locale            string                 `json:"locale"`
-	CurrentVersion    uint64                 `json:"currentVersion"`
-	PublishedVersion  uint64                 `json:"publishedVersion,omitempty"`
-	Content           string                 `json:"content"`
-	ContentSHA256     string                 `json:"contentSha256"`
-	VersionState      string                 `json:"versionState"`
-	ValidationSHA256  string                 `json:"validationSha256,omitempty"`
-	RollbackOfVersion uint64                 `json:"rollbackOfVersion,omitempty"`
-	Ownership         ConfigurationOwnership `json:"ownership"`
+	StableKey               string                       `json:"stableKey"`
+	Locale                  string                       `json:"locale"`
+	CurrentVersion          uint64                       `json:"currentVersion"`
+	PublishedVersion        uint64                       `json:"publishedVersion,omitempty"`
+	Content                 string                       `json:"content"`
+	ContentSHA256           string                       `json:"contentSha256"`
+	VersionState            string                       `json:"versionState"`
+	ValidationSHA256        string                       `json:"validationSha256,omitempty"`
+	ValidationSucceeded     bool                         `json:"validationSucceeded"`
+	ValidatedContentVersion uint64                       `json:"validatedContentVersion,omitempty"`
+	ValidatedContentSHA256  string                       `json:"validatedContentSha256,omitempty"`
+	ValidationErrors        []InstructionValidationError `json:"validationErrors,omitempty"`
+	RollbackOfVersion       uint64                       `json:"rollbackOfVersion,omitempty"`
+	Ownership               ConfigurationOwnership       `json:"ownership"`
+}
+
+type InstructionValidationError struct {
+	Code    string `json:"code"`
+	Field   string `json:"field"`
+	Line    uint32 `json:"line,omitempty"`
+	Column  uint32 `json:"column,omitempty"`
+	Message string `json:"message"`
 }
 
 func (InstructionSetSpec) Kind() enum.Kind                                     { return enum.KindInstructionSet }
@@ -127,15 +158,22 @@ func (spec InstructionSetSpec) Validate() error {
 	}
 	switch spec.VersionState {
 	case "DRAFT":
-		if spec.ValidationSHA256 != "" || spec.PublishedVersion >= spec.CurrentVersion {
+		if spec.ValidationSHA256 != "" || spec.ValidationSucceeded || spec.ValidatedContentVersion != 0 ||
+			spec.ValidatedContentSHA256 != "" || len(spec.ValidationErrors) != 0 || spec.PublishedVersion >= spec.CurrentVersion {
 			return errors.New("draft instruction version is invalid")
 		}
 	case "VALIDATED", "REJECTED":
-		if !validSHA256(spec.ValidationSHA256) || spec.PublishedVersion >= spec.CurrentVersion {
+		if !validSHA256(spec.ValidationSHA256) || spec.ValidatedContentVersion != spec.CurrentVersion ||
+			spec.ValidatedContentSHA256 != spec.ContentSHA256 || spec.PublishedVersion >= spec.CurrentVersion ||
+			(spec.VersionState == "VALIDATED") != spec.ValidationSucceeded ||
+			(spec.ValidationSucceeded && len(spec.ValidationErrors) != 0) ||
+			(!spec.ValidationSucceeded && len(spec.ValidationErrors) == 0) {
 			return errors.New("validated instruction version is invalid")
 		}
 	case "PUBLISHED":
-		if !validSHA256(spec.ValidationSHA256) || spec.PublishedVersion != spec.CurrentVersion {
+		if !validSHA256(spec.ValidationSHA256) || !spec.ValidationSucceeded || len(spec.ValidationErrors) != 0 ||
+			spec.ValidatedContentVersion != spec.CurrentVersion || spec.ValidatedContentSHA256 != spec.ContentSHA256 ||
+			spec.PublishedVersion != spec.CurrentVersion {
 			return errors.New("published instruction version is invalid")
 		}
 	case "ARCHIVED":
@@ -145,6 +183,12 @@ func (spec InstructionSetSpec) Validate() error {
 	default:
 		return errors.New("instruction version state is invalid")
 	}
+	for _, validationError := range spec.ValidationErrors {
+		if value.ValidateStableKey(validationError.Code) != nil || validationError.Field != "content" ||
+			len(validationError.Message) == 0 || len(validationError.Message) > 256 {
+			return errors.New("instruction validation error is invalid")
+		}
+	}
 	if spec.RollbackOfVersion >= spec.CurrentVersion {
 		return errors.New("instruction rollback lineage is invalid")
 	}
@@ -153,29 +197,34 @@ func (spec InstructionSetSpec) Validate() error {
 
 // ProviderConnectionReferenceSpec намеренно исключает credential values и provider payload.
 type ProviderConnectionReferenceSpec struct {
-	StableKey        string    `json:"stableKey"`
-	Provider         string    `json:"provider"`
-	ServerReference  string    `json:"serverReference"`
-	ReferenceVersion uint64    `json:"referenceVersion"`
-	ReferenceSHA256  string    `json:"referenceSha256"`
-	MaskedLabel      string    `json:"maskedLabel"`
-	MaskedStatus     string    `json:"maskedStatus"`
-	Capabilities     []string  `json:"capabilities"`
-	Eligible         bool      `json:"eligible"`
-	ObservedAt       time.Time `json:"observedAt"`
-	ReceiptID        string    `json:"receiptId"`
-	ReceiptVersion   uint64    `json:"receiptVersion"`
-	ReceiptSHA256    string    `json:"receiptSha256"`
+	StableKey                string    `json:"stableKey"`
+	Provider                 string    `json:"provider"`
+	ServerReference          string    `json:"serverReference"`
+	ReferenceVersion         uint64    `json:"referenceVersion"`
+	ReferenceGeneration      uint64    `json:"referenceGeneration"`
+	ReferenceSHA256          string    `json:"referenceSha256"`
+	MaskedLabel              string    `json:"maskedLabel"`
+	MaskedStatus             string    `json:"maskedStatus"`
+	Capabilities             []string  `json:"capabilities"`
+	Eligible                 bool      `json:"eligible"`
+	ObservedAt               time.Time `json:"observedAt"`
+	ReceiptID                string    `json:"receiptId"`
+	ReceiptVersion           uint64    `json:"receiptVersion"`
+	ReceiptSHA256            string    `json:"receiptSha256"`
+	CredentialBindingID      string    `json:"credentialBindingId"`
+	CredentialBindingVersion uint64    `json:"credentialBindingVersion"`
+	CredentialBindingSHA256  string    `json:"credentialBindingSha256"`
 }
 
 func (ProviderConnectionReferenceSpec) Kind() enum.Kind { return enum.KindProviderReference }
 func (spec ProviderConnectionReferenceSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil || value.ValidateStableKey(spec.Provider) != nil ||
-		!validExternalRef(spec.ServerReference) || spec.ReferenceVersion == 0 ||
+		!validExternalRef(spec.ServerReference) || spec.ReferenceVersion == 0 || spec.ReferenceGeneration == 0 ||
 		!validSHA256(spec.ReferenceSHA256) || len(spec.MaskedLabel) == 0 || len(spec.MaskedLabel) > 256 ||
 		!validBoundedKeys(spec.Capabilities, 64) || spec.ObservedAt.IsZero() ||
 		value.ValidateID(spec.ReceiptID) != nil || spec.ReceiptVersion == 0 ||
-		!validSHA256(spec.ReceiptSHA256) {
+		!validSHA256(spec.ReceiptSHA256) || value.ValidateID(spec.CredentialBindingID) != nil ||
+		spec.CredentialBindingVersion == 0 || !validSHA256(spec.CredentialBindingSHA256) {
 		return errors.New("provider connection reference specification is invalid")
 	}
 	switch spec.MaskedStatus {
@@ -191,6 +240,18 @@ func (spec ProviderConnectionReferenceSpec) Validate() error {
 		return errors.New("provider connection status is invalid")
 	}
 	return nil
+}
+
+func validProviderUsername(username string) bool {
+	if len(username) < 1 || len(username) > 64 {
+		return false
+	}
+	for _, symbol := range username {
+		if (symbol < 'a' || symbol > 'z') && (symbol < '0' || symbol > '9') && symbol != '-' && symbol != '_' && symbol != '.' {
+			return false
+		}
+	}
+	return true
 }
 
 type ProviderPoolBinding struct {
@@ -315,6 +376,7 @@ func (spec WorkspaceBackupSpec) Validate() error {
 
 type WorkspaceRestoreMember struct {
 	SourceExecutionID      string `json:"sourceExecutionId"`
+	WorkspaceID            string `json:"workspaceId"`
 	SourceSessionID        string `json:"sourceSessionId"`
 	TargetTurnID           string `json:"targetTurnId"`
 	TargetTurnVersion      uint64 `json:"targetTurnVersion"`
@@ -365,7 +427,8 @@ func (spec WorkspaceRestoreSpec) Validate() error {
 		return errors.New("workspace restore state is invalid")
 	}
 	for _, member := range spec.Members {
-		if value.ValidateID(member.SourceExecutionID) != nil || value.ValidateID(member.SourceSessionID) != nil || value.ValidateID(member.TargetTurnID) != nil ||
+		if value.ValidateID(member.SourceExecutionID) != nil || value.ValidateID(member.WorkspaceID) != nil ||
+			value.ValidateID(member.SourceSessionID) != nil || value.ValidateID(member.TargetTurnID) != nil ||
 			member.TargetTurnVersion == 0 || member.TargetAttempt == 0 ||
 			value.ValidateID(member.RuntimeRevisionID) != nil || member.RuntimeRevisionVersion == 0 ||
 			!validSHA256(member.ImmutableInputSHA256) || !validSHA256(member.GrantSHA256) ||
@@ -379,16 +442,18 @@ func (spec WorkspaceRestoreSpec) Validate() error {
 
 // WorkspaceMattermostMappingSpec хранит только refs и receipt digest.
 type WorkspaceMattermostMappingSpec struct {
-	WorkspaceID            string    `json:"workspaceId"`
-	WorkspaceVersion       uint64    `json:"workspaceVersion"`
-	WorkspaceSHA256        string    `json:"workspaceSha256"`
-	ProviderTeamRef        string    `json:"providerTeamRef"`
-	ProviderReceiptID      string    `json:"providerReceiptId"`
-	ProviderReceiptVersion uint64    `json:"providerReceiptVersion"`
-	ProviderReceiptSHA256  string    `json:"providerReceiptSha256"`
-	MappingGeneration      uint64    `json:"mappingGeneration"`
-	MappingState           string    `json:"mappingState"`
-	ProviderObservedAt     time.Time `json:"providerObservedAt"`
+	WorkspaceID              string    `json:"workspaceId"`
+	WorkspaceVersion         uint64    `json:"workspaceVersion"`
+	WorkspaceSHA256          string    `json:"workspaceSha256"`
+	ProviderTeamRef          string    `json:"providerTeamRef"`
+	ProviderReceiptID        string    `json:"providerReceiptId"`
+	ProviderReceiptVersion   uint64    `json:"providerReceiptVersion"`
+	ProviderReceiptSHA256    string    `json:"providerReceiptSha256"`
+	ProviderEffectVersion    uint64    `json:"providerEffectVersion"`
+	ProviderEffectGeneration uint64    `json:"providerEffectGeneration"`
+	MappingGeneration        uint64    `json:"mappingGeneration"`
+	MappingState             string    `json:"mappingState"`
+	ProviderObservedAt       time.Time `json:"providerObservedAt"`
 }
 
 func (WorkspaceMattermostMappingSpec) Kind() enum.Kind { return enum.KindWorkspaceMapping }
@@ -396,7 +461,8 @@ func (spec WorkspaceMattermostMappingSpec) Validate() error {
 	if value.ValidateID(spec.WorkspaceID) != nil || spec.WorkspaceVersion == 0 ||
 		!validSHA256(spec.WorkspaceSHA256) || !validExternalRef(spec.ProviderTeamRef) ||
 		value.ValidateID(spec.ProviderReceiptID) != nil || spec.ProviderReceiptVersion == 0 ||
-		!validSHA256(spec.ProviderReceiptSHA256) || spec.MappingGeneration == 0 ||
+		!validSHA256(spec.ProviderReceiptSHA256) || spec.ProviderEffectVersion == 0 ||
+		spec.ProviderEffectGeneration == 0 || spec.MappingGeneration == 0 ||
 		(spec.MappingState != "BOUND" && spec.MappingState != "UNLINKED") ||
 		spec.ProviderObservedAt.IsZero() {
 		return errors.New("workspace Mattermost mapping specification is invalid")

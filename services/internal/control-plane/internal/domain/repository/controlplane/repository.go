@@ -685,6 +685,7 @@ type Transaction interface {
 	SaveTurnAttempt(context.Context, TurnAttempt) error
 	FinishTurnAttempt(context.Context, TurnAttempt) error
 	EnqueueInteractionDelivery(context.Context, InteractionDeliveryWork) error
+	WorkspaceHasOpenInteractionDeliveries(context.Context, string, string) (bool, error)
 	ClaimInteractionDelivery(context.Context, string, string, string, string, time.Duration) (InteractionDeliveryWork, error)
 	CompleteInteractionDelivery(context.Context, string, string, string, uint64, string, string) error
 	SaveInteractionDeliveryReadbackGrant(context.Context, InteractionDeliveryReadbackGrant) error
@@ -783,6 +784,46 @@ type Transaction interface {
 	ActiveWorkClaimsForUpdate(context.Context, string, string, string, string) ([]entity.Resource, error)
 	ActiveProcessTurnCandidates(context.Context, string, string, string) ([]entity.Resource, error)
 	ActiveOwnerGateForProcess(context.Context, string, string, string) (entity.Resource, error)
+}
+
+// RuntimeProjectionTransaction записывает только immutable derived adapter;
+// generic resources mutation authority к нему не имеет доступа.
+type RuntimeProjectionTransaction interface {
+	InsertDerivedRuntimeResource(context.Context, entity.Resource, enum.Kind, string, uint64, string) error
+	GetDerivedRuntimeResource(context.Context, string, string, string, enum.Kind, uint64) (entity.Resource, error)
+}
+
+// RuntimeProjectionRepository обслуживает только exact version-pinned readback.
+type RuntimeProjectionRepository interface {
+	GetDerivedRuntimeResource(context.Context, string, string, string, enum.Kind, uint64) (entity.Resource, error)
+}
+
+// RunTimelineRepository объединяет exact run projection одним PostgreSQL
+// keyset query по (occurred_at,id), а не пагинирует UUIDv4 отдельно по видам.
+type RunTimelineRepository interface {
+	ListRunTimelineAudit(
+		context.Context, string, string, string, []string, time.Time, string, int,
+	) ([]Audit, error)
+}
+
+// WorkspaceRecoveryTransaction — единственный organization-wide path,
+// который внутри одной physical transaction переключает только exact Project
+// scope того же actor. Он не расширяет generic CRUD для остальных команд.
+type WorkspaceRecoveryTransaction interface {
+	SwitchWorkspaceProject(context.Context, string) error
+	OwnerWorkspaceProjectsForUpdate(context.Context, string, string) ([]entity.Resource, error)
+}
+
+type WorkspaceRecoveryCandidate struct {
+	OrganizationID, ProjectID, OwnerActorID, ResourceID string
+	Kind                                                enum.Kind
+	Version, Generation                                 uint64
+	Attempt                                             uint32
+	Outcome, TerminalReasonCode                         string
+}
+
+type WorkspaceRecoveryCandidateRepository interface {
+	NextWorkspaceRecoveryCandidate(context.Context) (WorkspaceRecoveryCandidate, error)
 }
 
 // ProtectedTransaction — узкий порт owner-конфигурации Issue #234. Он не

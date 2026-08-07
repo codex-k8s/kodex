@@ -41,20 +41,15 @@ func (service *Service) ManageSession(
 	}
 	if input.Action == "CREATE" {
 		if value.ValidateName(input.Name) != nil ||
-			(input.RoleID == "") == (input.AgentStableKey == "") ||
-			(input.RoleID != "" && value.ValidateID(input.RoleID) != nil) ||
-			(input.AgentStableKey != "" && value.ValidateStableKey(input.AgentStableKey) != nil) ||
+			value.ValidateStableKey(input.AgentStableKey) != nil ||
 			(input.ConversationID != "" && value.ValidateID(input.ConversationID) != nil) ||
-			(input.PreferredProviderCredentialBindingID != "" &&
-				(input.AgentStableKey != "" || value.ValidateID(input.PreferredProviderCredentialBindingID) != nil)) ||
 			input.SessionID != "" || input.ExpectedVersion != 0 ||
 			input.ArchiveRef != "" || input.ReasonCode != "" {
 			return entity.Resource{}, errs.ErrInvalidInput
 		}
 	} else if value.ValidateID(input.SessionID) != nil ||
 		input.ExpectedVersion == 0 || value.ValidateStableKey(input.ReasonCode) != nil ||
-		input.Name != "" || input.RoleID != "" || input.AgentStableKey != "" || input.ConversationID != "" ||
-		input.PreferredProviderCredentialBindingID != "" {
+		input.Name != "" || input.AgentStableKey != "" || input.ConversationID != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	if input.Action != "CREATE" && input.Action != "CLOSE" &&
@@ -69,20 +64,17 @@ func (service *Service) ManageSession(
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
-		Action                               string
-		SessionID                            string
-		ExpectedVersion                      uint64
-		Name                                 string
-		RoleID                               string
-		AgentStableKey                       string
-		ConversationID                       string
-		PreferredProviderCredentialBindingID string
-		ArchiveRef                           string
-		ReasonCode                           string
+		Action          string
+		SessionID       string
+		ExpectedVersion uint64
+		Name            string
+		AgentStableKey  string
+		ConversationID  string
+		ArchiveRef      string
+		ReasonCode      string
 	}{
 		input.Action, input.SessionID, input.ExpectedVersion, input.Name,
-		input.RoleID, input.AgentStableKey, input.ConversationID,
-		input.PreferredProviderCredentialBindingID, input.ArchiveRef,
+		input.AgentStableKey, input.ConversationID, input.ArchiveRef,
 		input.ReasonCode,
 	})
 	if err != nil {
@@ -94,12 +86,13 @@ func (service *Service) ManageSession(
 			requestHash,
 			func(tx domainrepo.Transaction) (entity.Resource, error) {
 				now := service.now().UTC().Truncate(time.Microsecond)
-				if input.RoleID != "" {
-					return service.createLegacyManagedSession(ctx, tx, input, now)
-				}
 				protected, ok := tx.(domainrepo.ProtectedTransaction)
 				if !ok {
 					return entity.Resource{}, errs.ErrInternal
+				}
+				workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, input.Principal)
+				if err != nil {
+					return entity.Resource{}, err
 				}
 				agent, err := requireProtectedStable(ctx, protected, input.Principal,
 					enum.KindAgent, input.AgentStableKey)
@@ -107,7 +100,7 @@ func (service *Service) ManageSession(
 					return entity.Resource{}, err
 				}
 				agentSpec, ok := agent.Spec.(entity.AgentSpec)
-				if !ok {
+				if !ok || agent.State != enum.StateActive || !agentSpec.Enabled {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 				agentSHA, err := entity.ProjectionSHA256(agent)
@@ -128,18 +121,40 @@ func (service *Service) ManageSession(
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				assigned := false
+				assignmentIDs := make([]string, 0, 1)
 				for _, candidate := range resources {
 					spec, specOK := candidate.Spec.(entity.AgentAssignmentSpec)
 					if specOK && candidate.Kind == enum.KindAgentAssignment && candidate.State == enum.StateActive &&
 						candidate.OwnerActorID == input.Principal.ActorID && spec.RootActorID == input.Principal.ActorID &&
-						spec.AgentID == agent.ID && (input.ConversationID == "" || spec.RoomID == input.ConversationID) {
-						assigned = true
-						break
+						spec.AgentID == agent.ID && spec.WorkspaceID == input.Principal.ProjectID &&
+						(input.ConversationID == "" && spec.RoomID == "" || spec.RoomID == input.ConversationID) {
+						assignmentIDs = append(assignmentIDs, candidate.ID)
 					}
 				}
-				if !assigned {
+				slices.Sort(assignmentIDs)
+				if len(assignmentIDs) == 0 {
 					return entity.Resource{}, errs.ErrNotFound
+				}
+				if len(assignmentIDs) != 1 {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				assignment, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, assignmentIDs[0])
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				assignmentSpec, assignmentOK := assignment.Spec.(entity.AgentAssignmentSpec)
+				assignmentSHA, digestErr := entity.ProjectionSHA256(assignment)
+				if !assignmentOK || digestErr != nil || assignment.Kind != enum.KindAgentAssignment ||
+					assignment.State != enum.StateActive || assignment.OwnerActorID != input.Principal.ActorID ||
+					assignmentSpec.RootActorID != input.Principal.ActorID || assignmentSpec.AgentID != agent.ID ||
+					assignmentSpec.AgentVersion != agent.Version || assignmentSpec.AgentSHA256 != agentSHA ||
+					assignmentSpec.WorkspaceID != input.Principal.ProjectID ||
+					assignmentSpec.WorkspaceVersion != workspace.Version ||
+					assignmentSpec.WorkspaceSHA256 != workspaceSHA ||
+					(input.ConversationID == "" && assignmentSpec.RoomID != "" ||
+						input.ConversationID != "" && assignmentSpec.RoomID != input.ConversationID) {
+					return entity.Resource{}, errs.ErrStateConflict
 				}
 				sessionID := uuid.NewString()
 				if input.ConversationID != "" {
@@ -168,7 +183,9 @@ func (service *Service) ManageSession(
 					entity.SessionSpec{
 						AgentID: agent.ID, AgentVersion: agent.Version, AgentSHA256: agentSHA,
 						ProviderPoolID: pool.ID, ProviderPoolVersion: pool.Version, ProviderPoolSHA256: poolSHA,
-						ConversationID: input.ConversationID,
+						AgentAssignmentID: assignment.ID, AgentAssignmentVersion: assignment.Version,
+						AgentAssignmentSHA256: assignmentSHA,
+						ConversationID:        input.ConversationID,
 					},
 					now,
 				)
@@ -283,62 +300,6 @@ func (service *Service) ManageSession(
 			)
 		},
 	)
-}
-
-// createLegacyManagedSession сохраняет исполняемый path принятого unit #187.
-// Frozen ROLE/PROMPT_PROFILE не изменяются и служат только version-pinned
-// входом уже существующего runtime consumer.
-func (service *Service) createLegacyManagedSession(
-	ctx context.Context,
-	tx domainrepo.Transaction,
-	input ManageSessionInput,
-	now time.Time,
-) (entity.Resource, error) {
-	role, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, input.RoleID)
-	if err != nil {
-		return entity.Resource{}, err
-	}
-	roleSpec, ok := role.Spec.(entity.RoleSpec)
-	if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive ||
-		len(roleSpec.ProviderCredentialBindingIDs) == 0 {
-		return entity.Resource{}, errs.ErrStateConflict
-	}
-	roleIDs, err := tx.ActorRoleIDs(ctx, input.Principal.OrganizationID,
-		input.Principal.ProjectID, input.Principal.ActorID)
-	if err != nil {
-		return entity.Resource{}, err
-	}
-	if !slices.Contains(roleIDs, role.ID) {
-		return entity.Resource{}, errs.ErrNotFound
-	}
-	binding, err := service.selectProviderBinding(ctx, tx, input.Principal, role.ID, roleSpec,
-		input.PreferredProviderCredentialBindingID, now)
-	if err != nil {
-		return entity.Resource{}, err
-	}
-	if input.ConversationID != "" {
-		conversation, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
-			input.Principal.ProjectID, input.ConversationID)
-		if err != nil {
-			return entity.Resource{}, err
-		}
-		if conversation.Kind != enum.KindChat || conversation.State != enum.StateActive {
-			return entity.Resource{}, errs.ErrNotFound
-		}
-	}
-	session, err := entity.New(uuid.NewString(), input.Principal.OrganizationID,
-		input.Principal.ProjectID, input.ConversationID, input.Principal.ActorID,
-		enum.KindSession, input.Name, entity.SessionSpec{
-			AgentID: role.ID, ProviderAccountBindingID: binding.ID,
-			ConversationID: input.ConversationID,
-		}, now)
-	if err != nil {
-		return entity.Resource{}, errs.ErrInvalidInput
-	}
-	if err := tx.Insert(ctx, session); err != nil {
-		return entity.Resource{}, err
-	}
-	return session, service.appendMutationRecords(ctx, tx, input.Principal, "create_session", session)
 }
 
 // ManageConversationLifecycle материализует единственный transport-specific

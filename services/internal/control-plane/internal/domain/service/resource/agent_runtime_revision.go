@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -30,10 +31,18 @@ func (service *Service) createAgentRuntimeRevision(
 	}
 	selected := make(map[string]entity.Resource)
 	add := func(identifier string, kind enum.Kind) (entity.Resource, error) {
-		item, ok := byID[identifier]
-		if !ok || item.Kind != kind || item.State != enum.StateActive {
+		candidate, ok := byID[identifier]
+		if !ok || candidate.Kind != kind {
 			return entity.Resource{}, errs.ErrNotFound
 		}
+		item, lockErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, identifier)
+		if lockErr != nil {
+			return entity.Resource{}, lockErr
+		}
+		if item.Kind != kind || item.State != enum.StateActive {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		byID[identifier] = item
 		selected[item.ID] = item
 		return item, nil
 	}
@@ -41,16 +50,38 @@ func (service *Service) createAgentRuntimeRevision(
 	if err != nil {
 		return entity.Resource{}, err
 	}
-	_ = project
-	selected[session.ID], selected[agent.ID] = session, agent
+	projectSHA, err := entity.ProjectionSHA256(project)
+	if err != nil || project.ID != principal.ProjectID || project.ProjectID != principal.ProjectID ||
+		project.OrganizationID != principal.OrganizationID || project.OwnerActorID != principal.ActorID {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	selected[session.ID] = session
+	agent, err = add(agent.ID, enum.KindAgent)
+	if err != nil {
+		return entity.Resource{}, err
+	}
 	agentSpec, ok := agent.Spec.(entity.AgentSpec)
-	if !ok || agent.OwnerActorID != principal.ActorID || sessionSpec.AgentID != agent.ID ||
+	if !ok || !agentSpec.Enabled || agent.State != enum.StateActive || agent.OwnerActorID != principal.ActorID || sessionSpec.AgentID != agent.ID ||
 		sessionSpec.AgentVersion != agent.Version || sessionSpec.ProviderPoolID != agentSpec.ProviderPoolID ||
 		sessionSpec.ProviderPoolVersion != agentSpec.ProviderPoolVersion {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
 	agentSHA, err := entity.ProjectionSHA256(agent)
 	if err != nil || agentSHA != sessionSpec.AgentSHA256 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	assignment, err := add(sessionSpec.AgentAssignmentID, enum.KindAgentAssignment)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	assignmentSpec, ok := assignment.Spec.(entity.AgentAssignmentSpec)
+	assignmentSHA, digestErr := entity.ProjectionSHA256(assignment)
+	if !ok || digestErr != nil || assignment.Version != sessionSpec.AgentAssignmentVersion ||
+		assignmentSHA != sessionSpec.AgentAssignmentSHA256 || assignmentSpec.AgentID != agent.ID ||
+		assignment.OwnerActorID != principal.ActorID || assignmentSpec.RootActorID != principal.ActorID ||
+		assignmentSpec.AgentVersion != agent.Version || assignmentSpec.AgentSHA256 != agentSHA ||
+		assignmentSpec.WorkspaceID != principal.ProjectID || assignmentSpec.WorkspaceVersion != project.Version ||
+		assignmentSpec.WorkspaceSHA256 != projectSHA || assignmentSpec.RoomID != sessionSpec.ConversationID {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
 	roleDefinition, err := add(agentSpec.RoleDefinitionID, enum.KindRoleDefinition)
@@ -82,15 +113,59 @@ func (service *Service) createAgentRuntimeRevision(
 		poolSHA != sessionSpec.ProviderPoolSHA256 {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
+	type providerCandidate struct {
+		resource entity.Resource
+		spec     entity.CredentialBindingSpec
+		weight   uint32
+	}
+	providerCandidates := make([]providerCandidate, 0, len(poolSpec.Bindings))
 	for _, binding := range poolSpec.Bindings {
 		reference, err := add(binding.ProviderConnectionReferenceID, enum.KindProviderReference)
 		if err != nil {
 			return entity.Resource{}, err
 		}
 		referenceSHA, digestErr := entity.ProjectionSHA256(reference)
-		if digestErr != nil || reference.Version != binding.ReferenceVersion || referenceSHA != binding.ReferenceSHA256 {
+		referenceSpec, referenceOK := reference.Spec.(entity.ProviderConnectionReferenceSpec)
+		if digestErr != nil || !referenceOK || !referenceSpec.Eligible || reference.Version != binding.ReferenceVersion ||
+			referenceSHA != binding.ReferenceSHA256 || service.now().UTC().Sub(referenceSpec.ObservedAt) > poolSpec.ObservationMaxAge {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
+		credential, err := add(referenceSpec.CredentialBindingID, enum.KindCredentialBinding)
+		if err != nil {
+			return entity.Resource{}, err
+		}
+		credentialSpec, credentialOK := credential.Spec.(entity.CredentialBindingSpec)
+		credentialSHA, digestErr := entity.ProjectionSHA256(credential)
+		if !credentialOK || digestErr != nil || credentialSpec.Purpose != "provider-account" ||
+			!credentialSpec.ProviderEligible || credential.Version != referenceSpec.CredentialBindingVersion ||
+			credentialSHA != referenceSpec.CredentialBindingSHA256 {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		providerCandidates = append(providerCandidates, providerCandidate{resource: credential, spec: credentialSpec, weight: binding.Weight})
+	}
+	if len(providerCandidates) == 0 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	slices.SortFunc(providerCandidates, func(left, right providerCandidate) int {
+		if poolSpec.Policy == "least_used" && left.spec.ProviderObservedUsage != right.spec.ProviderObservedUsage {
+			if left.spec.ProviderObservedUsage < right.spec.ProviderObservedUsage {
+				return -1
+			}
+			return 1
+		}
+		if poolSpec.Policy == "weighted" && left.weight != right.weight {
+			if left.weight > right.weight {
+				return -1
+			}
+			return 1
+		}
+		return compareText(left.resource.ID, right.resource.ID)
+	})
+	providerBinding := providerCandidates[0].resource
+	providerSpec := providerCandidates[0].spec
+	providerAccountName := providerPublicAccountName(providerSpec.PrincipalRef)
+	if providerAccountName == "" {
+		return entity.Resource{}, errs.ErrStateConflict
 	}
 	roleSpec, ok := roleDefinition.Spec.(entity.RoleDefinitionSpec)
 	if !ok || roleSpec.RoleImageRecipeID == "" {
@@ -104,6 +179,9 @@ func (service *Service) createAgentRuntimeRevision(
 	recipeSpec, recipeOK := recipe.Spec.(entity.RoleImageRecipeSpec)
 	if err != nil || !recipeOK || recipe.Version != roleSpec.RoleImageRecipeVersion ||
 		recipeSHA != roleSpec.RoleImageRecipeSHA256 || recipeSpec.PolicyRevision != service.imagePolicyRevision ||
+		agentSpec.RuntimeProfileRef != "control-plane://runtime-profile/"+recipe.ID ||
+		agentSpec.RuntimeProfileVersion != recipe.Version || agentSpec.RuntimeProfileSHA256 != recipeSHA ||
+		recipe.OwnerActorID != principal.ActorID ||
 		recipeSpec.PolicySHA256 != service.imagePolicySHA256 ||
 		recipeSpec.RoleRuntimeContractRevision != service.roleRuntimeContractRevision ||
 		recipeSpec.RoleRuntimeContractSHA256 != service.roleRuntimeContractSHA256 {
@@ -163,23 +241,88 @@ func (service *Service) createAgentRuntimeRevision(
 		}
 		requiredCredentials[spec.Purpose] = item.ID
 	}
-	credentialIDs := make([]string, 0, len(requiredCredentials)+1)
-	for _, identifier := range requiredCredentials {
+	credentialIDs := make([]string, 0, len(requiredCredentials)+2)
+	credentialIDs = append(credentialIDs, providerBinding.ID)
+	selected[providerBinding.ID] = providerBinding
+	requiredPurposes := make([]string, 0, len(requiredCredentials))
+	for purpose := range requiredCredentials {
+		requiredPurposes = append(requiredPurposes, purpose)
+	}
+	slices.Sort(requiredPurposes)
+	for _, purpose := range requiredPurposes {
+		identifier := requiredCredentials[purpose]
 		if identifier == "" {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
+		credential, credentialErr := add(identifier, enum.KindCredentialBinding)
+		if credentialErr != nil {
+			return entity.Resource{}, credentialErr
+		}
+		credentialSpec, credentialOK := credential.Spec.(entity.CredentialBindingSpec)
+		if !credentialOK || credentialSpec.Purpose != purpose || credentialSpec.Ownership.ManagedBy != "GIT" {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
 		credentialIDs = append(credentialIDs, identifier)
-		selected[identifier] = byID[identifier]
 	}
 	if sessionSpec.ConversationID != "" {
 		mcpBindingID := sessionMCPBindingID(session.ID)
-		binding, exists := byID[mcpBindingID]
-		if !exists || binding.Kind != enum.KindCredentialBinding || binding.State != enum.StateActive {
-			return entity.Resource{}, errs.ErrStateConflict
+		binding, bindingErr := add(mcpBindingID, enum.KindCredentialBinding)
+		if bindingErr != nil {
+			return entity.Resource{}, bindingErr
 		}
 		credentialIDs = append(credentialIDs, binding.ID)
-		selected[binding.ID] = binding
 	}
+	now := service.now().UTC().Truncate(time.Microsecond)
+	projectionTx, ok := tx.(domainrepo.RuntimeProjectionTransaction)
+	if !ok {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	derivedPromptID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:agent-prompt:"+instruction.ID)).String()
+	derivedRoleID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:agent-role:"+agent.ID)).String()
+	derivedPrompt := entity.Resource{
+		ID: derivedPromptID, OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ParentID: instruction.ID, OwnerActorID: principal.ActorID, Kind: enum.KindPromptProfile,
+		Name: "Derived Agent prompt", State: enum.StateActive, Version: instruction.Version,
+		Spec: entity.PromptProfileSpec{Revision: instructionSpec.CurrentVersion, ContentSHA256: instructionSpec.ContentSHA256,
+			SourceRef: "control-plane://instruction-set/" + instruction.ID, Locale: instructionSpec.Locale,
+			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI", SourceRef: "control-plane://instruction-set/" + instruction.ID,
+				SourceRevision: instruction.Version, SourceSHA256: instructionSHA}},
+		CreatedAt: instruction.UpdatedAt, UpdatedAt: instruction.UpdatedAt,
+	}
+	roleBindings := make([]entity.ProviderAccountPoolBinding, 0, len(providerCandidates))
+	roleCredentialIDs := make([]string, 0, len(providerCandidates))
+	for _, candidate := range providerCandidates {
+		roleBindings = append(roleBindings, entity.ProviderAccountPoolBinding{CredentialBindingID: candidate.resource.ID, Weight: candidate.weight})
+		roleCredentialIDs = append(roleCredentialIDs, candidate.resource.ID)
+	}
+	slices.Sort(roleCredentialIDs)
+	slices.SortFunc(roleBindings, func(left, right entity.ProviderAccountPoolBinding) int {
+		return compareText(left.CredentialBindingID, right.CredentialBindingID)
+	})
+	derivedRole := entity.Resource{
+		ID: derivedRoleID, OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ParentID: agent.ID, OwnerActorID: principal.ActorID, Kind: enum.KindRole,
+		Name: "Derived Agent runtime role", State: enum.StateActive, Version: agent.Version,
+		Spec: entity.RoleSpec{StableKey: agentSpec.StableKey, Capabilities: slices.Clone(agentSpec.Capabilities),
+			PromptProfileID: derivedPromptID, ProviderCredentialBindingIDs: roleCredentialIDs,
+			ProviderAccountPool: entity.ProviderAccountPool{Policy: poolSpec.Policy, PolicyRevision: poolSpec.PolicyRevision,
+				ObservationMaxAge: poolSpec.ObservationMaxAge, Bindings: roleBindings},
+			RoleImageRecipeID: recipe.ID, Ownership: entity.ConfigurationOwnership{ManagedBy: "UI",
+				SourceRef: "control-plane://agent/" + agent.ID, SourceRevision: agent.Version, SourceSHA256: agentSHA}},
+		CreatedAt: agent.UpdatedAt, UpdatedAt: agent.UpdatedAt,
+	}
+	if derivedPrompt.Validate() != nil || derivedRole.Validate() != nil {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	if err := projectionTx.InsertDerivedRuntimeResource(ctx, derivedPrompt, enum.KindInstructionSet,
+		instruction.ID, instruction.Version, instructionSHA); err != nil {
+		return entity.Resource{}, err
+	}
+	if err := projectionTx.InsertDerivedRuntimeResource(ctx, derivedRole, enum.KindAgent,
+		agent.ID, agent.Version, agentSHA); err != nil {
+		return entity.Resource{}, err
+	}
+	selected[derivedPrompt.ID], selected[derivedRole.ID] = derivedPrompt, derivedRole
 	slices.Sort(credentialIDs)
 	components := make([]entity.EffectiveResourceRef, 0, len(selected))
 	for _, item := range selected {
@@ -196,7 +339,6 @@ func (service *Service) createAgentRuntimeRevision(
 		}
 		return compareText(left.ResourceID, right.ResourceID)
 	})
-	now := service.now().UTC().Truncate(time.Microsecond)
 	effectiveRuntimeSHA256, err := canonicalHash(struct {
 		ImageReference, ImageManifestDigest     string
 		AgentID, AgentSHA256                    string
@@ -249,7 +391,10 @@ func (service *Service) createAgentRuntimeRevision(
 			ImagePromotionReadbackSHA256: artifactSpec.PromotionReadbackSHA256,
 			RoleRuntimeContractRevision:  artifactSpec.RoleRuntimeContractRevision,
 			RoleRuntimeContractSHA256:    artifactSpec.RoleRuntimeContractSHA256,
-			CredentialBindingIDs:         credentialIDs, PredecessorRevisionID: predecessorID,
+			PromptProfileID:              derivedPrompt.ID, PromptRevision: instructionSpec.CurrentVersion,
+			RoleID: derivedRole.ID, ProviderCredentialBindingID: providerBinding.ID,
+			ProviderAccountName:  providerAccountName,
+			CredentialBindingIDs: credentialIDs, PredecessorRevisionID: predecessorID,
 			AuthorityPolicyVersion: service.authorityPolicyRevision, AuthorityPolicySHA256: service.authorityPolicySHA256,
 			Components: components, CreatedAt: now, SessionID: session.ID, ChatID: sessionSpec.ConversationID,
 			EffectiveRuntimeSHA256: effectiveRuntimeSHA256, CodexModel: "gpt-5.4",
@@ -259,6 +404,8 @@ func (service *Service) createAgentRuntimeRevision(
 			RoleDefinitionSHA256: roleDefinitionSHA, InstructionSetID: instruction.ID,
 			InstructionSetVersion: instruction.Version, InstructionSetSHA256: instructionSHA,
 			ProviderPoolID: pool.ID, ProviderPoolVersion: pool.Version, ProviderPoolSHA256: poolSHA,
+			AgentAssignmentID: assignment.ID, AgentAssignmentVersion: assignment.Version,
+			AgentAssignmentSHA256: assignmentSHA,
 		}, now)
 	if err != nil {
 		return entity.Resource{}, errs.ErrInternal
@@ -270,4 +417,15 @@ func (service *Service) createAgentRuntimeRevision(
 		return entity.Resource{}, err
 	}
 	return revision, nil
+}
+
+func providerPublicAccountName(principalRef string) string {
+	name := strings.ToLower(strings.TrimSpace(principalRef))
+	if separator := strings.LastIndexByte(name, ':'); separator >= 0 {
+		name = name[separator+1:]
+	}
+	if !publicProviderAccountNamePattern.MatchString(name) {
+		return ""
+	}
+	return name
 }

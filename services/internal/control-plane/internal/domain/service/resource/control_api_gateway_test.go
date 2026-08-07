@@ -63,3 +63,14 @@ func TestUIUpdatePreservesServerOwnedCopyLineage(t *testing.T) {
 		t.Fatalf("copy lineage lost: %#v", ownership)
 	}
 }
+
+func TestAccessConfigurationRegistryRejectsLegacyRuntimeKinds(t *testing.T) {
+	if !accessConfigurationKind(enum.KindTeam) {
+		t.Fatal("TEAM must remain in the access configuration registry")
+	}
+	for _, kind := range []enum.Kind{enum.KindRole, enum.KindPromptProfile} {
+		if accessConfigurationKind(kind) {
+			t.Fatalf("legacy runtime kind %s retained mutation authority", kind)
+		}
+	}
+}

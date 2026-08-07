@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.20.0
-updated: 2026-08-05
+version: 1.21.0
+updated: 2026-08-06
 ---
 
 # Диагностика и восстановление control-plane
@@ -644,31 +644,56 @@ receipt; другой intent — конфликт. Generic Resource lifecycle д
 
 При отказе configuration mutation проверить по порядку:
 
-1. caller workload/full method/permission в authority policy revision 22;
+1. caller workload/full method/permission в authority policy revision 23;
 2. owner-scoped current row и expected version до анализа receipt;
 3. exact reference versions/digests и отсутствие live зависимого graph;
 4. protected history, audit и применимый outbox predecessor одной transaction.
 
 Provider credential, token, device code, private provider payload и secret
 value не должны появляться ни в readback, ни в audit/log/metric. Provider
-reference и mapping mutation принимаются только от exact
-`integration-gateway` с `DOMAIN_STATE` readback authority; один mTLS peer или
-payload receipt не является полномочием.
+reference mutation принимает только exact `integration-gateway` с
+`AI_PROVIDER_READBACK_RECEIPT`; Workspace↔Mattermost mapping и Agent bot
+identity — только exact `interaction-gateway` с
+`MATTERMOST_PROVIDER_READBACK_RECEIPT`. В обоих случаях source authority —
+`PROVIDER_READBACK`, а typed receipt обязан связать issuer, purpose, workload,
+SPIFFE, full method, actor/org/project/workspace/team/action/effect,
+version/generation/digest, expiry и replay ID. Один mTLS peer, payload ref или
+обычный OIDC token полномочием не является.
+
+Если ordinary UI update пытается изменить Git-owned RoleDefinition, Agent,
+InstructionSet или ProviderPool, использовать только соответствующий exact
+`ReconcileGit*` profile с `controlplane.configuration.git.apply` и immutable
+source/revision/digest. Для InstructionSet validation не передавать verdict,
+digest или errors: их вычисляет control-plane из locked content version;
+publish допустим только после successful server validation той же версии.
+Detach очищает Git source binding, copy создаёт новый UI-owned set.
 
 Для Incident action использовать только `acknowledge|retry|release|close`.
+Owner и project operator требуют разные exact permissions, но используют один
+authoritative execution→project eligibility для get/list/history/action.
 Перед retry сверить incident version и весь current Process/Session/Turn/
 Runtime graph; старый execution/lease/grant/claim должен стать terminal, а
-successor — получить fresh attempt и generation. Не менять incident или
-execution ручным SQL.
+successor — получить fresh attempt и generation. `release` считается успешным
+только когда returned released execution и весь graph стали `CANCELLED`, а
+старые leases/grants/claims отозваны. Не менять incident или execution ручным
+SQL.
 
 Workspace backup фиксирует immutable membership snapshot и digest для
-`WORKSPACE|ALL_WORKSPACES`. Restore принимается только для exact AVAILABLE
-backup version/digest и материализует всех members одной transaction. При
-cancel/fail/expire весь envelope становится terminal, generation отзывается;
-частично успешный envelope запрещён. Retry создаёт fresh attempt,
-`RuntimeRevision` и grant для каждого member. Если хотя бы один member не
-совпадает, исправить источник и повторить специализированную команду; не
-закрывать остальные members вручную.
+`WORKSPACE|ALL_WORKSPACES`, где Workspace — авторитетный Project aggregate, а
+не repository checkout. Owner RPC принимает только create/cancel/retry.
+Complete/fail/expire выбирает bounded in-process recovery reconciler через
+PostgreSQL candidate query; browser не является lifecycle engine. Restore
+принимается только для exact AVAILABLE backup version/digest и материализует
+всех members одной transaction. При cancel/fail/expire весь envelope
+становится terminal, generation/revoke watermark продвигается; частично
+успешный envelope запрещён. Retry создаёт fresh attempt, `RuntimeRevision` и
+grant для каждого member. Ошибка recovery worker закрывает readiness; искать
+`workspace recovery reconcile` в runtime diagnostics без вывода payload.
+
+При mapping relink/unlink сначала проверить отсутствие open
+Workspace→Chat→Session→Turn/delivery graph. Open graph должен дать закрытый
+conflict без изменения mapping version/generation. Run timeline проверять по
+stable cursor `(occurred_at,id)`; UUID не является хронологическим курсором.
 
 ## Остановка и rollback
 
@@ -682,7 +707,7 @@ cancel/fail/expire весь envelope становится terminal, generation �
 
 Application rollback допустим только к образу, который понимает уже
 опубликованные Proto/schema/policy revisions. Schema `20260806023400` и
-authority policy 22,
+authority policy 23,
 proof generation, audit и outbox назад не откатываются. При несовместимости
 оставить workload not ready и подготовить forward fix.
 

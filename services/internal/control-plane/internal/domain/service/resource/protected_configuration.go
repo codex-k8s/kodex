@@ -16,12 +16,12 @@ import (
 )
 
 var protectedConfigurationActions = map[enum.Kind]map[string]struct{}{
-	enum.KindRoleDefinition:    {"create": {}, "update": {}, "archive": {}, "delete": {}},
-	enum.KindAgent:             {"create": {}, "update": {}, "archive": {}, "delete": {}},
+	enum.KindRoleDefinition:    {"create": {}, "update": {}, "reconcile_git": {}, "archive": {}, "delete": {}},
+	enum.KindAgent:             {"create": {}, "update": {}, "reconcile_git": {}, "pause": {}, "resume": {}, "enable": {}, "disable": {}, "bind_bot": {}, "rebind_bot": {}, "revoke_bot": {}, "archive": {}, "delete": {}},
 	enum.KindAgentAssignment:   {"assign": {}, "unassign": {}},
-	enum.KindInstructionSet:    {"create": {}, "update": {}, "validate": {}, "publish": {}, "rollback": {}, "detach": {}, "copy": {}, "archive": {}, "delete": {}},
+	enum.KindInstructionSet:    {"create": {}, "update": {}, "reconcile_git": {}, "validate": {}, "publish": {}, "rollback": {}, "detach": {}, "copy": {}, "archive": {}, "delete": {}},
 	enum.KindProviderReference: {"register": {}, "refresh": {}, "archive": {}},
-	enum.KindProviderPool:      {"create": {}, "update": {}, "archive": {}, "delete": {}},
+	enum.KindProviderPool:      {"create": {}, "update": {}, "reconcile_git": {}, "archive": {}, "delete": {}},
 }
 
 func protectedConfigurationPermission(kind enum.Kind) string {
@@ -55,15 +55,44 @@ func protectedConfigurationScope(kind enum.Kind, action string) string {
 	return prefix + "_" + action
 }
 
+func protectedConfigurationMethod(kind enum.Kind, action string) string {
+	if action == "reconcile_git" {
+		return map[enum.Kind]string{
+			enum.KindRoleDefinition: "/controlplane.v1.ControlPlaneService/ReconcileGitRoleDefinition",
+			enum.KindAgent:          "/controlplane.v1.ControlPlaneService/ReconcileGitAgent",
+			enum.KindInstructionSet: "/controlplane.v1.ControlPlaneService/ReconcileGitInstructionSet",
+			enum.KindProviderPool:   "/controlplane.v1.ControlPlaneService/ReconcileGitProviderPool",
+		}[kind]
+	}
+	if kind == enum.KindAgent && (action == "bind_bot" || action == "rebind_bot" || action == "revoke_bot") {
+		return "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity"
+	}
+	return map[enum.Kind]string{
+		enum.KindRoleDefinition:    "/controlplane.v1.ControlPlaneService/ManageRoleDefinition",
+		enum.KindAgent:             "/controlplane.v1.ControlPlaneService/ManageAgent",
+		enum.KindAgentAssignment:   "/controlplane.v1.ControlPlaneService/ManageAgentAssignment",
+		enum.KindInstructionSet:    "/controlplane.v1.ControlPlaneService/ManageInstructionSet",
+		enum.KindProviderReference: "/controlplane.v1.ControlPlaneService/ManageProviderConnectionReference",
+		enum.KindProviderPool:      "/controlplane.v1.ControlPlaneService/ManageProviderPool",
+	}[kind]
+}
+
 // ManageProtectedConfiguration выполняет только закрытый kind-specific registry.
 func (service *Service) ManageProtectedConfiguration(
 	ctx context.Context,
 	input ManageProtectedConfigurationInput,
 ) (entity.Resource, error) {
 	permission := protectedConfigurationPermission(input.Kind)
+	if input.Action == "reconcile_git" {
+		permission = permissionApplyGitConfiguration
+	} else if input.Kind == enum.KindAgent &&
+		(input.Action == "bind_bot" || input.Action == "rebind_bot" || input.Action == "revoke_bot") {
+		permission = permissionAgentBotIdentityManage
+	}
 	actions, kindAllowed := protectedConfigurationActions[input.Kind]
 	_, actionAllowed := actions[input.Action]
-	if permission == "" || !kindAllowed || !actionAllowed {
+	if permission == "" || !kindAllowed || !actionAllowed || input.FullMethod == "" ||
+		input.FullMethod != protectedConfigurationMethod(input.Kind, input.Action) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	if err := authorize(input.Principal, permission); err != nil {
@@ -71,12 +100,13 @@ func (service *Service) ManageProtectedConfiguration(
 	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || input.Principal.ProjectID == "" ||
 		(value.ValidateName(input.Name) != nil && protectedCreateLike(input.Action)) ||
-		(input.Action == "update" && value.ValidateName(input.Name) != nil) ||
+		((input.Action == "update" || input.Action == "reconcile_git") && value.ValidateName(input.Name) != nil) ||
 		(input.ResourceID != "" && value.ValidateID(input.ResourceID) != nil) ||
 		(input.TargetSHA256 != "" && !validSHA256Text(input.TargetSHA256)) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	if protectedCreateLike(input.Action) {
+	createLike := protectedCreateLike(input.Action) || input.Action == "reconcile_git" && input.ResourceID == ""
+	if createLike {
 		if input.Action == "copy" &&
 			(value.ValidateID(input.ResourceID) != nil || input.ExpectedVersion == 0) {
 			return entity.Resource{}, errs.ErrInvalidInput
@@ -89,6 +119,7 @@ func (service *Service) ManageProtectedConfiguration(
 	}
 	requestHash, err := canonicalHash(struct {
 		Identity        commandIdentity
+		FullMethod      string
 		Kind            enum.Kind
 		Action          string
 		ResourceID      string
@@ -98,9 +129,10 @@ func (service *Service) ManageProtectedConfiguration(
 		TargetVersion   uint64
 		TargetSHA256    string
 		ReferenceKeys   []string
-	}{identity(input.Principal), input.Kind, input.Action, input.ResourceID,
+		ProviderReceipt value.ProviderEffectReceipt
+	}{identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
 		input.ExpectedVersion, input.Name, input.Spec, input.TargetVersion,
-		input.TargetSHA256, input.ReferenceKeys})
+		input.TargetSHA256, input.ReferenceKeys, input.ProviderReceipt})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -112,13 +144,13 @@ func (service *Service) ManageProtectedConfiguration(
 		if input.Action == "copy" {
 			return service.copyInstructionSet(ctx, tx, protected, input)
 		}
-		if protectedCreateLike(input.Action) {
+		if createLike {
 			return service.createProtectedConfiguration(ctx, tx, protected, input)
 		}
 		return service.mutateProtectedConfiguration(ctx, tx, protected, input)
 	}
 	scope := protectedConfigurationScope(input.Kind, input.Action)
-	if protectedCreateLike(input.Action) && input.Action != "copy" {
+	if createLike && input.Action != "copy" {
 		return service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 			scope, requestHash, apply)
 	}
@@ -198,7 +230,7 @@ func (service *Service) mutateProtectedConfiguration(
 	now := service.now().UTC().Truncate(time.Microsecond)
 	var updated entity.Resource
 	switch input.Action {
-	case "update", "refresh":
+	case "update", "refresh", "reconcile_git":
 		spec, resolveErr := service.resolveProtectedSpec(ctx, tx, protected, input, current)
 		if resolveErr != nil {
 			return entity.Resource{}, resolveErr
@@ -209,19 +241,21 @@ func (service *Service) mutateProtectedConfiguration(
 			(currentHasStableKey && currentStableKey != nextStableKey) {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
-		if input.Action == "update" {
+		if input.Action == "update" || input.Action == "reconcile_git" {
 			spec, resolveErr = configurationUpdateSpec(ctx, tx, input.Principal, current.Spec, spec, false)
 			if resolveErr != nil {
 				return entity.Resource{}, resolveErr
 			}
 		}
 		name := current.Name
-		if input.Action == "update" {
+		if input.Action == "update" || input.Action == "reconcile_git" {
 			name = input.Name
 		}
 		updated, err = current.Update(name, spec, now)
 	case "validate", "publish", "rollback", "detach":
 		updated, err = service.transitionInstructionSet(ctx, tx, protected, input, current, now)
+	case "pause", "resume", "enable", "disable", "bind_bot", "rebind_bot", "revoke_bot":
+		updated, err = service.transitionAgent(ctx, tx, input, current, now)
 	case "archive":
 		if err := service.requireNoLiveProtectedReferences(ctx, tx, input.Principal, current.ID); err != nil {
 			return entity.Resource{}, err
@@ -313,7 +347,12 @@ func (service *Service) resolveProtectedSpec(
 	switch input.Kind {
 	case enum.KindRoleDefinition:
 		spec, ok := input.Spec.(entity.RoleDefinitionSpec)
-		if !ok || spec.Validate() != nil {
+		if !ok {
+			return nil, errs.ErrInvalidInput
+		}
+		var ownershipErr error
+		spec.Ownership, ownershipErr = normalizedProtectedOwnership(spec.Ownership, input.Action, current.ID == "")
+		if ownershipErr != nil || spec.Validate() != nil {
 			return nil, errs.ErrInvalidInput
 		}
 		permissions, err := tx.ActorPermissions(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, input.Principal.ActorID)
@@ -343,6 +382,7 @@ func (service *Service) resolveProtectedSpec(
 			}
 			recipeSHA, digestErr := entity.ProjectionSHA256(recipe)
 			if digestErr != nil || recipe.Kind != enum.KindRoleImageRecipe || recipe.State != enum.StateActive ||
+				recipe.OwnerActorID != input.Principal.ActorID ||
 				recipe.Version != spec.RoleImageRecipeVersion || recipeSHA != spec.RoleImageRecipeSHA256 {
 				return nil, errs.ErrStateConflict
 			}
@@ -389,26 +429,66 @@ func (service *Service) resolveProtectedSpec(
 		if spec.ProviderPoolID, spec.ProviderPoolVersion, spec.ProviderPoolSHA256, err = protectedTuple(pool); err != nil {
 			return nil, err
 		}
+		if roleSpec.RoleImageRecipeID == "" {
+			return nil, errs.ErrStateConflict
+		}
+		runtimeProfile, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, roleSpec.RoleImageRecipeID)
+		if err != nil {
+			return nil, err
+		}
+		profileID, profileVersion, profileSHA, err := protectedTuple(runtimeProfile)
+		if err != nil || runtimeProfile.Kind != enum.KindRoleImageRecipe || runtimeProfile.State != enum.StateActive ||
+			runtimeProfile.OwnerActorID != input.Principal.ActorID ||
+			profileVersion != roleSpec.RoleImageRecipeVersion || profileSHA != roleSpec.RoleImageRecipeSHA256 {
+			return nil, errs.ErrStateConflict
+		}
+		spec.RuntimeProfileRef = "control-plane://runtime-profile/" + profileID
+		spec.RuntimeProfileVersion, spec.RuntimeProfileSHA256 = profileVersion, profileSHA
+		if current.ID == "" && (spec.BotIdentityRef != "" || spec.BotUsername != "" || spec.BotProviderRevision != 0 ||
+			spec.BotProviderGeneration != 0 || spec.BotProviderTeamRef != "" ||
+			spec.BotMaskedStatus != "" || spec.BotReceiptID != "" || spec.BotReceiptVersion != 0 || spec.BotReceiptSHA256 != "") {
+			return nil, errs.ErrInvalidInput
+		}
+		if current.ID == "" {
+			spec.Enabled = true
+		}
+		if current.ID != "" {
+			currentSpec, currentOK := current.Spec.(entity.AgentSpec)
+			if !currentOK {
+				return nil, errs.ErrStateConflict
+			}
+			spec.BotIdentityRef, spec.BotUsername, spec.BotProviderRevision, spec.BotProviderGeneration,
+				spec.BotProviderTeamRef, spec.BotMaskedStatus =
+				currentSpec.BotIdentityRef, currentSpec.BotUsername, currentSpec.BotProviderRevision,
+				currentSpec.BotProviderGeneration, currentSpec.BotProviderTeamRef, currentSpec.BotMaskedStatus
+			spec.BotReceiptID, spec.BotReceiptVersion, spec.BotReceiptSHA256 =
+				currentSpec.BotReceiptID, currentSpec.BotReceiptVersion, currentSpec.BotReceiptSHA256
+			spec.Enabled = currentSpec.Enabled
+		}
+		var ownershipErr error
+		spec.Ownership, ownershipErr = normalizedProtectedOwnership(spec.Ownership, input.Action, current.ID == "")
+		if ownershipErr != nil {
+			return nil, errs.ErrInvalidInput
+		}
 		if spec.Validate() != nil {
 			return nil, errs.ErrInvalidInput
 		}
 		return spec, nil
 	case enum.KindAgentAssignment:
-		if len(input.ReferenceKeys) != 3 {
+		if len(input.ReferenceKeys) != 2 {
 			return nil, errs.ErrInvalidInput
 		}
 		agent, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindAgent, input.ReferenceKeys[0])
 		if err != nil {
 			return nil, err
 		}
-		workspace, err := protected.GetByNameForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
-			enum.KindRepositoryWorkspace, input.ReferenceKeys[1])
-		if err != nil || workspace.State != enum.StateActive {
-			return nil, errs.ErrNotFound
+		workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, input.Principal)
+		if err != nil {
+			return nil, err
 		}
 		roomID := ""
-		if input.ReferenceKeys[2] != "" {
-			room, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindChat, input.ReferenceKeys[2])
+		if input.ReferenceKeys[1] != "" {
+			room, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindChat, input.ReferenceKeys[1])
 			if err != nil {
 				return nil, err
 			}
@@ -418,34 +498,37 @@ func (service *Service) resolveProtectedSpec(
 		if err != nil {
 			return nil, err
 		}
-		workspaceID, workspaceVersion, workspaceSHA, err := protectedTuple(workspace)
-		if err != nil {
-			return nil, err
-		}
 		return entity.AgentAssignmentSpec{
 			AgentID: agentID, AgentVersion: agentVersion, AgentSHA256: agentSHA,
-			WorkspaceID: workspaceID, WorkspaceVersion: workspaceVersion, WorkspaceSHA256: workspaceSHA,
+			WorkspaceID: workspace.ID, WorkspaceVersion: workspace.Version, WorkspaceSHA256: workspaceSHA,
 			RoomID: roomID, RootActorID: input.Principal.ActorID, AssignmentGeneration: 1,
 		}, nil
 	case enum.KindInstructionSet:
 		spec, ok := input.Spec.(entity.InstructionSetSpec)
-		if !ok || input.Action != "create" && input.Action != "update" {
+		if !ok || input.Action != "create" && input.Action != "update" && input.Action != "reconcile_git" {
 			return nil, errs.ErrInvalidInput
 		}
-		if input.Action == "create" {
+		if current.ID == "" {
 			spec.CurrentVersion, spec.PublishedVersion, spec.VersionState = 1, 0, "DRAFT"
 			spec.ValidationSHA256, spec.RollbackOfVersion = "", 0
+			spec.ValidationSucceeded, spec.ValidatedContentVersion, spec.ValidatedContentSHA256, spec.ValidationErrors = false, 0, "", nil
 		} else {
 			currentSpec, ok := current.Spec.(entity.InstructionSetSpec)
 			if !ok || currentSpec.VersionState == "ARCHIVED" {
 				return nil, errs.ErrStateConflict
 			}
-			if currentSpec.Ownership.ManagedBy == "GIT" {
+			if currentSpec.Ownership.ManagedBy == "GIT" && input.Action != "reconcile_git" {
 				return nil, errs.ErrPermissionDenied
 			}
 			spec.CurrentVersion = currentSpec.CurrentVersion + 1
 			spec.PublishedVersion = currentSpec.PublishedVersion
 			spec.VersionState, spec.ValidationSHA256, spec.RollbackOfVersion = "DRAFT", "", 0
+			spec.ValidationSucceeded, spec.ValidatedContentVersion, spec.ValidatedContentSHA256, spec.ValidationErrors = false, 0, "", nil
+		}
+		var ownershipErr error
+		spec.Ownership, ownershipErr = normalizedProtectedOwnership(spec.Ownership, input.Action, current.ID == "")
+		if ownershipErr != nil {
+			return nil, errs.ErrInvalidInput
 		}
 		if spec.Validate() != nil {
 			return nil, errs.ErrInvalidInput
@@ -455,10 +538,15 @@ func (service *Service) resolveProtectedSpec(
 		spec, ok := input.Spec.(entity.ProviderConnectionReferenceSpec)
 		if !ok || input.Principal.CallerWorkload != service.integrationGatewayWorkload ||
 			input.Principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
-			input.Principal.AuthoritySource != "DOMAIN_STATE" ||
+			input.Principal.AuthoritySource != "PROVIDER_READBACK" ||
 			input.Principal.AuthorityReference == "" || input.Principal.AuthorityRevision == 0 ||
 			!validSHA256Text(input.Principal.AuthorityDigest) {
 			return nil, errs.ErrPermissionDenied
+		}
+		if err := validateProviderReceipt(input.Principal, input.ProviderReceipt,
+			"AI_PROVIDER_READBACK_RECEIPT", input.Action, "provider_connection_reference",
+			input.FullMethod, service.now().UTC()); err != nil {
+			return nil, err
 		}
 		if spec.ReceiptID != "" && spec.ReceiptID != input.Principal.AuthorityReference ||
 			spec.ReceiptVersion != 0 && spec.ReceiptVersion != input.Principal.AuthorityRevision ||
@@ -467,9 +555,34 @@ func (service *Service) resolveProtectedSpec(
 		}
 		spec.ReceiptID, spec.ReceiptVersion, spec.ReceiptSHA256 = input.Principal.AuthorityReference,
 			input.Principal.AuthorityRevision, input.Principal.AuthorityDigest
+		spec.ServerReference, spec.ReferenceVersion, spec.ReferenceGeneration, spec.ReferenceSHA256 =
+			input.ProviderReceipt.ProviderObjectRef, input.ProviderReceipt.EffectVersion,
+			input.ProviderReceipt.EffectGeneration, input.ProviderReceipt.EffectSHA256
+		if input.ProviderReceipt.Provider == "" || input.ProviderReceipt.MaskedLabel == "" ||
+			(input.ProviderReceipt.MaskedStatus != "AVAILABLE" && input.ProviderReceipt.MaskedStatus != "DEGRADED" &&
+				input.ProviderReceipt.MaskedStatus != "INELIGIBLE" && input.ProviderReceipt.MaskedStatus != "ARCHIVED") {
+			return nil, errs.ErrStateConflict
+		}
+		spec.Provider, spec.MaskedLabel, spec.MaskedStatus = input.ProviderReceipt.Provider,
+			input.ProviderReceipt.MaskedLabel, input.ProviderReceipt.MaskedStatus
+		spec.Capabilities, spec.Eligible, spec.ObservedAt = slices.Clone(input.ProviderReceipt.Capabilities),
+			input.ProviderReceipt.Eligible, input.ProviderReceipt.IssuedAt
+		spec.CredentialBindingID, spec.CredentialBindingVersion, spec.CredentialBindingSHA256 =
+			input.ProviderReceipt.CredentialBindingID, input.ProviderReceipt.CredentialBindingVersion,
+			input.ProviderReceipt.CredentialBindingSHA256
+		binding, bindingErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, spec.CredentialBindingID)
+		if bindingErr != nil {
+			return nil, bindingErr
+		}
+		bindingSHA, digestErr := entity.ProjectionSHA256(binding)
+		if digestErr != nil || binding.Kind != enum.KindCredentialBinding || binding.State != enum.StateActive ||
+			binding.Version != spec.CredentialBindingVersion || bindingSHA != spec.CredentialBindingSHA256 {
+			return nil, errs.ErrStateConflict
+		}
 		if current.ID != "" {
 			currentSpec, ok := current.Spec.(entity.ProviderConnectionReferenceSpec)
 			if !ok || spec.ReferenceVersion <= currentSpec.ReferenceVersion ||
+				spec.ReferenceGeneration <= currentSpec.ReferenceGeneration ||
 				spec.ReceiptVersion <= currentSpec.ReceiptVersion || spec.ServerReference != currentSpec.ServerReference {
 				return nil, errs.ErrStateConflict
 			}
@@ -521,6 +634,11 @@ func (service *Service) resolveProtectedSpec(
 			return nil, errs.ErrInternal
 		}
 		spec.EligibilitySnapshotSHA256 = digest
+		var ownershipErr error
+		spec.Ownership, ownershipErr = normalizedProtectedOwnership(spec.Ownership, input.Action, current.ID == "")
+		if ownershipErr != nil {
+			return nil, errs.ErrInvalidInput
+		}
 		if current.ID != "" {
 			currentSpec, ok := current.Spec.(entity.ProviderPoolSpec)
 			if !ok || spec.PolicyRevision <= currentSpec.PolicyRevision {
@@ -534,6 +652,25 @@ func (service *Service) resolveProtectedSpec(
 	default:
 		return nil, errs.ErrInvalidInput
 	}
+}
+
+func normalizedProtectedOwnership(ownership entity.ConfigurationOwnership, action string, creating bool) (entity.ConfigurationOwnership, error) {
+	if action == "reconcile_git" {
+		if ownership.ManagedBy != "GIT" || ownership.Validate() != nil || !validSHA256Text(ownership.SourceSHA256) {
+			return entity.ConfigurationOwnership{}, errs.ErrInvalidInput
+		}
+		return ownership, nil
+	}
+	if creating {
+		if ownership.ManagedBy != "UI" || ownership.SourceRef != "" || ownership.SourceRevision != 0 || ownership.SourceSHA256 != "" {
+			return entity.ConfigurationOwnership{}, errs.ErrInvalidInput
+		}
+		return entity.ConfigurationOwnership{ManagedBy: "UI"}, nil
+	}
+	if ownership.ManagedBy != "UI" {
+		return entity.ConfigurationOwnership{}, errs.ErrInvalidInput
+	}
+	return ownership, nil
 }
 
 func requireProtectedStable(
@@ -578,20 +715,38 @@ func (service *Service) transitionInstructionSet(
 	}
 	switch input.Action {
 	case "validate":
-		if spec.VersionState != "DRAFT" || input.TargetVersion != spec.CurrentVersion || !validSHA256Text(input.TargetSHA256) {
+		if spec.VersionState != "DRAFT" || input.TargetVersion != spec.CurrentVersion || input.TargetSHA256 != "" {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
-		spec.VersionState, spec.ValidationSHA256 = "VALIDATED", input.TargetSHA256
+		spec.ValidationErrors = validateInstructionContent(spec.Content)
+		spec.ValidationSucceeded = len(spec.ValidationErrors) == 0
+		spec.ValidatedContentVersion, spec.ValidatedContentSHA256 = spec.CurrentVersion, spec.ContentSHA256
+		validationDigest, digestErr := canonicalHash(struct {
+			ContentVersion uint64
+			ContentSHA256  string
+			Succeeded      bool
+			Errors         []entity.InstructionValidationError
+		}{spec.CurrentVersion, spec.ContentSHA256, spec.ValidationSucceeded, spec.ValidationErrors})
+		if digestErr != nil {
+			return entity.Resource{}, errs.ErrInternal
+		}
+		spec.ValidationSHA256 = validationDigest
+		if spec.ValidationSucceeded {
+			spec.VersionState = "VALIDATED"
+		} else {
+			spec.VersionState = "REJECTED"
+		}
 		return current.Update(current.Name, spec, now)
 	case "publish":
 		if spec.VersionState != "VALIDATED" || input.TargetVersion != spec.CurrentVersion ||
-			input.TargetSHA256 != spec.ContentSHA256 {
+			input.TargetSHA256 != "" || !spec.ValidationSucceeded || spec.ValidatedContentVersion != spec.CurrentVersion ||
+			spec.ValidatedContentSHA256 != spec.ContentSHA256 || len(spec.ValidationErrors) != 0 {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
 		spec.VersionState, spec.PublishedVersion = "PUBLISHED", spec.CurrentVersion
 		return current.Update(current.Name, spec, now)
 	case "rollback":
-		if spec.Ownership.ManagedBy == "GIT" || input.TargetVersion == 0 || !validSHA256Text(input.TargetSHA256) {
+		if spec.Ownership.ManagedBy == "GIT" || input.TargetVersion == 0 || input.TargetSHA256 != "" {
 			return entity.Resource{}, errs.ErrPermissionDenied
 		}
 		target, err := protected.GetInstructionHistoryContentVersion(ctx, current.ID, input.TargetVersion)
@@ -599,13 +754,16 @@ func (service *Service) transitionInstructionSet(
 			return entity.Resource{}, err
 		}
 		targetSpec, ok := target.Resource.Spec.(entity.InstructionSetSpec)
-		if !ok || targetSpec.ContentSHA256 != input.TargetSHA256 || targetSpec.VersionState != "PUBLISHED" {
+		if !ok || targetSpec.VersionState != "PUBLISHED" || !targetSpec.ValidationSucceeded ||
+			targetSpec.ValidatedContentVersion != targetSpec.CurrentVersion || targetSpec.ValidatedContentSHA256 != targetSpec.ContentSHA256 {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
 		spec.CurrentVersion++
 		spec.PublishedVersion = spec.CurrentVersion
 		spec.Content, spec.ContentSHA256 = targetSpec.Content, targetSpec.ContentSHA256
 		spec.VersionState, spec.ValidationSHA256 = "PUBLISHED", targetSpec.ValidationSHA256
+		spec.ValidationSucceeded, spec.ValidatedContentVersion, spec.ValidatedContentSHA256 = true, spec.CurrentVersion, targetSpec.ContentSHA256
+		spec.ValidationErrors = nil
 		spec.RollbackOfVersion = targetSpec.CurrentVersion
 		return current.Update(current.Name, spec, now)
 	case "detach":
@@ -615,20 +773,124 @@ func (service *Service) transitionInstructionSet(
 		if err := requireDurablePermission(ctx, tx, input.Principal, permissionDetachConfiguration); err != nil {
 			return entity.Resource{}, err
 		}
-		previousVersion := spec.CurrentVersion
-		spec.CurrentVersion++
-		if spec.VersionState == "PUBLISHED" {
-			spec.PublishedVersion = spec.CurrentVersion
+		spec.Ownership = entity.ConfigurationOwnership{ManagedBy: "UI"}
+		return current.Update(current.Name, spec, now)
+	default:
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+}
+
+func (service *Service) transitionAgent(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input ManageProtectedConfigurationInput,
+	current entity.Resource,
+	now time.Time,
+) (entity.Resource, error) {
+	spec, ok := current.Spec.(entity.AgentSpec)
+	if !ok || current.Kind != enum.KindAgent {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	switch input.Action {
+	case "pause":
+		if current.State != enum.StateActive || !spec.Enabled {
+			return entity.Resource{}, errs.ErrStateConflict
 		}
-		spec.RollbackOfVersion = previousVersion
-		spec.Ownership = entity.ConfigurationOwnership{
-			ManagedBy: "UI", SourceRef: "control-plane://instruction-set/" + current.ID,
-			SourceRevision: previousVersion,
+		return current.ReplaceAndTransition(spec, enum.StatePaused, now)
+	case "resume":
+		if current.State != enum.StatePaused || !spec.Enabled {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		return current.ReplaceAndTransition(spec, enum.StateActive, now)
+	case "disable":
+		if current.State != enum.StateActive && current.State != enum.StatePaused || !spec.Enabled {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		spec.Enabled = false
+		if current.State == enum.StatePaused {
+			return current.Update(current.Name, spec, now)
+		}
+		return current.ReplaceAndTransition(spec, enum.StatePaused, now)
+	case "enable":
+		if current.State != enum.StatePaused || spec.Enabled {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		spec.Enabled = true
+		return current.ReplaceAndTransition(spec, enum.StateActive, now)
+	case "bind_bot", "rebind_bot", "revoke_bot":
+		if current.State != enum.StateActive && current.State != enum.StatePaused ||
+			!service.interactionGatewayPrincipal(input.Principal) || input.Principal.AuthoritySource != "PROVIDER_READBACK" {
+			return entity.Resource{}, errs.ErrPermissionDenied
+		}
+		if err := validateProviderReceipt(input.Principal, input.ProviderReceipt,
+			"MATTERMOST_PROVIDER_READBACK_RECEIPT", input.Action, "agent_bot_identity",
+			input.FullMethod, now); err != nil {
+			return entity.Resource{}, err
+		}
+		if input.ProviderReceipt.WorkspaceID != input.Principal.ProjectID || input.ProviderReceipt.ProviderObjectRef == "" ||
+			input.ProviderReceipt.ReceiptRevision <= spec.BotReceiptVersion {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		if _, err := lockWorkspaceMappingForProviderTeam(ctx, tx, input.Principal,
+			input.ProviderReceipt.ProviderTeamRef); err != nil {
+			return entity.Resource{}, err
+		}
+		switch input.Action {
+		case "bind_bot":
+			if spec.BotIdentityRef != "" || input.ProviderReceipt.MaskedStatus != "AVAILABLE" {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+		case "rebind_bot":
+			if spec.BotIdentityRef == "" || input.ProviderReceipt.MaskedStatus != "AVAILABLE" {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+		case "revoke_bot":
+			if spec.BotIdentityRef == "" || input.ProviderReceipt.ProviderObjectRef != spec.BotIdentityRef ||
+				input.ProviderReceipt.ProviderTeamRef != spec.BotProviderTeamRef ||
+				input.ProviderReceipt.MaskedStatus != "REVOKED" {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+		}
+		if spec.BotProviderGeneration != 0 &&
+			(input.ProviderReceipt.EffectGeneration <= spec.BotProviderGeneration ||
+				input.ProviderReceipt.EffectVersion <= spec.BotProviderRevision) {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		spec.BotIdentityRef, spec.BotUsername = input.ProviderReceipt.ProviderObjectRef, input.ProviderReceipt.ProviderUsername
+		spec.BotProviderRevision, spec.BotProviderGeneration, spec.BotMaskedStatus = input.ProviderReceipt.EffectVersion,
+			input.ProviderReceipt.EffectGeneration, input.ProviderReceipt.MaskedStatus
+		spec.BotProviderTeamRef = input.ProviderReceipt.ProviderTeamRef
+		spec.BotReceiptID, spec.BotReceiptVersion, spec.BotReceiptSHA256 = input.Principal.AuthorityReference,
+			input.Principal.AuthorityRevision, input.Principal.AuthorityDigest
+		if spec.Validate() != nil {
+			return entity.Resource{}, errs.ErrInvalidInput
 		}
 		return current.Update(current.Name, spec, now)
 	default:
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+}
+
+func validateInstructionContent(content string) []entity.InstructionValidationError {
+	errorsFound := make([]entity.InstructionValidationError, 0)
+	line, column := uint32(1), uint32(0)
+	for _, symbol := range content {
+		column++
+		if symbol == '\n' {
+			line, column = line+1, 0
+			continue
+		}
+		if symbol < 0x20 && symbol != '\t' || symbol == 0x7f {
+			errorsFound = append(errorsFound, entity.InstructionValidationError{
+				Code: "unsupported_control_character", Field: "content", Line: line, Column: column,
+				Message: "Instruction content contains an unsupported control character.",
+			})
+			if len(errorsFound) == 64 {
+				break
+			}
+		}
+	}
+	return errorsFound
 }
 
 func (service *Service) copyInstructionSet(
@@ -659,10 +921,8 @@ func (service *Service) copyInstructionSet(
 	copySpec.StableKey = baseKey + suffix
 	copySpec.CurrentVersion, copySpec.PublishedVersion = 1, 0
 	copySpec.VersionState, copySpec.ValidationSHA256, copySpec.RollbackOfVersion = "DRAFT", "", 0
-	copySpec.Ownership = entity.ConfigurationOwnership{
-		ManagedBy: "UI", SourceRef: "control-plane://instruction-set/" + source.ID,
-		SourceRevision: sourceSpec.CurrentVersion,
-	}
+	copySpec.ValidationSucceeded, copySpec.ValidatedContentVersion, copySpec.ValidatedContentSHA256, copySpec.ValidationErrors = false, 0, "", nil
+	copySpec.Ownership = entity.ConfigurationOwnership{ManagedBy: "UI"}
 	now := service.now().UTC().Truncate(time.Microsecond)
 	created, err := entity.New(newID, input.Principal.OrganizationID, input.Principal.ProjectID, "",
 		input.Principal.ActorID, enum.KindInstructionSet, input.Name, copySpec, now)
@@ -743,6 +1003,8 @@ func protectedSpecReferences(spec entity.Spec, resourceID string) bool {
 		return typed.BackupID == resourceID
 	case entity.WorkspaceMattermostMappingSpec:
 		return typed.WorkspaceID == resourceID
+	case entity.SessionSpec:
+		return typed.AgentID == resourceID
 	default:
 		return false
 	}
