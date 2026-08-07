@@ -242,6 +242,119 @@ func TestScheduleSessionCompatibilityPinsWholeTuple(t *testing.T) {
 	}
 }
 
+func TestScheduleRebindCycleLeavesOneAdmissionActiveTuple(t *testing.T) {
+	t.Parallel()
+
+	digest := strings.Repeat("c", 64)
+	tuple := func(agent, assignment string) entity.ScheduleSpec {
+		return entity.ScheduleSpec{
+			AgentID: agent, AgentVersion: 1, AgentSHA256: digest,
+			ProviderPoolID: "pool", ProviderPoolVersion: 1, ProviderPoolSHA256: digest,
+			AgentAssignmentID: assignment, AgentAssignmentVersion: 1,
+			AgentAssignmentSHA256: digest, RoomID: "room",
+		}
+	}
+	session := func(id string, state enum.State, spec entity.ScheduleSpec) entity.Resource {
+		return entity.Resource{ID: id, OwnerActorID: "owner", Kind: enum.KindSession, State: state,
+			Spec: entity.SessionSpec{AgentID: spec.AgentID, AgentVersion: spec.AgentVersion,
+				AgentSHA256: spec.AgentSHA256, ProviderPoolID: spec.ProviderPoolID,
+				ProviderPoolVersion: spec.ProviderPoolVersion, ProviderPoolSHA256: spec.ProviderPoolSHA256,
+				AgentAssignmentID:      spec.AgentAssignmentID,
+				AgentAssignmentVersion: spec.AgentAssignmentVersion,
+				AgentAssignmentSHA256:  spec.AgentAssignmentSHA256, ConversationID: spec.RoomID}}
+	}
+	t1, t2 := tuple("agent-t1", "assignment-t1"), tuple("agent-t2", "assignment-t2")
+	resources := []entity.Resource{session("s1", enum.StateActive, t1)}
+	if got := scheduleSessionCandidateIDs(resources, "owner", t1); !reflect.DeepEqual(got, []string{"s1"}) {
+		t.Fatalf("initial T1 candidate mismatch: %#v", got)
+	}
+	resources[0].State = enum.StateArchived
+	resources = append(resources, session("s2", enum.StateActive, t2))
+	if got := scheduleSessionCandidateIDs(resources, "owner", t1); len(got) != 0 {
+		t.Fatalf("archived T1 remained admission-active: %#v", got)
+	}
+	resources[1].State = enum.StateArchived
+	resources = append(resources, session("s3", enum.StateActive, t1))
+	if got := scheduleSessionCandidateIDs(resources, "owner", t1); !reflect.DeepEqual(got, []string{"s3"}) {
+		t.Fatalf("T1 -> T2 -> T1 produced ambiguous active tuple: %#v", got)
+	}
+}
+
+func TestExternalSemanticReceiptReturnsImmutableResult(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 7, 8, 0, 0, 0, time.UTC)
+	result, err := entity.New("11111111-1111-4111-8111-111111111111",
+		"22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333", "",
+		"44444444-4444-4444-8444-444444444444", enum.KindRoleDefinition, "role",
+		entity.RoleDefinitionSpec{StableKey: "role", Capabilities: []string{"resource.read"},
+			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err = result.Update(result.Name, result.Spec, now.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := entity.ProjectionSHA256(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := domainrepo.ExternalCommandReceipt{
+		Issuer: "issuer", Purpose: "purpose", ReceiptID: "55555555-5555-4555-8555-555555555555",
+		OrganizationID: result.OrganizationID, ProjectID: result.ProjectID, OwnerActorID: result.OwnerActorID,
+		TargetKind: "role_definition", TargetResourceID: result.ID, TargetStableKey: "role",
+		Action: "reconcile_git", Effect: "git_configuration", EffectGeneration: 7,
+		EffectSHA256: strings.Repeat("a", 64), CommandIntentSHA256: strings.Repeat("b", 64),
+		AuthoritySHA256: strings.Repeat("c", 64),
+	}
+	stored := expected
+	stored.ResultResourceID, stored.ResultVersion, stored.ResultSHA256 = result.ID, result.Version, digest
+	stored.Result = result
+	replayed, err := externalCommandReceiptReplay(stored, expected)
+	if err != nil || replayed.Version != 2 {
+		t.Fatalf("immutable semantic replay failed: %#v, %v", replayed, err)
+	}
+	conflicting := expected
+	conflicting.Action = "different"
+	if _, err := externalCommandReceiptReplay(stored, conflicting); err == nil {
+		t.Fatal("conflicting semantic intent reused one-use receipt")
+	}
+	incomplete := stored
+	incomplete.Result, incomplete.ResultResourceID = entity.Resource{}, ""
+	if _, err := externalCommandReceiptReplay(incomplete, expected); err == nil {
+		t.Fatal("incomplete reservation was replayed")
+	}
+}
+
+func TestExternalSemanticReplayRegistryIsNarrow(t *testing.T) {
+	t.Parallel()
+
+	for _, input := range []ManageProtectedConfigurationInput{
+		{Kind: enum.KindAgent, Action: "bind_bot", ResourceID: "agent"},
+		{Kind: enum.KindAgent, Action: "rebind_bot", ResourceID: "agent"},
+		{Kind: enum.KindAgent, Action: "revoke_bot", ResourceID: "agent"},
+		{Kind: enum.KindProviderReference, Action: "refresh", ResourceID: "provider"},
+		{Kind: enum.KindRoleDefinition, Action: "reconcile_git", ResourceID: "role"},
+		{Kind: enum.KindAgent, Action: "reconcile_git", ResourceID: "agent"},
+		{Kind: enum.KindInstructionSet, Action: "reconcile_git", ResourceID: "instruction"},
+		{Kind: enum.KindProviderPool, Action: "reconcile_git", ResourceID: "pool"},
+	} {
+		if !protectedExternalSemanticReplay(input) {
+			t.Fatalf("approved semantic replay path was rejected: %s/%s", input.Kind, input.Action)
+		}
+	}
+	for _, input := range []ManageProtectedConfigurationInput{
+		{Kind: enum.KindAgent, Action: "update", ResourceID: "agent"},
+		{Kind: enum.KindProviderPool, Action: "reconcile_git"},
+		{Kind: enum.KindInstructionSet, Action: "publish", ResourceID: "instruction"},
+	} {
+		if protectedExternalSemanticReplay(input) {
+			t.Fatalf("generic mutation gained semantic replay authority: %s/%s", input.Kind, input.Action)
+		}
+	}
+}
+
 func TestInstructionArtifactIdentityMatchesObjectDedupDomain(t *testing.T) {
 	t.Parallel()
 

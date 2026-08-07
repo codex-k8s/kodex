@@ -2360,6 +2360,7 @@ message RuntimeIncidentHistoryEntry {
   RuntimeIncidentAction action = 3;
   string reason_code = 4;
   google.protobuf.Timestamp occurred_at = 5;
+  uint64 execution_fence = 6;
 }
 
 message ListRuntimeIncidentHistoryRequest {

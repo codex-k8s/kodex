@@ -4,7 +4,7 @@ title: Контракт owner-конфигурации и полного жиз�
 type: service-contract
 status: approved
 owner: developer
-version: 1.3.0
+version: 1.3.1
 updated: 2026-08-07
 ---
 
@@ -78,12 +78,21 @@ OCC и receipt проверяются после блокировки owner/curr
 | `DOM-MC-002/003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageInstructionSet`, `ReconcileGitInstructionSet`, `CompareInstructionSetVersions` | UI update не меняет Git-owned set; Git reconcile сверяет signed source/revision/digest/target/intent; detach очищает source binding, copy создаёт новый UI set; validate вычисляет digest/verdict/errors из locked immutable content | exact content сначала получает immutable versioned S3 object, затем owner transaction создаёт CLEAN Artifact + set version + validation/history/receipt/audit; publish только после successful validation той же version/digest | derived Prompt pin-ит Artifact ID/version/digest; `ClaimRuntimeExecution` читает тот же projection и материализует `AGENTS.md`; Git producer ожидает #236 |
 | `DOM-MC-003`, integration-gateway provider readback profile | integration-gateway #236 | `ManageProviderConnectionReference` | exact typed receipt связывает protected target stable key и command intent; object/binding/version/generation/digest выводятся из proof | one-use issuer+purpose+JTI consume вместе с metadata/history/receipt/audit; credential values отсутствуют | provider effect/catalog/readback producer и signer принадлежат #236; #234 readiness проверяет только registered receive trust |
 | `DOM-MC-003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageProviderPool` или `ReconcileGitProviderPool` | refs разрешаются под lock; signed Git receipt назначает Git ownership; eligibility, weights, observation revision/time и digest копируются в immutable snapshot | pool + snapshot digest + history + receipt + audit; нового события нет | runtime получает только server-resolved pinned pool и exact credential binding; Git producer ожидает #236 |
-| `DOM-MC-005`, owner | control-api-gateway #237 | `CreateScheduleFromOwnerSelections` или update-only `BindScheduleConfiguration` | create принимает stable Agent/Instruction/Pool/Room и display name Artifact; сервер lock-resolve Workspace, RuntimeProfile и active assignment, назначает Schedule ID/version и exact tuple; rebind блокирует прежнюю Session | Schedule + exact assignment/config versions/digests + effective input + receipt+audit одной transaction; `NEW` очищает Session binding, `PERSISTENT/ROLLING` сохраняет совместимую либо создаёт новую exact Session без изменения исторической | automation-scheduler при каждой materialization повторно проверяет тот же assignment tuple |
+| `DOM-MC-005`, owner | control-api-gateway #237 | `CreateScheduleFromOwnerSelections` или update-only `BindScheduleConfiguration` | create принимает stable Agent/Instruction/Pool/Room и display name Artifact; сервер lock-resolve Workspace, RuntimeProfile и active assignment, назначает Schedule ID/version и exact tuple; rebind блокирует прежнюю Session | Schedule + exact assignment/config versions/digests + effective input + receipt+audit одной transaction; `NEW` очищает Session binding, `PERSISTENT/ROLLING` сохраняет единственную совместимую Session либо безопасно архивирует прежнюю и создаёт replacement; T1→T2→T1 не оставляет два admission-active tuple | automation-scheduler при каждой materialization повторно проверяет тот же assignment tuple |
 | `DOM-MC-002/004/005`, owner | control-api-gateway #237 | `GetRunDetail`, `ListRunTimeline`, `GetRunLineage`, `ListRunArtifacts`, `ManageRun` cancel/retry | requested Process разрешается до graph query; recursive root/descendants и все attempts читаются в одной owner/RLS boundary; stable cursor `(occurred_at,id)` | cancel закрывает весь graph; retry из failed/expired/cancelled создаёт fresh Turn/RuntimeRevision/grants и сохраняет predecessor | lineage возвращает root, parent/child и predecessor/successor edges; timeline/artifacts охватывают все attempts без UUID pagination |
 | `GUIDE-DOC-006`, owner или project operator с exact permission | control-api-gateway #237 | `ManageRuntimeIncident` | authoritative execution→project eligibility общая для get/list/history/actions; hidden cross-tenant; incident и полный graph lock | retry использует graph helper; release атомарно переводит execution и весь runtime graph в `CANCELLED`, отзывает leases/grants/claims и возвращает released readback | watchdog только создаёт evidence; broad project grant и creator-only gate отсутствуют |
 | `DOM-MC-009`, owner | control-api-gateway #237 | owner `ManageWorkspaceBackup` create/cancel/retry; internal reconciliation без RPC | Workspace — Project aggregate; snapshot перечисляет все исторические owner Session независимо от current assignment/Workspace version и требует exact terminal archive каждой; ALL_WORKSPACES фиксируется под sorted locks | отсутствующий archive откатывает весь create; owner action либо internal complete/fail/expire коммитит один immutable envelope, membership, generation/revoke watermark, receipt+audit | bounded in-process recovery reconciler использует тот же membership на retry/restore; partial AVAILABLE невозможен |
 | `DOM-MC-009`, owner | control-api-gateway #237 | owner `ManageWorkspaceRestore` create/cancel/retry; internal reconciliation без RPC | exact backup/membership locks; retry только terminal predecessor; each member переключает RLS project scope только через server transaction primitive | fresh attempt/generation, RuntimeRevision и grants для каждого member либо rollback; internal complete/fail/expire запрещает partial terminal | runtime-controller materializes существующий restore effect #231; in-process reconciler владеет terminal decision/readiness |
 | `DOM-MC-011`, interaction-gateway provider readback profile | pending producer #235 после rebase | `ManageWorkspaceMattermostMapping` bind/relink/unlink | Project является Workspace; signed receipt связывает exact mapping target/stable key/intent, team ref и effect; mapping generation monotonic; graph lock проверяет Workspace→Chat→Session→Turn/delivery | one-use JTI consume + mapping/revoke watermark/receipt/audit одной transaction; open graph relink/unlink отклоняется | #234 владеет receive contract/state/readback; #235 обязан добавить Team effect/readback signer и generated call site до end-to-end readiness |
+
+Для update-path Agent bot, Workspace mapping, ProviderConnectionReference и
+четырёх `ReconcileGit*` завершённый semantic receipt проверяется после
+owner-locked source, но до generic command-key receipt и до object-store effect.
+Exact issuer/purpose/JTI/target/stable key/action/effect/generation/digests/
+intent/authority возвращает сохранённый immutable result snapshot. Любое
+расхождение или незавершённая reservation закрыто конфликтует; отсутствие
+semantic consumption только разрешает обычной owner transaction выполнить
+первую mutation.
 
 ## Граф исполнения
 
@@ -175,14 +184,14 @@ detach/copy, но не подписывать Git provenance. Receive-side JWK/p
 | ProviderPool create/update | absent / ACTIVE | refs locked, observations fresh, weights bounded | immutable eligibility snapshot + digest | typed version-pinned read |
 | ProviderPool Git reconcile | absent/GIT-owned current | exact Git profile/source/revision/digest; refs server-resolved | immutable eligibility snapshot + digest | typed version-pinned read |
 | ProviderPool archive/delete | no active Agent/runtime pin / ARCHIVED | full reference check | ARCHIVED / DELETED | typed version-pinned read |
-| Schedule bind/rebind | active Schedule | existing graph closed; exact stable selections, active Workspace/Room assignment и прежняя Session locked | aggregate receives pinned assignment/Agent/Instruction/Runtime tuple; `NEW` detaches, persistent/rolling keeps compatible or creates a replacement Session | existing Schedule read/polling, no event |
+| Schedule bind/rebind | active Schedule | existing graph closed; exact stable selections, active Workspace/Room assignment и прежняя Session locked; unsafe cleanup отклоняется | aggregate receives pinned assignment/Agent/Instruction/Runtime tuple; `NEW` detaches, persistent/rolling reuses only one exact-compatible Session or archives the prior Session before replacement | existing Schedule read/polling, no event |
 | Schedule materialization | active binding | `NEW`, `PERSISTENT` и `ROLLING` path повторно разрешают active assignment/version/digest | stale/revoked assignment fail closed before run creation | existing polling/readback |
 | Run cancel | current nonterminal | owner permission; full graph/fence | CANCELLED everywhere; leases/grants/claims revoked | typed run read |
 | Run retry | FAILED/EXPIRED/CANCELLED eligible | exact predecessor/version and policy | RETRIED predecessor + fresh attempt с immutable RuntimeRevision ID/version + grants | typed lineage/read от TurnAttempt, включая pre-admission predecessor |
 | Run terminal complete | current live attempt | exact executor lease/fence | entire graph terminal | existing runtime read |
 | Run partial failure | любой member transition failed | неприменимо как successor | transaction rollback; no partial envelope | previous version read |
 | Incident acknowledge | OPEN | owner/operator permission, exact version | ACKNOWLEDGED | typed incident history |
-| Incident retry | OPEN/ACKNOWLEDGED при FAILED/EXPIRED execution; RELEASED при CANCELLED execution | exact current execution и monotonic fence lower bound; future/stale incident и не-current graph отклоняются | RETRYING и fresh run attempt atomically; иной runtime state даёт conflict без success | run+incident read |
+| Incident retry | OPEN/ACKNOWLEDGED при FAILED/EXPIRED execution; RELEASED при CANCELLED execution | exact current execution и monotonic fence lower bound; future/stale incident и не-current graph отклоняются | RETRYING и fresh run attempt atomically; post-effect `ExecutionFence` сохраняется в incident, history и receipt той же версии; иной runtime state даёт conflict без success | run+incident read |
 | Incident release | ACKNOWLEDGED | owner/operator permission; exact execution and full graph lock | execution/Turn/Process/Schedule graph `CANCELLED`, grants/leases/claims revoked; incident `RELEASED` | incident history + released execution readback |
 | Incident close | ACKNOWLEDGED/RELEASED/RETRYING | incident execution terminal; successor не скрывает predecessor lineage | CLOSED | typed incident history |
 | Backup create | absent | WORKSPACE/ALL derived owner scope; отдельный locked non-deleted historical Session query, all members archive-verified | RUNNING/VERIFYING immutable membership/version/digest либо полный rollback | typed backup read |
@@ -227,8 +236,10 @@ PostgreSQL, создаёт server-owned principal и выполняет одну
 `services/internal/control-plane` и `deploy/k8s/base/control-plane` владеют
 RPC, migration, PostgreSQL/RLS, cache invalidation, immutable Instruction S3
 writer/readiness с exact TLS SNI/CA/mTLS/application credential и bucket destination;
-readiness тем же prefix выполняет bounded versioned write, version-pinned
-stat/read и exact version cleanup, outbox relay, readiness,
+readiness до каждого нового Put через `ListObjectVersions` bounded удаляет и
+повторно проверяет все versions/delete markers выделенного deterministic prefix,
+затем выполняет versioned write, version-pinned stat/read и exact version cleanup;
+ambiguous commit и превышение bounds закрывают readiness на любой replica. Unit также владеет outbox relay,
 in-process recovery reconciler, business metrics, dashboard и alerts.
 `runbook_url` каждого alert — абсолютный
 HTTPS URL. NetworkPolicy не открывает Mattermost/provider egress: mapping

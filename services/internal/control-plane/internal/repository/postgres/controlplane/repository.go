@@ -1101,6 +1101,27 @@ func (wrapped *transaction) GetForUpdateIncludingDeleted(
 	))
 }
 
+func (wrapped *transaction) OtherScheduleReferencesSessionForUpdate(
+	ctx context.Context,
+	organizationID, projectID, scheduleID, sessionID string,
+) (bool, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlScheduleOtherSessionReferencesForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"schedule_id":     scheduleID,
+		"session_id":      sessionID,
+	})
+	if err != nil {
+		return false, mapError(err)
+	}
+	defer rows.Close()
+	referenced := rows.Next()
+	if err := rows.Err(); err != nil {
+		return false, mapError(err)
+	}
+	return referenced, nil
+}
+
 func (wrapped *transaction) ProjectHasLiveResources(
 	ctx context.Context,
 	organizationID, projectID string,
@@ -1806,6 +1827,9 @@ func (wrapped *transaction) SaveTurnAttempt(
 	ctx context.Context,
 	attempt domainrepo.TurnAttempt,
 ) error {
+	if !enum.TurnAttemptStateValid(attempt.State) || enum.TurnAttemptStateFinished(attempt.State) {
+		return errs.ErrStateConflict
+	}
 	tag, err := wrapped.tx.Exec(
 		ctx,
 		sqlTurnAttemptSave,
@@ -1833,6 +1857,9 @@ func (wrapped *transaction) FinishTurnAttempt(
 	ctx context.Context,
 	attempt domainrepo.TurnAttempt,
 ) error {
+	if !enum.TurnAttemptStateFinished(attempt.State) {
+		return errs.ErrStateConflict
+	}
 	tag, err := wrapped.tx.Exec(
 		ctx,
 		sqlTurnAttemptFinish,

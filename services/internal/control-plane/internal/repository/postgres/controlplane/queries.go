@@ -141,6 +141,9 @@ var sqlResourceGetByStableKeyForUpdate string
 //go:embed sql/resource__get_by_name_for_update.sql
 var sqlResourceGetByNameForUpdate string
 
+//go:embed sql/schedule__other_session_references_for_update.sql
+var sqlScheduleOtherSessionReferencesForUpdate string
+
 //go:embed sql/project__has_live_resources.sql
 var sqlProjectHasLiveResources string
 

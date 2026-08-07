@@ -920,7 +920,7 @@ func (server *Server) ListRuntimeIncidentHistory(
 		response.Entries = append(response.Entries, &controlplanev1.RuntimeIncidentHistoryEntry{
 			Version: entry.Version, State: runtimeIncidentStateToProto(entry.State),
 			Action: runtimeIncidentActionToProto(entry.Action), ReasonCode: entry.ReasonCode,
-			OccurredAt: timestamppb.New(entry.OccurredAt),
+			OccurredAt: timestamppb.New(entry.OccurredAt), ExecutionFence: entry.ExecutionFence,
 		})
 	}
 	if len(history) == limit {

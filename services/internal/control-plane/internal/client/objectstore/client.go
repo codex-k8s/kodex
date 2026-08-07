@@ -34,15 +34,18 @@ type Config struct {
 }
 
 type Client struct {
-	config         Config
-	client         *minio.Client
-	readinessMu    sync.Mutex
-	readinessDirty bool
+	config      Config
+	client      *minio.Client
+	readinessMu sync.Mutex
 }
 
 var errReadinessCleanup = errors.New("S3 instruction object store readiness cleanup failed")
 
-const readinessObjectKey = "projects/00000000-0000-0000-0000-000000000000/instruction-sets/control-plane-readiness/probe.md"
+const (
+	readinessObjectPrefix    = "projects/00000000-0000-0000-0000-000000000000/instruction-sets/control-plane-readiness/"
+	readinessObjectKey       = readinessObjectPrefix + "probe.md"
+	readinessMaximumVersions = 32
+)
 
 var readinessContent = []byte("# MatterCodex control-plane readiness\n")
 
@@ -96,23 +99,22 @@ func New(config Config) (*Client, error) {
 func (client *Client) Check(ctx context.Context) error {
 	client.readinessMu.Lock()
 	defer client.readinessMu.Unlock()
-	if client.readinessDirty {
-		return errReadinessCleanup
-	}
-	exists, err := client.client.BucketExists(ctx, client.config.Bucket)
+	checkCtx, cancel := context.WithTimeout(ctx, client.config.Timeout)
+	defer cancel()
+	exists, err := client.client.BucketExists(checkCtx, client.config.Bucket)
 	if err != nil || !exists {
 		return errors.New("S3 instruction object store bucket is not ready")
 	}
-	versioning, err := client.client.GetBucketVersioning(ctx, client.config.Bucket)
+	versioning, err := client.client.GetBucketVersioning(checkCtx, client.config.Bucket)
 	if err != nil || !versioning.Enabled() {
 		return errors.New("S3 instruction object store bucket versioning is not ready")
 	}
-	if err := client.checkWorkingPath(ctx); err != nil {
-		if errors.Is(err, errReadinessCleanup) {
-			// После неуспешного exact delete эта replica больше не пишет новые
-			// версии canary и тем самым ограничивает возможный мусор одной версией.
-			client.readinessDirty = true
-		}
+	// Каждый pod сначала восстанавливает authoritative S3 state. Поэтому
+	// ambiguous Put/Delete переживает replacement и не полагается на local flag.
+	if err := reconcileReadinessObjects(checkCtx, client.client, client.config.Bucket); err != nil {
+		return err
+	}
+	if err := client.checkWorkingPath(checkCtx); err != nil {
 		return err
 	}
 	return nil
@@ -126,7 +128,9 @@ func (client *Client) checkWorkingPath(ctx context.Context) (resultErr error) {
 			DisableMultipart: true,
 		})
 	if err != nil || put.Key != readinessObjectKey || put.Size != int64(len(readinessContent)) || put.VersionID == "" {
-		return errors.New("S3 instruction object store readiness write failed")
+		// Commit мог состояться без доступного VersionID. Следующий probe любой
+		// replica обязан найти версию через ListObjectVersions до нового Put.
+		return errReadinessCleanup
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), client.config.Timeout)
@@ -136,9 +140,7 @@ func (client *Client) checkWorkingPath(ctx context.Context) (resultErr error) {
 			resultErr = errReadinessCleanup
 			return
 		}
-		_, err := client.client.StatObject(cleanupCtx, client.config.Bucket, readinessObjectKey,
-			minio.StatObjectOptions{VersionID: put.VersionID})
-		if err == nil || !objectNotFound(err) {
+		if err := reconcileReadinessObjects(cleanupCtx, client.client, client.config.Bucket); err != nil {
 			resultErr = errReadinessCleanup
 		}
 	}()
@@ -160,6 +162,54 @@ func (client *Client) checkWorkingPath(ctx context.Context) (resultErr error) {
 		return errors.New("S3 instruction object store readiness readback failed")
 	}
 	return nil
+}
+
+type readinessObjectStore interface {
+	ListObjects(context.Context, string, minio.ListObjectsOptions) <-chan minio.ObjectInfo
+	RemoveObject(context.Context, string, string, minio.RemoveObjectOptions) error
+}
+
+// reconcileReadinessObjects удаляет все versions и delete markers только из
+// выделенного deterministic prefix, затем отдельным list доказывает пустоту.
+// Bounds не позволяют readiness превратиться в неограниченный cleanup worker.
+func reconcileReadinessObjects(ctx context.Context, store readinessObjectStore, bucket string) error {
+	versions, err := listReadinessVersions(ctx, store, bucket)
+	if err != nil {
+		return errReadinessCleanup
+	}
+	for _, object := range versions {
+		if err := store.RemoveObject(ctx, bucket, object.Key,
+			minio.RemoveObjectOptions{VersionID: object.VersionID}); err != nil {
+			return errReadinessCleanup
+		}
+	}
+	remaining, err := listReadinessVersions(ctx, store, bucket)
+	if err != nil || len(remaining) != 0 {
+		return errReadinessCleanup
+	}
+	return nil
+}
+
+func listReadinessVersions(
+	ctx context.Context,
+	store readinessObjectStore,
+	bucket string,
+) ([]minio.ObjectInfo, error) {
+	objects := make([]minio.ObjectInfo, 0, 1)
+	for object := range store.ListObjects(ctx, bucket, minio.ListObjectsOptions{
+		Prefix: readinessObjectPrefix, Recursive: true, WithVersions: true,
+	}) {
+		if object.Err != nil || object.Key == "" ||
+			!strings.HasPrefix(object.Key, readinessObjectPrefix) || object.VersionID == "" ||
+			len(objects) == readinessMaximumVersions {
+			return nil, errReadinessCleanup
+		}
+		objects = append(objects, object)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, errReadinessCleanup
+	}
+	return objects, nil
 }
 
 func objectNotFound(err error) bool {

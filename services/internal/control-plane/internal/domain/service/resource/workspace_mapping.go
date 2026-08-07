@@ -71,6 +71,12 @@ func (service *Service) ManageWorkspaceMapping(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	if input.Action == "relink" || input.Action == "unlink" {
+		replay, replayed, replayErr := service.replayWorkspaceMappingExternalCommand(ctx, input)
+		if replayErr != nil || replayed {
+			return replay, replayErr
+		}
+	}
 	apply := func(tx domainrepo.Transaction) (entity.Resource, error) {
 		protected, ok := tx.(domainrepo.ProtectedTransaction)
 		if !ok {
@@ -194,7 +200,7 @@ func (service *Service) ManageWorkspaceMapping(
 	if input.Action == "bind" {
 		return service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey, scope, requestHash, apply)
 	}
-	return service.withOwnerLockedResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
+	result, mutationErr := service.withOwnerLockedResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 		scope, requestHash, input.MappingID, enum.KindWorkspaceMapping, input.ExpectedVersion,
 		func(stored entity.Resource) error {
 			if stored.ID != input.MappingID || stored.Kind != enum.KindWorkspaceMapping ||
@@ -203,6 +209,60 @@ func (service *Service) ManageWorkspaceMapping(
 			}
 			return nil
 		}, apply)
+	if mutationErr != nil {
+		replay, replayed, replayErr := service.replayWorkspaceMappingExternalCommand(ctx, input)
+		if replayErr != nil || replayed {
+			return replay, replayErr
+		}
+	}
+	return result, mutationErr
+}
+
+// replayWorkspaceMappingExternalCommand разрешает source внутри owner boundary
+// и читает только завершённый immutable semantic result до generic command key.
+func (service *Service) replayWorkspaceMappingExternalCommand(
+	ctx context.Context,
+	input ManageWorkspaceMappingInput,
+) (entity.Resource, bool, error) {
+	var result entity.Resource
+	replayed := false
+	err := service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		current, err := tx.GetForUpdateIncludingDeleted(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, input.MappingID)
+		if err != nil {
+			return err
+		}
+		spec, ok := current.Spec.(entity.WorkspaceMattermostMappingSpec)
+		if !ok || current.Kind != enum.KindWorkspaceMapping ||
+			current.OwnerActorID != input.Principal.ActorID {
+			return errs.ErrNotFound
+		}
+		if current.Version < input.ExpectedVersion {
+			return errs.ErrVersionMismatch
+		}
+		protected, ok := tx.(domainrepo.ProtectedTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		stableTarget := "workspace-" + strings.ReplaceAll(spec.WorkspaceID, "-", "")
+		result, replayed, err = replayProviderCommandReceipt(ctx, protected, input.Principal,
+			input.ProviderReceipt, "workspace_mattermost_mapping", spec.WorkspaceID,
+			stableTarget, service.now().UTC())
+		if err != nil || !replayed {
+			return err
+		}
+		if result.ID != current.ID || result.Kind != enum.KindWorkspaceMapping ||
+			result.Version != input.ExpectedVersion+1 ||
+			result.OwnerActorID != input.Principal.ActorID {
+			return errs.ErrStateConflict
+		}
+		return nil
+	})
+	return result, replayed && err == nil, err
 }
 
 func validateProviderReceipt(principal value.Principal, receipt value.ProviderEffectReceipt,

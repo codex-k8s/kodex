@@ -489,13 +489,14 @@ type RuntimeIncident struct {
 
 // RuntimeIncidentHistory фиксирует каждое специализированное owner action.
 type RuntimeIncidentHistory struct {
-	IncidentID   string
-	Version      uint64
-	State        string
-	Action       string
-	ReasonCode   string
-	OccurredAt   time.Time
-	OwnerActorID string
+	IncidentID     string
+	Version        uint64
+	ExecutionFence uint64
+	State          string
+	Action         string
+	ReasonCode     string
+	OccurredAt     time.Time
+	OwnerActorID   string
 }
 
 // OwnerSessionState — verifying-side durable current OIDC session fence.
@@ -652,6 +653,7 @@ type Transaction interface {
 	Get(context.Context, string, string, string) (entity.Resource, error)
 	GetForUpdate(context.Context, string, string, string) (entity.Resource, error)
 	GetForUpdateIncludingDeleted(context.Context, string, string, string) (entity.Resource, error)
+	OtherScheduleReferencesSessionForUpdate(context.Context, string, string, string, string) (bool, error)
 	ProjectHasLiveResources(context.Context, string, string) (bool, error)
 	Insert(context.Context, entity.Resource) error
 	Update(context.Context, entity.Resource, uint64) error
@@ -886,6 +888,7 @@ type ProtectedTransaction interface {
 	GetRuntimeIncidentForUpdate(context.Context, string) (RuntimeIncident, error)
 	UpdateRuntimeIncident(context.Context, RuntimeIncident, uint64) error
 	AppendRuntimeIncidentHistory(context.Context, RuntimeIncidentHistory) error
+	GetExternalCommandReceipt(context.Context, string, string, string) (ExternalCommandReceipt, error)
 	ReserveExternalCommandReceipt(context.Context, ExternalCommandReceipt) (ExternalCommandReceipt, bool, error)
 	FinalizeExternalCommandReceipt(context.Context, ExternalCommandReceipt) error
 }

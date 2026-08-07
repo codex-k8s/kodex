@@ -114,6 +114,7 @@ func (service *Service) ManageRuntimeIncident(
 		},
 		func() error {
 			if result.Incident.ID != lockedIncident.ID || result.Incident.Version != lockedIncident.Version ||
+				result.Incident.ExecutionFence != lockedIncident.ExecutionFence ||
 				result.Incident.State != lockedIncident.State || result.Incident.ReasonCode != lockedIncident.ReasonCode {
 				return errs.ErrStateConflict
 			}
@@ -163,7 +164,7 @@ func (service *Service) ManageRuntimeIncident(
 				return err
 			}
 			if err := protected.AppendRuntimeIncidentHistory(ctx, domainrepo.RuntimeIncidentHistory{
-				IncidentID: updated.ID, Version: updated.Version, State: updated.State,
+				IncidentID: updated.ID, Version: updated.Version, ExecutionFence: updated.ExecutionFence, State: updated.State,
 				Action: input.Action, ReasonCode: input.ReasonCode, OccurredAt: now,
 				OwnerActorID: lockedOwnerActorID,
 			}); err != nil {

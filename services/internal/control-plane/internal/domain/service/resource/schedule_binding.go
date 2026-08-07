@@ -182,22 +182,47 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 func uniqueScheduleSession(ctx context.Context, tx domainrepo.Transaction, principal value.Principal,
 	spec entity.ScheduleSpec,
 ) (entity.Resource, error) {
-	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	result, found, err := lockUniqueScheduleSession(ctx, tx, principal, spec)
 	if err != nil {
 		return entity.Resource{}, err
 	}
+	if !found {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return result, nil
+}
+
+func lockUniqueScheduleSession(ctx context.Context, tx domainrepo.Transaction, principal value.Principal,
+	spec entity.ScheduleSpec,
+) (entity.Resource, bool, error) {
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	if err != nil {
+		return entity.Resource{}, false, err
+	}
+	ids := scheduleSessionCandidateIDs(resources, principal.ActorID, spec)
+	if len(ids) > 1 {
+		return entity.Resource{}, false, errs.ErrStateConflict
+	}
+	if len(ids) == 0 {
+		return entity.Resource{}, false, nil
+	}
+	result, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, ids[0])
+	return result, err == nil, err
+}
+
+func scheduleSessionCandidateIDs(resources []entity.Resource, ownerActorID string,
+	spec entity.ScheduleSpec,
+) []string {
 	ids := make([]string, 0, 1)
 	for _, candidate := range resources {
 		session, ok := candidate.Spec.(entity.SessionSpec)
 		if ok && candidate.Kind == enum.KindSession && candidate.State == enum.StateActive &&
-			candidate.OwnerActorID == principal.ActorID && scheduleSessionCompatible(session, spec) {
+			candidate.OwnerActorID == ownerActorID && scheduleSessionCompatible(session, spec) {
 			ids = append(ids, candidate.ID)
 		}
 	}
-	if len(ids) != 1 {
-		return entity.Resource{}, errs.ErrStateConflict
-	}
-	return tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, ids[0])
+	slices.Sort(ids)
+	return ids
 }
 
 func scheduleSessionCompatible(session entity.SessionSpec, schedule entity.ScheduleSpec) bool {
@@ -237,9 +262,47 @@ func (service *Service) rebindScheduleSession(
 	if previous.State == enum.StateActive && scheduleSessionCompatible(previousSpec, spec) {
 		return previous, nil
 	}
-	// Старую Session не переписываем и не закрываем: она может принадлежать
-	// уже материализованной истории. Schedule атомарно отвязывается от неё и
-	// получает новую server-owned Session с exact новым tuple.
+	if previous.State != enum.StateActive {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	if err := lockAndRejectOtherScheduleSessionReferences(
+		ctx, tx, principal, schedule.ID, previous.ID,
+	); err != nil {
+		return entity.Resource{}, err
+	}
+	blocked, err := tx.SessionBlocksRuntimeCleanup(
+		ctx, principal.OrganizationID, principal.ProjectID, previous.ID,
+	)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if blocked {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	archived, err := previous.Transition(enum.StateArchived, now)
+	if err != nil {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	if err := tx.Update(ctx, archived, previous.Version); err != nil {
+		return entity.Resource{}, err
+	}
+	if err := service.appendMutationRecords(
+		ctx, tx, principal, "schedule_rebind_archive_session", archived,
+	); err != nil {
+		return entity.Resource{}, err
+	}
+	// Exact-compatible Session могла быть создана другим сериализованным
+	// schedule lifecycle. Её переиспользуем только при доказанной
+	// единственности; дубли закрыто отклоняются.
+	compatible, found, err := lockUniqueScheduleSession(ctx, tx, principal, spec)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if found {
+		return compatible, nil
+	}
+	// Архивирование сохраняет immutable историю прежнего tuple, а Schedule
+	// получает единственную новую admission-active Session.
 	replacement, err := entity.New(uuid.NewString(), principal.OrganizationID, principal.ProjectID,
 		schedule.ID, schedule.OwnerActorID, enum.KindSession, "Scheduled session "+schedule.ID,
 		entity.SessionSpec{
@@ -259,6 +322,24 @@ func (service *Service) rebindScheduleSession(
 		return entity.Resource{}, err
 	}
 	return replacement, nil
+}
+
+func lockAndRejectOtherScheduleSessionReferences(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	scheduleID, sessionID string,
+) error {
+	referenced, err := tx.OtherScheduleReferencesSessionForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, scheduleID, sessionID,
+	)
+	if err != nil {
+		return err
+	}
+	if referenced {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 // BindScheduleConfiguration разрешает человекочитаемые stable key внутри

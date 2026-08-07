@@ -466,6 +466,32 @@ REVOKE ALL ON FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text,
 GRANT EXECUTE ON FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text, bigint)
     TO control_plane_runtime;
 
+-- Runtime owner-gate, integration continuation и blocked completion завершают
+-- текущую attempt до свежего continuation/retry. Старый inline CHECK не
+-- включал реально сохраняемые WAITING_* и BLOCKED состояния.
+DO $turn_attempt_state_validation$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM control_plane.turn_attempts
+        WHERE state NOT IN (
+            'QUEUED', 'CLAIMED', 'WAITING_OWNER', 'WAITING_EXTERNAL',
+            'BLOCKED', 'EXPIRED', 'SUCCEEDED', 'FAILED', 'CANCELLED'
+        )
+    ) THEN
+        RAISE EXCEPTION 'turn attempt state backfill contains an unsupported value'
+            USING ERRCODE = '23514';
+    END IF;
+END
+$turn_attempt_state_validation$;
+
+ALTER TABLE control_plane.turn_attempts
+    DROP CONSTRAINT turn_attempts_state_check,
+    ADD CONSTRAINT turn_attempts_state_v2_ck CHECK (state IN (
+        'QUEUED', 'CLAIMED', 'WAITING_OWNER', 'WAITING_EXTERNAL',
+        'BLOCKED', 'EXPIRED', 'SUCCEEDED', 'FAILED', 'CANCELLED'
+    ));
+
 -- Turn меняет current RuntimeRevision при retry, поэтому immutable attempt
 -- хранит собственный exact revision pin. Backfill сначала использует
 -- RuntimeExecution, затем current Turn, затем единственную хронологическую
@@ -582,6 +608,9 @@ CREATE TABLE control_plane.runtime_incident_history (
     project_id uuid NOT NULL,
     incident_id uuid NOT NULL,
     version bigint NOT NULL CHECK (version BETWEEN 1 AND 9007199254740991),
+    execution_fence bigint NOT NULL CHECK (
+        execution_fence BETWEEN 1 AND 9007199254740991
+    ),
     owner_actor_id uuid NOT NULL,
     state text NOT NULL CHECK (state IN (
         'OPEN', 'ACKNOWLEDGED', 'RETRYING', 'RELEASED', 'CLOSED'
@@ -600,11 +629,11 @@ CREATE INDEX runtime_incident_history_owner_page_idx
         organization_id, project_id, owner_actor_id, incident_id, version DESC
     );
 INSERT INTO control_plane.runtime_incident_history (
-    organization_id, project_id, incident_id, version, owner_actor_id,
+    organization_id, project_id, incident_id, version, execution_fence, owner_actor_id,
     state, action, reason_code, occurred_at
 )
 SELECT incident.organization_id, incident.project_id, incident.id,
-    incident.version, process.owner_actor_id, incident.state,
+    incident.version, incident.execution_fence, process.owner_actor_id, incident.state,
     'record', 'incident_recorded', incident.occurred_at
 FROM control_plane.runtime_execution_incidents AS incident
 JOIN control_plane.runtime_executions AS execution

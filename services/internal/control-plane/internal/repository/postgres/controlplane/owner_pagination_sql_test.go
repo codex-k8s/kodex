@@ -62,3 +62,32 @@ func TestProviderPinsAndReceiptReplayUseTargetProjections(t *testing.T) {
 		t.Fatal("external one-use receipt does not persist immutable replay result")
 	}
 }
+
+func TestRuntimeIncidentUpdateAndHistoryPersistFence(t *testing.T) {
+	t.Parallel()
+
+	for name, statement := range map[string]string{
+		"incident update":  sqlRuntimeIncidentUpdate,
+		"history insert":   sqlRuntimeIncidentHistoryInsert,
+		"history readback": sqlRuntimeIncidentHistoryList,
+	} {
+		if !strings.Contains(statement, "execution_fence") {
+			t.Fatalf("%s does not persist exact execution fence", name)
+		}
+	}
+}
+
+func TestScheduleRebindLocksOtherSessionReferences(t *testing.T) {
+	t.Parallel()
+
+	for _, fragment := range []string{
+		"kind = 'SCHEDULE'",
+		"state IN ('ACTIVE', 'PAUSED')",
+		"spec ->> 'executionSessionId' = @session_id",
+		"FOR UPDATE",
+	} {
+		if !strings.Contains(sqlScheduleOtherSessionReferencesForUpdate, fragment) {
+			t.Fatalf("schedule rebind reference lock misses %q", fragment)
+		}
+	}
+}

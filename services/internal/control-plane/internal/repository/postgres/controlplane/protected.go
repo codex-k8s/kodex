@@ -157,6 +157,14 @@ func (wrapped *transaction) ReserveExternalCommandReceipt(
 	return stored, tag.RowsAffected() == 1, nil
 }
 
+func (wrapped *transaction) GetExternalCommandReceipt(
+	ctx context.Context,
+	issuer, purpose, receiptID string,
+) (domainrepo.ExternalCommandReceipt, error) {
+	return scanExternalCommandReceipt(wrapped.tx.QueryRow(ctx, sqlExternalCommandReceiptGet,
+		pgx.StrictNamedArgs{"issuer": issuer, "purpose": purpose, "receipt_id": receiptID}))
+}
+
 func (wrapped *transaction) FinalizeExternalCommandReceipt(
 	ctx context.Context,
 	receipt domainrepo.ExternalCommandReceipt,
@@ -321,6 +329,7 @@ func (wrapped *transaction) UpdateRuntimeIncident(
 		"project_id":       incident.ProjectID,
 		"incident_id":      incident.ID,
 		"version":          incident.Version,
+		"execution_fence":  incident.ExecutionFence,
 		"state":            incident.State,
 		"reason_code":      incident.ReasonCode,
 		"updated_at":       incident.UpdatedAt,
@@ -339,18 +348,25 @@ func (wrapped *transaction) AppendRuntimeIncidentHistory(
 	ctx context.Context,
 	entry domainrepo.RuntimeIncidentHistory,
 ) error {
-	_, err := wrapped.tx.Exec(ctx, sqlRuntimeIncidentHistoryInsert, pgx.StrictNamedArgs{
+	commandTag, err := wrapped.tx.Exec(ctx, sqlRuntimeIncidentHistoryInsert, pgx.StrictNamedArgs{
 		"organization_id": wrapped.organizationID,
 		"project_id":      wrapped.projectID,
 		"incident_id":     entry.IncidentID,
 		"version":         entry.Version,
+		"execution_fence": entry.ExecutionFence,
 		"owner_actor_id":  entry.OwnerActorID,
 		"state":           entry.State,
 		"action":          entry.Action,
 		"reason_code":     entry.ReasonCode,
 		"occurred_at":     entry.OccurredAt,
 	})
-	return mapError(err)
+	if err != nil {
+		return mapError(err)
+	}
+	if commandTag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (repository *Repository) GetRuntimeIncident(
@@ -393,7 +409,7 @@ func (repository *Repository) ListRuntimeIncidentHistory(
 		defer rows.Close()
 		for rows.Next() {
 			var entry domainrepo.RuntimeIncidentHistory
-			if err := rows.Scan(&entry.IncidentID, &entry.Version, &entry.State, &entry.Action,
+			if err := rows.Scan(&entry.IncidentID, &entry.Version, &entry.ExecutionFence, &entry.State, &entry.Action,
 				&entry.ReasonCode, &entry.OccurredAt, &entry.OwnerActorID); err != nil {
 				return err
 			}

@@ -119,14 +119,6 @@ func (service *Service) ManageProtectedConfiguration(
 		(input.TargetSHA256 != "" && !validSHA256Text(input.TargetSHA256)) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	if input.Kind == enum.KindInstructionSet &&
-		(input.Action == "create" || input.Action == "update" || input.Action == "reconcile_git") {
-		var prepareErr error
-		input, prepareErr = service.prepareInstructionArtifact(ctx, input)
-		if prepareErr != nil {
-			return entity.Resource{}, prepareErr
-		}
-	}
 	createLike := protectedCreateLike(input.Action) || input.Action == "reconcile_git" && input.ResourceID == ""
 	if createLike {
 		if input.Action == "copy" &&
@@ -138,6 +130,26 @@ func (service *Service) ManageProtectedConfiguration(
 		}
 	} else if value.ValidateID(input.ResourceID) != nil || input.ExpectedVersion == 0 {
 		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if input.ProviderReceipt.ContractVersion != 0 {
+		intentHash, intentErr := protectedProviderIntentSHA256(input)
+		if intentErr != nil || input.ProviderReceipt.CommandIntentSHA256 != intentHash {
+			return entity.Resource{}, errs.ErrPermissionDenied
+		}
+	}
+	if protectedExternalSemanticReplay(input) {
+		replay, replayed, replayErr := service.replayProtectedExternalCommand(ctx, input)
+		if replayErr != nil || replayed {
+			return replay, replayErr
+		}
+	}
+	if input.Kind == enum.KindInstructionSet &&
+		(input.Action == "create" || input.Action == "update" || input.Action == "reconcile_git") {
+		var prepareErr error
+		input, prepareErr = service.prepareInstructionArtifact(ctx, input)
+		if prepareErr != nil {
+			return entity.Resource{}, prepareErr
+		}
 	}
 	requestHash, err := canonicalHash(struct {
 		Identity        commandIdentity
@@ -158,23 +170,6 @@ func (service *Service) ManageProtectedConfiguration(
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	if input.ProviderReceipt.ContractVersion != 0 {
-		intentHash, intentErr := canonicalHash(struct {
-			Identity        commandIdentity
-			FullMethod      string
-			Kind            enum.Kind
-			Action          string
-			ResourceID      string
-			ExpectedVersion uint64
-			Name            string
-			Spec            entity.Spec
-			ReferenceKeys   []string
-		}{identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
-			input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys})
-		if intentErr != nil || input.ProviderReceipt.CommandIntentSHA256 != intentHash {
-			return entity.Resource{}, errs.ErrPermissionDenied
-		}
-	}
 	apply := func(tx domainrepo.Transaction) (entity.Resource, error) {
 		protected, ok := tx.(domainrepo.ProtectedTransaction)
 		if !ok {
@@ -193,7 +188,7 @@ func (service *Service) ManageProtectedConfiguration(
 		return service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 			scope, requestHash, apply)
 	}
-	return service.withOwnerLockedResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
+	result, mutationErr := service.withOwnerLockedResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 		scope, requestHash, input.ResourceID, input.Kind, input.ExpectedVersion,
 		func(stored entity.Resource) error {
 			if stored.Kind != input.Kind || stored.OwnerActorID != input.Principal.ActorID ||
@@ -217,6 +212,13 @@ func (service *Service) ManageProtectedConfiguration(
 		},
 		apply,
 	)
+	if mutationErr != nil && protectedExternalSemanticReplay(input) {
+		replay, replayed, replayErr := service.replayProtectedExternalCommand(ctx, input)
+		if replayErr != nil || replayed {
+			return replay, replayErr
+		}
+	}
+	return result, mutationErr
 }
 
 func protectedCreateLike(action string) bool {
@@ -234,6 +236,21 @@ func protectedGitIntentSHA256(input ManageProtectedConfigurationInput) (string, 
 		Spec            entity.Spec
 		ReferenceKeys   []string
 	}{identity(input.Principal), input.FullMethod, input.Kind, input.ResourceID,
+		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys})
+}
+
+func protectedProviderIntentSHA256(input ManageProtectedConfigurationInput) (string, error) {
+	return canonicalHash(struct {
+		Identity        commandIdentity
+		FullMethod      string
+		Kind            enum.Kind
+		Action          string
+		ResourceID      string
+		ExpectedVersion uint64
+		Name            string
+		Spec            entity.Spec
+		ReferenceKeys   []string
+	}{identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
 		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys})
 }
 
@@ -567,7 +584,27 @@ func reserveProviderCommandReceipt(
 		receipt.TargetStableKey != targetStableKey {
 		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrPermissionDenied
 	}
-	consumption := domainrepo.ExternalCommandReceipt{
+	consumption := providerCommandReceiptConsumption(principal, receipt, now)
+	stored, reserved, err := protected.ReserveExternalCommandReceipt(ctx, consumption)
+	if err != nil {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, err
+	}
+	if reserved {
+		return consumption, entity.Resource{}, false, nil
+	}
+	result, err := externalCommandReceiptReplay(stored, consumption)
+	if err != nil {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, err
+	}
+	return stored, result, true, nil
+}
+
+func providerCommandReceiptConsumption(
+	principal value.Principal,
+	receipt value.ProviderEffectReceipt,
+	now time.Time,
+) domainrepo.ExternalCommandReceipt {
+	return domainrepo.ExternalCommandReceipt{
 		Issuer: receipt.Issuer, Purpose: receipt.Purpose, ReceiptID: receipt.ReceiptID,
 		OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID, OwnerActorID: principal.ActorID,
 		TargetKind: receipt.TargetKind, TargetResourceID: receipt.TargetResourceID,
@@ -576,32 +613,57 @@ func reserveProviderCommandReceipt(
 		CommandIntentSHA256: receipt.CommandIntentSHA256, AuthoritySHA256: principal.AuthorityDigest,
 		ConsumedAt: now.UTC().Truncate(time.Microsecond),
 	}
-	stored, reserved, err := protected.ReserveExternalCommandReceipt(ctx, consumption)
-	if err != nil {
-		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, err
-	}
-	if stored.OrganizationID != consumption.OrganizationID || stored.ProjectID != consumption.ProjectID ||
-		stored.OwnerActorID != consumption.OwnerActorID || stored.TargetKind != consumption.TargetKind ||
-		stored.TargetResourceID != consumption.TargetResourceID || stored.TargetStableKey != consumption.TargetStableKey ||
-		stored.Action != consumption.Action || stored.Effect != consumption.Effect ||
-		stored.EffectGeneration != consumption.EffectGeneration || stored.EffectSHA256 != consumption.EffectSHA256 ||
-		stored.CommandIntentSHA256 != consumption.CommandIntentSHA256 || stored.AuthoritySHA256 != consumption.AuthoritySHA256 {
-		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
-	}
-	if reserved {
-		return consumption, entity.Resource{}, false, nil
+}
+
+func externalCommandReceiptReplay(
+	stored domainrepo.ExternalCommandReceipt,
+	expected domainrepo.ExternalCommandReceipt,
+) (entity.Resource, error) {
+	if stored.Issuer != expected.Issuer || stored.Purpose != expected.Purpose ||
+		stored.ReceiptID != expected.ReceiptID ||
+		stored.OrganizationID != expected.OrganizationID || stored.ProjectID != expected.ProjectID ||
+		stored.OwnerActorID != expected.OwnerActorID || stored.TargetKind != expected.TargetKind ||
+		stored.TargetResourceID != expected.TargetResourceID || stored.TargetStableKey != expected.TargetStableKey ||
+		stored.Action != expected.Action || stored.Effect != expected.Effect ||
+		stored.EffectGeneration != expected.EffectGeneration || stored.EffectSHA256 != expected.EffectSHA256 ||
+		stored.CommandIntentSHA256 != expected.CommandIntentSHA256 || stored.AuthoritySHA256 != expected.AuthoritySHA256 {
+		return entity.Resource{}, errs.ErrStateConflict
 	}
 	if stored.ResultResourceID == "" || stored.ResultVersion == 0 || !validSHA256Text(stored.ResultSHA256) {
-		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
+		return entity.Resource{}, errs.ErrStateConflict
 	}
 	result := stored.Result
 	digest, err := entity.ProjectionSHA256(result)
 	if err != nil || result.ID != stored.ResultResourceID || result.Version != stored.ResultVersion ||
-		result.OrganizationID != principal.OrganizationID || result.ProjectID != principal.ProjectID ||
-		result.OwnerActorID != principal.ActorID || digest != stored.ResultSHA256 {
-		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
+		result.OrganizationID != expected.OrganizationID || result.ProjectID != expected.ProjectID ||
+		result.OwnerActorID != expected.OwnerActorID || digest != stored.ResultSHA256 {
+		return entity.Resource{}, errs.ErrStateConflict
 	}
-	return stored, result, true, nil
+	return result, nil
+}
+
+func replayProviderCommandReceipt(
+	ctx context.Context,
+	protected domainrepo.ProtectedTransaction,
+	principal value.Principal,
+	receipt value.ProviderEffectReceipt,
+	targetKind, targetResourceID, targetStableKey string,
+	now time.Time,
+) (entity.Resource, bool, error) {
+	if receipt.TargetKind != targetKind || receipt.TargetResourceID != targetResourceID ||
+		receipt.TargetStableKey != targetStableKey {
+		return entity.Resource{}, false, errs.ErrPermissionDenied
+	}
+	expected := providerCommandReceiptConsumption(principal, receipt, now)
+	stored, err := protected.GetExternalCommandReceipt(ctx, receipt.Issuer, receipt.Purpose, receipt.ReceiptID)
+	if errors.Is(err, errs.ErrNotFound) {
+		return entity.Resource{}, false, nil
+	}
+	if err != nil {
+		return entity.Resource{}, false, err
+	}
+	result, err := externalCommandReceiptReplay(stored, expected)
+	return result, err == nil, err
 }
 
 func reserveGitCommandReceipt(
@@ -620,6 +682,117 @@ func reserveGitCommandReceipt(
 		EffectGeneration: receipt.SourceRevision, EffectSHA256: receipt.SourceSHA256,
 		CommandIntentSHA256: receipt.CommandIntentSHA256,
 	}, targetKind, targetResourceID, targetStableKey, now)
+}
+
+func replayGitCommandReceipt(
+	ctx context.Context,
+	protected domainrepo.ProtectedTransaction,
+	principal value.Principal,
+	receipt value.GitReconciliationReceipt,
+	targetKind, targetResourceID, targetStableKey string,
+	now time.Time,
+) (entity.Resource, bool, error) {
+	return replayProviderCommandReceipt(ctx, protected, principal, value.ProviderEffectReceipt{
+		Issuer: receipt.Issuer, Purpose: receipt.Purpose, ReceiptID: receipt.ReceiptID,
+		TargetKind: receipt.TargetKind, TargetResourceID: receipt.TargetResourceID,
+		TargetStableKey: receipt.TargetStableKey, Action: "reconcile_git", Effect: "git_configuration",
+		EffectGeneration: receipt.SourceRevision, EffectSHA256: receipt.SourceSHA256,
+		CommandIntentSHA256: receipt.CommandIntentSHA256,
+	}, targetKind, targetResourceID, targetStableKey, now)
+}
+
+func protectedExternalSemanticReplay(input ManageProtectedConfigurationInput) bool {
+	if input.ResourceID == "" {
+		return false
+	}
+	if input.Action == "reconcile_git" {
+		return input.Kind == enum.KindRoleDefinition || input.Kind == enum.KindAgent ||
+			input.Kind == enum.KindInstructionSet || input.Kind == enum.KindProviderPool
+	}
+	if input.Kind == enum.KindAgent {
+		return input.Action == "bind_bot" || input.Action == "rebind_bot" || input.Action == "revoke_bot"
+	}
+	return input.Kind == enum.KindProviderReference && input.Action == "refresh"
+}
+
+// replayProtectedExternalCommand выполняется до generic idempotency и любых
+// InstructionSet object effects. Транзакция только читает owner-locked source
+// и immutable one-use consumption; первая execution по-прежнему фиксирует все
+// записи одной последующей owner transaction.
+func (service *Service) replayProtectedExternalCommand(
+	ctx context.Context,
+	input ManageProtectedConfigurationInput,
+) (entity.Resource, bool, error) {
+	if !protectedExternalSemanticReplay(input) {
+		return entity.Resource{}, false, nil
+	}
+	var result entity.Resource
+	replayed := false
+	err := service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		current, err := tx.GetForUpdateIncludingDeleted(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, input.ResourceID)
+		if err != nil {
+			return err
+		}
+		if current.Kind != input.Kind || current.OwnerActorID != input.Principal.ActorID {
+			return errs.ErrNotFound
+		}
+		if current.Version < input.ExpectedVersion {
+			return errs.ErrVersionMismatch
+		}
+		stableKey, ok := protectedConfigurationStableKey(current.Spec)
+		if !ok {
+			return errs.ErrStateConflict
+		}
+		protected, ok := tx.(domainrepo.ProtectedTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		now := service.now().UTC()
+		if input.Action == "reconcile_git" {
+			result, replayed, err = replayGitCommandReceipt(ctx, protected, input.Principal,
+				input.GitReceipt, strings.ToLower(string(input.Kind)), current.ID, stableKey, now)
+		} else {
+			switch input.Kind {
+			case enum.KindAgent:
+				if !service.interactionGatewayPrincipal(input.Principal) ||
+					input.Principal.AuthoritySource != "PROVIDER_READBACK" {
+					return errs.ErrPermissionDenied
+				}
+				err = validateProviderReceipt(input.Principal, input.ProviderReceipt,
+					"MATTERMOST_PROVIDER_READBACK_RECEIPT", input.Action,
+					"agent_bot_identity", input.FullMethod, now)
+			case enum.KindProviderReference:
+				if input.Principal.CallerWorkload != service.integrationGatewayWorkload ||
+					input.Principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
+					input.Principal.AuthoritySource != "PROVIDER_READBACK" {
+					return errs.ErrPermissionDenied
+				}
+				err = validateProviderReceipt(input.Principal, input.ProviderReceipt,
+					"AI_PROVIDER_READBACK_RECEIPT", input.Action,
+					"provider_connection_reference", input.FullMethod, now)
+			default:
+				return errs.ErrStateConflict
+			}
+			if err == nil {
+				result, replayed, err = replayProviderCommandReceipt(ctx, protected, input.Principal,
+					input.ProviderReceipt, strings.ToLower(string(input.Kind)), current.ID, stableKey, now)
+			}
+		}
+		if err != nil || !replayed {
+			return err
+		}
+		if result.ID != current.ID || result.Kind != input.Kind ||
+			result.Version != input.ExpectedVersion+1 || result.OwnerActorID != input.Principal.ActorID {
+			return errs.ErrStateConflict
+		}
+		return nil
+	})
+	return result, replayed && err == nil, err
 }
 
 func finalizeExternalCommandReceipt(

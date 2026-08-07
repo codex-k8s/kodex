@@ -1,4 +1,4 @@
-SELECT incident_id::text, version, state, action, reason_code,
+SELECT incident_id::text, version, execution_fence, state, action, reason_code,
     occurred_at, owner_actor_id::text
 FROM control_plane.runtime_incident_history
 WHERE organization_id = @organization_id::uuid

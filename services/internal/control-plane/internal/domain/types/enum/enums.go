@@ -88,6 +88,23 @@ const (
 	StateBlocked         State = "BLOCKED"
 )
 
+// TurnAttemptStateValid синхронизирует закрытый PostgreSQL CHECK с
+// фактически материализуемыми состояниями attempt. WAITING_* и BLOCKED
+// завершают текущую attempt; продолжение всегда получает свежую attempt.
+func TurnAttemptStateValid(state string) bool {
+	switch State(state) {
+	case StateQueued, StateClaimed, StateWaitingOwner, StateWaitingExternal,
+		StateBlocked, StateSucceeded, StateFailed, StateCancelled, StateExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+func TurnAttemptStateFinished(state string) bool {
+	return TurnAttemptStateValid(state) && state != string(StateQueued) && state != string(StateClaimed)
+}
+
 // Terminal фиксирует состояния без штатного обратного перехода.
 func (state State) Terminal() bool {
 	switch state {

@@ -1,5 +1,6 @@
 UPDATE control_plane.runtime_execution_incidents
 SET version = @version,
+    execution_fence = @execution_fence,
     state = @state,
     action_reason_code = nullif(@reason_code, ''),
     updated_at = @updated_at

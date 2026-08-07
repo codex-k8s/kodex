@@ -16817,14 +16817,15 @@ func (x *GetRuntimeIncidentResponse) GetIncident() *RuntimeIncident {
 }
 
 type RuntimeIncidentHistoryEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Version       uint64                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
-	State         RuntimeIncidentState   `protobuf:"varint,2,opt,name=state,proto3,enum=controlplane.v1.RuntimeIncidentState" json:"state,omitempty"`
-	Action        RuntimeIncidentAction  `protobuf:"varint,3,opt,name=action,proto3,enum=controlplane.v1.RuntimeIncidentAction" json:"action,omitempty"`
-	ReasonCode    string                 `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
-	OccurredAt    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Version        uint64                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	State          RuntimeIncidentState   `protobuf:"varint,2,opt,name=state,proto3,enum=controlplane.v1.RuntimeIncidentState" json:"state,omitempty"`
+	Action         RuntimeIncidentAction  `protobuf:"varint,3,opt,name=action,proto3,enum=controlplane.v1.RuntimeIncidentAction" json:"action,omitempty"`
+	ReasonCode     string                 `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	OccurredAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	ExecutionFence uint64                 `protobuf:"varint,6,opt,name=execution_fence,json=executionFence,proto3" json:"execution_fence,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RuntimeIncidentHistoryEntry) Reset() {
@@ -16890,6 +16891,13 @@ func (x *RuntimeIncidentHistoryEntry) GetOccurredAt() *timestamppb.Timestamp {
 		return x.OccurredAt
 	}
 	return nil
+}
+
+func (x *RuntimeIncidentHistoryEntry) GetExecutionFence() uint64 {
+	if x != nil {
+		return x.ExecutionFence
+	}
+	return 0
 }
 
 type ListRuntimeIncidentHistoryRequest struct {
@@ -39112,7 +39120,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vincident_id\x18\x01 \x01(\tR\n" +
 	"incidentId\"Z\n" +
 	"\x1aGetRuntimeIncidentResponse\x12<\n" +
-	"\bincident\x18\x01 \x01(\v2 .controlplane.v1.RuntimeIncidentR\bincident\"\x92\x02\n" +
+	"\bincident\x18\x01 \x01(\v2 .controlplane.v1.RuntimeIncidentR\bincident\"\xbb\x02\n" +
 	"\x1bRuntimeIncidentHistoryEntry\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\x04R\aversion\x12;\n" +
 	"\x05state\x18\x02 \x01(\x0e2%.controlplane.v1.RuntimeIncidentStateR\x05state\x12>\n" +
@@ -39120,7 +39128,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vreason_code\x18\x04 \x01(\tR\n" +
 	"reasonCode\x12;\n" +
 	"\voccurred_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAt\"\x80\x01\n" +
+	"occurredAt\x12'\n" +
+	"\x0fexecution_fence\x18\x06 \x01(\x04R\x0eexecutionFence\"\x80\x01\n" +
 	"!ListRuntimeIncidentHistoryRequest\x12\x1f\n" +
 	"\vincident_id\x18\x01 \x01(\tR\n" +
 	"incidentId\x12\x1b\n" +

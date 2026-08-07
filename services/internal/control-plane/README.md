@@ -37,6 +37,9 @@ owner-конфигурацией Issue
   `WORKSPACE|ALL_WORKSPACES` backup/restore envelope;
 - метаданными артефактов; immutable Instruction content записывается через
   узкий versioned S3 client, а остальные artifact bytes остаются вне сервиса.
+  Readiness перед каждым canary Put bounded согласует все versions и delete
+  markers выделенного prefix, поэтому ambiguous S3 commit переживает replacement
+  pod и не создаёт неограниченную цепочку orphan versions.
 
 Значения секретов остаются во внешнем хранилище Vault/Kubernetes.
 `control-plane` не вызывает Mattermost, MCP, Codex и Kubernetes API, не

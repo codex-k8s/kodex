@@ -4,7 +4,7 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.22.0
+version: 1.22.1
 updated: 2026-08-07
 ---
 
@@ -162,12 +162,17 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - migration schema version равна `20260806023400`;
 - instruction object-store bucket существует, versioning включено, а exact
   HTTPS SNI/CA/mTLS/application credential рабочего prefix проходят bounded
-  canary `PutObject` → получение `VersionID` → version-pinned `StatObject` и
-  `GetObject` с проверкой content/SHA-256 → exact `DeleteObjectVersion`;
-  IAM обязан разрешать рабочие `PutObject`/`GetObject` и только для canary
-  cleanup `DeleteObjectVersion` на том же `projects/*/instruction-sets/*`
-  prefix; cleanup failure снимает readiness и блокирует новые canary writes
-  этой replica;
+  recovery `ListObjectVersions` → удаление всех versions/delete markers
+  выделенного deterministic canary prefix → доказательство пустоты → canary
+  `PutObject` → получение `VersionID` → version-pinned `StatObject` и
+  `GetObject` с проверкой content/SHA-256 → exact `DeleteObjectVersion` →
+  повторное доказательство пустоты;
+  IAM обязан разрешать bounded `ListBucketVersions` с condition на canary
+  prefix, рабочие `PutObject`/`GetObject` и только для canary cleanup
+  `DeleteObjectVersion` на том же `projects/*/instruction-sets/*` prefix.
+  Ambiguous Put/Delete, неполная очистка или более 32 versions/delete markers
+  снимают readiness; следующий pod обязан восстановить authoritative S3 prefix
+  до любого нового Put. Локальное состояние процесса не является recovery state;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
