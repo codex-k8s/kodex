@@ -100,10 +100,6 @@ SELECT current_user = session_user,
                      candidate.table_schema = 'public'
                      AND candidate.table_name = 'matter_codex_legacy_data_cutovers'
                  )
-                 AND NOT (
-                     candidate.table_schema = 'control_plane'
-                     AND candidate.table_name = 'legacy_data_cutovers'
-                 )
                  AND (
                      has_table_privilege(session_user,
                          format('%I.%I', candidate.table_schema, candidate.table_name), 'INSERT')
@@ -191,6 +187,21 @@ SELECT current_user = session_user,
                AND has_function_privilege(
                    session_user,
                    'control_plane.materialize_legacy_data_cutover(text,text,text,text,text,text,text,bigint)',
+                   'EXECUTE'
+               )
+               AND has_function_privilege(
+                   session_user,
+                   'control_plane.prepare_legacy_data_cutover(text,text,text,text,text,text,text,bigint,text,jsonb)',
+                   'EXECUTE'
+               )
+               AND has_function_privilege(
+                   session_user,
+                   'control_plane.verify_legacy_data_cutover_restore(text,text,text,text,text,text,text,bigint)',
+                   'EXECUTE'
+               )
+               AND has_function_privilege(
+                   session_user,
+                   'control_plane.abort_legacy_data_cutover(text,text,text,text,text,text,text,bigint)',
                    'EXECUTE'
                )
                AND has_schema_privilege(

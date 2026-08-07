@@ -68,7 +68,7 @@ status, bounded metrics, safe report и receipts.
 - проверить readiness source/target principals без раскрытия DSN: source имеет
   `SELECT` только на exact 50-table allowlist, snapshot/lock и cutover receipt;
   target — RLS readback, target lock/receipt и `EXECUTE` только на
-  `materialize_legacy_data_cutover`, без произвольного business DML. Сама
+  узкие prepare/restore/abort capabilities и `materialize_legacy_data_cutover`, без прямого receipt или произвольного business DML. Сама
   capability принадлежит отдельной `NOLOGIN NOBYPASSRLS`
   `control_plane_legacy_materializer` с exact `SELECT/INSERT` и receipt-bound
   RLS policy; LOGIN job не является member этой роли;
@@ -139,6 +139,9 @@ callback Turn, единственного manifest и двух delivered destina
 HMAC/closed `pg_restore --list`, затем фиксирует
 `PREPARED` receipts и exact typed materialization intent. До
 этого source/target cutover effects отсутствуют.
+Authenticated plaintext staging разрешён только через `TMPDIR` на
+pod-private bounded `emptyDir`; файл немедленно unlink-ится и не сохраняется в
+backup PVC.
 
 До `commit` обязательно выполнить `restore-verify` в отдельной пустой DB.
 `pg_restore --single-transaction` должен завершиться успешно, а повторный
@@ -171,9 +174,9 @@ backup evidence завершает Job до fence.
 
 После source `FROZEN` legacy writes закрыто отвергаются. Затем target owner
 повторно разрешает Project/Chat/Agent/configuration/Artifact authority и одной
-transaction материализует все planned Schedule, deterministic audit и receipt.
+transaction материализует весь planned Project/Team/Chat/Agent/configuration/Session/Turn/Attempt/Process/Schedule graph, exact root actor/policy/delegation/callback provenance, deterministic audit и receipt. Активный legacy lease не копируется: owner receipt переносится в `QUEUED/BLOCKED`, а новый execution создаётся target owner только после cutover.
 Job повторно строит exact authoritative plan/readback; только затем source
-receipt становится `COMMITTED`. Target `COMMITTED` — irreversible cutover boundary: rollback и
+receipt становится `COMMITTED`. Receipt tuple неизменяем с первого `PREPARED`; caller не имеет table-wide DML, а terminal winner выбирается одной owner transaction. Target `COMMITTED` — irreversible cutover boundary: rollback и
 возврат legacy writer запрещены. Переключение consumers и #197 выполняются
 отдельными owner-approved действиями, не этой job.
 

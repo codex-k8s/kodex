@@ -87,6 +87,36 @@ func TestPrincipalReadbackContainsExactSourceInventory(t *testing.T) {
 	}
 }
 
+func TestTargetCutoverUsesClosedOwnerCapabilities(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"target_cutover__prepare.sql", "target_cutover__verify_restore.sql", "target_cutover__abort.sql"} {
+		query := mustQuery(name)
+		if strings.Contains(query, "UPDATE control_plane.legacy_data_cutovers") ||
+			strings.Contains(query, "INSERT INTO control_plane.legacy_data_cutovers") {
+			t.Fatalf("%s содержит прямой receipt DML", name)
+		}
+	}
+	path := filepath.Join("..", "..", "..", "..", "..", "internal", "control-plane", "cmd", "cli",
+		"migrations", "20260807019601_legacy_data_cutover_hardening.sql")
+	migration, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("прочитать hardening migration: %v", err)
+	}
+	text := string(migration)
+	for _, operation := range []string{"UPSERT_PROJECT", "UPSERT_TEAM", "UPSERT_CHAT",
+		"UPSERT_PROTECTED_CONFIGURATION", "UPSERT_SESSION", "UPSERT_TURN", "UPSERT_TURN_ATTEMPT",
+		"UPSERT_PROCESS_RUN", "UPSERT_SCHEDULE"} {
+		if !strings.Contains(text, "'"+operation+"'") {
+			t.Fatalf("hardening migration не содержит operation %s", operation)
+		}
+	}
+	if !strings.Contains(text, "REVOKE INSERT, UPDATE, DELETE, TRUNCATE") ||
+		!strings.Contains(text, "legacy_data_cutovers_immutable_transition") ||
+		!strings.Contains(text, "legacy_data_cutover_provenance") {
+		t.Fatal("hardening migration не закрывает receipt/provenance boundary")
+	}
+}
+
 func TestSafeSourceProjectionDropsPrivatePayload(t *testing.T) {
 	t.Parallel()
 	projected, retained, err := safeSourceProjection("matter_codex_agent_session_turns", []byte(

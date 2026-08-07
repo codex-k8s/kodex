@@ -52,6 +52,10 @@ spec:
               value: /var/run/config/mattercodex/legacy-migration/target-ca/ca.pem
             - name: LEGACY_DATA_MIGRATION_BACKUP_DIRECTORY
               value: /var/lib/mattercodex/legacy-migration/backups
+            # Authenticated plaintext staging существует только как unlinked
+            # fd внутри этого pod-private bounded volume.
+            - name: TMPDIR
+              value: /var/run/mattercodex/legacy-migration-staging
             - name: LEGACY_DATA_MIGRATION_BACKUP_KEY_FILE
               value: /var/run/secrets/mattercodex/legacy-migration/backup-key
             - name: LEGACY_DATA_MIGRATION_REPORT_PATH
@@ -97,6 +101,8 @@ spec:
               readOnly: true
             - name: backup
               mountPath: /var/lib/mattercodex/legacy-migration
+            - name: authenticated-staging
+              mountPath: /var/run/mattercodex/legacy-migration-staging
       volumes:
         - name: credentials
           csi:
@@ -121,3 +127,6 @@ spec:
         - name: backup
           persistentVolumeClaim:
             claimName: legacy-data-migration-backup
+        - name: authenticated-staging
+          emptyDir:
+            sizeLimit: 2Gi

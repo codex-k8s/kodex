@@ -6,8 +6,11 @@ SELECT jsonb_build_object(
     'parent_id', snapshot ->> 'parentId',
     'owner_actor_id', owner_actor_id,
     'kind', resource_kind,
+    'name', snapshot ->> 'name',
     'state', snapshot ->> 'state',
     'version', resource_version,
+    'created_at', snapshot ->> 'createdAt',
+    'updated_at', snapshot ->> 'updatedAt',
     'projection_sha256', snapshot_sha256,
     'historical', true,
     'spec', snapshot -> 'spec'

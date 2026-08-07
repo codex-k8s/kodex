@@ -15,7 +15,7 @@ updated: 2026-08-07
 создаёт compatibility facade и не становится вторым источником истины. После
 поставки server-owned owner paths зависимостями #238/#239 job сверяет полный
 legacy snapshot и exact уже доставленный runtime graph, строит закрытые
-server-owned команды для применимого active Schedule state, сохраняет immutable
+server-owned команды для полного применимого active Project/Team/Chat/Agent/configuration/Session/Turn/Process/Schedule graph, сохраняет immutable
 backup и атомарно исполняет materialization вместе с target receipt/audit после
 source write fence. Legacy Project/Agent не назначает target organization/owner:
 неоднозначная либо отсутствующая owner-конфигурация закрыто блокирует план, а не
@@ -46,7 +46,7 @@ lineage; messages, archive bytes, credentials и memory content отбрасыв
 | --- | --- |
 | `projects`, `chats`, `agent_roles`, `mattermost_bot_identities`, `chat_participants`, `chat_repositories`, `project_repositories`, repositories/accounts/profiles/prompts/flows/runtime variables | Сверяются с server-owned `PROJECT → TEAM → CHAT → AGENT → RoleDefinition/InstructionSet/ProviderPool/ProviderReference/RoleImageRecipe/AgentAssignment`; каждая version/digest подтверждается protected history, configured bot — exact provider identity/Team receipt; точные секретные/config payload остаются только в encrypted archive, target configuration остаётся единственным authoritative state |
 | `agent_sessions`, `agent_session_turns` | Активные строки обязаны иметь exact `SESSION → TURN` binding по source ID/key/run/version/SHA; закрытая unmapped history допускается только как archive relation |
-| `runtime_agent_binding_outbox`, `runtime_agent_binding_discoveries` | `DELIVERED` receipt сверяется с target binding; незавершённая active discovery, stale digest/version или duplicate блокируют план |
+| `runtime_agent_binding_outbox`, `runtime_agent_binding_discoveries` | `DELIVERED` owner receipt либо сверяется с target binding, либо является единственным authority для создания отсутствующих Session/Turn/Attempt в безопасном `QUEUED`; незавершённая active discovery, stale digest/version или duplicate блокируют план |
 | `process_runs`, `process_turns`, `work_claims`, `owner_attention_requests`, `agent_delegations` и callback manifests | Активный `PROCESS_RUN` связывается через его Turns; parent/process/project lineage обязателен. Делегация считается закрытой только с terminal callback Turn, одним manifest и двумя delivered destinations; незавершённые claim/owner attention/callback блокируют cutover |
 | `agent_runs`, turn artifacts, thread contexts, session archive | Каждый незавершённый `agent_run` обязан быть связан с materialized Turn; standalone active run и `pending/configured` thread context блокируют cutover. Target `ARTIFACT`, current `TURN_ATTEMPT`, `RUNTIME_REVISION` и `RUNTIME_EXECUTION` проверяются по scope/version/digest |
 | `automation_schedules` | Disabled Schedule получает явную archive relation. Каждый enabled daily Schedule превращается в детерминированную `UPSERT_SCHEDULE` intent: source public ID/revision/digest, Project/Chat/Agent owner boundary, cron/timezone/next run, overlap/coalesce/misfire/retry, playbook/prompt/callback pins и target UUID. Target owner повторно разрешает authority и одним специализированным API создаёт exact `SCHEDULE` + audit либо закрыто отклоняет весь commit |
@@ -59,11 +59,12 @@ Target inventory читается из `control_plane.resources`, immutable
 по exact historical version и owner; для protected history дополнительно
 сверяется сохранённый projection digest, а не случайный current resource. Job
 не имеет произвольного DML к target business tables. Единственный mutation path
+— `control_plane.prepare_legacy_data_cutover`, `verify_legacy_data_cutover_restore` и `abort_legacy_data_cutover`: узкие owner capabilities; migration principal не имеет DML к receipt table, а immutable tuple после первого `PREPARED` меняет только разрешённые lifecycle-поля;
 — `control_plane.materialize_legacy_data_cutover`: `SECURITY DEFINER` capability,
 принадлежащая отдельной `NOLOGIN NOBYPASSRLS`
 `control_plane_legacy_materializer`. Она имеет exact `SELECT/INSERT`, действует
 через receipt-bound RLS fence, заново разрешает owner/configuration и Artifact
-eligibility и фиксирует `SCHEDULE`, audit и receipt одной transaction с
+eligibility и фиксирует полный closed-set graph, source root actor/policy/delegation/callback provenance, audit и receipt одной transaction с
 идемпотентным readback.
 
 ## Source → target invariants
@@ -136,7 +137,7 @@ eligibility и фиксирует `SCHEDULE`, audit и receipt одной transa
 | Owner resolution | Source project/chat/role IDs никогда не принимаются как target owner: organization/project/owner выводятся из единственного matched `PROJECT`, затем проверяются на каждом target edge |
 | Locks / OCC | Source exported repeatable-read snapshot; commit берёт все legacy tables `SHARE`, target resources/attempts/executions `SHARE`; immutable receipt и plan/source/target SHA являются OCC fence |
 | Idempotency / one-winner | Plan ID + шесть immutable hashes; per-DB advisory transaction lock, unique source `FROZEN/COMMITTED` и target `COMMITTED` winner |
-| State / audit | `PREPARED → FROZEN → COMMITTED` source и `PREPARED → PREPARED + restore_verified_at → materialize + COMMITTED` target; до cutover возможен `ABORTED`. Schedule, deterministic audit и target receipt фиксируются одной owner transaction; event не нужен, потому что commit выполняет exact authoritative readback до source `COMMITTED` |
+| State / audit | `PREPARED → FROZEN → COMMITTED` source и `PREPARED → PREPARED + restore_verified_at → materialize + COMMITTED` target; до cutover возможен `ABORTED`. Full graph, provenance, deterministic audit и target receipt фиксируются одной owner transaction; повтор `COMMITTED` выполняет только authoritative readback |
 | Failure / retry / cancel | До target commit повторяет exact plan либо abort; после target commit только forward recovery. SIGTERM отменяет operation и join; по неизвестному outcome сначала читаются receipts |
 | Readiness / deploy | Exact TLS readback обеих БД и named SQL до operation; suspended Kubernetes Job, Vault CSI, retained PVC, exact NetworkPolicy, metrics/alerts; запуск принадлежит отдельному owner-approved execution PR |
 
@@ -144,7 +145,7 @@ eligibility и фиксирует `SCHEDULE`, audit и receipt одной transa
 | --- | --- | --- |
 | `dry-run` | Repeatable-read source snapshot, target readback, безопасный report; source/target business state не меняется | Тот же immutable input даёт тот же plan/digests; violation завершает job ошибкой |
 | `pre-commit` | Exported snapshot → encrypted `pg_dump` → HMAC/list verification → exclusive manifest → `PREPARED` receipts | O_EXCL и exact manifest делают повтор идемпотентным; crash после fsync dump до manifest восстанавливает sidecar только после HMAC/list и exact source/count readback; иной drift закрыто отклоняется |
-| `commit` | Повторная HMAC/manifest/receipt проверка backup, source/target locks, повтор plan, source `FROZEN` fence, атомарные target Schedule/audit/`COMMITTED`, authoritative replan/readback, source `COMMITTED` | Unique winner; crash между БД безопасно продолжается тем же mode/plan. Partial target materialization откатывается общей transaction |
+| `commit` | Повторная HMAC/manifest/receipt проверка backup, source/target locks, повтор plan, source `FROZEN` fence, атомарные target graph/provenance/audit/`COMMITTED`, authoritative replan/readback, source `COMMITTED` | Unique winner; crash между БД безопасно продолжается тем же mode/plan. Partial target materialization откатывается общей transaction |
 | `rollback` | Только до target `COMMITTED`: target/source receipts переходят в `ABORTED`, source `FROZEN` снимается | После irreversible cutover отклоняется. Для нового запуска после abort нужен новый plan ID |
 | `restore-verify` | Аутентифицированный decrypt и `pg_restore --single-transaction` в exact empty isolated DB, затем повторный snapshot/count/SHA readback и durable target proof | Имя DB обязано соответствовать `mattercodex_restore_<12..32 hex>`; непустая DB всегда отклоняется, после crash её пересоздаёт controller |
 
@@ -181,6 +182,8 @@ regular inode (`0600`, uid, link count, size); plaintext публикуется 
 unlinked private staging inode с повторной проверкой `uid/mode/link-count=0` и
 exact size. Rename/symlink/hardlink/truncate исходного PVC после проверки не
 меняет bytes, читаемые `pg_restore`.
+`TMPDIR` указывает на отдельный pod-private `emptyDir` с `sizeLimit`: staging
+остаётся writable при `readOnlyRootFilesystem` и не попадает в retained PVC.
 
 `pg_restore --list` доказывает читаемость архива при `pre-commit`; отдельный
 `restore-verify` доказывает фактическое восстановление и exact source

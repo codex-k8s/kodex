@@ -83,25 +83,45 @@ type Receipt struct {
 }
 
 // MaterializationCommand — закрытая семантическая команда target owner.
-// Authority-bearing owner/tenant/version поля намеренно отсутствуют.
+// Caller несёт source tuple и ожидаемый readback. Organization/owner всегда
+// повторно выводятся target capability из Project/protected history.
 type MaterializationCommand struct {
-	Operation               string    `json:"operation"`
-	SourceTable             string    `json:"sourceTable"`
-	SourceID                int64     `json:"sourceId"`
-	SourcePublicID          string    `json:"sourcePublicId"`
-	SourceRevision          uint64    `json:"sourceRevision"`
-	SourceDigest            string    `json:"sourceDigest"`
-	TargetID                string    `json:"targetId"`
-	ProjectSlug             string    `json:"projectSlug"`
-	AgentStableKey          string    `json:"agentStableKey"`
-	ChatStableKey           string    `json:"chatStableKey"`
-	PromptSHA256            string    `json:"promptSha256"`
-	LocalTime               string    `json:"localTime"`
-	Timezone                string    `json:"timezone"`
-	NextRunAt               time.Time `json:"nextRunAt"`
-	PlaybookKey             string    `json:"playbookKey"`
-	PromptVersion           string    `json:"promptVersion"`
-	CallbackContractVersion string    `json:"callbackContractVersion"`
+	Operation         string               `json:"operation"`
+	SourceTable       string               `json:"sourceTable"`
+	SourceID          int64                `json:"sourceId"`
+	SourcePublicID    string               `json:"sourcePublicId,omitempty"`
+	SourceRevision    uint64               `json:"sourceRevision"`
+	SourceDigest      string               `json:"sourceDigest"`
+	TargetID          string               `json:"targetId"`
+	TargetKind        string               `json:"targetKind"`
+	ProjectTargetID   string               `json:"projectTargetId"`
+	AuthorityTargetID string               `json:"authorityTargetId,omitempty"`
+	AuthorityVersion  uint64               `json:"authorityVersion,omitempty"`
+	AuthoritySHA256   string               `json:"authoritySha256,omitempty"`
+	Resource          MaterializedResource `json:"resource"`
+	ProcessProvenance *ProcessProvenance   `json:"processProvenance,omitempty"`
+}
+
+// MaterializedResource — exact ожидаемый target readback без authority-полей.
+type MaterializedResource struct {
+	ParentID string         `json:"parentId,omitempty"`
+	Name     string         `json:"name"`
+	State    string         `json:"state"`
+	Version  uint64         `json:"version"`
+	Spec     map[string]any `json:"spec"`
+}
+
+// ProcessProvenance связывает provider identity source с server-owned Actor,
+// policy и конкретным delegation/callback envelope.
+type ProcessProvenance struct {
+	RootActorSourceRef string `json:"rootActorSourceRef"`
+	PolicyRevision     uint64 `json:"policyRevision"`
+	PolicySHA256       string `json:"policySha256"`
+	DelegationSourceID int64  `json:"delegationSourceId,omitempty"`
+	DelegationTargetID string `json:"delegationTargetId,omitempty"`
+	DelegationSHA256   string `json:"delegationSha256,omitempty"`
+	CallbackRunID      string `json:"callbackRunId,omitempty"`
+	CallbackSHA256     string `json:"callbackSha256,omitempty"`
 }
 
 type RestoreVerification struct {

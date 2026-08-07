@@ -58,6 +58,24 @@ func TestBuildMapsActiveRuntimeLineage(t *testing.T) {
 				"runtimeRevisionSha256": digest, "immutableInputSha256": digest}, Canonical: []byte(`{"kind":"RUNTIME_EXECUTION"}`)},
 	)
 	snapshot := snapshotRows(t, rows)
+	counts := make(map[string]uint64)
+	for _, row := range snapshot {
+		if len(row.Payload) > 0 {
+			counts[row.Table]++
+		} else if _, exists := counts[row.Table]; !exists {
+			counts[row.Table] = 0
+		}
+	}
+	decoded, _, err := decodeSource(snapshot, counts)
+	if err != nil {
+		t.Fatalf("decodeSource() error = %v", err)
+	}
+	policySHA := sourcePolicySHA(decoded, 7)
+	for index := range target {
+		if target[index].Kind == "RUNTIME_REVISION" {
+			target[index].Spec["authorityPolicySha256"] = policySHA
+		}
+	}
 	plan, err := Build("issue-196-plan-0000", snapshot, target)
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
@@ -65,6 +83,54 @@ func TestBuildMapsActiveRuntimeLineage(t *testing.T) {
 	if !plan.Ready() || plan.Counts.Mapped["RUNTIME_EXECUTION"] != 1 || plan.Counts.Mapped["PROCESS_RUN"] != 1 ||
 		plan.Counts.Mapped["AGENT_RUN"] != 1 {
 		t.Fatalf("active lineage was not mapped: %#v", plan)
+	}
+	rows["matter_codex_runtime_agent_binding_outbox"] = []map[string]any{{
+		"id": 9, "state": "DELIVERED", "agent_session_id": 4, "agent_session_key": "session",
+		"agent_session_version": 2, "agent_session_turn_id": 5, "agent_run_id": "run",
+		"agent_session_turn_version": 3, "control_session_id": "session-id", "control_session_version": 4,
+		"control_turn_id": "turn-id", "control_turn_version": 5, "attempt": 1, "input_sha256": digest,
+		"runtime_revision_id": "revision-id", "runtime_revision_version": 7, "runtime_revision_sha256": digest,
+		"agent_session_binding_sha256": digest, "agent_turn_binding_sha256": digest,
+	}}
+	materializationTarget := make([]model.TargetResource, 0, len(target))
+	for _, resource := range target {
+		if resource.Kind != "SESSION" && resource.Kind != "TURN" && resource.Kind != "TURN_ATTEMPT" &&
+			resource.Kind != "PROCESS_RUN" && resource.Kind != "RUNTIME_EXECUTION" {
+			materializationTarget = append(materializationTarget, resource)
+		}
+	}
+	materialized, err := Build("issue-196-plan-full-active-graph", snapshotRows(t, rows), materializationTarget)
+	if err != nil {
+		t.Fatalf("Build() materialization error = %v", err)
+	}
+	operations := make(map[string]bool)
+	var provenance *model.ProcessProvenance
+	for _, command := range materialized.Materialization {
+		operations[command.Operation] = true
+		if command.Operation == "UPSERT_PROCESS_RUN" {
+			provenance = command.ProcessProvenance
+		}
+	}
+	if !materialized.Ready() || !operations["UPSERT_SESSION"] || !operations["UPSERT_TURN"] ||
+		!operations["UPSERT_TURN_ATTEMPT"] || !operations["UPSERT_PROCESS_RUN"] || provenance == nil ||
+		provenance.RootActorSourceRef != "user-1" || provenance.PolicySHA256 != policySHA {
+		t.Fatalf("full active graph and provenance were not materialized: %#v", materialized)
+	}
+	readbackTarget := append([]model.TargetResource(nil), materializationTarget...)
+	for _, command := range materialized.Materialization {
+		if !map[string]bool{"UPSERT_SESSION": true, "UPSERT_TURN": true,
+			"UPSERT_TURN_ATTEMPT": true, "UPSERT_PROCESS_RUN": true}[command.Operation] {
+			continue
+		}
+		readbackTarget = append(readbackTarget, model.TargetResource{ID: command.TargetID,
+			OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: "owner-1",
+			ParentID: command.Resource.ParentID, Kind: command.TargetKind, Name: command.Resource.Name,
+			State: command.Resource.State, Version: command.Resource.Version, Spec: command.Resource.Spec})
+	}
+	readback, err := Build("issue-196-plan-full-active-graph", snapshotRows(t, rows), readbackTarget)
+	if err != nil || !readback.Ready() || readback.PlanSHA256 != materialized.PlanSHA256 ||
+		readback.MaterializationSHA256 != materialized.MaterializationSHA256 {
+		t.Fatalf("full active graph readback changed immutable plan: %#v error=%v", readback, err)
 	}
 	for index := range target {
 		if target[index].Kind == "PROCESS_RUN" {
@@ -238,14 +304,14 @@ func TestBuildArchivesClosedHistoryDeterministically(t *testing.T) {
 	}
 }
 
-func TestBuildBlocksUnmaterializedActiveSession(t *testing.T) {
+func TestBuildBlocksActiveSessionWithoutDeliveredOwnerBinding(t *testing.T) {
 	t.Parallel()
 	plan, err := Build("issue-196-plan-0002", closedHistorySnapshot(t, "running", "running"), configurationTarget("owner-1"))
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
 	if plan.Ready() || plan.Violations["unmaterialized_active"] == 0 {
-		t.Fatalf("active source without target did not fail closed: %#v", plan.Violations)
+		t.Fatalf("active source without owner binding did not fail closed: %#v", plan.Violations)
 	}
 }
 
@@ -349,8 +415,13 @@ func TestBuildPlansEnabledScheduleMaterializationDeterministically(t *testing.T)
 	if err != nil {
 		t.Fatalf("Build() repeat error = %v", err)
 	}
-	if !plan.Ready() || plan.MaterializationCount != 1 || len(plan.Materialization) != 1 ||
-		plan.Materialization[0].Operation != "UPSERT_SCHEDULE" ||
+	operations := make(map[string]bool)
+	for _, command := range plan.Materialization {
+		operations[command.Operation] = true
+	}
+	if !plan.Ready() || !operations["UPSERT_PROJECT"] || !operations["UPSERT_TEAM"] ||
+		!operations["UPSERT_CHAT"] || !operations["UPSERT_PROTECTED_CONFIGURATION"] ||
+		!operations["UPSERT_SCHEDULE"] ||
 		plan.MaterializationSHA256 != repeated.MaterializationSHA256 ||
 		plan.PlanSHA256 != repeated.PlanSHA256 {
 		t.Fatalf("enabled schedule materialization is not repeatable: %#v", plan)
