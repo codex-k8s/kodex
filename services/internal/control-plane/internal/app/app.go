@@ -237,7 +237,7 @@ func Run(
 		AccessKeyFile:        config.InstructionS3AccessKeyFile, SecretKeyFile: config.InstructionS3SecretKeyFile,
 		SessionTokenFile: config.InstructionS3SessionTokenFile, Bucket: config.InstructionS3Bucket,
 		MaximumObjectBytes: 262144, Timeout: config.ReadinessTimeout,
-	})
+	}, postgresRepository)
 	if err != nil {
 		return err
 	}

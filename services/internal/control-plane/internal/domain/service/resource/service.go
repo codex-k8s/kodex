@@ -1146,6 +1146,15 @@ func (service *Service) withOwnerLockedResourceReceipt(
 	return service.withValidatedResourceReceipt(ctx, principal, idempotencyKey,
 		scope, requestHash,
 		func(tx domainrepo.Transaction) (lifecycleReceiptDisposition, error) {
+			// Bind двух Schedule может затронуть одну Session reference. Общий
+			// project fence берётся до любого Schedule row lock, чтобы один writer
+			// не держал свой Schedule, ожидая fence, пока владелец fence блокирует
+			// этот же row через проверку shared references.
+			if scope == "bind_schedule_configuration" && sourceKind == enum.KindSchedule {
+				if _, err := lockScheduleSessionProjectFence(ctx, tx, principal); err != nil {
+					return 0, err
+				}
+			}
 			current, err := tx.GetForUpdateIncludingDeleted(ctx, principal.OrganizationID,
 				principal.ProjectID, sourceResourceID)
 			if err != nil {

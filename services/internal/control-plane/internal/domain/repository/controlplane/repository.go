@@ -645,6 +645,13 @@ type MemorySearchHit struct {
 	VectorProjectionUsed bool
 }
 
+// ScheduleSessionTransaction задаёт узкий owner path ранней сериализации
+// Session conversation boundary до candidate read/archive/replacement.
+type ScheduleSessionTransaction interface {
+	LockScheduleSessionProjectFence(context.Context, string, string) error
+	ListScheduleSessionConversationForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+}
+
 // Transaction выражает одну транзакцию команды без утечки pgx.
 type Transaction interface {
 	CurrentTime(context.Context) (time.Time, error)

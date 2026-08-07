@@ -1,6 +1,8 @@
 package controlplane
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -88,6 +90,74 @@ func TestScheduleRebindLocksOtherSessionReferences(t *testing.T) {
 	} {
 		if !strings.Contains(sqlScheduleOtherSessionReferencesForUpdate, fragment) {
 			t.Fatalf("schedule rebind reference lock misses %q", fragment)
+		}
+	}
+}
+
+func TestScheduleReplacementUsesEarlyProjectFenceAndAdmissionIndex(t *testing.T) {
+	t.Parallel()
+
+	projectFence := "@organization_id::text || ':' || @project_id::text"
+	for name, statement := range map[string]string{
+		"early schedule fence": sqlScheduleSessionProjectFence,
+		"Session insert fence": sqlResourceInsert,
+	} {
+		if !strings.Contains(statement, "pg_advisory_xact_lock") ||
+			!strings.Contains(statement, projectFence) {
+			t.Fatalf("%s does not use the shared project graph fence", name)
+		}
+	}
+	for _, fragment := range []string{
+		"kind = 'SESSION'", "state IN (", "'ACTIVE'", "'PAUSED'", "'WAITING_OWNER'", "'BLOCKED'",
+		"spec ->> 'conversationId'", "ORDER BY id", "FOR UPDATE",
+	} {
+		if !strings.Contains(sqlScheduleSessionConversationForUpdate, fragment) {
+			t.Fatalf("locked Session candidate reread misses %q", fragment)
+		}
+	}
+	if strings.Contains(sqlScheduleSessionConversationForUpdate, "'ARCHIVED'") {
+		t.Fatal("immutable archived Session remained in the admission candidate set")
+	}
+	migrationPath := filepath.Join("..", "..", "..", "..", "cmd", "cli", "migrations",
+		"20260806023400_control_plane_owner_configuration.sql")
+	migration, err := os.ReadFile(migrationPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(migration)
+	for _, fragment := range []string{
+		"DROP INDEX control_plane.resources_session_conversation_uidx",
+		"CREATE UNIQUE INDEX resources_session_conversation_uidx",
+		"control-plane Session conversation admission boundary is ambiguous",
+		"state IN (",
+	} {
+		if !strings.Contains(source, fragment) {
+			t.Fatalf("forward migration misses %q", fragment)
+		}
+	}
+	indexStart := strings.Index(source, "CREATE UNIQUE INDEX resources_session_conversation_uidx")
+	if indexStart < 0 {
+		t.Fatal("forward Session admission index is absent")
+	}
+	indexEnd := strings.Index(source[indexStart:], "CREATE TABLE control_plane.protected_resource_history")
+	if indexEnd < 0 {
+		t.Fatal("forward Session admission index is not bounded in migration")
+	}
+	indexSQL := source[indexStart : indexStart+indexEnd]
+	if strings.Contains(indexSQL, "'ARCHIVED'") || strings.Contains(indexSQL, "state <> 'DELETED'") {
+		t.Fatal("forward Session index still lets immutable history block replacement")
+	}
+}
+
+func TestInstructionReadinessUsesCrossReplicaTransactionFence(t *testing.T) {
+	t.Parallel()
+
+	for _, fragment := range []string{
+		"pg_advisory_xact_lock",
+		"control-plane:instruction-object-store-readiness:v1",
+	} {
+		if !strings.Contains(sqlInstructionObjectReadinessFence, fragment) {
+			t.Fatalf("instruction readiness fence misses %q", fragment)
 		}
 	}
 }

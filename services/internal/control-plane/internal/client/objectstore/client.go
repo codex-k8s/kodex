@@ -17,7 +17,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	domainobjectstore "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/client/objectstore"
@@ -34,9 +33,13 @@ type Config struct {
 }
 
 type Client struct {
-	config      Config
-	client      *minio.Client
-	readinessMu sync.Mutex
+	config Config
+	client *minio.Client
+	fence  readinessFence
+}
+
+type readinessFence interface {
+	WithInstructionObjectReadinessFence(context.Context, func(context.Context) error) error
 }
 
 var errReadinessCleanup = errors.New("S3 instruction object store readiness cleanup failed")
@@ -49,12 +52,12 @@ const (
 
 var readinessContent = []byte("# MatterCodex control-plane readiness\n")
 
-func New(config Config) (*Client, error) {
+func New(config Config, fence readinessFence) (*Client, error) {
 	parsed, err := url.Parse(config.Endpoint)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() != config.TLSServerName ||
 		parsed.Path != "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 		invalidBucket(config.Bucket) || config.MaximumObjectBytes < 1 || config.MaximumObjectBytes > 262144 ||
-		config.Timeout < time.Second || config.Timeout > time.Minute {
+		config.Timeout < time.Second || config.Timeout > time.Minute || fence == nil {
 		return nil, errors.New("S3 instruction object store configuration is invalid")
 	}
 	accessKey, err := readCredential(config.AccessKeyFile)
@@ -93,12 +96,10 @@ func New(config Config) (*Client, error) {
 	if err != nil {
 		return nil, errors.New("create S3 instruction object store client")
 	}
-	return &Client{config: config, client: configured}, nil
+	return &Client{config: config, client: configured, fence: fence}, nil
 }
 
 func (client *Client) Check(ctx context.Context) error {
-	client.readinessMu.Lock()
-	defer client.readinessMu.Unlock()
 	checkCtx, cancel := context.WithTimeout(ctx, client.config.Timeout)
 	defer cancel()
 	exists, err := client.client.BucketExists(checkCtx, client.config.Bucket)
@@ -109,15 +110,25 @@ func (client *Client) Check(ctx context.Context) error {
 	if err != nil || !versioning.Enabled() {
 		return errors.New("S3 instruction object store bucket versioning is not ready")
 	}
-	// Каждый pod сначала восстанавливает authoritative S3 state. Поэтому
-	// ambiguous Put/Delete переживает replacement и не полагается на local flag.
-	if err := reconcileReadinessObjects(checkCtx, client.client, client.config.Bucket); err != nil {
-		return err
+	return client.withReadinessFence(checkCtx, func(fencedCtx context.Context) error {
+		// Все replica сначала восстанавливают authoritative S3 state под одним
+		// PostgreSQL session-lifetime fence. Ambiguous Put/Delete переживает
+		// replacement, а live VersionID другого probe удалить невозможно.
+		if err := reconcileReadinessObjects(fencedCtx, client.client, client.config.Bucket); err != nil {
+			return err
+		}
+		return client.checkWorkingPath(fencedCtx)
+	})
+}
+
+func (client *Client) withReadinessFence(
+	ctx context.Context,
+	callback func(context.Context) error,
+) error {
+	if client.fence == nil || callback == nil {
+		return errors.New("S3 instruction object store readiness fence is unavailable")
 	}
-	if err := client.checkWorkingPath(checkCtx); err != nil {
-		return err
-	}
-	return nil
+	return client.fence.WithInstructionObjectReadinessFence(ctx, callback)
 }
 
 func (client *Client) checkWorkingPath(ctx context.Context) (resultErr error) {
@@ -173,7 +184,7 @@ type readinessObjectStore interface {
 // выделенного deterministic prefix, затем отдельным list доказывает пустоту.
 // Bounds не позволяют readiness превратиться в неограниченный cleanup worker.
 func reconcileReadinessObjects(ctx context.Context, store readinessObjectStore, bucket string) error {
-	versions, err := listReadinessVersions(ctx, store, bucket)
+	versions, overflow, err := listReadinessVersions(ctx, store, bucket)
 	if err != nil {
 		return errReadinessCleanup
 	}
@@ -183,8 +194,8 @@ func reconcileReadinessObjects(ctx context.Context, store readinessObjectStore, 
 			return errReadinessCleanup
 		}
 	}
-	remaining, err := listReadinessVersions(ctx, store, bucket)
-	if err != nil || len(remaining) != 0 {
+	remaining, remainingOverflow, err := listReadinessVersions(ctx, store, bucket)
+	if err != nil || overflow || remainingOverflow || len(remaining) != 0 {
 		return errReadinessCleanup
 	}
 	return nil
@@ -194,22 +205,26 @@ func listReadinessVersions(
 	ctx context.Context,
 	store readinessObjectStore,
 	bucket string,
-) ([]minio.ObjectInfo, error) {
+) ([]minio.ObjectInfo, bool, error) {
 	objects := make([]minio.ObjectInfo, 0, 1)
+	overflow := false
 	for object := range store.ListObjects(ctx, bucket, minio.ListObjectsOptions{
 		Prefix: readinessObjectPrefix, Recursive: true, WithVersions: true,
 	}) {
 		if object.Err != nil || object.Key == "" ||
-			!strings.HasPrefix(object.Key, readinessObjectPrefix) || object.VersionID == "" ||
-			len(objects) == readinessMaximumVersions {
-			return nil, errReadinessCleanup
+			!strings.HasPrefix(object.Key, readinessObjectPrefix) || object.VersionID == "" {
+			return nil, false, errReadinessCleanup
+		}
+		if len(objects) == readinessMaximumVersions {
+			overflow = true
+			continue
 		}
 		objects = append(objects, object)
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, errReadinessCleanup
+		return nil, false, errReadinessCleanup
 	}
-	return objects, nil
+	return objects, overflow, nil
 }
 
 func objectNotFound(err error) bool {

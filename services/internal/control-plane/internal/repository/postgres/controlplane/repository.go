@@ -845,6 +845,52 @@ func (repository *Repository) Check(ctx context.Context) error {
 	return nil
 }
 
+// WithInstructionObjectReadinessFence удерживает одну выделенную PostgreSQL
+// connection и transaction-scoped advisory lock на всей внешней S3 sequence.
+// Crash закрывает connection и автоматически освобождает lock; пропуск lock
+// никогда не считается успешной readiness.
+func (repository *Repository) WithInstructionObjectReadinessFence(
+	ctx context.Context,
+	callback func(context.Context) error,
+) (resultErr error) {
+	if callback == nil {
+		return errs.ErrInternal
+	}
+	connection, err := repository.pool.Acquire(ctx)
+	if err != nil {
+		return mapError(err)
+	}
+	defer connection.Release()
+	tx, err := connection.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	finished := false
+	defer func() {
+		if finished {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), repository.config.ContextTTL)
+		defer cancel()
+		if rollbackErr := tx.Rollback(cleanupCtx); rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			resultErr = errors.Join(resultErr, errs.ErrUnavailable)
+		}
+	}()
+	if _, err := tx.Exec(ctx, sqlInstructionObjectReadinessFence, pgx.StrictNamedArgs{}); err != nil {
+		return mapError(err)
+	}
+	if err := callback(ctx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return mapError(err)
+	}
+	finished = true
+	return nil
+}
+
 func (repository *Repository) NextWorkspaceRecoveryCandidate(
 	ctx context.Context,
 ) (domainrepo.WorkspaceRecoveryCandidate, error) {
@@ -1120,6 +1166,41 @@ func (wrapped *transaction) OtherScheduleReferencesSessionForUpdate(
 		return false, mapError(err)
 	}
 	return referenced, nil
+}
+
+func (wrapped *transaction) LockScheduleSessionProjectFence(
+	ctx context.Context,
+	organizationID, projectID string,
+) error {
+	_, err := wrapped.tx.Exec(ctx, sqlScheduleSessionProjectFence, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+	})
+	return mapError(err)
+}
+
+func (wrapped *transaction) ListScheduleSessionConversationForUpdate(
+	ctx context.Context,
+	organizationID, projectID, conversationID string,
+) ([]entity.Resource, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlScheduleSessionConversationForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"conversation_id": conversationID,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	resources := make([]entity.Resource, 0, 1)
+	for rows.Next() {
+		resource, scanErr := scanResource(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		resources = append(resources, resource)
+	}
+	return resources, mapError(rows.Err())
 }
 
 func (wrapped *transaction) ProjectHasLiveResources(

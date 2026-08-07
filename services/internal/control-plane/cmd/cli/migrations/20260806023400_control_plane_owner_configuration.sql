@@ -58,6 +58,43 @@ CREATE UNIQUE INDEX resources_workspace_mapping_uidx
     WHERE kind = 'WORKSPACE_MATTERMOST_MAPPING'
       AND state NOT IN ('ARCHIVED', 'DELETION_PENDING', 'DELETED');
 
+-- Историческая Session остаётся immutable, но не занимает admission boundary.
+-- Сначала закрыто доказываем, что уже существующий live graph однозначен;
+-- только затем заменяем более широкий индекс из 20260731000100.
+DO $session_conversation_preflight$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM control_plane.resources
+        WHERE kind = 'SESSION'
+          AND state IN (
+              'ACTIVE', 'PAUSED', 'QUEUED', 'CLAIMED', 'RUNNING',
+              'WAITING_EXTERNAL', 'WAITING_OWNER', 'BLOCKED'
+          )
+          AND coalesce(spec ->> 'conversationId', '') <> ''
+        GROUP BY organization_id, project_id, spec ->> 'conversationId'
+        HAVING count(*) > 1
+    ) THEN
+        RAISE EXCEPTION
+            'control-plane Session conversation admission boundary is ambiguous'
+            USING ERRCODE = '23505';
+    END IF;
+END
+$session_conversation_preflight$;
+DROP INDEX control_plane.resources_session_conversation_uidx;
+CREATE UNIQUE INDEX resources_session_conversation_uidx
+    ON control_plane.resources (
+        organization_id,
+        project_id,
+        (spec ->> 'conversationId')
+    )
+    WHERE kind = 'SESSION'
+      AND state IN (
+          'ACTIVE', 'PAUSED', 'QUEUED', 'CLAIMED', 'RUNNING',
+          'WAITING_EXTERNAL', 'WAITING_OWNER', 'BLOCKED'
+      )
+      AND coalesce(spec ->> 'conversationId', '') <> '';
+
 CREATE TABLE control_plane.protected_resource_history (
     organization_id uuid NOT NULL,
     project_id uuid NOT NULL,

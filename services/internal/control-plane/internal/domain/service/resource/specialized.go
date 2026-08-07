@@ -1087,6 +1087,12 @@ func (service *Service) MaterializeScheduleOccurrence(
 				result = replayed
 				return nil
 			}
+			// Fence предшествует capability/occurrence/Schedule row locks. Поэтому
+			// materialization не может удерживать Schedule, ожидая rebind fence,
+			// пока rebind проверяет shared Session references.
+			if _, err := lockScheduleSessionProjectFence(ctx, tx, input.Principal); err != nil {
+				return err
+			}
 			candidateNow, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return err
@@ -2184,6 +2190,10 @@ func (service *Service) prepareScheduleSession(
 			return entity.Resource{}, entity.SessionSpec{}, err
 		}
 	}
+	scheduleTx, err := lockScheduleSessionProjectFence(ctx, tx, principal)
+	if err != nil {
+		return entity.Resource{}, entity.SessionSpec{}, err
+	}
 	if spec.SessionPolicy != "NEW" {
 		session, err := tx.GetForUpdate(
 			ctx,
@@ -2202,7 +2212,20 @@ func (service *Service) prepareScheduleSession(
 			sessionSpec.ConversationID != spec.RoomID {
 			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
 		}
+		boundary, boundaryErr := scheduleTx.ListScheduleSessionConversationForUpdate(
+			ctx, principal.OrganizationID, principal.ProjectID, spec.RoomID,
+		)
+		if boundaryErr != nil || (spec.RoomID != "" &&
+			(len(boundary) != 1 || boundary[0].ID != session.ID)) {
+			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+		}
 		if spec.TargetKind == enum.KindAgent {
+			compatible, found, candidateErr := lockUniqueScheduleSessionAfterFence(
+				ctx, scheduleTx, principal, spec,
+			)
+			if candidateErr != nil || !found || compatible.ID != session.ID {
+				return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+			}
 			if !scheduleSessionCompatible(sessionSpec, spec) ||
 				sessionSpec.AgentAssignmentID != pinnedAssignment.ID ||
 				sessionSpec.AgentAssignmentVersion != pinnedAssignment.Version ||
@@ -2213,6 +2236,17 @@ func (service *Service) prepareScheduleSession(
 			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
 		}
 		return session, sessionSpec, nil
+	}
+	if spec.RoomID != "" {
+		boundary, boundaryErr := scheduleTx.ListScheduleSessionConversationForUpdate(
+			ctx, principal.OrganizationID, principal.ProjectID, spec.RoomID,
+		)
+		if boundaryErr != nil {
+			return entity.Resource{}, entity.SessionSpec{}, boundaryErr
+		}
+		if len(boundary) != 0 {
+			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
+		}
 	}
 	if spec.TargetKind == enum.KindAgent {
 		agent, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, spec.AgentID)

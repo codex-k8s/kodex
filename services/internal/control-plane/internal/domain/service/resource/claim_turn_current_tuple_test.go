@@ -269,6 +269,35 @@ func (tx *currentTupleTestTransaction) ListSnapshotResources(
 	return resources, nil
 }
 
+func (*currentTupleTestTransaction) LockScheduleSessionProjectFence(
+	context.Context, string, string,
+) error {
+	return nil
+}
+
+func (tx *currentTupleTestTransaction) ListScheduleSessionConversationForUpdate(
+	_ context.Context,
+	organizationID, projectID, conversationID string,
+) ([]entity.Resource, error) {
+	resources := make([]entity.Resource, 0, 1)
+	for _, resource := range tx.resources {
+		spec, ok := resource.Spec.(entity.SessionSpec)
+		if !ok || resource.Kind != enum.KindSession || resource.OrganizationID != organizationID ||
+			resource.ProjectID != projectID || spec.ConversationID != conversationID {
+			continue
+		}
+		switch resource.State {
+		case enum.StateActive, enum.StatePaused, enum.StateQueued, enum.StateClaimed, enum.StateRunning,
+			enum.StateWaitingExternal, enum.StateWaitingOwner, enum.StateBlocked:
+			resources = append(resources, resource)
+		}
+	}
+	slices.SortFunc(resources, func(left, right entity.Resource) int {
+		return strings.Compare(left.ID, right.ID)
+	})
+	return resources, nil
+}
+
 func (tx *currentTupleTestTransaction) NextImageBuild(
 	context.Context, string, string, time.Time,
 ) (entity.Resource, error) {

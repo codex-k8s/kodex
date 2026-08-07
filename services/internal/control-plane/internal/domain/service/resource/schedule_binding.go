@@ -59,6 +59,14 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 			if !ok {
 				return entity.Resource{}, errs.ErrInternal
 			}
+			// Persistent/rolling create получает project fence до Workspace,
+			// configuration и candidate locks: все Session writers соблюдают один
+			// порядок и не образуют Schedule↔Session lock cycle.
+			if input.Spec.SessionPolicy != "NEW" {
+				if _, err := lockScheduleSessionProjectFence(ctx, tx, input.Principal); err != nil {
+					return entity.Resource{}, err
+				}
+			}
 			now, err := tx.CurrentTime(ctx)
 			if err != nil {
 				return entity.Resource{}, err
@@ -195,19 +203,63 @@ func uniqueScheduleSession(ctx context.Context, tx domainrepo.Transaction, princ
 func lockUniqueScheduleSession(ctx context.Context, tx domainrepo.Transaction, principal value.Principal,
 	spec entity.ScheduleSpec,
 ) (entity.Resource, bool, error) {
-	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	scheduleTx, err := lockScheduleSessionProjectFence(ctx, tx, principal)
 	if err != nil {
 		return entity.Resource{}, false, err
+	}
+	return lockUniqueScheduleSessionAfterFence(ctx, scheduleTx, principal, spec)
+}
+
+func lockScheduleSessionProjectFence(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+) (domainrepo.ScheduleSessionTransaction, error) {
+	scheduleTx, ok := tx.(domainrepo.ScheduleSessionTransaction)
+	if !ok {
+		return nil, errs.ErrInternal
+	}
+	if err := scheduleTx.LockScheduleSessionProjectFence(
+		ctx, principal.OrganizationID, principal.ProjectID,
+	); err != nil {
+		return nil, err
+	}
+	return scheduleTx, nil
+}
+
+func lockUniqueScheduleSessionAfterFence(
+	ctx context.Context,
+	scheduleTx domainrepo.ScheduleSessionTransaction,
+	principal value.Principal,
+	spec entity.ScheduleSpec,
+) (entity.Resource, bool, error) {
+	resources, err := scheduleTx.ListScheduleSessionConversationForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, spec.RoomID,
+	)
+	if err != nil {
+		return entity.Resource{}, false, err
+	}
+	// Для непустой conversation uniqueness совпадает с admission index:
+	// любой live объект другого owner/tuple является закрытым конфликтом.
+	if spec.RoomID != "" && len(resources) > 1 {
+		return entity.Resource{}, false, errs.ErrStateConflict
 	}
 	ids := scheduleSessionCandidateIDs(resources, principal.ActorID, spec)
 	if len(ids) > 1 {
 		return entity.Resource{}, false, errs.ErrStateConflict
 	}
 	if len(ids) == 0 {
+		if spec.RoomID != "" && len(resources) != 0 {
+			return entity.Resource{}, false, errs.ErrStateConflict
+		}
 		return entity.Resource{}, false, nil
 	}
-	result, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, ids[0])
-	return result, err == nil, err
+	for _, resource := range resources {
+		if resource.ID == ids[0] {
+			return resource, true, nil
+		}
+	}
+	return entity.Resource{}, false, errs.ErrStateConflict
 }
 
 func scheduleSessionCandidateIDs(resources []entity.Resource, ownerActorID string,
@@ -249,6 +301,18 @@ func (service *Service) rebindScheduleSession(
 	if value.ValidateID(previousSessionID) != nil {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
+	scheduleTx, err := lockScheduleSessionProjectFence(ctx, tx, principal)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	// Candidate read выполняется только после project graph fence и берёт row
+	// locks. Ожидавший конкурент поэтому перечитывает уже committed tuple.
+	boundary, err := scheduleTx.ListScheduleSessionConversationForUpdate(
+		ctx, principal.OrganizationID, principal.ProjectID, spec.RoomID,
+	)
+	if err != nil {
+		return entity.Resource{}, err
+	}
 	previous, err := tx.GetForUpdateIncludingDeleted(
 		ctx, principal.OrganizationID, principal.ProjectID, previousSessionID,
 	)
@@ -260,9 +324,15 @@ func (service *Service) rebindScheduleSession(
 		return entity.Resource{}, errs.ErrNotFound
 	}
 	if previous.State == enum.StateActive && scheduleSessionCompatible(previousSpec, spec) {
+		if len(boundary) != 1 || boundary[0].ID != previous.ID {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
 		return previous, nil
 	}
 	if previous.State != enum.StateActive {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	if spec.RoomID != "" && (len(boundary) != 1 || boundary[0].ID != previous.ID) {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
 	if err := lockAndRejectOtherScheduleSessionReferences(
@@ -294,7 +364,7 @@ func (service *Service) rebindScheduleSession(
 	// Exact-compatible Session могла быть создана другим сериализованным
 	// schedule lifecycle. Её переиспользуем только при доказанной
 	// единственности; дубли закрыто отклоняются.
-	compatible, found, err := lockUniqueScheduleSession(ctx, tx, principal, spec)
+	compatible, found, err := lockUniqueScheduleSessionAfterFence(ctx, scheduleTx, principal, spec)
 	if err != nil {
 		return entity.Resource{}, err
 	}

@@ -162,7 +162,8 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - migration schema version равна `20260806023400`;
 - instruction object-store bucket существует, versioning включено, а exact
   HTTPS SNI/CA/mTLS/application credential рабочего prefix проходят bounded
-  recovery `ListObjectVersions` → удаление всех versions/delete markers
+  recovery под одним PostgreSQL transaction-scoped advisory fence на
+  выделенной connection: `ListObjectVersions` → удаление versions/delete markers
   выделенного deterministic canary prefix → доказательство пустоты → canary
   `PutObject` → получение `VersionID` → version-pinned `StatObject` и
   `GetObject` с проверкой content/SHA-256 → exact `DeleteObjectVersion` →
@@ -170,9 +171,13 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   IAM обязан разрешать bounded `ListBucketVersions` с condition на canary
   prefix, рабочие `PutObject`/`GetObject` и только для canary cleanup
   `DeleteObjectVersion` на том же `projects/*/instruction-sets/*` prefix.
-  Ambiguous Put/Delete, неполная очистка или более 32 versions/delete markers
-  снимают readiness; следующий pod обязан восстановить authoritative S3 prefix
-  до любого нового Put. Локальное состояние процесса не является recovery state;
+  Fence удерживается от первого reconcile до доказательства финальной пустоты;
+  ожидание ограничено readiness context, crash закрывает connection и освобождает
+  lock, а probe без полученного fence не считается успешным. Ambiguous Put/Delete
+  и неполная очистка снимают readiness; при более 32 versions/delete markers один
+  probe удаляет не более 32 exact versions и остаётся fail-closed, а следующие
+  fenced probes завершают bounded recovery до любого нового Put. Локальный mutex
+  и локальное состояние процесса не являются cross-replica recovery state;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,

@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"context"
 	"encoding/base64"
 	"reflect"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 )
 
 func TestProtectedConfigurationRegistriesAreSpecialized(t *testing.T) {
@@ -277,6 +279,62 @@ func TestScheduleRebindCycleLeavesOneAdmissionActiveTuple(t *testing.T) {
 	resources = append(resources, session("s3", enum.StateActive, t1))
 	if got := scheduleSessionCandidateIDs(resources, "owner", t1); !reflect.DeepEqual(got, []string{"s3"}) {
 		t.Fatalf("T1 -> T2 -> T1 produced ambiguous active tuple: %#v", got)
+	}
+}
+
+type scheduleFenceTestTransaction struct {
+	domainrepo.Transaction
+	order     []string
+	resources []entity.Resource
+}
+
+func (tx *scheduleFenceTestTransaction) LockScheduleSessionProjectFence(
+	context.Context, string, string,
+) error {
+	tx.order = append(tx.order, "fence")
+	return nil
+}
+
+func (tx *scheduleFenceTestTransaction) ListScheduleSessionConversationForUpdate(
+	context.Context, string, string, string,
+) ([]entity.Resource, error) {
+	tx.order = append(tx.order, "reread_for_update")
+	return tx.resources, nil
+}
+
+func TestScheduleSessionFencePrecedesLockedCandidateReread(t *testing.T) {
+	t.Parallel()
+
+	digest := strings.Repeat("d", 64)
+	spec := entity.ScheduleSpec{
+		AgentID: "agent", AgentVersion: 1, AgentSHA256: digest,
+		ProviderPoolID: "pool", ProviderPoolVersion: 1, ProviderPoolSHA256: digest,
+		AgentAssignmentID: "assignment", AgentAssignmentVersion: 1,
+		AgentAssignmentSHA256: digest, RoomID: "room",
+	}
+	tx := &scheduleFenceTestTransaction{resources: []entity.Resource{{
+		ID: "session", OwnerActorID: "owner", Kind: enum.KindSession, State: enum.StateActive,
+		Spec: entity.SessionSpec{
+			AgentID: spec.AgentID, AgentVersion: spec.AgentVersion, AgentSHA256: spec.AgentSHA256,
+			ProviderPoolID: spec.ProviderPoolID, ProviderPoolVersion: spec.ProviderPoolVersion,
+			ProviderPoolSHA256: spec.ProviderPoolSHA256,
+			AgentAssignmentID:  spec.AgentAssignmentID, AgentAssignmentVersion: spec.AgentAssignmentVersion,
+			AgentAssignmentSHA256: spec.AgentAssignmentSHA256, ConversationID: spec.RoomID,
+		},
+	}}}
+	principal := value.Principal{OrganizationID: "organization", ProjectID: "project", ActorID: "owner"}
+	scheduleTx, err := lockScheduleSessionProjectFence(context.Background(), tx, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, found, err := lockUniqueScheduleSessionAfterFence(
+		context.Background(), scheduleTx, principal, spec,
+	)
+	if err != nil || !found || candidate.ID != "session" {
+		t.Fatalf("locked candidate was not re-read: %#v, %v", candidate, err)
+	}
+	if !reflect.DeepEqual(tx.order, []string{"fence", "reread_for_update"}) {
+		t.Fatalf("candidate list ran before deterministic fence: %#v", tx.order)
 	}
 }
 

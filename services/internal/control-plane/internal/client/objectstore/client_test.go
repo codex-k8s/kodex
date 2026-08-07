@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/minio/minio-go/v7"
@@ -39,6 +40,61 @@ type readinessStoreFake struct {
 	listOptions []minio.ListObjectsOptions
 	removed     []minio.ObjectInfo
 	removeError error
+}
+
+type serialReadinessFence struct {
+	mutex    sync.Mutex
+	attempts chan struct{}
+}
+
+func (fence *serialReadinessFence) WithInstructionObjectReadinessFence(
+	ctx context.Context,
+	callback func(context.Context) error,
+) error {
+	fence.attempts <- struct{}{}
+	fence.mutex.Lock()
+	defer fence.mutex.Unlock()
+	return callback(ctx)
+}
+
+func TestReadinessFenceSerializesTwoReplicas(t *testing.T) {
+	t.Parallel()
+
+	fence := &serialReadinessFence{attempts: make(chan struct{}, 2)}
+	client := &Client{fence: fence}
+	firstEntered := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	secondEntered := make(chan struct{})
+	results := make(chan error, 2)
+	go func() {
+		results <- client.withReadinessFence(context.Background(), func(context.Context) error {
+			close(firstEntered)
+			<-releaseFirst
+			return nil
+		})
+	}()
+	<-fence.attempts
+	<-firstEntered
+	go func() {
+		results <- client.withReadinessFence(context.Background(), func(context.Context) error {
+			close(secondEntered)
+			return nil
+		})
+	}()
+	// Вторая replica уже запросила fence, но не может начать S3 sequence.
+	<-fence.attempts
+	select {
+	case <-secondEntered:
+		t.Fatal("second readiness replica entered before the first released its fence")
+	default:
+	}
+	close(releaseFirst)
+	<-secondEntered
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func (store *readinessStoreFake) ListObjects(
@@ -103,8 +159,8 @@ func TestReadinessCleanupIsBoundedAndFailClosed(t *testing.T) {
 		overflow[index] = minio.ObjectInfo{Key: readinessObjectKey, VersionID: "version"}
 	}
 	store := &readinessStoreFake{steps: []readinessStoreStep{{objects: overflow}}}
-	if err := reconcileReadinessObjects(context.Background(), store, "bucket"); !errors.Is(err, errReadinessCleanup) || len(store.removed) != 0 {
-		t.Fatalf("overflowing readiness cleanup was not rejected before mutation: %v, %#v", err, store.removed)
+	if err := reconcileReadinessObjects(context.Background(), store, "bucket"); !errors.Is(err, errReadinessCleanup) || len(store.removed) != readinessMaximumVersions {
+		t.Fatalf("overflowing readiness cleanup did not make bounded recovery progress: %v, %d", err, len(store.removed))
 	}
 
 	store = &readinessStoreFake{steps: []readinessStoreStep{{objects: []minio.ObjectInfo{
@@ -112,5 +168,25 @@ func TestReadinessCleanupIsBoundedAndFailClosed(t *testing.T) {
 	}}}, removeError: errors.New("delete denied")}
 	if err := reconcileReadinessObjects(context.Background(), store, "bucket"); !errors.Is(err, errReadinessCleanup) {
 		t.Fatalf("failed exact delete did not fail readiness closed: %v", err)
+	}
+}
+
+func TestReadinessRecoversAmbiguousDeleteBeforeNextPut(t *testing.T) {
+	t.Parallel()
+
+	orphan := minio.ObjectInfo{Key: readinessObjectKey, VersionID: "ambiguous-version"}
+	store := &readinessStoreFake{
+		steps:       []readinessStoreStep{{objects: []minio.ObjectInfo{orphan}}, {objects: []minio.ObjectInfo{orphan}}, {}},
+		removeError: errors.New("ambiguous delete"),
+	}
+	if err := reconcileReadinessObjects(context.Background(), store, "bucket"); !errors.Is(err, errReadinessCleanup) {
+		t.Fatalf("ambiguous delete was not fail-closed: %v", err)
+	}
+	store.removeError = nil
+	if err := reconcileReadinessObjects(context.Background(), store, "bucket"); err != nil {
+		t.Fatalf("next fenced probe did not recover the durable orphan: %v", err)
+	}
+	if len(store.removed) != 1 || store.removed[0].VersionID != orphan.VersionID {
+		t.Fatalf("recovery did not delete the exact orphan version: %#v", store.removed)
 	}
 }

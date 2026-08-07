@@ -471,6 +471,15 @@ var sqlSessionOpenTurns string
 //go:embed sql/session__blocks_runtime_cleanup.sql
 var sqlSessionBlocksRuntimeCleanup string
 
+//go:embed sql/schedule_session__project_fence.sql
+var sqlScheduleSessionProjectFence string
+
+//go:embed sql/schedule_session__conversation_for_update.sql
+var sqlScheduleSessionConversationForUpdate string
+
+//go:embed sql/instruction_object_readiness__fence.sql
+var sqlInstructionObjectReadinessFence string
+
 //go:embed sql/transaction__set_scope.sql
 var sqlTransactionSetScope string
 
