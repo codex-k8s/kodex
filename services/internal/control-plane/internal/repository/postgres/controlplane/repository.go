@@ -536,6 +536,7 @@ func (repository *Repository) ListRunGraphNodes(ctx context.Context, organizatio
 			var item domainrepo.RunGraphNode
 			if err := rows.Scan(&item.NodeType, &item.ID, &item.State, &item.ParentProcessRunID,
 				&item.ProcessRunID, &item.SessionID, &item.TurnID, &item.RuntimeRevisionID,
+				&item.PredecessorID, &item.SuccessorID,
 				&item.Version, &item.RuntimeRevisionVersion, &item.Attempt,
 				&item.OccurredAt, &item.UpdatedAt); err != nil {
 				return err
@@ -1428,6 +1429,28 @@ func (wrapped *transaction) OwnerWorkspaceProjectsForUpdate(
 		projects = append(projects, project)
 	}
 	return projects, mapError(rows.Err())
+}
+
+func (wrapped *transaction) HistoricalOwnerSessionsForUpdate(
+	ctx context.Context,
+	organizationID, projectID, actorID string,
+) ([]entity.Resource, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlSessionHistoricalOwnerListForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID, "actor_id": actorID,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var sessions []entity.Resource
+	for rows.Next() {
+		session, scanErr := scanResource(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, mapError(rows.Err())
 }
 
 func (wrapped *transaction) LatestRuntimeRevision(
@@ -2775,7 +2798,7 @@ func (wrapped *transaction) NextProviderPoolSlot(
 ) (uint64, error) {
 	var slot uint64
 	err := wrapped.tx.QueryRow(ctx, sqlProviderPoolNextSlot, pgx.StrictNamedArgs{
-		"role_id": cursor.RoleID, "policy_revision": cursor.PolicyRevision,
+		"selection_key_id": cursor.SelectionKeyID, "policy_revision": cursor.PolicyRevision,
 		"snapshot_sha256": cursor.SnapshotSHA256, "total_weight": cursor.TotalWeight,
 	}).Scan(&slot)
 	return slot, mapError(err)

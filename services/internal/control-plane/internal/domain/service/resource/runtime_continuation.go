@@ -1425,6 +1425,16 @@ func (service *Service) RecordRuntimeIncident(
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil {
 				return err
 			}
+			expectedVersion, expectedFence := execution.Version, execution.Fence
+			execution.Version++
+			execution.Fence++
+			execution.UpdatedAt = now
+			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
+				return err
+			}
+			// Incident pin указывает уже на post-revocation fence. Дальнейший
+			// terminal transition может только монотонно поднять fence; owner
+			// action повторно блокирует exact current execution.
 			if err := tx.InsertRuntimeIncident(ctx, domainrepo.RuntimeIncident{
 				ID: input.IncidentID, OrganizationID: execution.OrganizationID,
 				ProjectID: execution.ProjectID, ExecutionID: execution.ID,
@@ -1432,13 +1442,6 @@ func (service *Service) RecordRuntimeIncident(
 				EvidenceSHA256: input.EvidenceSHA256,
 				WorkloadID:     input.Principal.CallerWorkload, OccurredAt: now,
 			}); err != nil {
-				return err
-			}
-			expectedVersion, expectedFence := execution.Version, execution.Fence
-			execution.Version++
-			execution.Fence++
-			execution.UpdatedAt = now
-			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
 			}
 			graph, graphErr := service.lockOwnerGraphByTurn(ctx, tx, input.Principal, execution.TurnID)

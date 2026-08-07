@@ -199,7 +199,7 @@ type ScheduledRun struct {
 
 // ProviderPoolCursor фиксирует один bounded slot версионированного цикла.
 type ProviderPoolCursor struct {
-	RoleID         string
+	SelectionKeyID string
 	PolicyRevision uint64
 	SnapshotSHA256 string
 	TotalWeight    uint64
@@ -856,6 +856,13 @@ type WorkspaceRecoveryTransaction interface {
 	OwnerWorkspaceProjectsForUpdate(context.Context, string, string) ([]entity.Resource, error)
 }
 
+// WorkspaceHistoricalSessionTransaction отделяет backup membership от
+// runtime-admission snapshot: архивные и отменённые, но не удалённые Session
+// остаются обязательными членами owner backup.
+type WorkspaceHistoricalSessionTransaction interface {
+	HistoricalOwnerSessionsForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+}
+
 type WorkspaceRecoveryCandidate struct {
 	OrganizationID, ProjectID, OwnerActorID, ResourceID string
 	Kind                                                enum.Kind
@@ -895,6 +902,7 @@ type ExternalCommandReceipt struct {
 	EffectSHA256, CommandIntentSHA256, AuthoritySHA256 string
 	ResultResourceID, ResultSHA256                     string
 	ResultVersion                                      uint64
+	Result                                             entity.Resource
 	ConsumedAt                                         time.Time
 }
 

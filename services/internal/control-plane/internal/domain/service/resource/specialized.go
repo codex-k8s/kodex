@@ -2203,13 +2203,9 @@ func (service *Service) prepareScheduleSession(
 			return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
 		}
 		if spec.TargetKind == enum.KindAgent {
-			if sessionSpec.AgentVersion != spec.AgentVersion || sessionSpec.AgentSHA256 != spec.AgentSHA256 ||
-				sessionSpec.ProviderPoolID != spec.ProviderPoolID ||
-				sessionSpec.ProviderPoolVersion != spec.ProviderPoolVersion ||
-				sessionSpec.ProviderPoolSHA256 != spec.ProviderPoolSHA256 ||
+			if !scheduleSessionCompatible(sessionSpec, spec) ||
 				sessionSpec.AgentAssignmentID != pinnedAssignment.ID ||
 				sessionSpec.AgentAssignmentVersion != pinnedAssignment.Version ||
-				sessionSpec.AgentAssignmentSHA256 != spec.AgentAssignmentSHA256 ||
 				sessionSpec.ProviderAccountBindingID != "" {
 				return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
 			}

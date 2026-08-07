@@ -216,6 +216,66 @@ func TestTargetScheduleDigestPinsPromptAndEverySelection(t *testing.T) {
 	}
 }
 
+func TestScheduleSessionCompatibilityPinsWholeTuple(t *testing.T) {
+	t.Parallel()
+
+	digest := strings.Repeat("a", 64)
+	schedule := entity.ScheduleSpec{
+		AgentID: "agent", AgentVersion: 2, AgentSHA256: digest,
+		ProviderPoolID: "pool", ProviderPoolVersion: 3, ProviderPoolSHA256: digest,
+		AgentAssignmentID: "assignment", AgentAssignmentVersion: 4,
+		AgentAssignmentSHA256: digest, RoomID: "room",
+	}
+	session := entity.SessionSpec{
+		AgentID: schedule.AgentID, AgentVersion: schedule.AgentVersion, AgentSHA256: schedule.AgentSHA256,
+		ProviderPoolID: schedule.ProviderPoolID, ProviderPoolVersion: schedule.ProviderPoolVersion,
+		ProviderPoolSHA256: schedule.ProviderPoolSHA256,
+		AgentAssignmentID:  schedule.AgentAssignmentID, AgentAssignmentVersion: schedule.AgentAssignmentVersion,
+		AgentAssignmentSHA256: schedule.AgentAssignmentSHA256, ConversationID: schedule.RoomID,
+	}
+	if !scheduleSessionCompatible(session, schedule) {
+		t.Fatal("exact Schedule/Session tuple was rejected")
+	}
+	session.AgentAssignmentVersion++
+	if scheduleSessionCompatible(session, schedule) {
+		t.Fatal("stale assignment remained compatible with Schedule")
+	}
+}
+
+func TestInstructionArtifactIdentityMatchesObjectDedupDomain(t *testing.T) {
+	t.Parallel()
+
+	projectID := "11111111-1111-4111-8111-111111111111"
+	digest := strings.Repeat("b", 64)
+	first := instructionArtifactID(projectID, "instructions-a", digest)
+	if first != instructionArtifactID(projectID, "instructions-a", digest) {
+		t.Fatal("instruction artifact identity is not deterministic")
+	}
+	if first == instructionArtifactID(projectID, "instructions-b", digest) {
+		t.Fatal("different InstructionSet stable keys share one artifact identity")
+	}
+}
+
+func TestRuntimeIncidentRetryFenceIsMonotonic(t *testing.T) {
+	t.Parallel()
+
+	incident := domainrepo.RuntimeIncident{State: "ACKNOWLEDGED", ExecutionFence: 4}
+	execution := RuntimeExecution{State: "FAILED", Fence: 6}
+	if !runtimeIncidentRetryEligible(incident, execution, true) {
+		t.Fatal("terminal execution with a monotonic post-incident fence was rejected")
+	}
+	incident.ExecutionFence = 7
+	if runtimeIncidentRetryEligible(incident, execution, true) {
+		t.Fatal("future incident fence was accepted")
+	}
+	incident = domainrepo.RuntimeIncident{State: "RELEASED", ExecutionFence: 6}
+	execution.State = "CANCELLED"
+	if !runtimeIncidentRetryEligible(incident, execution, true) ||
+		runtimeIncidentRetryEligible(incident, execution, false) {
+		t.Fatal("released incident retry does not require exact current cancelled execution")
+	}
+}
+
 func TestRunLineageLinksProcessesAndAttempts(t *testing.T) {
 	t.Parallel()
 
@@ -244,6 +304,19 @@ func TestRunLineageLinksProcessesAndAttempts(t *testing.T) {
 		byID["attempt-2"].SuccessorID != "attempt-3" ||
 		byID["attempt-3"].PredecessorID != "attempt-2" {
 		t.Fatalf("unexpected attempt graph: %#v", lineage.Attempts)
+	}
+}
+
+func TestRunLineageLinksPredecessorTurns(t *testing.T) {
+	t.Parallel()
+
+	lineage := RunLineageResult{Attempts: []domainrepo.RunGraphNode{
+		{ID: "first", TurnID: "turn-a", Attempt: 1},
+		{ID: "second", TurnID: "turn-b", Attempt: 2, PredecessorID: "turn-a"},
+	}}
+	linkRunLineage(&lineage)
+	if lineage.Attempts[0].SuccessorID != "second" || lineage.Attempts[1].PredecessorID != "first" {
+		t.Fatalf("cross-turn lineage is incomplete: %#v", lineage.Attempts)
 	}
 }
 

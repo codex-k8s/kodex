@@ -90,14 +90,7 @@ func (service *Service) ManageRuntimeIncident(
 			currentExecution := graph.Runtime != nil && graph.Runtime.ID == execution.ID
 			switch input.Action {
 			case "retry":
-				if !currentExecution || incident.ExecutionFence != execution.Fence {
-					return 0, errs.ErrStateConflict
-				}
-				if incident.State == "RELEASED" {
-					if execution.State != "CANCELLED" {
-						return 0, errs.ErrStateConflict
-					}
-				} else if execution.State != "FAILED" && execution.State != "EXPIRED" {
+				if !runtimeIncidentRetryEligible(incident, execution, currentExecution) {
 					return 0, errs.ErrStateConflict
 				}
 			case "release":
@@ -140,6 +133,7 @@ func (service *Service) ManageRuntimeIncident(
 				return errs.ErrInternal
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
+			resultFence := lockedExecution.Fence
 			if input.Action == "retry" {
 				ownerPrincipal := input.Principal
 				ownerPrincipal.ActorID = lockedOwnerActorID
@@ -148,6 +142,7 @@ func (service *Service) ManageRuntimeIncident(
 					return err
 				}
 				result.SuccessorTurn = retried.Turn
+				resultFence = retried.Previous.Fence
 			}
 			if input.Action == "release" {
 				released, err := service.terminateRuntimeGraphForOwner(
@@ -158,9 +153,11 @@ func (service *Service) ManageRuntimeIncident(
 					return err
 				}
 				result.ReleasedExecution = &released
+				resultFence = released.Fence
 			}
 			updated := lockedIncident
 			updated.Version++
+			updated.ExecutionFence = resultFence
 			updated.State, updated.ReasonCode, updated.UpdatedAt = targetState, input.ReasonCode, now
 			if err := protected.UpdateRuntimeIncident(ctx, updated, lockedIncident.Version); err != nil {
 				return err
@@ -180,6 +177,21 @@ func (service *Service) ManageRuntimeIncident(
 			return nil
 		})
 	return result, err
+}
+
+func runtimeIncidentRetryEligible(
+	incident domainrepo.RuntimeIncident,
+	execution RuntimeExecution,
+	currentExecution bool,
+) bool {
+	if !currentExecution || incident.ExecutionFence > execution.Fence {
+		return false
+	}
+	if incident.State == "RELEASED" {
+		return execution.State == "CANCELLED"
+	}
+	return (incident.State == "OPEN" || incident.State == "ACKNOWLEDGED") &&
+		(execution.State == "FAILED" || execution.State == "EXPIRED")
 }
 
 // terminateRuntimeGraphForOwner закрывает Turn,

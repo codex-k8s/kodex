@@ -170,7 +170,10 @@ func (service *Service) createAgentRuntimeRevision(
 		ProviderAccountPool: entity.ProviderAccountPool{Policy: poolSpec.Policy,
 			PolicyRevision: poolSpec.PolicyRevision, ObservationMaxAge: poolSpec.ObservationMaxAge,
 			Bindings: roleBindings}}
-	providerBinding, err := service.selectProviderBinding(ctx, tx, principal, derivedRoleID, selectionSpec, "", now)
+	// Durable weighted cursor принадлежит уже заблокированному authoritative
+	// Agent. Derived ROLE проекция создаётся только после выбора и не является
+	// источником selection authority.
+	providerBinding, err := service.selectProviderBinding(ctx, tx, principal, agent.ID, selectionSpec, "", now)
 	if err != nil {
 		return entity.Resource{}, err
 	}

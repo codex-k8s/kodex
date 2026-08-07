@@ -27,3 +27,38 @@ func TestOwnerEligibilityPrecedesPageLimitInNamedSQL(t *testing.T) {
 		})
 	}
 }
+
+func TestOwnerHistoricalAndRunQueriesDoNotReuseAdmissionSnapshot(t *testing.T) {
+	t.Parallel()
+
+	for _, required := range []string{"kind = 'SESSION'", "state <> 'DELETED'", "FOR UPDATE"} {
+		if !strings.Contains(sqlSessionHistoricalOwnerListForUpdate, required) {
+			t.Fatalf("historical Session query misses %q", required)
+		}
+	}
+	if strings.Contains(sqlSessionHistoricalOwnerListForUpdate, "state = 'ACTIVE'") {
+		t.Fatal("historical backup membership still uses runtime admission state")
+	}
+	for _, required := range []string{"turn_attempts", "runtime_revision_id", "predecessorTurnId"} {
+		if !strings.Contains(sqlRunGraphNodes, required) {
+			t.Fatalf("run graph query misses %q", required)
+		}
+	}
+	if !strings.Contains(sqlRunGraphArtifacts, "inputArtifacts") {
+		t.Fatal("run artifact projection misses pre-admission Turn references")
+	}
+}
+
+func TestProviderPinsAndReceiptReplayUseTargetProjections(t *testing.T) {
+	t.Parallel()
+
+	for _, required := range []string{"providerCredentialBindingId", "runtime_executions", "providerAccountBindingId"} {
+		if !strings.Contains(sqlProviderBindingActiveSessions, required) {
+			t.Fatalf("provider capacity query misses %q", required)
+		}
+	}
+	if !strings.Contains(sqlExternalCommandReceiptFinalize, "result_snapshot") ||
+		!strings.Contains(sqlExternalCommandReceiptGet, "result_snapshot") {
+		t.Fatal("external one-use receipt does not persist immutable replay result")
+	}
+}

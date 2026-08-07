@@ -321,6 +321,9 @@ var sqlRunGraphArtifacts string
 //go:embed sql/project__owner_list_for_update.sql
 var sqlProjectOwnerListForUpdate string
 
+//go:embed sql/session__historical_owner_list_for_update.sql
+var sqlSessionHistoricalOwnerListForUpdate string
+
 //go:embed sql/transaction__switch_workspace_scope.sql
 var sqlTransactionSwitchWorkspaceScope string
 

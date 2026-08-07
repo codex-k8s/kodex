@@ -190,13 +190,7 @@ func uniqueScheduleSession(ctx context.Context, tx domainrepo.Transaction, princ
 	for _, candidate := range resources {
 		session, ok := candidate.Spec.(entity.SessionSpec)
 		if ok && candidate.Kind == enum.KindSession && candidate.State == enum.StateActive &&
-			candidate.OwnerActorID == principal.ActorID && session.AgentID == spec.AgentID &&
-			session.AgentVersion == spec.AgentVersion && session.AgentSHA256 == spec.AgentSHA256 &&
-			session.ProviderPoolID == spec.ProviderPoolID && session.ProviderPoolVersion == spec.ProviderPoolVersion &&
-			session.ProviderPoolSHA256 == spec.ProviderPoolSHA256 &&
-			session.AgentAssignmentID == spec.AgentAssignmentID &&
-			session.AgentAssignmentVersion == spec.AgentAssignmentVersion &&
-			session.AgentAssignmentSHA256 == spec.AgentAssignmentSHA256 && session.ConversationID == spec.RoomID {
+			candidate.OwnerActorID == principal.ActorID && scheduleSessionCompatible(session, spec) {
 			ids = append(ids, candidate.ID)
 		}
 	}
@@ -204,6 +198,67 @@ func uniqueScheduleSession(ctx context.Context, tx domainrepo.Transaction, princ
 		return entity.Resource{}, errs.ErrStateConflict
 	}
 	return tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, ids[0])
+}
+
+func scheduleSessionCompatible(session entity.SessionSpec, schedule entity.ScheduleSpec) bool {
+	return session.AgentID == schedule.AgentID &&
+		session.AgentVersion == schedule.AgentVersion && session.AgentSHA256 == schedule.AgentSHA256 &&
+		session.ProviderPoolID == schedule.ProviderPoolID &&
+		session.ProviderPoolVersion == schedule.ProviderPoolVersion &&
+		session.ProviderPoolSHA256 == schedule.ProviderPoolSHA256 &&
+		session.AgentAssignmentID == schedule.AgentAssignmentID &&
+		session.AgentAssignmentVersion == schedule.AgentAssignmentVersion &&
+		session.AgentAssignmentSHA256 == schedule.AgentAssignmentSHA256 &&
+		session.ConversationID == schedule.RoomID
+}
+
+func (service *Service) rebindScheduleSession(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	schedule entity.Resource,
+	previousSessionID string,
+	spec entity.ScheduleSpec,
+	now time.Time,
+) (entity.Resource, error) {
+	if value.ValidateID(previousSessionID) != nil {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	previous, err := tx.GetForUpdateIncludingDeleted(
+		ctx, principal.OrganizationID, principal.ProjectID, previousSessionID,
+	)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	previousSpec, ok := previous.Spec.(entity.SessionSpec)
+	if !ok || previous.Kind != enum.KindSession || previous.OwnerActorID != schedule.OwnerActorID {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	if previous.State == enum.StateActive && scheduleSessionCompatible(previousSpec, spec) {
+		return previous, nil
+	}
+	// Старую Session не переписываем и не закрываем: она может принадлежать
+	// уже материализованной истории. Schedule атомарно отвязывается от неё и
+	// получает новую server-owned Session с exact новым tuple.
+	replacement, err := entity.New(uuid.NewString(), principal.OrganizationID, principal.ProjectID,
+		schedule.ID, schedule.OwnerActorID, enum.KindSession, "Scheduled session "+schedule.ID,
+		entity.SessionSpec{
+			AgentID: spec.AgentID, AgentVersion: spec.AgentVersion, AgentSHA256: spec.AgentSHA256,
+			ProviderPoolID: spec.ProviderPoolID, ProviderPoolVersion: spec.ProviderPoolVersion,
+			ProviderPoolSHA256: spec.ProviderPoolSHA256, ConversationID: spec.RoomID,
+			AgentAssignmentID: spec.AgentAssignmentID, AgentAssignmentVersion: spec.AgentAssignmentVersion,
+			AgentAssignmentSHA256: spec.AgentAssignmentSHA256,
+		}, now)
+	if err != nil {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	if err := tx.Insert(ctx, replacement); err != nil {
+		return entity.Resource{}, err
+	}
+	if err := service.appendMutationRecords(ctx, tx, principal, "schedule_rebind_agent_session", replacement); err != nil {
+		return entity.Resource{}, err
+	}
+	return replacement, nil
 }
 
 // BindScheduleConfiguration разрешает человекочитаемые stable key внутри
@@ -314,6 +369,7 @@ func (service *Service) BindScheduleConfiguration(
 		if err != nil {
 			return entity.Resource{}, errs.ErrInternal
 		}
+		previousExecutionSessionID := spec.ExecutionSessionID
 		spec.TargetResourceID, spec.TargetKind, spec.TargetVersion = agentID, enum.KindAgent, agentVersion
 		spec.PromptProfileID, spec.PromptRevision, spec.RuntimeRevisionID = "", 0, ""
 		spec.AgentID, spec.AgentVersion, spec.AgentSHA256 = agentID, agentVersion, agentSHA
@@ -324,6 +380,22 @@ func (service *Service) BindScheduleConfiguration(
 			agentSpec.RuntimeProfileRef, agentSpec.RuntimeProfileVersion, agentSpec.RuntimeProfileSHA256
 		spec.AgentAssignmentID, spec.AgentAssignmentVersion, spec.AgentAssignmentSHA256 =
 			assignment.ID, assignment.Version, assignmentSHA
+		// Rebind не сохраняет ссылку на Session со старым authority tuple.
+		// Для persistent/rolling exact совместимая Session заново разрешается и
+		// блокируется до commit; NEW всегда отвязывается и создаёт новую Session
+		// при следующей materialization.
+		now := service.now().UTC().Truncate(time.Microsecond)
+		if spec.SessionPolicy == "NEW" {
+			spec.ExecutionSessionID = ""
+		} else {
+			compatible, sessionErr := service.rebindScheduleSession(
+				ctx, tx, input.Principal, schedule, previousExecutionSessionID, spec, now,
+			)
+			if sessionErr != nil {
+				return entity.Resource{}, sessionErr
+			}
+			spec.ExecutionSessionID = compatible.ID
+		}
 		promptArtifact, artifactErr := service.requireCleanArtifact(ctx, tx, input.Principal, spec.PromptArtifactID)
 		if artifactErr != nil {
 			return entity.Resource{}, artifactErr
@@ -332,7 +404,6 @@ func (service *Service) BindScheduleConfiguration(
 		if err != nil || spec.Validate() != nil {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
-		now := service.now().UTC().Truncate(time.Microsecond)
 		updated, err := schedule.Update(schedule.Name, spec, now)
 		if err != nil {
 			return entity.Resource{}, errs.ErrStateConflict

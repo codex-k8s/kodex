@@ -449,7 +449,7 @@ func (service *Service) selectProviderBinding(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
-	roleID string,
+	selectionKeyID string,
 	roleSpec entity.RoleSpec,
 	preferredBindingID string,
 	now time.Time,
@@ -466,7 +466,9 @@ func (service *Service) selectProviderBinding(
 		weights[binding.CredentialBindingID] = binding.Weight
 	}
 	var candidates []candidate
-	for _, bindingID := range roleSpec.ProviderCredentialBindingIDs {
+	bindingIDs := slices.Clone(roleSpec.ProviderCredentialBindingIDs)
+	slices.Sort(bindingIDs)
+	for _, bindingID := range bindingIDs {
 		binding, err := tx.GetForUpdate(
 			ctx, principal.OrganizationID, principal.ProjectID, bindingID,
 		)
@@ -557,7 +559,7 @@ func (service *Service) selectProviderBinding(
 		return entity.Resource{}, errs.ErrInternal
 	}
 	slot, err := tx.NextProviderPoolSlot(ctx, domainrepo.ProviderPoolCursor{
-		RoleID: roleID, PolicyRevision: roleSpec.ProviderAccountPool.PolicyRevision,
+		SelectionKeyID: selectionKeyID, PolicyRevision: roleSpec.ProviderAccountPool.PolicyRevision,
 		SnapshotSHA256: snapshotSHA256, TotalWeight: totalWeight,
 	})
 	if err != nil {

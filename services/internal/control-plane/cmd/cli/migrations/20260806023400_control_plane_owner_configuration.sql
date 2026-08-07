@@ -339,10 +339,17 @@ CREATE TABLE control_plane.external_command_receipt_consumptions (
     result_resource_id uuid,
     result_version bigint NOT NULL DEFAULT 0 CHECK (result_version BETWEEN 0 AND 9007199254740991),
     result_sha256 text CHECK (result_sha256 IS NULL OR result_sha256 ~ '^[a-f0-9]{64}$'),
+    result_snapshot jsonb CHECK (
+        result_snapshot IS NULL OR (
+            jsonb_typeof(result_snapshot) = 'object'
+            AND octet_length(result_snapshot::text) <= 1048576
+        )
+    ),
     consumed_at timestamptz NOT NULL,
     PRIMARY KEY (issuer, purpose, receipt_id),
     CHECK ((result_resource_id IS NULL) = (result_version = 0)),
-    CHECK ((result_resource_id IS NULL) = (result_sha256 IS NULL))
+    CHECK ((result_resource_id IS NULL) = (result_sha256 IS NULL)),
+    CHECK ((result_resource_id IS NULL) = (result_snapshot IS NULL))
 );
 ALTER TABLE control_plane.external_command_receipt_consumptions OWNER TO control_plane_owner;
 ALTER TABLE control_plane.external_command_receipt_consumptions ENABLE ROW LEVEL SECURITY;
@@ -362,6 +369,194 @@ CREATE POLICY external_command_receipt_runtime_scope
     );
 REVOKE ALL ON control_plane.external_command_receipt_consumptions FROM PUBLIC;
 GRANT SELECT, INSERT, UPDATE ON control_plane.external_command_receipt_consumptions TO control_plane_runtime;
+
+-- Weighted cursor связывается с существующим authoritative selection key.
+-- Legacy path использует ROLE, target path — AGENT; derived ROLE ещё не
+-- существует в момент выбора и никогда не получает mutation authority.
+DROP FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text, bigint);
+ALTER TABLE control_plane.provider_pool_cursors
+    RENAME COLUMN role_id TO selection_key_id;
+
+CREATE FUNCTION control_plane.next_provider_pool_slot(
+    requested_selection_key_id uuid,
+    requested_policy_revision bigint,
+    requested_snapshot_sha256 text,
+    requested_total_weight bigint
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, control_plane
+SET row_security = on
+AS $function$
+DECLARE
+    scope record;
+    cursor_row control_plane.provider_pool_cursors%ROWTYPE;
+    selected_slot bigint;
+BEGIN
+    IF NOT pg_has_role(session_user, 'control_plane_runtime', 'member')
+       OR requested_policy_revision < 1
+       OR requested_snapshot_sha256 !~ '^[a-f0-9]{64}$'
+       OR requested_total_weight NOT BETWEEN 1 AND 80000 THEN
+        RAISE EXCEPTION 'provider pool cursor input is invalid'
+            USING ERRCODE = '22023';
+    END IF;
+    SELECT * INTO scope FROM control_plane.runtime_scope();
+    IF NOT EXISTS (
+        SELECT 1
+        FROM control_plane.resources AS selection_key
+        WHERE selection_key.id = requested_selection_key_id
+          AND selection_key.organization_id = scope.organization_id
+          AND selection_key.project_id = scope.project_id
+          AND selection_key.kind IN ('ROLE', 'AGENT')
+          AND selection_key.state = 'ACTIVE'
+    ) THEN
+        RAISE EXCEPTION 'provider pool selection key is unavailable'
+            USING ERRCODE = 'P0002';
+    END IF;
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtextextended(
+            scope.organization_id::text || ':' || scope.project_id::text || ':' ||
+            requested_selection_key_id::text,
+            0
+        )
+    );
+    SELECT * INTO cursor_row
+    FROM control_plane.provider_pool_cursors
+    WHERE organization_id = scope.organization_id
+      AND project_id = scope.project_id
+      AND selection_key_id = requested_selection_key_id
+    FOR UPDATE;
+    IF NOT FOUND THEN
+        selected_slot := 0;
+        INSERT INTO control_plane.provider_pool_cursors (
+            organization_id, project_id, selection_key_id, policy_revision,
+            snapshot_sha256, total_weight, next_slot, updated_at
+        ) VALUES (
+            scope.organization_id, scope.project_id, requested_selection_key_id,
+            requested_policy_revision, requested_snapshot_sha256,
+            requested_total_weight, 1 % requested_total_weight,
+            clock_timestamp()
+        );
+    ELSIF cursor_row.policy_revision <> requested_policy_revision
+       OR cursor_row.snapshot_sha256 <> requested_snapshot_sha256
+       OR cursor_row.total_weight <> requested_total_weight THEN
+        selected_slot := 0;
+        UPDATE control_plane.provider_pool_cursors
+        SET policy_revision = requested_policy_revision,
+            snapshot_sha256 = requested_snapshot_sha256,
+            total_weight = requested_total_weight,
+            next_slot = 1 % requested_total_weight,
+            updated_at = clock_timestamp()
+        WHERE organization_id = scope.organization_id
+          AND project_id = scope.project_id
+          AND selection_key_id = requested_selection_key_id;
+    ELSE
+        selected_slot := cursor_row.next_slot;
+        UPDATE control_plane.provider_pool_cursors
+        SET next_slot = (cursor_row.next_slot + 1) % requested_total_weight,
+            updated_at = clock_timestamp()
+        WHERE organization_id = scope.organization_id
+          AND project_id = scope.project_id
+          AND selection_key_id = requested_selection_key_id;
+    END IF;
+    RETURN selected_slot;
+END
+$function$;
+REVOKE ALL ON FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION control_plane.next_provider_pool_slot(uuid, bigint, text, bigint)
+    TO control_plane_runtime;
+
+-- Turn меняет current RuntimeRevision при retry, поэтому immutable attempt
+-- хранит собственный exact revision pin. Backfill сначала использует
+-- RuntimeExecution, затем current Turn, затем единственную хронологическую
+-- revision того же Session между соседними attempts. Неполная история
+-- закрыто останавливает migration вместо публикации ложной lineage.
+ALTER TABLE control_plane.turn_attempts
+    ADD COLUMN runtime_revision_id uuid,
+    ADD COLUMN runtime_revision_version bigint
+        CHECK (runtime_revision_version BETWEEN 1 AND 9007199254740991),
+    ADD CHECK ((runtime_revision_id IS NULL) = (runtime_revision_version IS NULL));
+
+UPDATE control_plane.turn_attempts AS attempt
+SET runtime_revision_id = execution.runtime_revision_id,
+    runtime_revision_version = execution.runtime_revision_version
+FROM control_plane.runtime_executions AS execution
+WHERE execution.turn_id = attempt.turn_id
+  AND execution.attempt = attempt.attempt;
+
+UPDATE control_plane.turn_attempts AS attempt
+SET runtime_revision_id = (turn.spec ->> 'runtimeRevisionId')::uuid,
+    runtime_revision_version = revision.version
+FROM control_plane.resources AS turn
+JOIN control_plane.resources AS revision
+  ON revision.organization_id = turn.organization_id
+ AND revision.project_id = turn.project_id
+ AND revision.owner_actor_id = turn.owner_actor_id
+ AND revision.id = (turn.spec ->> 'runtimeRevisionId')::uuid
+ AND revision.kind = 'RUNTIME_REVISION'
+WHERE attempt.runtime_revision_id IS NULL
+  AND turn.id = attempt.turn_id
+  AND turn.kind = 'TURN'
+  AND (turn.spec ->> 'attempt')::integer = attempt.attempt;
+
+WITH candidates AS (
+    SELECT attempt.turn_id,
+           attempt.attempt,
+           revision.id AS runtime_revision_id,
+           revision.version AS runtime_revision_version,
+           row_number() OVER (
+               PARTITION BY attempt.turn_id, attempt.attempt
+               ORDER BY revision.created_at DESC, revision.id DESC
+           ) AS rank,
+           count(*) OVER (
+               PARTITION BY attempt.turn_id, attempt.attempt
+           ) AS candidate_count
+    FROM control_plane.turn_attempts AS attempt
+    JOIN control_plane.resources AS turn
+      ON turn.id = attempt.turn_id
+     AND turn.kind = 'TURN'
+    JOIN control_plane.resources AS revision
+      ON revision.organization_id = turn.organization_id
+     AND revision.project_id = turn.project_id
+     AND revision.owner_actor_id = turn.owner_actor_id
+     AND revision.parent_id = (turn.spec ->> 'sessionId')::uuid
+     AND revision.kind = 'RUNTIME_REVISION'
+     AND revision.created_at <= attempt.started_at
+     AND revision.created_at > coalesce((
+         SELECT max(previous.started_at)
+         FROM control_plane.turn_attempts AS previous
+         WHERE previous.turn_id = attempt.turn_id
+           AND previous.attempt < attempt.attempt
+     ), '-infinity'::timestamptz)
+    WHERE attempt.runtime_revision_id IS NULL
+)
+UPDATE control_plane.turn_attempts AS attempt
+SET runtime_revision_id = candidate.runtime_revision_id,
+    runtime_revision_version = candidate.runtime_revision_version
+FROM candidates AS candidate
+WHERE candidate.rank = 1
+  AND candidate.candidate_count = 1
+  AND candidate.turn_id = attempt.turn_id
+  AND candidate.attempt = attempt.attempt;
+
+DO $turn_attempt_revision_backfill$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM control_plane.turn_attempts
+        WHERE runtime_revision_id IS NULL OR runtime_revision_version IS NULL
+    ) THEN
+        RAISE EXCEPTION 'turn attempt runtime revision backfill is incomplete'
+            USING ERRCODE = '23514';
+    END IF;
+END
+$turn_attempt_revision_backfill$;
+
+ALTER TABLE control_plane.turn_attempts
+    ALTER COLUMN runtime_revision_id SET NOT NULL,
+    ALTER COLUMN runtime_revision_version SET NOT NULL,
+    ADD CONSTRAINT turn_attempts_runtime_revision_fk
+        FOREIGN KEY (runtime_revision_id) REFERENCES control_plane.resources(id)
+        ON DELETE RESTRICT;
 
 ALTER TABLE control_plane.runtime_execution_incidents
     ADD COLUMN version bigint NOT NULL DEFAULT 1

@@ -476,8 +476,7 @@ func (service *Service) prepareInstructionArtifact(
 	if service.instructionObjects == nil {
 		return ManageProtectedConfigurationInput{}, errs.ErrUnavailable
 	}
-	artifactID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:instruction-artifact:"+
-		input.Principal.ProjectID+":"+spec.ContentSHA256)).String()
+	artifactID := instructionArtifactID(input.Principal.ProjectID, spec.StableKey, spec.ContentSHA256)
 	object, err := service.instructionObjects.Put(ctx, input.Principal.ProjectID,
 		"instruction-sets/"+spec.StableKey+"/"+spec.ContentSHA256+".md", []byte(spec.Content),
 		"text/markdown", spec.ContentSHA256)
@@ -488,6 +487,14 @@ func (service *Service) prepareInstructionArtifact(
 	spec.ContentArtifactID, spec.ContentArtifactVersion = artifactID, 1
 	input.Spec, input.InstructionObject = spec, object
 	return input, nil
+}
+
+// instructionArtifactID использует тот же dedup domain, что и object key:
+// project + InstructionSet stable key + immutable content digest. Поэтому два
+// независимых InstructionSet с одинаковым Markdown не делят metadata identity.
+func instructionArtifactID(projectID, instructionStableKey, contentSHA256 string) string {
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:instruction-artifact:"+
+		projectID+":"+instructionStableKey+":"+contentSHA256)).String()
 }
 
 func (service *Service) ensureInstructionArtifact(
@@ -549,7 +556,7 @@ func (service *Service) ensureInstructionArtifact(
 
 func reserveProviderCommandReceipt(
 	ctx context.Context,
-	tx domainrepo.Transaction,
+	_ domainrepo.Transaction,
 	protected domainrepo.ProtectedTransaction,
 	principal value.Principal,
 	receipt value.ProviderEffectReceipt,
@@ -587,12 +594,11 @@ func reserveProviderCommandReceipt(
 	if stored.ResultResourceID == "" || stored.ResultVersion == 0 || !validSHA256Text(stored.ResultSHA256) {
 		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
 	}
-	result, err := tx.GetForUpdateIncludingDeleted(ctx, principal.OrganizationID, principal.ProjectID, stored.ResultResourceID)
-	if err != nil {
-		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, err
-	}
+	result := stored.Result
 	digest, err := entity.ProjectionSHA256(result)
-	if err != nil || result.Version != stored.ResultVersion || digest != stored.ResultSHA256 {
+	if err != nil || result.ID != stored.ResultResourceID || result.Version != stored.ResultVersion ||
+		result.OrganizationID != principal.OrganizationID || result.ProjectID != principal.ProjectID ||
+		result.OwnerActorID != principal.ActorID || digest != stored.ResultSHA256 {
 		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
 	}
 	return stored, result, true, nil
@@ -627,6 +633,7 @@ func finalizeExternalCommandReceipt(
 		return errs.ErrInternal
 	}
 	consumption.ResultResourceID, consumption.ResultVersion, consumption.ResultSHA256 = result.ID, result.Version, digest
+	consumption.Result = result
 	return protected.FinalizeExternalCommandReceipt(ctx, consumption)
 }
 

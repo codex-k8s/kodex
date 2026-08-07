@@ -161,7 +161,13 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
 - migration schema version равна `20260806023400`;
 - instruction object-store bucket существует, versioning включено, а exact
-  HTTPS SNI/CA/mTLS client и bounded credential files проходят `BucketExists`;
+  HTTPS SNI/CA/mTLS/application credential рабочего prefix проходят bounded
+  canary `PutObject` → получение `VersionID` → version-pinned `StatObject` и
+  `GetObject` с проверкой content/SHA-256 → exact `DeleteObjectVersion`;
+  IAM обязан разрешать рабочие `PutObject`/`GetObject` и только для canary
+  cleanup `DeleteObjectVersion` на том же `projects/*/instruction-sets/*`
+  prefix; cleanup failure снимает readiness и блокирует новые canary writes
+  этой replica;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -683,8 +689,10 @@ publish допустим только после successful server validation т
 Detach очищает Git source binding, copy создаёт новый UI-owned set.
 
 Instruction create/update/reconcile до owner transaction записывает exact
-content-addressed object в versioned S3 и проверяет `VersionId`, size,
-media type и SHA-256. Затем одна PostgreSQL transaction создаёт CLEAN Artifact,
+content-addressed object в versioned S3. Artifact identity и object key имеют
+один dedup domain `Project + InstructionSet stable key + content SHA-256`,
+поэтому одинаковый Markdown разных sets не конфликтует. Writer проверяет
+собственный exact `VersionId`, size, media type и SHA-256. Затем одна PostgreSQL transaction создаёт CLEAN Artifact,
 Instruction version, command receipt, audit и history. Orphan object после
 database rollback безопасно переиспользуется только при exact metadata
 readback; удалять его вручную в рамках диагностики запрещено.
@@ -701,7 +709,9 @@ Role/Prompt, Artifact, runtime profile, credentials и Workspace. Любая
 Owner и project operator требуют разные exact permissions, но используют один
 authoritative execution→project eligibility для get/list/history/action.
 Перед retry сверить incident version и весь current Process/Session/Turn/
-Runtime graph; старый execution/lease/grant/claim должен стать terminal, а
+Runtime graph. Incident fence является монотонной нижней границей: последующий
+terminal transition вправе увеличить execution fence, но future/stale incident
+либо не-current execution отклоняется. Старый execution/lease/grant/claim должен стать terminal, а
 successor — получить fresh attempt и generation. `release` считается успешным
 только когда returned released execution и весь graph стали `CANCELLED`, а
 старые leases/grants/claims отозваны. Не менять incident или execution ручным
@@ -709,8 +719,9 @@ SQL.
 
 Workspace backup фиксирует immutable membership snapshot и digest для
 `WORKSPACE|ALL_WORKSPACES`, где Workspace — авторитетный Project aggregate, а
-не repository checkout. Snapshot перечисляет все исторические owner Session,
-не применяя current AgentAssignment/Workspace admission; для каждой требуется
+не repository checkout. Snapshot использует отдельный `FOR UPDATE` owner query
+и перечисляет все non-deleted исторические Session, включая
+`ARCHIVED`/`CANCELLED`, не применяя current AgentAssignment/Workspace admission; для каждой требуется
 exact terminal archive. Один отсутствующий archive откатывает весь create,
 поэтому AVAILABLE с молча исключённой Session недопустим. Owner RPC принимает только create/cancel/retry.
 Complete/fail/expire выбирает bounded in-process recovery reconciler через
@@ -728,7 +739,11 @@ conflict без изменения mapping version/generation. Run timeline и a
 проверять по stable cursor `(occurred_at,id)`; UUID не является
 хронологическим курсором. `GetRunLineage` должен вернуть root Process, все
 descendants, parent/child edges и все attempt predecessor/successor edges;
-после retry старые RuntimeRevision, events и artifacts не исчезают.
+authoritative набор начинается от Process→Turn→TurnAttempt→его immutable
+RuntimeRevision pin,
+поэтому `QUEUED`/`BLOCKED`/`WAITING_OWNER` до runtime admission также видны.
+После retry старые RuntimeRevision, events и prompt/input/result artifacts не
+исчезают.
 
 ## Остановка и rollback
 

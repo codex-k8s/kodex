@@ -181,11 +181,17 @@ func (service *Service) GetRunLineage(ctx context.Context, principal value.Princ
 		switch node.NodeType {
 		case "PROCESS":
 			result.Processes = append(result.Processes, node)
+			if !enum.State(node.State).Terminal() {
+				result.Complete = false
+			}
 			if node.ParentProcessRunID == "" {
 				result.RootProcessRunID = node.ID
 			}
 		case "ATTEMPT":
 			result.Attempts = append(result.Attempts, node)
+			if !enum.State(node.State).Terminal() {
+				result.Complete = false
+			}
 		}
 	}
 	linkRunLineage(&result)
@@ -227,9 +233,18 @@ func linkRunLineage(result *RunLineageResult) {
 		for position, index := range indexes {
 			if position > 0 {
 				result.Attempts[index].PredecessorID = result.Attempts[indexes[position-1]].ID
+				result.Attempts[indexes[position-1]].SuccessorID = result.Attempts[index].ID
+				continue
 			}
-			if position+1 < len(indexes) {
-				result.Attempts[index].SuccessorID = result.Attempts[indexes[position+1]].ID
+			predecessorTurnID := result.Attempts[index].PredecessorID
+			predecessors := attemptIndexes[predecessorTurnID]
+			if len(predecessors) != 0 {
+				sort.Slice(predecessors, func(left, right int) bool {
+					return result.Attempts[predecessors[left]].Attempt < result.Attempts[predecessors[right]].Attempt
+				})
+				predecessor := predecessors[len(predecessors)-1]
+				result.Attempts[index].PredecessorID = result.Attempts[predecessor].ID
+				result.Attempts[predecessor].SuccessorID = result.Attempts[index].ID
 			}
 		}
 	}

@@ -161,11 +161,20 @@ func (wrapped *transaction) FinalizeExternalCommandReceipt(
 	ctx context.Context,
 	receipt domainrepo.ExternalCommandReceipt,
 ) error {
+	digest, digestErr := entity.ProjectionSHA256(receipt.Result)
+	if digestErr != nil || receipt.Result.ID != receipt.ResultResourceID ||
+		receipt.Result.Version != receipt.ResultVersion || digest != receipt.ResultSHA256 {
+		return errs.ErrInternal
+	}
+	snapshot, err := marshalResource(receipt.Result)
+	if err != nil {
+		return errs.ErrInternal
+	}
 	tag, err := wrapped.tx.Exec(ctx, sqlExternalCommandReceiptFinalize, pgx.StrictNamedArgs{
 		"issuer": receipt.Issuer, "purpose": receipt.Purpose, "receipt_id": receipt.ReceiptID,
 		"command_intent_sha256": receipt.CommandIntentSHA256,
 		"result_resource_id":    receipt.ResultResourceID, "result_version": receipt.ResultVersion,
-		"result_sha256": receipt.ResultSHA256,
+		"result_sha256": receipt.ResultSHA256, "result_snapshot": string(snapshot),
 	})
 	if err != nil {
 		return mapError(err)
@@ -178,14 +187,21 @@ func (wrapped *transaction) FinalizeExternalCommandReceipt(
 
 func scanExternalCommandReceipt(row rowScanner) (domainrepo.ExternalCommandReceipt, error) {
 	var result domainrepo.ExternalCommandReceipt
+	var snapshot []byte
 	err := row.Scan(&result.Issuer, &result.Purpose, &result.ReceiptID,
 		&result.OrganizationID, &result.ProjectID, &result.OwnerActorID,
 		&result.TargetKind, &result.TargetResourceID, &result.TargetStableKey,
 		&result.Action, &result.Effect, &result.EffectGeneration, &result.EffectSHA256,
 		&result.CommandIntentSHA256, &result.AuthoritySHA256,
-		&result.ResultResourceID, &result.ResultVersion, &result.ResultSHA256, &result.ConsumedAt)
+		&result.ResultResourceID, &result.ResultVersion, &result.ResultSHA256, &snapshot, &result.ConsumedAt)
 	if err != nil {
 		return domainrepo.ExternalCommandReceipt{}, mapError(err)
+	}
+	if len(snapshot) != 0 {
+		result.Result, err = unmarshalResource(snapshot)
+		if err != nil {
+			return domainrepo.ExternalCommandReceipt{}, errs.ErrInternal
+		}
 	}
 	result.ConsumedAt = result.ConsumedAt.UTC()
 	return result, nil

@@ -212,7 +212,13 @@ func (service *Service) snapshotWorkspaceBackupMembers(
 	principal value.Principal,
 	workspace entity.Resource,
 ) ([]entity.WorkspaceBackupMember, error) {
-	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, workspace.ID)
+	historical, ok := tx.(domainrepo.WorkspaceHistoricalSessionTransaction)
+	if !ok {
+		return nil, errs.ErrInternal
+	}
+	resources, err := historical.HistoricalOwnerSessionsForUpdate(
+		ctx, principal.OrganizationID, workspace.ID, principal.ActorID,
+	)
 	if err != nil {
 		return nil, err
 	}
