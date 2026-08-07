@@ -222,8 +222,10 @@ func parseKeyset(config Config, raw []byte, now time.Time) (map[uint64]verificat
 			if reference.AcceptUntil <= now.Unix() || reference.Generation >= document.ServedGeneration {
 				return nil, servedState{}, nil, errors.New("interaction delivery readback PREVIOUS overlap is invalid")
 			}
-			keys[reference.Generation] = verificationKey{key: key, status: reference.Status,
-				acceptUntil: time.Unix(reference.AcceptUntil, 0).UTC()}
+			keys[reference.Generation] = verificationKey{
+				key: key, status: reference.Status,
+				acceptUntil: time.Unix(reference.AcceptUntil, 0).UTC(),
+			}
 		case "NEXT":
 			if reference.Generation <= document.ServedGeneration || reference.Generation > document.HighWatermark+1 {
 				return nil, servedState{}, nil, errors.New("interaction delivery readback NEXT key is invalid")
@@ -238,8 +240,10 @@ func parseKeyset(config Config, raw []byte, now time.Time) (map[uint64]verificat
 		return nil, servedState{}, nil, errors.New("interaction delivery readback keyset must contain one CURRENT key")
 	}
 	sum := sha256.Sum256(raw)
-	return keys, servedState{document.Revision, document.HighWatermark, document.ServedGeneration,
-		hex.EncodeToString(sum[:])}, identities, nil
+	return keys, servedState{
+		document.Revision, document.HighWatermark, document.ServedGeneration,
+		hex.EncodeToString(sum[:]),
+	}, identities, nil
 }
 
 func (verifier *Verifier) validate(claims Claims) error {

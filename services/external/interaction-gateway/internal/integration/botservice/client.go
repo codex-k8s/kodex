@@ -39,10 +39,14 @@ func New(config Config) (*Client, error) {
 		config.Timeout < time.Second || config.Timeout > time.Minute {
 		return nil, errors.New("bot-service runtime client configuration is invalid")
 	}
-	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13,
-		ServerName: config.TLSServerName, RootCAs: roots, Certificates: []tls.Certificate{certificate}},
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			ServerName: config.TLSServerName, RootCAs: roots, Certificates: []tls.Certificate{certificate},
+		},
 		DisableCompression: true, MaxIdleConns: 2, MaxIdleConnsPerHost: 2,
-		ResponseHeaderTimeout: config.Timeout, TLSHandshakeTimeout: 5 * time.Second}
+		ResponseHeaderTimeout: config.Timeout, TLSHandshakeTimeout: 5 * time.Second,
+	}
 	return &Client{endpoint: endpoint, http: &http.Client{Transport: transport, Timeout: config.Timeout}}, nil
 }
 
@@ -66,7 +70,8 @@ func (client *Client) Check(ctx context.Context) error {
 }
 
 func (client *Client) EnsureRuntimeMCPBinding(ctx context.Context,
-	input domainbot.BindingRequest) (domainbot.Binding, error) {
+	input domainbot.BindingRequest,
+) (domainbot.Binding, error) {
 	body, err := json.Marshal(struct {
 		ControlSessionID string `json:"control_session_id"`
 		ChannelID        string `json:"channel_id"`
@@ -75,8 +80,10 @@ func (client *Client) EnsureRuntimeMCPBinding(ctx context.Context,
 		ExecutionID      string `json:"execution_id"`
 		TurnID           string `json:"turn_id"`
 		Attempt          uint32 `json:"attempt"`
-	}{input.ControlSessionID, input.ChannelID, input.RootPostID, input.BotStableKey,
-		input.ExecutionID, input.TurnID, input.Attempt})
+	}{
+		input.ControlSessionID, input.ChannelID, input.RootPostID, input.BotStableKey,
+		input.ExecutionID, input.TurnID, input.Attempt,
+	})
 	if err != nil {
 		return domainbot.Binding{}, errors.New("encode runtime MCP binding request")
 	}
@@ -119,9 +126,11 @@ func (client *Client) EnsureRuntimeMCPBinding(ctx context.Context,
 		uuid.Validate(input.ControlSessionID) != nil {
 		return domainbot.Binding{}, errors.New("bot-service runtime MCP binding readback is invalid")
 	}
-	return domainbot.Binding{AgentSessionKey: wire.AgentSessionKey, AgentSessionID: wire.AgentSessionID,
+	return domainbot.Binding{
+		AgentSessionKey: wire.AgentSessionKey, AgentSessionID: wire.AgentSessionID,
 		AgentSessionVersion: wire.AgentSessionVersion, AgentSessionBindingSHA256: wire.AgentSessionBindingSHA256,
 		ExecutionID: wire.ExecutionID, TurnID: wire.TurnID, Attempt: wire.Attempt,
 		ImmutableSecretRef: wire.ImmutableSecretRef, ProviderContentVersion: wire.ProviderContentVersion,
-		ContentSHA256: wire.ContentSHA256}, nil
+		ContentSHA256: wire.ContentSHA256,
+	}, nil
 }

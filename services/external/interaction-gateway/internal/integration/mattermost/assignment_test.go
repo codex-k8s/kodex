@@ -42,8 +42,10 @@ func TestOnlyAssignedMentionIsAgentSelector(t *testing.T) {
 
 func TestChannelBoundariesPreserveProviderAndDomainIDs(t *testing.T) {
 	current := &index{channels: map[string]ChannelBinding{
-		"team\x00channel": {TeamID: "team", ChannelID: "channel", OrganizationID: "organization",
-			ProjectID: "project", ChatID: "chat"},
+		"team\x00channel": {
+			TeamID: "team", ChannelID: "channel", OrganizationID: "organization",
+			ProjectID: "project", ChatID: "chat",
+		},
 	}}
 	boundaries := current.channelBoundaries()
 	if len(boundaries) != 1 || boundaries[0].TeamID != "team" || boundaries[0].ChannelID != "channel" ||
@@ -55,8 +57,10 @@ func TestChannelBoundariesPreserveProviderAndDomainIDs(t *testing.T) {
 
 func TestIgnoredBotKeepsCursorAuthorityBoundary(t *testing.T) {
 	current := &index{channels: map[string]ChannelBinding{
-		"team\x00channel": {TeamID: "team", ChannelID: "channel", OrganizationID: "organization",
-			ProjectID: "project", ChatID: "chat", RoleID: "role", BotStableKey: "bot", Locale: "ru"},
+		"team\x00channel": {
+			TeamID: "team", ChannelID: "channel", OrganizationID: "organization",
+			ProjectID: "project", ChatID: "chat", RoleID: "role", BotStableKey: "bot", Locale: "ru",
+		},
 	}, botUsers: map[string]struct{}{"bot-user": {}}}
 	boundary, err := current.resolve("team", "channel", "bot-user", true)
 	if err != nil || !boundary.IgnoredBot || boundary.OrganizationID != "organization" ||

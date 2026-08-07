@@ -186,11 +186,25 @@ func loadManifest(path, expectedRevision, digestFile string, vaultKVVersion uint
 			}
 			result.deliveries[key] = entity.Boundary{
 				OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
-				ChatID: channel.ChatID, ActorID: actor.ActorID, RoleID: channel.RoleID,
+				ChatID: channel.ChatID, ActorID: actor.ActorID, MappingOwnerActorID: channel.LifecycleActorID,
+				RoleID: channel.RoleID,
 				Locale: channel.Locale, BotStableKey: channel.BotStableKey,
 				TeamID: channel.TeamID, ChannelID: channel.ChannelID, SessionID: channel.SessionID,
 				MattermostUserID: actor.MattermostUserID,
 			}
+		}
+	}
+	for _, channel := range result.channels {
+		ownerFound := false
+		for _, actor := range result.actors {
+			if actor.ActorID == channel.LifecycleActorID && actor.OrganizationID == channel.OrganizationID &&
+				actor.ProjectID == channel.ProjectID {
+				ownerFound = true
+				break
+			}
+		}
+		if !ownerFound {
+			return Manifest{}, nil, errors.New("mattermost mapping owner is outside the server-owned actor scope")
 		}
 	}
 	if len(result.deliveries) == 0 {
@@ -206,7 +220,8 @@ func (current *index) resolve(teamID, channelID, userID string, isBot bool) (ent
 	}
 	boundary := entity.Boundary{
 		OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
-		ChatID: channel.ChatID, RoleID: channel.RoleID, Locale: channel.Locale,
+		ChatID: channel.ChatID, MappingOwnerActorID: channel.LifecycleActorID,
+		RoleID: channel.RoleID, Locale: channel.Locale,
 		BotStableKey: channel.BotStableKey, TeamID: teamID, ChannelID: channelID,
 		SessionID: channel.SessionID,
 	}
@@ -242,8 +257,11 @@ func (current *index) assigned(teamID, channelID, username string) (AgentAssignm
 func (current *index) channelBoundaries() []entity.Boundary {
 	values := make([]entity.Boundary, 0, len(current.channels))
 	for _, binding := range current.channels {
-		values = append(values, entity.Boundary{OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
-			ChatID: binding.ChatID, TeamID: binding.TeamID, ChannelID: binding.ChannelID})
+		values = append(values, entity.Boundary{
+			OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
+			ChatID: binding.ChatID, MappingOwnerActorID: binding.LifecycleActorID,
+			TeamID: binding.TeamID, ChannelID: binding.ChannelID,
+		})
 	}
 	slices.SortFunc(values, func(left, right entity.Boundary) int { return strings.Compare(left.ChannelID, right.ChannelID) })
 	return values
@@ -255,6 +273,19 @@ func (current *index) resolveDelivery(projectID, actorID string) (entity.Boundar
 		return boundary, nil
 	}
 	return entity.Boundary{}, errors.New("mattermost delivery target is outside the server-owned mapping")
+}
+
+func (current *index) resolveMappedChannel(teamID, channelID string) (entity.Boundary, error) {
+	channel, ok := current.channels[teamID+"\x00"+channelID]
+	if !ok {
+		return entity.Boundary{}, errors.New("mattermost channel is outside the server-owned mapping")
+	}
+	return entity.Boundary{
+		OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
+		ChatID: channel.ChatID, MappingOwnerActorID: channel.LifecycleActorID,
+		RoleID: channel.RoleID, Locale: channel.Locale, BotStableKey: channel.BotStableKey,
+		TeamID: channel.TeamID, ChannelID: channel.ChannelID, SessionID: channel.SessionID,
+	}, nil
 }
 
 func (current *index) resolveOwner(principal entity.TeamPrincipal) (ActorBinding, error) {
@@ -289,11 +320,14 @@ func (current *index) resolveRoomDelivery(projectID, chatID, actorID string) (en
 	}
 	for _, channel := range current.channels {
 		if channel.ProjectID == projectID && channel.OrganizationID == actor.OrganizationID && channel.ChatID == chatID {
-			return entity.Boundary{OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
-				ChatID: channel.ChatID, ActorID: actor.ActorID, RoleID: channel.RoleID,
+			return entity.Boundary{
+				OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
+				ChatID: channel.ChatID, ActorID: actor.ActorID, MappingOwnerActorID: channel.LifecycleActorID,
+				RoleID: channel.RoleID,
 				Locale: channel.Locale, BotStableKey: channel.BotStableKey, TeamID: channel.TeamID,
 				ChannelID: channel.ChannelID, SessionID: channel.SessionID,
-				MattermostUserID: actor.MattermostUserID}, nil
+				MattermostUserID: actor.MattermostUserID,
+			}, nil
 		}
 	}
 	return entity.Boundary{}, errors.New("mattermost room delivery target is outside the server-owned mapping")

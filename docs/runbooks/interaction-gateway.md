@@ -4,8 +4,8 @@ title: Interaction gateway
 type: runbook
 status: approved
 owner: manager
-version: 1.3.0
-updated: 2026-08-06
+version: 1.5.0
+updated: 2026-08-07
 ---
 
 # Interaction gateway
@@ -20,6 +20,8 @@ updated: 2026-08-06
   scan или control-plane command;
 - `InteractionGatewayTeamRecoveryFailures` — неоднозначный Mattermost Team
   effect не подтверждён exact provider readback и требует диагностики;
+- `InteractionGatewayMappingRecoveryFailures` — специализированная mapping-команда
+  не подтверждена авторитетным control-plane readback;
 - `InteractionGatewayPostgresqlUnavailable` — недостаточно готовых CNPG Pod.
 
 ## Диагностика
@@ -50,7 +52,8 @@ updated: 2026-08-06
    тот же cleanup receipt; SQL-переход вручную запрещён.
 9. Для result больше Mattermost upload limit сверить `CLEAN`, exact private S3
    metadata/project prefix и одноразовый download audit. Direct S3 URL быть не
-   должно; gateway повторно проверяет Mattermost User/channel membership.
+   должно; gateway повторно проверяет Mattermost User/channel membership и
+   current `BOUND` mapping у control-plane до чтения object.
 10. При Team create сверить immutable normalized intent, request SHA-256,
     operation fence/lease и момент `EFFECT_PENDING`. После неоднозначного
     ответа `CreateTeam` запрещено повторять provider mutation: recovery читает
@@ -59,9 +62,24 @@ updated: 2026-08-06
     project provider generation; mismatch или истёкшее окно переводятся в
     `REPAIR_REQUIRED`.
 11. Raw Mattermost Team ID допустим только в RLS-scoped selector/operation
-    checkpoint. gRPC DTO, логи, метрики и provider receipt его не раскрывают;
+    checkpoint, подписанном internal provider receipt и авторитетной mapping
+    spec control-plane. gRPC DTO, логи и метрики его не раскрывают;
     selector/cursor повторно разрешаются в actor/organization/project scope.
-    До принятия #234 состояние `PROVIDER_ACCEPTED` не означает Workspace bind.
+    Состояние `PROVIDER_ACCEPTED` означает только завершённый provider effect;
+    ответ create считается успешным лишь после exact `BOUND` readback control-plane.
+12. При bind/relink/unlink сверить semantic idempotency key, immutable request
+    digest, local `effect_generation`/receipt JTI и авторитетные mapping
+    version/generation. После ambiguous RPC worker сначала выполняет signed
+    `ListWorkspaceMattermostMappings` и `GetWorkspaceMattermostMapping`; повтор
+    `ManageWorkspaceMattermostMapping` допустим только для доказанного прежнего
+    owner-state. `REPAIR_REQUIRED` и открытый Chat/Session/Turn/delivery graph
+    не обходятся ручным SQL.
+13. Для отказов inbound/delivery проверить, что mapping существует, имеет
+    `BOUND`, ссылается на тот же fresh Mattermost Team и подтверждён fresh
+    Team/member readback. `UNLINKED`, stale Team, недоступный provider либо
+    неоднозначный owner list закрывают путь до любого нового provider effect.
+    Проверка обязательна и после reclaim queued inbound, и прямо перед publish
+    либо artifact download; старый tenant/project snapshot её не заменяет.
 
 ## Ротация ключей и PostgreSQL identity
 

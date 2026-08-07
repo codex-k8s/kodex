@@ -46,6 +46,9 @@ configMapGenerator:
       - INTERACTION_GATEWAY_READBACK_AUDIENCE=urn:mattercodex:interaction-delivery-readback
       - INTERACTION_GATEWAY_READBACK_PUBLIC_KEYSET_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/delivery-readback.public-keyset.json
       - INTERACTION_GATEWAY_READBACK_GENERATION=1
+      - INTERACTION_GATEWAY_PROVIDER_RECEIPT_ISSUER=https://interaction-gateway.mattercodex-system.svc.cluster.local/authority/provider-readback
+      - INTERACTION_GATEWAY_PROVIDER_RECEIPT_PRIVATE_JWK_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/provider-readback.private.jwk
+      - INTERACTION_GATEWAY_PROVIDER_RECEIPT_TTL=2m
       - INTERACTION_GATEWAY_ACTION_CALLBACK_URL=https://interaction-gateway.mattercodex-system.svc.cluster.local:8443/mattermost/v1/actions
       - INTERACTION_GATEWAY_DIALOG_CALLBACK_URL=https://interaction-gateway.mattercodex-system.svc.cluster.local:8443/mattermost/v1/dialogs
       - INTERACTION_GATEWAY_ARTIFACT_DOWNLOAD_BASE_URL=https://interaction-artifacts.mattercodex.dev

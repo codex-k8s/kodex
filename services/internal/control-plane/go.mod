@@ -9,6 +9,7 @@ require (
 	github.com/codex-k8s/matter-codex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/observability v0.0.0-00010101000000-000000000000
 	github.com/codex-k8s/matter-codex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
@@ -104,6 +105,8 @@ replace github.com/codex-k8s/matter-codex/libs/go/internalrpcauth => ../../../li
 replace github.com/codex-k8s/matter-codex/libs/go/integrationgatewayauth => ../../../libs/go/integrationgatewayauth
 
 replace github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi => ../../../libs/go/integrationgatewayapi
+
+replace github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi => ../../../libs/go/interactiongatewayapi
 
 replace github.com/codex-k8s/matter-codex/libs/go/observability => ../../../libs/go/observability
 

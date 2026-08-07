@@ -64,7 +64,8 @@ func New(service *domainservice.Service, readbackGrant *readbackgrant.Verifier, 
 }
 
 func (handler *Handler) GetRuntimeMaterialization(response http.ResponseWriter, request *http.Request,
-	executionID openapi_types.UUID, artifactID openapi_types.UUID, params generated.GetRuntimeMaterializationParams) {
+	executionID openapi_types.UUID, artifactID openapi_types.UUID, params generated.GetRuntimeMaterializationParams,
+) {
 	identity, ok := peerSPIFFE(request)
 	if !ok || identity != handler.config.MaterializationClientSPIFFE {
 		writeError(response, http.StatusForbidden, "runtime materialization identity is not allowed")
@@ -93,7 +94,8 @@ func (handler *Handler) GetRuntimeMaterialization(response http.ResponseWriter, 
 }
 
 func (handler *Handler) PutRuntimeOutput(response http.ResponseWriter, request *http.Request,
-	executionID openapi_types.UUID, params generated.PutRuntimeOutputParams) {
+	executionID openapi_types.UUID, params generated.PutRuntimeOutputParams,
+) {
 	identity, ok := peerSPIFFE(request)
 	if !ok || identity != handler.config.MaterializationClientSPIFFE {
 		writeError(response, http.StatusForbidden, "runtime output identity is not allowed")
@@ -136,18 +138,22 @@ func (handler *Handler) PutRuntimeOutput(response http.ResponseWriter, request *
 		return
 	}
 	artifact, err := handler.service.StageRuntimeOutput(request.Context(), grant, executionID.String(),
-		domaincontrol.RuntimeOutputMetadata{Kind: string(params.XMatterCodexOutputKind),
+		domaincontrol.RuntimeOutputMetadata{
+			Kind: string(params.XMatterCodexOutputKind),
 			Name: params.XMatterCodexOutputName, MediaType: params.XMatterCodexOutputMediaType,
 			SizeBytes: uint64(written), SHA256: params.XMatterCodexOutputSHA256,
-			Sequence: uint32(params.XMatterCodexOutputSequence), Total: uint32(params.XMatterCodexOutputTotal)}, staged)
+			Sequence: uint32(params.XMatterCodexOutputSequence), Total: uint32(params.XMatterCodexOutputTotal),
+		}, staged)
 	identifier, parseErr := uuid.Parse(artifact.ID)
 	if err != nil || parseErr != nil || artifact.Version > math.MaxInt || artifact.SizeBytes > math.MaxInt64 {
 		writeError(response, http.StatusServiceUnavailable, "runtime output staging is unavailable")
 		return
 	}
-	writeJSON(response, http.StatusCreated, generated.RuntimeOutputReference{ArtifactId: identifier,
+	writeJSON(response, http.StatusCreated, generated.RuntimeOutputReference{
+		ArtifactId:      identifier,
 		ArtifactVersion: int(artifact.Version), Sha256: artifact.SHA256, SizeBytes: int64(artifact.SizeBytes),
-		Name: artifact.Name, MediaType: artifact.MediaType, StorageRef: artifact.StorageRef})
+		Name: artifact.Name, MediaType: artifact.MediaType, StorageRef: artifact.StorageRef,
+	})
 }
 
 func (handler *Handler) AcceptMattermostSlashCommand(response http.ResponseWriter, request *http.Request) {
@@ -336,10 +342,12 @@ func (handler *Handler) GetInteractionDelivery(response http.ResponseWriter, req
 			writeError(response, http.StatusInternalServerError, "delivery attachment readback is invalid")
 			return
 		}
-		attachment := generated.ArtifactBindingReadback{ArtifactId: artifactID,
-			Name: binding.Name, Path: binding.Path, StorageRef: binding.StorageRef,
+		attachment := generated.ArtifactBindingReadback{
+			ArtifactId: artifactID,
+			Name:       binding.Name, Path: binding.Path, StorageRef: binding.StorageRef,
 			SizeBytes: int64(binding.SizeBytes), MediaType: binding.MediaType, Sha256: binding.SHA256,
-			Provenance: binding.Provenance, ScanState: generated.CLEAN}
+			Provenance: binding.Provenance, ScanState: generated.CLEAN,
+		}
 		if binding.Version > 0 {
 			version := int(binding.Version)
 			attachment.Version = &version
@@ -387,7 +395,8 @@ func (handler *Handler) GetInteractionDelivery(response http.ResponseWriter, req
 }
 
 func (handler *Handler) DownloadInteractionArtifact(response http.ResponseWriter, request *http.Request,
-	grantID openapi_types.UUID) {
+	grantID openapi_types.UUID,
+) {
 	binding, raw, err := handler.service.DownloadArtifact(request.Context(), grantID.String(), request.Header.Get("Authorization"))
 	if err != nil {
 		switch {

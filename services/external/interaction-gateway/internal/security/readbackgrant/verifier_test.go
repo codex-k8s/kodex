@@ -25,10 +25,12 @@ func TestVerifierBindsProducerWorkloadAndDeliveryScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal public key: %v", err)
 	}
-	keyset, err := internalrpcauth.CanonicalJSON(map[string]any{"version": 1, "revision": 1,
+	keyset, err := internalrpcauth.CanonicalJSON(map[string]any{
+		"version": 1, "revision": 1,
 		"high_watermark": 1, "served_generation": 1, "keys": []map[string]any{{
 			"generation": 1, "status": "CURRENT", "jwk": json.RawMessage(publicRaw),
-		}}})
+		}},
+	})
 	if err != nil {
 		t.Fatalf("marshal public keyset: %v", err)
 	}
@@ -36,10 +38,12 @@ func TestVerifierBindsProducerWorkloadAndDeliveryScope(t *testing.T) {
 	if err := os.WriteFile(publicFile, keyset, 0o600); err != nil {
 		t.Fatalf("write public key: %v", err)
 	}
-	config := Config{Issuer: "https://control-plane.test/readback", Audience: "urn:test:readback",
+	config := Config{
+		Issuer: "https://control-plane.test/readback", Audience: "urn:test:readback",
 		ProducerID: "control-plane.interaction-delivery-readback", Purpose: "INTERACTION_DELIVERY_READBACK_GRANT",
 		Operation: "interaction.delivery.read", Permission: "interaction.delivery.read", PublicKeysetFile: publicFile,
-		Generation: 1, MaximumTTL: 5 * time.Minute}
+		Generation: 1, MaximumTTL: 5 * time.Minute,
+	}
 	fence := &memoryFence{}
 	verifier, err := New(context.Background(), config, fence)
 	if err != nil {
@@ -47,14 +51,16 @@ func TestVerifierBindsProducerWorkloadAndDeliveryScope(t *testing.T) {
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	verifier.now = func() time.Time { return now }
-	base := Claims{Version: 1, Issuer: config.Issuer, Audience: config.Audience,
+	base := Claims{
+		Version: 1, Issuer: config.Issuer, Audience: config.Audience,
 		Subject: "10000000-0000-4000-8000-000000000001", ProducerID: config.ProducerID, Purpose: config.Purpose,
 		WorkloadID: "control-plane", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
 		Operation: config.Operation, Permission: config.Permission,
 		OrganizationID: "10000000-0000-4000-8000-000000000002",
 		ProjectID:      "10000000-0000-4000-8000-000000000003", DeliveryID: "10000000-0000-4000-8000-000000000004",
 		Generation: 1, JTI: "10000000-0000-4000-8000-000000000005",
-		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: now.Add(time.Minute).Unix()}
+		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: now.Add(time.Minute).Unix(),
+	}
 	sign := func(value Claims) string {
 		compact, signErr := internalrpcauth.SignCanonicalJSON(value, key,
 			internalrpcauth.ProtectedHeaderExpectation{Type: credentialType, KeyID: key.KeyID})
@@ -88,7 +94,8 @@ type memoryFence struct {
 }
 
 func (fence *memoryFence) AdmitDeliveryReadbackKeyset(_ context.Context, revision, highWatermark,
-	generation uint64, digest string, identities []KeyIdentity) error {
+	generation uint64, digest string, identities []KeyIdentity,
+) error {
 	if fence.revision > revision || fence.highWatermark > highWatermark ||
 		(fence.revision == revision && fence.digest != "" && fence.digest != digest) {
 		return errors.New("rollback")

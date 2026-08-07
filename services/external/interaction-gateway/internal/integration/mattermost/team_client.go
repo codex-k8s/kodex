@@ -29,9 +29,16 @@ func (client *Client) CheckTeamLifecycle(ctx context.Context) error {
 			continue
 		}
 		seenProjects[projectScope] = struct{}{}
+		user, _, err := client.primary.api.GetUser(ctx, actor.MattermostUserID, "")
+		if err != nil || user == nil || user.Id != actor.MattermostUserID || user.DeleteAt != 0 {
+			return errors.New("mattermost team owner readback working path is not ready")
+		}
 		teams, _, err := client.primary.api.GetTeamsForUser(ctx, actor.MattermostUserID, "")
 		if err != nil || len(teams) > maximumCatalogTeams {
 			return errors.New("mattermost team catalog working path is not ready")
+		}
+		if len(teams) == 0 {
+			continue
 		}
 		membershipReadback := false
 		for _, team := range teams {
@@ -54,6 +61,50 @@ func (client *Client) CheckTeamLifecycle(ctx context.Context) error {
 		return errors.New("mattermost team readiness owner mapping is missing")
 	}
 	return nil
+}
+
+func (client *Client) TeamReadinessBindings() []entity.MattermostReadinessBinding {
+	seen := map[string]struct{}{}
+	result := make([]entity.MattermostReadinessBinding, 0, len(client.manifest.Channels))
+	for _, channel := range client.manifest.Channels {
+		key := channel.OrganizationID + "\x00" + channel.ProjectID + "\x00" + channel.LifecycleActorID
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, entity.MattermostReadinessBinding{Principal: entity.TeamPrincipal{
+			ActorID: channel.LifecycleActorID, OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
+		}, ProviderTeamID: channel.TeamID})
+	}
+	slices.SortFunc(result, func(left, right entity.MattermostReadinessBinding) int {
+		leftKey := left.Principal.ProjectID + "\x00" + left.Principal.ActorID
+		rightKey := right.Principal.ProjectID + "\x00" + right.Principal.ActorID
+		return strings.Compare(leftKey, rightKey)
+	})
+	return result
+}
+
+func (client *Client) ReadOwner(ctx context.Context, principal entity.TeamPrincipal) (entity.MattermostOwnerObservation, error) {
+	actor, err := client.index.resolveOwner(principal)
+	if err != nil {
+		return entity.MattermostOwnerObservation{}, domainmattermost.ErrTeamForbidden
+	}
+	user, response, err := client.primary.api.GetUser(ctx, actor.MattermostUserID, "")
+	if err != nil || user == nil || user.Id != actor.MattermostUserID || user.DeleteAt != 0 {
+		return entity.MattermostOwnerObservation{}, providerReadError(response, err)
+	}
+	observedAt := time.Now().UTC()
+	value := strings.Join([]string{
+		"mattermost-owner-snapshot-v1", user.Id,
+		time.UnixMilli(user.CreateAt).UTC().Format(time.RFC3339Nano),
+		time.UnixMilli(user.UpdateAt).UTC().Format(time.RFC3339Nano),
+		time.UnixMilli(user.DeleteAt).UTC().Format(time.RFC3339Nano),
+	}, "\x00")
+	digest := sha256.Sum256([]byte(value))
+	return entity.MattermostOwnerObservation{
+		ProviderObjectRef: user.Id,
+		SnapshotSHA256:    hex.EncodeToString(digest[:]), ObservedAt: observedAt,
+	}, nil
 }
 
 func (client *Client) ListTeams(ctx context.Context, principal entity.TeamPrincipal, offset, limit uint32) ([]entity.MattermostTeam, bool, error) {
@@ -82,6 +133,14 @@ func (client *Client) ListTeams(ctx context.Context, principal entity.TeamPrinci
 		if listed == nil || listed.DeleteAt != 0 || invalidProviderID(listed.Id) {
 			continue
 		}
+		active = append(active, listed)
+	}
+	if int(offset) >= len(active) {
+		return []entity.MattermostTeam{}, false, nil
+	}
+	end := min(int(offset+limit), len(active))
+	result := make([]entity.MattermostTeam, 0, end-int(offset))
+	for _, listed := range active[offset:end] {
 		fresh, _, readErr := client.primary.api.GetTeam(ctx, listed.Id, "")
 		if readErr != nil || fresh == nil || fresh.Id != listed.Id || fresh.DeleteAt != 0 {
 			return nil, false, domainmattermost.ErrTeamForbidden
@@ -90,15 +149,7 @@ func (client *Client) ListTeams(ctx context.Context, principal entity.TeamPrinci
 		if memberErr != nil || member == nil || member.TeamId != fresh.Id || member.UserId != actor.MattermostUserID || member.DeleteAt != 0 {
 			return nil, false, domainmattermost.ErrTeamForbidden
 		}
-		active = append(active, fresh)
-	}
-	if int(offset) >= len(active) {
-		return []entity.MattermostTeam{}, false, nil
-	}
-	end := min(int(offset+limit), len(active))
-	result := make([]entity.MattermostTeam, 0, end-int(offset))
-	for _, team := range active[offset:end] {
-		result = append(result, safeTeam(team))
+		result = append(result, safeTeam(fresh))
 	}
 	return result, end < len(active), nil
 }
@@ -226,10 +277,12 @@ func safeTeam(team *model.Team) entity.MattermostTeam {
 }
 
 func providerTeamDigest(team *model.Team) string {
-	value := strings.Join([]string{"mattermost-team-snapshot-v1", team.Id, team.Name, team.DisplayName,
+	value := strings.Join([]string{
+		"mattermost-team-snapshot-v1", team.Id, team.Name, team.DisplayName,
 		team.Type, time.UnixMilli(team.CreateAt).UTC().Format(time.RFC3339Nano),
 		time.UnixMilli(team.UpdateAt).UTC().Format(time.RFC3339Nano),
-		time.UnixMilli(team.DeleteAt).UTC().Format(time.RFC3339Nano)}, "\x00")
+		time.UnixMilli(team.DeleteAt).UTC().Format(time.RFC3339Nano),
+	}, "\x00")
 	digest := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(digest[:])
 }

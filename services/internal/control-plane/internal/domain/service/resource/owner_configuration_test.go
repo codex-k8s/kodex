@@ -90,10 +90,12 @@ func TestInstructionValidationIsServerComputedAndBounded(t *testing.T) {
 func TestProtectedConfigurationDoesNotDeclareFalseEventConsumer(t *testing.T) {
 	t.Parallel()
 
-	for _, kind := range []enum.Kind{enum.KindRoleDefinition, enum.KindAgent,
+	for _, kind := range []enum.Kind{
+		enum.KindRoleDefinition, enum.KindAgent,
 		enum.KindAgentAssignment, enum.KindInstructionSet, enum.KindProviderReference,
 		enum.KindProviderPool, enum.KindWorkspaceBackup, enum.KindWorkspaceRestore,
-		enum.KindWorkspaceMapping} {
+		enum.KindWorkspaceMapping,
+	} {
 		if name, published := event.EventNameForKind(kind); published {
 			t.Fatalf("protected kind %s declares unsupported event %s", kind, name)
 		}
@@ -161,6 +163,56 @@ func TestWorkspaceRecoveryActionRegistriesAreExact(t *testing.T) {
 	}
 	if !enum.TransitionAllowed(enum.KindTurn, enum.StateCancelled, enum.StateQueued) {
 		t.Fatal("full-envelope workspace restore cannot create a fresh cancelled attempt")
+	}
+}
+
+func TestWorkspaceMappingIdempotencyIgnoresOneUseProviderProof(t *testing.T) {
+	t.Parallel()
+
+	base := ManageWorkspaceMappingInput{
+		Principal: value.Principal{
+			ActorID: "11111111-1111-4111-8111-111111111111", OrganizationID: "22222222-2222-4222-8222-222222222222",
+			ProjectID: "33333333-3333-4333-8333-333333333333", Permission: permissionWorkspaceMappingManage,
+			CallerWorkload: "interaction-gateway", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+			AuthoritySource: "PROVIDER_READBACK", AuthorityReference: "44444444-4444-4444-8444-444444444444",
+			AuthorityRevision: 7, AuthorityDigest: strings.Repeat("a", 64), PolicyRevision: 9,
+		},
+		Action: "bind", Name: "Owner Workspace",
+		ProviderReceipt: value.ProviderEffectReceipt{
+			WorkspaceID: "33333333-3333-4333-8333-333333333333", ProviderTeamRef: "team-one",
+			ProviderObjectRef: "owner-one", EffectGeneration: 7, EffectSHA256: strings.Repeat("b", 64),
+			ReceiptID: "44444444-4444-4444-8444-444444444444", ReceiptRevision: 7,
+			IssuedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Minute),
+		},
+	}
+	first, err := workspaceMappingRequestHash(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry := base
+	retry.Principal.AuthorityReference = "55555555-5555-4555-8555-555555555555"
+	retry.Principal.AuthorityRevision++
+	retry.Principal.AuthorityDigest = strings.Repeat("c", 64)
+	retry.Principal.PolicyRevision++
+	retry.ProviderReceipt.ReceiptID = retry.Principal.AuthorityReference
+	retry.ProviderReceipt.ReceiptRevision++
+	retry.ProviderReceipt.EffectGeneration++
+	retry.ProviderReceipt.IssuedAt = retry.ProviderReceipt.IssuedAt.Add(time.Second)
+	retry.ProviderReceipt.ExpiresAt = retry.ProviderReceipt.ExpiresAt.Add(time.Second)
+	second, err := workspaceMappingRequestHash(retry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("fresh one-use provider proof changed durable semantic idempotency")
+	}
+	retry.ProviderReceipt.ProviderTeamRef = "team-two"
+	changed, err := workspaceMappingRequestHash(retry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed == first {
+		t.Fatal("changed provider Team reused durable semantic idempotency")
 	}
 }
 
@@ -257,13 +309,17 @@ func TestScheduleRebindCycleLeavesOneAdmissionActiveTuple(t *testing.T) {
 		}
 	}
 	session := func(id string, state enum.State, spec entity.ScheduleSpec) entity.Resource {
-		return entity.Resource{ID: id, OwnerActorID: "owner", Kind: enum.KindSession, State: state,
-			Spec: entity.SessionSpec{AgentID: spec.AgentID, AgentVersion: spec.AgentVersion,
+		return entity.Resource{
+			ID: id, OwnerActorID: "owner", Kind: enum.KindSession, State: state,
+			Spec: entity.SessionSpec{
+				AgentID: spec.AgentID, AgentVersion: spec.AgentVersion,
 				AgentSHA256: spec.AgentSHA256, ProviderPoolID: spec.ProviderPoolID,
 				ProviderPoolVersion: spec.ProviderPoolVersion, ProviderPoolSHA256: spec.ProviderPoolSHA256,
 				AgentAssignmentID:      spec.AgentAssignmentID,
 				AgentAssignmentVersion: spec.AgentAssignmentVersion,
-				AgentAssignmentSHA256:  spec.AgentAssignmentSHA256, ConversationID: spec.RoomID}}
+				AgentAssignmentSHA256:  spec.AgentAssignmentSHA256, ConversationID: spec.RoomID,
+			},
+		}
 	}
 	t1, t2 := tuple("agent-t1", "assignment-t1"), tuple("agent-t2", "assignment-t2")
 	resources := []entity.Resource{session("s1", enum.StateActive, t1)}
@@ -345,8 +401,10 @@ func TestExternalSemanticReceiptReturnsImmutableResult(t *testing.T) {
 	result, err := entity.New("11111111-1111-4111-8111-111111111111",
 		"22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333", "",
 		"44444444-4444-4444-8444-444444444444", enum.KindRoleDefinition, "role",
-		entity.RoleDefinitionSpec{StableKey: "role", Capabilities: []string{"resource.read"},
-			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"}}, now)
+		entity.RoleDefinitionSpec{
+			StableKey: "role", Capabilities: []string{"resource.read"},
+			Ownership: entity.ConfigurationOwnership{ManagedBy: "UI"},
+		}, now)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,6 +26,30 @@ func CreateRequest(request *interactiongatewayv1.CreateMattermostTeamRequest) (s
 	return request.GetDisplayName(), request.GetSlugIntent(), request.GetIdempotencyKey(), nil
 }
 
+func LinkRequest(request *interactiongatewayv1.LinkMattermostTeamRequest) (string, string, error) {
+	if request == nil || !validUUID(request.GetSelector()) || !validUUID(request.GetIdempotencyKey()) {
+		return "", "", errors.New("Mattermost team link request is invalid")
+	}
+	return request.GetSelector(), request.GetIdempotencyKey(), nil
+}
+
+func RelinkRequest(request *interactiongatewayv1.RelinkMattermostTeamRequest) (string, uint64, uint64, string, error) {
+	if request == nil || !validUUID(request.GetSelector()) || request.GetExpectedMappingVersion() == 0 ||
+		request.GetExpectedMappingGeneration() == 0 || !validUUID(request.GetIdempotencyKey()) {
+		return "", 0, 0, "", errors.New("Mattermost team relink request is invalid")
+	}
+	return request.GetSelector(), request.GetExpectedMappingVersion(), request.GetExpectedMappingGeneration(),
+		request.GetIdempotencyKey(), nil
+}
+
+func UnlinkRequest(request *interactiongatewayv1.UnlinkMattermostTeamRequest) (uint64, uint64, string, error) {
+	if request == nil || request.GetExpectedMappingVersion() == 0 ||
+		request.GetExpectedMappingGeneration() == 0 || !validUUID(request.GetIdempotencyKey()) {
+		return 0, 0, "", errors.New("Mattermost team unlink request is invalid")
+	}
+	return request.GetExpectedMappingVersion(), request.GetExpectedMappingGeneration(), request.GetIdempotencyKey(), nil
+}
+
 func ProviderReadbackRequest(request *interactiongatewayv1.GetMattermostTeamProviderReadbackRequest) (string, error) {
 	if request == nil || !validUUID(request.GetSelector()) {
 		return "", errors.New("mattermost team provider readback request is invalid")

@@ -14,10 +14,14 @@ import (
 )
 
 const (
-	listOperation      = "interaction.team.catalog.read"
-	createOperation    = "interaction.team.create"
-	readbackOperation  = "interaction.team.provider.readback"
-	readinessOperation = "interaction.team.readiness"
+	listOperation       = "interaction.team.catalog.read"
+	createOperation     = "interaction.team.create"
+	linkOperation       = "interaction.team.link"
+	getBindingOperation = "interaction.team.binding.get"
+	relinkOperation     = "interaction.team.relink"
+	unlinkOperation     = "interaction.team.unlink"
+	readbackOperation   = "interaction.team.provider.readback"
+	readinessOperation  = "interaction.team.readiness"
 )
 
 type Server struct {
@@ -65,11 +69,86 @@ func (server *Server) CreateMattermostTeam(ctx context.Context,
 	if err != nil {
 		return nil, invalidRequest()
 	}
-	operation, err := server.service.Create(ctx, principal, displayName, slugIntent, idempotencyKey)
+	operation, binding, err := server.service.CreateAndBind(ctx, principal, displayName, slugIntent, idempotencyKey)
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return casters.CreateResponse(operation), nil
+	return casters.CreateResponse(operation, binding), nil
+}
+
+func (server *Server) LinkMattermostTeam(ctx context.Context,
+	request *interactiongatewayv1.LinkMattermostTeamRequest,
+) (*interactiongatewayv1.LinkMattermostTeamResponse, error) {
+	principal, err := teamprincipal.Principal(ctx,
+		interactiongatewayv1.MattermostTeamService_LinkMattermostTeam_FullMethodName, linkOperation, linkOperation)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "verified Mattermost team link context rejected")
+	}
+	selector, idempotencyKey, err := casters.LinkRequest(request)
+	if err != nil {
+		return nil, invalidRequest()
+	}
+	binding, err := server.service.Link(ctx, principal, selector, idempotencyKey)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &interactiongatewayv1.LinkMattermostTeamResponse{Binding: casters.BindingView(binding)}, nil
+}
+
+func (server *Server) GetMattermostTeamBinding(ctx context.Context,
+	_ *interactiongatewayv1.GetMattermostTeamBindingRequest,
+) (*interactiongatewayv1.GetMattermostTeamBindingResponse, error) {
+	principal, err := teamprincipal.Principal(ctx,
+		interactiongatewayv1.MattermostTeamService_GetMattermostTeamBinding_FullMethodName,
+		getBindingOperation, getBindingOperation)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "verified Mattermost team binding context rejected")
+	}
+	binding, err := server.service.GetBinding(ctx, principal)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &interactiongatewayv1.GetMattermostTeamBindingResponse{Binding: casters.BindingView(binding)}, nil
+}
+
+func (server *Server) RelinkMattermostTeam(ctx context.Context,
+	request *interactiongatewayv1.RelinkMattermostTeamRequest,
+) (*interactiongatewayv1.RelinkMattermostTeamResponse, error) {
+	principal, err := teamprincipal.Principal(ctx,
+		interactiongatewayv1.MattermostTeamService_RelinkMattermostTeam_FullMethodName,
+		relinkOperation, relinkOperation)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "verified Mattermost team relink context rejected")
+	}
+	selector, version, generation, idempotencyKey, err := casters.RelinkRequest(request)
+	if err != nil {
+		return nil, invalidRequest()
+	}
+	binding, err := server.service.Relink(ctx, principal, selector, version, generation, idempotencyKey)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &interactiongatewayv1.RelinkMattermostTeamResponse{Binding: casters.BindingView(binding)}, nil
+}
+
+func (server *Server) UnlinkMattermostTeam(ctx context.Context,
+	request *interactiongatewayv1.UnlinkMattermostTeamRequest,
+) (*interactiongatewayv1.UnlinkMattermostTeamResponse, error) {
+	principal, err := teamprincipal.Principal(ctx,
+		interactiongatewayv1.MattermostTeamService_UnlinkMattermostTeam_FullMethodName,
+		unlinkOperation, unlinkOperation)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "verified Mattermost team unlink context rejected")
+	}
+	version, generation, idempotencyKey, err := casters.UnlinkRequest(request)
+	if err != nil {
+		return nil, invalidRequest()
+	}
+	binding, err := server.service.Unlink(ctx, principal, version, generation, idempotencyKey)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &interactiongatewayv1.UnlinkMattermostTeamResponse{Binding: casters.BindingView(binding)}, nil
 }
 
 func (server *Server) GetMattermostTeamProviderReadback(ctx context.Context,
@@ -104,6 +183,7 @@ func (server *Server) CheckReadiness(ctx context.Context,
 		return nil, status.Error(codes.Unavailable, "Mattermost team working path is unavailable")
 	}
 	return &interactiongatewayv1.MattermostTeamServiceCheckReadinessResponse{
-		Ready: true, SchemaVersion: 1, AuthorityReady: true, PostgresReady: true, MattermostReady: true,
+		Ready: true, SchemaVersion: 2, AuthorityReady: true, PostgresReady: true, MattermostReady: true,
+		ControlPlaneReady: true, MappingReady: true,
 	}, nil
 }

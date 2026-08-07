@@ -37,4 +37,22 @@ var (
 	nextWorkScopeSQL string
 	//go:embed sql/team_operation__claim_recovery.sql
 	operationClaimRecoverySQL string
+	//go:embed sql/workspace_mapping_operation__insert.sql
+	mappingOperationInsertSQL string
+	//go:embed sql/workspace_mapping_operation__lock.sql
+	mappingOperationLockSQL string
+	//go:embed sql/workspace_mapping_operation__reclaim.sql
+	mappingOperationReclaimSQL string
+	//go:embed sql/workspace_mapping_operation__refresh_receipt.sql
+	mappingOperationRefreshReceiptSQL string
+	//go:embed sql/workspace_mapping_operation__mark_ambiguous.sql
+	mappingOperationMarkAmbiguousSQL string
+	//go:embed sql/workspace_mapping_operation__mark_terminal.sql
+	mappingOperationMarkTerminalSQL string
+	//go:embed sql/workspace_mapping_operation__mark_repair.sql
+	mappingOperationMarkRepairSQL string
+	//go:embed sql/workspace_mapping_operation__claim_recovery.sql
+	mappingOperationClaimRecoverySQL string
+	//go:embed sql/workspace_mapping_work_scope__next.sql
+	mappingNextWorkScopeSQL string
 )

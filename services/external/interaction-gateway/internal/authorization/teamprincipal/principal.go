@@ -12,13 +12,12 @@ import (
 )
 
 const (
-	expectedAudience        = "urn:mattercodex:internal-rpc:interaction-gateway"
-	expectedCaller          = "control-api-gateway"
-	expectedCallerSPIFFE    = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
-	expectedTarget          = "interaction-gateway"
-	expectedTargetSPIFFE    = "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway"
-	expectedContract        = uint32(1)
-	expectedAuthoritySource = internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION
+	expectedAudience     = "urn:mattercodex:internal-rpc:interaction-gateway"
+	expectedCaller       = "control-api-gateway"
+	expectedCallerSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway"
+	expectedTarget       = "interaction-gateway"
+	expectedTargetSPIFFE = "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway"
+	expectedContract     = uint32(1)
 )
 
 func Principal(ctx context.Context, fullMethod, operation, permission string) (entity.TeamPrincipal, error) {
@@ -34,15 +33,17 @@ func Principal(ctx context.Context, fullMethod, operation, permission string) (e
 	authority := verified.GetAuthority()
 	if authority.GetActorKind() != internalrpcauthorityv1.ActorKind_ACTOR_KIND_HUMAN ||
 		authority.GetActor() == nil || authority.GetTenant() == nil || authority.GetProject() == nil ||
-		!validProvenance(authority.GetActor().GetProvenance()) ||
-		!validProvenance(authority.GetTenant().GetProvenance()) ||
-		!validProvenance(authority.GetProject().GetProvenance()) ||
+		!validProvenance(authority.GetActor().GetProvenance(), internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION) ||
+		!validProvenance(authority.GetTenant().GetProvenance(), internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION) ||
+		!validProvenance(authority.GetProject().GetProvenance(), internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE) ||
 		!validUUID(authority.GetActor().GetId()) || !validUUID(authority.GetTenant().GetId()) ||
 		!validUUID(authority.GetProject().GetId()) {
 		return entity.TeamPrincipal{}, errors.New("verified Mattermost team owner authority is invalid")
 	}
-	return entity.TeamPrincipal{ActorID: authority.GetActor().GetId(), OrganizationID: authority.GetTenant().GetId(),
-		ProjectID: authority.GetProject().GetId()}, nil
+	return entity.TeamPrincipal{
+		ActorID: authority.GetActor().GetId(), OrganizationID: authority.GetTenant().GetId(),
+		ProjectID: authority.GetProject().GetId(),
+	}, nil
 }
 
 func validUUID(value string) bool {
@@ -50,8 +51,10 @@ func validUUID(value string) bool {
 	return err == nil && parsed != uuid.Nil
 }
 
-func validProvenance(value *internalrpcauthorityv1.AuthorityProvenance) bool {
-	return value != nil && value.GetSource() == expectedAuthoritySource && value.GetRevision() != 0 &&
+func validProvenance(value *internalrpcauthorityv1.AuthorityProvenance,
+	expected internalrpcauthorityv1.AuthoritySource,
+) bool {
+	return value != nil && value.GetSource() == expected && value.GetRevision() != 0 &&
 		validDigest(value.GetDigestSha256())
 }
 

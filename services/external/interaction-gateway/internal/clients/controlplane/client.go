@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Client struct {
@@ -92,7 +93,8 @@ func (client *Client) GetArtifact(ctx context.Context, grant, artifactID string,
 }
 
 func (client *Client) GetRuntimeMaterialization(ctx context.Context, grant, executionID, artifactID string,
-	artifactVersion uint64, artifactSHA256 string) (domaincontrol.RuntimeMaterialization, error) {
+	artifactVersion uint64, artifactSHA256 string,
+) (domaincontrol.RuntimeMaterialization, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
@@ -100,8 +102,10 @@ func (client *Client) GetRuntimeMaterialization(ctx context.Context, grant, exec
 		return domaincontrol.RuntimeMaterialization{}, err
 	}
 	response, err := client.client.ControlPlane.GetRuntimeMaterialization(protected,
-		&controlplanev1.GetRuntimeMaterializationRequest{ExecutionId: executionID, ArtifactId: artifactID,
-			ArtifactVersion: artifactVersion, ArtifactSha256: artifactSHA256})
+		&controlplanev1.GetRuntimeMaterializationRequest{
+			ExecutionId: executionID, ArtifactId: artifactID,
+			ArtifactVersion: artifactVersion, ArtifactSha256: artifactSHA256,
+		})
 	if err != nil || response.GetMaterialization() == nil {
 		return domaincontrol.RuntimeMaterialization{}, errors.New("read control-plane runtime materialization")
 	}
@@ -110,13 +114,16 @@ func (client *Client) GetRuntimeMaterialization(ctx context.Context, grant, exec
 		item.GetSha256() != artifactSHA256 || item.GetSizeBytes() == 0 {
 		return domaincontrol.RuntimeMaterialization{}, errors.New("control-plane runtime materialization is incomplete")
 	}
-	return domaincontrol.RuntimeMaterialization{ProjectID: response.GetProjectId(), StorageRef: item.GetStorageRef(),
+	return domaincontrol.RuntimeMaterialization{
+		ProjectID: response.GetProjectId(), StorageRef: item.GetStorageRef(),
 		MediaType: item.GetMediaType(), SHA256: item.GetSha256(), ArtifactVersion: item.GetArtifactVersion(),
-		SizeBytes: item.GetSizeBytes()}, nil
+		SizeBytes: item.GetSizeBytes(),
+	}, nil
 }
 
 func (client *Client) AuthorizeRuntimeOutput(ctx context.Context, grant, executionID string,
-	output domaincontrol.RuntimeOutputMetadata) (domaincontrol.RuntimeOutputAuthorization, error) {
+	output domaincontrol.RuntimeOutputMetadata,
+) (domaincontrol.RuntimeOutputAuthorization, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
@@ -124,20 +131,25 @@ func (client *Client) AuthorizeRuntimeOutput(ctx context.Context, grant, executi
 		return domaincontrol.RuntimeOutputAuthorization{}, err
 	}
 	response, err := client.client.ControlPlane.AuthorizeRuntimeOutput(protected,
-		&controlplanev1.AuthorizeRuntimeOutputRequest{ExecutionId: executionID,
-			Output: runtimeOutputMetadata(output)})
+		&controlplanev1.AuthorizeRuntimeOutputRequest{
+			ExecutionId: executionID,
+			Output:      runtimeOutputMetadata(output),
+		})
 	if err != nil || response.GetProjectId() == "" || response.GetExecutionVersion() == 0 ||
 		response.GetExecutionFence() == 0 || response.GetGrantGeneration() == 0 {
 		return domaincontrol.RuntimeOutputAuthorization{}, errors.New("authorize control-plane runtime output")
 	}
-	return domaincontrol.RuntimeOutputAuthorization{OrganizationID: response.GetOrganizationId(),
-		ProjectID: response.GetProjectId(), ExecutionVersion: response.GetExecutionVersion(),
-		Fence: response.GetExecutionFence(), GrantGeneration: response.GetGrantGeneration()}, nil
+	return domaincontrol.RuntimeOutputAuthorization{
+		OrganizationID: response.GetOrganizationId(),
+		ProjectID:      response.GetProjectId(), ExecutionVersion: response.GetExecutionVersion(),
+		Fence: response.GetExecutionFence(), GrantGeneration: response.GetGrantGeneration(),
+	}, nil
 }
 
 func (client *Client) RegisterRuntimeOutput(ctx context.Context, grant, executionID string,
 	authorization domaincontrol.RuntimeOutputAuthorization, output domaincontrol.RuntimeOutputMetadata,
-	storageRef string) (domaincontrol.Artifact, error) {
+	storageRef string,
+) (domaincontrol.Artifact, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
@@ -145,10 +157,12 @@ func (client *Client) RegisterRuntimeOutput(ctx context.Context, grant, executio
 		return domaincontrol.Artifact{}, err
 	}
 	response, err := client.client.ControlPlane.RegisterRuntimeOutput(protected,
-		&controlplanev1.RegisterRuntimeOutputRequest{IdempotencyKey: stableRuntimeOutputID(executionID, output),
-			ExecutionId: executionID, ExpectedExecutionVersion: authorization.ExecutionVersion,
+		&controlplanev1.RegisterRuntimeOutputRequest{
+			IdempotencyKey: stableRuntimeOutputID(executionID, output),
+			ExecutionId:    executionID, ExpectedExecutionVersion: authorization.ExecutionVersion,
 			ExpectedExecutionFence: authorization.Fence, ExpectedGrantGeneration: authorization.GrantGeneration,
-			Output: runtimeOutputMetadata(output), StorageRef: storageRef})
+			Output: runtimeOutputMetadata(output), StorageRef: storageRef,
+		})
 	if err != nil || response.GetArtifact() == nil || response.GetArtifact().GetSpec().GetArtifact() == nil {
 		return domaincontrol.Artifact{}, errors.New("register control-plane runtime output")
 	}
@@ -156,9 +170,11 @@ func (client *Client) RegisterRuntimeOutput(ctx context.Context, grant, executio
 }
 
 func runtimeOutputMetadata(output domaincontrol.RuntimeOutputMetadata) *controlplanev1.RuntimeOutputMetadata {
-	return &controlplanev1.RuntimeOutputMetadata{Kind: output.Kind, Name: output.Name,
+	return &controlplanev1.RuntimeOutputMetadata{
+		Kind: output.Kind, Name: output.Name,
 		MediaType: output.MediaType, SizeBytes: output.SizeBytes, Sha256: output.SHA256,
-		Sequence: output.Sequence, Total: output.Total}
+		Sequence: output.Sequence, Total: output.Total,
+	}
 }
 
 func stableRuntimeOutputID(executionID string, output domaincontrol.RuntimeOutputMetadata) string {
@@ -181,11 +197,13 @@ func (client *Client) GetTurn(ctx context.Context, grant, turnID string) (domain
 		return domaincontrol.Turn{}, errors.New("read control-plane turn")
 	}
 	spec := resource.GetSpec().GetTurn()
-	return domaincontrol.Turn{ID: resource.GetId(), Version: resource.GetVersion(),
+	return domaincontrol.Turn{
+		ID: resource.GetId(), Version: resource.GetVersion(),
 		State:     stringWithoutPrefix(resource.GetState().String(), "RESOURCE_STATE_"),
 		SessionID: spec.GetSessionId(), Attempt: spec.GetAttempt(), Outcome: spec.GetOutcome(),
 		ResultArtifactID: spec.GetResultArtifactId(), ResultArtifactVersion: spec.GetResultArtifactVersion(),
-		ResultArtifactSHA256: spec.GetResultArtifactSha256(), ImmutableInputSHA256: spec.GetEffectiveInputSha256()}, nil
+		ResultArtifactSHA256: spec.GetResultArtifactSha256(), ImmutableInputSHA256: spec.GetEffectiveInputSha256(),
+	}, nil
 }
 
 func (client *Client) ManageConversationLifecycle(ctx context.Context, grant, idempotencyKey, kind, resourceID, action string) error {
@@ -212,15 +230,17 @@ func (client *Client) ManageConversationLifecycle(ctx context.Context, grant, id
 		return errors.New("conversation lifecycle action is invalid")
 	}
 	response, err := client.client.ControlPlane.ManageConversationLifecycle(protected,
-		&controlplanev1.ManageConversationLifecycleRequest{IdempotencyKey: idempotencyKey,
-			Kind: kindValue, Action: actionValue, ResourceId: resourceID})
+		&controlplanev1.ManageConversationLifecycleRequest{
+			IdempotencyKey: idempotencyKey,
+			Kind:           kindValue, Action: actionValue, ResourceId: resourceID,
+		})
 	if err != nil || response.GetResource() == nil || response.GetResource().GetId() != resourceID {
 		return errors.New("manage control-plane conversation lifecycle")
 	}
 	return nil
 }
 
-func (client *Client) CreateSession(ctx context.Context, grant, idempotencyKey, name, roleID, conversationID string) (domaincontrol.Session, error) {
+func (client *Client) CreateSession(ctx context.Context, grant, idempotencyKey, name, agentStableKey, conversationID string) (domaincontrol.Session, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
@@ -229,7 +249,7 @@ func (client *Client) CreateSession(ctx context.Context, grant, idempotencyKey, 
 	}
 	response, err := client.client.ControlPlane.ManageSession(protected, &controlplanev1.ManageSessionRequest{
 		IdempotencyKey: idempotencyKey, Action: controlplanev1.SessionAction_SESSION_ACTION_CREATE,
-		Name: name, RoleId: roleID, ConversationId: conversationID,
+		Name: name, AgentStableKey: agentStableKey, ConversationId: conversationID,
 	})
 	if err != nil || response.GetSession() == nil || response.GetSession().GetId() == "" {
 		return domaincontrol.Session{}, errors.New("create control-plane session")
@@ -238,7 +258,8 @@ func (client *Client) CreateSession(ctx context.Context, grant, idempotencyKey, 
 }
 
 func (client *Client) BindSessionMCP(ctx context.Context, grant string,
-	input domaincontrol.SessionMCPBindingInput) (domaincontrol.Session, error) {
+	input domaincontrol.SessionMCPBindingInput,
+) (domaincontrol.Session, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
@@ -355,7 +376,8 @@ func (client *Client) ResolveOwnerGate(ctx context.Context, grant string, input 
 }
 
 func (client *Client) ManageRuntimeAction(ctx context.Context, grant string,
-	input domaincontrol.RuntimeActionInput) (domaincontrol.Turn, error) {
+	input domaincontrol.RuntimeActionInput,
+) (domaincontrol.Turn, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	protected, err := controlplaneclient.WithApplicationGrant(bounded, grant)
@@ -369,8 +391,10 @@ func (client *Client) ManageRuntimeAction(ctx context.Context, grant string,
 		return domaincontrol.Turn{}, errors.New("runtime action is invalid")
 	}
 	response, err := client.client.ControlPlane.ManageRuntimeAction(protected,
-		&controlplanev1.ManageRuntimeActionRequest{IdempotencyKey: input.IdempotencyKey,
-			SessionId: input.SessionID, TurnId: input.TurnID, Action: action})
+		&controlplanev1.ManageRuntimeActionRequest{
+			IdempotencyKey: input.IdempotencyKey,
+			SessionId:      input.SessionID, TurnId: input.TurnID, Action: action,
+		})
 	if err != nil || response.GetTurn() == nil || response.GetTurn().GetSpec().GetTurn() == nil {
 		if status.Code(err) == codes.InvalidArgument || status.Code(err) == codes.PermissionDenied ||
 			status.Code(err) == codes.NotFound || status.Code(err) == codes.FailedPrecondition ||
@@ -380,10 +404,12 @@ func (client *Client) ManageRuntimeAction(ctx context.Context, grant string,
 		return domaincontrol.Turn{}, errors.New("manage control-plane runtime action")
 	}
 	resource, spec := response.GetTurn(), response.GetTurn().GetSpec().GetTurn()
-	return domaincontrol.Turn{ID: resource.GetId(), Version: resource.GetVersion(),
+	return domaincontrol.Turn{
+		ID: resource.GetId(), Version: resource.GetVersion(),
 		State:     stringWithoutPrefix(resource.GetState().String(), "RESOURCE_STATE_"),
 		SessionID: spec.GetSessionId(), Attempt: spec.GetAttempt(), Outcome: spec.GetOutcome(),
-		ImmutableInputSHA256: spec.GetEffectiveInputSha256()}, nil
+		ImmutableInputSHA256: spec.GetEffectiveInputSha256(),
+	}, nil
 }
 
 func (client *Client) ExpireOwnerGate(ctx context.Context, idempotencyKey string) error {
@@ -410,7 +436,8 @@ func (client *Client) ClaimInteractionDelivery(ctx context.Context, idempotencyK
 	if err != nil || response.GetDeliveryLeaseExpiresAt() == nil {
 		return domaincontrol.InteractionDeliveryWork{}, errors.New("claim control-plane interaction delivery")
 	}
-	return domaincontrol.InteractionDeliveryWork{DeliveryID: response.GetDeliveryId(),
+	return domaincontrol.InteractionDeliveryWork{
+		DeliveryID:     response.GetDeliveryId(),
 		OrganizationID: response.GetOrganizationId(), ProjectID: response.GetProjectId(), ActorID: response.GetActorId(),
 		SessionID: response.GetSessionId(), SessionVersion: response.GetSessionVersion(), TurnID: response.GetTurnId(),
 		TurnVersion: response.GetTurnVersion(), Attempt: response.GetAttempt(), RuntimeRevisionID: response.GetRuntimeRevisionId(),
@@ -424,17 +451,21 @@ func (client *Client) ClaimInteractionDelivery(ctx context.Context, idempotencyK
 		ReadbackCredential: response.GetDeliveryReadbackCredential(), InlinePayload: slices.Clone(response.GetInlinePayload()),
 		NotificationRoomID: response.GetNotificationRoomId(),
 		NotificationPolicy: stringWithoutPrefix(response.GetNotificationPolicy().String(), "SCHEDULE_NOTIFICATION_POLICY_"),
-		ScheduledOutcome:   stringWithoutPrefix(response.GetScheduledOutcome().String(), "SCHEDULED_OUTCOME_")}, nil
+		ScheduledOutcome:   stringWithoutPrefix(response.GetScheduledOutcome().String(), "SCHEDULED_OUTCOME_"),
+	}, nil
 }
 
 func (client *Client) RecordInteractionDelivery(ctx context.Context, idempotencyKey string,
-	work domaincontrol.InteractionDeliveryWork, providerReceiptSHA256 string) error {
+	work domaincontrol.InteractionDeliveryWork, providerReceiptSHA256 string,
+) error {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	response, err := client.client.ControlPlane.RecordInteractionDelivery(bounded,
-		&controlplanev1.RecordInteractionDeliveryRequest{IdempotencyKey: idempotencyKey,
-			DeliveryId: work.DeliveryID, DeliveryFence: work.Fence, DeliveryLeaseToken: work.LeaseToken,
-			ProviderReceiptSha256: providerReceiptSHA256})
+		&controlplanev1.RecordInteractionDeliveryRequest{
+			IdempotencyKey: idempotencyKey,
+			DeliveryId:     work.DeliveryID, DeliveryFence: work.Fence, DeliveryLeaseToken: work.LeaseToken,
+			ProviderReceiptSha256: providerReceiptSHA256,
+		})
 	if err != nil || response.GetDeliveryId() != work.DeliveryID || response.GetProviderReceiptSha256() != providerReceiptSHA256 {
 		return errors.New("record control-plane interaction delivery")
 	}
@@ -442,12 +473,15 @@ func (client *Client) RecordInteractionDelivery(ctx context.Context, idempotency
 }
 
 func (client *Client) IssueInteractionDeliveryReadback(ctx context.Context, idempotencyKey, deliveryID string,
-	readiness bool) (string, time.Time, error) {
+	readiness bool,
+) (string, time.Time, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	response, err := client.client.ControlPlane.IssueInteractionDeliveryReadbackGrant(bounded,
-		&controlplanev1.IssueInteractionDeliveryReadbackGrantRequest{IdempotencyKey: idempotencyKey,
-			DeliveryId: deliveryID, Readiness: readiness})
+		&controlplanev1.IssueInteractionDeliveryReadbackGrantRequest{
+			IdempotencyKey: idempotencyKey,
+			DeliveryId:     deliveryID, Readiness: readiness,
+		})
 	if err != nil || response.GetDeliveryId() != deliveryID || response.GetCredential() == "" || response.GetExpiresAt() == nil {
 		return "", time.Time{}, errors.New("issue interaction delivery readback credential")
 	}
@@ -455,17 +489,153 @@ func (client *Client) IssueInteractionDeliveryReadback(ctx context.Context, idem
 }
 
 func (client *Client) ValidateInteractionDeliveryReadback(ctx context.Context, idempotencyKey, grantID, deliveryID,
-	organizationID, projectID, credentialSHA256 string, generation uint64) (bool, error) {
+	organizationID, projectID, credentialSHA256 string, generation uint64,
+) (bool, error) {
 	bounded, cancel := context.WithTimeout(ctx, client.deadline)
 	defer cancel()
 	response, err := client.client.ControlPlane.ValidateInteractionDeliveryReadbackGrant(bounded,
-		&controlplanev1.ValidateInteractionDeliveryReadbackGrantRequest{IdempotencyKey: idempotencyKey,
-			GrantId: grantID, DeliveryId: deliveryID, OrganizationId: organizationID, ProjectId: projectID,
-			CredentialSha256: credentialSHA256, Generation: generation})
+		&controlplanev1.ValidateInteractionDeliveryReadbackGrantRequest{
+			IdempotencyKey: idempotencyKey,
+			GrantId:        grantID, DeliveryId: deliveryID, OrganizationId: organizationID, ProjectId: projectID,
+			CredentialSha256: credentialSHA256, Generation: generation,
+		})
 	if err != nil || response.GetGrantId() != grantID || response.GetDeliveryId() != deliveryID {
 		return false, errors.New("validate interaction delivery readback credential")
 	}
 	return response.GetActive(), nil
+}
+
+func (client *Client) ListWorkspaceMattermostMappings(ctx context.Context,
+	credential domaincontrol.ProviderCredential, workspaceID string,
+) ([]entity.WorkspaceMattermostMapping, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, credential.CompactJWS)
+	if err != nil {
+		return nil, domaincontrol.ErrUnavailable
+	}
+	response, err := client.client.ControlPlane.ListWorkspaceMattermostMappings(protected,
+		&controlplanev1.ListWorkspaceMattermostMappingsRequest{
+			WorkspaceId: workspaceID,
+			States: []controlplanev1.WorkspaceMattermostMappingState{
+				controlplanev1.WorkspaceMattermostMappingState_WORKSPACE_MATTERMOST_MAPPING_STATE_BOUND,
+				controlplanev1.WorkspaceMattermostMappingState_WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED,
+			}, PageSize: 2,
+		})
+	if err != nil {
+		return nil, mappingRPCError(err)
+	}
+	if response.GetNextPageToken() != "" || len(response.GetMappings()) > 1 {
+		return nil, domaincontrol.ErrConflict
+	}
+	result := make([]entity.WorkspaceMattermostMapping, 0, len(response.GetMappings()))
+	for _, item := range response.GetMappings() {
+		mapping, castErr := projectWorkspaceMapping(item)
+		if castErr != nil || mapping.ProviderTeamID == "" || mapping.ID == "" {
+			return nil, domaincontrol.ErrUnavailable
+		}
+		result = append(result, mapping)
+	}
+	return result, nil
+}
+
+func (client *Client) GetWorkspaceMattermostMapping(ctx context.Context,
+	credential domaincontrol.ProviderCredential, mappingID string,
+) (entity.WorkspaceMattermostMapping, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, credential.CompactJWS)
+	if err != nil {
+		return entity.WorkspaceMattermostMapping{}, domaincontrol.ErrUnavailable
+	}
+	response, err := client.client.ControlPlane.GetWorkspaceMattermostMapping(protected,
+		&controlplanev1.GetWorkspaceMattermostMappingRequest{MappingId: mappingID})
+	if err != nil {
+		return entity.WorkspaceMattermostMapping{}, mappingRPCError(err)
+	}
+	return projectWorkspaceMapping(response.GetMapping())
+}
+
+func (client *Client) ManageWorkspaceMattermostMapping(ctx context.Context,
+	input domaincontrol.ManageWorkspaceMappingInput,
+) (entity.WorkspaceMattermostMapping, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, input.Credential.CompactJWS)
+	if err != nil {
+		return entity.WorkspaceMattermostMapping{}, domaincontrol.ErrUnavailable
+	}
+	action := controlplanev1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND
+	switch input.Action {
+	case "relink":
+		action = controlplanev1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK
+	case "unlink":
+		action = controlplanev1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK
+	case "bind":
+	default:
+		return entity.WorkspaceMattermostMapping{}, domaincontrol.ErrConflict
+	}
+	response, err := client.client.ControlPlane.ManageWorkspaceMattermostMapping(protected,
+		&controlplanev1.ManageWorkspaceMattermostMappingRequest{
+			IdempotencyKey: input.IdempotencyKey, Action: action, MappingId: input.MappingID,
+			ExpectedVersion: input.ExpectedVersion, ExpectedGeneration: input.ExpectedGeneration,
+			Name: input.Name, ProviderReceipt: providerReceiptToProto(input.Credential.Receipt),
+		})
+	if err != nil {
+		return entity.WorkspaceMattermostMapping{}, mappingRPCError(err)
+	}
+	return projectWorkspaceMapping(response.GetMapping())
+}
+
+func providerReceiptToProto(value domaincontrol.ProviderEffectReceipt) *controlplanev1.ProviderEffectReadbackReceipt {
+	return &controlplanev1.ProviderEffectReadbackReceipt{
+		ContractVersion: value.ContractVersion, Issuer: value.Issuer, Purpose: value.Purpose,
+		WorkloadId: value.WorkloadID, CallerSpiffeId: value.CallerSPIFFEID, FullMethod: value.FullMethod,
+		ActorId: value.ActorID, OrganizationId: value.OrganizationID, ProjectId: value.ProjectID,
+		WorkspaceId: value.WorkspaceID, ProviderTeamRef: value.ProviderTeamRef,
+		ProviderObjectRef: value.ProviderObjectRef, Action: value.Action, Effect: value.Effect,
+		EffectVersion: value.EffectVersion, EffectGeneration: value.EffectGeneration,
+		EffectSha256: value.EffectSHA256, ReceiptId: value.ReceiptID, ReceiptRevision: value.ReceiptRevision,
+		IssuedAt: timestamppb.New(value.IssuedAt), NotBefore: timestamppb.New(value.NotBefore),
+		ExpiresAt: timestamppb.New(value.ExpiresAt), MaskedStatus: value.MaskedStatus, Eligible: value.Eligible,
+		TargetKind: value.TargetKind, TargetResourceId: value.TargetResourceID,
+		TargetStableKey: value.TargetStableKey, CommandIntentSha256: value.CommandIntentSHA256,
+	}
+}
+
+func projectWorkspaceMapping(resource *controlplanev1.Resource) (entity.WorkspaceMattermostMapping, error) {
+	if resource == nil || resource.GetSpec() == nil || resource.GetSpec().GetWorkspaceMattermostMapping() == nil ||
+		resource.GetUpdatedAt() == nil {
+		return entity.WorkspaceMattermostMapping{}, domaincontrol.ErrUnavailable
+	}
+	spec := resource.GetSpec().GetWorkspaceMattermostMapping()
+	if spec.GetProviderObservedAt() == nil || spec.GetWorkspaceId() != resource.GetProjectId() ||
+		spec.GetProviderTeamRef() == "" || spec.GetMappingGeneration() == 0 ||
+		spec.GetProviderEffectVersion() == 0 || spec.GetProviderEffectGeneration() == 0 {
+		return entity.WorkspaceMattermostMapping{}, domaincontrol.ErrUnavailable
+	}
+	state := stringWithoutPrefix(spec.GetMappingState().String(), "WORKSPACE_MATTERMOST_MAPPING_STATE_")
+	if state != "BOUND" && state != "UNLINKED" {
+		return entity.WorkspaceMattermostMapping{}, domaincontrol.ErrUnavailable
+	}
+	return entity.WorkspaceMattermostMapping{
+		ID: resource.GetId(), Name: resource.GetName(),
+		Version: resource.GetVersion(), Generation: spec.GetMappingGeneration(), State: state,
+		ProviderTeamID: spec.GetProviderTeamRef(), ProviderEffectVersion: spec.GetProviderEffectVersion(),
+		ProviderEffectGeneration: spec.GetProviderEffectGeneration(),
+		ProviderObservedAt:       spec.GetProviderObservedAt().AsTime(), UpdatedAt: resource.GetUpdatedAt().AsTime(),
+	}, nil
+}
+
+func mappingRPCError(err error) error {
+	switch status.Code(err) {
+	case codes.NotFound:
+		return domaincontrol.ErrNotFound
+	case codes.InvalidArgument, codes.PermissionDenied, codes.FailedPrecondition, codes.Aborted, codes.AlreadyExists:
+		return domaincontrol.ErrConflict
+	default:
+		return domaincontrol.ErrUnavailable
+	}
 }
 
 func scanState(resource *controlplanev1.Resource) string {
@@ -480,9 +650,11 @@ func projectArtifact(resource *controlplanev1.Resource) domaincontrol.Artifact {
 		return domaincontrol.Artifact{}
 	}
 	spec := resource.GetSpec().GetArtifact()
-	return domaincontrol.Artifact{ID: resource.GetId(), Version: resource.GetVersion(), Name: resource.GetName(),
+	return domaincontrol.Artifact{
+		ID: resource.GetId(), Version: resource.GetVersion(), Name: resource.GetName(),
 		ScanState: scanState(resource), Direction: spec.GetDirection(),
-		StorageRef: spec.GetStorageRef(), SizeBytes: spec.GetSizeBytes(), MediaType: spec.GetMediaType(), SHA256: spec.GetSha256()}
+		StorageRef: spec.GetStorageRef(), SizeBytes: spec.GetSizeBytes(), MediaType: spec.GetMediaType(), SHA256: spec.GetSha256(),
+	}
 }
 
 func ownerDecision(value string) (controlplanev1.OwnerGateDecision, bool) {

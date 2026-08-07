@@ -21,6 +21,10 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	MattermostTeamService_ListMattermostTeams_FullMethodName               = "/interactiongateway.v1.MattermostTeamService/ListMattermostTeams"
 	MattermostTeamService_CreateMattermostTeam_FullMethodName              = "/interactiongateway.v1.MattermostTeamService/CreateMattermostTeam"
+	MattermostTeamService_LinkMattermostTeam_FullMethodName                = "/interactiongateway.v1.MattermostTeamService/LinkMattermostTeam"
+	MattermostTeamService_GetMattermostTeamBinding_FullMethodName          = "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamBinding"
+	MattermostTeamService_RelinkMattermostTeam_FullMethodName              = "/interactiongateway.v1.MattermostTeamService/RelinkMattermostTeam"
+	MattermostTeamService_UnlinkMattermostTeam_FullMethodName              = "/interactiongateway.v1.MattermostTeamService/UnlinkMattermostTeam"
 	MattermostTeamService_GetMattermostTeamProviderReadback_FullMethodName = "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamProviderReadback"
 	MattermostTeamService_CheckReadiness_FullMethodName                    = "/interactiongateway.v1.MattermostTeamService/CheckReadiness"
 )
@@ -29,9 +33,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// MattermostTeamService материализует только принадлежащие interaction-gateway
-// provider catalog, create и fresh readback. Авторитетный Workspace mapping
-// остаётся специализированным контрактом control-plane.
+// MattermostTeamService материализует provider Team effect/readback и вызывает
+// специализированный авторитетный Workspace mapping contract control-plane.
 type MattermostTeamServiceClient interface {
 	// ListMattermostTeams возвращает bounded owner-scoped catalog. Actor,
 	// organization и project берутся только из verified authorization context.
@@ -39,6 +42,18 @@ type MattermostTeamServiceClient interface {
 	// CreateMattermostTeam выполняет один durable semantic provider intent.
 	// Повтор того же ключа с другим intent закрыто конфликтует.
 	CreateMattermostTeam(ctx context.Context, in *CreateMattermostTeamRequest, opts ...grpc.CallOption) (*CreateMattermostTeamResponse, error)
+	// LinkMattermostTeam связывает server-resolved Workspace с Team, выбранной
+	// только opaque selector-ом текущего owner catalog.
+	LinkMattermostTeam(ctx context.Context, in *LinkMattermostTeamRequest, opts ...grpc.CallOption) (*LinkMattermostTeamResponse, error)
+	// GetMattermostTeamBinding объединяет exact control-plane mapping с fresh
+	// Mattermost Team/member readback.
+	GetMattermostTeamBinding(ctx context.Context, in *GetMattermostTeamBindingRequest, opts ...grpc.CallOption) (*GetMattermostTeamBindingResponse, error)
+	// RelinkMattermostTeam требует exact current mapping version/generation и
+	// новую Team из owner catalog.
+	RelinkMattermostTeam(ctx context.Context, in *RelinkMattermostTeamRequest, opts ...grpc.CallOption) (*RelinkMattermostTeamResponse, error)
+	// UnlinkMattermostTeam не принимает provider Team ID и закрывает mapping
+	// только после owner graph gate control-plane.
+	UnlinkMattermostTeam(ctx context.Context, in *UnlinkMattermostTeamRequest, opts ...grpc.CallOption) (*UnlinkMattermostTeamResponse, error)
 	// GetMattermostTeamProviderReadback заново проверяет opaque selector,
 	// provider Team и actor membership без раскрытия provider Team ID.
 	GetMattermostTeamProviderReadback(ctx context.Context, in *GetMattermostTeamProviderReadbackRequest, opts ...grpc.CallOption) (*GetMattermostTeamProviderReadbackResponse, error)
@@ -75,6 +90,46 @@ func (c *mattermostTeamServiceClient) CreateMattermostTeam(ctx context.Context, 
 	return out, nil
 }
 
+func (c *mattermostTeamServiceClient) LinkMattermostTeam(ctx context.Context, in *LinkMattermostTeamRequest, opts ...grpc.CallOption) (*LinkMattermostTeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LinkMattermostTeamResponse)
+	err := c.cc.Invoke(ctx, MattermostTeamService_LinkMattermostTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mattermostTeamServiceClient) GetMattermostTeamBinding(ctx context.Context, in *GetMattermostTeamBindingRequest, opts ...grpc.CallOption) (*GetMattermostTeamBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMattermostTeamBindingResponse)
+	err := c.cc.Invoke(ctx, MattermostTeamService_GetMattermostTeamBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mattermostTeamServiceClient) RelinkMattermostTeam(ctx context.Context, in *RelinkMattermostTeamRequest, opts ...grpc.CallOption) (*RelinkMattermostTeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RelinkMattermostTeamResponse)
+	err := c.cc.Invoke(ctx, MattermostTeamService_RelinkMattermostTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mattermostTeamServiceClient) UnlinkMattermostTeam(ctx context.Context, in *UnlinkMattermostTeamRequest, opts ...grpc.CallOption) (*UnlinkMattermostTeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnlinkMattermostTeamResponse)
+	err := c.cc.Invoke(ctx, MattermostTeamService_UnlinkMattermostTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mattermostTeamServiceClient) GetMattermostTeamProviderReadback(ctx context.Context, in *GetMattermostTeamProviderReadbackRequest, opts ...grpc.CallOption) (*GetMattermostTeamProviderReadbackResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetMattermostTeamProviderReadbackResponse)
@@ -99,9 +154,8 @@ func (c *mattermostTeamServiceClient) CheckReadiness(ctx context.Context, in *Ma
 // All implementations must embed UnimplementedMattermostTeamServiceServer
 // for forward compatibility.
 //
-// MattermostTeamService материализует только принадлежащие interaction-gateway
-// provider catalog, create и fresh readback. Авторитетный Workspace mapping
-// остаётся специализированным контрактом control-plane.
+// MattermostTeamService материализует provider Team effect/readback и вызывает
+// специализированный авторитетный Workspace mapping contract control-plane.
 type MattermostTeamServiceServer interface {
 	// ListMattermostTeams возвращает bounded owner-scoped catalog. Actor,
 	// organization и project берутся только из verified authorization context.
@@ -109,6 +163,18 @@ type MattermostTeamServiceServer interface {
 	// CreateMattermostTeam выполняет один durable semantic provider intent.
 	// Повтор того же ключа с другим intent закрыто конфликтует.
 	CreateMattermostTeam(context.Context, *CreateMattermostTeamRequest) (*CreateMattermostTeamResponse, error)
+	// LinkMattermostTeam связывает server-resolved Workspace с Team, выбранной
+	// только opaque selector-ом текущего owner catalog.
+	LinkMattermostTeam(context.Context, *LinkMattermostTeamRequest) (*LinkMattermostTeamResponse, error)
+	// GetMattermostTeamBinding объединяет exact control-plane mapping с fresh
+	// Mattermost Team/member readback.
+	GetMattermostTeamBinding(context.Context, *GetMattermostTeamBindingRequest) (*GetMattermostTeamBindingResponse, error)
+	// RelinkMattermostTeam требует exact current mapping version/generation и
+	// новую Team из owner catalog.
+	RelinkMattermostTeam(context.Context, *RelinkMattermostTeamRequest) (*RelinkMattermostTeamResponse, error)
+	// UnlinkMattermostTeam не принимает provider Team ID и закрывает mapping
+	// только после owner graph gate control-plane.
+	UnlinkMattermostTeam(context.Context, *UnlinkMattermostTeamRequest) (*UnlinkMattermostTeamResponse, error)
 	// GetMattermostTeamProviderReadback заново проверяет opaque selector,
 	// provider Team и actor membership без раскрытия provider Team ID.
 	GetMattermostTeamProviderReadback(context.Context, *GetMattermostTeamProviderReadbackRequest) (*GetMattermostTeamProviderReadbackResponse, error)
@@ -130,6 +196,18 @@ func (UnimplementedMattermostTeamServiceServer) ListMattermostTeams(context.Cont
 }
 func (UnimplementedMattermostTeamServiceServer) CreateMattermostTeam(context.Context, *CreateMattermostTeamRequest) (*CreateMattermostTeamResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateMattermostTeam not implemented")
+}
+func (UnimplementedMattermostTeamServiceServer) LinkMattermostTeam(context.Context, *LinkMattermostTeamRequest) (*LinkMattermostTeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LinkMattermostTeam not implemented")
+}
+func (UnimplementedMattermostTeamServiceServer) GetMattermostTeamBinding(context.Context, *GetMattermostTeamBindingRequest) (*GetMattermostTeamBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMattermostTeamBinding not implemented")
+}
+func (UnimplementedMattermostTeamServiceServer) RelinkMattermostTeam(context.Context, *RelinkMattermostTeamRequest) (*RelinkMattermostTeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RelinkMattermostTeam not implemented")
+}
+func (UnimplementedMattermostTeamServiceServer) UnlinkMattermostTeam(context.Context, *UnlinkMattermostTeamRequest) (*UnlinkMattermostTeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnlinkMattermostTeam not implemented")
 }
 func (UnimplementedMattermostTeamServiceServer) GetMattermostTeamProviderReadback(context.Context, *GetMattermostTeamProviderReadbackRequest) (*GetMattermostTeamProviderReadbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMattermostTeamProviderReadback not implemented")
@@ -194,6 +272,78 @@ func _MattermostTeamService_CreateMattermostTeam_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MattermostTeamService_LinkMattermostTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinkMattermostTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MattermostTeamServiceServer).LinkMattermostTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MattermostTeamService_LinkMattermostTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MattermostTeamServiceServer).LinkMattermostTeam(ctx, req.(*LinkMattermostTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MattermostTeamService_GetMattermostTeamBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMattermostTeamBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MattermostTeamServiceServer).GetMattermostTeamBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MattermostTeamService_GetMattermostTeamBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MattermostTeamServiceServer).GetMattermostTeamBinding(ctx, req.(*GetMattermostTeamBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MattermostTeamService_RelinkMattermostTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RelinkMattermostTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MattermostTeamServiceServer).RelinkMattermostTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MattermostTeamService_RelinkMattermostTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MattermostTeamServiceServer).RelinkMattermostTeam(ctx, req.(*RelinkMattermostTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MattermostTeamService_UnlinkMattermostTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnlinkMattermostTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MattermostTeamServiceServer).UnlinkMattermostTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MattermostTeamService_UnlinkMattermostTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MattermostTeamServiceServer).UnlinkMattermostTeam(ctx, req.(*UnlinkMattermostTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MattermostTeamService_GetMattermostTeamProviderReadback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetMattermostTeamProviderReadbackRequest)
 	if err := dec(in); err != nil {
@@ -244,6 +394,22 @@ var MattermostTeamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateMattermostTeam",
 			Handler:    _MattermostTeamService_CreateMattermostTeam_Handler,
+		},
+		{
+			MethodName: "LinkMattermostTeam",
+			Handler:    _MattermostTeamService_LinkMattermostTeam_Handler,
+		},
+		{
+			MethodName: "GetMattermostTeamBinding",
+			Handler:    _MattermostTeamService_GetMattermostTeamBinding_Handler,
+		},
+		{
+			MethodName: "RelinkMattermostTeam",
+			Handler:    _MattermostTeamService_RelinkMattermostTeam_Handler,
+		},
+		{
+			MethodName: "UnlinkMattermostTeam",
+			Handler:    _MattermostTeamService_UnlinkMattermostTeam_Handler,
 		},
 		{
 			MethodName: "GetMattermostTeamProviderReadback",

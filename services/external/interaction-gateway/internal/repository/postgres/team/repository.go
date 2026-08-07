@@ -66,11 +66,13 @@ func (repository *Repository) Check(ctx context.Context) error {
 	var schemaVersion uint64
 	var identityReady bool
 	if err := repository.pool.QueryRow(ctx, readinessCheckSQL, repository.config.PrincipalGeneration,
-		repository.config.OrganizationID, projects).Scan(&schemaVersion, &identityReady); err != nil || schemaVersion != 1 || !identityReady {
+		repository.config.OrganizationID, projects).Scan(&schemaVersion, &identityReady); err != nil || schemaVersion != 2 || !identityReady {
 		return errors.New("mattermost team repository is not ready")
 	}
-	principal := entity.TeamPrincipal{OrganizationID: repository.config.OrganizationID,
-		ProjectID: repository.config.AllowedProjectIDs[0], ActorID: uuid.NewString()}
+	principal := entity.TeamPrincipal{
+		OrganizationID: repository.config.OrganizationID,
+		ProjectID:      repository.config.AllowedProjectIDs[0], ActorID: uuid.NewString(),
+	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
 	if err != nil {
 		return errors.New("begin Mattermost team readiness transaction")
@@ -297,8 +299,10 @@ func (repository *Repository) ClaimRecovery(ctx context.Context, owner string, l
 	if !organizationID.Valid || !projectID.Valid {
 		return entity.MattermostTeamOperation{}, false, nil
 	}
-	principal := entity.TeamPrincipal{OrganizationID: organizationID.String, ProjectID: projectID.String,
-		ActorID: "system:interaction-team-recovery"}
+	principal := entity.TeamPrincipal{
+		OrganizationID: organizationID.String, ProjectID: projectID.String,
+		ActorID: "system:interaction-team-recovery",
+	}
 	token, err := newLeaseToken()
 	if err != nil {
 		return entity.MattermostTeamOperation{}, false, err
@@ -318,6 +322,192 @@ func (repository *Repository) ClaimRecovery(ctx context.Context, owner string, l
 	}
 	operation.LeaseToken = token
 	return operation, true, nil
+}
+
+func (repository *Repository) AdvanceProviderGeneration(ctx context.Context, principal entity.TeamPrincipal) (uint64, error) {
+	var generation uint64
+	err := repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, providerWatermarkAdvanceSQL, principal.OrganizationID, principal.ProjectID).Scan(&generation)
+	})
+	if err != nil || generation == 0 {
+		return 0, errors.New("advance Mattermost provider observation generation")
+	}
+	return generation, nil
+}
+
+func (repository *Repository) BeginMapping(ctx context.Context, operation entity.WorkspaceMappingOperation,
+	owner string, lease time.Duration,
+) (entity.WorkspaceMappingOperation, domainrepo.MappingDisposition, error) {
+	token, err := newLeaseToken()
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, 0, err
+	}
+	disposition := domainrepo.MappingClaimed
+	var stored entity.WorkspaceMappingOperation
+	err = repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		var generation uint64
+		if err := tx.QueryRow(ctx, providerWatermarkAdvanceSQL, operation.Principal.OrganizationID,
+			operation.Principal.ProjectID).Scan(&generation); err != nil {
+			return err
+		}
+		receiptID := uuid.NewString()
+		tag, err := tx.Exec(ctx, mappingOperationInsertSQL, operation.ID, operation.Principal.OrganizationID,
+			operation.Principal.ProjectID, operation.Principal.ActorID, operation.Action,
+			operation.IdempotencyKey, operation.RequestSHA256, operation.MappingID,
+			operation.ExpectedVersion, operation.ExpectedGeneration, operation.DisplayName,
+			operation.Team.Selector, operation.Team.ProviderTeamID, operation.Team.Status,
+			operation.Team.ProviderSnapshotSHA256, operation.Team.CreatedAt, operation.Team.UpdatedAt,
+			operation.Team.ObservedAt, generation, receiptID, owner, digest(token), interval(lease))
+		if err != nil {
+			return err
+		}
+		stored, leaseActive, err := scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, operation.ID))
+		if err != nil {
+			return err
+		}
+		if stored.RequestSHA256 != operation.RequestSHA256 || stored.Action != operation.Action ||
+			stored.Principal.ActorID != operation.Principal.ActorID {
+			return domainrepo.ErrIdempotencyConflict
+		}
+		if tag.RowsAffected() == 1 {
+			stored.LeaseToken = token
+			return nil
+		}
+		if stored.State != enum.WorkspaceMappingOperationPending &&
+			stored.State != enum.WorkspaceMappingOperationAmbiguous {
+			disposition = domainrepo.MappingReplay
+			return nil
+		}
+		if leaseActive {
+			disposition = domainrepo.MappingBusy
+			return nil
+		}
+		tag, err = tx.Exec(ctx, mappingOperationReclaimSQL, stored.ID, owner, digest(token), interval(lease))
+		if err != nil || tag.RowsAffected() != 1 {
+			disposition = domainrepo.MappingBusy
+			return err
+		}
+		stored, _, err = scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, stored.ID))
+		stored.LeaseToken = token
+		return err
+	})
+	if errors.Is(err, domainrepo.ErrIdempotencyConflict) {
+		return entity.WorkspaceMappingOperation{}, 0, err
+	}
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, 0, errors.New("begin Workspace Mattermost mapping operation")
+	}
+	return stored, disposition, nil
+}
+
+// RefreshMappingReceipt выдаёт неоднозначной операции новый одноразовый JTI и
+// монотонное provider generation только после owner readback её predecessor.
+// Watermark и operation checkpoint меняются одной транзакцией.
+func (repository *Repository) RefreshMappingReceipt(ctx context.Context,
+	operation entity.WorkspaceMappingOperation,
+) (entity.WorkspaceMappingOperation, error) {
+	var refreshed entity.WorkspaceMappingOperation
+	err := repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		var generation uint64
+		if err := tx.QueryRow(ctx, providerWatermarkAdvanceSQL, operation.Principal.OrganizationID,
+			operation.Principal.ProjectID).Scan(&generation); err != nil {
+			return err
+		}
+		if generation <= operation.EffectGeneration {
+			return errors.New("provider observation generation did not advance")
+		}
+		tag, err := tx.Exec(ctx, mappingOperationRefreshReceiptSQL, operation.ID,
+			operation.Fence, digest(operation.LeaseToken), generation, uuid.NewString())
+		if err != nil || tag.RowsAffected() != 1 {
+			return errors.New("refresh Workspace mapping provider receipt")
+		}
+		refreshed, _, err = scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, operation.ID))
+		if err == nil {
+			refreshed.LeaseToken = operation.LeaseToken
+		}
+		return err
+	})
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, errors.New("refresh Workspace mapping provider receipt")
+	}
+	return refreshed, nil
+}
+
+func (repository *Repository) MarkMappingAmbiguous(ctx context.Context, operation entity.WorkspaceMappingOperation,
+	code string, retry time.Time,
+) error {
+	return repository.updateMappingOperation(ctx, operation, mappingOperationMarkAmbiguousSQL,
+		operation.ID, code, retry, operation.Fence, digest(operation.LeaseToken))
+}
+
+func (repository *Repository) MarkMappingTerminal(ctx context.Context, operation entity.WorkspaceMappingOperation,
+	mapping entity.WorkspaceMattermostMapping,
+) error {
+	state := enum.WorkspaceMappingOperationBound
+	if mapping.State == "UNLINKED" {
+		state = enum.WorkspaceMappingOperationUnlinked
+	}
+	return repository.updateMappingOperation(ctx, operation, mappingOperationMarkTerminalSQL,
+		operation.ID, state, mapping.ID, mapping.Version, mapping.Generation,
+		mapping.ProviderEffectVersion, mapping.ProviderEffectGeneration, mapping.ProviderObservedAt,
+		mapping.UpdatedAt, operation.Fence, digest(operation.LeaseToken))
+}
+
+func (repository *Repository) MarkMappingRepairRequired(ctx context.Context,
+	operation entity.WorkspaceMappingOperation, code string,
+) error {
+	return repository.updateMappingOperation(ctx, operation, mappingOperationMarkRepairSQL,
+		operation.ID, code, operation.Fence, digest(operation.LeaseToken))
+}
+
+func (repository *Repository) ClaimMappingRecovery(ctx context.Context, owner string,
+	lease time.Duration,
+) (entity.WorkspaceMappingOperation, bool, error) {
+	var organizationID, projectID sql.NullString
+	if err := repository.pool.QueryRow(ctx, mappingNextWorkScopeSQL).Scan(&organizationID, &projectID); err != nil {
+		return entity.WorkspaceMappingOperation{}, false, errors.New("resolve Workspace mapping recovery scope")
+	}
+	if !organizationID.Valid || !projectID.Valid {
+		return entity.WorkspaceMappingOperation{}, false, nil
+	}
+	principal := entity.TeamPrincipal{
+		OrganizationID: organizationID.String, ProjectID: projectID.String,
+		ActorID: "system:interaction-mapping-recovery",
+	}
+	token, err := newLeaseToken()
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, false, err
+	}
+	var operation entity.WorkspaceMappingOperation
+	err = repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		var operationID string
+		if err := tx.QueryRow(ctx, mappingOperationClaimRecoverySQL, owner, digest(token), interval(lease)).Scan(&operationID); err != nil {
+			return err
+		}
+		var scanErr error
+		operation, _, scanErr = scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, operationID))
+		return scanErr
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.WorkspaceMappingOperation{}, false, nil
+	}
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, false, errors.New("claim Workspace mapping recovery")
+	}
+	operation.LeaseToken = token
+	return operation, true, nil
+}
+
+func (repository *Repository) updateMappingOperation(ctx context.Context,
+	operation entity.WorkspaceMappingOperation, query string, arguments ...any,
+) error {
+	return repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, query, arguments...)
+		if err != nil || tag.RowsAffected() != 1 {
+			return errors.New("update Workspace Mattermost mapping operation")
+		}
+		return nil
+	})
 }
 
 func (repository *Repository) updateOperation(ctx context.Context, operation entity.MattermostTeamOperation,
@@ -398,6 +588,36 @@ func scanOperation(row rowScanner) (entity.MattermostTeamOperation, bool, error)
 	}
 	if operation.Team.CreatedAt.Equal(time.Unix(0, 0)) {
 		operation.Team.CreatedAt, operation.Team.UpdatedAt, operation.Team.ObservedAt = time.Time{}, time.Time{}, time.Time{}
+	}
+	return operation, leaseActive, nil
+}
+
+func scanMappingOperation(row rowScanner) (entity.WorkspaceMappingOperation, bool, error) {
+	var operation entity.WorkspaceMappingOperation
+	var status string
+	var resultObservedAt, resultUpdatedAt time.Time
+	var leaseActive bool
+	if err := row.Scan(&operation.ID, &operation.Principal.OrganizationID, &operation.Principal.ProjectID,
+		&operation.Principal.ActorID, &operation.Action, &operation.IdempotencyKey, &operation.RequestSHA256,
+		&operation.MappingID, &operation.ExpectedVersion, &operation.ExpectedGeneration, &operation.DisplayName,
+		&operation.Team.Selector, &operation.Team.ProviderTeamID, &status, &operation.Team.ProviderSnapshotSHA256,
+		&operation.Team.CreatedAt, &operation.Team.UpdatedAt, &operation.Team.ObservedAt,
+		&operation.EffectGeneration, &operation.ReceiptID, &operation.State, &operation.FailureCode,
+		&operation.Fence, &operation.RetryNotBefore, &operation.CreatedAt, &operation.UpdatedAt,
+		&operation.Result.ID, &operation.Result.Version, &operation.Result.Generation,
+		&operation.Result.ProviderEffectVersion, &operation.Result.ProviderEffectGeneration,
+		&resultObservedAt, &resultUpdatedAt, &leaseActive); err != nil {
+		return entity.WorkspaceMappingOperation{}, false, err
+	}
+	operation.Team.Status = enum.MattermostTeamStatus(status)
+	operation.Result.ProviderTeamID = operation.Team.ProviderTeamID
+	if operation.State == enum.WorkspaceMappingOperationUnlinked {
+		operation.Result.State = "UNLINKED"
+	} else if operation.State == enum.WorkspaceMappingOperationBound {
+		operation.Result.State = "BOUND"
+	}
+	if !resultObservedAt.Equal(time.Unix(0, 0)) {
+		operation.Result.ProviderObservedAt, operation.Result.UpdatedAt = resultObservedAt, resultUpdatedAt
 	}
 	return operation, leaseActive, nil
 }

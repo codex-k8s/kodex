@@ -31,6 +31,7 @@ import (
 	postgresgateway "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/gateway"
 	postgresteam "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/team"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/mattermostevent"
+	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/providerreceipt"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/readbackgrant"
 	teamgrpc "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/grpc/team"
 	apihttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/api"
@@ -154,7 +155,15 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	teamService, err := domainteam.New(teamRepository, mattermost, current.business, domainteam.Config{
+	receiptSigner, err := providerreceipt.New(providerreceipt.Config{
+		Issuer:         config.Gateway.ProviderReceiptIssuer,
+		PrivateJWKFile: config.Gateway.ProviderReceiptPrivateJWKFile,
+		MaximumTTL:     config.Gateway.ProviderReceiptTTL,
+	})
+	if err != nil {
+		return err
+	}
+	teamService, err := domainteam.New(teamRepository, mattermost, control, receiptSigner, current.business, domainteam.Config{
 		InstanceID: config.Gateway.InstanceID, Lease: config.Gateway.TeamOperationLease,
 		SelectorTTL: config.Gateway.TeamSelectorTTL, RecoveryInterval: config.Gateway.TeamRecoveryInterval,
 		RecoveryWindow: config.Gateway.TeamRecoveryWindow,
@@ -187,9 +196,11 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	bot, err := botclient.New(botclient.Config{URL: config.Bot.URL, TLSServerName: config.Bot.TLSServerName,
+	bot, err := botclient.New(botclient.Config{
+		URL: config.Bot.URL, TLSServerName: config.Bot.TLSServerName,
 		CAFile: config.Bot.CAFile, ClientCertificateFile: config.Bot.ClientCertificateFile,
-		ClientPrivateKeyFile: config.Bot.ClientPrivateKeyFile, Timeout: config.Bot.Timeout})
+		ClientPrivateKeyFile: config.Bot.ClientPrivateKeyFile, Timeout: config.Bot.Timeout,
+	})
 	if err != nil {
 		return err
 	}
@@ -212,15 +223,16 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	service, err := domainservice.New(repository, mattermost, objects, control, bot, authority, current.business, domainservice.Config{
-		ActionCallbackURL: config.Gateway.ActionCallbackURL, DialogCallbackURL: config.Gateway.DialogCallbackURL,
-		ArtifactDownloadBaseURL: config.Gateway.ArtifactDownloadBaseURL, ArtifactDownloadTTL: config.Gateway.ArtifactDownloadTTL,
-		RetentionRef: config.Gateway.RetentionRef, MaximumPromptBytes: config.Gateway.MaximumPromptBytes,
-		MaximumFiles: config.Gateway.MaximumFiles, MaximumAttempts: config.Gateway.MaximumAttempts,
-		MaximumMattermostFileBytes: config.Mattermost.MaximumFileBytes,
-		InboundLease:               config.Gateway.InboundLease, DeliveryLease: config.Gateway.DeliveryLease,
-		ScanPollInterval: config.Gateway.ScanPollInterval, RetryBase: config.Gateway.RetryBase,
-	})
+	service, err := domainservice.New(repository, mattermost, objects, control, bot, authority, teamService,
+		current.business, domainservice.Config{
+			ActionCallbackURL: config.Gateway.ActionCallbackURL, DialogCallbackURL: config.Gateway.DialogCallbackURL,
+			ArtifactDownloadBaseURL: config.Gateway.ArtifactDownloadBaseURL, ArtifactDownloadTTL: config.Gateway.ArtifactDownloadTTL,
+			RetentionRef: config.Gateway.RetentionRef, MaximumPromptBytes: config.Gateway.MaximumPromptBytes,
+			MaximumFiles: config.Gateway.MaximumFiles, MaximumAttempts: config.Gateway.MaximumAttempts,
+			MaximumMattermostFileBytes: config.Mattermost.MaximumFileBytes,
+			InboundLease:               config.Gateway.InboundLease, DeliveryLease: config.Gateway.DeliveryLease,
+			ScanPollInterval: config.Gateway.ScanPollInterval, RetryBase: config.Gateway.RetryBase,
+		})
 	if err != nil {
 		return err
 	}
@@ -263,9 +275,16 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	for _, check := range []struct {
 		name string
 		run  func(context.Context) error
-	}{{"PostgreSQL", repository.Check}, {"control-plane", control.Check}, {"Mattermost event", service.CheckInteraction},
-		{"Mattermost Team", teamService.Check}, {"internal authority verifier", authorityChecker.Check},
-		{"bot-service runtime transport", bot.Check}, {"S3", objects.Check}, {"delivery readback", readbackCheck}} {
+	}{
+		{"PostgreSQL", repository.Check},
+		{"control-plane", control.Check},
+		{"Mattermost event", service.CheckInteraction},
+		{"Mattermost Team", teamService.Check},
+		{"internal authority verifier", authorityChecker.Check},
+		{"bot-service runtime transport", bot.Check},
+		{"S3", objects.Check},
+		{"delivery readback", readbackCheck},
+	} {
 		if err := check.run(startup); err != nil {
 			return errors.New("startup barrier: " + check.name + " working path is not ready")
 		}
@@ -324,7 +343,8 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	}
 	current.readiness.Set(true, "ready")
 	current.metrics.SetReady(true)
-	current.workers = serviceruntime.StartWorkers(lifecycle,
+	current.workers = serviceruntime.StartWorkers(
+		lifecycle,
 		publicWorker(current.public, current.publicConn, shutdownBase, config.Gateway.ShutdownTimeout),
 		teamRPCWorker(current.teamServer, current.teamConn, config.Gateway.ShutdownTimeout),
 		technicalWorker(current.technical, shutdownBase, config.Gateway.ShutdownTimeout),
@@ -343,6 +363,8 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 			func(ctx context.Context) (bool, error) { return true, service.ExpireOwnerGate(ctx) }),
 		periodicWorker("team_recovery", config.Gateway.TeamRecoveryInterval, config.Gateway.OperationTimeout, current.business, current.logger,
 			teamService.ProcessRecovery),
+		periodicWorker("mapping_recovery", config.Gateway.TeamRecoveryInterval, config.Gateway.OperationTimeout, current.business, current.logger,
+			teamService.ProcessMappingRecovery),
 		readinessWorker(repository.Check, control.Check, service.CheckInteraction, mattermost.Check, teamService.Check,
 			authorityChecker.Check, bot.Check, objects.Check, readbackCheck,
 			current.readiness, current.metrics, current.business, current.logger,
@@ -465,7 +487,8 @@ func teamRPCWorker(server *stdgrpc.Server, listener net.Listener, timeout time.D
 }
 
 func webSocketWorker(service *domainservice.Service, metrics *internalobservability.Metrics,
-	logger *slog.Logger, retry time.Duration) serviceruntime.Worker {
+	logger *slog.Logger, retry time.Duration,
+) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		for ctx.Err() == nil {
 			catchUpContext, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -488,7 +511,8 @@ func webSocketWorker(service *domainservice.Service, metrics *internalobservabil
 }
 
 func periodicWorker(name string, interval, timeout time.Duration, metrics *internalobservability.Metrics,
-	logger *slog.Logger, cycle func(context.Context) (bool, error)) serviceruntime.Worker {
+	logger *slog.Logger, cycle func(context.Context) (bool, error),
+) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -531,8 +555,10 @@ func readinessWorker(
 	interval time.Duration,
 	timeout time.Duration,
 ) serviceruntime.Worker {
-	checkFunctions := []func(context.Context) error{repositoryCheck, controlCheck, interactionCheck, mattermostCheck,
-		teamCheck, authorityCheck, botCheck, objectCheck, readbackCheck}
+	checkFunctions := []func(context.Context) error{
+		repositoryCheck, controlCheck, interactionCheck, mattermostCheck,
+		teamCheck, authorityCheck, botCheck, objectCheck, readbackCheck,
+	}
 	return periodicWorker("readiness", interval, timeout, business, logger, func(ctx context.Context) (bool, error) {
 		for _, check := range checkFunctions {
 			if err := check(ctx); err != nil {
@@ -609,7 +635,8 @@ func (current *state) shutdown(base context.Context) error {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "close PostgreSQL", Timeout: current.config.Gateway.ShutdownTimeout, Run: func(context.Context) error { current.pool.Close(); return nil }})
 	}
 	if current.telemetry != nil {
-		operations = append(operations,
+		operations = append(
+			operations,
 			serviceruntime.ShutdownOperation{Name: "shutdown tracing", Timeout: current.config.Gateway.ShutdownTimeout, Run: current.telemetry.ShutdownTracing},
 			serviceruntime.ShutdownOperation{Name: "flush Sentry", Timeout: current.config.Gateway.ShutdownTimeout, Run: current.telemetry.FlushSentry},
 		)

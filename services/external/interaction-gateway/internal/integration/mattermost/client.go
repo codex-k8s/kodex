@@ -166,7 +166,8 @@ func (client *Client) Check(ctx context.Context) error {
 }
 
 func (client *Client) ReconcileLifecycle(ctx context.Context, knownThreads map[string]string,
-	consume func(context.Context, domainmattermost.RawEvent) error) error {
+	consume func(context.Context, domainmattermost.RawEvent) error,
+) error {
 	for _, boundary := range client.ChannelBoundaries() {
 		channel, err := client.getMappedChannel(ctx, client.primary, boundary.TeamID, boundary.ChannelID)
 		if err != nil || channel == nil || channel.Id != boundary.ChannelID || channel.TeamId != boundary.TeamID {
@@ -180,9 +181,11 @@ func (client *Client) ReconcileLifecycle(ctx context.Context, knownThreads map[s
 		if channel.DeleteAt != 0 {
 			kind = "CHANNEL_DELETE"
 		}
-		raw := domainmattermost.RawEvent{Kind: kind, Revision: uint64(revision), TeamID: channel.TeamId,
+		raw := domainmattermost.RawEvent{
+			Kind: kind, Revision: uint64(revision), TeamID: channel.TeamId,
 			ChannelID: channel.Id, DeleteAt: channel.DeleteAt,
-			ProviderEventID: fmt.Sprintf("reconcile:%s:%s:%d", strings.ToLower(kind), channel.Id, revision)}
+			ProviderEventID: fmt.Sprintf("reconcile:%s:%s:%d", strings.ToLower(kind), channel.Id, revision),
+		}
 		if err := consume(ctx, raw); err != nil {
 			return err
 		}
@@ -202,9 +205,11 @@ func (client *Client) ReconcileLifecycle(ctx context.Context, knownThreads map[s
 		if post.DeleteAt != 0 {
 			kind = "THREAD_DELETE"
 		}
-		raw := domainmattermost.RawEvent{Kind: kind, Revision: uint64(revision), ChannelID: post.ChannelId,
+		raw := domainmattermost.RawEvent{
+			Kind: kind, Revision: uint64(revision), ChannelID: post.ChannelId,
 			PostID: post.Id, RootPostID: post.Id, UserID: post.UserId, DeleteAt: post.DeleteAt,
-			ProviderEventID: fmt.Sprintf("reconcile:%s:%s:%d", strings.ToLower(kind), post.Id, revision)}
+			ProviderEventID: fmt.Sprintf("reconcile:%s:%s:%d", strings.ToLower(kind), post.Id, revision),
+		}
 		if err := consume(ctx, raw); err != nil {
 			return err
 		}
@@ -325,10 +330,13 @@ func (client *Client) resolveLifecycle(ctx context.Context, raw domainmattermost
 	if raw.Kind != "THREAD_RESTORE_CANDIDATE" {
 		raw.UserID = client.primary.identity.UserID
 	}
-	return entity.Boundary{OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
-		ChatID: binding.ChatID, ActorID: binding.LifecycleActorID, RoleID: binding.RoleID,
+	return entity.Boundary{
+		OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
+		ChatID: binding.ChatID, ActorID: binding.LifecycleActorID, MappingOwnerActorID: binding.LifecycleActorID,
+		RoleID: binding.RoleID,
 		Locale: binding.Locale, BotStableKey: binding.BotStableKey, TeamID: channel.TeamId,
-		ChannelID: channel.Id, SessionID: binding.SessionID}, raw, nil
+		ChannelID: channel.Id, SessionID: binding.SessionID,
+	}, raw, nil
 }
 
 func (client *Client) getMappedChannel(ctx context.Context, bot *botClient, teamID, channelID string) (*model.Channel, error) {
@@ -353,6 +361,10 @@ func (client *Client) ResolveDelivery(projectID, actorID string) (entity.Boundar
 
 func (client *Client) ResolveRoomDelivery(projectID, chatID, actorID string) (entity.Boundary, error) {
 	return client.index.resolveRoomDelivery(projectID, chatID, actorID)
+}
+
+func (client *Client) ResolveMappedChannel(teamID, channelID string) (entity.Boundary, error) {
+	return client.index.resolveMappedChannel(teamID, channelID)
 }
 
 func (client *Client) DownloadFile(ctx context.Context, channelID, fileID string) ([]byte, string, string, error) {
@@ -385,9 +397,11 @@ func (client *Client) Publish(ctx context.Context, delivery entity.Delivery, fil
 		return domainmattermost.Published{}, errors.New("mattermost card payload is invalid")
 	}
 	if delivery.UpdatePostID != "" {
-		post := &model.Post{Id: delivery.UpdatePostID, ChannelId: delivery.ChannelID,
+		post := &model.Post{
+			Id: delivery.UpdatePostID, ChannelId: delivery.ChannelID,
 			RootId: delivery.RootPostID, Message: payload.Message, Props: payload.Props,
-			FileIds: model.StringArray(fileIDs)}
+			FileIds: model.StringArray(fileIDs),
+		}
 		updated, _, updateErr := bot.api.UpdatePost(ctx, delivery.UpdatePostID, post)
 		if updateErr != nil || updated == nil || updated.Id != delivery.UpdatePostID {
 			readback, _, readErr := bot.api.GetPost(ctx, delivery.UpdatePostID, "")
@@ -452,8 +466,10 @@ func (client *Client) OpenDecisionDialog(ctx context.Context, botStableKey, trig
 			SubmitLabel: label, NotifyOnCancel: true, State: state,
 			Elements: []model.DialogElement{
 				{DisplayName: title, Name: "decision", Type: "select", Options: []*model.PostActionOptions{
-					{Text: approve, Value: "APPROVE"}, {Text: reject, Value: "REJECT"},
-					{Text: changes, Value: "CHANGES_REQUESTED"}, {Text: cancel, Value: "CANCEL"},
+					{Text: approve, Value: "APPROVE"},
+					{Text: reject, Value: "REJECT"},
+					{Text: changes, Value: "CHANGES_REQUESTED"},
+					{Text: cancel, Value: "CANCEL"},
 				}},
 				{DisplayName: field, Name: "reason", Type: "textarea", MinLength: 1, MaxLength: 2048},
 			},
@@ -466,7 +482,8 @@ func (client *Client) OpenDecisionDialog(ctx context.Context, botStableKey, trig
 }
 
 func (client *Client) findPending(ctx context.Context, bot *botClient, delivery entity.Delivery,
-	payload cardPayload, fileIDs []string) (*model.Post, bool, error) {
+	payload cardPayload, fileIDs []string,
+) (*model.Post, bool, error) {
 	since := delivery.CreatedAt.Add(-client.config.CatchUpWindow).UnixMilli()
 	posts, _, err := bot.api.GetPostsSince(ctx, delivery.ChannelID, since, false)
 	if err != nil || posts == nil {
@@ -484,7 +501,8 @@ func (client *Client) findPending(ctx context.Context, bot *botClient, delivery 
 }
 
 func (client *Client) exactPending(ctx context.Context, bot *botClient, post *model.Post,
-	delivery entity.Delivery, payload cardPayload, expectedFileIDs []string) bool {
+	delivery entity.Delivery, payload cardPayload, expectedFileIDs []string,
+) bool {
 	if post.ChannelId != delivery.ChannelID || post.UserId != bot.identity.UserID ||
 		post.RootId != delivery.RootPostID || post.Message != payload.Message ||
 		!slices.Equal([]string(post.FileIds), expectedFileIDs) || len(post.FileIds) != len(delivery.Attachments) ||
@@ -531,7 +549,8 @@ func exactProps(actual, expected model.StringInterface) bool {
 }
 
 func (client *Client) CatchUp(ctx context.Context, cursors map[string]int64, reactionPosts map[string]string,
-	consume func(context.Context, domainmattermost.RawEvent) error) error {
+	consume func(context.Context, domainmattermost.RawEvent) error,
+) error {
 	for _, boundary := range client.ChannelBoundaries() {
 		channelID := boundary.ChannelID
 		channel, _, channelErr := client.primary.api.GetChannel(ctx, channelID)
@@ -641,10 +660,12 @@ func (client *Client) ChannelBoundaries() []entity.Boundary { return client.inde
 
 func (client *Client) ReadinessBoundary() (entity.Boundary, error) {
 	for _, binding := range client.manifest.Channels {
-		return entity.Boundary{OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
+		return entity.Boundary{
+			OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
 			ChatID: binding.ChatID, ActorID: binding.LifecycleActorID, RoleID: binding.RoleID,
 			Locale: binding.Locale, BotStableKey: binding.BotStableKey, TeamID: binding.TeamID,
-			ChannelID: binding.ChannelID, SessionID: binding.SessionID}, nil
+			ChannelID: binding.ChannelID, SessionID: binding.SessionID,
+		}, nil
 	}
 	return entity.Boundary{}, errors.New("mattermost readiness boundary is unavailable")
 }
@@ -713,8 +734,10 @@ func decodeEvent(event *model.WebSocketEvent) (domainmattermost.RawEvent, bool) 
 		if event.EventType() == model.WebsocketEventChannelRestored {
 			kind = "CHANNEL_RESTORE"
 		}
-		return domainmattermost.RawEvent{ProviderEventID: fmt.Sprintf("%s:%s:%d", strings.ToLower(kind), channelID, event.GetSequence()),
-			Kind: kind, Revision: uint64(event.GetSequence()), ChannelID: channelID}, true
+		return domainmattermost.RawEvent{
+			ProviderEventID: fmt.Sprintf("%s:%s:%d", strings.ToLower(kind), channelID, event.GetSequence()),
+			Kind:            kind, Revision: uint64(event.GetSequence()), ChannelID: channelID,
+		}, true
 	case model.WebsocketEventReactionAdded:
 		var reaction model.Reaction
 		if !decodeData(event.GetData()["reaction"], &reaction) || reaction.PostId == "" {
@@ -772,8 +795,10 @@ func publishedReceipt(post *model.Post, payloadDigest string) (domainmattermost.
 		PostID, ChannelID, RootPostID, PendingPostID, UserID, PayloadSHA256 string
 		FileIDs                                                             []string
 		UpdateAt                                                            int64
-	}{post.Id, post.ChannelId, post.RootId, post.PendingPostId, post.UserId, payloadDigest,
-		append([]string(nil), post.FileIds...), post.UpdateAt})
+	}{
+		post.Id, post.ChannelId, post.RootId, post.PendingPostId, post.UserId, payloadDigest,
+		append([]string(nil), post.FileIds...), post.UpdateAt,
+	})
 	if err != nil {
 		return domainmattermost.Published{}, errors.New("encode Mattermost receipt")
 	}

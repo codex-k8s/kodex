@@ -50,7 +50,8 @@ func openPostgres(ctx context.Context, config GatewayConfig) (*pgxpool.Pool, err
 	}
 	var sessionUser string
 	var runtimeMember bool
-	if err := pool.QueryRow(ctx,
+	if err := pool.QueryRow(
+		ctx,
 		"SELECT session_user::text, pg_has_role(session_user, 'interaction_gateway_runtime', 'member')",
 	).Scan(&sessionUser, &runtimeMember); err != nil || sessionUser != config.PostgresExpectedUser || !runtimeMember {
 		pool.Close()

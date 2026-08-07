@@ -154,8 +154,10 @@ func (server *Server) ManageAgent(
 			Action:     trimEnum(request.GetAction().String(), "PROTECTED_CONFIGURATION_ACTION_"),
 			ResourceID: request.GetAgentId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: agentFromProto(request.GetSpec()),
-			ReferenceKeys: []string{request.GetRoleDefinitionStableKey(), request.GetInstructionSetStableKey(),
-				request.GetProviderPoolStableKey()},
+			ReferenceKeys: []string{
+				request.GetRoleDefinitionStableKey(), request.GetInstructionSetStableKey(),
+				request.GetProviderPoolStableKey(),
+			},
 		})
 	if err != nil {
 		return nil, err
@@ -177,8 +179,10 @@ func (server *Server) ReconcileGitAgent(
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindAgent, Action: "reconcile_git",
 			ResourceID: request.GetAgentId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: agentFromProto(request.GetSpec()),
-			ReferenceKeys: []string{request.GetRoleDefinitionStableKey(), request.GetInstructionSetStableKey(),
-				request.GetProviderPoolStableKey()}, GitReceipt: receipt,
+			ReferenceKeys: []string{
+				request.GetRoleDefinitionStableKey(), request.GetInstructionSetStableKey(),
+				request.GetProviderPoolStableKey(),
+			}, GitReceipt: receipt,
 		})
 	if err != nil {
 		return nil, err
@@ -463,8 +467,10 @@ func protectedHistoryToProto(item domainrepo.ProtectedResourceHistory) (*control
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.ProtectedResourceHistoryEntry{Resource: encoded, Action: item.Action,
-		SnapshotSha256: item.SnapshotSHA256, OccurredAt: timestamppb.New(item.OccurredAt)}, nil
+	return &controlplanev1.ProtectedResourceHistoryEntry{
+		Resource: encoded, Action: item.Action,
+		SnapshotSha256: item.SnapshotSHA256, OccurredAt: timestamppb.New(item.OccurredAt),
+	}, nil
 }
 
 func parseUint64PageToken(token string) (uint64, error) {
@@ -599,8 +605,10 @@ func (server *Server) CompareInstructionSetVersions(ctx context.Context, request
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
-	return &controlplanev1.CompareInstructionSetVersionsResponse{Left: left, Right: right,
-		ContentEqual: result.ContentEqual, ComparisonSha256: result.ComparisonSHA256}, nil
+	return &controlplanev1.CompareInstructionSetVersionsResponse{
+		Left: left, Right: right,
+		ContentEqual: result.ContentEqual, ComparisonSha256: result.ComparisonSHA256,
+	}, nil
 }
 
 func (server *Server) BindScheduleConfiguration(
@@ -720,21 +728,34 @@ func (server *Server) ListWorkspaceMattermostMappings(
 	ctx context.Context,
 	request *controlplanev1.ListWorkspaceMattermostMappingsRequest,
 ) (*controlplanev1.ListWorkspaceMattermostMappingsResponse, error) {
-	states := make([]controlplanev1.LifecycleState, 0, len(request.GetStates()))
+	states := make([]enum.State, 0, len(request.GetStates()))
 	for _, state := range request.GetStates() {
 		if state == controlplanev1.WorkspaceMattermostMappingState_WORKSPACE_MATTERMOST_MAPPING_STATE_BOUND {
-			states = append(states, controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE)
+			states = append(states, enum.StateActive)
 		} else if state == controlplanev1.WorkspaceMattermostMappingState_WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED {
-			states = append(states, controlplanev1.LifecycleState_LIFECYCLE_STATE_ARCHIVED)
+			states = append(states, enum.StateArchived)
 		} else {
 			return nil, rpcError("", errs.ErrInvalidInput)
 		}
 	}
-	items, next, err := server.listProtectedConfigurations(ctx,
-		controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
-		enum.KindWorkspaceMapping, states, request.GetPageToken(), request.GetPageSize())
+	principal, principalErr := authorization.Principal(ctx,
+		controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName)
+	if principalErr != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	limit := pageSize(request.GetPageSize())
+	found, err := server.service.ListWorkspaceMattermostMappings(ctx, principal, states,
+		request.GetPageToken(), limit)
 	if err != nil {
-		return nil, err
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	items := make([]*controlplanev1.Resource, 0, len(found))
+	for _, item := range found {
+		projection, castErr := toProtoResource(item)
+		if castErr != nil {
+			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+		}
+		items = append(items, projection)
 	}
 	if request.GetWorkspaceId() != "" {
 		filtered := items[:0]
@@ -744,6 +765,10 @@ func (server *Server) ListWorkspaceMattermostMappings(
 			}
 		}
 		items = filtered
+	}
+	next := ""
+	if len(found) == limit {
+		next = found[len(found)-1].ID
 	}
 	return &controlplanev1.ListWorkspaceMattermostMappingsResponse{Mappings: items, NextPageToken: next}, nil
 }
@@ -930,12 +955,14 @@ func (server *Server) ListRuntimeIncidentHistory(
 }
 
 func runtimeIncidentToProto(incident domainrepo.RuntimeIncident) *controlplanev1.RuntimeIncident {
-	return &controlplanev1.RuntimeIncident{IncidentId: incident.ID, ExecutionId: incident.ExecutionID,
+	return &controlplanev1.RuntimeIncident{
+		IncidentId: incident.ID, ExecutionId: incident.ExecutionID,
 		ExecutionFence: incident.ExecutionFence, Kind: toProtoRuntimeIncidentKind(incident.Kind),
 		EvidenceSha256: incident.EvidenceSHA256, WorkloadId: incident.WorkloadID,
 		OccurredAt: timestamppb.New(incident.OccurredAt), Version: incident.Version,
 		State: runtimeIncidentStateToProto(incident.State), ActionReasonCode: incident.ReasonCode,
-		UpdatedAt: timestamppb.New(incident.UpdatedAt)}
+		UpdatedAt: timestamppb.New(incident.UpdatedAt),
+	}
 }
 
 func runtimeIncidentStateToProto(state string) controlplanev1.RuntimeIncidentState {
@@ -965,10 +992,12 @@ func (server *Server) ManageRun(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	result, err := server.service.ManageRun(ctx, resource.ManageRunInput{Principal: principal,
+	result, err := server.service.ManageRun(ctx, resource.ManageRunInput{
+		Principal:      principal,
 		IdempotencyKey: request.GetIdempotencyKey(), ProcessRunID: request.GetProcessRunId(),
 		ExpectedVersion: request.GetExpectedVersion(),
-		Action:          trimEnum(request.GetAction().String(), "RUN_ACTION_"), ReasonCode: request.GetReasonCode()})
+		Action:          trimEnum(request.GetAction().String(), "RUN_ACTION_"), ReasonCode: request.GetReasonCode(),
+	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
@@ -1046,7 +1075,8 @@ func (server *Server) GetRunLineage(
 		encoded.Processes = append(encoded.Processes, &controlplanev1.RunProcessLineage{
 			ProcessRunId: process.ID, ParentProcessRunId: process.ParentProcessRunID,
 			State: process.State, Version: process.Version, ChildProcessRunIds: process.ChildIDs,
-			CreatedAt: timestamppb.New(process.OccurredAt), UpdatedAt: timestamppb.New(process.UpdatedAt)})
+			CreatedAt: timestamppb.New(process.OccurredAt), UpdatedAt: timestamppb.New(process.UpdatedAt),
+		})
 	}
 	for _, attempt := range lineage.Attempts {
 		encoded.Attempts = append(encoded.Attempts, &controlplanev1.RunAttemptLineage{
@@ -1055,7 +1085,8 @@ func (server *Server) GetRunLineage(
 			RuntimeRevisionVersion: attempt.RuntimeRevisionVersion, State: attempt.State,
 			ExecutionVersion: attempt.Version, CreatedAt: timestamppb.New(attempt.OccurredAt),
 			UpdatedAt: timestamppb.New(attempt.UpdatedAt), PredecessorExecutionId: attempt.PredecessorID,
-			SuccessorExecutionId: attempt.SuccessorID})
+			SuccessorExecutionId: attempt.SuccessorID,
+		})
 	}
 	return &controlplanev1.GetRunLineageResponse{Lineage: encoded}, nil
 }
@@ -1075,11 +1106,13 @@ func (server *Server) ListRunTimeline(
 	}
 	response := &controlplanev1.ListRunTimelineResponse{Events: make([]*controlplanev1.AuditEvent, 0, len(items))}
 	for _, item := range items {
-		response.Events = append(response.Events, &controlplanev1.AuditEvent{Id: item.ID, Action: item.Action,
+		response.Events = append(response.Events, &controlplanev1.AuditEvent{
+			Id: item.ID, Action: item.Action,
 			ResourceId: item.ResourceID, ResourceKind: toProtoKind(enum.Kind(item.ResourceKind)),
 			ResourceVersion: item.ResourceVersion, Outcome: item.Outcome, ActorId: item.ActorID,
 			CorrelationId: item.CorrelationID, PolicyRevision: item.PolicyRevision,
-			OccurredAt: timestamppb.New(item.OccurredAt)})
+			OccurredAt: timestamppb.New(item.OccurredAt),
+		})
 	}
 	response.NextPageToken = next
 	return response, nil

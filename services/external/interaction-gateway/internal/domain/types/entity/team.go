@@ -27,6 +27,62 @@ type MattermostTeam struct {
 	ObservedAt             time.Time
 }
 
+// MattermostOwnerObservation подтверждает fresh provider user readback без
+// сохранения или выдачи provider payload.
+type MattermostOwnerObservation struct {
+	ProviderObjectRef string
+	SnapshotSHA256    string
+	ObservedAt        time.Time
+}
+
+type MattermostReadinessBinding struct {
+	Principal      TeamPrincipal
+	ProviderTeamID string
+}
+
+// WorkspaceMattermostMapping — внутренняя проекция авторитетного mapping.
+// ProviderTeamID никогда не передаётся наружу и заменяется opaque selector-ом.
+type WorkspaceMattermostMapping struct {
+	ID                       string
+	Name                     string
+	Version                  uint64
+	Generation               uint64
+	State                    string
+	ProviderTeamID           string
+	ProviderEffectVersion    uint64
+	ProviderEffectGeneration uint64
+	ProviderObservedAt       time.Time
+	UpdatedAt                time.Time
+}
+
+type WorkspaceMattermostBinding struct {
+	Mapping WorkspaceMattermostMapping
+	Team    MattermostTeam
+}
+
+type WorkspaceMappingOperation struct {
+	ID                 string
+	Principal          TeamPrincipal
+	Action             string
+	IdempotencyKey     string
+	RequestSHA256      string
+	MappingID          string
+	ExpectedVersion    uint64
+	ExpectedGeneration uint64
+	DisplayName        string
+	Team               MattermostTeam
+	State              string
+	EffectGeneration   uint64
+	ReceiptID          string
+	Fence              uint64
+	LeaseToken         string
+	FailureCode        string
+	RetryNotBefore     time.Time
+	Result             WorkspaceMattermostMapping
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
 type MattermostTeamCreateIntent struct {
 	DisplayName    string
 	Slug           string

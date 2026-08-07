@@ -65,7 +65,8 @@ func (metrics *Metrics) ObserveExternalEffect(effect, outcome string) {
 
 func normalizeEffect(value string) string {
 	switch value {
-	case "upload_file", "create_post", "update_post", "create_team":
+	case "upload_file", "create_post", "update_post", "create_team",
+		"workspace_mapping_bind", "workspace_mapping_relink", "workspace_mapping_unlink":
 		return value
 	default:
 		return "unknown"
@@ -101,7 +102,8 @@ func normalizeRoute(value string) string {
 
 func normalizeWorker(value string) string {
 	switch value {
-	case "websocket", "inbound", "delivery", "turn_delivery", "owner_gate", "owner_delivery", "expiry", "team_recovery", "readiness":
+	case "websocket", "inbound", "delivery", "turn_delivery", "owner_gate", "owner_delivery", "expiry",
+		"team_recovery", "mapping_recovery", "readiness":
 		return value
 	default:
 		return "unknown"
@@ -110,7 +112,7 @@ func normalizeWorker(value string) string {
 
 func normalizeTeamOperation(value string) string {
 	switch value {
-	case "catalog", "create", "readback", "recovery":
+	case "catalog", "create", "readback", "recovery", "mapping_recovery":
 		return value
 	default:
 		return "unknown"

@@ -231,6 +231,9 @@ func validTarget(candidate binding) bool {
 	case "urn:mattercodex:internal-rpc:integration-gateway":
 		return candidate.TargetWorkload == "integration-gateway" &&
 			candidate.TargetSPIFFEID == "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway"
+	case "urn:mattercodex:internal-rpc:interaction-gateway":
+		return candidate.TargetWorkload == "interaction-gateway" &&
+			candidate.TargetSPIFFEID == "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway"
 	default:
 		return false
 	}

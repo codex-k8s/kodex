@@ -22,6 +22,14 @@ const (
 	CreateBusy
 )
 
+type MappingDisposition uint8
+
+const (
+	MappingClaimed MappingDisposition = iota + 1
+	MappingReplay
+	MappingBusy
+)
+
 type Repository interface {
 	Check(context.Context) error
 	ResolveCatalogOffset(context.Context, entity.TeamPrincipal, string, uint32) (uint32, error)
@@ -34,4 +42,11 @@ type Repository interface {
 	MarkRepairRequired(context.Context, entity.MattermostTeamOperation, string) error
 	AcceptProvider(context.Context, entity.MattermostTeamOperation, entity.MattermostTeam, string, time.Duration) (entity.MattermostTeamOperation, error)
 	ClaimRecovery(context.Context, string, time.Duration) (entity.MattermostTeamOperation, bool, error)
+	AdvanceProviderGeneration(context.Context, entity.TeamPrincipal) (uint64, error)
+	BeginMapping(context.Context, entity.WorkspaceMappingOperation, string, time.Duration) (entity.WorkspaceMappingOperation, MappingDisposition, error)
+	RefreshMappingReceipt(context.Context, entity.WorkspaceMappingOperation) (entity.WorkspaceMappingOperation, error)
+	MarkMappingAmbiguous(context.Context, entity.WorkspaceMappingOperation, string, time.Time) error
+	MarkMappingTerminal(context.Context, entity.WorkspaceMappingOperation, entity.WorkspaceMattermostMapping) error
+	MarkMappingRepairRequired(context.Context, entity.WorkspaceMappingOperation, string) error
+	ClaimMappingRecovery(context.Context, string, time.Duration) (entity.WorkspaceMappingOperation, bool, error)
 }

@@ -10,16 +10,35 @@ import (
 )
 
 func ListResponse(teams []entity.MattermostTeam, nextCursor string) *interactiongatewayv1.ListMattermostTeamsResponse {
-	response := &interactiongatewayv1.ListMattermostTeamsResponse{NextCursor: nextCursor,
-		Teams: make([]*interactiongatewayv1.MattermostTeamView, 0, len(teams))}
+	response := &interactiongatewayv1.ListMattermostTeamsResponse{
+		NextCursor: nextCursor,
+		Teams:      make([]*interactiongatewayv1.MattermostTeamView, 0, len(teams)),
+	}
 	for _, team := range teams {
 		response.Teams = append(response.Teams, TeamView(team))
 	}
 	return response
 }
 
-func CreateResponse(operation entity.MattermostTeamOperation) *interactiongatewayv1.CreateMattermostTeamResponse {
-	return &interactiongatewayv1.CreateMattermostTeamResponse{Operation: OperationView(operation)}
+func CreateResponse(operation entity.MattermostTeamOperation, binding entity.WorkspaceMattermostBinding) *interactiongatewayv1.CreateMattermostTeamResponse {
+	return &interactiongatewayv1.CreateMattermostTeamResponse{Operation: OperationView(operation), Binding: BindingView(binding)}
+}
+
+func BindingView(binding entity.WorkspaceMattermostBinding) *interactiongatewayv1.WorkspaceMattermostTeamBindingView {
+	state := interactiongatewayv1.WorkspaceMattermostMappingState_WORKSPACE_MATTERMOST_MAPPING_STATE_UNSPECIFIED
+	switch binding.Mapping.State {
+	case "BOUND":
+		state = interactiongatewayv1.WorkspaceMattermostMappingState_WORKSPACE_MATTERMOST_MAPPING_STATE_BOUND
+	case "UNLINKED":
+		state = interactiongatewayv1.WorkspaceMattermostMappingState_WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED
+	}
+	return &interactiongatewayv1.WorkspaceMattermostTeamBindingView{
+		MappingRef: binding.Mapping.ID, MappingVersion: binding.Mapping.Version,
+		MappingGeneration: binding.Mapping.Generation, State: state, Team: TeamView(binding.Team),
+		ProviderEffectVersion:    binding.Mapping.ProviderEffectVersion,
+		ProviderEffectGeneration: binding.Mapping.ProviderEffectGeneration,
+		ProviderObservedAt:       timestamp(binding.Mapping.ProviderObservedAt), UpdatedAt: timestamp(binding.Mapping.UpdatedAt),
+	}
 }
 
 func ProviderReadbackResponse(team entity.MattermostTeam) *interactiongatewayv1.GetMattermostTeamProviderReadbackResponse {
@@ -44,8 +63,10 @@ func TeamView(team entity.MattermostTeam) *interactiongatewayv1.MattermostTeamVi
 func OperationView(operation entity.MattermostTeamOperation) *interactiongatewayv1.MattermostTeamOperationView {
 	state := interactiongatewayv1.MattermostTeamOperationState_MATTERMOST_TEAM_OPERATION_STATE_UNSPECIFIED
 	switch operation.State {
-	case enum.TeamOperationPending, enum.TeamOperationEffectPending:
+	case enum.TeamOperationPending:
 		state = interactiongatewayv1.MattermostTeamOperationState_MATTERMOST_TEAM_OPERATION_STATE_PENDING
+	case enum.TeamOperationEffectPending:
+		state = interactiongatewayv1.MattermostTeamOperationState_MATTERMOST_TEAM_OPERATION_STATE_EFFECT_PENDING
 	case enum.TeamOperationAmbiguous:
 		state = interactiongatewayv1.MattermostTeamOperationState_MATTERMOST_TEAM_OPERATION_STATE_AMBIGUOUS
 	case enum.TeamOperationProviderAccepted:

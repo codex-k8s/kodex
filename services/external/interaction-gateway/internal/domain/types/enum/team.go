@@ -7,6 +7,14 @@ const (
 	MattermostTeamDeleted MattermostTeamStatus = "DELETED"
 )
 
+const (
+	WorkspaceMappingOperationPending        = "PENDING"
+	WorkspaceMappingOperationAmbiguous      = "AMBIGUOUS"
+	WorkspaceMappingOperationBound          = "BOUND"
+	WorkspaceMappingOperationUnlinked       = "UNLINKED"
+	WorkspaceMappingOperationRepairRequired = "REPAIR_REQUIRED"
+)
+
 type MattermostTeamOperationState string
 
 const (

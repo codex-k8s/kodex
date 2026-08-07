@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
+	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -46,28 +48,26 @@ func (service *Service) ManageWorkspaceMapping(
 		input.Name != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
-	intentHash, err := canonicalHash(struct {
-		Identity                            commandIdentity
-		Action, MappingID, DisplayName      string
-		ExpectedVersion, ExpectedGeneration uint64
-		ProviderTeamRef, ProviderObjectRef  string
-		EffectGeneration                    uint64
-		EffectSHA256                        string
-	}{identity(input.Principal), input.Action, input.MappingID, input.Name,
-		input.ExpectedVersion, input.ExpectedGeneration, input.ProviderReceipt.ProviderTeamRef,
-		input.ProviderReceipt.ProviderObjectRef, input.ProviderReceipt.EffectGeneration,
-		input.ProviderReceipt.EffectSHA256})
+	intentHash, err := controlplanecontract.WorkspaceMattermostMappingIntentSHA256(
+		controlplanecontract.WorkspaceMattermostMappingIntent{
+			ActorID: input.Principal.ActorID, OrganizationID: input.Principal.OrganizationID,
+			ProjectID: input.Principal.ProjectID, WorkspaceID: input.ProviderReceipt.WorkspaceID,
+			Action: input.Action, MappingID: input.MappingID, DisplayName: input.Name,
+			ExpectedVersion: input.ExpectedVersion, ExpectedGeneration: input.ExpectedGeneration,
+			ProviderTeamRef:   input.ProviderReceipt.ProviderTeamRef,
+			ProviderObjectRef: input.ProviderReceipt.ProviderObjectRef,
+			EffectGeneration:  input.ProviderReceipt.EffectGeneration,
+			EffectSHA256:      input.ProviderReceipt.EffectSHA256,
+		},
+	)
 	if err != nil || input.ProviderReceipt.CommandIntentSHA256 != intentHash {
 		return entity.Resource{}, errs.ErrPermissionDenied
 	}
-	requestHash, err := canonicalHash(struct {
-		Identity                            commandIdentity
-		Action, MappingID                   string
-		ExpectedVersion, ExpectedGeneration uint64
-		ProviderReceipt                     value.ProviderEffectReceipt
-		DisplayName                         string
-	}{identity(input.Principal), input.Action, input.MappingID, input.ExpectedVersion,
-		input.ExpectedGeneration, input.ProviderReceipt, input.Name})
+	// One-use receipt/JTI, policy revision и provider generation относятся к
+	// transport proof конкретной попытки. Durable idempotency связывается только
+	// с проверенной workload boundary и неизменным business intent, чтобы после
+	// ambiguous outcome producer мог предъявить свежий receipt той же команды.
+	requestHash, err := workspaceMappingRequestHash(input)
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -218,6 +218,29 @@ func (service *Service) ManageWorkspaceMapping(
 	return result, mutationErr
 }
 
+func workspaceMappingRequestHash(input ManageWorkspaceMappingInput) (string, error) {
+	return canonicalHash(struct {
+		ActorID, OrganizationID, ProjectID string
+		Permission, CallerWorkload         string
+		CallerSPIFFEID, AuthoritySource    string
+		Action, MappingID, DisplayName     string
+		ExpectedVersion                    uint64
+		ExpectedGeneration                 uint64
+		WorkspaceID, ProviderTeamRef       string
+		ProviderObjectRef, EffectSHA256    string
+	}{
+		ActorID: input.Principal.ActorID, OrganizationID: input.Principal.OrganizationID,
+		ProjectID: input.Principal.ProjectID, Permission: input.Principal.Permission,
+		CallerWorkload: input.Principal.CallerWorkload, CallerSPIFFEID: input.Principal.CallerSPIFFEID,
+		AuthoritySource: input.Principal.AuthoritySource, Action: input.Action, MappingID: input.MappingID,
+		DisplayName: input.Name, ExpectedVersion: input.ExpectedVersion,
+		ExpectedGeneration: input.ExpectedGeneration, WorkspaceID: input.ProviderReceipt.WorkspaceID,
+		ProviderTeamRef:   input.ProviderReceipt.ProviderTeamRef,
+		ProviderObjectRef: input.ProviderReceipt.ProviderObjectRef,
+		EffectSHA256:      input.ProviderReceipt.EffectSHA256,
+	})
+}
+
 // replayWorkspaceMappingExternalCommand разрешает source внутри owner boundary
 // и читает только завершённый immutable semantic result до generic command key.
 func (service *Service) replayWorkspaceMappingExternalCommand(
@@ -275,7 +298,7 @@ func validateProviderReceipt(principal value.Principal, receipt value.ProviderEf
 		receipt.ReceiptID != principal.AuthorityReference || receipt.ReceiptRevision != principal.AuthorityRevision {
 		return errs.ErrPermissionDenied
 	}
-	digest, err := canonicalHash(receipt)
+	digest, err := internalrpcauth.CanonicalJSONSHA256(receipt)
 	if err != nil || digest != principal.AuthorityDigest {
 		return errs.ErrPermissionDenied
 	}
