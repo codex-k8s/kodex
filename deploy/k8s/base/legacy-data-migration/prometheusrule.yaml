@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: legacy-data-migration
+  labels:
+    app.kubernetes.io/name: legacy-data-migration
+spec:
+  groups:
+    - name: legacy-data-migration
+      rules:
+        - alert: LegacyDataMigrationFailed
+          expr: kube_job_status_failed{namespace="mattercodex-system",job_name="legacy-data-migration"} > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: Legacy data migration job failed closed
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/legacy-data-migration.md
+        - alert: LegacyDataMigrationDeadlineNear
+          expr: time() - kube_job_status_start_time{namespace="mattercodex-system",job_name="legacy-data-migration"} > 6600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Legacy data migration is near its active deadline
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/legacy-data-migration.md

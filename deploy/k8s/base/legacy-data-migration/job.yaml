@@ -1,0 +1,120 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: legacy-data-migration
+  labels:
+    app.kubernetes.io/name: legacy-data-migration
+    app.kubernetes.io/component: migration
+spec:
+  # Запуск разрешается только отдельным owner-approved execution PR.
+  suspend: true
+  backoffLimit: 0
+  activeDeadlineSeconds: 7200
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: legacy-data-migration
+        app.kubernetes.io/component: migration
+    spec:
+      serviceAccountName: legacy-data-migration
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migration
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/legacy-data-migration@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          env:
+            # Каждый mode и plan ID фиксируется отдельным reviewed execution PR.
+            - name: LEGACY_DATA_MIGRATION_MODE
+              value: dry-run
+            - name: LEGACY_DATA_MIGRATION_PLAN_ID
+              value: replace-with-owner-approved-plan-id
+            - name: LEGACY_DATA_MIGRATION_SOURCE_DSN_FILE
+              value: /var/run/secrets/mattercodex/legacy-migration/source-dsn
+            - name: LEGACY_DATA_MIGRATION_SOURCE_TLS_SERVER_NAME
+              value: mattermost-postgres.mattercodex-system.svc.cluster.local
+            - name: LEGACY_DATA_MIGRATION_SOURCE_CA_FILE
+              value: /var/run/config/mattercodex/legacy-migration/source-ca/ca.pem
+            - name: LEGACY_DATA_MIGRATION_TARGET_DSN_FILE
+              value: /var/run/secrets/mattercodex/legacy-migration/target-dsn
+            - name: LEGACY_DATA_MIGRATION_TARGET_TLS_SERVER_NAME
+              value: control-plane-postgresql.mattercodex-system.svc.cluster.local
+            - name: LEGACY_DATA_MIGRATION_TARGET_CA_FILE
+              value: /var/run/config/mattercodex/legacy-migration/target-ca/ca.pem
+            - name: LEGACY_DATA_MIGRATION_BACKUP_DIRECTORY
+              value: /var/lib/mattercodex/legacy-migration/backups
+            - name: LEGACY_DATA_MIGRATION_BACKUP_KEY_FILE
+              value: /var/run/secrets/mattercodex/legacy-migration/backup-key
+            - name: LEGACY_DATA_MIGRATION_REPORT_PATH
+              value: /var/lib/mattercodex/legacy-migration/reports/report.json
+            - name: LEGACY_DATA_MIGRATION_TECHNICAL_LISTEN
+              value: :9090
+            - name: LEGACY_DATA_MIGRATION_STARTUP_TIMEOUT
+              value: 30s
+            - name: LEGACY_DATA_MIGRATION_OPERATION_TIMEOUT
+              value: 90m
+            - name: LEGACY_DATA_MIGRATION_SHUTDOWN_TIMEOUT
+              value: 10s
+          ports:
+            - name: technical
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: credentials
+              mountPath: /var/run/secrets/mattercodex/legacy-migration
+              readOnly: true
+            - name: source-ca
+              mountPath: /var/run/config/mattercodex/legacy-migration/source-ca
+              readOnly: true
+            - name: target-ca
+              mountPath: /var/run/config/mattercodex/legacy-migration/target-ca
+              readOnly: true
+            - name: backup
+              mountPath: /var/lib/mattercodex/legacy-migration
+      volumes:
+        - name: credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: legacy-data-migration
+        - name: source-ca
+          configMap:
+            name: mattermost-postgresql-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
+        - name: target-ca
+          configMap:
+            name: control-plane-postgresql-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
+        - name: backup
+          persistentVolumeClaim:
+            claimName: legacy-data-migration-backup

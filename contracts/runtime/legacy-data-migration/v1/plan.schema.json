@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/runtime/legacy-data-migration/v1/plan.schema.json",
+  "title": "MatterCodex legacy data migration plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "planId", "sourceSha256", "targetSha256", "mappingSha256",
+    "counts", "violations", "planSha256"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "mattercodex.legacy-data-migration-plan.v1"},
+    "planId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{15,127}$"},
+    "sourceSha256": {"$ref": "#/$defs/sha256"},
+    "targetSha256": {"$ref": "#/$defs/sha256"},
+    "mappingSha256": {"$ref": "#/$defs/sha256"},
+    "counts": {"$ref": "#/$defs/counts"},
+    "violations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ambiguous_target", "broken_lineage", "duplicate_source", "orphan_reference",
+        "stale_reference", "tenant_mismatch", "unknown_state", "unmaterialized_active",
+        "unsupported_state"
+      ],
+      "properties": {
+        "ambiguous_target": {"$ref": "#/$defs/count"},
+        "broken_lineage": {"$ref": "#/$defs/count"},
+        "duplicate_source": {"$ref": "#/$defs/count"},
+        "orphan_reference": {"$ref": "#/$defs/count"},
+        "stale_reference": {"$ref": "#/$defs/count"},
+        "tenant_mismatch": {"$ref": "#/$defs/count"},
+        "unknown_state": {"$ref": "#/$defs/count"},
+        "unmaterialized_active": {"$ref": "#/$defs/count"},
+        "unsupported_state": {"$ref": "#/$defs/count"}
+      }
+    },
+    "planSha256": {"$ref": "#/$defs/sha256"},
+    "backupSha256": {"$ref": "#/$defs/sha256"},
+    "manifestSha256": {"$ref": "#/$defs/sha256"},
+    "cutoverState": {"enum": ["PREPARED", "COMMITTED"]}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "count": {"type": "integer", "minimum": 0},
+    "countMap": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[A-Za-z0-9_]+$"},
+      "additionalProperties": {"$ref": "#/$defs/count"}
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "mapped", "archive"],
+      "properties": {
+        "source": {"$ref": "#/$defs/countMap"},
+        "mapped": {"$ref": "#/$defs/countMap"},
+        "archive": {"$ref": "#/$defs/countMap"}
+      }
+    }
+  }
+}

@@ -92,6 +92,13 @@ packages:
       - control-plane
       - runtime-controller
       - agent-runner
+  - id: legacy-data-migration-reports-v1
+    format: json-schema
+    owner: legacy-data-migration
+    source: contracts/runtime/legacy-data-migration/v1
+    consumers:
+      - legacy-data-migration
+      - sre
   - id: internal-rpc-authority-v1
     format: proto
     owner: internal-rpc-authority
