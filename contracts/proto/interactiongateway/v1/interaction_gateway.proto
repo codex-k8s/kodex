@@ -1,0 +1,222 @@
+syntax = "proto3";
+
+package interactiongateway.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1;interactiongatewayv1";
+
+// MattermostTeamService материализует provider Team effect/readback и вызывает
+// специализированный авторитетный Workspace mapping contract control-plane.
+service MattermostTeamService {
+  // ListMattermostTeams возвращает bounded owner-scoped catalog. Actor,
+  // organization и project берутся только из verified authorization context.
+  rpc ListMattermostTeams(ListMattermostTeamsRequest) returns (ListMattermostTeamsResponse);
+
+  // CreateMattermostTeam выполняет один durable semantic provider intent.
+  // Повтор того же ключа с другим intent закрыто конфликтует.
+  rpc CreateMattermostTeam(CreateMattermostTeamRequest) returns (CreateMattermostTeamResponse);
+
+  // LinkMattermostTeam связывает server-resolved Workspace с Team, выбранной
+  // только opaque selector-ом текущего owner catalog.
+  rpc LinkMattermostTeam(LinkMattermostTeamRequest) returns (LinkMattermostTeamResponse);
+
+  // GetMattermostTeamBinding объединяет exact control-plane mapping с fresh
+  // Mattermost Team/member readback.
+  rpc GetMattermostTeamBinding(GetMattermostTeamBindingRequest) returns (GetMattermostTeamBindingResponse);
+
+  // RelinkMattermostTeam требует exact current mapping version/generation и
+  // новую Team из owner catalog.
+  rpc RelinkMattermostTeam(RelinkMattermostTeamRequest) returns (RelinkMattermostTeamResponse);
+
+  // UnlinkMattermostTeam не принимает provider Team ID и закрывает mapping
+  // только после owner graph gate control-plane.
+  rpc UnlinkMattermostTeam(UnlinkMattermostTeamRequest) returns (UnlinkMattermostTeamResponse);
+
+  // GetMattermostTeamMappingOperation возвращает owner-scoped durable outcome
+  // semantic mutation по action+idempotency key без provider identity/payload.
+  rpc GetMattermostTeamMappingOperation(GetMattermostTeamMappingOperationRequest) returns (GetMattermostTeamMappingOperationResponse);
+
+  // GetMattermostTeamProviderReadback заново проверяет opaque selector,
+  // provider Team и actor membership без раскрытия provider Team ID.
+  rpc GetMattermostTeamProviderReadback(GetMattermostTeamProviderReadbackRequest) returns (GetMattermostTeamProviderReadbackResponse);
+
+  // CheckReadiness проверяет тот же authority, PostgreSQL и Mattermost read
+  // path, который используют рабочие операции, не создавая provider effect.
+  rpc CheckReadiness(MattermostTeamServiceCheckReadinessRequest) returns (MattermostTeamServiceCheckReadinessResponse);
+}
+
+enum MattermostTeamStatus {
+  MATTERMOST_TEAM_STATUS_UNSPECIFIED = 0;
+  MATTERMOST_TEAM_STATUS_ACTIVE = 1;
+  MATTERMOST_TEAM_STATUS_DELETED = 2;
+}
+
+enum MattermostTeamOperationState {
+  MATTERMOST_TEAM_OPERATION_STATE_UNSPECIFIED = 0;
+  MATTERMOST_TEAM_OPERATION_STATE_PENDING = 1;
+  MATTERMOST_TEAM_OPERATION_STATE_AMBIGUOUS = 2;
+  MATTERMOST_TEAM_OPERATION_STATE_PROVIDER_ACCEPTED = 3;
+  MATTERMOST_TEAM_OPERATION_STATE_REPAIR_REQUIRED = 4;
+  MATTERMOST_TEAM_OPERATION_STATE_EFFECT_PENDING = 5;
+}
+
+enum WorkspaceMattermostMappingState {
+  WORKSPACE_MATTERMOST_MAPPING_STATE_UNSPECIFIED = 0;
+  WORKSPACE_MATTERMOST_MAPPING_STATE_BOUND = 1;
+  WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED = 2;
+}
+
+enum WorkspaceMattermostMappingAction {
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED = 0;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND = 1;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK = 2;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK = 3;
+}
+
+enum WorkspaceMattermostMappingOperationState {
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED = 0;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_PENDING = 1;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS = 2;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND = 3;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED = 4;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED = 5;
+}
+
+message MattermostTeamView {
+  string selector = 1;
+  string display_name = 2;
+  string slug = 3;
+  MattermostTeamStatus status = 4;
+  string provider_snapshot_sha256 = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  google.protobuf.Timestamp observed_at = 8;
+}
+
+message MattermostTeamOperationView {
+  string operation_id = 1;
+  MattermostTeamOperationState state = 2;
+  MattermostTeamView team = 3;
+  string request_sha256 = 4;
+  string provider_receipt_sha256 = 5;
+  uint64 provider_generation = 6;
+  string failure_code = 7;
+  google.protobuf.Timestamp retry_not_before = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message WorkspaceMattermostTeamBindingView {
+  string mapping_ref = 1;
+  uint64 mapping_version = 2;
+  uint64 mapping_generation = 3;
+  WorkspaceMattermostMappingState state = 4;
+  MattermostTeamView team = 5;
+  uint64 provider_effect_version = 6;
+  uint64 provider_effect_generation = 7;
+  google.protobuf.Timestamp provider_observed_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message WorkspaceMattermostMappingOperationView {
+  string operation_id = 1;
+  WorkspaceMattermostMappingAction action = 2;
+  WorkspaceMattermostMappingOperationState state = 3;
+  string failure_code = 4;
+  google.protobuf.Timestamp retry_not_before = 5;
+  google.protobuf.Timestamp recovery_deadline = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  WorkspaceMattermostTeamBindingView result = 9;
+}
+
+message ListMattermostTeamsRequest {
+  uint32 page_size = 1;
+  string cursor = 2;
+}
+
+message ListMattermostTeamsResponse {
+  repeated MattermostTeamView teams = 1;
+  string next_cursor = 2;
+}
+
+message CreateMattermostTeamRequest {
+  string display_name = 1;
+  string slug_intent = 2;
+  string idempotency_key = 3;
+}
+
+message CreateMattermostTeamResponse {
+  MattermostTeamOperationView operation = 1;
+  WorkspaceMattermostTeamBindingView binding = 2;
+  WorkspaceMattermostMappingOperationView mapping_operation = 3;
+}
+
+message LinkMattermostTeamRequest {
+  string selector = 1;
+  string idempotency_key = 2;
+}
+
+message LinkMattermostTeamResponse {
+  WorkspaceMattermostTeamBindingView binding = 1;
+  WorkspaceMattermostMappingOperationView operation = 2;
+}
+
+message GetMattermostTeamBindingRequest {}
+
+message GetMattermostTeamBindingResponse {
+  WorkspaceMattermostTeamBindingView binding = 1;
+}
+
+message RelinkMattermostTeamRequest {
+  string selector = 1;
+  uint64 expected_mapping_version = 2;
+  uint64 expected_mapping_generation = 3;
+  string idempotency_key = 4;
+}
+
+message RelinkMattermostTeamResponse {
+  WorkspaceMattermostTeamBindingView binding = 1;
+  WorkspaceMattermostMappingOperationView operation = 2;
+}
+
+message UnlinkMattermostTeamRequest {
+  uint64 expected_mapping_version = 1;
+  uint64 expected_mapping_generation = 2;
+  string idempotency_key = 3;
+}
+
+message UnlinkMattermostTeamResponse {
+  WorkspaceMattermostTeamBindingView binding = 1;
+  WorkspaceMattermostMappingOperationView operation = 2;
+}
+
+message GetMattermostTeamMappingOperationRequest {
+  WorkspaceMattermostMappingAction action = 1;
+  string idempotency_key = 2;
+}
+
+message GetMattermostTeamMappingOperationResponse {
+  WorkspaceMattermostMappingOperationView operation = 1;
+}
+
+message GetMattermostTeamProviderReadbackRequest {
+  string selector = 1;
+}
+
+message GetMattermostTeamProviderReadbackResponse {
+  MattermostTeamView team = 1;
+}
+
+message MattermostTeamServiceCheckReadinessRequest {}
+
+message MattermostTeamServiceCheckReadinessResponse {
+  bool ready = 1;
+  uint64 schema_version = 2;
+  bool authority_ready = 3;
+  bool postgres_ready = 4;
+  bool mattermost_ready = 5;
+  bool control_plane_ready = 6;
+  bool mapping_ready = 7;
+}

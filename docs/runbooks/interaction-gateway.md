@@ -4,8 +4,8 @@ title: Interaction gateway
 type: runbook
 status: approved
 owner: manager
-version: 1.2.0
-updated: 2026-08-04
+version: 1.6.0
+updated: 2026-08-07
 ---
 
 # Interaction gateway
@@ -18,12 +18,16 @@ updated: 2026-08-04
   provider receipt либо domain acknowledgement;
 - `InteractionGatewayInboundFailures` — inbound не проходит mapping, artifact
   scan или control-plane command;
+- `InteractionGatewayTeamRecoveryFailures` — неоднозначный Mattermost Team
+  effect не подтверждён exact provider readback и требует диагностики;
+- `InteractionGatewayMappingRecoveryFailures` — специализированная mapping-команда
+  не подтверждена авторитетным control-plane readback;
 - `InteractionGatewayPostgresqlUnavailable` — недостаточно готовых CNPG Pod.
 
 ## Диагностика
 
-1. Проверить `/readyz` и метрики gateway/authority issuer без чтения значений
-   Secret.
+1. Проверить `/readyz` и метрики gateway, authority issuer и authority verifier
+   без чтения значений Secret.
 2. Проверить готовность CNPG, control-plane, Mattermost REST/WebSocket и S3
    bucket по тем же TLS identities, которые использует рабочий путь.
 3. Для delivery прочитать защищённый
@@ -48,7 +52,41 @@ updated: 2026-08-04
    тот же cleanup receipt; SQL-переход вручную запрещён.
 9. Для result больше Mattermost upload limit сверить `CLEAN`, exact private S3
    metadata/project prefix и одноразовый download audit. Direct S3 URL быть не
-   должно; gateway повторно проверяет Mattermost User/channel membership.
+   должно; gateway повторно проверяет Mattermost User/channel membership и
+   current `BOUND` mapping у control-plane до чтения object.
+10. При Team create сверить immutable normalized intent, request SHA-256,
+    project-scoped single-winner fence, operation lease, случайную correlation,
+    operation-bound provider slug и момент `EFFECT_PENDING`. После
+    неоднозначного ответа `CreateTeam` запрещено повторять provider mutation:
+    recovery читает exact operation slug через `GetTeamByName` и до изменения
+    membership проверяет correlation marker, display/type и causality digest.
+    Чужая/raced Team не принимается и не изменяется. Transient readback
+    сохраняет `AMBIGUOUS`; только PostgreSQL clock после durable deadline
+    назначает `RECOVERY_TIMEOUT`/`REPAIR_REQUIRED`.
+11. Raw Mattermost Team ID допустим только в RLS-scoped selector/operation
+    checkpoint, подписанном internal provider receipt и авторитетной mapping
+    spec control-plane. gRPC DTO, логи и метрики его не раскрывают;
+    selector/cursor повторно разрешаются в actor/organization/project scope.
+    Состояние `PROVIDER_ACCEPTED` означает только завершённый provider effect;
+    ответ create считается успешным лишь после exact `BOUND` readback control-plane.
+12. При bind/relink/unlink сверить semantic idempotency key, immutable request
+    digest, local `effect_generation`/receipt JTI и авторитетные mapping
+    version/generation. До каждого нового JTI и owner retry обязателен fresh
+    exact Team+owner membership readback. Receipt обязан содержать exact `aud`,
+    совпадающий с authority policy. После ambiguous RPC worker сначала
+    выполняет signed `ListWorkspaceMattermostMappings` и
+    `GetWorkspaceMattermostMapping`; повтор `ManageWorkspaceMattermostMapping`
+    допустим только для доказанного прежнего owner-state. Durable outcome
+    читается через `GetMattermostTeamMappingOperation`; `REPAIR_REQUIRED` и
+    открытый Chat/Session/Turn/delivery graph не обходятся ручным SQL.
+13. Для отказов inbound/delivery проверить PostgreSQL joined route: exact
+    current `BOUND` mapping ID/version/generation/digest, fresh Mattermost
+    Team/channel и отдельный monotonic high-watermark. `UNLINKED`, stale Team,
+    недоступный provider либо неоднозначный owner list закрывают путь до любого
+    provider effect. Проверка обязательна после reclaim queued inbound, для
+    direct/owner delivery, catch-up, прямо перед publish и artifact download,
+    а также в readiness; environment manifest не содержит current Team
+    authority и старый tenant/project snapshot её не заменяет.
 
 ## Ротация ключей и PostgreSQL identity
 

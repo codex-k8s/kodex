@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -164,9 +165,11 @@ func (service *Service) ManageProtectedConfiguration(
 		TargetSHA256    string
 		ReferenceKeys   []string
 		ProviderReceipt value.ProviderEffectReceipt
-	}{identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
+	}{
+		identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
 		input.ExpectedVersion, input.Name, input.Spec, input.TargetVersion,
-		input.TargetSHA256, input.ReferenceKeys, input.ProviderReceipt})
+		input.TargetSHA256, input.ReferenceKeys, input.ProviderReceipt,
+	})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -188,7 +191,8 @@ func (service *Service) ManageProtectedConfiguration(
 		return service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 			scope, requestHash, apply)
 	}
-	result, mutationErr := service.withOwnerLockedResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
+	result, mutationErr := service.withOwnerLockedResourceReceipt(
+		ctx, input.Principal, input.IdempotencyKey,
 		scope, requestHash, input.ResourceID, input.Kind, input.ExpectedVersion,
 		func(stored entity.Resource) error {
 			if stored.Kind != input.Kind || stored.OwnerActorID != input.Principal.ActorID ||
@@ -235,8 +239,10 @@ func protectedGitIntentSHA256(input ManageProtectedConfigurationInput) (string, 
 		Name            string
 		Spec            entity.Spec
 		ReferenceKeys   []string
-	}{identity(input.Principal), input.FullMethod, input.Kind, input.ResourceID,
-		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys})
+	}{
+		identity(input.Principal), input.FullMethod, input.Kind, input.ResourceID,
+		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys,
+	})
 }
 
 func protectedProviderIntentSHA256(input ManageProtectedConfigurationInput) (string, error) {
@@ -250,8 +256,10 @@ func protectedProviderIntentSHA256(input ManageProtectedConfigurationInput) (str
 		Name            string
 		Spec            entity.Spec
 		ReferenceKeys   []string
-	}{identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
-		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys})
+	}{
+		identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
+		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys,
+	})
 }
 
 func (service *Service) validateGitReconciliationReceipt(input ManageProtectedConfigurationInput) error {
@@ -279,7 +287,7 @@ func (service *Service) validateGitReconciliationReceipt(input ManageProtectedCo
 		ownership.SourceSHA256 != receipt.SourceSHA256 {
 		return errs.ErrPermissionDenied
 	}
-	digest, err := canonicalHash(receipt)
+	digest, err := internalrpcauth.CanonicalJSONSHA256(receipt)
 	if err != nil || digest != input.Principal.AuthorityDigest {
 		return errs.ErrPermissionDenied
 	}
@@ -548,8 +556,10 @@ func (service *Service) ensureInstructionArtifact(
 	evidence, err := canonicalHash(struct {
 		Reference, VersionID, SHA256, Validator string
 		Size                                    uint64
-	}{input.InstructionObject.Reference, input.InstructionObject.VersionID,
-		input.InstructionObject.SHA256, "control-plane-instruction-validator-v1", input.InstructionObject.Size})
+	}{
+		input.InstructionObject.Reference, input.InstructionObject.VersionID,
+		input.InstructionObject.SHA256, "control-plane-instruction-validator-v1", input.InstructionObject.Size,
+	})
 	if err != nil {
 		return errs.ErrInternal
 	}
@@ -1539,6 +1549,33 @@ func (service *Service) ListProtectedConfigurations(
 	return service.List(ctx, ListInput{Principal: principal, Filter: query.ResourceFilter{
 		Kind: kind, States: states, AfterID: afterID, Limit: limit,
 	}})
+}
+
+// ListWorkspaceMattermostMappings обслуживает принятый specialized read
+// contract с permission controlplane.resource.read, не расширяя generic list.
+func (service *Service) ListWorkspaceMattermostMappings(
+	ctx context.Context,
+	principal value.Principal,
+	states []enum.State,
+	afterID string,
+	limit int,
+) ([]entity.Resource, error) {
+	if err := authorize(principal, permissionRead); err != nil {
+		return nil, err
+	}
+	filter := query.ResourceFilter{
+		OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, Kind: enum.KindWorkspaceMapping,
+		States: states, AfterID: afterID, Limit: limit,
+	}
+	if principal.ProjectID == "" || filter.Validate() != nil {
+		return nil, errs.ErrInvalidInput
+	}
+	resources, err := service.repository.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return filterOwnerBoundResources(resources, principal.ActorID), nil
 }
 
 func (service *Service) ListProtectedResourceHistory(

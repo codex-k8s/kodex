@@ -35,7 +35,8 @@ type Repository struct {
 // AdmitDeliveryReadbackKeyset фиксирует verifier-owned high-watermark до
 // проверки любого bearer credential, включая повторный readback того же файла.
 func (repository *Repository) AdmitDeliveryReadbackKeyset(ctx context.Context, revision, highWatermark,
-	servedGeneration uint64, digest string, identities []readbackgrant.KeyIdentity) error {
+	servedGeneration uint64, digest string, identities []readbackgrant.KeyIdentity,
+) error {
 	encoded, err := json.Marshal(identities)
 	if err != nil {
 		return errors.New("encode delivery readback key identities")
@@ -119,8 +120,10 @@ func (repository *Repository) Check(ctx context.Context) error {
 	if err != nil {
 		return errors.New("begin interaction repository readiness transaction")
 	}
-	if err := repository.activateScope(ctx, tx, scope{OrganizationID: organizationID, ProjectID: projectID,
-		ActorID: "system:interaction-readiness"}); err != nil {
+	if err := repository.activateScope(ctx, tx, scope{
+		OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-readiness",
+	}); err != nil {
 		return errors.Join(err, repository.rollback(tx))
 	}
 	negative, err := tx.Begin(ctx)
@@ -297,8 +300,10 @@ func (repository *Repository) ClaimWaitingInbound(ctx context.Context, lease tim
 func (repository *Repository) LoadCursors(ctx context.Context, boundaries []entity.Boundary) (map[string]int64, error) {
 	result := make(map[string]int64, len(boundaries))
 	for _, boundary := range boundaries {
-		err := repository.withScope(ctx, scope{OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
-			ActorID: "system:interaction-cursor"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+		err := repository.withScope(ctx, scope{
+			OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
+			ActorID: "system:interaction-cursor",
+		}, pgx.ReadOnly, func(tx pgx.Tx) error {
 			rows, queryErr := tx.Query(ctx, cursorLoadSQL, []string{boundary.ChannelID})
 			if queryErr != nil {
 				return errors.New("load Mattermost cursors")
@@ -322,8 +327,10 @@ func (repository *Repository) LoadCursors(ctx context.Context, boundaries []enti
 }
 
 func (repository *Repository) AdvanceCursor(ctx context.Context, boundary entity.Boundary, channel string, cursor int64) error {
-	return repository.withScope(ctx, scope{OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
-		ActorID: "system:interaction-cursor"}, pgx.ReadWrite, func(tx pgx.Tx) error {
+	return repository.withScope(ctx, scope{
+		OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
+		ActorID: "system:interaction-cursor",
+	}, pgx.ReadWrite, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, cursorAdvanceSQL, channel, cursor, boundary.OrganizationID, boundary.ProjectID)
 		return err
 	})
@@ -331,8 +338,10 @@ func (repository *Repository) AdvanceCursor(ctx context.Context, boundary entity
 
 func (repository *Repository) HasDeletionPending(ctx context.Context, organizationID, projectID, chatID, sessionID string) (bool, error) {
 	var pending bool
-	err := repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
-		ActorID: "system:interaction-lifecycle"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+	err := repository.withScope(ctx, scope{
+		OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-lifecycle",
+	}, pgx.ReadOnly, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, inboundDeletionPendingSQL, organizationID, projectID, chatID, sessionID).Scan(&pending)
 	})
 	if err != nil {
@@ -342,8 +351,10 @@ func (repository *Repository) HasDeletionPending(ctx context.Context, organizati
 }
 
 func (repository *Repository) CancelDeletion(ctx context.Context, organizationID, projectID, chatID, sessionID, message string) error {
-	return repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
-		ActorID: "system:interaction-lifecycle"}, pgx.ReadWrite, func(tx pgx.Tx) error {
+	return repository.withScope(ctx, scope{
+		OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-lifecycle",
+	}, pgx.ReadWrite, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, inboundCancelDeletionSQL, organizationID, projectID, chatID, sessionID, message)
 		if err != nil || tag.RowsAffected() != 1 {
 			return errors.New("cancel conversation deletion")
@@ -354,8 +365,10 @@ func (repository *Repository) CancelDeletion(ctx context.Context, organizationID
 
 func (repository *Repository) ResolveThreadSession(ctx context.Context, organizationID, projectID, channelID, rootPostID string) (string, error) {
 	var sessionID string
-	err := repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
-		ActorID: "system:interaction-resolution"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+	err := repository.withScope(ctx, scope{
+		OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-resolution",
+	}, pgx.ReadOnly, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, inboundThreadSessionSQL, projectID, channelID, rootPostID).Scan(&sessionID)
 	})
 	if err != nil {
@@ -376,8 +389,10 @@ func (repository *Repository) ListKnownThreads(ctx context.Context, boundaries [
 			continue
 		}
 		seenProjects[scopeKey] = struct{}{}
-		err := repository.withScope(ctx, scope{OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
-			ActorID: "system:interaction-lifecycle-reconciliation"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+		err := repository.withScope(ctx, scope{
+			OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
+			ActorID: "system:interaction-lifecycle-reconciliation",
+		}, pgx.ReadOnly, func(tx pgx.Tx) error {
 			rows, queryErr := tx.Query(ctx, inboundKnownThreadsSQL, boundary.ProjectID, limit+1)
 			if queryErr != nil {
 				return queryErr
@@ -564,8 +579,10 @@ func (repository *Repository) GetDelivery(ctx context.Context, id string) (entit
 
 func (repository *Repository) GetDeliveryScoped(ctx context.Context, organizationID, projectID, id string) (entity.Delivery, error) {
 	var delivery entity.Delivery
-	err := repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
-		ActorID: "system:interaction-readback"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+	err := repository.withScope(ctx, scope{
+		OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-readback",
+	}, pgx.ReadOnly, func(tx pgx.Tx) error {
 		var getErr error
 		delivery, getErr = repository.getDeliveryWithSQL(ctx, tx, deliveryGetScopedSQL, id, organizationID, projectID)
 		if getErr != nil {
@@ -621,10 +638,13 @@ func (repository *Repository) GetDeliveryByProviderPost(ctx context.Context, pos
 }
 
 func (repository *Repository) GetRunDeliveryByTurn(ctx context.Context,
-	organizationID, projectID, sessionID, turnID string) (entity.Delivery, error) {
+	organizationID, projectID, sessionID, turnID string,
+) (entity.Delivery, error) {
 	var delivery entity.Delivery
-	err := repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
-		ActorID: "system:interaction-delivery"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+	err := repository.withScope(ctx, scope{
+		OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-delivery",
+	}, pgx.ReadOnly, func(tx pgx.Tx) error {
 		var getErr error
 		delivery, getErr = repository.getDeliveryWithSQL(ctx, tx, deliveryRunByTurnSQL,
 			organizationID, projectID, sessionID, turnID)
@@ -642,8 +662,10 @@ func (repository *Repository) ListPendingReactionPosts(ctx context.Context, boun
 	}
 	result := make(map[string]string, limit)
 	for _, boundary := range boundaries {
-		err := repository.withScope(ctx, scope{OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
-			ActorID: "system:interaction-reaction-catchup"}, pgx.ReadOnly, func(tx pgx.Tx) error {
+		err := repository.withScope(ctx, scope{
+			OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
+			ActorID: "system:interaction-reaction-catchup",
+		}, pgx.ReadOnly, func(tx pgx.Tx) error {
 			rows, queryErr := tx.Query(ctx, gateDeliveryReactionPostsSQL, limit+1)
 			if queryErr != nil {
 				return errors.New("list pending reaction posts")
@@ -683,8 +705,10 @@ func (repository *Repository) SaveDownloadGrant(ctx context.Context, grant entit
 	if err != nil {
 		return errors.New("encode artifact download grant")
 	}
-	return repository.withScope(ctx, scope{OrganizationID: grant.OrganizationID, ProjectID: grant.ProjectID,
-		ActorID: grant.ActorID}, pgx.ReadWrite, func(tx pgx.Tx) error {
+	return repository.withScope(ctx, scope{
+		OrganizationID: grant.OrganizationID, ProjectID: grant.ProjectID,
+		ActorID: grant.ActorID,
+	}, pgx.ReadWrite, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, downloadGrantInsertSQL, grant.ID, grant.Generation, grant.OrganizationID,
 			grant.ProjectID, grant.ActorID, grant.MattermostUserID, grant.TeamID, grant.ChannelID,
 			grant.SessionID, grant.TurnID, artifact, grant.IssuedPayloadSHA256, grant.ExpiresAt); err != nil {
@@ -718,10 +742,13 @@ func (repository *Repository) GetDownloadGrant(ctx context.Context, grantID stri
 }
 
 func (repository *Repository) ConsumeDownloadGrant(ctx context.Context, grant entity.DownloadGrant, userID string) error {
-	return repository.withScope(ctx, scope{OrganizationID: grant.OrganizationID, ProjectID: grant.ProjectID,
-		ActorID: grant.ActorID}, pgx.ReadWrite, func(tx pgx.Tx) error {
+	return repository.withScope(ctx, scope{
+		OrganizationID: grant.OrganizationID, ProjectID: grant.ProjectID,
+		ActorID: grant.ActorID,
+	}, pgx.ReadWrite, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, downloadGrantConsumeSQL, grant.ID, grant.Generation, userID).Scan(
-			&grant.ConsumedAt, &grant.AuthenticationAt); err != nil {
+			&grant.ConsumedAt, &grant.AuthenticationAt,
+		); err != nil {
 			return errors.New("consume artifact download grant")
 		}
 		return nil
@@ -729,9 +756,12 @@ func (repository *Repository) ConsumeDownloadGrant(ctx context.Context, grant en
 }
 
 func (repository *Repository) RevokeDownloadGrants(ctx context.Context, organizationID, projectID,
-	channelID, sessionID string) error {
-	return repository.withScope(ctx, scope{OrganizationID: organizationID, ProjectID: projectID,
-		ActorID: "system:interaction-lifecycle"}, pgx.ReadWrite, func(tx pgx.Tx) error {
+	channelID, sessionID string,
+) error {
+	return repository.withScope(ctx, scope{
+		OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-lifecycle",
+	}, pgx.ReadWrite, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, downloadGrantRevokeSQL, organizationID, projectID, channelID, sessionID); err != nil {
 			return errors.New("revoke artifact download grants")
 		}
@@ -795,7 +825,8 @@ func (repository *Repository) SaveOwnerGateClaim(ctx context.Context, key string
 		if encryptErr != nil {
 			return encryptErr
 		}
-		tag, rebindErr := tx.Exec(ctx, gateDeliveryRebindSQL,
+		tag, rebindErr := tx.Exec(
+			ctx, gateDeliveryRebindSQL,
 			delivery.ID, delivery.OwnerGate.GateID, delivery.OwnerGate.GateVersion,
 			delivery.OwnerGate.ProcessRunID, delivery.OwnerGate.ProcessVersion, claimCipher,
 			delivery.OwnerGate.ClaimFence, delivery.OwnerGate.ClaimExpiresAt,
@@ -864,7 +895,8 @@ func (repository *Repository) insertDelivery(ctx context.Context, tx pgx.Tx, del
 			return false, err
 		}
 	}
-	tag, err := tx.Exec(ctx, deliveryInsertSQL,
+	tag, err := tx.Exec(
+		ctx, deliveryInsertSQL,
 		delivery.ID, delivery.Kind, delivery.OrganizationID, delivery.ProjectID,
 		delivery.SessionID, delivery.TurnID, delivery.Attempt, delivery.ImmutableInputSHA256,
 		delivery.TeamID, delivery.ChannelID, delivery.RootPostID, delivery.BotStableKey,
@@ -923,9 +955,11 @@ func (repository *Repository) getDeliveryWithSQL(ctx context.Context, source que
 		} else if delivery.State != enum.DeliveryDelivered {
 			return entity.Delivery{}, errors.New("owner interaction delivery claim is unavailable")
 		}
-		delivery.OwnerDelivery = &entity.OwnerDeliveryBinding{Fence: ownerFence, LeaseToken: string(leaseToken),
+		delivery.OwnerDelivery = &entity.OwnerDeliveryBinding{
+			Fence: ownerFence, LeaseToken: string(leaseToken),
 			LeaseExpiresAt: ownerExpires.Time, TurnVersion: ownerTurnVersion,
-			RuntimeRevisionID: ownerRevisionID.String, RuntimeRevisionVersion: ownerRevisionVersion}
+			RuntimeRevisionID: ownerRevisionID.String, RuntimeRevisionVersion: ownerRevisionVersion,
+		}
 	}
 	delivery.SessionID, delivery.TurnID = sessionID.String, turnID.String
 	if leaseExpires.Valid {

@@ -49,6 +49,10 @@ type Observer interface {
 	ObserveExternalEffect(string, string)
 }
 
+type MappingGuard interface {
+	RequireBoundTeam(context.Context, entity.TeamPrincipal, string) (entity.WorkspaceMattermostMapping, error)
+}
+
 type Config struct {
 	ActionCallbackURL          string
 	DialogCallbackURL          string
@@ -72,6 +76,7 @@ type Service struct {
 	control    domaincontrol.Client
 	bot        domainbot.Client
 	authority  Authority
+	mapping    MappingGuard
 	observer   Observer
 	config     Config
 	localizers map[string]*i18n.Localizer
@@ -85,11 +90,14 @@ type Result struct {
 }
 
 func New(repository domainrepo.Repository, mattermost domainmattermost.Client, objects domainobjectstore.Client,
-	control domaincontrol.Client, bot domainbot.Client, authority Authority, observer Observer, config Config) (*Service, error) {
+	control domaincontrol.Client, bot domainbot.Client, authority Authority, mapping MappingGuard,
+	observer Observer, config Config,
+) (*Service, error) {
 	callback, err := url.Parse(config.ActionCallbackURL)
 	dialogCallback, dialogErr := url.Parse(config.DialogCallbackURL)
 	downloadBase, downloadErr := url.Parse(config.ArtifactDownloadBaseURL)
-	if repository == nil || mattermost == nil || objects == nil || control == nil || bot == nil || authority == nil || observer == nil ||
+	if repository == nil || mattermost == nil || objects == nil || control == nil || bot == nil || authority == nil ||
+		mapping == nil || observer == nil ||
 		err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil ||
 		callback.RawQuery != "" || callback.Fragment != "" || config.RetentionRef == "" ||
 		dialogErr != nil || dialogCallback.Scheme != "https" || dialogCallback.Host == "" || dialogCallback.User != nil ||
@@ -117,8 +125,11 @@ func New(repository domainrepo.Repository, mattermost domainmattermost.Client, o
 		}
 		localizers[locale] = localizer
 	}
-	return &Service{repository: repository, mattermost: mattermost, objects: objects,
-		control: control, bot: bot, authority: authority, observer: observer, config: config, localizers: localizers, now: time.Now}, nil
+	return &Service{
+		repository: repository, mattermost: mattermost, objects: objects,
+		control: control, bot: bot, authority: authority, mapping: mapping, observer: observer,
+		config: config, localizers: localizers, now: time.Now,
+	}, nil
 }
 
 func (service *Service) HandleRaw(ctx context.Context, raw domainmattermost.RawEvent) (result Result, resultErr error) {
@@ -154,6 +165,9 @@ func (service *Service) HandleRaw(ctx context.Context, raw domainmattermost.RawE
 				return Result{}, domainerrs.ErrUnauthorized
 			}
 		}
+	}
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
+		return Result{}, domainerrs.ErrUnauthorized
 	}
 	if isLifecycleKind(verified.Kind) {
 		return service.handleConversationLifecycle(ctx, verified, boundary)
@@ -204,13 +218,17 @@ func (service *Service) HandleRaw(ctx context.Context, raw domainmattermost.RawE
 }
 
 func (service *Service) HandleDecision(ctx context.Context, raw domainmattermost.RawEvent,
-	deliveryID, callbackToken string, decision enum.OwnerDecision, reason string) (result Result, resultErr error) {
+	deliveryID, callbackToken string, decision enum.OwnerDecision, reason string,
+) (result Result, resultErr error) {
 	defer func() { service.observeInbound(raw.Kind, result, resultErr) }()
 	if !decision.Valid() || uuid.Validate(deliveryID) != nil || len(reason) > 2048 {
 		return Result{}, domainerrs.ErrConflict
 	}
 	boundary, verified, err := service.mattermost.ResolveInbound(ctx, raw)
 	if err != nil || boundary.IgnoredBot {
+		return Result{}, domainerrs.ErrUnauthorized
+	}
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
 		return Result{}, domainerrs.ErrUnauthorized
 	}
 	inbound, err := buildInbound(verified, boundary)
@@ -240,13 +258,17 @@ func (service *Service) HandleDecision(ctx context.Context, raw domainmattermost
 }
 
 func (service *Service) HandleRuntimeAction(ctx context.Context, raw domainmattermost.RawEvent,
-	deliveryID, callbackToken, action string) (result Result, resultErr error) {
+	deliveryID, callbackToken, action string,
+) (result Result, resultErr error) {
 	defer func() { service.observeInbound(raw.Kind, result, resultErr) }()
 	if (action != "STOP" && action != "RETRY") || uuid.Validate(deliveryID) != nil {
 		return Result{}, domainerrs.ErrConflict
 	}
 	boundary, verified, err := service.mattermost.ResolveInbound(ctx, raw)
 	if err != nil || boundary.IgnoredBot {
+		return Result{}, domainerrs.ErrUnauthorized
+	}
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
 		return Result{}, domainerrs.ErrUnauthorized
 	}
 	inbound, err := buildInbound(verified, boundary)
@@ -273,9 +295,13 @@ func (service *Service) HandleRuntimeAction(ctx context.Context, raw domainmatte
 }
 
 func (service *Service) OpenDecisionDialog(ctx context.Context, raw domainmattermost.RawEvent,
-	deliveryID, callbackToken, triggerID string) (Result, error) {
+	deliveryID, callbackToken, triggerID string,
+) (Result, error) {
 	boundary, verified, err := service.mattermost.ResolveInbound(ctx, raw)
 	if err != nil || boundary.IgnoredBot || triggerID == "" {
+		return Result{}, domainerrs.ErrUnauthorized
+	}
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
 		return Result{}, domainerrs.ErrUnauthorized
 	}
 	inbound, err := buildInbound(verified, boundary)
@@ -349,7 +375,8 @@ func (service *Service) resumeOwnerCallback(ctx context.Context, inbound entity.
 }
 
 func (service *Service) resolveRuntimeAction(ctx context.Context, inbound entity.InboundEvent,
-	delivery entity.Delivery) (Result, error) {
+	delivery entity.Delivery,
+) (Result, error) {
 	grant, err := service.authority.Sign(inbound)
 	if err != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "AUTHORITY_SIGN_FAILED")
@@ -412,6 +439,13 @@ func (service *Service) ProcessWaiting(ctx context.Context) (bool, error) {
 	if err != nil || !ok {
 		return ok, err
 	}
+	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(ctx, inbound.TeamID, inbound.ChannelID)
+	if boundaryErr != nil || boundary.OrganizationID != inbound.OrganizationID || boundary.ProjectID != inbound.ProjectID {
+		return true, service.retryInbound(ctx, inbound, "MATTERMOST_MAPPING_NOT_CURRENT")
+	}
+	if boundaryErr = service.requireBoundTeam(ctx, boundary); boundaryErr != nil {
+		return true, service.retryInbound(ctx, inbound, "MATTERMOST_MAPPING_NOT_CURRENT")
+	}
 	if inbound.Kind == enum.InboundChannelDelete || inbound.Kind == enum.InboundThreadDelete {
 		_, err = service.finalizeConversationCleanup(ctx, inbound)
 	} else if (inbound.Kind == enum.InboundAction || inbound.Kind == enum.InboundDialog) && inbound.DeliveryID != "" {
@@ -423,7 +457,8 @@ func (service *Service) ProcessWaiting(ctx context.Context) (bool, error) {
 }
 
 func (service *Service) handleConversationLifecycle(ctx context.Context, raw domainmattermost.RawEvent,
-	boundary entity.Boundary) (Result, error) {
+	boundary entity.Boundary,
+) (Result, error) {
 	inbound, err := buildInbound(raw, boundary)
 	if err != nil {
 		return Result{}, domainerrs.ErrConflict
@@ -550,6 +585,21 @@ func (service *Service) ProcessDelivery(ctx context.Context, instanceID string) 
 		}
 		return true, nil
 	}
+	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(ctx, delivery.TeamID, delivery.ChannelID)
+	if boundaryErr != nil || boundary.OrganizationID != delivery.OrganizationID || boundary.ProjectID != delivery.ProjectID {
+		outcome = "retry"
+		if delivery.Attempts >= service.config.MaximumAttempts {
+			outcome = "dead_letter"
+		}
+		return true, service.retryDelivery(ctx, delivery, "MATTERMOST_MAPPING_NOT_CURRENT")
+	}
+	if boundaryErr = service.requireBoundTeam(ctx, boundary); boundaryErr != nil {
+		outcome = "retry"
+		if delivery.Attempts >= service.config.MaximumAttempts {
+			outcome = "dead_letter"
+		}
+		return true, service.retryDelivery(ctx, delivery, "MATTERMOST_MAPPING_NOT_CURRENT")
+	}
 	// Mattermost UploadFile не имеет документированного readback, который
 	// восстанавливает file_id после потери финального ответа. Такой effect не
 	// повторяется: все исходящие artifacts заранее превращаются в одноразовые
@@ -623,17 +673,20 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 		if uuid.Validate(claim.ScheduleID) != nil || uuid.Validate(claim.NotificationRoomID) != nil {
 			return true, errors.New("control-plane owner gate room route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveRoomDelivery(
+		boundary, err = service.mattermost.ResolveRoomDelivery(ctx,
 			claim.ProjectID, claim.NotificationRoomID, claim.RecipientActorID,
 		)
 	} else {
 		if claim.NotificationRoomID != "" {
 			return true, errors.New("control-plane owner gate room route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveDelivery(claim.ProjectID, claim.RecipientActorID)
+		boundary, err = service.mattermost.ResolveDelivery(ctx, claim.ProjectID, claim.RecipientActorID)
 	}
 	if err != nil {
 		return true, err
+	}
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
+		return true, errors.New("owner gate Mattermost mapping is not current")
 	}
 	delivery := entity.Delivery{
 		ID:   claim.DeliveryID,
@@ -674,8 +727,10 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 	payload := service.ownerGateCard(delivery, claim, token)
 	if protectedURL != "" {
 		payload["message"] = fmt.Sprintf("%s\n\n%s", payload["message"], service.text(delivery.Locale,
-			"card.artifact.protected_link", map[string]any{"URL": protectedURL, "Name": resultObject.Name,
-				"Size": resultObject.Size, "SHA256": resultObject.SHA256}))
+			"card.artifact.protected_link", map[string]any{
+				"URL": protectedURL, "Name": resultObject.Name,
+				"Size": resultObject.Size, "SHA256": resultObject.SHA256,
+			}))
 	}
 	delivery.Payload, delivery.PayloadSHA256, err = encodeDeliveryPayload(delivery.ID, payload)
 	if err != nil {
@@ -707,17 +762,20 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 			work.NotificationPolicy == "AUDIT_ONLY" || work.NotificationPolicy == "UNSPECIFIED" {
 			return true, errors.New("control-plane scheduled delivery route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveRoomDelivery(
+		boundary, err = service.mattermost.ResolveRoomDelivery(ctx,
 			work.ProjectID, work.NotificationRoomID, work.ActorID,
 		)
 	} else {
 		if work.NotificationPolicy != "UNSPECIFIED" || work.ScheduledOutcome != "UNSPECIFIED" {
 			return true, errors.New("control-plane scheduled delivery route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveDelivery(work.ProjectID, work.ActorID)
+		boundary, err = service.mattermost.ResolveDelivery(ctx, work.ProjectID, work.ActorID)
 	}
 	if err != nil || boundary.OrganizationID != work.OrganizationID {
 		return true, errors.New("control-plane interaction delivery route is invalid")
+	}
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
+		return true, errors.New("interaction delivery Mattermost mapping is not current")
 	}
 	deliveryKind := enum.DeliveryStatus
 	if work.Kind == "RUN_CARD" || work.Kind == "FINAL_MARKDOWN" {
@@ -727,28 +785,36 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 	} else if work.Kind == "PUBLISH_ARTIFACT" {
 		deliveryKind = enum.DeliveryArtifact
 	}
-	delivery := entity.Delivery{ID: work.DeliveryID, Kind: deliveryKind, State: enum.DeliveryPending,
+	delivery := entity.Delivery{
+		ID: work.DeliveryID, Kind: deliveryKind, State: enum.DeliveryPending,
 		OrganizationID: work.OrganizationID, ProjectID: work.ProjectID, SessionID: work.SessionID,
 		TurnID: work.TurnID, Attempt: work.Attempt, ImmutableInputSHA256: work.ImmutableInputSHA256,
 		TeamID: boundary.TeamID, ChannelID: boundary.ChannelID, BotStableKey: boundary.BotStableKey,
 		Locale: boundary.Locale, CreatedAt: service.now().UTC(), UpdatedAt: service.now().UTC(),
-		OwnerDelivery: &entity.OwnerDeliveryBinding{Fence: work.Fence, LeaseToken: work.LeaseToken,
+		OwnerDelivery: &entity.OwnerDeliveryBinding{
+			Fence: work.Fence, LeaseToken: work.LeaseToken,
 			LeaseExpiresAt: work.LeaseExpiresAt, TurnVersion: work.TurnVersion,
-			RuntimeRevisionID: work.RuntimeRevisionID, RuntimeRevisionVersion: work.RuntimeRevisionVersion}}
+			RuntimeRevisionID: work.RuntimeRevisionID, RuntimeRevisionVersion: work.RuntimeRevisionVersion,
+		},
+	}
 	if original, originalErr := service.repository.GetRunDeliveryByTurn(ctx, work.OrganizationID,
 		work.ProjectID, work.SessionID, work.TurnID); originalErr == nil {
 		delivery.UpdatePostID = original.ProviderPostID
 	} else if !errors.Is(originalErr, domainrepo.ErrNotFound) {
 		return true, originalErr
 	}
-	message := service.text(delivery.Locale, "card.run.progress", map[string]any{"State": work.LifecycleState,
+	message := service.text(delivery.Locale, "card.run.progress", map[string]any{
+		"State":   work.LifecycleState,
 		"Outcome": work.Outcome, "SessionID": work.SessionID, "TurnID": work.TurnID,
-		"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256})
+		"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256,
+	})
 	if work.LifecycleState == "SUCCEEDED" || work.LifecycleState == "FAILED" ||
 		work.LifecycleState == "CANCELLED" || work.LifecycleState == "BLOCKED" {
-		message = service.text(delivery.Locale, "card.run.terminal", map[string]any{"State": work.LifecycleState,
+		message = service.text(delivery.Locale, "card.run.terminal", map[string]any{
+			"State":   work.LifecycleState,
 			"Outcome": work.Outcome, "SessionID": work.SessionID, "TurnID": work.TurnID,
-			"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256})
+			"Attempt": work.Attempt, "InputSHA256": work.ImmutableInputSHA256,
+		})
 	}
 	if work.ArtifactID != "" {
 		if uuid.Validate(work.ArtifactID) != nil || work.ArtifactVersion == 0 || !validSHA256Text(work.ArtifactSHA256) ||
@@ -772,10 +838,12 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 		} else if len(artifactRaw) != 0 {
 			return true, errors.New("unexpected control-plane inline artifact payload")
 		}
-		binding := entity.ArtifactBinding{ArtifactID: work.ArtifactID, Version: work.ArtifactVersion,
+		binding := entity.ArtifactBinding{
+			ArtifactID: work.ArtifactID, Version: work.ArtifactVersion,
 			Name: safeName(work.ArtifactName, 0), Path: "results/" + safeName(work.ArtifactName, 0),
 			StorageRef: work.ArtifactStorageRef, SizeBytes: work.ArtifactSizeBytes, MediaType: work.ArtifactMediaType,
-			SHA256: work.ArtifactSHA256, Provenance: "control-plane-owner:" + work.TurnID, ScanState: "CLEAN"}
+			SHA256: work.ArtifactSHA256, Provenance: "control-plane-owner:" + work.TurnID, ScanState: "CLEAN",
+		}
 		link, linkErr := service.issueArtifactDownload(ctx, delivery, boundary, binding)
 		if linkErr != nil {
 			return true, linkErr
@@ -825,7 +893,8 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 }
 
 func (service *Service) StageRuntimeOutput(ctx context.Context, grant, executionID string,
-	output domaincontrol.RuntimeOutputMetadata, raw io.ReadSeeker) (domaincontrol.Artifact, error) {
+	output domaincontrol.RuntimeOutputMetadata, raw io.ReadSeeker,
+) (domaincontrol.Artifact, error) {
 	if uuid.Validate(executionID) != nil || raw == nil || output.SizeBytes == 0 ||
 		output.Name == "" || len(output.Name) > 255 ||
 		strings.ContainsAny(output.Name, "/\\\x00\r\n") || output.MediaType == "" ||
@@ -862,11 +931,15 @@ func (service *Service) ExpireOwnerGate(ctx context.Context) error {
 }
 
 func (service *Service) CatchUp(ctx context.Context) error {
-	cursors, err := service.repository.LoadCursors(ctx, service.mattermost.ChannelBoundaries())
+	boundaries, err := service.mattermost.ChannelBoundaries(ctx)
 	if err != nil {
 		return err
 	}
-	reactionPosts, err := service.repository.ListPendingReactionPosts(ctx, service.mattermost.ChannelBoundaries(), 1024)
+	cursors, err := service.repository.LoadCursors(ctx, boundaries)
+	if err != nil {
+		return err
+	}
+	reactionPosts, err := service.repository.ListPendingReactionPosts(ctx, boundaries, 1024)
 	if err != nil {
 		return err
 	}
@@ -876,7 +949,11 @@ func (service *Service) CatchUp(ctx context.Context) error {
 }
 
 func (service *Service) ReconcileLifecycle(ctx context.Context) error {
-	knownThreads, err := service.repository.ListKnownThreads(ctx, service.mattermost.ChannelBoundaries(), 4096)
+	boundaries, err := service.mattermost.ChannelBoundaries(ctx)
+	if err != nil {
+		return err
+	}
+	knownThreads, err := service.repository.ListKnownThreads(ctx, boundaries, 4096)
 	if err != nil {
 		return err
 	}
@@ -884,6 +961,9 @@ func (service *Service) ReconcileLifecycle(ctx context.Context) error {
 		if raw.Kind == "CHANNEL_RESTORE" || raw.Kind == "THREAD_RESTORE" {
 			boundary, verified, resolveErr := service.mattermost.ResolveInbound(eventContext, raw)
 			if resolveErr != nil {
+				return resolveErr
+			}
+			if resolveErr = service.requireBoundTeam(eventContext, boundary); resolveErr != nil {
 				return resolveErr
 			}
 			sessionID := boundary.SessionID
@@ -902,6 +982,13 @@ func (service *Service) ReconcileLifecycle(ctx context.Context) error {
 		}
 		return service.consumeStreamEvent(eventContext, raw)
 	})
+}
+
+func (service *Service) requireBoundTeam(ctx context.Context, boundary entity.Boundary) error {
+	_, err := service.mapping.RequireBoundTeam(ctx, entity.TeamPrincipal{
+		ActorID: boundary.MappingOwnerActorID, OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
+	}, boundary.TeamID)
+	return err
 }
 
 func (service *Service) Listen(ctx context.Context) error {
@@ -946,7 +1033,8 @@ func (service *Service) GetDeliveryScoped(ctx context.Context, organizationID, p
 }
 
 func (service *Service) ReadRuntimeMaterialization(ctx context.Context, grant, executionID, artifactID string,
-	artifactVersion uint64, artifactSHA256 string) ([]byte, string, error) {
+	artifactVersion uint64, artifactSHA256 string,
+) ([]byte, string, error) {
 	materialization, err := service.control.GetRuntimeMaterialization(ctx, grant, executionID, artifactID,
 		artifactVersion, artifactSHA256)
 	if err != nil {
@@ -961,7 +1049,8 @@ func (service *Service) ReadRuntimeMaterialization(ctx context.Context, grant, e
 }
 
 func (service *Service) ValidateDeliveryReadback(ctx context.Context, grantID, deliveryID, organizationID,
-	projectID, credentialSHA256 string, generation uint64) error {
+	projectID, credentialSHA256 string, generation uint64,
+) error {
 	if uuid.Validate(grantID) != nil || uuid.Validate(deliveryID) != nil || uuid.Validate(organizationID) != nil ||
 		uuid.Validate(projectID) != nil || !validSHA256Text(credentialSHA256) || generation == 0 {
 		return domainerrs.ErrUnauthorized
@@ -979,7 +1068,8 @@ func (service *Service) ValidateDeliveryReadback(ctx context.Context, grantID, d
 }
 
 func (service *Service) issueArtifactDownload(ctx context.Context, delivery entity.Delivery,
-	boundary entity.Boundary, artifact entity.ArtifactBinding) (string, error) {
+	boundary entity.Boundary, artifact entity.ArtifactBinding,
+) (string, error) {
 	if artifact.ScanState != "CLEAN" || boundary.ActorID == "" || boundary.MattermostUserID == "" ||
 		delivery.SessionID == "" || delivery.TurnID == "" || artifact.ArtifactID == "" || artifact.Version == 0 ||
 		!validSHA256Text(artifact.SHA256) {
@@ -992,17 +1082,21 @@ func (service *Service) issueArtifactDownload(ctx context.Context, delivery enti
 		GrantID, DeliveryID, OrganizationID, ProjectID, ActorID, MattermostUserID string
 		TeamID, ChannelID, SessionID, TurnID, ArtifactID, ArtifactSHA256          string
 		ArtifactVersion                                                           uint64
-	}{1, generation, grantID, delivery.ID, delivery.OrganizationID, delivery.ProjectID, boundary.ActorID,
+	}{
+		1, generation, grantID, delivery.ID, delivery.OrganizationID, delivery.ProjectID, boundary.ActorID,
 		boundary.MattermostUserID, delivery.TeamID, delivery.ChannelID, delivery.SessionID, delivery.TurnID,
-		artifact.ArtifactID, artifact.SHA256, artifact.Version})
+		artifact.ArtifactID, artifact.SHA256, artifact.Version,
+	})
 	if err != nil {
 		return "", errors.New("encode artifact download lineage")
 	}
-	grant := entity.DownloadGrant{ID: grantID, Generation: generation, OrganizationID: delivery.OrganizationID,
+	grant := entity.DownloadGrant{
+		ID: grantID, Generation: generation, OrganizationID: delivery.OrganizationID,
 		ProjectID: delivery.ProjectID, ActorID: boundary.ActorID, MattermostUserID: boundary.MattermostUserID,
 		TeamID: delivery.TeamID, ChannelID: delivery.ChannelID, SessionID: delivery.SessionID,
 		TurnID: delivery.TurnID, Artifact: artifact, ExpiresAt: service.now().UTC().Add(service.config.ArtifactDownloadTTL),
-		IssuedPayloadSHA256: issuedDigest}
+		IssuedPayloadSHA256: issuedDigest,
+	}
 	if err := service.repository.SaveDownloadGrant(ctx, grant); err != nil {
 		return "", err
 	}
@@ -1021,6 +1115,13 @@ func (service *Service) DownloadArtifact(ctx context.Context, grantID, authoriza
 	if err := service.mattermost.AuthenticateArtifactDownload(ctx, authorization, grant); err != nil {
 		return entity.ArtifactBinding{}, nil, domainerrs.ErrUnauthorized
 	}
+	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(ctx, grant.TeamID, grant.ChannelID)
+	if boundaryErr != nil || boundary.OrganizationID != grant.OrganizationID || boundary.ProjectID != grant.ProjectID {
+		return entity.ArtifactBinding{}, nil, domainerrs.ErrNotFound
+	}
+	if boundaryErr = service.requireBoundTeam(ctx, boundary); boundaryErr != nil {
+		return entity.ArtifactBinding{}, nil, domainerrs.ErrNotFound
+	}
 	raw, err := service.objects.Get(ctx, grant.ProjectID, grant.Artifact.StorageRef,
 		grant.Artifact.SizeBytes, grant.Artifact.SHA256)
 	if err != nil {
@@ -1033,15 +1134,20 @@ func (service *Service) DownloadArtifact(ctx context.Context, grantID, authoriza
 }
 
 func (service *Service) CheckInteraction(ctx context.Context) error {
-	boundary, err := service.mattermost.ReadinessBoundary()
+	boundary, err := service.mattermost.ReadinessBoundary(ctx)
 	if err != nil {
 		return err
 	}
-	inbound := entity.InboundEvent{ID: uuid.NewString(), ProviderEventID: "readiness:" + uuid.NewString(),
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
+		return errors.New("Mattermost joined readiness mapping is not current")
+	}
+	inbound := entity.InboundEvent{
+		ID: uuid.NewString(), ProviderEventID: "readiness:" + uuid.NewString(),
 		Kind: enum.InboundPost, Revision: 1, TeamID: boundary.TeamID, ChannelID: boundary.ChannelID,
 		UserID: boundary.BotStableKey, OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
 		ChatID: boundary.ChatID, ActorID: boundary.ActorID, RoleID: boundary.RoleID,
-		Locale: boundary.Locale, BotStableKey: boundary.BotStableKey, Text: "readiness"}
+		Locale: boundary.Locale, BotStableKey: boundary.BotStableKey, Text: "readiness",
+	}
 	inbound.DigestSHA256, err = eventDigest(inbound)
 	if err != nil {
 		return err
@@ -1326,8 +1432,10 @@ func (service *Service) acknowledgeDelivery(ctx context.Context, delivery entity
 		}
 	}
 	if delivery.OwnerDelivery != nil {
-		work := domaincontrol.InteractionDeliveryWork{DeliveryID: delivery.ID, Fence: delivery.OwnerDelivery.Fence,
-			LeaseToken: delivery.OwnerDelivery.LeaseToken}
+		work := domaincontrol.InteractionDeliveryWork{
+			DeliveryID: delivery.ID, Fence: delivery.OwnerDelivery.Fence,
+			LeaseToken: delivery.OwnerDelivery.LeaseToken,
+		}
 		if err := service.control.RecordInteractionDelivery(ctx, stableID(delivery.ID, "record-owner-delivery"),
 			work, delivery.ProviderReceiptSHA256); err != nil {
 			return err
@@ -1360,12 +1468,14 @@ func (service *Service) ownerGateCard(delivery entity.Delivery, claim entity.Own
 
 func (service *Service) enqueueRunCard(ctx context.Context, inbound entity.InboundEvent, turnID string) error {
 	deliveryID := stableID(inbound.ID, "card:"+string(enum.DeliveryRun))
-	delivery := entity.Delivery{ID: deliveryID, Kind: enum.DeliveryRun, State: enum.DeliveryPending,
+	delivery := entity.Delivery{
+		ID: deliveryID, Kind: enum.DeliveryRun, State: enum.DeliveryPending,
 		OrganizationID: inbound.OrganizationID, ProjectID: inbound.ProjectID,
 		SessionID: inbound.SessionID, TurnID: turnID, TeamID: inbound.TeamID,
 		ChannelID: inbound.ChannelID, RootPostID: inbound.RootPostID,
 		BotStableKey: inbound.BotStableKey, Locale: inbound.Locale,
-		CreatedAt: service.now(), UpdatedAt: service.now()}
+		CreatedAt: service.now(), UpdatedAt: service.now(),
+	}
 	token, err := service.authority.CallbackToken(delivery, inbound.ActorID)
 	if err != nil {
 		return err
@@ -1387,13 +1497,16 @@ func (service *Service) enqueueRunCard(ctx context.Context, inbound entity.Inbou
 }
 
 func (service *Service) enqueueRuntimeActionCard(ctx context.Context, inbound entity.InboundEvent,
-	previous entity.Delivery, turn domaincontrol.Turn, stoppable bool, message string) error {
-	delivery := entity.Delivery{ID: stableID(inbound.ID, "runtime-action-card"), Kind: enum.DeliveryRun,
+	previous entity.Delivery, turn domaincontrol.Turn, stoppable bool, message string,
+) error {
+	delivery := entity.Delivery{
+		ID: stableID(inbound.ID, "runtime-action-card"), Kind: enum.DeliveryRun,
 		State: enum.DeliveryPending, OrganizationID: previous.OrganizationID, ProjectID: previous.ProjectID,
 		SessionID: previous.SessionID, TurnID: previous.TurnID, Attempt: turn.Attempt,
 		ImmutableInputSHA256: turn.ImmutableInputSHA256, TeamID: previous.TeamID, ChannelID: previous.ChannelID,
 		RootPostID: previous.RootPostID, BotStableKey: previous.BotStableKey, Locale: previous.Locale,
-		UpdatePostID: previous.ProviderPostID, CreatedAt: service.now(), UpdatedAt: service.now()}
+		UpdatePostID: previous.ProviderPostID, CreatedAt: service.now(), UpdatedAt: service.now(),
+	}
 	token, err := service.authority.CallbackToken(delivery, inbound.ActorID)
 	if err != nil {
 		return err
@@ -1417,18 +1530,24 @@ func (service *Service) runtimeActionButton(delivery entity.Delivery, token, act
 	if action == "RETRY" {
 		label = service.text(delivery.Locale, "card.run.retry", nil)
 	}
-	return map[string]any{"id": strings.ToLower(action), "name": label, "type": "button",
-		"integration": map[string]any{"url": service.config.ActionCallbackURL,
-			"context": map[string]any{"delivery_id": delivery.ID, "callback_token": token, "action": action}}}
+	return map[string]any{
+		"id": strings.ToLower(action), "name": label, "type": "button",
+		"integration": map[string]any{
+			"url":     service.config.ActionCallbackURL,
+			"context": map[string]any{"delivery_id": delivery.ID, "callback_token": token, "action": action},
+		},
+	}
 }
 
 func (service *Service) enqueueInformational(ctx context.Context, inbound entity.InboundEvent,
-	kind enum.DeliveryKind, messageID string, data map[string]any) error {
+	kind enum.DeliveryKind, messageID string, data map[string]any,
+) error {
 	return service.enqueueCard(ctx, inbound, "", kind, map[string]any{"message": service.text(inbound.Locale, messageID, data)})
 }
 
 func (service *Service) enqueueCard(ctx context.Context, inbound entity.InboundEvent, turnID string,
-	kind enum.DeliveryKind, payload map[string]any) error {
+	kind enum.DeliveryKind, payload map[string]any,
+) error {
 	deliveryID := stableID(inbound.ID, "card:"+string(kind))
 	raw, payloadDigest, err := encodeDeliveryPayload(deliveryID, payload)
 	if err != nil {

@@ -21,7 +21,7 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: Interaction gateway не проходит readiness
-            description: Проверить PostgreSQL, control-plane, Mattermost, S3 и локальный authority issuer.
+            description: Проверить PostgreSQL, control-plane, Mattermost event и Team paths, S3, локальные authority issuer и verifier.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
         - alert: InteractionGatewayDeliveryFailures
           expr: sum(rate(mattercodex_interaction_gateway_worker_cycles_total{worker="delivery",outcome="failure"}[5m])) > 0.1
@@ -38,6 +38,22 @@ spec:
           annotations:
             summary: Растёт число отказов входящих событий
             description: Проверить artifact scan, server-owned mapping и exact control-plane operation profile.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayTeamRecoveryFailures
+          expr: sum(rate(mattercodex_interaction_gateway_mattermost_team_operations_total{operation="recovery",outcome="failure"}[5m])) > 0
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Не восстанавливаются неоднозначные Mattermost Team effects
+            description: Проверить operation lease, provider readback, immutable intent и локальный provider checkpoint до ручного repair.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayMappingRecoveryFailures
+          expr: sum(rate(mattercodex_interaction_gateway_mattermost_team_operations_total{operation="mapping_recovery",outcome="failure"}[5m])) > 0
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Не восстанавливается неоднозначный Workspace Mattermost mapping
+            description: Проверить owner readback, provider receipt generation, operation lease/fence и control-plane graph gate до ручного repair.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
         - alert: InteractionGatewayPostgresqlUnavailable
           expr: sum(kube_pod_status_ready{namespace="mattercodex-system",condition="true",pod=~"interaction-gateway-postgresql-.*"}) < 2

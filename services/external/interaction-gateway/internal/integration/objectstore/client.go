@@ -114,7 +114,8 @@ func (client *Client) Put(ctx context.Context, projectID, key string, raw []byte
 }
 
 func (client *Client) PutStream(ctx context.Context, projectID, key string, raw io.ReadSeeker, size int64,
-	mediaType, expectedSHA256 string) (domainobjectstore.Object, error) {
+	mediaType, expectedSHA256 string,
+) (domainobjectstore.Object, error) {
 	if invalidSegment(projectID) || invalidObjectKey(key) || raw == nil || size < 1 ||
 		size > client.config.MaximumObjectBytes || len(mediaType) < 3 || len(mediaType) > 255 {
 		return domainobjectstore.Object{}, errors.New("S3 object stream input is invalid")

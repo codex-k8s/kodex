@@ -11,6 +11,7 @@ import (
 type ProviderEffectReceipt struct {
 	ContractVersion          uint32    `json:"contract_version"`
 	Issuer                   string    `json:"iss"`
+	Audience                 string    `json:"aud"`
 	Purpose                  string    `json:"purpose"`
 	WorkloadID               string    `json:"workload_id"`
 	CallerSPIFFEID           string    `json:"caller_spiffe_id"`
@@ -47,7 +48,7 @@ type ProviderEffectReceipt struct {
 }
 
 func (receipt ProviderEffectReceipt) Validate(now time.Time) error {
-	if receipt.ContractVersion != 1 || receipt.Issuer == "" || receipt.Purpose == "" ||
+	if receipt.ContractVersion != 1 || receipt.Issuer == "" || receipt.Audience == "" || receipt.Purpose == "" ||
 		ValidateStableKey(receipt.WorkloadID) != nil || receipt.CallerSPIFFEID == "" ||
 		!strings.HasPrefix(receipt.FullMethod, "/controlplane.v1.ControlPlaneService/") ||
 		ValidateID(receipt.ActorID) != nil || ValidateID(receipt.OrganizationID) != nil ||

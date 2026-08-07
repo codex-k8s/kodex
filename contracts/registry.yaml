@@ -37,6 +37,15 @@ packages:
     consumers:
       - integration-gateway
       - agent-runner
+  - id: interaction-gateway-internal-v1
+    format: proto
+    owner: interaction-gateway
+    source: contracts/proto/interactiongateway/v1
+    generated:
+      go: libs/go/interactiongatewayapi/gen/interactiongateway/v1
+    consumers:
+      - interaction-gateway
+      - control-api-gateway
   - id: control-plane-events-v1
     format: asyncapi
     owner: control-plane

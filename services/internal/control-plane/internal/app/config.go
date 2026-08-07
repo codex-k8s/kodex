@@ -10,6 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 )
 
 const serviceName = "control-plane"
@@ -415,6 +416,15 @@ func expectedOperations() map[string]string {
 		"control.legacy-cutover.get":                     controlplanev1.ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName,
 		"control.legacy-cutover.list":                    controlplanev1.ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName,
 		"control.legacy-cutover.resolve":                 controlplanev1.ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName,
+		"interaction.team.catalog.read":                  interactiongatewayv1.MattermostTeamService_ListMattermostTeams_FullMethodName,
+		"interaction.team.create":                        interactiongatewayv1.MattermostTeamService_CreateMattermostTeam_FullMethodName,
+		"interaction.team.link":                          interactiongatewayv1.MattermostTeamService_LinkMattermostTeam_FullMethodName,
+		"interaction.team.binding.get":                   interactiongatewayv1.MattermostTeamService_GetMattermostTeamBinding_FullMethodName,
+		"interaction.team.mapping-operation.get":         interactiongatewayv1.MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName,
+		"interaction.team.relink":                        interactiongatewayv1.MattermostTeamService_RelinkMattermostTeam_FullMethodName,
+		"interaction.team.unlink":                        interactiongatewayv1.MattermostTeamService_UnlinkMattermostTeam_FullMethodName,
+		"interaction.team.provider.readback":             interactiongatewayv1.MattermostTeamService_GetMattermostTeamProviderReadback_FullMethodName,
+		"interaction.team.readiness":                     interactiongatewayv1.MattermostTeamService_CheckReadiness_FullMethodName,
 		"control.integration.provider-reference.manage":  controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
 		"control.integration.provider-reference.get":     controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
 		"control.integration.provider-reference.list":    controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,

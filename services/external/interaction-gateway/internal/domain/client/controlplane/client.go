@@ -11,6 +11,11 @@ import (
 
 var ErrConflict = errors.New("control-plane command conflict")
 
+var (
+	ErrNotFound    = errors.New("control-plane resource is not found")
+	ErrUnavailable = errors.New("control-plane working path is unavailable")
+)
+
 type Artifact struct {
 	ID         string
 	Version    uint64
@@ -137,6 +142,53 @@ type RuntimeOutputAuthorization struct {
 	GrantGeneration           uint64
 }
 
+type ProviderEffectReceipt struct {
+	ContractVersion     uint32    `json:"contract_version"`
+	Issuer              string    `json:"iss"`
+	Audience            string    `json:"aud"`
+	Purpose             string    `json:"purpose"`
+	WorkloadID          string    `json:"workload_id"`
+	CallerSPIFFEID      string    `json:"caller_spiffe_id"`
+	FullMethod          string    `json:"full_method"`
+	ActorID             string    `json:"actor_id"`
+	OrganizationID      string    `json:"organization_id"`
+	ProjectID           string    `json:"project_id"`
+	WorkspaceID         string    `json:"workspace_id,omitempty"`
+	ProviderTeamRef     string    `json:"provider_team_ref,omitempty"`
+	ProviderObjectRef   string    `json:"provider_object_ref,omitempty"`
+	Action              string    `json:"action"`
+	Effect              string    `json:"effect"`
+	EffectVersion       uint64    `json:"effect_version"`
+	EffectGeneration    uint64    `json:"effect_generation"`
+	EffectSHA256        string    `json:"effect_sha256"`
+	ReceiptID           string    `json:"jti"`
+	ReceiptRevision     uint64    `json:"revision"`
+	IssuedAt            time.Time `json:"issued_at"`
+	NotBefore           time.Time `json:"not_before"`
+	ExpiresAt           time.Time `json:"expires_at"`
+	MaskedStatus        string    `json:"masked_status"`
+	Eligible            bool      `json:"eligible"`
+	TargetKind          string    `json:"target_kind"`
+	TargetResourceID    string    `json:"target_resource_id,omitempty"`
+	TargetStableKey     string    `json:"target_stable_key"`
+	CommandIntentSHA256 string    `json:"command_intent_sha256"`
+}
+
+type ProviderCredential struct {
+	CompactJWS string
+	Receipt    ProviderEffectReceipt
+}
+
+type ManageWorkspaceMappingInput struct {
+	IdempotencyKey     string
+	Action             string
+	MappingID          string
+	ExpectedVersion    uint64
+	ExpectedGeneration uint64
+	Name               string
+	Credential         ProviderCredential
+}
+
 type Client interface {
 	Check(context.Context) error
 	CheckInteraction(context.Context, string, string) error
@@ -159,4 +211,7 @@ type Client interface {
 	GetRuntimeMaterialization(context.Context, string, string, string, uint64, string) (RuntimeMaterialization, error)
 	AuthorizeRuntimeOutput(context.Context, string, string, RuntimeOutputMetadata) (RuntimeOutputAuthorization, error)
 	RegisterRuntimeOutput(context.Context, string, string, RuntimeOutputAuthorization, RuntimeOutputMetadata, string) (Artifact, error)
+	ListWorkspaceMattermostMappings(context.Context, ProviderCredential, string) ([]entity.WorkspaceMattermostMapping, error)
+	GetWorkspaceMattermostMapping(context.Context, ProviderCredential, string) (entity.WorkspaceMattermostMapping, error)
+	ManageWorkspaceMattermostMapping(context.Context, ManageWorkspaceMappingInput) (entity.WorkspaceMattermostMapping, error)
 }

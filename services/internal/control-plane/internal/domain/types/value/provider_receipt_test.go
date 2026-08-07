@@ -13,6 +13,7 @@ func TestProviderEffectReceiptRequiresExactBoundedTuple(t *testing.T) {
 	receipt := ProviderEffectReceipt{
 		ContractVersion:     1,
 		Issuer:              "mattercodex-interaction-gateway-provider-readback",
+		Audience:            "urn:mattercodex:provider-readback:mattermost",
 		Purpose:             "MATTERMOST_PROVIDER_READBACK_RECEIPT",
 		WorkloadID:          "interaction-gateway",
 		CallerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",

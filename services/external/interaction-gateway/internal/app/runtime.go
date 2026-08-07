@@ -5,8 +5,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +50,8 @@ func openPostgres(ctx context.Context, config GatewayConfig) (*pgxpool.Pool, err
 	}
 	var sessionUser string
 	var runtimeMember bool
-	if err := pool.QueryRow(ctx,
+	if err := pool.QueryRow(
+		ctx,
 		"SELECT session_user::text, pg_has_role(session_user, 'interaction_gateway_runtime', 'member')",
 	).Scan(&sessionUser, &runtimeMember); err != nil || sessionUser != config.PostgresExpectedUser || !runtimeMember {
 		pool.Close()
@@ -69,6 +72,32 @@ func publicTLS(config GatewayConfig) (*tls.Config, error) {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate},
 		ClientAuth: tls.VerifyClientCertIfGiven, ClientCAs: roots,
+	}, nil
+}
+
+func teamRPCTLS(config GatewayConfig) (*tls.Config, error) {
+	certificate, err := tls.LoadX509KeyPair(config.TLSCertificateFile, config.TLSPrivateKeyFile)
+	if err != nil {
+		return nil, errors.New("load Mattermost team gRPC server identity")
+	}
+	roots, err := loadCertPool(config.TLSClientCAFile)
+	if err != nil {
+		return nil, errors.New("load Mattermost team gRPC client CA")
+	}
+	expected, err := url.Parse(config.TeamRPCClientSPIFFE)
+	if err != nil || expected.Scheme != "spiffe" || expected.Host == "" || expected.RawQuery != "" || expected.Fragment != "" {
+		return nil, errors.New("mattermost team gRPC client identity is invalid")
+	}
+	return &tls.Config{
+		MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate},
+		ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: roots,
+		VerifyConnection: func(connection tls.ConnectionState) error {
+			if len(connection.VerifiedChains) != 1 || len(connection.PeerCertificates) != 1 ||
+				len(connection.PeerCertificates[0].URIs) != 1 || connection.PeerCertificates[0].URIs[0].String() != expected.String() {
+				return fmt.Errorf("mattermost team gRPC client identity is not allowed")
+			}
+			return nil
+		},
 	}, nil
 }
 

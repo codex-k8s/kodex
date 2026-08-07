@@ -160,18 +160,19 @@ type OwnerGateBinding struct {
 }
 
 type Boundary struct {
-	OrganizationID   string
-	ProjectID        string
-	ChatID           string
-	ActorID          string
-	RoleID           string
-	Locale           string
-	BotStableKey     string
-	TeamID           string
-	ChannelID        string
-	SessionID        string
-	MattermostUserID string
-	IgnoredBot       bool
+	OrganizationID      string
+	ProjectID           string
+	ChatID              string
+	ActorID             string
+	MappingOwnerActorID string
+	RoleID              string
+	Locale              string
+	BotStableKey        string
+	TeamID              string
+	ChannelID           string
+	SessionID           string
+	MattermostUserID    string
+	IgnoredBot          bool
 }
 
 type OwnerGateClaim struct {

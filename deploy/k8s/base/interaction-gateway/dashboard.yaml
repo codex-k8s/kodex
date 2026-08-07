@@ -12,7 +12,8 @@ data:
         {"id": 1, "title": "Готовые реплики", "type": "stat", "targets": [{"expr": "sum(mattercodex_interaction_gateway_readiness{ready=\"true\"})", "legendFormat": "ready"}]},
         {"id": 2, "title": "HTTP outcomes", "type": "timeseries", "targets": [{"expr": "sum by (route, outcome) (rate(mattercodex_interaction_gateway_http_requests_total[5m]))", "legendFormat": "{{route}} {{outcome}}"}]},
         {"id": 3, "title": "Worker cycles", "type": "timeseries", "targets": [{"expr": "sum by (worker, outcome) (rate(mattercodex_interaction_gateway_worker_cycles_total[5m]))", "legendFormat": "{{worker}} {{outcome}}"}]},
-        {"id": 4, "title": "Deliveries", "type": "timeseries", "targets": [{"expr": "sum by (kind, outcome) (rate(mattercodex_interaction_gateway_deliveries_total[5m]))", "legendFormat": "{{kind}} {{outcome}}"}]}
+        {"id": 4, "title": "Deliveries", "type": "timeseries", "targets": [{"expr": "sum by (kind, outcome) (rate(mattercodex_interaction_gateway_deliveries_total[5m]))", "legendFormat": "{{kind}} {{outcome}}"}]},
+        {"id": 5, "title": "Mattermost Team operations", "type": "timeseries", "targets": [{"expr": "sum by (operation, outcome) (rate(mattercodex_interaction_gateway_mattermost_team_operations_total[5m]))", "legendFormat": "{{operation}} {{outcome}}"}]}
       ],
       "schemaVersion": 39,
       "tags": ["mattercodex", "interaction-gateway"],
