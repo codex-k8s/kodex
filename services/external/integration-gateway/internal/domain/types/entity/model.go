@@ -214,6 +214,7 @@ type Invocation struct {
 type Approval struct {
 	ID                 string
 	InvocationID       string
+	Version            uint64
 	RequestHash        string
 	Preview            json.RawMessage
 	Status             enum.ApprovalStatus

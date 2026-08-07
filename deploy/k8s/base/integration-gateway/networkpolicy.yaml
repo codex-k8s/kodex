@@ -36,6 +36,7 @@ spec:
               app.kubernetes.io/name: control-api-gateway
       ports:
         - {protocol: TCP, port: 8443}
+        - {protocol: TCP, port: 9443}
     - from:
         - namespaceSelector:
             matchLabels:
@@ -76,6 +77,12 @@ spec:
               app.kubernetes.io/name: integration-egress-proxy
       ports:
         - {protocol: TCP, port: 8443}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-management-egress-proxy
+      ports:
+        - {protocol: TCP, port: 8080}
     - to:
         - namespaceSelector:
             matchLabels:

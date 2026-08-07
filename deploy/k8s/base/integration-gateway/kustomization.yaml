@@ -11,6 +11,7 @@ resources:
   - migration-job.yaml
   - postgresql.yaml
   - egress-proxy.yaml
+  - management-egress-proxy.yaml
   - networkpolicy.yaml
   - vault-secret-provider-classes.yaml
   - vault-resources.yaml
@@ -37,5 +38,12 @@ configMapGenerator:
   - name: integration-gateway-definitions
     files:
       - health.yaml=definitions/health.yaml
+  - name: integration-gateway-provider-catalog
+    files:
+      - catalog.json=provider-catalog/catalog.json
+  - name: integration-gateway-git-sources
+    files:
+      - catalog.json=git-sources/catalog.json
+      - integration-observer-role.json=git-sources/integration-observer-role.json
 generatorOptions:
   disableNameSuffixHash: true

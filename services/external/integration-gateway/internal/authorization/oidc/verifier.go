@@ -74,11 +74,13 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 	baseTransport := &http.Transport{TLSClientConfig: &tls.Config{
 		MinVersion: tls.VersionTLS13, ServerName: config.TLSServerName, RootCAs: roots,
 	}}
-	httpClient := &http.Client{Timeout: config.Timeout,
+	httpClient := &http.Client{
+		Timeout:   config.Timeout,
 		Transport: exactTransport{next: baseTransport, host: issuerURL.Hostname()},
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return errors.New("OIDC redirects are forbidden")
-		}}
+		},
+	}
 	providerContext := oidc.ClientContext(ctx, httpClient)
 	provider, err := oidc.NewProvider(providerContext, config.Issuer)
 	if err != nil {
@@ -104,6 +106,8 @@ func (verifier *Verifier) Verify(ctx context.Context, authorization string) (Pri
 		len(values.Permissions) == 0 || len(values.Permissions) > 256 {
 		return Principal{}, errors.New("OIDC claims are invalid")
 	}
-	return Principal{Scope: domainrepo.Scope{TenantID: values.OrganizationID, ProjectID: values.ProjectID, ActorID: token.Subject},
-		Permissions: values.Permissions}, nil
+	return Principal{
+		Scope:       domainrepo.Scope{TenantID: values.OrganizationID, ProjectID: values.ProjectID, ActorID: token.Subject},
+		Permissions: values.Permissions,
+	}, nil
 }

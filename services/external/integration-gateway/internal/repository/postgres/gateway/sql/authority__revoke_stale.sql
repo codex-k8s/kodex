@@ -9,8 +9,9 @@ WITH stale_invocations AS (
     RETURNING invocation_id, canonical_request_hash
 ), stale_approvals AS (
     UPDATE integration_gateway.approvals SET
-        status = 'CANCELLED', decided_at = clock_timestamp(),
-        payload = jsonb_set(payload, '{Status}', '"CANCELLED"'::jsonb, false)
+        status = 'CANCELLED', version = version + 1, decided_at = clock_timestamp(),
+        payload = jsonb_set(jsonb_set(payload, '{Status}', '"CANCELLED"'::jsonb, false),
+                            '{Version}', to_jsonb(version + 1), true)
      WHERE invocation_id IN (SELECT invocation_id FROM stale_invocations)
        AND status = 'PENDING'
     RETURNING invocation_id

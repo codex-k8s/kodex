@@ -22,15 +22,22 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/authorization/oidc"
 	controlclient "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/clients/controlplane"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/service/gateway"
+	managementservice "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/service/management"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/credential"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/definition"
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/gitsource"
+	providerregistry "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/provider"
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/provider/codexappserver"
 	providerhttp "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/provider/http"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/schema"
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/integration/secret"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/observability"
 	postgresgateway "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/repository/postgres/gateway"
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/security/effectreceipt"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/security/payloadcipher"
+	managementgrpc "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/transport/grpc/management"
 	resultgrpc "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/transport/grpc/result"
 	apihttp "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/transport/http/api"
 	mcphttp "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/transport/http/mcp"
@@ -55,6 +62,7 @@ type state struct {
 	resultListener    net.Listener
 	pool              *pgxpool.Pool
 	control           *controlplaneclient.Client
+	managementControl *controlplaneclient.Client
 	authority         *authorityclient.LocalConnection
 }
 
@@ -126,6 +134,16 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
+	current.managementControl, err = controlplaneclient.Dial(startup, controlplaneclient.Config{
+		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
+		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile,
+		ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ApplicationGrantFile: config.ControlPlaneApplicationGrantFile,
+		ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 2 * time.Second,
+		Operations: controlplaneclient.IntegrationGatewayManagementOperations(),
+	})
+	if err != nil {
+		return err
+	}
 	control, err := controlclient.New(current.control, catalog, config.SessionTTL)
 	if err != nil {
 		return err
@@ -135,6 +153,79 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		MaximumSessionRequests: config.MaximumSessionRequests, MaximumConcurrentRequests: config.MaximumSessionConcurrency,
 	})
 	if err != nil {
+		return err
+	}
+	if err := loadDefinitions(startup, config.DefinitionDirectory, service, catalog); err != nil {
+		return err
+	}
+	providerCatalog, err := providerregistry.LoadCatalog(config.ProviderCatalogFile)
+	if err != nil {
+		return err
+	}
+	gitCatalog, err := gitsource.NewCatalog(config.GitSourceCatalogFile)
+	if err != nil {
+		return err
+	}
+	for _, directory := range []string{config.CodexTemporaryRoot, config.GitTemporaryRoot} {
+		if err = preparePrivateDirectory(directory); err != nil {
+			return err
+		}
+	}
+	secretBoundary, err := secret.NewVault(secret.Config{
+		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName, CAFile: config.VaultCAFile,
+		Role: config.VaultRole, AuthMount: config.VaultAuthMount, KVMount: config.VaultKVMount,
+		PathPrefix: config.VaultCredentialPathPrefix, ServiceAccountTokenFile: config.VaultServiceAccountTokenFile,
+		Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	gitSecretBoundary, err := secret.NewVault(secret.Config{
+		Address: config.VaultAddress, TLSServerName: config.VaultTLSServerName, CAFile: config.VaultCAFile,
+		Role: config.VaultRole, AuthMount: config.VaultAuthMount, KVMount: config.VaultKVMount,
+		PathPrefix: config.VaultGitCredentialPathPrefix, ServiceAccountTokenFile: config.VaultServiceAccountTokenFile,
+		Timeout: 5 * time.Second, ReadOnly: true,
+	})
+	if err != nil {
+		return err
+	}
+	authorizer, err := codexappserver.New(codexappserver.Config{
+		Executable: config.CodexExecutable, TemporaryRoot: config.CodexTemporaryRoot,
+		SSLCertificateFile: config.CodexCAFile, HTTPSProxy: config.ManagementEgressProxyURL,
+		Timeout: config.ProviderAuthorizationTimeout, PollInterval: config.ProviderAuthorizationPollInterval,
+	})
+	if err != nil {
+		return err
+	}
+	receiptSigner, err := effectreceipt.New(effectreceipt.Config{
+		ProviderIssuer: config.ProviderReceiptIssuer, ProviderPrivateJWKFile: config.ProviderReceiptPrivateJWKFile,
+		GitIssuer: config.GitReceiptIssuer, GitPrivateJWKFile: config.GitReceiptPrivateJWKFile,
+		MaximumTTL: config.EffectReceiptTTL,
+	})
+	if err != nil {
+		return err
+	}
+	managementEffects, err := controlclient.NewManagementClient(current.managementControl, receiptSigner)
+	if err != nil {
+		return err
+	}
+	gitFetcher, err := gitsource.NewFetcher(gitCatalog, gitSecretBoundary, gitsource.FetcherConfig{
+		GitExecutable: config.GitExecutable, TemporaryRoot: config.GitTemporaryRoot, CAFile: config.GitCAFile,
+		HTTPSProxy: config.ManagementEgressProxyURL, Timeout: config.GitFetchTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	managementService, err := managementservice.New(repository, cipher, catalog, gitCatalog, service, managementservice.Config{
+		Providers: providerCatalog.Providers(), AuthorizationTTL: config.AuthorizationTTL, MaximumPageSize: 100,
+	})
+	if err != nil {
+		return err
+	}
+	if err = managementService.ConfigureWorker(managementservice.WorkerDependencies{
+		Authorizer: authorizer, Secrets: secretBoundary, GitSecrets: gitSecretBoundary, Effects: managementEffects, Git: gitFetcher,
+		SecretPathPrefix: config.VaultCredentialPathPrefix, LeaseDuration: config.ManagementLeaseDuration,
+	}); err != nil {
 		return err
 	}
 	current.authority, err = authorityclient.DialLocal(startup, authorityclient.LocalConfig{
@@ -148,11 +239,12 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err := authorityChecker.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)
 	}
-	resultTransport, err := resultgrpc.New(repository, control)
+	resultTransport, err := resultgrpc.New(managementPostgresChecker{repository}, control)
 	if err != nil {
 		return err
 	}
-	if err := loadDefinitions(startup, config.DefinitionDirectory, service, catalog); err != nil {
+	managementTransport, err := managementgrpc.New(managementService)
+	if err != nil {
 		return err
 	}
 	oidcVerifier, err := oidc.New(lifecycle, oidc.Config{
@@ -182,6 +274,11 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err := provider.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)
 	}
+	for _, dependency := range []checker{managementPostgresChecker{repository}, secretBoundary, gitSecretBoundary, authorizer, gitFetcher, providerCatalog, gitCatalog, managementEffects} {
+		if err := dependency.Check(startup); err != nil {
+			return fmt.Errorf("startup barrier: %w", err)
+		}
+	}
 	publicMux := http.NewServeMux()
 	publicMux.Handle("/mcp/v1", observeHTTP(current.business, "mcp", mcpHandler.HTTPHandler()))
 	publicMux.Handle("/api/v1/", observeHTTP(current.business, "api",
@@ -206,6 +303,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		stdgrpc.ChainUnaryInterceptor(authorityclient.VerifierUnaryServerInterceptor(current.authority.Verifier())),
 	)
 	integrationgatewayv1.RegisterIntegrationResultServiceServer(current.resultServer, resultTransport)
+	integrationgatewayv1.RegisterIntegrationManagementServiceServer(current.resultServer, managementTransport)
 	technicalMux := http.NewServeMux()
 	technicalMux.HandleFunc("/livez", func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusNoContent) })
 	technicalMux.HandleFunc("/readyz", func(response http.ResponseWriter, _ *http.Request) {
@@ -247,7 +345,8 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		executionWorker(service, current.business, current.logger, config.WorkerInterval, shutdownBase),
 		continuationWorker(service, current.business, current.logger, config.WorkerInterval),
 		lifecycleWorker(service, current.business, current.logger, config.WorkerInterval),
-		readinessWorker(repository, current.control, provider, cipher, authorityChecker, current.readiness, current.metrics, current.business, current.logger, config.ReadinessInterval),
+		managementWorker(managementService, current.business, current.logger, config.WorkerInterval, shutdownBase),
+		readinessWorker([]checker{managementPostgresChecker{repository}, current.control, provider, cipher, authorityChecker, secretBoundary, gitSecretBoundary, authorizer, gitFetcher, providerCatalog, gitCatalog, managementEffects}, current.readiness, current.metrics, current.business, current.logger, config.ReadinessInterval),
 	)
 	workerResult := make(chan error, 1)
 	go func() { workerResult <- current.workers.Wait(shutdownBase) }()
@@ -257,6 +356,23 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	case err := <-workerResult:
 		return err
 	}
+}
+
+func preparePrivateDirectory(path string) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return errors.New("management runtime directory is invalid")
+	}
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return errors.New("create management runtime directory")
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("management runtime directory is unsafe")
+	}
+	if err = os.Chmod(path, 0o700); err != nil {
+		return errors.New("secure management runtime directory")
+	}
+	return nil
 }
 
 func loadDefinitions(ctx context.Context, directory string, service *domainservice.Service, catalog *controlclient.Catalog) error {
@@ -392,7 +508,37 @@ func continuationWorker(service *domainservice.Service, metrics *internalobserva
 	}
 }
 
+func managementWorker(service *managementservice.Service, metrics *internalobservability.Metrics, logger *slog.Logger, interval time.Duration, finalizationBase context.Context) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		for {
+			didWork, err := service.ProcessOne(ctx, finalizationBase)
+			if err != nil {
+				metrics.ObserveWorker("management", "failure")
+				logger.Error("integration management effect cycle failed", "error", err)
+			} else if didWork {
+				metrics.ObserveWorker("management", "success")
+			} else {
+				metrics.ObserveWorker("management", "idle")
+			}
+			if !wait(ctx, interval) {
+				return nil
+			}
+		}
+	}
+}
+
 type checker interface{ Check(context.Context) error }
+
+type managementRepository interface {
+	Check(context.Context) error
+	CheckManagement(context.Context) error
+}
+
+type managementPostgresChecker struct{ repository managementRepository }
+
+func (checker managementPostgresChecker) Check(ctx context.Context) error {
+	return errors.Join(checker.repository.Check(ctx), checker.repository.CheckManagement(ctx))
+}
 
 type authorityVerifierChecker struct {
 	client internalrpcauthorityv1.AuthorizationVerifierServiceClient
@@ -409,12 +555,15 @@ func (checker authorityVerifierChecker) Check(ctx context.Context) error {
 	return nil
 }
 
-func readinessWorker(repository, control, provider, payloadKeyset, authority checker, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, business *internalobservability.Metrics, logger *slog.Logger, interval time.Duration) serviceruntime.Worker {
+func readinessWorker(checks []checker, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, business *internalobservability.Metrics, logger *slog.Logger, interval time.Duration) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		for {
 			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			err := errors.Join(repository.Check(checkCtx), control.Check(checkCtx), provider.Check(checkCtx),
-				payloadKeyset.Check(checkCtx), authority.Check(checkCtx))
+			var checkErrors []error
+			for _, dependency := range checks {
+				checkErrors = append(checkErrors, dependency.Check(checkCtx))
+			}
+			err := errors.Join(checkErrors...)
 			cancel()
 			if err != nil {
 				readiness.Set(false, "dependency unavailable")
@@ -510,6 +659,9 @@ func (current *state) shutdown(background context.Context) error {
 	}
 	if current.control != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { return current.control.Close() }})
+	}
+	if current.managementControl != nil {
+		operations = append(operations, serviceruntime.ShutdownOperation{Name: "control-plane management client", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { return current.managementControl.Close() }})
 	}
 	if current.authority != nil {
 		operations = append(operations, serviceruntime.ShutdownOperation{Name: "authority verifier client", Timeout: current.config.ShutdownTimeout, Run: func(context.Context) error { return current.authority.Close() }})

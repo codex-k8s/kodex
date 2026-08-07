@@ -11395,19 +11395,22 @@ func (*ResourceSpec_WorkspaceMattermostMapping) isResourceSpec_Value() {}
 
 // Resource описывает версионированное сообщение контракта control-plane.
 type Resource struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Kind          ResourceKind           `protobuf:"varint,2,opt,name=kind,proto3,enum=controlplane.v1.ResourceKind" json:"kind,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	State         LifecycleState         `protobuf:"varint,4,opt,name=state,proto3,enum=controlplane.v1.LifecycleState" json:"state,omitempty"`
-	Version       uint64                 `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
-	ProjectId     string                 `protobuf:"bytes,6,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	ParentId      string                 `protobuf:"bytes,7,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	Spec          *ResourceSpec          `protobuf:"bytes,8,opt,name=spec,proto3" json:"spec,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Kind      ResourceKind           `protobuf:"varint,2,opt,name=kind,proto3,enum=controlplane.v1.ResourceKind" json:"kind,omitempty"`
+	Name      string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	State     LifecycleState         `protobuf:"varint,4,opt,name=state,proto3,enum=controlplane.v1.LifecycleState" json:"state,omitempty"`
+	Version   uint64                 `protobuf:"varint,5,opt,name=version,proto3" json:"version,omitempty"`
+	ProjectId string                 `protobuf:"bytes,6,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ParentId  string                 `protobuf:"bytes,7,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	Spec      *ResourceSpec          `protobuf:"bytes,8,opt,name=spec,proto3" json:"spec,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// projection_sha256 — canonical digest exact version, вычисленный
+	// authoritative control-plane; consumer не воспроизводит его из wire form.
+	ProjectionSha256 string `protobuf:"bytes,11,opt,name=projection_sha256,json=projectionSha256,proto3" json:"projection_sha256,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Resource) Reset() {
@@ -11508,6 +11511,13 @@ func (x *Resource) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Resource) GetProjectionSha256() string {
+	if x != nil {
+		return x.ProjectionSha256
+	}
+	return ""
 }
 
 // CreateResourceRequest описывает версионированное сообщение контракта control-plane.
@@ -43680,7 +43690,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10workspace_backup\x18\x1b \x01(\v2$.controlplane.v1.WorkspaceBackupSpecH\x00R\x0fworkspaceBackup\x12T\n" +
 	"\x11workspace_restore\x18\x1c \x01(\v2%.controlplane.v1.WorkspaceRestoreSpecH\x00R\x10workspaceRestore\x12s\n" +
 	"\x1cworkspace_mattermost_mapping\x18\x1d \x01(\v2/.controlplane.v1.WorkspaceMattermostMappingSpecH\x00R\x1aworkspaceMattermostMappingB\a\n" +
-	"\x05value\"\x97\x03\n" +
+	"\x05value\"\xc4\x03\n" +
 	"\bResource\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12\x12\n" +
@@ -43695,7 +43705,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe9\x01\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12+\n" +
+	"\x11projection_sha256\x18\v \x01(\tR\x10projectionSha256\"\xe9\x01\n" +
 	"\x15CreateResourceRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.controlplane.v1.ResourceKindR\x04kind\x12\x12\n" +

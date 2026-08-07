@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 
+	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -48,6 +49,10 @@ func providerEffectReceiptFromProto(receipt *controlplanev1.ProviderEffectReadba
 		TargetResourceID: receipt.GetTargetResourceId(), TargetStableKey: receipt.GetTargetStableKey(),
 		CommandIntentSHA256: receipt.GetCommandIntentSha256(),
 	}
+	result.Audience = map[string]string{
+		"MATTERMOST_PROVIDER_READBACK_RECEIPT": "urn:mattercodex:provider-readback:mattermost",
+		"AI_PROVIDER_READBACK_RECEIPT":         "urn:mattercodex:provider-readback:ai",
+	}[result.Purpose]
 	if result.ContractVersion == 0 {
 		return value.ProviderEffectReceipt{}, errors.New("provider receipt is empty")
 	}
@@ -71,7 +76,7 @@ func gitReconciliationReceiptFromProto(receipt *controlplanev1.GitReconciliation
 		return value.GitReconciliationReceipt{}, err
 	}
 	return value.GitReconciliationReceipt{
-		ContractVersion: receipt.GetContractVersion(), Issuer: receipt.GetIssuer(), Purpose: receipt.GetPurpose(),
+		ContractVersion: receipt.GetContractVersion(), Issuer: receipt.GetIssuer(), Audience: "urn:mattercodex:git-reconciliation", Purpose: receipt.GetPurpose(),
 		WorkloadID: receipt.GetWorkloadId(), CallerSPIFFEID: receipt.GetCallerSpiffeId(), FullMethod: receipt.GetFullMethod(),
 		ActorID: receipt.GetActorId(), OrganizationID: receipt.GetOrganizationId(), ProjectID: receipt.GetProjectId(),
 		TargetKind: receipt.GetTargetKind(), TargetResourceID: receipt.GetTargetResourceId(),
@@ -86,10 +91,23 @@ func (server *Server) manageProtectedConfiguration(
 	ctx context.Context,
 	fullMethod string,
 	input resource.ManageProtectedConfigurationInput,
+	semanticIntent ...func(controlplanecontract.VerifiedCommandAuthority) (string, error),
 ) (*controlplanev1.Resource, error) {
 	principal, err := authorization.Principal(ctx, fullMethod)
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	if len(semanticIntent) > 1 {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	if len(semanticIntent) == 1 {
+		input.SemanticIntentSHA256, err = semanticIntent[0](controlplanecontract.VerifiedCommandAuthority{
+			ActorID: principal.ActorID, OrganizationID: principal.OrganizationID,
+			ProjectID: principal.ProjectID, WorkloadID: principal.CallerWorkload, FullMethod: fullMethod,
+		})
+		if err != nil {
+			return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+		}
 	}
 	input.Principal = principal
 	input.FullMethod = fullMethod
@@ -136,6 +154,8 @@ func (server *Server) ReconcileGitRoleDefinition(
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindRoleDefinition, Action: "reconcile_git",
 			ResourceID: request.GetRoleDefinitionId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: roleDefinitionFromProto(request.GetSpec()), GitReceipt: receipt,
+		}, func(authority controlplanecontract.VerifiedCommandAuthority) (string, error) {
+			return controlplanecontract.GitReconciliationIntentSHA256(authority, request)
 		})
 	if err != nil {
 		return nil, err
@@ -183,6 +203,8 @@ func (server *Server) ReconcileGitAgent(
 				request.GetRoleDefinitionStableKey(), request.GetInstructionSetStableKey(),
 				request.GetProviderPoolStableKey(),
 			}, GitReceipt: receipt,
+		}, func(authority controlplanecontract.VerifiedCommandAuthority) (string, error) {
+			return controlplanecontract.GitReconciliationIntentSHA256(authority, request)
 		})
 	if err != nil {
 		return nil, err
@@ -274,6 +296,8 @@ func (server *Server) ReconcileGitInstructionSet(
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindInstructionSet, Action: "reconcile_git",
 			ResourceID: request.GetInstructionSetId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: instructionSetFromProto(request.GetSpec()), GitReceipt: receipt,
+		}, func(authority controlplanecontract.VerifiedCommandAuthority) (string, error) {
+			return controlplanecontract.GitReconciliationIntentSHA256(authority, request)
 		})
 	if err != nil {
 		return nil, err
@@ -305,6 +329,8 @@ func (server *Server) ManageProviderConnectionReference(
 			Action:     action,
 			ResourceID: request.GetProviderConnectionReferenceId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: spec, ProviderReceipt: receipt,
+		}, func(authority controlplanecontract.VerifiedCommandAuthority) (string, error) {
+			return controlplanecontract.ProviderConnectionReferenceIntentSHA256(authority, request)
 		})
 	if err != nil {
 		return nil, err
@@ -360,6 +386,8 @@ func (server *Server) ReconcileGitProviderPool(
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindProviderPool, Action: "reconcile_git",
 			ResourceID: request.GetProviderPoolId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: spec, ReferenceKeys: keys, GitReceipt: receipt,
+		}, func(authority controlplanecontract.VerifiedCommandAuthority) (string, error) {
+			return controlplanecontract.GitReconciliationIntentSHA256(authority, request)
 		})
 	if err != nil {
 		return nil, err

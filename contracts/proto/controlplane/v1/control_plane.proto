@@ -1697,6 +1697,9 @@ message Resource {
   ResourceSpec spec = 8;
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
+  // projection_sha256 — canonical digest exact version, вычисленный
+  // authoritative control-plane; consumer не воспроизводит его из wire form.
+  string projection_sha256 = 11;
 }
 
 // CreateResourceRequest описывает версионированное сообщение контракта control-plane.

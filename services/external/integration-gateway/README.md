@@ -1,11 +1,14 @@
 # Integration gateway
 
 `integration-gateway` — внешняя граница выполнения MCP, API и безопасной
-материализации CLI/env integrations. Компонент реализуется в Issue
-[#189](https://github.com/codex-k8s/matter-codex/issues/189).
+материализации CLI/env integrations. Runtime исполнения реализован в Issue
+[#189](https://github.com/codex-k8s/matter-codex/issues/189), а целевой owner
+lifecycle provider/Git — в Issue
+[#236](https://github.com/codex-k8s/matter-codex/issues/236).
 
 Gateway не читает PostgreSQL, Redis или S3 других компонентов. Опасные
-учётные данные доступны только provider adapter через файловый secret resolver;
+учётные данные доступны только provider adapter через version-pinned Vault
+boundary либо уже принятый файловый resolver runtime #189;
 они не возвращаются агенту, не попадают в `RuntimeRevision`, TOML, preview,
 аудит, логи, ошибки или метрики.
 
@@ -21,11 +24,98 @@ Gateway не читает PostgreSQL, Redis или S3 других компон�
 | invocation, approval, preview/hash, execution/result receipts | `integration-gateway` | PostgreSQL, одна owner transaction на каждый переход |
 | session/turn continuation | `control-plane` | durable effect с зашифрованным application grant и version/fence; business state не копируется |
 | transport session, quota, replay и request receipts | `integration-gateway` | PostgreSQL; SDK session не является `AgentSession` |
-| secret values | Vault/Kubernetes Secret | только файл внутри gateway; PostgreSQL хранит ref, revision и digest metadata |
+| secret values | Vault/Kubernetes Secret | только JIT-read внутри exact adapter; PostgreSQL хранит ref, immutable version и content digest metadata |
 
 Gateway не создаёт вторую редактируемую копию desired integration metadata.
 Изменение control-plane definition reference, endpoint, binding или revision
 создаёт новый session snapshot/grant generation и закрывает прежние claims.
+
+До one-shot cutover Issue #196 новый provider-management state не обслуживает
+пользовательский runtime и не синхронизируется с legacy-состоянием
+`bot-service`. Это отдельная целевая schema без dual-write и compatibility
+facade. После cutover `integration-gateway` является единственным владельцем
+authorization attempt, immutable credential generation, provider observation,
+Git source binding и integration configuration; `control-plane` остаётся
+единственным владельцем desired provider pool и `RuntimeRevision` pins.
+
+## Owner-management contract Issue #236
+
+### Матрица сценариев
+
+| Сценарий | Инициатор и transport | Команда unit | Авторитетное состояние и readback | Внешний effect |
+| --- | --- | --- | --- | --- |
+| Provider catalog | verified owner OIDC либо exact internal application proof | `ListProviders`, `GetProvider` | закрытый server registry с immutable version/digest, auth modes и capabilities | отсутствует |
+| Device authorization | owner context; provider и idempotency intent из bounded request | `StartProviderAuthorization`, `GetProviderAuthorization`, `RestartProviderAuthorization`, `CancelProviderAuthorization` | durable server-owned attempt; code выдаётся только до `code_expires_at`, token не сохраняется в business tables | Codex app-server `account/login/start`, notification/read/cancel; completion передаётся только secret writer |
+| Connection lifecycle | owner context и locator после tenant resolution | `List/Get/Reauthorize/RevokeProviderConnection` | immutable credential generation, opaque secret ref/content digest, masked account metadata, monotonic revoke generation | provider readback, signed `ProviderEffectReadbackReceipt`, exact `ManageProviderConnectionReference`, затем Get readback |
+| Provider pool | owner context; connection IDs являются locators | `Create/Update/Archive/DeleteProviderPool`, `Get/ListProviderPool` | desired policy/weights принадлежит control-plane; gateway сохраняет только fresh bounded observations и exact refs; effective digest связывает обе версии | specialized control-plane RPC и version-pinned readback |
+| Integration definition/configuration | owner context | `List/GetIntegrationDefinition`, `ConfigureIntegration`, `TestIntegrationConnection` | immutable closed definition registry и immutable typed configuration revision; arbitrary kind/schema/YAML/secret defaults запрещены | test проходит тот же credential/TLS/egress adapter path и сохраняет bounded receipt |
+| Capability assignment | owner context; caller предлагает подмножество | `ConfigureIntegration` | пересечение definition capabilities, provider capabilities и control-plane assignment; runtime получает только следующий server-created `RuntimeRevision` | control-plane readback, без локальной выдачи grant |
+| Approval | опасное invocation #189 создаёт request; owner context принимает решение | `List/Get/DecideIntegrationApproval` | существующие invocation/approval rows, exact request hash, immutable redacted preview, OCC/version и один terminal winner | существующий continuation worker выполняет `SUSPEND`, decision, `BEGIN`, terminal |
+| Git source | owner context создаёт только allowlisted intent | `Create/Update/ArchiveGitSourceBinding`, `ReconcileGitSourceBinding` | server-owned repository connection, repository/ref/path allowlist, opaque credential ref, immutable fetched commit/revision/digest | gateway fetch/readback → signed `GitReconciliationReceipt` → exact `ReconcileGit*` → version-pinned readback |
+| Diagnostics | owner context либо readiness principal | `GetIntegrationDiagnostics` | только status/ref/digest/generation/timestamp и closed error category | рабочие PostgreSQL/control-plane/secret/provider/Git paths; payload/header/token/path не возвращаются |
+
+Owner management публикуется только internal Proto для будущего mapping #237.
+Существующий OpenAPI относится к runtime #189 и не расширяется browser
+командами. Browser API в `control-api-gateway` и PWA здесь не материализуются.
+
+### Матрица authority
+
+| Граница | Источник полномочий | Запрещённый источник | Повторная проверка |
+| --- | --- | --- | --- |
+| Owner HTTP | verified OIDC transport context | actor/org/project/owner из body/path | resource сначала разрешается внутри organization/project, затем OCC/idempotency |
+| Internal gRPC | exact mTLS SPIFFE peer + application credential + full-method permission + signed authority proof | один mTLS peer либо arbitrary bearer | handler повторно связывает actor/tenant/project с owner state |
+| Agent MCP | фактический #189 process/session/thread/turn/attempt/runtime revision/grant tuple | session, turn, attempt, capability или connection из payload | перед dispatch проверяются current grant и provider revoke generation |
+| Device worker | DB-owned attempt/intent/lease/fence | provider/account scope из job payload | terminal transition под row lock и PostgreSQL time; cancel/revoke имеет приоритет |
+| Provider adapter | exact connection generation и secret ref | secret value из API/DB/audit | secret читается just-in-time; revoke generation проверяется сразу до effect |
+| Git worker | DB-owned Git source binding и immutable fetch intent | repository/ref/path/spec/source digest из reconcile payload | allowlist, fetched commit and content digest проверяются до подписи receipt |
+| Provider receipt | purpose `AI_PROVIDER_READBACK_RECEIPT`, exact target/intent/JTI | Git purpose/JTI либо caller proof | control-plane verifier владеет durable one-use watermark |
+| Git receipt | purpose `GIT_RECONCILIATION_RECEIPT`, exact source/target/intent/JTI | provider purpose/JTI либо OIDC caller | control-plane verifier владеет durable one-use watermark |
+
+Create-команды назначают owner/root lineage сервером. ID connection, pool,
+definition, approval, invocation и Git source являются только locators после
+server-side owner resolution. Каждый control-plane RPC зарегистрирован по
+exact full method, а readiness проверяет тот же путь.
+
+### Матрица lifecycle
+
+| Aggregate | Допустимые переходы | One-winner и terminal правило | Rejoin/read path |
+| --- | --- | --- | --- |
+| Device attempt | `PENDING -> CODE_ISSUED -> AUTHORIZED|DENIED|EXPIRED|FAILED|CANCELLED` | terminal immutable; restart/new code/reauthorize создают новую attempt; row lock + generation + PostgreSQL time | owner Get exact attempt/version; code скрывается после TTL/terminal |
+| Connection | `PENDING -> VALID|INVALID|REVOKED`, `VALID|INVALID -> REVOKED`; reauthorize создаёт новый generation | `REVOKED` не оживает; revoke закрывает pending attempts, leases, eligibility и открытые pre-dispatch claims | owner Get/List и control-plane provider reference readback по exact version/digest |
+| Provider observation | fresh `VALID|INVALID` с monotonic version/generation; stale/unknown не eligible | observation не меняет control-plane desired pool | effective read связывает pool version/digest и observation version/digest |
+| Pool | create active; update fresh revision; archive только без live pins; delete только archived без refs | membership разрешается в owner boundary; `least_used|weighted` deterministic/bounded/overflow-safe | control-plane Get/List exact version plus gateway effective projection |
+| Definition/configuration | definition immutable; configure создаёт новую revision; old revision остаётся pin-able | closed kind/effect/capability registry; arbitrary config rejected | catalog/configuration Get exact version/digest |
+| Approval | `PENDING -> APPROVED|REJECTED|EXPIRED|CANCELLED` | decision/expiry/cancel race под row lock; late/replay decision fail closed | существующие Get/List invocation/approval и control-plane continuation readback |
+| Test/diagnostic intent | `PENDING -> SUCCEEDED|FAILED|EXPIRED|CANCELLED` | bounded TTL, один terminal receipt, no secret material | owner exact receipt/timestamp/category |
+| Git source binding | `ACTIVE -> ACTIVE(new revision)|ARCHIVED`; reconcile intent `PENDING -> FETCHED -> APPLIED|FAILED|CANCELLED` | update создаёт immutable binding revision; fetched commit/content snapshot immutable; ambiguous apply не подписывается повторно | binding/reconcile exact revision/digest + returned control-plane version |
+
+### Матрица effects и транзакций
+
+| Команда | Одна owner transaction | Effect вне transaction | Recovery / ambiguity |
+| --- | --- | --- | --- |
+| Start/restart auth | attempt + idempotency receipt + audit + durable provider intent | app-server start/poll | provider login ID checkpointed один раз; crash не создаёт вторую authorization; неизвестный исход закрывается `FAILED` |
+| Authorization complete | immutable generation metadata + opaque pending secret ref + audit + provider-reference intent | secret writer создаёт immutable secret и выполняет exact Vault readback; отдельный durable effect публикует provider reference | candidate остаётся `PENDING`, а active pointer, binding и eligibility меняются одной transaction только после exact control-plane Get/List readback; raw token не входит в receipt/audit/event |
+| Revoke | connection revoke generation + terminal attempts/leases/claims + все credential generations + receipt + audit + revoke intent | однократный provider logout, уничтожение всех immutable Vault versions и control-plane archive/readback | provider worker сверяет generation непосредственно до effect; late completion rejected; partial cleanup закрывается `UNKNOWN` без повтора provider effect |
+| Pool/config mutation | local observation/config revision + receipt + audit + control-plane intent | specialized generated control-plane call/readback | exact command digest/JTI; stale readback закрывает intent без local eligibility |
+| Test | bounded intent + receipt reservation + audit | same adapter/TLS/egress/credential path | timeout/protocol ambiguity даёт closed safe category; no repeat после dispatch marker |
+| Approval transition | существующие approval/invocation/receipt/audit/continuation effect rows | existing continuation worker | replay returns exact receipt; late decision rejected; no parallel approval model |
+| Git binding update | immutable binding revision + receipt + audit + fetch intent | exact allowlisted fetch/readback | fetched commit/digest checkpointed; caller spec absent |
+| Git reconcile | fetched snapshot + target intent digest + receipt reservation + durable RPC intent | signer + exact generated `ReconcileGit*` call и typed mutation readback | JTI one-use; ambiguous RPC закрывается `UNKNOWN/FAILED` без повторной подписи и без fake success |
+
+External provider, secret, Git и control-plane calls никогда не выполняются
+внутри PostgreSQL transaction. State-changing command атомарно сохраняет
+business state, idempotency receipt, audit и обязательный effect intent.
+Отдельные AsyncAPI events не добавляются: каждый новый aggregate имеет exact
+version-pinned PostgreSQL/Proto read path, а control-plane mutations возвращают
+авторитетный typed readback.
+
+Provider-reference и четыре Git producer path вычисляют
+`command_intent_sha256` до подписи одним helper из `libs/go/controlplaneapi`.
+Canonical bytes содержат только verified actor/organization/project,
+workload, exact full method/target и typed business intent. JTI/receipt,
+signature/proof, signer/policy revision, `AuthorityDigest`, idempotency key и
+сам `command_intent_sha256` исключены. Control-plane повторно вычисляет тот же
+hash после проверки authority; producer-local digest не принимается.
 
 ## Сквозные сценарии
 
@@ -346,6 +436,26 @@ OpenAPI/MCP read path. Отдельного gateway result ACK и result bearer 
     runbook.
 12. Прочитать terminal invocation из continuation turn через session-scoped
     MCP; чужая session и stale grant generation должны закрыто отклоняться.
+13. Через internal gRPC с exact owner proof прочитать provider catalog, начать
+    device authorization и проверить, что `verification_url`/`user_code`
+    исчезают после `code_expires_at`; в логах и PostgreSQL raw code/token нет.
+14. Завершить device authorization и проверить immutable Vault version/content
+    digest, затем exact provider-reference Get/List readback. При остановке Pod
+    после provider completion повторная provider authorization не запускается.
+15. Выполнить reauthorize и убедиться, что появилась новая immutable generation,
+    а pinned runtime #189 продолжает ссылаться на прежнюю. Затем revoke должен
+    закрыть pending attempt, выполнить `account/logout`, уничтожить exact Vault
+    version и исключить connection из новых pool snapshots.
+16. Создать `least_used` и `weighted` pools из принадлежащих project
+    connections; чужой locator и stale observation должны быть отклонены, а
+    control-plane readback обязан совпасть по version/projection digest.
+17. Настроить closed integration definition, выполнить test и проверить только
+    safe category/timestamp/receipt. Header, payload, path и credential value в
+    ответе, audit, логе и метриках отсутствуют.
+18. Создать Git binding из allowlisted repository/ref/path, выполнить reconcile
+    и сверить immutable commit/source revision/digest, semantic intent и typed
+    readback одного из четырёх `ReconcileGit*`. Изменённый request с прежним JTI
+    и stale receipt должны быть отклонены.
 
 ## Rollback
 

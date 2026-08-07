@@ -10,6 +10,7 @@ import (
 type GitReconciliationReceipt struct {
 	ContractVersion     uint32    `json:"contract_version"`
 	Issuer              string    `json:"iss"`
+	Audience            string    `json:"aud"`
 	Purpose             string    `json:"purpose"`
 	WorkloadID          string    `json:"workload_id"`
 	CallerSPIFFEID      string    `json:"caller_spiffe_id"`
@@ -32,7 +33,8 @@ type GitReconciliationReceipt struct {
 }
 
 func (receipt GitReconciliationReceipt) Validate(now time.Time) error {
-	if receipt.ContractVersion != 1 || receipt.Issuer == "" || receipt.Purpose != "GIT_RECONCILIATION_RECEIPT" ||
+	if receipt.ContractVersion != 1 || receipt.Issuer == "" || receipt.Audience != "urn:mattercodex:git-reconciliation" ||
+		receipt.Purpose != "GIT_RECONCILIATION_RECEIPT" ||
 		ValidateStableKey(receipt.WorkloadID) != nil || !strings.HasPrefix(receipt.CallerSPIFFEID, "spiffe://") ||
 		!strings.HasPrefix(receipt.FullMethod, "/controlplane.v1.ControlPlaneService/ReconcileGit") ||
 		ValidateID(receipt.ActorID) != nil || ValidateID(receipt.OrganizationID) != nil || ValidateID(receipt.ProjectID) != nil ||

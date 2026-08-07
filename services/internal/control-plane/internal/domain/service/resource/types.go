@@ -110,21 +110,22 @@ type CopyAccessResourceInput struct {
 }
 
 type ManageProtectedConfigurationInput struct {
-	Principal         value.Principal
-	FullMethod        string
-	IdempotencyKey    string
-	Kind              enum.Kind
-	Action            string
-	ResourceID        string
-	ExpectedVersion   uint64
-	Name              string
-	Spec              entity.Spec
-	TargetVersion     uint64
-	TargetSHA256      string
-	ReferenceKeys     []string
-	ProviderReceipt   value.ProviderEffectReceipt
-	GitReceipt        value.GitReconciliationReceipt
-	InstructionObject domainobjectstore.Object
+	Principal            value.Principal
+	FullMethod           string
+	IdempotencyKey       string
+	Kind                 enum.Kind
+	Action               string
+	ResourceID           string
+	ExpectedVersion      uint64
+	Name                 string
+	Spec                 entity.Spec
+	TargetVersion        uint64
+	TargetSHA256         string
+	ReferenceKeys        []string
+	ProviderReceipt      value.ProviderEffectReceipt
+	GitReceipt           value.GitReconciliationReceipt
+	SemanticIntentSHA256 string
+	InstructionObject    domainobjectstore.Object
 }
 
 type ProtectedResourceHistoryInput struct {

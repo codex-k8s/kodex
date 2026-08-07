@@ -436,6 +436,16 @@ func TestExternalSemanticReceiptReturnsImmutableResult(t *testing.T) {
 	if _, err := externalCommandReceiptReplay(stored, conflicting); err == nil {
 		t.Fatal("conflicting semantic intent reused one-use receipt")
 	}
+	stale := expected
+	stale.EffectGeneration--
+	if _, err := externalCommandReceiptReplay(stored, stale); err == nil {
+		t.Fatal("stale receipt generation reused immutable result")
+	}
+	proofChanged := expected
+	proofChanged.AuthoritySHA256 = strings.Repeat("d", 64)
+	if _, err := externalCommandReceiptReplay(stored, proofChanged); err == nil {
+		t.Fatal("receipt signed by another transport proof reused immutable result")
+	}
 	incomplete := stored
 	incomplete.Result, incomplete.ResultResourceID = entity.Resource{}, ""
 	if _, err := externalCommandReceiptReplay(incomplete, expected); err == nil {

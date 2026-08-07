@@ -813,17 +813,22 @@ func toProtoResource(resource entity.Resource) (*controlplanev1.Resource, error)
 	if err != nil {
 		return nil, err
 	}
+	projectionSHA256, err := entity.ProjectionSHA256(resource)
+	if err != nil {
+		return nil, err
+	}
 	return &controlplanev1.Resource{
-		Id:        resource.ID,
-		Kind:      toProtoKind(resource.Kind),
-		Name:      resource.Name,
-		State:     toProtoState(resource.State),
-		Version:   resource.Version,
-		ProjectId: resource.ProjectID,
-		ParentId:  resource.ParentID,
-		Spec:      spec,
-		CreatedAt: timestamppb.New(resource.CreatedAt),
-		UpdatedAt: timestamppb.New(resource.UpdatedAt),
+		Id:               resource.ID,
+		Kind:             toProtoKind(resource.Kind),
+		Name:             resource.Name,
+		State:            toProtoState(resource.State),
+		Version:          resource.Version,
+		ProjectId:        resource.ProjectID,
+		ParentId:         resource.ParentID,
+		Spec:             spec,
+		CreatedAt:        timestamppb.New(resource.CreatedAt),
+		UpdatedAt:        timestamppb.New(resource.UpdatedAt),
+		ProjectionSha256: projectionSHA256,
 	}, nil
 }
 

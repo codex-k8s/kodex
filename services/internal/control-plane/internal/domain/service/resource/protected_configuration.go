@@ -108,8 +108,8 @@ func (service *Service) ManageProtectedConfiguration(
 		// Producer подписывает exact caller intent до server-owned artifact
 		// materialization; deterministic artifact pins не являются частью
 		// внешнего Git authority payload.
-		intentHash, intentErr := protectedGitIntentSHA256(input)
-		if intentErr != nil || input.GitReceipt.CommandIntentSHA256 != intentHash {
+		if !validSHA256Text(input.SemanticIntentSHA256) ||
+			input.GitReceipt.CommandIntentSHA256 != input.SemanticIntentSHA256 {
 			return entity.Resource{}, errs.ErrPermissionDenied
 		}
 	}
@@ -133,8 +133,23 @@ func (service *Service) ManageProtectedConfiguration(
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	if input.ProviderReceipt.ContractVersion != 0 {
-		intentHash, intentErr := protectedProviderIntentSHA256(input)
-		if intentErr != nil || input.ProviderReceipt.CommandIntentSHA256 != intentHash {
+		if input.Kind == enum.KindProviderReference {
+			if input.Principal.CallerWorkload != service.integrationGatewayWorkload ||
+				input.Principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
+				input.Principal.AuthoritySource != "PROVIDER_READBACK" ||
+				validateProviderReceipt(input.Principal, input.ProviderReceipt,
+					"AI_PROVIDER_READBACK_RECEIPT", input.Action,
+					"provider_connection_reference", input.FullMethod, service.now().UTC()) != nil {
+				return entity.Resource{}, errs.ErrPermissionDenied
+			}
+		}
+		intentHash := input.SemanticIntentSHA256
+		var intentErr error
+		if input.Kind != enum.KindProviderReference {
+			intentHash, intentErr = protectedProviderIntentSHA256(input)
+		}
+		if intentErr != nil || !validSHA256Text(intentHash) ||
+			input.ProviderReceipt.CommandIntentSHA256 != intentHash {
 			return entity.Resource{}, errs.ErrPermissionDenied
 		}
 	}
@@ -227,22 +242,6 @@ func (service *Service) ManageProtectedConfiguration(
 
 func protectedCreateLike(action string) bool {
 	return action == "create" || action == "assign" || action == "register" || action == "copy"
-}
-
-func protectedGitIntentSHA256(input ManageProtectedConfigurationInput) (string, error) {
-	return canonicalHash(struct {
-		Identity        commandIdentity
-		FullMethod      string
-		Kind            enum.Kind
-		ResourceID      string
-		ExpectedVersion uint64
-		Name            string
-		Spec            entity.Spec
-		ReferenceKeys   []string
-	}{
-		identity(input.Principal), input.FullMethod, input.Kind, input.ResourceID,
-		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys,
-	})
 }
 
 func protectedProviderIntentSHA256(input ManageProtectedConfigurationInput) (string, error) {
