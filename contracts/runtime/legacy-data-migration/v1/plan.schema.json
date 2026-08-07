@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion", "planId", "sourceSha256", "targetSha256", "mappingSha256",
-    "counts", "violations", "planSha256"
+    "materializationSha256", "materializationCount", "counts", "violations", "planSha256"
   ],
   "properties": {
     "schemaVersion": {"const": "mattercodex.legacy-data-migration-plan.v1"},
@@ -14,6 +14,8 @@
     "sourceSha256": {"$ref": "#/$defs/sha256"},
     "targetSha256": {"$ref": "#/$defs/sha256"},
     "mappingSha256": {"$ref": "#/$defs/sha256"},
+    "materializationSha256": {"$ref": "#/$defs/sha256"},
+    "materializationCount": {"type": "integer", "minimum": 0, "maximum": 100000},
     "counts": {"$ref": "#/$defs/counts"},
     "violations": {
       "type": "object",

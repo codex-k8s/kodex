@@ -34,12 +34,14 @@ type Config struct {
 	StartupTimeout       time.Duration `env:"LEGACY_DATA_MIGRATION_STARTUP_TIMEOUT"`
 	OperationTimeout     time.Duration `env:"LEGACY_DATA_MIGRATION_OPERATION_TIMEOUT"`
 	ShutdownTimeout      time.Duration `env:"LEGACY_DATA_MIGRATION_SHUTDOWN_TIMEOUT"`
+	TerminalScrapeHold   time.Duration `env:"LEGACY_DATA_MIGRATION_TERMINAL_SCRAPE_HOLD"`
 }
 
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen: ":9090", StartupTimeout: 30 * time.Second,
 		OperationTimeout: 30 * time.Minute, ShutdownTimeout: 10 * time.Second,
+		TerminalScrapeHold: 20 * time.Second,
 	}
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
 		return Config{}, err
@@ -92,7 +94,8 @@ func (config Config) validate() error {
 	}
 	if config.StartupTimeout < 5*time.Second || config.StartupTimeout > 2*time.Minute ||
 		config.OperationTimeout < time.Minute || config.OperationTimeout > 2*time.Hour ||
-		config.ShutdownTimeout < time.Second || config.ShutdownTimeout > time.Minute {
+		config.ShutdownTimeout < time.Second || config.ShutdownTimeout > time.Minute ||
+		config.TerminalScrapeHold < 16*time.Second || config.TerminalScrapeHold > time.Minute {
 		return errors.New("legacy migration lifecycle timeout is invalid")
 	}
 	return nil

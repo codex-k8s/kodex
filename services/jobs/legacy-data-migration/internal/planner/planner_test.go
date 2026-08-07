@@ -22,8 +22,8 @@ func TestBuildMapsActiveRuntimeLineage(t *testing.T) {
 			"binding_version": 3, "artifacts": map[string]any{}}},
 		"matter_codex_agent_runs":       {{"id": 8, "run_id": "run", "status": "running"}},
 		"matter_codex_policy_revisions": {{"id": 7, "project_id": 1, "version": 1, "status": "active"}},
-		"matter_codex_process_runs": {{"id": 6, "project_id": 1, "policy_revision_id": 7,
-			"root_role_id": 3, "status": "running"}},
+		"matter_codex_process_runs": {{"id": 6, "public_id": "process-1", "project_id": 1, "policy_revision_id": 7,
+			"root_role_id": 3, "root_initiator_user_id": "user-1", "root_trigger_post_id": "post-1", "status": "running"}},
 		"matter_codex_process_turns": {{"process_run_id": 6, "turn_id": 5}},
 	}
 	target := append(configurationTarget("owner-1"),
@@ -32,13 +32,19 @@ func TestBuildMapsActiveRuntimeLineage(t *testing.T) {
 				"agentSessionBindingVersion": 2, "agentSessionBindingSha256": digest, "agentId": "agent-id", "conversationId": "chat-id"}, Canonical: []byte(`{"kind":"SESSION"}`)},
 		model.TargetResource{ID: "revision-id", OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: "owner-1",
 			Kind: "RUNTIME_REVISION", State: "ACTIVE", Version: 7, Spec: map[string]any{"sessionId": "session-id",
-				"effectiveRuntimeSha256": digest, "components": []any{map[string]any{"kind": "AGENT", "resourceId": "agent-id", "version": 1, "projectionSha256": digest}}},
+				"effectiveRuntimeSha256": digest, "authorityPolicyRevision": 1, "authorityPolicySha256": digest, "components": []any{
+					map[string]any{"kind": "AGENT", "resourceId": "agent-id", "version": 1, "projectionSha256": digest},
+					map[string]any{"kind": "ARTIFACT", "resourceId": "artifact-id", "version": 1, "projectionSha256": digest},
+				}},
 			Canonical: []byte(`{"kind":"RUNTIME_REVISION"}`)},
 		model.TargetResource{ID: "artifact-id", OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: "owner-1",
-			Kind: "ARTIFACT", State: "ACTIVE", Version: 1, Spec: map[string]any{"sha256": digest}, Canonical: []byte(`{"kind":"ARTIFACT"}`)},
+			Kind: "ARTIFACT", State: "ACTIVE", Version: 1, ProjectionSHA256: digest,
+			Spec: cleanArtifactSpec(digest), Canonical: []byte(`{"kind":"ARTIFACT"}`)},
 		model.TargetResource{ID: "process-id", OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: "owner-1",
 			Kind: "PROCESS_RUN", State: "RUNNING", Version: 1, Spec: map[string]any{"rootTurnId": "turn-id",
-				"rootSessionId": "session-id", "rootAttempt": 1, "runtimeRevisionId": "revision-id"}, Canonical: []byte(`{"kind":"PROCESS_RUN"}`)},
+				"rootSessionId": "session-id", "rootSessionVersion": 4, "rootTurnVersion": 5,
+				"rootAttempt": 1, "runtimeRevisionId": "revision-id", "immutableInputSha256": digest,
+				"policyRevision": 1, "rootInitiatorActorId": "owner-1", "rootTriggerRef": "mattermost-post:post-1"}, Canonical: []byte(`{"kind":"PROCESS_RUN"}`)},
 		model.TargetResource{ID: "turn-id", OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: "owner-1",
 			Kind: "TURN", State: "RUNNING", Version: 5, Spec: map[string]any{"agentSessionTurnId": 5, "agentRunId": "run",
 				"agentTurnBindingVersion": 3, "agentTurnBindingSha256": digest, "sessionId": "session-id", "runtimeRevisionId": "revision-id",
@@ -51,13 +57,26 @@ func TestBuildMapsActiveRuntimeLineage(t *testing.T) {
 				"processRunId": "process-id", "attempt": 1, "runtimeRevisionId": "revision-id", "runtimeRevisionVersion": 7,
 				"runtimeRevisionSha256": digest, "immutableInputSha256": digest}, Canonical: []byte(`{"kind":"RUNTIME_EXECUTION"}`)},
 	)
-	plan, err := Build("issue-196-plan-0000", snapshotRows(t, rows), target)
+	snapshot := snapshotRows(t, rows)
+	plan, err := Build("issue-196-plan-0000", snapshot, target)
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
 	if !plan.Ready() || plan.Counts.Mapped["RUNTIME_EXECUTION"] != 1 || plan.Counts.Mapped["PROCESS_RUN"] != 1 ||
 		plan.Counts.Mapped["AGENT_RUN"] != 1 {
 		t.Fatalf("active lineage was not mapped: %#v", plan)
+	}
+	for index := range target {
+		if target[index].Kind == "PROCESS_RUN" {
+			target[index].Spec["rootTriggerRef"] = "mattermost-post:wrong-post"
+		}
+	}
+	blocked, err := Build("issue-196-plan-0000", snapshot, target)
+	if err != nil {
+		t.Fatalf("Build() drift error = %v", err)
+	}
+	if blocked.Ready() || blocked.Violations["broken_lineage"] == 0 {
+		t.Fatalf("process provenance drift did not fail closed: %#v", blocked.Violations)
 	}
 }
 
@@ -111,6 +130,36 @@ func TestBuildBlocksAgentConfigurationWithoutProtectedVersionEvidence(t *testing
 	}
 	if plan.Ready() || plan.Violations["broken_lineage"] == 0 {
 		t.Fatalf("missing protected configuration evidence did not fail closed: %#v", plan.Violations)
+	}
+}
+
+func TestBuildBlocksIneligibleInstructionArtifact(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name string
+		edit func(map[string]any)
+	}{
+		{name: "quarantined", edit: func(spec map[string]any) { spec["scanStatus"] = "QUARANTINED" }},
+		{name: "mutable storage", edit: func(spec map[string]any) {
+			spec["storageRef"] = "s3://mattercodex/projects/project/artifact"
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			target := configurationTarget("owner-1")
+			for index := range target {
+				if target[index].ID == "instruction-artifact-id" {
+					test.edit(target[index].Spec)
+				}
+			}
+			plan, err := Build("issue-196-plan-artifact-eligibility", closedHistorySnapshot(t, "closed", "succeeded"), target)
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+			if plan.Ready() || plan.Violations["unsupported_state"] == 0 {
+				t.Fatalf("ineligible instruction artifact did not fail closed: %#v", plan.Violations)
+			}
+		})
 	}
 }
 
@@ -269,30 +318,57 @@ func TestBuildBlocksUnknownSourceTable(t *testing.T) {
 		"matter_codex_agent_roles":     {{"id": 3, "project_id": 1, "name": "worker", "enabled": true}},
 		"matter_codex_future_resource": nil,
 	}
-	plan, err := Build("issue-196-plan-0005", snapshotRows(t, rows), configurationTarget("owner-1"))
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-	if plan.Ready() || plan.Violations["unsupported_state"] == 0 {
-		t.Fatalf("unknown source table did not fail closed: %#v", plan.Violations)
+	if _, err := Build("issue-196-plan-0005", snapshotRows(t, rows), configurationTarget("owner-1")); err == nil {
+		t.Fatal("Build() accepted a source table outside the closed inventory")
 	}
 }
 
-func TestBuildBlocksEnabledArchivedSchedule(t *testing.T) {
+func TestBuildPlansEnabledScheduleMaterializationDeterministically(t *testing.T) {
 	t.Parallel()
+	digest := strings.Repeat("a", 64)
+	scheduleRow := map[string]any{"id": 4, "project_id": 1, "target_agent_role_id": 3,
+		"target_chat_id": 2, "public_id": "schedule-0123456789abcdef0123456789abcdef", "preset": "daily",
+		"local_time": "09:30", "time_zone": "UTC", "enabled": true,
+		"next_run_at": "2026-08-08T09:30:00Z", "playbook_key": "owner-daily-review",
+		"prompt_version": "v1", "prompt_sha256": digest,
+		"callback_contract_version": "automation.callback.v1", "command_hash": digest,
+		"updated_at": "2026-08-07T00:00:00Z"}
 	rows := map[string][]map[string]any{
-		"matter_codex_projects":    {{"id": 1, "slug": "project", "mattermost_team_id": "team-ref"}},
-		"matter_codex_chats":       {{"id": 2, "project_id": 1, "mattermost_channel_id": "channel-ref", "slug": "chat", "status": "active"}},
-		"matter_codex_agent_roles": {{"id": 3, "project_id": 1, "name": "worker", "enabled": true}},
-		"matter_codex_automation_schedules": {{"id": 4, "project_id": 1, "target_agent_role_id": 3,
-			"target_chat_id": 2, "enabled": true}},
+		"matter_codex_projects":             {{"id": 1, "slug": "project", "mattermost_team_id": "team-ref"}},
+		"matter_codex_chats":                {{"id": 2, "project_id": 1, "mattermost_channel_id": "channel-ref", "slug": "chat", "status": "active"}},
+		"matter_codex_agent_roles":          {{"id": 3, "project_id": 1, "name": "worker", "enabled": true}},
+		"matter_codex_automation_schedules": {scheduleRow},
 	}
-	plan, err := Build("issue-196-plan-0006", snapshotRows(t, rows), configurationTarget("owner-1"))
+	snapshot := snapshotRows(t, rows)
+	target := configurationTarget("owner-1")
+	plan, err := Build("issue-196-plan-0006", snapshot, target)
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if plan.Ready() || plan.Violations["unmaterialized_active"] == 0 {
-		t.Fatalf("enabled archived schedule did not fail closed: %#v", plan.Violations)
+	repeated, err := Build("issue-196-plan-0006", snapshot, configurationTarget("owner-1"))
+	if err != nil {
+		t.Fatalf("Build() repeat error = %v", err)
+	}
+	if !plan.Ready() || plan.MaterializationCount != 1 || len(plan.Materialization) != 1 ||
+		plan.Materialization[0].Operation != "UPSERT_SCHEDULE" ||
+		plan.MaterializationSHA256 != repeated.MaterializationSHA256 ||
+		plan.PlanSHA256 != repeated.PlanSHA256 {
+		t.Fatalf("enabled schedule materialization is not repeatable: %#v", plan)
+	}
+	report, err := json.Marshal(plan)
+	if err != nil || strings.Contains(string(report), "UPSERT_SCHEDULE") ||
+		strings.Contains(string(report), "schedule-0123456789abcdef0123456789abcdef") {
+		t.Fatalf("safe plan report exposed private materialization intent: value=%s error=%v", report, err)
+	}
+	_, preview, ok := scheduleMaterialization(sourceRow(scheduleRow), target[0], target[2], target[3], target,
+		&model.Plan{Violations: map[string]uint64{}})
+	if !ok {
+		t.Fatal("schedule preview was not reproducible")
+	}
+	readback, err := Build("issue-196-plan-0006", snapshot, append(target, preview))
+	if err != nil || !readback.Ready() || readback.PlanSHA256 != plan.PlanSHA256 ||
+		readback.MaterializationSHA256 != plan.MaterializationSHA256 {
+		t.Fatalf("materialized schedule readback changed the immutable plan: %#v error=%v", readback, err)
 	}
 }
 
@@ -416,22 +492,32 @@ func configurationTarget(owner string) []model.TargetResource {
 			Canonical: []byte(`{"kind":"PROVIDER_CONNECTION_REFERENCE"}`)},
 		{ID: "role-image-recipe-id", OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: owner,
 			Kind: "ROLE_IMAGE_RECIPE", State: "ACTIVE", Version: 1, Spec: map[string]any{"stableKey": "runtime"},
-			Canonical: []byte(`{"kind":"ROLE_IMAGE_RECIPE"}`)},
+			ProjectionSHA256: digest, Canonical: []byte(`{"kind":"ROLE_IMAGE_RECIPE"}`)},
 		{ID: "agent-assignment-id", OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: owner,
 			Kind: "AGENT_ASSIGNMENT", State: "ACTIVE", Version: 1, Spec: map[string]any{
 				"agentId": "agent-id", "agentVersion": 1, "agentSha256": digest,
 				"workspaceId": "project-id", "workspaceVersion": 1, "workspaceSha256": digest,
-				"rootActorId": owner, "assignmentGeneration": 1,
+				"rootActorId": owner, "assignmentGeneration": 1, "roomId": "chat-id",
 			}, Canonical: []byte(`{"kind":"AGENT_ASSIGNMENT"}`)},
 		{ID: "instruction-artifact-id", OrganizationID: "organization-id", ProjectID: "project-id", OwnerActorID: owner,
-			Kind: "ARTIFACT", State: "ACTIVE", Version: 1, Spec: map[string]any{"sha256": digest},
+			Kind: "ARTIFACT", State: "ACTIVE", Version: 1, Spec: cleanArtifactSpec(digest),
 			Canonical: []byte(`{"kind":"ARTIFACT"}`)},
 	}
-	for _, index := range []int{3, 4, 5, 6, 7, 8} {
+	for _, index := range []int{3, 4, 5, 6, 7, 8, 9} {
 		historical := resources[index]
 		historical.Historical = true
 		historical.ProjectionSHA256 = digest
 		resources = append(resources, historical)
 	}
 	return resources
+}
+
+func cleanArtifactSpec(digest string) map[string]any {
+	return map[string]any{"kind": "migration-input", "direction": "INPUT",
+		"storageRef": "s3://mattercodex/projects/project/artifact?versionId=immutable-v1",
+		"sizeBytes":  1, "mediaType": "text/markdown", "sha256": digest,
+		"retentionPolicyRef": "control-plane://retention/default",
+		"scanStatus":         "CLEAN", "scanPolicyRevision": 1,
+		"scanEvidenceSha256": digest, "scannerWorkloadId": "artifact-scanner",
+		"scannedAt": "2026-08-07T00:00:00Z"}
 }

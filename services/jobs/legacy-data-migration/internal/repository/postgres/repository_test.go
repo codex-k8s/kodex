@@ -11,8 +11,12 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/inventory"
+	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
 )
 
 func TestSecurePoolConfig(t *testing.T) {
@@ -73,6 +77,16 @@ func TestNamedSQLContracts(t *testing.T) {
 	}
 }
 
+func TestPrincipalReadbackContainsExactSourceInventory(t *testing.T) {
+	t.Parallel()
+	query := mustQuery("principal__readback.sql")
+	for _, table := range inventory.Tables {
+		if !strings.Contains(query, "('public', '"+table+"')") {
+			t.Fatalf("principal readback misses exact source table %q", table)
+		}
+	}
+}
+
 func TestSafeSourceProjectionDropsPrivatePayload(t *testing.T) {
 	t.Parallel()
 	projected, retained, err := safeSourceProjection("matter_codex_agent_session_turns", []byte(
@@ -94,6 +108,27 @@ func TestSafeSourceProjectionDropsPrivatePayload(t *testing.T) {
 		[]byte(`{"id":1,"project_id":2,"name":"worker","prompt_template":"private instruction","enabled":true}`)); err != nil || !retained || bytes.Contains(projected, []byte("private")) ||
 		!bytes.Contains(projected, []byte(`"prompt_sha256"`)) {
 		t.Fatalf("unsafe role instruction projection: value=%s retained=%t error=%v", projected, retained, err)
+	}
+}
+
+func TestArtifactProjectionSHARequiresExactAdmittedArtifact(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC)
+	digest := string(bytes.Repeat([]byte{'a'}, 64))
+	resource := model.TargetResource{ID: "artifact-id", OrganizationID: "organization-id",
+		ProjectID: "project-id", ParentID: "turn-id", OwnerActorID: "owner-id", Kind: "ARTIFACT",
+		Name: "artifact", State: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now,
+		Spec: map[string]any{"kind": "turn-input", "direction": "INPUT",
+			"storageRef": "s3://bucket/key?versionId=immutable-v1", "sizeBytes": 1,
+			"mediaType": "text/markdown", "sha256": digest, "scanStatus": "CLEAN",
+			"retentionPolicyRef": "control-plane://retention/default", "scanPolicyRevision": 1,
+			"scanEvidenceSha256": digest, "scannerWorkloadId": "artifact-scanner", "scannedAt": now}}
+	if projection, err := artifactProjectionSHA(resource); err != nil || !validSHA256(projection) {
+		t.Fatalf("artifactProjectionSHA() projection=%q error=%v", projection, err)
+	}
+	resource.Spec["unexpected"] = true
+	if _, err := artifactProjectionSHA(resource); err == nil {
+		t.Fatal("artifactProjectionSHA() accepted an unknown spec field")
 	}
 }
 

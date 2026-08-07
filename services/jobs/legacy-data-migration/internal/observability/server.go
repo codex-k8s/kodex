@@ -60,7 +60,24 @@ func (server *Server) SetOutcome(value string) {
 	server.outcome = value
 }
 
+// HoldTerminal сохраняет terminal sample доступным как минимум один полный
+// ServiceMonitor interval. Durable report/receipt остаётся authority.
+func (server *Server) HoldTerminal(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return errors.New("terminal observability hold was interrupted")
+	}
+}
+
 func (server *Server) Shutdown(ctx context.Context) error { return server.server.Shutdown(ctx) }
+
+// Close принудительно закрывает listener и все HTTP connections после
+// исчерпания graceful budget. После него Serve обязан завершиться до cleanup.
+func (server *Server) Close() error { return server.server.Close() }
 
 func (server *Server) live(writer http.ResponseWriter, _ *http.Request) {
 	writer.WriteHeader(http.StatusNoContent)

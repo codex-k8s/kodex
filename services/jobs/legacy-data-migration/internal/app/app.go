@@ -36,17 +36,16 @@ func Run(lifecycle context.Context, shutdownBase context.Context, _ string) (res
 		if state.server != nil {
 			state.server.SetReady(false)
 			shutdown, cancel := context.WithTimeout(context.WithoutCancel(shutdownBase), config.ShutdownTimeout)
-			defer cancel()
-			resultErr = errors.Join(resultErr, state.server.Shutdown(shutdown))
+			shutdownErr := state.server.Shutdown(shutdown)
+			cancel()
+			if shutdownErr != nil {
+				shutdownErr = errors.Join(shutdownErr, state.server.Close())
+			}
+			resultErr = errors.Join(resultErr, shutdownErr)
 			if serveResult != nil {
-				joinTimer := time.NewTimer(config.ShutdownTimeout)
-				defer joinTimer.Stop()
-				select {
-				case serveErr := <-serveResult:
-					resultErr = errors.Join(resultErr, serveErr)
-				case <-joinTimer.C:
-					resultErr = errors.Join(resultErr, errors.New("technical server shutdown join timed out"))
-				}
+				// Shutdown либо Close уже сняли listener/connection effects;
+				// dependencies закрываются только после фактического join Serve.
+				resultErr = errors.Join(resultErr, <-serveResult)
 			}
 		}
 		if state.target != nil {
@@ -98,7 +97,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, _ string) (res
 	case err := <-serveResult:
 		serveResult = nil
 		cancelOperation()
-		if joinErr := waitResult(runResult, config.ShutdownTimeout, "migration operation shutdown join timed out"); joinErr != nil {
+		if joinErr := waitResult(runResult); joinErr != nil {
 			return errors.Join(err, joinErr)
 		}
 		state.server.SetOutcome("error")
@@ -108,28 +107,28 @@ func Run(lifecycle context.Context, shutdownBase context.Context, _ string) (res
 		return fmt.Errorf("serve technical endpoint: %w", err)
 	case err := <-runResult:
 		if err != nil {
-			state.server.SetOutcome("blocked")
-			return err
+			return state.finishTerminal(shutdownBase, "blocked", err)
 		}
-		state.server.SetOutcome("success")
-		return nil
+		return state.finishTerminal(shutdownBase, "success", nil)
 	case <-lifecycle.Done():
 		cancelOperation()
-		joinErr := waitResult(runResult, config.ShutdownTimeout, "migration operation shutdown join timed out")
-		state.server.SetOutcome("error")
-		return errors.Join(lifecycle.Err(), joinErr)
+		joinErr := waitResult(runResult)
+		return state.finishTerminal(shutdownBase, "error", errors.Join(lifecycle.Err(), joinErr))
 	}
 }
 
-func waitResult(result <-chan error, timeout time.Duration, timeoutMessage string) error {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case err := <-result:
-		return err
-	case <-timer.C:
-		return errors.New(timeoutMessage)
-	}
+func waitResult(result <-chan error) error {
+	// Каждый blocking effect имеет собственный ctx/kill/wait contract. Здесь
+	// закрытие dependencies запрещено до фактического завершения worker.
+	return <-result
+}
+
+func (state *runtimeState) finishTerminal(shutdownBase context.Context, outcome string, operationErr error) error {
+	state.server.SetReady(false)
+	state.server.SetOutcome(outcome)
+	holdContext, cancel := context.WithTimeout(context.WithoutCancel(shutdownBase), state.config.TerminalScrapeHold+time.Second)
+	defer cancel()
+	return errors.Join(operationErr, state.server.HoldTerminal(holdContext, state.config.TerminalScrapeHold))
 }
 
 func (state *runtimeState) execute(ctx context.Context, sourceDSN string) error {
@@ -194,7 +193,7 @@ func (state *runtimeState) restoreVerify(ctx context.Context) error {
 		state.config.RestoreTLSServerName, state.config.RestoreCAFile); err != nil {
 		return err
 	}
-	snapshot, err := state.restore.BeginSourceSnapshot(ctx, false, false)
+	snapshot, err := state.restore.BeginRestoredSnapshot(ctx)
 	if err != nil {
 		return err
 	}
@@ -212,8 +211,11 @@ func (state *runtimeState) restoreVerify(ctx context.Context) error {
 	return writeJSONReport(state.config.ReportPath, model.RestoreVerification{
 		SchemaVersion: "mattercodex.legacy-data-restore-verification.v1", PlanID: state.config.PlanID,
 		SourceSHA256: digest, BackupSHA256: result.BackupSHA256,
-		ManifestSHA256: result.ManifestSHA256, TableCounts: counts,
-		Outcome: "verified", VerifiedAt: time.Now().UTC().Truncate(time.Microsecond),
+		ManifestSHA256:        result.ManifestSHA256,
+		MaterializationSHA256: sourceReceipt.MaterializationSHA256,
+		MaterializationCount:  sourceReceipt.MaterializationCount,
+		TableCounts:           counts,
+		Outcome:               "verified", VerifiedAt: time.Now().UTC().Truncate(time.Microsecond),
 	})
 }
 
@@ -281,7 +283,7 @@ func (state *runtimeState) prepare(ctx context.Context, sourceDSN string) error 
 	plan.BackupSHA256 = backupResult.BackupSHA256
 	plan.ManifestSHA256 = backupResult.ManifestSHA256
 	receipt := receiptFromPlan(plan)
-	if err := state.target.PrepareTarget(ctx, receipt, plan.Counts); err != nil {
+	if err := state.target.PrepareTarget(ctx, receipt, plan.Counts, plan.Materialization); err != nil {
 		return err
 	}
 	if err := state.source.PrepareSource(ctx, receipt); err != nil {
@@ -335,7 +337,13 @@ func (state *runtimeState) commit(ctx context.Context) error {
 		return err
 	}
 	if err := targetSnapshot.Tx.Commit(ctx); err != nil {
-		return errors.New("commit target cutover receipt")
+		return errors.New("commit target materialization")
+	}
+	readback, err := state.buildPlan(ctx, false)
+	if err != nil || !readback.Ready() || readback.PlanSHA256 != sourceReceipt.PlanSHA256 ||
+		readback.MaterializationSHA256 != sourceReceipt.MaterializationSHA256 ||
+		readback.MaterializationCount != sourceReceipt.MaterializationCount {
+		return errors.New("target materialization authoritative readback mismatch")
 	}
 	if err := state.source.CommitSource(ctx, sourceReceipt); err != nil {
 		return err
@@ -404,7 +412,10 @@ func (state *runtimeState) rollback(ctx context.Context) error {
 		SchemaVersion: "mattercodex.legacy-data-cutover-audit.v1", PlanID: auditReceipt.PlanID,
 		PlanSHA256: auditReceipt.PlanSHA256, SourceSHA256: auditReceipt.SourceSHA256,
 		TargetSHA256: auditReceipt.TargetSHA256, BackupSHA256: auditReceipt.BackupSHA256,
-		ManifestSHA256: auditReceipt.ManifestSHA256, SourceState: sourceState, TargetState: targetState,
+		ManifestSHA256:        auditReceipt.ManifestSHA256,
+		MaterializationSHA256: auditReceipt.MaterializationSHA256,
+		MaterializationCount:  auditReceipt.MaterializationCount,
+		SourceState:           sourceState, TargetState: targetState,
 		Outcome: "aborted", RecordedAt: time.Now().UTC().Truncate(time.Microsecond),
 	})
 }
@@ -412,13 +423,17 @@ func (state *runtimeState) rollback(ctx context.Context) error {
 func receiptFromPlan(plan model.Plan) model.Receipt {
 	return model.Receipt{PlanID: plan.PlanID, PlanSHA256: plan.PlanSHA256,
 		SourceSHA256: plan.SourceSHA256, TargetSHA256: plan.TargetSHA256,
-		BackupSHA256: plan.BackupSHA256, ManifestSHA256: plan.ManifestSHA256}
+		BackupSHA256: plan.BackupSHA256, ManifestSHA256: plan.ManifestSHA256,
+		MaterializationSHA256: plan.MaterializationSHA256,
+		MaterializationCount:  plan.MaterializationCount}
 }
 
 func sameReceipt(left, right model.Receipt) bool {
 	return left.PlanID == right.PlanID && left.PlanSHA256 == right.PlanSHA256 &&
 		left.SourceSHA256 == right.SourceSHA256 && left.TargetSHA256 == right.TargetSHA256 &&
-		left.BackupSHA256 == right.BackupSHA256 && left.ManifestSHA256 == right.ManifestSHA256
+		left.BackupSHA256 == right.BackupSHA256 && left.ManifestSHA256 == right.ManifestSHA256 &&
+		left.MaterializationSHA256 == right.MaterializationSHA256 &&
+		left.MaterializationCount == right.MaterializationCount
 }
 
 func commitStateAllowed(sourceState, targetState string) bool {

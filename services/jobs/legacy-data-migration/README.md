@@ -13,9 +13,13 @@ updated: 2026-08-07
 `legacy-data-migration` — самостоятельно развёртываемая one-shot job для
 [Issue #196](https://github.com/codex-k8s/matter-codex/issues/196). Она не
 создаёт compatibility facade и не становится вторым источником истины. После
-материализации target graph зависимостями #238/#239 job сверяет полный legacy
-snapshot, сохраняет его immutable backup и атомарно фиксирует cutover receipts
-с source write fence.
+поставки server-owned owner paths зависимостями #238/#239 job сверяет полный
+legacy snapshot и exact уже доставленный runtime graph, строит закрытые
+server-owned команды для применимого active Schedule state, сохраняет immutable
+backup и атомарно исполняет materialization вместе с target receipt/audit после
+source write fence. Legacy Project/Agent не назначает target organization/owner:
+неоднозначная либо отсутствующая owner-конфигурация закрыто блокирует план, а не
+подменяется caller mapping или ручным DML.
 
 Исполнение любого mode запрещено до закрытия prerequisite
 [Issue #241](https://github.com/codex-k8s/matter-codex/issues/241). Код всегда
@@ -27,10 +31,11 @@ hostname/SNI и отдельным абсолютным путём trusted CA. P
 
 ## Source и target inventory
 
-Source adapter динамически экспортирует sentinel и строки каждой существующей
-`public.matter_codex_%` таблицы. Planner при этом содержит закрытый inventory
-всех таблиц свежего `main`: новая или неизвестная таблица блокирует план как
-`unsupported_state`, а не только меняет digest. Поэтому забытая legacy-таблица
+Source adapter экспортирует sentinel и строки ровно 50 таблиц из единого
+закрытого inventory. Catalog preflight требует точного равенства этому набору,
+а `pg_dump` получает 50 отдельных `--table=public.<name>` без wildcard.
+Новая, лишняя или отсутствующая `public.matter_codex_%` таблица блокирует план
+до backup. Поэтому забытая legacy-таблица
 не исчезает из backup и не получает молчаливую archive-классификацию.
 Полный canonical payload потоково входит в source SHA и `pg_dump`, но в памяти
 planner остаётся только минимальная безопасная проекция ключей, lifecycle и
@@ -44,7 +49,8 @@ lineage; messages, archive bytes, credentials и memory content отбрасыв
 | `runtime_agent_binding_outbox`, `runtime_agent_binding_discoveries` | `DELIVERED` receipt сверяется с target binding; незавершённая active discovery, stale digest/version или duplicate блокируют план |
 | `process_runs`, `process_turns`, `work_claims`, `owner_attention_requests`, `agent_delegations` и callback manifests | Активный `PROCESS_RUN` связывается через его Turns; parent/process/project lineage обязателен. Делегация считается закрытой только с terminal callback Turn, одним manifest и двумя delivered destinations; незавершённые claim/owner attention/callback блокируют cutover |
 | `agent_runs`, turn artifacts, thread contexts, session archive | Каждый незавершённый `agent_run` обязан быть связан с materialized Turn; standalone active run и `pending/configured` thread context блокируют cutover. Target `ARTIFACT`, current `TURN_ATTEMPT`, `RUNTIME_REVISION` и `RUNTIME_EXECUTION` проверяются по scope/version/digest |
-| memory records/versions/embeddings, automation schedules/occurrences/runs/audit, policy/capability/relationship, cluster-admin security state, credentials и audit | Полностью входят в encrypted immutable backup с counts/digest; разорванная memory version/supersedes/embedding цепочка, неизвестное состояние, outstanding interaction capability, enabled Schedule, nonterminal occurrence/run и незакрытый thread context блокируют cutover; значения не попадают в report и не копируются в target как второй authoritative state |
+| `automation_schedules` | Disabled Schedule получает явную archive relation. Каждый enabled daily Schedule превращается в детерминированную `UPSERT_SCHEDULE` intent: source public ID/revision/digest, Project/Chat/Agent owner boundary, cron/timezone/next run, overlap/coalesce/misfire/retry, playbook/prompt/callback pins и target UUID. Target owner повторно разрешает authority и одним специализированным API создаёт exact `SCHEDULE` + audit либо закрыто отклоняет весь commit |
+| memory records/versions/embeddings, occurrences/runs/automation audit, policy/capability/relationship, cluster-admin security state, credentials и audit | Полностью входят в encrypted immutable backup с counts/digest; разорванная memory version/supersedes/embedding цепочка, неизвестное состояние, outstanding interaction capability, nonterminal occurrence/run и незакрытый thread context блокируют cutover; значения не попадают в report и не копируются в target как второй authoritative state |
 
 Target inventory читается из `control_plane.resources`, immutable
 `protected_resource_history`, versioned `runtime_derived_resources`,
@@ -52,8 +58,13 @@ Target inventory читается из `control_plane.resources`, immutable
 `control_plane_migration` policy. Так RuntimeRevision components проверяются
 по exact historical version и owner; для protected history дополнительно
 сверяется сохранённый projection digest, а не случайный current resource. Job
-не имеет DML к target business tables. Target receipt хранится
-отдельно в `control_plane.legacy_data_cutovers`.
+не имеет произвольного DML к target business tables. Единственный mutation path
+— `control_plane.materialize_legacy_data_cutover`: `SECURITY DEFINER` capability,
+принадлежащая отдельной `NOLOGIN NOBYPASSRLS`
+`control_plane_legacy_materializer`. Она имеет exact `SELECT/INSERT`, действует
+через receipt-bound RLS fence, заново разрешает owner/configuration и Artifact
+eligibility и фиксирует `SCHEDULE`, audit и receipt одной transaction с
+идемпотентным readback.
 
 ## Source → target invariants
 
@@ -65,12 +76,21 @@ Target inventory читается из `control_plane.resources`, immutable
 - `SESSION` фиксирует source session ID/key/binding version/SHA, exact Agent и
   Chat. `TURN` фиксирует session, source turn ID/run/version/SHA и текущую
   RuntimeRevision.
+- Каждый Artifact, доступный active Turn, InstructionSet или RuntimeRevision,
+  обязан быть `ACTIVE`, иметь положительную immutable version/size, exact
+  SHA-256, `CLEAN` scan evidence с policy revision и version-pinned
+  `s3://...?...versionId=...` storage reference. Missing, stale, ambiguous или
+  недостижимая storage reference закрыто блокирует materialization/commit.
 - Каждая attempt имеет exact immutable input и собственную pinned
   RuntimeRevision; current attempt совпадает с Turn. Active legacy Turn имеет
   ровно одну current RuntimeExecution. Prompt/result/input artifacts находятся
   в той же owner boundary.
-- ProcessRun выводится только из server-owned Turn relation. Cross-project
-  source link, orphan parent, несколько target process IDs и broken runtime
+- ProcessRun выводится только из server-owned Turn relation. Root initiator,
+  trigger, active policy revision/digest, immutable input, exact versions root
+  Session/Turn/attempt/RuntimeRevision,
+  каждый `parent_turn_id`, parent/launching Process, launching Turn/attempt,
+  delegation и target Session/Turn/attempt обязаны совпасть. Cross-project
+  source link, orphan parent, неверный predecessor/successor и broken runtime
   lineage блокируют commit.
 - Unknown/unsupported state, duplicate source ID, orphan, ambiguous target,
   stale reference, tenant mismatch, unmaterialized active state и broken
@@ -100,6 +120,7 @@ Target inventory читается из `control_plane.resources`, immutable
 - `sourceSha256` покрывает имя каждой таблицы и canonical JSON каждой строки;
   `targetSha256` — только exact matched target graph;
   `mappingSha256` — source→target/archive relation с owner/version;
+  `materializationSha256/count` — точный закрытый typed intent;
   `planSha256` — полный безопасный plan. Report содержит только эти digests и
   агрегированные counts, без identifiers, сообщений, actor names и секретов.
 
@@ -115,7 +136,7 @@ Target inventory читается из `control_plane.resources`, immutable
 | Owner resolution | Source project/chat/role IDs никогда не принимаются как target owner: organization/project/owner выводятся из единственного matched `PROJECT`, затем проверяются на каждом target edge |
 | Locks / OCC | Source exported repeatable-read snapshot; commit берёт все legacy tables `SHARE`, target resources/attempts/executions `SHARE`; immutable receipt и plan/source/target SHA являются OCC fence |
 | Idempotency / one-winner | Plan ID + шесть immutable hashes; per-DB advisory transaction lock, unique source `FROZEN/COMMITTED` и target `COMMITTED` winner |
-| State / audit | `PREPARED → FROZEN → COMMITTED` source и `PREPARED → PREPARED + restore_verified_at → COMMITTED` target; до cutover возможен `ABORTED`. Отдельное domain event неприменимо: job не меняет target business aggregate; authoritative result — exact receipts, immutable manifest и safe report |
+| State / audit | `PREPARED → FROZEN → COMMITTED` source и `PREPARED → PREPARED + restore_verified_at → materialize + COMMITTED` target; до cutover возможен `ABORTED`. Schedule, deterministic audit и target receipt фиксируются одной owner transaction; event не нужен, потому что commit выполняет exact authoritative readback до source `COMMITTED` |
 | Failure / retry / cancel | До target commit повторяет exact plan либо abort; после target commit только forward recovery. SIGTERM отменяет operation и join; по неизвестному outcome сначала читаются receipts |
 | Readiness / deploy | Exact TLS readback обеих БД и named SQL до operation; suspended Kubernetes Job, Vault CSI, retained PVC, exact NetworkPolicy, metrics/alerts; запуск принадлежит отдельному owner-approved execution PR |
 
@@ -123,7 +144,7 @@ Target inventory читается из `control_plane.resources`, immutable
 | --- | --- | --- |
 | `dry-run` | Repeatable-read source snapshot, target readback, безопасный report; source/target business state не меняется | Тот же immutable input даёт тот же plan/digests; violation завершает job ошибкой |
 | `pre-commit` | Exported snapshot → encrypted `pg_dump` → HMAC/list verification → exclusive manifest → `PREPARED` receipts | O_EXCL и exact manifest делают повтор идемпотентным; crash после fsync dump до manifest восстанавливает sidecar только после HMAC/list и exact source/count readback; иной drift закрыто отклоняется |
-| `commit` | Повторная HMAC/manifest/receipt проверка backup, source/target locks, повтор plan, source `FROZEN` fence, target `COMMITTED`, source `COMMITTED` | Unique winner; crash между БД безопасно продолжается тем же mode/plan. Target business tables не получают частичных записей |
+| `commit` | Повторная HMAC/manifest/receipt проверка backup, source/target locks, повтор plan, source `FROZEN` fence, атомарные target Schedule/audit/`COMMITTED`, authoritative replan/readback, source `COMMITTED` | Unique winner; crash между БД безопасно продолжается тем же mode/plan. Partial target materialization откатывается общей transaction |
 | `rollback` | Только до target `COMMITTED`: target/source receipts переходят в `ABORTED`, source `FROZEN` снимается | После irreversible cutover отклоняется. Для нового запуска после abort нужен новый plan ID |
 | `restore-verify` | Аутентифицированный decrypt и `pg_restore --single-transaction` в exact empty isolated DB, затем повторный snapshot/count/SHA readback и durable target proof | Имя DB обязано соответствовать `mattercodex_restore_<12..32 hex>`; непустая DB всегда отклоняется, после crash её пересоздаёт controller |
 
@@ -134,22 +155,32 @@ owners нет ложной распределённой транзакции: п
 разрешён `rollback`; после него — только forward recovery/readback.
 
 Worker начинает operation только после config, named-SQL, TLS и обеих DB
-readiness. SIGTERM отменяет operation, ожидает goroutine, затем отдельным
-bounded context останавливает technical HTTP server и только потом закрывает
-DB pools. Metrics имеют закрытые `mode/outcome` labels; runtime diagnostics и
+readiness. SIGTERM отменяет operation; каждый `psql`/`pg_dump`/`pg_restore`
+получает SIGTERM, bounded kill fallback и обязательный `wait`, а worker
+фактически join-ится до закрытия DB/files. Durable receipt/report остаётся
+authority; terminal metric удерживается 20 секунд при readiness=false для
+очередного 15-секундного scrape. Labels закрыты, runtime diagnostics и
 Prometheus HELP — на английском.
 
 ## Backup boundary
 
 Backup создаётся до любого cutover effect в source-exported snapshot.
-`pg_dump --format=custom` шифруется потоком AES-256-CTR с независимым
+Exact 50-table `pg_dump --format=custom` шифруется потоком AES-256-CTR с независимым
 HMAC-SHA-256 encrypt-then-MAC ключом, производным от 32-byte base64 secret;
 nonce случаен, а аутентифицированный header содержит exact source SHA и digest
 table counts для безопасного завершения sidecar после crash. Файл и manifest
 создаются `O_EXCL`, mode `0600`, синхронизируются
 вместе с directory entry на retained PVC и проверяются без загрузки dump в память. Manifest связывает
 source SHA, backup SHA/size и table counts. Secret, DSN, CA, row payload и PII
-не логируются и не входят в report.
+не логируются и не входят в report. Каждый CLI получает закрытый env без
+унаследованных `PG*` routing/options и без DSN-as-`PGDATABASE`: URL закрыто
+раскладывается в exact `PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE`, CA, `verify-full`,
+`PGSSLMINPROTOCOLVERSION=TLSv1.3` и `PGSSLMAXPROTOCOLVERSION=TLSv1.3`.
+Перед consumer HMAC и file digest проверяются одним проходом по `O_NOFOLLOW`
+regular inode (`0600`, uid, link count, size); plaintext публикуется только в
+unlinked private staging inode с повторной проверкой `uid/mode/link-count=0` и
+exact size. Rename/symlink/hardlink/truncate исходного PVC после проверки не
+меняет bytes, читаемые `pg_restore`.
 
 `pg_restore --list` доказывает читаемость архива при `pre-commit`; отдельный
 `restore-verify` доказывает фактическое восстановление и exact source

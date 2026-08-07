@@ -6,7 +6,8 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion", "planId", "planSha256", "sourceSha256", "targetSha256",
-    "backupSha256", "manifestSha256", "sourceState", "targetState", "outcome", "recordedAt"
+    "backupSha256", "manifestSha256", "materializationSha256", "materializationCount",
+    "sourceState", "targetState", "outcome", "recordedAt"
   ],
   "properties": {
     "schemaVersion": {"const": "mattercodex.legacy-data-cutover-audit.v1"},
@@ -16,6 +17,8 @@
     "targetSha256": {"$ref": "#/$defs/sha256"},
     "backupSha256": {"$ref": "#/$defs/sha256"},
     "manifestSha256": {"$ref": "#/$defs/sha256"},
+    "materializationSha256": {"$ref": "#/$defs/sha256"},
+    "materializationCount": {"type": "integer", "minimum": 0, "maximum": 100000},
     "sourceState": {"enum": ["MISSING", "ABORTED"]},
     "targetState": {"enum": ["MISSING", "ABORTED"]},
     "outcome": {"const": "aborted"},

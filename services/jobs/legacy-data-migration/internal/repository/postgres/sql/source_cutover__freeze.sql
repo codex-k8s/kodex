@@ -8,6 +8,9 @@ WHERE plan_id = @plan_id
   AND target_sha256 = @target_sha256
   AND backup_sha256 = @backup_sha256
   AND manifest_sha256 = @manifest_sha256
+  AND materialization_sha256 = @materialization_sha256
+  AND materialization_count = @materialization_count
   AND state IN ('PREPARED', 'FROZEN', 'COMMITTED')
 RETURNING plan_id, plan_sha256, source_sha256, target_sha256,
-          backup_sha256, manifest_sha256, state, false;
+          backup_sha256, manifest_sha256, materialization_sha256,
+          materialization_count, state, false;

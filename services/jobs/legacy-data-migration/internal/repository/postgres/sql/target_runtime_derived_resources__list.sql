@@ -3,6 +3,7 @@ SELECT jsonb_build_object(
     'id', id,
     'organization_id', organization_id,
     'project_id', project_id,
+    'parent_id', parent_id,
     'owner_actor_id', owner_actor_id,
     'kind', kind,
     'state', state,

@@ -20,6 +20,7 @@ spec:
       serviceAccountName: legacy-data-migration
       automountServiceAccountToken: false
       restartPolicy: Never
+      terminationGracePeriodSeconds: 40
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
@@ -63,6 +64,8 @@ spec:
               value: 90m
             - name: LEGACY_DATA_MIGRATION_SHUTDOWN_TIMEOUT
               value: 10s
+            - name: LEGACY_DATA_MIGRATION_TERMINAL_SCRAPE_HOLD
+              value: 20s
           ports:
             - name: technical
               containerPort: 9090

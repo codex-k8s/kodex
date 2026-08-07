@@ -12,10 +12,14 @@ type TargetResource struct {
 	ID               string         `json:"id"`
 	OrganizationID   string         `json:"organization_id"`
 	ProjectID        string         `json:"project_id"`
+	ParentID         string         `json:"parent_id,omitempty"`
 	OwnerActorID     string         `json:"owner_actor_id"`
 	Kind             string         `json:"kind"`
+	Name             string         `json:"name,omitempty"`
 	State            string         `json:"state"`
 	Version          uint64         `json:"version"`
+	CreatedAt        time.Time      `json:"created_at,omitempty"`
+	UpdatedAt        time.Time      `json:"updated_at,omitempty"`
 	ProjectionSHA256 string         `json:"projection_sha256,omitempty"`
 	Historical       bool           `json:"historical,omitempty"`
 	Spec             map[string]any `json:"spec"`
@@ -29,17 +33,20 @@ type Counts struct {
 }
 
 type Plan struct {
-	SchemaVersion  string            `json:"schemaVersion"`
-	PlanID         string            `json:"planId"`
-	SourceSHA256   string            `json:"sourceSha256"`
-	TargetSHA256   string            `json:"targetSha256"`
-	MappingSHA256  string            `json:"mappingSha256"`
-	Counts         Counts            `json:"counts"`
-	Violations     map[string]uint64 `json:"violations"`
-	PlanSHA256     string            `json:"planSha256"`
-	BackupSHA256   string            `json:"backupSha256,omitempty"`
-	ManifestSHA256 string            `json:"manifestSha256,omitempty"`
-	CutoverState   string            `json:"cutoverState,omitempty"`
+	SchemaVersion         string                   `json:"schemaVersion"`
+	PlanID                string                   `json:"planId"`
+	SourceSHA256          string                   `json:"sourceSha256"`
+	TargetSHA256          string                   `json:"targetSha256"`
+	MappingSHA256         string                   `json:"mappingSha256"`
+	MaterializationSHA256 string                   `json:"materializationSha256"`
+	MaterializationCount  uint64                   `json:"materializationCount"`
+	Counts                Counts                   `json:"counts"`
+	Violations            map[string]uint64        `json:"violations"`
+	PlanSHA256            string                   `json:"planSha256"`
+	BackupSHA256          string                   `json:"backupSha256,omitempty"`
+	ManifestSHA256        string                   `json:"manifestSha256,omitempty"`
+	CutoverState          string                   `json:"cutoverState,omitempty"`
+	Materialization       []MaterializationCommand `json:"-"`
 }
 
 func (plan Plan) Ready() bool {
@@ -63,37 +70,65 @@ type Manifest struct {
 }
 
 type Receipt struct {
-	PlanID          string
-	PlanSHA256      string
-	SourceSHA256    string
-	TargetSHA256    string
-	BackupSHA256    string
-	ManifestSHA256  string
-	State           string
-	RestoreVerified bool
+	PlanID                string
+	PlanSHA256            string
+	SourceSHA256          string
+	TargetSHA256          string
+	BackupSHA256          string
+	ManifestSHA256        string
+	MaterializationSHA256 string
+	MaterializationCount  uint64
+	State                 string
+	RestoreVerified       bool
+}
+
+// MaterializationCommand — закрытая семантическая команда target owner.
+// Authority-bearing owner/tenant/version поля намеренно отсутствуют.
+type MaterializationCommand struct {
+	Operation               string    `json:"operation"`
+	SourceTable             string    `json:"sourceTable"`
+	SourceID                int64     `json:"sourceId"`
+	SourcePublicID          string    `json:"sourcePublicId"`
+	SourceRevision          uint64    `json:"sourceRevision"`
+	SourceDigest            string    `json:"sourceDigest"`
+	TargetID                string    `json:"targetId"`
+	ProjectSlug             string    `json:"projectSlug"`
+	AgentStableKey          string    `json:"agentStableKey"`
+	ChatStableKey           string    `json:"chatStableKey"`
+	PromptSHA256            string    `json:"promptSha256"`
+	LocalTime               string    `json:"localTime"`
+	Timezone                string    `json:"timezone"`
+	NextRunAt               time.Time `json:"nextRunAt"`
+	PlaybookKey             string    `json:"playbookKey"`
+	PromptVersion           string    `json:"promptVersion"`
+	CallbackContractVersion string    `json:"callbackContractVersion"`
 }
 
 type RestoreVerification struct {
-	SchemaVersion  string            `json:"schemaVersion"`
-	PlanID         string            `json:"planId"`
-	SourceSHA256   string            `json:"sourceSha256"`
-	BackupSHA256   string            `json:"backupSha256"`
-	ManifestSHA256 string            `json:"manifestSha256"`
-	TableCounts    map[string]uint64 `json:"tableCounts"`
-	Outcome        string            `json:"outcome"`
-	VerifiedAt     time.Time         `json:"verifiedAt"`
+	SchemaVersion         string            `json:"schemaVersion"`
+	PlanID                string            `json:"planId"`
+	SourceSHA256          string            `json:"sourceSha256"`
+	BackupSHA256          string            `json:"backupSha256"`
+	ManifestSHA256        string            `json:"manifestSha256"`
+	MaterializationSHA256 string            `json:"materializationSha256"`
+	MaterializationCount  uint64            `json:"materializationCount"`
+	TableCounts           map[string]uint64 `json:"tableCounts"`
+	Outcome               string            `json:"outcome"`
+	VerifiedAt            time.Time         `json:"verifiedAt"`
 }
 
 type CutoverAudit struct {
-	SchemaVersion  string    `json:"schemaVersion"`
-	PlanID         string    `json:"planId"`
-	PlanSHA256     string    `json:"planSha256"`
-	SourceSHA256   string    `json:"sourceSha256"`
-	TargetSHA256   string    `json:"targetSha256"`
-	BackupSHA256   string    `json:"backupSha256"`
-	ManifestSHA256 string    `json:"manifestSha256"`
-	SourceState    string    `json:"sourceState"`
-	TargetState    string    `json:"targetState"`
-	Outcome        string    `json:"outcome"`
-	RecordedAt     time.Time `json:"recordedAt"`
+	SchemaVersion         string    `json:"schemaVersion"`
+	PlanID                string    `json:"planId"`
+	PlanSHA256            string    `json:"planSha256"`
+	SourceSHA256          string    `json:"sourceSha256"`
+	TargetSHA256          string    `json:"targetSha256"`
+	BackupSHA256          string    `json:"backupSha256"`
+	ManifestSHA256        string    `json:"manifestSha256"`
+	MaterializationSHA256 string    `json:"materializationSha256"`
+	MaterializationCount  uint64    `json:"materializationCount"`
+	SourceState           string    `json:"sourceState"`
+	TargetState           string    `json:"targetState"`
+	Outcome               string    `json:"outcome"`
+	RecordedAt            time.Time `json:"recordedAt"`
 }

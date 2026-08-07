@@ -20,8 +20,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/inventory"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
 )
 
@@ -32,6 +34,14 @@ const evidenceSize = sha256.Size * 2
 type backupEvidence struct {
 	SourceSHA256 string
 	CountsSHA256 string
+}
+
+type authenticatedBackup struct {
+	file         *os.File
+	evidence     backupEvidence
+	backupSHA256 string
+	backupBytes  int64
+	close        func()
 }
 
 type Result struct {
@@ -52,8 +62,8 @@ func Create(ctx context.Context, directory, planID, dsn, tlsServerName, caFile, 
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return Result{}, errors.New("create backup directory")
 	}
-	info, err := os.Stat(directory)
-	if err != nil || !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
+	info, err := os.Lstat(directory)
+	if err != nil || !safePrivateDirectory(info) {
 		return Result{}, errors.New("backup directory permissions are unsafe")
 	}
 	backupPath := filepath.Join(directory, planID+".dump.enc")
@@ -73,8 +83,12 @@ func Create(ctx context.Context, directory, planID, dsn, tlsServerName, caFile, 
 	if err != nil {
 		return Result{}, err
 	}
-	if _, err := verifyRestore(ctx, backupPath, key); err != nil {
+	proof, err := verifyRestore(ctx, backupPath, key)
+	if err != nil {
 		return Result{}, err
+	}
+	if proof.backupSHA256 != backupSHA || proof.backupBytes != backupBytes {
+		return Result{}, errors.New("created backup readback mismatch")
 	}
 	manifest := model.Manifest{
 		SchemaVersion: "mattercodex.legacy-data-backup-manifest.v1",
@@ -103,17 +117,14 @@ func Create(ctx context.Context, directory, planID, dsn, tlsServerName, caFile, 
 func recoverManifest(ctx context.Context, directory, backupPath, manifestPath string, key []byte, planID, sourceSHA string,
 	counts map[string]uint64, now time.Time,
 ) (Result, error) {
-	evidence, err := verifyRestore(ctx, backupPath, key)
+	proof, err := verifyRestore(ctx, backupPath, key)
 	if err != nil {
 		return Result{}, err
 	}
-	if !evidenceMatches(evidence, sourceSHA, counts) {
+	if !evidenceMatches(proof.evidence, sourceSHA, counts) {
 		return Result{}, errors.New("orphaned backup evidence does not match current source snapshot")
 	}
-	backupSHA, backupBytes, err := fileDigest(ctx, backupPath)
-	if err != nil {
-		return Result{}, err
-	}
+	backupSHA, backupBytes := proof.backupSHA256, proof.backupBytes
 	manifest := model.Manifest{SchemaVersion: "mattercodex.legacy-data-backup-manifest.v1",
 		PlanID: planID, SourceSHA256: sourceSHA, BackupSHA256: backupSHA, BackupBytes: backupBytes,
 		TableCounts: counts, CreatedAt: now.UTC().Truncate(time.Microsecond), RestoreCheck: "pg_restore_list_verified"}
@@ -167,11 +178,21 @@ func createEncryptedDump(ctx context.Context, path, dsn, tlsServerName, caFile, 
 		return "", 0, errors.New("write backup header")
 	}
 	encrypted := &cipher.StreamWriter{S: cipher.NewCTR(block, nonce), W: io.MultiWriter(file, fileHash, mac)}
-	command := exec.CommandContext(ctx, "pg_dump", "--format=custom", "--no-owner", "--no-acl", "--snapshot="+snapshotID)
-	command.Env = databaseEnvironment(dsn, tlsServerName, caFile)
+	environment, err := databaseEnvironment(dsn, tlsServerName, caFile)
+	if err != nil {
+		return "", 0, err
+	}
+	if err := verifyCLITransport(ctx, environment); err != nil {
+		return "", 0, err
+	}
+	arguments := []string{"--format=custom", "--no-owner", "--no-acl", "--strict-names",
+		"--section=pre-data", "--section=data", "--snapshot=" + snapshotID}
+	arguments = append(arguments, tableArguments()...)
+	command := exec.CommandContext(ctx, "pg_dump", arguments...)
+	command.Env = environment
 	command.Stdout = encrypted
 	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
+	if err := runSubprocess(command); err != nil {
 		return "", 0, errors.New("create source backup")
 	}
 	tag := mac.Sum(nil)
@@ -195,20 +216,21 @@ func createEncryptedDump(ctx context.Context, path, dsn, tlsServerName, caFile, 
 	return hex.EncodeToString(fileHash.Sum(nil)), info.Size(), nil
 }
 
-func verifyRestore(ctx context.Context, path string, key []byte) (backupEvidence, error) {
-	reader, evidence, closeReader, err := authenticatedReader(ctx, path, key)
+func verifyRestore(ctx context.Context, path string, key []byte) (authenticatedBackup, error) {
+	proof, err := stageAuthenticated(ctx, path, key)
 	if err != nil {
-		return backupEvidence{}, err
+		return authenticatedBackup{}, err
 	}
-	defer closeReader()
+	defer proof.close()
 	command := exec.CommandContext(ctx, "pg_restore", "--list", "-")
-	command.Stdin = reader
-	command.Stdout = io.Discard
+	command.Stdin = proof.file
+	var list bytes.Buffer
+	command.Stdout = &list
 	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
-		return backupEvidence{}, errors.New("backup restore verification failed")
+	if err := runSubprocess(command); err != nil || !validArchiveList(list.String()) {
+		return authenticatedBackup{}, errors.New("backup restore verification failed")
 	}
-	return evidence, nil
+	return proof, nil
 }
 
 // Restore загружает аутентифицированный backup только в заранее проверенную
@@ -218,43 +240,70 @@ func Restore(ctx context.Context, path, keyFile, dsn, tlsServerName, caFile stri
 	if err != nil {
 		return err
 	}
-	reader, _, closeReader, err := authenticatedReader(ctx, path, key)
+	proof, err := stageAuthenticated(ctx, path, key)
 	if err != nil {
 		return err
 	}
-	defer closeReader()
+	defer proof.close()
 	environment, database, err := restoreEnvironment(dsn, tlsServerName, caFile)
 	if err != nil {
 		return err
 	}
+	if err := verifyCLITransport(ctx, environment); err != nil {
+		return err
+	}
+	listCommand := exec.CommandContext(ctx, "pg_restore", "--list", "-")
+	listCommand.Stdin = proof.file
+	var list bytes.Buffer
+	listCommand.Stdout = &list
+	listCommand.Stderr = io.Discard
+	if err := runSubprocess(listCommand); err != nil || !validArchiveList(list.String()) {
+		return errors.New("backup restore inventory is invalid")
+	}
+	if _, err := proof.file.Seek(0, io.SeekStart); err != nil {
+		return errors.New("rewind authenticated restore staging")
+	}
 	command := exec.CommandContext(ctx, "pg_restore", "--exit-on-error", "--single-transaction",
 		"--no-owner", "--no-acl", "--dbname", database, "-")
 	command.Env = environment
-	command.Stdin = reader
+	command.Stdin = proof.file
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
+	if err := runSubprocess(command); err != nil {
 		return errors.New("restore backup into verification database")
 	}
 	return nil
 }
 
 func authenticatedReader(ctx context.Context, path string, key []byte) (io.Reader, backupEvidence, func(), error) {
-	file, err := os.Open(path)
+	proof, err := stageAuthenticated(ctx, path, key)
 	if err != nil {
-		return nil, backupEvidence{}, func() {}, errors.New("open backup for restore verification")
+		return nil, backupEvidence{}, func() {}, err
 	}
-	closeReader := func() { _ = file.Close() }
+	return proof.file, proof.evidence, proof.close, nil
+}
+
+// stageAuthenticated не выдаёт consumer ни одного plaintext byte, пока один
+// проход по exact O_NOFOLLOW inode не проверил HMAC. Consumer затем читает
+// только unlinked private staging file, поэтому rename/hardlink/truncate
+// исходного PVC-файла не образует TOCTOU.
+func stageAuthenticated(ctx context.Context, path string, key []byte) (authenticatedBackup, error) {
+	descriptor, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return authenticatedBackup{}, errors.New("open immutable backup")
+	}
+	file := os.NewFile(uintptr(descriptor), path)
+	closeSource := func() { _ = file.Close() }
 	info, err := file.Stat()
 	headerSize := len(magic) + evidenceSize + aes.BlockSize
-	if err != nil || info.Size() <= int64(headerSize+tagSize) {
-		closeReader()
-		return nil, backupEvidence{}, func() {}, errors.New("encrypted backup is incomplete")
+	if err != nil || !safeBackupInode(info, headerSize) {
+		closeSource()
+		return authenticatedBackup{}, errors.New("encrypted backup inode is unsafe")
 	}
 	header := make([]byte, headerSize)
 	if _, err := io.ReadFull(file, header); err != nil || string(header[:len(magic)]) != magic {
-		closeReader()
-		return nil, backupEvidence{}, func() {}, errors.New("encrypted backup header is invalid")
+		closeSource()
+		return authenticatedBackup{}, errors.New("encrypted backup header is invalid")
 	}
 	evidence := backupEvidence{
 		SourceSHA256: hex.EncodeToString(header[len(magic) : len(magic)+sha256.Size]),
@@ -262,43 +311,132 @@ func authenticatedReader(ctx context.Context, path string, key []byte) (io.Reade
 	}
 	derived := sha512.Sum512(key)
 	mac := hmac.New(sha256.New, derived[32:])
+	fileHash := sha256.New()
 	ciphertextSize := info.Size() - int64(len(header)) - tagSize
-	if _, err := mac.Write(header); err != nil {
-		closeReader()
-		return nil, backupEvidence{}, func() {}, errors.New("verify backup header")
+	if _, err := io.MultiWriter(mac, fileHash).Write(header); err != nil {
+		closeSource()
+		return authenticatedBackup{}, errors.New("verify backup header")
 	}
-	if _, err := copyContext(ctx, mac, io.NewSectionReader(file, int64(len(header)), ciphertextSize)); err != nil {
-		closeReader()
-		return nil, backupEvidence{}, func() {}, errors.New("verify backup ciphertext")
+	stagingDirectory, err := os.MkdirTemp("", "mattercodex-authenticated-restore-")
+	if err != nil || os.Chmod(stagingDirectory, 0o700) != nil {
+		closeSource()
+		return authenticatedBackup{}, errors.New("create private restore staging")
 	}
-	tag := make([]byte, tagSize)
-	if _, err := file.ReadAt(tag, info.Size()-tagSize); err != nil || !hmac.Equal(tag, mac.Sum(nil)) {
-		closeReader()
-		return nil, backupEvidence{}, func() {}, errors.New("backup authentication failed")
+	staging, err := os.CreateTemp(stagingDirectory, "plaintext-")
+	if err != nil || staging.Chmod(0o600) != nil {
+		closeSource()
+		if staging != nil {
+			stagingPath := staging.Name()
+			_ = staging.Close()
+			_ = os.Remove(stagingPath)
+		}
+		_ = os.Remove(stagingDirectory)
+		return authenticatedBackup{}, errors.New("create private restore staging")
+	}
+	stagingPath := staging.Name()
+	if err := os.Remove(stagingPath); err != nil {
+		_ = staging.Close()
+		closeSource()
+		_ = os.Remove(stagingDirectory)
+		return authenticatedBackup{}, errors.New("unlink private restore staging")
+	}
+	_ = os.Remove(stagingDirectory)
+	cleanup := func() {
+		_ = staging.Close()
+		closeSource()
+		_ = os.Remove(stagingDirectory)
+	}
+	if stagingInfo, statErr := staging.Stat(); statErr != nil || !safeStagingInode(stagingInfo, 0) {
+		cleanup()
+		return authenticatedBackup{}, errors.New("private restore staging inode is unsafe")
 	}
 	block, err := aes.NewCipher(derived[:32])
 	if err != nil {
-		closeReader()
-		return nil, backupEvidence{}, func() {}, errors.New("initialize restore decryption")
+		cleanup()
+		return authenticatedBackup{}, errors.New("initialize restore decryption")
 	}
-	reader := &cipher.StreamReader{
-		S: cipher.NewCTR(block, header[len(magic)+evidenceSize:]),
-		R: io.NewSectionReader(file, int64(len(header)), ciphertextSize),
+	stream := cipher.NewCTR(block, header[len(magic)+evidenceSize:])
+	remaining := ciphertextSize
+	buffer := make([]byte, 64*1024)
+	for remaining > 0 {
+		if err := ctx.Err(); err != nil {
+			cleanup()
+			return authenticatedBackup{}, errors.New("authenticate backup was canceled")
+		}
+		chunk := int64(len(buffer))
+		if remaining < chunk {
+			chunk = remaining
+		}
+		if _, err := io.ReadFull(file, buffer[:chunk]); err != nil {
+			cleanup()
+			return authenticatedBackup{}, errors.New("read encrypted backup")
+		}
+		ciphertext := buffer[:chunk]
+		_, _ = mac.Write(ciphertext)
+		_, _ = fileHash.Write(ciphertext)
+		plaintext := make([]byte, len(ciphertext))
+		stream.XORKeyStream(plaintext, ciphertext)
+		if _, err := staging.Write(plaintext); err != nil {
+			cleanup()
+			return authenticatedBackup{}, errors.New("write private restore staging")
+		}
+		remaining -= chunk
 	}
-	return reader, evidence, closeReader, nil
+	tag := make([]byte, tagSize)
+	if _, err := io.ReadFull(file, tag); err != nil {
+		cleanup()
+		return authenticatedBackup{}, errors.New("read backup authentication tag")
+	}
+	_, _ = fileHash.Write(tag)
+	finalInfo, statErr := file.Stat()
+	if statErr != nil || !safeBackupInode(finalInfo, headerSize) || finalInfo.Size() != info.Size() ||
+		!os.SameFile(info, finalInfo) || !hmac.Equal(tag, mac.Sum(nil)) {
+		cleanup()
+		return authenticatedBackup{}, errors.New("backup authentication failed")
+	}
+	if err := staging.Sync(); err != nil {
+		cleanup()
+		return authenticatedBackup{}, errors.New("sync private restore staging")
+	}
+	if stagingInfo, statErr := staging.Stat(); statErr != nil || !safeStagingInode(stagingInfo, ciphertextSize) {
+		cleanup()
+		return authenticatedBackup{}, errors.New("private restore staging readback is unsafe")
+	}
+	if _, err := staging.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return authenticatedBackup{}, errors.New("rewind private restore staging")
+	}
+	closeSource()
+	return authenticatedBackup{file: staging, evidence: evidence,
+		backupSHA256: hex.EncodeToString(fileHash.Sum(nil)), backupBytes: info.Size(), close: func() { _ = staging.Close() }}, nil
+}
+
+func safeBackupInode(info os.FileInfo, headerSize int) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && info.Mode().IsRegular() && info.Mode().Perm() == 0o600 &&
+		info.Size() > int64(headerSize+tagSize) && stat.Nlink == 1 && int(stat.Uid) == os.Geteuid()
+}
+
+func safePrivateDirectory(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && info.IsDir() && info.Mode()&os.ModeSymlink == 0 &&
+		info.Mode().Perm()&0o077 == 0 && int(stat.Uid) == os.Geteuid()
+}
+
+func safeStagingInode(info os.FileInfo, expectedSize int64) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && info.Mode().IsRegular() && info.Mode().Perm() == 0o600 &&
+		info.Size() == expectedSize && stat.Nlink == 0 && int(stat.Uid) == os.Geteuid()
 }
 
 func readExisting(ctx context.Context, backupPath, manifestPath string, key []byte, planID, sourceSHA string,
 	counts map[string]uint64,
 ) (Result, error) {
-	evidence, err := verifyRestore(ctx, backupPath, key)
+	proof, err := verifyRestore(ctx, backupPath, key)
 	if err != nil {
 		return Result{}, err
 	}
-	backupSHA, backupBytes, err := fileDigest(ctx, backupPath)
-	if err != nil {
-		return Result{}, err
-	}
+	backupSHA, backupBytes := proof.backupSHA256, proof.backupBytes
 	manifestBytes, err := readBounded(manifestPath, 1024*1024)
 	if err != nil {
 		return Result{}, errors.New("read existing backup manifest")
@@ -307,39 +445,12 @@ func readExisting(ctx context.Context, backupPath, manifestPath string, key []by
 	if err != nil || !validManifest(manifest) || manifest.PlanID != planID ||
 		manifest.SourceSHA256 != sourceSHA || manifest.BackupSHA256 != backupSHA ||
 		manifest.BackupBytes != backupBytes || manifest.SchemaVersion != "mattercodex.legacy-data-backup-manifest.v1" ||
-		manifest.RestoreCheck != "pg_restore_list_verified" || !evidenceMatches(evidence, manifest.SourceSHA256, manifest.TableCounts) ||
+		manifest.RestoreCheck != "pg_restore_list_verified" || !evidenceMatches(proof.evidence, manifest.SourceSHA256, manifest.TableCounts) ||
 		counts != nil && !sameCounts(manifest.TableCounts, counts) {
 		return Result{}, errors.New("existing backup manifest mismatch")
 	}
 	return Result{BackupPath: backupPath, ManifestPath: manifestPath,
 		BackupSHA256: manifest.BackupSHA256, ManifestSHA256: digest(manifestBytes), BackupBytes: backupBytes}, nil
-}
-
-func copyContext(ctx context.Context, destination io.Writer, source io.Reader) (int64, error) {
-	buffer := make([]byte, 64*1024)
-	var written int64
-	for {
-		if err := ctx.Err(); err != nil {
-			return written, err
-		}
-		count, readErr := source.Read(buffer)
-		if count > 0 {
-			output, writeErr := destination.Write(buffer[:count])
-			written += int64(output)
-			if writeErr != nil {
-				return written, writeErr
-			}
-			if output != count {
-				return written, io.ErrShortWrite
-			}
-		}
-		if errors.Is(readErr, io.EOF) {
-			return written, nil
-		}
-		if readErr != nil {
-			return written, readErr
-		}
-	}
 }
 
 // LoadExisting проверяет immutable backup/manifest без обращения к source.
@@ -360,20 +471,6 @@ func LoadExisting(ctx context.Context, directory, planID, keyFile string) (Resul
 	}
 	result, err := readExisting(ctx, backupPath, manifestPath, key, planID, manifest.SourceSHA256, nil)
 	return result, manifest, err
-}
-
-func fileDigest(ctx context.Context, path string) (string, int64, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", 0, errors.New("open existing backup")
-	}
-	hash := sha256.New()
-	size, copyErr := copyContext(ctx, hash, file)
-	closeErr := file.Close()
-	if copyErr != nil || closeErr != nil {
-		return "", 0, errors.New("digest existing backup")
-	}
-	return hex.EncodeToString(hash.Sum(nil)), size, nil
 }
 
 func sameCounts(left, right map[string]uint64) bool {
@@ -457,45 +554,151 @@ func readBounded(path string, maximum int64) ([]byte, error) {
 	return content, nil
 }
 
-func databaseEnvironment(dsn, tlsServerName, caFile string) []string {
-	environment := cleanDatabaseEnvironment()
-	return append(environment, "PGDATABASE="+dsn, "PGHOST="+tlsServerName,
-		"PGSSLMODE=verify-full", "PGSSLROOTCERT="+caFile)
+func databaseEnvironment(dsn, tlsServerName, caFile string) ([]string, error) {
+	environment, _, err := explicitDatabaseEnvironment(dsn, tlsServerName, caFile)
+	return environment, err
 }
 
 func restoreEnvironment(dsn, tlsServerName, caFile string) ([]string, string, error) {
+	return explicitDatabaseEnvironment(dsn, tlsServerName, caFile)
+}
+
+func explicitDatabaseEnvironment(dsn, tlsServerName, caFile string) ([]string, string, error) {
 	parsed, err := url.Parse(dsn)
-	if err != nil || parsed == nil || parsed.User == nil || parsed.Hostname() != tlsServerName {
-		return nil, "", errors.New("restore database configuration is invalid")
+	if err != nil || parsed == nil || parsed.User == nil || parsed.Hostname() != tlsServerName ||
+		(parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") || parsed.Fragment != "" {
+		return nil, "", errors.New("database CLI configuration is invalid")
+	}
+	query := parsed.Query()
+	if len(query["sslmode"]) != 1 || query.Get("sslmode") != "verify-full" {
+		return nil, "", errors.New("database CLI TLS configuration is invalid")
+	}
+	for key, values := range query {
+		if (key != "sslmode" && key != "sslrootcert" && key != "connect_timeout" && key != "application_name") ||
+			len(values) != 1 {
+			return nil, "", errors.New("database CLI routing configuration is invalid")
+		}
+	}
+	if configuredCA := query.Get("sslrootcert"); configuredCA != "" && configuredCA != caFile {
+		return nil, "", errors.New("database CLI CA configuration is invalid")
 	}
 	database := strings.TrimPrefix(parsed.EscapedPath(), "/")
 	database, err = url.PathUnescape(database)
 	if err != nil || database == "" || strings.Contains(database, "/") {
-		return nil, "", errors.New("restore database name is invalid")
+		return nil, "", errors.New("database CLI name is invalid")
 	}
 	password, passwordPresent := parsed.User.Password()
 	if !passwordPresent || parsed.User.Username() == "" {
-		return nil, "", errors.New("restore database credentials are invalid")
+		return nil, "", errors.New("database CLI credentials are invalid")
 	}
 	port := parsed.Port()
 	if port == "" {
 		port = "5432"
 	}
-	environment := append(cleanDatabaseEnvironment(),
+	environment := append(closedDatabaseEnvironment(),
 		"PGHOST="+tlsServerName, "PGPORT="+port, "PGUSER="+parsed.User.Username(), "PGPASSWORD="+password,
-		"PGDATABASE="+database, "PGSSLMODE=verify-full", "PGSSLROOTCERT="+caFile)
+		"PGDATABASE="+database, "PGSSLMODE=verify-full", "PGSSLROOTCERT="+caFile,
+		"PGSSLMINPROTOCOLVERSION=TLSv1.3", "PGSSLMAXPROTOCOLVERSION=TLSv1.3")
 	return environment, database, nil
 }
 
-func cleanDatabaseEnvironment() []string {
-	environment := make([]string, 0, len(os.Environ())+1)
-	for _, value := range os.Environ() {
-		name, _, _ := strings.Cut(value, "=")
-		if !strings.HasPrefix(name, "PG") {
-			environment = append(environment, value)
+func closedDatabaseEnvironment() []string {
+	return []string{"LANG=C", "LC_ALL=C", "TZ=UTC"}
+}
+
+func verifyCLITransport(ctx context.Context, environment []string) error {
+	command := exec.CommandContext(ctx, "psql", "--no-psqlrc", "--tuples-only", "--no-align", "--quiet",
+		"--command=SELECT ssl::text || '|' || version FROM pg_catalog.pg_stat_ssl WHERE pid = pg_catalog.pg_backend_pid()")
+	command.Env = environment
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = io.Discard
+	if err := runSubprocess(command); err != nil || strings.TrimSpace(output.String()) != "true|TLSv1.3" {
+		return errors.New("database CLI TLS readback is invalid")
+	}
+	return nil
+}
+
+func runSubprocess(command *exec.Cmd) error {
+	command.Cancel = func() error {
+		if command.Process == nil {
+			return nil
+		}
+		err := command.Process.Signal(syscall.SIGTERM)
+		if errors.Is(err, os.ErrProcessDone) {
+			return nil
+		}
+		return err
+	}
+	command.WaitDelay = 5 * time.Second
+	return command.Run()
+}
+
+func tableArguments() []string {
+	arguments := make([]string, 0, len(inventory.Tables))
+	for _, table := range inventory.Tables {
+		arguments = append(arguments, "--table=public."+table)
+	}
+	return arguments
+}
+
+func validArchiveList(value string) bool {
+	seen := make(map[string]bool, len(inventory.Tables))
+	for _, line := range strings.Split(value, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 || strings.HasPrefix(line, ";") {
+			continue
+		}
+		publicIndex := -1
+		for index, field := range fields {
+			if field == "public" {
+				publicIndex = index
+				break
+			}
+		}
+		if publicIndex < 0 {
+			if len(fields) >= 5 && fields[4] == "-" &&
+				(fields[3] == "ENCODING" || fields[3] == "STDSTRINGS" || fields[3] == "SEARCHPATH") {
+				continue
+			}
+			return false
+		}
+		if publicIndex+1 >= len(fields) {
+			continue
+		}
+		name := fields[publicIndex+1]
+		object := strings.Join(fields[3:publicIndex], " ")
+		if !archiveObjectAllowed(object, name) {
+			return false
+		}
+		if inventory.Contains(name) {
+			seen[name] = true
 		}
 	}
-	return environment
+	for _, table := range inventory.Tables {
+		if !seen[table] {
+			return false
+		}
+	}
+	return true
+}
+
+func archiveObjectAllowed(object, name string) bool {
+	if inventory.Contains(name) {
+		return true
+	}
+	if strings.HasPrefix(object, "SEQUENCE") && strings.HasSuffix(name, "_id_seq") &&
+		inventory.Contains(strings.TrimSuffix(name, "_id_seq")) {
+		return true
+	}
+	if object == "INDEX" || object == "INDEX ATTACH" {
+		for _, table := range inventory.Tables {
+			if strings.HasPrefix(name, table+"_") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func writeExclusive(path string, content []byte) error {

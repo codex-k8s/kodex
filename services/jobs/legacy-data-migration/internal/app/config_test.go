@@ -15,6 +15,7 @@ func TestConfigValidateFailClosed(t *testing.T) {
 		BackupDirectory: "/data/migration/backups", BackupKeyFile: "/run/backup-key",
 		ReportPath: "/data/migration/reports/report.json", TechnicalListen: ":9090",
 		StartupTimeout: 30 * time.Second, OperationTimeout: 30 * time.Minute, ShutdownTimeout: 10 * time.Second,
+		TerminalScrapeHold: 20 * time.Second,
 	}
 	if err := valid.validate(); err != nil {
 		t.Fatalf("validate() error = %v", err)
@@ -27,6 +28,7 @@ func TestConfigValidateFailClosed(t *testing.T) {
 		{name: "relative DSN", edit: func(value *Config) { value.SourceDSNFile = "source-dsn" }},
 		{name: "report outside storage", edit: func(value *Config) { value.ReportPath = "/other/reports/report.json" }},
 		{name: "restore values in dry run", edit: func(value *Config) { value.RestoreDSNFile = "/run/restore-dsn" }},
+		{name: "short terminal hold", edit: func(value *Config) { value.TerminalScrapeHold = 15 * time.Second }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

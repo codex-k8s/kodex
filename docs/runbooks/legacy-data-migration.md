@@ -28,6 +28,9 @@ trusted CA, Vault credential и NetworkPolicy/readback. Job дополнител
 проверяет URL и отклоняет plaintext, `sslmode=disable`, `sslmode=require`, IP,
 host override, другой CA и negotiated protocol не `TLSv1.3`. Отключать
 проверку для диагностики запрещено.
+`pg_dump`, `pg_restore` и их `psql` readback получают только закрытый набор
+`PG*`: DSN не передаётся как routing string, а раскладывается на exact host,
+port, database, user, password, CA, `verify-full` и min/max TLS 1.3.
 
 ## Ownership и подготовка execution PR
 
@@ -63,8 +66,12 @@ status, bounded metrics, safe report и receipts.
   0`, PVC имеет `Prune=false`, а NetworkPolicy разрешает только DNS, три exact
   PostgreSQL Pod selectors и Prometheus ingress;
 - проверить readiness source/target principals без раскрытия DSN: source имеет
-  только `SELECT`, snapshot/lock и cutover receipt; target — только RLS readback,
-  target lock и receipt;
+  `SELECT` только на exact 50-table allowlist, snapshot/lock и cutover receipt;
+  target — RLS readback, target lock/receipt и `EXECUTE` только на
+  `materialize_legacy_data_cutover`, без произвольного business DML. Сама
+  capability принадлежит отдельной `NOLOGIN NOBYPASSRLS`
+  `control_plane_legacy_materializer` с exact `SELECT/INSERT` и receipt-bound
+  RLS policy; LOGIN job не является member этой роли;
 - подтвердить штатным migration readback, что bot-service migration `000041`
   и control-plane migration `20260807019600` уже применены; job не применяет
   schema migrations сама и не получает DDL authority;
@@ -84,7 +91,8 @@ status, bounded metrics, safe report и receipts.
 source snapshot и read-only target inventory. Успех требует всех violation
 counters равными нулю. Сохранить вне публичного канала safe report и его SHA;
 повтор с тем же immutable input обязан дать те же `sourceSha256`,
-`targetSha256`, `mappingSha256`, counts и `planSha256`.
+`targetSha256`, `mappingSha256`, `materializationSha256/count`, counts и
+`planSha256`.
 
 Ненулевой `unknown_state`, `orphan_reference`, `duplicate_source`,
 `tenant_mismatch`, `stale_reference`, `broken_lineage`,
@@ -101,10 +109,19 @@ missing/archived/stale edge блокирует план до штатного ow
 Перед `pre-commit` должны отсутствовать незавершённые legacy work claims,
 owner-attention requests, callback deliveries, thread contexts и
 Schedule occurrences/runs, а interaction capabilities должны быть `consumed`
-либо `revoked`. Enabled legacy Schedule без materialized target disposition
-также даёт `unmaterialized_active`; отключение либо target replacement
-выполняется только штатным owner path и отдельным решением, не ручным
-исправлением данных migration job.
+либо `revoked`. Каждый enabled daily legacy Schedule обязан дать одну
+детерминированную materialization intent и exact target preview. Проверить
+Project/Chat/Agent, cron/timezone/next run, overlap/coalesce/misfire/retry,
+playbook/prompt/callback pins, Session/RuntimeRevision/Process lineage и prompt
+Artifact eligibility. Неоднозначный successor либо unsupported source state
+блокирует plan и требует owner decision; Schedule нельзя молча отключать или
+архивировать.
+
+Каждый Artifact, доступный active Turn, InstructionSet, RuntimeRevision или
+Process result, должен быть `ACTIVE`, `CLEAN`, иметь exact scan policy/evidence,
+положительные immutable version/size, SHA-256 и единственный version-pinned
+`s3://...?...versionId=...` storage ref. Missing, mutable, quarantined,
+stale либо cross-tenant Artifact блокирует план до необратимой границы.
 
 Standalone active `agent_run`, несвязанный active Turn, делегация без terminal
 callback Turn, единственного manifest и двух delivered destinations также
@@ -117,8 +134,10 @@ callback Turn, единственного manifest и двух delivered destina
 ### 2. pre-commit и restore-verify
 
 После сверки двух одинаковых dry-run выполнить `pre-commit` тем же plan ID.
-Фаза держит exported snapshot, создаёт encrypted immutable dump и manifest,
-проверяет HMAC/`pg_restore --list`, затем фиксирует `PREPARED` receipts. До
+Фаза держит exported snapshot, создаёт exact 50-table encrypted immutable dump
+без чужих `public` tables и без post-data objects, и manifest, проверяет
+HMAC/closed `pg_restore --list`, затем фиксирует
+`PREPARED` receipts и exact typed materialization intent. До
 этого source/target cutover effects отсутствуют.
 
 До `commit` обязательно выполнить `restore-verify` в отдельной пустой DB.
@@ -131,8 +150,9 @@ owner-approved path.
 
 Если crash произошёл после durable fsync dump, но до создания manifest, повтор
 того же `pre-commit` завершает sidecar только после HMAC, `pg_restore --list`
-и совпадения source SHA/count с аутентифицированным header. Manifest mismatch, неаутентифицируемый dump,
-неизолированная или непустая restore DB и отличие digest/count блокируют
+и совпадения source SHA/count с аутентифицированным header. Manifest mismatch,
+неаутентифицируемый dump, неизолированная или непустая restore DB и отличие
+digest/count блокируют
 plan. Если crash произошёл после `--single-transaction` restore, но до
 durable `restore_verified_at`, controller удаляет только disposable verification
 DB, создаёт новую пустую DB и повторяет `restore-verify`. Job никогда не
@@ -149,9 +169,11 @@ ID только после owner decision.
 manifest SHA/counts с durable receipts. Любой concurrent drift или повреждение
 backup evidence завершает Job до fence.
 
-После source `FROZEN` legacy writes закрыто отвергаются. Затем один target
-receipt становится `COMMITTED`, после чего source receipt становится
-`COMMITTED`. Target `COMMITTED` — irreversible cutover boundary: rollback и
+После source `FROZEN` legacy writes закрыто отвергаются. Затем target owner
+повторно разрешает Project/Chat/Agent/configuration/Artifact authority и одной
+transaction материализует все planned Schedule, deterministic audit и receipt.
+Job повторно строит exact authoritative plan/readback; только затем source
+receipt становится `COMMITTED`. Target `COMMITTED` — irreversible cutover boundary: rollback и
 возврат legacy writer запрещены. Переключение consumers и #197 выполняются
 отдельными owner-approved действиями, не этой job.
 
@@ -187,8 +209,11 @@ startup barrier. Метрики:
   значениями mode/outcome.
 
 Alerts `LegacyDataMigrationFailed` и `LegacyDataMigrationDeadlineNear` ведут
-в этот runbook. При SIGTERM operation отменяется и join выполняется до закрытия
-DB. Timeout/cancel не означает отсутствие effects: всегда читать оба durable
+в этот runbook. При SIGTERM operation отменяется, каждый CLI subprocess получает
+terminate/kill/wait, а worker фактически join-ится до закрытия DB/files.
+Terminal endpoint остаётся доступным с readiness=false не менее 20 секунд, что
+покрывает один 15-секундный scrape; durable receipt/report остаётся authority.
+Timeout/cancel не означает отсутствие effects: всегда читать оба durable
 receipt и manifest, затем применять таблицу recovery выше.
 
 ## Короткая ручная проверка владельца

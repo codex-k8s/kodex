@@ -21,6 +21,8 @@ CREATE TABLE matter_codex_legacy_data_cutovers (
 	target_sha256 text NOT NULL CHECK (target_sha256 ~ '^[a-f0-9]{64}$'),
 	backup_sha256 text NOT NULL CHECK (backup_sha256 ~ '^[a-f0-9]{64}$'),
 	manifest_sha256 text NOT NULL CHECK (manifest_sha256 ~ '^[a-f0-9]{64}$'),
+	materialization_sha256 text NOT NULL CHECK (materialization_sha256 ~ '^[a-f0-9]{64}$'),
+	materialization_count bigint NOT NULL CHECK (materialization_count BETWEEN 0 AND 100000),
 	state text NOT NULL CHECK (state IN ('PREPARED', 'FROZEN', 'COMMITTED', 'ABORTED')),
 	prepared_at timestamptz NOT NULL,
 	frozen_at timestamptz,
@@ -33,6 +35,67 @@ CREATE TABLE matter_codex_legacy_data_cutovers (
 CREATE UNIQUE INDEX matter_codex_legacy_data_cutovers_one_winner_uidx
 	ON matter_codex_legacy_data_cutovers ((true))
 	WHERE state IN ('FROZEN', 'COMMITTED');
+
+-- Единственный closed-set inventory используется snapshot, locks, grants и
+-- selective pg_dump. Prefix scan служит только fail-closed проверкой drift.
+CREATE FUNCTION matter_codex_legacy_source_tables()
+RETURNS TABLE(table_name text)
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog
+AS $$
+	VALUES
+		('matter_codex_agent_delegation_callback_deliveries'),
+		('matter_codex_agent_delegation_callback_delivery_manifests'),
+		('matter_codex_agent_delegations'),
+		('matter_codex_agent_flows'),
+		('matter_codex_agent_profiles'),
+		('matter_codex_agent_prompt_templates'),
+		('matter_codex_agent_role_runtime_variables'),
+		('matter_codex_agent_roles'),
+		('matter_codex_agent_runs'),
+		('matter_codex_agent_session_turns'),
+		('matter_codex_agent_sessions'),
+		('matter_codex_audit_events'),
+		('matter_codex_automation_audit_events'),
+		('matter_codex_automation_schedules'),
+		('matter_codex_chat_participants'),
+		('matter_codex_chat_repositories'),
+		('matter_codex_chats'),
+		('matter_codex_cluster_admin_bindings'),
+		('matter_codex_cluster_admin_bot_bindings'),
+		('matter_codex_cluster_admin_delivery_fences'),
+		('matter_codex_cluster_admin_dependencies'),
+		('matter_codex_cluster_admin_prompt_templates'),
+		('matter_codex_cluster_admin_revocations'),
+		('matter_codex_cluster_admin_runtime_variable_bindings'),
+		('matter_codex_cluster_admin_session_bindings'),
+		('matter_codex_cluster_admin_subjects'),
+		('matter_codex_credentials'),
+		('matter_codex_github_accounts'),
+		('matter_codex_interaction_capabilities'),
+		('matter_codex_mattermost_bot_identities'),
+		('matter_codex_memory_embeddings'),
+		('matter_codex_memory_record_versions'),
+		('matter_codex_memory_records'),
+		('matter_codex_openai_accounts'),
+		('matter_codex_owner_attention_requests'),
+		('matter_codex_policy_revisions'),
+		('matter_codex_process_runs'),
+		('matter_codex_process_turns'),
+		('matter_codex_project_repositories'),
+		('matter_codex_project_runtime_variables'),
+		('matter_codex_projects'),
+		('matter_codex_repositories'),
+		('matter_codex_role_capabilities'),
+		('matter_codex_role_relationship_policies'),
+		('matter_codex_runtime_agent_binding_discoveries'),
+		('matter_codex_runtime_agent_binding_outbox'),
+		('matter_codex_schedule_occurrences'),
+		('matter_codex_scheduled_runs'),
+		('matter_codex_thread_contexts'),
+		('matter_codex_work_claims')
+$$;
 
 -- Возвращает канонически упорядоченный полный снимок всех legacy-таблиц.
 -- Payload содержит чувствительные данные и предназначен только для потокового
@@ -48,15 +111,9 @@ DECLARE
 	source_table record;
 BEGIN
 	FOR source_table IN
-		SELECT class.relname AS name
-		FROM pg_catalog.pg_class AS class
-		JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = class.relnamespace
-		WHERE namespace.nspname = 'public'
-			AND class.relkind IN ('r', 'p')
-			AND NOT class.relispartition
-			AND class.relname LIKE 'matter_codex_%'
-			AND class.relname <> 'matter_codex_legacy_data_cutovers'
-		ORDER BY class.relname
+		SELECT inventory.table_name AS name
+		FROM public.matter_codex_legacy_source_tables() AS inventory
+		ORDER BY inventory.table_name
 	LOOP
 		table_name := source_table.name;
 		row_payload := NULL;
@@ -103,15 +160,9 @@ DECLARE
 	source_table record;
 BEGIN
 	FOR source_table IN
-		SELECT class.relname AS name
-		FROM pg_catalog.pg_class AS class
-		JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = class.relnamespace
-		WHERE namespace.nspname = 'public'
-			AND class.relkind IN ('r', 'p')
-			AND NOT class.relispartition
-			AND class.relname LIKE 'matter_codex_%'
-			AND class.relname <> 'matter_codex_legacy_data_cutovers'
-		ORDER BY class.relname
+		SELECT inventory.table_name AS name
+		FROM public.matter_codex_legacy_source_tables() AS inventory
+		ORDER BY inventory.table_name
 	LOOP
 		IF NOT EXISTS (
 			SELECT 1
@@ -139,15 +190,9 @@ DECLARE
 	source_table record;
 BEGIN
 	FOR source_table IN
-		SELECT class.relname AS name
-		FROM pg_catalog.pg_class AS class
-		JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = class.relnamespace
-		WHERE namespace.nspname = 'public'
-			AND class.relkind IN ('r', 'p')
-			AND NOT class.relispartition
-			AND class.relname LIKE 'matter_codex_%'
-			AND class.relname <> 'matter_codex_legacy_data_cutovers'
-		ORDER BY class.relname
+		SELECT inventory.table_name AS name
+		FROM public.matter_codex_legacy_source_tables() AS inventory
+		ORDER BY inventory.table_name
 	LOOP
 		EXECUTE format(
 			'CREATE TRIGGER matter_codex_legacy_cutover_guard BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.%I FOR EACH STATEMENT EXECUTE FUNCTION public.matter_codex_reject_writes_after_cutover()',
@@ -161,20 +206,65 @@ $$;
 ALTER FUNCTION matter_codex_legacy_snapshot_rows() OWNER TO CURRENT_USER;
 ALTER FUNCTION matter_codex_reject_writes_after_cutover() OWNER TO CURRENT_USER;
 ALTER FUNCTION matter_codex_lock_legacy_business_tables() OWNER TO CURRENT_USER;
+ALTER FUNCTION matter_codex_legacy_source_tables() OWNER TO CURRENT_USER;
 
 -- +goose StatementBegin
 DO $$
+DECLARE
+	source_table record;
+	sequence_name record;
 BEGIN
+	IF EXISTS (
+		(SELECT class.relname
+		 FROM pg_catalog.pg_class AS class
+		 JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = class.relnamespace
+		 WHERE namespace.nspname = 'public'
+			AND class.relkind IN ('r', 'p')
+			AND NOT class.relispartition
+			AND class.relname LIKE 'matter_codex_%'
+			AND class.relname <> 'matter_codex_legacy_data_cutovers'
+		 EXCEPT SELECT table_name FROM public.matter_codex_legacy_source_tables())
+		UNION ALL
+		(SELECT table_name FROM public.matter_codex_legacy_source_tables()
+		 EXCEPT
+		 SELECT class.relname
+		 FROM pg_catalog.pg_class AS class
+		 JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = class.relnamespace
+		 WHERE namespace.nspname = 'public'
+			AND class.relkind IN ('r', 'p')
+			AND NOT class.relispartition)
+	) THEN
+		RAISE EXCEPTION 'legacy source inventory differs from the reviewed closed set'
+			USING ERRCODE = '55000';
+	END IF;
 	REVOKE ALL ON matter_codex_legacy_data_cutovers FROM PUBLIC;
+	REVOKE ALL ON FUNCTION matter_codex_legacy_source_tables() FROM PUBLIC;
 	REVOKE ALL ON FUNCTION matter_codex_legacy_snapshot_rows() FROM PUBLIC;
 	REVOKE ALL ON FUNCTION matter_codex_reject_writes_after_cutover() FROM PUBLIC;
 	REVOKE ALL ON FUNCTION matter_codex_lock_legacy_business_tables() FROM PUBLIC;
 	GRANT USAGE ON SCHEMA public TO matter_codex_migration;
 	GRANT SELECT, INSERT, UPDATE ON matter_codex_legacy_data_cutovers TO matter_codex_migration;
-	GRANT SELECT ON ALL TABLES IN SCHEMA public TO matter_codex_migration;
-	GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO matter_codex_migration;
 	GRANT EXECUTE ON FUNCTION matter_codex_legacy_snapshot_rows() TO matter_codex_migration;
 	GRANT EXECUTE ON FUNCTION matter_codex_lock_legacy_business_tables() TO matter_codex_migration;
+	FOR source_table IN SELECT table_name FROM public.matter_codex_legacy_source_tables() LOOP
+		EXECUTE format('REVOKE ALL ON TABLE public.%I FROM matter_codex_migration', source_table.table_name);
+		EXECUTE format('GRANT SELECT ON TABLE public.%I TO matter_codex_migration', source_table.table_name);
+	END LOOP;
+	FOR sequence_name IN
+		SELECT DISTINCT sequence.relname AS name
+		FROM pg_catalog.pg_class AS sequence
+		JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = sequence.relnamespace
+		JOIN pg_catalog.pg_depend AS dependency ON dependency.objid = sequence.oid
+		JOIN pg_catalog.pg_class AS source_table ON source_table.oid = dependency.refobjid
+		JOIN public.matter_codex_legacy_source_tables() AS inventory
+			ON inventory.table_name = source_table.relname
+		WHERE namespace.nspname = 'public'
+			AND sequence.relkind = 'S'
+			AND dependency.deptype IN ('a', 'i')
+	LOOP
+		EXECUTE format('REVOKE ALL ON SEQUENCE public.%I FROM matter_codex_migration', sequence_name.name);
+		EXECUTE format('GRANT SELECT ON SEQUENCE public.%I TO matter_codex_migration', sequence_name.name);
+	END LOOP;
 END
 $$;
 -- +goose StatementEnd
