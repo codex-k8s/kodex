@@ -8,13 +8,25 @@ ARG VERSION=dev
 
 WORKDIR /workspace
 
+COPY libs/go/grpcserver/go.mod libs/go/grpcserver/go.mod
+COPY libs/go/httpserver/go.mod libs/go/httpserver/go.mod
+COPY libs/go/observability/go.mod libs/go/observability/go.mod
+COPY libs/go/serviceruntime/go.mod libs/go/serviceruntime/go.mod
+COPY services/external/egress-gateway/go.mod services/external/egress-gateway/go.sum services/external/egress-gateway/
+
+WORKDIR /workspace/services/external/egress-gateway
+RUN go mod download
+
+WORKDIR /workspace
+COPY libs/go/grpcserver/ libs/go/grpcserver/
+COPY libs/go/httpserver/ libs/go/httpserver/
+COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY services/external/egress-gateway/ services/external/egress-gateway/
 
 WORKDIR /workspace/services/external/egress-gateway
 
 RUN test "$(go env GOVERSION)" = "go1.26.5"
-RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/egress-gateway ./cmd/egress-gateway

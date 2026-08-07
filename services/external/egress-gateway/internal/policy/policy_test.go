@@ -63,14 +63,27 @@ func TestLoadRejectsUnknownDuplicateAndPartialFields(t *testing.T) {
 }
 
 func TestNormalizeHostnameRejectsIPWildcardAndMalformed(t *testing.T) {
-	for _, value := range []string{"127.0.0.1", "[::1]", "*.example.com", "example", "-bad.example", "user@example.com", "exa_mple.com", " api.openai.com"} {
+	for _, value := range []string{"127.0.0.1", "[::1]", "*.example.com", "example", "-bad.example", "user@example.com", "exa_mple.com", " api.openai.com", "API.OpenAI.COM", "api.openai.com."} {
 		if _, err := NormalizeHostname(value); err == nil {
 			t.Fatalf("expected %q to be rejected", value)
 		}
 	}
-	value, err := NormalizeHostname("API.OpenAI.COM.")
+	value, err := NormalizeHostname("api.openai.com")
 	if err != nil || value != "api.openai.com" {
-		t.Fatalf("unexpected normalization: %q, %v", value, err)
+		t.Fatalf("unexpected canonical hostname: %q, %v", value, err)
+	}
+}
+
+func TestLoadRejectsHostnameAliasesAndShutdownAboveDeploymentBudget(t *testing.T) {
+	for _, value := range []string{
+		strings.Replace(validPolicy, `"api.openai.com"`, `"API.OPENAI.COM"`, 1),
+		strings.Replace(validPolicy, `"api.openai.com"`, `"api.openai.com."`, 1),
+		strings.Replace(validPolicy, `{"hostname":"github.com","port":443}`, `{"hostname":"api.openai.com","port":443}`, 1),
+		strings.Replace(validPolicy, `"shutdownTimeoutMilliseconds":20000`, `"shutdownTimeoutMilliseconds":20001`, 1),
+	} {
+		if _, err := Load([]byte(value), "2026-08-07.1", strings.Repeat("0", 64)); err == nil {
+			t.Fatal("expected non-canonical or over-budget policy to fail closed")
+		}
 	}
 }
 

@@ -92,6 +92,10 @@ spec:
 Provider и Git clients `integration-gateway`, которым нужен изменяемый SaaS
 address set, используют
 `egress-gateway.mattercodex-system.svc.cluster.local:8080` как HTTP proxy.
+Этот же exact URL поддерживает только bodyless `GET /readyz` без query для
+совместимости management readiness: `204` требует фактически ACTIVE policy и
+validated resolver; `503` означает закрытый отказ. Technical readback остаётся
+на отдельном monitoring-only Service `:9090`, consumer к нему не допускается.
 `NO_PROXY` сохраняет внутренние `.svc` и `.svc.cluster.local` calls внутри
 кластера. Consumer `NetworkPolicy` разрешает только точные endpoint Pod labels
 `app.kubernetes.io/name=egress-gateway` и

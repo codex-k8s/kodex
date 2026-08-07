@@ -9,9 +9,26 @@ import (
 )
 
 func TestParseAcceptsOnlyExactBodylessConnect(t *testing.T) {
-	target, _, err := parseRequest(t, "CONNECT API.OpenAI.COM:443 HTTP/1.1\r\nHost: api.openai.com:443\r\nUser-Agent: test\r\n\r\n", 4096)
-	if err != nil || target.Hostname != "api.openai.com" || target.Port != 443 {
-		t.Fatalf("unexpected target or error: %+v, %v", target, err)
+	request, _, err := parseRequest(t, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\nUser-Agent: test\r\n\r\n", 4096)
+	if err != nil || request.Kind != KindConnect || request.Target.Hostname != "api.openai.com" || request.Target.Port != 443 {
+		t.Fatalf("unexpected request or error: %+v, %v", request, err)
+	}
+}
+
+func TestParseAcceptsOnlyExactBodylessCompatibilityReadiness(t *testing.T) {
+	request, _, err := parseRequest(t, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\nConnection: close\r\n\r\n", 4096)
+	if err != nil || request.Kind != KindReadiness {
+		t.Fatalf("unexpected readiness request: %+v, %v", request, err)
+	}
+	for _, value := range []string{
+		"GET /readyz?detail=1 HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\n\r\n",
+		"GET /livez HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\n\r\n",
+		"POST /readyz HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\n\r\n",
+		"GET /readyz HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\nContent-Length: 0\r\n\r\n",
+	} {
+		if _, _, err := parseRequest(t, value, 4096); err == nil {
+			t.Fatalf("expected compatibility request to be rejected: %q", value)
+		}
 	}
 }
 
@@ -54,7 +71,7 @@ func TestParseRejectsOversizedHeaders(t *testing.T) {
 	}
 }
 
-func parseRequest(t *testing.T, request string, maximum int) (Target, any, error) {
+func parseRequest(t *testing.T, request string, maximum int) (Request, any, error) {
 	t.Helper()
 	server, client := net.Pipe()
 	t.Cleanup(func() { server.Close(); client.Close() })

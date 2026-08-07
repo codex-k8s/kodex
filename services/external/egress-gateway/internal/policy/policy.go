@@ -103,34 +103,14 @@ func LoadFile(path, expectedRevision, expectedDigest string) (*Active, error) {
 
 // Load строго разбирает policy bytes и создаёт ACTIVE snapshot.
 func Load(value []byte, expectedRevision, expectedDigest string) (*Active, error) {
-	if len(value) == 0 || len(value) > MaximumFileBytes {
-		return nil, errors.New("policy size is invalid")
-	}
-	if err := rejectDuplicateFields(value); err != nil {
-		return nil, err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(value))
-	decoder.DisallowUnknownFields()
-	var document Document
-	if err := decoder.Decode(&document); err != nil {
-		return nil, errors.New("policy JSON is invalid")
-	}
-	if err := requireJSONEOF(decoder); err != nil {
-		return nil, err
-	}
-	if err := validate(&document); err != nil {
+	document, digest, err := parseAndDigest(value)
+	if err != nil {
 		return nil, err
 	}
 	if expectedRevision == "" || document.Metadata.Revision != expectedRevision {
 		return nil, errors.New("policy revision does not match expected revision")
 	}
-	canonical, err := canonicalJSON(document)
-	if err != nil {
-		return nil, errors.New("canonicalize policy")
-	}
-	digestValue := sha256.Sum256(canonical)
-	digest := hex.EncodeToString(digestValue[:])
-	if len(expectedDigest) != sha256.Size*2 || !strings.EqualFold(digest, expectedDigest) {
+	if len(expectedDigest) != sha256.Size*2 || digest != expectedDigest {
 		return nil, errors.New("policy digest does not match expected digest")
 	}
 	allowed := make(map[string]struct{}, len(document.Spec.Destinations))
@@ -138,6 +118,49 @@ func Load(value []byte, expectedRevision, expectedDigest string) (*Active, error
 		allowed[net.JoinHostPort(destination.Hostname, strconv.Itoa(destination.Port))] = struct{}{}
 	}
 	return &Active{document: document, digest: digest, allowed: allowed}, nil
+}
+
+// DigestFile возвращает canonical digest policy через тот же parser, что runtime.
+func DigestFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", errors.New("open policy file")
+	}
+	defer file.Close()
+	value, err := io.ReadAll(io.LimitReader(file, MaximumFileBytes+1))
+	if err != nil {
+		return "", errors.New("read policy file")
+	}
+	_, digest, err := parseAndDigest(value)
+	return digest, err
+}
+
+func parseAndDigest(value []byte) (Document, string, error) {
+	if len(value) == 0 || len(value) > MaximumFileBytes {
+		return Document{}, "", errors.New("policy size is invalid")
+	}
+	if err := rejectDuplicateFields(value); err != nil {
+		return Document{}, "", err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	var document Document
+	if err := decoder.Decode(&document); err != nil {
+		return Document{}, "", errors.New("policy JSON is invalid")
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		return Document{}, "", err
+	}
+	if err := validate(&document); err != nil {
+		return Document{}, "", err
+	}
+	canonical, err := canonicalJSON(document)
+	if err != nil {
+		return Document{}, "", errors.New("canonicalize policy")
+	}
+	digestValue := sha256.Sum256(canonical)
+	digest := hex.EncodeToString(digestValue[:])
+	return document, digest, nil
 }
 
 // Revision возвращает активную immutable revision.
@@ -165,13 +188,12 @@ func (active *Active) Allows(hostname string, port int) bool {
 	return ok
 }
 
-// NormalizeHostname строго нормализует ASCII FQDN и отвергает IP/wildcard.
+// NormalizeHostname принимает только уже canonical lowercase ASCII FQDN.
 func NormalizeHostname(value string) (string, error) {
 	if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, "*@/\\[]:%") || len(value) > 254 {
 		return "", errors.New("hostname is invalid")
 	}
-	value = strings.TrimSuffix(strings.ToLower(value), ".")
-	if value == "" || len(value) > 253 {
+	if value != strings.ToLower(value) || strings.HasSuffix(value, ".") || len(value) > 253 {
 		return "", errors.New("hostname is invalid")
 	}
 	if _, err := netip.ParseAddr(value); err == nil {
@@ -222,7 +244,7 @@ func validate(document *Document) error {
 		!boundedMilliseconds(limits.DialTimeoutMilliseconds, 100, 30_000) ||
 		!boundedMilliseconds(limits.IdleTimeoutMilliseconds, 1_000, int((30*time.Minute)/time.Millisecond)) ||
 		!boundedMilliseconds(limits.WriteTimeoutMilliseconds, 100, 30_000) ||
-		!boundedMilliseconds(limits.ShutdownTimeoutMilliseconds, 1_000, 60_000) {
+		!boundedMilliseconds(limits.ShutdownTimeoutMilliseconds, 1_000, 20_000) {
 		return errors.New("policy runtime bounds are invalid")
 	}
 	if len(document.Spec.Destinations) == 0 || len(document.Spec.Destinations) > 64 {
@@ -235,7 +257,6 @@ func validate(document *Document) error {
 		if err != nil || destination.Port != 443 {
 			return errors.New("policy destination is invalid")
 		}
-		destination.Hostname = hostname
 		key := net.JoinHostPort(hostname, strconv.Itoa(destination.Port))
 		if _, exists := seen[key]; exists {
 			return errors.New("policy destination is duplicated")

@@ -21,6 +21,7 @@ var prohibitedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("203.0.113.0/24"),
 	netip.MustParsePrefix("240.0.0.0/4"),
 	netip.MustParsePrefix("::/128"),
+	netip.MustParsePrefix("::/96"),
 	netip.MustParsePrefix("::1/128"),
 	netip.MustParsePrefix("::ffff:0:0/96"),
 	netip.MustParsePrefix("64:ff9b::/96"),
@@ -38,6 +39,8 @@ var prohibitedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("fec0::/10"),
 }
 
+var allocatedIPv6GlobalUnicast = netip.MustParsePrefix("2000::/3")
+
 // ValidateAddresses отклоняет весь snapshot, если хотя бы один address запрещён.
 func ValidateAddresses(addresses []netip.Addr) error {
 	if len(addresses) == 0 {
@@ -46,6 +49,9 @@ func ValidateAddresses(addresses []netip.Addr) error {
 	for _, address := range addresses {
 		if !address.IsValid() || address.Is4In6() || address.IsUnspecified() || address.IsLoopback() ||
 			address.IsPrivate() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() || address.IsMulticast() {
+			return &Error{Reason: ReasonSpecial}
+		}
+		if address.Is6() && !allocatedIPv6GlobalUnicast.Contains(address) {
 			return &Error{Reason: ReasonSpecial}
 		}
 		for _, prefix := range prohibitedPrefixes {

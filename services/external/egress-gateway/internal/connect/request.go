@@ -32,38 +32,61 @@ type Error struct{ Reason Reason }
 
 func (err *Error) Error() string { return "CONNECT request rejected: " + string(err.Reason) }
 
+// Kind — закрытый набор допустимых запросов listener.
+type Kind uint8
+
+const (
+	KindConnect Kind = iota + 1
+	KindReadiness
+)
+
 // Target — проверенный exact CONNECT destination.
 type Target struct {
 	Hostname string
 	Port     int
 }
 
+// Request — проверенный CONNECT либо compatibility readiness request.
+type Request struct {
+	Kind   Kind
+	Target Target
+}
+
 // Parse bounded-читает request, проверяет authority/Host и сохраняет reader для ClientHello.
-func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int) bool) (Target, *bufio.Reader, error) {
+func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows func(string, int) bool) (Request, *bufio.Reader, error) {
 	if connection == nil || maximumBytes < 1024 || timeout <= 0 || allows == nil {
-		return Target{}, nil, &Error{Reason: ReasonMalformed}
+		return Request{}, nil, &Error{Reason: ReasonMalformed}
 	}
 	if err := connection.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-		return Target{}, nil, &Error{Reason: ReasonMalformed}
+		return Request{}, nil, &Error{Reason: ReasonMalformed}
 	}
 	defer connection.SetReadDeadline(time.Time{})
 	reader := bufio.NewReaderSize(connection, maximumBytes+1)
 	total := 0
 	requestLine, err := readLine(reader, &total, maximumBytes)
 	if err != nil {
-		return Target{}, nil, err
+		return Request{}, nil, err
 	}
 	parts := strings.Split(requestLine, " ")
-	if len(parts) != 3 || parts[0] != "CONNECT" || parts[2] != "HTTP/1.1" {
+	if len(parts) != 3 || parts[2] != "HTTP/1.1" {
+		return Request{}, nil, &Error{Reason: ReasonMalformed}
+	}
+	request := Request{}
+	switch {
+	case parts[0] == "CONNECT":
+		target, targetErr := parseAuthority(parts[1])
+		if targetErr != nil {
+			return Request{}, nil, targetErr
+		}
+		request = Request{Kind: KindConnect, Target: target}
+	case parts[0] == "GET" && parts[1] == "/readyz":
+		request = Request{Kind: KindReadiness}
+	default:
 		reason := ReasonMalformed
-		if len(parts) == 3 && parts[0] != "CONNECT" {
+		if parts[0] != "CONNECT" {
 			reason = ReasonMethod
 		}
-		return Target{}, nil, &Error{Reason: reason}
-	}
-	target, err := parseAuthority(parts[1])
-	if err != nil {
-		return Target{}, nil, err
+		return Request{}, nil, &Error{Reason: reason}
 	}
 	headerCount := 0
 	hostCount := 0
@@ -71,50 +94,54 @@ func Parse(connection net.Conn, maximumBytes int, timeout time.Duration, allows 
 	for {
 		line, lineErr := readLine(reader, &total, maximumBytes)
 		if lineErr != nil {
-			return Target{}, nil, lineErr
+			return Request{}, nil, lineErr
 		}
 		if line == "" {
 			break
 		}
 		headerCount++
 		if headerCount > 64 || line[0] == ' ' || line[0] == '\t' {
-			return Target{}, nil, &Error{Reason: ReasonOversized}
+			return Request{}, nil, &Error{Reason: ReasonOversized}
 		}
 		separator := strings.IndexByte(line, ':')
 		if separator <= 0 {
-			return Target{}, nil, &Error{Reason: ReasonMalformed}
+			return Request{}, nil, &Error{Reason: ReasonMalformed}
 		}
 		name := strings.ToLower(line[:separator])
 		value := strings.TrimSpace(line[separator+1:])
 		if !validHeaderName(name) || !validHeaderValue(value) {
-			return Target{}, nil, &Error{Reason: ReasonMalformed}
+			return Request{}, nil, &Error{Reason: ReasonMalformed}
 		}
 		switch name {
 		case "host":
 			hostCount++
 			if hostCount != 1 {
-				return Target{}, nil, &Error{Reason: ReasonAuthority}
+				return Request{}, nil, &Error{Reason: ReasonAuthority}
 			}
-			hostTarget, err = parseAuthority(value)
+			if request.Kind == KindConnect {
+				hostTarget, err = parseAuthority(value)
+			} else {
+				hostTarget, err = parseReadinessAuthority(value)
+			}
 			if err != nil {
-				return Target{}, nil, &Error{Reason: ReasonAuthority}
+				return Request{}, nil, &Error{Reason: ReasonAuthority}
 			}
 		case "content-length", "transfer-encoding", "expect":
-			return Target{}, nil, &Error{Reason: ReasonBody}
+			return Request{}, nil, &Error{Reason: ReasonBody}
 		case "authorization", "proxy-authorization", "cookie":
-			return Target{}, nil, &Error{Reason: ReasonCredentials}
+			return Request{}, nil, &Error{Reason: ReasonCredentials}
 		}
 	}
-	if hostCount != 1 || hostTarget != target {
-		return Target{}, nil, &Error{Reason: ReasonAuthority}
+	if hostCount != 1 || request.Kind == KindConnect && hostTarget != request.Target {
+		return Request{}, nil, &Error{Reason: ReasonAuthority}
 	}
 	if reader.Buffered() != 0 {
-		return Target{}, nil, &Error{Reason: ReasonBody}
+		return Request{}, nil, &Error{Reason: ReasonBody}
 	}
-	if !allows(target.Hostname, target.Port) {
-		return Target{}, nil, &Error{Reason: ReasonPolicy}
+	if request.Kind == KindConnect && !allows(request.Target.Hostname, request.Target.Port) {
+		return Request{}, nil, &Error{Reason: ReasonPolicy}
 	}
-	return target, reader, nil
+	return request, reader, nil
 }
 
 func parseAuthority(value string) (Target, error) {
@@ -134,6 +161,21 @@ func parseAuthority(value string) (Target, error) {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	return Target{Hostname: hostname, Port: port}, nil
+}
+
+func parseReadinessAuthority(value string) (Target, error) {
+	if value == "" || strings.TrimSpace(value) != value || strings.Contains(value, "@") {
+		return Target{}, &Error{Reason: ReasonAuthority}
+	}
+	host, portValue, err := net.SplitHostPort(value)
+	if err != nil || portValue != "8080" {
+		return Target{}, &Error{Reason: ReasonAuthority}
+	}
+	hostname, err := policy.NormalizeHostname(host)
+	if err != nil {
+		return Target{}, &Error{Reason: ReasonAuthority}
+	}
+	return Target{Hostname: hostname, Port: 8080}, nil
 }
 
 func readLine(reader *bufio.Reader, total *int, maximum int) (string, error) {

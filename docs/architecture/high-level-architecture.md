@@ -108,6 +108,10 @@ authority, фактический TLS ClientHello SNI и immutable policy, са�
 получает bounded A/AAAA snapshot и выполняет dial только к повторно
 проверенному literal IP. Gateway не завершает TLS: CA/hostname verification и
 application credentials остаются end-to-end у consumer.
+Один consumer proxy URL на `8080` дополнительно принимает только bodyless
+`GET /readyz` без query и возвращает `204` по тому же ACTIVE/READY state;
+technical `/livez`, `/readyz`, `/metrics`, `/policy` на `9090` остаются
+monitoring-only.
 
 ## Internal RPC Authority
 

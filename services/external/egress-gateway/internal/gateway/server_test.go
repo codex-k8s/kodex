@@ -14,12 +14,13 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/dnsresolver"
 	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/observability"
 	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestHandlePinsDialToValidatedLiteralAndForwardsOriginalHello(t *testing.T) {
 	resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}, ExpiresAt: time.Now().Add(time.Minute)}}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
-	server, err := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, observability.NewMetrics())
+	server, err := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +60,7 @@ func TestHandlePinsDialToValidatedLiteralAndForwardsOriginalHello(t *testing.T) 
 func TestHandleRejectsSNIMismatchBeforeResolutionAndDial(t *testing.T) {
 	resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}, ExpiresAt: time.Now().Add(time.Minute)}}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
-	server, _ := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, observability.NewMetrics())
+	server, _ := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
 	serverSide, clientSide := net.Pipe()
 	done := make(chan struct{})
 	go func() { server.handle(serverSide); close(done) }()
@@ -80,7 +81,7 @@ func TestHandleRejectsSNIMismatchBeforeResolutionAndDial(t *testing.T) {
 func TestShutdownCancelsPendingClientHelloAndJoins(t *testing.T) {
 	resolver := &fakeResolver{healthy: true}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
-	server, err := New(context.Background(), "127.0.0.1:0", fakePolicy{}, resolver, dialer, observability.NewMetrics())
+	server, err := New(context.Background(), "127.0.0.1:0", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
 	if err != nil || server.Listen() != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
@@ -101,6 +102,113 @@ func TestShutdownCancelsPendingClientHelloAndJoins(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = client.Close()
+}
+
+func TestCompatibilityReadinessUsesEffectiveStateAndNeverDials(t *testing.T) {
+	for _, test := range []struct {
+		ready    bool
+		expected string
+	}{
+		{true, readinessReady},
+		{false, readinessNotReady},
+	} {
+		resolver := &fakeResolver{}
+		dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
+		server, err := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, readyStub(test.ready), newTestMetrics(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		serverSide, clientSide := net.Pipe()
+		done := make(chan struct{})
+		go func() {
+			server.handle(serverSide)
+			_ = serverSide.Close()
+			close(done)
+		}()
+		_, _ = io.WriteString(clientSide, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\nConnection: close\r\n\r\n")
+		response, readErr := io.ReadAll(clientSide)
+		_ = clientSide.Close()
+		<-done
+		if readErr != nil || string(response) != test.expected {
+			t.Fatalf("unexpected compatibility response: %q, %v", response, readErr)
+		}
+		if resolver.calls != 0 || len(dialer.targets) != 0 {
+			t.Fatalf("readiness crossed zero-dial boundary: resolver=%d dial=%d", resolver.calls, len(dialer.targets))
+		}
+	}
+}
+
+func TestCompatibilityListenerRejectsOtherPathsWithoutChangingCONNECT(t *testing.T) {
+	resolver := &fakeResolver{}
+	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
+	server, err := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverSide, clientSide := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		server.handle(serverSide)
+		_ = serverSide.Close()
+		close(done)
+	}()
+	_, _ = io.WriteString(clientSide, "GET /readyz?details=1 HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\n\r\n")
+	response, _ := io.ReadAll(clientSide)
+	_ = clientSide.Close()
+	<-done
+	if len(response) != 0 || resolver.calls != 0 || len(dialer.targets) != 0 {
+		t.Fatalf("unexpected rejected path effect: response=%q resolver=%d dial=%d", response, resolver.calls, len(dialer.targets))
+	}
+}
+
+func TestReadinessOnlyListenerReturns503AndRejectsCONNECT(t *testing.T) {
+	server, err := NewReadinessOnly(context.Background(), "unused", readyStub(false), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		request  string
+		response string
+	}{
+		{"GET /readyz HTTP/1.1\r\nHost: egress-gateway.mattercodex-system.svc.cluster.local:8080\r\n\r\n", readinessNotReady},
+		{"CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n", ""},
+	} {
+		serverSide, clientSide := net.Pipe()
+		done := make(chan struct{})
+		go func() {
+			server.handle(serverSide)
+			_ = serverSide.Close()
+			close(done)
+		}()
+		_, _ = io.WriteString(clientSide, test.request)
+		response, _ := io.ReadAll(clientSide)
+		_ = clientSide.Close()
+		<-done
+		if string(response) != test.response {
+			t.Fatalf("unexpected readiness-only response: %q", response)
+		}
+	}
+}
+
+type readyStub bool
+
+func (value readyStub) Ready() (bool, string) { return bool(value), "test" }
+
+func newTestMetrics(t *testing.T) *observability.Metrics {
+	t.Helper()
+	registry := prometheus.NewRegistry()
+	metrics, err := observability.New(func(collectors ...prometheus.Collector) error {
+		for _, collector := range collectors {
+			if err := registry.Register(collector); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return metrics
 }
 
 type fakePolicy struct{}

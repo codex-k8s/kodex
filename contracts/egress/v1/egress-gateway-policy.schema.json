@@ -51,7 +51,7 @@
             "dialTimeoutMilliseconds": {"type": "integer", "minimum": 100, "maximum": 30000},
             "idleTimeoutMilliseconds": {"type": "integer", "minimum": 1000, "maximum": 1800000},
             "writeTimeoutMilliseconds": {"type": "integer", "minimum": 100, "maximum": 30000},
-            "shutdownTimeoutMilliseconds": {"type": "integer", "minimum": 1000, "maximum": 60000}
+            "shutdownTimeoutMilliseconds": {"type": "integer", "minimum": 1000, "maximum": 20000}
           }
         },
         "destinations": {
@@ -64,7 +64,7 @@
             "additionalProperties": false,
             "required": ["hostname", "port"],
             "properties": {
-              "hostname": {"type": "string", "minLength": 4, "maxLength": 253, "pattern": "^([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.?$"},
+              "hostname": {"type": "string", "minLength": 4, "maxLength": 253, "pattern": "^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"},
               "port": {"const": 443}
             }
           }

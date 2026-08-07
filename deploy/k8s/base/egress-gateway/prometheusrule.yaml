@@ -18,15 +18,15 @@ spec:
             description: Ни одна реплика platform egress gateway не доступна для scrape.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayNotReady
-          expr: max(mattercodex_egress_gateway_readiness) < 1
-          for: 5m
+          expr: sum(up{service="egress-gateway-technical"} == 1) - sum(mattercodex_egress_gateway_readiness{ready="true"} == 1) > 0
+          for: 2m
           labels: {severity: critical}
           annotations:
             summary: Egress gateway не проходит effective readiness
             description: Проверить ACTIVE policy readback и server-owned DNS validation.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayPolicyInactive
-          expr: absent(mattercodex_egress_gateway_policy_active) or max(mattercodex_egress_gateway_policy_active) < 1
+          expr: sum(up{service="egress-gateway-technical"} == 1) - sum(mattercodex_egress_gateway_policy_active == 1) > 0
           for: 2m
           labels: {severity: critical}
           annotations:
@@ -58,4 +58,12 @@ spec:
           annotations:
             summary: Растёт число literal dial failures
             description: Проверить внешний TCP/443 path после успешной DNS validation.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
+        - alert: EgressGatewayConnectionLimitRejections
+          expr: sum(rate(mattercodex_egress_gateway_connection_attempts_total{outcome="rejected",stage="accept",reason="connection_limit"}[5m])) > 0.1
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Egress gateway устойчиво отклоняет новые соединения по лимиту
+            description: Проверить active connections и saturation; readiness может оставаться успешной.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md

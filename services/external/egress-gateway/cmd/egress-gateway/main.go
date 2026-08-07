@@ -7,8 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/policy"
-	gatewayruntime "github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/runtime"
+	"github.com/codex-k8s/matter-codex/services/external/egress-gateway/internal/app"
 )
 
 var version = "dev"
@@ -18,21 +17,7 @@ func main() {
 	base := context.Background()
 	lifecycle, stop := signal.NotifyContext(base, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	config, err := gatewayruntime.ConfigFromEnv()
-	if err != nil {
-		log.Print("egress gateway runtime configuration rejected")
-		os.Exit(1)
-	}
-	activePolicy, err := policy.LoadFile(config.PolicyFile, config.ExpectedRevision, config.ExpectedDigest)
-	if err != nil {
-		log.Print("egress gateway policy rejected")
-		if invalidErr := gatewayruntime.RunInvalidPolicy(lifecycle, base, config); invalidErr != nil {
-			log.Print("egress gateway invalid-policy runtime stopped with failure")
-			os.Exit(1)
-		}
-		return
-	}
-	if err := gatewayruntime.Run(lifecycle, base, config, activePolicy); err != nil {
+	if err := app.Run(lifecycle, base, version); err != nil {
 		log.Print("egress gateway runtime stopped with failure")
 		os.Exit(1)
 	}

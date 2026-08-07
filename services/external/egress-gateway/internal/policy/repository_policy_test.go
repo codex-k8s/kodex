@@ -2,8 +2,6 @@ package policy
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -22,19 +20,10 @@ func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var document Document
-	if err := json.Unmarshal(value, &document); err != nil {
-		t.Fatal(err)
-	}
-	if err := validate(&document); err != nil {
-		t.Fatal(err)
-	}
-	canonical, err := canonicalJSON(document)
+	_, actualDigest, err := parseAndDigest(value)
 	if err != nil {
 		t.Fatal(err)
 	}
-	digestValue := sha256.Sum256(canonical)
-	actualDigest := hex.EncodeToString(digestValue[:])
 	if actualDigest != repositoryPolicyDigest {
 		t.Fatalf("repository policy digest mismatch: got %s", actualDigest)
 	}
@@ -76,5 +65,15 @@ func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	}
 	if err := resolved.Validate(instance); err != nil {
 		t.Fatalf("repository policy does not match machine schema: %v", err)
+	}
+	for _, alias := range []string{"API.OPENAI.COM", "api.openai.com."} {
+		aliased := bytes.Replace(value, []byte("api.openai.com"), []byte(alias), 1)
+		var aliasedInstance any
+		if err := json.Unmarshal(aliased, &aliasedInstance); err != nil {
+			t.Fatal(err)
+		}
+		if err := resolved.Validate(aliasedInstance); err == nil {
+			t.Fatalf("machine schema accepted non-canonical hostname %q", alias)
+		}
 	}
 }

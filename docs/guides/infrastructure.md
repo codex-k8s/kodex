@@ -84,6 +84,12 @@ database, broker, egress proxy и secret operator фиксируются:
 provider path запрещены. Обязательная зависимость проверяется до открытия
 готовности и до запуска workers.
 
+Immutable ConfigMap с постоянным именем нельзя обновлять in-place. Изменяемый
+через rollout configuration snapshot получает content-addressed/versioned имя,
+а Deployment reference переключается renderer/Kustomize автоматически.
+Rollback выбирает ранее review-approved объект и render; delete/recreate либо
+runtime mutation не являются штатным путём.
+
 ## Итоговый render и NetworkPolicy
 
 Security review проверяет итоговый environment render, а не только base и

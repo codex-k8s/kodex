@@ -14,15 +14,5 @@ configMapGenerator:
   - name: egress-gateway-policy
     files:
       - policy.json=policy.json
-generatorOptions:
-  disableNameSuffixHash: true
-patches:
-  - target:
-      group: ""
-      version: v1
-      kind: ConfigMap
-      name: egress-gateway-policy
-    patch: |-
-      - op: add
-        path: /immutable
-        value: true
+    options:
+      immutable: true

@@ -21,6 +21,7 @@ func TestValidateAddressesRejectsSpecialPurposeAndMixedSnapshots(t *testing.T) {
 		"224.0.0.1", "240.0.0.1", "::", "::1", "::ffff:8.8.8.8", "64:ff9b::808:808",
 		"64:ff9b:1::1", "100::1", "100:0:0:1::1", "2001::1", "2001:db8::1", "2002::1",
 		"2620:4f:8000::1", "3fff::1", "5f00::1", "fc00::1", "fe80::1", "fec0::1", "ff02::1",
+		"::192.168.1.1", "1000::1", "4000::1", "8000::1",
 	}
 	for _, value := range prohibited {
 		if err := ValidateAddresses([]netip.Addr{netip.MustParseAddr(value)}); err == nil {
@@ -29,6 +30,9 @@ func TestValidateAddressesRejectsSpecialPurposeAndMixedSnapshots(t *testing.T) {
 	}
 	if err := ValidateAddresses([]netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("10.0.0.1")}); err == nil {
 		t.Fatal("expected mixed public/private answer to be rejected")
+	}
+	if err := ValidateAddresses([]netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("4000::1")}); err == nil {
+		t.Fatal("expected mixed public/reserved IPv6 answer to be rejected")
 	}
 	if err := ValidateAddresses([]netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("2606:4700:4700::1111")}); err != nil {
 		t.Fatalf("unexpected public address rejection: %v", err)

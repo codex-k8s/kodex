@@ -20,6 +20,11 @@ import (
 
 const connectEstablished = "HTTP/1.1 200 Connection Established\r\n\r\n"
 
+const (
+	readinessReady    = "HTTP/1.1 204 No Content\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n"
+	readinessNotReady = "HTTP/1.1 503 Service Unavailable\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n"
+)
+
 // AccessPolicy — минимальная immutable policy surface.
 type AccessPolicy interface {
 	Allows(string, int) bool
@@ -36,12 +41,18 @@ type LiteralDialer interface {
 	DialContext(context.Context, netip.AddrPort) (net.Conn, error)
 }
 
+// Readiness предоставляет тот же effective state, что technical `/readyz`.
+type Readiness interface {
+	Ready() (bool, string)
+}
+
 // Server владеет listener, active connections и cancel/join boundary.
 type Server struct {
 	address   string
 	policy    AccessPolicy
 	resolver  Resolver
 	dialer    LiteralDialer
+	readiness Readiness
 	metrics   *observability.Metrics
 	context   context.Context
 	cancel    context.CancelFunc
@@ -55,14 +66,29 @@ type Server struct {
 }
 
 // New создаёт CONNECT server без фоновых goroutine.
-func New(parent context.Context, address string, accessPolicy AccessPolicy, resolver Resolver, dialer LiteralDialer, metrics *observability.Metrics) (*Server, error) {
-	if parent == nil || address == "" || accessPolicy == nil || resolver == nil || dialer == nil || metrics == nil {
+func New(parent context.Context, address string, accessPolicy AccessPolicy, resolver Resolver, dialer LiteralDialer, readiness Readiness, metrics *observability.Metrics) (*Server, error) {
+	if parent == nil || address == "" || accessPolicy == nil || resolver == nil || dialer == nil || readiness == nil || metrics == nil {
 		return nil, errors.New("gateway server configuration is invalid")
 	}
 	limits := accessPolicy.Limits()
 	lifecycleContext, cancel := context.WithCancel(parent)
 	return &Server{
-		address: address, policy: accessPolicy, resolver: resolver, dialer: dialer, metrics: metrics,
+		address: address, policy: accessPolicy, resolver: resolver, dialer: dialer, readiness: readiness, metrics: metrics,
+		context: lifecycleContext, cancel: cancel, global: make(chan struct{}, limits.MaximumConnections),
+		active: make(map[net.Conn]struct{}), perSource: make(map[string]int),
+	}, nil
+}
+
+// NewReadinessOnly создаёт fail-closed listener для compatibility readiness без CONNECT authority.
+func NewReadinessOnly(parent context.Context, address string, readiness Readiness, metrics *observability.Metrics) (*Server, error) {
+	if parent == nil || address == "" || readiness == nil || metrics == nil {
+		return nil, errors.New("gateway readiness listener configuration is invalid")
+	}
+	accessPolicy := readinessOnlyPolicy{}
+	lifecycleContext, cancel := context.WithCancel(parent)
+	limits := accessPolicy.Limits()
+	return &Server{
+		address: address, policy: accessPolicy, readiness: readiness, metrics: metrics,
 		context: lifecycleContext, cancel: cancel, global: make(chan struct{}, limits.MaximumConnections),
 		active: make(map[net.Conn]struct{}), perSource: make(map[string]int),
 	}, nil
@@ -143,11 +169,16 @@ func (server *Server) Shutdown(ctx context.Context) error {
 
 func (server *Server) handle(client net.Conn) {
 	limits := server.policy.Limits()
-	target, reader, err := connect.Parse(client, limits.MaximumHeaderBytes, duration(limits.HeaderTimeoutMilliseconds), server.policy.Allows)
+	request, reader, err := connect.Parse(client, limits.MaximumHeaderBytes, duration(limits.HeaderTimeoutMilliseconds), server.policy.Allows)
 	if err != nil {
 		server.metrics.Connection("rejected", "connect", connectReason(err))
 		return
 	}
+	if request.Kind == connect.KindReadiness {
+		server.writeCompatibilityReadiness(client, duration(limits.WriteTimeoutMilliseconds))
+		return
+	}
+	target := request.Target
 	if err := client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))); err != nil {
 		server.metrics.Connection("failed", "connect", "io")
 		return
@@ -183,6 +214,17 @@ func (server *Server) handle(client net.Conn) {
 	}
 	_ = upstream.SetWriteDeadline(time.Time{})
 	server.tunnel(client, upstream, duration(limits.IdleTimeoutMilliseconds), duration(limits.WriteTimeoutMilliseconds))
+}
+
+func (server *Server) writeCompatibilityReadiness(connection net.Conn, timeout time.Duration) {
+	if err := connection.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+		return
+	}
+	response := readinessNotReady
+	if ready, _ := server.readiness.Ready(); ready {
+		response = readinessReady
+	}
+	_, _ = io.WriteString(connection, response)
 }
 
 func (server *Server) dial(snapshot dnsresolver.Snapshot, port int, timeout time.Duration) (net.Conn, error) {
@@ -353,4 +395,18 @@ type NetDialer struct{ Dialer net.Dialer }
 // DialContext передаёт net.Dialer только literal AddrPort string.
 func (dialer *NetDialer) DialContext(ctx context.Context, target netip.AddrPort) (net.Conn, error) {
 	return dialer.Dialer.DialContext(ctx, "tcp", target.String())
+}
+
+type readinessOnlyPolicy struct{}
+
+func (readinessOnlyPolicy) Allows(string, int) bool { return false }
+
+func (readinessOnlyPolicy) Limits() policy.Limits {
+	return policy.Limits{
+		MaximumHeaderBytes: 16 << 10, MaximumClientHelloBytes: 16 << 10,
+		MaximumConnections: 64, MaximumConnectionsPerSource: 16,
+		HeaderTimeoutMilliseconds: 5_000, ClientHelloTimeoutMilliseconds: 5_000,
+		DialTimeoutMilliseconds: 1_000, IdleTimeoutMilliseconds: 1_000,
+		WriteTimeoutMilliseconds: 5_000, ShutdownTimeoutMilliseconds: 5_000,
+	}
 }

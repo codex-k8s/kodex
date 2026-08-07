@@ -34,6 +34,12 @@ Technical Service
 Эти endpoints доступны только точному monitoring namespace/Pod selector.
 Readback не принимает hostname, policy, destination или credentials от caller.
 
+Тот же consumer URL
+`http://egress-gateway.mattercodex-system.svc.cluster.local:8080` обслуживает
+HTTP CONNECT и узкую compatibility-проверку: только bodyless `GET /readyz` без
+query получает `204` при том же effective readiness либо `503`. Иные методы и
+пути на `8080` закрыто отклоняются; consumer не получает доступ к `9090`.
+
 ## Alerts и первичная диагностика
 
 ### EgressGatewayUnavailable
@@ -53,6 +59,9 @@ Readback не принимает hostname, policy, destination или credential
 3. Для `resolverState != VALIDATED` проверить exact DNS NetworkPolicy к
    `kube-system` и bounded A/AAAA ответы. Не добавлять plaintext, host resolver
    или stale fallback.
+4. Сверить каждую scraped replica: alert сравнивает число `up` с числом
+   `ready=true`/`policy_active=1`, поэтому старая healthy replica не скрывает
+   новую `INVALID`/`NOT_READY` replica.
 
 ### EgressGatewayUnsafeDNSAnswers
 
@@ -74,6 +83,13 @@ Missing, duplicate, malformed, mismatched SNI и ECH закрыто отклон
 resource pressure gateway. Не добавлять fixed SaaS IP, hostname dial или
 вторичное DNS-разрешение в `net.Dialer`.
 
+### EgressGatewayConnectionLimitRejections
+
+Проверить `active_connections`, global/per-source limits и длительность
+tunnels. Alert означает устойчивые rejects с закрытой причиной
+`connection_limit`; readiness при saturation намеренно может оставаться `1`.
+Не увеличивать лимиты без проверки memory/file-descriptor budget.
+
 ## Проверка сетевой границы
 
 - Consumer egress выбирает только namespace `mattercodex-system`, Pod labels
@@ -86,15 +102,33 @@ resource pressure gateway. Не добавлять fixed SaaS IP, hostname dial 
 - Consumer и другие application Pods не получают `0.0.0.0/0`, `::/0` либо
   destination-less внешний `443`.
 
-## Failure policy и rollback
+После rebase PR #243 consumer удаляет локальный management egress proxy и его
+OCI/Kustomize target, направляет `ManagementEgressProxyURL`/`HTTPS_PROXY` на
+platform Service `:8080`, сохраняет внутренние service zones в `NO_PROXY` и не
+меняет принадлежащий `integration-gateway` management lifecycle.
+
+## Code-first rollout и rollback
+
+Environment render создаётся только через
+`tools/render-egress-gateway.sh staging|production <sha256> <registry-fqdn>`.
+Renderer отклоняет zero/mutable digest, неизвестное окружение, cluster-local
+registry host, отсутствие единственного image input и любой оставшийся zero
+digest. Он не выполняет apply.
+
+Новая policy revision изменяет review-approved `policy.json`, expected
+revision/digest и получает новое hash-suffixed immutable ConfigMap name;
+Deployment reference переключается Kustomize автоматически. Существующий
+immutable объект не редактируется и не удаляется. Rollback повторно выбирает
+ранее review-approved render с прежними image digest, expected revision/digest
+и прежним content-addressed ConfigMap, создавая обычный rollout.
+
+## Failure policy
 
 Invalid, partial или digest-mismatched policy не открывает readiness и не
 обслуживает CONNECT; technical runtime остаётся доступным для ограниченного
 `policyState=INVALID` readback без loaded revision/digest. DNS failure не использует stale snapshot; readiness
 восстанавливается только после успешной полной refresh validation.
 
-Rollback — новый Kubernetes rollout на ранее review-approved image digest и
-immutable policy revision/digest. ConfigMap не редактируется на месте. После
-rollback повторно сверяются `/policy`, readiness, Service endpoints и
+После rollback повторно сверяются `/policy`, readiness, Service endpoints и
 NetworkPolicy. Удалять CNI deny rules или давать consumer прямой внешний HTTPS
 для ускорения восстановления запрещено.

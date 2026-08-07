@@ -2,29 +2,26 @@
 package observability
 
 import (
-	"net/http"
+	"errors"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Metrics владеет изолированным Prometheus registry.
+// RegisterCollectors регистрирует service-owned collectors в общем registry.
+type RegisterCollectors func(...prometheus.Collector) error
+
+// Metrics содержит только gateway-specific collectors с закрытыми labels.
 type Metrics struct {
-	registry     *prometheus.Registry
 	connections  *prometheus.CounterVec
 	dns          *prometheus.CounterVec
 	dials        *prometheus.CounterVec
 	active       prometheus.Gauge
-	readiness    prometheus.Gauge
 	policyActive prometheus.Gauge
 }
 
-// NewMetrics создаёт collectors только с закрытыми labels.
-func NewMetrics() *Metrics {
-	registry := prometheus.NewRegistry()
+// New создаёт collectors и регистрирует их в общем service registry.
+func New(register RegisterCollectors) (*Metrics, error) {
 	metrics := &Metrics{
-		registry: registry,
 		connections: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "connection_attempts_total",
 			Help: "Total number of bounded CONNECT connection outcomes.",
@@ -41,22 +38,18 @@ func NewMetrics() *Metrics {
 			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "active_connections",
 			Help: "Current number of bounded CONNECT connections.",
 		}),
-		readiness: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "readiness",
-			Help: "Current readiness state of the effective gateway path.",
-		}),
 		policyActive: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: "mattercodex", Subsystem: "egress_gateway", Name: "policy_active",
 			Help: "Whether the immutable policy passed revision and digest validation.",
 		}),
 	}
-	registry.MustRegister(metrics.connections, metrics.dns, metrics.dials, metrics.active, metrics.readiness, metrics.policyActive, collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	return metrics
-}
-
-// Handler возвращает metrics endpoint.
-func (metrics *Metrics) Handler() http.Handler {
-	return promhttp.HandlerFor(metrics.registry, promhttp.HandlerOpts{})
+	if register == nil {
+		return nil, errors.New("gateway metrics registry is required")
+	}
+	if err := register(metrics.connections, metrics.dns, metrics.dials, metrics.active, metrics.policyActive); err != nil {
+		return nil, err
+	}
+	return metrics, nil
 }
 
 // Connection учитывает только нормализованные закрытые значения.
@@ -76,15 +69,6 @@ func (metrics *Metrics) Dial(outcome, reason string) {
 
 // AddActive обновляет gauge активных соединений.
 func (metrics *Metrics) AddActive(delta float64) { metrics.active.Add(delta) }
-
-// SetReady обновляет effective readiness gauge.
-func (metrics *Metrics) SetReady(ready bool) {
-	if ready {
-		metrics.readiness.Set(1)
-		return
-	}
-	metrics.readiness.Set(0)
-}
 
 // SetPolicyActive фиксирует startup policy validation.
 func (metrics *Metrics) SetPolicyActive(active bool) {

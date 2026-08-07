@@ -32,7 +32,8 @@ spec:
       enableServiceLinks: false
       hostNetwork: false
       dnsPolicy: ClusterFirst
-      terminationGracePeriodSeconds: 30
+      # 20s CONNECT cancel/join + 5s worker + 5s technical + 15s process margin.
+      terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
         seccompProfile:

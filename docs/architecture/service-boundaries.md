@@ -75,6 +75,10 @@ dial проверяет фактический ClientHello SNI и полный A
 `net.Dialer` получает только проверенный literal `AddrPort`. TLS peer,
 сертификат и application authentication остаются у consumer. Gateway не
 владеет management lifecycle `integration-gateway` и не получает его secrets.
+На том же Service `:8080` доступен только совместимый bodyless `GET /readyz`
+без query, связанный с тем же effective readiness; произвольная HTTP
+поверхность не открывается. Environment overlays принадлежат gateway, а policy
+rollout выбирает отдельный content-addressed immutable ConfigMap.
 
 `control-plane` материализует эту границу в
 `services/internal/control-plane`: транзакция PostgreSQL одновременно фиксирует
