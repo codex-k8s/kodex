@@ -454,6 +454,7 @@ func (service *Service) selectProviderBinding(
 	preferredBindingID string,
 	now time.Time,
 ) (entity.Resource, error) {
+	const credentialExpiryHeadroom = 5 * time.Minute
 	type candidate struct {
 		resource entity.Resource
 		spec     entity.CredentialBindingSpec
@@ -476,7 +477,8 @@ func (service *Service) selectProviderBinding(
 		if !ok || binding.Kind != enum.KindCredentialBinding ||
 			binding.State != enum.StateActive || spec.Purpose != "provider-account" ||
 			!spec.ProviderEligible ||
-			(!spec.ExpiresAt.IsZero() && !spec.ExpiresAt.After(now)) ||
+			(!spec.ExpiresAt.IsZero() && !spec.ExpiresAt.After(now.Add(credentialExpiryHeadroom))) ||
+			spec.ProviderObservedAt.After(now.Add(5*time.Second)) ||
 			now.Sub(spec.ProviderObservedAt) > roleSpec.ProviderAccountPool.ObservationMaxAge {
 			continue
 		}

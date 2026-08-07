@@ -136,6 +136,8 @@ type InstructionSetSpec struct {
 	ValidatedContentSHA256  string                       `json:"validatedContentSha256,omitempty"`
 	ValidationErrors        []InstructionValidationError `json:"validationErrors,omitempty"`
 	RollbackOfVersion       uint64                       `json:"rollbackOfVersion,omitempty"`
+	ContentArtifactID       string                       `json:"contentArtifactId"`
+	ContentArtifactVersion  uint64                       `json:"contentArtifactVersion"`
 	Ownership               ConfigurationOwnership       `json:"ownership"`
 }
 
@@ -153,7 +155,8 @@ func (spec InstructionSetSpec) Validate() error {
 	if value.ValidateStableKey(spec.StableKey) != nil ||
 		(spec.Locale != "ru" && spec.Locale != "en") || spec.CurrentVersion == 0 ||
 		len(spec.Content) == 0 || len(spec.Content) > 262144 ||
-		digestText(spec.Content) != spec.ContentSHA256 || spec.Ownership.Validate() != nil {
+		digestText(spec.Content) != spec.ContentSHA256 || value.ValidateID(spec.ContentArtifactID) != nil ||
+		spec.ContentArtifactVersion == 0 || spec.Ownership.Validate() != nil {
 		return errors.New("instruction set specification is invalid")
 	}
 	switch spec.VersionState {

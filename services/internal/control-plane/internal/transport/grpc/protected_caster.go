@@ -91,6 +91,7 @@ func instructionSetFromProto(value *controlplanev1.InstructionSetSpec) entity.In
 		ValidationSHA256: value.GetValidationSha256(), RollbackOfVersion: value.GetRollbackOfVersion(),
 		ValidationSucceeded: value.GetValidationSucceeded(), ValidatedContentVersion: value.GetValidatedContentVersion(),
 		ValidatedContentSHA256: value.GetValidatedContentSha256(), ValidationErrors: validationErrorsFromProto(value.GetValidationErrors()),
+		ContentArtifactID: value.GetContentArtifactId(), ContentArtifactVersion: value.GetContentArtifactVersion(),
 		Ownership: configurationOwnershipFromProto(value.GetOwnership()),
 	}
 }
@@ -103,6 +104,7 @@ func instructionSetToProto(value entity.InstructionSetSpec) *controlplanev1.Inst
 		RollbackOfVersion: value.RollbackOfVersion, Ownership: configurationOwnershipToProto(value.Ownership),
 		ValidationSucceeded: value.ValidationSucceeded, ValidatedContentVersion: value.ValidatedContentVersion,
 		ValidatedContentSha256: value.ValidatedContentSHA256, ValidationErrors: validationErrorsToProto(value.ValidationErrors),
+		ContentArtifactId: value.ContentArtifactID, ContentArtifactVersion: value.ContentArtifactVersion,
 	}
 }
 

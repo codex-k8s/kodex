@@ -168,6 +168,27 @@ var sqlRuntimeDerivedResourceInsert string
 //go:embed sql/runtime_derived_resource__get.sql
 var sqlRuntimeDerivedResourceGet string
 
+//go:embed sql/external_command_receipt__reserve.sql
+var sqlExternalCommandReceiptReserve string
+
+//go:embed sql/external_command_receipt__get.sql
+var sqlExternalCommandReceiptGet string
+
+//go:embed sql/external_command_receipt__finalize.sql
+var sqlExternalCommandReceiptFinalize string
+
+//go:embed sql/legacy_configuration_cutover__get.sql
+var sqlLegacyConfigurationCutoverGet string
+
+//go:embed sql/legacy_configuration_cutover__get_for_update.sql
+var sqlLegacyConfigurationCutoverGetForUpdate string
+
+//go:embed sql/legacy_configuration_cutover__list.sql
+var sqlLegacyConfigurationCutoverList string
+
+//go:embed sql/legacy_configuration_cutover__mark_migrated.sql
+var sqlLegacyConfigurationCutoverMarkMigrated string
+
 //go:embed sql/runtime_revision__latest.sql
 var sqlRuntimeRevisionLatest string
 
@@ -290,6 +311,12 @@ var sqlInteractionDeliveryWorkspaceOpenForUpdate string
 
 //go:embed sql/audit__run_timeline.sql
 var sqlAuditRunTimeline string
+
+//go:embed sql/run_graph__nodes.sql
+var sqlRunGraphNodes string
+
+//go:embed sql/run_graph__artifacts.sql
+var sqlRunGraphArtifacts string
 
 //go:embed sql/project__owner_list_for_update.sql
 var sqlProjectOwnerListForUpdate string

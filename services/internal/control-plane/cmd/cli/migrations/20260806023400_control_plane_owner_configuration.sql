@@ -149,6 +149,220 @@ CREATE POLICY runtime_derived_resources_runtime_scope
 REVOKE ALL ON control_plane.runtime_derived_resources FROM PUBLIC;
 GRANT SELECT, INSERT ON control_plane.runtime_derived_resources TO control_plane_runtime;
 
+-- Per-row deterministic cutover map. Legacy content bytes никогда не
+-- изобретаются из digest: upgrade фиксирует точные target IDs и typed manual
+-- action, после чего owner reconciliation атомарно материализует весь catalog.
+CREATE TABLE control_plane.legacy_configuration_cutovers (
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    owner_actor_id uuid NOT NULL,
+    legacy_role_id uuid NOT NULL,
+    legacy_role_version bigint NOT NULL CHECK (legacy_role_version BETWEEN 1 AND 9007199254740991),
+    legacy_prompt_profile_id uuid NOT NULL,
+    legacy_prompt_version bigint NOT NULL CHECK (legacy_prompt_version BETWEEN 1 AND 9007199254740991),
+    source_role_sha256 text NOT NULL CHECK (source_role_sha256 ~ '^[a-f0-9]{64}$'),
+    source_prompt_sha256 text NOT NULL CHECK (source_prompt_sha256 ~ '^[a-f0-9]{64}$'),
+    source_credential_ids uuid[] NOT NULL,
+    target_role_definition_id uuid NOT NULL,
+    target_agent_id uuid NOT NULL,
+    target_instruction_set_id uuid NOT NULL,
+    target_provider_pool_id uuid NOT NULL,
+    target_agent_assignment_id uuid NOT NULL,
+    target_provider_reference_ids uuid[] NOT NULL,
+    state text NOT NULL CHECK (state IN ('BLOCKED', 'MIGRATED')),
+    block_code text CHECK (block_code IS NULL OR block_code ~ '^[a-z][a-z0-9._-]{0,127}$'),
+    manual_action text CHECK (manual_action IS NULL OR length(manual_action) BETWEEN 1 AND 512),
+    result_agent_version bigint NOT NULL DEFAULT 0 CHECK (result_agent_version BETWEEN 0 AND 9007199254740991),
+    result_agent_sha256 text CHECK (result_agent_sha256 IS NULL OR result_agent_sha256 ~ '^[a-f0-9]{64}$'),
+    created_at timestamptz NOT NULL,
+    resolved_at timestamptz,
+    PRIMARY KEY (organization_id, project_id, legacy_role_id),
+    UNIQUE (organization_id, project_id, target_role_definition_id),
+    UNIQUE (organization_id, project_id, target_agent_id),
+    UNIQUE (organization_id, project_id, target_provider_pool_id),
+    UNIQUE (organization_id, project_id, target_agent_assignment_id),
+    CHECK ((state = 'BLOCKED') = (block_code IS NOT NULL)),
+    CHECK ((state = 'BLOCKED') = (manual_action IS NOT NULL)),
+    CHECK ((state = 'MIGRATED') = (resolved_at IS NOT NULL)),
+    CHECK ((state = 'MIGRATED') = (result_agent_version > 0)),
+    CHECK ((state = 'MIGRATED') = (result_agent_sha256 IS NOT NULL))
+);
+WITH legacy_roles AS (
+    SELECT role.*,
+        role.spec ->> 'promptProfileId' AS prompt_id_text,
+        role.spec ->> 'roleImageRecipeId' AS recipe_id_text,
+        role.spec -> 'providerCredentialBindingIds' AS credential_ids_json
+    FROM control_plane.resources AS role
+    WHERE role.kind = 'ROLE' AND role.state <> 'DELETED'
+), normalized AS (
+    SELECT role.*,
+        CASE WHEN role.prompt_id_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            THEN role.prompt_id_text::uuid
+            ELSE md5('mattercodex:invalid-legacy-prompt:' || role.id::text)::uuid
+        END AS prompt_id,
+        CASE WHEN role.recipe_id_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            THEN role.recipe_id_text::uuid
+            ELSE md5('mattercodex:invalid-legacy-runtime-profile:' || role.id::text)::uuid
+        END AS recipe_id,
+        coalesce(credentials.ids, ARRAY[]::uuid[]) AS credential_ids,
+        jsonb_typeof(role.credential_ids_json) = 'array'
+            AND coalesce(credentials.all_valid, false) AS credentials_valid,
+        coalesce(credentials.item_count, 0) AS credential_count
+    FROM legacy_roles AS role
+    LEFT JOIN LATERAL (
+        SELECT array_agg(value::uuid ORDER BY value)
+                   FILTER (WHERE value ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') AS ids,
+               bool_and(value ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') AS all_valid,
+               count(*) AS item_count
+        FROM jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(role.credential_ids_json) = 'array'
+                 THEN role.credential_ids_json ELSE '[]'::jsonb END
+        ) AS source(value)
+    ) AS credentials ON true
+), classified AS (
+    SELECT role.*, prompt.id AS found_prompt_id, prompt.version AS prompt_version,
+           prompt.spec AS prompt_spec, recipe.id AS found_recipe_id,
+        CASE
+            WHEN role.prompt_id_text !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                THEN 'legacy_prompt_profile_reference_invalid'
+            WHEN prompt.id IS NULL THEN 'legacy_prompt_profile_missing'
+            WHEN coalesce(prompt.spec ->> 'contentSha256', '') !~ '^[a-f0-9]{64}$'
+                THEN 'legacy_instruction_digest_invalid'
+            WHEN coalesce(prompt.spec ->> 'contentArtifactId', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                THEN 'legacy_instruction_artifact_missing'
+            WHEN role.credential_count = 0 THEN 'legacy_provider_binding_missing'
+            WHEN NOT role.credentials_valid THEN 'legacy_provider_binding_reference_invalid'
+            WHEN EXISTS (
+                SELECT 1
+                FROM unnest(role.credential_ids) AS source(credential_id)
+                LEFT JOIN control_plane.resources AS credential
+                  ON credential.organization_id = role.organization_id
+                 AND credential.project_id = role.project_id
+                 AND credential.id = source.credential_id
+                 AND credential.kind = 'CREDENTIAL_BINDING'
+                 AND credential.state = 'ACTIVE'
+                WHERE credential.id IS NULL
+                   OR coalesce(credential.spec ->> 'purpose', '') <> 'provider-account'
+                   OR coalesce(credential.spec ->> 'providerEligible', '') <> 'true'
+            ) THEN 'legacy_provider_binding_ineligible'
+            WHEN role.recipe_id_text !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                OR recipe.id IS NULL THEN 'legacy_runtime_profile_missing'
+            ELSE 'legacy_instruction_content_readback_required'
+        END AS block_code
+    FROM normalized AS role
+    LEFT JOIN control_plane.resources AS prompt
+      ON prompt.organization_id = role.organization_id
+     AND prompt.project_id = role.project_id
+     AND prompt.id = role.prompt_id
+     AND prompt.kind = 'PROMPT_PROFILE'
+     AND prompt.state <> 'DELETED'
+    LEFT JOIN control_plane.resources AS recipe
+      ON recipe.organization_id = role.organization_id
+     AND recipe.project_id = role.project_id
+     AND recipe.id = role.recipe_id
+     AND recipe.kind = 'ROLE_IMAGE_RECIPE'
+     AND recipe.state = 'ACTIVE'
+)
+INSERT INTO control_plane.legacy_configuration_cutovers (
+    organization_id, project_id, owner_actor_id, legacy_role_id, legacy_role_version,
+    legacy_prompt_profile_id, legacy_prompt_version, source_role_sha256, source_prompt_sha256,
+    source_credential_ids, target_role_definition_id, target_agent_id, target_instruction_set_id,
+    target_provider_pool_id, target_agent_assignment_id, target_provider_reference_ids,
+    state, block_code, manual_action, created_at
+)
+SELECT role.organization_id, role.project_id, role.owner_actor_id, role.id, role.version,
+    role.prompt_id, coalesce(role.prompt_version, 1),
+    encode(control_plane_extensions.digest(convert_to(role.spec::text, 'UTF8'), 'sha256'), 'hex'),
+    CASE WHEN coalesce(role.prompt_spec ->> 'contentSha256', '') ~ '^[a-f0-9]{64}$'
+         THEN role.prompt_spec ->> 'contentSha256' ELSE repeat('0', 64) END,
+    role.credential_ids,
+    md5('mattercodex:legacy-role-definition:' || role.id::text)::uuid,
+    md5('mattercodex:legacy-agent:' || role.id::text)::uuid,
+    md5('mattercodex:legacy-instruction-set:' || role.prompt_id::text)::uuid,
+    md5('mattercodex:legacy-provider-pool:' || role.id::text)::uuid,
+    md5('mattercodex:legacy-agent-assignment:' || role.id::text)::uuid,
+    ARRAY(SELECT md5('mattercodex:legacy-provider-reference:' || value::text)::uuid
+          FROM unnest(role.credential_ids) AS source(value) ORDER BY value),
+    'BLOCKED',
+    role.block_code,
+    CASE role.block_code
+        WHEN 'legacy_instruction_content_readback_required'
+            THEN 'Call ResolveLegacyConfigurationCutover with exact immutable instruction content matching source_prompt_sha256'
+        WHEN 'legacy_provider_binding_ineligible'
+            THEN 'Restore exact referenced provider binding eligibility, then call ResolveLegacyConfigurationCutover'
+        ELSE 'Create an owner-approved target replacement; immutable legacy source cannot be repaired automatically'
+    END,
+    transaction_timestamp()
+FROM classified AS role;
+CREATE INDEX legacy_configuration_cutovers_owner_page_idx
+    ON control_plane.legacy_configuration_cutovers (
+        organization_id, project_id, owner_actor_id, legacy_role_id
+    );
+ALTER TABLE control_plane.legacy_configuration_cutovers OWNER TO control_plane_owner;
+ALTER TABLE control_plane.legacy_configuration_cutovers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_plane.legacy_configuration_cutovers FORCE ROW LEVEL SECURITY;
+CREATE POLICY legacy_configuration_cutovers_runtime_scope
+    ON control_plane.legacy_configuration_cutovers
+    FOR ALL TO control_plane_runtime
+    USING (
+        organization_id = (control_plane.runtime_scope()).organization_id
+        AND project_id = (control_plane.runtime_scope()).project_id
+        AND owner_actor_id = (control_plane.runtime_scope()).actor_id
+    )
+    WITH CHECK (
+        organization_id = (control_plane.runtime_scope()).organization_id
+        AND project_id = (control_plane.runtime_scope()).project_id
+        AND owner_actor_id = (control_plane.runtime_scope()).actor_id
+    );
+REVOKE ALL ON control_plane.legacy_configuration_cutovers FROM PUBLIC;
+GRANT SELECT, UPDATE ON control_plane.legacy_configuration_cutovers TO control_plane_runtime;
+
+-- JTI внешнего signed readback резервируется ровно один раз до mutation и
+-- получает exact result tuple в той же owner transaction. Повтор с другим
+-- target/intent не может пройти через уникальный issuer+purpose+receipt_id.
+CREATE TABLE control_plane.external_command_receipt_consumptions (
+    issuer text NOT NULL CHECK (length(issuer) BETWEEN 1 AND 512),
+    purpose text NOT NULL CHECK (purpose ~ '^[A-Z][A-Z0-9_]{0,95}$'),
+    receipt_id uuid NOT NULL,
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    owner_actor_id uuid NOT NULL,
+    target_kind text NOT NULL CHECK (target_kind ~ '^[a-z][a-z0-9_]{0,95}$'),
+    target_resource_id uuid,
+    target_stable_key text NOT NULL CHECK (target_stable_key ~ '^[a-z0-9]([a-z0-9._-]{0,94}[a-z0-9])?$'),
+    action text NOT NULL CHECK (action ~ '^[a-z][a-z0-9_]{0,63}$'),
+    effect text NOT NULL CHECK (effect ~ '^[a-z][a-z0-9_]{0,95}$'),
+    effect_generation bigint NOT NULL CHECK (effect_generation BETWEEN 1 AND 9007199254740991),
+    effect_sha256 text NOT NULL CHECK (effect_sha256 ~ '^[a-f0-9]{64}$'),
+    command_intent_sha256 text NOT NULL CHECK (command_intent_sha256 ~ '^[a-f0-9]{64}$'),
+    authority_sha256 text NOT NULL CHECK (authority_sha256 ~ '^[a-f0-9]{64}$'),
+    result_resource_id uuid,
+    result_version bigint NOT NULL DEFAULT 0 CHECK (result_version BETWEEN 0 AND 9007199254740991),
+    result_sha256 text CHECK (result_sha256 IS NULL OR result_sha256 ~ '^[a-f0-9]{64}$'),
+    consumed_at timestamptz NOT NULL,
+    PRIMARY KEY (issuer, purpose, receipt_id),
+    CHECK ((result_resource_id IS NULL) = (result_version = 0)),
+    CHECK ((result_resource_id IS NULL) = (result_sha256 IS NULL))
+);
+ALTER TABLE control_plane.external_command_receipt_consumptions OWNER TO control_plane_owner;
+ALTER TABLE control_plane.external_command_receipt_consumptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_plane.external_command_receipt_consumptions FORCE ROW LEVEL SECURITY;
+CREATE POLICY external_command_receipt_runtime_scope
+    ON control_plane.external_command_receipt_consumptions
+    FOR ALL TO control_plane_runtime
+    USING (
+        organization_id = (control_plane.runtime_scope()).organization_id
+        AND project_id = (control_plane.runtime_scope()).project_id
+        AND owner_actor_id = (control_plane.runtime_scope()).actor_id
+    )
+    WITH CHECK (
+        organization_id = (control_plane.runtime_scope()).organization_id
+        AND project_id = (control_plane.runtime_scope()).project_id
+        AND owner_actor_id = (control_plane.runtime_scope()).actor_id
+    );
+REVOKE ALL ON control_plane.external_command_receipt_consumptions FROM PUBLIC;
+GRANT SELECT, INSERT, UPDATE ON control_plane.external_command_receipt_consumptions TO control_plane_runtime;
+
 ALTER TABLE control_plane.runtime_execution_incidents
     ADD COLUMN version bigint NOT NULL DEFAULT 1
         CHECK (version BETWEEN 1 AND 9007199254740991),

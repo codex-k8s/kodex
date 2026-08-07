@@ -798,12 +798,54 @@ type RuntimeProjectionRepository interface {
 	GetDerivedRuntimeResource(context.Context, string, string, string, enum.Kind, uint64) (entity.Resource, error)
 }
 
+// LegacyConfigurationCutover — immutable source→target mapping одного legacy
+// Role graph. BLOCKED всегда содержит точное owner action.
+type LegacyConfigurationCutover struct {
+	OrganizationID, ProjectID, OwnerActorID                       string
+	LegacyRoleID, LegacyPromptProfileID                           string
+	LegacyRoleVersion, LegacyPromptVersion                        uint64
+	SourceRoleSHA256, SourcePromptSHA256                          string
+	SourceCredentialIDs                                           []string
+	TargetRoleDefinitionID, TargetAgentID, TargetInstructionSetID string
+	TargetProviderPoolID, TargetAgentAssignmentID                 string
+	TargetProviderReferenceIDs                                    []string
+	State, BlockCode, ManualAction                                string
+	ResultAgentVersion                                            uint64
+	ResultAgentSHA256                                             string
+	CreatedAt, ResolvedAt                                         time.Time
+}
+
+type LegacyConfigurationCutoverRepository interface {
+	GetLegacyConfigurationCutover(context.Context, string, string, string, string) (LegacyConfigurationCutover, error)
+	ListLegacyConfigurationCutovers(context.Context, string, string, string, string, int) ([]LegacyConfigurationCutover, error)
+}
+
+type LegacyConfigurationCutoverTransaction interface {
+	GetLegacyConfigurationCutoverForUpdate(context.Context, string) (LegacyConfigurationCutover, error)
+	MarkLegacyConfigurationCutoverMigrated(context.Context, LegacyConfigurationCutover) error
+}
+
 // RunTimelineRepository объединяет exact run projection одним PostgreSQL
 // keyset query по (occurred_at,id), а не пагинирует UUIDv4 отдельно по видам.
 type RunTimelineRepository interface {
 	ListRunTimelineAudit(
 		context.Context, string, string, string, []string, time.Time, string, int,
 	) ([]Audit, error)
+}
+
+type RunGraphNode struct {
+	NodeType, ID, State, ParentProcessRunID            string
+	ProcessRunID, SessionID, TurnID, RuntimeRevisionID string
+	PredecessorID, SuccessorID                         string
+	ChildIDs                                           []string
+	Version, RuntimeRevisionVersion                    uint64
+	Attempt                                            uint32
+	OccurredAt, UpdatedAt                              time.Time
+}
+
+type RunGraphRepository interface {
+	ListRunGraphNodes(context.Context, string, string, string, string) ([]RunGraphNode, error)
+	ListRunGraphArtifacts(context.Context, string, string, string, string, time.Time, string, int) ([]entity.Resource, error)
 }
 
 // WorkspaceRecoveryTransaction — единственный organization-wide path,
@@ -837,6 +879,23 @@ type ProtectedTransaction interface {
 	GetRuntimeIncidentForUpdate(context.Context, string) (RuntimeIncident, error)
 	UpdateRuntimeIncident(context.Context, RuntimeIncident, uint64) error
 	AppendRuntimeIncidentHistory(context.Context, RuntimeIncidentHistory) error
+	ReserveExternalCommandReceipt(context.Context, ExternalCommandReceipt) (ExternalCommandReceipt, bool, error)
+	FinalizeExternalCommandReceipt(context.Context, ExternalCommandReceipt) error
+}
+
+// ExternalCommandReceipt — one-use semantic consumption signed provider/git
+// proof. Unique issuer+purpose+JTI резервируется до mutation, а result tuple
+// фиксируется той же owner transaction.
+type ExternalCommandReceipt struct {
+	Issuer, Purpose, ReceiptID                         string
+	OrganizationID, ProjectID, OwnerActorID            string
+	TargetKind, TargetResourceID, TargetStableKey      string
+	Action, Effect                                     string
+	EffectGeneration                                   uint64
+	EffectSHA256, CommandIntentSHA256, AuthoritySHA256 string
+	ResultResourceID, ResultSHA256                     string
+	ResultVersion                                      uint64
+	ConsumedAt                                         time.Time
 }
 
 // ImageTransaction materialизует только специализированный image lifecycle.

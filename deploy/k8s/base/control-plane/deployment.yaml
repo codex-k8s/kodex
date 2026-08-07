@@ -197,6 +197,12 @@ spec:
             - name: interaction-readback-trust
               mountPath: /var/run/config/mattercodex/control-plane/interaction-readback
               readOnly: true
+            - name: instruction-object-store
+              mountPath: /var/run/secrets/mattercodex/control-plane/instruction-object-store
+              readOnly: true
+            - name: object-store-ca
+              mountPath: /var/run/config/mattercodex/control-plane/object-store
+              readOnly: true
             - name: otel-ca
               mountPath: /var/run/config/mattercodex/control-plane/observability
               readOnly: true
@@ -318,6 +324,19 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-interaction-readback-trust
+        - name: instruction-object-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-instruction-object-store
+        - name: object-store-ca
+          configMap:
+            name: object-store-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

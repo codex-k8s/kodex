@@ -878,8 +878,23 @@ func (service *Service) runtimeMaterializations(
 	if err != nil {
 		return nil, err
 	}
-	promptProfile, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID,
-		resolved.RevisionSpec.PromptProfileID)
+	var promptProfile entity.Resource
+	if resolved.RevisionSpec.AgentID != "" {
+		projectionTx, projectionOK := tx.(domainrepo.RuntimeProjectionTransaction)
+		if !projectionOK {
+			return nil, errs.ErrInternal
+		}
+		promptVersion := revisionComponentVersion(resolved.RevisionSpec.Components, enum.KindPromptProfile,
+			resolved.RevisionSpec.PromptProfileID)
+		if promptVersion == 0 {
+			return nil, errs.ErrStateConflict
+		}
+		promptProfile, err = projectionTx.GetDerivedRuntimeResource(ctx, principal.OrganizationID, principal.ProjectID,
+			resolved.RevisionSpec.PromptProfileID, enum.KindPromptProfile, promptVersion)
+	} else {
+		promptProfile, err = tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID,
+			resolved.RevisionSpec.PromptProfileID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -3905,6 +3920,8 @@ func (service *Service) requireRetryableClosedRuntimeGraph(
 	target := enum.StateFailed
 	if execution.State == "EXPIRED" {
 		target = enum.StateExpired
+	} else if execution.State == "CANCELLED" {
+		target = enum.StateCancelled
 	}
 	if execution.TerminalOutcome != execution.State ||
 		!validBoundedReference(execution.TerminalReference) ||
@@ -3956,7 +3973,7 @@ func (service *Service) requireRetryableClosedRuntimeGraph(
 }
 
 func retryableRuntimePredecessor(state string) bool {
-	return state == "FAILED" || state == "EXPIRED"
+	return state == "FAILED" || state == "CANCELLED" || state == "EXPIRED"
 }
 
 func integrationOutcomeReadyForDelivery(continuation IntegrationContinuation) bool {

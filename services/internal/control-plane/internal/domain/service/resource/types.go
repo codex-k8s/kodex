@@ -3,6 +3,7 @@ package resource
 import (
 	"time"
 
+	domainobjectstore "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/client/objectstore"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
@@ -109,19 +110,21 @@ type CopyAccessResourceInput struct {
 }
 
 type ManageProtectedConfigurationInput struct {
-	Principal       value.Principal
-	FullMethod      string
-	IdempotencyKey  string
-	Kind            enum.Kind
-	Action          string
-	ResourceID      string
-	ExpectedVersion uint64
-	Name            string
-	Spec            entity.Spec
-	TargetVersion   uint64
-	TargetSHA256    string
-	ReferenceKeys   []string
-	ProviderReceipt value.ProviderEffectReceipt
+	Principal         value.Principal
+	FullMethod        string
+	IdempotencyKey    string
+	Kind              enum.Kind
+	Action            string
+	ResourceID        string
+	ExpectedVersion   uint64
+	Name              string
+	Spec              entity.Spec
+	TargetVersion     uint64
+	TargetSHA256      string
+	ReferenceKeys     []string
+	ProviderReceipt   value.ProviderEffectReceipt
+	GitReceipt        value.GitReconciliationReceipt
+	InstructionObject domainobjectstore.Object
 }
 
 type ProtectedResourceHistoryInput struct {
@@ -156,6 +159,32 @@ type BindScheduleConfigurationInput struct {
 	ProviderPoolStableKey   string
 }
 
+type CreateScheduleFromOwnerSelectionsInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	Name                    string
+	AgentStableKey          string
+	InstructionSetStableKey string
+	ProviderPoolStableKey   string
+	RoomStableKey           string
+	PromptArtifactName      string
+	Spec                    entity.ScheduleSpec
+}
+
+type ResolveLegacyConfigurationCutoverInput struct {
+	Principal                   value.Principal
+	IdempotencyKey              string
+	LegacyRoleID                string
+	ExpectedLegacyRoleVersion   uint64
+	ExpectedLegacyPromptVersion uint64
+	InstructionContent          string
+}
+
+type ResolveLegacyConfigurationCutoverResult struct {
+	Cutover domainrepo.LegacyConfigurationCutover
+	Agent   entity.Resource
+}
+
 type ManageRunInput struct {
 	Principal       value.Principal
 	IdempotencyKey  string
@@ -180,6 +209,7 @@ type RunDetailResult struct {
 }
 
 type RunLineageResult struct {
+	RootProcessRunID                              string
 	RootSessionID, RootTurnID, ParentProcessRunID string
 	CurrentSessionID                              string
 	CurrentSessionVersion                         uint64
@@ -189,6 +219,9 @@ type RunLineageResult struct {
 	RuntimeRevisionID                             string
 	RuntimeRevisionVersion                        uint64
 	ImmutableInputSHA256                          string
+	Processes                                     []domainrepo.RunGraphNode
+	Attempts                                      []domainrepo.RunGraphNode
+	Complete                                      bool
 }
 
 type ManageWorkspaceMappingInput struct {

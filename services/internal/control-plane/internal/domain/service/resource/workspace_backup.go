@@ -220,24 +220,6 @@ func (service *Service) snapshotWorkspaceBackupMembers(
 	if err != nil {
 		return nil, errs.ErrInternal
 	}
-	type assignmentTuple struct {
-		version uint64
-		digest  string
-	}
-	activeAssignments := make(map[string]assignmentTuple)
-	for _, item := range resources {
-		assignment, ok := item.Spec.(entity.AgentAssignmentSpec)
-		if ok && item.Kind == enum.KindAgentAssignment && item.State == enum.StateActive &&
-			item.OwnerActorID == principal.ActorID && assignment.RootActorID == principal.ActorID &&
-			assignment.WorkspaceID == workspace.ID && assignment.WorkspaceVersion == workspace.Version &&
-			assignment.WorkspaceSHA256 == workspaceSHA {
-			assignmentSHA, digestErr := entity.ProjectionSHA256(item)
-			if digestErr != nil {
-				return nil, errs.ErrInternal
-			}
-			activeAssignments[item.ID] = assignmentTuple{version: item.Version, digest: assignmentSHA}
-		}
-	}
 	members := make([]entity.WorkspaceBackupMember, 0)
 	for _, item := range resources {
 		session, ok := item.Spec.(entity.SessionSpec)
@@ -245,11 +227,12 @@ func (service *Service) snapshotWorkspaceBackupMembers(
 			item.State == enum.StateDeleted {
 			continue
 		}
-		assignment, assigned := activeAssignments[session.AgentAssignmentID]
-		if !assigned || session.AgentAssignmentVersion != assignment.version ||
-			session.AgentAssignmentSHA256 != assignment.digest {
-			continue
-		}
+		// Backup membership — исторический owner snapshot, а не runtime
+		// admission. Unassign, archive Agent либо новая Workspace version не
+		// вправе молча удалить уже существовавшую Session из полного envelope.
+		// Наличие pins фиксируется в Session history; для legacy Session без
+		// target assignment также требуется exact terminal archive ниже.
+		_ = session
 		source, sourceErr := tx.LatestSessionRuntimeArchiveForRestore(
 			ctx, principal.OrganizationID, workspace.ID, item.ID,
 		)
@@ -847,7 +830,7 @@ func (service *Service) retryWorkspaceExecution(
 		return RetryRuntimeExecutionResult{}, errs.ErrStateConflict
 	}
 	switch execution.State {
-	case "FAILED", "EXPIRED":
+	case "FAILED", "CANCELLED", "EXPIRED":
 		turn, err = service.requireRetryableClosedRuntimeGraph(ctx, tx, principal, execution)
 	default:
 		return RetryRuntimeExecutionResult{}, errs.ErrStateConflict

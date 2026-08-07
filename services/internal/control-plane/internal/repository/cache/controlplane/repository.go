@@ -44,6 +44,49 @@ type Repository struct {
 var _ domainrepo.Repository = (*Repository)(nil)
 var _ domainrepo.RuntimeProjectionRepository = (*Repository)(nil)
 var _ domainrepo.RunTimelineRepository = (*Repository)(nil)
+var _ domainrepo.LegacyConfigurationCutoverRepository = (*Repository)(nil)
+var _ domainrepo.RunGraphRepository = (*Repository)(nil)
+
+func (repository *Repository) ListRunGraphNodes(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string,
+) ([]domainrepo.RunGraphNode, error) {
+	source, ok := repository.source.(domainrepo.RunGraphRepository)
+	if !ok {
+		return nil, errors.New("run graph source is unavailable")
+	}
+	return source.ListRunGraphNodes(ctx, organizationID, projectID, actorID, processRunID)
+}
+
+func (repository *Repository) ListRunGraphArtifacts(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string, afterOccurredAt time.Time, afterID string, limit int,
+) ([]entity.Resource, error) {
+	source, ok := repository.source.(domainrepo.RunGraphRepository)
+	if !ok {
+		return nil, errors.New("run graph source is unavailable")
+	}
+	return source.ListRunGraphArtifacts(ctx, organizationID, projectID, actorID, processRunID,
+		afterOccurredAt, afterID, limit)
+}
+
+func (repository *Repository) GetLegacyConfigurationCutover(ctx context.Context,
+	organizationID, projectID, actorID, legacyRoleID string,
+) (domainrepo.LegacyConfigurationCutover, error) {
+	source, ok := repository.source.(domainrepo.LegacyConfigurationCutoverRepository)
+	if !ok {
+		return domainrepo.LegacyConfigurationCutover{}, errors.New("legacy cutover source is unavailable")
+	}
+	return source.GetLegacyConfigurationCutover(ctx, organizationID, projectID, actorID, legacyRoleID)
+}
+
+func (repository *Repository) ListLegacyConfigurationCutovers(ctx context.Context,
+	organizationID, projectID, actorID, afterLegacyRoleID string, limit int,
+) ([]domainrepo.LegacyConfigurationCutover, error) {
+	source, ok := repository.source.(domainrepo.LegacyConfigurationCutoverRepository)
+	if !ok {
+		return nil, errors.New("legacy cutover source is unavailable")
+	}
+	return source.ListLegacyConfigurationCutovers(ctx, organizationID, projectID, actorID, afterLegacyRoleID, limit)
+}
 
 // New создаёт декоратор; при сбое кэша чтение всегда возвращается к PostgreSQL.
 func New(

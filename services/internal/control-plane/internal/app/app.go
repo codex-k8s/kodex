@@ -32,6 +32,7 @@ import (
 	oidcauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/oidc"
 	authoritypolicy "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/policy"
 	readbackgrantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/readbackgrant"
+	objectclient "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/objectstore"
 	proofsignerfile "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/proofsigner/file"
 	domainerrs "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -229,6 +230,17 @@ func Run(
 	if err != nil {
 		return err
 	}
+	instructionObjects, err := objectclient.New(objectclient.Config{
+		Endpoint: config.InstructionS3Endpoint, TLSServerName: config.InstructionS3TLSServerName,
+		CAFile: config.InstructionS3CAFile, ClientCertificateFile: config.InstructionS3ClientCertificateFile,
+		ClientPrivateKeyFile: config.InstructionS3ClientPrivateKeyFile,
+		AccessKeyFile:        config.InstructionS3AccessKeyFile, SecretKeyFile: config.InstructionS3SecretKeyFile,
+		SessionTokenFile: config.InstructionS3SessionTokenFile, Bucket: config.InstructionS3Bucket,
+		MaximumObjectBytes: 262144, Timeout: config.ReadinessTimeout,
+	})
+	if err != nil {
+		return err
+	}
 	resourceService, err := resource.New(cachedRepository, resource.Config{
 		LeaseSigningKey:             leaseKey,
 		RuntimeAdmissionSigningKey:  admissionSigningKey,
@@ -278,6 +290,7 @@ func Run(
 		PendingRescheduleDelay:      config.PendingRescheduleDelay,
 		InteractionReadbackIssuer:   interactionReadbackIssuer{signer: interactionReadbackSigner},
 		Observer:                    businessMetrics,
+		InstructionObjects:          instructionObjects,
 	})
 	if err != nil {
 		return err
@@ -452,12 +465,13 @@ func Run(
 		return err
 	}
 	checker := &readinessChecker{
-		repository:     cachedRepository,
-		cache:          state.cache,
-		relay:          relay,
-		proof:          proofService,
-		verifier:       state.authority.Verifier(),
-		policyRevision: loadedPolicy.Revision,
+		repository:         cachedRepository,
+		cache:              state.cache,
+		relay:              relay,
+		proof:              proofService,
+		verifier:           state.authority.Verifier(),
+		policyRevision:     loadedPolicy.Revision,
+		instructionObjects: instructionObjects,
 	}
 	if _, err := checker.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)

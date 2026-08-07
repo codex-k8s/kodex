@@ -162,6 +162,9 @@ service ControlPlaneService {
 
   // ManageSchedule изменяет расписание только через закрытые действия сервера.
   rpc ManageSchedule(ManageScheduleRequest) returns (ManageScheduleResponse);
+  // CreateScheduleFromOwnerSelections принимает только человекочитаемые
+  // selections и атомарно закрепляет server-resolved target tuple.
+  rpc CreateScheduleFromOwnerSelections(CreateScheduleFromOwnerSelectionsRequest) returns (CreateScheduleFromOwnerSelectionsResponse);
   // BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
   rpc BindScheduleConfiguration(BindScheduleConfigurationRequest) returns (BindScheduleConfigurationResponse);
   // RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
@@ -259,6 +262,13 @@ service ControlPlaneService {
   rpc GetWorkspaceMattermostMapping(GetWorkspaceMattermostMappingRequest) returns (GetWorkspaceMattermostMappingResponse);
   // ListWorkspaceMattermostMappings возвращает owner-scoped mapping catalog.
   rpc ListWorkspaceMattermostMappings(ListWorkspaceMattermostMappingsRequest) returns (ListWorkspaceMattermostMappingsResponse);
+
+  // Get/ListLegacyConfigurationCutover дают typed per-row upgrade readback.
+  rpc GetLegacyConfigurationCutover(GetLegacyConfigurationCutoverRequest) returns (GetLegacyConfigurationCutoverResponse);
+  rpc ListLegacyConfigurationCutovers(ListLegacyConfigurationCutoversRequest) returns (ListLegacyConfigurationCutoversResponse);
+  // ResolveLegacyConfigurationCutover атомарно материализует target catalog из
+  // immutable legacy graph и exact content; authority IDs сервер не принимает.
+  rpc ResolveLegacyConfigurationCutover(ResolveLegacyConfigurationCutoverRequest) returns (ResolveLegacyConfigurationCutoverResponse);
 
   // RegisterArtifact выполняет версионированную операцию ControlPlaneService.
   rpc RegisterArtifact(RegisterArtifactRequest) returns (RegisterArtifactResponse);
@@ -925,6 +935,10 @@ message InstructionSetSpec {
   uint64 validated_content_version = 12;
   string validated_content_sha256 = 13;
   repeated InstructionValidationError validation_errors = 14;
+  // Server-owned immutable object pin; request values are rejected and never
+  // interpreted as authority.
+  string content_artifact_id = 15;
+  uint64 content_artifact_version = 16;
 }
 
 message InstructionValidationError {
@@ -1857,6 +1871,12 @@ message ProviderEffectReadbackReceipt {
   string masked_label = 29;
   repeated string capabilities = 30;
   bool eligible = 31;
+  // Exact target и semantic intent связывают one-use JTI с одной
+  // специализированной командой, а не только с provider effect kind.
+  string target_kind = 32;
+  string target_resource_id = 33;
+  string target_stable_key = 34;
+  string command_intent_sha256 = 35;
 }
 
 enum ProviderConnectionReferenceAction {
@@ -1893,6 +1913,7 @@ message ReconcileGitRoleDefinitionRequest {
   uint64 expected_version = 3;
   string name = 4;
   RoleDefinitionSpec spec = 5;
+  GitReconciliationReceipt reconciliation_receipt = 6;
 }
 
 message ReconcileGitRoleDefinitionResponse {
@@ -1926,6 +1947,7 @@ message ReconcileGitAgentRequest {
   string role_definition_stable_key = 6;
   string instruction_set_stable_key = 7;
   string provider_pool_stable_key = 8;
+  GitReconciliationReceipt reconciliation_receipt = 9;
 }
 
 
@@ -1983,6 +2005,7 @@ message ReconcileGitInstructionSetRequest {
   uint64 expected_version = 3;
   string name = 4;
   InstructionSetSpec spec = 5;
+  GitReconciliationReceipt reconciliation_receipt = 6;
 }
 
 message ReconcileGitInstructionSetResponse {
@@ -2035,6 +2058,34 @@ message ReconcileGitProviderPoolRequest {
   uint64 expected_version = 3;
   string name = 4;
   ProviderPoolSpec spec = 5;
+  GitReconciliationReceipt reconciliation_receipt = 6;
+}
+
+// GitReconciliationReceipt — canonical payload signed producer #236. Поля
+// request не являются proof: authority связывает exact method/source/target,
+// one-use JTI и digest semantic command.
+message GitReconciliationReceipt {
+  uint32 contract_version = 1;
+  string issuer = 2;
+  string purpose = 3;
+  string workload_id = 4;
+  string caller_spiffe_id = 5;
+  string full_method = 6;
+  string actor_id = 7;
+  string organization_id = 8;
+  string project_id = 9;
+  string target_kind = 10;
+  string target_resource_id = 11;
+  string target_stable_key = 12;
+  string source_ref = 13;
+  uint64 source_revision = 14;
+  string source_sha256 = 15;
+  string command_intent_sha256 = 16;
+  string receipt_id = 17;
+  uint64 receipt_revision = 18;
+  google.protobuf.Timestamp issued_at = 19;
+  google.protobuf.Timestamp not_before = 20;
+  google.protobuf.Timestamp expires_at = 21;
 }
 
 message ReconcileGitProviderPoolResponse {
@@ -2741,6 +2792,40 @@ message ManageScheduleResponse {
   Resource schedule = 1;
 }
 
+message OwnerScheduleIntent {
+  string cron = 1;
+  google.protobuf.Duration interval = 2;
+  string timezone = 3;
+  string calendar = 4;
+  ScheduleOverlapPolicy overlap_policy = 5;
+  ScheduleMisfirePolicy misfire_policy = 6;
+  google.protobuf.Duration misfire_grace = 7;
+  string delivery_policy = 8;
+  uint32 maximum_attempts = 9;
+  google.protobuf.Duration initial_backoff = 10;
+  google.protobuf.Duration maximum_backoff = 11;
+  google.protobuf.Duration dead_letter_after = 12;
+  ScheduleSessionPolicy session_policy = 13;
+  string room_stable_key = 14;
+  ScheduleNotificationPolicy notification_policy = 15;
+  google.protobuf.Duration maximum_execution_duration = 16;
+  bool coalesce = 17;
+  string prompt_artifact_name = 18;
+}
+
+message CreateScheduleFromOwnerSelectionsRequest {
+  string idempotency_key = 1;
+  string name = 2;
+  string agent_stable_key = 3;
+  string instruction_set_stable_key = 4;
+  string provider_pool_stable_key = 5;
+  OwnerScheduleIntent intent = 6;
+}
+
+message CreateScheduleFromOwnerSelectionsResponse {
+  Resource schedule = 1;
+}
+
 message BindScheduleConfigurationRequest {
   string idempotency_key = 1;
   string schedule_id = 2;
@@ -3016,6 +3101,34 @@ message RunLineage {
   string runtime_revision_id = 9;
   uint64 runtime_revision_version = 10;
   string immutable_input_sha256 = 11;
+  string root_process_run_id = 12;
+  repeated RunProcessLineage processes = 13;
+  repeated RunAttemptLineage attempts = 14;
+  bool complete = 15;
+}
+message RunProcessLineage {
+  string process_run_id = 1;
+  string parent_process_run_id = 2;
+  string state = 3;
+  uint64 version = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  repeated string child_process_run_ids = 7;
+}
+message RunAttemptLineage {
+  string execution_id = 1;
+  string process_run_id = 2;
+  string session_id = 3;
+  string turn_id = 4;
+  uint32 attempt = 5;
+  string runtime_revision_id = 6;
+  uint64 runtime_revision_version = 7;
+  string state = 8;
+  uint64 execution_version = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  string predecessor_execution_id = 12;
+  string successor_execution_id = 13;
 }
 message GetRunLineageResponse {
   RunLineage lineage = 1;
@@ -3029,6 +3142,51 @@ message ListRunArtifactsRequest {
 message ListRunArtifactsResponse {
   repeated Resource artifacts = 1;
   string next_page_token = 2;
+}
+
+message LegacyConfigurationCutover {
+  string legacy_role_id = 1;
+  uint64 legacy_role_version = 2;
+  string legacy_prompt_profile_id = 3;
+  uint64 legacy_prompt_version = 4;
+  string source_role_sha256 = 5;
+  string source_prompt_sha256 = 6;
+  repeated string source_credential_ids = 7;
+  string target_role_definition_id = 8;
+  string target_agent_id = 9;
+  string target_instruction_set_id = 10;
+  string target_provider_pool_id = 11;
+  string target_agent_assignment_id = 12;
+  repeated string target_provider_reference_ids = 13;
+  string state = 14;
+  string block_code = 15;
+  string manual_action = 16;
+  uint64 result_agent_version = 17;
+  string result_agent_sha256 = 18;
+  google.protobuf.Timestamp created_at = 19;
+  google.protobuf.Timestamp resolved_at = 20;
+}
+
+message GetLegacyConfigurationCutoverRequest { string legacy_role_id = 1; }
+message GetLegacyConfigurationCutoverResponse { LegacyConfigurationCutover cutover = 1; }
+message ListLegacyConfigurationCutoversRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+message ListLegacyConfigurationCutoversResponse {
+  repeated LegacyConfigurationCutover cutovers = 1;
+  string next_page_token = 2;
+}
+message ResolveLegacyConfigurationCutoverRequest {
+  string idempotency_key = 1;
+  string legacy_role_id = 2;
+  uint64 expected_legacy_role_version = 3;
+  uint64 expected_legacy_prompt_version = 4;
+  string instruction_content = 5;
+}
+message ResolveLegacyConfigurationCutoverResponse {
+  LegacyConfigurationCutover cutover = 1;
+  Resource agent = 2;
 }
 
 // ListOutboxFailuresRequest задаёт ограниченную UUID-пагинацию.

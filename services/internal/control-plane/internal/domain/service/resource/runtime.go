@@ -1303,7 +1303,7 @@ func (service *Service) RetryTurn(
 			}
 			if current.Version == input.ExpectedVersion && slices.Contains(
 				[]enum.State{enum.StateFailed, enum.StateBlocked,
-					enum.StateWaitingOwner}, current.State,
+					enum.StateWaitingOwner, enum.StateCancelled}, current.State,
 			) {
 				return lifecycleReceiptApply, nil
 			}
@@ -1342,7 +1342,8 @@ func (service *Service) RetryTurn(
 				current.Version != input.ExpectedVersion ||
 				(current.State != enum.StateFailed &&
 					current.State != enum.StateBlocked &&
-					current.State != enum.StateWaitingOwner) ||
+					current.State != enum.StateWaitingOwner &&
+					current.State != enum.StateCancelled) ||
 				spec.Attempt == ^uint32(0) {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
@@ -1356,6 +1357,10 @@ func (service *Service) RetryTurn(
 			switch current.State {
 			case enum.StateFailed:
 				if previousAttempt.FinishedAt.IsZero() {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			case enum.StateCancelled:
+				if previousAttempt.State != string(enum.StateCancelled) || previousAttempt.FinishedAt.IsZero() {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 			case enum.StateWaitingOwner:

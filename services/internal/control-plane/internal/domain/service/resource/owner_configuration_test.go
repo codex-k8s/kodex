@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/event"
+	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 )
@@ -172,7 +173,7 @@ func TestTargetScheduleDigestPinsPromptAndEverySelection(t *testing.T) {
 		ProviderPoolVersion: 4, ProviderPoolSHA256: strings.Repeat("4", 64),
 		AgentAssignmentID: "assignment", AgentAssignmentVersion: 5,
 		AgentAssignmentSHA256: strings.Repeat("9", 64),
-		TargetType: "AGENT", SessionPolicy: "NEW",
+		TargetType:            "AGENT", SessionPolicy: "NEW",
 	}
 	base, err := targetScheduleEffectiveInput(spec, strings.Repeat("5", 64))
 	if err != nil {
@@ -212,5 +213,48 @@ func TestTargetScheduleDigestPinsPromptAndEverySelection(t *testing.T) {
 				t.Fatal("changed target selection reused schedule digest")
 			}
 		})
+	}
+}
+
+func TestRunLineageLinksProcessesAndAttempts(t *testing.T) {
+	t.Parallel()
+
+	lineage := RunLineageResult{
+		Processes: []domainrepo.RunGraphNode{
+			{ID: "root"},
+			{ID: "child-b", ParentProcessRunID: "root"},
+			{ID: "child-a", ParentProcessRunID: "root"},
+		},
+		Attempts: []domainrepo.RunGraphNode{
+			{ID: "attempt-3", TurnID: "turn", Attempt: 3},
+			{ID: "attempt-1", TurnID: "turn", Attempt: 1},
+			{ID: "attempt-2", TurnID: "turn", Attempt: 2},
+		},
+	}
+	linkRunLineage(&lineage)
+	if !reflect.DeepEqual(lineage.Processes[0].ChildIDs, []string{"child-a", "child-b"}) {
+		t.Fatalf("unexpected child graph: %#v", lineage.Processes[0].ChildIDs)
+	}
+	byID := make(map[string]domainrepo.RunGraphNode, len(lineage.Attempts))
+	for _, attempt := range lineage.Attempts {
+		byID[attempt.ID] = attempt
+	}
+	if byID["attempt-1"].SuccessorID != "attempt-2" ||
+		byID["attempt-2"].PredecessorID != "attempt-1" ||
+		byID["attempt-2"].SuccessorID != "attempt-3" ||
+		byID["attempt-3"].PredecessorID != "attempt-2" {
+		t.Fatalf("unexpected attempt graph: %#v", lineage.Attempts)
+	}
+}
+
+func TestLegacyCutoverIDsAreDeterministic(t *testing.T) {
+	t.Parallel()
+
+	const source = "mattercodex:legacy-agent:1a8a43c2-917b-4f04-8339-fd6bbf0421af"
+	if first, second := deterministicLegacyID(source), deterministicLegacyID(source); first == "" || first != second {
+		t.Fatalf("legacy mapping is not deterministic: %q != %q", first, second)
+	}
+	if deterministicLegacyID(source) == deterministicLegacyID(source+":different") {
+		t.Fatal("different legacy identities produced one target identity")
 	}
 }

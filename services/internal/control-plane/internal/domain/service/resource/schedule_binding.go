@@ -11,7 +11,200 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/google/uuid"
 )
+
+// CreateScheduleFromOwnerSelections атомарно создаёт Schedule из stable keys
+// и отображаемого имени prompt artifact. Ни один target UUID/version/digest не
+// принимается от browser.
+func (service *Service) CreateScheduleFromOwnerSelections(
+	ctx context.Context,
+	input CreateScheduleFromOwnerSelectionsInput,
+) (entity.Resource, error) {
+	if err := authorize(input.Principal, permissionScheduleCreateFromSelections); err != nil {
+		return entity.Resource{}, err
+	}
+	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateName(input.Name) != nil ||
+		value.ValidateStableKey(input.AgentStableKey) != nil ||
+		value.ValidateStableKey(input.InstructionSetStableKey) != nil ||
+		value.ValidateStableKey(input.ProviderPoolStableKey) != nil ||
+		(input.RoomStableKey != "" && value.ValidateStableKey(input.RoomStableKey) != nil) ||
+		value.ValidateName(input.PromptArtifactName) != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	// Owner выбирает только поведение Schedule. Весь authority-bearing tuple
+	// очищается до semantic hash и затем назначается сервером под locks.
+	input.Spec.TargetResourceID, input.Spec.TargetKind, input.Spec.TargetVersion = "", "", 0
+	input.Spec.TargetType, input.Spec.PromptArtifactID, input.Spec.RoomID = "", "", ""
+	input.Spec.AgentID, input.Spec.AgentVersion, input.Spec.AgentSHA256 = "", 0, ""
+	input.Spec.InstructionSetID, input.Spec.InstructionSetVersion, input.Spec.InstructionSetSHA256 = "", 0, ""
+	input.Spec.ProviderPoolID, input.Spec.ProviderPoolVersion, input.Spec.ProviderPoolSHA256 = "", 0, ""
+	input.Spec.RuntimeSelectionRef, input.Spec.RuntimeSelectionVersion, input.Spec.RuntimeSelectionSHA256 = "", 0, ""
+	input.Spec.AgentAssignmentID, input.Spec.AgentAssignmentVersion, input.Spec.AgentAssignmentSHA256 = "", 0, ""
+	input.Spec.PromptProfileID, input.Spec.PromptRevision, input.Spec.RuntimeRevisionID = "", 0, ""
+	input.Spec.ExecutionSessionID, input.Spec.EffectiveInputSHA = "", ""
+	input.Spec.Ownership, input.Spec.NextRunAt = entity.ConfigurationOwnership{}, time.Time{}
+	requestHash, err := canonicalHash(struct {
+		Identity                                             commandIdentity
+		Name, Agent, Instruction, Pool, Room, PromptArtifact string
+		Spec                                                 entity.ScheduleSpec
+	}{identity(input.Principal), input.Name, input.AgentStableKey, input.InstructionSetStableKey,
+		input.ProviderPoolStableKey, input.RoomStableKey, input.PromptArtifactName, input.Spec})
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	return service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
+		"create_schedule_from_owner_selections", requestHash, func(tx domainrepo.Transaction) (entity.Resource, error) {
+			protected, ok := tx.(domainrepo.ProtectedTransaction)
+			if !ok {
+				return entity.Resource{}, errs.ErrInternal
+			}
+			now, err := tx.CurrentTime(ctx)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			now = now.UTC().Truncate(time.Microsecond)
+			workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, input.Principal)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			roomID := ""
+			if input.RoomStableKey != "" {
+				room, roomErr := protected.GetByStableKeyForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, enum.KindChat, input.RoomStableKey)
+				if roomErr != nil {
+					return entity.Resource{}, roomErr
+				}
+				if room.Kind != enum.KindChat || room.State != enum.StateActive || room.OwnerActorID != input.Principal.ActorID {
+					return entity.Resource{}, errs.ErrNotFound
+				}
+				roomID = room.ID
+			}
+			agent, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindAgent, input.AgentStableKey)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			instruction, err := requireProtectedStable(ctx, protected, input.Principal,
+				enum.KindInstructionSet, input.InstructionSetStableKey)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			pool, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindProviderPool, input.ProviderPoolStableKey)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			agentSpec, agentOK := agent.Spec.(entity.AgentSpec)
+			instructionSpec, instructionOK := instruction.Spec.(entity.InstructionSetSpec)
+			if !agentOK || !agentSpec.Enabled || agent.State != enum.StateActive || !instructionOK ||
+				instructionSpec.VersionState != "PUBLISHED" || agentSpec.InstructionSetID != instruction.ID ||
+				agentSpec.InstructionSetVersion != instruction.Version || agentSpec.ProviderPoolID != pool.ID ||
+				agentSpec.ProviderPoolVersion != pool.Version {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			if _, _, err := lockAgentRuntimeProfile(ctx, tx, input.Principal, agentSpec); err != nil {
+				return entity.Resource{}, err
+			}
+			agentID, agentVersion, agentSHA, err := protectedTuple(agent)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			instructionID, instructionVersion, instructionSHA, err := protectedTuple(instruction)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			poolID, poolVersion, poolSHA, err := protectedTuple(pool)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			assignment, err := lockActiveAgentAssignment(ctx, tx, input.Principal, agent.ID, agent.Version,
+				agentSHA, workspace.Version, workspaceSHA, roomID)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			assignmentSHA, err := entity.ProjectionSHA256(assignment)
+			if err != nil {
+				return entity.Resource{}, errs.ErrInternal
+			}
+			prompt, err := protected.GetByNameForUpdate(ctx, input.Principal.OrganizationID,
+				input.Principal.ProjectID, enum.KindArtifact, input.PromptArtifactName)
+			if err != nil {
+				return entity.Resource{}, err
+			}
+			promptSpec, ok := prompt.Spec.(entity.ArtifactSpec)
+			if !ok || prompt.Kind != enum.KindArtifact || prompt.State != enum.StateActive ||
+				prompt.OwnerActorID != input.Principal.ActorID || promptSpec.Direction != "INPUT" ||
+				promptSpec.MediaType != "text/markdown" || promptSpec.ScanStatus != "CLEAN" {
+				return entity.Resource{}, errs.ErrStateConflict
+			}
+			spec := input.Spec
+			spec.TargetResourceID, spec.TargetKind, spec.TargetVersion = agentID, enum.KindAgent, agentVersion
+			spec.TargetType, spec.PromptArtifactID, spec.RoomID = "AGENT", prompt.ID, roomID
+			spec.AgentID, spec.AgentVersion, spec.AgentSHA256 = agentID, agentVersion, agentSHA
+			spec.InstructionSetID, spec.InstructionSetVersion, spec.InstructionSetSHA256 =
+				instructionID, instructionVersion, instructionSHA
+			spec.ProviderPoolID, spec.ProviderPoolVersion, spec.ProviderPoolSHA256 = poolID, poolVersion, poolSHA
+			spec.RuntimeSelectionRef, spec.RuntimeSelectionVersion, spec.RuntimeSelectionSHA256 =
+				agentSpec.RuntimeProfileRef, agentSpec.RuntimeProfileVersion, agentSpec.RuntimeProfileSHA256
+			spec.AgentAssignmentID, spec.AgentAssignmentVersion, spec.AgentAssignmentSHA256 =
+				assignment.ID, assignment.Version, assignmentSHA
+			spec.PromptProfileID, spec.PromptRevision, spec.RuntimeRevisionID = "", 0, ""
+			spec.Ownership = entity.ConfigurationOwnership{ManagedBy: "UI"}
+			if spec.SessionPolicy != "NEW" {
+				session, sessionErr := uniqueScheduleSession(ctx, tx, input.Principal, spec)
+				if sessionErr != nil {
+					return entity.Resource{}, sessionErr
+				}
+				spec.ExecutionSessionID = session.ID
+			} else {
+				spec.ExecutionSessionID = ""
+			}
+			spec.EffectiveInputSHA, err = targetScheduleEffectiveInput(spec, promptSpec.SHA256)
+			if err != nil {
+				return entity.Resource{}, errs.ErrInternal
+			}
+			spec.NextRunAt, err = firstScheduleRun(spec, now)
+			if err != nil || spec.Validate() != nil || validateConfigurationCreate(ctx, tx, input.Principal, spec) != nil {
+				return entity.Resource{}, errs.ErrInvalidInput
+			}
+			created, err := entity.New(uuid.NewString(), input.Principal.OrganizationID, input.Principal.ProjectID,
+				"", input.Principal.ActorID, enum.KindSchedule, input.Name, spec, now)
+			if err != nil || validateTemporalCreation(spec, now) != nil {
+				return entity.Resource{}, errs.ErrInvalidInput
+			}
+			if err := tx.Insert(ctx, created); err != nil {
+				return entity.Resource{}, err
+			}
+			return created, service.appendMutationRecords(ctx, tx, input.Principal,
+				"create_schedule_from_owner_selections", created)
+		})
+}
+
+func uniqueScheduleSession(ctx context.Context, tx domainrepo.Transaction, principal value.Principal,
+	spec entity.ScheduleSpec,
+) (entity.Resource, error) {
+	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	ids := make([]string, 0, 1)
+	for _, candidate := range resources {
+		session, ok := candidate.Spec.(entity.SessionSpec)
+		if ok && candidate.Kind == enum.KindSession && candidate.State == enum.StateActive &&
+			candidate.OwnerActorID == principal.ActorID && session.AgentID == spec.AgentID &&
+			session.AgentVersion == spec.AgentVersion && session.AgentSHA256 == spec.AgentSHA256 &&
+			session.ProviderPoolID == spec.ProviderPoolID && session.ProviderPoolVersion == spec.ProviderPoolVersion &&
+			session.ProviderPoolSHA256 == spec.ProviderPoolSHA256 &&
+			session.AgentAssignmentID == spec.AgentAssignmentID &&
+			session.AgentAssignmentVersion == spec.AgentAssignmentVersion &&
+			session.AgentAssignmentSHA256 == spec.AgentAssignmentSHA256 && session.ConversationID == spec.RoomID {
+			ids = append(ids, candidate.ID)
+		}
+	}
+	if len(ids) != 1 {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, ids[0])
+}
 
 // BindScheduleConfiguration разрешает человекочитаемые stable key внутри
 // owner boundary и сохраняет только exact version/digest tuple.

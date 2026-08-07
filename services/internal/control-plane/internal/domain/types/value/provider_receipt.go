@@ -40,6 +40,10 @@ type ProviderEffectReceipt struct {
 	MaskedLabel              string    `json:"masked_label,omitempty"`
 	Capabilities             []string  `json:"capabilities,omitempty"`
 	Eligible                 bool      `json:"eligible"`
+	TargetKind               string    `json:"target_kind"`
+	TargetResourceID         string    `json:"target_resource_id,omitempty"`
+	TargetStableKey          string    `json:"target_stable_key"`
+	CommandIntentSHA256      string    `json:"command_intent_sha256"`
 }
 
 func (receipt ProviderEffectReceipt) Validate(now time.Time) error {
@@ -61,6 +65,11 @@ func (receipt ProviderEffectReceipt) Validate(now time.Time) error {
 	}
 	if receipt.Provider != "" && ValidateStableKey(receipt.Provider) != nil || len(receipt.MaskedLabel) > 256 || len(receipt.Capabilities) > 64 {
 		return errors.New("provider receipt metadata is invalid")
+	}
+	if ValidateStableKey(receipt.TargetKind) != nil ||
+		(receipt.TargetResourceID != "" && ValidateID(receipt.TargetResourceID) != nil) ||
+		ValidateStableKey(receipt.TargetStableKey) != nil || !validDigestValue(receipt.CommandIntentSHA256) {
+		return errors.New("provider receipt target binding is invalid")
 	}
 	seen := make(map[string]struct{}, len(receipt.Capabilities))
 	for _, capability := range receipt.Capabilities {

@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
@@ -45,6 +46,20 @@ func (service *Service) ManageWorkspaceMapping(
 		input.Name != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	intentHash, err := canonicalHash(struct {
+		Identity                            commandIdentity
+		Action, MappingID, DisplayName      string
+		ExpectedVersion, ExpectedGeneration uint64
+		ProviderTeamRef, ProviderObjectRef  string
+		EffectGeneration                    uint64
+		EffectSHA256                        string
+	}{identity(input.Principal), input.Action, input.MappingID, input.Name,
+		input.ExpectedVersion, input.ExpectedGeneration, input.ProviderReceipt.ProviderTeamRef,
+		input.ProviderReceipt.ProviderObjectRef, input.ProviderReceipt.EffectGeneration,
+		input.ProviderReceipt.EffectSHA256})
+	if err != nil || input.ProviderReceipt.CommandIntentSHA256 != intentHash {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
 	requestHash, err := canonicalHash(struct {
 		Identity                            commandIdentity
 		Action, MappingID                   string
@@ -68,6 +83,20 @@ func (service *Service) ManageWorkspaceMapping(
 				return entity.Resource{}, err
 			}
 			return entity.Resource{}, errs.ErrNotFound
+		}
+		stableTarget := "workspace-" + strings.ReplaceAll(workspace.ID, "-", "")
+		consumption, replay, replayed, err := reserveProviderCommandReceipt(
+			ctx, tx, protected, input.Principal, input.ProviderReceipt,
+			"workspace_mattermost_mapping", workspace.ID, stableTarget, now,
+		)
+		if err != nil || replayed {
+			return replay, err
+		}
+		finish := func(result entity.Resource) (entity.Resource, error) {
+			if err := finalizeExternalCommandReceipt(ctx, protected, consumption, result); err != nil {
+				return entity.Resource{}, err
+			}
+			return result, nil
 		}
 		if input.Action == "bind" {
 			existing, listErr := tx.ListSnapshotResources(ctx,
@@ -105,7 +134,7 @@ func (service *Service) ManageWorkspaceMapping(
 			if err := service.appendWorkspaceMappingRecords(ctx, tx, protected, input.Principal, input.Action, created); err != nil {
 				return entity.Resource{}, err
 			}
-			return created, nil
+			return finish(created)
 		}
 		current, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
 			input.Principal.ProjectID, input.MappingID)
@@ -159,7 +188,7 @@ func (service *Service) ManageWorkspaceMapping(
 		if err := service.appendWorkspaceMappingRecords(ctx, tx, protected, input.Principal, input.Action, updated); err != nil {
 			return entity.Resource{}, err
 		}
-		return updated, nil
+		return finish(updated)
 	}
 	scope := "manage_workspace_mapping_" + input.Action
 	if input.Action == "bind" {

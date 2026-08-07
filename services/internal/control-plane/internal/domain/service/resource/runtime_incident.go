@@ -93,6 +93,13 @@ func (service *Service) ManageRuntimeIncident(
 				if !currentExecution || incident.ExecutionFence != execution.Fence {
 					return 0, errs.ErrStateConflict
 				}
+				if incident.State == "RELEASED" {
+					if execution.State != "CANCELLED" {
+						return 0, errs.ErrStateConflict
+					}
+				} else if execution.State != "FAILED" && execution.State != "EXPIRED" {
+					return 0, errs.ErrStateConflict
+				}
 			case "release":
 				if !currentExecution || runtimeTerminal(execution.State) {
 					return 0, errs.ErrStateConflict

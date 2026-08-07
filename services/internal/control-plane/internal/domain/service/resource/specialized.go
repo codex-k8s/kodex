@@ -2176,6 +2176,14 @@ func (service *Service) prepareScheduleSession(
 	revisionSpec entity.RuntimeRevisionSpec,
 	now time.Time,
 ) (entity.Resource, entity.SessionSpec, error) {
+	var pinnedAssignment entity.Resource
+	if spec.TargetKind == enum.KindAgent {
+		var err error
+		pinnedAssignment, err = service.lockPinnedScheduleAssignment(ctx, tx, principal, schedule, spec)
+		if err != nil {
+			return entity.Resource{}, entity.SessionSpec{}, err
+		}
+	}
 	if spec.SessionPolicy != "NEW" {
 		session, err := tx.GetForUpdate(
 			ctx,
@@ -2199,6 +2207,9 @@ func (service *Service) prepareScheduleSession(
 				sessionSpec.ProviderPoolID != spec.ProviderPoolID ||
 				sessionSpec.ProviderPoolVersion != spec.ProviderPoolVersion ||
 				sessionSpec.ProviderPoolSHA256 != spec.ProviderPoolSHA256 ||
+				sessionSpec.AgentAssignmentID != pinnedAssignment.ID ||
+				sessionSpec.AgentAssignmentVersion != pinnedAssignment.Version ||
+				sessionSpec.AgentAssignmentSHA256 != spec.AgentAssignmentSHA256 ||
 				sessionSpec.ProviderAccountBindingID != "" {
 				return entity.Resource{}, entity.SessionSpec{}, errs.ErrStateConflict
 			}
@@ -2222,6 +2233,8 @@ func (service *Service) prepareScheduleSession(
 			AgentID: agent.ID, AgentVersion: agent.Version, AgentSHA256: agentSHA256,
 			ProviderPoolID: spec.ProviderPoolID, ProviderPoolVersion: spec.ProviderPoolVersion,
 			ProviderPoolSHA256: spec.ProviderPoolSHA256, ConversationID: spec.RoomID,
+			AgentAssignmentID: pinnedAssignment.ID, AgentAssignmentVersion: pinnedAssignment.Version,
+			AgentAssignmentSHA256: spec.AgentAssignmentSHA256,
 		}
 		session, err := entity.New(uuid.NewString(), principal.OrganizationID, principal.ProjectID,
 			schedule.ID, schedule.OwnerActorID, enum.KindSession, "Scheduled session "+schedule.ID,
@@ -2288,6 +2301,38 @@ func (service *Service) prepareScheduleSession(
 		return entity.Resource{}, entity.SessionSpec{}, err
 	}
 	return session, sessionSpec, nil
+}
+
+// lockPinnedScheduleAssignment заново разрешает exact assignment tuple перед
+// каждым NEW/PERSISTENT/ROLLING materialization. Schedule и Session не могут
+// смешать разные Workspace/Room/Agent версии после unassign или rebinding.
+func (service *Service) lockPinnedScheduleAssignment(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	schedule entity.Resource,
+	spec entity.ScheduleSpec,
+) (entity.Resource, error) {
+	workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, principal)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	assignment, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, spec.AgentAssignmentID)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	assignmentSpec, ok := assignment.Spec.(entity.AgentAssignmentSpec)
+	assignmentSHA, digestErr := entity.ProjectionSHA256(assignment)
+	if digestErr != nil || !ok || assignment.Kind != enum.KindAgentAssignment || assignment.State != enum.StateActive ||
+		assignment.OwnerActorID != schedule.OwnerActorID || assignment.Version != spec.AgentAssignmentVersion ||
+		assignmentSHA != spec.AgentAssignmentSHA256 || assignmentSpec.RootActorID != schedule.OwnerActorID ||
+		assignmentSpec.AgentID != spec.AgentID || assignmentSpec.AgentVersion != spec.AgentVersion ||
+		assignmentSpec.AgentSHA256 != spec.AgentSHA256 || assignmentSpec.WorkspaceID != workspace.ID ||
+		assignmentSpec.WorkspaceVersion != workspace.Version || assignmentSpec.WorkspaceSHA256 != workspaceSHA ||
+		assignmentSpec.RoomID != spec.RoomID {
+		return entity.Resource{}, errs.ErrStateConflict
+	}
+	return assignment, nil
 }
 
 // CompleteScheduleOccurrence завершает или повторяет только текущую аренду планировщика.

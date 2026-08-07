@@ -8,12 +8,102 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var (
 	_ domainrepo.ProtectedTransaction = (*transaction)(nil)
 	_ domainrepo.ProtectedRepository  = (*Repository)(nil)
 )
+
+func (repository *Repository) GetLegacyConfigurationCutover(
+	ctx context.Context,
+	organizationID, projectID, actorID, legacyRoleID string,
+) (domainrepo.LegacyConfigurationCutover, error) {
+	var result domainrepo.LegacyConfigurationCutover
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		var scanErr error
+		result, scanErr = scanLegacyConfigurationCutover(tx.QueryRow(ctx, sqlLegacyConfigurationCutoverGet,
+			pgx.StrictNamedArgs{"organization_id": organizationID, "project_id": projectID,
+				"actor_id": actorID, "legacy_role_id": legacyRoleID}))
+		return scanErr
+	})
+	return result, err
+}
+
+func (repository *Repository) ListLegacyConfigurationCutovers(
+	ctx context.Context,
+	organizationID, projectID, actorID, afterLegacyRoleID string,
+	limit int,
+) ([]domainrepo.LegacyConfigurationCutover, error) {
+	var result []domainrepo.LegacyConfigurationCutover
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlLegacyConfigurationCutoverList, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID, "actor_id": actorID,
+			"after_legacy_role_id": afterLegacyRoleID, "limit": limit})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			item, scanErr := scanLegacyConfigurationCutover(rows)
+			if scanErr != nil {
+				return scanErr
+			}
+			result = append(result, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
+func (wrapped *transaction) GetLegacyConfigurationCutoverForUpdate(
+	ctx context.Context,
+	legacyRoleID string,
+) (domainrepo.LegacyConfigurationCutover, error) {
+	return scanLegacyConfigurationCutover(wrapped.tx.QueryRow(ctx, sqlLegacyConfigurationCutoverGetForUpdate,
+		pgx.StrictNamedArgs{"organization_id": wrapped.organizationID, "project_id": wrapped.projectID,
+			"actor_id": wrapped.actorID, "legacy_role_id": legacyRoleID}))
+}
+
+func (wrapped *transaction) MarkLegacyConfigurationCutoverMigrated(
+	ctx context.Context,
+	cutover domainrepo.LegacyConfigurationCutover,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlLegacyConfigurationCutoverMarkMigrated, pgx.StrictNamedArgs{
+		"organization_id": cutover.OrganizationID, "project_id": cutover.ProjectID,
+		"actor_id": cutover.OwnerActorID, "legacy_role_id": cutover.LegacyRoleID,
+		"result_agent_version": cutover.ResultAgentVersion,
+		"result_agent_sha256":  cutover.ResultAgentSHA256, "resolved_at": cutover.ResolvedAt})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func scanLegacyConfigurationCutover(row rowScanner) (domainrepo.LegacyConfigurationCutover, error) {
+	var result domainrepo.LegacyConfigurationCutover
+	var resolved pgtype.Timestamptz
+	err := row.Scan(&result.OrganizationID, &result.ProjectID, &result.OwnerActorID,
+		&result.LegacyRoleID, &result.LegacyRoleVersion, &result.LegacyPromptProfileID,
+		&result.LegacyPromptVersion, &result.SourceRoleSHA256, &result.SourcePromptSHA256,
+		&result.SourceCredentialIDs, &result.TargetRoleDefinitionID, &result.TargetAgentID,
+		&result.TargetInstructionSetID, &result.TargetProviderPoolID, &result.TargetAgentAssignmentID,
+		&result.TargetProviderReferenceIDs,
+		&result.State, &result.BlockCode, &result.ManualAction, &result.ResultAgentVersion,
+		&result.ResultAgentSHA256, &result.CreatedAt, &resolved)
+	if err != nil {
+		return domainrepo.LegacyConfigurationCutover{}, mapError(err)
+	}
+	result.CreatedAt = result.CreatedAt.UTC()
+	if resolved.Valid {
+		result.ResolvedAt = resolved.Time.UTC()
+	}
+	return result, nil
+}
 
 func (wrapped *transaction) GetByStableKeyForUpdate(
 	ctx context.Context,
@@ -41,6 +131,64 @@ func (wrapped *transaction) GetByNameForUpdate(
 		"kind":            string(kind),
 		"name":            name,
 	}))
+}
+
+func (wrapped *transaction) ReserveExternalCommandReceipt(
+	ctx context.Context,
+	receipt domainrepo.ExternalCommandReceipt,
+) (domainrepo.ExternalCommandReceipt, bool, error) {
+	tag, err := wrapped.tx.Exec(ctx, sqlExternalCommandReceiptReserve, pgx.StrictNamedArgs{
+		"issuer": receipt.Issuer, "purpose": receipt.Purpose, "receipt_id": receipt.ReceiptID,
+		"organization_id": receipt.OrganizationID, "project_id": receipt.ProjectID,
+		"owner_actor_id": receipt.OwnerActorID, "target_kind": receipt.TargetKind,
+		"target_resource_id": receipt.TargetResourceID, "target_stable_key": receipt.TargetStableKey,
+		"action": receipt.Action, "effect": receipt.Effect, "effect_generation": receipt.EffectGeneration,
+		"effect_sha256": receipt.EffectSHA256, "command_intent_sha256": receipt.CommandIntentSHA256,
+		"authority_sha256": receipt.AuthoritySHA256, "consumed_at": receipt.ConsumedAt,
+	})
+	if err != nil {
+		return domainrepo.ExternalCommandReceipt{}, false, mapError(err)
+	}
+	stored, err := scanExternalCommandReceipt(wrapped.tx.QueryRow(ctx, sqlExternalCommandReceiptGet,
+		pgx.StrictNamedArgs{"issuer": receipt.Issuer, "purpose": receipt.Purpose, "receipt_id": receipt.ReceiptID}))
+	if err != nil {
+		return domainrepo.ExternalCommandReceipt{}, false, err
+	}
+	return stored, tag.RowsAffected() == 1, nil
+}
+
+func (wrapped *transaction) FinalizeExternalCommandReceipt(
+	ctx context.Context,
+	receipt domainrepo.ExternalCommandReceipt,
+) error {
+	tag, err := wrapped.tx.Exec(ctx, sqlExternalCommandReceiptFinalize, pgx.StrictNamedArgs{
+		"issuer": receipt.Issuer, "purpose": receipt.Purpose, "receipt_id": receipt.ReceiptID,
+		"command_intent_sha256": receipt.CommandIntentSHA256,
+		"result_resource_id":    receipt.ResultResourceID, "result_version": receipt.ResultVersion,
+		"result_sha256": receipt.ResultSHA256,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func scanExternalCommandReceipt(row rowScanner) (domainrepo.ExternalCommandReceipt, error) {
+	var result domainrepo.ExternalCommandReceipt
+	err := row.Scan(&result.Issuer, &result.Purpose, &result.ReceiptID,
+		&result.OrganizationID, &result.ProjectID, &result.OwnerActorID,
+		&result.TargetKind, &result.TargetResourceID, &result.TargetStableKey,
+		&result.Action, &result.Effect, &result.EffectGeneration, &result.EffectSHA256,
+		&result.CommandIntentSHA256, &result.AuthoritySHA256,
+		&result.ResultResourceID, &result.ResultVersion, &result.ResultSHA256, &result.ConsumedAt)
+	if err != nil {
+		return domainrepo.ExternalCommandReceipt{}, mapError(err)
+	}
+	result.ConsumedAt = result.ConsumedAt.UTC()
+	return result, nil
 }
 
 func (wrapped *transaction) AppendProtectedResourceHistory(

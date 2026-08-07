@@ -111,7 +111,7 @@ func (service *Service) prepareRetriedExecution(
 	if !ok || currentErr != nil || process.ID != spec.ProcessRunID ||
 		process.Kind != enum.KindProcessRun ||
 		(process.State.Terminal() && process.State != enum.StateFailed &&
-			process.State != enum.StateExpired) || current.TurnID != turn.ID ||
+			process.State != enum.StateCancelled && process.State != enum.StateExpired) || current.TurnID != turn.ID ||
 		current.Attempt != previousAttempt {
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
@@ -179,7 +179,7 @@ func (service *Service) prepareRetriedExecution(
 		return entity.Resource{}, entity.TurnSpec{}, errs.ErrStateConflict
 	}
 	var updatedProcess entity.Resource
-	if process.State == enum.StateFailed || process.State == enum.StateExpired ||
+	if process.State == enum.StateFailed || process.State == enum.StateCancelled || process.State == enum.StateExpired ||
 		process.State == enum.StateWaitingOwner ||
 		process.State == enum.StateWaitingExternal || process.State == enum.StateBlocked {
 		updatedProcess, err = process.ReplaceAndTransition(processSpec, enum.StateRunning, now)

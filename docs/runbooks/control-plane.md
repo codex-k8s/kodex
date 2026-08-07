@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.21.0
-updated: 2026-08-06
+version: 1.22.0
+updated: 2026-08-07
 ---
 
 # Диагностика и восстановление control-plane
@@ -159,7 +159,9 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260803000100`;
+- migration schema version равна `20260806023400`;
+- instruction object-store bucket существует, versioning включено, а exact
+  HTTPS SNI/CA/mTLS client и bounded credential files проходят `BucketExists`;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -167,7 +169,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
   max age 30 дней, dedup window 2 минуты, deny delete/purge и без
   mirror/source/republish/rollup/transform;
-- authority policy revision 8, independently delivered proof trust/private key
+- authority policy revision 23, independently delivered proof trust/private key
   и локальный verifier #186 согласованы; отсутствующие отдельные public JWK для
   `runtime-restore-verifier` или `runtime-cleanup-authorizer` закрывают startup,
   а не включают OIDC fallback;
@@ -656,17 +658,44 @@ reference mutation принимает только exact `integration-gateway` �
 identity — только exact `interaction-gateway` с
 `MATTERMOST_PROVIDER_READBACK_RECEIPT`. В обоих случаях source authority —
 `PROVIDER_READBACK`, а typed receipt обязан связать issuer, purpose, workload,
-SPIFFE, full method, actor/org/project/workspace/team/action/effect,
-version/generation/digest, expiry и replay ID. Один mTLS peer, payload ref или
-обычный OIDC token полномочием не является.
+SPIFFE, full method, actor/org/project/workspace/team, exact protected target
+ID либо stable key, action/effect, command intent, version/generation/digest,
+expiry и JTI. Owner transaction должна one-use consume exact
+issuer+purpose+JTI+target+intent вместе со state/command receipt/audit: exact
+semantic replay возвращает сохранённый result, другой target/intent — conflict.
+Один mTLS peer, payload ref или обычный OIDC token полномочием не является.
+
+Регистрация receive-side operation/profile не доказывает готовность producer.
+До rebase и принятия #235 interaction-gateway ещё не выпускает bot/mapping
+receipt и не вызывает generated control-plane RPC; до #236 integration-gateway
+ещё не выпускает Git reconciliation receipt/call site. Browser не должен
+подменять эти producers. При диагностике сверить exact full method, signer JWK,
+application audience, operation ID и рабочий protected readiness вызов; не
+ослаблять profile ради временного запуска.
 
 Если ordinary UI update пытается изменить Git-owned RoleDefinition, Agent,
-InstructionSet или ProviderPool, использовать только соответствующий exact
-`ReconcileGit*` profile с `controlplane.configuration.git.apply` и immutable
-source/revision/digest. Для InstructionSet validation не передавать verdict,
+InstructionSet или ProviderPool, owner может только читать drift, detach/copy.
+Exact `ReconcileGit*` требует #236 workload, permission
+`controlplane.configuration.git.apply` и signed source/revision/digest/target/
+intent; поля browser request доказательством не являются. Для InstructionSet validation не передавать verdict,
 digest или errors: их вычисляет control-plane из locked content version;
 publish допустим только после successful server validation той же версии.
 Detach очищает Git source binding, copy создаёт новый UI-owned set.
+
+Instruction create/update/reconcile до owner transaction записывает exact
+content-addressed object в versioned S3 и проверяет `VersionId`, size,
+media type и SHA-256. Затем одна PostgreSQL transaction создаёт CLEAN Artifact,
+Instruction version, command receipt, audit и history. Orphan object после
+database rollback безопасно переиспользуется только при exact metadata
+readback; удалять его вручную в рамках диагностики запрещено.
+
+После upgrade прочитать `ListLegacyConfigurationCutovers`. `BLOCKED` не
+является потерей catalog: оно сохраняет deterministic target IDs, source
+versions/digests и typed `block_code/manual_action`. Выполнить
+`ResolveLegacyConfigurationCutover` только с exact immutable Instruction
+content matching source SHA; server сам повторно lock-проверит legacy
+Role/Prompt, Artifact, runtime profile, credentials и Workspace. Любая
+неоднозначность откатывает весь target catalog; ручные INSERT/UPDATE запрещены.
 
 Для Incident action использовать только `acknowledge|retry|release|close`.
 Owner и project operator требуют разные exact permissions, но используют один
@@ -680,7 +709,10 @@ SQL.
 
 Workspace backup фиксирует immutable membership snapshot и digest для
 `WORKSPACE|ALL_WORKSPACES`, где Workspace — авторитетный Project aggregate, а
-не repository checkout. Owner RPC принимает только create/cancel/retry.
+не repository checkout. Snapshot перечисляет все исторические owner Session,
+не применяя current AgentAssignment/Workspace admission; для каждой требуется
+exact terminal archive. Один отсутствующий archive откатывает весь create,
+поэтому AVAILABLE с молча исключённой Session недопустим. Owner RPC принимает только create/cancel/retry.
 Complete/fail/expire выбирает bounded in-process recovery reconciler через
 PostgreSQL candidate query; browser не является lifecycle engine. Restore
 принимается только для exact AVAILABLE backup version/digest и материализует
@@ -692,8 +724,11 @@ grant для каждого member. Ошибка recovery worker закрыва�
 
 При mapping relink/unlink сначала проверить отсутствие open
 Workspace→Chat→Session→Turn/delivery graph. Open graph должен дать закрытый
-conflict без изменения mapping version/generation. Run timeline проверять по
-stable cursor `(occurred_at,id)`; UUID не является хронологическим курсором.
+conflict без изменения mapping version/generation. Run timeline и artifacts
+проверять по stable cursor `(occurred_at,id)`; UUID не является
+хронологическим курсором. `GetRunLineage` должен вернуть root Process, все
+descendants, parent/child edges и все attempt predecessor/successor edges;
+после retry старые RuntimeRevision, events и artifacts не исчезают.
 
 ## Остановка и rollback
 
@@ -710,6 +745,11 @@ Application rollback допустим только к образу, которы
 authority policy 23,
 proof generation, audit и outbox назад не откатываются. При несовместимости
 оставить workload not ready и подготовить forward fix.
+
+Миграция `20260806023400` в PR #239 ещё не merged и может быть атомарно
+исправлена только до первого owner-approved apply. Вне этого процесса её не
+применять. После первого применения файл неизменяем; следующее исправление —
+только новая forward migration.
 
 После миграции `20260803000100` rollback выполняется только вперёд: старый
 runtime выключается, данные runtime execution/continuation сохраняются, новая

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -166,12 +167,99 @@ func (service *Service) GetRunLineage(ctx context.Context, principal value.Princ
 	if !ok {
 		return RunLineageResult{}, errs.ErrStateConflict
 	}
-	return RunLineageResult{RootSessionID: spec.RootSessionID, RootTurnID: spec.RootTurnID,
+	graph, err := service.resolveRunGraph(ctx, principal, processRunID)
+	if err != nil {
+		return RunLineageResult{}, err
+	}
+	result := RunLineageResult{RootSessionID: spec.RootSessionID, RootTurnID: spec.RootTurnID,
 		ParentProcessRunID: spec.ParentProcessRunID, CurrentSessionID: tuple.SessionID,
 		CurrentSessionVersion: tuple.SessionVersion, CurrentTurnID: tuple.TurnID,
 		CurrentTurnVersion: tuple.TurnVersion, CurrentAttempt: tuple.Attempt,
 		RuntimeRevisionID: tuple.RuntimeRevisionID, RuntimeRevisionVersion: tuple.RuntimeRevisionVersion,
-		ImmutableInputSHA256: tuple.InputSHA256}, nil
+		ImmutableInputSHA256: tuple.InputSHA256, Complete: true}
+	for _, node := range graph {
+		switch node.NodeType {
+		case "PROCESS":
+			result.Processes = append(result.Processes, node)
+			if node.ParentProcessRunID == "" {
+				result.RootProcessRunID = node.ID
+			}
+		case "ATTEMPT":
+			result.Attempts = append(result.Attempts, node)
+		}
+	}
+	linkRunLineage(&result)
+	if result.RootProcessRunID == "" || len(result.Processes) == 0 {
+		return RunLineageResult{}, errs.ErrStateConflict
+	}
+	return result, nil
+}
+
+func linkRunLineage(result *RunLineageResult) {
+	processIndexes := make(map[string]int, len(result.Processes))
+	for index := range result.Processes {
+		processIndexes[result.Processes[index].ID] = index
+	}
+	for index := range result.Processes {
+		parentID := result.Processes[index].ParentProcessRunID
+		if parentIndex, ok := processIndexes[parentID]; ok {
+			result.Processes[parentIndex].ChildIDs = append(
+				result.Processes[parentIndex].ChildIDs,
+				result.Processes[index].ID,
+			)
+		}
+	}
+	for index := range result.Processes {
+		sort.Strings(result.Processes[index].ChildIDs)
+	}
+	attemptIndexes := make(map[string][]int, len(result.Attempts))
+	for index := range result.Attempts {
+		attemptIndexes[result.Attempts[index].TurnID] = append(attemptIndexes[result.Attempts[index].TurnID], index)
+	}
+	for _, indexes := range attemptIndexes {
+		sort.Slice(indexes, func(left, right int) bool {
+			leftAttempt, rightAttempt := result.Attempts[indexes[left]], result.Attempts[indexes[right]]
+			if leftAttempt.Attempt == rightAttempt.Attempt {
+				return leftAttempt.ID < rightAttempt.ID
+			}
+			return leftAttempt.Attempt < rightAttempt.Attempt
+		})
+		for position, index := range indexes {
+			if position > 0 {
+				result.Attempts[index].PredecessorID = result.Attempts[indexes[position-1]].ID
+			}
+			if position+1 < len(indexes) {
+				result.Attempts[index].SuccessorID = result.Attempts[indexes[position+1]].ID
+			}
+		}
+	}
+}
+
+func (service *Service) resolveRunGraph(ctx context.Context, principal value.Principal,
+	processRunID string,
+) ([]domainrepo.RunGraphNode, error) {
+	if value.ValidateID(processRunID) != nil {
+		return nil, errs.ErrInvalidInput
+	}
+	repository, ok := service.repository.(domainrepo.RunGraphRepository)
+	if !ok {
+		return nil, errs.ErrUnavailable
+	}
+	nodes, err := repository.ListRunGraphNodes(ctx, principal.OrganizationID, principal.ProjectID,
+		principal.ActorID, processRunID)
+	if err != nil {
+		return nil, err
+	}
+	foundRequested := false
+	for _, node := range nodes {
+		if node.NodeType == "PROCESS" && node.ID == processRunID {
+			foundRequested = true
+		}
+	}
+	if !foundRequested {
+		return nil, errs.ErrNotFound
+	}
+	return nodes, nil
 }
 
 func (service *Service) resolveRun(ctx context.Context, principal value.Principal, processRunID string) (entity.Resource, executionTuple, error) {
@@ -217,14 +305,21 @@ func (service *Service) ListRunTimeline(
 	if err != nil {
 		return nil, "", err
 	}
-	process, tuple, err := service.resolveRun(ctx, principal, processRunID)
+	_, _, err = service.resolveRun(ctx, principal, processRunID)
 	if err != nil {
 		return nil, "", err
 	}
-	ids := make([]string, 0, 4)
-	for _, id := range []string{process.ID, tuple.SessionID, tuple.TurnID, tuple.RuntimeRevisionID} {
-		if id != "" {
-			ids = append(ids, id)
+	graph, err := service.resolveRunGraph(ctx, principal, processRunID)
+	if err != nil {
+		return nil, "", err
+	}
+	ids := make([]string, 0, len(graph)*5)
+	for _, node := range graph {
+		ids = append(ids, node.ID)
+		for _, id := range []string{node.ProcessRunID, node.SessionID, node.TurnID, node.RuntimeRevisionID} {
+			if id != "" {
+				ids = append(ids, id)
+			}
 		}
 	}
 	slices.Sort(ids)
@@ -288,30 +383,37 @@ func encodeRunTimelineCursor(cursor runTimelineCursor) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-func (service *Service) ListRunArtifacts(ctx context.Context, principal value.Principal, processRunID, afterID string, limit int) ([]entity.Resource, error) {
+func (service *Service) ListRunArtifacts(ctx context.Context, principal value.Principal, processRunID, pageToken string, limit int) ([]entity.Resource, string, error) {
 	if err := authorize(principal, permissionRead); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if limit < 1 || limit > 100 || afterID != "" && value.ValidateID(afterID) != nil {
-		return nil, errs.ErrInvalidInput
+	if limit < 1 || limit > 100 {
+		return nil, "", errs.ErrInvalidInput
 	}
-	process, tuple, err := service.resolveRun(ctx, principal, processRunID)
+	cursor, err := decodeRunTimelineCursor(pageToken)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	found := make([]entity.Resource, 0, limit)
-	for _, parentID := range []string{process.ID, tuple.SessionID, tuple.TurnID} {
-		items, listErr := service.repository.List(ctx, query.ResourceFilter{OrganizationID: principal.OrganizationID,
-			ProjectID: principal.ProjectID, ActorID: principal.ActorID, ParentID: parentID,
-			Kind: enum.KindArtifact, AfterID: afterID, Limit: limit})
-		if listErr != nil {
-			return nil, listErr
-		}
-		found = append(found, items...)
+	if _, _, err := service.resolveRun(ctx, principal, processRunID); err != nil {
+		return nil, "", err
 	}
-	slices.SortFunc(found, func(left, right entity.Resource) int { return compareText(left.ID, right.ID) })
+	repository, ok := service.repository.(domainrepo.RunGraphRepository)
+	if !ok {
+		return nil, "", errs.ErrUnavailable
+	}
+	found, err := repository.ListRunGraphArtifacts(ctx, principal.OrganizationID, principal.ProjectID,
+		principal.ActorID, processRunID, cursor.OccurredAt, cursor.ID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	next := ""
 	if len(found) > limit {
 		found = found[:limit]
+		last := found[len(found)-1]
+		next, err = encodeRunTimelineCursor(runTimelineCursor{OccurredAt: last.CreatedAt, ID: last.ID})
+		if err != nil {
+			return nil, "", err
+		}
 	}
-	return filterOwnerBoundResources(found, principal.ActorID), nil
+	return filterOwnerBoundResources(found, principal.ActorID), next, nil
 }

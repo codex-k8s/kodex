@@ -521,6 +521,61 @@ func (repository *Repository) ListRunTimelineAudit(
 	return events, err
 }
 
+func (repository *Repository) ListRunGraphNodes(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string,
+) ([]domainrepo.RunGraphNode, error) {
+	var result []domainrepo.RunGraphNode
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlRunGraphNodes, pgx.StrictNamedArgs{"organization_id": organizationID,
+			"project_id": projectID, "actor_id": actorID, "process_run_id": processRunID})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item domainrepo.RunGraphNode
+			if err := rows.Scan(&item.NodeType, &item.ID, &item.State, &item.ParentProcessRunID,
+				&item.ProcessRunID, &item.SessionID, &item.TurnID, &item.RuntimeRevisionID,
+				&item.Version, &item.RuntimeRevisionVersion, &item.Attempt,
+				&item.OccurredAt, &item.UpdatedAt); err != nil {
+				return err
+			}
+			item.OccurredAt, item.UpdatedAt = item.OccurredAt.UTC(), item.UpdatedAt.UTC()
+			result = append(result, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
+func (repository *Repository) ListRunGraphArtifacts(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string, afterOccurredAt time.Time, afterID string, limit int,
+) ([]entity.Resource, error) {
+	var result []entity.Resource
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		var cursor any
+		if !afterOccurredAt.IsZero() {
+			cursor = afterOccurredAt
+		}
+		rows, err := tx.Query(ctx, sqlRunGraphArtifacts, pgx.StrictNamedArgs{"organization_id": organizationID,
+			"project_id": projectID, "actor_id": actorID, "process_run_id": processRunID,
+			"after_occurred_at": cursor, "after_id": afterID, "limit": limit})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			item, scanErr := scanResource(rows)
+			if scanErr != nil {
+				return scanErr
+			}
+			result = append(result, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
 func (repository *Repository) ListRuntimeIncidents(
 	ctx context.Context,
 	filter domainquery.RuntimeIncidentFilter,

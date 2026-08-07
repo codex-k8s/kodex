@@ -2,7 +2,9 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,12 +100,32 @@ func (service *Service) ManageProtectedConfiguration(
 	if err := authorize(input.Principal, permission); err != nil {
 		return entity.Resource{}, err
 	}
+	if input.Action == "reconcile_git" {
+		if err := service.validateGitReconciliationReceipt(input); err != nil {
+			return entity.Resource{}, err
+		}
+		// Producer подписывает exact caller intent до server-owned artifact
+		// materialization; deterministic artifact pins не являются частью
+		// внешнего Git authority payload.
+		intentHash, intentErr := protectedGitIntentSHA256(input)
+		if intentErr != nil || input.GitReceipt.CommandIntentSHA256 != intentHash {
+			return entity.Resource{}, errs.ErrPermissionDenied
+		}
+	}
 	if value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || input.Principal.ProjectID == "" ||
 		(value.ValidateName(input.Name) != nil && protectedCreateLike(input.Action)) ||
 		((input.Action == "update" || input.Action == "reconcile_git") && value.ValidateName(input.Name) != nil) ||
 		(input.ResourceID != "" && value.ValidateID(input.ResourceID) != nil) ||
 		(input.TargetSHA256 != "" && !validSHA256Text(input.TargetSHA256)) {
 		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if input.Kind == enum.KindInstructionSet &&
+		(input.Action == "create" || input.Action == "update" || input.Action == "reconcile_git") {
+		var prepareErr error
+		input, prepareErr = service.prepareInstructionArtifact(ctx, input)
+		if prepareErr != nil {
+			return entity.Resource{}, prepareErr
+		}
 	}
 	createLike := protectedCreateLike(input.Action) || input.Action == "reconcile_git" && input.ResourceID == ""
 	if createLike {
@@ -135,6 +157,23 @@ func (service *Service) ManageProtectedConfiguration(
 		input.TargetSHA256, input.ReferenceKeys, input.ProviderReceipt})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if input.ProviderReceipt.ContractVersion != 0 {
+		intentHash, intentErr := canonicalHash(struct {
+			Identity        commandIdentity
+			FullMethod      string
+			Kind            enum.Kind
+			Action          string
+			ResourceID      string
+			ExpectedVersion uint64
+			Name            string
+			Spec            entity.Spec
+			ReferenceKeys   []string
+		}{identity(input.Principal), input.FullMethod, input.Kind, input.Action, input.ResourceID,
+			input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys})
+		if intentErr != nil || input.ProviderReceipt.CommandIntentSHA256 != intentHash {
+			return entity.Resource{}, errs.ErrPermissionDenied
+		}
 	}
 	apply := func(tx domainrepo.Transaction) (entity.Resource, error) {
 		protected, ok := tx.(domainrepo.ProtectedTransaction)
@@ -184,14 +223,91 @@ func protectedCreateLike(action string) bool {
 	return action == "create" || action == "assign" || action == "register" || action == "copy"
 }
 
+func protectedGitIntentSHA256(input ManageProtectedConfigurationInput) (string, error) {
+	return canonicalHash(struct {
+		Identity        commandIdentity
+		FullMethod      string
+		Kind            enum.Kind
+		ResourceID      string
+		ExpectedVersion uint64
+		Name            string
+		Spec            entity.Spec
+		ReferenceKeys   []string
+	}{identity(input.Principal), input.FullMethod, input.Kind, input.ResourceID,
+		input.ExpectedVersion, input.Name, input.Spec, input.ReferenceKeys})
+}
+
+func (service *Service) validateGitReconciliationReceipt(input ManageProtectedConfigurationInput) error {
+	receipt := input.GitReceipt
+	if receipt.Validate(service.now().UTC()) != nil ||
+		input.Principal.CallerWorkload != service.integrationGatewayWorkload ||
+		input.Principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
+		input.Principal.AuthoritySource != "GIT_RECONCILIATION" ||
+		input.Principal.AuthorityReference != receipt.ReceiptID ||
+		input.Principal.AuthorityRevision != receipt.ReceiptRevision ||
+		receipt.WorkloadID != input.Principal.CallerWorkload || receipt.CallerSPIFFEID != input.Principal.CallerSPIFFEID ||
+		receipt.FullMethod != input.FullMethod || receipt.ActorID != input.Principal.ActorID ||
+		receipt.OrganizationID != input.Principal.OrganizationID || receipt.ProjectID != input.Principal.ProjectID ||
+		receipt.TargetKind != strings.ToLower(string(input.Kind)) || receipt.TargetResourceID != input.ResourceID {
+		return errs.ErrPermissionDenied
+	}
+	configured, ok := input.Spec.(entity.ConfiguredSpec)
+	if !ok {
+		return errs.ErrInvalidInput
+	}
+	ownership := configured.ConfigurationOwnership()
+	stableKey, ok := protectedConfigurationStableKey(input.Spec)
+	if !ok || receipt.TargetStableKey != stableKey || ownership.ManagedBy != "GIT" ||
+		ownership.SourceRef != receipt.SourceRef || ownership.SourceRevision != receipt.SourceRevision ||
+		ownership.SourceSHA256 != receipt.SourceSHA256 {
+		return errs.ErrPermissionDenied
+	}
+	digest, err := canonicalHash(receipt)
+	if err != nil || digest != input.Principal.AuthorityDigest {
+		return errs.ErrPermissionDenied
+	}
+	return nil
+}
+
 func (service *Service) createProtectedConfiguration(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	protected domainrepo.ProtectedTransaction,
 	input ManageProtectedConfigurationInput,
 ) (entity.Resource, error) {
+	stableKey, hasStableKey := protectedConfigurationStableKey(input.Spec)
+	var consumption domainrepo.ExternalCommandReceipt
+	if input.ProviderReceipt.ContractVersion != 0 {
+		if !hasStableKey {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		var replay entity.Resource
+		var replayed bool
+		var reserveErr error
+		consumption, replay, replayed, reserveErr = reserveProviderCommandReceipt(
+			ctx, tx, protected, input.Principal, input.ProviderReceipt,
+			strings.ToLower(string(input.Kind)), "", stableKey, service.now().UTC(),
+		)
+		if reserveErr != nil || replayed {
+			return replay, reserveErr
+		}
+	} else if input.Action == "reconcile_git" {
+		var replay entity.Resource
+		var replayed bool
+		var reserveErr error
+		consumption, replay, replayed, reserveErr = reserveGitCommandReceipt(
+			ctx, tx, protected, input.Principal, input.GitReceipt,
+			strings.ToLower(string(input.Kind)), "", stableKey, service.now().UTC(),
+		)
+		if reserveErr != nil || replayed {
+			return replay, reserveErr
+		}
+	}
 	spec, err := service.resolveProtectedSpec(ctx, tx, protected, input, entity.Resource{})
 	if err != nil {
+		return entity.Resource{}, err
+	}
+	if err := service.ensureInstructionArtifact(ctx, tx, input, spec); err != nil {
 		return entity.Resource{}, err
 	}
 	now := service.now().UTC().Truncate(time.Microsecond)
@@ -207,6 +323,11 @@ func (service *Service) createProtectedConfiguration(
 	}
 	if err := service.appendProtectedRecords(ctx, tx, protected, input.Principal, input.Action, created); err != nil {
 		return entity.Resource{}, err
+	}
+	if consumption.ReceiptID != "" {
+		if err := finalizeExternalCommandReceipt(ctx, protected, consumption, created); err != nil {
+			return entity.Resource{}, err
+		}
 	}
 	return created, nil
 }
@@ -224,6 +345,36 @@ func (service *Service) mutateProtectedConfiguration(
 	if current.Kind != input.Kind || current.OwnerActorID != input.Principal.ActorID {
 		return entity.Resource{}, errs.ErrNotFound
 	}
+	var consumption domainrepo.ExternalCommandReceipt
+	if input.ProviderReceipt.ContractVersion != 0 {
+		stableKey, ok := protectedConfigurationStableKey(current.Spec)
+		if !ok {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		var replay entity.Resource
+		var replayed bool
+		consumption, replay, replayed, err = reserveProviderCommandReceipt(
+			ctx, tx, protected, input.Principal, input.ProviderReceipt,
+			strings.ToLower(string(input.Kind)), current.ID, stableKey, service.now().UTC(),
+		)
+		if err != nil || replayed {
+			return replay, err
+		}
+	} else if input.Action == "reconcile_git" {
+		stableKey, ok := protectedConfigurationStableKey(current.Spec)
+		if !ok {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		var replay entity.Resource
+		var replayed bool
+		consumption, replay, replayed, err = reserveGitCommandReceipt(
+			ctx, tx, protected, input.Principal, input.GitReceipt,
+			strings.ToLower(string(input.Kind)), current.ID, stableKey, service.now().UTC(),
+		)
+		if err != nil || replayed {
+			return replay, err
+		}
+	}
 	if current.Version != input.ExpectedVersion {
 		return entity.Resource{}, errs.ErrVersionMismatch
 	}
@@ -234,6 +385,9 @@ func (service *Service) mutateProtectedConfiguration(
 		spec, resolveErr := service.resolveProtectedSpec(ctx, tx, protected, input, current)
 		if resolveErr != nil {
 			return entity.Resource{}, resolveErr
+		}
+		if ensureErr := service.ensureInstructionArtifact(ctx, tx, input, spec); ensureErr != nil {
+			return entity.Resource{}, ensureErr
 		}
 		currentStableKey, currentHasStableKey := protectedConfigurationStableKey(current.Spec)
 		nextStableKey, nextHasStableKey := protectedConfigurationStableKey(spec)
@@ -285,6 +439,11 @@ func (service *Service) mutateProtectedConfiguration(
 	if err := service.appendProtectedRecords(ctx, tx, protected, input.Principal, input.Action, updated); err != nil {
 		return entity.Resource{}, err
 	}
+	if consumption.ReceiptID != "" {
+		if err := finalizeExternalCommandReceipt(ctx, protected, consumption, updated); err != nil {
+			return entity.Resource{}, err
+		}
+	}
 	return updated, nil
 }
 
@@ -303,6 +462,172 @@ func protectedConfigurationStableKey(spec entity.Spec) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func (service *Service) prepareInstructionArtifact(
+	ctx context.Context,
+	input ManageProtectedConfigurationInput,
+) (ManageProtectedConfigurationInput, error) {
+	spec, ok := input.Spec.(entity.InstructionSetSpec)
+	if !ok || spec.ContentArtifactID != "" || spec.ContentArtifactVersion != 0 ||
+		value.ValidateStableKey(spec.StableKey) != nil || hashString(spec.Content) != spec.ContentSHA256 {
+		return ManageProtectedConfigurationInput{}, errs.ErrInvalidInput
+	}
+	if service.instructionObjects == nil {
+		return ManageProtectedConfigurationInput{}, errs.ErrUnavailable
+	}
+	artifactID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("mattercodex:instruction-artifact:"+
+		input.Principal.ProjectID+":"+spec.ContentSHA256)).String()
+	object, err := service.instructionObjects.Put(ctx, input.Principal.ProjectID,
+		"instruction-sets/"+spec.StableKey+"/"+spec.ContentSHA256+".md", []byte(spec.Content),
+		"text/markdown", spec.ContentSHA256)
+	if err != nil || object.Reference == "" || object.VersionID == "" || object.SHA256 != spec.ContentSHA256 ||
+		object.Size != uint64(len([]byte(spec.Content))) || object.MediaType != "text/markdown" {
+		return ManageProtectedConfigurationInput{}, errs.ErrUnavailable
+	}
+	spec.ContentArtifactID, spec.ContentArtifactVersion = artifactID, 1
+	input.Spec, input.InstructionObject = spec, object
+	return input, nil
+}
+
+func (service *Service) ensureInstructionArtifact(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input ManageProtectedConfigurationInput,
+	spec entity.Spec,
+) error {
+	instruction, ok := spec.(entity.InstructionSetSpec)
+	if !ok || input.InstructionObject.Reference == "" {
+		return nil
+	}
+	if instruction.ContentArtifactID == "" || instruction.ContentArtifactVersion != 1 ||
+		instruction.ContentSHA256 != input.InstructionObject.SHA256 {
+		return errs.ErrStateConflict
+	}
+	existing, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID,
+		instruction.ContentArtifactID)
+	if err == nil {
+		artifact, cast := existing.Spec.(entity.ArtifactSpec)
+		if !cast || existing.Kind != enum.KindArtifact || existing.OwnerActorID != input.Principal.ActorID ||
+			existing.Version != instruction.ContentArtifactVersion || existing.State != enum.StateActive ||
+			artifact.Direction != "INPUT" || artifact.MediaType != input.InstructionObject.MediaType ||
+			artifact.StorageRef != input.InstructionObject.Reference || artifact.SHA256 != input.InstructionObject.SHA256 ||
+			artifact.SizeBytes != input.InstructionObject.Size || artifact.ScanStatus != "CLEAN" {
+			return errs.ErrStateConflict
+		}
+		return nil
+	}
+	if !errors.Is(err, errs.ErrNotFound) {
+		return err
+	}
+	now := service.now().UTC().Truncate(time.Microsecond)
+	evidence, err := canonicalHash(struct {
+		Reference, VersionID, SHA256, Validator string
+		Size                                    uint64
+	}{input.InstructionObject.Reference, input.InstructionObject.VersionID,
+		input.InstructionObject.SHA256, "control-plane-instruction-validator-v1", input.InstructionObject.Size})
+	if err != nil {
+		return errs.ErrInternal
+	}
+	artifact, err := entity.New(instruction.ContentArtifactID, input.Principal.OrganizationID,
+		input.Principal.ProjectID, input.Principal.ProjectID, input.Principal.ActorID, enum.KindArtifact,
+		"Instruction content "+strconv.FormatUint(instruction.CurrentVersion, 10), entity.ArtifactSpec{
+			ArtifactKind: "instruction-content", Direction: "INPUT", StorageRef: input.InstructionObject.Reference,
+			SizeBytes: input.InstructionObject.Size, MediaType: input.InstructionObject.MediaType,
+			SHA256: input.InstructionObject.SHA256, ScanStatus: "CLEAN",
+			RetentionPolicyRef: "control-plane://retention/instruction-content", ScanPolicyRevision: 1,
+			ScanEvidenceSHA256: evidence, ScannerWorkloadID: "control-plane-instruction-validator", ScannedAt: now,
+		}, now)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	if err := tx.Insert(ctx, artifact); err != nil {
+		return err
+	}
+	return service.appendMutationRecords(ctx, tx, input.Principal, "materialize_instruction_content", artifact)
+}
+
+func reserveProviderCommandReceipt(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	protected domainrepo.ProtectedTransaction,
+	principal value.Principal,
+	receipt value.ProviderEffectReceipt,
+	targetKind, targetResourceID, targetStableKey string,
+	now time.Time,
+) (domainrepo.ExternalCommandReceipt, entity.Resource, bool, error) {
+	if receipt.TargetKind != targetKind || receipt.TargetResourceID != targetResourceID ||
+		receipt.TargetStableKey != targetStableKey {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrPermissionDenied
+	}
+	consumption := domainrepo.ExternalCommandReceipt{
+		Issuer: receipt.Issuer, Purpose: receipt.Purpose, ReceiptID: receipt.ReceiptID,
+		OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID, OwnerActorID: principal.ActorID,
+		TargetKind: receipt.TargetKind, TargetResourceID: receipt.TargetResourceID,
+		TargetStableKey: receipt.TargetStableKey, Action: receipt.Action, Effect: receipt.Effect,
+		EffectGeneration: receipt.EffectGeneration, EffectSHA256: receipt.EffectSHA256,
+		CommandIntentSHA256: receipt.CommandIntentSHA256, AuthoritySHA256: principal.AuthorityDigest,
+		ConsumedAt: now.UTC().Truncate(time.Microsecond),
+	}
+	stored, reserved, err := protected.ReserveExternalCommandReceipt(ctx, consumption)
+	if err != nil {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, err
+	}
+	if stored.OrganizationID != consumption.OrganizationID || stored.ProjectID != consumption.ProjectID ||
+		stored.OwnerActorID != consumption.OwnerActorID || stored.TargetKind != consumption.TargetKind ||
+		stored.TargetResourceID != consumption.TargetResourceID || stored.TargetStableKey != consumption.TargetStableKey ||
+		stored.Action != consumption.Action || stored.Effect != consumption.Effect ||
+		stored.EffectGeneration != consumption.EffectGeneration || stored.EffectSHA256 != consumption.EffectSHA256 ||
+		stored.CommandIntentSHA256 != consumption.CommandIntentSHA256 || stored.AuthoritySHA256 != consumption.AuthoritySHA256 {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
+	}
+	if reserved {
+		return consumption, entity.Resource{}, false, nil
+	}
+	if stored.ResultResourceID == "" || stored.ResultVersion == 0 || !validSHA256Text(stored.ResultSHA256) {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
+	}
+	result, err := tx.GetForUpdateIncludingDeleted(ctx, principal.OrganizationID, principal.ProjectID, stored.ResultResourceID)
+	if err != nil {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, err
+	}
+	digest, err := entity.ProjectionSHA256(result)
+	if err != nil || result.Version != stored.ResultVersion || digest != stored.ResultSHA256 {
+		return domainrepo.ExternalCommandReceipt{}, entity.Resource{}, false, errs.ErrStateConflict
+	}
+	return stored, result, true, nil
+}
+
+func reserveGitCommandReceipt(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	protected domainrepo.ProtectedTransaction,
+	principal value.Principal,
+	receipt value.GitReconciliationReceipt,
+	targetKind, targetResourceID, targetStableKey string,
+	now time.Time,
+) (domainrepo.ExternalCommandReceipt, entity.Resource, bool, error) {
+	return reserveProviderCommandReceipt(ctx, tx, protected, principal, value.ProviderEffectReceipt{
+		Issuer: receipt.Issuer, Purpose: receipt.Purpose, ReceiptID: receipt.ReceiptID,
+		TargetKind: receipt.TargetKind, TargetResourceID: receipt.TargetResourceID,
+		TargetStableKey: receipt.TargetStableKey, Action: "reconcile_git", Effect: "git_configuration",
+		EffectGeneration: receipt.SourceRevision, EffectSHA256: receipt.SourceSHA256,
+		CommandIntentSHA256: receipt.CommandIntentSHA256,
+	}, targetKind, targetResourceID, targetStableKey, now)
+}
+
+func finalizeExternalCommandReceipt(
+	ctx context.Context,
+	protected domainrepo.ProtectedTransaction,
+	consumption domainrepo.ExternalCommandReceipt,
+	result entity.Resource,
+) error {
+	digest, err := entity.ProjectionSHA256(result)
+	if err != nil {
+		return errs.ErrInternal
+	}
+	consumption.ResultResourceID, consumption.ResultVersion, consumption.ResultSHA256 = result.ID, result.Version, digest
+	return protected.FinalizeExternalCommandReceipt(ctx, consumption)
 }
 
 func archiveProtectedResource(current entity.Resource, now time.Time) (entity.Resource, error) {
@@ -506,6 +831,9 @@ func (service *Service) resolveProtectedSpec(
 	case enum.KindInstructionSet:
 		spec, ok := input.Spec.(entity.InstructionSetSpec)
 		if !ok || input.Action != "create" && input.Action != "update" && input.Action != "reconcile_git" {
+			return nil, errs.ErrInvalidInput
+		}
+		if spec.ContentArtifactID == "" || spec.ContentArtifactVersion != 1 {
 			return nil, errs.ErrInvalidInput
 		}
 		if current.ID == "" {
@@ -761,6 +1089,7 @@ func (service *Service) transitionInstructionSet(
 		spec.CurrentVersion++
 		spec.PublishedVersion = spec.CurrentVersion
 		spec.Content, spec.ContentSHA256 = targetSpec.Content, targetSpec.ContentSHA256
+		spec.ContentArtifactID, spec.ContentArtifactVersion = targetSpec.ContentArtifactID, targetSpec.ContentArtifactVersion
 		spec.VersionState, spec.ValidationSHA256 = "PUBLISHED", targetSpec.ValidationSHA256
 		spec.ValidationSucceeded, spec.ValidatedContentVersion, spec.ValidatedContentSHA256 = true, spec.CurrentVersion, targetSpec.ContentSHA256
 		spec.ValidationErrors = nil

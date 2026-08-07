@@ -24,6 +24,7 @@ import (
 const (
 	grantType           = "mattercodex-application-grant+jws"
 	providerReceiptType = "mattercodex-provider-effect-readback-receipt+jws"
+	gitReceiptType      = "mattercodex-git-reconciliation-receipt+jws"
 	maximumGrantTTL     = 5 * time.Minute
 	maximumClockSkew    = 5 * time.Second
 	maximumBearerBytes  = 16 << 10
@@ -99,6 +100,10 @@ type providerReceiptClaims struct {
 	MaskedLabel              string    `json:"masked_label,omitempty"`
 	Capabilities             []string  `json:"capabilities,omitempty"`
 	Eligible                 bool      `json:"eligible"`
+	TargetKind               string    `json:"target_kind"`
+	TargetResourceID         string    `json:"target_resource_id,omitempty"`
+	TargetStableKey          string    `json:"target_stable_key"`
+	CommandIntentSHA256      string    `json:"command_intent_sha256"`
 }
 
 func New(config Config) (*Verifier, error) {
@@ -164,6 +169,8 @@ func (verifier *Verifier) Authenticate(
 	expectedType := grantType
 	if providerReceiptPurpose(verifier.config.Purpose) {
 		expectedType = providerReceiptType
+	} else if verifier.config.Purpose == "GIT_RECONCILIATION_RECEIPT" {
+		expectedType = gitReceiptType
 	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		compact,
@@ -178,6 +185,8 @@ func (verifier *Verifier) Authenticate(
 	}
 	if providerReceiptPurpose(verifier.config.Purpose) {
 		return verifier.authenticateProviderReceipt(verified.CanonicalPayload)
+	} else if verifier.config.Purpose == "GIT_RECONCILIATION_RECEIPT" {
+		return verifier.authenticateGitReconciliationReceipt(verified.CanonicalPayload)
 	}
 	var parsed claims
 	if internalrpcauth.DecodeCanonicalJSON(
@@ -244,6 +253,25 @@ func (verifier *Verifier) Authenticate(
 	}, nil
 }
 
+func (verifier *Verifier) authenticateGitReconciliationReceipt(canonicalPayload []byte) (authoritytype.ApplicationIdentity, error) {
+	var parsed value.GitReconciliationReceipt
+	if internalrpcauth.DecodeCanonicalJSON(canonicalPayload, &parsed) != nil || parsed.Validate(verifier.now().UTC()) != nil ||
+		parsed.Issuer != verifier.config.Issuer || parsed.Purpose != verifier.config.Purpose ||
+		parsed.WorkloadID != verifier.config.WorkloadID || parsed.CallerSPIFFEID != verifier.config.CallerSPIFFEID {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	return authoritytype.ApplicationIdentity{
+		ProducerID: verifier.config.ProducerID, CredentialPurpose: verifier.config.Purpose,
+		CredentialGeneration: parsed.ReceiptRevision, ActorID: parsed.ActorID,
+		OrganizationID: parsed.OrganizationID, ProjectID: parsed.ProjectID,
+		SessionJTI: parsed.ReceiptID, SessionRevision: parsed.ReceiptRevision,
+		SubjectDigest:    digest("GIT_RECONCILIATION_SUBJECT:" + parsed.ActorID),
+		CredentialDigest: digest(string(canonicalPayload)), CallerWorkload: verifier.config.WorkloadID,
+		CallerSPIFFEID: verifier.config.CallerSPIFFEID, ProviderReceiptFullMethod: parsed.FullMethod,
+		ProviderReceiptPurpose: parsed.Purpose,
+	}, nil
+}
+
 func providerReceiptPurpose(purpose string) bool {
 	return purpose == "MATTERMOST_PROVIDER_READBACK_RECEIPT" || purpose == "AI_PROVIDER_READBACK_RECEIPT"
 }
@@ -268,6 +296,9 @@ func (verifier *Verifier) authenticateProviderReceipt(canonicalPayload []byte) (
 		!now.Before(parsed.ExpiresAt.Add(maximumClockSkew)) || parsed.FullMethod == "" ||
 		(parsed.Provider != "" && value.ValidateStableKey(parsed.Provider) != nil) || len(parsed.MaskedLabel) > 256 ||
 		!validStableKeys(parsed.Capabilities) ||
+		value.ValidateStableKey(parsed.TargetKind) != nil ||
+		(parsed.TargetResourceID != "" && value.ValidateID(parsed.TargetResourceID) != nil) ||
+		value.ValidateStableKey(parsed.TargetStableKey) != nil || !validSHA256(parsed.CommandIntentSHA256) ||
 		(credentialBound && (value.ValidateID(parsed.CredentialBindingID) != nil || parsed.CredentialBindingVersion == 0 || !validSHA256(parsed.CredentialBindingSHA256))) {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}

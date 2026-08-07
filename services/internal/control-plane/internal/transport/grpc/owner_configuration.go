@@ -44,12 +44,42 @@ func providerEffectReceiptFromProto(receipt *controlplanev1.ProviderEffectReadba
 		CredentialBindingSHA256: receipt.GetCredentialBindingSha256(), ProviderUsername: receipt.GetProviderUsername(),
 		MaskedStatus: receipt.GetMaskedStatus(),
 		Provider:     receipt.GetProvider(), MaskedLabel: receipt.GetMaskedLabel(), Capabilities: receipt.GetCapabilities(),
-		Eligible: receipt.GetEligible(),
+		Eligible: receipt.GetEligible(), TargetKind: receipt.GetTargetKind(),
+		TargetResourceID: receipt.GetTargetResourceId(), TargetStableKey: receipt.GetTargetStableKey(),
+		CommandIntentSHA256: receipt.GetCommandIntentSha256(),
 	}
 	if result.ContractVersion == 0 {
 		return value.ProviderEffectReceipt{}, errors.New("provider receipt is empty")
 	}
 	return result, nil
+}
+
+func gitReconciliationReceiptFromProto(receipt *controlplanev1.GitReconciliationReceipt) (value.GitReconciliationReceipt, error) {
+	if receipt == nil {
+		return value.GitReconciliationReceipt{}, errors.New("git reconciliation receipt is empty")
+	}
+	issuedAt, err := requiredTime(receipt.GetIssuedAt())
+	if err != nil {
+		return value.GitReconciliationReceipt{}, err
+	}
+	notBefore, err := requiredTime(receipt.GetNotBefore())
+	if err != nil {
+		return value.GitReconciliationReceipt{}, err
+	}
+	expiresAt, err := requiredTime(receipt.GetExpiresAt())
+	if err != nil {
+		return value.GitReconciliationReceipt{}, err
+	}
+	return value.GitReconciliationReceipt{
+		ContractVersion: receipt.GetContractVersion(), Issuer: receipt.GetIssuer(), Purpose: receipt.GetPurpose(),
+		WorkloadID: receipt.GetWorkloadId(), CallerSPIFFEID: receipt.GetCallerSpiffeId(), FullMethod: receipt.GetFullMethod(),
+		ActorID: receipt.GetActorId(), OrganizationID: receipt.GetOrganizationId(), ProjectID: receipt.GetProjectId(),
+		TargetKind: receipt.GetTargetKind(), TargetResourceID: receipt.GetTargetResourceId(),
+		TargetStableKey: receipt.GetTargetStableKey(), SourceRef: receipt.GetSourceRef(),
+		SourceRevision: receipt.GetSourceRevision(), SourceSHA256: receipt.GetSourceSha256(),
+		CommandIntentSHA256: receipt.GetCommandIntentSha256(), ReceiptID: receipt.GetReceiptId(),
+		ReceiptRevision: receipt.GetReceiptRevision(), IssuedAt: issuedAt, NotBefore: notBefore, ExpiresAt: expiresAt,
+	}, nil
 }
 
 func (server *Server) manageProtectedConfiguration(
@@ -96,12 +126,16 @@ func (server *Server) ReconcileGitRoleDefinition(
 	ctx context.Context,
 	request *controlplanev1.ReconcileGitRoleDefinitionRequest,
 ) (*controlplanev1.ReconcileGitRoleDefinitionResponse, error) {
+	receipt, castErr := gitReconciliationReceiptFromProto(request.GetReconciliationReceipt())
+	if castErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
 	managed, err := server.manageProtectedConfiguration(ctx,
 		controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
 		resource.ManageProtectedConfigurationInput{
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindRoleDefinition, Action: "reconcile_git",
 			ResourceID: request.GetRoleDefinitionId(), ExpectedVersion: request.GetExpectedVersion(),
-			Name: request.GetName(), Spec: roleDefinitionFromProto(request.GetSpec()),
+			Name: request.GetName(), Spec: roleDefinitionFromProto(request.GetSpec()), GitReceipt: receipt,
 		})
 	if err != nil {
 		return nil, err
@@ -133,6 +167,10 @@ func (server *Server) ReconcileGitAgent(
 	ctx context.Context,
 	request *controlplanev1.ReconcileGitAgentRequest,
 ) (*controlplanev1.ReconcileGitAgentResponse, error) {
+	receipt, castErr := gitReconciliationReceiptFromProto(request.GetReconciliationReceipt())
+	if castErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
 	managed, err := server.manageProtectedConfiguration(ctx,
 		controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName,
 		resource.ManageProtectedConfigurationInput{
@@ -140,7 +178,7 @@ func (server *Server) ReconcileGitAgent(
 			ResourceID: request.GetAgentId(), ExpectedVersion: request.GetExpectedVersion(),
 			Name: request.GetName(), Spec: agentFromProto(request.GetSpec()),
 			ReferenceKeys: []string{request.GetRoleDefinitionStableKey(), request.GetInstructionSetStableKey(),
-				request.GetProviderPoolStableKey()},
+				request.GetProviderPoolStableKey()}, GitReceipt: receipt,
 		})
 	if err != nil {
 		return nil, err
@@ -222,12 +260,16 @@ func (server *Server) ReconcileGitInstructionSet(
 	ctx context.Context,
 	request *controlplanev1.ReconcileGitInstructionSetRequest,
 ) (*controlplanev1.ReconcileGitInstructionSetResponse, error) {
+	receipt, castErr := gitReconciliationReceiptFromProto(request.GetReconciliationReceipt())
+	if castErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
 	managed, err := server.manageProtectedConfiguration(ctx,
 		controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
 		resource.ManageProtectedConfigurationInput{
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindInstructionSet, Action: "reconcile_git",
 			ResourceID: request.GetInstructionSetId(), ExpectedVersion: request.GetExpectedVersion(),
-			Name: request.GetName(), Spec: instructionSetFromProto(request.GetSpec()),
+			Name: request.GetName(), Spec: instructionSetFromProto(request.GetSpec()), GitReceipt: receipt,
 		})
 	if err != nil {
 		return nil, err
@@ -296,6 +338,10 @@ func (server *Server) ReconcileGitProviderPool(
 	ctx context.Context,
 	request *controlplanev1.ReconcileGitProviderPoolRequest,
 ) (*controlplanev1.ReconcileGitProviderPoolResponse, error) {
+	receipt, receiptErr := gitReconciliationReceiptFromProto(request.GetReconciliationReceipt())
+	if receiptErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
 	spec, castErr := providerPoolFromProto(request.GetSpec())
 	if castErr != nil {
 		return nil, rpcError("", errs.ErrInvalidInput)
@@ -309,7 +355,7 @@ func (server *Server) ReconcileGitProviderPool(
 		resource.ManageProtectedConfigurationInput{
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindProviderPool, Action: "reconcile_git",
 			ResourceID: request.GetProviderPoolId(), ExpectedVersion: request.GetExpectedVersion(),
-			Name: request.GetName(), Spec: spec, ReferenceKeys: keys,
+			Name: request.GetName(), Spec: spec, ReferenceKeys: keys, GitReceipt: receipt,
 		})
 	if err != nil {
 		return nil, err
@@ -579,6 +625,54 @@ func (server *Server) BindScheduleConfiguration(
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
 	return &controlplanev1.BindScheduleConfigurationResponse{Schedule: encoded}, nil
+}
+
+func (server *Server) CreateScheduleFromOwnerSelections(
+	ctx context.Context,
+	request *controlplanev1.CreateScheduleFromOwnerSelectionsRequest,
+) (*controlplanev1.CreateScheduleFromOwnerSelectionsResponse, error) {
+	principal, err := authorization.Principal(ctx,
+		controlplanev1.ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	intent := request.GetIntent()
+	if intent == nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	interval, intervalErr := optionalDuration(intent.GetInterval())
+	misfireGrace, misfireErr := optionalDuration(intent.GetMisfireGrace())
+	initialBackoff, initialErr := optionalDuration(intent.GetInitialBackoff())
+	maximumBackoff, maximumErr := optionalDuration(intent.GetMaximumBackoff())
+	deadLetterAfter, deadLetterErr := optionalDuration(intent.GetDeadLetterAfter())
+	maximumExecution, executionErr := optionalDuration(intent.GetMaximumExecutionDuration())
+	if intervalErr != nil || misfireErr != nil || initialErr != nil || maximumErr != nil ||
+		deadLetterErr != nil || executionErr != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	created, err := server.service.CreateScheduleFromOwnerSelections(ctx, resource.CreateScheduleFromOwnerSelectionsInput{
+		Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), Name: request.GetName(),
+		AgentStableKey: request.GetAgentStableKey(), InstructionSetStableKey: request.GetInstructionSetStableKey(),
+		ProviderPoolStableKey: request.GetProviderPoolStableKey(), RoomStableKey: intent.GetRoomStableKey(),
+		PromptArtifactName: intent.GetPromptArtifactName(), Spec: entity.ScheduleSpec{
+			Cron: intent.GetCron(), Interval: interval, Timezone: intent.GetTimezone(), Calendar: intent.GetCalendar(),
+			OverlapPolicy: trimEnum(intent.GetOverlapPolicy().String(), "SCHEDULE_OVERLAP_POLICY_"),
+			MisfirePolicy: trimEnum(intent.GetMisfirePolicy().String(), "SCHEDULE_MISFIRE_POLICY_"),
+			MisfireGrace:  misfireGrace, DeliveryPolicy: intent.GetDeliveryPolicy(), MaximumAttempts: intent.GetMaximumAttempts(),
+			InitialBackoff: initialBackoff, MaximumBackoff: maximumBackoff, DeadLetterAfter: deadLetterAfter,
+			SessionPolicy:            trimEnum(intent.GetSessionPolicy().String(), "SCHEDULE_SESSION_POLICY_"),
+			NotificationPolicy:       trimEnum(intent.GetNotificationPolicy().String(), "SCHEDULE_NOTIFICATION_POLICY_"),
+			MaximumExecutionDuration: maximumExecution, Coalesce: intent.GetCoalesce(),
+		},
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	encoded, err := toProtoResource(created)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return &controlplanev1.CreateScheduleFromOwnerSelectionsResponse{Schedule: encoded}, nil
 }
 
 func (server *Server) ManageWorkspaceMattermostMapping(
@@ -939,14 +1033,31 @@ func (server *Server) GetRunLineage(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	return &controlplanev1.GetRunLineageResponse{Lineage: &controlplanev1.RunLineage{
+	encoded := &controlplanev1.RunLineage{
 		RootSessionId: lineage.RootSessionID, RootTurnId: lineage.RootTurnID,
 		ParentProcessRunId: lineage.ParentProcessRunID, CurrentSessionId: lineage.CurrentSessionID,
 		CurrentSessionVersion: lineage.CurrentSessionVersion, CurrentTurnId: lineage.CurrentTurnID,
 		CurrentTurnVersion: lineage.CurrentTurnVersion, CurrentAttempt: lineage.CurrentAttempt,
 		RuntimeRevisionId: lineage.RuntimeRevisionID, RuntimeRevisionVersion: lineage.RuntimeRevisionVersion,
-		ImmutableInputSha256: lineage.ImmutableInputSHA256,
-	}}, nil
+		ImmutableInputSha256: lineage.ImmutableInputSHA256, RootProcessRunId: lineage.RootProcessRunID,
+		Complete: lineage.Complete,
+	}
+	for _, process := range lineage.Processes {
+		encoded.Processes = append(encoded.Processes, &controlplanev1.RunProcessLineage{
+			ProcessRunId: process.ID, ParentProcessRunId: process.ParentProcessRunID,
+			State: process.State, Version: process.Version, ChildProcessRunIds: process.ChildIDs,
+			CreatedAt: timestamppb.New(process.OccurredAt), UpdatedAt: timestamppb.New(process.UpdatedAt)})
+	}
+	for _, attempt := range lineage.Attempts {
+		encoded.Attempts = append(encoded.Attempts, &controlplanev1.RunAttemptLineage{
+			ExecutionId: attempt.ID, ProcessRunId: attempt.ProcessRunID, SessionId: attempt.SessionID,
+			TurnId: attempt.TurnID, Attempt: attempt.Attempt, RuntimeRevisionId: attempt.RuntimeRevisionID,
+			RuntimeRevisionVersion: attempt.RuntimeRevisionVersion, State: attempt.State,
+			ExecutionVersion: attempt.Version, CreatedAt: timestamppb.New(attempt.OccurredAt),
+			UpdatedAt: timestamppb.New(attempt.UpdatedAt), PredecessorExecutionId: attempt.PredecessorID,
+			SuccessorExecutionId: attempt.SuccessorID})
+	}
+	return &controlplanev1.GetRunLineageResponse{Lineage: encoded}, nil
 }
 
 func (server *Server) ListRunTimeline(
@@ -983,7 +1094,7 @@ func (server *Server) ListRunArtifacts(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	limit := pageSize(request.GetPageSize())
-	items, err := server.service.ListRunArtifacts(ctx, principal, request.GetProcessRunId(), request.GetPageToken(), limit)
+	items, next, err := server.service.ListRunArtifacts(ctx, principal, request.GetProcessRunId(), request.GetPageToken(), limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
@@ -998,5 +1109,6 @@ func (server *Server) ListRunArtifacts(
 	if len(items) == limit {
 		response.NextPageToken = items[len(items)-1].ID
 	}
+	response.NextPageToken = next
 	return response, nil
 }

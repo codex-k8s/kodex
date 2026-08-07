@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,6 +37,15 @@ type Config struct {
 	RedisPasswordFile                   string        `env:"CONTROL_PLANE_REDIS_PASSWORD_FILE"`
 	RedisDatabase                       int           `env:"CONTROL_PLANE_REDIS_DATABASE"`
 	RedisPoolSize                       int           `env:"CONTROL_PLANE_REDIS_POOL_SIZE"`
+	InstructionS3Endpoint               string        `env:"CONTROL_PLANE_INSTRUCTION_S3_ENDPOINT"`
+	InstructionS3TLSServerName          string        `env:"CONTROL_PLANE_INSTRUCTION_S3_TLS_SERVER_NAME"`
+	InstructionS3CAFile                 string        `env:"CONTROL_PLANE_INSTRUCTION_S3_CA_FILE"`
+	InstructionS3ClientCertificateFile  string        `env:"CONTROL_PLANE_INSTRUCTION_S3_CLIENT_CERTIFICATE_FILE"`
+	InstructionS3ClientPrivateKeyFile   string        `env:"CONTROL_PLANE_INSTRUCTION_S3_CLIENT_PRIVATE_KEY_FILE"`
+	InstructionS3AccessKeyFile          string        `env:"CONTROL_PLANE_INSTRUCTION_S3_ACCESS_KEY_FILE"`
+	InstructionS3SecretKeyFile          string        `env:"CONTROL_PLANE_INSTRUCTION_S3_SECRET_KEY_FILE"`
+	InstructionS3SessionTokenFile       string        `env:"CONTROL_PLANE_INSTRUCTION_S3_SESSION_TOKEN_FILE"`
+	InstructionS3Bucket                 string        `env:"CONTROL_PLANE_INSTRUCTION_S3_BUCKET"`
 	NATSURL                             string        `env:"CONTROL_PLANE_NATS_URL"`
 	NATSTLSServerName                   string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
 	NATSCAFile                          string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
@@ -111,6 +121,14 @@ func loadConfig() (Config, error) {
 		RedisPasswordFile:                   "/var/run/secrets/mattercodex/control-plane/redis/password",
 		RedisDatabase:                       0,
 		RedisPoolSize:                       16,
+		InstructionS3Endpoint:               "https://object-store.storage.svc.cluster.local",
+		InstructionS3TLSServerName:          "object-store.storage.svc.cluster.local",
+		InstructionS3CAFile:                 "/var/run/config/mattercodex/control-plane/object-store/ca.pem",
+		InstructionS3ClientCertificateFile:  "/var/run/secrets/mattercodex/control-plane/workload-tls/tls.crt",
+		InstructionS3ClientPrivateKeyFile:   "/var/run/secrets/mattercodex/control-plane/workload-tls/tls.key",
+		InstructionS3AccessKeyFile:          "/var/run/secrets/mattercodex/control-plane/instruction-object-store/access-key",
+		InstructionS3SecretKeyFile:          "/var/run/secrets/mattercodex/control-plane/instruction-object-store/secret-key",
+		InstructionS3Bucket:                 "mattercodex-instruction-artifacts",
 		NATSURL:                             "tls://nats.mattercodex-system.svc:4222",
 		NATSTLSServerName:                   "nats.mattercodex-system.svc.cluster.local",
 		NATSCAFile:                          "/var/run/config/mattercodex/control-plane/nats/ca.pem",
@@ -169,6 +187,13 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	instructionEndpoint, instructionEndpointErr := url.Parse(config.InstructionS3Endpoint)
+	if instructionEndpointErr != nil || instructionEndpoint.Scheme != "https" ||
+		instructionEndpoint.Hostname() != config.InstructionS3TLSServerName || instructionEndpoint.Path != "" ||
+		instructionEndpoint.User != nil || instructionEndpoint.RawQuery != "" || instructionEndpoint.Fragment != "" ||
+		config.InstructionS3Bucket != "mattercodex-instruction-artifacts" {
+		return errors.New("control-plane instruction object store endpoint is invalid")
+	}
 	for _, endpoint := range []string{
 		config.GRPCListen,
 		config.TechnicalListen,
@@ -208,6 +233,7 @@ func (config Config) validate() error {
 		config.RedisTLSServerName,
 		config.NATSTLSServerName,
 		config.OIDCTLSServerName,
+		config.InstructionS3TLSServerName,
 	} {
 		if serverName == "" || net.ParseIP(serverName) != nil {
 			return errors.New("control-plane TLS server name is invalid")
@@ -237,10 +263,18 @@ func (config Config) validate() error {
 		config.RuntimeRestoreSigningKeyFile,
 		config.OIDCCAFile,
 		config.ApplicationGrantTrustDir,
+		config.InstructionS3CAFile,
+		config.InstructionS3ClientCertificateFile,
+		config.InstructionS3ClientPrivateKeyFile,
+		config.InstructionS3AccessKeyFile,
+		config.InstructionS3SecretKeyFile,
 	} {
 		if !filepath.IsAbs(path) {
 			return errors.New("control-plane runtime path must be absolute")
 		}
+	}
+	if config.InstructionS3SessionTokenFile != "" && !filepath.IsAbs(config.InstructionS3SessionTokenFile) {
+		return errors.New("control-plane instruction object store session credential path must be absolute")
 	}
 	if config.StartupTimeout < time.Second ||
 		config.StartupTimeout > time.Minute ||
@@ -361,6 +395,7 @@ func expectedOperations() map[string]string {
 		"control.provider-pool.list":                     controlplanev1.ControlPlaneService_ListProviderPools_FullMethodName,
 		"control.provider-pool.history":                  controlplanev1.ControlPlaneService_ListProviderPoolHistory_FullMethodName,
 		"control.schedule.bind":                          controlplanev1.ControlPlaneService_BindScheduleConfiguration_FullMethodName,
+		"control.schedule.create-from-selections":        controlplanev1.ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName,
 		"control.run.manage":                             controlplanev1.ControlPlaneService_ManageRun_FullMethodName,
 		"control.run.get":                                controlplanev1.ControlPlaneService_GetRunDetail_FullMethodName,
 		"control.run.timeline":                           controlplanev1.ControlPlaneService_ListRunTimeline_FullMethodName,
@@ -377,6 +412,9 @@ func expectedOperations() map[string]string {
 		"control.runtime-incident.history":               controlplanev1.ControlPlaneService_ListRuntimeIncidentHistory_FullMethodName,
 		"control.workspace-mapping.get":                  controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
 		"control.workspace-mapping.list":                 controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
+		"control.legacy-cutover.get":                     controlplanev1.ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName,
+		"control.legacy-cutover.list":                    controlplanev1.ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName,
+		"control.legacy-cutover.resolve":                 controlplanev1.ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName,
 		"control.integration.provider-reference.manage":  controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
 		"control.integration.provider-reference.get":     controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
 		"control.integration.provider-reference.list":    controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,

@@ -88,6 +88,7 @@ const (
 	ControlPlaneService_ManageMemoryRecord_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ManageMemoryRecord"
 	ControlPlaneService_ManageWorkClaim_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
 	ControlPlaneService_ManageSchedule_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ManageSchedule"
+	ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName        = "/controlplane.v1.ControlPlaneService/CreateScheduleFromOwnerSelections"
 	ControlPlaneService_BindScheduleConfiguration_FullMethodName                = "/controlplane.v1.ControlPlaneService/BindScheduleConfiguration"
 	ControlPlaneService_RunScheduleNow_FullMethodName                           = "/controlplane.v1.ControlPlaneService/RunScheduleNow"
 	ControlPlaneService_ClaimDueSchedules_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
@@ -131,6 +132,9 @@ const (
 	ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName         = "/controlplane.v1.ControlPlaneService/ManageWorkspaceMattermostMapping"
 	ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName            = "/controlplane.v1.ControlPlaneService/GetWorkspaceMattermostMapping"
 	ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName          = "/controlplane.v1.ControlPlaneService/ListWorkspaceMattermostMappings"
+	ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName            = "/controlplane.v1.ControlPlaneService/GetLegacyConfigurationCutover"
+	ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName          = "/controlplane.v1.ControlPlaneService/ListLegacyConfigurationCutovers"
+	ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName        = "/controlplane.v1.ControlPlaneService/ResolveLegacyConfigurationCutover"
 	ControlPlaneService_RegisterArtifact_FullMethodName                         = "/controlplane.v1.ControlPlaneService/RegisterArtifact"
 	ControlPlaneService_RecordArtifactScan_FullMethodName                       = "/controlplane.v1.ControlPlaneService/RecordArtifactScan"
 	ControlPlaneService_ManageRoleImageRecipe_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageRoleImageRecipe"
@@ -346,6 +350,9 @@ type ControlPlaneServiceClient interface {
 	ManageWorkClaim(ctx context.Context, in *ManageWorkClaimRequest, opts ...grpc.CallOption) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(ctx context.Context, in *ManageScheduleRequest, opts ...grpc.CallOption) (*ManageScheduleResponse, error)
+	// CreateScheduleFromOwnerSelections принимает только человекочитаемые
+	// selections и атомарно закрепляет server-resolved target tuple.
+	CreateScheduleFromOwnerSelections(ctx context.Context, in *CreateScheduleFromOwnerSelectionsRequest, opts ...grpc.CallOption) (*CreateScheduleFromOwnerSelectionsResponse, error)
 	// BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
 	BindScheduleConfiguration(ctx context.Context, in *BindScheduleConfigurationRequest, opts ...grpc.CallOption) (*BindScheduleConfigurationResponse, error)
 	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
@@ -439,6 +446,12 @@ type ControlPlaneServiceClient interface {
 	GetWorkspaceMattermostMapping(ctx context.Context, in *GetWorkspaceMattermostMappingRequest, opts ...grpc.CallOption) (*GetWorkspaceMattermostMappingResponse, error)
 	// ListWorkspaceMattermostMappings возвращает owner-scoped mapping catalog.
 	ListWorkspaceMattermostMappings(ctx context.Context, in *ListWorkspaceMattermostMappingsRequest, opts ...grpc.CallOption) (*ListWorkspaceMattermostMappingsResponse, error)
+	// Get/ListLegacyConfigurationCutover дают typed per-row upgrade readback.
+	GetLegacyConfigurationCutover(ctx context.Context, in *GetLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*GetLegacyConfigurationCutoverResponse, error)
+	ListLegacyConfigurationCutovers(ctx context.Context, in *ListLegacyConfigurationCutoversRequest, opts ...grpc.CallOption) (*ListLegacyConfigurationCutoversResponse, error)
+	// ResolveLegacyConfigurationCutover атомарно материализует target catalog из
+	// immutable legacy graph и exact content; authority IDs сервер не принимает.
+	ResolveLegacyConfigurationCutover(ctx context.Context, in *ResolveLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*ResolveLegacyConfigurationCutoverResponse, error)
 	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(ctx context.Context, in *RegisterArtifactRequest, opts ...grpc.CallOption) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
@@ -1270,6 +1283,16 @@ func (c *controlPlaneServiceClient) ManageSchedule(ctx context.Context, in *Mana
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) CreateScheduleFromOwnerSelections(ctx context.Context, in *CreateScheduleFromOwnerSelectionsRequest, opts ...grpc.CallOption) (*CreateScheduleFromOwnerSelectionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateScheduleFromOwnerSelectionsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) BindScheduleConfiguration(ctx context.Context, in *BindScheduleConfigurationRequest, opts ...grpc.CallOption) (*BindScheduleConfigurationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BindScheduleConfigurationResponse)
@@ -1694,6 +1717,36 @@ func (c *controlPlaneServiceClient) ListWorkspaceMattermostMappings(ctx context.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListWorkspaceMattermostMappingsResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetLegacyConfigurationCutover(ctx context.Context, in *GetLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*GetLegacyConfigurationCutoverResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLegacyConfigurationCutoverResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListLegacyConfigurationCutovers(ctx context.Context, in *ListLegacyConfigurationCutoversRequest, opts ...grpc.CallOption) (*ListLegacyConfigurationCutoversResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListLegacyConfigurationCutoversResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ResolveLegacyConfigurationCutover(ctx context.Context, in *ResolveLegacyConfigurationCutoverRequest, opts ...grpc.CallOption) (*ResolveLegacyConfigurationCutoverResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveLegacyConfigurationCutoverResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2426,6 +2479,9 @@ type ControlPlaneServiceServer interface {
 	ManageWorkClaim(context.Context, *ManageWorkClaimRequest) (*ManageWorkClaimResponse, error)
 	// ManageSchedule изменяет расписание только через закрытые действия сервера.
 	ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error)
+	// CreateScheduleFromOwnerSelections принимает только человекочитаемые
+	// selections и атомарно закрепляет server-resolved target tuple.
+	CreateScheduleFromOwnerSelections(context.Context, *CreateScheduleFromOwnerSelectionsRequest) (*CreateScheduleFromOwnerSelectionsResponse, error)
 	// BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
 	BindScheduleConfiguration(context.Context, *BindScheduleConfigurationRequest) (*BindScheduleConfigurationResponse, error)
 	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
@@ -2519,6 +2575,12 @@ type ControlPlaneServiceServer interface {
 	GetWorkspaceMattermostMapping(context.Context, *GetWorkspaceMattermostMappingRequest) (*GetWorkspaceMattermostMappingResponse, error)
 	// ListWorkspaceMattermostMappings возвращает owner-scoped mapping catalog.
 	ListWorkspaceMattermostMappings(context.Context, *ListWorkspaceMattermostMappingsRequest) (*ListWorkspaceMattermostMappingsResponse, error)
+	// Get/ListLegacyConfigurationCutover дают typed per-row upgrade readback.
+	GetLegacyConfigurationCutover(context.Context, *GetLegacyConfigurationCutoverRequest) (*GetLegacyConfigurationCutoverResponse, error)
+	ListLegacyConfigurationCutovers(context.Context, *ListLegacyConfigurationCutoversRequest) (*ListLegacyConfigurationCutoversResponse, error)
+	// ResolveLegacyConfigurationCutover атомарно материализует target catalog из
+	// immutable legacy graph и exact content; authority IDs сервер не принимает.
+	ResolveLegacyConfigurationCutover(context.Context, *ResolveLegacyConfigurationCutoverRequest) (*ResolveLegacyConfigurationCutoverResponse, error)
 	// RegisterArtifact выполняет версионированную операцию ControlPlaneService.
 	RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error)
 	// RecordArtifactScan выполняет версионированную операцию ControlPlaneService.
@@ -2867,6 +2929,9 @@ func (UnimplementedControlPlaneServiceServer) ManageWorkClaim(context.Context, *
 func (UnimplementedControlPlaneServiceServer) ManageSchedule(context.Context, *ManageScheduleRequest) (*ManageScheduleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageSchedule not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) CreateScheduleFromOwnerSelections(context.Context, *CreateScheduleFromOwnerSelectionsRequest) (*CreateScheduleFromOwnerSelectionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateScheduleFromOwnerSelections not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) BindScheduleConfiguration(context.Context, *BindScheduleConfigurationRequest) (*BindScheduleConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BindScheduleConfiguration not implemented")
 }
@@ -2995,6 +3060,15 @@ func (UnimplementedControlPlaneServiceServer) GetWorkspaceMattermostMapping(cont
 }
 func (UnimplementedControlPlaneServiceServer) ListWorkspaceMattermostMappings(context.Context, *ListWorkspaceMattermostMappingsRequest) (*ListWorkspaceMattermostMappingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListWorkspaceMattermostMappings not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetLegacyConfigurationCutover(context.Context, *GetLegacyConfigurationCutoverRequest) (*GetLegacyConfigurationCutoverResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLegacyConfigurationCutover not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListLegacyConfigurationCutovers(context.Context, *ListLegacyConfigurationCutoversRequest) (*ListLegacyConfigurationCutoversResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLegacyConfigurationCutovers not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ResolveLegacyConfigurationCutover(context.Context, *ResolveLegacyConfigurationCutoverRequest) (*ResolveLegacyConfigurationCutoverResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveLegacyConfigurationCutover not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RegisterArtifact(context.Context, *RegisterArtifactRequest) (*RegisterArtifactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterArtifact not implemented")
@@ -4430,6 +4504,24 @@ func _ControlPlaneService_ManageSchedule_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_CreateScheduleFromOwnerSelections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateScheduleFromOwnerSelectionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).CreateScheduleFromOwnerSelections(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).CreateScheduleFromOwnerSelections(ctx, req.(*CreateScheduleFromOwnerSelectionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_BindScheduleConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BindScheduleConfigurationRequest)
 	if err := dec(in); err != nil {
@@ -5200,6 +5292,60 @@ func _ControlPlaneService_ListWorkspaceMattermostMappings_Handler(srv interface{
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ListWorkspaceMattermostMappings(ctx, req.(*ListWorkspaceMattermostMappingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetLegacyConfigurationCutover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLegacyConfigurationCutoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetLegacyConfigurationCutover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetLegacyConfigurationCutover(ctx, req.(*GetLegacyConfigurationCutoverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListLegacyConfigurationCutovers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLegacyConfigurationCutoversRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListLegacyConfigurationCutovers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListLegacyConfigurationCutovers(ctx, req.(*ListLegacyConfigurationCutoversRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ResolveLegacyConfigurationCutover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveLegacyConfigurationCutoverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ResolveLegacyConfigurationCutover(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ResolveLegacyConfigurationCutover(ctx, req.(*ResolveLegacyConfigurationCutoverRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6514,6 +6660,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ManageSchedule_Handler,
 		},
 		{
+			MethodName: "CreateScheduleFromOwnerSelections",
+			Handler:    _ControlPlaneService_CreateScheduleFromOwnerSelections_Handler,
+		},
+		{
 			MethodName: "BindScheduleConfiguration",
 			Handler:    _ControlPlaneService_BindScheduleConfiguration_Handler,
 		},
@@ -6684,6 +6834,18 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListWorkspaceMattermostMappings",
 			Handler:    _ControlPlaneService_ListWorkspaceMattermostMappings_Handler,
+		},
+		{
+			MethodName: "GetLegacyConfigurationCutover",
+			Handler:    _ControlPlaneService_GetLegacyConfigurationCutover_Handler,
+		},
+		{
+			MethodName: "ListLegacyConfigurationCutovers",
+			Handler:    _ControlPlaneService_ListLegacyConfigurationCutovers_Handler,
+		},
+		{
+			MethodName: "ResolveLegacyConfigurationCutover",
+			Handler:    _ControlPlaneService_ResolveLegacyConfigurationCutover_Handler,
 		},
 		{
 			MethodName: "RegisterArtifact",

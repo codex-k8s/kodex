@@ -125,7 +125,7 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 	if !kind.Valid() || from == to ||
 		(from.Terminal() &&
 			!(kind == KindTurn && (from == StateFailed || from == StateCancelled || from == StateExpired) && to == StateQueued) &&
-			!(kind == KindProcessRun && (from == StateFailed || from == StateExpired) && to == StateRunning) &&
+			!(kind == KindProcessRun && (from == StateFailed || from == StateCancelled || from == StateExpired) && to == StateRunning) &&
 			!(kind == KindImageBuild && (from == StateFailed || from == StateExpired) && to == StateQueued) &&
 			!(kind == KindWorkspaceBackup &&
 				(from == StateFailed || from == StateCancelled || from == StateExpired) && to == StateRunning) &&
