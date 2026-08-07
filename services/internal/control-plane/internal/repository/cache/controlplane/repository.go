@@ -42,6 +42,51 @@ type Repository struct {
 }
 
 var _ domainrepo.Repository = (*Repository)(nil)
+var _ domainrepo.RuntimeProjectionRepository = (*Repository)(nil)
+var _ domainrepo.RunTimelineRepository = (*Repository)(nil)
+var _ domainrepo.LegacyConfigurationCutoverRepository = (*Repository)(nil)
+var _ domainrepo.RunGraphRepository = (*Repository)(nil)
+
+func (repository *Repository) ListRunGraphNodes(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string,
+) ([]domainrepo.RunGraphNode, error) {
+	source, ok := repository.source.(domainrepo.RunGraphRepository)
+	if !ok {
+		return nil, errors.New("run graph source is unavailable")
+	}
+	return source.ListRunGraphNodes(ctx, organizationID, projectID, actorID, processRunID)
+}
+
+func (repository *Repository) ListRunGraphArtifacts(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string, afterOccurredAt time.Time, afterID string, limit int,
+) ([]entity.Resource, error) {
+	source, ok := repository.source.(domainrepo.RunGraphRepository)
+	if !ok {
+		return nil, errors.New("run graph source is unavailable")
+	}
+	return source.ListRunGraphArtifacts(ctx, organizationID, projectID, actorID, processRunID,
+		afterOccurredAt, afterID, limit)
+}
+
+func (repository *Repository) GetLegacyConfigurationCutover(ctx context.Context,
+	organizationID, projectID, actorID, legacyRoleID string,
+) (domainrepo.LegacyConfigurationCutover, error) {
+	source, ok := repository.source.(domainrepo.LegacyConfigurationCutoverRepository)
+	if !ok {
+		return domainrepo.LegacyConfigurationCutover{}, errors.New("legacy cutover source is unavailable")
+	}
+	return source.GetLegacyConfigurationCutover(ctx, organizationID, projectID, actorID, legacyRoleID)
+}
+
+func (repository *Repository) ListLegacyConfigurationCutovers(ctx context.Context,
+	organizationID, projectID, actorID, afterLegacyRoleID string, limit int,
+) ([]domainrepo.LegacyConfigurationCutover, error) {
+	source, ok := repository.source.(domainrepo.LegacyConfigurationCutoverRepository)
+	if !ok {
+		return nil, errors.New("legacy cutover source is unavailable")
+	}
+	return source.ListLegacyConfigurationCutovers(ctx, organizationID, projectID, actorID, afterLegacyRoleID, limit)
+}
 
 // New создаёт декоратор; при сбое кэша чтение всегда возвращается к PostgreSQL.
 func New(
@@ -70,6 +115,22 @@ func (repository *Repository) Transact(
 	callback func(domainrepo.Transaction) error,
 ) error {
 	return repository.source.Transact(ctx, scope, callback)
+}
+
+func (repository *Repository) ListRunTimelineAudit(
+	ctx context.Context,
+	organizationID, projectID, actorID string,
+	resourceIDs []string,
+	afterOccurredAt time.Time,
+	afterID string,
+	limit int,
+) ([]domainrepo.Audit, error) {
+	source, ok := repository.source.(domainrepo.RunTimelineRepository)
+	if !ok {
+		return nil, errors.New("run timeline source is unavailable")
+	}
+	return source.ListRunTimelineAudit(ctx, organizationID, projectID, actorID,
+		resourceIDs, afterOccurredAt, afterID, limit)
 }
 
 func (repository *Repository) Get(
@@ -138,6 +199,16 @@ func (repository *Repository) Get(
 		_ = repository.engine.Store(ctx, key, repaired)
 	}
 	return resource, nil
+}
+
+func (repository *Repository) GetDerivedRuntimeResource(ctx context.Context,
+	organizationID, projectID, resourceID string, kind enum.Kind, version uint64,
+) (entity.Resource, error) {
+	source, ok := repository.source.(domainrepo.RuntimeProjectionRepository)
+	if !ok {
+		return entity.Resource{}, errors.New("runtime projection repository is unavailable")
+	}
+	return source.GetDerivedRuntimeResource(ctx, organizationID, projectID, resourceID, kind, version)
 }
 
 // GetIncludingDeleted обходит projection cache: terminal tombstone нужен

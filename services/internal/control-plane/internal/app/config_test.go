@@ -16,7 +16,7 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authority policy mismatch: %v", err)
 	}
-	if loaded.Revision != 21 {
+	if loaded.Revision != 23 {
 		t.Fatalf("unexpected authority policy revision: %d", loaded.Revision)
 	}
 	for _, producerID := range []string{
@@ -25,6 +25,8 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		"control-plane.runtime-restore-effect",
 		"control-plane.runtime-cleanup-authorizer",
 		"control-plane.integration-gateway",
+		"control-plane.integration-provider-readback",
+		"control-plane.interaction-provider-readback",
 		"control-plane.integration-continuation",
 		"control-plane.agent-session",
 		"control-plane.role-image-builder",
@@ -58,5 +60,15 @@ func TestAuthorityPolicyMatchesEveryExpectedOperation(t *testing.T) {
 		if operation.CallerWorkload == "control-api-gateway" {
 			t.Fatalf("control API gateway reached destructive operation %s", operationID)
 		}
+	}
+}
+
+func TestWorkspaceRecoveryIntentDigestSeparatesTerminalOutcomes(t *testing.T) {
+	t.Parallel()
+
+	complete := workspaceRecoveryIntentDigest("11111111-1111-4111-8111-111111111111", 7, "complete", "")
+	failed := workspaceRecoveryIntentDigest("11111111-1111-4111-8111-111111111111", 7, "fail", "recovery_readback_mismatch")
+	if complete == failed || len(complete) != 64 || len(failed) != 64 {
+		t.Fatalf("workspace recovery intent digests are not exact: %q %q", complete, failed)
 	}
 }

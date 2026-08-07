@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.20.0
-updated: 2026-08-05
+version: 1.22.1
+updated: 2026-08-07
 ---
 
 # Диагностика и восстановление control-plane
@@ -159,7 +159,25 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
 - runtime и relay DSN доставлены отдельными файлами;
 - PostgreSQL TLS использует exact SNI/CA, login principal имеет ровно нужное
   group membership, остаётся `NOSUPERUSER/NOBYPASSRLS`;
-- migration schema version равна `20260803000100`;
+- migration schema version равна `20260806023400`;
+- instruction object-store bucket существует, versioning включено, а exact
+  HTTPS SNI/CA/mTLS/application credential рабочего prefix проходят bounded
+  recovery под одним PostgreSQL transaction-scoped advisory fence на
+  выделенной connection: `ListObjectVersions` → удаление versions/delete markers
+  выделенного deterministic canary prefix → доказательство пустоты → canary
+  `PutObject` → получение `VersionID` → version-pinned `StatObject` и
+  `GetObject` с проверкой content/SHA-256 → exact `DeleteObjectVersion` →
+  повторное доказательство пустоты;
+  IAM обязан разрешать bounded `ListBucketVersions` с condition на canary
+  prefix, рабочие `PutObject`/`GetObject` и только для canary cleanup
+  `DeleteObjectVersion` на том же `projects/*/instruction-sets/*` prefix.
+  Fence удерживается от первого reconcile до доказательства финальной пустоты;
+  ожидание ограничено readiness context, crash закрывает connection и освобождает
+  lock, а probe без полученного fence не считается успешным. Ambiguous Put/Delete
+  и неполная очистка снимают readiness; при более 32 versions/delete markers один
+  probe удаляет не более 32 exact versions и остаётся fail-closed, а следующие
+  fenced probes завершают bounded recovery до любого нового Put. Локальный mutex
+  и локальное состояние процесса не являются cross-replica recovery state;
 - Redis использует TLS, exact SNI/CA и bounded database/pool;
 - stream `CONTROL_PLANE` существует с точными двумя subjects, file storage,
   replicas окружения, `LimitsPolicy`, `DiscardOld`,
@@ -167,7 +185,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
   max age 30 дней, dedup window 2 минуты, deny delete/purge и без
   mirror/source/republish/rollup/transform;
-- authority policy revision 8, independently delivered proof trust/private key
+- authority policy revision 23, independently delivered proof trust/private key
   и локальный verifier #186 согласованы; отсутствующие отдельные public JWK для
   `runtime-restore-verifier` или `runtime-cleanup-authorizer` закрывают startup,
   а не включают OIDC fallback;
@@ -624,12 +642,118 @@ Alerts:
 - `ControlPlaneUnavailable`;
 - `ControlPlaneNotReady`;
 - `ControlPlaneInternalRPCFailures`;
-- `ControlPlaneGRPCLatencyHigh`.
+- `ControlPlaneGRPCLatencyHigh`;
+- `ControlPlaneOutboxTerminalPredecessor`;
+- `ControlPlaneOwnerLifecycleFailures`.
 
 Каждый alert содержит абсолютный
 `https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md`.
 Labels метрик ограничены operation/code/kind/action и не содержат tenant,
 resource ID или произвольный input.
+
+## Owner configuration, incidents и workspace restore
+
+Для `RoleDefinition`, `Agent`, `AgentAssignment`, `InstructionSet`, provider
+refs/pools и Workspace↔Mattermost mapping сначала получить typed get/list и
+сохранить exact version. Mutation выполняется только специализированным RPC с
+новым idempotency key. Повтор того же key и intent обязан вернуть тот же
+receipt; другой intent — конфликт. Generic Resource lifecycle для этих kinds
+не использовать.
+
+При отказе configuration mutation проверить по порядку:
+
+1. caller workload/full method/permission в authority policy revision 23;
+2. owner-scoped current row и expected version до анализа receipt;
+3. exact reference versions/digests и отсутствие live зависимого graph;
+4. protected history, audit и применимый outbox predecessor одной transaction.
+
+Provider credential, token, device code, private provider payload и secret
+value не должны появляться ни в readback, ни в audit/log/metric. Provider
+reference mutation принимает только exact `integration-gateway` с
+`AI_PROVIDER_READBACK_RECEIPT`; Workspace↔Mattermost mapping и Agent bot
+identity — только exact `interaction-gateway` с
+`MATTERMOST_PROVIDER_READBACK_RECEIPT`. В обоих случаях source authority —
+`PROVIDER_READBACK`, а typed receipt обязан связать issuer, purpose, workload,
+SPIFFE, full method, actor/org/project/workspace/team, exact protected target
+ID либо stable key, action/effect, command intent, version/generation/digest,
+expiry и JTI. Owner transaction должна one-use consume exact
+issuer+purpose+JTI+target+intent вместе со state/command receipt/audit: exact
+semantic replay возвращает сохранённый result, другой target/intent — conflict.
+Один mTLS peer, payload ref или обычный OIDC token полномочием не является.
+
+Регистрация receive-side operation/profile не доказывает готовность producer.
+До rebase и принятия #235 interaction-gateway ещё не выпускает bot/mapping
+receipt и не вызывает generated control-plane RPC; до #236 integration-gateway
+ещё не выпускает Git reconciliation receipt/call site. Browser не должен
+подменять эти producers. При диагностике сверить exact full method, signer JWK,
+application audience, operation ID и рабочий protected readiness вызов; не
+ослаблять profile ради временного запуска.
+
+Если ordinary UI update пытается изменить Git-owned RoleDefinition, Agent,
+InstructionSet или ProviderPool, owner может только читать drift, detach/copy.
+Exact `ReconcileGit*` требует #236 workload, permission
+`controlplane.configuration.git.apply` и signed source/revision/digest/target/
+intent; поля browser request доказательством не являются. Для InstructionSet validation не передавать verdict,
+digest или errors: их вычисляет control-plane из locked content version;
+publish допустим только после successful server validation той же версии.
+Detach очищает Git source binding, copy создаёт новый UI-owned set.
+
+Instruction create/update/reconcile до owner transaction записывает exact
+content-addressed object в versioned S3. Artifact identity и object key имеют
+один dedup domain `Project + InstructionSet stable key + content SHA-256`,
+поэтому одинаковый Markdown разных sets не конфликтует. Writer проверяет
+собственный exact `VersionId`, size, media type и SHA-256. Затем одна PostgreSQL transaction создаёт CLEAN Artifact,
+Instruction version, command receipt, audit и history. Orphan object после
+database rollback безопасно переиспользуется только при exact metadata
+readback; удалять его вручную в рамках диагностики запрещено.
+
+После upgrade прочитать `ListLegacyConfigurationCutovers`. `BLOCKED` не
+является потерей catalog: оно сохраняет deterministic target IDs, source
+versions/digests и typed `block_code/manual_action`. Выполнить
+`ResolveLegacyConfigurationCutover` только с exact immutable Instruction
+content matching source SHA; server сам повторно lock-проверит legacy
+Role/Prompt, Artifact, runtime profile, credentials и Workspace. Любая
+неоднозначность откатывает весь target catalog; ручные INSERT/UPDATE запрещены.
+
+Для Incident action использовать только `acknowledge|retry|release|close`.
+Owner и project operator требуют разные exact permissions, но используют один
+authoritative execution→project eligibility для get/list/history/action.
+Перед retry сверить incident version и весь current Process/Session/Turn/
+Runtime graph. Incident fence является монотонной нижней границей: последующий
+terminal transition вправе увеличить execution fence, но future/stale incident
+либо не-current execution отклоняется. Старый execution/lease/grant/claim должен стать terminal, а
+successor — получить fresh attempt и generation. `release` считается успешным
+только когда returned released execution и весь graph стали `CANCELLED`, а
+старые leases/grants/claims отозваны. Не менять incident или execution ручным
+SQL.
+
+Workspace backup фиксирует immutable membership snapshot и digest для
+`WORKSPACE|ALL_WORKSPACES`, где Workspace — авторитетный Project aggregate, а
+не repository checkout. Snapshot использует отдельный `FOR UPDATE` owner query
+и перечисляет все non-deleted исторические Session, включая
+`ARCHIVED`/`CANCELLED`, не применяя current AgentAssignment/Workspace admission; для каждой требуется
+exact terminal archive. Один отсутствующий archive откатывает весь create,
+поэтому AVAILABLE с молча исключённой Session недопустим. Owner RPC принимает только create/cancel/retry.
+Complete/fail/expire выбирает bounded in-process recovery reconciler через
+PostgreSQL candidate query; browser не является lifecycle engine. Restore
+принимается только для exact AVAILABLE backup version/digest и материализует
+всех members одной transaction. При cancel/fail/expire весь envelope
+становится terminal, generation/revoke watermark продвигается; частично
+успешный envelope запрещён. Retry создаёт fresh attempt, `RuntimeRevision` и
+grant для каждого member. Ошибка recovery worker закрывает readiness; искать
+`workspace recovery reconcile` в runtime diagnostics без вывода payload.
+
+При mapping relink/unlink сначала проверить отсутствие open
+Workspace→Chat→Session→Turn/delivery graph. Open graph должен дать закрытый
+conflict без изменения mapping version/generation. Run timeline и artifacts
+проверять по stable cursor `(occurred_at,id)`; UUID не является
+хронологическим курсором. `GetRunLineage` должен вернуть root Process, все
+descendants, parent/child edges и все attempt predecessor/successor edges;
+authoritative набор начинается от Process→Turn→TurnAttempt→его immutable
+RuntimeRevision pin,
+поэтому `QUEUED`/`BLOCKED`/`WAITING_OWNER` до runtime admission также видны.
+После retry старые RuntimeRevision, events и prompt/input/result artifacts не
+исчезают.
 
 ## Остановка и rollback
 
@@ -642,9 +766,15 @@ resource ID или произвольный input.
 5. tracing shutdown и Sentry flush получают независимые contexts.
 
 Application rollback допустим только к образу, который понимает уже
-опубликованные Proto/schema/policy revisions. Schema и authority policy 8,
+опубликованные Proto/schema/policy revisions. Schema `20260806023400` и
+authority policy 23,
 proof generation, audit и outbox назад не откатываются. При несовместимости
 оставить workload not ready и подготовить forward fix.
+
+Миграция `20260806023400` в PR #239 ещё не merged и может быть атомарно
+исправлена только до первого owner-approved apply. Вне этого процесса её не
+применять. После первого применения файл неизменяем; следующее исправление —
+только новая forward migration.
 
 После миграции `20260803000100` rollback выполняется только вперёд: старый
 runtime выключается, данные runtime execution/continuation сохраняются, новая

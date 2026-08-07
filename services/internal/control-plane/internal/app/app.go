@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -31,13 +32,19 @@ import (
 	oidcauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/oidc"
 	authoritypolicy "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/policy"
 	readbackgrantauth "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/authorization/readbackgrant"
+	objectclient "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/objectstore"
 	proofsignerfile "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/client/proofsigner/file"
+	domainerrs "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
+	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 	internalobservability "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/observability"
 	cachecontrolplane "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/cache/controlplane"
 	postgrescontrolplane "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/repository/postgres/controlplane"
 	transportgrpc "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/transport/grpc"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	stdgrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -223,6 +230,17 @@ func Run(
 	if err != nil {
 		return err
 	}
+	instructionObjects, err := objectclient.New(objectclient.Config{
+		Endpoint: config.InstructionS3Endpoint, TLSServerName: config.InstructionS3TLSServerName,
+		CAFile: config.InstructionS3CAFile, ClientCertificateFile: config.InstructionS3ClientCertificateFile,
+		ClientPrivateKeyFile: config.InstructionS3ClientPrivateKeyFile,
+		AccessKeyFile:        config.InstructionS3AccessKeyFile, SecretKeyFile: config.InstructionS3SecretKeyFile,
+		SessionTokenFile: config.InstructionS3SessionTokenFile, Bucket: config.InstructionS3Bucket,
+		MaximumObjectBytes: 262144, Timeout: config.ReadinessTimeout,
+	}, postgresRepository)
+	if err != nil {
+		return err
+	}
 	resourceService, err := resource.New(cachedRepository, resource.Config{
 		LeaseSigningKey:             leaseKey,
 		RuntimeAdmissionSigningKey:  admissionSigningKey,
@@ -272,6 +290,7 @@ func Run(
 		PendingRescheduleDelay:      config.PendingRescheduleDelay,
 		InteractionReadbackIssuer:   interactionReadbackIssuer{signer: interactionReadbackSigner},
 		Observer:                    businessMetrics,
+		InstructionObjects:          instructionObjects,
 	})
 	if err != nil {
 		return err
@@ -446,12 +465,13 @@ func Run(
 		return err
 	}
 	checker := &readinessChecker{
-		repository:     cachedRepository,
-		cache:          state.cache,
-		relay:          relay,
-		proof:          proofService,
-		verifier:       state.authority.Verifier(),
-		policyRevision: loadedPolicy.Revision,
+		repository:         cachedRepository,
+		cache:              state.cache,
+		relay:              relay,
+		proof:              proofService,
+		verifier:           state.authority.Verifier(),
+		policyRevision:     loadedPolicy.Revision,
+		instructionObjects: instructionObjects,
 	}
 	if _, err := checker.Check(startup); err != nil {
 		return fmt.Errorf("startup barrier: %w", err)
@@ -529,6 +549,10 @@ func Run(
 				config,
 			)
 		},
+		func(ctx context.Context) error {
+			return runWorkspaceRecovery(ctx, postgresRepository, resourceService,
+				loadedPolicy.Revision, config.RecoveryPollInterval)
+		},
 	)
 	workerResult := make(chan error, 1)
 	go func() {
@@ -551,6 +575,83 @@ func Run(
 		}
 		return nil
 	}
+}
+
+func runWorkspaceRecovery(
+	ctx context.Context,
+	repository domainrepo.WorkspaceRecoveryCandidateRepository,
+	service *resource.Service,
+	policyRevision uint64,
+	pollInterval time.Duration,
+) error {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		candidate, err := repository.NextWorkspaceRecoveryCandidate(ctx)
+		if err == nil {
+			permission := "controlplane.workspace_backup.terminal"
+			if candidate.Kind == enum.KindWorkspaceRestore {
+				permission = "controlplane.workspace_restore.terminal"
+			}
+			authorityDigest := workspaceRecoveryIntentDigest(candidate.ResourceID,
+				candidate.Version, candidate.Outcome, candidate.TerminalReasonCode)
+			principal := value.Principal{
+				ActorID: candidate.OwnerActorID, OrganizationID: candidate.OrganizationID,
+				ProjectID: candidate.ProjectID, Permission: permission,
+				CorrelationID: uuid.NewString(), PolicyRevision: policyRevision,
+				AuthorityGeneration: candidate.Generation,
+				CallerWorkload:      "control-plane-recovery-reconciler",
+				CallerSPIFFEID:      "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane-recovery-reconciler",
+				AuthoritySource:     "DOMAIN_STATE", AuthorityReference: candidate.ResourceID,
+				AuthorityRevision: candidate.Version,
+				AuthorityDigest:   authorityDigest,
+			}
+			input := resource.ReconcileWorkspaceRecoveryInput{
+				Principal: principal, IdempotencyKey: "workspace-recovery-" + authorityDigest,
+				ResourceID: candidate.ResourceID, ExpectedVersion: candidate.Version,
+				ExpectedAttempt: candidate.Attempt, ExpectedGeneration: candidate.Generation,
+				Outcome: candidate.Outcome, TerminalReasonCode: candidate.TerminalReasonCode,
+			}
+			if candidate.Kind == enum.KindWorkspaceBackup {
+				_, err = service.ReconcileWorkspaceBackupTerminal(ctx, input)
+			} else {
+				_, err = service.ReconcileWorkspaceRestoreTerminal(ctx, input)
+			}
+			if errors.Is(err, domainerrs.ErrStateConflict) && candidate.Outcome == "complete" {
+				// Exact terminal readback расходится с immutable snapshot. Оставлять
+				// такой candidate вечным predecessor нельзя: один bounded fallback
+				// закрывает весь envelope как FAILED. Конкурентный winner всё равно
+				// победит через version/attempt/generation OCC.
+				input.Outcome = "fail"
+				input.TerminalReasonCode = "recovery_readback_mismatch"
+				input.Principal.AuthorityDigest = workspaceRecoveryIntentDigest(input.ResourceID,
+					input.ExpectedVersion, input.Outcome, input.TerminalReasonCode)
+				input.IdempotencyKey = "workspace-recovery-" + input.Principal.AuthorityDigest
+				if candidate.Kind == enum.KindWorkspaceBackup {
+					_, err = service.ReconcileWorkspaceBackupTerminal(ctx, input)
+				} else {
+					_, err = service.ReconcileWorkspaceRestoreTerminal(ctx, input)
+				}
+			}
+		}
+		if err != nil && !errors.Is(err, domainerrs.ErrNotFound) &&
+			!errors.Is(err, domainerrs.ErrVersionMismatch) &&
+			!errors.Is(err, domainerrs.ErrStateConflict) {
+			return fmt.Errorf("workspace recovery reconcile: %w", err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func workspaceRecoveryIntentDigest(resourceID string, version uint64, outcome, reason string) string {
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		resourceID, fmt.Sprint(version), outcome, reason,
+	}, "\x00")))
+	return fmt.Sprintf("%x", digest[:])
 }
 
 func reconcileReadiness(

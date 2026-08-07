@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,6 +37,15 @@ type Config struct {
 	RedisPasswordFile                   string        `env:"CONTROL_PLANE_REDIS_PASSWORD_FILE"`
 	RedisDatabase                       int           `env:"CONTROL_PLANE_REDIS_DATABASE"`
 	RedisPoolSize                       int           `env:"CONTROL_PLANE_REDIS_POOL_SIZE"`
+	InstructionS3Endpoint               string        `env:"CONTROL_PLANE_INSTRUCTION_S3_ENDPOINT"`
+	InstructionS3TLSServerName          string        `env:"CONTROL_PLANE_INSTRUCTION_S3_TLS_SERVER_NAME"`
+	InstructionS3CAFile                 string        `env:"CONTROL_PLANE_INSTRUCTION_S3_CA_FILE"`
+	InstructionS3ClientCertificateFile  string        `env:"CONTROL_PLANE_INSTRUCTION_S3_CLIENT_CERTIFICATE_FILE"`
+	InstructionS3ClientPrivateKeyFile   string        `env:"CONTROL_PLANE_INSTRUCTION_S3_CLIENT_PRIVATE_KEY_FILE"`
+	InstructionS3AccessKeyFile          string        `env:"CONTROL_PLANE_INSTRUCTION_S3_ACCESS_KEY_FILE"`
+	InstructionS3SecretKeyFile          string        `env:"CONTROL_PLANE_INSTRUCTION_S3_SECRET_KEY_FILE"`
+	InstructionS3SessionTokenFile       string        `env:"CONTROL_PLANE_INSTRUCTION_S3_SESSION_TOKEN_FILE"`
+	InstructionS3Bucket                 string        `env:"CONTROL_PLANE_INSTRUCTION_S3_BUCKET"`
 	NATSURL                             string        `env:"CONTROL_PLANE_NATS_URL"`
 	NATSTLSServerName                   string        `env:"CONTROL_PLANE_NATS_TLS_SERVER_NAME"`
 	NATSCAFile                          string        `env:"CONTROL_PLANE_NATS_CA_FILE"`
@@ -69,6 +79,7 @@ type Config struct {
 	RoleRuntimeContractRevision         uint64        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256           string        `env:"CONTROL_PLANE_ROLE_RUNTIME_CONTRACT_SHA256"`
 	PendingRescheduleDelay              time.Duration `env:"CONTROL_PLANE_PENDING_RESCHEDULE_DELAY"`
+	RecoveryPollInterval                time.Duration `env:"CONTROL_PLANE_RECOVERY_POLL_INTERVAL"`
 	OIDCTLSServerName                   string        `env:"CONTROL_PLANE_OIDC_TLS_SERVER_NAME"`
 	OIDCCAFile                          string        `env:"CONTROL_PLANE_OIDC_CA_FILE"`
 	ApplicationGrantTrustDir            string        `env:"CONTROL_PLANE_APPLICATION_GRANT_TRUST_DIR"`
@@ -110,6 +121,14 @@ func loadConfig() (Config, error) {
 		RedisPasswordFile:                   "/var/run/secrets/mattercodex/control-plane/redis/password",
 		RedisDatabase:                       0,
 		RedisPoolSize:                       16,
+		InstructionS3Endpoint:               "https://object-store.storage.svc.cluster.local",
+		InstructionS3TLSServerName:          "object-store.storage.svc.cluster.local",
+		InstructionS3CAFile:                 "/var/run/config/mattercodex/control-plane/object-store/ca.pem",
+		InstructionS3ClientCertificateFile:  "/var/run/secrets/mattercodex/control-plane/workload-tls/tls.crt",
+		InstructionS3ClientPrivateKeyFile:   "/var/run/secrets/mattercodex/control-plane/workload-tls/tls.key",
+		InstructionS3AccessKeyFile:          "/var/run/secrets/mattercodex/control-plane/instruction-object-store/access-key",
+		InstructionS3SecretKeyFile:          "/var/run/secrets/mattercodex/control-plane/instruction-object-store/secret-key",
+		InstructionS3Bucket:                 "mattercodex-instruction-artifacts",
 		NATSURL:                             "tls://nats.mattercodex-system.svc:4222",
 		NATSTLSServerName:                   "nats.mattercodex-system.svc.cluster.local",
 		NATSCAFile:                          "/var/run/config/mattercodex/control-plane/nats/ca.pem",
@@ -141,6 +160,7 @@ func loadConfig() (Config, error) {
 		RoleRuntimeContractRevision:         1,
 		RoleRuntimeContractSHA256:           "0000000000000000000000000000000000000000000000000000000000000000",
 		PendingRescheduleDelay:              30 * time.Second,
+		RecoveryPollInterval:                time.Second,
 		OIDCTLSServerName:                   "sso.mattercodex.local",
 		OIDCCAFile:                          "/var/run/config/mattercodex/control-plane/oidc/ca.pem",
 		ApplicationGrantTrustDir:            "/var/run/config/mattercodex/control-plane/application-grants",
@@ -167,6 +187,13 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	instructionEndpoint, instructionEndpointErr := url.Parse(config.InstructionS3Endpoint)
+	if instructionEndpointErr != nil || instructionEndpoint.Scheme != "https" ||
+		instructionEndpoint.Hostname() != config.InstructionS3TLSServerName || instructionEndpoint.Path != "" ||
+		instructionEndpoint.User != nil || instructionEndpoint.RawQuery != "" || instructionEndpoint.Fragment != "" ||
+		config.InstructionS3Bucket != "mattercodex-instruction-artifacts" {
+		return errors.New("control-plane instruction object store endpoint is invalid")
+	}
 	for _, endpoint := range []string{
 		config.GRPCListen,
 		config.TechnicalListen,
@@ -206,6 +233,7 @@ func (config Config) validate() error {
 		config.RedisTLSServerName,
 		config.NATSTLSServerName,
 		config.OIDCTLSServerName,
+		config.InstructionS3TLSServerName,
 	} {
 		if serverName == "" || net.ParseIP(serverName) != nil {
 			return errors.New("control-plane TLS server name is invalid")
@@ -235,10 +263,18 @@ func (config Config) validate() error {
 		config.RuntimeRestoreSigningKeyFile,
 		config.OIDCCAFile,
 		config.ApplicationGrantTrustDir,
+		config.InstructionS3CAFile,
+		config.InstructionS3ClientCertificateFile,
+		config.InstructionS3ClientPrivateKeyFile,
+		config.InstructionS3AccessKeyFile,
+		config.InstructionS3SecretKeyFile,
 	} {
 		if !filepath.IsAbs(path) {
 			return errors.New("control-plane runtime path must be absolute")
 		}
+	}
+	if config.InstructionS3SessionTokenFile != "" && !filepath.IsAbs(config.InstructionS3SessionTokenFile) {
+		return errors.New("control-plane instruction object store session credential path must be absolute")
 	}
 	if config.StartupTimeout < time.Second ||
 		config.StartupTimeout > time.Minute ||
@@ -253,6 +289,7 @@ func (config Config) validate() error {
 		config.CacheTimeout > time.Second ||
 		config.TurnLeaseDuration < 5*time.Second ||
 		config.TurnLeaseDuration > 5*time.Minute ||
+		config.RecoveryPollInterval < 100*time.Millisecond || config.RecoveryPollInterval > time.Minute ||
 		config.PendingRescheduleDelay < 5*time.Second || config.PendingRescheduleDelay > 5*time.Minute {
 		return errors.New("control-plane duration is invalid")
 	}
@@ -328,6 +365,62 @@ func expectedOperations() map[string]string {
 		"control.backup.restore":                         controlplanev1.ControlPlaneService_RestoreBackup_FullMethodName,
 		"control.restore-operation.get":                  controlplanev1.ControlPlaneService_GetRestoreOperation_FullMethodName,
 		"control.restore-operation.list":                 controlplanev1.ControlPlaneService_ListRestoreOperations_FullMethodName,
+		"control.role-definition.manage":                 controlplanev1.ControlPlaneService_ManageRoleDefinition_FullMethodName,
+		"control.role-definition.git.reconcile":          controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
+		"control.role-definition.get":                    controlplanev1.ControlPlaneService_GetRoleDefinition_FullMethodName,
+		"control.role-definition.list":                   controlplanev1.ControlPlaneService_ListRoleDefinitions_FullMethodName,
+		"control.role-definition.history":                controlplanev1.ControlPlaneService_ListRoleDefinitionHistory_FullMethodName,
+		"control.agent.manage":                           controlplanev1.ControlPlaneService_ManageAgent_FullMethodName,
+		"control.agent.git.reconcile":                    controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName,
+		"control.interaction.agent-bot.manage":           controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
+		"control.agent.get":                              controlplanev1.ControlPlaneService_GetAgent_FullMethodName,
+		"control.agent.list":                             controlplanev1.ControlPlaneService_ListAgents_FullMethodName,
+		"control.agent.history":                          controlplanev1.ControlPlaneService_ListAgentHistory_FullMethodName,
+		"control.agent-assignment.manage":                controlplanev1.ControlPlaneService_ManageAgentAssignment_FullMethodName,
+		"control.agent-assignment.get":                   controlplanev1.ControlPlaneService_GetAgentAssignment_FullMethodName,
+		"control.agent-assignment.list":                  controlplanev1.ControlPlaneService_ListAgentAssignments_FullMethodName,
+		"control.agent-assignment.history":               controlplanev1.ControlPlaneService_ListAgentAssignmentHistory_FullMethodName,
+		"control.instruction-set.manage":                 controlplanev1.ControlPlaneService_ManageInstructionSet_FullMethodName,
+		"control.instruction-set.git.reconcile":          controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
+		"control.instruction-set.get":                    controlplanev1.ControlPlaneService_GetInstructionSet_FullMethodName,
+		"control.instruction-set.list":                   controlplanev1.ControlPlaneService_ListInstructionSets_FullMethodName,
+		"control.instruction-set.history":                controlplanev1.ControlPlaneService_ListInstructionSetHistory_FullMethodName,
+		"control.instruction-set.compare":                controlplanev1.ControlPlaneService_CompareInstructionSetVersions_FullMethodName,
+		"control.provider-reference.get":                 controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
+		"control.provider-reference.list":                controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
+		"control.provider-reference.history":             controlplanev1.ControlPlaneService_ListProviderConnectionReferenceHistory_FullMethodName,
+		"control.provider-pool.manage":                   controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName,
+		"control.provider-pool.git.reconcile":            controlplanev1.ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
+		"control.provider-pool.get":                      controlplanev1.ControlPlaneService_GetProviderPool_FullMethodName,
+		"control.provider-pool.list":                     controlplanev1.ControlPlaneService_ListProviderPools_FullMethodName,
+		"control.provider-pool.history":                  controlplanev1.ControlPlaneService_ListProviderPoolHistory_FullMethodName,
+		"control.schedule.bind":                          controlplanev1.ControlPlaneService_BindScheduleConfiguration_FullMethodName,
+		"control.schedule.create-from-selections":        controlplanev1.ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName,
+		"control.run.manage":                             controlplanev1.ControlPlaneService_ManageRun_FullMethodName,
+		"control.run.get":                                controlplanev1.ControlPlaneService_GetRunDetail_FullMethodName,
+		"control.run.timeline":                           controlplanev1.ControlPlaneService_ListRunTimeline_FullMethodName,
+		"control.run.lineage":                            controlplanev1.ControlPlaneService_GetRunLineage_FullMethodName,
+		"control.run.artifacts.list":                     controlplanev1.ControlPlaneService_ListRunArtifacts_FullMethodName,
+		"control.workspace-backup.manage":                controlplanev1.ControlPlaneService_ManageWorkspaceBackup_FullMethodName,
+		"control.workspace-backup.get":                   controlplanev1.ControlPlaneService_GetWorkspaceBackup_FullMethodName,
+		"control.workspace-backup.list":                  controlplanev1.ControlPlaneService_ListWorkspaceBackups_FullMethodName,
+		"control.workspace-restore.manage":               controlplanev1.ControlPlaneService_ManageWorkspaceRestore_FullMethodName,
+		"control.workspace-restore.get":                  controlplanev1.ControlPlaneService_GetWorkspaceRestore_FullMethodName,
+		"control.workspace-restore.list":                 controlplanev1.ControlPlaneService_ListWorkspaceRestores_FullMethodName,
+		"control.runtime-incident.manage":                controlplanev1.ControlPlaneService_ManageRuntimeIncident_FullMethodName,
+		"control.runtime-incident.get":                   controlplanev1.ControlPlaneService_GetRuntimeIncident_FullMethodName,
+		"control.runtime-incident.history":               controlplanev1.ControlPlaneService_ListRuntimeIncidentHistory_FullMethodName,
+		"control.workspace-mapping.get":                  controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
+		"control.workspace-mapping.list":                 controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
+		"control.legacy-cutover.get":                     controlplanev1.ControlPlaneService_GetLegacyConfigurationCutover_FullMethodName,
+		"control.legacy-cutover.list":                    controlplanev1.ControlPlaneService_ListLegacyConfigurationCutovers_FullMethodName,
+		"control.legacy-cutover.resolve":                 controlplanev1.ControlPlaneService_ResolveLegacyConfigurationCutover_FullMethodName,
+		"control.integration.provider-reference.manage":  controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
+		"control.integration.provider-reference.get":     controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
+		"control.integration.provider-reference.list":    controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
+		"control.interaction.workspace-mapping.manage":   controlplanev1.ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName,
+		"control.interaction.workspace-mapping.get":      controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
+		"control.interaction.workspace-mapping.list":     controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,
 		"control.artifact.scan":                          controlplanev1.ControlPlaneService_RecordArtifactScan_FullMethodName,
 		"control.artifact-scanner.readiness":             controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
 		"control.role-image-recipe.manage":               controlplanev1.ControlPlaneService_ManageRoleImageRecipe_FullMethodName,

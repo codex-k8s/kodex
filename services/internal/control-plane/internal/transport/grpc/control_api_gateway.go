@@ -79,13 +79,7 @@ func (server *Server) ListRuntimeIncidents(ctx context.Context,
 		Incidents: make([]*controlplanev1.RuntimeIncident, 0, len(incidents)),
 	}
 	for _, incident := range incidents {
-		response.Incidents = append(response.Incidents, &controlplanev1.RuntimeIncident{
-			IncidentId: incident.ID, ExecutionId: incident.ExecutionID,
-			ExecutionFence: incident.ExecutionFence,
-			Kind:           toProtoRuntimeIncidentKind(incident.Kind),
-			EvidenceSha256: incident.EvidenceSHA256, WorkloadId: incident.WorkloadID,
-			OccurredAt: timestamppb.New(incident.OccurredAt),
-		})
+		response.Incidents = append(response.Incidents, runtimeIncidentToProto(incident))
 	}
 	if len(incidents) == limit {
 		response.NextPageToken = incidents[len(incidents)-1].ID

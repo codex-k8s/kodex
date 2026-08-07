@@ -3,6 +3,7 @@ package resource
 import (
 	"time"
 
+	domainobjectstore "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/client/objectstore"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
@@ -106,6 +107,195 @@ type CopyAccessResourceInput struct {
 	ExpectedSourceVersion uint64
 	ExpectedKind          enum.Kind
 	Name                  string
+}
+
+type ManageProtectedConfigurationInput struct {
+	Principal         value.Principal
+	FullMethod        string
+	IdempotencyKey    string
+	Kind              enum.Kind
+	Action            string
+	ResourceID        string
+	ExpectedVersion   uint64
+	Name              string
+	Spec              entity.Spec
+	TargetVersion     uint64
+	TargetSHA256      string
+	ReferenceKeys     []string
+	ProviderReceipt   value.ProviderEffectReceipt
+	GitReceipt        value.GitReconciliationReceipt
+	InstructionObject domainobjectstore.Object
+}
+
+type ProtectedResourceHistoryInput struct {
+	Principal     value.Principal
+	ResourceID    string
+	Kind          enum.Kind
+	BeforeVersion uint64
+	Limit         int
+}
+
+type CompareInstructionVersionsInput struct {
+	Principal        value.Principal
+	InstructionSetID string
+	LeftVersion      uint64
+	RightVersion     uint64
+}
+
+type CompareInstructionVersionsResult struct {
+	Left             domainrepo.ProtectedResourceHistory
+	Right            domainrepo.ProtectedResourceHistory
+	ContentEqual     bool
+	ComparisonSHA256 string
+}
+
+type BindScheduleConfigurationInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	ScheduleID              string
+	ExpectedVersion         uint64
+	AgentStableKey          string
+	InstructionSetStableKey string
+	ProviderPoolStableKey   string
+}
+
+type CreateScheduleFromOwnerSelectionsInput struct {
+	Principal               value.Principal
+	IdempotencyKey          string
+	Name                    string
+	AgentStableKey          string
+	InstructionSetStableKey string
+	ProviderPoolStableKey   string
+	RoomStableKey           string
+	PromptArtifactName      string
+	Spec                    entity.ScheduleSpec
+}
+
+type ResolveLegacyConfigurationCutoverInput struct {
+	Principal                   value.Principal
+	IdempotencyKey              string
+	LegacyRoleID                string
+	ExpectedLegacyRoleVersion   uint64
+	ExpectedLegacyPromptVersion uint64
+	InstructionContent          string
+}
+
+type ResolveLegacyConfigurationCutoverResult struct {
+	Cutover domainrepo.LegacyConfigurationCutover
+	Agent   entity.Resource
+}
+
+type ManageRunInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	ProcessRunID    string
+	ExpectedVersion uint64
+	Action          string
+	ReasonCode      string
+}
+
+type ManageRunResult struct {
+	ProcessRun    entity.Resource
+	SuccessorTurn entity.Resource
+}
+
+type RunDetailResult struct {
+	ProcessRun      entity.Resource
+	Session         entity.Resource
+	Turn            entity.Resource
+	RuntimeRevision entity.Resource
+	Runtime         *domainrepo.RuntimeExecution
+	Incidents       []domainrepo.RuntimeIncident
+}
+
+type RunLineageResult struct {
+	RootProcessRunID                              string
+	RootSessionID, RootTurnID, ParentProcessRunID string
+	CurrentSessionID                              string
+	CurrentSessionVersion                         uint64
+	CurrentTurnID                                 string
+	CurrentTurnVersion                            uint64
+	CurrentAttempt                                uint32
+	RuntimeRevisionID                             string
+	RuntimeRevisionVersion                        uint64
+	ImmutableInputSHA256                          string
+	Processes                                     []domainrepo.RunGraphNode
+	Attempts                                      []domainrepo.RunGraphNode
+	Complete                                      bool
+}
+
+type ManageWorkspaceMappingInput struct {
+	Principal          value.Principal
+	IdempotencyKey     string
+	Action             string
+	MappingID          string
+	ExpectedVersion    uint64
+	ExpectedGeneration uint64
+	ProviderReceipt    value.ProviderEffectReceipt
+	Name               string
+}
+
+type ManageWorkspaceBackupInput struct {
+	Principal          value.Principal
+	IdempotencyKey     string
+	Action             string
+	BackupID           string
+	ExpectedVersion    uint64
+	Scope              string
+	Name               string
+	TerminalReasonCode string
+	RetainUntil        time.Time
+}
+
+type ManageWorkspaceRestoreInput struct {
+	Principal             value.Principal
+	IdempotencyKey        string
+	Action                string
+	RestoreID             string
+	ExpectedVersion       uint64
+	BackupID              string
+	ExpectedBackupVersion uint64
+	MembershipSHA256      string
+	Name                  string
+	TerminalReasonCode    string
+}
+
+type ReconcileWorkspaceRecoveryInput struct {
+	Principal          value.Principal
+	IdempotencyKey     string
+	ResourceID         string
+	ExpectedVersion    uint64
+	ExpectedAttempt    uint32
+	ExpectedGeneration uint64
+	Outcome            string
+	TerminalReasonCode string
+}
+
+type ManageRuntimeIncidentInput struct {
+	Principal       value.Principal
+	IdempotencyKey  string
+	IncidentID      string
+	ExpectedVersion uint64
+	Action          string
+	ReasonCode      string
+}
+
+type ManageRuntimeIncidentResult struct {
+	Incident          domainrepo.RuntimeIncident
+	SuccessorTurn     entity.Resource
+	ReleasedExecution *RuntimeExecution
+}
+
+type GetRuntimeIncidentInput struct {
+	Principal  value.Principal
+	IncidentID string
+}
+
+type ListRuntimeIncidentHistoryInput struct {
+	Principal     value.Principal
+	IncidentID    string
+	BeforeVersion uint64
+	Limit         int
 }
 
 type ListAuditInput struct {
@@ -273,17 +463,16 @@ type RetryTurnInput struct {
 type CancelTurnInput = RetryTurnInput
 
 type ManageSessionInput struct {
-	Principal                            value.Principal
-	IdempotencyKey                       string
-	Action                               string
-	SessionID                            string
-	ExpectedVersion                      uint64
-	Name                                 string
-	RoleID                               string
-	ConversationID                       string
-	ArchiveRef                           string
-	ReasonCode                           string
-	PreferredProviderCredentialBindingID string
+	Principal       value.Principal
+	IdempotencyKey  string
+	Action          string
+	SessionID       string
+	ExpectedVersion uint64
+	Name            string
+	AgentStableKey  string
+	ConversationID  string
+	ArchiveRef      string
+	ReasonCode      string
 }
 
 type BindSessionMCPInput struct {

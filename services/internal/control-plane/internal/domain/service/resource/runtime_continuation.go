@@ -315,9 +315,22 @@ func (service *Service) resolveBoundExecution(
 	if err != nil {
 		return resolvedExecution{}, errs.ErrInternal
 	}
-	role, err := tx.GetForUpdate(
-		ctx, principal.OrganizationID, principal.ProjectID, sessionSpec.AgentID,
-	)
+	roleID, roleVersion := sessionSpec.AgentID, uint64(0)
+	targetAgent := sessionSpec.AgentVersion != 0
+	if targetAgent {
+		roleID, roleVersion = revisionSpec.RoleID, revisionComponentVersion(revisionSpec.Components, enum.KindRole, revisionSpec.RoleID)
+	}
+	var role entity.Resource
+	if targetAgent {
+		projectionTx, projectionOK := tx.(domainrepo.RuntimeProjectionTransaction)
+		if !projectionOK || roleVersion == 0 {
+			return resolvedExecution{}, errs.ErrInternal
+		}
+		role, err = projectionTx.GetDerivedRuntimeResource(ctx, principal.OrganizationID, principal.ProjectID,
+			roleID, enum.KindRole, roleVersion)
+	} else {
+		role, err = tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, roleID)
+	}
 	if err != nil {
 		return resolvedExecution{}, err
 	}
@@ -325,7 +338,11 @@ func (service *Service) resolveBoundExecution(
 	if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive {
 		return resolvedExecution{}, errs.ErrStateConflict
 	}
-	if revisionSpec.SessionID != session.ID || revisionSpec.RoleID != role.ID {
+	if revisionSpec.SessionID != session.ID || revisionSpec.RoleID != role.ID ||
+		(targetAgent && (revisionSpec.AgentID != sessionSpec.AgentID || revisionSpec.AgentVersion != sessionSpec.AgentVersion ||
+			revisionSpec.AgentSHA256 != sessionSpec.AgentSHA256 || revisionSpec.AgentAssignmentID != sessionSpec.AgentAssignmentID ||
+			revisionSpec.AgentAssignmentVersion != sessionSpec.AgentAssignmentVersion ||
+			revisionSpec.AgentAssignmentSHA256 != sessionSpec.AgentAssignmentSHA256)) {
 		return resolvedExecution{}, errs.ErrStateConflict
 	}
 	var roleComponent entity.EffectiveResourceRef
@@ -351,6 +368,15 @@ func (service *Service) resolveBoundExecution(
 	}
 	resolved.Runtime = graph.Runtime
 	return resolved, nil
+}
+
+func revisionComponentVersion(components []entity.EffectiveResourceRef, kind enum.Kind, resourceID string) uint64 {
+	for _, component := range components {
+		if component.Kind == kind && component.ResourceID == resourceID {
+			return component.Version
+		}
+	}
+	return 0
 }
 
 func runtimeResourcePolicy(role entity.RoleSpec) (string, string) {
@@ -852,8 +878,23 @@ func (service *Service) runtimeMaterializations(
 	if err != nil {
 		return nil, err
 	}
-	promptProfile, err := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID,
-		resolved.RevisionSpec.PromptProfileID)
+	var promptProfile entity.Resource
+	if resolved.RevisionSpec.AgentID != "" {
+		projectionTx, projectionOK := tx.(domainrepo.RuntimeProjectionTransaction)
+		if !projectionOK {
+			return nil, errs.ErrInternal
+		}
+		promptVersion := revisionComponentVersion(resolved.RevisionSpec.Components, enum.KindPromptProfile,
+			resolved.RevisionSpec.PromptProfileID)
+		if promptVersion == 0 {
+			return nil, errs.ErrStateConflict
+		}
+		promptProfile, err = projectionTx.GetDerivedRuntimeResource(ctx, principal.OrganizationID, principal.ProjectID,
+			resolved.RevisionSpec.PromptProfileID, enum.KindPromptProfile, promptVersion)
+	} else {
+		promptProfile, err = tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID,
+			resolved.RevisionSpec.PromptProfileID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1384,6 +1425,16 @@ func (service *Service) RecordRuntimeIncident(
 			if err := matchRuntimeMutation(execution, input.RuntimeExecutionInput); err != nil {
 				return err
 			}
+			expectedVersion, expectedFence := execution.Version, execution.Fence
+			execution.Version++
+			execution.Fence++
+			execution.UpdatedAt = now
+			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
+				return err
+			}
+			// Incident pin указывает уже на post-revocation fence. Дальнейший
+			// terminal transition может только монотонно поднять fence; owner
+			// action повторно блокирует exact current execution.
 			if err := tx.InsertRuntimeIncident(ctx, domainrepo.RuntimeIncident{
 				ID: input.IncidentID, OrganizationID: execution.OrganizationID,
 				ProjectID: execution.ProjectID, ExecutionID: execution.ID,
@@ -1391,13 +1442,6 @@ func (service *Service) RecordRuntimeIncident(
 				EvidenceSHA256: input.EvidenceSHA256,
 				WorkloadID:     input.Principal.CallerWorkload, OccurredAt: now,
 			}); err != nil {
-				return err
-			}
-			expectedVersion, expectedFence := execution.Version, execution.Fence
-			execution.Version++
-			execution.Fence++
-			execution.UpdatedAt = now
-			if err := tx.UpdateRuntimeExecution(ctx, execution, expectedVersion, expectedFence); err != nil {
 				return err
 			}
 			graph, graphErr := service.lockOwnerGraphByTurn(ctx, tx, input.Principal, execution.TurnID)
@@ -3879,6 +3923,8 @@ func (service *Service) requireRetryableClosedRuntimeGraph(
 	target := enum.StateFailed
 	if execution.State == "EXPIRED" {
 		target = enum.StateExpired
+	} else if execution.State == "CANCELLED" {
+		target = enum.StateCancelled
 	}
 	if execution.TerminalOutcome != execution.State ||
 		!validBoundedReference(execution.TerminalReference) ||
@@ -3930,7 +3976,7 @@ func (service *Service) requireRetryableClosedRuntimeGraph(
 }
 
 func retryableRuntimePredecessor(state string) bool {
-	return state == "FAILED" || state == "EXPIRED"
+	return state == "FAILED" || state == "CANCELLED" || state == "EXPIRED"
 }
 
 func integrationOutcomeReadyForDelivery(continuation IntegrationContinuation) bool {

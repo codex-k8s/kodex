@@ -22,10 +22,12 @@ import (
 )
 
 const (
-	grantType          = "mattercodex-application-grant+jws"
-	maximumGrantTTL    = 5 * time.Minute
-	maximumClockSkew   = 5 * time.Second
-	maximumBearerBytes = 16 << 10
+	grantType           = "mattercodex-application-grant+jws"
+	providerReceiptType = "mattercodex-provider-effect-readback-receipt+jws"
+	gitReceiptType      = "mattercodex-git-reconciliation-receipt+jws"
+	maximumGrantTTL     = 5 * time.Minute
+	maximumClockSkew    = 5 * time.Second
+	maximumBearerBytes  = 16 << 10
 )
 
 type Config struct {
@@ -64,6 +66,44 @@ type claims struct {
 	IssuedAt       int64  `json:"iat"`
 	NotBefore      int64  `json:"nbf"`
 	ExpiresAt      int64  `json:"exp"`
+}
+
+type providerReceiptClaims struct {
+	ContractVersion          uint32    `json:"contract_version"`
+	Issuer                   string    `json:"iss"`
+	Purpose                  string    `json:"purpose"`
+	WorkloadID               string    `json:"workload_id"`
+	CallerSPIFFEID           string    `json:"caller_spiffe_id"`
+	FullMethod               string    `json:"full_method"`
+	ActorID                  string    `json:"actor_id"`
+	OrganizationID           string    `json:"organization_id"`
+	ProjectID                string    `json:"project_id"`
+	WorkspaceID              string    `json:"workspace_id,omitempty"`
+	ProviderTeamRef          string    `json:"provider_team_ref,omitempty"`
+	ProviderObjectRef        string    `json:"provider_object_ref,omitempty"`
+	Action                   string    `json:"action"`
+	Effect                   string    `json:"effect"`
+	EffectVersion            uint64    `json:"effect_version"`
+	EffectGeneration         uint64    `json:"effect_generation"`
+	EffectSHA256             string    `json:"effect_sha256"`
+	ReceiptID                string    `json:"jti"`
+	ReceiptRevision          uint64    `json:"revision"`
+	IssuedAt                 time.Time `json:"issued_at"`
+	NotBefore                time.Time `json:"not_before"`
+	ExpiresAt                time.Time `json:"expires_at"`
+	CredentialBindingID      string    `json:"credential_binding_id,omitempty"`
+	CredentialBindingVersion uint64    `json:"credential_binding_version,omitempty"`
+	CredentialBindingSHA256  string    `json:"credential_binding_sha256,omitempty"`
+	ProviderUsername         string    `json:"provider_username,omitempty"`
+	MaskedStatus             string    `json:"masked_status"`
+	Provider                 string    `json:"provider,omitempty"`
+	MaskedLabel              string    `json:"masked_label,omitempty"`
+	Capabilities             []string  `json:"capabilities,omitempty"`
+	Eligible                 bool      `json:"eligible"`
+	TargetKind               string    `json:"target_kind"`
+	TargetResourceID         string    `json:"target_resource_id,omitempty"`
+	TargetStableKey          string    `json:"target_stable_key"`
+	CommandIntentSHA256      string    `json:"command_intent_sha256"`
 }
 
 func New(config Config) (*Verifier, error) {
@@ -126,16 +166,27 @@ func (verifier *Verifier) Authenticate(
 	if strings.TrimSpace(compact) != compact {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
+	expectedType := grantType
+	if providerReceiptPurpose(verifier.config.Purpose) {
+		expectedType = providerReceiptType
+	} else if verifier.config.Purpose == "GIT_RECONCILIATION_RECEIPT" {
+		expectedType = gitReceiptType
+	}
 	verified, err := internalrpcauth.VerifyCanonicalJSON(
 		compact,
 		verifier.key,
 		internalrpcauth.ProtectedHeaderExpectation{
-			Type:  grantType,
+			Type:  expectedType,
 			KeyID: verifier.key.KeyID,
 		},
 	)
 	if err != nil {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	if providerReceiptPurpose(verifier.config.Purpose) {
+		return verifier.authenticateProviderReceipt(verified.CanonicalPayload)
+	} else if verifier.config.Purpose == "GIT_RECONCILIATION_RECEIPT" {
+		return verifier.authenticateGitReconciliationReceipt(verified.CanonicalPayload)
 	}
 	var parsed claims
 	if internalrpcauth.DecodeCanonicalJSON(
@@ -200,6 +251,82 @@ func (verifier *Verifier) Authenticate(
 		BoundInputSHA256:     parsed.InputSHA256,
 		BoundGeneration:      parsed.Generation,
 	}, nil
+}
+
+func (verifier *Verifier) authenticateGitReconciliationReceipt(canonicalPayload []byte) (authoritytype.ApplicationIdentity, error) {
+	var parsed value.GitReconciliationReceipt
+	if internalrpcauth.DecodeCanonicalJSON(canonicalPayload, &parsed) != nil || parsed.Validate(verifier.now().UTC()) != nil ||
+		parsed.Issuer != verifier.config.Issuer || parsed.Purpose != verifier.config.Purpose ||
+		parsed.WorkloadID != verifier.config.WorkloadID || parsed.CallerSPIFFEID != verifier.config.CallerSPIFFEID {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	return authoritytype.ApplicationIdentity{
+		ProducerID: verifier.config.ProducerID, CredentialPurpose: verifier.config.Purpose,
+		CredentialGeneration: parsed.ReceiptRevision, ActorID: parsed.ActorID,
+		OrganizationID: parsed.OrganizationID, ProjectID: parsed.ProjectID,
+		SessionJTI: parsed.ReceiptID, SessionRevision: parsed.ReceiptRevision,
+		SubjectDigest:    digest("GIT_RECONCILIATION_SUBJECT:" + parsed.ActorID),
+		CredentialDigest: digest(string(canonicalPayload)), CallerWorkload: verifier.config.WorkloadID,
+		CallerSPIFFEID: verifier.config.CallerSPIFFEID, ProviderReceiptFullMethod: parsed.FullMethod,
+		ProviderReceiptPurpose: parsed.Purpose,
+	}, nil
+}
+
+func providerReceiptPurpose(purpose string) bool {
+	return purpose == "MATTERMOST_PROVIDER_READBACK_RECEIPT" || purpose == "AI_PROVIDER_READBACK_RECEIPT"
+}
+
+func (verifier *Verifier) authenticateProviderReceipt(canonicalPayload []byte) (authoritytype.ApplicationIdentity, error) {
+	var parsed providerReceiptClaims
+	if internalrpcauth.DecodeCanonicalJSON(canonicalPayload, &parsed) != nil {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	now := verifier.now().UTC()
+	credentialBound := parsed.CredentialBindingID != "" || parsed.CredentialBindingVersion != 0 || parsed.CredentialBindingSHA256 != ""
+	if parsed.ContractVersion != 1 || parsed.Issuer != verifier.config.Issuer || parsed.Purpose != verifier.config.Purpose ||
+		parsed.WorkloadID != verifier.config.WorkloadID || parsed.CallerSPIFFEID != verifier.config.CallerSPIFFEID ||
+		value.ValidateID(parsed.ActorID) != nil || value.ValidateID(parsed.OrganizationID) != nil || value.ValidateID(parsed.ProjectID) != nil ||
+		(parsed.WorkspaceID != "" && value.ValidateID(parsed.WorkspaceID) != nil) || value.ValidateStableKey(parsed.Action) != nil ||
+		value.ValidateStableKey(parsed.Effect) != nil || parsed.EffectVersion == 0 || parsed.EffectGeneration == 0 ||
+		!validSHA256(parsed.EffectSHA256) || value.ValidateID(parsed.ReceiptID) != nil || parsed.ReceiptRevision == 0 ||
+		parsed.NotBefore.Before(parsed.IssuedAt.Add(-maximumClockSkew)) ||
+		parsed.NotBefore.After(parsed.IssuedAt.Add(maximumClockSkew)) || parsed.IssuedAt.After(now.Add(maximumClockSkew)) ||
+		!parsed.ExpiresAt.After(parsed.NotBefore) ||
+		parsed.ExpiresAt.Sub(parsed.IssuedAt) > maximumGrantTTL || now.Before(parsed.NotBefore.Add(-maximumClockSkew)) ||
+		!now.Before(parsed.ExpiresAt.Add(maximumClockSkew)) || parsed.FullMethod == "" ||
+		(parsed.Provider != "" && value.ValidateStableKey(parsed.Provider) != nil) || len(parsed.MaskedLabel) > 256 ||
+		!validStableKeys(parsed.Capabilities) ||
+		value.ValidateStableKey(parsed.TargetKind) != nil ||
+		(parsed.TargetResourceID != "" && value.ValidateID(parsed.TargetResourceID) != nil) ||
+		value.ValidateStableKey(parsed.TargetStableKey) != nil || !validSHA256(parsed.CommandIntentSHA256) ||
+		(credentialBound && (value.ValidateID(parsed.CredentialBindingID) != nil || parsed.CredentialBindingVersion == 0 || !validSHA256(parsed.CredentialBindingSHA256))) {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	return authoritytype.ApplicationIdentity{
+		ProducerID: verifier.config.ProducerID, CredentialPurpose: verifier.config.Purpose,
+		CredentialGeneration: parsed.ReceiptRevision, ActorID: parsed.ActorID, OrganizationID: parsed.OrganizationID,
+		ProjectID: parsed.ProjectID, SessionJTI: parsed.ReceiptID, SessionRevision: parsed.ReceiptRevision,
+		SubjectDigest: digest("PROVIDER_RECEIPT_SUBJECT:" + parsed.ActorID), CredentialDigest: digest(string(canonicalPayload)),
+		CallerWorkload: verifier.config.WorkloadID, CallerSPIFFEID: verifier.config.CallerSPIFFEID,
+		ProviderReceiptFullMethod: parsed.FullMethod, ProviderReceiptPurpose: parsed.Purpose,
+	}, nil
+}
+
+func validStableKeys(values []string) bool {
+	if len(values) > 64 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, item := range values {
+		if value.ValidateStableKey(item) != nil {
+			return false
+		}
+		if _, exists := seen[item]; exists {
+			return false
+		}
+		seen[item] = struct{}{}
+	}
+	return true
 }
 
 func digest(value string) string {

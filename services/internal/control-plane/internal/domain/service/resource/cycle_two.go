@@ -41,18 +41,15 @@ func (service *Service) ManageSession(
 	}
 	if input.Action == "CREATE" {
 		if value.ValidateName(input.Name) != nil ||
-			value.ValidateID(input.RoleID) != nil ||
+			value.ValidateStableKey(input.AgentStableKey) != nil ||
 			(input.ConversationID != "" && value.ValidateID(input.ConversationID) != nil) ||
-			(input.PreferredProviderCredentialBindingID != "" &&
-				value.ValidateID(input.PreferredProviderCredentialBindingID) != nil) ||
 			input.SessionID != "" || input.ExpectedVersion != 0 ||
 			input.ArchiveRef != "" || input.ReasonCode != "" {
 			return entity.Resource{}, errs.ErrInvalidInput
 		}
 	} else if value.ValidateID(input.SessionID) != nil ||
 		input.ExpectedVersion == 0 || value.ValidateStableKey(input.ReasonCode) != nil ||
-		input.Name != "" || input.RoleID != "" || input.ConversationID != "" ||
-		input.PreferredProviderCredentialBindingID != "" {
+		input.Name != "" || input.AgentStableKey != "" || input.ConversationID != "" {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	if input.Action != "CREATE" && input.Action != "CLOSE" &&
@@ -67,19 +64,17 @@ func (service *Service) ManageSession(
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	requestHash, err := semanticCommandHash(input.Principal, struct {
-		Action                               string
-		SessionID                            string
-		ExpectedVersion                      uint64
-		Name                                 string
-		RoleID                               string
-		ConversationID                       string
-		PreferredProviderCredentialBindingID string
-		ArchiveRef                           string
-		ReasonCode                           string
+		Action          string
+		SessionID       string
+		ExpectedVersion uint64
+		Name            string
+		AgentStableKey  string
+		ConversationID  string
+		ArchiveRef      string
+		ReasonCode      string
 	}{
 		input.Action, input.SessionID, input.ExpectedVersion, input.Name,
-		input.RoleID, input.ConversationID,
-		input.PreferredProviderCredentialBindingID, input.ArchiveRef,
+		input.AgentStableKey, input.ConversationID, input.ArchiveRef,
 		input.ReasonCode,
 	})
 	if err != nil {
@@ -91,41 +86,77 @@ func (service *Service) ManageSession(
 			requestHash,
 			func(tx domainrepo.Transaction) (entity.Resource, error) {
 				now := service.now().UTC().Truncate(time.Microsecond)
-				role, err := tx.GetForUpdate(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.RoleID,
-				)
+				protected, ok := tx.(domainrepo.ProtectedTransaction)
+				if !ok {
+					return entity.Resource{}, errs.ErrInternal
+				}
+				workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, input.Principal)
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				roleSpec, ok := role.Spec.(entity.RoleSpec)
-				if !ok || role.Kind != enum.KindRole || role.State != enum.StateActive ||
-					len(roleSpec.ProviderCredentialBindingIDs) == 0 {
+				agent, err := requireProtectedStable(ctx, protected, input.Principal,
+					enum.KindAgent, input.AgentStableKey)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				agentSpec, ok := agent.Spec.(entity.AgentSpec)
+				if !ok || agent.State != enum.StateActive || !agentSpec.Enabled {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
-				roleIDs, err := tx.ActorRoleIDs(
-					ctx,
-					input.Principal.OrganizationID,
-					input.Principal.ProjectID,
-					input.Principal.ActorID,
-				)
+				agentSHA, err := entity.ProjectionSHA256(agent)
+				if err != nil {
+					return entity.Resource{}, errs.ErrInternal
+				}
+				pool, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, agentSpec.ProviderPoolID)
 				if err != nil {
 					return entity.Resource{}, err
 				}
-				if !slices.Contains(roleIDs, role.ID) {
+				poolSHA, err := entity.ProjectionSHA256(pool)
+				if err != nil || pool.Kind != enum.KindProviderPool || pool.State != enum.StateActive ||
+					pool.Version != agentSpec.ProviderPoolVersion || poolSHA != agentSpec.ProviderPoolSHA256 {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				resources, err := tx.ListSnapshotResources(ctx, input.Principal.OrganizationID, input.Principal.ProjectID)
+				if err != nil {
+					return entity.Resource{}, err
+				}
+				assignmentIDs := make([]string, 0, 1)
+				for _, candidate := range resources {
+					spec, specOK := candidate.Spec.(entity.AgentAssignmentSpec)
+					if specOK && candidate.Kind == enum.KindAgentAssignment && candidate.State == enum.StateActive &&
+						candidate.OwnerActorID == input.Principal.ActorID && spec.RootActorID == input.Principal.ActorID &&
+						spec.AgentID == agent.ID && spec.WorkspaceID == input.Principal.ProjectID &&
+						(input.ConversationID == "" && spec.RoomID == "" || spec.RoomID == input.ConversationID) {
+						assignmentIDs = append(assignmentIDs, candidate.ID)
+					}
+				}
+				slices.Sort(assignmentIDs)
+				if len(assignmentIDs) == 0 {
 					return entity.Resource{}, errs.ErrNotFound
 				}
-				sessionID := uuid.NewString()
-				binding, err := service.selectProviderBinding(
-					ctx, tx, input.Principal, role.ID, roleSpec,
-					input.PreferredProviderCredentialBindingID,
-					now,
-				)
+				if len(assignmentIDs) != 1 {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				assignment, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+					input.Principal.ProjectID, assignmentIDs[0])
 				if err != nil {
 					return entity.Resource{}, err
 				}
+				assignmentSpec, assignmentOK := assignment.Spec.(entity.AgentAssignmentSpec)
+				assignmentSHA, digestErr := entity.ProjectionSHA256(assignment)
+				if !assignmentOK || digestErr != nil || assignment.Kind != enum.KindAgentAssignment ||
+					assignment.State != enum.StateActive || assignment.OwnerActorID != input.Principal.ActorID ||
+					assignmentSpec.RootActorID != input.Principal.ActorID || assignmentSpec.AgentID != agent.ID ||
+					assignmentSpec.AgentVersion != agent.Version || assignmentSpec.AgentSHA256 != agentSHA ||
+					assignmentSpec.WorkspaceID != input.Principal.ProjectID ||
+					assignmentSpec.WorkspaceVersion != workspace.Version ||
+					assignmentSpec.WorkspaceSHA256 != workspaceSHA ||
+					(input.ConversationID == "" && assignmentSpec.RoomID != "" ||
+						input.ConversationID != "" && assignmentSpec.RoomID != input.ConversationID) {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+				sessionID := uuid.NewString()
 				if input.ConversationID != "" {
 					conversation, err := tx.GetForUpdate(
 						ctx,
@@ -150,9 +181,11 @@ func (service *Service) ManageSession(
 					enum.KindSession,
 					input.Name,
 					entity.SessionSpec{
-						AgentID:                  role.ID,
-						ProviderAccountBindingID: binding.ID,
-						ConversationID:           input.ConversationID,
+						AgentID: agent.ID, AgentVersion: agent.Version, AgentSHA256: agentSHA,
+						ProviderPoolID: pool.ID, ProviderPoolVersion: pool.Version, ProviderPoolSHA256: poolSHA,
+						AgentAssignmentID: assignment.ID, AgentAssignmentVersion: assignment.Version,
+						AgentAssignmentSHA256: assignmentSHA,
+						ConversationID:        input.ConversationID,
 					},
 					now,
 				)
@@ -416,11 +449,12 @@ func (service *Service) selectProviderBinding(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
-	roleID string,
+	selectionKeyID string,
 	roleSpec entity.RoleSpec,
 	preferredBindingID string,
 	now time.Time,
 ) (entity.Resource, error) {
+	const credentialExpiryHeadroom = 5 * time.Minute
 	type candidate struct {
 		resource entity.Resource
 		spec     entity.CredentialBindingSpec
@@ -432,7 +466,9 @@ func (service *Service) selectProviderBinding(
 		weights[binding.CredentialBindingID] = binding.Weight
 	}
 	var candidates []candidate
-	for _, bindingID := range roleSpec.ProviderCredentialBindingIDs {
+	bindingIDs := slices.Clone(roleSpec.ProviderCredentialBindingIDs)
+	slices.Sort(bindingIDs)
+	for _, bindingID := range bindingIDs {
 		binding, err := tx.GetForUpdate(
 			ctx, principal.OrganizationID, principal.ProjectID, bindingID,
 		)
@@ -443,7 +479,8 @@ func (service *Service) selectProviderBinding(
 		if !ok || binding.Kind != enum.KindCredentialBinding ||
 			binding.State != enum.StateActive || spec.Purpose != "provider-account" ||
 			!spec.ProviderEligible ||
-			(!spec.ExpiresAt.IsZero() && !spec.ExpiresAt.After(now)) ||
+			(!spec.ExpiresAt.IsZero() && !spec.ExpiresAt.After(now.Add(credentialExpiryHeadroom))) ||
+			spec.ProviderObservedAt.After(now.Add(5*time.Second)) ||
 			now.Sub(spec.ProviderObservedAt) > roleSpec.ProviderAccountPool.ObservationMaxAge {
 			continue
 		}
@@ -522,7 +559,7 @@ func (service *Service) selectProviderBinding(
 		return entity.Resource{}, errs.ErrInternal
 	}
 	slot, err := tx.NextProviderPoolSlot(ctx, domainrepo.ProviderPoolCursor{
-		RoleID: roleID, PolicyRevision: roleSpec.ProviderAccountPool.PolicyRevision,
+		SelectionKeyID: selectionKeyID, PolicyRevision: roleSpec.ProviderAccountPool.PolicyRevision,
 		SnapshotSHA256: snapshotSHA256, TotalWeight: totalWeight,
 	})
 	if err != nil {

@@ -1303,7 +1303,7 @@ func (service *Service) RetryTurn(
 			}
 			if current.Version == input.ExpectedVersion && slices.Contains(
 				[]enum.State{enum.StateFailed, enum.StateBlocked,
-					enum.StateWaitingOwner}, current.State,
+					enum.StateWaitingOwner, enum.StateCancelled}, current.State,
 			) {
 				return lifecycleReceiptApply, nil
 			}
@@ -1342,7 +1342,8 @@ func (service *Service) RetryTurn(
 				current.Version != input.ExpectedVersion ||
 				(current.State != enum.StateFailed &&
 					current.State != enum.StateBlocked &&
-					current.State != enum.StateWaitingOwner) ||
+					current.State != enum.StateWaitingOwner &&
+					current.State != enum.StateCancelled) ||
 				spec.Attempt == ^uint32(0) {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
@@ -1356,6 +1357,10 @@ func (service *Service) RetryTurn(
 			switch current.State {
 			case enum.StateFailed:
 				if previousAttempt.FinishedAt.IsZero() {
+					return entity.Resource{}, errs.ErrStateConflict
+				}
+			case enum.StateCancelled:
+				if previousAttempt.State != string(enum.StateCancelled) || previousAttempt.FinishedAt.IsZero() {
 					return entity.Resource{}, errs.ErrStateConflict
 				}
 			case enum.StateWaitingOwner:
@@ -2294,6 +2299,10 @@ func (service *Service) createRuntimeRevision(
 	byID := make(map[string]entity.Resource, len(resources))
 	for _, item := range resources {
 		byID[item.ID] = item
+	}
+	if agent, ok := byID[sessionSpec.AgentID]; ok && agent.Kind == enum.KindAgent {
+		return service.createAgentRuntimeRevision(ctx, tx, principal, session, sessionSpec,
+			scheduledResultContract, resources, agent)
 	}
 	selected := make(map[string]entity.Resource)
 	add := func(identifier string, kind enum.Kind) (entity.Resource, error) {

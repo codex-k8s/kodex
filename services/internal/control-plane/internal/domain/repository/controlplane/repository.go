@@ -46,6 +46,14 @@ type Audit struct {
 	OccurredAt      time.Time
 }
 
+// ProtectedResourceHistory хранит immutable snapshot специализированной команды.
+type ProtectedResourceHistory struct {
+	Resource       entity.Resource
+	Action         string
+	SnapshotSHA256 string
+	OccurredAt     time.Time
+}
+
 // TurnLease защищает одну попытку выполнения хода.
 type TurnLease struct {
 	TurnID              string
@@ -191,7 +199,7 @@ type ScheduledRun struct {
 
 // ProviderPoolCursor фиксирует один bounded slot версионированного цикла.
 type ProviderPoolCursor struct {
-	RoleID         string
+	SelectionKeyID string
 	PolicyRevision uint64
 	SnapshotSHA256 string
 	TotalWeight    uint64
@@ -473,6 +481,22 @@ type RuntimeIncident struct {
 	EvidenceSHA256 string
 	WorkloadID     string
 	OccurredAt     time.Time
+	Version        uint64
+	State          string
+	ReasonCode     string
+	UpdatedAt      time.Time
+}
+
+// RuntimeIncidentHistory фиксирует каждое специализированное owner action.
+type RuntimeIncidentHistory struct {
+	IncidentID     string
+	Version        uint64
+	ExecutionFence uint64
+	State          string
+	Action         string
+	ReasonCode     string
+	OccurredAt     time.Time
+	OwnerActorID   string
 }
 
 // OwnerSessionState — verifying-side durable current OIDC session fence.
@@ -621,6 +645,13 @@ type MemorySearchHit struct {
 	VectorProjectionUsed bool
 }
 
+// ScheduleSessionTransaction задаёт узкий owner path ранней сериализации
+// Session conversation boundary до candidate read/archive/replacement.
+type ScheduleSessionTransaction interface {
+	LockScheduleSessionProjectFence(context.Context, string, string) error
+	ListScheduleSessionConversationForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+}
+
 // Transaction выражает одну транзакцию команды без утечки pgx.
 type Transaction interface {
 	CurrentTime(context.Context) (time.Time, error)
@@ -629,6 +660,7 @@ type Transaction interface {
 	Get(context.Context, string, string, string) (entity.Resource, error)
 	GetForUpdate(context.Context, string, string, string) (entity.Resource, error)
 	GetForUpdateIncludingDeleted(context.Context, string, string, string) (entity.Resource, error)
+	OtherScheduleReferencesSessionForUpdate(context.Context, string, string, string, string) (bool, error)
 	ProjectHasLiveResources(context.Context, string, string) (bool, error)
 	Insert(context.Context, entity.Resource) error
 	Update(context.Context, entity.Resource, uint64) error
@@ -662,6 +694,7 @@ type Transaction interface {
 	SaveTurnAttempt(context.Context, TurnAttempt) error
 	FinishTurnAttempt(context.Context, TurnAttempt) error
 	EnqueueInteractionDelivery(context.Context, InteractionDeliveryWork) error
+	WorkspaceHasOpenInteractionDeliveries(context.Context, string, string) (bool, error)
 	ClaimInteractionDelivery(context.Context, string, string, string, string, time.Duration) (InteractionDeliveryWork, error)
 	CompleteInteractionDelivery(context.Context, string, string, string, uint64, string, string) error
 	SaveInteractionDeliveryReadbackGrant(context.Context, InteractionDeliveryReadbackGrant) error
@@ -762,6 +795,127 @@ type Transaction interface {
 	ActiveOwnerGateForProcess(context.Context, string, string, string) (entity.Resource, error)
 }
 
+// RuntimeProjectionTransaction записывает только immutable derived adapter;
+// generic resources mutation authority к нему не имеет доступа.
+type RuntimeProjectionTransaction interface {
+	InsertDerivedRuntimeResource(context.Context, entity.Resource, enum.Kind, string, uint64, string) error
+	GetDerivedRuntimeResource(context.Context, string, string, string, enum.Kind, uint64) (entity.Resource, error)
+}
+
+// RuntimeProjectionRepository обслуживает только exact version-pinned readback.
+type RuntimeProjectionRepository interface {
+	GetDerivedRuntimeResource(context.Context, string, string, string, enum.Kind, uint64) (entity.Resource, error)
+}
+
+// LegacyConfigurationCutover — immutable source→target mapping одного legacy
+// Role graph. BLOCKED всегда содержит точное owner action.
+type LegacyConfigurationCutover struct {
+	OrganizationID, ProjectID, OwnerActorID                       string
+	LegacyRoleID, LegacyPromptProfileID                           string
+	LegacyRoleVersion, LegacyPromptVersion                        uint64
+	SourceRoleSHA256, SourcePromptSHA256                          string
+	SourceCredentialIDs                                           []string
+	TargetRoleDefinitionID, TargetAgentID, TargetInstructionSetID string
+	TargetProviderPoolID, TargetAgentAssignmentID                 string
+	TargetProviderReferenceIDs                                    []string
+	State, BlockCode, ManualAction                                string
+	ResultAgentVersion                                            uint64
+	ResultAgentSHA256                                             string
+	CreatedAt, ResolvedAt                                         time.Time
+}
+
+type LegacyConfigurationCutoverRepository interface {
+	GetLegacyConfigurationCutover(context.Context, string, string, string, string) (LegacyConfigurationCutover, error)
+	ListLegacyConfigurationCutovers(context.Context, string, string, string, string, int) ([]LegacyConfigurationCutover, error)
+}
+
+type LegacyConfigurationCutoverTransaction interface {
+	GetLegacyConfigurationCutoverForUpdate(context.Context, string) (LegacyConfigurationCutover, error)
+	MarkLegacyConfigurationCutoverMigrated(context.Context, LegacyConfigurationCutover) error
+}
+
+// RunTimelineRepository объединяет exact run projection одним PostgreSQL
+// keyset query по (occurred_at,id), а не пагинирует UUIDv4 отдельно по видам.
+type RunTimelineRepository interface {
+	ListRunTimelineAudit(
+		context.Context, string, string, string, []string, time.Time, string, int,
+	) ([]Audit, error)
+}
+
+type RunGraphNode struct {
+	NodeType, ID, State, ParentProcessRunID            string
+	ProcessRunID, SessionID, TurnID, RuntimeRevisionID string
+	PredecessorID, SuccessorID                         string
+	ChildIDs                                           []string
+	Version, RuntimeRevisionVersion                    uint64
+	Attempt                                            uint32
+	OccurredAt, UpdatedAt                              time.Time
+}
+
+type RunGraphRepository interface {
+	ListRunGraphNodes(context.Context, string, string, string, string) ([]RunGraphNode, error)
+	ListRunGraphArtifacts(context.Context, string, string, string, string, time.Time, string, int) ([]entity.Resource, error)
+}
+
+// WorkspaceRecoveryTransaction — единственный organization-wide path,
+// который внутри одной physical transaction переключает только exact Project
+// scope того же actor. Он не расширяет generic CRUD для остальных команд.
+type WorkspaceRecoveryTransaction interface {
+	SwitchWorkspaceProject(context.Context, string) error
+	OwnerWorkspaceProjectsForUpdate(context.Context, string, string) ([]entity.Resource, error)
+}
+
+// WorkspaceHistoricalSessionTransaction отделяет backup membership от
+// runtime-admission snapshot: архивные и отменённые, но не удалённые Session
+// остаются обязательными членами owner backup.
+type WorkspaceHistoricalSessionTransaction interface {
+	HistoricalOwnerSessionsForUpdate(context.Context, string, string, string) ([]entity.Resource, error)
+}
+
+type WorkspaceRecoveryCandidate struct {
+	OrganizationID, ProjectID, OwnerActorID, ResourceID string
+	Kind                                                enum.Kind
+	Version, Generation                                 uint64
+	Attempt                                             uint32
+	Outcome, TerminalReasonCode                         string
+}
+
+type WorkspaceRecoveryCandidateRepository interface {
+	NextWorkspaceRecoveryCandidate(context.Context) (WorkspaceRecoveryCandidate, error)
+}
+
+// ProtectedTransaction — узкий порт owner-конфигурации Issue #234. Он не
+// расширяет legacy Transaction и не превращает generic CRUD в protected API.
+type ProtectedTransaction interface {
+	GetByStableKeyForUpdate(context.Context, string, string, enum.Kind, string) (entity.Resource, error)
+	GetByNameForUpdate(context.Context, string, string, enum.Kind, string) (entity.Resource, error)
+	AppendProtectedResourceHistory(context.Context, ProtectedResourceHistory) error
+	GetProtectedResourceHistoryVersion(context.Context, string, uint64) (ProtectedResourceHistory, error)
+	GetInstructionHistoryContentVersion(context.Context, string, uint64) (ProtectedResourceHistory, error)
+	GetRuntimeIncidentForUpdate(context.Context, string) (RuntimeIncident, error)
+	UpdateRuntimeIncident(context.Context, RuntimeIncident, uint64) error
+	AppendRuntimeIncidentHistory(context.Context, RuntimeIncidentHistory) error
+	GetExternalCommandReceipt(context.Context, string, string, string) (ExternalCommandReceipt, error)
+	ReserveExternalCommandReceipt(context.Context, ExternalCommandReceipt) (ExternalCommandReceipt, bool, error)
+	FinalizeExternalCommandReceipt(context.Context, ExternalCommandReceipt) error
+}
+
+// ExternalCommandReceipt — one-use semantic consumption signed provider/git
+// proof. Unique issuer+purpose+JTI резервируется до mutation, а result tuple
+// фиксируется той же owner transaction.
+type ExternalCommandReceipt struct {
+	Issuer, Purpose, ReceiptID                         string
+	OrganizationID, ProjectID, OwnerActorID            string
+	TargetKind, TargetResourceID, TargetStableKey      string
+	Action, Effect                                     string
+	EffectGeneration                                   uint64
+	EffectSHA256, CommandIntentSHA256, AuthoritySHA256 string
+	ResultResourceID, ResultSHA256                     string
+	ResultVersion                                      uint64
+	Result                                             entity.Resource
+	ConsumedAt                                         time.Time
+}
+
 // ImageTransaction materialизует только специализированный image lifecycle.
 // Отдельный порт не расширяет generic CRUD и сохраняет закрытый реестр команд.
 type ImageTransaction interface {
@@ -793,4 +947,11 @@ type Repository interface {
 	CacheEpoch(context.Context, string, string) (uint64, error)
 	Check(context.Context) error
 	Close()
+}
+
+// ProtectedRepository — typed read/history boundary Issue #234.
+type ProtectedRepository interface {
+	ListProtectedResourceHistory(context.Context, string, string, string, string, uint64, int) ([]ProtectedResourceHistory, error)
+	GetRuntimeIncident(context.Context, string, string, string, string) (RuntimeIncident, error)
+	ListRuntimeIncidentHistory(context.Context, string, string, string, string, uint64, int) ([]RuntimeIncidentHistory, error)
 }

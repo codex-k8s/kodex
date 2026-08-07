@@ -7,11 +7,19 @@
 integration-continuation контуром Issue
 [#221](https://github.com/codex-k8s/matter-codex/issues/221) и owner
 Project/Schedule/OwnerGate/Backup/Restore path Issue
-[#231](https://github.com/codex-k8s/matter-codex/issues/231).
+[#231](https://github.com/codex-k8s/matter-codex/issues/231) и полной
+owner-конфигурацией Issue
+[#234](https://github.com/codex-k8s/matter-codex/issues/234).
 
 Сервис владеет:
 
-- проектами, командами, чатами, ролями и профилями запросов;
+- проектами, командами и чатами; legacy `ROLE`/`PROMPT_PROFILE` доступны только
+  как immutable read для старых graphs и server-derived runtime projection;
+- отдельными `RoleDefinition`, `Agent`, `AgentAssignment`, версионируемыми
+  `InstructionSet`, masked provider refs/pools и Workspace↔Mattermost mapping;
+- deterministic legacy cutover map и typed owner reconciliation для
+  существующих `ROLE`/`PROMPT_PROFILE`, которые невозможно безопасно
+  преобразовать без exact immutable Instruction content;
 - метаданными привязок учётных данных, репозиториев, рабочих пространств и
   интеграций;
 - неизменяемыми ревизиями среды исполнения;
@@ -25,7 +33,15 @@ Project/Schedule/OwnerGate/Backup/Restore path Issue
   authoritative read/rejoin;
 - сессиями, ходами и родословной процессов;
 - расписаниями, шлюзами владельца, памятью и заявками на работу;
-- метаданными артефактов, но не их байтами.
+- owner readback и закрытыми действиями Run/Incident, а также полным
+  `WORKSPACE|ALL_WORKSPACES` backup/restore envelope;
+- метаданными артефактов; immutable Instruction content записывается через
+  узкий versioned S3 client, а остальные artifact bytes остаются вне сервиса.
+  Readiness перед каждым canary Put получает PostgreSQL transaction-scoped
+  advisory fence на выделенной connection и только затем bounded согласует все
+  versions/delete markers выделенного prefix. Поэтому replica не удаляет live
+  VersionID соседнего probe, а ambiguous S3 commit переживает replacement pod и
+  не создаёт неограниченную цепочку orphan versions.
 
 Значения секретов остаются во внешнем хранилище Vault/Kubernetes.
 `control-plane` не вызывает Mattermost, MCP, Codex и Kubernetes API, не
@@ -64,6 +80,9 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 - политика полномочий: `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
 - две lifecycle/authority matrix и сквозная карта:
   `services/internal/control-plane/runtime-continuation-contract.md`.
+- закрытый реестр owner-конфигурации, карты сценариев, execution graph и полная
+  lifecycle/authority matrix Issue #234:
+  `services/internal/control-plane/owner-configuration-contract.md`.
 
 Внешнее отображение принадлежит будущему `control-api-gateway`; этот компонент
 публикует только внутренний gRPC. Политика deny-by-default регистрирует
@@ -75,6 +94,21 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 сканированием байтов, а `control-plane` — метаданными и автоматом состояний.
 Неизвестные производитель, назначение учётных данных, рабочая нагрузка,
 SPIFFE ID, полный метод, audience или полномочие закрыто отклоняются.
+Новые owner operations входят в policy revision 23. Provider reference
+mutation принимает только exact `integration-gateway` provider-readback
+receipt. Workspace↔Mattermost mapping и Agent bot identity принимают только
+exact `interaction-gateway` provider-readback receipt; team/object refs
+выводятся из проверенного proof, а OIDC-профиль имеет лишь безопасные typed
+reads. Git reconcile отделён от обычного UI update точными RPC и permission.
+
+Это receive-side contract, а не заявление готовности внешних producers.
+После merge #234 Issue #235 обязана rebase, добавить Mattermost Team/bot
+effect, signer `ProviderEffectReadbackReceipt` и generated calls
+`ManageWorkspaceMattermostMapping`/`ManageAgentMattermostBotIdentity`.
+Issue #236 обязана добавить Git reconciler signer/call site и provider-reference
+producer. До этих merge gates control-plane закрыто принимает только proof от
+зарегистрированных exact workload, но соответствующие end-to-end сценарии не
+считаются готовыми. Browser/OIDC не может выпускать ни provider, ни Git proof.
 
 `controlplaneclient` выполняет полный путь потребителя: точный mTLS к
 `control-plane`, проверку прикладного разрешения конкретной рабочей нагрузки
@@ -88,7 +122,7 @@ SPIFFE ID, полный метод, audience или полномочие зак�
 `RuntimeRestoreEffectOperations`,
 `RuntimeCleanupAuthorizerOperations`, `IntegrationGatewayOperations`,
 `OwnerGateDeliveryOperations`,
-`MemoryIndexerOperations`). Consumer
+`MemoryIndexerOperations`, `InteractionGatewayOperations`). Consumer
 Deployments не принадлежат Issue #187 и здесь не подменяются фиктивными
 развёртываемыми компонентами. Issue #231 материализует exact
 `runtime-restore-verifier` и `runtime-restore-effect` profiles; последний
@@ -250,17 +284,18 @@ locks. Поэтому `ManageWorkClaim(CREATE/RENEW)` replay повторно б
 | Все команды              | семантический ключ идемпотентности, канонический digest запроса, OCC и аудит фиксируются атомарно; receipt читается только после authoritative current eligibility, а superseded authority-bearing result никогда не возвращается                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Проект                   | ID и владельца назначает сервер; создание в организации требует полномочия владельца; update/delete сначала разрешают tenant owner project, затем проверяют OCC/receipt; owner и `managed_by` неизменяемы; delete допускается только без live children и одной transaction фиксирует `DELETION_PENDING`→`DELETED`, audit и события; slug стабилен                                                                                                                                                                                                                                                                                                             |
 | Команда, роль и prompt   | общий CRUD не управляет полномочиями; отдельная административная команда проверяет полномочие вида, назначаемое подмножество и запрещает самостоятельное включение и повышение                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Управляемая конфигурация | каждый project/team/chat/role/prompt/binding/workspace/integration/schedule хранит `managed_by=UI` или `managed_by=GIT`; Git-объект обновляется только тем же источником с возрастающей ревизией, а переход к UI требует явного `detach_git_management` и отдельного устойчивого полномочия                                                                                                                                                                                                                                                                                                                                                                                      |
+| Управляемая конфигурация | target `RoleDefinition`/`Agent`/`InstructionSet`/`ProviderPool` хранит server-assigned `managed_by=UI|GIT`; UI не назначает Git ownership, Git-owned объект изменяет только exact signed reconciler RPC #236 с source/revision/digest/target/intent и one-use JTI; detach очищает source binding, copy создаёт новую UI entity; deterministic legacy map остаётся `BLOCKED` с typed action до exact reconciliation, которая атомарно создаёт весь target catalog                                                                                                                                                                                                                  |
 | Привязка учётных данных  | хранится только URI метаданных; назначение и principal неизменяемы; ревизия растёт ровно на один; provider binding несёт server-verified eligibility/capabilities, лимит, usage, время и ревизию наблюдения                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Интеграция               | идентичность определения неизменяема; версия движется только вперёд                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Ревизия среды исполнения | перед каждым ходом сервер разрешает точные сессию и разрешение роли, активные chat/prompt/привязку провайдера и только связанные с ролью workspace/integration/credential; создаётся неизменяемый снимок с версиями, digest, политикой, образом и предшественником; `runtime-controller` читает его через отдельный авторизованный RPC                                                                                                                                                                                                                                                                                                                                           |
-| Сессия                   | привязку провайдера сервер выбирает из версионированного `AccountPool` роли по `least_used` или детерминированному `weighted`, exact freshness/limit/eligibility; ручной preferred binding — только проверенный override; общий create/update/transition запрещён; close/cancel работают только через полный batch owner graph и не обходят live runtime/scheduler authority, archive/cleanup требуют отсутствия open Turn/live runtime и полного session-scoped continuation rejoin                                                                                                                                                                                          |
+| Ревизия среды исполнения | перед каждой новой target-сессией/ходом сервер повторно разрешает active `AgentAssignment`, Agent, published InstructionSet, ProviderPool, RuntimeProfile и credential через единый selector с expiry headroom/freshness/capacity/durable weighted slot; cursor привязан к существующему authoritative Agent/Role, capacity объединяет legacy Session pin и target RuntimeRevision pin; `RuntimeRevision` хранит target tuple в top-level digest/readback, а Components содержит только принятые runtime-controller kinds и immutable derived ROLE/PROMPT; Prompt pin-ит CLEAN content Artifact, который materializes как `AGENTS.md`, без legacy mutation authority |
+| Сессия                   | новый `ManageSession(CREATE)` допускает только Agent + active Workspace/Room assignment и target version-pinned dependencies; `createLegacyManagedSession` недостижим из нового path, а legacy RoleSpec/PromptProfileSpec остаются immutable read только для ранее созданных graphs; provider binding server-resolved; close/cancel работают через полный owner graph                                                                                                                                                                                                                                                                        |
 | Ход                      | неизменяемый закреплённый снимок, строгий FIFO и один активный ход на сессию; claim/renew/complete связывают рабочую нагрузку, попытку, поколение полномочий, срок и fence; после runtime admission heartbeat атомарно продлевает RuntimeExecution и TurnLease до одного PostgreSQL deadline                                                                                                                                                                                                                                                                                                                                                                                         |
 | Восстановление хода      | истечение срока или ручной повтор сначала закрывает прежние attempt/lease/gate/claim, затем создаёт свежие `RuntimeRevision`, effective input, attempt и grant и атомарно перепривязывает единый current execution tuple процесса и `ScheduledRun`; `SourceRef` остаётся bounded server-owned identity, номер attempt хранится только в tuple; устаревшие workload/generation/token отклоняются                                                                                                                                                                                                                                                                                  |
 | Runtime execution       | control-plane материализует server-owned tuple organization/project/process/session/thread/role/turn/attempt, immutable input digest, RuntimeRevision version/digest, закрытые ResourceClass и `NONE/PROJECT_READ_ONLY/CLUSTER_ADMIN`, exact workload/generation и monotonic fence; terminal/cancel/expiry закрывают Turn/ProcessRun/occurrence/ScheduledRun вместе, retry принимает только active/`FAILED`/`EXPIRED` и создаёт свежие revision/input/attempt/grant; cleanup проходит монотонные `NONE/ACTIVE/EXPIRED/CONSUMED` и невозможна без exact archive checksum и отдельной verifier attestation; owner restore повторно проверяет latest eligible archive, source version/fence, safe digests и retention по PostgreSQL clock, затем атомарно создаёт immutable restore operation и pinned fresh Turn/RuntimeRevision/attempt; private locator/evidence/PVC/grant копируются только при exact runtime claim и никогда не входят в browser RPC |
 | Integration continuation | suspension отдельно сверяет claimant `agent-runner` TurnLease/TurnAttempt и executor `runtime-controller` RuntimeExecution/SPIFFE, атомарно терминализирует runtime как `SUSPENDED`, закрывает runtime и scheduler authority, переводит Turn/Session/Process в `WAITING_EXTERNAL` и записывает в ProcessRun/occurrence/ScheduledRun полный current tuple с уже увеличенными Session/Turn versions; terminal decision/result под теми же locks переводит source Turn в terminal `CANCELLED/integration_continuation_materialized`, сохраняет его provenance через RuntimeExecution/TurnAttempt/audit и `PredecessorTurnID`, затем создаёт один fresh RuntimeRevision/input/Turn/grant и перепривязывает полный scheduled current tuple; retry delivery увеличивает attempt/version/fence для того же immutable outcome без повторного external effect, pending/повторно открытая delivery блокирует cleanup до rejoin |
 | Процесс                  | дочерний процесс наследует server-owned root actor/org/project и может перейти в отдельную target session только через неизменяемое delegation edge source→target с exact turn/attempt/input/generation; enqueue и WorkClaim повторно проверяют эту родословную; terminal success/failure/cancel сверяется с авторитетным ходом, закрывает result и запрещён при активном child/work/gate                                                                                                                                                                                                                                                                                        |
-| Расписание               | закрытые цели `AGENT` и `PLAYBOOK`, точные role/playbook/prompt/runtime/session/room/notification/deadline; browser использует только специализированный `ManageSchedule`, create назначает ID/owner/state сервером, а delete одной owner transaction закрывает `ACTIVE|PAUSED`→`ARCHIVED`→`DELETION_PENDING`→`DELETED` с событием каждого перехода; claim в одной транзакции создаёт `ScheduledRun` с версиями occurrence/session/turn/process/revision и effective input; обычный completion и terminal-winner lease recovery используют одну retry/dead-letter disposition, закрывают прежнюю authority и допускают ровно одну новую attempt; recovery и overlap `SKIP` коммитятся до независимого следующего selection, поэтому no-candidate не откатывает disposition/audit; occurrence либо historical run в `QUEUED/CLAIMED/WAITING_OWNER/CONTINUATION` блокируют ARCHIVE/UPDATE/DELETE, а open run блокирует новый `QUEUE` graph даже при terminal occurrence; `PAUSED` сохраняет queued retry до ACTIVATE, закрытые Schedule states requeue не принимают; terminal runner, timeout, misfire и dead-letter не создают параллельный graph; `FORBID` не сдвигает верхнюю границу, `SKIP` оставляет конечное подтверждение, `QUEUE` сохраняет FIFO |
+| Расписание               | `CreateScheduleFromOwnerSelections` принимает stable Agent/Instruction/Pool/Room и display name Artifact и под locks назначает ID и exact Workspace/Runtime/Assignment tuple; все reuse/archive/create Session сначала получают единый project graph advisory fence и после ожидания перечитывают exact conversation boundary `FOR UPDATE`; admission partial index охватывает только live/resumable Session, поэтому immutable `ARCHIVED` history не блокирует replacement; `BindScheduleConfiguration` для `PERSISTENT`/`ROLLING` сохраняет совместимую Session либо атомарно создаёт replacement, `NEW` очищает binding; каждая materialization повторяет assignment resolution; stale/revoked fail closed, lifecycle #231 остаётся единственным источником истины |
+| Owner-конфигурация       | Agent state actions специализированы; provider/Git receipts включают exact protected target/intent и one-use consume в owner transaction, а exact replay читает сохранённый immutable result snapshot, не mutable current row; bot/mapping producer ожидает #235, Git/provider producer — #236; mapping relink/unlink отклоняется при open graph; Incident fence монотонен, release закрывает runtime graph, retry принимает только current FAILED/EXPIRED либо released CANCELLED execution; Run lineage строится от Process→Turn→TurnAttempt→его immutable RuntimeRevision pin и охватывает pre-admission/terminal attempts/artifacts; backup отдельным owner query включает все non-deleted historical Session с exact archive либо целиком откатывается |
 | Шлюз владельца           | запрос закрепляет корневого инициатора и единый server-owned current execution tuple process/session/turn/attempt/runtime revision/input, schedule/occurrence и точного получателя; доставка имеет неизменяемые ID, digest, Mattermost post и устойчивое подтверждение; `ExpireOwnerGate` выбирает unlocked candidate, затем блокирует полный graph и сам Gate последним, повторно сверяет PostgreSQL deadline и автономно закрывает просроченный graph; delivery query его не выдаёт; `CHANGES_REQUESTED` сохраняет terminal decision receipt и полное неизменяемое owner feedback в новом `TurnSpec`, тот же ProcessRun/root и создаёт свежие revision/input/turn; complete/gate/work-claim/schedule/retry читают одну current-связку, а решение не отображается в `FAILED` |
 | Память                   | область, владелец, процесс, рабочая нагрузка и происхождение назначаются сервером; единый eligibility скрывает `DELETED` title/content в single/list/generic/FTS/vector путях и оставляет tombstone только в авторизованном audit/read path; FTS ищет title/content с ранжированием и курсором; проекция pgvector связывает точные content/resource/model version и digest                                                                                                                                                                                                                                                                                                       |
 | Заявка на работу         | владелец, процесс, рабочая нагрузка, задача и попытка выводятся сервером и неизменяемы; активная заявка точного процесса или хода уникальна; RENEW и CREATE/RENEW replay получают свежий PostgreSQL clock после canonical graph и exact WorkClaim lock, поэтому ожидание блокировки не позволяет раскрыть receipt или оживить истёкшую ACTIVE строку; database eligibility обновляется отдельной forward-only migration                                                                                                                                                                                                                                                                                                                        |
@@ -285,7 +320,7 @@ Vault. Устойчивая монотонная верхняя граница �
 поколение, состояние, organization/project/actor, PID соединения и ID
 транзакции. GUC и `SET SESSION AUTHORIZATION` не являются источником
 полномочий. Readiness проверяет схему
-`20260803000100`,
+`20260806023400`,
 membership, `LOGIN`, `NOSUPERUSER` и `NOBYPASSRLS`.
 
 SQL хранится по одному именованному запросу в
@@ -331,6 +366,9 @@ Redis хранит только ограниченные снимки ресур
 Метрики не содержат ID организации или ресурса и используют закрытые labels.
 Dashboard — `mattercodex-control-plane`. Alerts ведут на абсолютный HTTPS URL
 runbook.
+Новые protected команды учитываются в `mutations_total` только через закрытый
+набор `kind/action`; отдельная панель показывает owner configuration и recovery
+mutations без tenant/resource labels.
 
 ## Конфигурация
 
@@ -485,12 +523,15 @@ CLI дополнительно подключается именно этим LO
 следующее идемпотентное согласование может повысить его до `CURRENT`. Миграции
 `20260731000200`, `20260731000300`, `20260731000400` и
 `20260731000500`, `20260731000600`, `20260801000100`,
-`20260802000100` и `20260803000100` явно forward-only. Уже применённая
+`20260802000100`, `20260803000100` и `20260806023400` явно forward-only. Уже применённая
 `20260731000500` не переписывается; `20260803000100` обновляет
 `work_claim_graph_is_active` через `CREATE OR REPLACE FUNCTION`, закрепляет
 database-expiry predicate и privilege/readback. Downgrade отклоняется,
 потому что потерял бы RLS fences, верхнюю границу и readback principal,
-попытки, подтверждения и происхождение вектора. Откат приложения выполняется
+попытки, подтверждения и происхождение вектора. Миграция `20260806023400` ещё
+не merged и поэтому исправляется атомарно только внутри PR #239; применять её
+вне owner-approved migration process запрещено. После первого применения она
+так же неизменяема, а исправление выполняется новой forward migration. Откат приложения выполняется
 только совместимым образом; откат схемы — новой компенсирующей forward
 миграцией.
 

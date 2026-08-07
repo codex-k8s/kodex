@@ -67,3 +67,16 @@ spec:
             summary: Terminal predecessor заблокировал ordering key control-plane
             description: Использовать bounded read/repair RPC; не удалять и не пропускать событие вручную.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md
+        - alert: ControlPlaneOwnerLifecycleFailures
+          expr: >-
+            sum(rate(mattercodex_control_plane_grpc_requests_total{
+              operation=~"controlplane.manage(roledefinition|agent|agentassignment|instructionset|providerconnectionreference|providerpool|workspacebackup|workspacerestore|runtimeincident|workspacemattermostmapping|run)",
+              code=~"Internal|Unavailable|Unknown|DataLoss"
+            }[5m])) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Ошибки owner lifecycle control-plane
+            description: Проверить PostgreSQL transaction, authority profile, outbox и exact graph locks новых owner-команд.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-plane.md

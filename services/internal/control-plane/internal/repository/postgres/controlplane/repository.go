@@ -53,8 +53,10 @@ type Repository struct {
 
 type transaction struct {
 	tx             pgx.Tx
+	repository     *Repository
 	organizationID string
 	projectID      string
+	actorID        string
 }
 
 // AdmitMattermostEventKeyset фиксирует verifier-owned monotonic fence до
@@ -162,8 +164,10 @@ func (repository *Repository) Transact(
 		}
 		wrapped := &transaction{
 			tx:             tx,
+			repository:     repository,
 			organizationID: scope.OrganizationID,
 			projectID:      scope.ProjectID,
+			actorID:        scope.ActorID,
 		}
 		if err := repository.setScope(ctx, tx, scope); err != nil {
 			_ = tx.Rollback(ctx)
@@ -204,6 +208,21 @@ func (repository *Repository) Get(
 		if scanErr == nil && resource.Kind != expectedKind {
 			return errs.ErrNotFound
 		}
+		return scanErr
+	})
+	return resource, err
+}
+
+func (repository *Repository) GetDerivedRuntimeResource(ctx context.Context,
+	organizationID, projectID, resourceID string, kind enum.Kind, version uint64,
+) (entity.Resource, error) {
+	var resource entity.Resource
+	err := repository.read(ctx, organizationID, projectID, nullActorID, func(tx pgx.Tx) error {
+		var scanErr error
+		resource, scanErr = scanResource(tx.QueryRow(ctx, sqlRuntimeDerivedResourceGet, pgx.StrictNamedArgs{
+			"organization_id": organizationID, "project_id": projectID, "resource_id": resourceID,
+			"kind": string(kind), "version": version,
+		}))
 		return scanErr
 	})
 	return resource, err
@@ -463,6 +482,101 @@ func (repository *Repository) ListAudit(
 	return events, err
 }
 
+func (repository *Repository) ListRunTimelineAudit(
+	ctx context.Context,
+	organizationID, projectID, actorID string,
+	resourceIDs []string,
+	afterOccurredAt time.Time,
+	afterID string,
+	limit int,
+) ([]domainrepo.Audit, error) {
+	var events []domainrepo.Audit
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlAuditRunTimeline, pgx.StrictNamedArgs{
+			"organization_id":   organizationID,
+			"project_id":        projectID,
+			"resource_ids":      resourceIDs,
+			"has_after":         afterID != "",
+			"after_occurred_at": afterOccurredAt,
+			"after_id":          afterID,
+			"limit":             limit,
+		})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var event domainrepo.Audit
+			if err := rows.Scan(
+				&event.ID, &event.OrganizationID, &event.ProjectID, &event.ActorID,
+				&event.Action, &event.ResourceID, &event.ResourceKind, &event.ResourceVersion,
+				&event.Outcome, &event.CorrelationID, &event.PolicyRevision, &event.OccurredAt,
+			); err != nil {
+				return err
+			}
+			events = append(events, event)
+		}
+		return rows.Err()
+	})
+	return events, err
+}
+
+func (repository *Repository) ListRunGraphNodes(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string,
+) ([]domainrepo.RunGraphNode, error) {
+	var result []domainrepo.RunGraphNode
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, sqlRunGraphNodes, pgx.StrictNamedArgs{"organization_id": organizationID,
+			"project_id": projectID, "actor_id": actorID, "process_run_id": processRunID})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item domainrepo.RunGraphNode
+			if err := rows.Scan(&item.NodeType, &item.ID, &item.State, &item.ParentProcessRunID,
+				&item.ProcessRunID, &item.SessionID, &item.TurnID, &item.RuntimeRevisionID,
+				&item.PredecessorID, &item.SuccessorID,
+				&item.Version, &item.RuntimeRevisionVersion, &item.Attempt,
+				&item.OccurredAt, &item.UpdatedAt); err != nil {
+				return err
+			}
+			item.OccurredAt, item.UpdatedAt = item.OccurredAt.UTC(), item.UpdatedAt.UTC()
+			result = append(result, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
+func (repository *Repository) ListRunGraphArtifacts(ctx context.Context, organizationID, projectID, actorID,
+	processRunID string, afterOccurredAt time.Time, afterID string, limit int,
+) ([]entity.Resource, error) {
+	var result []entity.Resource
+	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
+		var cursor any
+		if !afterOccurredAt.IsZero() {
+			cursor = afterOccurredAt
+		}
+		rows, err := tx.Query(ctx, sqlRunGraphArtifacts, pgx.StrictNamedArgs{"organization_id": organizationID,
+			"project_id": projectID, "actor_id": actorID, "process_run_id": processRunID,
+			"after_occurred_at": cursor, "after_id": afterID, "limit": limit})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			item, scanErr := scanResource(rows)
+			if scanErr != nil {
+				return scanErr
+			}
+			result = append(result, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
 func (repository *Repository) ListRuntimeIncidents(
 	ctx context.Context,
 	filter domainquery.RuntimeIncidentFilter,
@@ -479,13 +593,10 @@ func (repository *Repository) ListRuntimeIncidents(
 			}
 			defer rows.Close()
 			for rows.Next() {
-				var incident domainrepo.RuntimeIncident
-				if err := rows.Scan(&incident.ID, &incident.OrganizationID, &incident.ProjectID,
-					&incident.ExecutionID, &incident.ExecutionFence, &incident.Kind,
-					&incident.EvidenceSHA256, &incident.WorkloadID, &incident.OccurredAt); err != nil {
-					return err
+				incident, scanErr := scanRuntimeIncident(rows)
+				if scanErr != nil {
+					return scanErr
 				}
-				incident.OccurredAt = incident.OccurredAt.UTC()
 				incidents = append(incidents, incident)
 			}
 			return rows.Err()
@@ -727,7 +838,77 @@ func (repository *Repository) Check(ctx context.Context) error {
 		(status != "CURRENT" && status != "NEXT" && status != "PREVIOUS") {
 		return errs.ErrUnavailable
 	}
+	var recoveryReady bool
+	if err := repository.pool.QueryRow(ctx, sqlWorkspaceRecoveryReadiness).Scan(&recoveryReady); err != nil || !recoveryReady {
+		return errs.ErrUnavailable
+	}
 	return nil
+}
+
+// WithInstructionObjectReadinessFence удерживает одну выделенную PostgreSQL
+// connection и transaction-scoped advisory lock на всей внешней S3 sequence.
+// Crash закрывает connection и автоматически освобождает lock; пропуск lock
+// никогда не считается успешной readiness.
+func (repository *Repository) WithInstructionObjectReadinessFence(
+	ctx context.Context,
+	callback func(context.Context) error,
+) (resultErr error) {
+	if callback == nil {
+		return errs.ErrInternal
+	}
+	connection, err := repository.pool.Acquire(ctx)
+	if err != nil {
+		return mapError(err)
+	}
+	defer connection.Release()
+	tx, err := connection.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	finished := false
+	defer func() {
+		if finished {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), repository.config.ContextTTL)
+		defer cancel()
+		if rollbackErr := tx.Rollback(cleanupCtx); rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			resultErr = errors.Join(resultErr, errs.ErrUnavailable)
+		}
+	}()
+	if _, err := tx.Exec(ctx, sqlInstructionObjectReadinessFence, pgx.StrictNamedArgs{}); err != nil {
+		return mapError(err)
+	}
+	if err := callback(ctx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return mapError(err)
+	}
+	finished = true
+	return nil
+}
+
+func (repository *Repository) NextWorkspaceRecoveryCandidate(
+	ctx context.Context,
+) (domainrepo.WorkspaceRecoveryCandidate, error) {
+	var candidate domainrepo.WorkspaceRecoveryCandidate
+	var kind string
+	err := repository.pool.QueryRow(ctx, sqlWorkspaceRecoveryNextCandidate).Scan(
+		&candidate.OrganizationID, &candidate.ProjectID, &candidate.OwnerActorID,
+		&candidate.ResourceID, &kind, &candidate.Version, &candidate.Attempt,
+		&candidate.Generation, &candidate.Outcome, &candidate.TerminalReasonCode,
+	)
+	if err != nil {
+		return domainrepo.WorkspaceRecoveryCandidate{}, mapError(err)
+	}
+	candidate.Kind = enum.Kind(kind)
+	if candidate.Kind != enum.KindWorkspaceBackup && candidate.Kind != enum.KindWorkspaceRestore {
+		return domainrepo.WorkspaceRecoveryCandidate{}, errs.ErrInternal
+	}
+	return candidate, nil
 }
 
 // CacheEpoch возвращает принадлежащую PostgreSQL версию инвалидации.
@@ -822,6 +1003,40 @@ func (repository *Repository) setScope(
 			"signature":            mac.Sum(nil),
 		},
 	); err != nil {
+		return mapError(err)
+	}
+	return nil
+}
+
+func (repository *Repository) switchWorkspaceScope(
+	ctx context.Context,
+	tx pgx.Tx,
+	scope domainrepo.Scope,
+) error {
+	if scope.ActorID == "" || value.ValidateID(scope.ActorID) != nil ||
+		value.ValidateID(scope.OrganizationID) != nil ||
+		(scope.ProjectID != "" && value.ValidateID(scope.ProjectID) != nil) {
+		return errs.ErrInvalidInput
+	}
+	nonce := uuid.NewString()
+	expiresUnixMicro := time.Now().UTC().Add(repository.config.ContextTTL).UnixMicro()
+	canonical := "v1\n" + repository.config.PrincipalName + "\n" +
+		strconv.FormatUint(repository.config.PrincipalGeneration, 10) + "\n" +
+		scope.OrganizationID + "\n" + scope.ProjectID + "\n" + scope.ActorID + "\n" +
+		nonce + "\n" + strconv.FormatInt(expiresUnixMicro, 10)
+	mac := hmac.New(sha256.New, repository.config.ContextSigningKey)
+	_, _ = mac.Write([]byte(canonical))
+	if _, err := tx.Exec(ctx, sqlTransactionSwitchWorkspaceScope, pgx.StrictNamedArgs{
+		"organization_id":      scope.OrganizationID,
+		"project_id":           scope.ProjectID,
+		"actor_id":             scope.ActorID,
+		"principal_name":       repository.config.PrincipalName,
+		"principal_generation": repository.config.PrincipalGeneration,
+		"context_key_id":       repository.config.ContextKeyID,
+		"nonce":                nonce,
+		"expires_unix_micro":   expiresUnixMicro,
+		"signature":            mac.Sum(nil),
+	}); err != nil {
 		return mapError(err)
 	}
 	return nil
@@ -932,6 +1147,62 @@ func (wrapped *transaction) GetForUpdateIncludingDeleted(
 	))
 }
 
+func (wrapped *transaction) OtherScheduleReferencesSessionForUpdate(
+	ctx context.Context,
+	organizationID, projectID, scheduleID, sessionID string,
+) (bool, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlScheduleOtherSessionReferencesForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"schedule_id":     scheduleID,
+		"session_id":      sessionID,
+	})
+	if err != nil {
+		return false, mapError(err)
+	}
+	defer rows.Close()
+	referenced := rows.Next()
+	if err := rows.Err(); err != nil {
+		return false, mapError(err)
+	}
+	return referenced, nil
+}
+
+func (wrapped *transaction) LockScheduleSessionProjectFence(
+	ctx context.Context,
+	organizationID, projectID string,
+) error {
+	_, err := wrapped.tx.Exec(ctx, sqlScheduleSessionProjectFence, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+	})
+	return mapError(err)
+}
+
+func (wrapped *transaction) ListScheduleSessionConversationForUpdate(
+	ctx context.Context,
+	organizationID, projectID, conversationID string,
+) ([]entity.Resource, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlScheduleSessionConversationForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+		"conversation_id": conversationID,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	resources := make([]entity.Resource, 0, 1)
+	for rows.Next() {
+		resource, scanErr := scanResource(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		resources = append(resources, resource)
+	}
+	return resources, mapError(rows.Err())
+}
+
 func (wrapped *transaction) ProjectHasLiveResources(
 	ctx context.Context,
 	organizationID, projectID string,
@@ -993,6 +1264,39 @@ func (wrapped *transaction) Insert(ctx context.Context, resource entity.Resource
 		return err
 	}
 	return wrapped.bumpCacheEpoch(ctx, resource.Kind == enum.KindProject)
+}
+
+func (wrapped *transaction) InsertDerivedRuntimeResource(ctx context.Context, resource entity.Resource,
+	sourceKind enum.Kind, sourceID string, sourceVersion uint64, sourceSHA256 string,
+) error {
+	spec, err := marshalSpec(resource.Spec)
+	if err != nil {
+		return errs.ErrInvalidInput
+	}
+	var accepted bool
+	err = wrapped.tx.QueryRow(ctx, sqlRuntimeDerivedResourceInsert, pgx.StrictNamedArgs{
+		"id": resource.ID, "organization_id": resource.OrganizationID, "project_id": resource.ProjectID,
+		"parent_id": resource.ParentID, "owner_actor_id": resource.OwnerActorID, "kind": string(resource.Kind),
+		"name": resource.Name, "version": resource.Version, "spec": spec, "source_kind": string(sourceKind),
+		"source_id": sourceID, "source_version": sourceVersion, "source_sha256": sourceSHA256,
+		"created_at": resource.CreatedAt, "updated_at": resource.UpdatedAt,
+	}).Scan(&accepted)
+	if err != nil {
+		return mapError(err)
+	}
+	if !accepted {
+		return errs.ErrStateConflict
+	}
+	return nil
+}
+
+func (wrapped *transaction) GetDerivedRuntimeResource(ctx context.Context,
+	organizationID, projectID, resourceID string, kind enum.Kind, version uint64,
+) (entity.Resource, error) {
+	return scanResource(wrapped.tx.QueryRow(ctx, sqlRuntimeDerivedResourceGet, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID, "resource_id": resourceID,
+		"kind": string(kind), "version": version,
+	}))
 }
 
 func (wrapped *transaction) Update(
@@ -1186,6 +1490,69 @@ func (wrapped *transaction) ListSnapshotResources(
 		resources = append(resources, resource)
 	}
 	return resources, mapError(rows.Err())
+}
+
+func (wrapped *transaction) SwitchWorkspaceProject(ctx context.Context, projectID string) error {
+	if wrapped.repository == nil || (projectID != "" && value.ValidateID(projectID) != nil) {
+		return errs.ErrInvalidInput
+	}
+	if err := wrapped.repository.switchWorkspaceScope(ctx, wrapped.tx, domainrepo.Scope{
+		OrganizationID: wrapped.organizationID,
+		ProjectID:      projectID,
+		ActorID:        wrapped.actorID,
+	}); err != nil {
+		return err
+	}
+	wrapped.projectID = projectID
+	return nil
+}
+
+func (wrapped *transaction) OwnerWorkspaceProjectsForUpdate(
+	ctx context.Context,
+	organizationID, actorID string,
+) ([]entity.Resource, error) {
+	if wrapped.projectID != "" || organizationID != wrapped.organizationID || actorID != wrapped.actorID {
+		return nil, errs.ErrPermissionDenied
+	}
+	rows, err := wrapped.tx.Query(ctx, sqlProjectOwnerListForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"actor_id":        actorID,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var projects []entity.Resource
+	for rows.Next() {
+		project, scanErr := scanResource(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		projects = append(projects, project)
+	}
+	return projects, mapError(rows.Err())
+}
+
+func (wrapped *transaction) HistoricalOwnerSessionsForUpdate(
+	ctx context.Context,
+	organizationID, projectID, actorID string,
+) ([]entity.Resource, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlSessionHistoricalOwnerListForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID, "project_id": projectID, "actor_id": actorID,
+	})
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var sessions []entity.Resource
+	for rows.Next() {
+		session, scanErr := scanResource(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, mapError(rows.Err())
 }
 
 func (wrapped *transaction) LatestRuntimeRevision(
@@ -1541,6 +1908,9 @@ func (wrapped *transaction) SaveTurnAttempt(
 	ctx context.Context,
 	attempt domainrepo.TurnAttempt,
 ) error {
+	if !enum.TurnAttemptStateValid(attempt.State) || enum.TurnAttemptStateFinished(attempt.State) {
+		return errs.ErrStateConflict
+	}
 	tag, err := wrapped.tx.Exec(
 		ctx,
 		sqlTurnAttemptSave,
@@ -1568,6 +1938,9 @@ func (wrapped *transaction) FinishTurnAttempt(
 	ctx context.Context,
 	attempt domainrepo.TurnAttempt,
 ) error {
+	if !enum.TurnAttemptStateFinished(attempt.State) {
+		return errs.ErrStateConflict
+	}
 	tag, err := wrapped.tx.Exec(
 		ctx,
 		sqlTurnAttemptFinish,
@@ -1618,6 +1991,31 @@ func (wrapped *transaction) EnqueueInteractionDelivery(
 		return errs.ErrStateConflict
 	}
 	return nil
+}
+
+func (wrapped *transaction) WorkspaceHasOpenInteractionDeliveries(
+	ctx context.Context,
+	organizationID, projectID string,
+) (bool, error) {
+	rows, err := wrapped.tx.Query(ctx, sqlInteractionDeliveryWorkspaceOpenForUpdate, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+		"project_id":      projectID,
+	})
+	if err != nil {
+		return false, mapError(err)
+	}
+	defer rows.Close()
+	open := rows.Next()
+	if open {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return false, mapError(err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, mapError(err)
+	}
+	return open, nil
 }
 
 func (wrapped *transaction) ClaimInteractionDelivery(ctx context.Context, organizationID, projectID,
@@ -2508,7 +2906,7 @@ func (wrapped *transaction) NextProviderPoolSlot(
 ) (uint64, error) {
 	var slot uint64
 	err := wrapped.tx.QueryRow(ctx, sqlProviderPoolNextSlot, pgx.StrictNamedArgs{
-		"role_id": cursor.RoleID, "policy_revision": cursor.PolicyRevision,
+		"selection_key_id": cursor.SelectionKeyID, "policy_revision": cursor.PolicyRevision,
 		"snapshot_sha256": cursor.SnapshotSHA256, "total_weight": cursor.TotalWeight,
 	}).Scan(&slot)
 	return slot, mapError(err)
@@ -3061,7 +3459,21 @@ func (wrapped *transaction) InsertRuntimeIncident(
 		"workload_id":     incident.WorkloadID,
 		"occurred_at":     incident.OccurredAt,
 	})
-	return mapError(err)
+	if err != nil {
+		return mapError(err)
+	}
+	commandTag, err := wrapped.tx.Exec(ctx, sqlRuntimeIncidentHistoryRecord, pgx.StrictNamedArgs{
+		"organization_id": incident.OrganizationID,
+		"project_id":      incident.ProjectID,
+		"incident_id":     incident.ID,
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	if commandTag.RowsAffected() != 1 {
+		return errs.ErrStateConflict
+	}
+	return nil
 }
 
 func (wrapped *transaction) AdmitOwnerSession(

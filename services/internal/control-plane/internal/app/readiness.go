@@ -7,6 +7,7 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/cache"
 	"github.com/codex-k8s/matter-codex/libs/go/eventing"
 	internalrpcauthorityv1 "github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	domainobjectstore "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/client/objectstore"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	authorityservice "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/authority"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/schema"
@@ -14,12 +15,13 @@ import (
 )
 
 type readinessChecker struct {
-	repository     domainrepo.Repository
-	cache          cache.Store
-	relay          *eventing.Relay
-	proof          *authorityservice.Service
-	verifier       internalrpcauthorityv1.AuthorizationVerifierServiceClient
-	policyRevision uint64
+	repository         domainrepo.Repository
+	cache              cache.Store
+	relay              *eventing.Relay
+	proof              *authorityservice.Service
+	verifier           internalrpcauthorityv1.AuthorizationVerifierServiceClient
+	policyRevision     uint64
+	instructionObjects domainobjectstore.Client
 }
 
 func (checker *readinessChecker) Check(
@@ -38,6 +40,9 @@ func (checker *readinessChecker) Check(
 		return state, errors.New("outbox relay is not ready")
 	}
 	state.OutboxReady = true
+	if checker.instructionObjects == nil || checker.instructionObjects.Check(ctx) != nil {
+		return state, errors.New("instruction object store is not ready")
+	}
 	proofState, err := checker.proof.Check(ctx)
 	if err != nil || proofState.PolicyRevision != checker.policyRevision {
 		return state, errors.New("authority proof signer is not ready")

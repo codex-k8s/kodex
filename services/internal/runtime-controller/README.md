@@ -4,8 +4,8 @@ title: Runtime controller
 type: service
 status: approved
 owner: backend
-version: 2.0.0
-updated: 2026-08-04
+version: 2.2.0
+updated: 2026-08-07
 ---
 
 # Runtime controller
@@ -75,6 +75,29 @@ controller отдельно расходует durable `KUBERNETES_MATERIALIZATI
 restore ticket принимается только в `ADMITTED`, а Bind — только для уже consumed
 current generation. Lease token восстанавливается только из owner receipt
 и не сохраняется в Kubernetes Secret, ConfigMap, annotation, log или metric.
+
+Для target Agent-графа Issue #234 поля `RoleID` и `PromptProfileID` указывают
+не на изменяемые legacy `RoleSpec`/`PromptProfileSpec`, а на server-owned
+immutable derived projection control-plane. Runtime-controller читает её тем же
+`GetResource(kind,id,expected_version)` path; control-plane сверяет exact
+source Agent/InstructionSet version и digest и не предоставляет projection
+никакого mutation API. `ProviderCredentialBindingID` остаётся непустым и
+указывает на выбранный из exact ProviderPool snapshot действующий
+`CredentialBinding`; поэтому существующая materialization и credential
+validation не получают caller fallback и не требуют второго авторитетного
+источника.
+Derived Prompt содержит exact CLEAN content Artifact ID/version/digest;
+`ClaimRuntimeExecution` возвращает его тем же materialization contract как
+`AGENTS.md`. `RuntimeRevision.Components` при этом ограничен уже принимаемыми
+runtime-controller kinds, а target Agent/RoleDefinition/InstructionSet/Pool/
+Assignment tuple остаётся top-level version-pinned readback и входит в
+effective digest.
+
+Этот consumer contract не означает готовность Mattermost producer #235:
+runtime-controller не выполняет Team/bot effect, не подписывает
+`ProviderEffectReadbackReceipt` и не вызывает mapping/bot RPC control-plane.
+Эти signer/call-site/readiness обязанности остаются в interaction-gateway
+Issue #235 после rebase на принятый #234.
 
 Capacity учитывает durable pending/admitted/running journals, Pod requests,
 organization limit, server-owned provider binding и свежую observation,

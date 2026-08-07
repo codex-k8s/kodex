@@ -82,6 +82,8 @@ spec:
               value: 15m
             - name: CONTROL_PLANE_IMAGE_MAXIMUM_ATTEMPTS
               value: "3"
+            - name: CONTROL_PLANE_RECOVERY_POLL_INTERVAL
+              value: 1s
             - name: CONTROL_PLANE_STAGING_IMAGE_REPOSITORY
               value: mattercodex-image-registry-push.mattercodex-system.svc.cluster.local:5001/staging/role-images
             - name: CONTROL_PLANE_PROMOTED_IMAGE_REPOSITORY
@@ -194,6 +196,12 @@ spec:
               readOnly: true
             - name: interaction-readback-trust
               mountPath: /var/run/config/mattercodex/control-plane/interaction-readback
+              readOnly: true
+            - name: instruction-object-store
+              mountPath: /var/run/secrets/mattercodex/control-plane/instruction-object-store
+              readOnly: true
+            - name: object-store-ca
+              mountPath: /var/run/config/mattercodex/control-plane/object-store
               readOnly: true
             - name: otel-ca
               mountPath: /var/run/config/mattercodex/control-plane/observability
@@ -316,6 +324,19 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: control-plane-interaction-readback-trust
+        - name: instruction-object-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: control-plane-instruction-object-store
+        - name: object-store-ca
+          configMap:
+            name: object-store-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
         - name: otel-ca
           configMap:
             name: mattercodex-otel-ca

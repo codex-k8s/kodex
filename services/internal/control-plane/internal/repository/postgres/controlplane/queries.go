@@ -135,6 +135,15 @@ var sqlResourceGetForUpdate string
 //go:embed sql/resource__get_including_deleted_for_update.sql
 var sqlResourceGetIncludingDeletedForUpdate string
 
+//go:embed sql/resource__get_by_stable_key_for_update.sql
+var sqlResourceGetByStableKeyForUpdate string
+
+//go:embed sql/resource__get_by_name_for_update.sql
+var sqlResourceGetByNameForUpdate string
+
+//go:embed sql/schedule__other_session_references_for_update.sql
+var sqlScheduleOtherSessionReferencesForUpdate string
+
 //go:embed sql/project__has_live_resources.sql
 var sqlProjectHasLiveResources string
 
@@ -155,6 +164,33 @@ var sqlResourceUpdate string
 
 //go:embed sql/runtime_revision__components.sql
 var sqlRuntimeRevisionComponents string
+
+//go:embed sql/runtime_derived_resource__insert.sql
+var sqlRuntimeDerivedResourceInsert string
+
+//go:embed sql/runtime_derived_resource__get.sql
+var sqlRuntimeDerivedResourceGet string
+
+//go:embed sql/external_command_receipt__reserve.sql
+var sqlExternalCommandReceiptReserve string
+
+//go:embed sql/external_command_receipt__get.sql
+var sqlExternalCommandReceiptGet string
+
+//go:embed sql/external_command_receipt__finalize.sql
+var sqlExternalCommandReceiptFinalize string
+
+//go:embed sql/legacy_configuration_cutover__get.sql
+var sqlLegacyConfigurationCutoverGet string
+
+//go:embed sql/legacy_configuration_cutover__get_for_update.sql
+var sqlLegacyConfigurationCutoverGetForUpdate string
+
+//go:embed sql/legacy_configuration_cutover__list.sql
+var sqlLegacyConfigurationCutoverList string
+
+//go:embed sql/legacy_configuration_cutover__mark_migrated.sql
+var sqlLegacyConfigurationCutoverMarkMigrated string
 
 //go:embed sql/runtime_revision__latest.sql
 var sqlRuntimeRevisionLatest string
@@ -254,6 +290,63 @@ var sqlRuntimeIncidentInsert string
 
 //go:embed sql/runtime_incident__list.sql
 var sqlRuntimeIncidentList string
+
+//go:embed sql/runtime_incident__get_for_update.sql
+var sqlRuntimeIncidentGetForUpdate string
+
+//go:embed sql/runtime_incident__owner_get.sql
+var sqlRuntimeIncidentOwnerGet string
+
+//go:embed sql/runtime_incident__update.sql
+var sqlRuntimeIncidentUpdate string
+
+//go:embed sql/runtime_incident_history__insert.sql
+var sqlRuntimeIncidentHistoryInsert string
+
+//go:embed sql/runtime_incident_history__record.sql
+var sqlRuntimeIncidentHistoryRecord string
+
+//go:embed sql/runtime_incident_history__list.sql
+var sqlRuntimeIncidentHistoryList string
+
+//go:embed sql/interaction_delivery__workspace_open_for_update.sql
+var sqlInteractionDeliveryWorkspaceOpenForUpdate string
+
+//go:embed sql/audit__run_timeline.sql
+var sqlAuditRunTimeline string
+
+//go:embed sql/run_graph__nodes.sql
+var sqlRunGraphNodes string
+
+//go:embed sql/run_graph__artifacts.sql
+var sqlRunGraphArtifacts string
+
+//go:embed sql/project__owner_list_for_update.sql
+var sqlProjectOwnerListForUpdate string
+
+//go:embed sql/session__historical_owner_list_for_update.sql
+var sqlSessionHistoricalOwnerListForUpdate string
+
+//go:embed sql/transaction__switch_workspace_scope.sql
+var sqlTransactionSwitchWorkspaceScope string
+
+//go:embed sql/workspace_recovery__next_candidate.sql
+var sqlWorkspaceRecoveryNextCandidate string
+
+//go:embed sql/workspace_recovery__readiness.sql
+var sqlWorkspaceRecoveryReadiness string
+
+//go:embed sql/protected_history__insert.sql
+var sqlProtectedHistoryInsert string
+
+//go:embed sql/protected_history__list.sql
+var sqlProtectedHistoryList string
+
+//go:embed sql/protected_history__get_version.sql
+var sqlProtectedHistoryGetVersion string
+
+//go:embed sql/instruction_history__get_content_version.sql
+var sqlInstructionHistoryGetContentVersion string
 
 //go:embed sql/owner_session__admit.sql
 var sqlOwnerSessionAdmit string
@@ -377,6 +470,15 @@ var sqlSessionOpenTurns string
 
 //go:embed sql/session__blocks_runtime_cleanup.sql
 var sqlSessionBlocksRuntimeCleanup string
+
+//go:embed sql/schedule_session__project_fence.sql
+var sqlScheduleSessionProjectFence string
+
+//go:embed sql/schedule_session__conversation_for_update.sql
+var sqlScheduleSessionConversationForUpdate string
+
+//go:embed sql/instruction_object_readiness__fence.sql
+var sqlInstructionObjectReadinessFence string
 
 //go:embed sql/transaction__set_scope.sql
 var sqlTransactionSetScope string

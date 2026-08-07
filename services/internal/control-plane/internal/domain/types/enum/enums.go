@@ -25,6 +25,15 @@ const (
 	KindRoleImageRecipe     Kind = "ROLE_IMAGE_RECIPE"
 	KindImageBuild          Kind = "IMAGE_BUILD"
 	KindImageArtifact       Kind = "IMAGE_ARTIFACT"
+	KindRoleDefinition      Kind = "ROLE_DEFINITION"
+	KindAgent               Kind = "AGENT"
+	KindAgentAssignment     Kind = "AGENT_ASSIGNMENT"
+	KindInstructionSet      Kind = "INSTRUCTION_SET"
+	KindProviderReference   Kind = "PROVIDER_CONNECTION_REFERENCE"
+	KindProviderPool        Kind = "PROVIDER_POOL"
+	KindWorkspaceBackup     Kind = "WORKSPACE_BACKUP"
+	KindWorkspaceRestore    Kind = "WORKSPACE_RESTORE"
+	KindWorkspaceMapping    Kind = "WORKSPACE_MATTERMOST_MAPPING"
 )
 
 // ProcessContinuationKind различает взаимоисключающие owner continuation.
@@ -48,7 +57,10 @@ func (kind Kind) Valid() bool {
 		KindCredentialBinding, KindRepositoryWorkspace, KindIntegration,
 		KindRuntimeRevision, KindSession, KindTurn, KindProcessRun,
 		KindSchedule, KindOwnerGate, KindMemoryRecord, KindWorkClaim,
-		KindArtifact, KindRoleImageRecipe, KindImageBuild, KindImageArtifact:
+		KindArtifact, KindRoleImageRecipe, KindImageBuild, KindImageArtifact,
+		KindRoleDefinition, KindAgent, KindAgentAssignment, KindInstructionSet,
+		KindProviderReference, KindProviderPool, KindWorkspaceBackup,
+		KindWorkspaceRestore, KindWorkspaceMapping:
 		return true
 	default:
 		return false
@@ -76,6 +88,23 @@ const (
 	StateBlocked         State = "BLOCKED"
 )
 
+// TurnAttemptStateValid синхронизирует закрытый PostgreSQL CHECK с
+// фактически материализуемыми состояниями attempt. WAITING_* и BLOCKED
+// завершают текущую attempt; продолжение всегда получает свежую attempt.
+func TurnAttemptStateValid(state string) bool {
+	switch State(state) {
+	case StateQueued, StateClaimed, StateWaitingOwner, StateWaitingExternal,
+		StateBlocked, StateSucceeded, StateFailed, StateCancelled, StateExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+func TurnAttemptStateFinished(state string) bool {
+	return TurnAttemptStateValid(state) && state != string(StateQueued) && state != string(StateClaimed)
+}
+
 // Terminal фиксирует состояния без штатного обратного перехода.
 func (state State) Terminal() bool {
 	switch state {
@@ -99,6 +128,10 @@ func InitialState(kind Kind) State {
 		return StateQueued
 	case KindImageArtifact:
 		return StateWaitingExternal
+	case KindWorkspaceBackup:
+		return StateRunning
+	case KindWorkspaceRestore:
+		return StateQueued
 	default:
 		return StateActive
 	}
@@ -108,9 +141,14 @@ func InitialState(kind Kind) State {
 func TransitionAllowed(kind Kind, from, to State) bool {
 	if !kind.Valid() || from == to ||
 		(from.Terminal() &&
-			!(kind == KindTurn && (from == StateFailed || from == StateExpired) && to == StateQueued) &&
-			!(kind == KindProcessRun && (from == StateFailed || from == StateExpired) && to == StateRunning) &&
+			!(kind == KindTurn && (from == StateFailed || from == StateCancelled || from == StateExpired) && to == StateQueued) &&
+			!(kind == KindProcessRun && (from == StateFailed || from == StateCancelled || from == StateExpired) && to == StateRunning) &&
 			!(kind == KindImageBuild && (from == StateFailed || from == StateExpired) && to == StateQueued) &&
+			!(kind == KindWorkspaceBackup &&
+				(from == StateFailed || from == StateCancelled || from == StateExpired) && to == StateRunning) &&
+			!(kind == KindWorkspaceBackup && from == StateSucceeded && to == StateExpired) &&
+			!(kind == KindWorkspaceRestore &&
+				(from == StateFailed || from == StateCancelled || from == StateExpired) && to == StateQueued) &&
 			!(kind == KindSession && from == StateCancelled &&
 				to == StateDeletionPending)) {
 		return false
@@ -142,6 +180,26 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		case StateDeletionPending:
 			return to == StateDeleted
 		}
+	case KindWorkspaceBackup:
+		switch from {
+		case StateRunning:
+			return to == StateSucceeded || to == StateFailed || to == StateCancelled || to == StateExpired
+		case StateSucceeded:
+			return to == StateExpired
+		case StateFailed, StateCancelled, StateExpired:
+			return to == StateRunning
+		}
+	case KindWorkspaceRestore:
+		switch from {
+		case StateQueued:
+			return to == StateRunning || to == StateCancelled || to == StateExpired
+		case StateRunning:
+			return to == StateSucceeded || to == StateFailed || to == StateCancelled || to == StateExpired
+		case StateFailed, StateCancelled, StateExpired:
+			return to == StateQueued
+		}
+	case KindWorkspaceMapping:
+		return from == StateActive && to == StateArchived
 	case KindTurn:
 		switch from {
 		case StateQueued:
@@ -157,7 +215,7 @@ func TransitionAllowed(kind Kind, from, to State) bool {
 		case StateWaitingExternal, StateWaitingOwner, StateBlocked:
 			return to == StateQueued || to == StateSucceeded ||
 				to == StateCancelled || to == StateFailed
-		case StateFailed, StateExpired:
+		case StateFailed, StateCancelled, StateExpired:
 			return to == StateQueued
 		}
 	case KindSession:

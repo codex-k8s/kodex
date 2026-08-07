@@ -32,18 +32,20 @@ type ConfigurationOwnership struct {
 	ManagedBy      string `json:"managedBy"`
 	SourceRef      string `json:"sourceRef,omitempty"`
 	SourceRevision uint64 `json:"sourceRevision,omitempty"`
+	SourceSHA256   string `json:"sourceSha256,omitempty"`
 }
 
 func (ownership ConfigurationOwnership) Validate() error {
 	switch ownership.ManagedBy {
 	case "UI":
 		if (ownership.SourceRef == "") != (ownership.SourceRevision == 0) ||
-			(ownership.SourceRef != "" && (!validExternalRef(ownership.SourceRef) || ownership.SourceRevision == 0)) {
+			(ownership.SourceRef != "" && !validExternalRef(ownership.SourceRef)) ||
+			(ownership.SourceSHA256 != "" && !validSHA256(ownership.SourceSHA256)) {
 			return errors.New("UI configuration ownership is invalid")
 		}
 	case "GIT":
 		if !validExternalRef(ownership.SourceRef) ||
-			ownership.SourceRevision == 0 {
+			ownership.SourceRevision == 0 || (ownership.SourceSHA256 != "" && !validSHA256(ownership.SourceSHA256)) {
 			return errors.New("git configuration ownership is invalid")
 		}
 	default:
@@ -92,6 +94,18 @@ func WithConfigurationOwnership(
 		value.Ownership = ownership
 		return value, nil
 	case ScheduleSpec:
+		value.Ownership = ownership
+		return value, nil
+	case RoleDefinitionSpec:
+		value.Ownership = ownership
+		return value, nil
+	case AgentSpec:
+		value.Ownership = ownership
+		return value, nil
+	case InstructionSetSpec:
+		value.Ownership = ownership
+		return value, nil
+	case ProviderPoolSpec:
 		value.Ownership = ownership
 		return value, nil
 	default:
@@ -455,10 +469,30 @@ type RuntimeRevisionSpec struct {
 	CodexSandbox                           string                      `json:"codexSandbox"`
 	CodexApprovalPolicy                    string                      `json:"codexApprovalPolicy"`
 	ScheduledResultContract                *ScheduledResultContractRef `json:"scheduledResultContract,omitempty"`
+	AgentID                                string                      `json:"agentId,omitempty"`
+	AgentVersion                           uint64                      `json:"agentVersion,omitempty"`
+	AgentSHA256                            string                      `json:"agentSha256,omitempty"`
+	RoleDefinitionID                       string                      `json:"roleDefinitionId,omitempty"`
+	RoleDefinitionVersion                  uint64                      `json:"roleDefinitionVersion,omitempty"`
+	RoleDefinitionSHA256                   string                      `json:"roleDefinitionSha256,omitempty"`
+	InstructionSetID                       string                      `json:"instructionSetId,omitempty"`
+	InstructionSetVersion                  uint64                      `json:"instructionSetVersion,omitempty"`
+	InstructionSetSHA256                   string                      `json:"instructionSetSha256,omitempty"`
+	ProviderPoolID                         string                      `json:"providerPoolId,omitempty"`
+	ProviderPoolVersion                    uint64                      `json:"providerPoolVersion,omitempty"`
+	ProviderPoolSHA256                     string                      `json:"providerPoolSha256,omitempty"`
+	AgentAssignmentID                      string                      `json:"agentAssignmentId,omitempty"`
+	AgentAssignmentVersion                 uint64                      `json:"agentAssignmentVersion,omitempty"`
+	AgentAssignmentSHA256                  string                      `json:"agentAssignmentSha256,omitempty"`
 }
 
 func (RuntimeRevisionSpec) Kind() enum.Kind { return enum.KindRuntimeRevision }
 func (spec RuntimeRevisionSpec) Validate() error {
+	targetAgent := spec.AgentID != "" || spec.AgentVersion != 0 || spec.AgentSHA256 != "" ||
+		spec.RoleDefinitionID != "" || spec.RoleDefinitionVersion != 0 || spec.RoleDefinitionSHA256 != "" ||
+		spec.InstructionSetID != "" || spec.InstructionSetVersion != 0 || spec.InstructionSetSHA256 != "" ||
+		spec.ProviderPoolID != "" || spec.ProviderPoolVersion != 0 || spec.ProviderPoolSHA256 != "" ||
+		spec.AgentAssignmentID != "" || spec.AgentAssignmentVersion != 0 || spec.AgentAssignmentSHA256 != ""
 	if !validSHA256(spec.ManifestSHA256) ||
 		!validImageReference(spec.ImageReference) ||
 		!strings.HasSuffix(spec.ImageReference, "@"+spec.ImageManifestDigest) ||
@@ -472,8 +506,6 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		!validSHA256(spec.ImagePolicySHA256) || !validSHA256(spec.ImageSignatureSHA256) ||
 		!validSHA256(spec.ImagePromotionReadbackSHA256) || spec.RoleRuntimeContractRevision == 0 ||
 		!validSHA256(spec.RoleRuntimeContractSHA256) ||
-		value.ValidateID(spec.PromptProfileID) != nil ||
-		spec.PromptRevision == 0 ||
 		len(spec.CredentialBindingIDs) > 64 || len(spec.IntegrationIDs) > 64 ||
 		!validUniqueIDs(spec.CredentialBindingIDs) ||
 		!validUniqueIDs(spec.IntegrationIDs) ||
@@ -482,12 +514,22 @@ func (spec RuntimeRevisionSpec) Validate() error {
 		len(spec.Components) < 5 || len(spec.Components) > 256 ||
 		spec.CreatedAt.IsZero() ||
 		value.ValidateID(spec.SessionID) != nil ||
-		value.ValidateID(spec.RoleID) != nil ||
-		value.ValidateID(spec.ProviderCredentialBindingID) != nil ||
-		!providerAccountNamePattern.MatchString(spec.ProviderAccountName) ||
 		!validSHA256(spec.EffectiveRuntimeSHA256) ||
 		(spec.ChatID != "" && value.ValidateID(spec.ChatID) != nil) {
 		return errors.New("runtime revision specification is invalid")
+	}
+	if targetAgent {
+		// ROLE/PROMPT_PROFILE здесь — только immutable server-derived projection,
+		// необходимая существующему runtime-controller. Mutation authority остаётся
+		// у Agent/InstructionSet/ProviderPool.
+		if value.ValidateID(spec.PromptProfileID) != nil || spec.PromptRevision == 0 || value.ValidateID(spec.RoleID) != nil ||
+			value.ValidateID(spec.ProviderCredentialBindingID) != nil || !providerAccountNamePattern.MatchString(spec.ProviderAccountName) {
+			return errors.New("runtime revision derived projection binding is invalid")
+		}
+	} else if value.ValidateID(spec.PromptProfileID) != nil || spec.PromptRevision == 0 ||
+		value.ValidateID(spec.RoleID) != nil || value.ValidateID(spec.ProviderCredentialBindingID) != nil ||
+		!providerAccountNamePattern.MatchString(spec.ProviderAccountName) {
+		return errors.New("legacy runtime revision binding is invalid")
 	}
 	codexPinned := spec.CodexModel != "" || spec.CodexSandbox != "" || spec.CodexApprovalPolicy != ""
 	if codexPinned && (!regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`).MatchString(spec.CodexModel) ||
@@ -501,6 +543,16 @@ func (spec RuntimeRevisionSpec) Validate() error {
 	}
 	if spec.ScheduledResultContract != nil && spec.ScheduledResultContract.Validate() != nil {
 		return errors.New("runtime revision scheduled result contract is invalid")
+	}
+	if targetAgent && (value.ValidateID(spec.AgentID) != nil || spec.AgentVersion == 0 ||
+		!validSHA256(spec.AgentSHA256) || value.ValidateID(spec.RoleDefinitionID) != nil ||
+		spec.RoleDefinitionVersion == 0 || !validSHA256(spec.RoleDefinitionSHA256) ||
+		value.ValidateID(spec.InstructionSetID) != nil || spec.InstructionSetVersion == 0 ||
+		!validSHA256(spec.InstructionSetSHA256) || value.ValidateID(spec.ProviderPoolID) != nil ||
+		spec.ProviderPoolVersion == 0 || !validSHA256(spec.ProviderPoolSHA256) ||
+		value.ValidateID(spec.AgentAssignmentID) != nil || spec.AgentAssignmentVersion == 0 ||
+		!validSHA256(spec.AgentAssignmentSHA256)) {
+		return errors.New("runtime revision agent binding is invalid")
 	}
 	for _, identifiers := range [][]string{spec.CredentialBindingIDs, spec.IntegrationIDs} {
 		for _, identifier := range identifiers {
@@ -542,6 +594,14 @@ func (reference EffectiveResourceRef) Validate() error {
 
 type SessionSpec struct {
 	AgentID                    string `json:"agentId"`
+	AgentVersion               uint64 `json:"agentVersion,omitempty"`
+	AgentSHA256                string `json:"agentSha256,omitempty"`
+	ProviderPoolID             string `json:"providerPoolId,omitempty"`
+	ProviderPoolVersion        uint64 `json:"providerPoolVersion,omitempty"`
+	ProviderPoolSHA256         string `json:"providerPoolSha256,omitempty"`
+	AgentAssignmentID          string `json:"agentAssignmentId,omitempty"`
+	AgentAssignmentVersion     uint64 `json:"agentAssignmentVersion,omitempty"`
+	AgentAssignmentSHA256      string `json:"agentAssignmentSha256,omitempty"`
 	ProviderAccountBindingID   string `json:"providerAccountBindingId"`
 	ConversationID             string `json:"conversationId,omitempty"`
 	ArchiveRef                 string `json:"archiveRef,omitempty"`
@@ -554,9 +614,21 @@ type SessionSpec struct {
 
 func (SessionSpec) Kind() enum.Kind { return enum.KindSession }
 func (spec SessionSpec) Validate() error {
-	if value.ValidateID(spec.AgentID) != nil ||
-		value.ValidateID(spec.ProviderAccountBindingID) != nil {
+	if value.ValidateID(spec.AgentID) != nil {
 		return errors.New("session specification is invalid")
+	}
+	targetAgent := spec.AgentVersion != 0 || spec.AgentSHA256 != "" || spec.ProviderPoolID != "" ||
+		spec.ProviderPoolVersion != 0 || spec.ProviderPoolSHA256 != "" || spec.AgentAssignmentID != "" ||
+		spec.AgentAssignmentVersion != 0 || spec.AgentAssignmentSHA256 != ""
+	if targetAgent {
+		if spec.AgentVersion == 0 || !validSHA256(spec.AgentSHA256) ||
+			value.ValidateID(spec.ProviderPoolID) != nil || spec.ProviderPoolVersion == 0 ||
+			!validSHA256(spec.ProviderPoolSHA256) || value.ValidateID(spec.AgentAssignmentID) != nil ||
+			spec.AgentAssignmentVersion == 0 || !validSHA256(spec.AgentAssignmentSHA256) || spec.ProviderAccountBindingID != "" {
+			return errors.New("session Agent binding is invalid")
+		}
+	} else if value.ValidateID(spec.ProviderAccountBindingID) != nil {
+		return errors.New("legacy session provider binding is invalid")
 	}
 	for _, identifier := range []string{spec.ConversationID} {
 		if identifier != "" && value.ValidateID(identifier) != nil {
@@ -1010,6 +1082,21 @@ type ScheduleSpec struct {
 	PromptArtifactID         string                 `json:"promptArtifactId"`
 	ExecutionSessionID       string                 `json:"executionSessionId,omitempty"`
 	Ownership                ConfigurationOwnership `json:"ownership"`
+	AgentID                  string                 `json:"agentId,omitempty"`
+	AgentVersion             uint64                 `json:"agentVersion,omitempty"`
+	AgentSHA256              string                 `json:"agentSha256,omitempty"`
+	InstructionSetID         string                 `json:"instructionSetId,omitempty"`
+	InstructionSetVersion    uint64                 `json:"instructionSetVersion,omitempty"`
+	InstructionSetSHA256     string                 `json:"instructionSetSha256,omitempty"`
+	RuntimeSelectionRef      string                 `json:"runtimeSelectionRef,omitempty"`
+	RuntimeSelectionVersion  uint64                 `json:"runtimeSelectionVersion,omitempty"`
+	RuntimeSelectionSHA256   string                 `json:"runtimeSelectionSha256,omitempty"`
+	ProviderPoolID           string                 `json:"providerPoolId,omitempty"`
+	ProviderPoolVersion      uint64                 `json:"providerPoolVersion,omitempty"`
+	ProviderPoolSHA256       string                 `json:"providerPoolSha256,omitempty"`
+	AgentAssignmentID        string                 `json:"agentAssignmentId,omitempty"`
+	AgentAssignmentVersion   uint64                 `json:"agentAssignmentVersion,omitempty"`
+	AgentAssignmentSHA256    string                 `json:"agentAssignmentSha256,omitempty"`
 }
 
 func (ScheduleSpec) Kind() enum.Kind { return enum.KindSchedule }
@@ -1019,10 +1106,8 @@ func (spec ScheduleSpec) ConfigurationOwnership() ConfigurationOwnership {
 
 func (spec ScheduleSpec) Validate() error {
 	if value.ValidateID(spec.TargetResourceID) != nil ||
-		spec.TargetKind != enum.KindRole ||
+		(spec.TargetKind != enum.KindRole && spec.TargetKind != enum.KindAgent) ||
 		spec.TargetVersion == 0 || !validSHA256(spec.EffectiveInputSHA) ||
-		value.ValidateID(spec.PromptProfileID) != nil ||
-		spec.PromptRevision == 0 ||
 		(spec.SessionPolicy != "NEW" && spec.SessionPolicy != "PERSISTENT" &&
 			spec.SessionPolicy != "ROLLING") ||
 		(spec.RoomID != "" && value.ValidateID(spec.RoomID) != nil) ||
@@ -1033,7 +1118,6 @@ func (spec ScheduleSpec) Validate() error {
 			spec.NotificationPolicy != "AUDIT_ONLY") ||
 		spec.MaximumExecutionDuration < time.Minute ||
 		spec.MaximumExecutionDuration > 24*time.Hour ||
-		value.ValidateID(spec.RuntimeRevisionID) != nil ||
 		(spec.TargetType != "AGENT" && spec.TargetType != "PLAYBOOK") ||
 		value.ValidateID(spec.PromptArtifactID) != nil ||
 		(spec.Cron == "") == (spec.Interval == 0) ||
@@ -1056,8 +1140,33 @@ func (spec ScheduleSpec) Validate() error {
 		spec.Ownership.Validate() != nil {
 		return errors.New("schedule specification is invalid")
 	}
+	if spec.TargetKind == enum.KindRole {
+		if value.ValidateID(spec.PromptProfileID) != nil || spec.PromptRevision == 0 ||
+			value.ValidateID(spec.RuntimeRevisionID) != nil {
+			return errors.New("legacy schedule runtime binding is invalid")
+		}
+	} else if spec.PromptProfileID != "" || spec.PromptRevision != 0 ||
+		spec.RuntimeRevisionID != "" {
+		return errors.New("agent schedule contains legacy runtime binding")
+	}
 	if spec.OverlapPolicy == "QUEUE" && spec.Coalesce {
 		return errors.New("schedule queue policy cannot coalesce")
+	}
+	targetBinding := spec.AgentID != "" || spec.AgentVersion != 0 || spec.AgentSHA256 != "" ||
+		spec.InstructionSetID != "" || spec.InstructionSetVersion != 0 || spec.InstructionSetSHA256 != "" ||
+		spec.RuntimeSelectionRef != "" || spec.RuntimeSelectionVersion != 0 || spec.RuntimeSelectionSHA256 != "" ||
+		spec.ProviderPoolID != "" || spec.ProviderPoolVersion != 0 || spec.ProviderPoolSHA256 != "" ||
+		spec.AgentAssignmentID != "" || spec.AgentAssignmentVersion != 0 || spec.AgentAssignmentSHA256 != ""
+	if (spec.TargetKind == enum.KindAgent) != targetBinding || targetBinding &&
+		(value.ValidateID(spec.AgentID) != nil || spec.AgentVersion == 0 ||
+			!validSHA256(spec.AgentSHA256) || value.ValidateID(spec.InstructionSetID) != nil ||
+			spec.InstructionSetVersion == 0 || !validSHA256(spec.InstructionSetSHA256) ||
+			!validExternalRef(spec.RuntimeSelectionRef) || spec.RuntimeSelectionVersion == 0 ||
+			!validSHA256(spec.RuntimeSelectionSHA256) || value.ValidateID(spec.ProviderPoolID) != nil ||
+			spec.ProviderPoolVersion == 0 || !validSHA256(spec.ProviderPoolSHA256) ||
+			value.ValidateID(spec.AgentAssignmentID) != nil || spec.AgentAssignmentVersion == 0 ||
+			!validSHA256(spec.AgentAssignmentSHA256)) {
+		return errors.New("schedule owner binding is invalid")
 	}
 	if spec.TargetType == "PLAYBOOK" {
 		if !validExternalRef(spec.PlaybookRef) || spec.PlaybookVersion == 0 {

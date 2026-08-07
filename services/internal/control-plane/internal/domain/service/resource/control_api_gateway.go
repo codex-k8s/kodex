@@ -257,12 +257,10 @@ func (service *Service) DeleteProject(
 }
 
 func accessConfigurationKind(kind enum.Kind) bool {
-	switch kind {
-	case enum.KindTeam, enum.KindRole, enum.KindPromptProfile:
-		return true
-	default:
-		return false
-	}
+	// ROLE и PROMPT_PROFILE после target cutover доступны только для
+	// immutable legacy/derived read. Их detach/copy также не должны возвращать
+	// прежнему универсальному access path mutation authority.
+	return kind == enum.KindTeam
 }
 
 // DetachAccessResource разрешает source в trusted owner boundary до OCC и

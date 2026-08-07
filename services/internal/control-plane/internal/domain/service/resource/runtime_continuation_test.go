@@ -1222,12 +1222,12 @@ func TestRuntimeSuspensionAndRetryPredecessorsAreClosed(t *testing.T) {
 	if !runtimeTerminal("SUSPENDED") {
 		t.Fatal("suspended runtime execution must revoke the previous authority")
 	}
-	for _, state := range []string{"FAILED", "EXPIRED"} {
+	for _, state := range []string{"FAILED", "CANCELLED", "EXPIRED"} {
 		if !retryableRuntimePredecessor(state) {
 			t.Fatalf("retryable predecessor was rejected: %s", state)
 		}
 	}
-	for _, state := range []string{"SUCCEEDED", "CANCELLED", "SUSPENDED", "RETRIED"} {
+	for _, state := range []string{"SUCCEEDED", "SUSPENDED", "RETRIED"} {
 		if retryableRuntimePredecessor(state) {
 			t.Fatalf("non-retryable predecessor was accepted: %s", state)
 		}
