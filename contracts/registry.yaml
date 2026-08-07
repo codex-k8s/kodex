@@ -1,5 +1,11 @@
 version: 1
 packages:
+  - id: egress-gateway-policy-v1
+    format: json-schema
+    owner: egress-gateway
+    source: contracts/egress/v1/egress-gateway-policy.schema.json
+    consumers:
+      - egress-gateway
   - id: interaction-gateway-api-v1
     format: openapi
     owner: interaction-gateway

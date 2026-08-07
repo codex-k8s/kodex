@@ -4,8 +4,8 @@ title: Высокоуровневая архитектура
 type: architecture
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-08-04
+version: 1.1.1
+updated: 2026-08-07
 ---
 
 # Высокоуровневая архитектура
@@ -32,7 +32,8 @@ flowchart LR
     AR --> AI[Поставщик среды выполнения ИИ]
     AR --> BMCP[Bot Service MCP transport]
     BMCP --> MG[Шлюз интеграций MCP]
-    MG --> EXT[Внешние системы]
+    MG --> EG[Platform Egress Gateway]
+    EG --> EXT[Внешние системы]
     MG --> AP[Ручное согласование]
     AR --> IG
     IG --> S3
@@ -98,6 +99,15 @@ Gateway не читает PostgreSQL Control Plane напрямую.
 Предоставляет MCP endpoint в области одной сессии. Он аутентифицирует сессию агента, вычисляет права, маскирует данные, создает запросы согласования и выполняет внешние действия от имени `IntegrationConnection`.
 
 Опасные учетные данные остаются в шлюзе или хранилище секретов и не передаются в pod агента.
+
+## Platform Egress Gateway
+
+Предоставляет namespace-local HTTP CONNECT Service для разрешённого
+исходящего HTTPS-трафика `integration-gateway`. Он сопоставляет exact CONNECT
+authority, фактический TLS ClientHello SNI и immutable policy, самостоятельно
+получает bounded A/AAAA snapshot и выполняет dial только к повторно
+проверенному literal IP. Gateway не завершает TLS: CA/hostname verification и
+application credentials остаются end-to-end у consumer.
 
 ## Internal RPC Authority
 

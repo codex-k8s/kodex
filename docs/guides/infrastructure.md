@@ -4,8 +4,8 @@ title: Infrastructure Guide
 type: guide
 status: approved
 owner: SRE
-version: 1.2.0
-updated: 2026-08-03
+version: 1.2.1
+updated: 2026-08-07
 ---
 
 # Infrastructure Guide
@@ -99,10 +99,17 @@ overlay способен незаметно удалить обязательн�
   адресном контракте либо namespace-local egress gateway.
 - SaaS с изменяемыми адресами доступен через allowlisted proxy, а не wildcard
   HTTPS egress.
+- Сам allowlisted egress gateway может иметь destination-less `TCP/443` только
+  как явно зарегистрированное L3/L4-исключение: его application Pods не имеют
+  такого правила, immutable exact-FQDN policy сверяется с CONNECT authority и
+  фактическим ClientHello SNI, DNS принадлежит gateway, весь A/AAAA snapshot
+  отклоняется при любом special-purpose address, а dial получает только
+  повторно проверенный literal IP. Gateway не монтирует application secrets и
+  ServiceAccount token.
 
 После render сверяются полный набор разрешенных портов/destinations и
-отсутствие destination-less правил. Успешный YAML parse не доказывает
-семантику сети.
+отсутствие destination-less правил вне утверждённого egress gateway exception.
+Успешный YAML parse не доказывает семантику сети.
 
 ## Каркас нового Go-компонента
 

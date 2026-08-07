@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.3.0
-updated: 2026-08-05
+version: 1.3.1
+updated: 2026-08-07
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -396,6 +396,13 @@ applied -> pending -> reload -> exact peer readback -> applied
 - Внешний SaaS доступен через разрешённый прокси исходящего трафика, если
   точный диапазон IP не является устойчивым контрактом; открытый HTTPS-трафик
   не используется.
+- Только зарегистрированный platform egress gateway может получить
+  destination-less `TCP/443` как осознанную L3/L4 boundary. До dial он требует
+  exact равенство bodyless CONNECT authority, фактического ClientHello SNI и
+  immutable policy, запрещает ECH, полностью проверяет server-owned A/AAAA
+  snapshot и повторно проверяет каждый literal address. Consumer не получает
+  прямой внешний `443`, а gateway не получает application credentials,
+  ServiceAccount token, host access или TLS termination.
 - Итоговый render окружения проверяется после всех overlays. Исходная база
   или patch не доказывает результирующую политику: списки могут заменяться
   целиком.

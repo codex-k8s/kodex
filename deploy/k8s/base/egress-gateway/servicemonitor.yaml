@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: egress-gateway
+  labels:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: egress-gateway
+      app.kubernetes.io/component: platform-egress
+      mattercodex.dev/endpoint: technical
+  namespaceSelector:
+    matchNames: [mattercodex-system]
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s
