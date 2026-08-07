@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: staff-control-center-runtime
+  labels:
+    app.kubernetes.io/name: staff-control-center
+    app.kubernetes.io/component: staff-frontend
+data:
+  runtime-config.json: |
+    {
+      "environment": "base",
+      "apiBaseUrl": "https://control.mattercodex.local/api/v1",
+      "realtimeUrl": "wss://control.mattercodex.local/api/v1/realtime",
+      "requestTimeoutMs": 15000,
+      "oidc": {
+        "authority": "https://sso.mattercodex.local/realms/mattercodex",
+        "clientId": "mattercodex-control-center",
+        "redirectUri": "https://control.mattercodex.local/auth/callback",
+        "postLogoutRedirectUri": "https://control.mattercodex.local/",
+        "scope": "openid profile mattercodex.owner"
+      }
+    }
+  security-headers.conf: |
+    add_header Content-Security-Policy "default-src 'self'; connect-src 'self' wss://control.mattercodex.local https://sso.mattercodex.local; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Resource-Policy "same-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;

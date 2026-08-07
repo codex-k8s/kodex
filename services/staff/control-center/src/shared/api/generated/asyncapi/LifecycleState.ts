@@ -1,0 +1,3 @@
+
+type LifecycleState = "ACTIVE" | "PAUSED" | "ARCHIVED" | "DELETION_PENDING" | "DELETED" | "QUEUED" | "CLAIMED" | "RUNNING" | "WAITING_OWNER" | "WAITING_EXTERNAL" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "BLOCKED";
+export { LifecycleState };

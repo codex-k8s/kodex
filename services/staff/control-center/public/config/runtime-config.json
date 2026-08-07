@@ -1,0 +1,13 @@
+{
+  "environment": "base",
+  "apiBaseUrl": "https://control.mattercodex.local/api/v1",
+  "realtimeUrl": "wss://control.mattercodex.local/api/v1/realtime",
+  "requestTimeoutMs": 15000,
+  "oidc": {
+    "authority": "https://sso.mattercodex.local/realms/mattercodex",
+    "clientId": "mattercodex-control-center",
+    "redirectUri": "https://control.mattercodex.local/auth/callback",
+    "postLogoutRedirectUri": "https://control.mattercodex.local/",
+    "scope": "openid profile mattercodex.owner"
+  }
+}

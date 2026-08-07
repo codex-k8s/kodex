@@ -1,0 +1,42 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: staff-control-center-deny-all}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: staff-control-center}}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: staff-control-center-ingress}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: staff-control-center
+      app.kubernetes.io/component: staff-frontend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
+      ports: [{protocol: TCP, port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: staff-control-center-exact-egress}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: staff-control-center
+      app.kubernetes.io/component: staff-frontend
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-api-gateway
+              app.kubernetes.io/component: external-gateway
+      ports: [{protocol: TCP, port: 8443}]
