@@ -12,6 +12,7 @@ import (
 var (
 	ErrNotFound            = errors.New("mattermost team provider state is not found")
 	ErrIdempotencyConflict = errors.New("mattermost team semantic idempotency conflict")
+	ErrCreateFenceConflict = errors.New("mattermost team create fence conflict")
 )
 
 type CreateDisposition uint8
@@ -36,17 +37,24 @@ type Repository interface {
 	SaveCatalogPage(context.Context, entity.TeamPrincipal, []entity.MattermostTeam, uint32, uint32, bool, time.Duration) ([]entity.MattermostTeam, string, error)
 	ResolveSelector(context.Context, entity.TeamPrincipal, string) (string, error)
 	RefreshSelector(context.Context, entity.TeamPrincipal, entity.MattermostTeam, time.Duration) (entity.MattermostTeam, error)
-	BeginCreate(context.Context, entity.MattermostTeamOperation, string, time.Duration) (entity.MattermostTeamOperation, CreateDisposition, error)
+	BeginCreate(context.Context, entity.MattermostTeamOperation, string, time.Duration, time.Duration) (entity.MattermostTeamOperation, CreateDisposition, error)
+	GetCreateOperation(context.Context, entity.TeamPrincipal, string) (entity.MattermostTeamOperation, error)
 	MarkEffectStarted(context.Context, entity.MattermostTeamOperation) (entity.MattermostTeamOperation, error)
-	MarkAmbiguous(context.Context, entity.MattermostTeamOperation, string, time.Time) error
+	DeferCreateRecovery(context.Context, entity.MattermostTeamOperation, string, time.Duration) (entity.MattermostTeamOperation, error)
 	MarkRepairRequired(context.Context, entity.MattermostTeamOperation, string) error
 	AcceptProvider(context.Context, entity.MattermostTeamOperation, entity.MattermostTeam, string, time.Duration) (entity.MattermostTeamOperation, error)
 	ClaimRecovery(context.Context, string, time.Duration) (entity.MattermostTeamOperation, bool, error)
 	AdvanceProviderGeneration(context.Context, entity.TeamPrincipal) (uint64, error)
-	BeginMapping(context.Context, entity.WorkspaceMappingOperation, string, time.Duration) (entity.WorkspaceMappingOperation, MappingDisposition, error)
-	RefreshMappingReceipt(context.Context, entity.WorkspaceMappingOperation) (entity.WorkspaceMappingOperation, error)
-	MarkMappingAmbiguous(context.Context, entity.WorkspaceMappingOperation, string, time.Time) error
-	MarkMappingTerminal(context.Context, entity.WorkspaceMappingOperation, entity.WorkspaceMattermostMapping) error
+	BeginMapping(context.Context, entity.WorkspaceMappingOperation, string, time.Duration, time.Duration) (entity.WorkspaceMappingOperation, MappingDisposition, error)
+	GetMappingOperation(context.Context, entity.TeamPrincipal, string, string) (entity.WorkspaceMappingOperation, error)
+	PrepareMappingAttempt(context.Context, entity.WorkspaceMappingOperation, entity.MattermostTeam, time.Duration) (entity.WorkspaceMappingOperation, error)
+	DeferMappingRecovery(context.Context, entity.WorkspaceMappingOperation, string, time.Duration) (entity.WorkspaceMappingOperation, error)
+	MarkMappingTerminal(context.Context, entity.WorkspaceMappingOperation, entity.WorkspaceMattermostMapping, []entity.MattermostRuntimeRoute) error
+	ReconcileRuntimeRoutes(context.Context, entity.TeamPrincipal, entity.WorkspaceMattermostMapping, []entity.MattermostRuntimeRoute) error
 	MarkMappingRepairRequired(context.Context, entity.WorkspaceMappingOperation, string) error
 	ClaimMappingRecovery(context.Context, string, time.Duration) (entity.WorkspaceMappingOperation, bool, error)
+	ResolveRuntimeRoute(context.Context, string, string) (entity.MattermostRuntimeRoute, error)
+	ResolveRuntimeDelivery(context.Context, string, string, string) (entity.MattermostRuntimeRoute, error)
+	ListRuntimeRoutes(context.Context) ([]entity.MattermostRuntimeRoute, error)
+	GetRuntimeAdmission(context.Context, entity.TeamPrincipal, string) (entity.MattermostRuntimeRoute, error)
 }

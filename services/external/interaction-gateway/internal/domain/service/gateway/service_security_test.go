@@ -72,6 +72,14 @@ func TestStaleMappingStopsReclaimedInboundDeliveryAndArtifact(t *testing.T) {
 			t.Fatalf("stale artifact grant was not fenced: err=%v calls=%d", err, guard.calls)
 		}
 	})
+
+	t.Run("readiness", func(t *testing.T) {
+		guard := &rejectingMappingGuard{}
+		service := securityService(&securityRepository{}, &securityMattermost{boundary: boundary}, guard, now)
+		if err := service.CheckInteraction(context.Background()); err == nil || guard.calls != 1 {
+			t.Fatalf("stale joined readiness was green: err=%v calls=%d", err, guard.calls)
+		}
+	})
 }
 
 func securityService(repository *securityRepository, mattermost *securityMattermost,
@@ -127,7 +135,11 @@ type securityMattermost struct {
 	publishCalls int
 }
 
-func (client *securityMattermost) ResolveMappedChannel(string, string) (entity.Boundary, error) {
+func (client *securityMattermost) ResolveMappedChannel(context.Context, string, string) (entity.Boundary, error) {
+	return client.boundary, nil
+}
+
+func (client *securityMattermost) ReadinessBoundary(context.Context) (entity.Boundary, error) {
 	return client.boundary, nil
 }
 

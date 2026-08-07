@@ -90,6 +90,7 @@
           "interaction.team.create",
           "interaction.team.link",
           "interaction.team.binding.get",
+          "interaction.team.mapping-operation.get",
           "interaction.team.relink",
           "interaction.team.unlink",
           "interaction.team.provider.readback",
@@ -1133,6 +1134,35 @@
         },
         "operation_id": "interaction.team.catalog.read",
         "permission": "interaction.team.catalog.read",
+        "project_required": true,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+        "target_tls_server_name": "interaction-gateway.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "interaction-gateway"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:interaction-gateway",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-api-gateway",
+        "caller_workload_id": "control-api-gateway",
+        "full_method": "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamMappingOperation",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "local_target": {
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000,
+          "uid": 10001
+        },
+        "operation_id": "interaction.team.mapping-operation.get",
+        "permission": "interaction.team.mapping-operation.get",
         "project_required": true,
         "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
         "target_tls_server_name": "interaction-gateway.mattercodex-system.svc.cluster.local",
@@ -5923,6 +5953,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 24,
+  "policy_revision": 25,
   "v": 1
 }

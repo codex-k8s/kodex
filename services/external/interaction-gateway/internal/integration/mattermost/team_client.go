@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -74,7 +75,7 @@ func (client *Client) TeamReadinessBindings() []entity.MattermostReadinessBindin
 		seen[key] = struct{}{}
 		result = append(result, entity.MattermostReadinessBinding{Principal: entity.TeamPrincipal{
 			ActorID: channel.LifecycleActorID, OrganizationID: channel.OrganizationID, ProjectID: channel.ProjectID,
-		}, ProviderTeamID: channel.TeamID})
+		}})
 	}
 	slices.SortFunc(result, func(left, right entity.MattermostReadinessBinding) int {
 		leftKey := left.Principal.ProjectID + "\x00" + left.Principal.ActorID
@@ -166,6 +167,7 @@ func (client *Client) CreateTeam(ctx context.Context, principal entity.TeamPrinc
 	}
 	created, response, err := client.primary.api.CreateTeam(ctx, &model.Team{
 		Name: intent.Slug, DisplayName: intent.DisplayName, Type: model.TeamOpen,
+		Description: providerOperationMarker(intent.ProviderCorrelation),
 	})
 	if err != nil {
 		if response != nil && response.StatusCode >= http.StatusBadRequest && response.StatusCode < http.StatusInternalServerError {
@@ -176,10 +178,7 @@ func (client *Client) CreateTeam(ctx context.Context, principal entity.TeamPrinc
 	if created == nil || invalidProviderID(created.Id) || created.Name != intent.Slug || created.DisplayName != intent.DisplayName {
 		return entity.MattermostTeam{}, domainmattermost.ErrAmbiguousEffect
 	}
-	if err := client.ensureOwnerMembership(ctx, created.Id, actor.MattermostUserID); err != nil {
-		return entity.MattermostTeam{}, domainmattermost.ErrAmbiguousEffect
-	}
-	return client.readCreatedTeam(ctx, actor.MattermostUserID, intent)
+	return client.readCreatedTeam(ctx, actor.MattermostUserID, intent, false)
 }
 
 func (client *Client) RecoverCreatedTeam(ctx context.Context, principal entity.TeamPrincipal, intent entity.MattermostTeamCreateIntent) (entity.MattermostTeam, error) {
@@ -194,13 +193,30 @@ func (client *Client) RecoverCreatedTeam(ctx context.Context, principal entity.T
 		}
 		return entity.MattermostTeam{}, providerReadError(response, err)
 	}
-	if team == nil || team.Name != intent.Slug || team.DisplayName != intent.DisplayName || team.Type != model.TeamOpen || team.DeleteAt != 0 {
+	if !createdTeamMatches(team, intent) {
+		return entity.MattermostTeam{}, domainmattermost.ErrTeamConflict
+	}
+	return client.readCreatedTeam(ctx, actor.MattermostUserID, intent, false)
+}
+
+func (client *Client) EnsureCreatedTeamOwner(ctx context.Context, principal entity.TeamPrincipal,
+	intent entity.MattermostTeamCreateIntent, providerTeamID string,
+) (entity.MattermostTeam, error) {
+	actor, err := client.index.resolveOwner(principal)
+	if err != nil || invalidProviderID(providerTeamID) {
+		return entity.MattermostTeam{}, domainmattermost.ErrTeamForbidden
+	}
+	team, response, err := client.primary.api.GetTeam(ctx, providerTeamID, "")
+	if err != nil {
+		return entity.MattermostTeam{}, providerReadError(response, err)
+	}
+	if !createdTeamMatches(team, intent) {
 		return entity.MattermostTeam{}, domainmattermost.ErrTeamConflict
 	}
 	if err := client.ensureOwnerMembership(ctx, team.Id, actor.MattermostUserID); err != nil {
 		return entity.MattermostTeam{}, err
 	}
-	return client.readCreatedTeam(ctx, actor.MattermostUserID, intent)
+	return client.readCreatedTeam(ctx, actor.MattermostUserID, intent, true)
 }
 
 func (client *Client) ReadTeam(ctx context.Context, principal entity.TeamPrincipal, providerTeamID string) (entity.MattermostTeam, error) {
@@ -228,19 +244,111 @@ func (client *Client) ReadTeam(ctx context.Context, principal entity.TeamPrincip
 	return safeTeam(team), nil
 }
 
-func (client *Client) readCreatedTeam(ctx context.Context, userID string, intent entity.MattermostTeamCreateIntent) (entity.MattermostTeam, error) {
+func (client *Client) BuildRuntimeRoutes(ctx context.Context, principal entity.TeamPrincipal,
+	providerTeamID string,
+) ([]entity.MattermostRuntimeRoute, error) {
+	team, err := client.ReadTeam(ctx, principal, providerTeamID)
+	if err != nil || team.Status != enum.MattermostTeamActive {
+		return nil, domainmattermost.ErrTeamForbidden
+	}
+	routes := make([]entity.MattermostRuntimeRoute, 0)
+	for _, template := range client.index.templates {
+		if template.OrganizationID != principal.OrganizationID || template.ProjectID != principal.ProjectID ||
+			template.LifecycleActorID != principal.ActorID {
+			continue
+		}
+		source, _, readErr := client.primary.api.GetChannel(ctx, template.ChannelID)
+		if readErr != nil || source == nil || source.Id != template.ChannelID || source.TeamId != template.TeamID ||
+			source.Name == "" {
+			return nil, domainmattermost.ErrTeamConflict
+		}
+		target, response, readErr := client.primary.api.GetChannelByName(ctx, source.Name, providerTeamID, "")
+		if readErr != nil || target == nil || target.TeamId != providerTeamID || target.Name != source.Name || target.DeleteAt != 0 {
+			return nil, providerReadError(response, readErr)
+		}
+		botKeys := map[string]struct{}{template.BotStableKey: {}}
+		for _, assignment := range template.Assignments {
+			botKeys[assignment.BotStableKey] = struct{}{}
+		}
+		for botKey := range botKeys {
+			bot := client.bots[botKey]
+			if bot == nil {
+				return nil, domainmattermost.ErrTeamConflict
+			}
+			member, _, memberErr := bot.api.GetChannelMember(ctx, target.Id, bot.identity.UserID, "")
+			if memberErr != nil || member == nil || member.ChannelId != target.Id || member.UserId != bot.identity.UserID {
+				return nil, domainmattermost.ErrTeamForbidden
+			}
+		}
+		boundary := entity.Boundary{
+			OrganizationID: template.OrganizationID, ProjectID: template.ProjectID, ChatID: template.ChatID,
+			MappingOwnerActorID: template.LifecycleActorID, RoleID: template.RoleID, Locale: template.Locale,
+			BotStableKey: template.BotStableKey, TeamID: providerTeamID, ChannelID: target.Id,
+			SessionID: template.SessionID,
+		}
+		routeDigest := runtimeRouteDigest(template.RuntimeKey, boundary, team.ProviderSnapshotSHA256, template.OwnerDelivery)
+		routes = append(routes, entity.MattermostRuntimeRoute{
+			TemplateKey: template.RuntimeKey, Principal: principal, ProviderTeamID: providerTeamID,
+			ProviderSnapshotSHA256: team.ProviderSnapshotSHA256, Boundary: boundary,
+			OwnerDelivery: template.OwnerDelivery, RouteDigestSHA256: routeDigest,
+		})
+	}
+	if len(routes) == 0 {
+		return nil, domainmattermost.ErrTeamConflict
+	}
+	slices.SortFunc(routes, func(left, right entity.MattermostRuntimeRoute) int {
+		return strings.Compare(left.Boundary.ChannelID, right.Boundary.ChannelID)
+	})
+	return routes, nil
+}
+
+func runtimeRouteDigest(templateKey string, boundary entity.Boundary, providerSnapshot string, ownerDelivery bool) string {
+	value := strings.Join([]string{
+		"mattermost-runtime-route-v1", templateKey, boundary.OrganizationID, boundary.ProjectID,
+		boundary.ChatID, boundary.MappingOwnerActorID, boundary.RoleID, boundary.Locale, boundary.BotStableKey,
+		boundary.TeamID, boundary.ChannelID, boundary.SessionID, providerSnapshot,
+		fmt.Sprint(ownerDelivery),
+	}, "\x00")
+	digest := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(digest[:])
+}
+
+func (client *Client) readCreatedTeam(ctx context.Context, userID string, intent entity.MattermostTeamCreateIntent,
+	requireMembership bool,
+) (entity.MattermostTeam, error) {
 	team, response, err := client.primary.api.GetTeamByName(ctx, intent.Slug, "")
 	if err != nil {
 		return entity.MattermostTeam{}, providerReadError(response, err)
 	}
-	if team == nil || team.Name != intent.Slug || team.DisplayName != intent.DisplayName || team.Type != model.TeamOpen || team.DeleteAt != 0 {
+	if !createdTeamMatches(team, intent) {
 		return entity.MattermostTeam{}, domainmattermost.ErrTeamConflict
 	}
-	member, response, err := client.primary.api.GetTeamMember(ctx, team.Id, userID, "")
-	if err != nil || member == nil || member.TeamId != team.Id || member.UserId != userID || member.DeleteAt != 0 {
-		return entity.MattermostTeam{}, providerReadError(response, err)
+	if requireMembership {
+		member, response, err := client.primary.api.GetTeamMember(ctx, team.Id, userID, "")
+		if err != nil || member == nil || member.TeamId != team.Id || member.UserId != userID || member.DeleteAt != 0 {
+			return entity.MattermostTeam{}, providerReadError(response, err)
+		}
 	}
-	return safeTeam(team), nil
+	result := safeTeam(team)
+	result.ProviderCausalitySHA256 = providerCausalityDigest(intent.ProviderCorrelation, team)
+	return result, nil
+}
+
+func createdTeamMatches(team *model.Team, intent entity.MattermostTeamCreateIntent) bool {
+	return team != nil && !invalidProviderID(team.Id) && team.Name == intent.Slug &&
+		team.DisplayName == intent.DisplayName && team.Description == providerOperationMarker(intent.ProviderCorrelation) &&
+		team.Type == model.TeamOpen && team.DeleteAt == 0
+}
+
+func providerOperationMarker(correlation string) string {
+	return "mattercodex-operation:" + correlation
+}
+
+func providerCausalityDigest(correlation string, team *model.Team) string {
+	value := strings.Join([]string{"mattermost-team-create-proof-v1", correlation, team.Id,
+		time.UnixMilli(team.CreateAt).UTC().Format(time.RFC3339Nano)}, "\x00")
+	digest := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(digest[:])
 }
 
 func (client *Client) ensureOwnerMembership(ctx context.Context, teamID, userID string) error {
@@ -279,7 +387,7 @@ func safeTeam(team *model.Team) entity.MattermostTeam {
 func providerTeamDigest(team *model.Team) string {
 	value := strings.Join([]string{
 		"mattermost-team-snapshot-v1", team.Id, team.Name, team.DisplayName,
-		team.Type, time.UnixMilli(team.CreateAt).UTC().Format(time.RFC3339Nano),
+		team.Description, team.Type, time.UnixMilli(team.CreateAt).UTC().Format(time.RFC3339Nano),
 		time.UnixMilli(team.UpdateAt).UTC().Format(time.RFC3339Nano),
 		time.UnixMilli(team.DeleteAt).UTC().Format(time.RFC3339Nano),
 	}, "\x00")

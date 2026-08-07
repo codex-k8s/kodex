@@ -57,6 +57,7 @@ CREATE TABLE interaction_gateway_team_operations (
     kind text NOT NULL CHECK (kind = 'CREATE'),
     idempotency_key uuid NOT NULL,
     request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    provider_correlation uuid NOT NULL,
     display_name text NOT NULL CHECK (length(display_name) BETWEEN 1 AND 256),
     slug text NOT NULL CHECK (slug ~ '^[a-z0-9][a-z0-9-]{1,63}$'),
     state text NOT NULL CHECK (state IN ('PENDING', 'EFFECT_PENDING', 'AMBIGUOUS', 'PROVIDER_ACCEPTED', 'REPAIR_REQUIRED')),
@@ -65,6 +66,7 @@ CREATE TABLE interaction_gateway_team_operations (
     provider_status text NOT NULL DEFAULT '' CHECK (provider_status IN ('', 'ACTIVE', 'DELETED')),
     provider_snapshot_sha256 text NOT NULL DEFAULT '' CHECK (provider_snapshot_sha256 = '' OR provider_snapshot_sha256 ~ '^[0-9a-f]{64}$'),
     provider_receipt_sha256 text NOT NULL DEFAULT '' CHECK (provider_receipt_sha256 = '' OR provider_receipt_sha256 ~ '^[0-9a-f]{64}$'),
+    provider_causality_sha256 text NOT NULL DEFAULT '' CHECK (provider_causality_sha256 = '' OR provider_causality_sha256 ~ '^[0-9a-f]{64}$'),
     provider_generation bigint CHECK (provider_generation IS NULL OR provider_generation > 0),
     provider_created_at timestamptz,
     provider_updated_at timestamptz,
@@ -75,6 +77,7 @@ CREATE TABLE interaction_gateway_team_operations (
     lease_token_sha256 text NOT NULL DEFAULT '' CHECK (lease_token_sha256 = '' OR lease_token_sha256 ~ '^[0-9a-f]{64}$'),
     lease_expires_at timestamptz,
     effect_started_at timestamptz,
+    recovery_deadline timestamptz NOT NULL,
     retry_not_before timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -85,11 +88,25 @@ CREATE TABLE interaction_gateway_team_operations (
     CHECK (state <> 'PROVIDER_ACCEPTED' OR
         (selector_id IS NOT NULL AND provider_team_id <> '' AND provider_status = 'ACTIVE'
          AND provider_snapshot_sha256 <> '' AND provider_receipt_sha256 <> ''
+         AND provider_causality_sha256 <> ''
          AND provider_generation IS NOT NULL))
 );
 CREATE INDEX interaction_gateway_team_operation_due_idx
     ON interaction_gateway_team_operations(retry_not_before, created_at)
     WHERE state IN ('PENDING', 'EFFECT_PENDING', 'AMBIGUOUS');
+
+-- Single-winner fence создаётся до provider POST и переживает reclaim/crash.
+CREATE TABLE interaction_gateway_team_create_fences (
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    operation_id uuid NOT NULL REFERENCES interaction_gateway_team_operations(operation_id),
+    request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
+    state text NOT NULL CHECK (state IN ('ACTIVE', 'BOUND', 'UNLINKED', 'REPAIR_REQUIRED')),
+    provider_team_id text NOT NULL DEFAULT '' CHECK (length(provider_team_id) <= 64),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (organization_id, project_id)
+);
 
 -- Scope index intentionally carries no provider payload or receipt.
 CREATE TABLE interaction_gateway_team_operation_work_scopes (
@@ -166,6 +183,8 @@ ALTER TABLE interaction_gateway_team_provider_watermarks ENABLE ROW LEVEL SECURI
 ALTER TABLE interaction_gateway_team_provider_watermarks FORCE ROW LEVEL SECURITY;
 ALTER TABLE interaction_gateway_team_operations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interaction_gateway_team_operations FORCE ROW LEVEL SECURITY;
+ALTER TABLE interaction_gateway_team_create_fences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interaction_gateway_team_create_fences FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY interaction_gateway_team_selector_runtime_scope ON interaction_gateway_team_catalog_selectors
 USING ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()))
@@ -179,16 +198,20 @@ WITH CHECK ((organization_id, project_id) = (SELECT organization_id, project_id 
 CREATE POLICY interaction_gateway_team_operation_runtime_scope ON interaction_gateway_team_operations
 USING ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()))
 WITH CHECK ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()));
+CREATE POLICY interaction_gateway_team_create_fence_runtime_scope ON interaction_gateway_team_create_fences
+USING ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()))
+WITH CHECK ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()));
 
 REVOKE ALL ON interaction_gateway_team_metadata, interaction_gateway_team_catalog_selectors,
     interaction_gateway_team_catalog_cursors, interaction_gateway_team_provider_watermarks,
-    interaction_gateway_team_operations, interaction_gateway_team_operation_work_scopes
+    interaction_gateway_team_operations, interaction_gateway_team_create_fences,
+    interaction_gateway_team_operation_work_scopes
     FROM PUBLIC;
 REVOKE ALL ON interaction_gateway_team_operation_work_scopes FROM interaction_gateway_runtime;
 GRANT SELECT ON interaction_gateway_team_metadata TO interaction_gateway_runtime;
 GRANT SELECT, INSERT, UPDATE ON interaction_gateway_team_catalog_selectors,
     interaction_gateway_team_catalog_cursors, interaction_gateway_team_provider_watermarks,
-    interaction_gateway_team_operations TO interaction_gateway_runtime;
+    interaction_gateway_team_operations, interaction_gateway_team_create_fences TO interaction_gateway_runtime;
 
 -- +goose Down
 -- Forward-only: semantic receipts, provider checkpoints и monotonic watermark не удаляются.

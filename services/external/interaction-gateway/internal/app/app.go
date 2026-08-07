@@ -123,7 +123,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err != nil {
 		return err
 	}
-	boundaries := mattermost.ChannelBoundaries()
+	boundaries := mattermost.BootstrapBoundaries()
 	organizationID, projectSet := "", map[string]struct{}{}
 	for _, boundary := range boundaries {
 		if organizationID == "" {
@@ -153,6 +153,9 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		OrganizationID:      organizationID, AllowedProjectIDs: projectIDs,
 	})
 	if err != nil {
+		return err
+	}
+	if err := mattermost.UseRuntimeRoutes(teamRepository); err != nil {
 		return err
 	}
 	receiptSigner, err := providerreceipt.New(providerreceipt.Config{
@@ -278,8 +281,8 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	}{
 		{"PostgreSQL", repository.Check},
 		{"control-plane", control.Check},
-		{"Mattermost event", service.CheckInteraction},
 		{"Mattermost Team", teamService.Check},
+		{"Mattermost event", service.CheckInteraction},
 		{"internal authority verifier", authorityChecker.Check},
 		{"bot-service runtime transport", bot.Check},
 		{"S3", objects.Check},

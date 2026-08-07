@@ -16,15 +16,16 @@ type TeamPrincipal struct {
 // MattermostTeam содержит raw provider identity только внутри gateway.
 // Transport DTO всегда использует Selector.
 type MattermostTeam struct {
-	ProviderTeamID         string
-	Selector               string
-	DisplayName            string
-	Slug                   string
-	Status                 enum.MattermostTeamStatus
-	ProviderSnapshotSHA256 string
-	CreatedAt              time.Time
-	UpdatedAt              time.Time
-	ObservedAt             time.Time
+	ProviderTeamID          string
+	Selector                string
+	DisplayName             string
+	Slug                    string
+	Status                  enum.MattermostTeamStatus
+	ProviderSnapshotSHA256  string
+	ProviderCausalitySHA256 string
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	ObservedAt              time.Time
 }
 
 // MattermostOwnerObservation подтверждает fresh provider user readback без
@@ -36,8 +37,26 @@ type MattermostOwnerObservation struct {
 }
 
 type MattermostReadinessBinding struct {
-	Principal      TeamPrincipal
-	ProviderTeamID string
+	Principal TeamPrincipal
+}
+
+// MattermostRuntimeRoute — durable joined projection exact owner mapping и
+// provider Team/channel. TemplateKey связывает только неизменяемую route policy;
+// Team authority всегда задают MappingVersion/MappingGeneration.
+type MattermostRuntimeRoute struct {
+	TemplateKey            string
+	Principal              TeamPrincipal
+	MappingID              string
+	MappingVersion         uint64
+	MappingGeneration      uint64
+	MappingDigestSHA256    string
+	ProviderTeamID         string
+	ProviderSnapshotSHA256 string
+	Boundary               Boundary
+	OwnerDelivery          bool
+	RouteDigestSHA256      string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 // WorkspaceMattermostMapping — внутренняя проекция авторитетного mapping.
@@ -56,8 +75,9 @@ type WorkspaceMattermostMapping struct {
 }
 
 type WorkspaceMattermostBinding struct {
-	Mapping WorkspaceMattermostMapping
-	Team    MattermostTeam
+	Mapping   WorkspaceMattermostMapping
+	Team      MattermostTeam
+	Operation WorkspaceMappingOperation
 }
 
 type WorkspaceMappingOperation struct {
@@ -78,33 +98,38 @@ type WorkspaceMappingOperation struct {
 	LeaseToken         string
 	FailureCode        string
 	RetryNotBefore     time.Time
+	RecoveryDeadline   time.Time
 	Result             WorkspaceMattermostMapping
+	CreateOperationID  string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
 
 type MattermostTeamCreateIntent struct {
-	DisplayName    string
-	Slug           string
-	IdempotencyKey string
-	RequestSHA256  string
+	DisplayName         string
+	Slug                string
+	IdempotencyKey      string
+	RequestSHA256       string
+	ProviderCorrelation string
 }
 
 // MattermostTeamOperation является durable interaction-owned provider
 // checkpoint, но не копией авторитетного Workspace mapping control-plane.
 type MattermostTeamOperation struct {
-	ID                    string
-	Principal             TeamPrincipal
-	Intent                MattermostTeamCreateIntent
-	State                 enum.MattermostTeamOperationState
-	Team                  MattermostTeam
-	ProviderReceiptSHA256 string
-	ProviderGeneration    uint64
-	FailureCode           string
-	Fence                 uint64
-	LeaseToken            string
-	EffectStartedAt       time.Time
-	RetryNotBefore        time.Time
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	ID                      string
+	Principal               TeamPrincipal
+	Intent                  MattermostTeamCreateIntent
+	State                   enum.MattermostTeamOperationState
+	Team                    MattermostTeam
+	ProviderReceiptSHA256   string
+	ProviderCausalitySHA256 string
+	ProviderGeneration      uint64
+	FailureCode             string
+	Fence                   uint64
+	LeaseToken              string
+	EffectStartedAt         time.Time
+	RetryNotBefore          time.Time
+	RecoveryDeadline        time.Time
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
 }

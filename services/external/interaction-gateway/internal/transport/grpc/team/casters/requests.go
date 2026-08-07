@@ -50,6 +50,24 @@ func UnlinkRequest(request *interactiongatewayv1.UnlinkMattermostTeamRequest) (u
 	return request.GetExpectedMappingVersion(), request.GetExpectedMappingGeneration(), request.GetIdempotencyKey(), nil
 }
 
+func MappingOperationRequest(request *interactiongatewayv1.GetMattermostTeamMappingOperationRequest) (string, string, error) {
+	if request == nil || !validUUID(request.GetIdempotencyKey()) {
+		return "", "", errors.New("Mattermost mapping operation request is invalid")
+	}
+	action := ""
+	switch request.GetAction() {
+	case interactiongatewayv1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND:
+		action = "bind"
+	case interactiongatewayv1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK:
+		action = "relink"
+	case interactiongatewayv1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK:
+		action = "unlink"
+	default:
+		return "", "", errors.New("Mattermost mapping operation action is invalid")
+	}
+	return action, request.GetIdempotencyKey(), nil
+}
+
 func ProviderReadbackRequest(request *interactiongatewayv1.GetMattermostTeamProviderReadbackRequest) (string, error) {
 	if request == nil || !validUUID(request.GetSelector()) {
 		return "", errors.New("mattermost team provider readback request is invalid")

@@ -59,7 +59,7 @@ func TestSignerProducesCanonicalExactBoundReceipt(t *testing.T) {
 	if err := json.Unmarshal(verified.CanonicalPayload, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Purpose != Purpose || payload.WorkloadID != WorkloadID || payload.CallerSPIFFEID != CallerSPIFFEID ||
+	if payload.Purpose != Purpose || payload.Audience != Audience || payload.WorkloadID != WorkloadID || payload.CallerSPIFFEID != CallerSPIFFEID ||
 		payload.FullMethod != credential.Receipt.FullMethod || payload.ReceiptRevision != 7 ||
 		!payload.ExpiresAt.Equal(now.Add(2*time.Minute)) {
 		t.Fatalf("receipt binding mismatch: %#v", payload)

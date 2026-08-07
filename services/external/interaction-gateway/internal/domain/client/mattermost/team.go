@@ -22,5 +22,7 @@ type TeamClient interface {
 	ListTeams(context.Context, entity.TeamPrincipal, uint32, uint32) ([]entity.MattermostTeam, bool, error)
 	CreateTeam(context.Context, entity.TeamPrincipal, entity.MattermostTeamCreateIntent) (entity.MattermostTeam, error)
 	RecoverCreatedTeam(context.Context, entity.TeamPrincipal, entity.MattermostTeamCreateIntent) (entity.MattermostTeam, error)
+	EnsureCreatedTeamOwner(context.Context, entity.TeamPrincipal, entity.MattermostTeamCreateIntent, string) (entity.MattermostTeam, error)
 	ReadTeam(context.Context, entity.TeamPrincipal, string) (entity.MattermostTeam, error)
+	BuildRuntimeRoutes(context.Context, entity.TeamPrincipal, string) ([]entity.MattermostRuntimeRoute, error)
 }

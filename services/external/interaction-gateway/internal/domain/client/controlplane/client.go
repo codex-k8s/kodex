@@ -145,6 +145,7 @@ type RuntimeOutputAuthorization struct {
 type ProviderEffectReceipt struct {
 	ContractVersion     uint32    `json:"contract_version"`
 	Issuer              string    `json:"iss"`
+	Audience            string    `json:"aud"`
 	Purpose             string    `json:"purpose"`
 	WorkloadID          string    `json:"workload_id"`
 	CallerSPIFFEID      string    `json:"caller_spiffe_id"`

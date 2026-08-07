@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/enum"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,6 +43,38 @@ type rowScanner interface {
 	Scan(...any) error
 }
 
+type namedQueryer interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func strictNamed(arguments ...any) pgx.StrictNamedArgs {
+	result := make(pgx.StrictNamedArgs, len(arguments))
+	for index, argument := range arguments {
+		result[fmt.Sprintf("arg%d", index+1)] = argument
+	}
+	return result
+}
+
+func execNamed(ctx context.Context, queryer namedQueryer, query string,
+	arguments ...any,
+) (pgconn.CommandTag, error) {
+	return queryer.Exec(ctx, query, strictNamed(arguments...))
+}
+
+func queryNamed(ctx context.Context, queryer namedQueryer, query string,
+	arguments ...any,
+) (pgx.Rows, error) {
+	return queryer.Query(ctx, query, strictNamed(arguments...))
+}
+
+func queryRow(ctx context.Context, queryer namedQueryer, query string,
+	arguments ...any,
+) pgx.Row {
+	return queryer.QueryRow(ctx, query, strictNamed(arguments...))
+}
+
 func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 	if pool == nil || config.PrincipalGeneration == 0 || !validUUID(config.OrganizationID) || len(config.AllowedProjectIDs) == 0 {
 		return nil, errors.New("mattermost team repository configuration is invalid")
@@ -49,6 +83,9 @@ func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 		if !validUUID(projectID) {
 			return nil, errors.New("mattermost team repository project scope is invalid")
 		}
+	}
+	if err := validateTeamQueries(); err != nil {
+		return nil, err
 	}
 	return &Repository{pool: pool, config: config}, nil
 }
@@ -65,7 +102,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	}
 	var schemaVersion uint64
 	var identityReady bool
-	if err := repository.pool.QueryRow(ctx, readinessCheckSQL, repository.config.PrincipalGeneration,
+	if err := queryRow(ctx, repository.pool, readinessCheckSQL, repository.config.PrincipalGeneration,
 		repository.config.OrganizationID, projects).Scan(&schemaVersion, &identityReady); err != nil || schemaVersion != 2 || !identityReady {
 		return errors.New("mattermost team repository is not ready")
 	}
@@ -87,13 +124,13 @@ func (repository *Repository) Check(ctx context.Context) error {
 	}
 	var organizationID, projectID, actorID string
 	var offset uint32
-	negativeErr := negative.QueryRow(ctx, readinessProbeCursorSQL, uuid.NewString(), uuid.NewString(),
+	negativeErr := queryRow(ctx, negative, readinessProbeCursorSQL, uuid.NewString(), uuid.NewString(),
 		principal.ProjectID, principal.ActorID).Scan(&organizationID, &projectID, &actorID, &offset)
 	rollbackErr := negative.Rollback(ctx)
 	if negativeErr == nil || (rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed)) {
 		return errors.New("cross-tenant Mattermost team readiness probe was not rejected")
 	}
-	if err := tx.QueryRow(ctx, readinessProbeCursorSQL, uuid.NewString(), principal.OrganizationID,
+	if err := queryRow(ctx, tx, readinessProbeCursorSQL, uuid.NewString(), principal.OrganizationID,
 		principal.ProjectID, principal.ActorID).Scan(&organizationID, &projectID, &actorID, &offset); err != nil ||
 		organizationID != principal.OrganizationID || projectID != principal.ProjectID || actorID != principal.ActorID || offset != 1 {
 		return errors.New("scoped Mattermost team readiness DML is not ready")
@@ -110,7 +147,7 @@ func (repository *Repository) ResolveCatalogOffset(ctx context.Context, principa
 	}
 	var offset uint32
 	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, catalogCursorResolveSQL, cursor, principal.OrganizationID, principal.ProjectID,
+		return queryRow(ctx, tx, catalogCursorResolveSQL, cursor, principal.OrganizationID, principal.ProjectID,
 			principal.ActorID, pageSize).Scan(&offset)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -143,7 +180,7 @@ func (repository *Repository) SaveCatalogPage(ctx context.Context, principal ent
 			principal.OrganizationID, principal.ProjectID, principal.ActorID,
 			fmt.Sprint(nextOffset), fmt.Sprint(pageSize),
 		}, "\x00"))).String()
-		return tx.QueryRow(ctx, catalogCursorUpsertSQL, cursorID, principal.OrganizationID, principal.ProjectID,
+		return queryRow(ctx, tx, catalogCursorUpsertSQL, cursorID, principal.OrganizationID, principal.ProjectID,
 			principal.ActorID, nextOffset, pageSize, interval(ttl)).Scan(&nextCursor)
 	})
 	if err != nil {
@@ -155,7 +192,7 @@ func (repository *Repository) SaveCatalogPage(ctx context.Context, principal ent
 func (repository *Repository) ResolveSelector(ctx context.Context, principal entity.TeamPrincipal, selector string) (string, error) {
 	var providerTeamID string
 	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, selectorResolveSQL, selector, principal.OrganizationID,
+		return queryRow(ctx, tx, selectorResolveSQL, selector, principal.OrganizationID,
 			principal.ProjectID, principal.ActorID).Scan(&providerTeamID)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -183,7 +220,7 @@ func (repository *Repository) RefreshSelector(ctx context.Context, principal ent
 }
 
 func (repository *Repository) BeginCreate(ctx context.Context, operation entity.MattermostTeamOperation,
-	owner string, lease time.Duration,
+	owner string, lease, recoveryWindow time.Duration,
 ) (entity.MattermostTeamOperation, domainrepo.CreateDisposition, error) {
 	token, err := newLeaseToken()
 	if err != nil {
@@ -192,14 +229,36 @@ func (repository *Repository) BeginCreate(ctx context.Context, operation entity.
 	disposition := domainrepo.CreateClaimed
 	var stored entity.MattermostTeamOperation
 	err = repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, operationInsertSQL, operation.ID, operation.Principal.OrganizationID,
+		tag, err := execNamed(ctx, tx, operationInsertSQL, operation.ID, operation.Principal.OrganizationID,
 			operation.Principal.ProjectID, operation.Principal.ActorID, operation.Intent.IdempotencyKey,
-			operation.Intent.RequestSHA256, operation.Intent.DisplayName, operation.Intent.Slug,
-			owner, digest(token), interval(lease))
+			operation.Intent.RequestSHA256, operation.Intent.ProviderCorrelation, operation.Intent.DisplayName,
+			operation.Intent.Slug, owner, digest(token), interval(lease), interval(recoveryWindow))
 		if err != nil {
 			return err
 		}
-		stored, leaseActive, err := scanOperation(tx.QueryRow(ctx, operationLockSQL, operation.ID))
+		fenceTag, err := execNamed(ctx, tx, createFenceAcquireSQL, operation.Principal.OrganizationID,
+			operation.Principal.ProjectID, operation.ID, operation.Intent.RequestSHA256)
+		if err != nil {
+			return err
+		}
+		if fenceTag.RowsAffected() == 0 {
+			var fenceOperationID, fenceRequestSHA, fenceState, providerTeamID string
+			if err := queryRow(ctx, tx, createFenceLockSQL, operation.Principal.OrganizationID,
+				operation.Principal.ProjectID).Scan(&fenceOperationID, &fenceRequestSHA, &fenceState, &providerTeamID); err != nil {
+				return err
+			}
+			if fenceState == "UNLINKED" {
+				replaced, replaceErr := execNamed(ctx, tx, createFenceReplaceUnlinkedSQL, operation.Principal.OrganizationID,
+					operation.Principal.ProjectID, operation.ID, operation.Intent.RequestSHA256)
+				if replaceErr != nil || replaced.RowsAffected() != 1 {
+					return domainrepo.ErrCreateFenceConflict
+				}
+			} else if fenceOperationID != operation.ID || fenceRequestSHA != operation.Intent.RequestSHA256 {
+				_ = providerTeamID
+				return domainrepo.ErrCreateFenceConflict
+			}
+		}
+		stored, leaseActive, err := scanOperation(queryRow(ctx, tx, operationLockSQL, operation.ID))
 		if err != nil {
 			return err
 		}
@@ -211,12 +270,12 @@ func (repository *Repository) BeginCreate(ctx context.Context, operation entity.
 			return nil
 		}
 		if stored.State == enum.TeamOperationPending && !leaseActive {
-			tag, err = tx.Exec(ctx, operationReclaimSQL, operation.ID, owner, digest(token), interval(lease))
+			tag, err = execNamed(ctx, tx, operationReclaimSQL, operation.ID, owner, digest(token), interval(lease))
 			if err != nil {
 				return err
 			}
 			if tag.RowsAffected() == 1 {
-				stored, _, err = scanOperation(tx.QueryRow(ctx, operationLockSQL, operation.ID))
+				stored, _, err = scanOperation(queryRow(ctx, tx, operationLockSQL, operation.ID))
 				stored.LeaseToken = token
 				return err
 			}
@@ -228,7 +287,7 @@ func (repository *Repository) BeginCreate(ctx context.Context, operation entity.
 		}
 		return nil
 	})
-	if errors.Is(err, domainrepo.ErrIdempotencyConflict) {
+	if errors.Is(err, domainrepo.ErrIdempotencyConflict) || errors.Is(err, domainrepo.ErrCreateFenceConflict) {
 		return entity.MattermostTeamOperation{}, 0, err
 	}
 	if err != nil {
@@ -237,10 +296,29 @@ func (repository *Repository) BeginCreate(ctx context.Context, operation entity.
 	return stored, disposition, nil
 }
 
+func (repository *Repository) GetCreateOperation(ctx context.Context, principal entity.TeamPrincipal,
+	operationID string,
+) (entity.MattermostTeamOperation, error) {
+	var operation entity.MattermostTeamOperation
+	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
+		var scanErr error
+		operation, _, scanErr = scanOperation(queryRow(ctx, tx, operationGetSQL,
+			principal.OrganizationID, principal.ProjectID, principal.ActorID, operationID))
+		return scanErr
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.MattermostTeamOperation{}, domainrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.MattermostTeamOperation{}, errors.New("read Mattermost team create operation")
+	}
+	return operation, nil
+}
+
 func (repository *Repository) MarkEffectStarted(ctx context.Context, operation entity.MattermostTeamOperation) (entity.MattermostTeamOperation, error) {
 	var started time.Time
 	err := repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, operationMarkEffectSQL, operation.ID, operation.Fence,
+		return queryRow(ctx, tx, operationMarkEffectSQL, operation.ID, operation.Fence,
 			digest(operation.LeaseToken)).Scan(&started)
 	})
 	if err != nil {
@@ -250,16 +328,49 @@ func (repository *Repository) MarkEffectStarted(ctx context.Context, operation e
 	return operation, nil
 }
 
-func (repository *Repository) MarkAmbiguous(ctx context.Context, operation entity.MattermostTeamOperation,
-	code string, retry time.Time,
-) error {
-	return repository.updateOperation(ctx, operation, operationMarkAmbiguousSQL,
-		operation.ID, code, retry, operation.Fence, digest(operation.LeaseToken))
+func (repository *Repository) DeferCreateRecovery(ctx context.Context, operation entity.MattermostTeamOperation,
+	code string, retryDelay time.Duration,
+) (entity.MattermostTeamOperation, error) {
+	var state, failureCode string
+	var retryNotBefore, recoveryDeadline, updatedAt time.Time
+	err := repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		if err := queryRow(ctx, tx, operationMarkAmbiguousSQL, operation.ID, code, interval(retryDelay),
+			operation.Fence, digest(operation.LeaseToken)).Scan(&state, &failureCode, &retryNotBefore,
+			&recoveryDeadline, &updatedAt); err != nil {
+			return err
+		}
+		if state == string(enum.TeamOperationRepairRequired) {
+			tag, err := execNamed(ctx, tx, createFenceTerminalSQL, operation.Principal.OrganizationID,
+				operation.Principal.ProjectID, operation.ID, "REPAIR_REQUIRED")
+			if err != nil || tag.RowsAffected() != 1 {
+				return errors.New("update expired Mattermost team create fence")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return entity.MattermostTeamOperation{}, errors.New("defer Mattermost team create recovery")
+	}
+	operation.State = enum.MattermostTeamOperationState(state)
+	operation.FailureCode, operation.RetryNotBefore = failureCode, retryNotBefore
+	operation.RecoveryDeadline, operation.UpdatedAt, operation.LeaseToken = recoveryDeadline, updatedAt, ""
+	return operation, nil
 }
 
 func (repository *Repository) MarkRepairRequired(ctx context.Context, operation entity.MattermostTeamOperation, code string) error {
-	return repository.updateOperation(ctx, operation, operationMarkRepairSQL,
-		operation.ID, code, operation.Fence, digest(operation.LeaseToken))
+	return repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		tag, err := execNamed(ctx, tx, operationMarkRepairSQL, operation.ID, code, operation.Fence,
+			digest(operation.LeaseToken))
+		if err != nil || tag.RowsAffected() != 1 {
+			return errors.New("update Mattermost team operation")
+		}
+		fenceTag, fenceErr := execNamed(ctx, tx, createFenceTerminalSQL, operation.Principal.OrganizationID,
+			operation.Principal.ProjectID, operation.ID, "REPAIR_REQUIRED")
+		if fenceErr != nil || fenceTag.RowsAffected() != 1 {
+			return errors.New("update Mattermost team create fence")
+		}
+		return nil
+	})
 }
 
 func (repository *Repository) AcceptProvider(ctx context.Context, operation entity.MattermostTeamOperation,
@@ -272,17 +383,22 @@ func (repository *Repository) AcceptProvider(ctx context.Context, operation enti
 			return err
 		}
 		var generation uint64
-		if err := tx.QueryRow(ctx, providerWatermarkAdvanceSQL, operation.Principal.OrganizationID,
+		if err := queryRow(ctx, tx, providerWatermarkAdvanceSQL, operation.Principal.OrganizationID,
 			operation.Principal.ProjectID).Scan(&generation); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, operationAcceptSQL, operation.ID, storedTeam.Selector, team.ProviderTeamID,
-			team.Status, team.ProviderSnapshotSHA256, receipt, generation, team.CreatedAt, team.UpdatedAt,
+		tag, err := execNamed(ctx, tx, operationAcceptSQL, operation.ID, storedTeam.Selector, team.ProviderTeamID,
+			team.Status, team.ProviderSnapshotSHA256, team.ProviderCausalitySHA256, receipt, generation, team.CreatedAt, team.UpdatedAt,
 			team.ObservedAt, operation.Fence, digest(operation.LeaseToken))
 		if err != nil || tag.RowsAffected() != 1 {
 			return errors.New("accept Mattermost team provider checkpoint")
 		}
-		accepted, _, err = scanOperation(tx.QueryRow(ctx, operationLockSQL, operation.ID))
+		fenceTag, fenceErr := execNamed(ctx, tx, createFenceAcceptSQL, operation.Principal.OrganizationID,
+			operation.Principal.ProjectID, operation.ID, team.ProviderTeamID)
+		if fenceErr != nil || fenceTag.RowsAffected() != 1 {
+			return errors.New("accept Mattermost team create fence")
+		}
+		accepted, _, err = scanOperation(queryRow(ctx, tx, operationLockSQL, operation.ID))
 		return err
 	})
 	if err != nil {
@@ -293,7 +409,7 @@ func (repository *Repository) AcceptProvider(ctx context.Context, operation enti
 
 func (repository *Repository) ClaimRecovery(ctx context.Context, owner string, lease time.Duration) (entity.MattermostTeamOperation, bool, error) {
 	var organizationID, projectID sql.NullString
-	if err := repository.pool.QueryRow(ctx, nextWorkScopeSQL).Scan(&organizationID, &projectID); err != nil {
+	if err := queryRow(ctx, repository.pool, nextWorkScopeSQL).Scan(&organizationID, &projectID); err != nil {
 		return entity.MattermostTeamOperation{}, false, errors.New("resolve Mattermost team recovery scope")
 	}
 	if !organizationID.Valid || !projectID.Valid {
@@ -310,7 +426,7 @@ func (repository *Repository) ClaimRecovery(ctx context.Context, owner string, l
 	var operation entity.MattermostTeamOperation
 	err = repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
 		var scanErr error
-		operation, _, scanErr = scanOperation(tx.QueryRow(ctx, operationClaimRecoverySQL,
+		operation, _, scanErr = scanOperation(queryRow(ctx, tx, operationClaimRecoverySQL,
 			owner, digest(token), interval(lease)))
 		return scanErr
 	})
@@ -327,7 +443,7 @@ func (repository *Repository) ClaimRecovery(ctx context.Context, owner string, l
 func (repository *Repository) AdvanceProviderGeneration(ctx context.Context, principal entity.TeamPrincipal) (uint64, error) {
 	var generation uint64
 	err := repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, providerWatermarkAdvanceSQL, principal.OrganizationID, principal.ProjectID).Scan(&generation)
+		return queryRow(ctx, tx, providerWatermarkAdvanceSQL, principal.OrganizationID, principal.ProjectID).Scan(&generation)
 	})
 	if err != nil || generation == 0 {
 		return 0, errors.New("advance Mattermost provider observation generation")
@@ -336,7 +452,7 @@ func (repository *Repository) AdvanceProviderGeneration(ctx context.Context, pri
 }
 
 func (repository *Repository) BeginMapping(ctx context.Context, operation entity.WorkspaceMappingOperation,
-	owner string, lease time.Duration,
+	owner string, lease, recoveryWindow time.Duration,
 ) (entity.WorkspaceMappingOperation, domainrepo.MappingDisposition, error) {
 	token, err := newLeaseToken()
 	if err != nil {
@@ -345,23 +461,18 @@ func (repository *Repository) BeginMapping(ctx context.Context, operation entity
 	disposition := domainrepo.MappingClaimed
 	var stored entity.WorkspaceMappingOperation
 	err = repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
-		var generation uint64
-		if err := tx.QueryRow(ctx, providerWatermarkAdvanceSQL, operation.Principal.OrganizationID,
-			operation.Principal.ProjectID).Scan(&generation); err != nil {
-			return err
-		}
-		receiptID := uuid.NewString()
-		tag, err := tx.Exec(ctx, mappingOperationInsertSQL, operation.ID, operation.Principal.OrganizationID,
+		tag, err := execNamed(ctx, tx, mappingOperationInsertSQL, operation.ID, operation.Principal.OrganizationID,
 			operation.Principal.ProjectID, operation.Principal.ActorID, operation.Action,
 			operation.IdempotencyKey, operation.RequestSHA256, operation.MappingID,
 			operation.ExpectedVersion, operation.ExpectedGeneration, operation.DisplayName,
 			operation.Team.Selector, operation.Team.ProviderTeamID, operation.Team.Status,
 			operation.Team.ProviderSnapshotSHA256, operation.Team.CreatedAt, operation.Team.UpdatedAt,
-			operation.Team.ObservedAt, generation, receiptID, owner, digest(token), interval(lease))
+			operation.Team.ObservedAt, owner, digest(token), interval(lease), interval(recoveryWindow),
+			operation.CreateOperationID)
 		if err != nil {
 			return err
 		}
-		stored, leaseActive, err := scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, operation.ID))
+		stored, leaseActive, err := scanMappingOperation(queryRow(ctx, tx, mappingOperationLockSQL, operation.ID))
 		if err != nil {
 			return err
 		}
@@ -382,12 +493,12 @@ func (repository *Repository) BeginMapping(ctx context.Context, operation entity
 			disposition = domainrepo.MappingBusy
 			return nil
 		}
-		tag, err = tx.Exec(ctx, mappingOperationReclaimSQL, stored.ID, owner, digest(token), interval(lease))
+		tag, err = execNamed(ctx, tx, mappingOperationReclaimSQL, stored.ID, owner, digest(token), interval(lease))
 		if err != nil || tag.RowsAffected() != 1 {
 			disposition = domainrepo.MappingBusy
 			return err
 		}
-		stored, _, err = scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, stored.ID))
+		stored, _, err = scanMappingOperation(queryRow(ctx, tx, mappingOperationLockSQL, stored.ID))
 		stored.LeaseToken = token
 		return err
 	})
@@ -400,71 +511,240 @@ func (repository *Repository) BeginMapping(ctx context.Context, operation entity
 	return stored, disposition, nil
 }
 
-// RefreshMappingReceipt выдаёт неоднозначной операции новый одноразовый JTI и
-// монотонное provider generation только после owner readback её predecessor.
-// Watermark и operation checkpoint меняются одной транзакцией.
-func (repository *Repository) RefreshMappingReceipt(ctx context.Context,
-	operation entity.WorkspaceMappingOperation,
+func (repository *Repository) GetMappingOperation(ctx context.Context, principal entity.TeamPrincipal,
+	action, idempotencyKey string,
+) (entity.WorkspaceMappingOperation, error) {
+	var operation entity.WorkspaceMappingOperation
+	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
+		var scanErr error
+		operation, _, scanErr = scanMappingOperation(queryRow(ctx, tx, mappingOperationGetSQL,
+			principal.OrganizationID, principal.ProjectID, principal.ActorID, action, idempotencyKey))
+		return scanErr
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.WorkspaceMappingOperation{}, domainrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, errors.New("read Workspace mapping operation")
+	}
+	return operation, nil
+}
+
+// PrepareMappingAttempt атомарно фиксирует fresh Team/member snapshot,
+// monotonic generation и новый one-use JTI непосредственно перед owner RPC.
+func (repository *Repository) PrepareMappingAttempt(ctx context.Context,
+	operation entity.WorkspaceMappingOperation, team entity.MattermostTeam, _ time.Duration,
 ) (entity.WorkspaceMappingOperation, error) {
 	var refreshed entity.WorkspaceMappingOperation
 	err := repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
 		var generation uint64
-		if err := tx.QueryRow(ctx, providerWatermarkAdvanceSQL, operation.Principal.OrganizationID,
+		if err := queryRow(ctx, tx, providerWatermarkAdvanceSQL, operation.Principal.OrganizationID,
 			operation.Principal.ProjectID).Scan(&generation); err != nil {
 			return err
 		}
 		if generation <= operation.EffectGeneration {
 			return errors.New("provider observation generation did not advance")
 		}
-		tag, err := tx.Exec(ctx, mappingOperationRefreshReceiptSQL, operation.ID,
-			operation.Fence, digest(operation.LeaseToken), generation, uuid.NewString())
+		tag, err := execNamed(ctx, tx, mappingOperationPrepareSQL, operation.ID,
+			operation.Fence, digest(operation.LeaseToken), team.Selector, team.ProviderTeamID,
+			team.Status, team.ProviderSnapshotSHA256, team.CreatedAt, team.UpdatedAt, team.ObservedAt,
+			generation, uuid.NewString())
 		if err != nil || tag.RowsAffected() != 1 {
 			return errors.New("refresh Workspace mapping provider receipt")
 		}
-		refreshed, _, err = scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, operation.ID))
+		refreshed, _, err = scanMappingOperation(queryRow(ctx, tx, mappingOperationLockSQL, operation.ID))
 		if err == nil {
 			refreshed.LeaseToken = operation.LeaseToken
 		}
 		return err
 	})
 	if err != nil {
-		return entity.WorkspaceMappingOperation{}, errors.New("refresh Workspace mapping provider receipt")
+		return entity.WorkspaceMappingOperation{}, errors.New("prepare Workspace mapping provider receipt")
 	}
 	return refreshed, nil
 }
 
-func (repository *Repository) MarkMappingAmbiguous(ctx context.Context, operation entity.WorkspaceMappingOperation,
-	code string, retry time.Time,
-) error {
-	return repository.updateMappingOperation(ctx, operation, mappingOperationMarkAmbiguousSQL,
-		operation.ID, code, retry, operation.Fence, digest(operation.LeaseToken))
+func (repository *Repository) DeferMappingRecovery(ctx context.Context, operation entity.WorkspaceMappingOperation,
+	code string, retryDelay time.Duration,
+) (entity.WorkspaceMappingOperation, error) {
+	var state, failureCode string
+	var retryNotBefore, recoveryDeadline, updatedAt time.Time
+	err := repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		if err := queryRow(ctx, tx, mappingOperationMarkAmbiguousSQL, operation.ID, code, interval(retryDelay),
+			operation.Fence, digest(operation.LeaseToken)).Scan(&state, &failureCode, &retryNotBefore,
+			&recoveryDeadline, &updatedAt); err != nil {
+			return err
+		}
+		if state == enum.WorkspaceMappingOperationRepairRequired && operation.CreateOperationID != "" {
+			tag, err := execNamed(ctx, tx, createFenceTerminalSQL, operation.Principal.OrganizationID,
+				operation.Principal.ProjectID, operation.CreateOperationID, "REPAIR_REQUIRED")
+			if err != nil || tag.RowsAffected() != 1 {
+				return errors.New("update expired Mattermost team create fence")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, errors.New("defer Workspace mapping recovery")
+	}
+	operation.State, operation.FailureCode = state, failureCode
+	operation.RetryNotBefore, operation.RecoveryDeadline = retryNotBefore, recoveryDeadline
+	operation.UpdatedAt, operation.LeaseToken = updatedAt, ""
+	return operation, nil
 }
 
 func (repository *Repository) MarkMappingTerminal(ctx context.Context, operation entity.WorkspaceMappingOperation,
-	mapping entity.WorkspaceMattermostMapping,
+	mapping entity.WorkspaceMattermostMapping, routes []entity.MattermostRuntimeRoute,
 ) error {
 	state := enum.WorkspaceMappingOperationBound
 	if mapping.State == "UNLINKED" {
 		state = enum.WorkspaceMappingOperationUnlinked
 	}
-	return repository.updateMappingOperation(ctx, operation, mappingOperationMarkTerminalSQL,
-		operation.ID, state, mapping.ID, mapping.Version, mapping.Generation,
-		mapping.ProviderEffectVersion, mapping.ProviderEffectGeneration, mapping.ProviderObservedAt,
-		mapping.UpdatedAt, operation.Fence, digest(operation.LeaseToken))
+	return repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		if mapping.State == "UNLINKED" {
+			if err := deleteRuntimeRoutes(ctx, tx, operation.Principal, mapping); err != nil {
+				return err
+			}
+		} else if err := replaceRuntimeRoutes(ctx, tx, operation.Principal, mapping, routes); err != nil {
+			return err
+		}
+		tag, err := execNamed(ctx, tx, mappingOperationMarkTerminalSQL,
+			operation.ID, state, mapping.ID, mapping.Version, mapping.Generation,
+			mapping.ProviderEffectVersion, mapping.ProviderEffectGeneration, mapping.ProviderObservedAt,
+			mapping.UpdatedAt, operation.Fence, digest(operation.LeaseToken))
+		if err != nil || tag.RowsAffected() != 1 {
+			return errors.New("update Workspace Mattermost mapping operation")
+		}
+		if operation.CreateOperationID != "" {
+			fenceState := "BOUND"
+			if mapping.State == "UNLINKED" {
+				fenceState = "UNLINKED"
+			}
+			fenceTag, fenceErr := execNamed(ctx, tx, createFenceTerminalSQL, operation.Principal.OrganizationID,
+				operation.Principal.ProjectID, operation.CreateOperationID, fenceState)
+			if fenceErr != nil || fenceTag.RowsAffected() != 1 {
+				return errors.New("update Mattermost team create fence")
+			}
+		}
+		if mapping.State == "UNLINKED" {
+			if _, err := execNamed(ctx, tx, createFenceUnlinkSQL, operation.Principal.OrganizationID,
+				operation.Principal.ProjectID, operation.Team.ProviderTeamID); err != nil {
+				return errors.New("unlink Mattermost team create fence")
+			}
+		}
+		return nil
+	})
+}
+
+func (repository *Repository) ReconcileRuntimeRoutes(ctx context.Context, principal entity.TeamPrincipal,
+	mapping entity.WorkspaceMattermostMapping, routes []entity.MattermostRuntimeRoute,
+) error {
+	return repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		return replaceRuntimeRoutes(ctx, tx, principal, mapping, routes)
+	})
+}
+
+func replaceRuntimeRoutes(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincipal,
+	mapping entity.WorkspaceMattermostMapping, routes []entity.MattermostRuntimeRoute,
+) error {
+	if mapping.State != "BOUND" || len(routes) == 0 {
+		return errors.New("Mattermost joined runtime route input is invalid")
+	}
+	if err := lockRuntimeRouteGeneration(ctx, tx, principal, mapping); err != nil {
+		return err
+	}
+	if _, err := execNamed(ctx, tx, runtimeRouteDeleteProjectSQL, principal.OrganizationID,
+		principal.ProjectID); err != nil {
+		return err
+	}
+	for _, route := range routes {
+		if route.Principal != principal || route.MappingID != mapping.ID ||
+			route.MappingVersion != mapping.Version || route.MappingGeneration != mapping.Generation ||
+			route.MappingDigestSHA256 != runtimeMappingDigest(mapping) {
+			return errors.New("Mattermost joined runtime route mismatch")
+		}
+		if _, err := execNamed(ctx, tx, runtimeRouteInsertSQL, route.TemplateKey,
+			route.Principal.OrganizationID, route.Principal.ProjectID, route.Principal.ActorID,
+			route.MappingID, route.MappingVersion, route.MappingGeneration, route.MappingDigestSHA256,
+			route.ProviderTeamID, route.ProviderSnapshotSHA256, route.Boundary.ChatID,
+			route.Boundary.RoleID, route.Boundary.Locale, route.Boundary.BotStableKey,
+			route.Boundary.ChannelID, route.Boundary.SessionID, route.OwnerDelivery,
+			route.RouteDigestSHA256); err != nil {
+			return err
+		}
+	}
+	return saveRuntimeCheckpoint(ctx, tx, principal, mapping)
+}
+
+func deleteRuntimeRoutes(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincipal,
+	mapping entity.WorkspaceMattermostMapping,
+) error {
+	if err := lockRuntimeRouteGeneration(ctx, tx, principal, mapping); err != nil {
+		return err
+	}
+	if _, err := execNamed(ctx, tx, runtimeRouteDeleteProjectSQL, principal.OrganizationID, principal.ProjectID); err != nil {
+		return err
+	}
+	return saveRuntimeCheckpoint(ctx, tx, principal, mapping)
+}
+
+func saveRuntimeCheckpoint(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincipal,
+	mapping entity.WorkspaceMattermostMapping,
+) error {
+	tag, err := execNamed(ctx, tx, runtimeCheckpointUpsertSQL, principal.OrganizationID,
+		principal.ProjectID, mapping.ID, mapping.Version, mapping.Generation, mapping.State,
+		runtimeMappingDigest(mapping))
+	if err != nil || tag.RowsAffected() != 1 {
+		return errors.New("save Mattermost runtime route checkpoint")
+	}
+	return nil
+}
+
+func lockRuntimeRouteGeneration(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincipal,
+	mapping entity.WorkspaceMattermostMapping,
+) error {
+	var currentGeneration uint64
+	var currentDigest string
+	err := queryRow(ctx, tx, runtimeRouteLockProjectSQL, principal.OrganizationID, principal.ProjectID).
+		Scan(&currentGeneration, &currentDigest)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	incomingDigest := runtimeMappingDigest(mapping)
+	if currentGeneration > mapping.Generation || currentGeneration == mapping.Generation && currentDigest != incomingDigest {
+		return errors.New("Mattermost runtime route generation is stale")
+	}
+	return nil
 }
 
 func (repository *Repository) MarkMappingRepairRequired(ctx context.Context,
 	operation entity.WorkspaceMappingOperation, code string,
 ) error {
-	return repository.updateMappingOperation(ctx, operation, mappingOperationMarkRepairSQL,
-		operation.ID, code, operation.Fence, digest(operation.LeaseToken))
+	return repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
+		tag, err := execNamed(ctx, tx, mappingOperationMarkRepairSQL, operation.ID, code, operation.Fence,
+			digest(operation.LeaseToken))
+		if err != nil || tag.RowsAffected() != 1 {
+			return errors.New("update Workspace Mattermost mapping operation")
+		}
+		if operation.CreateOperationID != "" {
+			fenceTag, fenceErr := execNamed(ctx, tx, createFenceTerminalSQL, operation.Principal.OrganizationID,
+				operation.Principal.ProjectID, operation.CreateOperationID, "REPAIR_REQUIRED")
+			if fenceErr != nil || fenceTag.RowsAffected() != 1 {
+				return errors.New("update Mattermost team create fence")
+			}
+		}
+		return nil
+	})
 }
 
 func (repository *Repository) ClaimMappingRecovery(ctx context.Context, owner string,
 	lease time.Duration,
 ) (entity.WorkspaceMappingOperation, bool, error) {
 	var organizationID, projectID sql.NullString
-	if err := repository.pool.QueryRow(ctx, mappingNextWorkScopeSQL).Scan(&organizationID, &projectID); err != nil {
+	if err := queryRow(ctx, repository.pool, mappingNextWorkScopeSQL).Scan(&organizationID, &projectID); err != nil {
 		return entity.WorkspaceMappingOperation{}, false, errors.New("resolve Workspace mapping recovery scope")
 	}
 	if !organizationID.Valid || !projectID.Valid {
@@ -481,11 +761,11 @@ func (repository *Repository) ClaimMappingRecovery(ctx context.Context, owner st
 	var operation entity.WorkspaceMappingOperation
 	err = repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
 		var operationID string
-		if err := tx.QueryRow(ctx, mappingOperationClaimRecoverySQL, owner, digest(token), interval(lease)).Scan(&operationID); err != nil {
+		if err := queryRow(ctx, tx, mappingOperationClaimRecoverySQL, owner, digest(token), interval(lease)).Scan(&operationID); err != nil {
 			return err
 		}
 		var scanErr error
-		operation, _, scanErr = scanMappingOperation(tx.QueryRow(ctx, mappingOperationLockSQL, operationID))
+		operation, _, scanErr = scanMappingOperation(queryRow(ctx, tx, mappingOperationLockSQL, operationID))
 		return scanErr
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -498,28 +778,111 @@ func (repository *Repository) ClaimMappingRecovery(ctx context.Context, owner st
 	return operation, true, nil
 }
 
-func (repository *Repository) updateMappingOperation(ctx context.Context,
-	operation entity.WorkspaceMappingOperation, query string, arguments ...any,
-) error {
-	return repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, query, arguments...)
-		if err != nil || tag.RowsAffected() != 1 {
-			return errors.New("update Workspace Mattermost mapping operation")
-		}
-		return nil
+func (repository *Repository) ResolveRuntimeRoute(ctx context.Context, teamID,
+	channelID string,
+) (entity.MattermostRuntimeRoute, error) {
+	var organizationID, projectID string
+	if err := queryRow(ctx, repository.pool, runtimeRouteScopeSQL, teamID, channelID).Scan(&organizationID, &projectID); err != nil {
+		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+	}
+	if organizationID != repository.config.OrganizationID ||
+		!slices.Contains(repository.config.AllowedProjectIDs, projectID) {
+		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+	}
+	principal := entity.TeamPrincipal{OrganizationID: organizationID, ProjectID: projectID,
+		ActorID: "system:interaction-runtime-route"}
+	var route entity.MattermostRuntimeRoute
+	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
+		return scanRuntimeRoute(queryRow(ctx, tx, runtimeRouteResolveSQL, teamID, channelID), &route)
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.MattermostRuntimeRoute{}, errors.New("resolve Mattermost runtime route")
+	}
+	return route, nil
 }
 
-func (repository *Repository) updateOperation(ctx context.Context, operation entity.MattermostTeamOperation,
-	query string, arguments ...any,
-) error {
-	return repository.withScope(ctx, operation.Principal, pgx.ReadWrite, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, query, arguments...)
-		if err != nil || tag.RowsAffected() != 1 {
-			return errors.New("update Mattermost team operation")
-		}
-		return nil
+func (repository *Repository) ResolveRuntimeDelivery(ctx context.Context, projectID, chatID,
+	_ string,
+) (entity.MattermostRuntimeRoute, error) {
+	if !slices.Contains(repository.config.AllowedProjectIDs, projectID) {
+		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+	}
+	principal := entity.TeamPrincipal{OrganizationID: repository.config.OrganizationID, ProjectID: projectID,
+		ActorID: "system:interaction-runtime-delivery"}
+	var route entity.MattermostRuntimeRoute
+	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
+		return scanRuntimeRoute(queryRow(ctx, tx, runtimeRouteDeliverySQL, projectID, chatID), &route)
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.MattermostRuntimeRoute{}, errors.New("resolve Mattermost runtime delivery")
+	}
+	return route, nil
+}
+
+func (repository *Repository) ListRuntimeRoutes(ctx context.Context) ([]entity.MattermostRuntimeRoute, error) {
+	result := make([]entity.MattermostRuntimeRoute, 0)
+	for _, projectID := range repository.config.AllowedProjectIDs {
+		principal := entity.TeamPrincipal{OrganizationID: repository.config.OrganizationID, ProjectID: projectID,
+			ActorID: "system:interaction-runtime-readiness"}
+		err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
+			rows, err := queryNamed(ctx, tx, runtimeRouteListSQL)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var route entity.MattermostRuntimeRoute
+				if err := scanRuntimeRoute(rows, &route); err != nil {
+					return err
+				}
+				result = append(result, route)
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			return nil, errors.New("list Mattermost runtime routes")
+		}
+	}
+	return result, nil
+}
+
+func (repository *Repository) GetRuntimeAdmission(ctx context.Context, principal entity.TeamPrincipal,
+	providerTeamID string,
+) (entity.MattermostRuntimeRoute, error) {
+	var route entity.MattermostRuntimeRoute
+	err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
+		return scanRuntimeRoute(queryRow(ctx, tx, runtimeRouteAdmissionSQL, principal.OrganizationID,
+			principal.ProjectID, principal.ActorID, providerTeamID), &route)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.MattermostRuntimeRoute{}, domainrepo.ErrNotFound
+	}
+	if err != nil {
+		return entity.MattermostRuntimeRoute{}, errors.New("read Mattermost runtime admission")
+	}
+	return route, nil
+}
+
+func scanRuntimeRoute(row rowScanner, route *entity.MattermostRuntimeRoute) error {
+	if err := row.Scan(&route.TemplateKey, &route.Principal.OrganizationID, &route.Principal.ProjectID,
+		&route.Principal.ActorID, &route.MappingID, &route.MappingVersion, &route.MappingGeneration,
+		&route.MappingDigestSHA256, &route.ProviderTeamID, &route.ProviderSnapshotSHA256,
+		&route.Boundary.ChatID, &route.Boundary.RoleID, &route.Boundary.Locale,
+		&route.Boundary.BotStableKey, &route.Boundary.ChannelID, &route.Boundary.SessionID,
+		&route.OwnerDelivery, &route.RouteDigestSHA256, &route.CreatedAt, &route.UpdatedAt); err != nil {
+		return err
+	}
+	route.Boundary.OrganizationID = route.Principal.OrganizationID
+	route.Boundary.ProjectID = route.Principal.ProjectID
+	route.Boundary.MappingOwnerActorID = route.Principal.ActorID
+	route.Boundary.TeamID = route.ProviderTeamID
+	return nil
 }
 
 func (repository *Repository) withScope(ctx context.Context, principal entity.TeamPrincipal,
@@ -540,7 +903,7 @@ func (repository *Repository) withScope(ctx context.Context, principal entity.Te
 }
 
 func activateScope(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincipal) error {
-	if _, err := tx.Exec(ctx, activateScopeSQL, principal.OrganizationID, principal.ProjectID, principal.ActorID); err != nil {
+	if _, err := execNamed(ctx, tx, activateScopeSQL, principal.OrganizationID, principal.ProjectID, principal.ActorID); err != nil {
 		return errors.New("activate Mattermost team repository scope")
 	}
 	return nil
@@ -558,7 +921,7 @@ func upsertSelector(ctx context.Context, tx pgx.Tx, principal entity.TeamPrincip
 			principal.OrganizationID, principal.ProjectID, principal.ActorID, team.ProviderTeamID,
 		}, "\x00"))).String()
 	}
-	if err := tx.QueryRow(ctx, selectorUpsertSQL, selectorID, principal.OrganizationID, principal.ProjectID,
+	if err := queryRow(ctx, tx, selectorUpsertSQL, selectorID, principal.OrganizationID, principal.ProjectID,
 		principal.ActorID, team.ProviderTeamID, team.DisplayName, team.Slug, team.Status,
 		team.ProviderSnapshotSHA256, team.CreatedAt, team.UpdatedAt, team.ObservedAt, interval(ttl)).Scan(&selectorID); err != nil {
 		return entity.MattermostTeam{}, err
@@ -573,16 +936,17 @@ func scanOperation(row rowScanner) (entity.MattermostTeamOperation, bool, error)
 	var leaseActive bool
 	if err := row.Scan(&operation.ID, &operation.Principal.OrganizationID, &operation.Principal.ProjectID,
 		&operation.Principal.ActorID, &operation.Intent.IdempotencyKey, &operation.Intent.RequestSHA256,
-		&operation.Intent.DisplayName, &operation.Intent.Slug, &state, &operation.Team.Selector,
+		&operation.Intent.ProviderCorrelation, &operation.Intent.DisplayName, &operation.Intent.Slug, &state, &operation.Team.Selector,
 		&operation.Team.ProviderTeamID, &status, &operation.Team.ProviderSnapshotSHA256,
-		&operation.ProviderReceiptSHA256, &operation.ProviderGeneration, &operation.FailureCode,
+		&operation.ProviderCausalitySHA256, &operation.ProviderReceiptSHA256, &operation.ProviderGeneration, &operation.FailureCode,
 		&operation.Fence, &operation.EffectStartedAt, &operation.RetryNotBefore,
-		&operation.CreatedAt, &operation.UpdatedAt, &operation.Team.CreatedAt,
+		&operation.RecoveryDeadline, &operation.CreatedAt, &operation.UpdatedAt, &operation.Team.CreatedAt,
 		&operation.Team.UpdatedAt, &operation.Team.ObservedAt, &leaseActive); err != nil {
 		return entity.MattermostTeamOperation{}, false, err
 	}
 	operation.State = enum.MattermostTeamOperationState(state)
 	operation.Team.Status = enum.MattermostTeamStatus(status)
+	operation.Team.ProviderCausalitySHA256 = operation.ProviderCausalitySHA256
 	if operation.EffectStartedAt.Equal(time.Unix(0, 0)) {
 		operation.EffectStartedAt = time.Time{}
 	}
@@ -603,7 +967,8 @@ func scanMappingOperation(row rowScanner) (entity.WorkspaceMappingOperation, boo
 		&operation.Team.Selector, &operation.Team.ProviderTeamID, &status, &operation.Team.ProviderSnapshotSHA256,
 		&operation.Team.CreatedAt, &operation.Team.UpdatedAt, &operation.Team.ObservedAt,
 		&operation.EffectGeneration, &operation.ReceiptID, &operation.State, &operation.FailureCode,
-		&operation.Fence, &operation.RetryNotBefore, &operation.CreatedAt, &operation.UpdatedAt,
+		&operation.Fence, &operation.RetryNotBefore, &operation.RecoveryDeadline,
+		&operation.CreateOperationID, &operation.CreatedAt, &operation.UpdatedAt,
 		&operation.Result.ID, &operation.Result.Version, &operation.Result.Generation,
 		&operation.Result.ProviderEffectVersion, &operation.Result.ProviderEffectGeneration,
 		&resultObservedAt, &resultUpdatedAt, &leaseActive); err != nil {
@@ -633,6 +998,14 @@ func newLeaseToken() (string, error) {
 func digest(value string) string {
 	valueDigest := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(valueDigest[:])
+}
+
+func runtimeMappingDigest(mapping entity.WorkspaceMattermostMapping) string {
+	return digest(strings.Join([]string{
+		"workspace-mattermost-mapping-state-v1", mapping.ID, mapping.State, mapping.ProviderTeamID,
+		fmt.Sprint(mapping.Version), fmt.Sprint(mapping.Generation),
+		fmt.Sprint(mapping.ProviderEffectVersion), fmt.Sprint(mapping.ProviderEffectGeneration),
+	}, "\x00"))
 }
 
 func interval(value time.Duration) string {

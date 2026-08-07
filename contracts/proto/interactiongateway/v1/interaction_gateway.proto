@@ -33,6 +33,10 @@ service MattermostTeamService {
   // только после owner graph gate control-plane.
   rpc UnlinkMattermostTeam(UnlinkMattermostTeamRequest) returns (UnlinkMattermostTeamResponse);
 
+  // GetMattermostTeamMappingOperation возвращает owner-scoped durable outcome
+  // semantic mutation по action+idempotency key без provider identity/payload.
+  rpc GetMattermostTeamMappingOperation(GetMattermostTeamMappingOperationRequest) returns (GetMattermostTeamMappingOperationResponse);
+
   // GetMattermostTeamProviderReadback заново проверяет opaque selector,
   // provider Team и actor membership без раскрытия provider Team ID.
   rpc GetMattermostTeamProviderReadback(GetMattermostTeamProviderReadbackRequest) returns (GetMattermostTeamProviderReadbackResponse);
@@ -61,6 +65,22 @@ enum WorkspaceMattermostMappingState {
   WORKSPACE_MATTERMOST_MAPPING_STATE_UNSPECIFIED = 0;
   WORKSPACE_MATTERMOST_MAPPING_STATE_BOUND = 1;
   WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED = 2;
+}
+
+enum WorkspaceMattermostMappingAction {
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED = 0;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND = 1;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK = 2;
+  WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK = 3;
+}
+
+enum WorkspaceMattermostMappingOperationState {
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED = 0;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_PENDING = 1;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS = 2;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND = 3;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED = 4;
+  WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED = 5;
 }
 
 message MattermostTeamView {
@@ -99,6 +119,18 @@ message WorkspaceMattermostTeamBindingView {
   google.protobuf.Timestamp updated_at = 9;
 }
 
+message WorkspaceMattermostMappingOperationView {
+  string operation_id = 1;
+  WorkspaceMattermostMappingAction action = 2;
+  WorkspaceMattermostMappingOperationState state = 3;
+  string failure_code = 4;
+  google.protobuf.Timestamp retry_not_before = 5;
+  google.protobuf.Timestamp recovery_deadline = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  WorkspaceMattermostTeamBindingView result = 9;
+}
+
 message ListMattermostTeamsRequest {
   uint32 page_size = 1;
   string cursor = 2;
@@ -118,6 +150,7 @@ message CreateMattermostTeamRequest {
 message CreateMattermostTeamResponse {
   MattermostTeamOperationView operation = 1;
   WorkspaceMattermostTeamBindingView binding = 2;
+  WorkspaceMattermostMappingOperationView mapping_operation = 3;
 }
 
 message LinkMattermostTeamRequest {
@@ -127,6 +160,7 @@ message LinkMattermostTeamRequest {
 
 message LinkMattermostTeamResponse {
   WorkspaceMattermostTeamBindingView binding = 1;
+  WorkspaceMattermostMappingOperationView operation = 2;
 }
 
 message GetMattermostTeamBindingRequest {}
@@ -144,6 +178,7 @@ message RelinkMattermostTeamRequest {
 
 message RelinkMattermostTeamResponse {
   WorkspaceMattermostTeamBindingView binding = 1;
+  WorkspaceMattermostMappingOperationView operation = 2;
 }
 
 message UnlinkMattermostTeamRequest {
@@ -154,6 +189,16 @@ message UnlinkMattermostTeamRequest {
 
 message UnlinkMattermostTeamResponse {
   WorkspaceMattermostTeamBindingView binding = 1;
+  WorkspaceMattermostMappingOperationView operation = 2;
+}
+
+message GetMattermostTeamMappingOperationRequest {
+  WorkspaceMattermostMappingAction action = 1;
+  string idempotency_key = 2;
+}
+
+message GetMattermostTeamMappingOperationResponse {
+  WorkspaceMattermostMappingOperationView operation = 1;
 }
 
 message GetMattermostTeamProviderReadbackRequest {

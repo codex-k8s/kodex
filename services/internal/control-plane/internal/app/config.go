@@ -420,6 +420,7 @@ func expectedOperations() map[string]string {
 		"interaction.team.create":                        interactiongatewayv1.MattermostTeamService_CreateMattermostTeam_FullMethodName,
 		"interaction.team.link":                          interactiongatewayv1.MattermostTeamService_LinkMattermostTeam_FullMethodName,
 		"interaction.team.binding.get":                   interactiongatewayv1.MattermostTeamService_GetMattermostTeamBinding_FullMethodName,
+		"interaction.team.mapping-operation.get":         interactiongatewayv1.MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName,
 		"interaction.team.relink":                        interactiongatewayv1.MattermostTeamService_RelinkMattermostTeam_FullMethodName,
 		"interaction.team.unlink":                        interactiongatewayv1.MattermostTeamService_UnlinkMattermostTeam_FullMethodName,
 		"interaction.team.provider.readback":             interactiongatewayv1.MattermostTeamService_GetMattermostTeamProviderReadback_FullMethodName,

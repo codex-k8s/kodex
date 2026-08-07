@@ -3,6 +3,8 @@ package mattermost
 import (
 	"slices"
 	"testing"
+
+	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 )
 
 func TestExplicitMentionsClosedResolution(t *testing.T) {
@@ -56,13 +58,20 @@ func TestChannelBoundariesPreserveProviderAndDomainIDs(t *testing.T) {
 }
 
 func TestIgnoredBotKeepsCursorAuthorityBoundary(t *testing.T) {
-	current := &index{channels: map[string]ChannelBinding{
-		"team\x00channel": {
+	current := &index{templates: map[string]ChannelBinding{
+		"template": {
 			TeamID: "team", ChannelID: "channel", OrganizationID: "organization",
 			ProjectID: "project", ChatID: "chat", RoleID: "role", BotStableKey: "bot", Locale: "ru",
+			LifecycleActorID: "owner",
 		},
 	}, botUsers: map[string]struct{}{"bot-user": {}}}
-	boundary, err := current.resolve("team", "channel", "bot-user", true)
+	client := &Client{index: current}
+	boundary, _, err := client.resolveRuntimeBoundary(entity.MattermostRuntimeRoute{
+		TemplateKey: "template", Boundary: entity.Boundary{
+			TeamID: "team", ChannelID: "channel", OrganizationID: "organization", ProjectID: "project",
+			ChatID: "chat", RoleID: "role", BotStableKey: "bot", Locale: "ru", MappingOwnerActorID: "owner",
+		},
+	}, "bot-user", true)
 	if err != nil || !boundary.IgnoredBot || boundary.OrganizationID != "organization" ||
 		boundary.ProjectID != "project" || boundary.ChannelID != "channel" {
 		t.Fatalf("ignored bot lost server-owned boundary: %+v, %v", boundary, err)

@@ -25,6 +25,7 @@ const (
 	MattermostTeamService_GetMattermostTeamBinding_FullMethodName          = "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamBinding"
 	MattermostTeamService_RelinkMattermostTeam_FullMethodName              = "/interactiongateway.v1.MattermostTeamService/RelinkMattermostTeam"
 	MattermostTeamService_UnlinkMattermostTeam_FullMethodName              = "/interactiongateway.v1.MattermostTeamService/UnlinkMattermostTeam"
+	MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName = "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamMappingOperation"
 	MattermostTeamService_GetMattermostTeamProviderReadback_FullMethodName = "/interactiongateway.v1.MattermostTeamService/GetMattermostTeamProviderReadback"
 	MattermostTeamService_CheckReadiness_FullMethodName                    = "/interactiongateway.v1.MattermostTeamService/CheckReadiness"
 )
@@ -54,6 +55,9 @@ type MattermostTeamServiceClient interface {
 	// UnlinkMattermostTeam не принимает provider Team ID и закрывает mapping
 	// только после owner graph gate control-plane.
 	UnlinkMattermostTeam(ctx context.Context, in *UnlinkMattermostTeamRequest, opts ...grpc.CallOption) (*UnlinkMattermostTeamResponse, error)
+	// GetMattermostTeamMappingOperation возвращает owner-scoped durable outcome
+	// semantic mutation по action+idempotency key без provider identity/payload.
+	GetMattermostTeamMappingOperation(ctx context.Context, in *GetMattermostTeamMappingOperationRequest, opts ...grpc.CallOption) (*GetMattermostTeamMappingOperationResponse, error)
 	// GetMattermostTeamProviderReadback заново проверяет opaque selector,
 	// provider Team и actor membership без раскрытия provider Team ID.
 	GetMattermostTeamProviderReadback(ctx context.Context, in *GetMattermostTeamProviderReadbackRequest, opts ...grpc.CallOption) (*GetMattermostTeamProviderReadbackResponse, error)
@@ -130,6 +134,16 @@ func (c *mattermostTeamServiceClient) UnlinkMattermostTeam(ctx context.Context, 
 	return out, nil
 }
 
+func (c *mattermostTeamServiceClient) GetMattermostTeamMappingOperation(ctx context.Context, in *GetMattermostTeamMappingOperationRequest, opts ...grpc.CallOption) (*GetMattermostTeamMappingOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMattermostTeamMappingOperationResponse)
+	err := c.cc.Invoke(ctx, MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mattermostTeamServiceClient) GetMattermostTeamProviderReadback(ctx context.Context, in *GetMattermostTeamProviderReadbackRequest, opts ...grpc.CallOption) (*GetMattermostTeamProviderReadbackResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetMattermostTeamProviderReadbackResponse)
@@ -175,6 +189,9 @@ type MattermostTeamServiceServer interface {
 	// UnlinkMattermostTeam не принимает provider Team ID и закрывает mapping
 	// только после owner graph gate control-plane.
 	UnlinkMattermostTeam(context.Context, *UnlinkMattermostTeamRequest) (*UnlinkMattermostTeamResponse, error)
+	// GetMattermostTeamMappingOperation возвращает owner-scoped durable outcome
+	// semantic mutation по action+idempotency key без provider identity/payload.
+	GetMattermostTeamMappingOperation(context.Context, *GetMattermostTeamMappingOperationRequest) (*GetMattermostTeamMappingOperationResponse, error)
 	// GetMattermostTeamProviderReadback заново проверяет opaque selector,
 	// provider Team и actor membership без раскрытия provider Team ID.
 	GetMattermostTeamProviderReadback(context.Context, *GetMattermostTeamProviderReadbackRequest) (*GetMattermostTeamProviderReadbackResponse, error)
@@ -208,6 +225,9 @@ func (UnimplementedMattermostTeamServiceServer) RelinkMattermostTeam(context.Con
 }
 func (UnimplementedMattermostTeamServiceServer) UnlinkMattermostTeam(context.Context, *UnlinkMattermostTeamRequest) (*UnlinkMattermostTeamResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UnlinkMattermostTeam not implemented")
+}
+func (UnimplementedMattermostTeamServiceServer) GetMattermostTeamMappingOperation(context.Context, *GetMattermostTeamMappingOperationRequest) (*GetMattermostTeamMappingOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMattermostTeamMappingOperation not implemented")
 }
 func (UnimplementedMattermostTeamServiceServer) GetMattermostTeamProviderReadback(context.Context, *GetMattermostTeamProviderReadbackRequest) (*GetMattermostTeamProviderReadbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMattermostTeamProviderReadback not implemented")
@@ -344,6 +364,24 @@ func _MattermostTeamService_UnlinkMattermostTeam_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MattermostTeamService_GetMattermostTeamMappingOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMattermostTeamMappingOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MattermostTeamServiceServer).GetMattermostTeamMappingOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MattermostTeamServiceServer).GetMattermostTeamMappingOperation(ctx, req.(*GetMattermostTeamMappingOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MattermostTeamService_GetMattermostTeamProviderReadback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetMattermostTeamProviderReadbackRequest)
 	if err := dec(in); err != nil {
@@ -410,6 +448,10 @@ var MattermostTeamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnlinkMattermostTeam",
 			Handler:    _MattermostTeamService_UnlinkMattermostTeam_Handler,
+		},
+		{
+			MethodName: "GetMattermostTeamMappingOperation",
+			Handler:    _MattermostTeamService_GetMattermostTeamMappingOperation_Handler,
 		},
 		{
 			MethodName: "GetMattermostTeamProviderReadback",

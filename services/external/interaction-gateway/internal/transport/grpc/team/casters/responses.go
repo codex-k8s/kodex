@@ -21,7 +21,60 @@ func ListResponse(teams []entity.MattermostTeam, nextCursor string) *interaction
 }
 
 func CreateResponse(operation entity.MattermostTeamOperation, binding entity.WorkspaceMattermostBinding) *interactiongatewayv1.CreateMattermostTeamResponse {
-	return &interactiongatewayv1.CreateMattermostTeamResponse{Operation: OperationView(operation), Binding: BindingView(binding)}
+	return &interactiongatewayv1.CreateMattermostTeamResponse{Operation: OperationView(operation), Binding: BindingView(binding),
+		MappingOperation: MappingOperationView(binding.Operation)}
+}
+
+func MappingOperationView(operation entity.WorkspaceMappingOperation) *interactiongatewayv1.WorkspaceMattermostMappingOperationView {
+	if operation.ID == "" {
+		return nil
+	}
+	action := interactiongatewayv1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED
+	switch operation.Action {
+	case "bind":
+		action = interactiongatewayv1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND
+	case "relink":
+		action = interactiongatewayv1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK
+	case "unlink":
+		action = interactiongatewayv1.WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK
+	}
+	state := interactiongatewayv1.WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED
+	switch operation.State {
+	case enum.WorkspaceMappingOperationPending:
+		state = interactiongatewayv1.WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_PENDING
+	case enum.WorkspaceMappingOperationAmbiguous:
+		state = interactiongatewayv1.WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS
+	case enum.WorkspaceMappingOperationBound:
+		state = interactiongatewayv1.WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND
+	case enum.WorkspaceMappingOperationUnlinked:
+		state = interactiongatewayv1.WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED
+	case enum.WorkspaceMappingOperationRepairRequired:
+		state = interactiongatewayv1.WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED
+	}
+	result := &interactiongatewayv1.WorkspaceMattermostMappingOperationView{
+		OperationId: operation.ID, Action: action, State: state, FailureCode: safeFailureCode(operation.FailureCode),
+		RetryNotBefore: timestamp(operation.RetryNotBefore), RecoveryDeadline: timestamp(operation.RecoveryDeadline),
+		CreatedAt: timestamp(operation.CreatedAt), UpdatedAt: timestamp(operation.UpdatedAt),
+	}
+	if operation.Result.ID != "" {
+		result.Result = BindingView(entity.WorkspaceMattermostBinding{Mapping: operation.Result})
+		result.Result.Team = nil
+	}
+	return result
+}
+
+func MappingOperationResponse(operation entity.WorkspaceMappingOperation) *interactiongatewayv1.GetMattermostTeamMappingOperationResponse {
+	return &interactiongatewayv1.GetMattermostTeamMappingOperationResponse{Operation: MappingOperationView(operation)}
+}
+
+func safeFailureCode(code string) string {
+	switch code {
+	case "", "OWNER_OUTCOME_UNKNOWN", "OWNER_STATE_CONFLICT", "OWNER_READBACK_MISMATCH",
+		"PROVIDER_ELIGIBILITY_LOST", "PROVIDER_ROUTE_UNAVAILABLE", "RECOVERY_TIMEOUT":
+		return code
+	default:
+		return "SAFE_FAILURE"
+	}
 }
 
 func BindingView(binding entity.WorkspaceMattermostBinding) *interactiongatewayv1.WorkspaceMattermostTeamBindingView {

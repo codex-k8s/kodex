@@ -21,6 +21,8 @@ var (
 	operationInsertSQL string
 	//go:embed sql/team_operation__lock.sql
 	operationLockSQL string
+	//go:embed sql/team_operation__get.sql
+	operationGetSQL string
 	//go:embed sql/team_operation__reclaim.sql
 	operationReclaimSQL string
 	//go:embed sql/team_operation__mark_effect.sql
@@ -37,14 +39,28 @@ var (
 	nextWorkScopeSQL string
 	//go:embed sql/team_operation__claim_recovery.sql
 	operationClaimRecoverySQL string
+	//go:embed sql/team_create_fence__acquire.sql
+	createFenceAcquireSQL string
+	//go:embed sql/team_create_fence__lock.sql
+	createFenceLockSQL string
+	//go:embed sql/team_create_fence__accept.sql
+	createFenceAcceptSQL string
+	//go:embed sql/team_create_fence__replace_unlinked.sql
+	createFenceReplaceUnlinkedSQL string
+	//go:embed sql/team_create_fence__terminal.sql
+	createFenceTerminalSQL string
+	//go:embed sql/team_create_fence__unlink.sql
+	createFenceUnlinkSQL string
 	//go:embed sql/workspace_mapping_operation__insert.sql
 	mappingOperationInsertSQL string
 	//go:embed sql/workspace_mapping_operation__lock.sql
 	mappingOperationLockSQL string
+	//go:embed sql/workspace_mapping_operation__get.sql
+	mappingOperationGetSQL string
 	//go:embed sql/workspace_mapping_operation__reclaim.sql
 	mappingOperationReclaimSQL string
-	//go:embed sql/workspace_mapping_operation__refresh_receipt.sql
-	mappingOperationRefreshReceiptSQL string
+	//go:embed sql/workspace_mapping_operation__prepare.sql
+	mappingOperationPrepareSQL string
 	//go:embed sql/workspace_mapping_operation__mark_ambiguous.sql
 	mappingOperationMarkAmbiguousSQL string
 	//go:embed sql/workspace_mapping_operation__mark_terminal.sql
@@ -55,4 +71,22 @@ var (
 	mappingOperationClaimRecoverySQL string
 	//go:embed sql/workspace_mapping_work_scope__next.sql
 	mappingNextWorkScopeSQL string
+	//go:embed sql/mattermost_runtime_route__delete_project.sql
+	runtimeRouteDeleteProjectSQL string
+	//go:embed sql/mattermost_runtime_route__lock_project.sql
+	runtimeRouteLockProjectSQL string
+	//go:embed sql/mattermost_runtime_route__insert.sql
+	runtimeRouteInsertSQL string
+	//go:embed sql/mattermost_runtime_route__scope.sql
+	runtimeRouteScopeSQL string
+	//go:embed sql/mattermost_runtime_route__resolve.sql
+	runtimeRouteResolveSQL string
+	//go:embed sql/mattermost_runtime_route__delivery.sql
+	runtimeRouteDeliverySQL string
+	//go:embed sql/mattermost_runtime_route__list.sql
+	runtimeRouteListSQL string
+	//go:embed sql/mattermost_runtime_route__admission.sql
+	runtimeRouteAdmissionSQL string
+	//go:embed sql/mattermost_runtime_checkpoint__upsert.sql
+	runtimeCheckpointUpsertSQL string
 )

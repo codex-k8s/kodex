@@ -17,6 +17,7 @@ const (
 	credentialType  = "mattercodex-provider-effect-readback-receipt+jws"
 	maximumKeyBytes = 64 << 10
 	Purpose         = "MATTERMOST_PROVIDER_READBACK_RECEIPT"
+	Audience        = "urn:mattercodex:provider-readback:mattermost"
 	WorkloadID      = "interaction-gateway"
 	CallerSPIFFEID  = "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway"
 )
@@ -36,6 +37,7 @@ type Signer struct {
 type claims struct {
 	ContractVersion          uint32    `json:"contract_version"`
 	Issuer                   string    `json:"iss"`
+	Audience                 string    `json:"aud"`
 	Purpose                  string    `json:"purpose"`
 	WorkloadID               string    `json:"workload_id"`
 	CallerSPIFFEID           string    `json:"caller_spiffe_id"`
@@ -97,6 +99,7 @@ func (signer *Signer) Sign(input domaincontrol.ProviderEffectReceipt) (domaincon
 	now := signer.now().UTC().Truncate(time.Microsecond)
 	input.ContractVersion = 1
 	input.Issuer = signer.config.Issuer
+	input.Audience = Audience
 	input.Purpose = Purpose
 	input.WorkloadID = WorkloadID
 	input.CallerSPIFFEID = CallerSPIFFEID
@@ -105,7 +108,7 @@ func (signer *Signer) Sign(input domaincontrol.ProviderEffectReceipt) (domaincon
 		return domaincontrol.ProviderCredential{}, errors.New("provider receipt input is invalid")
 	}
 	payload := claims{
-		ContractVersion: input.ContractVersion, Issuer: input.Issuer, Purpose: input.Purpose,
+		ContractVersion: input.ContractVersion, Issuer: input.Issuer, Audience: input.Audience, Purpose: input.Purpose,
 		WorkloadID: input.WorkloadID, CallerSPIFFEID: input.CallerSPIFFEID, FullMethod: input.FullMethod,
 		ActorID: input.ActorID, OrganizationID: input.OrganizationID, ProjectID: input.ProjectID,
 		WorkspaceID: input.WorkspaceID, ProviderTeamRef: input.ProviderTeamRef,
@@ -129,7 +132,7 @@ func (signer *Signer) Sign(input domaincontrol.ProviderEffectReceipt) (domaincon
 func validReceipt(input domaincontrol.ProviderEffectReceipt) bool {
 	return uuid.Validate(input.ActorID) == nil && uuid.Validate(input.OrganizationID) == nil &&
 		uuid.Validate(input.ProjectID) == nil && uuid.Validate(input.WorkspaceID) == nil &&
-		input.ProjectID == input.WorkspaceID && strings.HasPrefix(input.FullMethod, "/controlplane.v1.ControlPlaneService/") &&
+		input.ProjectID == input.WorkspaceID && input.Audience == Audience && strings.HasPrefix(input.FullMethod, "/controlplane.v1.ControlPlaneService/") &&
 		input.Action != "" && input.Effect != "" && input.EffectVersion > 0 && input.EffectGeneration > 0 &&
 		validDigest(input.EffectSHA256) && uuid.Validate(input.ReceiptID) == nil && input.ReceiptRevision > 0 &&
 		input.MaskedStatus != "" && len(input.MaskedStatus) <= 64 && input.TargetKind == "workspace_mattermost_mapping" &&

@@ -46,14 +46,15 @@ type botClient struct {
 }
 
 type Client struct {
-	config       Config
-	manifest     Manifest
-	index        *index
-	bots         map[string]*botClient
-	primary      *botClient
-	dialer       *websocket.Dialer
-	websocketURL string
-	httpClient   *http.Client
+	config        Config
+	manifest      Manifest
+	index         *index
+	bots          map[string]*botClient
+	primary       *botClient
+	dialer        *websocket.Dialer
+	websocketURL  string
+	httpClient    *http.Client
+	runtimeRoutes domainmattermost.RuntimeRouteReader
 }
 
 type cardPayload struct {
@@ -121,45 +122,53 @@ func New(config Config) (*Client, error) {
 	return result, nil
 }
 
+// UseRuntimeRoutes однократно подключает durable joined projection до startup
+// barrier. Runtime route из manifest после этого не используется.
+func (client *Client) UseRuntimeRoutes(reader domainmattermost.RuntimeRouteReader) error {
+	if reader == nil || client.runtimeRoutes != nil {
+		return errors.New("mattermost runtime route reader is invalid")
+	}
+	client.runtimeRoutes = reader
+	return nil
+}
+
+func (client *Client) BootstrapBoundaries() []entity.Boundary {
+	return client.index.channelBoundaries()
+}
+
 func (client *Client) Check(ctx context.Context) error {
+	routes, err := client.runtimeRouteList(ctx)
+	if err != nil || len(routes) == 0 {
+		return errors.New("mattermost joined runtime route is not ready")
+	}
 	for _, bot := range client.bots {
 		user, _, err := bot.api.GetMe(ctx, "")
 		if err != nil || user == nil || user.Id != bot.identity.UserID || !user.IsBot || user.DeleteAt != 0 {
 			return errors.New("mattermost bot identity is not ready")
 		}
-		for _, binding := range client.manifest.Channels {
-			allowed := binding.BotStableKey == bot.identity.StableKey
-			for _, assignment := range binding.Assignments {
+		for _, route := range routes {
+			template, ok := client.index.templates[route.TemplateKey]
+			if !ok {
+				return errors.New("mattermost joined runtime route template is unavailable")
+			}
+			allowed := template.BotStableKey == bot.identity.StableKey
+			for _, assignment := range template.Assignments {
 				allowed = allowed || assignment.BotStableKey == bot.identity.StableKey
 			}
 			if !allowed {
 				continue
 			}
-			channel, channelErr := client.getMappedChannel(ctx, bot, binding.TeamID, binding.ChannelID)
-			if channelErr != nil || channel == nil || channel.Id != binding.ChannelID || channel.TeamId != binding.TeamID {
+			channel, channelErr := client.getMappedChannel(ctx, bot, route.Boundary.TeamID, route.Boundary.ChannelID)
+			if channelErr != nil || channel == nil || channel.Id != route.Boundary.ChannelID || channel.TeamId != route.Boundary.TeamID {
 				return errors.New("mattermost mapped channel is not ready")
 			}
 			if channel.DeleteAt != 0 {
-				continue
+				return errors.New("mattermost mapped channel is deleted")
 			}
-			member, _, memberErr := bot.api.GetChannelMember(ctx, binding.ChannelID, bot.identity.UserID, "")
-			if memberErr != nil || member == nil || member.ChannelId != binding.ChannelID || member.UserId != bot.identity.UserID {
+			member, _, memberErr := bot.api.GetChannelMember(ctx, route.Boundary.ChannelID, bot.identity.UserID, "")
+			if memberErr != nil || member == nil || member.ChannelId != route.Boundary.ChannelID || member.UserId != bot.identity.UserID {
 				return errors.New("mattermost bot channel binding is not ready")
 			}
-		}
-	}
-	for _, binding := range client.manifest.Channels {
-		channel, channelErr := client.getMappedChannel(ctx, client.primary, binding.TeamID, binding.ChannelID)
-		if channelErr != nil || channel == nil || channel.Id != binding.ChannelID || channel.TeamId != binding.TeamID {
-			return errors.New("mattermost primary readback channel is not ready")
-		}
-		if channel.DeleteAt != 0 {
-			continue
-		}
-		member, _, err := client.primary.api.GetChannelMember(ctx, binding.ChannelID, client.primary.identity.UserID, "")
-		if err != nil || member == nil || member.ChannelId != binding.ChannelID ||
-			member.UserId != client.primary.identity.UserID {
-			return errors.New("mattermost primary readback bot channel binding is not ready")
 		}
 	}
 	return nil
@@ -168,7 +177,11 @@ func (client *Client) Check(ctx context.Context) error {
 func (client *Client) ReconcileLifecycle(ctx context.Context, knownThreads map[string]string,
 	consume func(context.Context, domainmattermost.RawEvent) error,
 ) error {
-	for _, boundary := range client.ChannelBoundaries() {
+	boundaries, err := client.ChannelBoundaries(ctx)
+	if err != nil {
+		return err
+	}
+	for _, boundary := range boundaries {
 		channel, err := client.getMappedChannel(ctx, client.primary, boundary.TeamID, boundary.ChannelID)
 		if err != nil || channel == nil || channel.Id != boundary.ChannelID || channel.TeamId != boundary.TeamID {
 			return errors.New("mattermost channel lifecycle reconciliation failed")
@@ -256,13 +269,17 @@ func (client *Client) ResolveInbound(ctx context.Context, raw domainmattermost.R
 		return entity.Boundary{}, raw, errors.New("mattermost user readback mismatch")
 	}
 	raw.Verified = true
-	boundary, err := client.index.resolve(channel.TeamId, channel.Id, user.Id, user.IsBot)
+	route, err := client.runtimeRoute(ctx, channel.TeamId, channel.Id)
+	if err != nil {
+		return entity.Boundary{}, raw, err
+	}
+	boundary, template, err := client.resolveRuntimeBoundary(route, user.Id, user.IsBot)
 	if err != nil || boundary.IgnoredBot {
 		return boundary, raw, err
 	}
 	selectors := make([]string, 0, 2)
 	for _, mention := range explicitMentions(raw.Text) {
-		if _, assigned := client.index.assigned(channel.TeamId, channel.Id, mention); assigned {
+		if _, assigned := client.index.assigned(template.TeamID, template.ChannelID, mention); assigned {
 			selectors = append(selectors, mention)
 		}
 	}
@@ -274,7 +291,7 @@ func (client *Client) ResolveInbound(ctx context.Context, raw domainmattermost.R
 		if readErr != nil || mentioned == nil || mentioned.Id == "" || mentioned.DeleteAt != 0 {
 			return entity.Boundary{}, raw, errors.New("mattermost mentioned identity is unknown")
 		}
-		assignment, assignmentErr := client.index.resolveAssignment(channel.TeamId, channel.Id, selectors[0], mentioned.Id)
+		assignment, assignmentErr := client.index.resolveAssignment(template.TeamID, template.ChannelID, selectors[0], mentioned.Id)
 		if assignmentErr != nil {
 			return entity.Boundary{}, raw, assignmentErr
 		}
@@ -289,12 +306,7 @@ func (client *Client) resolveLifecycle(ctx context.Context, raw domainmattermost
 	}
 	teamID := raw.TeamID
 	if teamID == "" {
-		for _, binding := range client.manifest.Channels {
-			if binding.ChannelID == raw.ChannelID {
-				teamID = binding.TeamID
-				break
-			}
-		}
+		return entity.Boundary{}, raw, errors.New("mattermost lifecycle Team identity is missing")
 	}
 	channel, err := client.getMappedChannel(ctx, client.primary, teamID, raw.ChannelID)
 	if err != nil || channel == nil || channel.Id != raw.ChannelID || channel.TeamId == "" {
@@ -322,21 +334,17 @@ func (client *Client) resolveLifecycle(ctx context.Context, raw domainmattermost
 		raw.Revision = uint64(max(post.UpdateAt, post.DeleteAt))
 		raw.ProviderEventID = fmt.Sprintf("%s:%s:%d", strings.ToLower(raw.Kind), post.Id, raw.Revision)
 	}
-	binding, ok := client.index.channels[channel.TeamId+"\x00"+channel.Id]
-	if !ok {
+	route, routeErr := client.runtimeRoute(ctx, channel.TeamId, channel.Id)
+	if routeErr != nil {
 		return entity.Boundary{}, raw, errors.New("mattermost lifecycle event is outside the server-owned mapping")
 	}
 	raw.TeamID, raw.Verified = channel.TeamId, true
 	if raw.Kind != "THREAD_RESTORE_CANDIDATE" {
 		raw.UserID = client.primary.identity.UserID
 	}
-	return entity.Boundary{
-		OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
-		ChatID: binding.ChatID, ActorID: binding.LifecycleActorID, MappingOwnerActorID: binding.LifecycleActorID,
-		RoleID: binding.RoleID,
-		Locale: binding.Locale, BotStableKey: binding.BotStableKey, TeamID: channel.TeamId,
-		ChannelID: channel.Id, SessionID: binding.SessionID,
-	}, raw, nil
+	boundary := route.Boundary
+	boundary.ActorID = boundary.MappingOwnerActorID
+	return boundary, raw, nil
 }
 
 func (client *Client) getMappedChannel(ctx context.Context, bot *botClient, teamID, channelID string) (*model.Channel, error) {
@@ -355,16 +363,96 @@ func (client *Client) getMappedChannel(ctx context.Context, bot *botClient, team
 	return nil, errors.New("Mattermost mapped channel is unavailable")
 }
 
-func (client *Client) ResolveDelivery(projectID, actorID string) (entity.Boundary, error) {
-	return client.index.resolveDelivery(projectID, actorID)
+func (client *Client) ResolveDelivery(ctx context.Context, projectID, actorID string) (entity.Boundary, error) {
+	return client.resolveRuntimeDelivery(ctx, projectID, "", actorID)
 }
 
-func (client *Client) ResolveRoomDelivery(projectID, chatID, actorID string) (entity.Boundary, error) {
-	return client.index.resolveRoomDelivery(projectID, chatID, actorID)
+func (client *Client) ResolveRoomDelivery(ctx context.Context, projectID, chatID, actorID string) (entity.Boundary, error) {
+	return client.resolveRuntimeDelivery(ctx, projectID, chatID, actorID)
 }
 
-func (client *Client) ResolveMappedChannel(teamID, channelID string) (entity.Boundary, error) {
-	return client.index.resolveMappedChannel(teamID, channelID)
+func (client *Client) ResolveMappedChannel(ctx context.Context, teamID, channelID string) (entity.Boundary, error) {
+	route, err := client.runtimeRoute(ctx, teamID, channelID)
+	return route.Boundary, err
+}
+
+func (client *Client) runtimeRoute(ctx context.Context, teamID, channelID string) (entity.MattermostRuntimeRoute, error) {
+	if client.runtimeRoutes == nil {
+		return entity.MattermostRuntimeRoute{}, errors.New("mattermost runtime route reader is unavailable")
+	}
+	route, err := client.runtimeRoutes.ResolveRuntimeRoute(ctx, teamID, channelID)
+	if err != nil || route.Boundary.TeamID != teamID || route.Boundary.ChannelID != channelID ||
+		route.MappingVersion == 0 || route.MappingGeneration == 0 || route.MappingDigestSHA256 == "" ||
+		route.ProviderSnapshotSHA256 == "" || route.RouteDigestSHA256 == "" {
+		return entity.MattermostRuntimeRoute{}, errors.New("mattermost joined runtime route is unavailable")
+	}
+	if _, ok := client.index.templates[route.TemplateKey]; !ok {
+		return entity.MattermostRuntimeRoute{}, errors.New("mattermost runtime route template is unavailable")
+	}
+	return route, nil
+}
+
+func (client *Client) runtimeRouteList(ctx context.Context) ([]entity.MattermostRuntimeRoute, error) {
+	if client.runtimeRoutes == nil {
+		return nil, errors.New("mattermost runtime route reader is unavailable")
+	}
+	routes, err := client.runtimeRoutes.ListRuntimeRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, route := range routes {
+		if _, err := client.runtimeRoute(ctx, route.Boundary.TeamID, route.Boundary.ChannelID); err != nil {
+			return nil, err
+		}
+	}
+	return routes, nil
+}
+
+func (client *Client) resolveRuntimeBoundary(route entity.MattermostRuntimeRoute, userID string,
+	isBot bool,
+) (entity.Boundary, ChannelBinding, error) {
+	template, ok := client.index.templates[route.TemplateKey]
+	if !ok || template.OrganizationID != route.Boundary.OrganizationID ||
+		template.ProjectID != route.Boundary.ProjectID || template.ChatID != route.Boundary.ChatID ||
+		template.RoleID != route.Boundary.RoleID || template.LifecycleActorID != route.Boundary.MappingOwnerActorID {
+		return entity.Boundary{}, ChannelBinding{}, errors.New("mattermost joined runtime route template mismatch")
+	}
+	boundary := route.Boundary
+	if isBot {
+		boundary.IgnoredBot = true
+		return boundary, template, nil
+	}
+	if _, ignored := client.index.botUsers[userID]; ignored {
+		boundary.IgnoredBot = true
+		return boundary, template, nil
+	}
+	actor, ok := client.index.actors[userID+"\x00"+boundary.OrganizationID+"\x00"+boundary.ProjectID]
+	if !ok {
+		return boundary, template, errors.New("mattermost actor is outside the joined runtime route")
+	}
+	boundary.ActorID, boundary.MattermostUserID = actor.ActorID, userID
+	return boundary, template, nil
+}
+
+func (client *Client) resolveRuntimeDelivery(ctx context.Context, projectID, chatID,
+	actorID string,
+) (entity.Boundary, error) {
+	if client.runtimeRoutes == nil {
+		return entity.Boundary{}, errors.New("mattermost runtime route reader is unavailable")
+	}
+	route, err := client.runtimeRoutes.ResolveRuntimeDelivery(ctx, projectID, chatID, actorID)
+	if err != nil {
+		return entity.Boundary{}, err
+	}
+	actor, err := client.index.resolveOwner(entity.TeamPrincipal{
+		ActorID: actorID, OrganizationID: route.Boundary.OrganizationID, ProjectID: projectID,
+	})
+	if err != nil {
+		return entity.Boundary{}, err
+	}
+	boundary := route.Boundary
+	boundary.ActorID, boundary.MattermostUserID = actorID, actor.MattermostUserID
+	return boundary, nil
 }
 
 func (client *Client) DownloadFile(ctx context.Context, channelID, fileID string) ([]byte, string, string, error) {
@@ -551,7 +639,11 @@ func exactProps(actual, expected model.StringInterface) bool {
 func (client *Client) CatchUp(ctx context.Context, cursors map[string]int64, reactionPosts map[string]string,
 	consume func(context.Context, domainmattermost.RawEvent) error,
 ) error {
-	for _, boundary := range client.ChannelBoundaries() {
+	boundaries, err := client.ChannelBoundaries(ctx)
+	if err != nil {
+		return err
+	}
+	for _, boundary := range boundaries {
 		channelID := boundary.ChannelID
 		channel, _, channelErr := client.primary.api.GetChannel(ctx, channelID)
 		if channelErr != nil || channel == nil || channel.Id != channelID || channel.TeamId != boundary.TeamID {
@@ -656,16 +748,24 @@ func (client *Client) Listen(ctx context.Context, consume func(context.Context, 
 	}
 }
 
-func (client *Client) ChannelBoundaries() []entity.Boundary { return client.index.channelBoundaries() }
+func (client *Client) ChannelBoundaries(ctx context.Context) ([]entity.Boundary, error) {
+	routes, err := client.runtimeRouteList(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]entity.Boundary, 0, len(routes))
+	for _, route := range routes {
+		result = append(result, route.Boundary)
+	}
+	return result, nil
+}
 
-func (client *Client) ReadinessBoundary() (entity.Boundary, error) {
-	for _, binding := range client.manifest.Channels {
-		return entity.Boundary{
-			OrganizationID: binding.OrganizationID, ProjectID: binding.ProjectID,
-			ChatID: binding.ChatID, ActorID: binding.LifecycleActorID, RoleID: binding.RoleID,
-			Locale: binding.Locale, BotStableKey: binding.BotStableKey, TeamID: binding.TeamID,
-			ChannelID: binding.ChannelID, SessionID: binding.SessionID,
-		}, nil
+func (client *Client) ReadinessBoundary(ctx context.Context) (entity.Boundary, error) {
+	routes, err := client.runtimeRouteList(ctx)
+	if err == nil && len(routes) > 0 {
+		boundary := routes[0].Boundary
+		boundary.ActorID = boundary.MappingOwnerActorID
+		return boundary, nil
 	}
 	return entity.Boundary{}, errors.New("mattermost readiness boundary is unavailable")
 }
@@ -684,7 +784,11 @@ func (client *Client) AuthenticateArtifactDownload(ctx context.Context, bearer s
 	if err != nil || user == nil || user.Id != grant.MattermostUserID || user.DeleteAt != 0 || user.IsBot {
 		return errors.New("Mattermost artifact actor is invalid")
 	}
-	boundary, err := client.index.resolve(grant.TeamID, grant.ChannelID, user.Id, false)
+	route, err := client.runtimeRoute(ctx, grant.TeamID, grant.ChannelID)
+	if err != nil {
+		return errors.New("Mattermost artifact actor boundary mismatch")
+	}
+	boundary, _, err := client.resolveRuntimeBoundary(route, user.Id, false)
 	if err != nil || boundary.OrganizationID != grant.OrganizationID || boundary.ProjectID != grant.ProjectID ||
 		boundary.ActorID != grant.ActorID || boundary.TeamID != grant.TeamID || boundary.ChannelID != grant.ChannelID {
 		return errors.New("Mattermost artifact actor boundary mismatch")

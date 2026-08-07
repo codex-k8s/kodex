@@ -25,3 +25,24 @@ func TestTeamViewDoesNotExposeProviderTeamID(t *testing.T) {
 		t.Fatalf("provider Team ID leaked into response: %s", raw)
 	}
 }
+
+func TestMappingOperationViewMasksProviderAndRawFailure(t *testing.T) {
+	view := MappingOperationView(entity.WorkspaceMappingOperation{
+		ID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", Action: "bind",
+		State: "REPAIR_REQUIRED", FailureCode: "private provider: team-id-secret",
+		Team: entity.MattermostTeam{ProviderTeamID: "private-provider-team-id"},
+		Result: entity.WorkspaceMattermostMapping{
+			ID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", Version: 1, Generation: 1, State: "BOUND",
+			ProviderTeamID: "private-provider-team-id", ProviderEffectVersion: 1, ProviderEffectGeneration: 1,
+		},
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	})
+	raw, err := protojson.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("private-provider-team-id")) || bytes.Contains(raw, []byte("team-id-secret")) ||
+		!bytes.Contains(raw, []byte("SAFE_FAILURE")) {
+		t.Fatalf("unsafe mapping operation response: %s", raw)
+	}
+}

@@ -20,6 +20,7 @@ const (
 	getBindingOperation = "interaction.team.binding.get"
 	relinkOperation     = "interaction.team.relink"
 	unlinkOperation     = "interaction.team.unlink"
+	getOperation        = "interaction.team.mapping-operation.get"
 	readbackOperation   = "interaction.team.provider.readback"
 	readinessOperation  = "interaction.team.readiness"
 )
@@ -92,7 +93,8 @@ func (server *Server) LinkMattermostTeam(ctx context.Context,
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &interactiongatewayv1.LinkMattermostTeamResponse{Binding: casters.BindingView(binding)}, nil
+	return &interactiongatewayv1.LinkMattermostTeamResponse{Binding: casters.BindingView(binding),
+		Operation: casters.MappingOperationView(binding.Operation)}, nil
 }
 
 func (server *Server) GetMattermostTeamBinding(ctx context.Context,
@@ -128,7 +130,8 @@ func (server *Server) RelinkMattermostTeam(ctx context.Context,
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &interactiongatewayv1.RelinkMattermostTeamResponse{Binding: casters.BindingView(binding)}, nil
+	return &interactiongatewayv1.RelinkMattermostTeamResponse{Binding: casters.BindingView(binding),
+		Operation: casters.MappingOperationView(binding.Operation)}, nil
 }
 
 func (server *Server) UnlinkMattermostTeam(ctx context.Context,
@@ -148,7 +151,28 @@ func (server *Server) UnlinkMattermostTeam(ctx context.Context,
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &interactiongatewayv1.UnlinkMattermostTeamResponse{Binding: casters.BindingView(binding)}, nil
+	return &interactiongatewayv1.UnlinkMattermostTeamResponse{Binding: casters.BindingView(binding),
+		Operation: casters.MappingOperationView(binding.Operation)}, nil
+}
+
+func (server *Server) GetMattermostTeamMappingOperation(ctx context.Context,
+	request *interactiongatewayv1.GetMattermostTeamMappingOperationRequest,
+) (*interactiongatewayv1.GetMattermostTeamMappingOperationResponse, error) {
+	principal, err := teamprincipal.Principal(ctx,
+		interactiongatewayv1.MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName,
+		getOperation, getOperation)
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, "verified Mattermost mapping operation context rejected")
+	}
+	action, idempotencyKey, err := casters.MappingOperationRequest(request)
+	if err != nil {
+		return nil, invalidRequest()
+	}
+	operation, err := server.service.GetMappingOperation(ctx, principal, action, idempotencyKey)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return casters.MappingOperationResponse(operation), nil
 }
 
 func (server *Server) GetMattermostTeamProviderReadback(ctx context.Context,

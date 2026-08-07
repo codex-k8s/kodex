@@ -24,8 +24,8 @@ CREATE TABLE interaction_gateway_workspace_mapping_operations (
     provider_created_at timestamptz NOT NULL,
     provider_updated_at timestamptz NOT NULL,
     provider_observed_at timestamptz NOT NULL,
-    effect_generation bigint NOT NULL CHECK (effect_generation > 0),
-    receipt_id uuid NOT NULL,
+    effect_generation bigint CHECK (effect_generation IS NULL OR effect_generation > 0),
+    receipt_id uuid,
     state text NOT NULL CHECK (state IN ('PENDING', 'AMBIGUOUS', 'BOUND', 'UNLINKED', 'REPAIR_REQUIRED')),
     result_mapping_id uuid,
     result_mapping_version bigint CHECK (result_mapping_version IS NULL OR result_mapping_version > 0),
@@ -40,6 +40,8 @@ CREATE TABLE interaction_gateway_workspace_mapping_operations (
     lease_token_sha256 text NOT NULL DEFAULT '' CHECK (lease_token_sha256 = '' OR lease_token_sha256 ~ '^[0-9a-f]{64}$'),
     lease_expires_at timestamptz,
     retry_not_before timestamptz NOT NULL DEFAULT clock_timestamp(),
+    recovery_deadline timestamptz NOT NULL,
+    create_operation_id uuid REFERENCES interaction_gateway_team_operations(operation_id),
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (organization_id, project_id, actor_id, action, idempotency_key),
@@ -67,6 +69,104 @@ CREATE TABLE interaction_gateway_workspace_mapping_work_scopes (
     project_id uuid NOT NULL,
     due_at timestamptz NOT NULL
 );
+
+-- Authoritative runtime admission — атомарная joined projection owner mapping
+-- и fresh Mattermost Team/channel readback. Manifest задаёт лишь template_key.
+CREATE TABLE interaction_gateway_mattermost_runtime_routes (
+    template_key uuid PRIMARY KEY,
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    mapping_owner_actor_id uuid NOT NULL,
+    mapping_id uuid NOT NULL,
+    mapping_version bigint NOT NULL CHECK (mapping_version > 0),
+    mapping_generation bigint NOT NULL CHECK (mapping_generation > 0),
+    mapping_digest_sha256 text NOT NULL CHECK (mapping_digest_sha256 ~ '^[0-9a-f]{64}$'),
+    provider_team_id text NOT NULL CHECK (length(provider_team_id) BETWEEN 1 AND 64),
+    provider_snapshot_sha256 text NOT NULL CHECK (provider_snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+    chat_id uuid NOT NULL,
+    role_id uuid NOT NULL,
+    locale text NOT NULL CHECK (length(locale) BETWEEN 2 AND 32),
+    bot_stable_key text NOT NULL CHECK (length(bot_stable_key) BETWEEN 1 AND 64),
+    channel_id text NOT NULL CHECK (length(channel_id) BETWEEN 1 AND 64),
+    session_id uuid,
+    owner_delivery boolean NOT NULL,
+    route_digest_sha256 text NOT NULL CHECK (route_digest_sha256 ~ '^[0-9a-f]{64}$'),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (provider_team_id, channel_id),
+    UNIQUE (organization_id, project_id, mapping_id, mapping_generation, template_key)
+);
+CREATE UNIQUE INDEX interaction_gateway_mattermost_owner_delivery_idx
+    ON interaction_gateway_mattermost_runtime_routes(organization_id, project_id)
+    WHERE owner_delivery;
+
+-- High-watermark живёт отдельно от route rows: UNLINKED удаляет executable
+-- route, но не позволяет поздней старой generation снова её материализовать.
+CREATE TABLE interaction_gateway_mattermost_runtime_checkpoints (
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    mapping_id uuid NOT NULL,
+    mapping_version bigint NOT NULL CHECK (mapping_version > 0),
+    mapping_generation bigint NOT NULL CHECK (mapping_generation > 0),
+    mapping_state text NOT NULL CHECK (mapping_state IN ('BOUND', 'UNLINKED')),
+    mapping_digest_sha256 text NOT NULL CHECK (mapping_digest_sha256 ~ '^[0-9a-f]{64}$'),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (organization_id, project_id)
+);
+
+-- Минимальный locator index не содержит mapping/provider snapshot и доступен
+-- runtime только через SECURITY DEFINER scope resolver.
+CREATE TABLE interaction_gateway_mattermost_runtime_route_scopes (
+    template_key uuid PRIMARY KEY,
+    provider_team_id text NOT NULL,
+    channel_id text NOT NULL,
+    organization_id uuid NOT NULL,
+    project_id uuid NOT NULL,
+    UNIQUE (provider_team_id, channel_id)
+);
+
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION interaction_gateway_sync_mattermost_runtime_route_scope()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $function$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        DELETE FROM interaction_gateway_mattermost_runtime_route_scopes WHERE template_key = OLD.template_key;
+        RETURN OLD;
+    END IF;
+    INSERT INTO interaction_gateway_mattermost_runtime_route_scopes(
+        template_key, provider_team_id, channel_id, organization_id, project_id
+    ) VALUES (NEW.template_key, NEW.provider_team_id, NEW.channel_id, NEW.organization_id, NEW.project_id)
+    ON CONFLICT (template_key) DO UPDATE SET provider_team_id = EXCLUDED.provider_team_id,
+        channel_id = EXCLUDED.channel_id, organization_id = EXCLUDED.organization_id,
+        project_id = EXCLUDED.project_id;
+    RETURN NEW;
+END
+$function$;
+-- +goose StatementEnd
+CREATE TRIGGER interaction_gateway_mattermost_runtime_route_scope_trigger
+AFTER INSERT OR UPDATE OR DELETE ON interaction_gateway_mattermost_runtime_routes
+FOR EACH ROW EXECUTE FUNCTION interaction_gateway_sync_mattermost_runtime_route_scope();
+
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION interaction_gateway_mattermost_runtime_route_scope(
+    requested_team_id text, requested_channel_id text,
+    OUT organization_id uuid, OUT project_id uuid
+) RETURNS record LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $function$
+BEGIN
+    IF NOT pg_has_role(session_user, 'interaction_gateway_runtime', 'member') OR NOT EXISTS (
+        SELECT 1 FROM interaction_gateway_runtime_principals AS principal
+        JOIN interaction_gateway_runtime_credential_fence AS fence ON fence.singleton
+        WHERE principal.principal_name::text = session_user AND principal.status = 'CURRENT'
+          AND principal.generation = fence.served_generation
+    ) THEN
+        RAISE EXCEPTION 'runtime identity is not active' USING ERRCODE = '28000';
+    END IF;
+    SELECT route.organization_id, route.project_id INTO organization_id, project_id
+    FROM interaction_gateway_mattermost_runtime_route_scopes AS route
+    WHERE route.provider_team_id = requested_team_id AND route.channel_id = requested_channel_id;
+END
+$function$;
+-- +goose StatementEnd
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION interaction_gateway_sync_workspace_mapping_work_scope()
@@ -134,15 +234,36 @@ $function$;
 
 ALTER TABLE interaction_gateway_workspace_mapping_operations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE interaction_gateway_workspace_mapping_operations FORCE ROW LEVEL SECURITY;
+ALTER TABLE interaction_gateway_mattermost_runtime_routes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interaction_gateway_mattermost_runtime_routes FORCE ROW LEVEL SECURITY;
+ALTER TABLE interaction_gateway_mattermost_runtime_checkpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interaction_gateway_mattermost_runtime_checkpoints FORCE ROW LEVEL SECURITY;
 CREATE POLICY interaction_gateway_workspace_mapping_runtime_scope
 ON interaction_gateway_workspace_mapping_operations
 USING ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()))
 WITH CHECK ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()));
+CREATE POLICY interaction_gateway_mattermost_runtime_route_scope
+ON interaction_gateway_mattermost_runtime_routes
+USING ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()))
+WITH CHECK ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()));
+CREATE POLICY interaction_gateway_mattermost_runtime_checkpoint_scope
+ON interaction_gateway_mattermost_runtime_checkpoints
+USING ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()))
+WITH CHECK ((organization_id, project_id) = (SELECT organization_id, project_id FROM interaction_gateway_runtime_scope()));
 
 REVOKE ALL ON interaction_gateway_workspace_mapping_operations,
-    interaction_gateway_workspace_mapping_work_scopes FROM PUBLIC;
+    interaction_gateway_workspace_mapping_work_scopes,
+    interaction_gateway_mattermost_runtime_routes,
+    interaction_gateway_mattermost_runtime_checkpoints,
+    interaction_gateway_mattermost_runtime_route_scopes FROM PUBLIC;
 REVOKE ALL ON interaction_gateway_workspace_mapping_work_scopes FROM interaction_gateway_runtime;
-GRANT SELECT, INSERT, UPDATE ON interaction_gateway_workspace_mapping_operations TO interaction_gateway_runtime;
+REVOKE ALL ON interaction_gateway_mattermost_runtime_route_scopes FROM interaction_gateway_runtime;
+REVOKE ALL ON FUNCTION interaction_gateway_mattermost_runtime_route_scope(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION interaction_gateway_mattermost_runtime_route_scope(text, text) TO interaction_gateway_runtime;
+GRANT SELECT, INSERT, UPDATE ON interaction_gateway_workspace_mapping_operations,
+    interaction_gateway_mattermost_runtime_routes,
+    interaction_gateway_mattermost_runtime_checkpoints TO interaction_gateway_runtime;
+GRANT DELETE ON interaction_gateway_mattermost_runtime_routes TO interaction_gateway_runtime;
 
 -- +goose Down
 -- Forward-only: mapping receipts, provider checkpoints и monotonic watermark не удаляются.

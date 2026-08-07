@@ -439,7 +439,7 @@ func (service *Service) ProcessWaiting(ctx context.Context) (bool, error) {
 	if err != nil || !ok {
 		return ok, err
 	}
-	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(inbound.TeamID, inbound.ChannelID)
+	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(ctx, inbound.TeamID, inbound.ChannelID)
 	if boundaryErr != nil || boundary.OrganizationID != inbound.OrganizationID || boundary.ProjectID != inbound.ProjectID {
 		return true, service.retryInbound(ctx, inbound, "MATTERMOST_MAPPING_NOT_CURRENT")
 	}
@@ -585,7 +585,7 @@ func (service *Service) ProcessDelivery(ctx context.Context, instanceID string) 
 		}
 		return true, nil
 	}
-	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(delivery.TeamID, delivery.ChannelID)
+	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(ctx, delivery.TeamID, delivery.ChannelID)
 	if boundaryErr != nil || boundary.OrganizationID != delivery.OrganizationID || boundary.ProjectID != delivery.ProjectID {
 		outcome = "retry"
 		if delivery.Attempts >= service.config.MaximumAttempts {
@@ -673,14 +673,14 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 		if uuid.Validate(claim.ScheduleID) != nil || uuid.Validate(claim.NotificationRoomID) != nil {
 			return true, errors.New("control-plane owner gate room route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveRoomDelivery(
+		boundary, err = service.mattermost.ResolveRoomDelivery(ctx,
 			claim.ProjectID, claim.NotificationRoomID, claim.RecipientActorID,
 		)
 	} else {
 		if claim.NotificationRoomID != "" {
 			return true, errors.New("control-plane owner gate room route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveDelivery(claim.ProjectID, claim.RecipientActorID)
+		boundary, err = service.mattermost.ResolveDelivery(ctx, claim.ProjectID, claim.RecipientActorID)
 	}
 	if err != nil {
 		return true, err
@@ -762,14 +762,14 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 			work.NotificationPolicy == "AUDIT_ONLY" || work.NotificationPolicy == "UNSPECIFIED" {
 			return true, errors.New("control-plane scheduled delivery route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveRoomDelivery(
+		boundary, err = service.mattermost.ResolveRoomDelivery(ctx,
 			work.ProjectID, work.NotificationRoomID, work.ActorID,
 		)
 	} else {
 		if work.NotificationPolicy != "UNSPECIFIED" || work.ScheduledOutcome != "UNSPECIFIED" {
 			return true, errors.New("control-plane scheduled delivery route is invalid")
 		}
-		boundary, err = service.mattermost.ResolveDelivery(work.ProjectID, work.ActorID)
+		boundary, err = service.mattermost.ResolveDelivery(ctx, work.ProjectID, work.ActorID)
 	}
 	if err != nil || boundary.OrganizationID != work.OrganizationID {
 		return true, errors.New("control-plane interaction delivery route is invalid")
@@ -931,11 +931,15 @@ func (service *Service) ExpireOwnerGate(ctx context.Context) error {
 }
 
 func (service *Service) CatchUp(ctx context.Context) error {
-	cursors, err := service.repository.LoadCursors(ctx, service.mattermost.ChannelBoundaries())
+	boundaries, err := service.mattermost.ChannelBoundaries(ctx)
 	if err != nil {
 		return err
 	}
-	reactionPosts, err := service.repository.ListPendingReactionPosts(ctx, service.mattermost.ChannelBoundaries(), 1024)
+	cursors, err := service.repository.LoadCursors(ctx, boundaries)
+	if err != nil {
+		return err
+	}
+	reactionPosts, err := service.repository.ListPendingReactionPosts(ctx, boundaries, 1024)
 	if err != nil {
 		return err
 	}
@@ -945,7 +949,11 @@ func (service *Service) CatchUp(ctx context.Context) error {
 }
 
 func (service *Service) ReconcileLifecycle(ctx context.Context) error {
-	knownThreads, err := service.repository.ListKnownThreads(ctx, service.mattermost.ChannelBoundaries(), 4096)
+	boundaries, err := service.mattermost.ChannelBoundaries(ctx)
+	if err != nil {
+		return err
+	}
+	knownThreads, err := service.repository.ListKnownThreads(ctx, boundaries, 4096)
 	if err != nil {
 		return err
 	}
@@ -1107,7 +1115,7 @@ func (service *Service) DownloadArtifact(ctx context.Context, grantID, authoriza
 	if err := service.mattermost.AuthenticateArtifactDownload(ctx, authorization, grant); err != nil {
 		return entity.ArtifactBinding{}, nil, domainerrs.ErrUnauthorized
 	}
-	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(grant.TeamID, grant.ChannelID)
+	boundary, boundaryErr := service.mattermost.ResolveMappedChannel(ctx, grant.TeamID, grant.ChannelID)
 	if boundaryErr != nil || boundary.OrganizationID != grant.OrganizationID || boundary.ProjectID != grant.ProjectID {
 		return entity.ArtifactBinding{}, nil, domainerrs.ErrNotFound
 	}
@@ -1126,9 +1134,12 @@ func (service *Service) DownloadArtifact(ctx context.Context, grantID, authoriza
 }
 
 func (service *Service) CheckInteraction(ctx context.Context) error {
-	boundary, err := service.mattermost.ReadinessBoundary()
+	boundary, err := service.mattermost.ReadinessBoundary(ctx)
 	if err != nil {
 		return err
+	}
+	if err := service.requireBoundTeam(ctx, boundary); err != nil {
+		return errors.New("Mattermost joined readiness mapping is not current")
 	}
 	inbound := entity.InboundEvent{
 		ID: uuid.NewString(), ProviderEventID: "readiness:" + uuid.NewString(),

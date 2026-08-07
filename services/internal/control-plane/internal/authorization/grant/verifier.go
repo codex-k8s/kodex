@@ -71,6 +71,7 @@ type claims struct {
 type providerReceiptClaims struct {
 	ContractVersion          uint32    `json:"contract_version"`
 	Issuer                   string    `json:"iss"`
+	Audience                 string    `json:"aud"`
 	Purpose                  string    `json:"purpose"`
 	WorkloadID               string    `json:"workload_id"`
 	CallerSPIFFEID           string    `json:"caller_spiffe_id"`
@@ -283,7 +284,7 @@ func (verifier *Verifier) authenticateProviderReceipt(canonicalPayload []byte) (
 	}
 	now := verifier.now().UTC()
 	credentialBound := parsed.CredentialBindingID != "" || parsed.CredentialBindingVersion != 0 || parsed.CredentialBindingSHA256 != ""
-	if parsed.ContractVersion != 1 || parsed.Issuer != verifier.config.Issuer || parsed.Purpose != verifier.config.Purpose ||
+	if parsed.ContractVersion != 1 || parsed.Issuer != verifier.config.Issuer || parsed.Audience != verifier.config.Audience || parsed.Purpose != verifier.config.Purpose ||
 		parsed.WorkloadID != verifier.config.WorkloadID || parsed.CallerSPIFFEID != verifier.config.CallerSPIFFEID ||
 		value.ValidateID(parsed.ActorID) != nil || value.ValidateID(parsed.OrganizationID) != nil || value.ValidateID(parsed.ProjectID) != nil ||
 		(parsed.WorkspaceID != "" && value.ValidateID(parsed.WorkspaceID) != nil) || value.ValidateStableKey(parsed.Action) != nil ||

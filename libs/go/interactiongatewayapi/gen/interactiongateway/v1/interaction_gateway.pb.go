@@ -178,6 +178,116 @@ func (WorkspaceMattermostMappingState) EnumDescriptor() ([]byte, []int) {
 	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{2}
 }
 
+type WorkspaceMattermostMappingAction int32
+
+const (
+	WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED WorkspaceMattermostMappingAction = 0
+	WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND        WorkspaceMattermostMappingAction = 1
+	WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK      WorkspaceMattermostMappingAction = 2
+	WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK      WorkspaceMattermostMappingAction = 3
+)
+
+// Enum value maps for WorkspaceMattermostMappingAction.
+var (
+	WorkspaceMattermostMappingAction_name = map[int32]string{
+		0: "WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED",
+		1: "WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND",
+		2: "WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK",
+		3: "WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK",
+	}
+	WorkspaceMattermostMappingAction_value = map[string]int32{
+		"WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED": 0,
+		"WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND":        1,
+		"WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK":      2,
+		"WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK":      3,
+	}
+)
+
+func (x WorkspaceMattermostMappingAction) Enum() *WorkspaceMattermostMappingAction {
+	p := new(WorkspaceMattermostMappingAction)
+	*p = x
+	return p
+}
+
+func (x WorkspaceMattermostMappingAction) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (WorkspaceMattermostMappingAction) Descriptor() protoreflect.EnumDescriptor {
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[3].Descriptor()
+}
+
+func (WorkspaceMattermostMappingAction) Type() protoreflect.EnumType {
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[3]
+}
+
+func (x WorkspaceMattermostMappingAction) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use WorkspaceMattermostMappingAction.Descriptor instead.
+func (WorkspaceMattermostMappingAction) EnumDescriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{3}
+}
+
+type WorkspaceMattermostMappingOperationState int32
+
+const (
+	WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED     WorkspaceMattermostMappingOperationState = 0
+	WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_PENDING         WorkspaceMattermostMappingOperationState = 1
+	WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS       WorkspaceMattermostMappingOperationState = 2
+	WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND           WorkspaceMattermostMappingOperationState = 3
+	WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED        WorkspaceMattermostMappingOperationState = 4
+	WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED WorkspaceMattermostMappingOperationState = 5
+)
+
+// Enum value maps for WorkspaceMattermostMappingOperationState.
+var (
+	WorkspaceMattermostMappingOperationState_name = map[int32]string{
+		0: "WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED",
+		1: "WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_PENDING",
+		2: "WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS",
+		3: "WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND",
+		4: "WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED",
+		5: "WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED",
+	}
+	WorkspaceMattermostMappingOperationState_value = map[string]int32{
+		"WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED":     0,
+		"WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_PENDING":         1,
+		"WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS":       2,
+		"WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND":           3,
+		"WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED":        4,
+		"WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED": 5,
+	}
+)
+
+func (x WorkspaceMattermostMappingOperationState) Enum() *WorkspaceMattermostMappingOperationState {
+	p := new(WorkspaceMattermostMappingOperationState)
+	*p = x
+	return p
+}
+
+func (x WorkspaceMattermostMappingOperationState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (WorkspaceMattermostMappingOperationState) Descriptor() protoreflect.EnumDescriptor {
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[4].Descriptor()
+}
+
+func (WorkspaceMattermostMappingOperationState) Type() protoreflect.EnumType {
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[4]
+}
+
+func (x WorkspaceMattermostMappingOperationState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use WorkspaceMattermostMappingOperationState.Descriptor instead.
+func (WorkspaceMattermostMappingOperationState) EnumDescriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{4}
+}
+
 type MattermostTeamView struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	Selector               string                 `protobuf:"bytes,1,opt,name=selector,proto3" json:"selector,omitempty"`
@@ -502,6 +612,114 @@ func (x *WorkspaceMattermostTeamBindingView) GetUpdatedAt() *timestamppb.Timesta
 	return nil
 }
 
+type WorkspaceMattermostMappingOperationView struct {
+	state            protoimpl.MessageState                   `protogen:"open.v1"`
+	OperationId      string                                   `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	Action           WorkspaceMattermostMappingAction         `protobuf:"varint,2,opt,name=action,proto3,enum=interactiongateway.v1.WorkspaceMattermostMappingAction" json:"action,omitempty"`
+	State            WorkspaceMattermostMappingOperationState `protobuf:"varint,3,opt,name=state,proto3,enum=interactiongateway.v1.WorkspaceMattermostMappingOperationState" json:"state,omitempty"`
+	FailureCode      string                                   `protobuf:"bytes,4,opt,name=failure_code,json=failureCode,proto3" json:"failure_code,omitempty"`
+	RetryNotBefore   *timestamppb.Timestamp                   `protobuf:"bytes,5,opt,name=retry_not_before,json=retryNotBefore,proto3" json:"retry_not_before,omitempty"`
+	RecoveryDeadline *timestamppb.Timestamp                   `protobuf:"bytes,6,opt,name=recovery_deadline,json=recoveryDeadline,proto3" json:"recovery_deadline,omitempty"`
+	CreatedAt        *timestamppb.Timestamp                   `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt        *timestamppb.Timestamp                   `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Result           *WorkspaceMattermostTeamBindingView      `protobuf:"bytes,9,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *WorkspaceMattermostMappingOperationView) Reset() {
+	*x = WorkspaceMattermostMappingOperationView{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkspaceMattermostMappingOperationView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkspaceMattermostMappingOperationView) ProtoMessage() {}
+
+func (x *WorkspaceMattermostMappingOperationView) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkspaceMattermostMappingOperationView.ProtoReflect.Descriptor instead.
+func (*WorkspaceMattermostMappingOperationView) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetAction() WorkspaceMattermostMappingAction {
+	if x != nil {
+		return x.Action
+	}
+	return WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetState() WorkspaceMattermostMappingOperationState {
+	if x != nil {
+		return x.State
+	}
+	return WorkspaceMattermostMappingOperationState_WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetFailureCode() string {
+	if x != nil {
+		return x.FailureCode
+	}
+	return ""
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetRetryNotBefore() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RetryNotBefore
+	}
+	return nil
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetRecoveryDeadline() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RecoveryDeadline
+	}
+	return nil
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *WorkspaceMattermostMappingOperationView) GetResult() *WorkspaceMattermostTeamBindingView {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
 type ListMattermostTeamsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PageSize      uint32                 `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
@@ -512,7 +730,7 @@ type ListMattermostTeamsRequest struct {
 
 func (x *ListMattermostTeamsRequest) Reset() {
 	*x = ListMattermostTeamsRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -524,7 +742,7 @@ func (x *ListMattermostTeamsRequest) String() string {
 func (*ListMattermostTeamsRequest) ProtoMessage() {}
 
 func (x *ListMattermostTeamsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -537,7 +755,7 @@ func (x *ListMattermostTeamsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMattermostTeamsRequest.ProtoReflect.Descriptor instead.
 func (*ListMattermostTeamsRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{3}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ListMattermostTeamsRequest) GetPageSize() uint32 {
@@ -564,7 +782,7 @@ type ListMattermostTeamsResponse struct {
 
 func (x *ListMattermostTeamsResponse) Reset() {
 	*x = ListMattermostTeamsResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -576,7 +794,7 @@ func (x *ListMattermostTeamsResponse) String() string {
 func (*ListMattermostTeamsResponse) ProtoMessage() {}
 
 func (x *ListMattermostTeamsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -589,7 +807,7 @@ func (x *ListMattermostTeamsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMattermostTeamsResponse.ProtoReflect.Descriptor instead.
 func (*ListMattermostTeamsResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{4}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListMattermostTeamsResponse) GetTeams() []*MattermostTeamView {
@@ -617,7 +835,7 @@ type CreateMattermostTeamRequest struct {
 
 func (x *CreateMattermostTeamRequest) Reset() {
 	*x = CreateMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -629,7 +847,7 @@ func (x *CreateMattermostTeamRequest) String() string {
 func (*CreateMattermostTeamRequest) ProtoMessage() {}
 
 func (x *CreateMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -642,7 +860,7 @@ func (x *CreateMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*CreateMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{5}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateMattermostTeamRequest) GetDisplayName() string {
@@ -667,16 +885,17 @@ func (x *CreateMattermostTeamRequest) GetIdempotencyKey() string {
 }
 
 type CreateMattermostTeamResponse struct {
-	state         protoimpl.MessageState              `protogen:"open.v1"`
-	Operation     *MattermostTeamOperationView        `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
-	Binding       *WorkspaceMattermostTeamBindingView `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState                   `protogen:"open.v1"`
+	Operation        *MattermostTeamOperationView             `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	Binding          *WorkspaceMattermostTeamBindingView      `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
+	MappingOperation *WorkspaceMattermostMappingOperationView `protobuf:"bytes,3,opt,name=mapping_operation,json=mappingOperation,proto3" json:"mapping_operation,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CreateMattermostTeamResponse) Reset() {
 	*x = CreateMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -688,7 +907,7 @@ func (x *CreateMattermostTeamResponse) String() string {
 func (*CreateMattermostTeamResponse) ProtoMessage() {}
 
 func (x *CreateMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -701,7 +920,7 @@ func (x *CreateMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*CreateMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{6}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CreateMattermostTeamResponse) GetOperation() *MattermostTeamOperationView {
@@ -718,6 +937,13 @@ func (x *CreateMattermostTeamResponse) GetBinding() *WorkspaceMattermostTeamBind
 	return nil
 }
 
+func (x *CreateMattermostTeamResponse) GetMappingOperation() *WorkspaceMattermostMappingOperationView {
+	if x != nil {
+		return x.MappingOperation
+	}
+	return nil
+}
+
 type LinkMattermostTeamRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Selector       string                 `protobuf:"bytes,1,opt,name=selector,proto3" json:"selector,omitempty"`
@@ -728,7 +954,7 @@ type LinkMattermostTeamRequest struct {
 
 func (x *LinkMattermostTeamRequest) Reset() {
 	*x = LinkMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -740,7 +966,7 @@ func (x *LinkMattermostTeamRequest) String() string {
 func (*LinkMattermostTeamRequest) ProtoMessage() {}
 
 func (x *LinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -753,7 +979,7 @@ func (x *LinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*LinkMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{7}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *LinkMattermostTeamRequest) GetSelector() string {
@@ -771,15 +997,16 @@ func (x *LinkMattermostTeamRequest) GetIdempotencyKey() string {
 }
 
 type LinkMattermostTeamResponse struct {
-	state         protoimpl.MessageState              `protogen:"open.v1"`
-	Binding       *WorkspaceMattermostTeamBindingView `protobuf:"bytes,1,opt,name=binding,proto3" json:"binding,omitempty"`
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Binding       *WorkspaceMattermostTeamBindingView      `protobuf:"bytes,1,opt,name=binding,proto3" json:"binding,omitempty"`
+	Operation     *WorkspaceMattermostMappingOperationView `protobuf:"bytes,2,opt,name=operation,proto3" json:"operation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LinkMattermostTeamResponse) Reset() {
 	*x = LinkMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -791,7 +1018,7 @@ func (x *LinkMattermostTeamResponse) String() string {
 func (*LinkMattermostTeamResponse) ProtoMessage() {}
 
 func (x *LinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -804,12 +1031,19 @@ func (x *LinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*LinkMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{8}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *LinkMattermostTeamResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
 	if x != nil {
 		return x.Binding
+	}
+	return nil
+}
+
+func (x *LinkMattermostTeamResponse) GetOperation() *WorkspaceMattermostMappingOperationView {
+	if x != nil {
+		return x.Operation
 	}
 	return nil
 }
@@ -822,7 +1056,7 @@ type GetMattermostTeamBindingRequest struct {
 
 func (x *GetMattermostTeamBindingRequest) Reset() {
 	*x = GetMattermostTeamBindingRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -834,7 +1068,7 @@ func (x *GetMattermostTeamBindingRequest) String() string {
 func (*GetMattermostTeamBindingRequest) ProtoMessage() {}
 
 func (x *GetMattermostTeamBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -847,7 +1081,7 @@ func (x *GetMattermostTeamBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMattermostTeamBindingRequest.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamBindingRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{9}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{10}
 }
 
 type GetMattermostTeamBindingResponse struct {
@@ -859,7 +1093,7 @@ type GetMattermostTeamBindingResponse struct {
 
 func (x *GetMattermostTeamBindingResponse) Reset() {
 	*x = GetMattermostTeamBindingResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -871,7 +1105,7 @@ func (x *GetMattermostTeamBindingResponse) String() string {
 func (*GetMattermostTeamBindingResponse) ProtoMessage() {}
 
 func (x *GetMattermostTeamBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -884,7 +1118,7 @@ func (x *GetMattermostTeamBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMattermostTeamBindingResponse.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamBindingResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{10}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetMattermostTeamBindingResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
@@ -906,7 +1140,7 @@ type RelinkMattermostTeamRequest struct {
 
 func (x *RelinkMattermostTeamRequest) Reset() {
 	*x = RelinkMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -918,7 +1152,7 @@ func (x *RelinkMattermostTeamRequest) String() string {
 func (*RelinkMattermostTeamRequest) ProtoMessage() {}
 
 func (x *RelinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -931,7 +1165,7 @@ func (x *RelinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelinkMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*RelinkMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{11}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *RelinkMattermostTeamRequest) GetSelector() string {
@@ -963,15 +1197,16 @@ func (x *RelinkMattermostTeamRequest) GetIdempotencyKey() string {
 }
 
 type RelinkMattermostTeamResponse struct {
-	state         protoimpl.MessageState              `protogen:"open.v1"`
-	Binding       *WorkspaceMattermostTeamBindingView `protobuf:"bytes,1,opt,name=binding,proto3" json:"binding,omitempty"`
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Binding       *WorkspaceMattermostTeamBindingView      `protobuf:"bytes,1,opt,name=binding,proto3" json:"binding,omitempty"`
+	Operation     *WorkspaceMattermostMappingOperationView `protobuf:"bytes,2,opt,name=operation,proto3" json:"operation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RelinkMattermostTeamResponse) Reset() {
 	*x = RelinkMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -983,7 +1218,7 @@ func (x *RelinkMattermostTeamResponse) String() string {
 func (*RelinkMattermostTeamResponse) ProtoMessage() {}
 
 func (x *RelinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -996,12 +1231,19 @@ func (x *RelinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelinkMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*RelinkMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{12}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RelinkMattermostTeamResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
 	if x != nil {
 		return x.Binding
+	}
+	return nil
+}
+
+func (x *RelinkMattermostTeamResponse) GetOperation() *WorkspaceMattermostMappingOperationView {
+	if x != nil {
+		return x.Operation
 	}
 	return nil
 }
@@ -1017,7 +1259,7 @@ type UnlinkMattermostTeamRequest struct {
 
 func (x *UnlinkMattermostTeamRequest) Reset() {
 	*x = UnlinkMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1029,7 +1271,7 @@ func (x *UnlinkMattermostTeamRequest) String() string {
 func (*UnlinkMattermostTeamRequest) ProtoMessage() {}
 
 func (x *UnlinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1042,7 +1284,7 @@ func (x *UnlinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*UnlinkMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{13}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *UnlinkMattermostTeamRequest) GetExpectedMappingVersion() uint64 {
@@ -1067,15 +1309,16 @@ func (x *UnlinkMattermostTeamRequest) GetIdempotencyKey() string {
 }
 
 type UnlinkMattermostTeamResponse struct {
-	state         protoimpl.MessageState              `protogen:"open.v1"`
-	Binding       *WorkspaceMattermostTeamBindingView `protobuf:"bytes,1,opt,name=binding,proto3" json:"binding,omitempty"`
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Binding       *WorkspaceMattermostTeamBindingView      `protobuf:"bytes,1,opt,name=binding,proto3" json:"binding,omitempty"`
+	Operation     *WorkspaceMattermostMappingOperationView `protobuf:"bytes,2,opt,name=operation,proto3" json:"operation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UnlinkMattermostTeamResponse) Reset() {
 	*x = UnlinkMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1087,7 +1330,7 @@ func (x *UnlinkMattermostTeamResponse) String() string {
 func (*UnlinkMattermostTeamResponse) ProtoMessage() {}
 
 func (x *UnlinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1100,12 +1343,115 @@ func (x *UnlinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{14}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *UnlinkMattermostTeamResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
 	if x != nil {
 		return x.Binding
+	}
+	return nil
+}
+
+func (x *UnlinkMattermostTeamResponse) GetOperation() *WorkspaceMattermostMappingOperationView {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+type GetMattermostTeamMappingOperationRequest struct {
+	state          protoimpl.MessageState           `protogen:"open.v1"`
+	Action         WorkspaceMattermostMappingAction `protobuf:"varint,1,opt,name=action,proto3,enum=interactiongateway.v1.WorkspaceMattermostMappingAction" json:"action,omitempty"`
+	IdempotencyKey string                           `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetMattermostTeamMappingOperationRequest) Reset() {
+	*x = GetMattermostTeamMappingOperationRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMattermostTeamMappingOperationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMattermostTeamMappingOperationRequest) ProtoMessage() {}
+
+func (x *GetMattermostTeamMappingOperationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMattermostTeamMappingOperationRequest.ProtoReflect.Descriptor instead.
+func (*GetMattermostTeamMappingOperationRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetMattermostTeamMappingOperationRequest) GetAction() WorkspaceMattermostMappingAction {
+	if x != nil {
+		return x.Action
+	}
+	return WorkspaceMattermostMappingAction_WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED
+}
+
+func (x *GetMattermostTeamMappingOperationRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type GetMattermostTeamMappingOperationResponse struct {
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Operation     *WorkspaceMattermostMappingOperationView `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMattermostTeamMappingOperationResponse) Reset() {
+	*x = GetMattermostTeamMappingOperationResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMattermostTeamMappingOperationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMattermostTeamMappingOperationResponse) ProtoMessage() {}
+
+func (x *GetMattermostTeamMappingOperationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMattermostTeamMappingOperationResponse.ProtoReflect.Descriptor instead.
+func (*GetMattermostTeamMappingOperationResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetMattermostTeamMappingOperationResponse) GetOperation() *WorkspaceMattermostMappingOperationView {
+	if x != nil {
+		return x.Operation
 	}
 	return nil
 }
@@ -1119,7 +1465,7 @@ type GetMattermostTeamProviderReadbackRequest struct {
 
 func (x *GetMattermostTeamProviderReadbackRequest) Reset() {
 	*x = GetMattermostTeamProviderReadbackRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1131,7 +1477,7 @@ func (x *GetMattermostTeamProviderReadbackRequest) String() string {
 func (*GetMattermostTeamProviderReadbackRequest) ProtoMessage() {}
 
 func (x *GetMattermostTeamProviderReadbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1144,7 +1490,7 @@ func (x *GetMattermostTeamProviderReadbackRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use GetMattermostTeamProviderReadbackRequest.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamProviderReadbackRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{15}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetMattermostTeamProviderReadbackRequest) GetSelector() string {
@@ -1163,7 +1509,7 @@ type GetMattermostTeamProviderReadbackResponse struct {
 
 func (x *GetMattermostTeamProviderReadbackResponse) Reset() {
 	*x = GetMattermostTeamProviderReadbackResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1175,7 +1521,7 @@ func (x *GetMattermostTeamProviderReadbackResponse) String() string {
 func (*GetMattermostTeamProviderReadbackResponse) ProtoMessage() {}
 
 func (x *GetMattermostTeamProviderReadbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1188,7 +1534,7 @@ func (x *GetMattermostTeamProviderReadbackResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use GetMattermostTeamProviderReadbackResponse.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamProviderReadbackResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{16}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetMattermostTeamProviderReadbackResponse) GetTeam() *MattermostTeamView {
@@ -1206,7 +1552,7 @@ type MattermostTeamServiceCheckReadinessRequest struct {
 
 func (x *MattermostTeamServiceCheckReadinessRequest) Reset() {
 	*x = MattermostTeamServiceCheckReadinessRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1218,7 +1564,7 @@ func (x *MattermostTeamServiceCheckReadinessRequest) String() string {
 func (*MattermostTeamServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *MattermostTeamServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1231,7 +1577,7 @@ func (x *MattermostTeamServiceCheckReadinessRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use MattermostTeamServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*MattermostTeamServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{17}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{20}
 }
 
 type MattermostTeamServiceCheckReadinessResponse struct {
@@ -1249,7 +1595,7 @@ type MattermostTeamServiceCheckReadinessResponse struct {
 
 func (x *MattermostTeamServiceCheckReadinessResponse) Reset() {
 	*x = MattermostTeamServiceCheckReadinessResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1261,7 +1607,7 @@ func (x *MattermostTeamServiceCheckReadinessResponse) String() string {
 func (*MattermostTeamServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *MattermostTeamServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1274,7 +1620,7 @@ func (x *MattermostTeamServiceCheckReadinessResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use MattermostTeamServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*MattermostTeamServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{18}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *MattermostTeamServiceCheckReadinessResponse) GetReady() bool {
@@ -1368,7 +1714,19 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\x1aprovider_effect_generation\x18\a \x01(\x04R\x18providerEffectGeneration\x12L\n" +
 	"\x14provider_observed_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x12providerObservedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"Q\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xef\x04\n" +
+	"'WorkspaceMattermostMappingOperationView\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12O\n" +
+	"\x06action\x18\x02 \x01(\x0e27.interactiongateway.v1.WorkspaceMattermostMappingActionR\x06action\x12U\n" +
+	"\x05state\x18\x03 \x01(\x0e2?.interactiongateway.v1.WorkspaceMattermostMappingOperationStateR\x05state\x12!\n" +
+	"\ffailure_code\x18\x04 \x01(\tR\vfailureCode\x12D\n" +
+	"\x10retry_not_before\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x0eretryNotBefore\x12G\n" +
+	"\x11recovery_deadline\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x10recoveryDeadline\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12Q\n" +
+	"\x06result\x18\t \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\x06result\"Q\n" +
 	"\x1aListMattermostTeamsRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\rR\bpageSize\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"\x7f\n" +
@@ -1380,15 +1738,17 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\fdisplay_name\x18\x01 \x01(\tR\vdisplayName\x12\x1f\n" +
 	"\vslug_intent\x18\x02 \x01(\tR\n" +
 	"slugIntent\x12'\n" +
-	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"\xc5\x01\n" +
+	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"\xb2\x02\n" +
 	"\x1cCreateMattermostTeamResponse\x12P\n" +
 	"\toperation\x18\x01 \x01(\v22.interactiongateway.v1.MattermostTeamOperationViewR\toperation\x12S\n" +
-	"\abinding\x18\x02 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\"`\n" +
+	"\abinding\x18\x02 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\x12k\n" +
+	"\x11mapping_operation\x18\x03 \x01(\v2>.interactiongateway.v1.WorkspaceMattermostMappingOperationViewR\x10mappingOperation\"`\n" +
 	"\x19LinkMattermostTeamRequest\x12\x1a\n" +
 	"\bselector\x18\x01 \x01(\tR\bselector\x12'\n" +
-	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"q\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"\xcf\x01\n" +
 	"\x1aLinkMattermostTeamResponse\x12S\n" +
-	"\abinding\x18\x01 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\"!\n" +
+	"\abinding\x18\x01 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\x12\\\n" +
+	"\toperation\x18\x02 \x01(\v2>.interactiongateway.v1.WorkspaceMattermostMappingOperationViewR\toperation\"!\n" +
 	"\x1fGetMattermostTeamBindingRequest\"w\n" +
 	" GetMattermostTeamBindingResponse\x12S\n" +
 	"\abinding\x18\x01 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\"\xdc\x01\n" +
@@ -1396,15 +1756,22 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\bselector\x18\x01 \x01(\tR\bselector\x128\n" +
 	"\x18expected_mapping_version\x18\x02 \x01(\x04R\x16expectedMappingVersion\x12>\n" +
 	"\x1bexpected_mapping_generation\x18\x03 \x01(\x04R\x19expectedMappingGeneration\x12'\n" +
-	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"s\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"\xd1\x01\n" +
 	"\x1cRelinkMattermostTeamResponse\x12S\n" +
-	"\abinding\x18\x01 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\"\xc0\x01\n" +
+	"\abinding\x18\x01 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\x12\\\n" +
+	"\toperation\x18\x02 \x01(\v2>.interactiongateway.v1.WorkspaceMattermostMappingOperationViewR\toperation\"\xc0\x01\n" +
 	"\x1bUnlinkMattermostTeamRequest\x128\n" +
 	"\x18expected_mapping_version\x18\x01 \x01(\x04R\x16expectedMappingVersion\x12>\n" +
 	"\x1bexpected_mapping_generation\x18\x02 \x01(\x04R\x19expectedMappingGeneration\x12'\n" +
-	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"s\n" +
+	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"\xd1\x01\n" +
 	"\x1cUnlinkMattermostTeamResponse\x12S\n" +
-	"\abinding\x18\x01 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\"F\n" +
+	"\abinding\x18\x01 \x01(\v29.interactiongateway.v1.WorkspaceMattermostTeamBindingViewR\abinding\x12\\\n" +
+	"\toperation\x18\x02 \x01(\v2>.interactiongateway.v1.WorkspaceMattermostMappingOperationViewR\toperation\"\xa4\x01\n" +
+	"(GetMattermostTeamMappingOperationRequest\x12O\n" +
+	"\x06action\x18\x01 \x01(\x0e27.interactiongateway.v1.WorkspaceMattermostMappingActionR\x06action\x12'\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\"\x89\x01\n" +
+	")GetMattermostTeamMappingOperationResponse\x12\\\n" +
+	"\toperation\x18\x01 \x01(\v2>.interactiongateway.v1.WorkspaceMattermostMappingOperationViewR\toperation\"F\n" +
 	"(GetMattermostTeamProviderReadbackRequest\x12\x1a\n" +
 	"\bselector\x18\x01 \x01(\tR\bselector\"j\n" +
 	")GetMattermostTeamProviderReadbackResponse\x12=\n" +
@@ -1432,7 +1799,20 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\x1fWorkspaceMattermostMappingState\x122\n" +
 	".WORKSPACE_MATTERMOST_MAPPING_STATE_UNSPECIFIED\x10\x00\x12,\n" +
 	"(WORKSPACE_MATTERMOST_MAPPING_STATE_BOUND\x10\x01\x12/\n" +
-	"+WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED\x10\x022\xe4\b\n" +
+	"+WORKSPACE_MATTERMOST_MAPPING_STATE_UNLINKED\x10\x02*\xe5\x01\n" +
+	" WorkspaceMattermostMappingAction\x123\n" +
+	"/WORKSPACE_MATTERMOST_MAPPING_ACTION_UNSPECIFIED\x10\x00\x12,\n" +
+	"(WORKSPACE_MATTERMOST_MAPPING_ACTION_BIND\x10\x01\x12.\n" +
+	"*WORKSPACE_MATTERMOST_MAPPING_ACTION_RELINK\x10\x02\x12.\n" +
+	"*WORKSPACE_MATTERMOST_MAPPING_ACTION_UNLINK\x10\x03*\x93\x03\n" +
+	"(WorkspaceMattermostMappingOperationState\x12<\n" +
+	"8WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNSPECIFIED\x10\x00\x128\n" +
+	"4WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_PENDING\x10\x01\x12:\n" +
+	"6WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS\x10\x02\x126\n" +
+	"2WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND\x10\x03\x129\n" +
+	"5WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED\x10\x04\x12@\n" +
+	"<WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED\x10\x052\x8d\n" +
+	"\n" +
 	"\x15MattermostTeamService\x12|\n" +
 	"\x13ListMattermostTeams\x121.interactiongateway.v1.ListMattermostTeamsRequest\x1a2.interactiongateway.v1.ListMattermostTeamsResponse\x12\x7f\n" +
 	"\x14CreateMattermostTeam\x122.interactiongateway.v1.CreateMattermostTeamRequest\x1a3.interactiongateway.v1.CreateMattermostTeamResponse\x12y\n" +
@@ -1440,6 +1820,7 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\x18GetMattermostTeamBinding\x126.interactiongateway.v1.GetMattermostTeamBindingRequest\x1a7.interactiongateway.v1.GetMattermostTeamBindingResponse\x12\x7f\n" +
 	"\x14RelinkMattermostTeam\x122.interactiongateway.v1.RelinkMattermostTeamRequest\x1a3.interactiongateway.v1.RelinkMattermostTeamResponse\x12\x7f\n" +
 	"\x14UnlinkMattermostTeam\x122.interactiongateway.v1.UnlinkMattermostTeamRequest\x1a3.interactiongateway.v1.UnlinkMattermostTeamResponse\x12\xa6\x01\n" +
+	"!GetMattermostTeamMappingOperation\x12?.interactiongateway.v1.GetMattermostTeamMappingOperationRequest\x1a@.interactiongateway.v1.GetMattermostTeamMappingOperationResponse\x12\xa6\x01\n" +
 	"!GetMattermostTeamProviderReadback\x12?.interactiongateway.v1.GetMattermostTeamProviderReadbackRequest\x1a@.interactiongateway.v1.GetMattermostTeamProviderReadbackResponse\x12\x97\x01\n" +
 	"\x0eCheckReadiness\x12A.interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest\x1aB.interactiongateway.v1.MattermostTeamServiceCheckReadinessResponseBpZngithub.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1;interactiongatewayv1b\x06proto3"
 
@@ -1455,76 +1836,96 @@ func file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP() []byte {
 	return file_interactiongateway_v1_interaction_gateway_proto_rawDescData
 }
 
-var file_interactiongateway_v1_interaction_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_interactiongateway_v1_interaction_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_interactiongateway_v1_interaction_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_interactiongateway_v1_interaction_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_interactiongateway_v1_interaction_gateway_proto_goTypes = []any{
 	(MattermostTeamStatus)(0),                           // 0: interactiongateway.v1.MattermostTeamStatus
 	(MattermostTeamOperationState)(0),                   // 1: interactiongateway.v1.MattermostTeamOperationState
 	(WorkspaceMattermostMappingState)(0),                // 2: interactiongateway.v1.WorkspaceMattermostMappingState
-	(*MattermostTeamView)(nil),                          // 3: interactiongateway.v1.MattermostTeamView
-	(*MattermostTeamOperationView)(nil),                 // 4: interactiongateway.v1.MattermostTeamOperationView
-	(*WorkspaceMattermostTeamBindingView)(nil),          // 5: interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	(*ListMattermostTeamsRequest)(nil),                  // 6: interactiongateway.v1.ListMattermostTeamsRequest
-	(*ListMattermostTeamsResponse)(nil),                 // 7: interactiongateway.v1.ListMattermostTeamsResponse
-	(*CreateMattermostTeamRequest)(nil),                 // 8: interactiongateway.v1.CreateMattermostTeamRequest
-	(*CreateMattermostTeamResponse)(nil),                // 9: interactiongateway.v1.CreateMattermostTeamResponse
-	(*LinkMattermostTeamRequest)(nil),                   // 10: interactiongateway.v1.LinkMattermostTeamRequest
-	(*LinkMattermostTeamResponse)(nil),                  // 11: interactiongateway.v1.LinkMattermostTeamResponse
-	(*GetMattermostTeamBindingRequest)(nil),             // 12: interactiongateway.v1.GetMattermostTeamBindingRequest
-	(*GetMattermostTeamBindingResponse)(nil),            // 13: interactiongateway.v1.GetMattermostTeamBindingResponse
-	(*RelinkMattermostTeamRequest)(nil),                 // 14: interactiongateway.v1.RelinkMattermostTeamRequest
-	(*RelinkMattermostTeamResponse)(nil),                // 15: interactiongateway.v1.RelinkMattermostTeamResponse
-	(*UnlinkMattermostTeamRequest)(nil),                 // 16: interactiongateway.v1.UnlinkMattermostTeamRequest
-	(*UnlinkMattermostTeamResponse)(nil),                // 17: interactiongateway.v1.UnlinkMattermostTeamResponse
-	(*GetMattermostTeamProviderReadbackRequest)(nil),    // 18: interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
-	(*GetMattermostTeamProviderReadbackResponse)(nil),   // 19: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
-	(*MattermostTeamServiceCheckReadinessRequest)(nil),  // 20: interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
-	(*MattermostTeamServiceCheckReadinessResponse)(nil), // 21: interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
-	(*timestamppb.Timestamp)(nil),                       // 22: google.protobuf.Timestamp
+	(WorkspaceMattermostMappingAction)(0),               // 3: interactiongateway.v1.WorkspaceMattermostMappingAction
+	(WorkspaceMattermostMappingOperationState)(0),       // 4: interactiongateway.v1.WorkspaceMattermostMappingOperationState
+	(*MattermostTeamView)(nil),                          // 5: interactiongateway.v1.MattermostTeamView
+	(*MattermostTeamOperationView)(nil),                 // 6: interactiongateway.v1.MattermostTeamOperationView
+	(*WorkspaceMattermostTeamBindingView)(nil),          // 7: interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	(*WorkspaceMattermostMappingOperationView)(nil),     // 8: interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	(*ListMattermostTeamsRequest)(nil),                  // 9: interactiongateway.v1.ListMattermostTeamsRequest
+	(*ListMattermostTeamsResponse)(nil),                 // 10: interactiongateway.v1.ListMattermostTeamsResponse
+	(*CreateMattermostTeamRequest)(nil),                 // 11: interactiongateway.v1.CreateMattermostTeamRequest
+	(*CreateMattermostTeamResponse)(nil),                // 12: interactiongateway.v1.CreateMattermostTeamResponse
+	(*LinkMattermostTeamRequest)(nil),                   // 13: interactiongateway.v1.LinkMattermostTeamRequest
+	(*LinkMattermostTeamResponse)(nil),                  // 14: interactiongateway.v1.LinkMattermostTeamResponse
+	(*GetMattermostTeamBindingRequest)(nil),             // 15: interactiongateway.v1.GetMattermostTeamBindingRequest
+	(*GetMattermostTeamBindingResponse)(nil),            // 16: interactiongateway.v1.GetMattermostTeamBindingResponse
+	(*RelinkMattermostTeamRequest)(nil),                 // 17: interactiongateway.v1.RelinkMattermostTeamRequest
+	(*RelinkMattermostTeamResponse)(nil),                // 18: interactiongateway.v1.RelinkMattermostTeamResponse
+	(*UnlinkMattermostTeamRequest)(nil),                 // 19: interactiongateway.v1.UnlinkMattermostTeamRequest
+	(*UnlinkMattermostTeamResponse)(nil),                // 20: interactiongateway.v1.UnlinkMattermostTeamResponse
+	(*GetMattermostTeamMappingOperationRequest)(nil),    // 21: interactiongateway.v1.GetMattermostTeamMappingOperationRequest
+	(*GetMattermostTeamMappingOperationResponse)(nil),   // 22: interactiongateway.v1.GetMattermostTeamMappingOperationResponse
+	(*GetMattermostTeamProviderReadbackRequest)(nil),    // 23: interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
+	(*GetMattermostTeamProviderReadbackResponse)(nil),   // 24: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
+	(*MattermostTeamServiceCheckReadinessRequest)(nil),  // 25: interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
+	(*MattermostTeamServiceCheckReadinessResponse)(nil), // 26: interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
+	(*timestamppb.Timestamp)(nil),                       // 27: google.protobuf.Timestamp
 }
 var file_interactiongateway_v1_interaction_gateway_proto_depIdxs = []int32{
 	0,  // 0: interactiongateway.v1.MattermostTeamView.status:type_name -> interactiongateway.v1.MattermostTeamStatus
-	22, // 1: interactiongateway.v1.MattermostTeamView.created_at:type_name -> google.protobuf.Timestamp
-	22, // 2: interactiongateway.v1.MattermostTeamView.updated_at:type_name -> google.protobuf.Timestamp
-	22, // 3: interactiongateway.v1.MattermostTeamView.observed_at:type_name -> google.protobuf.Timestamp
+	27, // 1: interactiongateway.v1.MattermostTeamView.created_at:type_name -> google.protobuf.Timestamp
+	27, // 2: interactiongateway.v1.MattermostTeamView.updated_at:type_name -> google.protobuf.Timestamp
+	27, // 3: interactiongateway.v1.MattermostTeamView.observed_at:type_name -> google.protobuf.Timestamp
 	1,  // 4: interactiongateway.v1.MattermostTeamOperationView.state:type_name -> interactiongateway.v1.MattermostTeamOperationState
-	3,  // 5: interactiongateway.v1.MattermostTeamOperationView.team:type_name -> interactiongateway.v1.MattermostTeamView
-	22, // 6: interactiongateway.v1.MattermostTeamOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
-	22, // 7: interactiongateway.v1.MattermostTeamOperationView.created_at:type_name -> google.protobuf.Timestamp
-	22, // 8: interactiongateway.v1.MattermostTeamOperationView.updated_at:type_name -> google.protobuf.Timestamp
+	5,  // 5: interactiongateway.v1.MattermostTeamOperationView.team:type_name -> interactiongateway.v1.MattermostTeamView
+	27, // 6: interactiongateway.v1.MattermostTeamOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
+	27, // 7: interactiongateway.v1.MattermostTeamOperationView.created_at:type_name -> google.protobuf.Timestamp
+	27, // 8: interactiongateway.v1.MattermostTeamOperationView.updated_at:type_name -> google.protobuf.Timestamp
 	2,  // 9: interactiongateway.v1.WorkspaceMattermostTeamBindingView.state:type_name -> interactiongateway.v1.WorkspaceMattermostMappingState
-	3,  // 10: interactiongateway.v1.WorkspaceMattermostTeamBindingView.team:type_name -> interactiongateway.v1.MattermostTeamView
-	22, // 11: interactiongateway.v1.WorkspaceMattermostTeamBindingView.provider_observed_at:type_name -> google.protobuf.Timestamp
-	22, // 12: interactiongateway.v1.WorkspaceMattermostTeamBindingView.updated_at:type_name -> google.protobuf.Timestamp
-	3,  // 13: interactiongateway.v1.ListMattermostTeamsResponse.teams:type_name -> interactiongateway.v1.MattermostTeamView
-	4,  // 14: interactiongateway.v1.CreateMattermostTeamResponse.operation:type_name -> interactiongateway.v1.MattermostTeamOperationView
-	5,  // 15: interactiongateway.v1.CreateMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	5,  // 16: interactiongateway.v1.LinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	5,  // 17: interactiongateway.v1.GetMattermostTeamBindingResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	5,  // 18: interactiongateway.v1.RelinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	5,  // 19: interactiongateway.v1.UnlinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	3,  // 20: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse.team:type_name -> interactiongateway.v1.MattermostTeamView
-	6,  // 21: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:input_type -> interactiongateway.v1.ListMattermostTeamsRequest
-	8,  // 22: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:input_type -> interactiongateway.v1.CreateMattermostTeamRequest
-	10, // 23: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:input_type -> interactiongateway.v1.LinkMattermostTeamRequest
-	12, // 24: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:input_type -> interactiongateway.v1.GetMattermostTeamBindingRequest
-	14, // 25: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:input_type -> interactiongateway.v1.RelinkMattermostTeamRequest
-	16, // 26: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:input_type -> interactiongateway.v1.UnlinkMattermostTeamRequest
-	18, // 27: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:input_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
-	20, // 28: interactiongateway.v1.MattermostTeamService.CheckReadiness:input_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
-	7,  // 29: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:output_type -> interactiongateway.v1.ListMattermostTeamsResponse
-	9,  // 30: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:output_type -> interactiongateway.v1.CreateMattermostTeamResponse
-	11, // 31: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:output_type -> interactiongateway.v1.LinkMattermostTeamResponse
-	13, // 32: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:output_type -> interactiongateway.v1.GetMattermostTeamBindingResponse
-	15, // 33: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:output_type -> interactiongateway.v1.RelinkMattermostTeamResponse
-	17, // 34: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:output_type -> interactiongateway.v1.UnlinkMattermostTeamResponse
-	19, // 35: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:output_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
-	21, // 36: interactiongateway.v1.MattermostTeamService.CheckReadiness:output_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
-	29, // [29:37] is the sub-list for method output_type
-	21, // [21:29] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	5,  // 10: interactiongateway.v1.WorkspaceMattermostTeamBindingView.team:type_name -> interactiongateway.v1.MattermostTeamView
+	27, // 11: interactiongateway.v1.WorkspaceMattermostTeamBindingView.provider_observed_at:type_name -> google.protobuf.Timestamp
+	27, // 12: interactiongateway.v1.WorkspaceMattermostTeamBindingView.updated_at:type_name -> google.protobuf.Timestamp
+	3,  // 13: interactiongateway.v1.WorkspaceMattermostMappingOperationView.action:type_name -> interactiongateway.v1.WorkspaceMattermostMappingAction
+	4,  // 14: interactiongateway.v1.WorkspaceMattermostMappingOperationView.state:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationState
+	27, // 15: interactiongateway.v1.WorkspaceMattermostMappingOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
+	27, // 16: interactiongateway.v1.WorkspaceMattermostMappingOperationView.recovery_deadline:type_name -> google.protobuf.Timestamp
+	27, // 17: interactiongateway.v1.WorkspaceMattermostMappingOperationView.created_at:type_name -> google.protobuf.Timestamp
+	27, // 18: interactiongateway.v1.WorkspaceMattermostMappingOperationView.updated_at:type_name -> google.protobuf.Timestamp
+	7,  // 19: interactiongateway.v1.WorkspaceMattermostMappingOperationView.result:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	5,  // 20: interactiongateway.v1.ListMattermostTeamsResponse.teams:type_name -> interactiongateway.v1.MattermostTeamView
+	6,  // 21: interactiongateway.v1.CreateMattermostTeamResponse.operation:type_name -> interactiongateway.v1.MattermostTeamOperationView
+	7,  // 22: interactiongateway.v1.CreateMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	8,  // 23: interactiongateway.v1.CreateMattermostTeamResponse.mapping_operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	7,  // 24: interactiongateway.v1.LinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	8,  // 25: interactiongateway.v1.LinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	7,  // 26: interactiongateway.v1.GetMattermostTeamBindingResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	7,  // 27: interactiongateway.v1.RelinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	8,  // 28: interactiongateway.v1.RelinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	7,  // 29: interactiongateway.v1.UnlinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	8,  // 30: interactiongateway.v1.UnlinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	3,  // 31: interactiongateway.v1.GetMattermostTeamMappingOperationRequest.action:type_name -> interactiongateway.v1.WorkspaceMattermostMappingAction
+	8,  // 32: interactiongateway.v1.GetMattermostTeamMappingOperationResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	5,  // 33: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse.team:type_name -> interactiongateway.v1.MattermostTeamView
+	9,  // 34: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:input_type -> interactiongateway.v1.ListMattermostTeamsRequest
+	11, // 35: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:input_type -> interactiongateway.v1.CreateMattermostTeamRequest
+	13, // 36: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:input_type -> interactiongateway.v1.LinkMattermostTeamRequest
+	15, // 37: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:input_type -> interactiongateway.v1.GetMattermostTeamBindingRequest
+	17, // 38: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:input_type -> interactiongateway.v1.RelinkMattermostTeamRequest
+	19, // 39: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:input_type -> interactiongateway.v1.UnlinkMattermostTeamRequest
+	21, // 40: interactiongateway.v1.MattermostTeamService.GetMattermostTeamMappingOperation:input_type -> interactiongateway.v1.GetMattermostTeamMappingOperationRequest
+	23, // 41: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:input_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
+	25, // 42: interactiongateway.v1.MattermostTeamService.CheckReadiness:input_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
+	10, // 43: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:output_type -> interactiongateway.v1.ListMattermostTeamsResponse
+	12, // 44: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:output_type -> interactiongateway.v1.CreateMattermostTeamResponse
+	14, // 45: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:output_type -> interactiongateway.v1.LinkMattermostTeamResponse
+	16, // 46: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:output_type -> interactiongateway.v1.GetMattermostTeamBindingResponse
+	18, // 47: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:output_type -> interactiongateway.v1.RelinkMattermostTeamResponse
+	20, // 48: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:output_type -> interactiongateway.v1.UnlinkMattermostTeamResponse
+	22, // 49: interactiongateway.v1.MattermostTeamService.GetMattermostTeamMappingOperation:output_type -> interactiongateway.v1.GetMattermostTeamMappingOperationResponse
+	24, // 50: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:output_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
+	26, // 51: interactiongateway.v1.MattermostTeamService.CheckReadiness:output_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
+	43, // [43:52] is the sub-list for method output_type
+	34, // [34:43] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_interactiongateway_v1_interaction_gateway_proto_init() }
@@ -1537,8 +1938,8 @@ func file_interactiongateway_v1_interaction_gateway_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_interactiongateway_v1_interaction_gateway_proto_rawDesc), len(file_interactiongateway_v1_interaction_gateway_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   19,
+			NumEnums:      5,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

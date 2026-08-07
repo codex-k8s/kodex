@@ -117,6 +117,23 @@ func (service *Service) Check(ctx context.Context) error {
 		if err != nil || mapping.State != "BOUND" || team.Status != enum.MattermostTeamActive {
 			return errors.New("Workspace Mattermost mapping working path is not ready")
 		}
+		routes, err := service.provider.BuildRuntimeRoutes(ctx, binding.Principal, mapping.ProviderTeamID)
+		if err != nil {
+			return errors.New("Workspace Mattermost joined route is not ready")
+		}
+		mappingDigest := mappingStateDigest(mapping)
+		for index := range routes {
+			routes[index].MappingID, routes[index].MappingVersion = mapping.ID, mapping.Version
+			routes[index].MappingGeneration, routes[index].MappingDigestSHA256 = mapping.Generation, mappingDigest
+		}
+		if err := service.repository.ReconcileRuntimeRoutes(ctx, binding.Principal, mapping, routes); err != nil {
+			return errors.New("Workspace Mattermost joined route is not ready")
+		}
+		admission, err := service.repository.GetRuntimeAdmission(ctx, binding.Principal, mapping.ProviderTeamID)
+		if err != nil || admission.MappingID != mapping.ID || admission.MappingVersion != mapping.Version ||
+			admission.MappingGeneration != mapping.Generation || admission.MappingDigestSHA256 != mappingStateDigest(mapping) {
+			return errors.New("Workspace Mattermost joined route is not ready")
+		}
 	}
 	return nil
 }
@@ -155,6 +172,21 @@ func (service *Service) List(ctx context.Context, principal entity.TeamPrincipal
 func (service *Service) CreateAndBind(ctx context.Context, principal entity.TeamPrincipal,
 	displayName, slugIntent, idempotencyKey string,
 ) (entity.MattermostTeamOperation, entity.WorkspaceMattermostBinding, error) {
+	intent, normalizeErr := normalizeCreateIntent(displayName, slugIntent, idempotencyKey)
+	if normalizeErr != nil || validatePrincipal(principal) != nil || !validUUID(idempotencyKey) {
+		return entity.MattermostTeamOperation{}, entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnauthorized
+	}
+	requestSHA := mappingRequestDigest(principal, "bind", intent.DisplayName, intent.Slug)
+	if replay, found, replayErr := service.replayMapping(ctx, principal, "bind", idempotencyKey, requestSHA); found || replayErr != nil {
+		if replay.Operation.CreateOperationID == "" {
+			return entity.MattermostTeamOperation{}, replay, replayErr
+		}
+		operation, readErr := service.repository.GetCreateOperation(ctx, principal, replay.Operation.CreateOperationID)
+		if readErr != nil {
+			return entity.MattermostTeamOperation{}, replay, domainerrs.ErrUnavailable
+		}
+		return operation, replay, replayErr
+	}
 	current, exists, err := service.currentMapping(ctx, principal)
 	if err != nil {
 		return entity.MattermostTeamOperation{}, entity.WorkspaceMattermostBinding{}, mapMappingError(err)
@@ -167,7 +199,7 @@ func (service *Service) CreateAndBind(ctx context.Context, principal entity.Team
 		return operation, entity.WorkspaceMattermostBinding{}, err
 	}
 	binding, err := service.beginMapping(ctx, principal, "bind", operation.Team, "", 0, 0,
-		operation.Team.DisplayName, idempotencyKey)
+		operation.Team.DisplayName, idempotencyKey, requestSHA, operation.ID)
 	return operation, binding, err
 }
 
@@ -176,6 +208,10 @@ func (service *Service) Link(ctx context.Context, principal entity.TeamPrincipal
 ) (entity.WorkspaceMattermostBinding, error) {
 	if validatePrincipal(principal) != nil || !validUUID(selector) || !validUUID(idempotencyKey) {
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnauthorized
+	}
+	requestSHA := mappingRequestDigest(principal, "bind", selector)
+	if replay, found, err := service.replayMapping(ctx, principal, "bind", idempotencyKey, requestSHA); found || err != nil {
+		return replay, err
 	}
 	if _, exists, err := service.currentMapping(ctx, principal); err != nil {
 		return entity.WorkspaceMattermostBinding{}, mapMappingError(err)
@@ -189,7 +225,7 @@ func (service *Service) Link(ctx context.Context, principal entity.TeamPrincipal
 	if team.Status != enum.MattermostTeamActive {
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
 	}
-	return service.beginMapping(ctx, principal, "bind", team, "", 0, 0, team.DisplayName, idempotencyKey)
+	return service.beginMapping(ctx, principal, "bind", team, "", 0, 0, team.DisplayName, idempotencyKey, requestSHA, "")
 }
 
 func (service *Service) GetBinding(ctx context.Context, principal entity.TeamPrincipal) (entity.WorkspaceMattermostBinding, error) {
@@ -211,12 +247,56 @@ func (service *Service) GetBinding(ctx context.Context, principal entity.TeamPri
 	return entity.WorkspaceMattermostBinding{Mapping: mapping, Team: team}, nil
 }
 
+// GetMappingOperation возвращает только owner-scoped durable outcome. Raw
+// provider identity и внутренний error transport caster не публикует.
+func (service *Service) GetMappingOperation(ctx context.Context, principal entity.TeamPrincipal,
+	action, idempotencyKey string,
+) (entity.WorkspaceMappingOperation, error) {
+	if validatePrincipal(principal) != nil || !validMappingAction(action) || !validUUID(idempotencyKey) {
+		return entity.WorkspaceMappingOperation{}, domainerrs.ErrUnauthorized
+	}
+	operation, err := service.repository.GetMappingOperation(ctx, principal, action, idempotencyKey)
+	if err != nil {
+		return entity.WorkspaceMappingOperation{}, mapRepositoryError(err)
+	}
+	return operation, nil
+}
+
+func (service *Service) replayMapping(ctx context.Context, principal entity.TeamPrincipal,
+	action, idempotencyKey, requestSHA string,
+) (entity.WorkspaceMattermostBinding, bool, error) {
+	operation, err := service.repository.GetMappingOperation(ctx, principal, action, idempotencyKey)
+	if errors.Is(err, domainrepo.ErrNotFound) {
+		return entity.WorkspaceMattermostBinding{}, false, nil
+	}
+	if err != nil {
+		return entity.WorkspaceMattermostBinding{}, true, mapRepositoryError(err)
+	}
+	if operation.RequestSHA256 != requestSHA {
+		return entity.WorkspaceMattermostBinding{}, true, domainerrs.ErrConflict
+	}
+	switch operation.State {
+	case enum.WorkspaceMappingOperationBound, enum.WorkspaceMappingOperationUnlinked:
+		return entity.WorkspaceMattermostBinding{
+			Mapping: operation.Result, Team: operation.Team, Operation: operation,
+		}, true, nil
+	case enum.WorkspaceMappingOperationRepairRequired:
+		return entity.WorkspaceMattermostBinding{Operation: operation}, true, domainerrs.ErrConflict
+	default:
+		return entity.WorkspaceMattermostBinding{Operation: operation}, true, domainerrs.ErrUnavailable
+	}
+}
+
 func (service *Service) Relink(ctx context.Context, principal entity.TeamPrincipal, selector string,
 	expectedVersion, expectedGeneration uint64, idempotencyKey string,
 ) (entity.WorkspaceMattermostBinding, error) {
 	if validatePrincipal(principal) != nil || !validUUID(selector) || !validUUID(idempotencyKey) ||
 		expectedVersion == 0 || expectedGeneration == 0 {
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnauthorized
+	}
+	requestSHA := mappingRequestDigest(principal, "relink", selector, fmt.Sprint(expectedVersion), fmt.Sprint(expectedGeneration))
+	if replay, found, err := service.replayMapping(ctx, principal, "relink", idempotencyKey, requestSHA); found || err != nil {
+		return replay, err
 	}
 	current, exists, err := service.currentMapping(ctx, principal)
 	if err != nil {
@@ -233,7 +313,7 @@ func (service *Service) Relink(ctx context.Context, principal entity.TeamPrincip
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
 	}
 	return service.beginMapping(ctx, principal, "relink", team, current.ID,
-		expectedVersion, expectedGeneration, "", idempotencyKey)
+		expectedVersion, expectedGeneration, "", idempotencyKey, requestSHA, "")
 }
 
 func (service *Service) Unlink(ctx context.Context, principal entity.TeamPrincipal,
@@ -241,6 +321,10 @@ func (service *Service) Unlink(ctx context.Context, principal entity.TeamPrincip
 ) (entity.WorkspaceMattermostBinding, error) {
 	if validatePrincipal(principal) != nil || !validUUID(idempotencyKey) || expectedVersion == 0 || expectedGeneration == 0 {
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnauthorized
+	}
+	requestSHA := mappingRequestDigest(principal, "unlink", fmt.Sprint(expectedVersion), fmt.Sprint(expectedGeneration))
+	if replay, found, err := service.replayMapping(ctx, principal, "unlink", idempotencyKey, requestSHA); found || err != nil {
+		return replay, err
 	}
 	current, exists, err := service.currentMapping(ctx, principal)
 	if err != nil {
@@ -258,7 +342,7 @@ func (service *Service) Unlink(ctx context.Context, principal entity.TeamPrincip
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
 	}
 	return service.beginMapping(ctx, principal, "unlink", team, current.ID,
-		expectedVersion, expectedGeneration, "", idempotencyKey)
+		expectedVersion, expectedGeneration, "", idempotencyKey, requestSHA, "")
 }
 
 // RequireBoundTeam — общий fail-closed gate для inbound и delivery.
@@ -279,6 +363,12 @@ func (service *Service) RequireBoundTeam(ctx context.Context, principal entity.T
 	if !exists || mapping.State != "BOUND" || mapping.ProviderTeamID != providerTeamID {
 		return entity.WorkspaceMattermostMapping{}, domainerrs.ErrUnauthorized
 	}
+	admission, err := service.repository.GetRuntimeAdmission(ctx, principal, providerTeamID)
+	if err != nil || admission.MappingID != mapping.ID || admission.MappingVersion != mapping.Version ||
+		admission.MappingGeneration != mapping.Generation || admission.ProviderTeamID != mapping.ProviderTeamID ||
+		admission.MappingDigestSHA256 != mappingStateDigest(mapping) {
+		return entity.WorkspaceMattermostMapping{}, domainerrs.ErrUnauthorized
+	}
 	return mapping, nil
 }
 
@@ -294,11 +384,8 @@ func (service *Service) ProcessMappingRecovery(ctx context.Context) (bool, error
 
 func (service *Service) beginMapping(ctx context.Context, principal entity.TeamPrincipal, action string,
 	team entity.MattermostTeam, mappingID string, expectedVersion, expectedGeneration uint64,
-	displayName, idempotencyKey string,
+	displayName, idempotencyKey, requestSHA, createOperationID string,
 ) (entity.WorkspaceMattermostBinding, error) {
-	requestSHA := digestValues("workspace-mattermost-mapping-v1", principal.ActorID, principal.OrganizationID,
-		principal.ProjectID, action, mappingID, fmt.Sprint(expectedVersion), fmt.Sprint(expectedGeneration),
-		displayName, team.ProviderTeamID, team.ProviderSnapshotSHA256)
 	operation := entity.WorkspaceMappingOperation{
 		ID: uuid.NewSHA1(mappingOperationNamespace, []byte(strings.Join([]string{
 			principal.OrganizationID,
@@ -307,8 +394,10 @@ func (service *Service) beginMapping(ctx context.Context, principal entity.TeamP
 		Principal: principal, Action: action, IdempotencyKey: idempotencyKey, RequestSHA256: requestSHA,
 		MappingID: mappingID, ExpectedVersion: expectedVersion, ExpectedGeneration: expectedGeneration,
 		DisplayName: displayName, Team: team, State: enum.WorkspaceMappingOperationPending,
+		CreateOperationID: createOperationID,
 	}
-	stored, disposition, err := service.repository.BeginMapping(ctx, operation, service.config.InstanceID, service.config.Lease)
+	stored, disposition, err := service.repository.BeginMapping(ctx, operation, service.config.InstanceID,
+		service.config.Lease, service.config.RecoveryWindow)
 	if err != nil {
 		return entity.WorkspaceMattermostBinding{}, mapRepositoryError(err)
 	}
@@ -330,7 +419,7 @@ func (service *Service) beginMapping(ctx context.Context, principal entity.TeamP
 		if readErr != nil {
 			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
 		}
-		return entity.WorkspaceMattermostBinding{Mapping: stored.Result, Team: team}, nil
+		return entity.WorkspaceMattermostBinding{Mapping: stored.Result, Team: team, Operation: stored}, nil
 	}
 	return service.executeMapping(ctx, stored)
 }
@@ -338,15 +427,43 @@ func (service *Service) beginMapping(ctx context.Context, principal entity.TeamP
 func (service *Service) executeMapping(ctx context.Context,
 	operation entity.WorkspaceMappingOperation,
 ) (entity.WorkspaceMattermostBinding, error) {
+	// Fresh exact Team+owner membership precede every owner readback/retry and
+	// the new one-use Manage receipt. This closes deleted/lost membership before
+	// any control-plane effect.
+	freshTeam, providerErr := service.provider.ReadTeam(ctx, operation.Principal, operation.Team.ProviderTeamID)
+	if providerErr != nil {
+		if !exactProviderEligibilityError(providerErr) {
+			return entity.WorkspaceMattermostBinding{}, service.mappingAmbiguous(ctx, operation, providerErr)
+		}
+		if err := service.repository.MarkMappingRepairRequired(ctx, operation, "PROVIDER_ELIGIBILITY_LOST"); err != nil {
+			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+		}
+		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
+	}
+	if freshTeam.Status != enum.MattermostTeamActive {
+		if err := service.repository.MarkMappingRepairRequired(ctx, operation, "PROVIDER_ELIGIBILITY_LOST"); err != nil {
+			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+		}
+		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
+	}
+	operation.Team = freshTeam
+	if operation.Action != "unlink" {
+		if _, routeErr := service.provider.BuildRuntimeRoutes(ctx, operation.Principal, freshTeam.ProviderTeamID); routeErr != nil {
+			if !exactProviderEligibilityError(routeErr) {
+				return entity.WorkspaceMattermostBinding{}, service.mappingAmbiguous(ctx, operation, routeErr)
+			}
+			if err := service.repository.MarkMappingRepairRequired(ctx, operation, "PROVIDER_ROUTE_UNAVAILABLE"); err != nil {
+				return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+			}
+			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
+		}
+	}
 	current, exists, readErr := service.currentMapping(ctx, operation.Principal)
 	if readErr != nil {
 		return entity.WorkspaceMattermostBinding{}, service.mappingAmbiguous(ctx, operation, readErr)
 	}
 	if mappingTerminal(operation, current, exists) {
-		if err := service.repository.MarkMappingTerminal(ctx, operation, current); err != nil {
-			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
-		}
-		return entity.WorkspaceMattermostBinding{Mapping: current, Team: operation.Team}, nil
+		return service.finalizeMapping(ctx, operation, current)
 	}
 	if !mappingPredecessor(operation, current, exists) {
 		if err := service.repository.MarkMappingRepairRequired(ctx, operation, "OWNER_STATE_CONFLICT"); err != nil {
@@ -354,23 +471,13 @@ func (service *Service) executeMapping(ctx context.Context,
 		}
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
 	}
-	if operation.State == enum.WorkspaceMappingOperationAmbiguous &&
-		(operation.CreatedAt.IsZero() || !time.Now().Before(operation.CreatedAt.Add(service.config.RecoveryWindow))) {
-		if err := service.repository.MarkMappingRepairRequired(ctx, operation, "RECOVERY_TIMEOUT"); err != nil {
-			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
-		}
-		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
+	// Каждый новый one-use JTI опирается на fresh exact Team/member readback.
+	// Потерянная membership или удалённый Team закрыто останавливают owner RPC.
+	prepared, prepareErr := service.repository.PrepareMappingAttempt(ctx, operation, freshTeam, service.config.RecoveryWindow)
+	if prepareErr != nil {
+		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
 	}
-	// Одноразовый receipt предыдущей неоднозначной попытки нельзя повторять.
-	// Только доказанный owner predecessor разрешает выпустить новый JTI и
-	// monotonic generation перед повтором той же semantic command.
-	if operation.State == enum.WorkspaceMappingOperationAmbiguous {
-		refreshed, refreshErr := service.repository.RefreshMappingReceipt(ctx, operation)
-		if refreshErr != nil {
-			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
-		}
-		operation = refreshed
-	}
+	operation = prepared
 	intentSHA, err := controlplanecontract.WorkspaceMattermostMappingIntentSHA256(
 		controlplanecontract.WorkspaceMattermostMappingIntent{
 			ActorID: operation.Principal.ActorID, OrganizationID: operation.Principal.OrganizationID,
@@ -408,11 +515,11 @@ func (service *Service) executeMapping(ctx context.Context,
 	if err != nil {
 		if errors.Is(err, domaincontrol.ErrConflict) || errors.Is(err, domaincontrol.ErrNotFound) {
 			readback, found, retryErr := service.currentMapping(ctx, operation.Principal)
+			if retryErr != nil {
+				return entity.WorkspaceMattermostBinding{}, service.mappingAmbiguous(ctx, operation, retryErr)
+			}
 			if retryErr == nil && mappingTerminal(operation, readback, found) {
-				if saveErr := service.repository.MarkMappingTerminal(ctx, operation, readback); saveErr != nil {
-					return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
-				}
-				return entity.WorkspaceMattermostBinding{Mapping: readback, Team: operation.Team}, nil
+				return service.finalizeMapping(ctx, operation, readback)
 			}
 			if saveErr := service.repository.MarkMappingRepairRequired(ctx, operation, "OWNER_STATE_CONFLICT"); saveErr != nil {
 				return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
@@ -427,20 +534,78 @@ func (service *Service) executeMapping(ctx context.Context,
 		}
 		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
 	}
-	if err := service.repository.MarkMappingTerminal(ctx, operation, managed); err != nil {
-		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
-	}
 	service.metrics.ObserveExternalEffect("workspace_mapping_"+operation.Action, "success")
-	return entity.WorkspaceMattermostBinding{Mapping: managed, Team: operation.Team}, nil
+	return service.finalizeMapping(ctx, operation, managed)
 }
 
 func (service *Service) mappingAmbiguous(ctx context.Context, operation entity.WorkspaceMappingOperation, _ error) error {
-	if err := service.repository.MarkMappingAmbiguous(ctx, operation, "OWNER_OUTCOME_UNKNOWN",
-		time.Now().Add(service.config.RecoveryInterval)); err != nil {
+	deferred, err := service.repository.DeferMappingRecovery(ctx, operation, "OWNER_OUTCOME_UNKNOWN",
+		service.config.RecoveryInterval)
+	if err != nil {
 		return domainerrs.ErrUnavailable
 	}
 	service.metrics.ObserveExternalEffect("workspace_mapping_"+operation.Action, "ambiguous")
+	if deferred.State == enum.WorkspaceMappingOperationRepairRequired {
+		return domainerrs.ErrConflict
+	}
 	return domainerrs.ErrUnavailable
+}
+
+func (service *Service) finalizeMapping(ctx context.Context, operation entity.WorkspaceMappingOperation,
+	mapping entity.WorkspaceMattermostMapping,
+) (entity.WorkspaceMattermostBinding, error) {
+	freshTeam, err := service.provider.ReadTeam(ctx, operation.Principal, operation.Team.ProviderTeamID)
+	if err != nil {
+		if !exactProviderEligibilityError(err) {
+			return entity.WorkspaceMattermostBinding{}, service.mappingAmbiguous(ctx, operation, err)
+		}
+		if saveErr := service.repository.MarkMappingRepairRequired(ctx, operation, "PROVIDER_ELIGIBILITY_LOST"); saveErr != nil {
+			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+		}
+		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
+	}
+	if freshTeam.Status != enum.MattermostTeamActive {
+		if saveErr := service.repository.MarkMappingRepairRequired(ctx, operation, "PROVIDER_ELIGIBILITY_LOST"); saveErr != nil {
+			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+		}
+		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
+	}
+	routes := []entity.MattermostRuntimeRoute(nil)
+	if mapping.State == "BOUND" {
+		routes, err = service.provider.BuildRuntimeRoutes(ctx, operation.Principal, mapping.ProviderTeamID)
+		if err != nil {
+			if !exactProviderEligibilityError(err) {
+				return entity.WorkspaceMattermostBinding{}, service.mappingAmbiguous(ctx, operation, err)
+			}
+			if saveErr := service.repository.MarkMappingRepairRequired(ctx, operation, "PROVIDER_ROUTE_UNAVAILABLE"); saveErr != nil {
+				return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+			}
+			return entity.WorkspaceMattermostBinding{}, domainerrs.ErrConflict
+		}
+		mappingDigest := mappingStateDigest(mapping)
+		for index := range routes {
+			routes[index].MappingID = mapping.ID
+			routes[index].MappingVersion = mapping.Version
+			routes[index].MappingGeneration = mapping.Generation
+			routes[index].MappingDigestSHA256 = mappingDigest
+		}
+	}
+	operation.Team = freshTeam
+	if err := service.repository.MarkMappingTerminal(ctx, operation, mapping, routes); err != nil {
+		return entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+	}
+	operation.Result = mapping
+	operation.State = enum.WorkspaceMappingOperationBound
+	if mapping.State == "UNLINKED" {
+		operation.State = enum.WorkspaceMappingOperationUnlinked
+	}
+	return entity.WorkspaceMattermostBinding{Mapping: mapping, Team: freshTeam, Operation: operation}, nil
+}
+
+func exactProviderEligibilityError(err error) bool {
+	return errors.Is(err, domainmattermost.ErrTeamNotFound) ||
+		errors.Is(err, domainmattermost.ErrTeamForbidden) ||
+		errors.Is(err, domainmattermost.ErrTeamConflict)
 }
 
 func (service *Service) currentMapping(ctx context.Context,
@@ -605,7 +770,14 @@ func (service *Service) Create(ctx context.Context, principal entity.TeamPrincip
 		Intent:    intent,
 		State:     enum.TeamOperationPending,
 	}
-	operation, disposition, err := service.repository.BeginCreate(ctx, operation, service.config.InstanceID, service.config.Lease)
+	operation.Intent.ProviderCorrelation = uuid.NewString()
+	// Provider slug — operation-bound unique identity. Он не входит в
+	// semantic request digest: exact replay получает первый durable intent,
+	// а чужой объект с предсказуемым пользовательским slug не может быть
+	// принят после потери ответа CreateTeam.
+	operation.Intent.Slug = providerOperationSlug(operation.Intent.Slug, operation.Intent.ProviderCorrelation)
+	operation, disposition, err := service.repository.BeginCreate(ctx, operation, service.config.InstanceID,
+		service.config.Lease, service.config.RecoveryWindow)
 	if err != nil {
 		return entity.MattermostTeamOperation{}, mapRepositoryError(err)
 	}
@@ -648,31 +820,22 @@ func (service *Service) ProcessRecovery(ctx context.Context) (bool, error) {
 		service.metrics.ObserveTeamOperation("recovery", outcome)
 		return true, acceptErr
 	}
-	if errors.Is(recoverErr, domainmattermost.ErrTeamNotFound) && time.Now().Before(operation.EffectStartedAt.Add(service.config.RecoveryWindow)) {
-		err = service.repository.MarkAmbiguous(ctx, operation, failureProviderOutcomeUnknown, time.Now().Add(service.config.RecoveryInterval))
-		outcome := "retry"
-		if err != nil {
-			outcome = "failure"
-		}
-		service.metrics.ObserveTeamOperation("recovery", outcome)
-		return true, err
-	}
-	if errors.Is(recoverErr, domainmattermost.ErrTeamForbidden) && time.Now().Before(operation.EffectStartedAt.Add(service.config.RecoveryWindow)) {
-		err = service.repository.MarkAmbiguous(ctx, operation, failureProviderReadbackUnavailable, time.Now().Add(service.config.RecoveryInterval))
-		outcome := "retry"
-		if err != nil {
-			outcome = "failure"
-		}
-		service.metrics.ObserveTeamOperation("recovery", outcome)
-		return true, err
-	}
-	code := "RECOVERY_TIMEOUT"
 	if errors.Is(recoverErr, domainmattermost.ErrTeamConflict) {
-		code = "PROVIDER_STATE_CONFLICT"
+		err = service.repository.MarkRepairRequired(ctx, operation, "PROVIDER_STATE_CONFLICT")
+		service.metrics.ObserveTeamOperation("recovery", "failure")
+		return true, err
 	}
-	err = service.repository.MarkRepairRequired(ctx, operation, code)
-	service.metrics.ObserveTeamOperation("recovery", "failure")
-	return true, err
+	code := failureProviderReadbackUnavailable
+	if errors.Is(recoverErr, domainmattermost.ErrTeamNotFound) {
+		code = failureProviderOutcomeUnknown
+	}
+	deferred, deferErr := service.repository.DeferCreateRecovery(ctx, operation, code, service.config.RecoveryInterval)
+	outcome := "retry"
+	if deferErr != nil || deferred.State == enum.TeamOperationRepairRequired {
+		outcome = "failure"
+	}
+	service.metrics.ObserveTeamOperation("recovery", outcome)
+	return true, deferErr
 }
 
 func (service *Service) executeCreate(ctx context.Context, operation entity.MattermostTeamOperation) (entity.MattermostTeamOperation, error) {
@@ -697,28 +860,49 @@ func (service *Service) executeCreate(ctx context.Context, operation entity.Matt
 		service.metrics.ObserveTeamOperation("create", "failure")
 		return started, nil
 	}
-	if err := service.repository.MarkAmbiguous(ctx, started, failureProviderOutcomeUnknown, time.Now().Add(service.config.RecoveryInterval)); err != nil {
+	deferred, err := service.repository.DeferCreateRecovery(ctx, started, failureProviderOutcomeUnknown,
+		service.config.RecoveryInterval)
+	if err != nil {
 		return entity.MattermostTeamOperation{}, domainerrs.ErrUnavailable
 	}
-	started.State, started.FailureCode = enum.TeamOperationAmbiguous, failureProviderOutcomeUnknown
-	started.RetryNotBefore, started.LeaseToken = time.Now().Add(service.config.RecoveryInterval), ""
 	service.metrics.ObserveExternalEffect("create_team", "ambiguous")
 	service.metrics.ObserveTeamOperation("create", "retry")
-	return started, nil
+	return deferred, nil
 }
 
 func (service *Service) accept(ctx context.Context, operation entity.MattermostTeamOperation, team entity.MattermostTeam) (entity.MattermostTeamOperation, error) {
+	expectedCausality := digestValues("mattermost-team-create-proof-v1", operation.Intent.ProviderCorrelation,
+		team.ProviderTeamID, team.CreatedAt.UTC().Format(time.RFC3339Nano))
 	if team.ProviderTeamID == "" || team.ProviderSnapshotSHA256 == "" || team.Slug != operation.Intent.Slug ||
 		team.DisplayName != operation.Intent.DisplayName || team.Status != enum.MattermostTeamActive ||
-		(!operation.EffectStartedAt.IsZero() && team.CreatedAt.Before(operation.EffectStartedAt.Add(-2*time.Second))) {
+		team.ProviderCausalitySHA256 == "" || team.ProviderCausalitySHA256 != expectedCausality {
 		if err := service.repository.MarkRepairRequired(ctx, operation, failureProviderReadbackMismatch); err != nil {
 			return entity.MattermostTeamOperation{}, domainerrs.ErrUnavailable
 		}
 		operation.State, operation.FailureCode = enum.TeamOperationRepairRequired, failureProviderReadbackMismatch
 		return operation, nil
 	}
+	ownedTeam, ownerErr := service.provider.EnsureCreatedTeamOwner(ctx, operation.Principal, operation.Intent,
+		team.ProviderTeamID)
+	if errors.Is(ownerErr, domainmattermost.ErrTeamConflict) {
+		if err := service.repository.MarkRepairRequired(ctx, operation, failureProviderReadbackMismatch); err != nil {
+			return entity.MattermostTeamOperation{}, domainerrs.ErrUnavailable
+		}
+		operation.State, operation.FailureCode = enum.TeamOperationRepairRequired, failureProviderReadbackMismatch
+		return operation, nil
+	}
+	if ownerErr != nil || ownedTeam.ProviderCausalitySHA256 != expectedCausality ||
+		ownedTeam.ProviderSnapshotSHA256 == "" {
+		deferred, deferErr := service.repository.DeferCreateRecovery(ctx, operation,
+			failureProviderReadbackUnavailable, service.config.RecoveryInterval)
+		if deferErr != nil {
+			return entity.MattermostTeamOperation{}, domainerrs.ErrUnavailable
+		}
+		return deferred, nil
+	}
+	team = ownedTeam
 	receipt := digestValues("mattermost-team-provider-receipt-v1", operation.ID, operation.Intent.RequestSHA256,
-		team.ProviderTeamID, team.ProviderSnapshotSHA256)
+		team.ProviderTeamID, team.ProviderSnapshotSHA256, team.ProviderCausalitySHA256)
 	accepted, err := service.repository.AcceptProvider(ctx, operation, team, receipt, service.config.SelectorTTL)
 	if err != nil {
 		return entity.MattermostTeamOperation{}, domainerrs.ErrUnavailable
@@ -764,6 +948,14 @@ func normalizeCreateIntent(displayName, slugIntent, idempotencyKey string) (enti
 	}, nil
 }
 
+func providerOperationSlug(base, correlation string) string {
+	compactCorrelation := strings.ReplaceAll(correlation, "-", "")
+	if len(compactCorrelation) < 12 {
+		return ""
+	}
+	return strings.TrimRight(base, "-") + "-" + compactCorrelation[:12]
+}
+
 func validatePrincipal(principal entity.TeamPrincipal) error {
 	if !validUUID(principal.ActorID) || !validUUID(principal.OrganizationID) || !validUUID(principal.ProjectID) {
 		return errors.New("mattermost team principal is invalid")
@@ -774,6 +966,23 @@ func validatePrincipal(principal entity.TeamPrincipal) error {
 func validUUID(value string) bool {
 	parsed, err := uuid.Parse(value)
 	return err == nil && parsed != uuid.Nil
+}
+
+func validMappingAction(value string) bool {
+	return value == "bind" || value == "relink" || value == "unlink"
+}
+
+func mappingRequestDigest(principal entity.TeamPrincipal, action string, values ...string) string {
+	return digestValues(append([]string{
+		"workspace-mattermost-mapping-command-v2", principal.ActorID,
+		principal.OrganizationID, principal.ProjectID, action,
+	}, values...)...)
+}
+
+func mappingStateDigest(mapping entity.WorkspaceMattermostMapping) string {
+	return digestValues("workspace-mattermost-mapping-state-v1", mapping.ID, mapping.State,
+		mapping.ProviderTeamID, fmt.Sprint(mapping.Version), fmt.Sprint(mapping.Generation),
+		fmt.Sprint(mapping.ProviderEffectVersion), fmt.Sprint(mapping.ProviderEffectGeneration))
 }
 
 func mapProviderError(err error) error {
@@ -794,6 +1003,8 @@ func mapRepositoryError(err error) error {
 	case errors.Is(err, domainrepo.ErrNotFound):
 		return domainerrs.ErrNotFound
 	case errors.Is(err, domainrepo.ErrIdempotencyConflict):
+		return domainerrs.ErrConflict
+	case errors.Is(err, domainrepo.ErrCreateFenceConflict):
 		return domainerrs.ErrConflict
 	default:
 		return domainerrs.ErrUnavailable
