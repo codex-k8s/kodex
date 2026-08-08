@@ -29,7 +29,7 @@ func TestAuthenticatedReaderRejectsCiphertextTampering(t *testing.T) {
 	if err := os.WriteFile(path, encoded, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	reader, evidence, closeReader, err := authenticatedReader(context.Background(), path, key)
+	reader, evidence, closeReader, err := authenticatedReader(context.Background(), path, key, 1<<20)
 	if err != nil {
 		t.Fatalf("authenticatedReader() error = %v", err)
 	}
@@ -43,7 +43,7 @@ func TestAuthenticatedReaderRejectsCiphertextTampering(t *testing.T) {
 	if err := os.WriteFile(path, encoded, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, closeTampered, err := authenticatedReader(context.Background(), path, key); err == nil {
+	if _, _, closeTampered, err := authenticatedReader(context.Background(), path, key, 1<<20); err == nil {
 		closeTampered()
 		t.Fatal("authenticatedReader() accepted a modified ciphertext")
 	}
@@ -74,7 +74,7 @@ func TestAuthenticatedStagingIsIndependentFromSourcePath(t *testing.T) {
 	if err := os.WriteFile(path, encodeTestBackup(t, key, plaintext), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	proof, err := stageAuthenticated(context.Background(), path, key)
+	proof, err := stageAuthenticated(context.Background(), path, key, 1<<20)
 	if err != nil {
 		t.Fatalf("stageAuthenticated() error = %v", err)
 	}
@@ -89,6 +89,20 @@ func TestAuthenticatedStagingIsIndependentFromSourcePath(t *testing.T) {
 	actual, err := io.ReadAll(proof.file)
 	if err != nil || !bytes.Equal(actual, plaintext) {
 		t.Fatalf("authenticated staging changed with source path: value=%q error=%v", actual, err)
+	}
+}
+
+func TestAuthenticatedStagingRejectsCapacityBeforePlaintextWrite(t *testing.T) {
+	t.Parallel()
+	key := bytes.Repeat([]byte{0x42}, 32)
+	plaintext := bytes.Repeat([]byte("x"), 4097)
+	path := filepath.Join(t.TempDir(), "backup.dump.enc")
+	if err := os.WriteFile(path, encodeTestBackup(t, key, plaintext), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stageAuthenticated(context.Background(), path, key, 4096); err == nil ||
+		!strings.Contains(err.Error(), "exceeds staging capacity") {
+		t.Fatalf("oversized authenticated backup was not rejected synchronously: %v", err)
 	}
 }
 

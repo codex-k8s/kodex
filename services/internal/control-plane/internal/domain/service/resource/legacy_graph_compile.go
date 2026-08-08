@@ -191,12 +191,21 @@ func (service *Service) compileLegacyGraph(principal value.Principal,
 		if input.TerminalState != string(enum.StateSucceeded) || input.TerminalEvidenceSHA256 != input.ProvenanceSHA256 {
 			return compiledLegacyGraph{}, errs.ErrFailedPrecondition
 		}
+		immutableBuildSHA256, hashErr := canonicalHash(struct {
+			RecipeID                        string
+			RecipeVersion, RecipeGeneration uint64
+			SpecSHA256                      string
+			Input                           entity.RoleImageRecipeInput
+		}{recipe.ID, recipe.Version, recipeSpec.Generation, recipeSpec.SpecSHA256, recipeSpec.Input})
+		if hashErr != nil || input.ImmutableBuildSHA256 != "" {
+			return compiledLegacyGraph{}, errs.ErrFailedPrecondition
+		}
 		spec := entity.ImageBuildSpec{
 			RecipeID: recipe.ID, RecipeVersion: recipe.Version, RecipeGeneration: recipeSpec.Generation,
 			SpecSHA256: recipeSpec.SpecSHA256, Attempt: input.Attempt,
 			Stage: entity.ImageBuildStageCompleted, ProgressPercent: 100,
 			StagingReference: input.StagingReference, ManifestDigest: input.ManifestDigest,
-			ProvenanceSHA256: input.ProvenanceSHA256, ImmutableBuildSHA256: input.ImmutableBuildSHA256,
+			ProvenanceSHA256: input.ProvenanceSHA256, ImmutableBuildSHA256: immutableBuildSHA256,
 			AvailableAt: at, MaximumAttempts: service.imageMaximumAttempts,
 		}
 		if err := add(reference, legacyResource(principal, projectID, recipe.ID, operation.TargetID,
@@ -323,7 +332,7 @@ func (service *Service) compileLegacyGraph(principal value.Principal,
 			EligibilitySnapshotSHA256: strings.Repeat("0", 64), Ownership: legacyOwnership(input.Source),
 		}
 		digest, err := canonicalHash(spec)
-		if err != nil || digest != input.EligibilitySnapshotSHA256 {
+		if err != nil || input.EligibilitySnapshotSHA256 != "" {
 			return compiledLegacyGraph{}, errs.ErrFailedPrecondition
 		}
 		spec.EligibilitySnapshotSHA256 = digest

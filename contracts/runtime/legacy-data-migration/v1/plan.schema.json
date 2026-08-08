@@ -5,8 +5,9 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion", "planId", "sourceSha256", "targetSha256", "mappingSha256",
-    "materializationSha256", "materializationCount", "counts", "violations", "planSha256"
+    "schemaVersion", "planId", "sourceSha256", "mappingSha256",
+    "materializationSha256", "materializationCount", "counts", "violations", "planSha256",
+    "ownerRequestSha256"
   ],
   "properties": {
     "schemaVersion": {"const": "mattercodex.legacy-data-migration-plan.v1"},
@@ -15,7 +16,7 @@
     "targetSha256": {"$ref": "#/$defs/sha256"},
     "mappingSha256": {"$ref": "#/$defs/sha256"},
     "materializationSha256": {"$ref": "#/$defs/sha256"},
-    "materializationCount": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "materializationCount": {"type": "integer", "minimum": 1, "maximum": 2000},
     "counts": {"$ref": "#/$defs/counts"},
     "violations": {
       "type": "object",
@@ -38,6 +39,7 @@
       }
     },
     "planSha256": {"$ref": "#/$defs/sha256"},
+    "ownerRequestSha256": {"$ref": "#/$defs/sha256"},
     "backupSha256": {"$ref": "#/$defs/sha256"},
     "manifestSha256": {"$ref": "#/$defs/sha256"},
     "cutoverState": {"enum": ["PREPARED", "COMMITTED"]}

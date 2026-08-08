@@ -18,11 +18,31 @@
     "backupSha256": {"$ref": "#/$defs/sha256"},
     "manifestSha256": {"$ref": "#/$defs/sha256"},
     "materializationSha256": {"$ref": "#/$defs/sha256"},
-    "materializationCount": {"type": "integer", "minimum": 0, "maximum": 100000},
-    "sourceState": {"enum": ["MISSING", "ABORTED"]},
-    "targetState": {"enum": ["MISSING", "ABORTED"]},
-    "outcome": {"const": "aborted"},
+    "materializationCount": {"type": "integer", "minimum": 1, "maximum": 2000},
+    "sourceState": {"enum": ["MISSING", "ABORTED", "COMMITTED"]},
+    "targetState": {"enum": ["ABORTED", "COMMITTED"]},
+    "outcome": {"enum": ["aborted", "verified-replay"]},
     "recordedAt": {"type": "string", "format": "date-time"}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "aborted"}}},
+      "then": {
+        "properties": {
+          "sourceState": {"enum": ["MISSING", "ABORTED"]},
+          "targetState": {"const": "ABORTED"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "verified-replay"}}},
+      "then": {
+        "properties": {
+          "sourceState": {"const": "COMMITTED"},
+          "targetState": {"const": "COMMITTED"}
+        }
+      }
+    }
+  ],
   "$defs": {"sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
 }

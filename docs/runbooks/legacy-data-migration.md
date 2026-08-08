@@ -4,8 +4,8 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-08-07
+version: 1.1.0
+updated: 2026-08-08
 ---
 
 # Перенос legacy MatterCodex data
@@ -40,8 +40,10 @@ reviewed execution PR. В нём нужно:
 1. Закрепить подписанный image digest и новый устойчивый `plan ID`.
 2. Оставить ровно один явный mode: `dry-run`, `pre-commit`, `commit`,
    `rollback` или `restore-verify`.
-3. Подтвердить наличие exact source/target principals, membership только в
-   `matter_codex_migration`/`control_plane_migration`, TLS CA и retained PVC.
+3. Подтвердить exact source principal с membership только в
+   `matter_codex_migration`, workload mTLS, signed application grant, source
+   root authority reference/digest, exact control-plane RPC allowlist и
+   retained PVC. Target PostgreSQL credential job не получает.
 4. Для `restore-verify` добавить к Job отдельные CSI volume
    `legacy-data-migration-restore`, CA `legacy-data-restore-postgresql-ca` и
    env `LEGACY_DATA_MIGRATION_RESTORE_DSN_FILE`,
@@ -63,24 +65,24 @@ status, bounded metrics, safe report и receipts.
 - сверить exact image digest и render:
   `kubectl kustomize deploy/k8s/base/legacy-data-migration`;
 - проверить, что Job всё ещё `suspend: true` в базовом manifest, `backoffLimit:
-  0`, PVC имеет `Prune=false`, а NetworkPolicy разрешает только DNS, три exact
-  PostgreSQL Pod selectors и Prometheus ingress;
-- проверить readiness source/target principals без раскрытия DSN: source имеет
-  `SELECT` только на exact 50-table allowlist, snapshot/lock и cutover receipt;
-  target — RLS readback, target lock/receipt и `EXECUTE` только на
-  узкие prepare/restore/abort capabilities и `materialize_legacy_data_cutover`, без прямого receipt или произвольного business DML. Сама
-  capability принадлежит отдельной `NOLOGIN NOBYPASSRLS`
-  `control_plane_legacy_materializer` с exact `SELECT/INSERT` и receipt-bound
-  RLS policy; LOGIN job не является member этой роли;
+  0`, PVC имеет `Prune=false`, pod-private `emptyDir` имеет `sizeLimit: 2Gi`, а
+  NetworkPolicy разрешает только exact DNS, source/restore PostgreSQL,
+  control-plane, authority issuer и Prometheus paths;
+- проверить readiness source и owner RPC без раскрытия credentials: source
+  principal имеет `SELECT` только на exact 50-table allowlist,
+  snapshot/lock/cutover receipt; workload grant разрешает только
+  `PrepareLegacyGraphMigration`, `MaterializeLegacyGraphMigration`,
+  `GetLegacyGraphMigration` и `AbortLegacyGraphMigration`. Job не имеет target
+  DSN, generic operation API, прямого receipt или business DML;
 - подтвердить штатным migration readback, что bot-service migration `000041`
-  и control-plane migration `20260807019600` уже применены; job не применяет
+  и owner materializer migration `20260807024700` из #249 уже применены; job не применяет
   schema migrations сама и не получает DDL authority;
 - убедиться, что другого `FROZEN`/`COMMITTED` winner нет, а выбранный plan ID не
   относится к другому source/target digest;
 - подтвердить свободное место retained storage выше ожидаемого `pg_dump` с
   запасом; backup key — 32 bytes в strict base64 и доступен только job role;
-- подтвердить, что bot-service продолжает писать source до `commit`, а target
-  graph из #238/#239 доступен. Не использовать dry-run как readiness source до
+- подтвердить, что bot-service продолжает писать source до `commit`, а typed
+  owner materializer из #249 доступен по рабочему RPC path. Не использовать dry-run как readiness source до
   закрытия #241.
 
 ## Фазы
@@ -88,29 +90,31 @@ status, bounded metrics, safe report и receipts.
 ### 1. dry-run
 
 Запустить owner-approved Job с `MODE=dry-run`. Он открывает repeatable-read
-source snapshot и read-only target inventory. Успех требует всех violation
+source snapshot и строит deterministic closed typed owner request без target
+effect. Успех требует всех violation
 counters равными нулю. Сохранить вне публичного канала safe report и его SHA;
 повтор с тем же immutable input обязан дать те же `sourceSha256`,
-`targetSha256`, `mappingSha256`, `materializationSha256/count`, counts и
-`planSha256`.
+`mappingSha256`, `ownerRequestSha256`, `materializationSha256/count`, counts и
+`planSha256`. Owner semantic `targetSha256` появляется только в `pre-commit`
+после authoritative `Prepare` readback.
 
 Ненулевой `unknown_state`, `orphan_reference`, `duplicate_source`,
 `tenant_mismatch`, `stale_reference`, `broken_lineage`,
 `unmaterialized_active`, `ambiguous_target` или `unsupported_state` — blocker.
 Ничего не исправлять прямым SQL и не угадывать owner.
 
-Для каждого source Role отдельно сверить target Agent и весь его current
-configuration graph: RoleDefinition, опубликованный InstructionSet,
-ProviderPool/ProviderReference, RoleImageRecipe и active AgentAssignment.
-ID/version/digest должны иметь exact protected-history evidence; configured
-legacy bot — совпадающие provider identity, Team и durable receipt. Любой
-missing/archived/stale edge блокирует план до штатного owner reconciliation.
+Для каждого source Role проверить, что request содержит весь будущий owner
+graph: RoleDefinition, опубликованный InstructionSet, ProviderReference/Pool,
+RoleImageRecipe/ImageBuild/ImageArtifact, Agent и AgentAssignment. Target IDs,
+versions и derived digests отсутствуют в caller payload и назначаются owner;
+deploy-owned artifact/image evidence должно быть exact и immutable. Любой
+missing/archived/stale source edge блокирует plan.
 
 Перед `pre-commit` должны отсутствовать незавершённые legacy work claims,
 owner-attention requests, callback deliveries, thread contexts и
 Schedule occurrences/runs, а interaction capabilities должны быть `consumed`
 либо `revoked`. Каждый enabled daily legacy Schedule обязан дать одну
-детерминированную materialization intent и exact target preview. Проверить
+детерминированную typed Schedule operation. Проверить
 Project/Chat/Agent, cron/timezone/next run, overlap/coalesce/misfire/retry,
 playbook/prompt/callback pins, Session/RuntimeRevision/Process lineage и prompt
 Artifact eligibility. Неоднозначный successor либо unsupported source state
@@ -136,18 +140,21 @@ callback Turn, единственного manifest и двух delivered destina
 После сверки двух одинаковых dry-run выполнить `pre-commit` тем же plan ID.
 Фаза держит exported snapshot, создаёт exact 50-table encrypted immutable dump
 без чужих `public` tables и без post-data objects, и manifest, проверяет
-HMAC/closed `pg_restore --list`, затем фиксирует
-`PREPARED` receipts и exact typed materialization intent. До
+HMAC/closed `pg_restore --list`, затем фиксирует owner `PREPARED` immutable
+plan/operation receipts через #249 и source `PREPARED` receipt. До
 этого source/target cutover effects отсутствуют.
 Authenticated plaintext staging разрешён только через `TMPDIR` на
 pod-private bounded `emptyDir`; файл немедленно unlink-ится и не сохраняется в
-backup PVC.
+backup PVC. До decrypt/write код синхронно проверяет ciphertext/envelope и
+plain size против `LEGACY_DATA_MIGRATION_MAXIMUM_STAGING_BYTES=2013265920`.
+Это ниже `sizeLimit: 2Gi` и оставляет запас для каталога и deleted-but-open
+inode; eviction не считается механизмом ограничения.
 
 До `commit` обязательно выполнить `restore-verify` в отдельной пустой DB.
 `pg_restore --single-transaction` должен завершиться успешно, а повторный
 snapshot — дать exact source SHA и все table counts из manifest. Сохранить
-restore verification report и его SHA; target receipt должен получить exact
-`restore_verified_at` readback. `commit` без него невозможен. Verification DB
+restore verification report и его SHA; source receipt должен получить exact
+`restore_verified=true` readback. `commit` без него невозможен. Verification DB
 после фиксации evidence удаляет только её controller по отдельному
 owner-approved path.
 
@@ -157,7 +164,7 @@ owner-approved path.
 неаутентифицируемый dump, неизолированная или непустая restore DB и отличие
 digest/count блокируют
 plan. Если crash произошёл после `--single-transaction` restore, но до
-durable `restore_verified_at`, controller удаляет только disposable verification
+durable `restore_verified`, controller удаляет только disposable verification
 DB, создаёт новую пустую DB и повторяет `restore-verify`. Job никогда не
 принимает непустую DB как evidence. Не удалять файл и
 не создавать manifest вручную; расследовать storage/crash и выбрать новый plan
@@ -165,47 +172,54 @@ ID только после owner decision.
 
 ### 3. commit
 
-Перед необратимой фазой ещё раз сверить оба `PREPARED` receipt, durable
-`restore_verified_at` target readback и получить
-отдельный owner gate. `commit` берёт source/target locks, заново строит plan и
+Перед необратимой фазой ещё раз сверить source `PREPARED`, owner plan readback,
+durable `restore_verified` source readback и получить отдельный owner gate.
+`commit` берёт source lock; target locks принадлежат owner RPC. Job заново строит plan и
 сравнивает все digests, повторно аутентифицирует backup stream и сверяет
 manifest SHA/counts с durable receipts. Любой concurrent drift или повреждение
 backup evidence завершает Job до fence.
 
 После source `FROZEN` legacy writes закрыто отвергаются. Затем target owner
 повторно разрешает Project/Chat/Agent/configuration/Artifact authority и одной
-transaction материализует весь planned Project/Team/Chat/Agent/configuration/Session/Turn/Attempt/Process/Schedule graph, exact root actor/policy/delegation/callback provenance, deterministic audit и receipt. Активный legacy lease не копируется: owner receipt переносится в `QUEUED/BLOCKED`, а новый execution создаётся target owner только после cutover.
-Job повторно строит exact authoritative plan/readback; только затем source
-receipt становится `COMMITTED`. Receipt tuple неизменяем с первого `PREPARED`; caller не имеет table-wide DML, а terminal winner выбирается одной owner transaction. Target `COMMITTED` — irreversible cutover boundary: rollback и
+transaction материализует весь planned Project/Team/Chat/Agent/configuration/
+Session/Turn/Attempt/Process/Schedule/delegation/callback graph. Root actor,
+legacy policy digest, отдельный machine authority policy, parent/predecessor,
+launching Session/Turn/Attempt, callback route, audit и provenance фиксируются
+operation-specific receipts. Job вызывает
+`GetLegacyGraphMigration(verifyCommitted=true)`: owner перечитывает каждую
+target projection, protected history/runtime components, audit и provenance;
+missing/drift блокирует source `COMMITTED`. Receipt tuple неизменяем с первого
+`PREPARED`; caller не имеет target IDs, generic JSON/DML или table-wide update,
+а terminal winner выбирается одной owner transaction. Owner `COMMITTED` — irreversible cutover boundary: rollback и
 возврат legacy writer запрещены. Переключение consumers и #197 выполняются
 отдельными owner-approved действиями, не этой job.
 
 Crash recovery:
 
-| Source | Target | Действие |
+| Source | Owner plan | Действие |
 | --- | --- | --- |
 | `PREPARED` | `PREPARED` | До owner gate допустим `rollback`; иначе повтор exact `commit` |
 | `FROZEN` | `PREPARED` | Legacy writes уже закрыты; выбрать повтор `commit` либо до cutover `rollback` по owner decision |
 | `FROZEN` | `COMMITTED` | Только повтор exact `commit`, rollback запрещён |
-| `COMMITTED` | `COMMITTED` | Идемпотентный readback; дальнейшие действия только #197 |
+| `COMMITTED` | `COMMITTED` | Полный authoritative readback каждой operation/audit/provenance receipt; дальнейшие действия только #197 |
 | любой mismatch/missing receipt | любой | Fail closed, не создавать receipt вручную |
 
 ## Rollback и restore boundary
 
-`rollback` разрешён только пока target receipt не `COMMITTED`. Он переводит
-существующие intents в `ABORTED` и снимает source FROZEN fence. Backup и
+`rollback` разрешён только пока owner plan не `COMMITTED`. Он сначала вызывает
+typed owner `Abort`, затем переводит source intent в `ABORTED` и снимает fence. Backup и
 manifest не удаляются. После abort тот же plan ID не переиспользуется.
 
 `restore-verify` восстанавливает только disposable verification DB и не
-является production rollback. После target `COMMITTED` job никогда не обещает
+является production rollback. После owner `COMMITTED` job никогда не обещает
 возврат к legacy source: разрешены только forward recovery, authoritative
 readback и отдельная cleanup wave #197. Production restore, если когда-либо
 понадобится, требует отдельного Issue, owner protocol и нового code-first PR.
 
 ## Observability и инциденты
 
-`/health/ready` становится успешным только после config, named-SQL, TLS и DB
-startup barrier. Метрики:
+`/health/ready` становится успешным только после config, named-SQL, source TLS
+и owner RPC startup barrier. Метрики:
 
 - `mattercodex_legacy_data_migration_ready`;
 - `mattercodex_legacy_data_migration_runs_total{mode,outcome}` с закрытыми
@@ -216,8 +230,9 @@ Alerts `LegacyDataMigrationFailed` и `LegacyDataMigrationDeadlineNear` веду
 terminate/kill/wait, а worker фактически join-ится до закрытия DB/files.
 Terminal endpoint остаётся доступным с readiness=false не менее 20 секунд, что
 покрывает один 15-секундный scrape; durable receipt/report остаётся authority.
-Timeout/cancel не означает отсутствие effects: всегда читать оба durable
-receipt и manifest, затем применять таблицу recovery выше.
+Timeout/cancel не означает отсутствие effects: всегда читать source receipt,
+owner plan через `GetLegacyGraphMigration` и manifest, затем применять таблицу
+recovery выше.
 
 ## Короткая ручная проверка владельца
 
@@ -225,7 +240,8 @@ receipt и manifest, затем применять таблицу recovery вы�
 
 1. Выполнить `go test ./...` и `go build ./...` в
    `services/jobs/legacy-data-migration`.
-2. Проверить `goose validate` для обеих migration directories.
+2. Структурно проверить новые forward-only migration files и named SQL без их
+   применения к live DB.
 3. Выполнить `kubectl kustomize deploy/k8s/base/legacy-data-migration` и
    убедиться, что render содержит suspended Job, exact NetworkPolicy, retained
    PVC, Vault CSI, ServiceMonitor и HTTPS `runbook_url`.

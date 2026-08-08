@@ -53,7 +53,7 @@ type Result struct {
 }
 
 func Create(ctx context.Context, directory, planID, dsn, tlsServerName, caFile, snapshotID, keyFile, sourceSHA string,
-	counts map[string]uint64, now time.Time,
+	counts map[string]uint64, now time.Time, maximumPlaintextBytes int64,
 ) (Result, error) {
 	key, err := loadKey(keyFile)
 	if err != nil {
@@ -70,11 +70,12 @@ func Create(ctx context.Context, directory, planID, dsn, tlsServerName, caFile, 
 	manifestPath := filepath.Join(directory, planID+".manifest.json")
 	if _, err := os.Stat(backupPath); err == nil {
 		if _, manifestErr := os.Stat(manifestPath); errors.Is(manifestErr, os.ErrNotExist) {
-			return recoverManifest(ctx, directory, backupPath, manifestPath, key, planID, sourceSHA, counts, now)
+			return recoverManifest(ctx, directory, backupPath, manifestPath, key, planID, sourceSHA, counts, now,
+				maximumPlaintextBytes)
 		} else if manifestErr != nil {
 			return Result{}, errors.New("inspect backup manifest path")
 		}
-		return readExisting(ctx, backupPath, manifestPath, key, planID, sourceSHA, counts)
+		return readExisting(ctx, backupPath, manifestPath, key, planID, sourceSHA, counts, maximumPlaintextBytes)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Result{}, errors.New("inspect backup path")
 	}
@@ -83,7 +84,7 @@ func Create(ctx context.Context, directory, planID, dsn, tlsServerName, caFile, 
 	if err != nil {
 		return Result{}, err
 	}
-	proof, err := verifyRestore(ctx, backupPath, key)
+	proof, err := verifyRestore(ctx, backupPath, key, maximumPlaintextBytes)
 	if err != nil {
 		return Result{}, err
 	}
@@ -115,9 +116,9 @@ func Create(ctx context.Context, directory, planID, dsn, tlsServerName, caFile, 
 // recoverManifest завершает единственное допустимое crash-окно: dump уже
 // полностью записан и аутентифицируется, а sidecar manifest ещё не создан.
 func recoverManifest(ctx context.Context, directory, backupPath, manifestPath string, key []byte, planID, sourceSHA string,
-	counts map[string]uint64, now time.Time,
+	counts map[string]uint64, now time.Time, maximumPlaintextBytes int64,
 ) (Result, error) {
-	proof, err := verifyRestore(ctx, backupPath, key)
+	proof, err := verifyRestore(ctx, backupPath, key, maximumPlaintextBytes)
 	if err != nil {
 		return Result{}, err
 	}
@@ -216,8 +217,8 @@ func createEncryptedDump(ctx context.Context, path, dsn, tlsServerName, caFile, 
 	return hex.EncodeToString(fileHash.Sum(nil)), info.Size(), nil
 }
 
-func verifyRestore(ctx context.Context, path string, key []byte) (authenticatedBackup, error) {
-	proof, err := stageAuthenticated(ctx, path, key)
+func verifyRestore(ctx context.Context, path string, key []byte, maximumPlaintextBytes int64) (authenticatedBackup, error) {
+	proof, err := stageAuthenticated(ctx, path, key, maximumPlaintextBytes)
 	if err != nil {
 		return authenticatedBackup{}, err
 	}
@@ -235,12 +236,14 @@ func verifyRestore(ctx context.Context, path string, key []byte) (authenticatedB
 
 // Restore загружает аутентифицированный backup только в заранее проверенную
 // пустую изолированную PostgreSQL database.
-func Restore(ctx context.Context, path, keyFile, dsn, tlsServerName, caFile string) error {
+func Restore(ctx context.Context, path, keyFile, dsn, tlsServerName, caFile string,
+	maximumPlaintextBytes int64,
+) error {
 	key, err := loadKey(keyFile)
 	if err != nil {
 		return err
 	}
-	proof, err := stageAuthenticated(ctx, path, key)
+	proof, err := stageAuthenticated(ctx, path, key, maximumPlaintextBytes)
 	if err != nil {
 		return err
 	}
@@ -275,8 +278,10 @@ func Restore(ctx context.Context, path, keyFile, dsn, tlsServerName, caFile stri
 	return nil
 }
 
-func authenticatedReader(ctx context.Context, path string, key []byte) (io.Reader, backupEvidence, func(), error) {
-	proof, err := stageAuthenticated(ctx, path, key)
+func authenticatedReader(ctx context.Context, path string, key []byte,
+	maximumPlaintextBytes int64,
+) (io.Reader, backupEvidence, func(), error) {
+	proof, err := stageAuthenticated(ctx, path, key, maximumPlaintextBytes)
 	if err != nil {
 		return nil, backupEvidence{}, func() {}, err
 	}
@@ -287,7 +292,9 @@ func authenticatedReader(ctx context.Context, path string, key []byte) (io.Reade
 // проход по exact O_NOFOLLOW inode не проверил HMAC. Consumer затем читает
 // только unlinked private staging file, поэтому rename/hardlink/truncate
 // исходного PVC-файла не образует TOCTOU.
-func stageAuthenticated(ctx context.Context, path string, key []byte) (authenticatedBackup, error) {
+func stageAuthenticated(ctx context.Context, path string, key []byte,
+	maximumPlaintextBytes int64,
+) (authenticatedBackup, error) {
 	descriptor, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return authenticatedBackup{}, errors.New("open immutable backup")
@@ -296,7 +303,7 @@ func stageAuthenticated(ctx context.Context, path string, key []byte) (authentic
 	closeSource := func() { _ = file.Close() }
 	info, err := file.Stat()
 	headerSize := len(magic) + evidenceSize + aes.BlockSize
-	if err != nil || !safeBackupInode(info, headerSize) {
+	if err != nil || maximumPlaintextBytes < 1 || !safeBackupInode(info, headerSize) {
 		closeSource()
 		return authenticatedBackup{}, errors.New("encrypted backup inode is unsafe")
 	}
@@ -313,6 +320,14 @@ func stageAuthenticated(ctx context.Context, path string, key []byte) (authentic
 	mac := hmac.New(sha256.New, derived[32:])
 	fileHash := sha256.New()
 	ciphertextSize := info.Size() - int64(len(header)) - tagSize
+	// AES-CTR сохраняет длину plaintext. Проверка выполняется до создания
+	// unlinked inode и учитывает весь authenticated envelope отдельно: kubelet
+	// eviction не является синхронной границей для deleted-but-open файла.
+	maximumEnvelopeBytes := maximumPlaintextBytes + int64(headerSize+tagSize)
+	if ciphertextSize <= 0 || ciphertextSize > maximumPlaintextBytes || info.Size() > maximumEnvelopeBytes {
+		closeSource()
+		return authenticatedBackup{}, errors.New("authenticated backup exceeds staging capacity")
+	}
 	if _, err := io.MultiWriter(mac, fileHash).Write(header); err != nil {
 		closeSource()
 		return authenticatedBackup{}, errors.New("verify backup header")
@@ -430,9 +445,9 @@ func safeStagingInode(info os.FileInfo, expectedSize int64) bool {
 }
 
 func readExisting(ctx context.Context, backupPath, manifestPath string, key []byte, planID, sourceSHA string,
-	counts map[string]uint64,
+	counts map[string]uint64, maximumPlaintextBytes int64,
 ) (Result, error) {
-	proof, err := verifyRestore(ctx, backupPath, key)
+	proof, err := verifyRestore(ctx, backupPath, key, maximumPlaintextBytes)
 	if err != nil {
 		return Result{}, err
 	}
@@ -454,7 +469,9 @@ func readExisting(ctx context.Context, backupPath, manifestPath string, key []by
 }
 
 // LoadExisting проверяет immutable backup/manifest без обращения к source.
-func LoadExisting(ctx context.Context, directory, planID, keyFile string) (Result, model.Manifest, error) {
+func LoadExisting(ctx context.Context, directory, planID, keyFile string,
+	maximumPlaintextBytes int64,
+) (Result, model.Manifest, error) {
 	key, err := loadKey(keyFile)
 	if err != nil {
 		return Result{}, model.Manifest{}, err
@@ -469,7 +486,8 @@ func LoadExisting(ctx context.Context, directory, planID, keyFile string) (Resul
 	if err != nil || !validManifest(manifest) || manifest.PlanID != planID {
 		return Result{}, model.Manifest{}, errors.New("existing backup manifest mismatch")
 	}
-	result, err := readExisting(ctx, backupPath, manifestPath, key, planID, manifest.SourceSHA256, nil)
+	result, err := readExisting(ctx, backupPath, manifestPath, key, planID, manifest.SourceSHA256, nil,
+		maximumPlaintextBytes)
 	return result, manifest, err
 }
 

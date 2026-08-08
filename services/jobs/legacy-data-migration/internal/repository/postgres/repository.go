@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdhash "hash"
 	"io"
 	"net"
 	"net/url"
@@ -20,7 +21,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/inventory"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
@@ -174,11 +174,7 @@ type Snapshot struct {
 	ExportedID   string
 	SourceSHA256 string
 	Counts       map[string]uint64
-}
-
-type TargetSnapshot struct {
-	Tx        pgx.Tx
-	Resources []model.TargetResource
+	TableSHA256  map[string]string
 }
 
 func (repository *Repository) BeginSourceSnapshot(ctx context.Context, export, lock bool) (Snapshot, error) {
@@ -226,6 +222,12 @@ func (repository *Repository) beginSnapshot(ctx context.Context, export, lock bo
 	defer rows.Close()
 	result := make([]model.SnapshotRow, 0, 1024)
 	hash := sha256.New()
+	tableHashes := make(map[string]stdhash.Hash, len(inventory.Tables))
+	for _, table := range inventory.Tables {
+		tableHash := sha256.New()
+		writeFramed(tableHash, []byte(table))
+		tableHashes[table] = tableHash
+	}
 	counts := make(map[string]uint64)
 	lastTable := ""
 	var lastPayload []byte
@@ -260,6 +262,7 @@ func (repository *Repository) beginSnapshot(ctx context.Context, export, lock bo
 			continue
 		}
 		writeFramed(hash, raw)
+		writeFramed(tableHashes[table], raw)
 		lastPayload = raw
 		counts[table]++
 		projected, retained, projectionErr := safeSourceProjection(table, raw)
@@ -276,8 +279,12 @@ func (repository *Repository) beginSnapshot(ctx context.Context, export, lock bo
 	if len(counts) == 0 {
 		return fail(errors.New("source snapshot inventory is empty"))
 	}
+	tableSHA256 := make(map[string]string, len(tableHashes))
+	for _, table := range inventory.Tables {
+		tableSHA256[table] = hex.EncodeToString(tableHashes[table].Sum(nil))
+	}
 	return Snapshot{Tx: tx, Rows: result, ExportedID: exportedID,
-		SourceSHA256: hex.EncodeToString(hash.Sum(nil)), Counts: counts}, nil
+		SourceSHA256: hex.EncodeToString(hash.Sum(nil)), Counts: counts, TableSHA256: tableSHA256}, nil
 }
 
 var sourceProjectionKeys = map[string][]string{
@@ -287,15 +294,17 @@ var sourceProjectionKeys = map[string][]string{
 		"chat_type", "system_purpose", "work_policy", "created_at", "updated_at"},
 	"matter_codex_agent_roles": {"id", "project_id", "name", "description", "role_type",
 		"github_account_name", "openai_account_name", "bot_identity", "prompt_mode", "enabled",
+		"prompt_template", "kubernetes_access", "sandbox_mode", "config_overlay", "advanced_settings",
 		"created_at", "updated_at"},
 	"matter_codex_agent_sessions": {"id", "project_id", "chat_id", "role_id", "session_key", "status",
-		"active_turn_id", "active_run_id", "binding_version", "openai_account_name"},
+		"active_turn_id", "active_run_id", "binding_version", "openai_account_name", "created_at", "updated_at"},
 	"matter_codex_agent_session_turns": {"id", "session_id", "run_id", "status", "binding_version",
 		"mattermost_channel_id", "mattermost_root_post_id", "mattermost_post_id", "user_id", "created_at",
-		"updated_at", "artifacts"},
-	"matter_codex_agent_runs":             {"id", "run_id", "flow_id", "status"},
-	"matter_codex_agent_profiles":         {"id", "name", "openai_account_name", "github_account_name", "enabled"},
-	"matter_codex_agent_prompt_templates": {"id", "profile_name", "template_key"},
+		"started_at", "finished_at", "updated_at", "message", "final_message", "error_message", "artifacts"},
+	"matter_codex_agent_runs": {"id", "run_id", "flow_id", "status"},
+	"matter_codex_agent_profiles": {"id", "name", "role", "description", "openai_account_name",
+		"github_account_name", "kubernetes_access", "sandbox_mode", "config_overlay", "enabled"},
+	"matter_codex_agent_prompt_templates": {"id", "profile_name", "template_key", "body", "created_at", "updated_at"},
 	"matter_codex_audit_events":           {"id"},
 	"matter_codex_process_runs": {"id", "public_id", "project_id", "policy_revision_id", "root_role_id",
 		"root_initiator_user_id", "root_trigger_post_id", "root_channel_id", "root_thread_post_id", "status"},
@@ -308,15 +317,17 @@ var sourceProjectionKeys = map[string][]string{
 	"matter_codex_runtime_agent_binding_discoveries": {"id", "state", "agent_session_turn_id"},
 	"matter_codex_mattermost_bot_identities": {"id", "project_id", "role_id", "username",
 		"mattermost_user_id", "status"},
-	"matter_codex_chat_participants":            {"id", "chat_id", "role_id", "enabled"},
-	"matter_codex_project_repositories":         {"id", "project_id", "repository_id"},
-	"matter_codex_chat_repositories":            {"id", "chat_id", "repository_id"},
-	"matter_codex_repositories":                 {"id", "github_account_name", "status"},
-	"matter_codex_credentials":                  {"id", "status"},
-	"matter_codex_openai_accounts":              {"id", "name", "credential_id", "status"},
-	"matter_codex_github_accounts":              {"id", "name", "credential_id", "status"},
-	"matter_codex_agent_flows":                  {"id", "flow_id", "status"},
-	"matter_codex_project_runtime_variables":    {"id", "project_id"},
+	"matter_codex_chat_participants":    {"id", "chat_id", "role_id", "enabled"},
+	"matter_codex_project_repositories": {"id", "project_id", "repository_id"},
+	"matter_codex_chat_repositories":    {"id", "chat_id", "repository_id"},
+	"matter_codex_repositories":         {"id", "github_account_name", "status"},
+	"matter_codex_credentials": {"id", "name", "credential_type", "provider", "secret_ref", "status",
+		"last_checked_at", "created_at", "updated_at"},
+	"matter_codex_openai_accounts": {"id", "name", "credential_id", "status", "model_policy", "created_at", "updated_at"},
+	"matter_codex_github_accounts": {"id", "name", "credential_id", "secret_ref", "status", "created_at", "updated_at"},
+	"matter_codex_agent_flows":     {"id", "flow_id", "status"},
+	"matter_codex_project_runtime_variables": {"id", "project_id", "name", "slug", "description", "secret_ref",
+		"secret_key", "sensitive", "enabled", "created_at", "updated_at"},
 	"matter_codex_agent_role_runtime_variables": {"id", "role_id", "variable_id"},
 	"matter_codex_policy_revisions":             {"id", "project_id", "version", "status", "created_at", "activated_at"},
 	"matter_codex_role_capabilities":            {"id", "policy_revision_id", "role_id", "capability", "enabled"},
@@ -326,15 +337,17 @@ var sourceProjectionKeys = map[string][]string{
 	"matter_codex_owner_attention_requests": {"id", "process_run_id", "turn_id", "status"},
 	"matter_codex_agent_delegations": {"id", "project_id", "source_session_id", "source_turn_id", "target_chat_id",
 		"target_role_id", "target_session_id", "target_turn_id", "target_run_id", "status", "callback_turn_id", "callback_run_id"},
-	"matter_codex_agent_delegation_callback_deliveries":         {"id", "delegation_id", "callback_run_id", "destination", "status"},
-	"matter_codex_agent_delegation_callback_delivery_manifests": {"delegation_id", "callback_run_id", "expected_count"},
+	"matter_codex_agent_delegation_callback_deliveries": {"id", "delegation_id", "callback_run_id", "destination", "status",
+		"payload_sha256", "delivered_at", "created_at", "updated_at"},
+	"matter_codex_agent_delegation_callback_delivery_manifests": {"delegation_id", "callback_run_id", "expected_count", "plan_sha256", "created_at"},
 	"matter_codex_thread_contexts":                              {"id", "project_id", "chat_id", "status"},
 	"matter_codex_memory_records":                               {"id", "project_id", "scope", "role_id", "created_by_role_id", "source_turn_id", "status"},
-	"matter_codex_memory_record_versions":                       {"id", "record_id", "version", "content_hash", "supersedes_version_id"},
-	"matter_codex_memory_embeddings":                            {"version_id", "model_revision", "dimensions"},
-	"matter_codex_interaction_capabilities":                     {"status"},
+	"matter_codex_memory_record_versions": {"id", "record_id", "version", "title", "content", "content_hash",
+		"supersedes_version_id", "created_at"},
+	"matter_codex_memory_embeddings":        {"version_id", "model_revision", "dimensions"},
+	"matter_codex_interaction_capabilities": {"status"},
 	"matter_codex_automation_schedules": {"id", "public_id", "project_id", "target_agent_role_id", "target_chat_id",
-		"preset", "local_time", "time_zone", "enabled", "next_run_at", "playbook_key", "prompt_version",
+		"name", "owner_mattermost_user_id", "preset", "local_time", "time_zone", "enabled", "next_run_at", "playbook_key", "prompt_version",
 		"prompt_sha256", "callback_contract_version", "command_hash", "created_at", "updated_at"},
 	"matter_codex_schedule_occurrences": {"id", "schedule_id", "project_id", "status"},
 	"matter_codex_scheduled_runs": {"id", "occurrence_id", "schedule_id", "project_id", "target_agent_role_id",
@@ -371,7 +384,16 @@ func safeSourceProjection(table string, raw []byte) ([]byte, bool, error) {
 			projected[key] = value
 		}
 	}
+	rawDigest := sha256.Sum256(raw)
+	projected["_source_sha256"] = hex.EncodeToString(rawDigest[:])
+	projected["_source_bytes"] = len(raw)
 	if table == "matter_codex_agent_session_turns" {
+		artifactBytes, err := json.Marshal(source["artifacts"])
+		if err != nil {
+			return nil, false, errors.New("encode source turn artifacts")
+		}
+		artifactDigest := sha256.Sum256(artifactBytes)
+		projected["artifacts_sha256"] = hex.EncodeToString(artifactDigest[:])
 		switch artifacts := source["artifacts"].(type) {
 		case map[string]any:
 			projected["artifacts"] = len(artifacts)
@@ -379,6 +401,12 @@ func safeSourceProjection(table string, raw []byte) ([]byte, bool, error) {
 			projected["artifacts"] = len(artifacts)
 		default:
 			projected["artifacts"] = 0
+		}
+	}
+	if table == "matter_codex_agent_sessions" {
+		if archive, ok := source["session_archive_gzip_base64"].(string); ok && archive != "" {
+			digest := sha256.Sum256([]byte(archive))
+			projected["session_archive_sha256"] = hex.EncodeToString(digest[:])
 		}
 	}
 	if table == "matter_codex_agent_roles" {
@@ -412,288 +440,21 @@ func writeFramed(hash interface{ Write([]byte) (int, error) }, value []byte) {
 	_, _ = hash.Write(value)
 }
 
-func (repository *Repository) TargetResources(ctx context.Context) ([]model.TargetResource, error) {
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, errors.New("begin target inventory snapshot")
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	resources, err := targetResources(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, errors.New("close target inventory snapshot")
-	}
-	return resources, nil
-}
-
-func (repository *Repository) BeginTargetSnapshot(ctx context.Context) (TargetSnapshot, error) {
-	// Первый SELECT только получает locks. READ COMMITTED гарантирует, что
-	// inventory statements видят snapshot после ожидания concurrent writers.
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-	if err != nil {
-		return TargetSnapshot{}, errors.New("begin target snapshot")
-	}
-	fail := func(cause error) (TargetSnapshot, error) {
-		_ = tx.Rollback(ctx)
-		return TargetSnapshot{}, cause
-	}
-	if err := tx.QueryRow(ctx, mustQuery("target_snapshot__lock.sql"), pgx.StrictNamedArgs{}).Scan(new(any)); err != nil {
-		return fail(errors.New("lock target resources"))
-	}
-	resources, err := targetResources(ctx, tx)
-	if err != nil {
-		return fail(err)
-	}
-	return TargetSnapshot{Tx: tx, Resources: resources}, nil
-}
-
-type queryer interface {
-	Query(context.Context, string, ...any) (pgx.Rows, error)
-}
-
-func targetResources(ctx context.Context, database queryer) ([]model.TargetResource, error) {
-	result := make([]model.TargetResource, 0, 1024)
-	for _, name := range []string{
-		"target_resources__list.sql",
-		"target_runtime_derived_resources__list.sql",
-		"target_protected_history__list.sql",
-		"target_turn_attempts__list.sql",
-		"target_runtime_executions__list.sql",
-	} {
-		rows, err := database.Query(ctx, mustQuery(name), pgx.StrictNamedArgs{})
-		if err != nil {
-			return nil, errors.New("read target inventory")
-		}
-		for rows.Next() {
-			var raw string
-			if err := rows.Scan(&raw); err != nil {
-				rows.Close()
-				return nil, errors.New("scan target inventory")
-			}
-			var resource model.TargetResource
-			decoder := json.NewDecoder(strings.NewReader(raw))
-			decoder.UseNumber()
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&resource); err != nil {
-				rows.Close()
-				return nil, errors.New("decode target inventory")
-			}
-			if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
-				rows.Close()
-				return nil, errors.New("target inventory has trailing data")
-			}
-			resource.Canonical = []byte(raw)
-			switch resource.Kind {
-			case "ARTIFACT":
-				resource.ProjectionSHA256, err = artifactProjectionSHA(resource)
-				if err != nil {
-					rows.Close()
-					return nil, errors.New("derive target artifact projection")
-				}
-			case "ROLE_IMAGE_RECIPE":
-				resource.ProjectionSHA256, err = roleImageRecipeProjectionSHA(resource)
-				if err != nil {
-					rows.Close()
-					return nil, errors.New("derive target role image recipe projection")
-				}
-			}
-			result = append(result, resource)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, errors.New("stream target inventory")
-		}
-		rows.Close()
-	}
-	return result, nil
-}
-
-func artifactProjectionSHA(resource model.TargetResource) (string, error) {
-	type artifactSpec struct {
-		ArtifactKind       string    `json:"kind"`
-		Direction          string    `json:"direction"`
-		StorageRef         string    `json:"storageRef"`
-		SizeBytes          uint64    `json:"sizeBytes"`
-		MediaType          string    `json:"mediaType"`
-		SHA256             string    `json:"sha256"`
-		ScanStatus         string    `json:"scanStatus"`
-		RetentionPolicyRef string    `json:"retentionPolicyRef"`
-		ScanPolicyRevision uint64    `json:"scanPolicyRevision,omitempty"`
-		ScanEvidenceSHA256 string    `json:"scanEvidenceSha256,omitempty"`
-		ScannerWorkloadID  string    `json:"scannerWorkloadId,omitempty"`
-		ScannedAt          time.Time `json:"scannedAt,omitempty"`
-	}
-	encodedSpec, err := json.Marshal(resource.Spec)
-	if err != nil {
-		return "", err
-	}
-	var spec artifactSpec
-	decoder := json.NewDecoder(bytes.NewReader(encodedSpec))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&spec); err != nil || spec.ArtifactKind == "" || spec.Direction == "" ||
-		spec.StorageRef == "" || spec.SizeBytes == 0 || spec.MediaType == "" || !validSHA256(spec.SHA256) ||
-		spec.ScanStatus != "CLEAN" || spec.RetentionPolicyRef == "" || spec.ScanPolicyRevision == 0 ||
-		!validSHA256(spec.ScanEvidenceSHA256) || spec.ScannerWorkloadID == "" || spec.ScannedAt.IsZero() ||
-		resource.Name == "" || resource.CreatedAt.IsZero() || resource.UpdatedAt.IsZero() {
-		return "", errors.New("artifact projection is invalid")
-	}
-	projection, err := json.Marshal(struct {
-		ID             string       `json:"id"`
-		OrganizationID string       `json:"organizationId"`
-		ProjectID      string       `json:"projectId"`
-		ParentID       string       `json:"parentId,omitempty"`
-		OwnerActorID   string       `json:"ownerActorId"`
-		Kind           string       `json:"kind"`
-		Name           string       `json:"name"`
-		State          string       `json:"state"`
-		Version        uint64       `json:"version"`
-		Spec           artifactSpec `json:"spec"`
-		CreatedAt      time.Time    `json:"createdAt"`
-		UpdatedAt      time.Time    `json:"updatedAt"`
-	}{resource.ID, resource.OrganizationID, resource.ProjectID, resource.ParentID,
-		resource.OwnerActorID, resource.Kind, resource.Name, resource.State, resource.Version,
-		spec, resource.CreatedAt, resource.UpdatedAt})
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(projection)
-	return hex.EncodeToString(digest[:]), nil
-}
-
-type roleImagePlatform struct {
-	OS           string `json:"os"`
-	Architecture string `json:"architecture"`
-	Variant      string `json:"variant,omitempty"`
-}
-
-type roleImagePackage struct {
-	Manager   string `json:"manager"`
-	Name      string `json:"name"`
-	Version   string `json:"version"`
-	Digest    string `json:"digest"`
-	SourceRef string `json:"sourceRef"`
-}
-
-type roleImageTool struct {
-	Name      string `json:"name"`
-	Version   string `json:"version"`
-	SourceRef string `json:"sourceRef"`
-	SHA256    string `json:"sha256"`
-}
-
-type roleImageRecipeInput struct {
-	BaseImageReference string              `json:"baseImageReference"`
-	BaseImageDigest    string              `json:"baseImageDigest"`
-	SourceRef          string              `json:"sourceRef"`
-	SourceRevision     string              `json:"sourceRevision"`
-	SourceSHA256       string              `json:"sourceSha256"`
-	ContextRef         string              `json:"contextRef"`
-	ContextSHA256      string              `json:"contextSha256"`
-	BuilderSHA256      string              `json:"builderSha256"`
-	FrontendSHA256     string              `json:"frontendSha256"`
-	Platforms          []roleImagePlatform `json:"platforms"`
-	Packages           []roleImagePackage  `json:"packages"`
-	Tools              []roleImageTool     `json:"tools"`
-	InstallationBlock  string              `json:"installationBlock"`
-	ToolchainSHA256    string              `json:"toolchainSha256"`
-}
-
-type roleImageRecipeSpec struct {
-	Input                       roleImageRecipeInput `json:"input"`
-	Generation                  uint64               `json:"generation"`
-	SpecSHA256                  string               `json:"specSha256"`
-	PolicyRevision              uint64               `json:"policyRevision"`
-	PolicySHA256                string               `json:"policySha256"`
-	RoleRuntimeContractRevision uint64               `json:"roleRuntimeContractRevision"`
-	RoleRuntimeContractSHA256   string               `json:"roleRuntimeContractSha256"`
-}
-
-func roleImageRecipeProjectionSHA(resource model.TargetResource) (string, error) {
-	encodedSpec, err := json.Marshal(resource.Spec)
-	if err != nil {
-		return "", err
-	}
-	var spec roleImageRecipeSpec
-	decoder := json.NewDecoder(bytes.NewReader(encodedSpec))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&spec); err != nil || spec.Generation == 0 || !validSHA256(spec.SpecSHA256) ||
-		spec.PolicyRevision == 0 || !validSHA256(spec.PolicySHA256) ||
-		spec.RoleRuntimeContractRevision == 0 || !validSHA256(spec.RoleRuntimeContractSHA256) ||
-		resource.Name == "" || resource.CreatedAt.IsZero() || resource.UpdatedAt.IsZero() {
-		return "", errors.New("role image recipe projection is invalid")
-	}
-	projection, err := json.Marshal(struct {
-		ID             string              `json:"id"`
-		OrganizationID string              `json:"organizationId"`
-		ProjectID      string              `json:"projectId"`
-		ParentID       string              `json:"parentId,omitempty"`
-		OwnerActorID   string              `json:"ownerActorId"`
-		Kind           string              `json:"kind"`
-		Name           string              `json:"name"`
-		State          string              `json:"state"`
-		Version        uint64              `json:"version"`
-		Spec           roleImageRecipeSpec `json:"spec"`
-		CreatedAt      time.Time           `json:"createdAt"`
-		UpdatedAt      time.Time           `json:"updatedAt"`
-	}{resource.ID, resource.OrganizationID, resource.ProjectID, resource.ParentID,
-		resource.OwnerActorID, resource.Kind, resource.Name, resource.State, resource.Version,
-		spec, resource.CreatedAt, resource.UpdatedAt})
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(projection)
-	return hex.EncodeToString(digest[:]), nil
-}
-
-func validSHA256(value string) bool {
-	if len(value) != sha256.Size*2 {
-		return false
-	}
-	for _, symbol := range value {
-		if (symbol < '0' || symbol > '9') && (symbol < 'a' || symbol > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
 func FreezeSourceSnapshot(ctx context.Context, tx pgx.Tx, receipt model.Receipt) error {
 	return applyReceipt(ctx, tx, "source_cutover__freeze.sql", receipt, nil, "FROZEN", "COMMITTED")
-}
-
-func CommitTargetSnapshot(ctx context.Context, tx pgx.Tx, receipt model.Receipt) error {
-	return applyReceipt(ctx, tx, "target_cutover__commit.sql", receipt, nil, "COMMITTED")
 }
 
 func (repository *Repository) PrepareSource(ctx context.Context, receipt model.Receipt) error {
 	return repository.withReceiptTx(ctx, "source_cutover__prepare.sql", receipt, nil, "PREPARED")
 }
 
-func (repository *Repository) PrepareTarget(ctx context.Context, receipt model.Receipt, counts any,
-	commands []model.MaterializationCommand,
-) error {
-	encoded, err := json.Marshal(counts)
-	if err != nil {
-		return errors.New("encode mapping counts")
-	}
-	materialization, err := json.Marshal(commands)
-	if err != nil {
-		return errors.New("encode materialization intent")
-	}
-	return repository.withReceiptTx(ctx, "target_cutover__prepare.sql", receipt, pgx.StrictNamedArgs{
-		"mapping_counts": string(encoded), "materialization_plan": string(materialization),
-	}, "PREPARED")
-}
-
-func (repository *Repository) MarkTargetRestoreVerified(ctx context.Context, receipt model.Receipt) error {
-	if err := repository.withReceiptTx(ctx, "target_cutover__verify_restore.sql", receipt, nil, "PREPARED"); err != nil {
+func (repository *Repository) MarkSourceRestoreVerified(ctx context.Context, receipt model.Receipt) error {
+	if err := repository.withReceiptTx(ctx, "source_cutover__verify_restore.sql", receipt, nil, "PREPARED"); err != nil {
 		return err
 	}
-	stored, err := repository.GetTargetReceipt(ctx, receipt.PlanID)
+	stored, err := repository.GetSourceReceipt(ctx, receipt.PlanID)
 	if err != nil || !sameImmutableReceipt(receipt, stored) || stored.State != "PREPARED" || !stored.RestoreVerified {
-		return errors.New("restore verification receipt readback mismatch")
+		return errors.New("source restore verification receipt readback mismatch")
 	}
 	return nil
 }
@@ -706,32 +467,16 @@ func (repository *Repository) CommitSource(ctx context.Context, receipt model.Re
 	return repository.withReceiptTx(ctx, "source_cutover__commit.sql", receipt, nil, "COMMITTED")
 }
 
-func (repository *Repository) CommitTarget(ctx context.Context, receipt model.Receipt) error {
-	return repository.withReceiptTx(ctx, "target_cutover__commit.sql", receipt, nil, "COMMITTED")
-}
-
 func (repository *Repository) AbortSource(ctx context.Context, receipt model.Receipt) error {
 	return repository.withReceiptTx(ctx, "source_cutover__abort.sql", receipt, nil, "ABORTED")
-}
-
-func (repository *Repository) AbortTarget(ctx context.Context, receipt model.Receipt) error {
-	return repository.withReceiptTx(ctx, "target_cutover__abort.sql", receipt, nil, "ABORTED")
 }
 
 func (repository *Repository) GetSourceReceipt(ctx context.Context, planID string) (model.Receipt, error) {
 	return repository.getReceipt(ctx, "source_cutover__get.sql", planID)
 }
 
-func (repository *Repository) GetTargetReceipt(ctx context.Context, planID string) (model.Receipt, error) {
-	return repository.getReceipt(ctx, "target_cutover__get.sql", planID)
-}
-
 func (repository *Repository) FindSourceReceipt(ctx context.Context, planID string) (model.Receipt, bool, error) {
 	return repository.findReceipt(ctx, "source_cutover__get.sql", planID)
-}
-
-func (repository *Repository) FindTargetReceipt(ctx context.Context, planID string) (model.Receipt, bool, error) {
-	return repository.findReceipt(ctx, "target_cutover__get.sql", planID)
 }
 
 func (repository *Repository) findReceipt(ctx context.Context, name, planID string) (model.Receipt, bool, error) {

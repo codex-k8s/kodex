@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/inventory"
-	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
 )
 
 func TestSecurePoolConfig(t *testing.T) {
@@ -85,39 +84,13 @@ func TestPrincipalReadbackContainsExactSourceInventory(t *testing.T) {
 			t.Fatalf("principal readback misses exact source table %q", table)
 		}
 	}
-}
-
-func TestTargetCutoverUsesClosedOwnerCapabilities(t *testing.T) {
-	t.Parallel()
-	for _, name := range []string{"target_cutover__prepare.sql", "target_cutover__verify_restore.sql", "target_cutover__abort.sql"} {
-		query := mustQuery(name)
-		if strings.Contains(query, "UPDATE control_plane.legacy_data_cutovers") ||
-			strings.Contains(query, "INSERT INTO control_plane.legacy_data_cutovers") {
-			t.Fatalf("%s содержит прямой receipt DML", name)
-		}
-	}
-	path := filepath.Join("..", "..", "..", "..", "..", "internal", "control-plane", "cmd", "cli",
-		"migrations", "20260807019601_legacy_data_cutover_hardening.sql")
-	migration, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("прочитать hardening migration: %v", err)
-	}
-	text := string(migration)
-	for _, operation := range []string{"UPSERT_PROJECT", "UPSERT_TEAM", "UPSERT_CHAT",
-		"UPSERT_PROTECTED_CONFIGURATION", "UPSERT_SESSION", "UPSERT_TURN", "UPSERT_TURN_ATTEMPT",
-		"UPSERT_PROCESS_RUN", "UPSERT_SCHEDULE"} {
-		if !strings.Contains(text, "'"+operation+"'") {
-			t.Fatalf("hardening migration не содержит operation %s", operation)
-		}
-	}
-	if !strings.Contains(text, "REVOKE INSERT, UPDATE, DELETE, TRUNCATE") ||
-		!strings.Contains(text, "legacy_data_cutovers_immutable_transition") ||
-		!strings.Contains(text, "legacy_data_cutover_provenance") {
-		t.Fatal("hardening migration не закрывает receipt/provenance boundary")
+	if strings.Contains(query, "control_plane_migration") ||
+		strings.Contains(query, "materialize_legacy_data_cutover") {
+		t.Fatal("source principal readback retained removed target PostgreSQL authority")
 	}
 }
 
-func TestSafeSourceProjectionDropsPrivatePayload(t *testing.T) {
+func TestSourceProjectionRetainsRequiredMaterializationPayload(t *testing.T) {
 	t.Parallel()
 	projected, retained, err := safeSourceProjection("matter_codex_agent_session_turns", []byte(
 		`{"id":5,"session_id":4,"run_id":"run","status":"succeeded","binding_version":3,`+
@@ -126,39 +99,19 @@ func TestSafeSourceProjectionDropsPrivatePayload(t *testing.T) {
 	if err != nil || !retained {
 		t.Fatalf("safeSourceProjection() retained=%t error=%v", retained, err)
 	}
-	if bytes.Contains(projected, []byte("private")) || !bytes.Contains(projected, []byte(`"artifacts":2`)) {
-		t.Fatalf("unsafe source projection: %s", projected)
+	if !bytes.Contains(projected, []byte("private prompt")) || !bytes.Contains(projected, []byte("private result")) ||
+		!bytes.Contains(projected, []byte(`"artifacts":2`)) || !bytes.Contains(projected, []byte(`"_source_sha256"`)) {
+		t.Fatalf("materialization projection is incomplete: %s", projected)
 	}
 	if projected, retained, err = safeSourceProjection("matter_codex_memory_record_versions",
-		[]byte(`{"id":1,"record_id":2,"version":1,"content_hash":"hash","content":"private memory"}`)); err != nil || !retained || bytes.Contains(projected, []byte("private")) ||
+		[]byte(`{"id":1,"record_id":2,"version":1,"content_hash":"hash","content":"private memory"}`)); err != nil || !retained || !bytes.Contains(projected, []byte("private memory")) ||
 		!bytes.Contains(projected, []byte(`"record_id":2`)) {
-		t.Fatalf("unsafe memory lineage projection: value=%s retained=%t error=%v", projected, retained, err)
+		t.Fatalf("memory materialization projection is incomplete: value=%s retained=%t error=%v", projected, retained, err)
 	}
 	if projected, retained, err = safeSourceProjection("matter_codex_agent_roles",
-		[]byte(`{"id":1,"project_id":2,"name":"worker","prompt_template":"private instruction","enabled":true}`)); err != nil || !retained || bytes.Contains(projected, []byte("private")) ||
+		[]byte(`{"id":1,"project_id":2,"name":"worker","prompt_template":"private instruction","enabled":true}`)); err != nil || !retained || !bytes.Contains(projected, []byte("private instruction")) ||
 		!bytes.Contains(projected, []byte(`"prompt_sha256"`)) {
-		t.Fatalf("unsafe role instruction projection: value=%s retained=%t error=%v", projected, retained, err)
-	}
-}
-
-func TestArtifactProjectionSHARequiresExactAdmittedArtifact(t *testing.T) {
-	t.Parallel()
-	now := time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC)
-	digest := string(bytes.Repeat([]byte{'a'}, 64))
-	resource := model.TargetResource{ID: "artifact-id", OrganizationID: "organization-id",
-		ProjectID: "project-id", ParentID: "turn-id", OwnerActorID: "owner-id", Kind: "ARTIFACT",
-		Name: "artifact", State: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now,
-		Spec: map[string]any{"kind": "turn-input", "direction": "INPUT",
-			"storageRef": "s3://bucket/key?versionId=immutable-v1", "sizeBytes": 1,
-			"mediaType": "text/markdown", "sha256": digest, "scanStatus": "CLEAN",
-			"retentionPolicyRef": "control-plane://retention/default", "scanPolicyRevision": 1,
-			"scanEvidenceSha256": digest, "scannerWorkloadId": "artifact-scanner", "scannedAt": now}}
-	if projection, err := artifactProjectionSHA(resource); err != nil || !validSHA256(projection) {
-		t.Fatalf("artifactProjectionSHA() projection=%q error=%v", projection, err)
-	}
-	resource.Spec["unexpected"] = true
-	if _, err := artifactProjectionSHA(resource); err == nil {
-		t.Fatal("artifactProjectionSHA() accepted an unknown spec field")
+		t.Fatalf("role materialization projection is incomplete: value=%s retained=%t error=%v", projected, retained, err)
 	}
 }
 

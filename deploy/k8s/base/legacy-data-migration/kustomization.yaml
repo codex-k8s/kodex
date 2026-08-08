@@ -6,8 +6,10 @@ resources:
   - backup-pvc.yaml
   - vault-secret-provider-class.yaml
   - vault-restore-secret-provider-class.yaml
+  - vault-issuer-secret-provider-classes.yaml
   - job.yaml
   - service.yaml
   - servicemonitor.yaml
   - networkpolicy.yaml
   - prometheusrule.yaml
+  - owner-evidence-configmap.yaml

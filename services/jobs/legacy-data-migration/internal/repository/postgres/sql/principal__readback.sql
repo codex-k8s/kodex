@@ -15,14 +15,6 @@ WITH RECURSIVE session_role AS (
     SELECT parent.roleid
     FROM pg_catalog.pg_auth_members AS parent
     JOIN memberships ON memberships.roleid = parent.member
-), target_tables(table_schema, table_name) AS (
-    VALUES
-        ('control_plane', 'resources'),
-        ('control_plane', 'turn_attempts'),
-        ('control_plane', 'runtime_executions'),
-        ('control_plane', 'runtime_derived_resources'),
-        ('control_plane', 'protected_resource_history'),
-        ('control_plane', 'legacy_data_cutovers')
 ), source_tables(table_schema, table_name) AS (
     VALUES
         ('public', 'matter_codex_agent_delegation_callback_deliveries'),
@@ -157,60 +149,6 @@ SELECT current_user = session_user,
                )
                AND has_function_privilege(
                    session_user, 'public.matter_codex_lock_legacy_business_tables()', 'EXECUTE'
-               )
-           WHEN 'control_plane_migration' THEN
-               NOT EXISTS (
-                   SELECT 1 FROM target_tables AS expected
-                   WHERE NOT has_table_privilege(
-                       session_user,
-                       format('%I.%I', expected.table_schema, expected.table_name),
-                       'SELECT'
-                   )
-               )
-               AND NOT EXISTS (
-                   SELECT 1 FROM information_schema.tables AS candidate
-                   WHERE candidate.table_schema NOT IN ('pg_catalog', 'information_schema')
-                     AND has_table_privilege(
-                         session_user,
-                         format('%I.%I', candidate.table_schema, candidate.table_name),
-                         'SELECT'
-                     )
-                     AND NOT EXISTS (
-                         SELECT 1 FROM target_tables AS expected
-                         WHERE expected.table_schema = candidate.table_schema
-                           AND expected.table_name = candidate.table_name
-                     )
-               )
-               AND has_function_privilege(
-                   session_user, 'control_plane.lock_legacy_cutover_resources()', 'EXECUTE'
-               )
-               AND has_function_privilege(
-                   session_user,
-                   'control_plane.materialize_legacy_data_cutover(text,text,text,text,text,text,text,bigint)',
-                   'EXECUTE'
-               )
-               AND has_function_privilege(
-                   session_user,
-                   'control_plane.prepare_legacy_data_cutover(text,text,text,text,text,text,text,bigint,text,jsonb)',
-                   'EXECUTE'
-               )
-               AND has_function_privilege(
-                   session_user,
-                   'control_plane.verify_legacy_data_cutover_restore(text,text,text,text,text,text,text,bigint)',
-                   'EXECUTE'
-               )
-               AND has_function_privilege(
-                   session_user,
-                   'control_plane.abort_legacy_data_cutover(text,text,text,text,text,text,text,bigint)',
-                   'EXECUTE'
-               )
-               AND has_schema_privilege(
-                   session_user, 'control_plane_extensions', 'USAGE'
-               )
-               AND has_function_privilege(
-                   session_user,
-                   'control_plane_extensions.digest(bytea,text)',
-                   'EXECUTE'
                )
            ELSE true
        END,

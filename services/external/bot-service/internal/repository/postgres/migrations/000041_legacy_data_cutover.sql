@@ -23,12 +23,14 @@ CREATE TABLE matter_codex_legacy_data_cutovers (
 	manifest_sha256 text NOT NULL CHECK (manifest_sha256 ~ '^[a-f0-9]{64}$'),
 	materialization_sha256 text NOT NULL CHECK (materialization_sha256 ~ '^[a-f0-9]{64}$'),
 	materialization_count bigint NOT NULL CHECK (materialization_count BETWEEN 0 AND 100000),
+	restore_verified boolean NOT NULL DEFAULT false,
 	state text NOT NULL CHECK (state IN ('PREPARED', 'FROZEN', 'COMMITTED', 'ABORTED')),
 	prepared_at timestamptz NOT NULL,
 	frozen_at timestamptz,
 	committed_at timestamptz,
 	aborted_at timestamptz,
 	CHECK ((state IN ('FROZEN', 'COMMITTED')) = (frozen_at IS NOT NULL)),
+	CHECK (state NOT IN ('FROZEN', 'COMMITTED') OR restore_verified),
 	CHECK ((state = 'COMMITTED') = (committed_at IS NOT NULL)),
 	CHECK ((state = 'ABORTED') = (aborted_at IS NOT NULL))
 );

@@ -1,21 +1,38 @@
 package app
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/planner"
 )
 
 func TestConfigValidateFailClosed(t *testing.T) {
 	t.Parallel()
 	valid := Config{
-		Mode: "dry-run", PlanID: "issue-196-plan-0001",
-		SourceDSNFile: "/run/source-dsn", TargetDSNFile: "/run/target-dsn",
+		Mode: "dry-run", PlanID: "11111111-1111-4111-8111-111111111111",
+		SourceRootReference: "vault://legacy/root", SourceRootSHA256: strings.Repeat("a", 64),
+		SourceDSNFile:       "/run/source-dsn",
 		SourceTLSServerName: "source.database.svc", SourceCAFile: "/run/source-ca.pem",
-		TargetTLSServerName: "target.database.svc", TargetCAFile: "/run/target-ca.pem",
+		ControlPlaneTarget: "control-plane:8443", ControlPlaneTLSServerName: "control-plane.internal",
+		ControlPlaneCAFile: "/run/control-ca.pem", ControlPlaneCertificateFile: "/run/tls.crt",
+		ControlPlanePrivateKeyFile: "/run/tls.key", ApplicationGrantFile: "/run/grant.jws",
+		AuthorityPolicyFile: "/run/authority-policy.json", OwnerEvidenceFile: "/run/owner-evidence.json",
+		AuthorityPolicyRevision: 1, AuthorityPolicySHA256: strings.Repeat("b", 64),
+		ImagePolicyRevision: 1, ImagePolicySHA256: strings.Repeat("c", 64),
+		RoleRuntimeContractRevision: 1, RoleRuntimeContractSHA256: strings.Repeat("d", 64),
+		RoleImageInputRepository: "registry.internal/inputs", TrustedRoleBaseRepository: "registry.internal/base",
+		TrustedRoleBaseDigest: "sha256:" + strings.Repeat("e", 64), ControlPlaneRPCDeadline: 10 * time.Second,
+		OwnerEvidence: planner.Evidence{RoleImage: &controlplanev1.RoleImageRecipeInput{
+			BaseImageReference: "registry.internal/base", BaseImageDigest: "sha256:" + strings.Repeat("e", 64),
+			ContextRef: "oci://registry.internal/inputs@sha256:" + strings.Repeat("f", 64),
+		}},
 		BackupDirectory: "/data/migration/backups", BackupKeyFile: "/run/backup-key",
 		ReportPath: "/data/migration/reports/report.json", TechnicalListen: ":9090",
 		StartupTimeout: 30 * time.Second, OperationTimeout: 30 * time.Minute, ShutdownTimeout: 10 * time.Second,
-		TerminalScrapeHold: 20 * time.Second,
+		TerminalScrapeHold: 20 * time.Second, MaximumStagingBytes: 1920 << 20,
 	}
 	if err := valid.validate(); err != nil {
 		t.Fatalf("validate() error = %v", err)
@@ -43,18 +60,11 @@ func TestConfigValidateFailClosed(t *testing.T) {
 
 func TestCommitStateAllowed(t *testing.T) {
 	t.Parallel()
-	allowed := map[[2]string]bool{
-		{"PREPARED", "PREPARED"}:   true,
-		{"FROZEN", "PREPARED"}:     true,
-		{"FROZEN", "COMMITTED"}:    true,
-		{"COMMITTED", "COMMITTED"}: true,
-	}
+	allowed := map[string]bool{"PREPARED": true, "FROZEN": true, "COMMITTED": true}
 	states := []string{"PREPARED", "FROZEN", "COMMITTED", "ABORTED"}
 	for _, sourceState := range states {
-		for _, targetState := range states {
-			if commitStateAllowed(sourceState, targetState) != allowed[[2]string{sourceState, targetState}] {
-				t.Fatalf("commitStateAllowed(%q, %q) returned an unsafe result", sourceState, targetState)
-			}
+		if sourceCommitStateAllowed(sourceState) != allowed[sourceState] {
+			t.Fatalf("sourceCommitStateAllowed(%q) returned an unsafe result", sourceState)
 		}
 	}
 }

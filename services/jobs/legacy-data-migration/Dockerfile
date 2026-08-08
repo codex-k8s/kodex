@@ -3,10 +3,20 @@
 FROM docker.io/library/golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
 ENV GOTOOLCHAIN=local
 ARG VERSION=dev
+WORKDIR /workspace
+COPY libs/go/controlplaneapi/go.mod libs/go/controlplaneapi/go.mod
+COPY libs/go/controlplaneclient/go.mod libs/go/controlplaneclient/go.mod
+COPY libs/go/internalrpcauth/go.mod libs/go/internalrpcauth/go.mod
+COPY services/jobs/legacy-data-migration/go.mod services/jobs/legacy-data-migration/go.sum services/jobs/legacy-data-migration/
 WORKDIR /workspace/services/jobs/legacy-data-migration
-COPY services/jobs/legacy-data-migration/go.mod services/jobs/legacy-data-migration/go.sum ./
 RUN go mod download
-COPY services/jobs/legacy-data-migration/ ./
+
+WORKDIR /workspace
+COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
+COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
+COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
+COPY services/jobs/legacy-data-migration/ services/jobs/legacy-data-migration/
+WORKDIR /workspace/services/jobs/legacy-data-migration
 RUN test "$(go env GOVERSION)" = "go1.26.5"
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \

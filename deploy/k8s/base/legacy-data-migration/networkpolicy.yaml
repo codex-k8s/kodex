@@ -32,6 +32,8 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
+        - protocol: TCP
+          port: 9091
   egress:
     - to:
         - namespaceSelector:
@@ -55,10 +57,10 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: control-plane-postgresql
+              app.kubernetes.io/name: control-plane
       ports:
         - protocol: TCP
-          port: 5432
+          port: 8443
     - to:
         - podSelector:
             matchLabels:
@@ -66,3 +68,31 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-postgresql}
+      ports: [{protocol: TCP, port: 5432}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: vault}
+      ports: [{protocol: TCP, port: 8200}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-readback-attestor}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: internal-rpc-authority-restore-controller}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sentry-relay}
+      ports: [{protocol: TCP, port: 8443}]

@@ -1,3330 +1,1339 @@
-// Package planner строит детерминированную source-to-target карту без effects.
+// Package planner строит единственный typed owner plan из immutable source snapshot.
 package planner
 
 import (
 	"bytes"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/inventory"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const schemaVersion = "mattercodex.legacy-data-migration-plan.v1"
 
 type sourceRow map[string]any
 
-var knownSourceTables = func() map[string]struct{} {
-	result := make(map[string]struct{}, len(inventory.Tables))
-	for _, table := range inventory.Tables {
-		result[table] = struct{}{}
-	}
-	return result
-}()
+// Evidence содержит только deploy-owned, несекретное readback-доказательство
+// immutable archive, provider и role image. Business graph всегда выводится
+// из source snapshot; этот контракт не принимает target IDs или DML payload.
+type Evidence struct {
+	ArchiveStoragePrefix                string
+	ArchiveStorageVersion               string
+	ArchiveRetentionRef                 string
+	ArchiveScanPolicyRevision           uint64
+	ArchiveScanEvidenceSHA256           string
+	ArchiveScannerWorkloadID            string
+	ArchiveScannedAt                    time.Time
+	ProviderObservedAt                  time.Time
+	ProviderObservationRevision         uint64
+	ProviderObservedLimit               uint64
+	RoleImage                           *controlplanev1.RoleImageRecipeInput
+	RoleImageGeneration                 uint64
+	RoleImageSpecSHA256                 string
+	ImagePolicyRevision                 uint64
+	ImagePolicySHA256                   string
+	RuntimeContractRevision             uint64
+	RuntimeContractSHA256               string
+	ImageBuildStagingReference          string
+	ImageBuildManifestDigest            string
+	ImageBuildProvenanceSHA256          string
+	ImageArtifactPromotedReference      string
+	ImageAdmissionRevision              uint64
+	ImageAdmissionReceiptSHA256         string
+	ImageAdmissionReceiptManifestDigest string
+	ImageSignatureSHA256                string
+	ImagePromotionReadbackSHA256        string
+	ImageSBOMSHA256                     string
+	ImageVulnerabilityEvidenceSHA256    string
+	ImageSignatureIdentity              string
+	ImagePromotedAt                     time.Time
+	AuthorityPolicyRevision             uint64
+	AuthorityPolicySHA256               string
+}
 
-func Build(planID string, snapshot []model.SnapshotRow, target []model.TargetResource) (model.Plan, error) {
-	counts := make(map[string]uint64)
-	source, sourceDigest, err := decodeSource(snapshot, counts)
+type Result struct {
+	Report  model.Plan
+	Request *controlplanev1.PrepareLegacyGraphMigrationRequest
+}
+
+func Build(planID, idempotencyKey, sourceRootReference, sourceRootSHA256 string,
+	projection []model.SnapshotRow, sourceDigest string, counts map[string]uint64,
+	sourceTableDigests map[string]string, evidence Evidence,
+) (Result, error) {
+	rows, _, err := decodeSource(projection, counts)
+	if err != nil || !validSHA(sourceDigest) || !validSHA(sourceRootSHA256) ||
+		!validSourceTableDigests(sourceTableDigests) {
+		return Result{}, errors.New("source inventory evidence is invalid")
+	}
+	builder := ownerBuilder{rows: rows, counts: counts, tableDigests: cloneStrings(sourceTableDigests),
+		evidence: evidence, operations: make([]*controlplanev1.LegacyGraphOperation, 0, 512)}
+	if err := builder.build(); err != nil {
+		return Result{}, err
+	}
+	if err := builder.sortOperations(); err != nil {
+		return Result{}, err
+	}
+	dispositions, ownerSnapshotSHA256, err := builder.dispositions()
 	if err != nil {
-		return model.Plan{}, err
+		return Result{}, err
 	}
-	return build(planID, source, sourceDigest, counts, target)
+	request := &controlplanev1.PrepareLegacyGraphMigrationRequest{
+		IdempotencyKey: idempotencyKey, PlanId: planID,
+		SourceRootReference: sourceRootReference, SourceRootSha256: sourceRootSHA256,
+		SourceSnapshotSha256: ownerSnapshotSHA256, SourceDispositions: dispositions,
+		Operations: builder.operations,
+	}
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
+	if err != nil || len(encoded) > 8<<20 || len(builder.operations) > 2000 {
+		return Result{}, errors.New("typed owner materialization plan exceeds its closed limit")
+	}
+	requestSHA256 := digest(encoded)
+	report := model.Plan{
+		SchemaVersion: schemaVersion, PlanID: planID, SourceSHA256: sourceDigest,
+		MappingSHA256: ownerSnapshotSHA256, MaterializationSHA256: requestSHA256,
+		MaterializationCount: uint64(len(builder.operations)), OwnerRequestSHA256: requestSHA256,
+		Counts: model.Counts{Source: cloneCounts(counts), Mapped: builder.mapped, Archive: builder.archived},
+		Violations: map[string]uint64{"ambiguous_target": 0, "broken_lineage": 0,
+			"duplicate_source": 0, "orphan_reference": 0, "stale_reference": 0,
+			"tenant_mismatch": 0, "unknown_state": 0, "unmaterialized_active": 0,
+			"unsupported_state": 0},
+	}
+	report.PlanSHA256 = digest([]byte(planID + "\x00" + sourceRootSHA256 + "\x00" +
+		sourceDigest + "\x00" + ownerSnapshotSHA256 + "\x00" + requestSHA256))
+	return Result{Report: report, Request: request}, nil
 }
 
-// BuildInventory принимает полный потоковый digest/counts и только безопасную
-// проекцию строк, нужную для mapping. Raw archive payload остаётся в pg_dump.
-func BuildInventory(planID string, projection []model.SnapshotRow, sourceDigest string,
-	counts map[string]uint64, target []model.TargetResource,
-) (model.Plan, error) {
-	projection = append([]model.SnapshotRow(nil), projection...)
-	sort.SliceStable(projection, func(left, right int) bool {
-		if projection[left].Table != projection[right].Table {
-			return projection[left].Table < projection[right].Table
-		}
-		return bytes.Compare(projection[left].Payload, projection[right].Payload) < 0
-	})
-	projectedCounts := make(map[string]uint64)
-	source, _, err := decodeSource(projection, projectedCounts)
-	if err != nil || !validSHA(sourceDigest) || len(counts) == 0 {
-		return model.Plan{}, errors.New("source inventory evidence is invalid")
-	}
-	for table, count := range projectedCounts {
-		if count > counts[table] {
-			return model.Plan{}, errors.New("source inventory projection count is invalid")
-		}
-	}
-	for table, count := range counts {
-		if _, known := knownSourceTables[table]; known && projectedCounts[table] != count {
-			return model.Plan{}, errors.New("source inventory projection is incomplete")
-		}
-	}
-	clonedCounts := make(map[string]uint64, len(counts))
-	for table, count := range counts {
-		clonedCounts[table] = count
-	}
-	return build(planID, source, sourceDigest, clonedCounts, target)
+type ownerBuilder struct {
+	rows                                               map[string][]sourceRow
+	counts, mapped, archived                           map[string]uint64
+	tableDigests                                       map[string]string
+	evidence                                           Evidence
+	operations                                         []*controlplanev1.LegacyGraphOperation
+	roles, chats, sessions, turns, attempts, processes map[int64]string
+	assignments                                        map[string]string
+	providers, providerCredentials                     map[string]string
+	credentials                                        map[int64]string
+	provenanceRefs                                     []string
+	projectID                                          int64
 }
 
-func build(planID string, source map[string][]sourceRow, sourceDigest string,
-	counts map[string]uint64, target []model.TargetResource,
-) (model.Plan, error) {
-	if len(planID) < 16 || len(planID) > 128 {
-		return model.Plan{}, errors.New("migration plan identifier is invalid")
+func (builder *ownerBuilder) build() error {
+	builder.mapped, builder.archived = make(map[string]uint64), make(map[string]uint64)
+	builder.roles, builder.chats = make(map[int64]string), make(map[int64]string)
+	builder.sessions, builder.turns, builder.attempts = make(map[int64]string), make(map[int64]string), make(map[int64]string)
+	builder.processes, builder.assignments = make(map[int64]string), make(map[string]string)
+	builder.providers, builder.providerCredentials = make(map[string]string), make(map[string]string)
+	builder.credentials = make(map[int64]string)
+	if err := validateEvidence(builder.evidence); err != nil {
+		return err
 	}
-	plan := model.Plan{
-		SchemaVersion: schemaVersion,
-		PlanID:        planID,
-		Counts: model.Counts{
-			Source: counts, Mapped: make(map[string]uint64), Archive: make(map[string]uint64),
-		},
-		Violations: map[string]uint64{
-			"ambiguous_target": 0, "broken_lineage": 0, "duplicate_source": 0,
-			"orphan_reference": 0, "stale_reference": 0, "tenant_mismatch": 0,
-			"unknown_state": 0, "unmaterialized_active": 0, "unsupported_state": 0,
-		},
+	projects := builder.rows["matter_codex_projects"]
+	if len(projects) != 1 {
+		return errors.New("typed owner plan requires exactly one unambiguous source project")
 	}
-	plan.SourceSHA256 = sourceDigest
-	for required := range knownSourceTables {
-		if _, exists := plan.Counts.Source[required]; !exists {
-			plan.Violations["unsupported_state"]++
+	project := projects[0]
+	builder.projectID = number(project, "id")
+	if builder.projectID == 0 || builder.validateProjectBoundary() != nil {
+		return errors.New("source graph crosses or lacks the selected project boundary")
+	}
+	builder.addProject(project)
+	builder.addTeam(project)
+	for _, row := range builder.rows["matter_codex_chats"] {
+		builder.addChat(row)
+	}
+	for _, row := range builder.rows["matter_codex_agent_roles"] {
+		builder.addRolePrerequisites(row)
+	}
+	for _, row := range builder.rows["matter_codex_agent_session_turns"] {
+		builder.addTurnArtifacts(row)
+	}
+	builder.addProvenanceArtifacts()
+	for _, row := range builder.rows["matter_codex_credentials"] {
+		if err := builder.addCredential(row); err != nil {
+			return err
 		}
 	}
-	target = seedActiveGraphMaterialization(source, target, &plan)
-	matched := make(map[string]model.TargetResource)
-	mapping := make([]string, 0, len(source))
-	mapSource(source, target, &plan, matched, &mapping)
-	validateArchivedInventory(source, &plan)
-	archiveRemaining(source, &plan, &mapping)
-	detectMappingDuplicates(mapping, &plan)
-	plan.MappingSHA256 = digestMapping(mapping)
-	sort.SliceStable(plan.Materialization, func(left, right int) bool {
-		leftRank, rightRank := materializationOperationRank(plan.Materialization[left].Operation),
-			materializationOperationRank(plan.Materialization[right].Operation)
-		if leftRank != rightRank {
-			return leftRank < rightRank
+	for _, row := range builder.rows["matter_codex_openai_accounts"] {
+		if err := builder.addProvider(row); err != nil {
+			return err
 		}
-		if plan.Materialization[left].SourceTable != plan.Materialization[right].SourceTable {
-			return plan.Materialization[left].SourceTable < plan.Materialization[right].SourceTable
+	}
+	if len(builder.providers) == 0 {
+		return errors.New("active source graph has no eligible provider evidence")
+	}
+	for _, row := range builder.rows["matter_codex_agent_roles"] {
+		if err := builder.addRoleGraph(row); err != nil {
+			return err
 		}
-		if plan.Materialization[left].SourceID != plan.Materialization[right].SourceID {
-			return plan.Materialization[left].SourceID < plan.Materialization[right].SourceID
+	}
+	for _, row := range builder.rows["matter_codex_chat_participants"] {
+		if err := builder.addAssignment(row); err != nil {
+			return err
 		}
-		return plan.Materialization[left].TargetID < plan.Materialization[right].TargetID
-	})
-	if len(plan.Materialization) > 100_000 {
-		return model.Plan{}, errors.New("materialization plan exceeds the closed command limit")
 	}
-	materialization, materializationErr := json.Marshal(plan.Materialization)
-	if materializationErr != nil {
-		return model.Plan{}, errors.New("encode materialization plan")
+	for _, row := range builder.rows["matter_codex_automation_schedules"] {
+		if err := builder.addSchedule(row); err != nil {
+			return err
+		}
 	}
-	if len(materialization) > 1024*1024 {
-		return model.Plan{}, errors.New("materialization plan exceeds the closed byte limit")
+	for _, row := range builder.rows["matter_codex_agent_sessions"] {
+		if err := builder.indexSession(row); err != nil {
+			return err
+		}
 	}
-	plan.MaterializationSHA256 = digestBytes(materialization)
-	plan.MaterializationCount = uint64(len(plan.Materialization))
-	plan.TargetSHA256 = digestTargets(matched)
-	planSHA, err := digestPlan(plan)
-	if err != nil {
-		return model.Plan{}, err
+	for _, row := range builder.rows["matter_codex_agent_session_turns"] {
+		if err := builder.indexTurn(row); err != nil {
+			return err
+		}
 	}
-	plan.PlanSHA256 = planSHA
-	return plan, nil
+	for _, row := range builder.rows["matter_codex_process_runs"] {
+		builder.indexProcess(row)
+	}
+	for _, row := range builder.rows["matter_codex_agent_sessions"] {
+		if err := builder.addRuntime(row); err != nil {
+			return err
+		}
+	}
+	for _, row := range builder.rows["matter_codex_agent_sessions"] {
+		if err := builder.addSession(row); err != nil {
+			return err
+		}
+	}
+	for _, row := range builder.rows["matter_codex_agent_session_turns"] {
+		if err := builder.addTurnAndAttempt(row); err != nil {
+			return err
+		}
+	}
+	for _, row := range builder.rows["matter_codex_process_runs"] {
+		if err := builder.addProcess(row); err != nil {
+			return err
+		}
+	}
+	for _, row := range builder.rows["matter_codex_agent_delegations"] {
+		if err := builder.addDelegation(row); err != nil {
+			return err
+		}
+	}
+	for _, row := range builder.rows["matter_codex_agent_delegation_callback_delivery_manifests"] {
+		if err := builder.addCallbackManifest(row); err != nil {
+			return err
+		}
+	}
+	for _, row := range builder.rows["matter_codex_agent_delegation_callback_deliveries"] {
+		if err := builder.addCallbackDelivery(row); err != nil {
+			return err
+		}
+	}
+	for _, row := range builder.rows["matter_codex_memory_record_versions"] {
+		builder.addMemory(row)
+	}
+	for _, row := range builder.rows["matter_codex_memory_records"] {
+		builder.addMemoryRecord(row)
+	}
+	if len(builder.sessions) == 0 || len(builder.turns) == 0 || len(builder.processes) == 0 {
+		return errors.New("full active Session/Turn/Process graph is incomplete")
+	}
+	return nil
 }
 
-func materializationOperationRank(operation string) int {
-	switch operation {
-	case "UPSERT_PROJECT":
-		return 1
-	case "UPSERT_TEAM":
-		return 2
-	case "UPSERT_CHAT":
-		return 3
-	case "UPSERT_PROTECTED_CONFIGURATION":
-		return 4
-	case "UPSERT_SESSION":
-		return 5
-	case "UPSERT_TURN":
-		return 6
-	case "UPSERT_TURN_ATTEMPT":
-		return 7
-	case "UPSERT_PROCESS_RUN":
-		return 8
-	case "UPSERT_SCHEDULE":
-		return 9
-	default:
-		return 100
-	}
-}
-
-func SourceDigest(snapshot []model.SnapshotRow) (string, map[string]uint64, error) {
-	counts := make(map[string]uint64)
-	_, digest, err := decodeSource(snapshot, counts)
-	return digest, counts, err
-}
-
-func decodeSource(rows []model.SnapshotRow, counts map[string]uint64) (map[string][]sourceRow, string, error) {
-	hash := sha256.New()
-	result := make(map[string][]sourceRow)
-	lastTable := ""
-	var lastPayload []byte
-	for _, row := range rows {
-		if !validTableName(row.Table) || row.Table < lastTable {
-			return nil, "", errors.New("source snapshot table order is invalid")
-		}
-		if row.Table != lastTable {
-			if len(row.Payload) != 0 {
-				return nil, "", errors.New("source snapshot table sentinel is missing")
+func (builder *ownerBuilder) validateProjectBoundary() error {
+	for table, rows := range builder.rows {
+		for _, row := range rows {
+			if _, scoped := row["project_id"]; scoped && number(row, "project_id") != builder.projectID {
+				return fmt.Errorf("source table %s has a cross-project row", table)
 			}
-			lastPayload = nil
-		} else if len(row.Payload) == 0 || lastPayload != nil && bytes.Compare(row.Payload, lastPayload) < 0 {
-			return nil, "", errors.New("source snapshot row order is invalid")
 		}
-		lastTable = row.Table
-		writeFramed(hash, []byte(row.Table))
-		if _, exists := counts[row.Table]; !exists {
-			counts[row.Table] = 0
+	}
+	return nil
+}
+
+func (builder *ownerBuilder) source(table, prefix string, row sourceRow) *controlplanev1.LegacyOperationSource {
+	id := sourceID(row)
+	ref := table + "/" + id
+	return &controlplanev1.LegacyOperationSource{SourceTable: sourceTable(table), SourceRef: ref,
+		SourceRevision: sourceRevision(row), SourceSha256: rowDigest(row), LocalRef: prefix + "-" + id}
+}
+
+func (builder *ownerBuilder) add(operation *controlplanev1.LegacyGraphOperation, table string) {
+	builder.operations = append(builder.operations, operation)
+	builder.mapped[table]++
+}
+
+func (builder *ownerBuilder) sortOperations() error {
+	for _, operation := range builder.operations {
+		if ownerOperationRank(operation) < 0 {
+			return errors.New("typed owner operation kind is unsupported")
 		}
-		if len(row.Payload) == 0 {
+	}
+	sort.SliceStable(builder.operations, func(left, right int) bool {
+		return ownerOperationRank(builder.operations[left]) < ownerOperationRank(builder.operations[right])
+	})
+	if len(builder.operations) == 0 || ownerOperationRank(builder.operations[0]) != 0 {
+		return errors.New("typed owner plan has no leading project operation")
+	}
+	return nil
+}
+
+func ownerOperationRank(operation *controlplanev1.LegacyGraphOperation) int {
+	switch operation.GetOperation().(type) {
+	case *controlplanev1.LegacyGraphOperation_Project:
+		return 0
+	case *controlplanev1.LegacyGraphOperation_Team, *controlplanev1.LegacyGraphOperation_Chat:
+		return 1
+	case *controlplanev1.LegacyGraphOperation_Artifact, *controlplanev1.LegacyGraphOperation_CredentialBinding,
+		*controlplanev1.LegacyGraphOperation_RepositoryWorkspace:
+		return 2
+	case *controlplanev1.LegacyGraphOperation_RoleDefinition:
+		return 3
+	case *controlplanev1.LegacyGraphOperation_InstructionSet:
+		return 4
+	case *controlplanev1.LegacyGraphOperation_ProviderReference:
+		return 5
+	case *controlplanev1.LegacyGraphOperation_ProviderPool:
+		return 6
+	case *controlplanev1.LegacyGraphOperation_RoleImageRecipe:
+		return 7
+	case *controlplanev1.LegacyGraphOperation_ImageBuild:
+		return 8
+	case *controlplanev1.LegacyGraphOperation_ImageArtifact:
+		return 9
+	case *controlplanev1.LegacyGraphOperation_Agent:
+		return 10
+	case *controlplanev1.LegacyGraphOperation_AgentAssignment:
+		return 11
+	case *controlplanev1.LegacyGraphOperation_Schedule:
+		return 12
+	case *controlplanev1.LegacyGraphOperation_RuntimeRevision:
+		return 13
+	case *controlplanev1.LegacyGraphOperation_Session:
+		return 14
+	case *controlplanev1.LegacyGraphOperation_Turn:
+		return 15
+	case *controlplanev1.LegacyGraphOperation_TurnAttempt:
+		return 16
+	case *controlplanev1.LegacyGraphOperation_ProcessRun:
+		return 17
+	case *controlplanev1.LegacyGraphOperation_DelegationEdge:
+		return 18
+	case *controlplanev1.LegacyGraphOperation_CallbackManifest:
+		return 19
+	case *controlplanev1.LegacyGraphOperation_CallbackDelivery:
+		return 20
+	case *controlplanev1.LegacyGraphOperation_MemoryRecord:
+		return 21
+	default:
+		return -1
+	}
+}
+
+func (builder *ownerBuilder) addProject(row sourceRow) {
+	source := builder.source("matter_codex_projects", "project", row)
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Project{Project: &controlplanev1.LegacyProjectOperation{
+		Source: source, Name: nonempty(text(row, "name"), "Legacy project"), Slug: stable(nonempty(text(row, "slug"), "legacy-project")),
+		Description: text(row, "description"), Locale: nonempty(text(row, "locale"), "ru"),
+	}}}, "matter_codex_projects")
+}
+
+func (builder *ownerBuilder) addTeam(row sourceRow) {
+	roleRefs := make([]string, 0, len(builder.rows["matter_codex_agent_roles"]))
+	for _, role := range builder.rows["matter_codex_agent_roles"] {
+		roleRefs = append(roleRefs, "role-definition-"+strconv.FormatInt(number(role, "id"), 10))
+	}
+	source := builder.source("matter_codex_projects", "team", row)
+	source.LocalRef = "team-root"
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Team{Team: &controlplanev1.LegacyTeamOperation{
+		Source: source, Name: "Legacy team", StableKey: "legacy-team", ExternalTeamRef: nonempty(text(row, "mattermost_team_id"), "legacy://team/root"),
+		RoleDefinitionRefs: roleRefs,
+	}}}, "matter_codex_projects")
+}
+
+func (builder *ownerBuilder) addRolePrerequisites(row sourceRow) {
+	id := number(row, "id")
+	base := "role-" + strconv.FormatInt(id, 10)
+	content := nonempty(text(row, "prompt_template"), text(row, "description"))
+	if content == "" {
+		content = "Legacy role " + nonempty(text(row, "name"), strconv.FormatInt(id, 10))
+	}
+	contentSHA := digest([]byte(content))
+	artifactSource := builder.source("matter_codex_agent_roles", "artifact-prompt", row)
+	artifactSource.LocalRef = "artifact-prompt-" + strconv.FormatInt(id, 10)
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Artifact{Artifact: builder.artifact(artifactSource,
+		"Prompt "+nonempty(text(row, "name"), base), "instruction", "INPUT", contentSHA, uint64(len(content)))}}, "matter_codex_agent_roles")
+	configSource := builder.source("matter_codex_agent_roles", "artifact-role-config", row)
+	configSource.LocalRef = "artifact-role-config-" + strconv.FormatInt(id, 10)
+	builder.provenanceRefs = append(builder.provenanceRefs, configSource.LocalRef)
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Artifact{Artifact: builder.artifact(configSource,
+		"Role configuration "+nonempty(text(row, "name"), base), "legacy-role-configuration", "ARCHIVE", rowDigest(row), sourceBytes(row))}}, "matter_codex_agent_roles")
+}
+
+func (builder *ownerBuilder) addTurnArtifacts(row sourceRow) {
+	id := strconv.FormatInt(number(row, "id"), 10)
+	input := nonempty(text(row, "message"), rowDigest(row))
+	inputSource := builder.source("matter_codex_agent_session_turns", "artifact-turn-input", row)
+	inputSource.LocalRef = "artifact-turn-input-" + id
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Artifact{Artifact: builder.artifact(inputSource,
+		"Turn input "+id, "turn-input", "INPUT", digest([]byte(input)), uint64(len(input)))}}, "matter_codex_agent_session_turns")
+	result := nonempty(text(row, "final_message"), text(row, "error_message"))
+	if result == "" && number(row, "artifacts") == 0 {
+		return
+	}
+	resultEvidence := result + "\x00" + text(row, "artifacts_sha256")
+	resultSource := builder.source("matter_codex_agent_session_turns", "artifact-turn-result", row)
+	resultSource.LocalRef = "artifact-turn-result-" + id
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Artifact{Artifact: builder.artifact(resultSource,
+		"Turn result "+id, "turn-result", "OUTPUT", digest([]byte(resultEvidence)), uint64(maxInt64(1, int64(len(resultEvidence)))))}}, "matter_codex_agent_session_turns")
+}
+
+func (builder *ownerBuilder) addChat(row sourceRow) {
+	id := number(row, "id")
+	ref := "chat-" + strconv.FormatInt(id, 10)
+	builder.chats[id] = ref
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Chat{Chat: &controlplanev1.LegacyChatOperation{
+		Source: builder.source("matter_codex_chats", "chat", row), Name: nonempty(text(row, "name"), ref), StableKey: stable(nonempty(text(row, "slug"), ref)),
+		RoomType: controlplanev1.RoomType_ROOM_TYPE_COORDINATION, ExternalChannelRef: nonempty(text(row, "mattermost_channel_id"), "legacy://chat/"+ref),
+		WorkPolicy: nonempty(text(row, "work_policy"), "managed"),
+	}}}, "matter_codex_chats")
+}
+
+func (builder *ownerBuilder) addCredential(row sourceRow) error {
+	id := number(row, "id")
+	ref := "credential-" + strconv.FormatInt(id, 10)
+	builder.credentials[id] = ref
+	secretRef := text(row, "secret_ref")
+	if secretRef == "" || text(row, "status") != "authorized" {
+		return errors.New("provider credential is not authoritatively eligible")
+	}
+	accountName := ""
+	for _, account := range builder.rows["matter_codex_openai_accounts"] {
+		if number(account, "credential_id") != id {
 			continue
 		}
-		writeFramed(hash, row.Payload)
-		lastPayload = append(lastPayload[:0], row.Payload...)
-		var decoded sourceRow
-		decoder := json.NewDecoder(bytes.NewReader(row.Payload))
+		if accountName != "" {
+			return errors.New("provider credential is referenced by multiple accounts")
+		}
+		accountName = nonempty(text(account, "name"), strconv.FormatInt(number(account, "id"), 10))
+	}
+	if accountName == "" {
+		return errors.New("provider credential has no exact account")
+	}
+	sha := rowDigest(row)
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_CredentialBinding{CredentialBinding: &controlplanev1.LegacyCredentialBindingOperation{
+		Source: builder.source("matter_codex_credentials", "credential", row), Name: nonempty(text(row, "name"), ref), Purpose: "provider-account",
+		SecretRef: "vault://" + secretRef, ImmutableSecretRef: "vault://" + secretRef + "?version=" + sha,
+		PrincipalRef: "provider:" + stable(accountName), Revision: sourceRevision(row),
+		ProviderCapabilities: []string{"chat.completions"}, ObservedLimit: builder.evidence.ProviderObservedLimit,
+		ObservationRevision: builder.evidence.ProviderObservationRevision, ObservedAt: timestamppb.New(builder.evidence.ProviderObservedAt),
+		ContentVersion: sha, ContentSha256: sha,
+	}}}, "matter_codex_credentials")
+	return nil
+}
+
+func (builder *ownerBuilder) addProvider(row sourceRow) error {
+	if text(row, "status") != "authorized" {
+		return errors.New("provider account is not authoritatively eligible")
+	}
+	id := number(row, "credential_id")
+	credential := builder.credentials[id]
+	if credential == "" {
+		return errors.New("provider account has no exact credential binding")
+	}
+	name := nonempty(text(row, "name"), strconv.FormatInt(number(row, "id"), 10))
+	ref := "provider-" + stable(name)
+	builder.providers[name] = ref
+	builder.providerCredentials[name] = credential
+	sha := rowDigest(row)
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_ProviderReference{ProviderReference: &controlplanev1.LegacyProviderConnectionReferenceOperation{
+		Source: builder.source("matter_codex_openai_accounts", "provider", row), Name: name, StableKey: stable(name), Provider: "openai",
+		ServerReference: "provider://openai/" + stable(name), ReferenceVersion: sourceRevision(row), ReferenceGeneration: sourceRevision(row), ReferenceSha256: sha,
+		MaskedLabel: name, MaskedStatus: "AVAILABLE", Capabilities: []string{"chat.completions"}, ObservedAt: timestamppb.New(builder.evidence.ProviderObservedAt),
+		ReceiptId: "legacy-" + stable(name), ReceiptVersion: sourceRevision(row), ReceiptSha256: sha, CredentialBindingRef: credential,
+	}}}, "matter_codex_openai_accounts")
+	return nil
+}
+
+func (builder *ownerBuilder) addRoleGraph(row sourceRow) error {
+	id := number(row, "id")
+	idText := strconv.FormatInt(id, 10)
+	roleRef := "role-" + idText
+	name := nonempty(text(row, "name"), roleRef)
+	stableKey := stable(name)
+	provider := builder.providers[nonempty(text(row, "openai_account_name"), "primary")]
+	if provider == "" {
+		return errors.New("role provider reference is missing")
+	}
+	recipeRef := "recipe-" + idText
+	instructionRef := "instruction-" + idText
+	poolRef := "pool-" + idText
+	roleDefinitionRef := "role-definition-" + idText
+	artifactRef := "artifact-prompt-" + idText
+	roleImage := proto.Clone(builder.evidence.RoleImage).(*controlplanev1.RoleImageRecipeInput)
+	buildRef := "image-build-" + idText
+	imageRef := "image-artifact-" + idText
+	source := builder.source("matter_codex_agent_roles", "role-definition", row)
+	source.LocalRef = roleDefinitionRef
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_RoleDefinition{RoleDefinition: &controlplanev1.LegacyRoleDefinitionOperation{
+		Source: source, Name: name, StableKey: stableKey, Description: text(row, "description"), Capabilities: roleCapabilities(row), RoleImageRecipeRef: recipeRef,
+	}}}, "matter_codex_agent_roles")
+	content := nonempty(text(row, "prompt_template"), text(row, "description"))
+	if content == "" {
+		content = "Legacy role " + name
+	}
+	contentSHA := digest([]byte(content))
+	instructionSource := builder.source("matter_codex_agent_roles", "instruction", row)
+	instructionSource.LocalRef = instructionRef
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_InstructionSet{InstructionSet: &controlplanev1.LegacyInstructionSetOperation{
+		Source: instructionSource, Name: "Instruction " + name, StableKey: stableKey, Locale: "ru", Content: content, ContentSha256: contentSHA,
+		ValidationSha256: contentSHA, ContentArtifactRef: artifactRef,
+	}}}, "matter_codex_agent_roles")
+	poolSource := builder.source("matter_codex_agent_roles", "pool", row)
+	poolSource.LocalRef = poolRef
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_ProviderPool{ProviderPool: &controlplanev1.LegacyProviderPoolOperation{
+		Source: poolSource, Name: "Provider pool " + name, StableKey: stableKey, Policy: "ordered", PolicyRevision: 1,
+		ObservationMaxAge: durationpb.New(24 * time.Hour), Bindings: []*controlplanev1.LegacyProviderPoolBinding{{ProviderReferenceRef: provider, Weight: 100}},
+	}}}, "matter_codex_agent_roles")
+	recipeSource := builder.source("matter_codex_agent_roles", "recipe", row)
+	recipeSource.LocalRef = recipeRef
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_RoleImageRecipe{RoleImageRecipe: &controlplanev1.LegacyRoleImageRecipeOperation{
+		Source: recipeSource, Name: "Role image " + name, Input: roleImage, Generation: builder.evidence.RoleImageGeneration,
+		SpecSha256: builder.evidence.RoleImageSpecSHA256, PolicyRevision: builder.evidence.ImagePolicyRevision,
+		PolicySha256: builder.evidence.ImagePolicySHA256, RuntimeContractRevision: builder.evidence.RuntimeContractRevision,
+		RuntimeContractSha256: builder.evidence.RuntimeContractSHA256,
+	}}}, "matter_codex_agent_roles")
+	buildSource := builder.source("matter_codex_agent_roles", "image-build", row)
+	buildSource.LocalRef = buildRef
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_ImageBuild{ImageBuild: &controlplanev1.LegacyImageBuildOperation{
+		Source: buildSource, Name: "Legacy image build " + name, RecipeRef: recipeRef, Attempt: 1,
+		TerminalState:          controlplanev1.LifecycleState_LIFECYCLE_STATE_SUCCEEDED,
+		TerminalEvidenceSha256: builder.evidence.ImageBuildProvenanceSHA256,
+		StagingReference:       builder.evidence.ImageBuildStagingReference, ManifestDigest: builder.evidence.ImageBuildManifestDigest,
+		ProvenanceSha256: builder.evidence.ImageBuildProvenanceSHA256,
+	}}}, "matter_codex_agent_roles")
+	imageSource := builder.source("matter_codex_agent_roles", "image-artifact", row)
+	imageSource.LocalRef = imageRef
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_ImageArtifact{ImageArtifact: &controlplanev1.LegacyImageArtifactOperation{
+		Source: imageSource, Name: "Legacy image artifact " + name, RecipeRef: recipeRef, ImageBuildRef: buildRef,
+		ManifestDigest: builder.evidence.ImageBuildManifestDigest, PromotedReference: builder.evidence.ImageArtifactPromotedReference,
+		AdmissionRevision: builder.evidence.ImageAdmissionRevision, AdmissionReceiptSha256: builder.evidence.ImageAdmissionReceiptSHA256,
+		AdmissionReceiptManifestDigest: builder.evidence.ImageAdmissionReceiptManifestDigest, SignatureSha256: builder.evidence.ImageSignatureSHA256,
+		PromotionReadbackSha256: builder.evidence.ImagePromotionReadbackSHA256, SbomSha256: builder.evidence.ImageSBOMSHA256,
+		VulnerabilityEvidenceSha256: builder.evidence.ImageVulnerabilityEvidenceSHA256, SignatureIdentity: builder.evidence.ImageSignatureIdentity,
+		PromotedAt: timestamppb.New(builder.evidence.ImagePromotedAt),
+	}}}, "matter_codex_agent_roles")
+	agentSource := builder.source("matter_codex_agent_roles", "agent", row)
+	agentSource.LocalRef = roleRef
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Agent{Agent: &controlplanev1.LegacyAgentOperation{
+		Source: agentSource, Name: name, StableKey: stableKey, RoleDefinitionRef: roleDefinitionRef, InstructionSetRef: instructionRef,
+		ProviderPoolRef: poolRef, RoleImageRecipeRef: recipeRef, Capabilities: roleCapabilities(row), Enabled: boolean(row, "enabled"),
+		BotIdentityRef: nonempty(text(row, "bot_identity"), "legacy://bot/"+stableKey), BotUsername: stableKey,
+		BotTeamRef: "legacy://team/root", BotMaskedStatus: "AVAILABLE", BotReceiptId: "legacy-" + stableKey,
+		BotReceiptVersion: sourceRevision(row), BotReceiptSha256: rowDigest(row), BotProviderRevision: sourceRevision(row), BotProviderGeneration: sourceRevision(row),
+	}}}, "matter_codex_agent_roles")
+	builder.roles[id] = roleRef
+	return nil
+}
+
+func (builder *ownerBuilder) addAssignment(row sourceRow) error {
+	roleID, chatID := number(row, "role_id"), number(row, "chat_id")
+	role, chat := builder.roles[roleID], builder.chats[chatID]
+	if role == "" || chat == "" {
+		return errors.New("chat participant owner boundary is incomplete")
+	}
+	ref := "assignment-" + strconv.FormatInt(number(row, "id"), 10)
+	builder.assignments[assignmentKey(roleID, chatID)] = ref
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_AgentAssignment{AgentAssignment: &controlplanev1.LegacyAgentAssignmentOperation{
+		Source: builder.source("matter_codex_chat_participants", "assignment", row), Name: ref, AgentRef: role, RoomRef: chat,
+		AssignmentGeneration: sourceRevision(row),
+	}}}, "matter_codex_chat_participants")
+	return nil
+}
+
+func (builder *ownerBuilder) addSchedule(row sourceRow) error {
+	roleID, chatID := number(row, "target_agent_role_id"), number(row, "target_chat_id")
+	role, chat, assignment := builder.roles[roleID], builder.chats[chatID], builder.assignments[assignmentKey(roleID, chatID)]
+	if role == "" || chat == "" || assignment == "" || text(row, "owner_mattermost_user_id") == "" {
+		return errors.New("schedule target graph is incomplete")
+	}
+	roleText := strconv.FormatInt(roleID, 10)
+	state := controlplanev1.LifecycleState_LIFECYCLE_STATE_PAUSED
+	if boolean(row, "enabled") {
+		state = controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE
+	}
+	localTime := nonempty(text(row, "local_time"), "00:00")
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Schedule{Schedule: &controlplanev1.LegacyScheduleOperation{
+		Source: builder.source("matter_codex_automation_schedules", "schedule", row), Name: nonempty(text(row, "name"), "Legacy schedule"),
+		StableKey:      stable(nonempty(text(row, "public_id"), "schedule-"+strconv.FormatInt(number(row, "id"), 10))),
+		CronExpression: cronDaily(localTime), Timezone: nonempty(text(row, "time_zone"), "UTC"),
+		OverlapPolicy: controlplanev1.ScheduleOverlapPolicy_SCHEDULE_OVERLAP_POLICY_FORBID,
+		MisfirePolicy: controlplanev1.ScheduleMisfirePolicy_SCHEDULE_MISFIRE_POLICY_SKIP,
+		AgentRef:      role, AssignmentRef: assignment, InstructionSetRef: "instruction-" + roleText,
+		ProviderPoolRef: "pool-" + roleText, RoomRef: chat, RoleImageRecipeRef: "recipe-" + roleText,
+		NextRunAt: timestamp(row, "next_run_at"), State: state, Calendar: "gregorian", MisfireGrace: durationpb.New(5 * time.Minute),
+		DeliveryPolicy: "callback", MaximumAttempts: 1, InitialBackoff: durationpb.New(time.Second), MaximumBackoff: durationpb.New(time.Minute),
+		DeadLetterAfter: durationpb.New(24 * time.Hour), SessionPolicy: "reuse", NotificationPolicy: "owner", MaximumExecutionDuration: durationpb.New(time.Hour),
+		Coalesce: false,
+	}}}, "matter_codex_automation_schedules")
+	return nil
+}
+
+func (builder *ownerBuilder) indexSession(row sourceRow) error {
+	id := number(row, "id")
+	roleID, chatID := number(row, "role_id"), number(row, "chat_id")
+	if builder.roles[roleID] == "" || builder.chats[chatID] == "" || builder.assignments[assignmentKey(roleID, chatID)] == "" {
+		return errors.New("session owner graph is incomplete")
+	}
+	builder.sessions[id] = "session-" + strconv.FormatInt(id, 10)
+	return nil
+}
+
+func (builder *ownerBuilder) indexTurn(row sourceRow) error {
+	id, sessionID := number(row, "id"), number(row, "session_id")
+	if builder.sessions[sessionID] == "" {
+		return errors.New("turn session lineage is orphaned")
+	}
+	builder.turns[id] = "turn-" + strconv.FormatInt(id, 10)
+	builder.attempts[id] = "attempt-" + strconv.FormatInt(id, 10)
+	return nil
+}
+
+func (builder *ownerBuilder) indexProcess(row sourceRow) {
+	id := number(row, "id")
+	builder.processes[id] = "process-" + strconv.FormatInt(id, 10)
+}
+
+func (builder *ownerBuilder) addRuntime(row sourceRow) error {
+	sessionID, roleID, chatID := number(row, "id"), number(row, "role_id"), number(row, "chat_id")
+	role, chat := builder.roles[roleID], builder.chats[chatID]
+	assignment := builder.assignments[assignmentKey(roleID, chatID)]
+	provider := builder.providers[nonempty(roleProviderName(builder.rows["matter_codex_agent_roles"], roleID), "primary")]
+	if role == "" || chat == "" || assignment == "" || provider == "" {
+		return errors.New("runtime revision dependency is incomplete")
+	}
+	providerName := nonempty(roleProviderName(builder.rows["matter_codex_agent_roles"], roleID), "primary")
+	credentialRef := builder.providerCredentials[providerName]
+	if credentialRef == "" {
+		return errors.New("runtime credential is missing")
+	}
+	roleText := strconv.FormatInt(roleID, 10)
+	created := timestamp(row, "created_at")
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_RuntimeRevision{RuntimeRevision: &controlplanev1.LegacyRuntimeRevisionOperation{
+		Source: builder.source("matter_codex_agent_sessions", "runtime", row), Name: "Runtime " + builder.sessions[sessionID], SessionRef: builder.sessions[sessionID],
+		ChatRef: chat, AgentRef: role, AssignmentRef: assignment, RoleDefinitionRef: "role-definition-" + roleText,
+		InstructionSetRef: "instruction-" + roleText, ProviderPoolRef: "pool-" + roleText, ProviderCredentialRef: credentialRef,
+		RoleImageRecipeRef: "recipe-" + roleText, ImageBuildRef: "image-build-" + roleText, ImageArtifactRef: "image-artifact-" + roleText,
+		PromptArtifactRef: "artifact-prompt-" + roleText, ImageReference: builder.evidence.ImageArtifactPromotedReference,
+		ProviderAccountName: stable(providerName), CodexModel: "gpt-5",
+		CodexSandbox:        nonempty(roleField(builder.rows["matter_codex_agent_roles"], roleID, "sandbox_mode"), "danger-full-access"),
+		CodexApprovalPolicy: "never", AuthorityPolicyRevision: builder.evidence.AuthorityPolicyRevision,
+		AuthorityPolicySha256: builder.evidence.AuthorityPolicySHA256, Components: runtimeComponents(builder.provenanceRefs), CreatedAt: created,
+	}}}, "matter_codex_agent_sessions")
+	return nil
+}
+
+func (builder *ownerBuilder) addSession(row sourceRow) error {
+	id, roleID, chatID := number(row, "id"), number(row, "role_id"), number(row, "chat_id")
+	role, chat := builder.roles[roleID], builder.chats[chatID]
+	assignment := builder.assignments[assignmentKey(roleID, chatID)]
+	providerName := nonempty(roleProviderName(builder.rows["matter_codex_agent_roles"], roleID), "primary")
+	if role == "" || chat == "" || assignment == "" || builder.providers[providerName] == "" {
+		return errors.New("session dependency is incomplete")
+	}
+	state, err := sessionState(text(row, "status"))
+	if err != nil {
+		return err
+	}
+	lastSequence := uint64(0)
+	for _, turn := range builder.rows["matter_codex_agent_session_turns"] {
+		if number(turn, "session_id") == id {
+			lastSequence++
+		}
+	}
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Session{Session: &controlplanev1.LegacySessionOperation{
+		Source: builder.source("matter_codex_agent_sessions", "session", row), Name: nonempty(text(row, "session_key"), builder.sessions[id]),
+		AgentRef: role, ProviderPoolRef: "pool-" + strconv.FormatInt(roleID, 10), AssignmentRef: assignment, ChatRef: chat,
+		LastTurnSequence: lastSequence, ArchiveRef: archiveRef(row), State: state,
+	}}}, "matter_codex_agent_sessions")
+	return nil
+}
+
+func (builder *ownerBuilder) addTurnAndAttempt(row sourceRow) error {
+	id, sessionID := number(row, "id"), number(row, "session_id")
+	sessionRef := builder.sessions[sessionID]
+	if sessionRef == "" {
+		return errors.New("turn session is missing")
+	}
+	sequence := uint64(1)
+	predecessor := ""
+	for _, candidate := range builder.rows["matter_codex_agent_session_turns"] {
+		if number(candidate, "session_id") != sessionID || number(candidate, "id") >= id {
+			continue
+		}
+		sequence++
+		if predecessor == "" || number(candidate, "id") > parseRefID(predecessor) {
+			predecessor = builder.turns[number(candidate, "id")]
+		}
+	}
+	state, attemptState, finished, err := turnStates(text(row, "status"))
+	if err != nil {
+		return err
+	}
+	inputSHA := digest([]byte(nonempty(text(row, "message"), rowDigest(row))))
+	processRef, parentRef := builder.processForTurn(id)
+	turnSource := builder.source("matter_codex_agent_session_turns", "turn", row)
+	turnSource.LocalRef = builder.turns[id]
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Turn{Turn: &controlplanev1.LegacyTurnOperation{
+		Source: turnSource, Name: nonempty(text(row, "run_id"), builder.turns[id]), SessionRef: sessionRef, Sequence: sequence,
+		SourceTurnRef:      nonempty(text(row, "mattermost_post_id"), "legacy://turn/"+strconv.FormatInt(id, 10)),
+		PromptArtifactRef:  "artifact-turn-input-" + strconv.FormatInt(id, 10),
+		RuntimeRevisionRef: "runtime-" + strconv.FormatInt(sessionID, 10), PredecessorTurnRef: predecessor, ParentTurnRef: parentRef,
+		ProcessRunRef: processRef, ResultArtifactRef: turnResultArtifactRef(row), Attempt: 1,
+		EffectiveInputSha256: inputSHA, Outcome: turnOutcome(row), State: state,
+	}}}, "matter_codex_agent_session_turns")
+	attemptSource := builder.source("matter_codex_agent_session_turns", "attempt", row)
+	attemptSource.LocalRef = builder.attempts[id]
+	started := timeValue(row, "started_at")
+	if started.IsZero() {
+		started = timeValue(row, "created_at")
+	}
+	var finishedAt *timestamppb.Timestamp
+	if finished {
+		value := timeValue(row, "finished_at")
+		if value.IsZero() {
+			value = timeValue(row, "updated_at")
+		}
+		finishedAt = timestamppb.New(value)
+	}
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_TurnAttempt{TurnAttempt: &controlplanev1.LegacyTurnAttemptOperation{
+		Source: attemptSource, TurnRef: builder.turns[id], Attempt: 1, ImmutableInputSha256: inputSHA,
+		RuntimeRevisionRef: "runtime-" + strconv.FormatInt(sessionID, 10), State: attemptState, Outcome: turnOutcome(row),
+		StartedAt: timestamppb.New(started), FinishedAt: finishedAt,
+	}}}, "matter_codex_agent_session_turns")
+	return nil
+}
+
+func (builder *ownerBuilder) processForTurn(turnID int64) (string, string) {
+	for _, link := range builder.rows["matter_codex_process_turns"] {
+		if number(link, "turn_id") != turnID {
+			continue
+		}
+		parent := ""
+		if parentID := number(link, "parent_turn_id"); parentID > 0 {
+			parent = builder.turns[parentID]
+		}
+		return builder.processes[number(link, "process_run_id")], parent
+	}
+	return "", ""
+}
+
+func (builder *ownerBuilder) addProcess(row sourceRow) error {
+	id := number(row, "id")
+	processRef := builder.processes[id]
+	links := make([]sourceRow, 0)
+	for _, link := range builder.rows["matter_codex_process_turns"] {
+		if number(link, "process_run_id") == id {
+			links = append(links, link)
+		}
+	}
+	if len(links) == 0 {
+		return errors.New("process has no exact Session/Turn/Attempt tuple")
+	}
+	rootActorRef, rootTriggerRef := text(row, "root_initiator_user_id"), text(row, "root_trigger_post_id")
+	if rootActorRef == "" || rootTriggerRef == "" {
+		return errors.New("process root actor or trigger provenance is missing")
+	}
+	sort.Slice(links, func(i, j int) bool { return number(links[i], "turn_id") < number(links[j], "turn_id") })
+	rootTurnID := number(links[0], "turn_id")
+	rootSessionID := turnSession(builder.rows["matter_codex_agent_session_turns"], rootTurnID)
+	parentProcessRef, launchingTurnRef, launchingAttemptRef, delegationRef, targetSessionRef, targetTurnRef, targetAttemptRef := "", "", "", "", "", "", ""
+	for _, delegation := range builder.rows["matter_codex_agent_delegations"] {
+		targetID := number(delegation, "target_turn_id")
+		candidateProcess, _ := builder.processForTurn(targetID)
+		if candidateProcess != processRef {
+			continue
+		}
+		launchID := number(delegation, "source_turn_id")
+		parentProcessRef, _ = builder.processForTurn(launchID)
+		if parentProcessRef == "" {
+			return errors.New("child process parent provenance is missing")
+		}
+		launchingTurnRef, launchingAttemptRef = builder.turns[launchID], builder.attempts[launchID]
+		delegationRef = "delegation-" + strconv.FormatInt(number(delegation, "id"), 10)
+		targetSessionRef, targetTurnRef, targetAttemptRef = builder.sessions[number(delegation, "target_session_id")], builder.turns[targetID], builder.attempts[targetID]
+		parentRootTurn, parentRootSession := builder.rootTupleForProcess(parentProcessRef)
+		if parentRootTurn == 0 || parentRootSession == 0 {
+			return errors.New("child process inherited root provenance is missing")
+		}
+		rootTurnID, rootSessionID = parentRootTurn, parentRootSession
+		break
+	}
+	if builder.turns[rootTurnID] == "" || builder.sessions[rootSessionID] == "" {
+		return errors.New("process root lineage is orphaned")
+	}
+	policyRevision, policySHA := builder.legacyPolicy(row)
+	if policyRevision == 0 || !validSHA(policySHA) {
+		return errors.New("process legacy policy evidence is missing")
+	}
+	state, err := processState(text(row, "status"))
+	if err != nil {
+		return err
+	}
+	immutable := digest([]byte(rowDigest(row) + "\x00" + builder.turns[rootTurnID] + "\x00" + builder.attempts[rootTurnID]))
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_ProcessRun{ProcessRun: &controlplanev1.LegacyProcessRunOperation{
+		Source: builder.source("matter_codex_process_runs", "process", row), Name: nonempty(text(row, "public_id"), processRef),
+		RootSessionRef: builder.sessions[rootSessionID], RootTurnRef: builder.turns[rootTurnID], RootAttemptRef: builder.attempts[rootTurnID],
+		RuntimeRevisionRef: "runtime-" + strconv.FormatInt(func() int64 {
+			if targetSessionRef != "" {
+				return parseRefID(targetSessionRef)
+			}
+			return rootSessionID
+		}(), 10),
+		ParentProcessRef: parentProcessRef, LaunchingTurnRef: launchingTurnRef, LaunchingAttemptRef: launchingAttemptRef,
+		DelegationRef: delegationRef, TargetSessionRef: targetSessionRef, TargetTurnRef: targetTurnRef, TargetAttemptRef: targetAttemptRef,
+		ImmutableInputSha256: immutable,
+		LegacyPolicyRevision: policyRevision, LegacyPolicySha256: policySHA,
+		PlaybookRef: nonempty(text(row, "playbook_ref"), "legacy://playbook/default"), RootTriggerRef: rootTriggerRef,
+		Outcome: nonempty(text(row, "outcome"), strings.ToLower(text(row, "status"))), State: state,
+	}}}, "matter_codex_process_runs")
+	return nil
+}
+
+func (builder *ownerBuilder) rootTupleForProcess(processRef string) (int64, int64) {
+	processID := parseRefID(processRef)
+	links := make([]sourceRow, 0)
+	for _, link := range builder.rows["matter_codex_process_turns"] {
+		if number(link, "process_run_id") == processID {
+			links = append(links, link)
+		}
+	}
+	if len(links) == 0 {
+		return 0, 0
+	}
+	sort.Slice(links, func(i, j int) bool { return number(links[i], "turn_id") < number(links[j], "turn_id") })
+	turnID := number(links[0], "turn_id")
+	for _, delegation := range builder.rows["matter_codex_agent_delegations"] {
+		candidate, _ := builder.processForTurn(number(delegation, "target_turn_id"))
+		if candidate != processRef {
+			continue
+		}
+		parent, _ := builder.processForTurn(number(delegation, "source_turn_id"))
+		if parent != "" {
+			return builder.rootTupleForProcess(parent)
+		}
+	}
+	return turnID, turnSession(builder.rows["matter_codex_agent_session_turns"], turnID)
+}
+
+func (builder *ownerBuilder) legacyPolicy(process sourceRow) (uint64, string) {
+	policyID := number(process, "policy_revision_id")
+	for _, row := range builder.rows["matter_codex_policy_revisions"] {
+		if number(row, "id") == policyID {
+			domain := []string{"revision:" + rowDigest(row)}
+			for _, capability := range builder.rows["matter_codex_role_capabilities"] {
+				if number(capability, "policy_revision_id") == policyID {
+					domain = append(domain, "capability:"+rowDigest(capability))
+				}
+			}
+			for _, relationship := range builder.rows["matter_codex_role_relationship_policies"] {
+				if number(relationship, "policy_revision_id") == policyID {
+					domain = append(domain, "relationship:"+rowDigest(relationship))
+				}
+			}
+			sort.Strings(domain)
+			return uint64(number(row, "version")), digest([]byte(strings.Join(domain, "\x00")))
+		}
+	}
+	return 0, ""
+}
+
+func (builder *ownerBuilder) addDelegation(row sourceRow) error {
+	sourceTurnID, targetTurnID := number(row, "source_turn_id"), number(row, "target_turn_id")
+	parentProcess, _ := builder.processForTurn(sourceTurnID)
+	childProcess, _ := builder.processForTurn(targetTurnID)
+	parentSessionID, targetSessionID := number(row, "source_session_id"), number(row, "target_session_id")
+	childRole := builder.roles[number(row, "target_role_id")]
+	if parentProcess == "" || childProcess == "" || builder.sessions[parentSessionID] == "" || builder.sessions[targetSessionID] == "" ||
+		childRole == "" || builder.turns[sourceTurnID] == "" || builder.attempts[sourceTurnID] == "" ||
+		builder.turns[targetTurnID] == "" || builder.attempts[targetTurnID] == "" {
+		return errors.New("delegation lineage is incomplete")
+	}
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_DelegationEdge{DelegationEdge: &controlplanev1.LegacyDelegationEdgeOperation{
+		Source: builder.source("matter_codex_agent_delegations", "delegation", row), ParentProcessRef: parentProcess,
+		ParentSessionRef: builder.sessions[parentSessionID], ParentTurnRef: builder.turns[sourceTurnID], ParentAttemptRef: builder.attempts[sourceTurnID],
+		ChildRoleRef: childRole, ChildSessionRef: builder.sessions[targetSessionID], ChildTurnRef: builder.turns[targetTurnID],
+		ChildAttemptRef: builder.attempts[targetTurnID], GrantGeneration: sourceRevision(row), ChildProcessRef: childProcess,
+	}}}, "matter_codex_agent_delegations")
+	return nil
+}
+
+func (builder *ownerBuilder) addCallbackManifest(row sourceRow) error {
+	delegationID := number(row, "delegation_id")
+	processRef := ""
+	for _, delegation := range builder.rows["matter_codex_agent_delegations"] {
+		if number(delegation, "id") == delegationID {
+			processRef, _ = builder.processForTurn(number(delegation, "callback_turn_id"))
+		}
+	}
+	if processRef == "" {
+		return errors.New("callback process provenance is incomplete")
+	}
+	destinations := make([]string, 0, 2)
+	callbackRunID := text(row, "callback_run_id")
+	for _, delivery := range builder.rows["matter_codex_agent_delegation_callback_deliveries"] {
+		if number(delivery, "delegation_id") == delegationID && text(delivery, "callback_run_id") == callbackRunID {
+			destinations = append(destinations, text(delivery, "destination"))
+		}
+	}
+	sort.Strings(destinations)
+	if len(destinations) == 0 || int64(len(destinations)) != number(row, "expected_count") {
+		return errors.New("callback manifest destination set is incomplete")
+	}
+	for index := 1; index < len(destinations); index++ {
+		if destinations[index] == destinations[index-1] {
+			return errors.New("callback manifest destination set is duplicated")
+		}
+	}
+	source := builder.source("matter_codex_agent_delegation_callback_delivery_manifests", "callback-manifest", row)
+	source.LocalRef = "callback-manifest-" + strconv.FormatInt(delegationID, 10)
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_CallbackManifest{CallbackManifest: &controlplanev1.LegacyCallbackManifestOperation{
+		Source:        source,
+		DelegationRef: "delegation-" + strconv.FormatInt(delegationID, 10), CallbackProcessRef: processRef, Destinations: destinations,
+		ManifestSha256: hexText(row, "plan_sha256"),
+	}}}, "matter_codex_agent_delegation_callback_delivery_manifests")
+	return nil
+}
+
+func (builder *ownerBuilder) addCallbackDelivery(row sourceRow) error {
+	state := controlplanev1.LegacyCallbackDeliveryState_LEGACY_CALLBACK_DELIVERY_STATE_UNSPECIFIED
+	switch text(row, "status") {
+	case "delivered":
+		state = controlplanev1.LegacyCallbackDeliveryState_LEGACY_CALLBACK_DELIVERY_STATE_DELIVERED
+	case "blocked":
+		state = controlplanev1.LegacyCallbackDeliveryState_LEGACY_CALLBACK_DELIVERY_STATE_FAILED
+	default:
+		return errors.New("nonterminal callback delivery blocks migration")
+	}
+	delivered := timestamp(row, "delivered_at")
+	if delivered == nil {
+		return errors.New("callback delivery timestamp is missing")
+	}
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_CallbackDelivery{CallbackDelivery: &controlplanev1.LegacyCallbackDeliveryOperation{
+		Source:              builder.source("matter_codex_agent_delegation_callback_deliveries", "callback-delivery", row),
+		CallbackManifestRef: "callback-manifest-" + strconv.FormatInt(number(row, "delegation_id"), 10), Destination: text(row, "destination"),
+		ReceiptSha256: hexText(row, "payload_sha256"), TerminalState: state, DeliveredAt: delivered,
+	}}}, "matter_codex_agent_delegation_callback_deliveries")
+	return nil
+}
+
+func (builder *ownerBuilder) addMemory(row sourceRow) {
+	recordID := number(row, "record_id")
+	state := controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE
+	for _, record := range builder.rows["matter_codex_memory_records"] {
+		if number(record, "id") == recordID && text(record, "status") != "active" {
+			state = controlplanev1.LifecycleState_LIFECYCLE_STATE_ARCHIVED
+		}
+	}
+	content := text(row, "content")
+	sha := text(row, "content_hash")
+	if !validSHA(sha) {
+		sha = digest([]byte(content))
+	}
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_MemoryRecord{MemoryRecord: &controlplanev1.LegacyMemoryRecordOperation{
+		Source: builder.source("matter_codex_memory_record_versions", "memory", row), Name: nonempty(text(row, "title"), "Legacy memory"),
+		MemoryKind: "coordination", Content: content, ContentSha256: sha, SourceVersion: uint64(number(row, "version")), State: state,
+	}}}, "matter_codex_memory_record_versions")
+}
+
+func (builder *ownerBuilder) addMemoryRecord(row sourceRow) {
+	id := number(row, "id")
+	var latest sourceRow
+	for _, version := range builder.rows["matter_codex_memory_record_versions"] {
+		if number(version, "record_id") == id && (latest == nil || number(version, "version") > number(latest, "version")) {
+			latest = version
+		}
+	}
+	content, sha := text(latest, "content"), text(latest, "content_hash")
+	if content == "" {
+		content = "Legacy memory metadata " + rowDigest(row)
+	}
+	if !validSHA(sha) {
+		sha = digest([]byte(content))
+	}
+	state := controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE
+	if text(row, "status") != "active" {
+		state = controlplanev1.LifecycleState_LIFECYCLE_STATE_ARCHIVED
+	}
+	builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_MemoryRecord{MemoryRecord: &controlplanev1.LegacyMemoryRecordOperation{
+		Source: builder.source("matter_codex_memory_records", "memory-record", row), Name: "Legacy memory " + strconv.FormatInt(id, 10),
+		MemoryKind: nonempty(text(row, "scope"), "coordination"), Content: content, ContentSha256: sha,
+		SourceVersion: uint64(maxInt64(1, number(latest, "version"))), State: state,
+	}}}, "matter_codex_memory_records")
+}
+
+// addProvenanceArtifacts сохраняет exact rows конфигурационных таблиц, у
+// которых нет самостоятельного target aggregate: они становятся immutable
+// CLEAN Artifact evidence и затем входят в RuntimeRevision provenance. Это не
+// DML dispatcher: target kind и все поля закрыты compile-time Proto oneof.
+func (builder *ownerBuilder) addProvenanceArtifacts() {
+	for _, table := range []string{
+		"matter_codex_agent_profiles", "matter_codex_agent_prompt_templates",
+		"matter_codex_agent_role_runtime_variables", "matter_codex_agent_runs", "matter_codex_cluster_admin_bot_bindings",
+		"matter_codex_cluster_admin_dependencies",
+		"matter_codex_cluster_admin_prompt_templates", "matter_codex_cluster_admin_runtime_variable_bindings",
+		"matter_codex_cluster_admin_session_bindings", "matter_codex_cluster_admin_subjects",
+		"matter_codex_github_accounts", "matter_codex_interaction_capabilities",
+		"matter_codex_mattermost_bot_identities", "matter_codex_policy_revisions",
+		"matter_codex_process_turns", "matter_codex_project_repositories",
+		"matter_codex_project_runtime_variables", "matter_codex_repositories",
+		"matter_codex_role_capabilities", "matter_codex_role_relationship_policies",
+		"matter_codex_thread_contexts", "matter_codex_chat_repositories",
+	} {
+		for _, row := range builder.rows[table] {
+			source := builder.source(table, "provenance-"+stable(strings.TrimPrefix(table, "matter_codex_")), row)
+			builder.provenanceRefs = append(builder.provenanceRefs, source.LocalRef)
+			sha := rowDigest(row)
+			builder.add(&controlplanev1.LegacyGraphOperation{Operation: &controlplanev1.LegacyGraphOperation_Artifact{Artifact: builder.artifact(source,
+				"Legacy provenance "+strings.TrimPrefix(table, "matter_codex_"), "legacy-provenance", "ARCHIVE", sha, sourceBytes(row))}}, table)
+		}
+	}
+}
+
+func (builder *ownerBuilder) artifact(source *controlplanev1.LegacyOperationSource, name, kind, direction, sha string, size uint64) *controlplanev1.LegacyArtifactOperation {
+	if size == 0 {
+		size = 1
+	}
+	storage := strings.TrimSuffix(builder.evidence.ArchiveStoragePrefix, "/") + "/" + source.GetSourceTable().String() + "/" + sha + "?version=" + builder.evidence.ArchiveStorageVersion
+	return &controlplanev1.LegacyArtifactOperation{Source: source, Name: name, ArtifactKind: stable(kind), Direction: direction,
+		StorageRef: storage, StorageVersion: builder.evidence.ArchiveStorageVersion, SizeBytes: size, MediaType: "application/json",
+		Sha256: sha, RetentionPolicyRef: builder.evidence.ArchiveRetentionRef, ScanPolicyRevision: builder.evidence.ArchiveScanPolicyRevision,
+		ScanEvidenceSha256: builder.evidence.ArchiveScanEvidenceSHA256, ScannerWorkloadId: builder.evidence.ArchiveScannerWorkloadID,
+		ScannedAt: timestamppb.New(builder.evidence.ArchiveScannedAt)}
+}
+
+func (builder *ownerBuilder) dispositions() ([]*controlplanev1.LegacySourceDisposition, string, error) {
+	proofs := make(map[string]map[string]struct{})
+	for _, operation := range builder.operations {
+		source := operationSource(operation)
+		if source == nil {
+			return nil, "", errors.New("typed owner operation source is missing")
+		}
+		table := sourceTableName(source.SourceTable)
+		if proofs[table] == nil {
+			proofs[table] = make(map[string]struct{})
+		}
+		proofs[table][source.SourceRef] = struct{}{}
+	}
+	type canonicalDisposition struct {
+		SourceTable         string `json:"sourceTable"`
+		Disposition         string `json:"disposition"`
+		RowCount            uint64 `json:"rowCount"`
+		SourceSHA256        string `json:"sourceSha256"`
+		TerminalStateSHA256 string `json:"terminalStateSha256,omitempty"`
+	}
+	dispositions := make([]*controlplanev1.LegacySourceDisposition, 0, len(inventory.Tables))
+	canonical := make([]canonicalDisposition, 0, len(inventory.Tables))
+	for _, table := range inventory.Tables {
+		count := builder.counts[table]
+		sourceSHA := builder.tableDigests[table]
+		enumTable := sourceTable(table)
+		kind := controlplanev1.LegacySourceDispositionKind_LEGACY_SOURCE_DISPOSITION_KIND_REJECT_NONEMPTY
+		terminal := ""
+		switch {
+		case table == "matter_codex_cluster_admin_bindings":
+			if count != 0 {
+				return nil, "", errors.New("legacy cluster admin authority must be empty")
+			}
+		case terminalSourceTable(table):
+			if count > 0 {
+				if err := validateTerminalRows(table, builder.rows[table]); err != nil {
+					return nil, "", err
+				}
+				kind = controlplanev1.LegacySourceDispositionKind_LEGACY_SOURCE_DISPOSITION_KIND_ARCHIVE_TERMINAL
+				terminal = digest([]byte("terminal\x00" + table + "\x00" + sourceSHA))
+				builder.archived[table] = count
+			}
+		case count > 0:
+			kind = controlplanev1.LegacySourceDispositionKind_LEGACY_SOURCE_DISPOSITION_KIND_MATERIALIZE
+			if uint64(len(proofs[table])) != count {
+				return nil, "", fmt.Errorf("source table %s is not fully represented by typed operations", table)
+			}
+			builder.mapped[table] = count
+		}
+		dispositions = append(dispositions, &controlplanev1.LegacySourceDisposition{SourceTable: enumTable, Disposition: kind, RowCount: count, SourceSha256: sourceSHA, TerminalStateSha256: terminal})
+		canonical = append(canonical, canonicalDisposition{SourceTable: sourceTableName(enumTable), Disposition: dispositionName(kind), RowCount: count, SourceSHA256: sourceSHA, TerminalStateSHA256: terminal})
+	}
+	sort.Slice(canonical, func(i, j int) bool { return canonical[i].SourceTable < canonical[j].SourceTable })
+	encoded, err := json.Marshal(canonical)
+	if err != nil {
+		return nil, "", errors.New("encode owner source dispositions")
+	}
+	return dispositions, digest(encoded), nil
+}
+
+func decodeSource(rows []model.SnapshotRow, expected map[string]uint64) (map[string][]sourceRow, map[string]string, error) {
+	rows = append([]model.SnapshotRow(nil), rows...)
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Table != rows[j].Table {
+			return rows[i].Table < rows[j].Table
+		}
+		return bytes.Compare(rows[i].Payload, rows[j].Payload) < 0
+	})
+	result := make(map[string][]sourceRow)
+	digests := make(map[string]string)
+	hashes := make(map[string]hashWriter)
+	seenCounts := make(map[string]uint64)
+	for _, table := range inventory.Tables {
+		hashes[table] = hashWriter{hash: sha256.New()}
+		writeFramed(hashes[table].hash, []byte(table))
+	}
+	for _, entry := range rows {
+		if !inventory.Contains(entry.Table) {
+			return nil, nil, errors.New("source inventory contains an unknown table")
+		}
+		if len(entry.Payload) == 0 {
+			continue
+		}
+		var row sourceRow
+		decoder := json.NewDecoder(bytes.NewReader(entry.Payload))
 		decoder.UseNumber()
-		if err := decoder.Decode(&decoded); err != nil {
-			return nil, "", errors.New("decode source snapshot row")
+		if decoder.Decode(&row) != nil {
+			return nil, nil, errors.New("decode source inventory row")
 		}
 		if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
-			return nil, "", errors.New("source snapshot row has trailing data")
+			return nil, nil, errors.New("source inventory row has trailing data")
 		}
-		result[row.Table] = append(result[row.Table], decoded)
-		counts[row.Table]++
+		result[entry.Table] = append(result[entry.Table], row)
+		seenCounts[entry.Table]++
+		writer := hashes[entry.Table]
+		writeFramed(writer.hash, entry.Payload)
+		hashes[entry.Table] = writer
 	}
-	if len(counts) == 0 {
-		return nil, "", errors.New("source snapshot inventory is empty")
+	for _, table := range inventory.Tables {
+		if _, ok := expected[table]; !ok || seenCounts[table] != expected[table] {
+			return nil, nil, errors.New("source inventory projection is incomplete")
+		}
+		digests[table] = hex.EncodeToString(hashes[table].hash.Sum(nil))
 	}
-	return result, hex.EncodeToString(hash.Sum(nil)), nil
+	return result, digests, nil
 }
 
-func validTableName(value string) bool {
-	return inventory.Contains(value)
+type hashWriter struct{ hash hash.Hash }
+
+func writeFramed(writer interface{ Write([]byte) (int, error) }, value []byte) {
+	var size [8]byte
+	binary.BigEndian.PutUint64(size[:], uint64(len(value)))
+	_, _ = writer.Write(size[:])
+	_, _ = writer.Write(value)
 }
 
-// seedActiveGraphMaterialization строит target-owned preview до обычной
-// reconciliation. Для конфигурации единственным template authority служит
-// exact protected history; для Project/Team/Chat server fields выводятся из
-// её organization/project/owner boundary и никогда не принимаются из source.
-func seedActiveGraphMaterialization(source map[string][]sourceRow, target []model.TargetResource,
-	plan *model.Plan,
-) []model.TargetResource {
-	result := append([]model.TargetResource(nil), target...)
-	commandKeys := make(map[string]struct{})
-	appendCommand := func(command model.MaterializationCommand) {
-		key := command.Operation + "\x00" + command.TargetID
-		if _, duplicate := commandKeys[key]; duplicate {
-			return
-		}
-		commandKeys[key] = struct{}{}
-		plan.Materialization = append(plan.Materialization, command)
-	}
-	projects := byNumber(source["matter_codex_projects"], "id", plan)
-	roles := byNumber(source["matter_codex_agent_roles"], "id", plan)
-	chats := byNumber(source["matter_codex_chats"], "id", plan)
-	projectIDs := sortedSourceIDs(projects)
-	for _, projectID := range projectIDs {
-		row := projects[projectID]
-		project, projectExists := uniqueCurrentBySpec(result, "PROJECT", "slug", text(row, "slug"))
-		authority, authoritySHA, authorityOK := graphAuthorityForProject(projectID, roles, result,
-			project, projectExists)
-		if !authorityOK {
-			plan.Violations["unmaterialized_active"]++
-			continue
-		}
-		if !projectExists {
-			project = model.TargetResource{
-				ID: authority.ProjectID, OrganizationID: authority.OrganizationID,
-				ProjectID: authority.ProjectID, OwnerActorID: authority.OwnerActorID,
-				Kind: "PROJECT", Name: sourceName(row, "Legacy project "+text(row, "slug")),
-				State: "ACTIVE", Version: 1,
-				Spec: map[string]any{
-					"slug": text(row, "slug"), "description": text(row, "description"), "locale": "ru",
-					"ownership": legacyOwnership("project", projectID, sourceRowDigest(row)),
-				},
-			}
-			result = append(result, project)
-		}
-		command := materializationCommand("UPSERT_PROJECT", "matter_codex_projects", projectID,
-			text(row, "slug"), sourceRevision(row), sourceRowDigest(row), project.ID, project)
-		command.AuthorityTargetID, command.AuthorityVersion, command.AuthoritySHA256 =
-			authority.ID, authority.Version, authoritySHA
-		appendCommand(command)
-
-		roleDefinitionIDs := make([]any, 0)
-		for roleID, roleRow := range roles {
-			if number(roleRow, "project_id") != projectID {
-				continue
-			}
-			agent, ok := currentOrHistoricalByStableKey(result, "AGENT", text(roleRow, "name"), project)
-			if !ok {
-				plan.Violations["unmaterialized_active"]++
-				continue
-			}
-			agent = promoteHistorical(agent)
-			result = appendCurrentIfMissing(result, agent)
-			for _, protected := range protectedConfigurationGraph(result, agent, project, plan) {
-				protected = promoteHistorical(protected)
-				result = appendCurrentIfMissing(result, protected)
-				projection, ok := exactProtectedProjection(result, protected)
-				if !ok {
-					plan.Violations["broken_lineage"]++
-					continue
-				}
-				protectedCommand := materializationCommand("UPSERT_PROTECTED_CONFIGURATION",
-					"matter_codex_agent_roles", roleID, text(roleRow, "name"), sourceRevision(roleRow),
-					sourceRowDigest(roleRow), project.ID, protected)
-				protectedCommand.AuthorityTargetID, protectedCommand.AuthorityVersion,
-					protectedCommand.AuthoritySHA256 = protected.ID, protected.Version, projection
-				appendCommand(protectedCommand)
-				if protected.Kind == "ROLE_DEFINITION" {
-					roleDefinitionIDs = append(roleDefinitionIDs, protected.ID)
-				}
-			}
-		}
-		sort.Slice(roleDefinitionIDs, func(left, right int) bool {
-			return roleDefinitionIDs[left].(string) < roleDefinitionIDs[right].(string)
-		})
-		team, exists := currentInBoundaryBySpec(result, "TEAM", "externalTeamRef",
-			text(row, "mattermost_team_id"), project)
-		if !exists {
-			team = model.TargetResource{ID: deterministicLegacyUUID("mattercodex:legacy-team:" +
-				strconv.FormatInt(projectID, 10)), OrganizationID: project.OrganizationID, ProjectID: project.ID,
-				ParentID: project.ID, OwnerActorID: project.OwnerActorID, Kind: "TEAM",
-				Name: sourceName(row, "Legacy team "+text(row, "slug")), State: "ACTIVE", Version: 1,
-				Spec: map[string]any{"stableKey": text(row, "slug") + "-team",
-					"externalTeamRef": text(row, "mattermost_team_id"),
-					"memberActorIds":  []any{project.OwnerActorID}, "roleIds": roleDefinitionIDs,
-					"ownership": legacyOwnership("project", projectID, sourceRowDigest(row))}}
-			result = append(result, team)
-		}
-		appendCommand(materializationCommand("UPSERT_TEAM", "matter_codex_projects", projectID,
-			text(row, "mattermost_team_id"), sourceRevision(row), sourceRowDigest(row), project.ID, team))
-
-		for _, chatID := range sortedSourceIDs(chats) {
-			chatRow := chats[chatID]
-			if number(chatRow, "project_id") != projectID || text(chatRow, "status") != "active" {
-				continue
-			}
-			chat, exists := currentInBoundaryBySpec(result, "CHAT", "externalChannelRef",
-				text(chatRow, "mattermost_channel_id"), project)
-			if !exists {
-				chat = model.TargetResource{ID: deterministicLegacyUUID("mattercodex:legacy-chat:" +
-					strconv.FormatInt(chatID, 10)), OrganizationID: project.OrganizationID, ProjectID: project.ID,
-					ParentID: team.ID, OwnerActorID: project.OwnerActorID, Kind: "CHAT",
-					Name: sourceName(chatRow, "Legacy chat "+text(chatRow, "slug")), State: "ACTIVE", Version: 1,
-					Spec: map[string]any{"stableKey": text(chatRow, "slug"),
-						"roomType":           legacyRoomType(text(chatRow, "chat_type"), text(chatRow, "system_purpose")),
-						"externalChannelRef": text(chatRow, "mattermost_channel_id"),
-						"workPolicy":         text(chatRow, "work_policy"),
-						"ownership":          legacyOwnership("chat", chatID, sourceRowDigest(chatRow))}}
-				result = append(result, chat)
-			}
-			appendCommand(materializationCommand("UPSERT_CHAT", "matter_codex_chats", chatID,
-				text(chatRow, "mattermost_channel_id"), sourceRevision(chatRow), sourceRowDigest(chatRow),
-				project.ID, chat))
-		}
-	}
-	return seedRuntimeGraphMaterialization(source, result, plan, appendCommand)
-}
-
-// seedRuntimeGraphMaterialization материализует отсутствующий active runtime
-// graph только из DELIVERED owner receipt. Идентификаторы, версии и digests
-// нельзя выводить из caller payload: они уже назначены control-plane owner и
-// зафиксированы source outbox.
-func seedRuntimeGraphMaterialization(source map[string][]sourceRow, target []model.TargetResource, plan *model.Plan,
-	appendCommand func(model.MaterializationCommand),
-) []model.TargetResource {
-	result := target
-	projects := byNumber(source["matter_codex_projects"], "id", plan)
-	chats := byNumber(source["matter_codex_chats"], "id", plan)
-	roles := byNumber(source["matter_codex_agent_roles"], "id", plan)
-	sessions := byNumber(source["matter_codex_agent_sessions"], "id", plan)
-	turns := byNumber(source["matter_codex_agent_session_turns"], "id", plan)
-	processes := byNumber(source["matter_codex_process_runs"], "id", plan)
-	linksByTurn := make(map[int64]sourceRow)
-	for _, link := range source["matter_codex_process_turns"] {
-		linksByTurn[number(link, "turn_id")] = link
-	}
-	processByID := make(map[int64]string)
-	for processID, process := range processes {
-		processByID[processID] = deterministicLegacyUUID("mattercodex:legacy-process:" + text(process, "public_id"))
-	}
-	for _, receipt := range source["matter_codex_runtime_agent_binding_outbox"] {
-		if text(receipt, "state") != "DELIVERED" {
-			continue
-		}
-		sessionID, turnID := number(receipt, "agent_session_id"), number(receipt, "agent_session_turn_id")
-		sourceSession, sessionOK := sessions[sessionID]
-		sourceTurn, turnOK := turns[turnID]
-		projectRow, projectOK := projects[number(sourceSession, "project_id")]
-		chatRow, chatOK := chats[number(sourceSession, "chat_id")]
-		roleRow, roleOK := roles[number(sourceSession, "role_id")]
-		if !sessionOK || !turnOK || !projectOK || !chatOK || !roleOK ||
-			number(sourceTurn, "session_id") != sessionID || text(receipt, "agent_session_key") != text(sourceSession, "session_key") {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		project, projectFound := uniqueCurrentBySpec(result, "PROJECT", "slug", text(projectRow, "slug"))
-		chat, chatFound := currentInBoundaryBySpec(result, "CHAT", "externalChannelRef",
-			text(chatRow, "mattermost_channel_id"), project)
-		agent, agentFound := currentOrHistoricalByStableKey(result, "AGENT", text(roleRow, "name"), project)
-		if !projectFound || !chatFound || !agentFound || !sameBoundary(project, chat) || !sameBoundary(project, agent) {
-			plan.Violations["tenant_mismatch"]++
-			continue
-		}
-		controlSessionID, controlTurnID := text(receipt, "control_session_id"), text(receipt, "control_turn_id")
-		revisionID := text(receipt, "runtime_revision_id")
-		revision, revisionFound := targetByID(result, "RUNTIME_REVISION")[revisionID]
-		if controlSessionID == "" || controlTurnID == "" || !revisionFound || !sameBoundary(project, revision) ||
-			text(revision.Spec, "sessionId") != controlSessionID || revision.Version != uint64(number(receipt, "runtime_revision_version")) ||
-			!validSHA(text(receipt, "runtime_revision_sha256")) || !validSHA(text(receipt, "input_sha256")) ||
-			!validSHA(text(receipt, "agent_session_binding_sha256")) || !validSHA(text(receipt, "agent_turn_binding_sha256")) {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		session := model.TargetResource{ID: controlSessionID, OrganizationID: project.OrganizationID,
-			ProjectID: project.ID, ParentID: chat.ID, OwnerActorID: project.OwnerActorID, Kind: "SESSION",
-			Name: sourceName(sourceSession, "Legacy session "+text(sourceSession, "session_key")), State: "ACTIVE",
-			Version: uint64(number(receipt, "control_session_version")), Spec: map[string]any{
-				"agentSessionId": sessionID, "agentSessionKey": text(sourceSession, "session_key"),
-				"agentSessionBindingVersion": number(receipt, "agent_session_version"),
-				"agentSessionBindingSha256":  text(receipt, "agent_session_binding_sha256"),
-				"agentId":                    agent.ID, "conversationId": chat.ID,
-			}}
-		if existing, found := targetByID(result, "SESSION")[session.ID]; found {
-			session = existing
-		} else {
-			result = append(result, session)
-		}
-		appendCommand(materializationCommand("UPSERT_SESSION", "matter_codex_agent_sessions", sessionID,
-			text(sourceSession, "session_key"), sourceRevision(sourceSession), sourceRowDigest(sourceSession), project.ID, session))
-
-		processTargetID := ""
-		if link, linked := linksByTurn[turnID]; linked {
-			processTargetID = processByID[number(link, "process_run_id")]
-		}
-		promptID := exactRevisionPromptArtifact(result, revision, text(receipt, "input_sha256"), plan)
-		if promptID == "" {
-			continue
-		}
-		turn := model.TargetResource{ID: controlTurnID, OrganizationID: project.OrganizationID,
-			ProjectID: project.ID, ParentID: session.ID, OwnerActorID: project.OwnerActorID, Kind: "TURN",
-			Name: "Legacy turn " + strconv.FormatInt(turnID, 10), State: "QUEUED",
-			Version: uint64(number(receipt, "control_turn_version")), Spec: map[string]any{
-				"agentSessionTurnId": turnID, "agentRunId": text(receipt, "agent_run_id"),
-				"agentTurnBindingVersion": number(receipt, "agent_session_turn_version"),
-				"agentTurnBindingSha256":  text(receipt, "agent_turn_binding_sha256"),
-				"sessionId":               session.ID, "runtimeRevisionId": revision.ID, "attempt": number(receipt, "attempt"),
-				"effectiveInputSha256": text(receipt, "input_sha256"), "promptArtifactId": promptID,
-				"processRunId": processTargetID,
-			}}
-		if existing, found := targetByID(result, "TURN")[turn.ID]; found {
-			turn = existing
-		} else {
-			result = append(result, turn)
-		}
-		appendCommand(materializationCommand("UPSERT_TURN", "matter_codex_agent_session_turns", turnID,
-			text(sourceTurn, "run_id"), sourceRevision(sourceTurn), sourceRowDigest(sourceTurn), project.ID, turn))
-		attemptNumber := number(receipt, "attempt")
-		workloadID := "legacy-cutover-" + plan.PlanID
-		if len(workloadID) > 128 {
-			workloadID = workloadID[:128]
-		}
-		attempt := model.TargetResource{ID: turn.ID + "#" + strconv.FormatInt(attemptNumber, 10),
-			OrganizationID: project.OrganizationID, ProjectID: project.ID,
-			OwnerActorID: project.OwnerActorID, Kind: "TURN_ATTEMPT",
-			Name: "", State: "QUEUED", Version: 1, Spec: map[string]any{"turnId": turn.ID,
-				"attempt": attemptNumber, "workloadId": workloadID, "authorityGeneration": int64(1),
-				"inputSha256": text(receipt, "input_sha256"), "runtimeRevisionId": revision.ID,
-				"runtimeRevisionVersion": revision.Version}}
-		if existing := currentAttemptByTurn(result, turn.ID, attemptNumber); existing.ID != "" {
-			attempt = existing
-		} else {
-			result = append(result, attempt)
-		}
-		appendCommand(materializationCommand("UPSERT_TURN_ATTEMPT", "matter_codex_agent_session_turns", turnID,
-			text(sourceTurn, "run_id"), uint64(attemptNumber), text(receipt, "input_sha256"), project.ID, attempt))
-	}
-	return seedProcessGraphMaterialization(source, result, plan, appendCommand)
-}
-
-func exactRevisionPromptArtifact(target []model.TargetResource, revision model.TargetResource, digest string,
-	plan *model.Plan,
-) string {
-	components, ok := revision.Spec["components"].([]any)
-	if !ok {
-		plan.Violations["broken_lineage"]++
-		return ""
-	}
-	matchID := ""
-	for _, raw := range components {
-		component, valid := raw.(map[string]any)
-		if !valid || text(component, "kind") != "ARTIFACT" {
-			continue
-		}
-		artifact := targetByID(target, "ARTIFACT")[text(component, "resourceId")]
-		if artifact.ID == "" || artifact.Version != uint64(number(component, "version")) ||
-			artifact.ProjectionSHA256 != text(component, "projectionSha256") || text(artifact.Spec, "sha256") != digest ||
-			!sameBoundary(revision, artifact) || !eligibleArtifact(artifact) || matchID != "" {
-			plan.Violations["broken_lineage"]++
-			return ""
-		}
-		matchID = artifact.ID
-	}
-	if matchID == "" {
-		plan.Violations["unmaterialized_active"]++
-	}
-	return matchID
-}
-
-func currentAttemptByTurn(target []model.TargetResource, turnID string, attempt int64) model.TargetResource {
-	for _, candidate := range target {
-		if candidate.Kind == "TURN_ATTEMPT" && text(candidate.Spec, "turnId") == turnID &&
-			number(candidate.Spec, "attempt") == attempt {
-			return candidate
-		}
-	}
-	return model.TargetResource{}
-}
-
-func seedProcessGraphMaterialization(source map[string][]sourceRow, target []model.TargetResource, plan *model.Plan,
-	appendCommand func(model.MaterializationCommand),
-) []model.TargetResource {
-	result := target
-	processes := byNumber(source["matter_codex_process_runs"], "id", plan)
-	policies := byNumber(source["matter_codex_policy_revisions"], "id", plan)
-	turns := byNumber(source["matter_codex_agent_session_turns"], "id", plan)
-	links := make(map[int64][]sourceRow)
-	for _, link := range source["matter_codex_process_turns"] {
-		links[number(link, "process_run_id")] = append(links[number(link, "process_run_id")], link)
-	}
-	delegations := make(map[int64]sourceRow)
-	for _, delegation := range source["matter_codex_agent_delegations"] {
-		delegations[number(delegation, "target_turn_id")] = delegation
-	}
-	for _, processID := range sortedSourceIDs(processes) {
-		process := processes[processID]
-		if terminalProcess(text(process, "status")) {
-			continue
-		}
-		policy := policies[number(process, "policy_revision_id")]
-		policySHA := sourcePolicySHA(source, number(process, "policy_revision_id"))
-		if policy == nil || text(policy, "status") != "active" || !validSHA(policySHA) ||
-			text(process, "root_initiator_user_id") == "" || text(process, "root_trigger_post_id") == "" {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		var rootTurn model.TargetResource
-		rootSourceTurnID := int64(0)
-		for _, link := range links[processID] {
-			if number(link, "parent_turn_id") != 0 {
-				continue
-			}
-			rootSourceTurnID = number(link, "turn_id")
-			for _, candidate := range result {
-				if candidate.Kind == "TURN" && number(candidate.Spec, "agentSessionTurnId") == rootSourceTurnID {
-					if rootTurn.ID != "" {
-						plan.Violations["broken_lineage"]++
-						rootTurn = model.TargetResource{}
-						break
-					}
-					rootTurn = candidate
-				}
-			}
-		}
-		rootSession := targetByID(result, "SESSION")[text(rootTurn.Spec, "sessionId")]
-		revision := targetByID(result, "RUNTIME_REVISION")[text(rootTurn.Spec, "runtimeRevisionId")]
-		if rootTurn.ID == "" || rootSession.ID == "" || revision.ID == "" ||
-			number(turns[rootSourceTurnID], "session_id") != number(rootSession.Spec, "agentSessionId") ||
-			!sameBoundary(rootTurn, rootSession) || !sameBoundary(rootTurn, revision) ||
-			number(revision.Spec, "authorityPolicyRevision") != number(policy, "version") ||
-			text(revision.Spec, "authorityPolicySha256") != policySHA {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		targetID := text(rootTurn.Spec, "processRunId")
-		if targetID == "" {
-			targetID = deterministicLegacyUUID("mattercodex:legacy-process:" + text(process, "public_id"))
-			rootTurn.Spec["processRunId"] = targetID
-			for index := range result {
-				if result[index].Kind == "TURN" && result[index].ID == rootTurn.ID {
-					result[index] = rootTurn
-				}
-			}
-		}
-		provenance := &model.ProcessProvenance{RootActorSourceRef: text(process, "root_initiator_user_id"),
-			PolicyRevision: uint64(number(policy, "version")), PolicySHA256: policySHA}
-		parentProcessID, launchingTurnID, delegationID := "", "", ""
-		if delegation := delegations[rootSourceTurnID]; delegation != nil {
-			delegationSHA, callbackRunID, callbackSHA := sourceDelegationProvenance(source, delegation)
-			if !validSHA(delegationSHA) || !validSHA(callbackSHA) {
-				plan.Violations["broken_lineage"]++
-				continue
-			}
-			for _, candidate := range result {
-				if candidate.Kind == "TURN" && number(candidate.Spec, "agentSessionTurnId") == number(delegation, "source_turn_id") {
-					launchingTurnID = candidate.ID
-					parentProcessID = text(candidate.Spec, "processRunId")
-				}
-			}
-			if launchingTurnID == "" || parentProcessID == "" {
-				plan.Violations["broken_lineage"]++
-				continue
-			}
-			delegationID = deterministicLegacyUUID("mattercodex:legacy-delegation:" +
-				strconv.FormatInt(number(delegation, "id"), 10) + ":" + delegationSHA)
-			provenance.DelegationSourceID, provenance.DelegationTargetID = number(delegation, "id"), delegationID
-			provenance.DelegationSHA256, provenance.CallbackRunID, provenance.CallbackSHA256 =
-				delegationSHA, callbackRunID, callbackSHA
-		}
-		resource := model.TargetResource{ID: targetID, OrganizationID: rootTurn.OrganizationID,
-			ProjectID: rootTurn.ProjectID, ParentID: rootSession.ID, OwnerActorID: rootTurn.OwnerActorID,
-			Kind: "PROCESS_RUN", Name: "Legacy process " + text(process, "public_id"), State: "BLOCKED", Version: 1,
-			Spec: map[string]any{"rootTurnId": rootTurn.ID, "rootSessionId": rootSession.ID,
-				"rootSessionVersion": rootSession.Version, "rootTurnVersion": rootTurn.Version,
-				"rootAttempt": number(rootTurn.Spec, "attempt"), "runtimeRevisionId": revision.ID,
-				"immutableInputSha256": text(rootTurn.Spec, "effectiveInputSha256"),
-				"policyRevision":       number(policy, "version"), "rootInitiatorActorId": rootTurn.OwnerActorID,
-				"rootTriggerRef":     "mattermost-post:" + text(process, "root_trigger_post_id"),
-				"parentProcessRunId": parentProcessID, "launchingProcessRunId": parentProcessID,
-				"launchingTurnId": launchingTurnID, "delegationId": delegationID,
-			}}
-		if existing, found := targetByID(result, "PROCESS_RUN")[targetID]; found {
-			resource = existing
-		} else {
-			result = append(result, resource)
-		}
-		command := materializationCommand("UPSERT_PROCESS_RUN", "matter_codex_process_runs", processID,
-			text(process, "public_id"), sourceRevision(process),
-			digestMaterializationSource(sourceRowDigest(process), policySHA, provenance.DelegationSHA256,
-				provenance.CallbackSHA256), resource.ProjectID, resource)
-		command.ProcessProvenance = provenance
-		appendCommand(command)
-	}
-	return result
-}
-
-func sortedSourceIDs(rows map[int64]sourceRow) []int64 {
-	result := make([]int64, 0, len(rows))
-	for id := range rows {
-		result = append(result, id)
-	}
-	sort.Slice(result, func(left, right int) bool { return result[left] < result[right] })
-	return result
-}
-
-func sourceName(row sourceRow, fallback string) string {
-	if value := strings.TrimSpace(text(row, "name")); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func sourceRevision(row sourceRow) uint64 {
-	for _, key := range []string{"binding_version", "version"} {
-		if value := number(row, key); value > 0 {
-			return uint64(value)
-		}
-	}
-	if value, err := time.Parse(time.RFC3339Nano, text(row, "updated_at")); err == nil && !value.IsZero() {
-		return uint64(value.UTC().UnixMicro())
-	}
-	return 1
-}
-
-func sourceRowDigest(row sourceRow) string {
-	encoded, err := json.Marshal(row)
-	if err != nil {
-		return ""
-	}
-	return digestBytes(encoded)
-}
-
-func legacyOwnership(kind string, sourceID int64, digest string) map[string]any {
-	return map[string]any{"managedBy": "UI",
-		"sourceRef":      "control-plane://legacy/" + kind + "/" + strconv.FormatInt(sourceID, 10),
-		"sourceRevision": uint64(1), "sourceSha256": digest}
-}
-
-func legacyRoomType(chatType, purpose string) string {
-	if purpose == "development" || purpose == "coordination" || chatType == "coordination" {
-		return "COORDINATION"
-	}
-	return "USER"
-}
-
-func uniqueCurrentBySpec(target []model.TargetResource, kind, key, value string) (model.TargetResource, bool) {
-	var result model.TargetResource
-	for _, candidate := range target {
-		if candidate.Historical || candidate.Kind != kind || text(candidate.Spec, key) != value ||
-			candidate.State == "DELETED" {
-			continue
-		}
-		if result.ID != "" {
-			return model.TargetResource{}, false
-		}
-		result = candidate
-	}
-	return result, result.ID != ""
-}
-
-func currentInBoundaryBySpec(target []model.TargetResource, kind, key, value string,
-	boundary model.TargetResource,
-) (model.TargetResource, bool) {
-	var result model.TargetResource
-	for _, candidate := range target {
-		if candidate.Historical || candidate.Kind != kind || text(candidate.Spec, key) != value ||
-			candidate.State == "DELETED" || !sameBoundary(candidate, boundary) {
-			continue
-		}
-		if result.ID != "" {
-			return model.TargetResource{}, false
-		}
-		result = candidate
-	}
-	return result, result.ID != ""
-}
-
-func graphAuthorityForProject(projectID int64, roles map[int64]sourceRow, target []model.TargetResource,
-	project model.TargetResource, projectExists bool,
-) (model.TargetResource, string, bool) {
-	byID := make(map[string]model.TargetResource)
-	for _, role := range roles {
-		if number(role, "project_id") != projectID {
-			continue
-		}
-		for _, candidate := range target {
-			if candidate.Kind != "AGENT" || text(candidate.Spec, "stableKey") != text(role, "name") ||
-				projectExists && !sameBoundary(candidate, project) {
-				continue
-			}
-			if current, exists := byID[candidate.ID]; !exists || current.Historical && !candidate.Historical {
-				byID[candidate.ID] = candidate
-			}
-		}
-	}
-	ids := make([]string, 0, len(byID))
-	for id := range byID {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	var authority model.TargetResource
-	for _, id := range ids {
-		candidate := byID[id]
-		if authority.ID != "" && (candidate.OrganizationID != authority.OrganizationID ||
-			candidate.ProjectID != authority.ProjectID || candidate.OwnerActorID != authority.OwnerActorID) {
-			return model.TargetResource{}, "", false
-		}
-		authority = candidate
-	}
-	if authority.ID == "" {
-		return model.TargetResource{}, "", false
-	}
-	projection, ok := exactProtectedProjection(target, authority)
-	return authority, projection, ok
-}
-
-func currentOrHistoricalByStableKey(target []model.TargetResource, kind, stableKey string,
-	boundary model.TargetResource,
-) (model.TargetResource, bool) {
-	var result model.TargetResource
-	for _, candidate := range target {
-		if candidate.Kind != kind || text(candidate.Spec, "stableKey") != stableKey || !sameBoundary(candidate, boundary) {
-			continue
-		}
-		if result.ID != "" && candidate.ID != result.ID {
-			return model.TargetResource{}, false
-		}
-		if result.ID == "" || result.Historical && !candidate.Historical || candidate.Version > result.Version {
-			result = candidate
-		}
-	}
-	return result, result.ID != ""
-}
-
-func promoteHistorical(resource model.TargetResource) model.TargetResource {
-	resource.Historical = false
-	resource.Canonical = nil
-	return resource
-}
-
-func appendCurrentIfMissing(target []model.TargetResource, resource model.TargetResource) []model.TargetResource {
-	for _, candidate := range target {
-		if !candidate.Historical && candidate.Kind == resource.Kind && candidate.ID == resource.ID {
-			return target
-		}
-	}
-	return append(target, resource)
-}
-
-func exactProtectedProjection(target []model.TargetResource, resource model.TargetResource) (string, bool) {
-	values := make(map[string]struct{})
-	for _, candidate := range target {
-		if candidate.Historical && candidate.Kind == resource.Kind && candidate.ID == resource.ID &&
-			candidate.Version == resource.Version && sameBoundary(candidate, resource) && validSHA(candidate.ProjectionSHA256) {
-			values[candidate.ProjectionSHA256] = struct{}{}
-		}
-	}
-	if len(values) != 1 {
-		return "", false
-	}
-	for value := range values {
-		return value, true
-	}
-	return "", false
-}
-
-func protectedConfigurationGraph(target []model.TargetResource, agent, project model.TargetResource,
-	plan *model.Plan,
-) []model.TargetResource {
-	result := []model.TargetResource{agent}
-	references := []struct{ kind, idKey string }{
-		{"ROLE_DEFINITION", "roleDefinitionId"}, {"INSTRUCTION_SET", "instructionSetId"},
-		{"PROVIDER_POOL", "providerPoolId"},
-	}
-	for _, reference := range references {
-		resource, ok := currentOrHistoricalByID(target, reference.kind, text(agent.Spec, reference.idKey), project)
-		if !ok {
-			plan.Violations["unmaterialized_active"]++
-			continue
-		}
-		result = append(result, resource)
-		if resource.Kind == "PROVIDER_POOL" {
-			if bindings, cast := resource.Spec["bindings"].([]any); cast {
-				for _, value := range bindings {
-					binding, valid := value.(map[string]any)
-					if !valid {
-						plan.Violations["broken_lineage"]++
-						continue
-					}
-					referenceResource, found := currentOrHistoricalByID(target,
-						"PROVIDER_CONNECTION_REFERENCE", text(binding, "providerConnectionReferenceId"), project)
-					if !found {
-						plan.Violations["unmaterialized_active"]++
-						continue
-					}
-					result = append(result, referenceResource)
-				}
-			}
-		}
-	}
-	runtimeRef := strings.TrimPrefix(text(agent.Spec, "runtimeProfileRef"), "control-plane://runtime-profile/")
-	if runtimeRef != "" {
-		if recipe, ok := currentOrHistoricalByID(target, "ROLE_IMAGE_RECIPE", runtimeRef, project); ok {
-			result = append(result, recipe)
-		} else {
-			plan.Violations["unmaterialized_active"]++
-		}
-	}
-	for _, candidate := range target {
-		if candidate.Kind == "AGENT_ASSIGNMENT" && sameBoundary(candidate, project) &&
-			text(candidate.Spec, "agentId") == agent.ID {
-			result = append(result, candidate)
-		}
-	}
-	return deduplicateResources(result)
-}
-
-func currentOrHistoricalByID(target []model.TargetResource, kind, id string,
-	boundary model.TargetResource,
-) (model.TargetResource, bool) {
-	var result model.TargetResource
-	for _, candidate := range target {
-		if candidate.Kind != kind || candidate.ID != id || !sameBoundary(candidate, boundary) {
-			continue
-		}
-		if result.ID == "" || result.Historical && !candidate.Historical || candidate.Version > result.Version {
-			result = candidate
-		}
-	}
-	return result, result.ID != ""
-}
-
-func deduplicateResources(resources []model.TargetResource) []model.TargetResource {
-	result := make([]model.TargetResource, 0, len(resources))
-	seen := make(map[string]struct{})
-	for _, resource := range resources {
-		key := resource.Kind + "\x00" + resource.ID + "\x00" + strconv.FormatUint(resource.Version, 10)
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		result = append(result, resource)
-	}
-	return result
-}
-
-func mapSource(source map[string][]sourceRow, target []model.TargetResource, plan *model.Plan,
-	matched map[string]model.TargetResource, mapping *[]string,
-) {
-	projects := indexTarget(target, "PROJECT", "slug")
-	teams := indexTarget(target, "TEAM", "externalTeamRef")
-	chats := indexTarget(target, "CHAT", "externalChannelRef")
-	agents := indexTarget(target, "AGENT", "stableKey")
-	sessions := indexTargetNumber(target, "SESSION", "agentSessionId")
-	turns := indexTargetNumber(target, "TURN", "agentSessionTurnId")
-	revisions := targetByID(target, "RUNTIME_REVISION")
-
-	sourceProjects := byNumber(source["matter_codex_projects"], "id", plan)
-	sourceChats := byNumber(source["matter_codex_chats"], "id", plan)
-	sourceRoles := byNumber(source["matter_codex_agent_roles"], "id", plan)
-	sourceSessions := byNumber(source["matter_codex_agent_sessions"], "id", plan)
-	sourceTurns := byNumber(source["matter_codex_agent_session_turns"], "id", plan)
-	sourceBotsByRole := make(map[int64]sourceRow)
-	for _, bot := range source["matter_codex_mattermost_bot_identities"] {
-		roleID := number(bot, "role_id")
-		if roleID <= 0 {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if _, duplicate := sourceBotsByRole[roleID]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		sourceBotsByRole[roleID] = bot
-	}
-
-	projectMap := make(map[int64]model.TargetResource)
-	teamMap := make(map[int64]model.TargetResource)
-	for id, row := range sourceProjects {
-		key := text(row, "slug")
-		candidate, ok := uniqueTarget(projects[key], plan)
-		if !ok || candidate.ProjectID != candidate.ID || candidate.OrganizationID == "" ||
-			candidate.OwnerActorID == "" || candidate.State != "ACTIVE" {
-			plan.Violations["ambiguous_target"]++
-			continue
-		}
-		projectMap[id] = candidate
-		match(plan, matched, "PROJECT", candidate)
-		recordMapping(mapping, "PROJECT", id, candidate)
-		team, found := uniqueGloballyScoped(teams[text(row, "mattermost_team_id")], candidate, plan)
-		if !found || team.State != "ACTIVE" {
-			delete(projectMap, id)
-			continue
-		}
-		match(plan, matched, "TEAM", team)
-		recordMapping(mapping, "TEAM", id, team)
-		teamMap[id] = team
-	}
-
-	chatMap := make(map[int64]model.TargetResource)
-	archivedChats := make(map[int64]bool)
-	for id, row := range sourceChats {
-		project, ok := projectMap[number(row, "project_id")]
-		if !ok {
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		status := text(row, "status")
-		if status != "active" && status != "archived" {
-			plan.Violations["unknown_state"]++
-			continue
-		}
-		candidates, hiddenMismatch := globallyScopedTargets(chats[text(row, "mattermost_channel_id")], project)
-		if status == "archived" && len(candidates) == 0 && !hiddenMismatch {
-			archivedChats[id] = true
-			plan.Counts.Archive["CHAT"]++
-			recordArchive(mapping, "CHAT", id)
-			continue
-		}
-		if hiddenMismatch || len(candidates) != 1 {
-			if hiddenMismatch {
-				plan.Violations["tenant_mismatch"]++
-			} else {
-				plan.Violations["ambiguous_target"]++
-			}
-			continue
-		}
-		candidate := candidates[0]
-		if stable := text(candidate.Spec, "stableKey"); stable != text(row, "slug") {
-			plan.Violations["stale_reference"]++
-			continue
-		}
-		if status == "active" && candidate.State != "ACTIVE" || status == "archived" && candidate.State != "ARCHIVED" {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		chatMap[id] = candidate
-		match(plan, matched, "CHAT", candidate)
-		recordMapping(mapping, "CHAT", id, candidate)
-	}
-
-	roleMap := make(map[int64]model.TargetResource)
-	for id, row := range sourceRoles {
-		if !set("raw", "template")[text(row, "prompt_mode")] {
-			plan.Violations["unknown_state"]++
-			continue
-		}
-		project, ok := projectMap[number(row, "project_id")]
-		if !ok {
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		candidate, found := uniqueScoped(agents[text(row, "name")], project, plan)
-		if !found {
-			continue
-		}
-		if candidate.State != "ACTIVE" || boolean(candidate.Spec, "enabled") != boolean(row, "enabled") {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if !validateAgentConfiguration(id, text(row, "prompt_sha256"), candidate, project, target, plan, matched, mapping) ||
-			!validateAgentBot(candidate, teamMap[number(row, "project_id")], sourceBotsByRole[id], plan) {
-			continue
-		}
-		roleMap[id] = candidate
-		match(plan, matched, "AGENT", candidate)
-		recordMapping(mapping, "AGENT", id, candidate)
-	}
-	mapSchedules(source, projectMap, chatMap, roleMap, target, plan, matched, mapping)
-
-	sessionMap := make(map[int64]model.TargetResource)
-	archivedSessions := make(map[int64]bool)
-	for id, row := range sourceSessions {
-		if !knownSession(text(row, "status")) {
-			plan.Violations["unknown_state"]++
-			continue
-		}
-		project, projectOK := projectMap[number(row, "project_id")]
-		chat, chatOK := chatMap[number(row, "chat_id")]
-		agent, roleOK := roleMap[number(row, "role_id")]
-		if projectOK && archivedChats[number(row, "chat_id")] && roleOK && terminalSession(text(row, "status")) {
-			archivedSessions[id] = true
-			plan.Counts.Archive["SESSION"]++
-			recordArchive(mapping, "SESSION", id)
-			continue
-		}
-		if !projectOK || !chatOK || !roleOK {
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		if !sameBoundary(project, chat) || !sameBoundary(project, agent) {
-			plan.Violations["tenant_mismatch"]++
-			continue
-		}
-		candidates, hiddenMismatch := globallyScopedTargets(sessions[id], project)
-		if hiddenMismatch || len(candidates) != 1 {
-			if len(candidates) == 0 && !hiddenMismatch && terminalSession(text(row, "status")) {
-				archivedSessions[id] = true
-				plan.Counts.Archive["SESSION"]++
-				recordArchive(mapping, "SESSION", id)
-				continue
-			}
-			if hiddenMismatch {
-				plan.Violations["tenant_mismatch"]++
-			} else if len(candidates) > 1 {
-				plan.Violations["ambiguous_target"]++
-			} else {
-				plan.Violations["unmaterialized_active"]++
-			}
-			continue
-		}
-		candidate := candidates[0]
-		if text(candidate.Spec, "agentSessionKey") != text(row, "session_key") ||
-			uint64(number(candidate.Spec, "agentSessionBindingVersion")) != uint64(number(row, "binding_version")) ||
-			text(candidate.Spec, "agentId") != agent.ID || text(candidate.Spec, "conversationId") != chat.ID ||
-			!validSHA(text(candidate.Spec, "agentSessionBindingSha256")) ||
-			!sessionStateCompatible(text(row, "status"), candidate.State) {
-			plan.Violations["stale_reference"]++
-			continue
-		}
-		sessionMap[id] = candidate
-		match(plan, matched, "SESSION", candidate)
-		recordMapping(mapping, "SESSION", id, candidate)
-		appendUniqueMaterialization(plan, materializationCommand("UPSERT_SESSION",
-			"matter_codex_agent_sessions", id, text(row, "session_key"), sourceRevision(row),
-			sourceRowDigest(row), project.ID, candidate))
-	}
-
-	turnMap := make(map[int64]model.TargetResource)
-	for id, row := range sourceTurns {
-		sessionID := number(row, "session_id")
-		session, sessionOK := sessionMap[sessionID]
-		status := text(row, "status")
-		if !knownTurn(status) {
-			plan.Violations["unknown_state"]++
-			continue
-		}
-		if !sessionOK {
-			if archivedSessions[sessionID] && terminalTurn(status) {
-				plan.Counts.Archive["TURN"]++
-				plan.Counts.Archive["ARTIFACT"] += artifactCardinality(row["artifacts"])
-				recordArchive(mapping, "TURN", id)
-				continue
-			}
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		candidates, hiddenMismatch := globallyScopedTargets(turns[id], sessionProject(session))
-		if len(candidates) == 1 && !hiddenMismatch {
-			candidate := candidates[0]
-			revisionID := text(candidate.Spec, "runtimeRevisionId")
-			revision, revisionOK := revisions[revisionID]
-			if text(candidate.Spec, "sessionId") != session.ID || !turnStateCompatible(status, candidate.State) ||
-				text(candidate.Spec, "agentRunId") != text(row, "run_id") ||
-				uint64(number(candidate.Spec, "agentTurnBindingVersion")) != uint64(number(row, "binding_version")) ||
-				!validSHA(text(candidate.Spec, "agentTurnBindingSha256")) || !revisionOK ||
-				!sameBoundary(session, revision) || text(revision.Spec, "sessionId") != session.ID ||
-				!validSHA(text(revision.Spec, "effectiveRuntimeSha256")) {
-				plan.Violations["broken_lineage"]++
-				continue
-			}
-			turnMap[id] = candidate
-			match(plan, matched, "TURN", candidate)
-			match(plan, matched, "RUNTIME_REVISION", revision)
-			recordMapping(mapping, "TURN", id, candidate)
-			recordMapping(mapping, "RUNTIME_REVISION", id, revision)
-			appendUniqueMaterialization(plan, materializationCommand("UPSERT_TURN",
-				"matter_codex_agent_session_turns", id, text(row, "run_id"), sourceRevision(row),
-				sourceRowDigest(row), candidate.ProjectID, candidate))
-			mapTurnDetails(candidate, revision, target, plan, matched, mapping, text(row, "status"))
-			continue
-		}
-		if hiddenMismatch {
-			plan.Violations["tenant_mismatch"]++
-		} else if len(candidates) > 1 {
-			plan.Violations["ambiguous_target"]++
-		} else {
-			plan.Violations["unmaterialized_active"]++
-		}
-	}
-
-	mapProcesses(source, turnMap, archivedSessions, sourceSessions, sourceTurns, plan, matched, mapping, target)
-	validateSessionCurrentTuple(sourceSessions, sourceTurns, turnMap, plan)
-	validateBindingReceipts(source, sessionMap, turnMap, sourceTurns, archivedSessions, target, plan, mapping)
-	validateAgentRuns(source, turnMap, sourceTurns, archivedSessions, plan, mapping)
-}
-
-func mapSchedules(source map[string][]sourceRow, projects, chats, agents map[int64]model.TargetResource,
-	target []model.TargetResource, plan *model.Plan, matched map[string]model.TargetResource, mapping *[]string,
-) {
-	currentSchedules := targetByID(target, "SCHEDULE")
-	for _, row := range source["matter_codex_automation_schedules"] {
-		id := number(row, "id")
-		if id <= 0 {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if !boolean(row, "enabled") {
-			plan.Counts.Archive["SCHEDULE"]++
-			recordArchive(mapping, "SCHEDULE", id)
-			continue
-		}
-		project, projectOK := projects[number(row, "project_id")]
-		chat, chatOK := chats[number(row, "target_chat_id")]
-		agent, agentOK := agents[number(row, "target_agent_role_id")]
-		if !projectOK || !chatOK || !agentOK {
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		if !sameBoundary(project, chat) || !sameBoundary(project, agent) {
-			plan.Violations["tenant_mismatch"]++
-			continue
-		}
-		command, preview, ok := scheduleMaterialization(row, project, chat, agent, target, plan)
-		if !ok {
-			continue
-		}
-		if existing, exists := currentSchedules[preview.ID]; exists {
-			if existing.OrganizationID != preview.OrganizationID || existing.ProjectID != preview.ProjectID ||
-				existing.ParentID != preview.ParentID ||
-				existing.OwnerActorID != preview.OwnerActorID || existing.Kind != preview.Kind ||
-				existing.Name != preview.Name ||
-				existing.State != preview.State || existing.Version != preview.Version ||
-				!equalJSON(existing.Spec, preview.Spec) {
-				plan.Violations["stale_reference"]++
-				continue
-			}
-			preview = existing
-		}
-		plan.Materialization = append(plan.Materialization, command)
-		match(plan, matched, "SCHEDULE", preview)
-		recordMapping(mapping, "SCHEDULE", id, preview)
-	}
-}
-
-func scheduleMaterialization(row sourceRow, project, chat, agent model.TargetResource,
-	target []model.TargetResource, plan *model.Plan,
-) (model.MaterializationCommand, model.TargetResource, bool) {
-	if text(row, "preset") != "daily" || text(row, "local_time") == "" || text(row, "time_zone") == "" ||
-		!validExternalRef(text(row, "playbook_key")) || !validExternalRef(text(row, "prompt_version")) ||
-		!validExternalRef(text(row, "callback_contract_version")) || !validSHA(text(row, "prompt_sha256")) ||
-		!validSHA(text(row, "command_hash")) || !validLegacyScheduleID(text(row, "public_id")) {
-		plan.Violations["unsupported_state"]++
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	if _, err := time.LoadLocation(text(row, "time_zone")); err != nil {
-		plan.Violations["unsupported_state"]++
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	nextRunAt, err := time.Parse(time.RFC3339Nano, text(row, "next_run_at"))
-	if err != nil || nextRunAt.IsZero() {
-		plan.Violations["unsupported_state"]++
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	updatedAt, err := time.Parse(time.RFC3339Nano, text(row, "updated_at"))
-	if err != nil || updatedAt.UnixMicro() <= 0 {
-		plan.Violations["unsupported_state"]++
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	sourceRevision := uint64(updatedAt.UTC().UnixMicro())
-	agentSHA, ok := protectedProjectionSHA(target, agent, plan)
-	if !ok {
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	instruction, instructionOK := exactCurrentReference(target, agent, "INSTRUCTION_SET",
-		text(agent.Spec, "instructionSetId"), number(agent.Spec, "instructionSetVersion"),
-		text(agent.Spec, "instructionSetSha256"), plan)
-	pool, poolOK := exactCurrentReference(target, agent, "PROVIDER_POOL",
-		text(agent.Spec, "providerPoolId"), number(agent.Spec, "providerPoolVersion"),
-		text(agent.Spec, "providerPoolSha256"), plan)
-	if !instructionOK || !poolOK || text(instruction.Spec, "versionState") != "PUBLISHED" {
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	if text(instruction.Spec, "contentSha256") != text(row, "prompt_sha256") {
-		plan.Violations["stale_reference"]++
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	var assignment model.TargetResource
-	for _, candidate := range target {
-		if candidate.Historical || candidate.Kind != "AGENT_ASSIGNMENT" || candidate.State != "ACTIVE" ||
-			text(candidate.Spec, "agentId") != agent.ID || text(candidate.Spec, "roomId") != chat.ID ||
-			!sameBoundary(project, candidate) {
-			continue
-		}
-		if assignment.ID != "" {
-			plan.Violations["ambiguous_target"]++
-			return model.MaterializationCommand{}, model.TargetResource{}, false
-		}
-		assignment = candidate
-	}
-	assignmentSHA, assignmentOK := protectedProjectionSHA(target, assignment, plan)
-	if assignment.ID == "" || !assignmentOK {
-		plan.Violations["unmaterialized_active"]++
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	prompt, promptOK := currentResource(target, "ARTIFACT", text(instruction.Spec, "contentArtifactId"), instruction, plan)
-	if !promptOK || prompt.Version != uint64(number(instruction.Spec, "contentArtifactVersion")) ||
-		text(prompt.Spec, "sha256") != text(row, "prompt_sha256") || text(prompt.Spec, "direction") != "INPUT" ||
-		text(prompt.Spec, "mediaType") != "text/markdown" || !eligibleArtifact(prompt) {
-		if promptOK {
-			plan.Violations["unsupported_state"]++
-		}
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	parts := strings.Split(text(row, "local_time"), ":")
-	if len(parts) != 2 {
-		plan.Violations["unsupported_state"]++
-		return model.MaterializationCommand{}, model.TargetResource{}, false
-	}
-	sourceRef := "control-plane://legacy-schedule/" + text(row, "public_id")
-	targetID := deterministicLegacyUUID("mattercodex:legacy-schedule:" + text(row, "public_id"))
-	spec := map[string]any{
-		"targetResourceId": agent.ID, "targetKind": "AGENT", "targetVersion": agent.Version,
-		"effectiveInputSha256": text(row, "command_hash"), "cron": parts[1] + " " + parts[0] + " * * *",
-		"timezone": text(row, "time_zone"), "calendar": "GREGORIAN", "overlapPolicy": "FORBID",
-		"misfirePolicy": "RUN_ONCE", "misfireGrace": int64(0),
-		"nextRunAt":      nextRunAt.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano),
-		"deliveryPolicy": "EXACTLY_ONCE_EFFECT", "maximumAttempts": 3, "initialBackoff": int64(5 * time.Second),
-		"maximumBackoff": int64(time.Minute), "deadLetterAfter": int64(24 * time.Hour), "sessionPolicy": "NEW",
-		"roomId": chat.ID, "notificationPolicy": "ON_ACTION_OR_FAILURE", "maximumExecutionDuration": int64(90 * time.Minute),
-		"coalesce": true, "targetType": "PLAYBOOK", "playbookRef": text(row, "playbook_key"), "playbookVersion": 1,
-		"promptArtifactId": prompt.ID, "ownership": map[string]any{"managedBy": "UI", "sourceRef": sourceRef,
-			"sourceRevision": sourceRevision, "sourceSha256": text(row, "command_hash")},
-		"agentId": agent.ID, "agentVersion": agent.Version, "agentSha256": agentSHA,
-		"instructionSetId": instruction.ID, "instructionSetVersion": instruction.Version,
-		"instructionSetSha256":    text(agent.Spec, "instructionSetSha256"),
-		"runtimeSelectionRef":     text(agent.Spec, "runtimeProfileRef"),
-		"runtimeSelectionVersion": number(agent.Spec, "runtimeProfileVersion"),
-		"runtimeSelectionSha256":  text(agent.Spec, "runtimeProfileSha256"),
-		"providerPoolId":          pool.ID, "providerPoolVersion": pool.Version,
-		"providerPoolSha256": text(agent.Spec, "providerPoolSha256"),
-		"agentAssignmentId":  assignment.ID, "agentAssignmentVersion": assignment.Version,
-		"agentAssignmentSha256": assignmentSHA,
-	}
-	preview := model.TargetResource{ID: targetID, OrganizationID: project.OrganizationID, ProjectID: project.ProjectID,
-		ParentID:     project.ID,
-		OwnerActorID: project.OwnerActorID, Kind: "SCHEDULE",
-		Name: "Legacy schedule " + text(row, "public_id"), State: "ACTIVE", Version: 1, Spec: spec}
-	command := materializationCommand("UPSERT_SCHEDULE", "matter_codex_automation_schedules",
-		number(row, "id"), text(row, "public_id"), sourceRevision, text(row, "command_hash"),
-		project.ID, preview)
-	return command, preview, true
-}
-
-func materializationCommand(operation, sourceTable string, sourceID int64, sourcePublicID string,
-	sourceRevision uint64, sourceDigest, projectTargetID string, resource model.TargetResource,
-) model.MaterializationCommand {
-	return model.MaterializationCommand{
-		Operation: operation, SourceTable: sourceTable, SourceID: sourceID,
-		SourcePublicID: sourcePublicID, SourceRevision: sourceRevision, SourceDigest: sourceDigest,
-		TargetID: resource.ID, TargetKind: resource.Kind, ProjectTargetID: projectTargetID,
-		Resource: model.MaterializedResource{ParentID: resource.ParentID, Name: resource.Name,
-			State: resource.State, Version: resource.Version, Spec: resource.Spec},
-	}
-}
-
-func appendUniqueMaterialization(plan *model.Plan, command model.MaterializationCommand) {
-	for _, existing := range plan.Materialization {
-		if existing.Operation == command.Operation && existing.TargetID == command.TargetID {
-			return
-		}
-	}
-	plan.Materialization = append(plan.Materialization, command)
-}
-
-func deterministicLegacyUUID(value string) string {
-	digest := md5.Sum([]byte(value)) // Совпадает с PostgreSQL md5(text)::uuid; не security hash.
-	encoded := hex.EncodeToString(digest[:])
-	return encoded[:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:]
-}
-
-func validLegacyScheduleID(value string) bool {
-	if len(value) != len("schedule-")+32 || !strings.HasPrefix(value, "schedule-") {
-		return false
-	}
-	for _, symbol := range strings.TrimPrefix(value, "schedule-") {
-		if (symbol < '0' || symbol > '9') && (symbol < 'a' || symbol > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
-func equalJSON(left, right any) bool {
-	leftJSON, leftErr := json.Marshal(left)
-	rightJSON, rightErr := json.Marshal(right)
-	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
-}
-
-func validateAgentConfiguration(sourceRoleID int64, sourcePromptSHA string, agent, project model.TargetResource,
-	target []model.TargetResource, plan *model.Plan, matched map[string]model.TargetResource, mapping *[]string,
-) bool {
-	agentSHA, valid := protectedProjectionSHA(target, agent, plan)
-	references := []struct {
-		kind, idKey, versionKey, shaKey string
-	}{
-		{"ROLE_DEFINITION", "roleDefinitionId", "roleDefinitionVersion", "roleDefinitionSha256"},
-		{"INSTRUCTION_SET", "instructionSetId", "instructionSetVersion", "instructionSetSha256"},
-		{"PROVIDER_POOL", "providerPoolId", "providerPoolVersion", "providerPoolSha256"},
-	}
-	resolved := make(map[string]model.TargetResource, len(references))
-	for _, reference := range references {
-		resource, ok := exactCurrentReference(target, agent, reference.kind, text(agent.Spec, reference.idKey),
-			number(agent.Spec, reference.versionKey), text(agent.Spec, reference.shaKey), plan)
-		if !ok {
-			valid = false
-			continue
-		}
-		resolved[reference.kind] = resource
-		match(plan, matched, reference.kind, resource)
-		recordMapping(mapping, "AGENT_CONFIGURATION", sourceRoleID, resource)
-	}
-	runtimePrefix := "control-plane://runtime-profile/"
-	runtimeReference := text(agent.Spec, "runtimeProfileRef")
-	if !strings.HasPrefix(runtimeReference, runtimePrefix) || len(runtimeReference) == len(runtimePrefix) {
-		plan.Violations["broken_lineage"]++
-		valid = false
-	} else if resource, ok := exactCurrentReference(target, agent, "ROLE_IMAGE_RECIPE",
-		strings.TrimPrefix(runtimeReference, runtimePrefix), number(agent.Spec, "runtimeProfileVersion"),
-		text(agent.Spec, "runtimeProfileSha256"), plan); ok {
-		match(plan, matched, "ROLE_IMAGE_RECIPE", resource)
-		recordMapping(mapping, "AGENT_CONFIGURATION", sourceRoleID, resource)
-	} else {
-		valid = false
-	}
-
-	providerPool, poolOK := resolved["PROVIDER_POOL"]
-	bindings, bindingsOK := providerPool.Spec["bindings"].([]any)
-	if instruction, ok := resolved["INSTRUCTION_SET"]; ok {
-		contentVersion := number(instruction.Spec, "currentVersion")
-		artifactID := text(instruction.Spec, "contentArtifactId")
-		if sourcePromptSHA != "" && text(instruction.Spec, "contentSha256") != sourcePromptSHA {
-			plan.Violations["stale_reference"]++
-			valid = false
-		}
-		if text(instruction.Spec, "versionState") != "PUBLISHED" || contentVersion <= 0 ||
-			number(instruction.Spec, "publishedVersion") != contentVersion ||
-			!validSHA(text(instruction.Spec, "contentSha256")) || artifactID == "" ||
-			number(instruction.Spec, "contentArtifactVersion") <= 0 {
-			plan.Violations["unsupported_state"]++
-			valid = false
-		} else if artifact, artifactOK := currentResource(target, "ARTIFACT", artifactID, instruction, plan); !artifactOK {
-			valid = false
-		} else if artifact.Version != uint64(number(instruction.Spec, "contentArtifactVersion")) ||
-			text(artifact.Spec, "sha256") != text(instruction.Spec, "contentSha256") ||
-			text(artifact.Spec, "direction") != "INPUT" || text(artifact.Spec, "mediaType") != "text/markdown" {
-			plan.Violations["stale_reference"]++
-			valid = false
-		} else if !eligibleArtifact(artifact) {
-			plan.Violations["unsupported_state"]++
-			valid = false
-		} else {
-			match(plan, matched, "ARTIFACT", artifact)
-			recordMapping(mapping, "AGENT_CONFIGURATION", sourceRoleID, artifact)
-		}
-	}
-	if poolOK && (!bindingsOK || len(bindings) == 0 ||
-		!validSHA(text(providerPool.Spec, "eligibilitySnapshotSha256"))) {
-		plan.Violations["broken_lineage"]++
-		valid = false
-	}
-	for _, rawBinding := range bindings {
-		binding, ok := rawBinding.(map[string]any)
-		if !ok || !boolean(binding, "eligible") ||
-			!set("AVAILABLE", "DEGRADED")[text(binding, "maskedStatus")] {
-			plan.Violations["broken_lineage"]++
-			valid = false
-			continue
-		}
-		reference, ok := exactCurrentReference(target, agent, "PROVIDER_CONNECTION_REFERENCE",
-			text(binding, "providerConnectionReferenceId"), number(binding, "referenceVersion"),
-			text(binding, "referenceSha256"), plan)
-		if !ok || text(reference.Spec, "stableKey") != text(binding, "providerConnectionStableKey") ||
-			!boolean(reference.Spec, "eligible") ||
-			!set("AVAILABLE", "DEGRADED")[text(reference.Spec, "maskedStatus")] {
-			if ok {
-				plan.Violations["stale_reference"]++
-			}
-			valid = false
-			continue
-		}
-		match(plan, matched, "PROVIDER_CONNECTION_REFERENCE", reference)
-		recordMapping(mapping, "AGENT_CONFIGURATION", sourceRoleID, reference)
-	}
-
-	assignments := make([]model.TargetResource, 0, 1)
-	hiddenBoundary := false
-	for _, resource := range target {
-		if resource.Historical || resource.Kind != "AGENT_ASSIGNMENT" || text(resource.Spec, "agentId") != agent.ID {
-			continue
-		}
-		if sameBoundary(resource, project) {
-			assignments = append(assignments, resource)
-		} else {
-			hiddenBoundary = true
-		}
-	}
-	if hiddenBoundary {
-		plan.Violations["tenant_mismatch"]++
-		valid = false
-	}
-	if boolean(agent.Spec, "enabled") && len(assignments) != 1 || len(assignments) > 1 {
-		plan.Violations["ambiguous_target"]++
-		valid = false
-	}
-	if len(assignments) == 1 {
-		assignment := assignments[0]
-		if assignment.State != "ACTIVE" || assignment.Version == 0 ||
-			uint64(number(assignment.Spec, "agentVersion")) != agent.Version ||
-			text(assignment.Spec, "agentSha256") != agentSHA ||
-			text(assignment.Spec, "workspaceId") != project.ID ||
-			uint64(number(assignment.Spec, "workspaceVersion")) != project.Version ||
-			!validSHA(text(assignment.Spec, "workspaceSha256")) ||
-			text(assignment.Spec, "rootActorId") != project.OwnerActorID ||
-			number(assignment.Spec, "assignmentGeneration") <= 0 {
-			plan.Violations["stale_reference"]++
-			valid = false
-		} else if roomID := text(assignment.Spec, "roomId"); roomID != "" &&
-			!currentResourceInBoundary(target, "CHAT", roomID, project) {
-			plan.Violations["tenant_mismatch"]++
-			valid = false
-		} else {
-			match(plan, matched, "AGENT_ASSIGNMENT", assignment)
-			recordMapping(mapping, "AGENT_ASSIGNMENT", sourceRoleID, assignment)
-		}
-	}
-	return valid
-}
-
-func validateAgentBot(agent, team model.TargetResource, sourceBot sourceRow, plan *model.Plan) bool {
-	if sourceBot == nil || text(sourceBot, "status") != "configured" {
-		return true
-	}
-	if team.ID == "" || text(sourceBot, "mattermost_user_id") == "" || text(sourceBot, "username") == "" ||
-		text(agent.Spec, "botIdentityRef") != text(sourceBot, "mattermost_user_id") ||
-		text(agent.Spec, "botUsername") != text(sourceBot, "username") ||
-		text(agent.Spec, "botProviderTeamRef") != text(team.Spec, "externalTeamRef") ||
-		text(agent.Spec, "botMaskedStatus") != "AVAILABLE" ||
-		number(agent.Spec, "botProviderRevision") <= 0 || number(agent.Spec, "botProviderGeneration") <= 0 ||
-		text(agent.Spec, "botReceiptId") == "" || number(agent.Spec, "botReceiptVersion") <= 0 ||
-		!validSHA(text(agent.Spec, "botReceiptSha256")) {
-		plan.Violations["stale_reference"]++
-		return false
-	}
-	return true
-}
-
-func exactCurrentReference(target []model.TargetResource, boundary model.TargetResource, kind, id string,
-	version int64, expectedSHA string, plan *model.Plan,
-) (model.TargetResource, bool) {
-	if id == "" || version <= 0 || !validSHA(expectedSHA) {
-		plan.Violations["broken_lineage"]++
-		return model.TargetResource{}, false
-	}
-	candidates := make([]model.TargetResource, 0, 1)
-	hiddenBoundary := false
-	for _, resource := range target {
-		if resource.Historical || resource.Kind != kind || resource.ID != id {
-			continue
-		}
-		if sameBoundary(resource, boundary) {
-			candidates = append(candidates, resource)
-		} else {
-			hiddenBoundary = true
-		}
-	}
-	if hiddenBoundary {
-		plan.Violations["tenant_mismatch"]++
-		return model.TargetResource{}, false
-	}
-	if len(candidates) != 1 {
-		plan.Violations["ambiguous_target"]++
-		return model.TargetResource{}, false
-	}
-	resource := candidates[0]
-	projectionSHA, projectionOK := "", false
-	if resource.Kind == "ROLE_IMAGE_RECIPE" {
-		projectionSHA, projectionOK = resource.ProjectionSHA256, validSHA(resource.ProjectionSHA256)
-		if !projectionOK {
-			plan.Violations["broken_lineage"]++
-		}
-	} else {
-		projectionSHA, projectionOK = protectedProjectionSHA(target, resource, plan)
-	}
-	if resource.State != "ACTIVE" || resource.Version != uint64(version) || !projectionOK || projectionSHA != expectedSHA {
-		plan.Violations["stale_reference"]++
-		return model.TargetResource{}, false
-	}
-	return resource, true
-}
-
-func protectedProjectionSHA(target []model.TargetResource, resource model.TargetResource, plan *model.Plan) (string, bool) {
-	values := make(map[string]struct{}, 1)
-	hiddenBoundary := false
-	for _, historical := range target {
-		if !historical.Historical || historical.Kind != resource.Kind || historical.ID != resource.ID ||
-			historical.Version != resource.Version {
-			continue
-		}
-		if sameBoundary(historical, resource) {
-			if validSHA(historical.ProjectionSHA256) {
-				values[historical.ProjectionSHA256] = struct{}{}
-			} else {
-				plan.Violations["broken_lineage"]++
-			}
-		} else {
-			hiddenBoundary = true
-		}
-	}
-	if hiddenBoundary {
-		plan.Violations["tenant_mismatch"]++
-		return "", false
-	}
-	if len(values) != 1 {
-		plan.Violations["broken_lineage"]++
-		return "", false
-	}
-	for value := range values {
-		return value, true
-	}
-	return "", false
-}
-
-func currentResourceInBoundary(target []model.TargetResource, kind, id string, boundary model.TargetResource) bool {
-	_, ok := currentResource(target, kind, id, boundary, nil)
-	return ok
-}
-
-func currentResource(target []model.TargetResource, kind, id string, boundary model.TargetResource,
-	plan *model.Plan,
-) (model.TargetResource, bool) {
-	candidates := make([]model.TargetResource, 0, 1)
-	hiddenBoundary := false
-	for _, resource := range target {
-		if resource.Historical || resource.Kind != kind || resource.ID != id || resource.State != "ACTIVE" {
-			continue
-		}
-		if sameBoundary(resource, boundary) {
-			candidates = append(candidates, resource)
-		} else {
-			hiddenBoundary = true
-		}
-	}
-	if plan != nil {
-		if hiddenBoundary {
-			plan.Violations["tenant_mismatch"]++
-		} else if len(candidates) != 1 {
-			plan.Violations["ambiguous_target"]++
-		}
-	}
-	return firstTarget(candidates), !hiddenBoundary && len(candidates) == 1
-}
-
-func firstTarget(values []model.TargetResource) model.TargetResource {
-	if len(values) == 0 {
-		return model.TargetResource{}
-	}
-	return values[0]
-}
-
-func validateAgentRuns(source map[string][]sourceRow, targetTurns map[int64]model.TargetResource,
-	sourceTurns map[int64]sourceRow, archivedSessions map[int64]bool, plan *model.Plan, mapping *[]string,
-) {
-	turnsByRun := make(map[string]sourceRow, len(sourceTurns))
-	for _, turn := range sourceTurns {
-		runID := text(turn, "run_id")
-		if runID == "" {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if _, duplicate := turnsByRun[runID]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		turnsByRun[runID] = turn
-	}
-	runsByID := make(map[string]sourceRow, len(source["matter_codex_agent_runs"]))
-	for _, run := range source["matter_codex_agent_runs"] {
-		runID := text(run, "run_id")
-		status := text(run, "status")
-		if runID == "" || number(run, "id") <= 0 {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if _, duplicate := runsByID[runID]; duplicate {
-			plan.Violations["duplicate_source"]++
-			continue
-		}
-		runsByID[runID] = run
-		active, known := agentRunActive(status)
-		if !known {
-			plan.Violations["unknown_state"]++
-			continue
-		}
-		sourceTurn, linked := turnsByRun[runID]
-		if !linked {
-			if active {
-				plan.Violations["unmaterialized_active"]++
-			} else {
-				plan.Counts.Archive["AGENT_RUN"]++
-				recordArchive(mapping, "AGENT_RUN", number(run, "id"))
-			}
-			continue
-		}
-		turnID := number(sourceTurn, "id")
-		if active == terminalTurn(text(sourceTurn, "status")) {
-			plan.Violations["stale_reference"]++
-			continue
-		}
-		if targetTurn, mapped := targetTurns[turnID]; mapped {
-			plan.Counts.Mapped["AGENT_RUN"]++
-			recordMapping(mapping, "AGENT_RUN", number(run, "id"), targetTurn)
-		} else if archivedSessions[number(sourceTurn, "session_id")] && terminalTurn(text(sourceTurn, "status")) {
-			plan.Counts.Archive["AGENT_RUN"]++
-			recordArchive(mapping, "AGENT_RUN", number(run, "id"))
-		}
-	}
-	for _, turn := range sourceTurns {
-		if runsByID[text(turn, "run_id")] == nil {
-			plan.Violations["orphan_reference"]++
-		}
-	}
-}
-
-func agentRunActive(status string) (bool, bool) {
-	if set("started", "pending", "queued", "running", "blocked", "capacity_retry")[status] {
-		return true, true
-	}
-	if set("succeeded", "failed", "canceled", "cancelled", "completed", "completed_no_changes", "pr_created",
-		"approved", "changes_requested", "review_comment", "review_submitted", "cleaned")[status] {
-		return false, true
-	}
-	return false, false
-}
-
-func validateSessionCurrentTuple(sourceSessions, sourceTurns map[int64]sourceRow,
-	targetTurns map[int64]model.TargetResource, plan *model.Plan,
-) {
-	for sessionID, session := range sourceSessions {
-		activeTurnID := number(session, "active_turn_id")
-		activeRunID := text(session, "active_run_id")
-		if text(session, "status") == "running" {
-			activeTurn, sourceExists := sourceTurns[activeTurnID]
-			_, targetExists := targetTurns[activeTurnID]
-			if activeTurnID <= 0 || !sourceExists || number(activeTurn, "session_id") != sessionID ||
-				activeRunID == "" || activeRunID != text(activeTurn, "run_id") || !targetExists {
-				plan.Violations["broken_lineage"]++
-			}
-		} else if activeTurnID != 0 || activeRunID != "" {
-			plan.Violations["stale_reference"]++
-		}
-	}
-}
-
-func mapProcesses(source map[string][]sourceRow, turns map[int64]model.TargetResource,
-	archivedSessions map[int64]bool, sourceSessions, sourceTurns map[int64]sourceRow, plan *model.Plan,
-	matched map[string]model.TargetResource, mapping *[]string, target []model.TargetResource,
-) {
-	processes := byNumber(source["matter_codex_process_runs"], "id", plan)
-	links := source["matter_codex_process_turns"]
-	policies := byNumber(source["matter_codex_policy_revisions"], "id", plan)
-	delegationsByTargetTurn := make(map[int64]sourceRow)
-	for _, delegation := range source["matter_codex_agent_delegations"] {
-		targetTurnID := number(delegation, "target_turn_id")
-		if targetTurnID == 0 {
-			continue
-		}
-		if _, duplicate := delegationsByTargetTurn[targetTurnID]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		delegationsByTargetTurn[targetTurnID] = delegation
-	}
-	targetProcesses := targetByID(target, "PROCESS_RUN")
-	targetSessions := targetByID(target, "SESSION")
-	targetRevisions := targetByID(target, "RUNTIME_REVISION")
-	targetArtifacts := targetByID(target, "ARTIFACT")
-	processTurns := make(map[int64][]int64)
-	turnProcesses := make(map[int64]int64)
-	linksByTurn := make(map[int64]sourceRow)
-	for _, link := range links {
-		processID, turnID := number(link, "process_run_id"), number(link, "turn_id")
-		if _, ok := processes[processID]; !ok {
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		if _, ok := sourceTurns[turnID]; !ok {
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		if previous, duplicate := turnProcesses[turnID]; duplicate && previous != processID {
-			plan.Violations["duplicate_source"]++
-			continue
-		}
-		turnProcesses[turnID] = processID
-		linksByTurn[turnID] = link
-		processTurns[processID] = append(processTurns[processID], turnID)
-	}
-	for _, link := range links {
-		parentID := number(link, "parent_turn_id")
-		if parentID != 0 && turnProcesses[parentID] != number(link, "process_run_id") {
-			plan.Violations["broken_lineage"]++
-		}
-	}
-	for id, process := range processes {
-		if len(processTurns[id]) == 0 {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		var targetID string
-		var boundary model.TargetResource
-		targetTurns := make(map[string]model.TargetResource)
-		rootSourceTurnID := int64(0)
-		allMapped := true
-		allArchived := true
-		for _, turnID := range processTurns[id] {
-			sourceTurn, sourceTurnOK := sourceTurns[turnID]
-			sourceSession, sourceSessionOK := sourceSessions[number(sourceTurn, "session_id")]
-			if !sourceTurnOK || !sourceSessionOK || number(sourceSession, "project_id") != number(process, "project_id") {
-				plan.Violations["tenant_mismatch"]++
-				allMapped, allArchived = false, false
-				continue
-			}
-			if turn, ok := turns[turnID]; ok {
-				link := linksByTurn[turnID]
-				parentSourceTurnID := number(link, "parent_turn_id")
-				expectedPredecessor := ""
-				if parentSourceTurnID == 0 {
-					if rootSourceTurnID != 0 {
-						plan.Violations["broken_lineage"]++
-					}
-					rootSourceTurnID = turnID
-				} else if parent, exists := turns[parentSourceTurnID]; exists {
-					expectedPredecessor = parent.ID
-				} else {
-					plan.Violations["broken_lineage"]++
-				}
-				if text(turn.Spec, "predecessorTurnId") != expectedPredecessor {
-					plan.Violations["broken_lineage"]++
-				}
-				targetTurns[turn.ID] = turn
-				plan.Counts.Mapped["PROCESS_TURN"]++
-				recordMapping(mapping, "PROCESS_TURN", turnID, turn)
-				candidate := text(turn.Spec, "processRunId")
-				if targetID != "" && candidate != targetID {
-					plan.Violations["broken_lineage"]++
-				}
-				targetID = candidate
-				if boundary.ID == "" {
-					boundary = turn
-				} else if !sameBoundary(boundary, turn) {
-					plan.Violations["tenant_mismatch"]++
-				}
-				allArchived = false
-				continue
-			}
-			allMapped = false
-			if !archivedSessions[number(sourceTurn, "session_id")] || !terminalTurn(text(sourceTurn, "status")) {
-				allArchived = false
-			} else {
-				plan.Counts.Archive["PROCESS_TURN"]++
-				recordArchive(mapping, "PROCESS_TURN", turnID)
-			}
-		}
-		if allMapped && targetID != "" {
-			candidate, ok := targetProcesses[targetID]
-			rootTurn, rootExists := targetTurns[text(candidate.Spec, "rootTurnId")]
-			rootSession, rootSessionExists := targetSessions[text(candidate.Spec, "rootSessionId")]
-			runtimeRevision, runtimeRevisionExists := targetRevisions[text(candidate.Spec, "runtimeRevisionId")]
-			policy, policyExists := policies[number(process, "policy_revision_id")]
-			policySHA := sourcePolicySHA(source, number(process, "policy_revision_id"))
-			expectedRoot, expectedRootExists := turns[rootSourceTurnID]
-			if !ok || !processStateCompatible(text(process, "status"), candidate.State) ||
-				!sameBoundary(boundary, candidate) || !rootExists || !rootSessionExists || !runtimeRevisionExists ||
-				!policyExists || number(policy, "project_id") != number(process, "project_id") ||
-				text(policy, "status") != "active" || number(policy, "version") <= 0 ||
-				number(candidate.Spec, "policyRevision") != number(policy, "version") ||
-				!expectedRootExists || candidate.Spec["rootTurnId"] != expectedRoot.ID ||
-				text(candidate.Spec, "rootInitiatorActorId") != candidate.OwnerActorID ||
-				text(process, "root_initiator_user_id") == "" || text(process, "root_trigger_post_id") == "" ||
-				text(candidate.Spec, "rootTriggerRef") != "mattermost-post:"+text(process, "root_trigger_post_id") ||
-				text(candidate.Spec, "rootSessionId") != text(rootTurn.Spec, "sessionId") ||
-				rootSession.ID != text(rootTurn.Spec, "sessionId") || !sameBoundary(candidate, rootSession) ||
-				number(candidate.Spec, "rootSessionVersion") != int64(rootSession.Version) ||
-				number(candidate.Spec, "rootTurnVersion") != int64(rootTurn.Version) ||
-				number(candidate.Spec, "rootAttempt") != number(rootTurn.Spec, "attempt") ||
-				text(candidate.Spec, "runtimeRevisionId") != text(rootTurn.Spec, "runtimeRevisionId") ||
-				!sameBoundary(candidate, runtimeRevision) ||
-				number(runtimeRevision.Spec, "authorityPolicyRevision") != number(policy, "version") ||
-				!validSHA(policySHA) || text(runtimeRevision.Spec, "authorityPolicySha256") != policySHA ||
-				text(candidate.Spec, "immutableInputSha256") != text(rootTurn.Spec, "effectiveInputSha256") ||
-				!validSHA(text(candidate.Spec, "immutableInputSha256")) {
-				plan.Violations["broken_lineage"]++
-				continue
-			}
-			var processProvenance = &model.ProcessProvenance{
-				RootActorSourceRef: text(process, "root_initiator_user_id"),
-				PolicyRevision:     uint64(number(policy, "version")), PolicySHA256: policySHA,
-			}
-			if delegation, launched := delegationsByTargetTurn[rootSourceTurnID]; launched {
-				launchSourceTurnID := number(delegation, "source_turn_id")
-				launchTurn, launchMapped := turns[launchSourceTurnID]
-				launchProcessID := turnProcesses[launchSourceTurnID]
-				launchProcessTargetID := ""
-				if launchMapped {
-					launchProcessTargetID = text(launchTurn.Spec, "processRunId")
-				}
-				delegationSHA, callbackRunID, callbackSHA := sourceDelegationProvenance(source, delegation)
-				targetDelegationID := deterministicLegacyUUID("mattercodex:legacy-delegation:" +
-					strconv.FormatInt(number(delegation, "id"), 10) + ":" + delegationSHA)
-				if !validSHA(delegationSHA) || !validSHA(callbackSHA) || !launchMapped || launchProcessID == 0 || launchProcessID == id ||
-					text(candidate.Spec, "parentProcessRunId") != launchProcessTargetID ||
-					text(candidate.Spec, "launchingProcessRunId") != launchProcessTargetID ||
-					text(candidate.Spec, "launchingTurnId") != launchTurn.ID ||
-					number(candidate.Spec, "launchingAttempt") != number(launchTurn.Spec, "attempt") ||
-					text(candidate.Spec, "delegationId") != targetDelegationID ||
-					text(candidate.Spec, "targetSessionId") != text(expectedRoot.Spec, "sessionId") ||
-					number(candidate.Spec, "targetSessionVersion") != int64(rootSession.Version) ||
-					text(candidate.Spec, "targetTurnId") != expectedRoot.ID ||
-					number(candidate.Spec, "targetTurnVersion") != int64(expectedRoot.Version) ||
-					number(candidate.Spec, "targetAttempt") != number(expectedRoot.Spec, "attempt") {
-					plan.Violations["broken_lineage"]++
-					continue
-				}
-				processProvenance.DelegationSourceID = number(delegation, "id")
-				processProvenance.DelegationTargetID = targetDelegationID
-				processProvenance.DelegationSHA256 = delegationSHA
-				processProvenance.CallbackRunID = callbackRunID
-				processProvenance.CallbackSHA256 = callbackSHA
-			} else if text(candidate.Spec, "parentProcessRunId") != "" ||
-				text(candidate.Spec, "launchingProcessRunId") != "" || text(candidate.Spec, "launchingTurnId") != "" ||
-				text(candidate.Spec, "delegationId") != "" {
-				plan.Violations["broken_lineage"]++
-				continue
-			}
-			if resultArtifactID := text(candidate.Spec, "resultArtifactId"); resultArtifactID != "" {
-				artifact, artifactExists := targetArtifacts[resultArtifactID]
-				if !artifactExists || !sameBoundary(candidate, artifact) || !eligibleArtifact(artifact) ||
-					!revisionPinsArtifact(runtimeRevision, artifact) {
-					plan.Violations["broken_lineage"]++
-					continue
-				}
-				match(plan, matched, "ARTIFACT", artifact)
-				recordMapping(mapping, "PROCESS_RESULT_ARTIFACT", id, artifact)
-			}
-			match(plan, matched, "PROCESS_RUN", candidate)
-			recordMapping(mapping, "PROCESS_RUN", id, candidate)
-			command := materializationCommand("UPSERT_PROCESS_RUN", "matter_codex_process_runs", id,
-				text(process, "public_id"), sourceRevision(process),
-				digestMaterializationSource(sourceRowDigest(process), policySHA,
-					processProvenance.DelegationSHA256, processProvenance.CallbackSHA256),
-				candidate.ProjectID, candidate)
-			command.ProcessProvenance = processProvenance
-			appendUniqueMaterialization(plan, command)
-			continue
-		}
-		if allArchived && terminalProcess(text(process, "status")) {
-			plan.Counts.Archive["PROCESS_RUN"]++
-			recordArchive(mapping, "PROCESS_RUN", id)
-			continue
-		}
-		if !knownProcess(text(process, "status")) {
-			plan.Violations["unknown_state"]++
-		} else {
-			plan.Violations["broken_lineage"]++
-		}
-	}
-}
-
-func mapTurnDetails(turn, revision model.TargetResource, target []model.TargetResource, plan *model.Plan,
-	matched map[string]model.TargetResource, mapping *[]string, sourceStatus string,
-) {
-	validateRevision(revision, target, plan, matched, mapping, number(turn.Spec, "agentSessionTurnId"))
-	artifacts := targetByID(target, "ARTIFACT")
-	artifactIDs := []string{text(turn.Spec, "promptArtifactId"), text(turn.Spec, "resultArtifactId")}
-	if values, ok := turn.Spec["inputArtifacts"].([]any); ok {
-		for _, value := range values {
-			if reference, ok := value.(map[string]any); ok {
-				artifactIDs = append(artifactIDs, text(reference, "artifactId"))
-			}
-		}
-	}
-	seenArtifact := make(map[string]struct{})
-	for index, artifactID := range artifactIDs {
-		if artifactID == "" && index != 0 {
-			continue
-		}
-		artifact, ok := artifacts[artifactID]
-		if !ok || !sameBoundary(turn, artifact) || !eligibleArtifact(artifact) ||
-			!revisionPinsArtifact(revision, artifact) {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		if _, exists := seenArtifact[artifactID]; !exists {
-			seenArtifact[artifactID] = struct{}{}
-			match(plan, matched, "ARTIFACT", artifact)
-			recordMapping(mapping, "ARTIFACT", number(turn.Spec, "agentSessionTurnId"), artifact)
-		}
-	}
-	resultArtifactID := text(turn.Spec, "resultArtifactId")
-	if resultArtifactID != "" {
-		artifact := artifacts[resultArtifactID]
-		if artifact.Version != uint64(number(turn.Spec, "resultArtifactVersion")) ||
-			text(artifact.Spec, "sha256") != text(turn.Spec, "resultArtifactSha256") ||
-			!validSHA(text(turn.Spec, "resultArtifactSha256")) {
-			plan.Violations["stale_reference"]++
-		}
-	}
-	if values, ok := turn.Spec["inputArtifacts"].([]any); ok {
-		for _, value := range values {
-			reference, ok := value.(map[string]any)
-			artifact := artifacts[text(reference, "artifactId")]
-			if !ok || artifact.Version != uint64(number(reference, "version")) ||
-				text(artifact.Spec, "sha256") != text(reference, "sha256") ||
-				text(artifact.Spec, "mediaType") != text(reference, "mediaType") ||
-				number(artifact.Spec, "sizeBytes") != number(reference, "sizeBytes") ||
-				!validSHA(text(reference, "sha256")) {
-				plan.Violations["stale_reference"]++
-			}
-		}
-	}
-
-	currentAttempt := number(turn.Spec, "attempt")
-	currentAttempts := make([]model.TargetResource, 0, 1)
-	revisions := targetByID(target, "RUNTIME_REVISION")
-	for _, attempt := range target {
-		if attempt.Kind != "TURN_ATTEMPT" || text(attempt.Spec, "turnId") != turn.ID {
-			continue
-		}
-		if !sameBoundary(turn, attempt) || !knownAttemptState(attempt.State) {
-			plan.Violations["tenant_mismatch"]++
-			continue
-		}
-		attemptRevisionID := text(attempt.Spec, "runtimeRevisionId")
-		attemptRevision, revisionExists := revisions[attemptRevisionID]
-		isCurrent := number(attempt.Spec, "attempt") == currentAttempt
-		if !revisionExists || !sameBoundary(turn, attemptRevision) ||
-			uint64(number(attempt.Spec, "runtimeRevisionVersion")) != attemptRevision.Version ||
-			!validSHA(text(attempt.Spec, "inputSha256")) ||
-			(isCurrent && (attemptRevisionID != revision.ID ||
-				text(attempt.Spec, "inputSha256") != text(turn.Spec, "effectiveInputSha256"))) {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		match(plan, matched, "TURN_ATTEMPT", attempt)
-		match(plan, matched, "RUNTIME_REVISION", attemptRevision)
-		recordMapping(mapping, "TURN_ATTEMPT", number(turn.Spec, "agentSessionTurnId"), attempt)
-		appendUniqueMaterialization(plan, materializationCommand("UPSERT_TURN_ATTEMPT",
-			"matter_codex_agent_session_turns", number(turn.Spec, "agentSessionTurnId"),
-			text(turn.Spec, "agentRunId"), uint64(number(attempt.Spec, "attempt")),
-			text(attempt.Spec, "inputSha256"), turn.ProjectID, attempt))
-		if isCurrent {
-			currentAttempts = append(currentAttempts, attempt)
-		}
-	}
-	if len(currentAttempts) != 1 {
-		plan.Violations["broken_lineage"]++
-		return
-	}
-
-	executions := make([]model.TargetResource, 0, 1)
-	processes := targetByID(target, "PROCESS_RUN")
-	for _, execution := range target {
-		if execution.Kind != "RUNTIME_EXECUTION" || text(execution.Spec, "turnId") != turn.ID ||
-			number(execution.Spec, "attempt") != currentAttempt {
-			continue
-		}
-		process := processes[text(execution.Spec, "processRunId")]
-		if !sameBoundary(turn, execution) || !sameBoundary(turn, process) ||
-			text(execution.Spec, "processRunId") != text(turn.Spec, "processRunId") ||
-			text(execution.Spec, "sessionId") != text(turn.Spec, "sessionId") ||
-			text(execution.Spec, "runtimeRevisionId") != revision.ID ||
-			uint64(number(execution.Spec, "runtimeRevisionVersion")) != revision.Version ||
-			!validSHA(text(execution.Spec, "runtimeRevisionSha256")) ||
-			text(execution.Spec, "immutableInputSha256") != text(currentAttempts[0].Spec, "inputSha256") ||
-			!validSHA(text(execution.Spec, "immutableInputSha256")) ||
-			!executionStateCompatible(sourceStatus, execution.State) {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		executions = append(executions, execution)
-	}
-	active := !terminalTurn(sourceStatus)
-	// Materialized active work is deliberately requeued without copying a
-	// legacy lease/token. A fresh target-owned execution is created only after
-	// irreversible cutover. Existing CLAIMED/RUNNING work still requires its
-	// exact execution readback.
-	requeued := active && turn.State == "QUEUED" && currentAttempts[0].State == "QUEUED"
-	if len(executions) > 1 || active && !requeued && len(executions) != 1 || requeued && len(executions) != 0 {
-		plan.Violations["broken_lineage"]++
-		return
-	}
-	for _, execution := range executions {
-		match(plan, matched, "RUNTIME_EXECUTION", execution)
-		recordMapping(mapping, "RUNTIME_EXECUTION", number(turn.Spec, "agentSessionTurnId"), execution)
-	}
-}
-
-func revisionPinsArtifact(revision, artifact model.TargetResource) bool {
-	components, ok := revision.Spec["components"].([]any)
-	if !ok || artifact.ProjectionSHA256 == "" {
-		return false
-	}
-	for _, value := range components {
-		component, valid := value.(map[string]any)
-		if valid && text(component, "kind") == "ARTIFACT" &&
-			text(component, "resourceId") == artifact.ID &&
-			uint64(number(component, "version")) == artifact.Version &&
-			text(component, "projectionSha256") == artifact.ProjectionSHA256 {
-			return true
-		}
-	}
-	return false
-}
-
-func validateRevision(revision model.TargetResource, target []model.TargetResource, plan *model.Plan,
-	matched map[string]model.TargetResource, mapping *[]string, sourceTurnID int64,
-) {
-	resources := make(map[string]model.TargetResource, len(target))
-	for _, resource := range target {
-		resources[resource.Kind+"\x00"+resource.ID+"\x00"+strconv.FormatUint(resource.Version, 10)] = resource
-	}
-	components, ok := revision.Spec["components"].([]any)
-	if !ok || len(components) == 0 {
-		plan.Violations["broken_lineage"]++
-		return
-	}
-	seen := make(map[string]struct{}, len(components))
-	for _, value := range components {
-		component, componentOK := value.(map[string]any)
-		seenKey := text(component, "kind") + "\x00" + text(component, "resourceId")
-		key := seenKey + "\x00" +
-			strconv.FormatInt(number(component, "version"), 10)
-		resource, exists := resources[key]
-		if !componentOK || !exists || !sameBoundary(revision, resource) ||
-			resource.Version != uint64(number(component, "version")) ||
-			!validSHA(text(component, "projectionSha256")) ||
-			(resource.ProjectionSHA256 != "" && resource.ProjectionSHA256 != text(component, "projectionSha256")) {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		if resource.Kind == "ARTIFACT" && !eligibleArtifact(resource) {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if resource.Kind == "ARTIFACT" && (resource.ProjectionSHA256 == "" ||
-			resource.ProjectionSHA256 != text(component, "projectionSha256")) {
-			plan.Violations["stale_reference"]++
-			continue
-		}
-		if _, duplicate := seen[seenKey]; duplicate {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		seen[seenKey] = struct{}{}
-		match(plan, matched, resource.Kind, resource)
-		recordMapping(mapping, "RUNTIME_REVISION_COMPONENT", sourceTurnID, resource)
-	}
-}
-
-func validateBindingReceipts(source map[string][]sourceRow, sessions, turns map[int64]model.TargetResource,
-	sourceTurns map[int64]sourceRow, archivedSessions map[int64]bool, target []model.TargetResource, plan *model.Plan,
-	mapping *[]string,
-) {
-	revisions := targetByID(target, "RUNTIME_REVISION")
-	for _, row := range source["matter_codex_runtime_agent_binding_outbox"] {
-		state := text(row, "state")
-		if state != "PENDING" && state != "LEASED" && state != "DELIVERED" {
-			plan.Violations["unknown_state"]++
-			continue
-		}
-		if state != "DELIVERED" {
-			plan.Violations["unmaterialized_active"]++
-			continue
-		}
-		sourceTurn, sourceExists := sourceTurns[number(row, "agent_session_turn_id")]
-		archived := sourceExists && archivedSessions[number(sourceTurn, "session_id")] &&
-			terminalTurn(text(sourceTurn, "status"))
-		session, sessionOK := sessions[number(row, "agent_session_id")]
-		turn, turnOK := turns[number(row, "agent_session_turn_id")]
-		if archived && !sessionOK && !turnOK {
-			plan.Counts.Archive["RUNTIME_AGENT_BINDING_RECEIPT"]++
-			recordArchive(mapping, "RUNTIME_AGENT_BINDING_RECEIPT", number(row, "id"))
-			continue
-		}
-		if !sessionOK || !turnOK {
-			plan.Violations["orphan_reference"]++
-			continue
-		}
-		if state != "DELIVERED" || text(session.Spec, "agentSessionKey") != text(row, "agent_session_key") ||
-			session.ID != text(row, "control_session_id") || session.Version != uint64(number(row, "control_session_version")) ||
-			uint64(number(session.Spec, "agentSessionBindingVersion")) != uint64(number(row, "agent_session_version")) ||
-			text(session.Spec, "agentSessionBindingSha256") != text(row, "agent_session_binding_sha256") ||
-			turn.ID != text(row, "control_turn_id") || turn.Version != uint64(number(row, "control_turn_version")) ||
-			text(turn.Spec, "agentRunId") != text(row, "agent_run_id") ||
-			uint64(number(turn.Spec, "agentTurnBindingVersion")) != uint64(number(row, "agent_session_turn_version")) ||
-			text(turn.Spec, "agentTurnBindingSha256") != text(row, "agent_turn_binding_sha256") ||
-			text(turn.Spec, "runtimeRevisionId") != text(row, "runtime_revision_id") ||
-			number(turn.Spec, "attempt") != number(row, "attempt") ||
-			text(turn.Spec, "effectiveInputSha256") != text(row, "input_sha256") ||
-			revisions[text(row, "runtime_revision_id")].Version != uint64(number(row, "runtime_revision_version")) ||
-			!validSHA(text(row, "runtime_revision_sha256")) || !bindingExecutionMatches(target, turn, row) {
-			plan.Violations["stale_reference"]++
-		} else {
-			plan.Counts.Mapped["RUNTIME_AGENT_BINDING_RECEIPT"]++
-			recordMapping(mapping, "RUNTIME_AGENT_BINDING_RECEIPT", number(row, "id"), turn)
-		}
-	}
-	for _, row := range source["matter_codex_runtime_agent_binding_discoveries"] {
-		state := text(row, "state")
-		turnID := number(row, "agent_session_turn_id")
-		_, mapped := turns[turnID]
-		sourceTurn, sourceExists := sourceTurns[turnID]
-		archived := sourceExists && archivedSessions[number(sourceTurn, "session_id")] &&
-			terminalTurn(text(sourceTurn, "status"))
-		if state != "PENDING" && state != "LEASED" && state != "DELIVERED" {
-			plan.Violations["unknown_state"]++
-		} else if state != "DELIVERED" {
-			plan.Violations["unmaterialized_active"]++
-		} else if !archived && !mapped {
-			plan.Violations["unmaterialized_active"]++
-		} else if archived {
-			plan.Counts.Archive["RUNTIME_AGENT_BINDING_DISCOVERY"]++
-			recordArchive(mapping, "RUNTIME_AGENT_BINDING_DISCOVERY", number(row, "id"))
-		} else {
-			plan.Counts.Mapped["RUNTIME_AGENT_BINDING_DISCOVERY"]++
-			recordMapping(mapping, "RUNTIME_AGENT_BINDING_DISCOVERY", number(row, "id"), turns[turnID])
-		}
-	}
-}
-
-func bindingExecutionMatches(target []model.TargetResource, turn model.TargetResource, row sourceRow) bool {
-	matches := 0
-	for _, execution := range target {
-		if execution.Kind == "RUNTIME_EXECUTION" && text(execution.Spec, "turnId") == turn.ID &&
-			number(execution.Spec, "attempt") == number(row, "attempt") &&
-			text(execution.Spec, "runtimeRevisionId") == text(row, "runtime_revision_id") &&
-			uint64(number(execution.Spec, "runtimeRevisionVersion")) == uint64(number(row, "runtime_revision_version")) &&
-			text(execution.Spec, "runtimeRevisionSha256") == text(row, "runtime_revision_sha256") &&
-			text(execution.Spec, "immutableInputSha256") == text(row, "input_sha256") {
-			matches++
-		}
-	}
-	if turn.State == "QUEUED" {
-		return matches == 0
-	}
-	return matches == 1
-}
-
-func validateArchivedInventory(source map[string][]sourceRow, plan *model.Plan) {
-	for table := range plan.Counts.Source {
-		if _, known := knownSourceTables[table]; !known {
-			plan.Violations["unsupported_state"]++
-		}
-	}
-	validateArchiveIdentifiers(source, plan)
-	validateArchivedLifecycle(source["matter_codex_thread_contexts"], "status",
-		set("pending", "configured", "closed"), set("closed"), plan)
-	validateArchivedLifecycle(source["matter_codex_work_claims"], "status",
-		set("active", "queued", "running", "capacity_retry", "blocked", "succeeded", "failed", "canceled", "cancelled"),
-		set("succeeded", "failed", "canceled", "cancelled"), plan)
-	validateArchivedLifecycle(source["matter_codex_owner_attention_requests"], "status",
-		set("open", "resolved"), set("resolved"), plan)
-	validateArchivedLifecycle(source["matter_codex_agent_delegation_callback_deliveries"], "status",
-		set("pending", "in_flight", "blocked", "delivered"), set("delivered"), plan)
-	validateArchivedLifecycle(source["matter_codex_schedule_occurrences"], "status",
-		set("queued", "running", "waiting_owner", "succeeded", "failed"), set("succeeded", "failed"), plan)
-	validateArchivedLifecycle(source["matter_codex_scheduled_runs"], "status",
-		set("queued", "running", "waiting_owner", "succeeded", "failed"), set("succeeded", "failed"), plan)
-	validateArchivedLifecycle(source["matter_codex_interaction_capabilities"], "status",
-		set("pending", "unused", "consumed", "revoked"), set("consumed", "revoked"), plan)
-	validateKnownArchivedState(source["matter_codex_repositories"], "status", set("active"), plan)
-	validateKnownArchivedState(source["matter_codex_credentials"], "status",
-		set("unknown", "not_authorized", "auth_pending", "awaiting_user", "authorized", "auth_failed", "configured", "disabled", "error"), plan)
-	validateKnownArchivedState(source["matter_codex_openai_accounts"], "status",
-		set("not_authorized", "auth_pending", "awaiting_user", "authorized", "auth_failed", "disabled"), plan)
-	validateKnownArchivedState(source["matter_codex_github_accounts"], "status",
-		set("unknown", "configured", "disabled", "error"), plan)
-	validateKnownArchivedState(source["matter_codex_agent_flows"], "status", set("created"), plan)
-	validateKnownArchivedState(source["matter_codex_mattermost_bot_identities"], "status",
-		set("pending", "configured", "error"), plan)
-	validateKnownArchivedState(source["matter_codex_policy_revisions"], "status",
-		set("draft", "active", "archived"), plan)
-	validateKnownArchivedState(source["matter_codex_memory_records"], "status", set("active", "archived"), plan)
-	validateDelegationLifecycle(source, plan)
-	validateSourceBoundaries(source, plan)
-	validateMemoryLineage(source, plan)
-	validateClusterAdminArchive(source, plan)
-}
-
-type deliverySet struct {
-	count        int
-	destinations map[string]struct{}
-}
-
-func validateDelegationLifecycle(source map[string][]sourceRow, plan *model.Plan) {
-	delegations := rowsByID(source["matter_codex_agent_delegations"])
-	sessions := rowsByID(source["matter_codex_agent_sessions"])
-	turns := rowsByID(source["matter_codex_agent_session_turns"])
-	manifests := make(map[string]int)
-	deliveries := make(map[string]deliverySet)
-	for _, manifest := range source["matter_codex_agent_delegation_callback_delivery_manifests"] {
-		delegationID, callbackRunID := number(manifest, "delegation_id"), text(manifest, "callback_run_id")
-		key := delegationCallbackKey(delegationID, callbackRunID)
-		if delegationID <= 0 || callbackRunID == "" || number(manifest, "expected_count") != 2 {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		manifests[key]++
-		delegation, exists := delegations[delegationID]
-		if !exists {
-			plan.Violations["orphan_reference"]++
-		} else if text(delegation, "callback_run_id") != callbackRunID {
-			plan.Violations["stale_reference"]++
-		}
-	}
-	for _, delivery := range source["matter_codex_agent_delegation_callback_deliveries"] {
-		delegationID, callbackRunID := number(delivery, "delegation_id"), text(delivery, "callback_run_id")
-		key := delegationCallbackKey(delegationID, callbackRunID)
-		group := deliveries[key]
-		if group.destinations == nil {
-			group.destinations = make(map[string]struct{}, 2)
-		}
-		group.count++
-		destination := text(delivery, "destination")
-		if destination != "source_callback" && destination != "child_return" {
-			plan.Violations["unsupported_state"]++
-		} else if _, duplicate := group.destinations[destination]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		group.destinations[destination] = struct{}{}
-		deliveries[key] = group
-		delegation, exists := delegations[delegationID]
-		if !exists {
-			plan.Violations["orphan_reference"]++
-		} else if text(delegation, "callback_run_id") != callbackRunID {
-			plan.Violations["stale_reference"]++
-		}
-	}
-	known := set("creating", "thread_created", "queued", "callback_queued", "failed")
-	for id, delegation := range delegations {
-		status := text(delegation, "status")
-		if !known[status] {
-			plan.Violations["unknown_state"]++
-			continue
-		}
-		callbackRunID := text(delegation, "callback_run_id")
-		callbackTurnID := number(delegation, "callback_turn_id")
-		key := delegationCallbackKey(id, callbackRunID)
-		if callbackRunID == "" && callbackTurnID == 0 {
-			if manifests[key] != 0 || deliveries[key].count != 0 {
-				plan.Violations["broken_lineage"]++
-			}
-			if status != "failed" {
-				plan.Violations["unmaterialized_active"]++
-			}
-			continue
-		}
-		if callbackRunID == "" || callbackTurnID <= 0 || status != "callback_queued" {
-			plan.Violations["broken_lineage"]++
-			continue
-		}
-		callbackTurn, turnExists := turns[callbackTurnID]
-		sourceSession, sessionExists := sessions[number(delegation, "source_session_id")]
-		group := deliveries[key]
-		if !turnExists || !sessionExists || number(callbackTurn, "session_id") != number(sourceSession, "id") ||
-			text(callbackTurn, "run_id") != callbackRunID || manifests[key] != 1 || group.count != 2 ||
-			len(group.destinations) != 2 {
-			plan.Violations["broken_lineage"]++
-		} else if !terminalTurn(text(callbackTurn, "status")) {
-			plan.Violations["unmaterialized_active"]++
-		}
-	}
-}
-
-func delegationCallbackKey(delegationID int64, callbackRunID string) string {
-	return strconv.FormatInt(delegationID, 10) + "\x00" + callbackRunID
-}
-
-func sourcePolicySHA(source map[string][]sourceRow, policyID int64) string {
-	parts := make([]string, 0)
-	for _, policy := range source["matter_codex_policy_revisions"] {
-		if number(policy, "id") == policyID {
-			parts = append(parts, "policy\x00"+sourceRowDigest(policy))
-		}
-	}
-	for _, capability := range source["matter_codex_role_capabilities"] {
-		if number(capability, "policy_revision_id") == policyID {
-			parts = append(parts, "capability\x00"+sourceRowDigest(capability))
-		}
-	}
-	for _, relationship := range source["matter_codex_role_relationship_policies"] {
-		if number(relationship, "policy_revision_id") == policyID {
-			parts = append(parts, "relationship\x00"+sourceRowDigest(relationship))
-		}
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	sort.Strings(parts)
-	return digestMaterializationSource(parts...)
-}
-
-func sourceDelegationProvenance(source map[string][]sourceRow, delegation sourceRow) (string, string, string) {
-	delegationID := number(delegation, "id")
-	callbackRunID := text(delegation, "callback_run_id")
-	delegationParts := []string{sourceRowDigest(delegation)}
-	callbackParts := make([]string, 0)
-	for _, manifest := range source["matter_codex_agent_delegation_callback_delivery_manifests"] {
-		if number(manifest, "delegation_id") == delegationID && text(manifest, "callback_run_id") == callbackRunID {
-			callbackParts = append(callbackParts, "manifest\x00"+sourceRowDigest(manifest))
-		}
-	}
-	for _, delivery := range source["matter_codex_agent_delegation_callback_deliveries"] {
-		if number(delivery, "delegation_id") == delegationID && text(delivery, "callback_run_id") == callbackRunID {
-			callbackParts = append(callbackParts, "delivery\x00"+sourceRowDigest(delivery))
-		}
-	}
-	sort.Strings(callbackParts)
-	callbackSHA := digestMaterializationSource(callbackParts...)
-	delegationParts = append(delegationParts, callbackRunID, callbackSHA)
-	return digestMaterializationSource(delegationParts...), callbackRunID, callbackSHA
-}
-
-func digestMaterializationSource(parts ...string) string {
-	hash := sha256.New()
-	for _, part := range parts {
-		writeFramed(hash, []byte(part))
-	}
-	return hex.EncodeToString(hash.Sum(nil))
-}
-
-func validateArchiveIdentifiers(source map[string][]sourceRow, plan *model.Plan) {
-	owned := set(
-		"matter_codex_projects", "matter_codex_chats", "matter_codex_agent_roles",
-		"matter_codex_agent_sessions", "matter_codex_agent_session_turns", "matter_codex_process_runs",
-	)
-	for table, rows := range source {
-		if owned[table] {
-			continue
-		}
-		seen := make(map[int64]struct{}, len(rows))
-		for _, row := range rows {
-			if _, exists := row["id"]; !exists {
-				continue
-			}
-			id := number(row, "id")
-			if id <= 0 {
-				plan.Violations["unsupported_state"]++
-				continue
-			}
-			if _, duplicate := seen[id]; duplicate {
-				plan.Violations["duplicate_source"]++
-			}
-			seen[id] = struct{}{}
-		}
-	}
-}
-
-func validateArchivedLifecycle(rows []sourceRow, stateKey string, known, terminal map[string]bool, plan *model.Plan) {
-	for _, row := range rows {
-		state := text(row, stateKey)
-		if !known[state] {
-			plan.Violations["unknown_state"]++
-		} else if !terminal[state] {
-			plan.Violations["unmaterialized_active"]++
-		}
-	}
-}
-
-func validateKnownArchivedState(rows []sourceRow, stateKey string, known map[string]bool, plan *model.Plan) {
-	for _, row := range rows {
-		if !known[text(row, stateKey)] {
-			plan.Violations["unknown_state"]++
-		}
-	}
-}
-
-func validateSourceBoundaries(source map[string][]sourceRow, plan *model.Plan) {
-	projects := rowsByID(source["matter_codex_projects"])
-	chats := rowsByID(source["matter_codex_chats"])
-	roles := rowsByID(source["matter_codex_agent_roles"])
-	sessions := rowsByID(source["matter_codex_agent_sessions"])
-	turns := rowsByID(source["matter_codex_agent_session_turns"])
-	processes := rowsByID(source["matter_codex_process_runs"])
-	policies := rowsByID(source["matter_codex_policy_revisions"])
-	repositories := rowsByID(source["matter_codex_repositories"])
-	credentials := rowsByID(source["matter_codex_credentials"])
-	openAIAccounts := rowsByText(source["matter_codex_openai_accounts"], "name", plan)
-	githubAccounts := rowsByText(source["matter_codex_github_accounts"], "name", plan)
-	variables := rowsByID(source["matter_codex_project_runtime_variables"])
-	schedules := rowsByID(source["matter_codex_automation_schedules"])
-	occurrences := rowsByID(source["matter_codex_schedule_occurrences"])
-	botsByProjectUsername := make(map[string]sourceRow)
-	for _, bot := range source["matter_codex_mattermost_bot_identities"] {
-		key := strconv.FormatInt(number(bot, "project_id"), 10) + "\x00" + text(bot, "username")
-		if number(bot, "project_id") <= 0 || text(bot, "username") == "" {
-			plan.Violations["unsupported_state"]++
-		} else if _, duplicate := botsByProjectUsername[key]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		botsByProjectUsername[key] = bot
-	}
-
-	for _, row := range source["matter_codex_mattermost_bot_identities"] {
-		validateProjectRole(number(row, "project_id"), number(row, "role_id"), projects, roles, plan)
-	}
-	for _, row := range source["matter_codex_chat_participants"] {
-		validateChatRole(number(row, "chat_id"), number(row, "role_id"), chats, roles, plan)
-	}
-	for _, row := range source["matter_codex_project_repositories"] {
-		validateReference(projects, number(row, "project_id"), plan)
-		validateReference(repositories, number(row, "repository_id"), plan)
-	}
-	for _, row := range source["matter_codex_chat_repositories"] {
-		validateReference(chats, number(row, "chat_id"), plan)
-		validateReference(repositories, number(row, "repository_id"), plan)
-	}
-	for _, row := range source["matter_codex_openai_accounts"] {
-		credentialID := number(row, "credential_id")
-		if credentialID != 0 {
-			validateReference(credentials, credentialID, plan)
-		} else if text(row, "status") == "authorized" {
-			plan.Violations["orphan_reference"]++
-		}
-	}
-	for _, row := range source["matter_codex_github_accounts"] {
-		credentialID := number(row, "credential_id")
-		if credentialID != 0 {
-			validateReference(credentials, credentialID, plan)
-		} else if text(row, "status") == "configured" {
-			plan.Violations["orphan_reference"]++
-		}
-	}
-	for _, row := range source["matter_codex_projects"] {
-		validateNamedReference(githubAccounts, text(row, "github_account_name"), plan)
-	}
-	for _, row := range source["matter_codex_repositories"] {
-		validateNamedReference(githubAccounts, text(row, "github_account_name"), plan)
-	}
-	for _, row := range source["matter_codex_agent_profiles"] {
-		validateNamedReference(openAIAccounts, text(row, "openai_account_name"), plan)
-		validateNamedReference(githubAccounts, text(row, "github_account_name"), plan)
-	}
-	for _, row := range source["matter_codex_agent_roles"] {
-		validateNamedReference(openAIAccounts, text(row, "openai_account_name"), plan)
-		validateNamedReference(githubAccounts, text(row, "github_account_name"), plan)
-		if botName := text(row, "bot_identity"); botName != "" {
-			bot := botsByProjectUsername[strconv.FormatInt(number(row, "project_id"), 10)+"\x00"+botName]
-			if bot == nil {
-				plan.Violations["orphan_reference"]++
-			} else if number(bot, "role_id") != number(row, "id") {
-				plan.Violations["tenant_mismatch"]++
-			}
-		}
-	}
-	for _, row := range source["matter_codex_agent_sessions"] {
-		validateNamedReference(openAIAccounts, text(row, "openai_account_name"), plan)
-	}
-	for _, row := range source["matter_codex_project_runtime_variables"] {
-		validateReference(projects, number(row, "project_id"), plan)
-	}
-	for _, row := range source["matter_codex_agent_role_runtime_variables"] {
-		role, roleOK := roles[number(row, "role_id")]
-		variable, variableOK := variables[number(row, "variable_id")]
-		if !roleOK || !variableOK {
-			plan.Violations["orphan_reference"]++
-		} else if number(role, "project_id") != number(variable, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_policy_revisions"] {
-		validateReference(projects, number(row, "project_id"), plan)
-	}
-	for _, row := range source["matter_codex_role_capabilities"] {
-		validatePolicyRole(number(row, "policy_revision_id"), number(row, "role_id"), policies, roles, plan)
-	}
-	for _, row := range source["matter_codex_role_relationship_policies"] {
-		policy, policyOK := policies[number(row, "policy_revision_id")]
-		sourceRole, sourceOK := roles[number(row, "source_role_id")]
-		targetRole, targetOK := roles[number(row, "target_role_id")]
-		if !policyOK || !sourceOK || !targetOK {
-			plan.Violations["orphan_reference"]++
-		} else if number(policy, "project_id") != number(sourceRole, "project_id") ||
-			number(policy, "project_id") != number(targetRole, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_process_runs"] {
-		validateProjectRole(number(row, "project_id"), number(row, "root_role_id"), projects, roles, plan)
-		policy, ok := policies[number(row, "policy_revision_id")]
-		if !ok {
-			plan.Violations["orphan_reference"]++
-		} else if number(policy, "project_id") != number(row, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_work_claims"] {
-		validateProcessTurnRole(row, processes, turns, sessions, roles, plan)
-	}
-	for _, row := range source["matter_codex_owner_attention_requests"] {
-		validateProcessTurnRole(row, processes, turns, sessions, roles, plan)
-	}
-	for _, row := range source["matter_codex_agent_delegations"] {
-		validateDelegationBoundary(row, projects, chats, roles, sessions, turns, plan)
-	}
-	for _, row := range source["matter_codex_thread_contexts"] {
-		chat, chatOK := chats[number(row, "chat_id")]
-		if _, projectOK := projects[number(row, "project_id")]; !projectOK || !chatOK {
-			plan.Violations["orphan_reference"]++
-		} else if number(chat, "project_id") != number(row, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_memory_records"] {
-		validateMemoryBoundary(row, projects, roles, sessions, turns, plan)
-	}
-	for _, row := range source["matter_codex_automation_schedules"] {
-		projectID := number(row, "project_id")
-		validateProjectRole(projectID, number(row, "target_agent_role_id"), projects, roles, plan)
-		chat, ok := chats[number(row, "target_chat_id")]
-		if !ok {
-			plan.Violations["orphan_reference"]++
-		} else if number(chat, "project_id") != projectID {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_schedule_occurrences"] {
-		schedule, scheduleOK := schedules[number(row, "schedule_id")]
-		if !scheduleOK || projects[number(row, "project_id")] == nil {
-			plan.Violations["orphan_reference"]++
-		} else if number(schedule, "project_id") != number(row, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_scheduled_runs"] {
-		validateScheduledRunBoundary(row, projects, roles, chats, schedules, occurrences, sessions, turns, plan)
-	}
-}
-
-func validateMemoryLineage(source map[string][]sourceRow, plan *model.Plan) {
-	records := rowsByID(source["matter_codex_memory_records"])
-	versions := rowsByID(source["matter_codex_memory_record_versions"])
-	versionsByRecord := make(map[int64]int, len(records))
-	seenVersion := make(map[string]struct{}, len(versions))
-	seenHash := make(map[string]struct{}, len(versions))
-	for _, version := range versions {
-		recordID := number(version, "record_id")
-		sequence := number(version, "version")
-		contentHash := text(version, "content_hash")
-		if records[recordID] == nil {
-			plan.Violations["orphan_reference"]++
-		}
-		if sequence <= 0 || !validSHA(contentHash) {
-			plan.Violations["broken_lineage"]++
-		}
-		versionKey := strconv.FormatInt(recordID, 10) + "\x00" + strconv.FormatInt(sequence, 10)
-		hashKey := strconv.FormatInt(recordID, 10) + "\x00" + contentHash
-		if _, duplicate := seenVersion[versionKey]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		if _, duplicate := seenHash[hashKey]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		seenVersion[versionKey] = struct{}{}
-		seenHash[hashKey] = struct{}{}
-		versionsByRecord[recordID]++
-		if supersedesID := number(version, "supersedes_version_id"); supersedesID != 0 {
-			superseded, exists := versions[supersedesID]
-			if !exists {
-				plan.Violations["orphan_reference"]++
-			} else if number(superseded, "record_id") != recordID || number(superseded, "version") >= sequence {
-				plan.Violations["broken_lineage"]++
-			}
-		}
-	}
-	for id, record := range records {
-		scope := text(record, "scope")
-		roleID := number(record, "role_id")
-		if scope != "project" && scope != "role" {
-			plan.Violations["unknown_state"]++
-		} else if scope == "project" && roleID != 0 || scope == "role" && roleID == 0 {
-			plan.Violations["broken_lineage"]++
-		}
-		if versionsByRecord[id] == 0 {
-			plan.Violations["broken_lineage"]++
-		}
-	}
-	for _, embedding := range source["matter_codex_memory_embeddings"] {
-		if versions[number(embedding, "version_id")] == nil {
-			plan.Violations["orphan_reference"]++
-		}
-		if text(embedding, "model_revision") == "" || number(embedding, "dimensions") <= 0 {
-			plan.Violations["broken_lineage"]++
-		}
-	}
-}
-
-func validateClusterAdminArchive(source map[string][]sourceRow, plan *model.Plan) {
-	projects := rowsByID(source["matter_codex_projects"])
-	chats := rowsByID(source["matter_codex_chats"])
-	roles := rowsByID(source["matter_codex_agent_roles"])
-	variables := rowsByID(source["matter_codex_project_runtime_variables"])
-	repositories := rowsByID(source["matter_codex_repositories"])
-	projectRepositories := rowsByID(source["matter_codex_project_repositories"])
-	chatRepositories := rowsByID(source["matter_codex_chat_repositories"])
-	schedules := rowsByID(source["matter_codex_automation_schedules"])
-	scheduledRuns := rowsByID(source["matter_codex_scheduled_runs"])
-	profiles := rowsByText(source["matter_codex_agent_profiles"], "name", plan)
-	openAIAccounts := rowsByText(source["matter_codex_openai_accounts"], "name", plan)
-	githubAccounts := rowsByText(source["matter_codex_github_accounts"], "name", plan)
-	sessionsByKey := rowsByText(source["matter_codex_agent_sessions"], "session_key", plan)
-	promptTemplates := make(map[string]sourceRow)
-	for _, row := range source["matter_codex_agent_prompt_templates"] {
-		key := text(row, "profile_name") + "\x00" + text(row, "template_key")
-		if key == "\x00" {
-			plan.Violations["unsupported_state"]++
-		} else if _, duplicate := promptTemplates[key]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		promptTemplates[key] = row
-	}
-	revocations := make(map[string]struct{})
-	knownRevocationTypes := set("agent_profile", "agent_role", "bot_binding", "runtime_variable_binding", "dependency",
-		"profile_dependency", "chat_binding", "session_binding")
-	for _, row := range source["matter_codex_cluster_admin_revocations"] {
-		resourceType, resourceKey := text(row, "resource_type"), text(row, "resource_key")
-		if !knownRevocationTypes[resourceType] {
-			plan.Violations["unknown_state"]++
-		}
-		if resourceKey == "" {
-			plan.Violations["unsupported_state"]++
-		}
-		key := resourceType + "\x00" + resourceKey
-		if _, duplicate := revocations[key]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		revocations[key] = struct{}{}
-	}
-	isRevoked := func(resourceType, resourceKey string) bool {
-		_, exists := revocations[resourceType+"\x00"+resourceKey]
-		return exists
-	}
-	for _, row := range source["matter_codex_agent_prompt_templates"] {
-		profileName := text(row, "profile_name")
-		if profiles[profileName] == nil && !isRevoked("agent_profile", profileName) {
-			plan.Violations["orphan_reference"]++
-		}
-	}
-	for _, row := range source["matter_codex_cluster_admin_subjects"] {
-		subjectType, subjectKey := text(row, "subject_type"), text(row, "subject_key")
-		switch subjectType {
-		case "agent_profile":
-			if number(row, "project_id") != 0 || subjectKey != text(row, "profile_name") {
-				plan.Violations["broken_lineage"]++
-			} else if profiles[subjectKey] == nil && !isRevoked("agent_profile", subjectKey) {
-				plan.Violations["orphan_reference"]++
-			}
-		case "agent_role":
-			roleID, err := strconv.ParseInt(subjectKey, 10, 64)
-			role := roles[roleID]
-			if err != nil || roleID <= 0 {
-				plan.Violations["unsupported_state"]++
-			} else if role == nil && !isRevoked("agent_role", subjectKey) {
-				plan.Violations["orphan_reference"]++
-			} else if role != nil && number(role, "project_id") != number(row, "project_id") {
-				plan.Violations["tenant_mismatch"]++
-			}
-		default:
-			plan.Violations["unknown_state"]++
-		}
-	}
-	for _, row := range source["matter_codex_cluster_admin_bindings"] {
-		validateFrozenRoleProject(number(row, "role_id"), number(row, "project_id"), roles, projects,
-			isRevoked("chat_binding", compoundID(row, "role_id", "chat_id")), plan)
-		chat, exists := chats[number(row, "chat_id")]
-		if !exists && !isRevoked("chat_binding", compoundID(row, "role_id", "chat_id")) {
-			plan.Violations["orphan_reference"]++
-		} else if exists && number(chat, "project_id") != number(row, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_cluster_admin_session_bindings"] {
-		revoked := isRevoked("session_binding", strconv.FormatInt(number(row, "role_id"), 10)+":"+text(row, "session_key"))
-		validateFrozenRoleProject(number(row, "role_id"), number(row, "project_id"), roles, projects, revoked, plan)
-		session := sessionsByKey[text(row, "session_key")]
-		chat := chats[number(row, "chat_id")]
-		if (session == nil || chat == nil) && !revoked {
-			plan.Violations["orphan_reference"]++
-		} else if session != nil && (number(session, "role_id") != number(row, "role_id") ||
-			number(session, "project_id") != number(row, "project_id") || number(session, "chat_id") != number(row, "chat_id")) ||
-			chat != nil && number(chat, "project_id") != number(row, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_cluster_admin_bot_bindings"] {
-		roleID := number(row, "role_id")
-		validateFrozenRoleProject(roleID, number(row, "project_id"), roles, projects,
-			isRevoked("bot_binding", strconv.FormatInt(roleID, 10)), plan)
-	}
-	for _, row := range source["matter_codex_cluster_admin_runtime_variable_bindings"] {
-		roleID, variableID := number(row, "role_id"), number(row, "variable_id")
-		revoked := isRevoked("runtime_variable_binding", strconv.FormatInt(roleID, 10)+":"+strconv.FormatInt(variableID, 10))
-		role, roleOK := roles[roleID]
-		variable, variableOK := variables[variableID]
-		if (!roleOK || !variableOK) && !revoked {
-			plan.Violations["orphan_reference"]++
-		} else if roleOK && variableOK && number(role, "project_id") != number(variable, "project_id") {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	for _, row := range source["matter_codex_cluster_admin_prompt_templates"] {
-		key := text(row, "profile_name") + "\x00" + text(row, "template_key")
-		if promptTemplates[key] == nil && !isRevoked("agent_profile", text(row, "profile_name")) {
-			plan.Violations["orphan_reference"]++
-		}
-	}
-	for _, row := range source["matter_codex_cluster_admin_dependencies"] {
-		validateClusterAdminDependency(row, source, roles, chats, repositories, projectRepositories,
-			chatRepositories, openAIAccounts, githubAccounts, isRevoked, plan)
-	}
-	for _, row := range source["matter_codex_cluster_admin_delivery_fences"] {
-		sessionKey := text(row, "session_key")
-		if sessionKey == "" {
-			plan.Violations["unsupported_state"]++
-		} else if sessionsByKey[sessionKey] == nil && !hasSessionRevocation(revocations, sessionKey) {
-			plan.Violations["orphan_reference"]++
-		}
-	}
-	for _, row := range source["matter_codex_automation_audit_events"] {
-		projectID := number(row, "project_id")
-		if projects[projectID] == nil {
-			plan.Violations["orphan_reference"]++
-		}
-		if scheduleID := number(row, "schedule_id"); scheduleID != 0 {
-			schedule := schedules[scheduleID]
-			if schedule == nil {
-				plan.Violations["orphan_reference"]++
-			} else if number(schedule, "project_id") != projectID {
-				plan.Violations["tenant_mismatch"]++
-			}
-		}
-		if runID := number(row, "scheduled_run_id"); runID != 0 {
-			run := scheduledRuns[runID]
-			if run == nil {
-				plan.Violations["orphan_reference"]++
-			} else if number(run, "project_id") != projectID {
-				plan.Violations["tenant_mismatch"]++
-			}
-		}
-	}
-}
-
-func rowsByText(rows []sourceRow, key string, plan *model.Plan) map[string]sourceRow {
-	result := make(map[string]sourceRow, len(rows))
-	for _, row := range rows {
-		identifier := text(row, key)
-		if identifier == "" {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if _, duplicate := result[identifier]; duplicate {
-			plan.Violations["duplicate_source"]++
-		}
-		result[identifier] = row
-	}
-	return result
-}
-
-func validateFrozenRoleProject(roleID, projectID int64, roles, projects map[int64]sourceRow, revoked bool, plan *model.Plan) {
-	role, roleExists := roles[roleID]
-	_, projectExists := projects[projectID]
-	if !roleExists || !projectExists {
-		if !revoked {
-			plan.Violations["orphan_reference"]++
-		}
-	} else if number(role, "project_id") != projectID {
-		plan.Violations["tenant_mismatch"]++
-	}
-}
-
-func validateClusterAdminDependency(row sourceRow, source map[string][]sourceRow, roles, chats, repositories,
-	projectRepositories, chatRepositories map[int64]sourceRow, openAIAccounts, githubAccounts map[string]sourceRow,
-	isRevoked func(string, string) bool, plan *model.Plan,
-) {
-	roleID := number(row, "role_id")
-	resourceType, resourceKey := text(row, "resource_type"), text(row, "resource_key")
-	revocationKey := strconv.FormatInt(roleID, 10) + ":" + resourceType + ":" + resourceKey
-	revoked := isRevoked("dependency", revocationKey)
-	role, roleExists := roles[roleID]
-	if !roleExists && !revoked && !isRevoked("agent_role", strconv.FormatInt(roleID, 10)) {
-		plan.Violations["orphan_reference"]++
-	}
-	switch resourceType {
-	case "openai_account":
-		if openAIAccounts[resourceKey] == nil && !revoked {
-			plan.Violations["orphan_reference"]++
-		}
-	case "github_account":
-		if githubAccounts[resourceKey] == nil && !revoked {
-			plan.Violations["orphan_reference"]++
-		}
-	case "repository", "project_repository", "chat_repository":
-		identifier, err := strconv.ParseInt(resourceKey, 10, 64)
-		if err != nil || identifier <= 0 {
-			plan.Violations["unsupported_state"]++
-			return
-		}
-		referenceState := validateClusterAdminRepositoryReference(resourceType, identifier, roleID, role, roleExists,
-			source, chats, repositories, projectRepositories, chatRepositories)
-		if referenceState == 0 && !revoked {
-			plan.Violations["orphan_reference"]++
-		} else if referenceState < 0 {
-			plan.Violations["tenant_mismatch"]++
-		}
+func operationSource(operation *controlplanev1.LegacyGraphOperation) *controlplanev1.LegacyOperationSource {
+	switch value := operation.GetOperation().(type) {
+	case *controlplanev1.LegacyGraphOperation_Project:
+		return value.Project.Source
+	case *controlplanev1.LegacyGraphOperation_Team:
+		return value.Team.Source
+	case *controlplanev1.LegacyGraphOperation_Chat:
+		return value.Chat.Source
+	case *controlplanev1.LegacyGraphOperation_Artifact:
+		return value.Artifact.Source
+	case *controlplanev1.LegacyGraphOperation_CredentialBinding:
+		return value.CredentialBinding.Source
+	case *controlplanev1.LegacyGraphOperation_RepositoryWorkspace:
+		return value.RepositoryWorkspace.Source
+	case *controlplanev1.LegacyGraphOperation_RoleDefinition:
+		return value.RoleDefinition.Source
+	case *controlplanev1.LegacyGraphOperation_InstructionSet:
+		return value.InstructionSet.Source
+	case *controlplanev1.LegacyGraphOperation_ProviderReference:
+		return value.ProviderReference.Source
+	case *controlplanev1.LegacyGraphOperation_ProviderPool:
+		return value.ProviderPool.Source
+	case *controlplanev1.LegacyGraphOperation_RoleImageRecipe:
+		return value.RoleImageRecipe.Source
+	case *controlplanev1.LegacyGraphOperation_ImageBuild:
+		return value.ImageBuild.Source
+	case *controlplanev1.LegacyGraphOperation_ImageArtifact:
+		return value.ImageArtifact.Source
+	case *controlplanev1.LegacyGraphOperation_Agent:
+		return value.Agent.Source
+	case *controlplanev1.LegacyGraphOperation_AgentAssignment:
+		return value.AgentAssignment.Source
+	case *controlplanev1.LegacyGraphOperation_Schedule:
+		return value.Schedule.Source
+	case *controlplanev1.LegacyGraphOperation_RuntimeRevision:
+		return value.RuntimeRevision.Source
+	case *controlplanev1.LegacyGraphOperation_Session:
+		return value.Session.Source
+	case *controlplanev1.LegacyGraphOperation_Turn:
+		return value.Turn.Source
+	case *controlplanev1.LegacyGraphOperation_TurnAttempt:
+		return value.TurnAttempt.Source
+	case *controlplanev1.LegacyGraphOperation_ProcessRun:
+		return value.ProcessRun.Source
+	case *controlplanev1.LegacyGraphOperation_DelegationEdge:
+		return value.DelegationEdge.Source
+	case *controlplanev1.LegacyGraphOperation_CallbackManifest:
+		return value.CallbackManifest.Source
+	case *controlplanev1.LegacyGraphOperation_CallbackDelivery:
+		return value.CallbackDelivery.Source
+	case *controlplanev1.LegacyGraphOperation_MemoryRecord:
+		return value.MemoryRecord.Source
 	default:
-		plan.Violations["unknown_state"]++
+		return nil
 	}
 }
 
-func validateClusterAdminRepositoryReference(resourceType string, identifier, roleID int64, role sourceRow, roleExists bool,
-	source map[string][]sourceRow, chats, repositories, projectRepositories, chatRepositories map[int64]sourceRow,
-) int {
-	if !roleExists {
-		return 0
-	}
-	projectID := number(role, "project_id")
-	switch resourceType {
-	case "project_repository":
-		binding := projectRepositories[identifier]
-		if binding == nil {
-			return 0
+var sourceTables = []controlplanev1.LegacySourceTable{
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_DELEGATION_CALLBACK_DELIVERIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_DELEGATION_CALLBACK_MANIFESTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_DELEGATIONS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_FLOWS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_PROFILES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_PROMPT_TEMPLATES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_ROLE_RUNTIME_VARIABLES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_ROLES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_RUNS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_SESSION_TURNS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AGENT_SESSIONS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AUDIT_EVENTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AUTOMATION_AUDIT_EVENTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_AUTOMATION_SCHEDULES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CHAT_PARTICIPANTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CHAT_REPOSITORIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CHATS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_ADMIN_BINDINGS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_BOT_BINDINGS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_DELIVERY_FENCES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_DEPENDENCIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_PROMPT_TEMPLATES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_REVOCATIONS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_RUNTIME_VARIABLE_BINDINGS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_SESSION_BINDINGS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CLUSTER_SUBJECTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_CREDENTIALS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_GITHUB_ACCOUNTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_INTERACTION_CAPABILITIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_MATTERMOST_BOT_IDENTITIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_MEMORY_EMBEDDINGS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_MEMORY_RECORD_VERSIONS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_MEMORY_RECORDS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_OPENAI_ACCOUNTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_OWNER_ATTENTION_REQUESTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_POLICY_REVISIONS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_PROCESS_RUNS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_PROCESS_TURNS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_PROJECT_REPOSITORIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_PROJECT_RUNTIME_VARIABLES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_PROJECTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_REPOSITORIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_ROLE_CAPABILITIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_ROLE_RELATIONSHIP_POLICIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_RUNTIME_AGENT_BINDING_DISCOVERIES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_RUNTIME_AGENT_BINDING_OUTBOX,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_SCHEDULE_OCCURRENCES,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_SCHEDULED_RUNS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_THREAD_CONTEXTS,
+	controlplanev1.LegacySourceTable_LEGACY_SOURCE_TABLE_WORK_CLAIMS,
+}
+
+func sourceTable(table string) controlplanev1.LegacySourceTable {
+	for index, candidate := range inventory.Tables {
+		if candidate == table {
+			return sourceTables[index]
 		}
-		if number(binding, "project_id") != projectID {
-			return -1
-		}
-		return 1
-	case "chat_repository":
-		binding := chatRepositories[identifier]
-		chat := chats[number(binding, "chat_id")]
-		if binding == nil || chat == nil {
-			return 0
-		}
-		if number(chat, "project_id") != projectID ||
-			!hasEnabledParticipant(source["matter_codex_chat_participants"], roleID, number(binding, "chat_id")) {
-			return -1
-		}
-		return 1
-	case "repository":
-		if repositories[identifier] == nil {
-			return 0
-		}
-		for _, binding := range projectRepositories {
-			if number(binding, "repository_id") == identifier && number(binding, "project_id") == projectID {
-				return 1
-			}
-		}
-		for _, binding := range chatRepositories {
-			chatID := number(binding, "chat_id")
-			chat := chats[chatID]
-			if number(binding, "repository_id") == identifier && chat != nil && number(chat, "project_id") == projectID &&
-				hasEnabledParticipant(source["matter_codex_chat_participants"], roleID, chatID) {
-				return 1
-			}
-		}
-		return -1
 	}
 	return 0
 }
+func sourceTableName(value controlplanev1.LegacySourceTable) string {
+	for index, candidate := range sourceTables {
+		if candidate == value {
+			return canonicalSourceTableName(inventory.Tables[index])
+		}
+	}
+	return ""
+}
+func canonicalSourceTableName(value string) string {
+	switch value {
+	case "matter_codex_agent_delegation_callback_delivery_manifests":
+		return "matter_codex_agent_delegation_callback_manifests"
+	case "matter_codex_cluster_admin_bot_bindings":
+		return "matter_codex_cluster_bot_bindings"
+	case "matter_codex_cluster_admin_delivery_fences":
+		return "matter_codex_cluster_delivery_fences"
+	case "matter_codex_cluster_admin_dependencies":
+		return "matter_codex_cluster_dependencies"
+	case "matter_codex_cluster_admin_prompt_templates":
+		return "matter_codex_cluster_prompt_templates"
+	case "matter_codex_cluster_admin_revocations":
+		return "matter_codex_cluster_revocations"
+	case "matter_codex_cluster_admin_runtime_variable_bindings":
+		return "matter_codex_cluster_runtime_variable_bindings"
+	case "matter_codex_cluster_admin_session_bindings":
+		return "matter_codex_cluster_session_bindings"
+	case "matter_codex_cluster_admin_subjects":
+		return "matter_codex_cluster_subjects"
+	default:
+		return value
+	}
+}
 
-func hasEnabledParticipant(rows []sourceRow, roleID, chatID int64) bool {
+func dispositionName(value controlplanev1.LegacySourceDispositionKind) string {
+	return strings.TrimPrefix(value.String(), "LEGACY_SOURCE_DISPOSITION_KIND_")
+}
+
+func validateEvidence(value Evidence) error {
+	for _, sha := range []string{value.ArchiveScanEvidenceSHA256, value.RoleImageSpecSHA256, value.ImagePolicySHA256, value.RuntimeContractSHA256,
+		value.ImageBuildProvenanceSHA256, value.ImageAdmissionReceiptSHA256, value.ImageSignatureSHA256, value.ImagePromotionReadbackSHA256,
+		value.ImageSBOMSHA256, value.ImageVulnerabilityEvidenceSHA256, value.AuthorityPolicySHA256} {
+		if !validSHA(sha) {
+			return errors.New("owner materialization evidence digest is invalid")
+		}
+	}
+	if value.RoleImage == nil || value.ArchiveStoragePrefix == "" || value.ArchiveStorageVersion == "" || value.ArchiveRetentionRef == "" ||
+		value.ArchiveScanPolicyRevision == 0 || value.ArchiveScannerWorkloadID == "" || value.ArchiveScannedAt.IsZero() || value.ProviderObservedAt.IsZero() ||
+		value.ProviderObservationRevision == 0 || value.ProviderObservedLimit == 0 || value.RoleImageGeneration == 0 || value.ImagePolicyRevision == 0 || value.RuntimeContractRevision == 0 ||
+		value.ImageBuildStagingReference == "" || value.ImageBuildManifestDigest == "" || value.ImageArtifactPromotedReference == "" || value.ImageAdmissionRevision == 0 ||
+		value.ImageAdmissionReceiptManifestDigest == "" || value.ImageSignatureIdentity == "" || value.ImagePromotedAt.IsZero() || value.AuthorityPolicyRevision == 0 {
+		return errors.New("owner materialization evidence is incomplete")
+	}
+	return nil
+}
+
+func terminalSourceTable(table string) bool {
+	switch table {
+	case "matter_codex_agent_flows", "matter_codex_audit_events", "matter_codex_automation_audit_events", "matter_codex_cluster_admin_delivery_fences", "matter_codex_cluster_admin_revocations", "matter_codex_memory_embeddings", "matter_codex_owner_attention_requests", "matter_codex_runtime_agent_binding_discoveries", "matter_codex_runtime_agent_binding_outbox", "matter_codex_schedule_occurrences", "matter_codex_scheduled_runs", "matter_codex_work_claims":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateTerminalRows(table string, rows []sourceRow) error {
+	if table == "matter_codex_audit_events" || table == "matter_codex_automation_audit_events" || table == "matter_codex_memory_embeddings" || table == "matter_codex_cluster_admin_revocations" || table == "matter_codex_cluster_admin_delivery_fences" {
+		return nil
+	}
 	for _, row := range rows {
-		if number(row, "role_id") == roleID && number(row, "chat_id") == chatID && boolean(row, "enabled") {
-			return true
+		state := strings.ToLower(nonempty(text(row, "status"), text(row, "state")))
+		switch state {
+		case "completed", "succeeded", "failed", "cancelled", "canceled", "expired", "blocked", "delivered", "revoked", "closed", "archived":
+		default:
+			return fmt.Errorf("nonterminal row in %s blocks migration", table)
 		}
 	}
-	return false
-}
-
-func compoundID(row sourceRow, left, right string) string {
-	return strconv.FormatInt(number(row, left), 10) + ":" + strconv.FormatInt(number(row, right), 10)
-}
-
-func hasSessionRevocation(revocations map[string]struct{}, sessionKey string) bool {
-	prefix := "session_binding\x00"
-	for key := range revocations {
-		if strings.HasPrefix(key, prefix) && strings.HasSuffix(key, ":"+sessionKey) {
-			return true
-		}
-	}
-	return false
-}
-
-func rowsByID(rows []sourceRow) map[int64]sourceRow {
-	result := make(map[int64]sourceRow, len(rows))
-	for _, row := range rows {
-		if id := number(row, "id"); id > 0 {
-			result[id] = row
-		}
-	}
-	return result
-}
-
-func validateReference(index map[int64]sourceRow, id int64, plan *model.Plan) {
-	if id <= 0 || index[id] == nil {
-		plan.Violations["orphan_reference"]++
-	}
-}
-
-func validateNamedReference(index map[string]sourceRow, key string, plan *model.Plan) {
-	if key != "" && index[key] == nil {
-		plan.Violations["orphan_reference"]++
-	}
-}
-
-func validateProjectRole(projectID, roleID int64, projects, roles map[int64]sourceRow, plan *model.Plan) {
-	role, roleOK := roles[roleID]
-	if projects[projectID] == nil || !roleOK {
-		plan.Violations["orphan_reference"]++
-	} else if number(role, "project_id") != projectID {
-		plan.Violations["tenant_mismatch"]++
-	}
-}
-
-func validateChatRole(chatID, roleID int64, chats, roles map[int64]sourceRow, plan *model.Plan) {
-	chat, chatOK := chats[chatID]
-	role, roleOK := roles[roleID]
-	if !chatOK || !roleOK {
-		plan.Violations["orphan_reference"]++
-	} else if number(chat, "project_id") != number(role, "project_id") {
-		plan.Violations["tenant_mismatch"]++
-	}
-}
-
-func validatePolicyRole(policyID, roleID int64, policies, roles map[int64]sourceRow, plan *model.Plan) {
-	policy, policyOK := policies[policyID]
-	role, roleOK := roles[roleID]
-	if !policyOK || !roleOK {
-		plan.Violations["orphan_reference"]++
-	} else if number(policy, "project_id") != number(role, "project_id") {
-		plan.Violations["tenant_mismatch"]++
-	}
-}
-
-func validateProcessTurnRole(row sourceRow, processes, turns, sessions, roles map[int64]sourceRow, plan *model.Plan) {
-	process, processOK := processes[number(row, "process_run_id")]
-	turn, turnOK := turns[number(row, "turn_id")]
-	roleID := number(row, "role_id")
-	role, roleOK := roles[roleID]
-	if roleID == 0 {
-		roleOK = true
-	}
-	if !processOK || !turnOK || !roleOK {
-		plan.Violations["orphan_reference"]++
-		return
-	}
-	session, sessionOK := sessions[number(turn, "session_id")]
-	if !sessionOK {
-		plan.Violations["orphan_reference"]++
-	} else if number(session, "project_id") != number(process, "project_id") ||
-		(roleID != 0 && number(role, "project_id") != number(process, "project_id")) {
-		plan.Violations["tenant_mismatch"]++
-	}
-}
-
-func validateDelegationBoundary(row sourceRow, projects, chats, roles, sessions, turns map[int64]sourceRow, plan *model.Plan) {
-	projectID := number(row, "project_id")
-	sourceSession, sourceSessionOK := sessions[number(row, "source_session_id")]
-	sourceTurn, sourceTurnOK := turns[number(row, "source_turn_id")]
-	targetChat, targetChatOK := chats[number(row, "target_chat_id")]
-	targetRole, targetRoleOK := roles[number(row, "target_role_id")]
-	if projects[projectID] == nil || !sourceSessionOK || !sourceTurnOK || !targetChatOK || !targetRoleOK {
-		plan.Violations["orphan_reference"]++
-		return
-	}
-	if number(sourceTurn, "session_id") != number(row, "source_session_id") ||
-		number(sourceSession, "project_id") != projectID || number(targetChat, "project_id") != projectID ||
-		number(targetRole, "project_id") != projectID {
-		plan.Violations["tenant_mismatch"]++
-	}
-	sessionID, turnID := number(row, "target_session_id"), number(row, "target_turn_id")
-	if sessionID == 0 && turnID == 0 {
-		if text(row, "target_run_id") != "" {
-			plan.Violations["stale_reference"]++
-		}
-		return
-	}
-	session, sessionOK := sessions[sessionID]
-	turn, turnOK := turns[turnID]
-	if !sessionOK || !turnOK {
-		plan.Violations["orphan_reference"]++
-	} else if number(session, "project_id") != projectID || number(session, "chat_id") != number(row, "target_chat_id") ||
-		number(session, "role_id") != number(row, "target_role_id") || number(turn, "session_id") != sessionID {
-		plan.Violations["tenant_mismatch"]++
-	} else if text(row, "target_run_id") == "" || text(row, "target_run_id") != text(turn, "run_id") {
-		plan.Violations["stale_reference"]++
-	}
-}
-
-func validateMemoryBoundary(row sourceRow, projects, roles, sessions, turns map[int64]sourceRow, plan *model.Plan) {
-	projectID := number(row, "project_id")
-	if projects[projectID] == nil {
-		plan.Violations["orphan_reference"]++
-		return
-	}
-	for _, roleKey := range []string{"role_id", "created_by_role_id"} {
-		roleID := number(row, roleKey)
-		if roleID == 0 && roleKey == "role_id" {
-			continue
-		}
-		role, ok := roles[roleID]
-		if !ok {
-			plan.Violations["orphan_reference"]++
-		} else if number(role, "project_id") != projectID {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-	if turnID := number(row, "source_turn_id"); turnID != 0 {
-		turn, turnOK := turns[turnID]
-		session, sessionOK := sessions[number(turn, "session_id")]
-		if !turnOK || !sessionOK {
-			plan.Violations["orphan_reference"]++
-		} else if number(session, "project_id") != projectID {
-			plan.Violations["tenant_mismatch"]++
-		}
-	}
-}
-
-func validateScheduledRunBoundary(row sourceRow, projects, roles, chats, schedules, occurrences, sessions, turns map[int64]sourceRow,
-	plan *model.Plan,
-) {
-	projectID := number(row, "project_id")
-	schedule, scheduleOK := schedules[number(row, "schedule_id")]
-	occurrence, occurrenceOK := occurrences[number(row, "occurrence_id")]
-	role, roleOK := roles[number(row, "target_agent_role_id")]
-	chat, chatOK := chats[number(row, "target_chat_id")]
-	if projects[projectID] == nil || !scheduleOK || !occurrenceOK || !roleOK || !chatOK {
-		plan.Violations["orphan_reference"]++
-		return
-	}
-	if number(schedule, "project_id") != projectID || number(occurrence, "project_id") != projectID ||
-		number(occurrence, "schedule_id") != number(row, "schedule_id") || number(role, "project_id") != projectID ||
-		number(chat, "project_id") != projectID {
-		plan.Violations["tenant_mismatch"]++
-	}
-	sessionID, turnID := number(row, "runtime_session_id"), number(row, "runtime_turn_id")
-	if sessionID == 0 && turnID == 0 {
-		return
-	}
-	session, sessionOK := sessions[sessionID]
-	turn, turnOK := turns[turnID]
-	if !sessionOK || !turnOK {
-		plan.Violations["orphan_reference"]++
-	} else if number(session, "project_id") != projectID || number(turn, "session_id") != sessionID {
-		plan.Violations["tenant_mismatch"]++
-	} else if text(row, "runtime_run_id") == "" || text(row, "runtime_run_id") != text(turn, "run_id") {
-		plan.Violations["stale_reference"]++
-	}
-}
-
-func set(values ...string) map[string]bool {
-	result := make(map[string]bool, len(values))
-	for _, value := range values {
-		result[value] = true
-	}
-	return result
-}
-
-func archiveRemaining(_ map[string][]sourceRow, plan *model.Plan, mapping *[]string) {
-	owned := map[string]struct{}{
-		"matter_codex_projects": {}, "matter_codex_chats": {}, "matter_codex_agent_roles": {},
-		"matter_codex_agent_sessions": {}, "matter_codex_agent_session_turns": {},
-		"matter_codex_agent_runs":   {},
-		"matter_codex_process_runs": {}, "matter_codex_process_turns": {},
-		"matter_codex_automation_schedules":              {},
-		"matter_codex_runtime_agent_binding_outbox":      {},
-		"matter_codex_runtime_agent_binding_discoveries": {},
-	}
-	for table, count := range plan.Counts.Source {
-		if _, consumed := owned[table]; consumed || count == 0 {
-			continue
-		}
-		plan.Counts.Archive[table] += count
-		*mapping = append(*mapping, "ARCHIVE_TABLE\x00"+table+"\x00"+strconv.FormatUint(count, 10))
-	}
-}
-
-func indexTarget(resources []model.TargetResource, kind, key string) map[string][]model.TargetResource {
-	result := make(map[string][]model.TargetResource)
-	for _, resource := range resources {
-		if resource.Kind == kind && !resource.Historical {
-			result[text(resource.Spec, key)] = append(result[text(resource.Spec, key)], resource)
-		}
-	}
-	return result
-}
-
-func indexTargetNumber(resources []model.TargetResource, kind, key string) map[int64][]model.TargetResource {
-	result := make(map[int64][]model.TargetResource)
-	for _, resource := range resources {
-		if resource.Kind == kind && !resource.Historical {
-			result[number(resource.Spec, key)] = append(result[number(resource.Spec, key)], resource)
-		}
-	}
-	return result
-}
-
-func targetByID(resources []model.TargetResource, kind string) map[string]model.TargetResource {
-	result := make(map[string]model.TargetResource)
-	for _, resource := range resources {
-		if resource.Kind == kind && !resource.Historical {
-			result[resource.ID] = resource
-		}
-	}
-	return result
-}
-
-func byNumber(rows []sourceRow, key string, plan *model.Plan) map[int64]sourceRow {
-	result := make(map[int64]sourceRow, len(rows))
-	for _, row := range rows {
-		id := number(row, key)
-		if id <= 0 {
-			plan.Violations["unsupported_state"]++
-			continue
-		}
-		if _, exists := result[id]; exists {
-			plan.Violations["duplicate_source"]++
-		}
-		result[id] = row
-	}
-	return result
-}
-
-func uniqueTarget(candidates []model.TargetResource, plan *model.Plan) (model.TargetResource, bool) {
-	if len(candidates) != 1 {
-		plan.Violations["ambiguous_target"]++
-		return model.TargetResource{}, false
-	}
-	return candidates[0], true
-}
-
-func uniqueScoped(candidates []model.TargetResource, project model.TargetResource, plan *model.Plan) (model.TargetResource, bool) {
-	filtered, hiddenOwnerMismatch := scopedTargets(candidates, project)
-	if hiddenOwnerMismatch || len(filtered) != 1 {
-		if hiddenOwnerMismatch {
-			plan.Violations["tenant_mismatch"]++
-		} else {
-			plan.Violations["ambiguous_target"]++
-		}
-		return model.TargetResource{}, false
-	}
-	return filtered[0], true
-}
-
-func uniqueGloballyScoped(candidates []model.TargetResource, project model.TargetResource, plan *model.Plan) (model.TargetResource, bool) {
-	filtered, hiddenBoundaryMismatch := globallyScopedTargets(candidates, project)
-	if hiddenBoundaryMismatch || len(filtered) != 1 {
-		if hiddenBoundaryMismatch {
-			plan.Violations["tenant_mismatch"]++
-		} else {
-			plan.Violations["ambiguous_target"]++
-		}
-		return model.TargetResource{}, false
-	}
-	return filtered[0], true
-}
-
-func scopedTargets(candidates []model.TargetResource, project model.TargetResource) ([]model.TargetResource, bool) {
-	filtered := make([]model.TargetResource, 0, 1)
-	hiddenOwnerMismatch := false
-	for _, candidate := range candidates {
-		if candidate.OrganizationID == project.OrganizationID && candidate.ProjectID == project.ProjectID {
-			if candidate.OwnerActorID == project.OwnerActorID {
-				filtered = append(filtered, candidate)
-			} else {
-				hiddenOwnerMismatch = true
-			}
-		}
-	}
-	return filtered, hiddenOwnerMismatch
-}
-
-func globallyScopedTargets(candidates []model.TargetResource, project model.TargetResource) ([]model.TargetResource, bool) {
-	filtered := make([]model.TargetResource, 0, 1)
-	hiddenBoundaryMismatch := false
-	for _, candidate := range candidates {
-		if sameBoundary(candidate, project) {
-			filtered = append(filtered, candidate)
-		} else {
-			hiddenBoundaryMismatch = true
-		}
-	}
-	return filtered, hiddenBoundaryMismatch
-}
-
-func sessionProject(session model.TargetResource) model.TargetResource {
-	return model.TargetResource{OrganizationID: session.OrganizationID, ProjectID: session.ProjectID,
-		OwnerActorID: session.OwnerActorID}
-}
-
-func match(plan *model.Plan, matched map[string]model.TargetResource, kind string, resource model.TargetResource) {
-	key := resource.OrganizationID + "/" + resource.ProjectID + "/" + resource.OwnerActorID + "/" +
-		resource.Kind + "/" + resource.ID + "/" + strconv.FormatUint(resource.Version, 10)
-	if _, exists := matched[key]; !exists {
-		matched[key] = resource
-		plan.Counts.Mapped[kind]++
-	}
-}
-
-func sameBoundary(left, right model.TargetResource) bool {
-	return left.OrganizationID != "" && left.OrganizationID == right.OrganizationID &&
-		left.ProjectID != "" && left.ProjectID == right.ProjectID &&
-		left.OwnerActorID != "" && left.OwnerActorID == right.OwnerActorID
-}
-
-func recordMapping(mapping *[]string, sourceKind string, sourceID int64, target model.TargetResource) {
-	*mapping = append(*mapping, sourceKind+"\x00"+strconv.FormatInt(sourceID, 10)+"\x00"+
-		target.OrganizationID+"\x00"+target.ProjectID+"\x00"+target.OwnerActorID+"\x00"+
-		target.Kind+"\x00"+target.ID+"\x00"+strconv.FormatUint(target.Version, 10))
-}
-
-func recordArchive(mapping *[]string, sourceKind string, sourceID int64) {
-	*mapping = append(*mapping, sourceKind+"\x00"+strconv.FormatInt(sourceID, 10)+"\x00ARCHIVE")
-}
-
-func digestMapping(mapping []string) string {
-	sort.Strings(mapping)
-	hash := sha256.New()
-	for _, entry := range mapping {
-		writeFramed(hash, []byte(entry))
-	}
-	return hex.EncodeToString(hash.Sum(nil))
-}
-
-func detectMappingDuplicates(mapping []string, plan *model.Plan) {
-	oneToOne := map[string]bool{
-		"PROJECT": true, "TEAM": true, "CHAT": true, "AGENT": true,
-		"SESSION": true, "TURN": true, "PROCESS_RUN": true,
-	}
-	claimed := make(map[string]string)
-	for _, entry := range mapping {
-		parts := strings.Split(entry, "\x00")
-		if len(parts) != 8 || !oneToOne[parts[0]] {
-			continue
-		}
-		targetKey := strings.Join(parts[2:], "\x00")
-		if previous, exists := claimed[targetKey]; exists && previous != parts[0]+"\x00"+parts[1] {
-			plan.Violations["duplicate_source"]++
-		} else {
-			claimed[targetKey] = parts[0] + "\x00" + parts[1]
-		}
-	}
-}
-
-func digestTargets(resources map[string]model.TargetResource) string {
-	keys := make([]string, 0, len(resources))
-	for key := range resources {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	hash := sha256.New()
-	for _, key := range keys {
-		writeFramed(hash, []byte(key))
-		resource := resources[key]
-		canonical, err := json.Marshal(struct {
-			ID, OrganizationID, ProjectID, ParentID, OwnerActorID, Kind, Name, State string
-			Version                                                                  uint64
-			Spec                                                                     map[string]any
-		}{resource.ID, resource.OrganizationID, resource.ProjectID, resource.ParentID, resource.OwnerActorID,
-			resource.Kind, resource.Name, resource.State, resource.Version, resource.Spec})
-		if err != nil {
-			return ""
-		}
-		writeFramed(hash, canonical)
-	}
-	return hex.EncodeToString(hash.Sum(nil))
-}
-
-func digestBytes(value []byte) string {
-	digest := sha256.Sum256(value)
-	return hex.EncodeToString(digest[:])
-}
-
-func digestPlan(plan model.Plan) (string, error) {
-	plan.PlanSHA256, plan.BackupSHA256, plan.ManifestSHA256, plan.CutoverState = "", "", "", ""
-	encoded, err := json.Marshal(plan)
-	if err != nil {
-		return "", errors.New("encode migration plan")
-	}
-	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:]), nil
-}
-
-func writeFramed(hash interface{ Write([]byte) (int, error) }, value []byte) {
-	var length [8]byte
-	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
-	_, _ = hash.Write(length[:])
-	_, _ = hash.Write(value)
+	return nil
 }
 
 func text(row map[string]any, key string) string {
@@ -3332,233 +1341,281 @@ func text(row map[string]any, key string) string {
 	if !ok || value == nil {
 		return ""
 	}
-	return strings.TrimSpace(fmt.Sprint(value))
-}
-
-func number(row map[string]any, key string) int64 {
-	value, ok := row[key]
-	if !ok || value == nil {
-		return 0
-	}
 	switch typed := value.(type) {
-	case float64:
-		return int64(typed)
+	case string:
+		return strings.TrimSpace(typed)
 	case json.Number:
-		parsed, _ := typed.Int64()
-		return parsed
-	case string:
-		parsed, _ := strconv.ParseInt(typed, 10, 64)
-		return parsed
+		return typed.String()
 	default:
-		parsed, _ := strconv.ParseInt(fmt.Sprint(value), 10, 64)
-		return parsed
+		return strings.TrimSpace(fmt.Sprint(typed))
 	}
 }
-
+func number(row map[string]any, key string) int64 {
+	value := text(row, key)
+	parsed, _ := strconv.ParseInt(value, 10, 64)
+	return parsed
+}
 func boolean(row map[string]any, key string) bool {
-	value, ok := row[key]
-	if !ok || value == nil {
-		return false
-	}
-	switch typed := value.(type) {
-	case bool:
-		return typed
-	case string:
-		parsed, _ := strconv.ParseBool(typed)
-		return parsed
-	default:
-		return false
-	}
+	value := strings.ToLower(text(row, key))
+	return value == "true" || value == "t" || value == "1"
 }
-
+func nonempty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+func sourceID(row sourceRow) string {
+	if id := number(row, "id"); id > 0 {
+		return strconv.FormatInt(id, 10)
+	}
+	for _, key := range []string{"public_id", "session_key", "run_id", "name", "delegation_id"} {
+		if value := text(row, key); value != "" {
+			return stable(value)
+		}
+	}
+	return rowDigest(row)[:24]
+}
+func sourceRevision(row sourceRow) uint64 {
+	for _, key := range []string{"binding_version", "version", "revision", "generation", "updated_revision"} {
+		if value := number(row, key); value > 0 {
+			return uint64(value)
+		}
+	}
+	return 1
+}
+func rowDigest(row sourceRow) string {
+	if value := text(row, "_source_sha256"); validSHA(value) {
+		return value
+	}
+	return digest(mustJSON(row))
+}
+func sourceBytes(row sourceRow) uint64 {
+	if value := number(row, "_source_bytes"); value > 0 {
+		return uint64(value)
+	}
+	return uint64(len(mustJSON(row)))
+}
+func mustJSON(value any) []byte {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return encoded
+}
+func digest(value []byte) string { sum := sha256.Sum256(value); return hex.EncodeToString(sum[:]) }
 func validSHA(value string) bool {
 	if len(value) != 64 {
 		return false
 	}
-	_, err := hex.DecodeString(value)
-	return err == nil && value == strings.ToLower(value)
-}
-
-func terminalTurn(status string) bool {
-	return status == "succeeded" || status == "failed" || status == "canceled" || status == "cancelled"
-}
-
-func knownSession(status string) bool {
-	return status == "idle" || status == "running" || status == "error" || status == "blocked" ||
-		status == "closed" || status == "expired"
-}
-
-func terminalSession(status string) bool { return status == "closed" || status == "expired" }
-
-func sessionStateCompatible(source, target string) bool {
-	switch source {
-	case "idle", "running", "error", "blocked":
-		return target == "ACTIVE"
-	case "closed":
-		return target == "ARCHIVED" || target == "SUCCEEDED" || target == "FAILED" || target == "CANCELLED"
-	case "expired":
-		return target == "EXPIRED" || target == "ARCHIVED"
-	default:
-		return false
-	}
-}
-
-func turnStateCompatible(source, target string) bool {
-	switch source {
-	case "queued":
-		return target == "QUEUED"
-	case "running", "capacity_retry":
-		return target == "QUEUED" || target == "CLAIMED" || target == "RUNNING"
-	case "blocked":
-		return target == "BLOCKED" || target == "WAITING_OWNER" || target == "WAITING_EXTERNAL"
-	case "succeeded":
-		return target == "SUCCEEDED"
-	case "failed":
-		return target == "FAILED"
-	case "canceled", "cancelled":
-		return target == "CANCELLED"
-	default:
-		return false
-	}
-}
-
-func processStateCompatible(source, target string) bool {
-	switch source {
-	case "running":
-		return target == "RUNNING" || target == "WAITING_OWNER" || target == "WAITING_EXTERNAL" || target == "BLOCKED"
-	case "waiting_owner":
-		return target == "WAITING_OWNER"
-	case "completed":
-		return target == "SUCCEEDED"
-	case "failed":
-		return target == "FAILED"
-	default:
-		return false
-	}
-}
-
-func knownAttemptState(state string) bool {
-	switch state {
-	case "QUEUED", "CLAIMED", "WAITING_OWNER", "WAITING_EXTERNAL", "BLOCKED", "SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED":
-		return true
-	default:
-		return false
-	}
-}
-
-func knownExecutionState(state string) bool {
-	switch state {
-	case "PENDING", "ADMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED", "RETRIED", "SUSPENDED":
-		return true
-	default:
-		return false
-	}
-}
-
-func executionStateCompatible(source, target string) bool {
-	if !knownExecutionState(target) {
-		return false
-	}
-	switch source {
-	case "queued", "capacity_retry":
-		return target == "PENDING" || target == "ADMITTED" || target == "RETRIED"
-	case "running":
-		return target == "ADMITTED" || target == "RUNNING"
-	case "blocked":
-		return target == "SUSPENDED"
-	case "succeeded":
-		return target == "SUCCEEDED"
-	case "failed":
-		return target == "FAILED" || target == "RETRIED"
-	case "canceled", "cancelled":
-		return target == "CANCELLED"
-	default:
-		return false
-	}
-}
-
-func knownTurn(status string) bool {
-	return terminalTurn(status) || status == "queued" || status == "running" || status == "capacity_retry" || status == "blocked"
-}
-
-func terminalProcess(status string) bool { return status == "completed" || status == "failed" }
-func knownProcess(status string) bool {
-	return terminalProcess(status) || status == "running" || status == "waiting_owner"
-}
-
-func artifactCardinality(value any) uint64 {
-	switch typed := value.(type) {
-	case map[string]any:
-		return uint64(len(typed))
-	case []any:
-		return uint64(len(typed))
-	case json.Number:
-		parsed, _ := strconv.ParseUint(string(typed), 10, 64)
-		return parsed
-	case float64:
-		if typed >= 0 {
-			return uint64(typed)
-		}
-		return 0
-	default:
-		return 0
-	}
-}
-
-func eligibleArtifact(artifact model.TargetResource) bool {
-	if artifact.Kind != "ARTIFACT" || artifact.State != "ACTIVE" || artifact.Version == 0 ||
-		!validStableKey(text(artifact.Spec, "kind")) ||
-		!set("INPUT", "OUTPUT", "ARCHIVE")[text(artifact.Spec, "direction")] ||
-		text(artifact.Spec, "scanStatus") != "CLEAN" || number(artifact.Spec, "scanPolicyRevision") <= 0 ||
-		!validSHA(text(artifact.Spec, "scanEvidenceSha256")) || !validSHA(text(artifact.Spec, "sha256")) ||
-		number(artifact.Spec, "sizeBytes") <= 0 || number(artifact.Spec, "sizeBytes") > 10<<30 ||
-		len(text(artifact.Spec, "mediaType")) < 3 || len(text(artifact.Spec, "mediaType")) > 255 ||
-		!validExternalRef(text(artifact.Spec, "retentionPolicyRef")) ||
-		!validStableKey(text(artifact.Spec, "scannerWorkloadId")) || text(artifact.Spec, "scannedAt") == "" {
-		return false
-	}
-	if scannedAt, err := time.Parse(time.RFC3339Nano, text(artifact.Spec, "scannedAt")); err != nil || scannedAt.IsZero() {
-		return false
-	}
-	reference, err := url.Parse(text(artifact.Spec, "storageRef"))
-	if err != nil || !validExternalRef(text(artifact.Spec, "storageRef")) ||
-		reference.Scheme != "s3" || reference.Host == "" || reference.Path == "" || reference.Path == "/" ||
-		reference.User != nil || reference.Fragment != "" {
-		return false
-	}
-	query := reference.Query()
-	return len(query) == 1 && len(query["versionId"]) == 1 && strings.TrimSpace(query.Get("versionId")) != ""
-}
-
-func validExternalRef(value string) bool {
-	if len(value) < 1 || len(value) > 512 || value != strings.TrimSpace(value) {
-		return false
-	}
-	for _, symbol := range value {
-		if symbol < 0x20 || symbol == 0x7f {
+	for _, char := range value {
+		if char < '0' || char > '9' && char < 'a' || char > 'f' {
 			return false
 		}
 	}
 	return true
 }
-
-func validStableKey(value string) bool {
-	if len(value) < 1 || len(value) > 96 || value[0] < 'a' || value[0] > 'z' {
+func stable(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var result strings.Builder
+	lastDash := false
+	for _, char := range value {
+		ok := char >= 'a' && char <= 'z' || char >= '0' && char <= '9'
+		if ok {
+			result.WriteRune(char)
+			lastDash = false
+		} else if !lastDash && result.Len() > 0 {
+			result.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(result.String(), "-")
+}
+func cloneCounts(value map[string]uint64) map[string]uint64 {
+	result := make(map[string]uint64, len(value))
+	for key, count := range value {
+		result[key] = count
+	}
+	return result
+}
+func cloneStrings(value map[string]string) map[string]string {
+	result := make(map[string]string, len(value))
+	for key, item := range value {
+		result[key] = item
+	}
+	return result
+}
+func validSourceTableDigests(value map[string]string) bool {
+	if len(value) != len(inventory.Tables) {
 		return false
 	}
-	separator := false
-	for _, symbol := range value[1:] {
-		switch {
-		case symbol >= 'a' && symbol <= 'z', symbol >= '0' && symbol <= '9':
-			separator = false
-		case symbol == '-' || symbol == '_':
-			if separator {
-				return false
-			}
-			separator = true
-		default:
+	for _, table := range inventory.Tables {
+		if !validSHA(value[table]) {
 			return false
 		}
 	}
-	return !separator
+	return true
+}
+func maxInt64(left, right int64) int64 {
+	if left > right {
+		return left
+	}
+	return right
+}
+func runtimeComponents(refs []string) []*controlplanev1.LegacyRuntimeComponent {
+	result := make([]*controlplanev1.LegacyRuntimeComponent, 0, len(refs))
+	for _, ref := range refs {
+		result = append(result, &controlplanev1.LegacyRuntimeComponent{LocalRef: ref})
+	}
+	return result
+}
+func assignmentKey(roleID, chatID int64) string {
+	return strconv.FormatInt(roleID, 10) + "/" + strconv.FormatInt(chatID, 10)
+}
+func roleProviderName(rows []sourceRow, roleID int64) string {
+	for _, row := range rows {
+		if number(row, "id") == roleID {
+			return text(row, "openai_account_name")
+		}
+	}
+	return ""
+}
+func roleField(rows []sourceRow, roleID int64, key string) string {
+	for _, row := range rows {
+		if number(row, "id") == roleID {
+			return text(row, key)
+		}
+	}
+	return ""
+}
+func roleCapabilities(row sourceRow) []string {
+	result := []string{"turn.execute"}
+	if value := text(row, "kubernetes_access"); value != "" {
+		result = append(result, "kubernetes."+stable(value))
+	}
+	sort.Strings(result)
+	return result
+}
+func turnSession(rows []sourceRow, turnID int64) int64 {
+	for _, row := range rows {
+		if number(row, "id") == turnID {
+			return number(row, "session_id")
+		}
+	}
+	return 0
+}
+func parseRefID(value string) int64 {
+	index := strings.LastIndexByte(value, '-')
+	if index < 0 {
+		return 0
+	}
+	parsed, _ := strconv.ParseInt(value[index+1:], 10, 64)
+	return parsed
+}
+func cronDaily(local string) string {
+	parts := strings.Split(local, ":")
+	if len(parts) != 2 {
+		return "0 0 * * *"
+	}
+	return parts[1] + " " + parts[0] + " * * *"
+}
+func archiveRef(row sourceRow) string {
+	if sha256 := text(row, "session_archive_sha256"); validSHA(sha256) {
+		return "legacy-archive://session/" + sourceID(row) + "?sha256=" + sha256
+	}
+	return ""
+}
+func turnResultArtifactRef(row sourceRow) string {
+	if nonempty(text(row, "final_message"), text(row, "error_message")) != "" || number(row, "artifacts") > 0 {
+		return "artifact-turn-result-" + strconv.FormatInt(number(row, "id"), 10)
+	}
+	return ""
+}
+func turnOutcome(row sourceRow) string {
+	status := strings.ToLower(text(row, "status"))
+	if status == "queued" || status == "running" || status == "capacity_retry" {
+		return ""
+	}
+	return nonempty(text(row, "final_message"), text(row, "error_message"), status)
+}
+
+func timeValue(row sourceRow, key string) time.Time {
+	value := text(row, key)
+	if value == "" {
+		return time.Time{}
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999-07:00", "2006-01-02 15:04:05-07:00"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC().Truncate(time.Microsecond)
+		}
+	}
+	return time.Time{}
+}
+func timestamp(row sourceRow, key string) *timestamppb.Timestamp {
+	value := timeValue(row, key)
+	if value.IsZero() {
+		return nil
+	}
+	return timestamppb.New(value)
+}
+func hexText(row sourceRow, key string) string {
+	value := text(row, key)
+	value = strings.TrimPrefix(value, "\\x")
+	if validSHA(value) {
+		return value
+	}
+	return rowDigest(row)
+}
+
+func sessionState(value string) (controlplanev1.LifecycleState, error) {
+	switch strings.ToLower(value) {
+	case "idle", "active":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE, nil
+	case "paused":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_PAUSED, nil
+	case "completed", "closed", "archived":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_ARCHIVED, nil
+	case "failed":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_FAILED, nil
+	default:
+		return 0, errors.New("unknown session lifecycle state")
+	}
+}
+func turnStates(value string) (controlplanev1.LifecycleState, controlplanev1.LifecycleState, bool, error) {
+	switch strings.ToLower(value) {
+	case "queued", "capacity_retry":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_QUEUED, controlplanev1.LifecycleState_LIFECYCLE_STATE_QUEUED, false, nil
+	case "completed", "succeeded":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_SUCCEEDED, controlplanev1.LifecycleState_LIFECYCLE_STATE_SUCCEEDED, true, nil
+	case "failed":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_FAILED, controlplanev1.LifecycleState_LIFECYCLE_STATE_FAILED, true, nil
+	case "cancelled", "canceled":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_CANCELLED, controlplanev1.LifecycleState_LIFECYCLE_STATE_CANCELLED, true, nil
+	case "blocked", "waiting_owner":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_BLOCKED, controlplanev1.LifecycleState_LIFECYCLE_STATE_BLOCKED, true, nil
+	case "running", "claimed":
+		return 0, 0, false, errors.New("live turn lease blocks migration")
+	default:
+		return 0, 0, false, errors.New("unknown turn lifecycle state")
+	}
+}
+func processState(value string) (controlplanev1.LifecycleState, error) {
+	switch strings.ToLower(value) {
+	case "completed", "succeeded":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_SUCCEEDED, nil
+	case "failed":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_FAILED, nil
+	case "cancelled", "canceled":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_CANCELLED, nil
+	case "waiting_owner":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_WAITING_OWNER, nil
+	case "blocked":
+		return controlplanev1.LifecycleState_LIFECYCLE_STATE_BLOCKED, nil
+	case "running", "queued", "claimed":
+		return 0, errors.New("live process authority blocks migration")
+	default:
+		return 0, errors.New("unknown process lifecycle state")
+	}
 }

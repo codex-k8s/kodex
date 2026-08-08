@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/backup"
+	controlplaneclient "github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/clients/controlplane"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/model"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/observability"
 	"github.com/codex-k8s/matter-codex/services/jobs/legacy-data-migration/internal/planner"
@@ -20,7 +21,7 @@ import (
 type runtimeState struct {
 	config  Config
 	source  *postgres.Repository
-	target  *postgres.Repository
+	target  *controlplaneclient.Client
 	restore *postgres.Repository
 	server  *observability.Server
 }
@@ -49,7 +50,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, _ string) (res
 			}
 		}
 		if state.target != nil {
-			state.target.Close()
+			resultErr = errors.Join(resultErr, state.target.Close())
 		}
 		if state.restore != nil {
 			state.restore.Close()
@@ -64,10 +65,6 @@ func Run(lifecycle context.Context, shutdownBase context.Context, _ string) (res
 	if err != nil {
 		return err
 	}
-	targetDSN, err := readDSN(config.TargetDSNFile)
-	if err != nil {
-		return err
-	}
 	state.source, err = postgres.Open(startup, postgres.ConnectionConfig{
 		DSN: sourceDSN, TLSServerName: config.SourceTLSServerName, CAFile: config.SourceCAFile,
 		RequiredRole: "matter_codex_migration",
@@ -75,11 +72,17 @@ func Run(lifecycle context.Context, shutdownBase context.Context, _ string) (res
 	if err != nil {
 		return err
 	}
-	state.target, err = postgres.Open(startup, postgres.ConnectionConfig{
-		DSN: targetDSN, TLSServerName: config.TargetTLSServerName, CAFile: config.TargetCAFile,
-		RequiredRole: "control_plane_migration",
+	state.target, err = controlplaneclient.Dial(startup, controlplaneclient.Config{
+		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
+		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
+		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
+		ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 5 * time.Second,
+		RPCDeadline: config.ControlPlaneRPCDeadline,
 	})
 	if err != nil {
+		return err
+	}
+	if err := state.target.Check(startup); err != nil {
 		return err
 	}
 	state.server, err = observability.Start(config.TechnicalListen, config.Mode)
@@ -134,10 +137,11 @@ func (state *runtimeState) finishTerminal(shutdownBase context.Context, outcome 
 func (state *runtimeState) execute(ctx context.Context, sourceDSN string) error {
 	switch state.config.Mode {
 	case "dry-run":
-		plan, err := state.buildPlan(ctx, false)
+		result, err := state.buildPlan(ctx, false)
 		if err != nil {
 			return err
 		}
+		plan := result.Report
 		if err := writeReport(state.config.ReportPath, plan); err != nil {
 			return err
 		}
@@ -163,10 +167,6 @@ func (state *runtimeState) restoreVerify(ctx context.Context) error {
 	if err != nil || sourceReceipt.State != "PREPARED" {
 		return errors.New("restore verification requires a prepared source receipt")
 	}
-	targetReceipt, err := state.target.GetTargetReceipt(ctx, state.config.PlanID)
-	if err != nil || targetReceipt.State != "PREPARED" || !sameReceipt(sourceReceipt, targetReceipt) {
-		return errors.New("restore verification requires matching prepared receipts")
-	}
 	restoreDSN, err := readDSN(state.config.RestoreDSNFile)
 	if err != nil {
 		return err
@@ -181,7 +181,7 @@ func (state *runtimeState) restoreVerify(ctx context.Context) error {
 		return err
 	}
 	result, manifest, err := backup.LoadExisting(ctx, state.config.BackupDirectory,
-		state.config.PlanID, state.config.BackupKeyFile)
+		state.config.PlanID, state.config.BackupKeyFile, state.config.MaximumStagingBytes)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,8 @@ func (state *runtimeState) restoreVerify(ctx context.Context) error {
 		return errors.New("backup evidence does not match prepared cutover receipts")
 	}
 	if err := backup.Restore(ctx, result.BackupPath, state.config.BackupKeyFile, restoreDSN,
-		state.config.RestoreTLSServerName, state.config.RestoreCAFile); err != nil {
+		state.config.RestoreTLSServerName, state.config.RestoreCAFile,
+		state.config.MaximumStagingBytes); err != nil {
 		return err
 	}
 	snapshot, err := state.restore.BeginRestoredSnapshot(ctx)
@@ -205,7 +206,7 @@ func (state *runtimeState) restoreVerify(ctx context.Context) error {
 	if err := snapshot.Tx.Commit(ctx); err != nil {
 		return errors.New("close restored verification snapshot")
 	}
-	if err := state.target.MarkTargetRestoreVerified(ctx, targetReceipt); err != nil {
+	if err := state.source.MarkSourceRestoreVerified(ctx, sourceReceipt); err != nil {
 		return err
 	}
 	return writeJSONReport(state.config.ReportPath, model.RestoreVerification{
@@ -231,23 +232,20 @@ func sameCounts(left, right map[string]uint64) bool {
 	return true
 }
 
-func (state *runtimeState) buildPlan(ctx context.Context, export bool) (model.Plan, error) {
+func (state *runtimeState) buildPlan(ctx context.Context, export bool) (planner.Result, error) {
 	snapshot, err := state.source.BeginSourceSnapshot(ctx, export, false)
 	if err != nil {
-		return model.Plan{}, err
+		return planner.Result{}, err
 	}
 	defer func() { _ = snapshot.Tx.Rollback(ctx) }()
-	resources, err := state.target.TargetResources(ctx)
+	plan, err := planner.Build(state.config.PlanID, state.config.PlanID,
+		state.config.SourceRootReference, state.config.SourceRootSHA256,
+		snapshot.Rows, snapshot.SourceSHA256, snapshot.Counts, snapshot.TableSHA256, state.config.OwnerEvidence)
 	if err != nil {
-		return model.Plan{}, err
-	}
-	plan, err := planner.BuildInventory(state.config.PlanID, snapshot.Rows, snapshot.SourceSHA256,
-		snapshot.Counts, resources)
-	if err != nil {
-		return model.Plan{}, err
+		return planner.Result{}, err
 	}
 	if err := snapshot.Tx.Commit(ctx); err != nil {
-		return model.Plan{}, errors.New("close source snapshot")
+		return planner.Result{}, errors.New("close source snapshot")
 	}
 	return plan, nil
 }
@@ -258,22 +256,21 @@ func (state *runtimeState) prepare(ctx context.Context, sourceDSN string) error 
 		return err
 	}
 	defer func() { _ = snapshot.Tx.Rollback(ctx) }()
-	resources, err := state.target.TargetResources(ctx)
+	result, err := planner.Build(state.config.PlanID, state.config.PlanID,
+		state.config.SourceRootReference, state.config.SourceRootSHA256,
+		snapshot.Rows, snapshot.SourceSHA256, snapshot.Counts, snapshot.TableSHA256, state.config.OwnerEvidence)
 	if err != nil {
 		return err
 	}
-	plan, err := planner.BuildInventory(state.config.PlanID, snapshot.Rows, snapshot.SourceSHA256,
-		snapshot.Counts, resources)
-	if err != nil {
-		return err
-	}
+	plan := result.Report
 	if !plan.Ready() {
 		_ = writeReport(state.config.ReportPath, plan)
 		return errors.New("migration plan is blocked by integrity violations")
 	}
 	backupResult, err := backup.Create(ctx, state.config.BackupDirectory, state.config.PlanID, sourceDSN,
 		state.config.SourceTLSServerName, state.config.SourceCAFile, snapshot.ExportedID,
-		state.config.BackupKeyFile, plan.SourceSHA256, plan.Counts.Source, time.Now())
+		state.config.BackupKeyFile, plan.SourceSHA256, plan.Counts.Source, time.Now(),
+		state.config.MaximumStagingBytes)
 	if err != nil {
 		return err
 	}
@@ -282,10 +279,12 @@ func (state *runtimeState) prepare(ctx context.Context, sourceDSN string) error 
 	}
 	plan.BackupSHA256 = backupResult.BackupSHA256
 	plan.ManifestSHA256 = backupResult.ManifestSHA256
-	receipt := receiptFromPlan(plan)
-	if err := state.target.PrepareTarget(ctx, receipt, plan.Counts, plan.Materialization); err != nil {
+	ownerReceipt, err := state.target.Prepare(ctx, result.Request)
+	if err != nil {
 		return err
 	}
+	plan.TargetSHA256 = ownerReceipt.GetSemanticSha256()
+	receipt := receiptFromPlan(plan)
 	if err := state.source.PrepareSource(ctx, receipt); err != nil {
 		return err
 	}
@@ -298,52 +297,50 @@ func (state *runtimeState) commit(ctx context.Context) error {
 	if err != nil {
 		return errors.New("read prepared source receipt")
 	}
-	targetReceipt, err := state.target.GetTargetReceipt(ctx, state.config.PlanID)
-	if err != nil || !sameReceipt(sourceReceipt, targetReceipt) || !targetReceipt.RestoreVerified ||
-		!commitStateAllowed(sourceReceipt.State, targetReceipt.State) {
-		return errors.New("prepared cutover receipts mismatch")
+	if !sourceReceipt.RestoreVerified || !sourceCommitStateAllowed(sourceReceipt.State) {
+		return errors.New("prepared source receipt is not eligible for commit")
 	}
 	backupEvidence, manifest, err := backup.LoadExisting(ctx, state.config.BackupDirectory,
-		state.config.PlanID, state.config.BackupKeyFile)
+		state.config.PlanID, state.config.BackupKeyFile, state.config.MaximumStagingBytes)
 	if err != nil || backupEvidence.BackupSHA256 != sourceReceipt.BackupSHA256 ||
 		backupEvidence.ManifestSHA256 != sourceReceipt.ManifestSHA256 || manifest.SourceSHA256 != sourceReceipt.SourceSHA256 {
 		return errors.New("immutable backup evidence does not match cutover receipts")
+	}
+	if sourceReceipt.State == "COMMITTED" {
+		if _, err := state.target.ReadCommitted(ctx, state.config.PlanID, sourceReceipt.TargetSHA256,
+			uint32(sourceReceipt.MaterializationCount)); err != nil {
+			return err
+		}
+		return writeJSONReport(state.config.ReportPath, model.CutoverAudit{SchemaVersion: "mattercodex.legacy-data-cutover-audit.v1",
+			PlanID: sourceReceipt.PlanID, PlanSHA256: sourceReceipt.PlanSHA256, SourceSHA256: sourceReceipt.SourceSHA256,
+			TargetSHA256: sourceReceipt.TargetSHA256, BackupSHA256: sourceReceipt.BackupSHA256, ManifestSHA256: sourceReceipt.ManifestSHA256,
+			MaterializationSHA256: sourceReceipt.MaterializationSHA256, MaterializationCount: sourceReceipt.MaterializationCount,
+			SourceState: "COMMITTED", TargetState: "COMMITTED", Outcome: "verified-replay", RecordedAt: time.Now().UTC().Truncate(time.Microsecond)})
 	}
 	sourceSnapshot, err := state.source.BeginSourceSnapshot(ctx, false, true)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = sourceSnapshot.Tx.Rollback(ctx) }()
-	targetSnapshot, err := state.target.BeginTargetSnapshot(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = targetSnapshot.Tx.Rollback(ctx) }()
-	plan, err := planner.BuildInventory(state.config.PlanID, sourceSnapshot.Rows, sourceSnapshot.SourceSHA256,
-		sourceSnapshot.Counts, targetSnapshot.Resources)
+	result, err := planner.Build(state.config.PlanID, state.config.PlanID,
+		state.config.SourceRootReference, state.config.SourceRootSHA256,
+		sourceSnapshot.Rows, sourceSnapshot.SourceSHA256, sourceSnapshot.Counts, sourceSnapshot.TableSHA256, state.config.OwnerEvidence)
+	plan := result.Report
 	if err != nil || !plan.Ready() || plan.PlanSHA256 != sourceReceipt.PlanSHA256 ||
-		plan.SourceSHA256 != sourceReceipt.SourceSHA256 || plan.TargetSHA256 != sourceReceipt.TargetSHA256 ||
-		!sameCounts(plan.Counts.Source, manifest.TableCounts) {
+		plan.SourceSHA256 != sourceReceipt.SourceSHA256 || plan.MaterializationSHA256 != sourceReceipt.MaterializationSHA256 ||
+		plan.MaterializationCount != sourceReceipt.MaterializationCount || !sameCounts(plan.Counts.Source, manifest.TableCounts) {
 		return errors.New("concurrent drift blocks migration commit")
 	}
-	plan.BackupSHA256, plan.ManifestSHA256 = sourceReceipt.BackupSHA256, sourceReceipt.ManifestSHA256
+	plan.TargetSHA256, plan.BackupSHA256, plan.ManifestSHA256 = sourceReceipt.TargetSHA256, sourceReceipt.BackupSHA256, sourceReceipt.ManifestSHA256
 	if err := postgres.FreezeSourceSnapshot(ctx, sourceSnapshot.Tx, sourceReceipt); err != nil {
 		return err
 	}
 	if err := sourceSnapshot.Tx.Commit(ctx); err != nil {
 		return errors.New("commit source cutover fence")
 	}
-	if err := postgres.CommitTargetSnapshot(ctx, targetSnapshot.Tx, targetReceipt); err != nil {
+	if _, err := state.target.Materialize(ctx, state.config.PlanID, state.config.PlanID,
+		sourceReceipt.TargetSHA256, uint32(sourceReceipt.MaterializationCount)); err != nil {
 		return err
-	}
-	if err := targetSnapshot.Tx.Commit(ctx); err != nil {
-		return errors.New("commit target materialization")
-	}
-	readback, err := state.buildPlan(ctx, false)
-	if err != nil || !readback.Ready() || readback.PlanSHA256 != sourceReceipt.PlanSHA256 ||
-		readback.MaterializationSHA256 != sourceReceipt.MaterializationSHA256 ||
-		readback.MaterializationCount != sourceReceipt.MaterializationCount {
-		return errors.New("target materialization authoritative readback mismatch")
 	}
 	if err := state.source.CommitSource(ctx, sourceReceipt); err != nil {
 		return err
@@ -352,10 +349,9 @@ func (state *runtimeState) commit(ctx context.Context) error {
 	if err != nil || committedSource.State != "COMMITTED" || !sameReceipt(sourceReceipt, committedSource) {
 		return errors.New("source committed receipt readback mismatch")
 	}
-	committedTarget, err := state.target.GetTargetReceipt(ctx, state.config.PlanID)
-	if err != nil || committedTarget.State != "COMMITTED" || !committedTarget.RestoreVerified ||
-		!sameReceipt(targetReceipt, committedTarget) {
-		return errors.New("target committed receipt readback mismatch")
+	if _, err := state.target.ReadCommitted(ctx, state.config.PlanID, sourceReceipt.TargetSHA256,
+		uint32(sourceReceipt.MaterializationCount)); err != nil {
+		return err
 	}
 	plan.CutoverState = "COMMITTED"
 	return writeReport(state.config.ReportPath, plan)
@@ -366,47 +362,27 @@ func (state *runtimeState) rollback(ctx context.Context) error {
 	if err != nil {
 		return errors.New("read source receipt for rollback")
 	}
-	targetReceipt, targetExists, err := state.target.FindTargetReceipt(ctx, state.config.PlanID)
-	if err != nil {
-		return errors.New("read target receipt for rollback")
-	}
-	if !sourceExists && !targetExists {
+	if !sourceExists {
 		return errors.New("rollback receipt does not exist")
 	}
-	if sourceExists && targetExists && !sameReceipt(sourceReceipt, targetReceipt) {
-		return errors.New("rollback receipts mismatch")
-	}
-	if (sourceExists && sourceReceipt.State == "COMMITTED") || (targetExists && targetReceipt.State == "COMMITTED") {
+	if sourceReceipt.State == "COMMITTED" {
 		return errors.New("rollback is forbidden after irreversible cutover")
 	}
-	if targetExists {
-		if err := state.target.AbortTarget(ctx, targetReceipt); err != nil {
-			return err
-		}
+	if err := state.target.Abort(ctx, state.config.PlanID, state.config.PlanID,
+		sourceReceipt.TargetSHA256, uint32(sourceReceipt.MaterializationCount)); err != nil {
+		return err
 	}
-	if sourceExists {
-		if err := state.source.AbortSource(ctx, sourceReceipt); err != nil {
-			return err
-		}
+	if err := state.source.AbortSource(ctx, sourceReceipt); err != nil {
+		return err
 	}
 	verifiedSource, verifiedSourceExists, err := state.source.FindSourceReceipt(ctx, state.config.PlanID)
 	if err != nil || (verifiedSourceExists && verifiedSource.State != "ABORTED") {
 		return errors.New("source rollback readback mismatch")
 	}
-	verifiedTarget, verifiedTargetExists, err := state.target.FindTargetReceipt(ctx, state.config.PlanID)
-	if err != nil || (verifiedTargetExists && verifiedTarget.State != "ABORTED") {
-		return errors.New("target rollback readback mismatch")
-	}
-	auditReceipt := targetReceipt
-	if sourceExists {
-		auditReceipt = sourceReceipt
-	}
-	sourceState, targetState := "MISSING", "MISSING"
+	auditReceipt := sourceReceipt
+	sourceState, targetState := "MISSING", "ABORTED"
 	if verifiedSourceExists {
 		sourceState = verifiedSource.State
-	}
-	if verifiedTargetExists {
-		targetState = verifiedTarget.State
 	}
 	return writeJSONReport(state.config.ReportPath, model.CutoverAudit{
 		SchemaVersion: "mattercodex.legacy-data-cutover-audit.v1", PlanID: auditReceipt.PlanID,
@@ -436,10 +412,8 @@ func sameReceipt(left, right model.Receipt) bool {
 		left.MaterializationCount == right.MaterializationCount
 }
 
-func commitStateAllowed(sourceState, targetState string) bool {
-	return sourceState == "PREPARED" && targetState == "PREPARED" ||
-		sourceState == "FROZEN" && (targetState == "PREPARED" || targetState == "COMMITTED") ||
-		sourceState == "COMMITTED" && targetState == "COMMITTED"
+func sourceCommitStateAllowed(sourceState string) bool {
+	return sourceState == "PREPARED" || sourceState == "FROZEN" || sourceState == "COMMITTED"
 }
 
 func writeReport(path string, plan model.Plan) error {
