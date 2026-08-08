@@ -61,7 +61,8 @@ query получает `204` при том же effective readiness либо `50
    или stale fallback.
 4. Сверить каждую scraped replica: alert сравнивает число `up` с числом
    `ready=true`/`policy_active=1`, поэтому старая healthy replica не скрывает
-   новую `INVALID`/`NOT_READY` replica.
+   новую `INVALID`/`NOT_READY` replica, а полностью отсутствующий ряд
+   готовности явно считается нулём.
 
 ### EgressGatewayUnsafeDNSAnswers
 

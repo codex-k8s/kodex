@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -114,6 +116,23 @@ func TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener(t *testing.T)
 func TestShutdownBudgetMatchesDeploymentContract(t *testing.T) {
 	if MinimumTerminationGrace != 45*time.Second {
 		t.Fatalf("unexpected minimum termination grace: %s", MinimumTerminationGrace)
+	}
+}
+
+func TestReadinessWorkerResultDistinguishesShutdownFromFailure(t *testing.T) {
+	lifecycle, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := readinessWorkerResult(lifecycle, fmt.Errorf("wait workers: %w", context.Canceled)); err != nil {
+		t.Fatalf("normal lifecycle cancellation must succeed: %v", err)
+	}
+
+	workerFailure := errors.New("readiness refresh failed")
+	err := readinessWorkerResult(context.Background(), workerFailure)
+	if !errors.Is(err, workerFailure) {
+		t.Fatalf("unexpected worker failure must remain fail-closed: %v", err)
+	}
+	if err := readinessWorkerResult(context.Background(), context.Canceled); err == nil {
+		t.Fatal("worker cancellation without lifecycle shutdown must fail")
 	}
 }
 

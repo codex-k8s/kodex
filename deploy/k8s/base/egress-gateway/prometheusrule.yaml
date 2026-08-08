@@ -18,7 +18,7 @@ spec:
             description: Ни одна реплика platform egress gateway не доступна для scrape.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayNotReady
-          expr: sum(up{service="egress-gateway-technical"} == 1) - sum(mattercodex_egress_gateway_readiness{ready="true"} == 1) > 0
+          expr: sum(up{service="egress-gateway-technical"} == 1) - (sum(mattercodex_egress_gateway_readiness{ready="true"} == 1) or vector(0)) > 0
           for: 2m
           labels: {severity: critical}
           annotations:
@@ -26,7 +26,7 @@ spec:
             description: Проверить ACTIVE policy readback и server-owned DNS validation.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/egress-gateway.md
         - alert: EgressGatewayPolicyInactive
-          expr: sum(up{service="egress-gateway-technical"} == 1) - sum(mattercodex_egress_gateway_policy_active == 1) > 0
+          expr: sum(up{service="egress-gateway-technical"} == 1) - (sum(mattercodex_egress_gateway_policy_active == 1) or vector(0)) > 0
           for: 2m
           labels: {severity: critical}
           annotations:

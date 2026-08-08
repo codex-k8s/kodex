@@ -28,11 +28,25 @@ if [[ ! "$gateway_digest" =~ ^sha256:[a-f0-9]{64}$ ]] ||
   exit 2
 fi
 
-if [[ ! "$registry_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
-  [[ "$registry_pull_host" != *.* ]] ||
-  [[ "$registry_pull_host" == *.svc ]] ||
-  [[ "$registry_pull_host" == *.svc.cluster.local ]] ||
-  [[ ${#registry_pull_host} -gt 253 ]]; then
+valid_registry_pull_host() {
+  local host=$1
+  local label
+  local -a labels=()
+
+  [[ ${#host} -le 253 ]] || return 1
+  [[ "$host" == *.* ]] || return 1
+  [[ "$host" != .* && "$host" != *. && "$host" != *..* ]] || return 1
+  [[ "$host" != *.svc && "$host" != *.svc.cluster.local ]] || return 1
+
+  IFS='.' read -r -a labels <<<"$host"
+  ((${#labels[@]} >= 2)) || return 1
+  for label in "${labels[@]}"; do
+    [[ ${#label} -le 63 ]] || return 1
+    [[ "$label" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || return 1
+  done
+}
+
+if ! valid_registry_pull_host "$registry_pull_host"; then
   echo "registry_pull_host must be a node-reachable exact DNS name" >&2
   exit 2
 fi

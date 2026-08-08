@@ -137,11 +137,19 @@ func runActive(
 	case serveErr := <-connectResult:
 		return serveResult("CONNECT", serveErr)
 	case workerErr := <-workerResult:
-		if workerErr != nil && !errors.Is(workerErr, context.Canceled) {
-			return fmt.Errorf("egress gateway readiness worker stopped: %w", workerErr)
-		}
-		return errors.New("egress gateway readiness worker stopped unexpectedly")
+		return readinessWorkerResult(lifecycle, workerErr)
 	}
+}
+
+func readinessWorkerResult(lifecycle context.Context, workerErr error) error {
+	if lifecycleErr := lifecycle.Err(); lifecycleErr != nil &&
+		(workerErr == nil || errors.Is(workerErr, lifecycleErr)) {
+		return nil
+	}
+	if workerErr != nil {
+		return fmt.Errorf("egress gateway readiness worker stopped: %w", workerErr)
+	}
+	return errors.New("egress gateway readiness worker stopped unexpectedly")
 }
 
 func runTechnicalOnly(
