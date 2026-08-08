@@ -47,25 +47,27 @@ type Verifier struct {
 }
 
 type claims struct {
-	Version        int    `json:"v"`
-	Issuer         string `json:"iss"`
-	Audience       string `json:"aud"`
-	Subject        string `json:"sub"`
-	OrganizationID string `json:"organization_id"`
-	ProjectID      string `json:"project_id"`
-	JTI            string `json:"jti"`
-	Revision       uint64 `json:"revision"`
-	TenantOwner    bool   `json:"tenant_owner"`
-	WorkloadID     string `json:"workload_id"`
-	CallerSPIFFEID string `json:"caller_spiffe_id"`
-	SessionID      string `json:"session_id,omitempty"`
-	TurnID         string `json:"turn_id,omitempty"`
-	Attempt        uint32 `json:"attempt,omitempty"`
-	InputSHA256    string `json:"input_sha256,omitempty"`
-	Generation     uint64 `json:"generation,omitempty"`
-	IssuedAt       int64  `json:"iat"`
-	NotBefore      int64  `json:"nbf"`
-	ExpiresAt      int64  `json:"exp"`
+	Version             int    `json:"v"`
+	Issuer              string `json:"iss"`
+	Audience            string `json:"aud"`
+	Subject             string `json:"sub"`
+	OrganizationID      string `json:"organization_id"`
+	ProjectID           string `json:"project_id"`
+	JTI                 string `json:"jti"`
+	Revision            uint64 `json:"revision"`
+	TenantOwner         bool   `json:"tenant_owner"`
+	WorkloadID          string `json:"workload_id"`
+	CallerSPIFFEID      string `json:"caller_spiffe_id"`
+	SessionID           string `json:"session_id,omitempty"`
+	TurnID              string `json:"turn_id,omitempty"`
+	Attempt             uint32 `json:"attempt,omitempty"`
+	InputSHA256         string `json:"input_sha256,omitempty"`
+	Generation          uint64 `json:"generation,omitempty"`
+	SourceRootReference string `json:"source_root_reference,omitempty"`
+	SourceRootSHA256    string `json:"source_root_sha256,omitempty"`
+	IssuedAt            int64  `json:"iat"`
+	NotBefore           int64  `json:"nbf"`
+	ExpiresAt           int64  `json:"exp"`
 }
 
 type providerReceiptClaims struct {
@@ -207,7 +209,8 @@ func (verifier *Verifier) Authenticate(
 		parsed.CallerSPIFFEID != verifier.config.CallerSPIFFEID ||
 		value.ValidateID(parsed.Subject) != nil ||
 		value.ValidateID(parsed.OrganizationID) != nil ||
-		(parsed.ProjectID == "" && verifier.config.WorkloadID != "automation-scheduler") ||
+		(parsed.ProjectID == "" && verifier.config.WorkloadID != "automation-scheduler" &&
+			verifier.config.WorkloadID != "legacy-data-migration") ||
 		(parsed.ProjectID != "" && value.ValidateID(parsed.ProjectID) != nil) ||
 		value.ValidateID(parsed.JTI) != nil ||
 		parsed.Revision == 0 ||
@@ -218,6 +221,14 @@ func (verifier *Verifier) Authenticate(
 		!now.Before(expiresAt.Add(maximumClockSkew)) ||
 		!expiresAt.After(notBefore) ||
 		expiresAt.Sub(issuedAt) > maximumGrantTTL {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	legacyMigration := verifier.config.WorkloadID == "legacy-data-migration"
+	if legacyMigration && (parsed.ProjectID != "" || value.ValidateID(parsed.SourceRootReference) != nil ||
+		!validSHA256(parsed.SourceRootSHA256) || !parsed.TenantOwner) {
+		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
+	}
+	if !legacyMigration && (parsed.SourceRootReference != "" || parsed.SourceRootSHA256 != "") {
 		return authoritytype.ApplicationIdentity{}, errs.ErrUnauthenticated
 	}
 	if (verifier.config.WorkloadID == "agent-runner" ||
@@ -251,6 +262,8 @@ func (verifier *Verifier) Authenticate(
 		BoundAttempt:         parsed.Attempt,
 		BoundInputSHA256:     parsed.InputSHA256,
 		BoundGeneration:      parsed.Generation,
+		SourceRootReference:  parsed.SourceRootReference,
+		SourceRootSHA256:     parsed.SourceRootSHA256,
 	}, nil
 }
 

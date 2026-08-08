@@ -21,7 +21,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-const maximumCredentialBytes = 16 << 10
+const (
+	maximumCredentialBytes     = 16 << 10
+	maximumControlPlaneRPCSize = 9 << 20
+)
 
 type applicationGrantContextKey struct{}
 
@@ -93,8 +96,8 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	rawOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(transport),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(1<<20),
-			grpc.MaxCallSendMsgSize(1<<20),
+			grpc.MaxCallRecvMsgSize(maximumControlPlaneRPCSize),
+			grpc.MaxCallSendMsgSize(maximumControlPlaneRPCSize),
 		),
 	}
 	if config.UnaryClientInterceptor != nil {
@@ -134,8 +137,8 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 		grpc.WithTransportCredentials(transport),
 		grpc.WithChainUnaryInterceptor(interceptors...),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(1<<20),
-			grpc.MaxCallSendMsgSize(1<<20),
+			grpc.MaxCallRecvMsgSize(maximumControlPlaneRPCSize),
+			grpc.MaxCallSendMsgSize(maximumControlPlaneRPCSize),
 		),
 	)
 	if err != nil {

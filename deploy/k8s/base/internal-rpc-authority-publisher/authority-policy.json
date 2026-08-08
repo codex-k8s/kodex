@@ -973,6 +973,50 @@
       },
       {
         "allowed_operation_ids": [
+          "control.legacy-data-migration.readiness",
+          "control.legacy-graph-migration.prepare",
+          "control.legacy-graph-migration.materialize",
+          "control.legacy-graph-migration.read",
+          "control.legacy-graph-migration.abort"
+        ],
+        "application_credential": "LEGACY_DATA_MIGRATION_GRANT",
+        "application_credential_audience": "urn:mattercodex:legacy-data-migration",
+        "application_credential_issuer": "https://control-plane.mattercodex-system.svc.cluster.local/authority/legacy-data-migration",
+        "application_credential_metadata": "authorization",
+        "application_credential_trust_bundle_id": "legacy-data-migration-grants-g1",
+        "authority_proof_audience": "urn:mattercodex:internal-rpc-authority-issuer:legacy-data-migration",
+        "authority_proof_issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "authority_proof_max_age_seconds": 15,
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_sources": [
+          "LEGACY_MIGRATION"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+        "caller_workload_id": "legacy-data-migration",
+        "deadline_milliseconds": 5000,
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "idempotency_scope": "source-root-digest+caller-workload+operation+idempotency-key",
+        "max_attempts": 2,
+        "owner_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "owner_workload_id": "control-plane",
+        "producer_id": "control-plane.legacy-data-migration",
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "source_root",
+          "project",
+          "ownership",
+          "provenance"
+        ],
+        "tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "mattercodex-internal-ca-g1"
+      },
+      {
+        "allowed_operation_ids": [
           "control.interaction.agent-bot.manage",
           "control.interaction.workspace-mapping.manage",
           "control.interaction.workspace-mapping.get",
@@ -5719,6 +5763,130 @@
       },
       {
         "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.legacy-data-migration",
+        "authority_sources": [
+          "LEGACY_MIGRATION"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+        "caller_workload_id": "legacy-data-migration",
+        "full_method": "/controlplane.v1.ControlPlaneService/PrepareLegacyGraphMigration",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "operation_id": "control.legacy-graph-migration.prepare",
+        "permission": "controlplane.legacy_graph_migration.prepare",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.legacy-data-migration",
+        "authority_sources": [
+          "LEGACY_MIGRATION"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+        "caller_workload_id": "legacy-data-migration",
+        "full_method": "/controlplane.v1.ControlPlaneService/MaterializeLegacyGraphMigration",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "operation_id": "control.legacy-graph-migration.materialize",
+        "permission": "controlplane.legacy_graph_migration.materialize",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.legacy-data-migration",
+        "authority_sources": [
+          "LEGACY_MIGRATION"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+        "caller_workload_id": "legacy-data-migration",
+        "full_method": "/controlplane.v1.ControlPlaneService/GetLegacyGraphMigration",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "operation_id": "control.legacy-graph-migration.read",
+        "permission": "controlplane.legacy_graph_migration.read",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.legacy-data-migration",
+        "authority_sources": [
+          "LEGACY_MIGRATION"
+        ],
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+        "caller_workload_id": "legacy-data-migration",
+        "full_method": "/controlplane.v1.ControlPlaneService/AbortLegacyGraphMigration",
+        "issuer": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "operation_id": "control.legacy-graph-migration.abort",
+        "permission": "controlplane.legacy_graph_migration.abort",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_tls_server_name": "control-plane.mattercodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "mattercodex-internal-ca-g1",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
+        "authority_proof_producer_id": "control-plane.legacy-data-migration",
+        "caller_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/legacy-data-migration",
+        "caller_workload_id": "legacy-data-migration",
+        "full_method": "/controlplane.v1.ControlPlaneService/CheckReadiness",
+        "operation_id": "control.legacy-data-migration.readiness",
+        "permission": "controlplane.readiness.check",
+        "project_required": false,
+        "target_spiffe_id": "spiffe://mattercodex.local/ns/mattercodex-system/sa/control-plane",
+        "target_workload_id": "control-plane"
+      },
+      {
+        "audience": "urn:mattercodex:internal-rpc:control-plane",
         "authority_proof_producer_id": "control-plane.interaction-provider-readback",
         "authority_sources": [
           "PROVIDER_READBACK",
@@ -5953,6 +6121,6 @@
     "token_ttl_seconds": 30,
     "trust_domain": "mattercodex.local"
   },
-  "policy_revision": 25,
+  "policy_revision": 26,
   "v": 1
 }

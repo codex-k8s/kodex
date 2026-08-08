@@ -402,6 +402,14 @@ service ControlPlaneService {
   rpc GetIntegrationContinuation(GetIntegrationContinuationRequest) returns (GetIntegrationContinuationResponse);
   // AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
   rpc AcknowledgeIntegrationContinuation(AcknowledgeIntegrationContinuationRequest) returns (AcknowledgeIntegrationContinuationResponse);
+  // PrepareLegacyGraphMigration сохраняет immutable typed plan без business mutation.
+  rpc PrepareLegacyGraphMigration(PrepareLegacyGraphMigrationRequest) returns (PrepareLegacyGraphMigrationResponse);
+  // MaterializeLegacyGraphMigration атомарно создаёт весь owner graph.
+  rpc MaterializeLegacyGraphMigration(MaterializeLegacyGraphMigrationRequest) returns (MaterializeLegacyGraphMigrationResponse);
+  // GetLegacyGraphMigration выполняет version-pinned readback плана.
+  rpc GetLegacyGraphMigration(GetLegacyGraphMigrationRequest) returns (GetLegacyGraphMigrationResponse);
+  // AbortLegacyGraphMigration выбирает ABORTED только для PREPARED плана.
+  rpc AbortLegacyGraphMigration(AbortLegacyGraphMigrationRequest) returns (AbortLegacyGraphMigrationResponse);
   // CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
 }
@@ -1950,7 +1958,6 @@ message ReconcileGitAgentRequest {
   GitReconciliationReceipt reconciliation_receipt = 9;
 }
 
-
 message ReconcileGitAgentResponse {
   Resource agent = 1;
 }
@@ -3168,8 +3175,12 @@ message LegacyConfigurationCutover {
   google.protobuf.Timestamp resolved_at = 20;
 }
 
-message GetLegacyConfigurationCutoverRequest { string legacy_role_id = 1; }
-message GetLegacyConfigurationCutoverResponse { LegacyConfigurationCutover cutover = 1; }
+message GetLegacyConfigurationCutoverRequest {
+  string legacy_role_id = 1;
+}
+message GetLegacyConfigurationCutoverResponse {
+  LegacyConfigurationCutover cutover = 1;
+}
 message ListLegacyConfigurationCutoversRequest {
   uint32 page_size = 1;
   string page_token = 2;
@@ -4869,6 +4880,582 @@ message AcknowledgeIntegrationContinuationRequest {
 
 message AcknowledgeIntegrationContinuationResponse {
   IntegrationContinuation continuation = 1;
+}
+
+// LegacyGraphMigrationState задаёт single-winner lifecycle owner plan.
+enum LegacyGraphMigrationState {
+  LEGACY_GRAPH_MIGRATION_STATE_UNSPECIFIED = 0;
+  LEGACY_GRAPH_MIGRATION_STATE_PREPARED = 1;
+  LEGACY_GRAPH_MIGRATION_STATE_COMMITTED = 2;
+  LEGACY_GRAPH_MIGRATION_STATE_ABORTED = 3;
+}
+
+// LegacyGraphVerificationState отделяет terminal state от результата readback.
+enum LegacyGraphVerificationState {
+  LEGACY_GRAPH_VERIFICATION_STATE_UNSPECIFIED = 0;
+  LEGACY_GRAPH_VERIFICATION_STATE_VERIFIED = 1;
+  LEGACY_GRAPH_VERIFICATION_STATE_DRIFTED = 2;
+}
+
+// LegacySourceTable — закрытый inventory ровно 50 таблиц source schema.
+enum LegacySourceTable {
+  LEGACY_SOURCE_TABLE_UNSPECIFIED = 0;
+  LEGACY_SOURCE_TABLE_AGENT_DELEGATION_CALLBACK_DELIVERIES = 1;
+  LEGACY_SOURCE_TABLE_AGENT_DELEGATION_CALLBACK_MANIFESTS = 2;
+  LEGACY_SOURCE_TABLE_AGENT_DELEGATIONS = 3;
+  LEGACY_SOURCE_TABLE_AGENT_FLOWS = 4;
+  LEGACY_SOURCE_TABLE_AGENT_PROFILES = 5;
+  LEGACY_SOURCE_TABLE_AGENT_PROMPT_TEMPLATES = 6;
+  LEGACY_SOURCE_TABLE_AGENT_ROLE_RUNTIME_VARIABLES = 7;
+  LEGACY_SOURCE_TABLE_AGENT_ROLES = 8;
+  LEGACY_SOURCE_TABLE_AGENT_RUNS = 9;
+  LEGACY_SOURCE_TABLE_AGENT_SESSION_TURNS = 10;
+  LEGACY_SOURCE_TABLE_AGENT_SESSIONS = 11;
+  LEGACY_SOURCE_TABLE_AUDIT_EVENTS = 12;
+  LEGACY_SOURCE_TABLE_AUTOMATION_AUDIT_EVENTS = 13;
+  LEGACY_SOURCE_TABLE_AUTOMATION_SCHEDULES = 14;
+  LEGACY_SOURCE_TABLE_CHAT_PARTICIPANTS = 15;
+  LEGACY_SOURCE_TABLE_CHAT_REPOSITORIES = 16;
+  LEGACY_SOURCE_TABLE_CHATS = 17;
+  LEGACY_SOURCE_TABLE_CLUSTER_ADMIN_BINDINGS = 18;
+  LEGACY_SOURCE_TABLE_CLUSTER_BOT_BINDINGS = 19;
+  LEGACY_SOURCE_TABLE_CLUSTER_DELIVERY_FENCES = 20;
+  LEGACY_SOURCE_TABLE_CLUSTER_DEPENDENCIES = 21;
+  LEGACY_SOURCE_TABLE_CLUSTER_PROMPT_TEMPLATES = 22;
+  LEGACY_SOURCE_TABLE_CLUSTER_REVOCATIONS = 23;
+  LEGACY_SOURCE_TABLE_CLUSTER_RUNTIME_VARIABLE_BINDINGS = 24;
+  LEGACY_SOURCE_TABLE_CLUSTER_SESSION_BINDINGS = 25;
+  LEGACY_SOURCE_TABLE_CLUSTER_SUBJECTS = 26;
+  LEGACY_SOURCE_TABLE_CREDENTIALS = 27;
+  LEGACY_SOURCE_TABLE_GITHUB_ACCOUNTS = 28;
+  LEGACY_SOURCE_TABLE_INTERACTION_CAPABILITIES = 29;
+  LEGACY_SOURCE_TABLE_MATTERMOST_BOT_IDENTITIES = 30;
+  LEGACY_SOURCE_TABLE_MEMORY_EMBEDDINGS = 31;
+  LEGACY_SOURCE_TABLE_MEMORY_RECORD_VERSIONS = 32;
+  LEGACY_SOURCE_TABLE_MEMORY_RECORDS = 33;
+  LEGACY_SOURCE_TABLE_OPENAI_ACCOUNTS = 34;
+  LEGACY_SOURCE_TABLE_OWNER_ATTENTION_REQUESTS = 35;
+  LEGACY_SOURCE_TABLE_POLICY_REVISIONS = 36;
+  LEGACY_SOURCE_TABLE_PROCESS_RUNS = 37;
+  LEGACY_SOURCE_TABLE_PROCESS_TURNS = 38;
+  LEGACY_SOURCE_TABLE_PROJECT_REPOSITORIES = 39;
+  LEGACY_SOURCE_TABLE_PROJECT_RUNTIME_VARIABLES = 40;
+  LEGACY_SOURCE_TABLE_PROJECTS = 41;
+  LEGACY_SOURCE_TABLE_REPOSITORIES = 42;
+  LEGACY_SOURCE_TABLE_ROLE_CAPABILITIES = 43;
+  LEGACY_SOURCE_TABLE_ROLE_RELATIONSHIP_POLICIES = 44;
+  LEGACY_SOURCE_TABLE_RUNTIME_AGENT_BINDING_DISCOVERIES = 45;
+  LEGACY_SOURCE_TABLE_RUNTIME_AGENT_BINDING_OUTBOX = 46;
+  LEGACY_SOURCE_TABLE_SCHEDULE_OCCURRENCES = 47;
+  LEGACY_SOURCE_TABLE_SCHEDULED_RUNS = 48;
+  LEGACY_SOURCE_TABLE_THREAD_CONTEXTS = 49;
+  LEGACY_SOURCE_TABLE_WORK_CLAIMS = 50;
+}
+
+enum LegacySourceDispositionKind {
+  LEGACY_SOURCE_DISPOSITION_KIND_UNSPECIFIED = 0;
+  LEGACY_SOURCE_DISPOSITION_KIND_MATERIALIZE = 1;
+  LEGACY_SOURCE_DISPOSITION_KIND_ARCHIVE_TERMINAL = 2;
+  LEGACY_SOURCE_DISPOSITION_KIND_REJECT_NONEMPTY = 3;
+}
+
+message LegacySourceDisposition {
+  LegacySourceTable source_table = 1;
+  LegacySourceDispositionKind disposition = 2;
+  uint64 row_count = 3;
+  string source_sha256 = 4;
+  string terminal_state_sha256 = 5;
+}
+
+message LegacyOperationSource {
+  LegacySourceTable source_table = 1;
+  string source_ref = 2;
+  uint64 source_revision = 3;
+  string source_sha256 = 4;
+  string local_ref = 5;
+}
+
+message LegacyProjectOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string slug = 3;
+  string description = 4;
+  string locale = 5;
+}
+
+message LegacyTeamOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  string external_team_ref = 4;
+  repeated string role_definition_refs = 5;
+}
+
+message LegacyChatOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  RoomType room_type = 4;
+  string external_channel_ref = 5;
+  string work_policy = 6;
+  string default_agent_ref = 7;
+}
+
+message LegacyArtifactOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string artifact_kind = 3;
+  string direction = 4;
+  string storage_ref = 5;
+  string storage_version = 6;
+  uint64 size_bytes = 7;
+  string media_type = 8;
+  string sha256 = 9;
+  string retention_policy_ref = 10;
+  uint64 scan_policy_revision = 11;
+  string scan_evidence_sha256 = 12;
+  string scanner_workload_id = 13;
+  google.protobuf.Timestamp scanned_at = 14;
+}
+
+message LegacyCredentialBindingOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string purpose = 3;
+  string secret_ref = 4;
+  string immutable_secret_ref = 5;
+  string principal_ref = 6;
+  uint64 revision = 7;
+  repeated string provider_capabilities = 8;
+  uint64 observed_usage = 9;
+  uint64 observed_limit = 10;
+  uint64 observation_revision = 11;
+  google.protobuf.Timestamp observed_at = 12;
+  string content_version = 13;
+  string content_sha256 = 14;
+}
+
+message LegacyRepositoryWorkspaceOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string repository_ref = 3;
+  string workspace_mode = 4;
+  string default_branch = 5;
+  string credential_binding_ref = 6;
+  string snapshot_artifact_ref = 7;
+}
+
+message LegacyRoleDefinitionOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  string description = 4;
+  repeated string capabilities = 5;
+  repeated string allowed_role_refs = 6;
+  string role_image_recipe_ref = 7;
+}
+
+message LegacyInstructionSetOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  string locale = 4;
+  string content = 5;
+  string content_sha256 = 6;
+  string validation_sha256 = 7;
+  string content_artifact_ref = 8;
+}
+
+message LegacyProviderConnectionReferenceOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  string provider = 4;
+  string server_reference = 5;
+  uint64 reference_version = 6;
+  uint64 reference_generation = 7;
+  string reference_sha256 = 8;
+  string masked_label = 9;
+  string masked_status = 10;
+  repeated string capabilities = 11;
+  google.protobuf.Timestamp observed_at = 12;
+  string receipt_id = 13;
+  uint64 receipt_version = 14;
+  string receipt_sha256 = 15;
+  string credential_binding_ref = 16;
+}
+
+message LegacyProviderPoolBinding {
+  string provider_reference_ref = 1;
+  uint32 weight = 2;
+}
+
+message LegacyProviderPoolOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  string policy = 4;
+  uint64 policy_revision = 5;
+  google.protobuf.Duration observation_max_age = 6;
+  repeated LegacyProviderPoolBinding bindings = 7;
+  string eligibility_snapshot_sha256 = 8;
+}
+
+message LegacyRoleImageRecipeOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  RoleImageRecipeInput input = 3;
+  uint64 generation = 4;
+  string spec_sha256 = 5;
+  uint64 policy_revision = 6;
+  string policy_sha256 = 7;
+  uint64 runtime_contract_revision = 8;
+  string runtime_contract_sha256 = 9;
+}
+
+message LegacyImageBuildOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string recipe_ref = 3;
+  uint32 attempt = 4;
+  string immutable_build_sha256 = 5;
+  LifecycleState terminal_state = 6;
+  string terminal_evidence_sha256 = 7;
+  string staging_reference = 8;
+  string manifest_digest = 9;
+  string provenance_sha256 = 10;
+}
+
+message LegacyImageArtifactOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string recipe_ref = 3;
+  string image_build_ref = 4;
+  string manifest_digest = 5;
+  string promoted_reference = 6;
+  uint64 admission_revision = 7;
+  string admission_receipt_sha256 = 8;
+  string admission_receipt_manifest_digest = 9;
+  string signature_sha256 = 10;
+  string promotion_readback_sha256 = 11;
+  string sbom_sha256 = 12;
+  string vulnerability_evidence_sha256 = 13;
+  string signature_identity = 14;
+  google.protobuf.Timestamp promoted_at = 15;
+}
+
+message LegacyAgentOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  string role_definition_ref = 4;
+  string instruction_set_ref = 5;
+  string provider_pool_ref = 6;
+  string role_image_recipe_ref = 7;
+  repeated string capabilities = 8;
+  bool enabled = 9;
+  string bot_identity_ref = 10;
+  string bot_username = 11;
+  string bot_team_ref = 12;
+  string bot_masked_status = 13;
+  string bot_receipt_id = 14;
+  uint64 bot_receipt_version = 15;
+  string bot_receipt_sha256 = 16;
+  uint64 bot_provider_revision = 17;
+  uint64 bot_provider_generation = 18;
+}
+
+message LegacyAgentAssignmentOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string agent_ref = 3;
+  string room_ref = 4;
+  uint64 assignment_generation = 5;
+}
+
+message LegacyScheduleOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string stable_key = 3;
+  string cron_expression = 4;
+  string timezone = 5;
+  ScheduleOverlapPolicy overlap_policy = 6;
+  ScheduleMisfirePolicy misfire_policy = 7;
+  string agent_ref = 8;
+  string assignment_ref = 9;
+  string instruction_set_ref = 10;
+  string provider_pool_ref = 11;
+  string room_ref = 12;
+  string role_image_recipe_ref = 13;
+  string effective_input_sha256 = 14;
+  google.protobuf.Timestamp next_run_at = 15;
+  LifecycleState state = 16;
+  string calendar = 17;
+  google.protobuf.Duration misfire_grace = 18;
+  string delivery_policy = 19;
+  uint32 maximum_attempts = 20;
+  google.protobuf.Duration initial_backoff = 21;
+  google.protobuf.Duration maximum_backoff = 22;
+  google.protobuf.Duration dead_letter_after = 23;
+  string session_policy = 24;
+  string notification_policy = 25;
+  google.protobuf.Duration maximum_execution_duration = 26;
+  bool coalesce = 27;
+}
+
+message LegacyRuntimeComponent {
+  string local_ref = 1;
+  string projection_sha256 = 2;
+}
+
+message LegacyRuntimeRevisionOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string session_ref = 3;
+  string chat_ref = 4;
+  string agent_ref = 5;
+  string assignment_ref = 6;
+  string role_definition_ref = 7;
+  string instruction_set_ref = 8;
+  string provider_pool_ref = 9;
+  string provider_credential_ref = 10;
+  string role_image_recipe_ref = 11;
+  string image_build_ref = 12;
+  string image_artifact_ref = 13;
+  string prompt_artifact_ref = 14;
+  string manifest_sha256 = 15;
+  string image_reference = 16;
+  string effective_runtime_sha256 = 17;
+  string provider_account_name = 18;
+  string codex_model = 19;
+  string codex_sandbox = 20;
+  string codex_approval_policy = 21;
+  uint64 authority_policy_revision = 22;
+  string authority_policy_sha256 = 23;
+  repeated LegacyRuntimeComponent components = 24;
+  google.protobuf.Timestamp created_at = 25;
+}
+
+message LegacySessionOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string agent_ref = 3;
+  string provider_pool_ref = 4;
+  string assignment_ref = 5;
+  string chat_ref = 6;
+  uint64 last_turn_sequence = 7;
+  string archive_ref = 8;
+  LifecycleState state = 9;
+}
+
+message LegacyTurnOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string session_ref = 3;
+  uint64 sequence = 4;
+  string source_turn_ref = 5;
+  string prompt_artifact_ref = 6;
+  string runtime_revision_ref = 7;
+  string predecessor_turn_ref = 8;
+  string parent_turn_ref = 9;
+  string process_run_ref = 10;
+  uint32 attempt = 11;
+  string effective_input_sha256 = 12;
+  string outcome = 13;
+  string result_artifact_ref = 14;
+  LifecycleState state = 15;
+}
+
+message LegacyTurnAttemptOperation {
+  LegacyOperationSource source = 1;
+  string turn_ref = 2;
+  uint32 attempt = 3;
+  string immutable_input_sha256 = 4;
+  string runtime_revision_ref = 5;
+  LifecycleState state = 6;
+  string outcome = 7;
+  google.protobuf.Timestamp started_at = 8;
+  google.protobuf.Timestamp finished_at = 9;
+}
+
+message LegacyProcessRunOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string root_session_ref = 3;
+  string root_turn_ref = 4;
+  string root_attempt_ref = 5;
+  string runtime_revision_ref = 6;
+  string parent_process_ref = 7;
+  string launching_turn_ref = 8;
+  string launching_attempt_ref = 9;
+  string immutable_input_sha256 = 10;
+  uint64 legacy_policy_revision = 11;
+  string legacy_policy_sha256 = 12;
+  string playbook_ref = 13;
+  string root_trigger_ref = 14;
+  string outcome = 15;
+  LifecycleState state = 16;
+  string delegation_ref = 17;
+  string target_session_ref = 18;
+  string target_turn_ref = 19;
+  string target_attempt_ref = 20;
+}
+
+message LegacyDelegationEdgeOperation {
+  LegacyOperationSource source = 1;
+  string parent_process_ref = 2;
+  string parent_session_ref = 3;
+  string parent_turn_ref = 4;
+  string parent_attempt_ref = 5;
+  string child_role_ref = 6;
+  string child_session_ref = 7;
+  string child_turn_ref = 8;
+  string child_attempt_ref = 9;
+  uint64 grant_generation = 10;
+  string child_process_ref = 11;
+}
+
+message LegacyCallbackManifestOperation {
+  LegacyOperationSource source = 1;
+  string delegation_ref = 2;
+  string callback_process_ref = 3;
+  repeated string destinations = 4;
+  string manifest_sha256 = 5;
+}
+
+enum LegacyCallbackDeliveryState {
+  LEGACY_CALLBACK_DELIVERY_STATE_UNSPECIFIED = 0;
+  LEGACY_CALLBACK_DELIVERY_STATE_DELIVERED = 1;
+  LEGACY_CALLBACK_DELIVERY_STATE_FAILED = 2;
+  LEGACY_CALLBACK_DELIVERY_STATE_CANCELLED = 3;
+}
+
+message LegacyCallbackDeliveryOperation {
+  LegacyOperationSource source = 1;
+  string callback_manifest_ref = 2;
+  string destination = 3;
+  string receipt_sha256 = 4;
+  LegacyCallbackDeliveryState terminal_state = 5;
+  google.protobuf.Timestamp delivered_at = 6;
+}
+
+message LegacyMemoryRecordOperation {
+  LegacyOperationSource source = 1;
+  string name = 2;
+  string memory_kind = 3;
+  string content = 4;
+  string content_sha256 = 5;
+  uint64 source_version = 6;
+  LifecycleState state = 7;
+}
+
+message LegacyGraphOperation {
+  oneof operation {
+    LegacyProjectOperation project = 1;
+    LegacyTeamOperation team = 2;
+    LegacyChatOperation chat = 3;
+    LegacyArtifactOperation artifact = 4;
+    LegacyCredentialBindingOperation credential_binding = 5;
+    LegacyRepositoryWorkspaceOperation repository_workspace = 6;
+    LegacyRoleDefinitionOperation role_definition = 7;
+    LegacyInstructionSetOperation instruction_set = 8;
+    LegacyProviderConnectionReferenceOperation provider_reference = 9;
+    LegacyProviderPoolOperation provider_pool = 10;
+    LegacyRoleImageRecipeOperation role_image_recipe = 11;
+    LegacyImageBuildOperation image_build = 12;
+    LegacyImageArtifactOperation image_artifact = 13;
+    LegacyAgentOperation agent = 14;
+    LegacyAgentAssignmentOperation agent_assignment = 15;
+    LegacyScheduleOperation schedule = 16;
+    LegacyRuntimeRevisionOperation runtime_revision = 17;
+    LegacySessionOperation session = 18;
+    LegacyTurnOperation turn = 19;
+    LegacyTurnAttemptOperation turn_attempt = 20;
+    LegacyProcessRunOperation process_run = 21;
+    LegacyDelegationEdgeOperation delegation_edge = 22;
+    LegacyCallbackManifestOperation callback_manifest = 23;
+    LegacyCallbackDeliveryOperation callback_delivery = 24;
+    LegacyMemoryRecordOperation memory_record = 25;
+  }
+}
+
+message PrepareLegacyGraphMigrationRequest {
+  string idempotency_key = 1;
+  string plan_id = 2;
+  string source_root_reference = 3;
+  string source_root_sha256 = 4;
+  string source_snapshot_sha256 = 5;
+  repeated LegacySourceDisposition source_dispositions = 6;
+  repeated LegacyGraphOperation operations = 7;
+}
+
+message MaterializeLegacyGraphMigrationRequest {
+  string idempotency_key = 1;
+  string plan_id = 2;
+  string expected_semantic_sha256 = 3;
+}
+
+message GetLegacyGraphMigrationRequest {
+  string plan_id = 1;
+  bool verify_committed = 2;
+}
+
+message AbortLegacyGraphMigrationRequest {
+  string idempotency_key = 1;
+  string plan_id = 2;
+  string expected_semantic_sha256 = 3;
+}
+
+message LegacyOperationReceipt {
+  uint32 ordinal = 1;
+  string operation_kind = 2;
+  string input_sha256 = 3;
+  string target_id = 4;
+  string target_kind = 5;
+  uint64 target_version = 6;
+  LifecycleState target_state = 7;
+  string projection_sha256 = 8;
+  string provenance_sha256 = 9;
+  repeated string audit_ids = 10;
+  repeated string event_ids = 11;
+  repeated uint64 event_sequences = 12;
+  string provenance_evidence_sha256 = 13;
+}
+
+message LegacyGraphDrift {
+  uint32 ordinal = 1;
+  string predicate = 2;
+}
+
+message LegacyGraphMigration {
+  string plan_id = 1;
+  LegacyGraphMigrationState state = 2;
+  LegacyGraphVerificationState verification_state = 3;
+  string semantic_sha256 = 4;
+  string source_snapshot_sha256 = 5;
+  string project_id = 6;
+  uint32 operation_count = 7;
+  uint32 archived_source_count = 8;
+  google.protobuf.Timestamp prepared_at = 9;
+  google.protobuf.Timestamp terminal_at = 10;
+  repeated LegacyOperationReceipt operation_receipts = 11;
+  repeated LegacyGraphDrift drift = 12;
+}
+
+message PrepareLegacyGraphMigrationResponse {
+  LegacyGraphMigration migration = 1;
+}
+
+message MaterializeLegacyGraphMigrationResponse {
+  LegacyGraphMigration migration = 1;
+}
+
+message GetLegacyGraphMigrationResponse {
+  LegacyGraphMigration migration = 1;
+}
+
+message AbortLegacyGraphMigrationResponse {
+  LegacyGraphMigration migration = 1;
 }
 
 // CheckReadinessRequest описывает версионированное сообщение контракта control-plane.

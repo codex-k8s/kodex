@@ -191,6 +191,10 @@ const (
 	ControlPlaneService_FailIntegrationExecution_FullMethodName                 = "/controlplane.v1.ControlPlaneService/FailIntegrationExecution"
 	ControlPlaneService_GetIntegrationContinuation_FullMethodName               = "/controlplane.v1.ControlPlaneService/GetIntegrationContinuation"
 	ControlPlaneService_AcknowledgeIntegrationContinuation_FullMethodName       = "/controlplane.v1.ControlPlaneService/AcknowledgeIntegrationContinuation"
+	ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName              = "/controlplane.v1.ControlPlaneService/PrepareLegacyGraphMigration"
+	ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName          = "/controlplane.v1.ControlPlaneService/MaterializeLegacyGraphMigration"
+	ControlPlaneService_GetLegacyGraphMigration_FullMethodName                  = "/controlplane.v1.ControlPlaneService/GetLegacyGraphMigration"
+	ControlPlaneService_AbortLegacyGraphMigration_FullMethodName                = "/controlplane.v1.ControlPlaneService/AbortLegacyGraphMigration"
 	ControlPlaneService_CheckReadiness_FullMethodName                           = "/controlplane.v1.ControlPlaneService/CheckReadiness"
 )
 
@@ -581,6 +585,14 @@ type ControlPlaneServiceClient interface {
 	GetIntegrationContinuation(ctx context.Context, in *GetIntegrationContinuationRequest, opts ...grpc.CallOption) (*GetIntegrationContinuationResponse, error)
 	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
 	AcknowledgeIntegrationContinuation(ctx context.Context, in *AcknowledgeIntegrationContinuationRequest, opts ...grpc.CallOption) (*AcknowledgeIntegrationContinuationResponse, error)
+	// PrepareLegacyGraphMigration сохраняет immutable typed plan без business mutation.
+	PrepareLegacyGraphMigration(ctx context.Context, in *PrepareLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*PrepareLegacyGraphMigrationResponse, error)
+	// MaterializeLegacyGraphMigration атомарно создаёт весь owner graph.
+	MaterializeLegacyGraphMigration(ctx context.Context, in *MaterializeLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*MaterializeLegacyGraphMigrationResponse, error)
+	// GetLegacyGraphMigration выполняет version-pinned readback плана.
+	GetLegacyGraphMigration(ctx context.Context, in *GetLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*GetLegacyGraphMigrationResponse, error)
+	// AbortLegacyGraphMigration выбирает ABORTED только для PREPARED плана.
+	AbortLegacyGraphMigration(ctx context.Context, in *AbortLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*AbortLegacyGraphMigrationResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 }
@@ -2313,6 +2325,46 @@ func (c *controlPlaneServiceClient) AcknowledgeIntegrationContinuation(ctx conte
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) PrepareLegacyGraphMigration(ctx context.Context, in *PrepareLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*PrepareLegacyGraphMigrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareLegacyGraphMigrationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) MaterializeLegacyGraphMigration(ctx context.Context, in *MaterializeLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*MaterializeLegacyGraphMigrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeLegacyGraphMigrationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetLegacyGraphMigration(ctx context.Context, in *GetLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*GetLegacyGraphMigrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLegacyGraphMigrationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetLegacyGraphMigration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) AbortLegacyGraphMigration(ctx context.Context, in *AbortLegacyGraphMigrationRequest, opts ...grpc.CallOption) (*AbortLegacyGraphMigrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AbortLegacyGraphMigrationResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_AbortLegacyGraphMigration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckReadinessResponse)
@@ -2710,6 +2762,14 @@ type ControlPlaneServiceServer interface {
 	GetIntegrationContinuation(context.Context, *GetIntegrationContinuationRequest) (*GetIntegrationContinuationResponse, error)
 	// AcknowledgeIntegrationContinuation фиксирует одно server-owned rejoin ACK.
 	AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error)
+	// PrepareLegacyGraphMigration сохраняет immutable typed plan без business mutation.
+	PrepareLegacyGraphMigration(context.Context, *PrepareLegacyGraphMigrationRequest) (*PrepareLegacyGraphMigrationResponse, error)
+	// MaterializeLegacyGraphMigration атомарно создаёт весь owner graph.
+	MaterializeLegacyGraphMigration(context.Context, *MaterializeLegacyGraphMigrationRequest) (*MaterializeLegacyGraphMigrationResponse, error)
+	// GetLegacyGraphMigration выполняет version-pinned readback плана.
+	GetLegacyGraphMigration(context.Context, *GetLegacyGraphMigrationRequest) (*GetLegacyGraphMigrationResponse, error)
+	// AbortLegacyGraphMigration выбирает ABORTED только для PREPARED плана.
+	AbortLegacyGraphMigration(context.Context, *AbortLegacyGraphMigrationRequest) (*AbortLegacyGraphMigrationResponse, error)
 	// CheckReadiness проверяет полномочия, PostgreSQL, кэш и издателя outbox.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
 	mustEmbedUnimplementedControlPlaneServiceServer()
@@ -3237,6 +3297,18 @@ func (UnimplementedControlPlaneServiceServer) GetIntegrationContinuation(context
 }
 func (UnimplementedControlPlaneServiceServer) AcknowledgeIntegrationContinuation(context.Context, *AcknowledgeIntegrationContinuationRequest) (*AcknowledgeIntegrationContinuationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AcknowledgeIntegrationContinuation not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) PrepareLegacyGraphMigration(context.Context, *PrepareLegacyGraphMigrationRequest) (*PrepareLegacyGraphMigrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareLegacyGraphMigration not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) MaterializeLegacyGraphMigration(context.Context, *MaterializeLegacyGraphMigrationRequest) (*MaterializeLegacyGraphMigrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeLegacyGraphMigration not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetLegacyGraphMigration(context.Context, *GetLegacyGraphMigrationRequest) (*GetLegacyGraphMigrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLegacyGraphMigration not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) AbortLegacyGraphMigration(context.Context, *AbortLegacyGraphMigrationRequest) (*AbortLegacyGraphMigrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AbortLegacyGraphMigration not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
@@ -6358,6 +6430,78 @@ func _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler(srv interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_PrepareLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareLegacyGraphMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).PrepareLegacyGraphMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).PrepareLegacyGraphMigration(ctx, req.(*PrepareLegacyGraphMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_MaterializeLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeLegacyGraphMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).MaterializeLegacyGraphMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).MaterializeLegacyGraphMigration(ctx, req.(*MaterializeLegacyGraphMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLegacyGraphMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetLegacyGraphMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetLegacyGraphMigration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetLegacyGraphMigration(ctx, req.(*GetLegacyGraphMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_AbortLegacyGraphMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AbortLegacyGraphMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).AbortLegacyGraphMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_AbortLegacyGraphMigration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).AbortLegacyGraphMigration(ctx, req.(*AbortLegacyGraphMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckReadinessRequest)
 	if err := dec(in); err != nil {
@@ -7070,6 +7214,22 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AcknowledgeIntegrationContinuation",
 			Handler:    _ControlPlaneService_AcknowledgeIntegrationContinuation_Handler,
+		},
+		{
+			MethodName: "PrepareLegacyGraphMigration",
+			Handler:    _ControlPlaneService_PrepareLegacyGraphMigration_Handler,
+		},
+		{
+			MethodName: "MaterializeLegacyGraphMigration",
+			Handler:    _ControlPlaneService_MaterializeLegacyGraphMigration_Handler,
+		},
+		{
+			MethodName: "GetLegacyGraphMigration",
+			Handler:    _ControlPlaneService_GetLegacyGraphMigration_Handler,
+		},
+		{
+			MethodName: "AbortLegacyGraphMigration",
+			Handler:    _ControlPlaneService_AbortLegacyGraphMigration_Handler,
 		},
 		{
 			MethodName: "CheckReadiness",

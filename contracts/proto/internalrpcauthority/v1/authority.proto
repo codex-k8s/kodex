@@ -115,6 +115,7 @@ enum AuthoritySource {
   AUTHORITY_SOURCE_IMAGE_BUILD = 8;
   AUTHORITY_SOURCE_IMAGE_ARTIFACT = 9;
   AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM = 10;
+  AUTHORITY_SOURCE_LEGACY_MIGRATION = 11;
 }
 
 // WorkloadAuthorityRole задаёт закрытую роль одного authority sidecar либо

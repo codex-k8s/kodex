@@ -232,6 +232,7 @@ func authoritySource(value string) internalrpcauthorityv1.AuthoritySource {
 		"IMAGE_BUILD":              internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_BUILD,
 		"IMAGE_ARTIFACT":           internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_ARTIFACT,
 		"IMAGE_PROMOTION_CLAIM":    internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM,
+		"LEGACY_MIGRATION":         internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_LEGACY_MIGRATION,
 	}[value]
 }
 
