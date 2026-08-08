@@ -12,12 +12,13 @@ import (
 )
 
 type Definition struct {
-	ID        string
-	Version   uint64
-	Digest    string
-	Source    []byte
-	Tools     []Tool
-	CreatedAt time.Time
+	ID                    string
+	Version               uint64
+	Digest                string
+	ValidationEndpointRef string
+	Source                []byte
+	Tools                 []Tool
+	CreatedAt             time.Time
 }
 
 type Tool struct {
@@ -214,6 +215,7 @@ type Invocation struct {
 type Approval struct {
 	ID                 string
 	InvocationID       string
+	Version            uint64
 	RequestHash        string
 	Preview            json.RawMessage
 	Status             enum.ApprovalStatus

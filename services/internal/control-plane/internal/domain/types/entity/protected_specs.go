@@ -217,6 +217,13 @@ type ProviderConnectionReferenceSpec struct {
 	CredentialBindingID      string    `json:"credentialBindingId"`
 	CredentialBindingVersion uint64    `json:"credentialBindingVersion"`
 	CredentialBindingSHA256  string    `json:"credentialBindingSha256"`
+	ObservedUsage            uint64    `json:"observedUsage"`
+	ObservedLimit            uint64    `json:"observedLimit"`
+	ObservationRevision      uint64    `json:"observationRevision"`
+	ObservationExpiresAt     time.Time `json:"observationExpiresAt"`
+	WindowDurationSeconds    uint64    `json:"windowDurationSeconds"`
+	ResetsAt                 time.Time `json:"resetsAt"`
+	ObservationSHA256        string    `json:"observationSha256"`
 }
 
 func (ProviderConnectionReferenceSpec) Kind() enum.Kind { return enum.KindProviderReference }
@@ -229,6 +236,11 @@ func (spec ProviderConnectionReferenceSpec) Validate() error {
 		!validSHA256(spec.ReceiptSHA256) || value.ValidateID(spec.CredentialBindingID) != nil ||
 		spec.CredentialBindingVersion == 0 || !validSHA256(spec.CredentialBindingSHA256) {
 		return errors.New("provider connection reference specification is invalid")
+	}
+	if spec.Eligible && (spec.ObservedLimit == 0 || spec.ObservedUsage > spec.ObservedLimit ||
+		spec.ObservationRevision == 0 || !spec.ObservationExpiresAt.After(spec.ObservedAt) ||
+		spec.WindowDurationSeconds == 0 || spec.ResetsAt.IsZero() || !validSHA256(spec.ObservationSHA256)) {
+		return errors.New("provider capacity observation is invalid")
 	}
 	switch spec.MaskedStatus {
 	case "AVAILABLE", "DEGRADED":
@@ -258,13 +270,21 @@ func validProviderUsername(username string) bool {
 }
 
 type ProviderPoolBinding struct {
-	ProviderConnectionReferenceID string `json:"providerConnectionReferenceId"`
-	ProviderConnectionStableKey   string `json:"providerConnectionStableKey"`
-	ReferenceVersion              uint64 `json:"referenceVersion"`
-	ReferenceSHA256               string `json:"referenceSha256"`
-	Weight                        uint32 `json:"weight"`
-	Eligible                      bool   `json:"eligible"`
-	MaskedStatus                  string `json:"maskedStatus"`
+	ProviderConnectionReferenceID string    `json:"providerConnectionReferenceId"`
+	ProviderConnectionStableKey   string    `json:"providerConnectionStableKey"`
+	ReferenceVersion              uint64    `json:"referenceVersion"`
+	ReferenceSHA256               string    `json:"referenceSha256"`
+	Weight                        uint32    `json:"weight"`
+	Eligible                      bool      `json:"eligible"`
+	MaskedStatus                  string    `json:"maskedStatus"`
+	ObservedUsage                 uint64    `json:"observedUsage"`
+	ObservedLimit                 uint64    `json:"observedLimit"`
+	ObservationRevision           uint64    `json:"observationRevision"`
+	ObservedAt                    time.Time `json:"observedAt"`
+	ObservationExpiresAt          time.Time `json:"observationExpiresAt"`
+	ObservationSHA256             string    `json:"observationSha256"`
+	WindowDurationSeconds         uint64    `json:"windowDurationSeconds"`
+	ResetsAt                      time.Time `json:"resetsAt"`
 }
 
 // ProviderPoolSpec хранит immutable eligibility snapshot.
@@ -295,6 +315,11 @@ func (spec ProviderPoolSpec) Validate() error {
 			!validSHA256(binding.ReferenceSHA256) || binding.Weight == 0 || binding.Weight > 10000 ||
 			!binding.Eligible || (binding.MaskedStatus != "AVAILABLE" && binding.MaskedStatus != "DEGRADED") {
 			return errors.New("provider pool binding is invalid")
+		}
+		if binding.ObservedLimit == 0 || binding.ObservedUsage > binding.ObservedLimit || binding.ObservationRevision == 0 ||
+			binding.ObservedAt.IsZero() || !binding.ObservationExpiresAt.After(binding.ObservedAt) || !validSHA256(binding.ObservationSHA256) ||
+			binding.WindowDurationSeconds == 0 || binding.ResetsAt.IsZero() {
+			return errors.New("provider pool capacity observation is invalid")
 		}
 		ids = append(ids, binding.ProviderConnectionReferenceID)
 	}

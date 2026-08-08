@@ -54,7 +54,7 @@ func (server *Server) CheckReadiness(
 		return nil, status.Error(codes.Unavailable, "integration gateway owner readiness unavailable")
 	}
 	return &integrationgatewayv1.IntegrationResultServiceCheckReadinessResponse{
-		Ready: true, SchemaVersion: 1, AuthorityReady: true, PostgresReady: true,
+		Ready: true, SchemaVersion: 20260807000600, AuthorityReady: true, PostgresReady: true,
 	}, nil
 }
 

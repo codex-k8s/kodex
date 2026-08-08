@@ -59,14 +59,16 @@ func normalizeRoute(value string) string {
 		return "unknown"
 	}
 }
+
 func normalizeWorker(value string) string {
 	switch value {
-	case "execution", "continuation", "lifecycle", "readiness":
+	case "execution", "continuation", "lifecycle", "management", "readiness":
 		return value
 	default:
 		return "unknown"
 	}
 }
+
 func normalizeOutcome(value string) string {
 	switch value {
 	case "success", "failure", "idle", "accepted", "rejected":

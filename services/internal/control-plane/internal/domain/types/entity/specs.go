@@ -303,21 +303,24 @@ func (spec PromptProfileSpec) Validate() error {
 }
 
 type CredentialBindingSpec struct {
-	Purpose                     string                 `json:"purpose"`
-	SecretRef                   string                 `json:"secretRef"`
-	PrincipalRef                string                 `json:"principalRef"`
-	Revision                    uint64                 `json:"revision"`
-	ExpiresAt                   time.Time              `json:"expiresAt,omitempty"`
-	ProviderEligible            bool                   `json:"providerEligible"`
-	ProviderCapabilities        []string               `json:"providerCapabilities,omitempty"`
-	ProviderObservedUsage       uint64                 `json:"providerObservedUsage,omitempty"`
-	ProviderObservedLimit       uint64                 `json:"providerObservedLimit,omitempty"`
-	ProviderObservationRevision uint64                 `json:"providerObservationRevision,omitempty"`
-	ProviderObservedAt          time.Time              `json:"providerObservedAt,omitempty"`
-	ImmutableSecretRef          string                 `json:"immutableSecretRef"`
-	ProviderContentVersion      string                 `json:"providerContentVersion"`
-	ContentSHA256               string                 `json:"contentSha256"`
-	Ownership                   ConfigurationOwnership `json:"ownership"`
+	Purpose                       string                 `json:"purpose"`
+	SecretRef                     string                 `json:"secretRef"`
+	PrincipalRef                  string                 `json:"principalRef"`
+	Revision                      uint64                 `json:"revision"`
+	ExpiresAt                     time.Time              `json:"expiresAt,omitempty"`
+	ProviderEligible              bool                   `json:"providerEligible"`
+	ProviderCapabilities          []string               `json:"providerCapabilities,omitempty"`
+	ProviderObservedUsage         uint64                 `json:"providerObservedUsage,omitempty"`
+	ProviderObservedLimit         uint64                 `json:"providerObservedLimit,omitempty"`
+	ProviderObservationRevision   uint64                 `json:"providerObservationRevision,omitempty"`
+	ProviderObservedAt            time.Time              `json:"providerObservedAt,omitempty"`
+	ImmutableSecretRef            string                 `json:"immutableSecretRef"`
+	ProviderContentVersion        string                 `json:"providerContentVersion"`
+	ContentSHA256                 string                 `json:"contentSha256"`
+	ProviderWindowDurationSeconds uint64                 `json:"providerWindowDurationSeconds,omitempty"`
+	ProviderResetsAt              time.Time              `json:"providerResetsAt,omitempty"`
+	ProviderObservationExpiresAt  time.Time              `json:"providerObservationExpiresAt,omitempty"`
+	Ownership                     ConfigurationOwnership `json:"ownership"`
 }
 
 func (CredentialBindingSpec) Kind() enum.Kind { return enum.KindCredentialBinding }
@@ -344,9 +347,15 @@ func (spec CredentialBindingSpec) Validate() error {
 			spec.ProviderObservedAt.IsZero() {
 			return errors.New("provider account observation is invalid")
 		}
+		capacityWindowPresent := spec.ProviderWindowDurationSeconds != 0 || !spec.ProviderResetsAt.IsZero() || !spec.ProviderObservationExpiresAt.IsZero()
+		if capacityWindowPresent && (spec.ProviderWindowDurationSeconds == 0 || spec.ProviderResetsAt.IsZero() ||
+			!spec.ProviderObservationExpiresAt.After(spec.ProviderObservedAt)) {
+			return errors.New("provider account capacity window is invalid")
+		}
 	} else if spec.ProviderEligible || len(spec.ProviderCapabilities) != 0 ||
 		spec.ProviderObservedUsage != 0 || spec.ProviderObservedLimit != 0 ||
-		spec.ProviderObservationRevision != 0 || !spec.ProviderObservedAt.IsZero() {
+		spec.ProviderObservationRevision != 0 || !spec.ProviderObservedAt.IsZero() ||
+		spec.ProviderWindowDurationSeconds != 0 || !spec.ProviderResetsAt.IsZero() || !spec.ProviderObservationExpiresAt.IsZero() {
 		return errors.New("non-provider observation is forbidden")
 	}
 	return nil

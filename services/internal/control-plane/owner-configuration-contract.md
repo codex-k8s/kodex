@@ -4,7 +4,7 @@ title: Контракт owner-конфигурации и полного жиз�
 type: service-contract
 status: approved
 owner: developer
-version: 1.3.1
+version: 1.4.0
 updated: 2026-08-07
 ---
 
@@ -14,13 +14,14 @@ updated: 2026-08-07
 [#234](https://github.com/codex-k8s/matter-codex/issues/234) и дополняет
 `SVC-MC-004`. Он не меняет уже исполняемые Project, Schedule, OwnerGate и
 SESSION restore paths Issues #187 и #231. Внешний owner HTTP/PWA mapping
-принадлежит Issues #237/#194. Этот unit материализует только принимающий
-control-plane contract для Mattermost effect/readback; provider Team/bot
-effect, signer receipt и generated call site остаются обязательным producer
-scope Issue #235 после rebase на #234. Аналогично Git receipt verifier и exact
-RPC profile здесь готовы как принимающая граница, но реальный Git producer,
-signer и call site принадлежат Issue #236. До принятия соответствующего unit
-ни один из этих двух end-to-end путей не считается готовым.
+принадлежит Issues #237/#194. Issue #234 материализовал принимающие
+control-plane contracts Mattermost/provider/Git. Unit #236 добавляет реальный
+integration-gateway producer для provider/Git и узкое общее вычисление
+canonical semantic intent на обеих сторонах, не меняя business rules
+control-plane. Provider Team/bot effect, signer receipt и generated call site
+остаются обязательным producer scope Issue #235. Mattermost path не считается
+готовым до #235; provider/Git path готов только вместе с deploy/readiness unit
+#236.
 
 ## Закрытый реестр защищённых видов
 
@@ -71,13 +72,13 @@ OCC и receipt проверяются после блокировки owner/curr
 
 | Requirement и actor/authority | Будущий endpoint consumer | Generated RPC/command | Owner resolver и OCC/idempotency | Одна PostgreSQL transaction и результат | Consumer/readiness/deploy ownership |
 | --- | --- | --- | --- | --- | --- |
-| `DOM-MC-003`, owner UI или exact Git reconciler | control-api-gateway #237 только для UI; integration-gateway #236 для Git | `ManageRoleDefinition` либо `ReconcileGitRoleDefinition` | project из authority; UI всегда назначает `managed_by=UI`; Git source/revision/digest/target/intent берутся из подписанного exact receipt, existing row `FOR UPDATE`, OCC и receipt JTI consume | state + protected history snapshot + command receipt + audit; нового события нет | owner может читать drift/detach/copy, но не выпускать Git provenance; Git producer readiness ожидает #236 |
-| `DOM-MC-003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageAgent`, `ReconcileGitAgent`; отдельные state actions | Role/Instruction/Pool и active server-owned `RoleImageRecipe` runtime profile разрешаются по stable key, закрепляются ID/version/digest; Git target/intent доказывает receipt | Agent + pins + state/history + receipt + audit; pause/disable запрещают новый runtime, resume/enable повторно проверяют eligibility | runtime получает только version-pinned `RuntimeRevision`; Git producer readiness ожидает #236 |
+| `DOM-MC-003`, owner UI или exact Git reconciler | control-api-gateway #237 только для UI; integration-gateway #236 для Git | `ManageRoleDefinition` либо `ReconcileGitRoleDefinition` | project из authority; UI всегда назначает `managed_by=UI`; Git source/revision/digest/target/intent берутся из подписанного exact receipt, existing row `FOR UPDATE`, OCC и receipt JTI consume | state + protected history snapshot + command receipt + audit; нового события нет | owner может читать drift/detach/copy, но не выпускать Git provenance; producer/readback принадлежат deployable #236 |
+| `DOM-MC-003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageAgent`, `ReconcileGitAgent`; отдельные state actions | Role/Instruction/Pool и active server-owned `RoleImageRecipe` runtime profile разрешаются по stable key, закрепляются ID/version/digest; Git target/intent доказывает receipt | Agent + pins + state/history + receipt + audit; pause/disable запрещают новый runtime, resume/enable повторно проверяют eligibility | runtime получает только version-pinned `RuntimeRevision`; Git producer/readback принадлежат #236 |
 | `DOM-MC-003/011`, interaction-gateway provider readback profile | pending producer #235 после rebase | `ManageAgentMattermostBotIdentity` bind/rebind/revoke | exact signed receipt связывает issuer/purpose/workload/SPIFFE/full method/actor/org/project/workspace/team/Agent target/action/effect/version/generation/digest/expiry/JTI; team и bot ref выводятся из receipt | owner transaction one-use consume issuer+purpose+JTI+target+intent вместе с masked state/history/command receipt/audit и bounded immutable result snapshot; exact replay возвращает прежнюю версию даже после последующей mutation | #234 предоставляет receive contract/profile/client operation; bot effect, signer и call site не готовы до #235 |
 | `DOM-MC-003/004`, owner | control-api-gateway #237 | `ManageAgentAssignment` assign/unassign | product Workspace — server-resolved Project без Git checkout; Agent и optional Room разрешаются внутри project; owner/root назначает сервер | assignment state + exact Agent/Workspace versions/digests + history + receipt + audit | новая Session и каждая `NEW`/`PERSISTENT`/`ROLLING` Schedule materialization повторно lock/resolve active assignment; stale/revoked fail closed |
-| `DOM-MC-002/003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageInstructionSet`, `ReconcileGitInstructionSet`, `CompareInstructionSetVersions` | UI update не меняет Git-owned set; Git reconcile сверяет signed source/revision/digest/target/intent; detach очищает source binding, copy создаёт новый UI set; validate вычисляет digest/verdict/errors из locked immutable content | exact content сначала получает immutable versioned S3 object, затем owner transaction создаёт CLEAN Artifact + set version + validation/history/receipt/audit; publish только после successful validation той же version/digest | derived Prompt pin-ит Artifact ID/version/digest; `ClaimRuntimeExecution` читает тот же projection и материализует `AGENTS.md`; Git producer ожидает #236 |
-| `DOM-MC-003`, integration-gateway provider readback profile | integration-gateway #236 | `ManageProviderConnectionReference` | exact typed receipt связывает protected target stable key и command intent; object/binding/version/generation/digest выводятся из proof | one-use issuer+purpose+JTI consume вместе с metadata/history/receipt/audit; credential values отсутствуют | provider effect/catalog/readback producer и signer принадлежат #236; #234 readiness проверяет только registered receive trust |
-| `DOM-MC-003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageProviderPool` или `ReconcileGitProviderPool` | refs разрешаются под lock; signed Git receipt назначает Git ownership; eligibility, weights, observation revision/time и digest копируются в immutable snapshot | pool + snapshot digest + history + receipt + audit; нового события нет | runtime получает только server-resolved pinned pool и exact credential binding; Git producer ожидает #236 |
+| `DOM-MC-002/003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageInstructionSet`, `ReconcileGitInstructionSet`, `CompareInstructionSetVersions` | UI update не меняет Git-owned set; Git reconcile сверяет signed source/revision/digest/target/intent; detach очищает source binding, copy создаёт новый UI set; validate вычисляет digest/verdict/errors из locked immutable content | exact content сначала получает immutable versioned S3 object, затем owner transaction создаёт CLEAN Artifact + set version + validation/history/receipt/audit; publish только после successful validation той же version/digest | derived Prompt pin-ит Artifact ID/version/digest; `ClaimRuntimeExecution` читает тот же projection и материализует `AGENTS.md`; Git producer/readback принадлежат #236 |
+| `DOM-MC-003`, integration-gateway provider readback profile | integration-gateway #236 | `ManageProviderConnectionReference` | exact typed receipt связывает protected target stable key и общий canonical semantic intent; object/binding/version/generation/digest выводятся из proof | one-use issuer+purpose+JTI consume вместе с metadata/history/receipt/audit; credential values отсутствуют | provider effect/catalog/readback producer, signer и Get/List readback принадлежат #236 |
+| `DOM-MC-003`, owner UI или exact Git reconciler | control-api-gateway #237 либо integration-gateway #236 | `ManageProviderPool` или `ReconcileGitProviderPool` | refs разрешаются под lock; signed Git receipt назначает Git ownership; eligibility, weights, observation revision/time и digest копируются в immutable snapshot | pool + snapshot digest + history + receipt + audit; нового события нет | runtime получает только server-resolved pinned pool и exact credential binding; Git producer/readback принадлежат #236 |
 | `DOM-MC-005`, owner | control-api-gateway #237 | `CreateScheduleFromOwnerSelections` или update-only `BindScheduleConfiguration` | create принимает stable Agent/Instruction/Pool/Room и display name Artifact; сервер lock-resolve Workspace, RuntimeProfile и active assignment, назначает Schedule ID/version и exact tuple; каждый Session reuse/archive/create сначала получает общий с `Insert` project graph fence и перечитывает conversation candidates `FOR UPDATE` | Schedule + exact assignment/config versions/digests + effective input + receipt+audit одной transaction; partial unique index допускает immutable `ARCHIVED` history, но не более одной live/resumable Session на conversation; `NEW` очищает binding, `PERSISTENT/ROLLING` сохраняет единственную совместимую Session либо создаёт replacement; T1→T2→T1 не оставляет два admission-active tuple | automation-scheduler при каждой materialization повторно проверяет тот же assignment tuple |
 | `DOM-MC-002/004/005`, owner | control-api-gateway #237 | `GetRunDetail`, `ListRunTimeline`, `GetRunLineage`, `ListRunArtifacts`, `ManageRun` cancel/retry | requested Process разрешается до graph query; recursive root/descendants и все attempts читаются в одной owner/RLS boundary; stable cursor `(occurred_at,id)` | cancel закрывает весь graph; retry из failed/expired/cancelled создаёт fresh Turn/RuntimeRevision/grants и сохраняет predecessor | lineage возвращает root, parent/child и predecessor/successor edges; timeline/artifacts охватывают все attempts без UUID pagination |
 | `GUIDE-DOC-006`, owner или project operator с exact permission | control-api-gateway #237 | `ManageRuntimeIncident` | authoritative execution→project eligibility общая для get/list/history/actions; hidden cross-tenant; incident и полный graph lock | retry использует graph helper; release атомарно переводит execution и весь runtime graph в `CANCELLED`, отзывает leases/grants/claims и возвращает released readback | watchdog только создаёт evidence; broad project grant и creator-only gate отсутствуют |
@@ -93,6 +94,17 @@ intent/authority возвращает сохранённый immutable result sn
 расхождение или незавершённая reservation закрыто конфликтует; отсутствие
 semantic consumption только разрешает обычной owner transaction выполнить
 первую mutation.
+
+ProviderConnectionReference и четыре `ReconcileGit*` используют один
+canonical semantic business-intent helper из `libs/go/controlplaneapi` на
+producer и consumer. Hash строится после проверки actor/organization/project
+из authority и включает workload, exact full method/target и typed business
+spec. Receipt/JTI, signature/proof, signer/policy revision, `AuthorityDigest`,
+idempotency key и само поле `command_intent_sha256` в canonical bytes не входят.
+Control-plane не принимает digest, вычисленный только producer-ом: transport
+повторно вычисляет его из проверенной authority и фактического typed request до
+domain transition. Receipt replay остаётся связан с one-use JTI, generation и
+verifier-owned watermark.
 
 ## Граф исполнения
 
@@ -142,12 +154,23 @@ exact returned version/generation. Rebase #235 на принятый #234 и rea
 этого рабочего call path — merge gate; текущий #238 этого producer contract
 не содержит.
 
-Для #236 обязательна аналогичная последовательность Git fetch/readback →
+Unit #236 реализует последовательность Git fetch/readback →
 exact immutable source/revision/digest и target intent → signed
 `GitReconciliationReceipt` → authority proof → один из четырёх generated
 `ReconcileGit*` RPC → version-pinned readback. Owner OIDC может читать drift,
-detach/copy, но не подписывать Git provenance. Receive-side JWK/profile в #234
-не подменяет producer readiness #236.
+detach/copy, но не подписывать Git provenance. Readiness integration-gateway
+проверяет fetcher, закрытый registry, signer trust и тот же protected
+control-plane path; receive-side JWK/profile #234 сам по себе готовность
+producer не доказывает.
+
+Для provider authorization unit #236 использует только специализированный
+`ProviderEffectReadbackReceipt`: одна owner transaction материализует
+immutable `CredentialBinding` с opaque Vault ref/version/content digest и
+safe capacity observation вместе с `ProviderConnectionReference`. Частичный
+commit запрещён. Ответ `ManageProviderConnectionReference` возвращает typed
+readback обоих ресурсов; последующие Get/List сверяют exact
+ID/version/projection digest. Generic credential CRUD и raw secret transport в
+control-plane не открываются.
 
 ## Lifecycle и authority matrix
 
@@ -248,5 +271,6 @@ in-process recovery reconciler, business metrics, dashboard и alerts.
 HTTPS URL. NetworkPolicy не открывает Mattermost/provider egress: mapping
 команда принимает только проверенный receipt, а provider Team/bot effect,
 signer и вызов control-plane остаются pending scope #235. Git signer/call site
-аналогично остаётся pending scope #236. Отдельный deployable worker не добавлен: reconciler принадлежит
+принадлежат integration-gateway #236 и не расширяют control-plane business
+rules. Отдельный deployable worker не добавлен: reconciler принадлежит
 cancel/join lifecycle самого control-plane и его отказ закрывает readiness.

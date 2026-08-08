@@ -4,6 +4,8 @@ metadata:
   name: provider-health
   version: 1
 spec:
+  validation:
+    endpointRef: provider-health.readonly
   tools:
     - name: read-provider-health
       version: 1

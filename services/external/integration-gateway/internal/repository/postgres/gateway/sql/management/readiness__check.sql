@@ -1,0 +1,1 @@
+SELECT integration_gateway.check_management_readiness()

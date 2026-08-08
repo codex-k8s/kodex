@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package integrationgateway.v1;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1;integrationgatewayv1";
 
 // IntegrationResultService оставляет только рабочую readiness-границу gateway.
@@ -12,6 +14,40 @@ service IntegrationResultService {
   rpc CheckReadiness(IntegrationResultServiceCheckReadinessRequest) returns (IntegrationResultServiceCheckReadinessResponse);
 }
 
+// IntegrationManagementService — internal owner boundary Issue #236. Actor,
+// organization и project отсутствуют в request: они поступают только из
+// проверенного mTLS/application authority context.
+service IntegrationManagementService {
+  rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse);
+  rpc GetProvider(GetProviderRequest) returns (GetProviderResponse);
+  rpc StartProviderAuthorization(StartProviderAuthorizationRequest) returns (StartProviderAuthorizationResponse);
+  rpc GetProviderAuthorization(GetProviderAuthorizationRequest) returns (GetProviderAuthorizationResponse);
+  rpc RestartProviderAuthorization(RestartProviderAuthorizationRequest) returns (RestartProviderAuthorizationResponse);
+  rpc CancelProviderAuthorization(CancelProviderAuthorizationRequest) returns (CancelProviderAuthorizationResponse);
+  rpc ListProviderConnections(ListProviderConnectionsRequest) returns (ListProviderConnectionsResponse);
+  rpc GetProviderConnection(GetProviderConnectionRequest) returns (GetProviderConnectionResponse);
+  rpc ReauthorizeProviderConnection(ReauthorizeProviderConnectionRequest) returns (ReauthorizeProviderConnectionResponse);
+  rpc RevokeProviderConnection(RevokeProviderConnectionRequest) returns (RevokeProviderConnectionResponse);
+  rpc ManageProviderPool(ManageProviderPoolRequest) returns (ManageProviderPoolResponse);
+  rpc GetProviderPool(GetProviderPoolRequest) returns (GetProviderPoolResponse);
+  rpc ListProviderPools(ListProviderPoolsRequest) returns (ListProviderPoolsResponse);
+  rpc ListIntegrationDefinitions(ListIntegrationDefinitionsRequest) returns (ListIntegrationDefinitionsResponse);
+  rpc GetIntegrationDefinition(GetIntegrationDefinitionRequest) returns (GetIntegrationDefinitionResponse);
+  rpc ConfigureIntegration(ConfigureIntegrationRequest) returns (ConfigureIntegrationResponse);
+  rpc GetIntegrationConfiguration(GetIntegrationConfigurationRequest) returns (GetIntegrationConfigurationResponse);
+  rpc ListIntegrationConfigurations(ListIntegrationConfigurationsRequest) returns (ListIntegrationConfigurationsResponse);
+  rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
+  rpc GetIntegrationTestReceipt(GetIntegrationTestReceiptRequest) returns (GetIntegrationTestReceiptResponse);
+  rpc ListIntegrationApprovals(ListIntegrationApprovalsRequest) returns (ListIntegrationApprovalsResponse);
+  rpc GetIntegrationApproval(GetIntegrationApprovalRequest) returns (GetIntegrationApprovalResponse);
+  rpc DecideIntegrationApproval(DecideIntegrationApprovalRequest) returns (DecideIntegrationApprovalResponse);
+  rpc ManageGitSourceBinding(ManageGitSourceBindingRequest) returns (ManageGitSourceBindingResponse);
+  rpc GetGitSourceBinding(GetGitSourceBindingRequest) returns (GetGitSourceBindingResponse);
+  rpc ListGitSourceBindings(ListGitSourceBindingsRequest) returns (ListGitSourceBindingsResponse);
+  rpc ReconcileGitSourceBinding(ReconcileGitSourceBindingRequest) returns (ReconcileGitSourceBindingResponse);
+  rpc GetManagementDiagnostics(GetManagementDiagnosticsRequest) returns (GetManagementDiagnosticsResponse);
+}
+
 message IntegrationResultServiceCheckReadinessRequest {}
 
 message IntegrationResultServiceCheckReadinessResponse {
@@ -19,4 +55,464 @@ message IntegrationResultServiceCheckReadinessResponse {
   uint64 schema_version = 2;
   bool authority_ready = 3;
   bool postgres_ready = 4;
+}
+
+enum ProviderAuthorizationState {
+  PROVIDER_AUTHORIZATION_STATE_UNSPECIFIED = 0;
+  PROVIDER_AUTHORIZATION_STATE_PENDING = 1;
+  PROVIDER_AUTHORIZATION_STATE_CODE_ISSUED = 2;
+  PROVIDER_AUTHORIZATION_STATE_AUTHORIZED = 3;
+  PROVIDER_AUTHORIZATION_STATE_DENIED = 4;
+  PROVIDER_AUTHORIZATION_STATE_EXPIRED = 5;
+  PROVIDER_AUTHORIZATION_STATE_FAILED = 6;
+  PROVIDER_AUTHORIZATION_STATE_CANCELLED = 7;
+}
+
+enum ManagedProviderConnectionState {
+  MANAGED_PROVIDER_CONNECTION_STATE_UNSPECIFIED = 0;
+  MANAGED_PROVIDER_CONNECTION_STATE_PENDING = 1;
+  MANAGED_PROVIDER_CONNECTION_STATE_VALID = 2;
+  MANAGED_PROVIDER_CONNECTION_STATE_INVALID = 3;
+  MANAGED_PROVIDER_CONNECTION_STATE_REVOKED = 4;
+}
+
+enum ProviderPoolAction {
+  PROVIDER_POOL_ACTION_UNSPECIFIED = 0;
+  PROVIDER_POOL_ACTION_CREATE = 1;
+  PROVIDER_POOL_ACTION_UPDATE = 2;
+  PROVIDER_POOL_ACTION_ARCHIVE = 3;
+  PROVIDER_POOL_ACTION_DELETE = 4;
+}
+
+enum IntegrationTestCategory {
+  INTEGRATION_TEST_CATEGORY_UNSPECIFIED = 0;
+  INTEGRATION_TEST_CATEGORY_PENDING = 1;
+  INTEGRATION_TEST_CATEGORY_OK = 2;
+  INTEGRATION_TEST_CATEGORY_CREDENTIAL_UNAVAILABLE = 3;
+  INTEGRATION_TEST_CATEGORY_UNAUTHORIZED = 4;
+  INTEGRATION_TEST_CATEGORY_FORBIDDEN = 5;
+  INTEGRATION_TEST_CATEGORY_ENDPOINT_UNAVAILABLE = 6;
+  INTEGRATION_TEST_CATEGORY_TIMEOUT = 7;
+  INTEGRATION_TEST_CATEGORY_PROTOCOL_ERROR = 8;
+}
+
+enum ApprovalDecision {
+  APPROVAL_DECISION_UNSPECIFIED = 0;
+  APPROVAL_DECISION_APPROVE = 1;
+  APPROVAL_DECISION_REJECT = 2;
+}
+
+enum GitSourceBindingAction {
+  GIT_SOURCE_BINDING_ACTION_UNSPECIFIED = 0;
+  GIT_SOURCE_BINDING_ACTION_CREATE = 1;
+  GIT_SOURCE_BINDING_ACTION_UPDATE = 2;
+  GIT_SOURCE_BINDING_ACTION_ARCHIVE = 3;
+}
+
+enum GitTargetKind {
+  GIT_TARGET_KIND_UNSPECIFIED = 0;
+  GIT_TARGET_KIND_ROLE_DEFINITION = 1;
+  GIT_TARGET_KIND_AGENT = 2;
+  GIT_TARGET_KIND_INSTRUCTION_SET = 3;
+  GIT_TARGET_KIND_PROVIDER_POOL = 4;
+}
+
+enum GitReconciliationState {
+  GIT_RECONCILIATION_STATE_UNSPECIFIED = 0;
+  GIT_RECONCILIATION_STATE_PENDING = 1;
+  GIT_RECONCILIATION_STATE_FETCHED = 2;
+  GIT_RECONCILIATION_STATE_APPLIED = 3;
+  GIT_RECONCILIATION_STATE_FAILED = 4;
+  GIT_RECONCILIATION_STATE_CANCELLED = 5;
+}
+
+message ProviderCapability {
+  string name = 1;
+  string risk = 2;
+  bool requires_approval = 3;
+}
+
+message Provider {
+  string provider_id = 1;
+  uint64 version = 2;
+  string digest_sha256 = 3;
+  string display_name = 4;
+  repeated string authorization_modes = 5;
+  repeated ProviderCapability capabilities = 6;
+}
+
+message ListProvidersRequest {}
+message ListProvidersResponse {
+  repeated Provider providers = 1;
+  uint64 catalog_version = 2;
+  string catalog_digest_sha256 = 3;
+}
+message GetProviderRequest {
+  string provider_id = 1;
+  uint64 expected_version = 2;
+  string expected_digest_sha256 = 3;
+}
+message GetProviderResponse { Provider provider = 1; }
+
+message ProviderAuthorization {
+  string authorization_id = 1;
+  string provider_id = 2;
+  string connection_id = 3;
+  uint64 attempt = 4;
+  uint64 version = 5;
+  uint64 generation = 6;
+  ProviderAuthorizationState state = 7;
+  string verification_url = 8;
+  string user_code = 9;
+  google.protobuf.Timestamp code_expires_at = 10;
+  google.protobuf.Timestamp expires_at = 11;
+  string failure_category = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message StartProviderAuthorizationRequest {
+  string provider_id = 1;
+  string connection_stable_key = 2;
+  string display_name = 3;
+  string idempotency_key = 4;
+}
+message StartProviderAuthorizationResponse { ProviderAuthorization authorization = 1; }
+message GetProviderAuthorizationRequest { string authorization_id = 1; }
+message GetProviderAuthorizationResponse { ProviderAuthorization authorization = 1; }
+message RestartProviderAuthorizationRequest {
+  string authorization_id = 1;
+  uint64 expected_version = 2;
+  string idempotency_key = 3;
+}
+message RestartProviderAuthorizationResponse { ProviderAuthorization authorization = 1; }
+message CancelProviderAuthorizationRequest {
+  string authorization_id = 1;
+  uint64 expected_version = 2;
+  string idempotency_key = 3;
+}
+message CancelProviderAuthorizationResponse { ProviderAuthorization authorization = 1; }
+
+message ProviderConnection {
+  string connection_id = 1;
+  string stable_key = 2;
+  string provider_id = 3;
+  string display_name = 4;
+  uint64 version = 5;
+  uint64 generation = 6;
+  ManagedProviderConnectionState state = 7;
+  string masked_label = 8;
+  string masked_account = 9;
+  repeated string capabilities = 10;
+  string capability_digest_sha256 = 11;
+  string credential_binding_id = 12;
+  uint64 credential_binding_version = 13;
+  string credential_binding_sha256 = 14;
+  string observation_digest_sha256 = 15;
+  google.protobuf.Timestamp observed_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+  uint64 active_credential_generation = 18;
+  ProviderCapacityObservation capacity = 19;
+}
+
+// ProviderCapacityObservation — нормализованный bounded readback provider-а.
+// Он не содержит account payload, headers или credential material.
+message ProviderCapacityObservation {
+  uint64 usage = 1;
+  uint64 limit = 2;
+  uint64 revision = 3;
+  google.protobuf.Timestamp observed_at = 4;
+  uint64 window_duration_seconds = 5;
+  google.protobuf.Timestamp resets_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  string digest_sha256 = 8;
+}
+message ListProviderConnectionsRequest {
+  repeated ManagedProviderConnectionState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListProviderConnectionsResponse {
+  repeated ProviderConnection connections = 1;
+  string next_page_token = 2;
+}
+message GetProviderConnectionRequest {
+  string connection_id = 1;
+  uint64 expected_version = 2;
+}
+message GetProviderConnectionResponse { ProviderConnection connection = 1; }
+message ReauthorizeProviderConnectionRequest {
+  string connection_id = 1;
+  uint64 expected_version = 2;
+  uint64 expected_generation = 3;
+  string idempotency_key = 4;
+}
+message ReauthorizeProviderConnectionResponse { ProviderAuthorization authorization = 1; }
+message RevokeProviderConnectionRequest {
+  string connection_id = 1;
+  uint64 expected_version = 2;
+  uint64 expected_generation = 3;
+  string idempotency_key = 4;
+}
+message RevokeProviderConnectionResponse { ProviderConnection connection = 1; }
+
+message ProviderPoolMemberIntent {
+  string connection_id = 1;
+  uint64 expected_connection_version = 2;
+  uint64 expected_connection_generation = 3;
+  uint32 weight = 4;
+}
+message ProviderPoolMember {
+  string connection_id = 1;
+  uint64 connection_version = 2;
+  uint64 connection_generation = 3;
+  string observation_digest_sha256 = 4;
+  uint32 weight = 5;
+  bool eligible = 6;
+}
+message ProviderPool {
+  string provider_pool_id = 1;
+  string stable_key = 2;
+  string display_name = 3;
+  string policy = 4;
+  uint64 version = 5;
+  string desired_digest_sha256 = 6;
+  uint64 observation_version = 7;
+  string observation_digest_sha256 = 8;
+  string effective_digest_sha256 = 9;
+  string state = 10;
+  repeated ProviderPoolMember members = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+message ManageProviderPoolRequest {
+  ProviderPoolAction action = 1;
+  string provider_pool_id = 2;
+  uint64 expected_version = 3;
+  string stable_key = 4;
+  string display_name = 5;
+  string policy = 6;
+  repeated ProviderPoolMemberIntent members = 7;
+  string idempotency_key = 8;
+}
+message ManageProviderPoolResponse { ProviderPool provider_pool = 1; }
+message GetProviderPoolRequest { string provider_pool_id = 1; }
+message GetProviderPoolResponse { ProviderPool provider_pool = 1; }
+message ListProviderPoolsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+message ListProviderPoolsResponse {
+  repeated ProviderPool provider_pools = 1;
+  string next_page_token = 2;
+}
+
+message IntegrationDefinitionSummary {
+  string definition_id = 1;
+  uint64 version = 2;
+  string digest_sha256 = 3;
+  string display_name = 4;
+  string state = 5;
+  repeated ProviderCapability capabilities = 6;
+}
+message ListIntegrationDefinitionsRequest {}
+message ListIntegrationDefinitionsResponse { repeated IntegrationDefinitionSummary definitions = 1; }
+message GetIntegrationDefinitionRequest {
+  string definition_id = 1;
+  uint64 version = 2;
+  string expected_digest_sha256 = 3;
+}
+message GetIntegrationDefinitionResponse { IntegrationDefinitionSummary definition = 1; }
+
+message IntegrationConfiguration {
+  string configuration_id = 1;
+  string stable_key = 2;
+  uint64 version = 3;
+  string digest_sha256 = 4;
+  string definition_id = 5;
+  uint64 definition_version = 6;
+  string definition_digest_sha256 = 7;
+  string connection_id = 8;
+  uint64 connection_version = 9;
+  uint64 connection_generation = 10;
+  repeated string capabilities = 11;
+  string capability_digest_sha256 = 12;
+  string effect_kind = 13;
+  string state = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+message ConfigureIntegrationRequest {
+  string configuration_id = 1;
+  uint64 expected_version = 2;
+  string stable_key = 3;
+  string definition_id = 4;
+  uint64 definition_version = 5;
+  string definition_digest_sha256 = 6;
+  string connection_id = 7;
+  uint64 connection_version = 8;
+  uint64 connection_generation = 9;
+  repeated string capabilities = 10;
+  string effect_kind = 11;
+  string idempotency_key = 12;
+}
+message ConfigureIntegrationResponse { IntegrationConfiguration configuration = 1; }
+message GetIntegrationConfigurationRequest { string configuration_id = 1; }
+message GetIntegrationConfigurationResponse { IntegrationConfiguration configuration = 1; }
+message ListIntegrationConfigurationsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+message ListIntegrationConfigurationsResponse {
+  repeated IntegrationConfiguration configurations = 1;
+  string next_page_token = 2;
+}
+
+message IntegrationTestReceipt {
+  string test_id = 1;
+  string connection_id = 2;
+  uint64 connection_version = 3;
+  uint64 connection_generation = 4;
+  string definition_id = 5;
+  uint64 definition_version = 6;
+  IntegrationTestCategory category = 7;
+  string receipt_sha256 = 8;
+  google.protobuf.Timestamp tested_at = 9;
+  google.protobuf.Timestamp expires_at = 10;
+  string definition_digest_sha256 = 11;
+  string configuration_id = 12;
+  uint64 configuration_version = 13;
+  string configuration_digest_sha256 = 14;
+  uint64 credential_generation = 15;
+  string credential_binding_id = 16;
+  uint64 credential_binding_version = 17;
+  string credential_binding_sha256 = 18;
+}
+message TestIntegrationConnectionRequest {
+  string connection_id = 1;
+  uint64 connection_version = 2;
+  uint64 connection_generation = 3;
+  string definition_id = 4;
+  uint64 definition_version = 5;
+  string idempotency_key = 6;
+  string definition_digest_sha256 = 7;
+  string configuration_id = 8;
+  uint64 configuration_version = 9;
+  string configuration_digest_sha256 = 10;
+}
+message TestIntegrationConnectionResponse { IntegrationTestReceipt receipt = 1; }
+message GetIntegrationTestReceiptRequest { string test_id = 1; }
+message GetIntegrationTestReceiptResponse { IntegrationTestReceipt receipt = 1; }
+
+message IntegrationApproval {
+  string approval_id = 1;
+  string invocation_id = 2;
+  uint64 version = 3;
+  string status = 4;
+  string request_hash = 5;
+  bytes redacted_preview_json = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp decided_at = 8;
+  string reason_code = 9;
+}
+message ListIntegrationApprovalsRequest {
+  repeated string statuses = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+message ListIntegrationApprovalsResponse {
+  repeated IntegrationApproval approvals = 1;
+  string next_page_token = 2;
+}
+message GetIntegrationApprovalRequest { string approval_id = 1; }
+message GetIntegrationApprovalResponse { IntegrationApproval approval = 1; }
+message DecideIntegrationApprovalRequest {
+  string approval_id = 1;
+  uint64 expected_version = 2;
+  string expected_request_hash = 3;
+  ApprovalDecision decision = 4;
+  string reason_code = 5;
+  string idempotency_key = 6;
+}
+message DecideIntegrationApprovalResponse { IntegrationApproval approval = 1; }
+
+message GitSourceBinding {
+  string binding_id = 1;
+  string stable_key = 2;
+  uint64 version = 3;
+  string state = 4;
+  string repository_key = 5;
+  string ref_key = 6;
+  string path_key = 7;
+  string repository_connection_id = 8;
+  uint64 repository_connection_version = 9;
+  string repository_connection_sha256 = 10;
+  string credential_binding_id = 11;
+  uint64 credential_binding_version = 12;
+  string credential_binding_sha256 = 13;
+  GitTargetKind target_kind = 14;
+  string target_stable_key = 15;
+  string fetched_commit = 16;
+  uint64 source_revision = 17;
+  string source_digest_sha256 = 18;
+  google.protobuf.Timestamp fetched_at = 19;
+  google.protobuf.Timestamp updated_at = 20;
+  uint64 generation = 21;
+}
+message ManageGitSourceBindingRequest {
+  GitSourceBindingAction action = 1;
+  string binding_id = 2;
+  uint64 expected_version = 3;
+  string stable_key = 4;
+  string repository_key = 5;
+  string ref_key = 6;
+  string path_key = 7;
+  GitTargetKind target_kind = 8;
+  string target_stable_key = 9;
+  string idempotency_key = 10;
+}
+message ManageGitSourceBindingResponse { GitSourceBinding binding = 1; }
+message GetGitSourceBindingRequest { string binding_id = 1; }
+message GetGitSourceBindingResponse { GitSourceBinding binding = 1; }
+message ListGitSourceBindingsRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+message ListGitSourceBindingsResponse {
+  repeated GitSourceBinding bindings = 1;
+  string next_page_token = 2;
+}
+message GitReconciliation {
+  string reconciliation_id = 1;
+  string binding_id = 2;
+  uint64 binding_version = 3;
+  GitReconciliationState state = 4;
+  string fetched_commit = 5;
+  uint64 source_revision = 6;
+  string source_digest_sha256 = 7;
+  string target_resource_id = 8;
+  uint64 target_version = 9;
+  string target_digest_sha256 = 10;
+  string receipt_id = 11;
+  string receipt_sha256 = 12;
+  string failure_category = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+message ReconcileGitSourceBindingRequest {
+  string binding_id = 1;
+  uint64 expected_version = 2;
+  uint64 expected_source_revision = 3;
+  string idempotency_key = 4;
+  uint64 expected_generation = 5;
+}
+message ReconcileGitSourceBindingResponse { GitReconciliation reconciliation = 1; }
+
+message GetManagementDiagnosticsRequest {}
+message ManagementDependencyStatus {
+  string dependency = 1;
+  string status = 2;
+  uint64 version = 3;
+  string digest_sha256 = 4;
+  google.protobuf.Timestamp checked_at = 5;
+}
+message GetManagementDiagnosticsResponse {
+  string status = 1;
+  repeated ManagementDependencyStatus dependencies = 2;
 }

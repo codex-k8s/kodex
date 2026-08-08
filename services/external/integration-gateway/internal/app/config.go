@@ -9,7 +9,11 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-const serviceName = "integration-gateway"
+const (
+	serviceName                      = "integration-gateway"
+	platformManagementEgressProxyURL = "http://egress-gateway.mattercodex-system.svc.cluster.local:8080"
+	managementEgressNoProxy          = "localhost,127.0.0.1,::1,.svc,.svc.cluster.local"
+)
 
 type Config struct {
 	HTTPListen                        string        `env:"INTEGRATION_GATEWAY_HTTP_LISTEN"`
@@ -41,6 +45,29 @@ type Config struct {
 	ProviderProxyURL                  string        `env:"INTEGRATION_GATEWAY_PROVIDER_PROXY_URL"`
 	ProviderProxyTLSServerName        string        `env:"INTEGRATION_GATEWAY_PROVIDER_PROXY_TLS_SERVER_NAME"`
 	ProviderProxyCAFile               string        `env:"INTEGRATION_GATEWAY_PROVIDER_PROXY_CA_FILE"`
+	ManagementEgressProxyURL          string        `env:"INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_PROXY_URL"`
+	ManagementEgressNoProxy           string        `env:"INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_NO_PROXY"`
+	ProviderCatalogFile               string        `env:"INTEGRATION_GATEWAY_PROVIDER_CATALOG_FILE"`
+	GitSourceCatalogFile              string        `env:"INTEGRATION_GATEWAY_GIT_SOURCE_CATALOG_FILE"`
+	GitExecutable                     string        `env:"INTEGRATION_GATEWAY_GIT_EXECUTABLE"`
+	GitTemporaryRoot                  string        `env:"INTEGRATION_GATEWAY_GIT_TEMPORARY_ROOT"`
+	GitCAFile                         string        `env:"INTEGRATION_GATEWAY_GIT_CA_FILE"`
+	CodexExecutable                   string        `env:"INTEGRATION_GATEWAY_CODEX_EXECUTABLE"`
+	CodexTemporaryRoot                string        `env:"INTEGRATION_GATEWAY_CODEX_TEMPORARY_ROOT"`
+	CodexCAFile                       string        `env:"INTEGRATION_GATEWAY_CODEX_CA_FILE"`
+	VaultAddress                      string        `env:"INTEGRATION_GATEWAY_VAULT_ADDRESS"`
+	VaultTLSServerName                string        `env:"INTEGRATION_GATEWAY_VAULT_TLS_SERVER_NAME"`
+	VaultCAFile                       string        `env:"INTEGRATION_GATEWAY_VAULT_CA_FILE"`
+	VaultRole                         string        `env:"INTEGRATION_GATEWAY_VAULT_ROLE"`
+	VaultAuthMount                    string        `env:"INTEGRATION_GATEWAY_VAULT_AUTH_MOUNT"`
+	VaultKVMount                      string        `env:"INTEGRATION_GATEWAY_VAULT_KV_MOUNT"`
+	VaultCredentialPathPrefix         string        `env:"INTEGRATION_GATEWAY_VAULT_CREDENTIAL_PATH_PREFIX"`
+	VaultGitCredentialPathPrefix      string        `env:"INTEGRATION_GATEWAY_VAULT_GIT_CREDENTIAL_PATH_PREFIX"`
+	VaultServiceAccountTokenFile      string        `env:"INTEGRATION_GATEWAY_VAULT_SERVICE_ACCOUNT_TOKEN_FILE"`
+	ProviderReceiptIssuer             string        `env:"INTEGRATION_GATEWAY_PROVIDER_RECEIPT_ISSUER"`
+	ProviderReceiptPrivateJWKFile     string        `env:"INTEGRATION_GATEWAY_PROVIDER_RECEIPT_PRIVATE_JWK_FILE"`
+	GitReceiptIssuer                  string        `env:"INTEGRATION_GATEWAY_GIT_RECEIPT_ISSUER"`
+	GitReceiptPrivateJWKFile          string        `env:"INTEGRATION_GATEWAY_GIT_RECEIPT_PRIVATE_JWK_FILE"`
 	OIDCIssuer                        string        `env:"INTEGRATION_GATEWAY_OIDC_ISSUER"`
 	OIDCAudience                      string        `env:"INTEGRATION_GATEWAY_OIDC_AUDIENCE"`
 	OIDCTLSServerName                 string        `env:"INTEGRATION_GATEWAY_OIDC_TLS_SERVER_NAME"`
@@ -52,6 +79,12 @@ type Config struct {
 	ShutdownTimeout                   time.Duration `env:"INTEGRATION_GATEWAY_SHUTDOWN_TIMEOUT"`
 	ReadinessInterval                 time.Duration `env:"INTEGRATION_GATEWAY_READINESS_INTERVAL"`
 	WorkerInterval                    time.Duration `env:"INTEGRATION_GATEWAY_WORKER_INTERVAL"`
+	ManagementLeaseDuration           time.Duration `env:"INTEGRATION_GATEWAY_MANAGEMENT_LEASE_DURATION"`
+	AuthorizationTTL                  time.Duration `env:"INTEGRATION_GATEWAY_AUTHORIZATION_TTL"`
+	ProviderAuthorizationTimeout      time.Duration `env:"INTEGRATION_GATEWAY_PROVIDER_AUTHORIZATION_TIMEOUT"`
+	ProviderAuthorizationPollInterval time.Duration `env:"INTEGRATION_GATEWAY_PROVIDER_AUTHORIZATION_POLL_INTERVAL"`
+	GitFetchTimeout                   time.Duration `env:"INTEGRATION_GATEWAY_GIT_FETCH_TIMEOUT"`
+	EffectReceiptTTL                  time.Duration `env:"INTEGRATION_GATEWAY_EFFECT_RECEIPT_TTL"`
 	MaximumBodyBytes                  int64         `env:"INTEGRATION_GATEWAY_MAXIMUM_BODY_BYTES"`
 	MaximumSessionRequests            uint64        `env:"INTEGRATION_GATEWAY_MAXIMUM_SESSION_REQUESTS"`
 	MaximumSessionConcurrency         uint32        `env:"INTEGRATION_GATEWAY_MAXIMUM_SESSION_CONCURRENCY"`
@@ -85,11 +118,37 @@ func loadConfig() (Config, error) {
 		ProviderProxyURL:                  "https://integration-egress-proxy.mattercodex-system.svc:8443",
 		ProviderProxyTLSServerName:        "integration-egress-proxy.mattercodex-system.svc.cluster.local",
 		ProviderProxyCAFile:               "/var/run/config/mattercodex/integration-gateway/provider-proxy/ca.pem",
+		ManagementEgressProxyURL:          platformManagementEgressProxyURL,
+		ManagementEgressNoProxy:           managementEgressNoProxy,
+		ProviderCatalogFile:               "/var/run/config/mattercodex/integration-gateway/provider-catalog/catalog.json",
+		GitSourceCatalogFile:              "/var/run/config/mattercodex/integration-gateway/git-sources/catalog.json",
+		GitExecutable:                     "/usr/bin/git",
+		GitTemporaryRoot:                  "/var/run/mattercodex/integration-gateway/git",
+		GitCAFile:                         "/etc/ssl/certs/ca-certificates.crt",
+		CodexExecutable:                   "/usr/local/bin/codex",
+		CodexTemporaryRoot:                "/var/run/mattercodex/integration-gateway/codex",
+		CodexCAFile:                       "/etc/ssl/certs/ca-certificates.crt",
+		VaultAddress:                      "https://vault.mattercodex-system.svc:8200",
+		VaultTLSServerName:                "vault.mattercodex-system.svc.cluster.local",
+		VaultCAFile:                       "/var/run/config/mattercodex/integration-gateway/vault/ca.pem",
+		VaultRole:                         "integration-gateway",
+		VaultAuthMount:                    "kubernetes",
+		VaultKVMount:                      "kv",
+		VaultCredentialPathPrefix:         "mattercodex/integration-gateway/provider-credentials",
+		VaultGitCredentialPathPrefix:      "mattercodex/integration-gateway/git-credentials",
+		VaultServiceAccountTokenFile:      "/var/run/secrets/tokens/vault/token",
+		ProviderReceiptIssuer:             "https://integration-gateway.mattercodex-system.svc.cluster.local/authority/provider-readback",
+		ProviderReceiptPrivateJWKFile:     "/var/run/secrets/mattercodex/integration-gateway/provider-receipt/private.jwk",
+		GitReceiptIssuer:                  "https://integration-gateway.mattercodex-system.svc.cluster.local/authority/git-reconciliation",
+		GitReceiptPrivateJWKFile:          "/var/run/secrets/mattercodex/integration-gateway/git-receipt/private.jwk",
 		OIDCIssuer:                        "https://sso.mattercodex.local", OIDCAudience: "mattercodex-integration-gateway",
 		OIDCTLSServerName: "sso.mattercodex.local", OIDCCAFile: "/var/run/config/mattercodex/integration-gateway/oidc/ca.pem",
 		SessionTTL: 30 * time.Minute, InvocationTTL: 7 * 24 * time.Hour, RequestDeadline: 30 * time.Second,
 		StartupTimeout: 15 * time.Second, ShutdownTimeout: 10 * time.Second, ReadinessInterval: 10 * time.Second,
 		WorkerInterval: 250 * time.Millisecond, MaximumBodyBytes: 512 << 10,
+		ManagementLeaseDuration: 20 * time.Second, AuthorizationTTL: 15 * time.Minute,
+		ProviderAuthorizationTimeout: 15 * time.Minute, ProviderAuthorizationPollInterval: time.Second,
+		GitFetchTimeout: 30 * time.Second, EffectReceiptTTL: time.Minute,
 		MaximumSessionRequests: 10000, MaximumSessionConcurrency: 4, MaximumGlobalConcurrency: 128,
 	}
 	if err := env.Parse(&config); err != nil {
@@ -106,7 +165,7 @@ func (config Config) validate() error {
 	}
 	for _, name := range []string{
 		config.PostgresTLSServerName, config.ControlPlaneTLSServerName,
-		config.ProviderProxyTLSServerName, config.OIDCTLSServerName,
+		config.ProviderProxyTLSServerName, config.OIDCTLSServerName, config.VaultTLSServerName,
 	} {
 		if name == "" || net.ParseIP(name) != nil {
 			return errors.New("integration gateway TLS server name is invalid")
@@ -118,6 +177,10 @@ func (config Config) validate() error {
 		config.CredentialDirectory, config.PayloadKeysetFile, config.ControlPlaneCAFile,
 		config.ControlPlaneClientCertificateFile, config.ControlPlaneClientPrivateKeyFile,
 		config.ControlPlaneApplicationGrantFile, config.ProviderProxyCAFile, config.OIDCCAFile,
+		config.ProviderCatalogFile, config.GitSourceCatalogFile, config.GitExecutable, config.GitTemporaryRoot,
+		config.GitCAFile, config.CodexExecutable, config.CodexTemporaryRoot, config.CodexCAFile,
+		config.VaultCAFile, config.VaultServiceAccountTokenFile, config.ProviderReceiptPrivateJWKFile,
+		config.GitReceiptPrivateJWKFile,
 	} {
 		if !filepath.IsAbs(path) {
 			return errors.New("integration gateway runtime path is invalid")
@@ -134,6 +197,13 @@ func (config Config) validate() error {
 		config.MaximumSessionConcurrency == 0 || config.MaximumSessionConcurrency > 32 ||
 		config.MaximumGlobalConcurrency < 1 || config.MaximumGlobalConcurrency > 1024 {
 		return errors.New("integration gateway bounded configuration is invalid")
+	}
+	if config.ManagementEgressProxyURL != platformManagementEgressProxyURL || config.ManagementEgressNoProxy != managementEgressNoProxy || config.VaultAddress == "" || config.VaultRole == "" || config.VaultAuthMount == "" || config.VaultKVMount == "" || config.VaultCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == config.VaultCredentialPathPrefix ||
+		config.ProviderReceiptIssuer == "" || config.GitReceiptIssuer == "" || config.ManagementLeaseDuration < 5*time.Second || config.ManagementLeaseDuration > time.Minute ||
+		config.AuthorizationTTL < time.Minute || config.AuthorizationTTL > 15*time.Minute || config.ProviderAuthorizationTimeout < time.Minute || config.ProviderAuthorizationTimeout > 20*time.Minute ||
+		config.ProviderAuthorizationPollInterval < 100*time.Millisecond || config.ProviderAuthorizationPollInterval > 5*time.Second || config.GitFetchTimeout < time.Second || config.GitFetchTimeout > time.Minute ||
+		config.EffectReceiptTTL < 30*time.Second || config.EffectReceiptTTL > 5*time.Minute {
+		return errors.New("integration management configuration is invalid")
 	}
 	return nil
 }

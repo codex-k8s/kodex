@@ -2,6 +2,7 @@
 WITH changed_approval AS (
     UPDATE integration_gateway.approvals SET
         status = @approval_status,
+        version = version + 1,
         payload = @approval_payload::jsonb,
         decided_at = @decided_at
      WHERE approval_id = @approval_id AND status = 'PENDING'

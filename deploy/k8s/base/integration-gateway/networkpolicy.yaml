@@ -36,6 +36,7 @@ spec:
               app.kubernetes.io/name: control-api-gateway
       ports:
         - {protocol: TCP, port: 8443}
+        - {protocol: TCP, port: 9443}
     - from:
         - namespaceSelector:
             matchLabels:

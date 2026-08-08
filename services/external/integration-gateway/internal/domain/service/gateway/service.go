@@ -383,6 +383,7 @@ func (service *Service) Invoke(ctx context.Context, input InvokeInput) (Invocati
 	invocationID := uuid.NewString()
 	approval.ID = uuid.NewString()
 	approval.InvocationID = invocationID
+	approval.Version = 1
 	approval.RequestHash = hash
 	approval.Preview = preview
 	approval.ExpiresAt = approvalExpiresAt
@@ -492,6 +493,17 @@ func operationRequestHash(operation, resourceID, outcome, reasonCode string) str
 }
 
 func (service *Service) Decide(ctx context.Context, scope domainrepo.Scope, approvalID string, approve bool, reasonCode, semanticKey string) (entity.Invocation, error) {
+	return service.decide(ctx, scope, approvalID, 0, "", approve, reasonCode, semanticKey)
+}
+
+func (service *Service) DecideExact(ctx context.Context, scope domainrepo.Scope, approvalID string, expectedVersion uint64, expectedRequestHash string, approve bool, reasonCode, semanticKey string) (entity.Invocation, error) {
+	if expectedVersion == 0 || !validDigestText(expectedRequestHash) {
+		return entity.Invocation{}, errs.ErrInvalid
+	}
+	return service.decide(ctx, scope, approvalID, expectedVersion, expectedRequestHash, approve, reasonCode, semanticKey)
+}
+
+func (service *Service) decide(ctx context.Context, scope domainrepo.Scope, approvalID string, expectedVersion uint64, expectedRequestHash string, approve bool, reasonCode, semanticKey string) (entity.Invocation, error) {
 	if uuid.Validate(approvalID) != nil || reasonCode == "" || len(reasonCode) > 64 || uuid.Validate(semanticKey) != nil {
 		return entity.Invocation{}, errs.ErrInvalid
 	}
@@ -510,6 +522,7 @@ func (service *Service) Decide(ctx context.Context, scope domainrepo.Scope, appr
 		var err error
 		invocation, _, err = tx.DecideApproval(ctx, domainrepo.Decision{
 			ApprovalID: approvalID, Approve: approve,
+			ExpectedVersion: expectedVersion, ExpectedRequestHash: expectedRequestHash,
 			ActorID: scope.ActorID, ReasonCode: reasonCode, ReceiptKeyHash: receiptKeyHash,
 			RequestHash: requestHash, DecidedAt: now, Audit: audit,
 		})

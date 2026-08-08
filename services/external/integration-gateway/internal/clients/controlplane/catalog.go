@@ -3,6 +3,7 @@ package controlplane
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/entity"
@@ -12,6 +13,22 @@ type Catalog struct {
 	mu          sync.RWMutex
 	definitions map[string]entity.Definition
 	exposed     map[string]string
+}
+
+func (catalog *Catalog) List() []entity.Definition {
+	catalog.mu.RLock()
+	defer catalog.mu.RUnlock()
+	values := make([]entity.Definition, 0, len(catalog.definitions))
+	for _, definition := range catalog.definitions {
+		values = append(values, definition)
+	}
+	sort.Slice(values, func(left, right int) bool {
+		if values[left].ID == values[right].ID {
+			return values[left].Version < values[right].Version
+		}
+		return values[left].ID < values[right].ID
+	})
+	return values
 }
 
 func NewCatalog() *Catalog {

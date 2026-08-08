@@ -32,6 +32,14 @@ spec:
             summary: Не синхронизируется integration continuation
             description: Durable effect не подтверждается control-plane; provider path остаётся закрыт.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
+        - alert: IntegrationGatewayManagementFailures
+          expr: sum(rate(mattercodex_integration_gateway_worker_cycles_total{worker="management",outcome="failure"}[5m])) > 0.1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: Не завершаются owner management effects integration gateway
+            description: Проверить fenced lease и safe status Vault, Codex, Git и control-plane без чтения credential или payload.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
         - alert: IntegrationGatewayProviderFailures
           expr: sum(rate(mattercodex_integration_gateway_invocations_total{outcome="failure"}[5m])) > 0.1
           for: 10m

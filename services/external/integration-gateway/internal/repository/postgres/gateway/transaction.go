@@ -237,18 +237,21 @@ func (transaction *transaction) ReserveInvocation(ctx context.Context, reservati
 func (transaction *transaction) DecideApproval(ctx context.Context, decision domainrepo.Decision) (entity.Invocation, bool, error) {
 	var approvalRaw, invocationRaw []byte
 	var approvalStatus enum.ApprovalStatus
+	var approvalVersion uint64
 	var invocationStatus enum.InvocationStatus
 	var expiresAt, databaseNow time.Time
 	if err := transaction.tx.QueryRow(ctx, sqlApprovalLock, pgx.StrictNamedArgs{
 		"approval_id": decision.ApprovalID, "tenant_id": transaction.tenantID, "project_id": transaction.projectID,
-	}).Scan(&approvalRaw, &approvalStatus, &expiresAt, &invocationRaw, &invocationStatus, &databaseNow); err != nil {
+	}).Scan(&approvalRaw, &approvalVersion, &approvalStatus, &expiresAt, &invocationRaw, &invocationStatus, &databaseNow); err != nil {
 		return entity.Invocation{}, false, err
 	}
 	stored, replay, err := transaction.replayReceipt(ctx, decision.ReceiptKeyHash, decision.RequestHash)
 	if err != nil || replay {
 		return stored, replay, err
 	}
-	if approvalStatus != enum.ApprovalPending || invocationStatus != enum.InvocationPendingApproval || !expiresAt.After(databaseNow) {
+	if decision.ExpectedVersion != 0 && approvalVersion != decision.ExpectedVersion ||
+		approvalStatus != enum.ApprovalPending ||
+		invocationStatus != enum.InvocationPendingApproval || !expiresAt.After(databaseNow) {
 		return entity.Invocation{}, false, errs.ErrConflict
 	}
 	var approval entity.Approval
@@ -256,6 +259,10 @@ func (transaction *transaction) DecideApproval(ctx context.Context, decision dom
 	if json.Unmarshal(approvalRaw, &approval) != nil || json.Unmarshal(invocationRaw, &invocation) != nil {
 		return entity.Invocation{}, false, errors.New("stored approval state is invalid")
 	}
+	if decision.ExpectedRequestHash != "" && approval.RequestHash != decision.ExpectedRequestHash {
+		return entity.Invocation{}, false, errs.ErrConflict
+	}
+	approval.Version = approvalVersion + 1
 	approval.DecidedBy = decision.ActorID
 	approval.DecisionReasonCode = decision.ReasonCode
 	approval.DecidedAt = &databaseNow
@@ -332,6 +339,7 @@ func (transaction *transaction) CancelInvocation(ctx context.Context, cancellati
 	}
 	if approval.ID != "" && (approval.Status == enum.ApprovalPending || approval.Status == enum.ApprovalApproved) {
 		approval.Status = enum.ApprovalCancelled
+		approval.Version++
 		approval.DecidedBy = cancellation.ActorID
 		approval.DecisionReasonCode = cancellation.ReasonCode
 		approval.DecidedAt = &cancellation.CancelledAt

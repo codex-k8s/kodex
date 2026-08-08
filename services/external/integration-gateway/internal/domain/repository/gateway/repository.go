@@ -31,14 +31,16 @@ type InvocationReservation struct {
 }
 
 type Decision struct {
-	ApprovalID     string
-	Approve        bool
-	ActorID        string
-	ReasonCode     string
-	ReceiptKeyHash string
-	RequestHash    string
-	DecidedAt      time.Time
-	Audit          entity.AuditEvent
+	ApprovalID          string
+	ExpectedVersion     uint64
+	ExpectedRequestHash string
+	Approve             bool
+	ActorID             string
+	ReasonCode          string
+	ReceiptKeyHash      string
+	RequestHash         string
+	DecidedAt           time.Time
+	Audit               entity.AuditEvent
 }
 
 type Cancellation struct {

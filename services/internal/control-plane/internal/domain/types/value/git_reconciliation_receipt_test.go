@@ -15,6 +15,7 @@ func TestGitReconciliationReceiptRequiresExactProtectedTarget(t *testing.T) {
 	receipt := GitReconciliationReceipt{
 		ContractVersion: 1,
 		Issuer:          "https://integration-gateway.mattercodex-system.svc.cluster.local/authority/git-reconciliation",
+		Audience:        "urn:mattercodex:git-reconciliation",
 		Purpose:         "GIT_RECONCILIATION_RECEIPT",
 		WorkloadID:      "integration-gateway",
 		CallerSPIFFEID:  "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",

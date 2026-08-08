@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "repository_key": "matter-codex",
+      "url": "https://github.com/codex-k8s/matter-codex.git",
+      "tls_server_name": "github.com",
+      "refs": {"main": "refs/heads/main"},
+      "paths": {"integration-observer-role": "deploy/k8s/base/integration-gateway/git-sources/integration-observer-role.json"},
+      "repository_connection_id": "d86ea9ef-9867-50ce-a35f-a97601e90089",
+      "repository_connection_version": 1,
+      "credential_binding_id": "5419fe9b-0cf5-576f-a2c3-b37f86e44808",
+      "credential_binding_version": 1,
+      "credential_secret_ref": "mattercodex/integration-gateway/git-credentials/matter-codex",
+      "maximum_bytes": 262144
+    }
+  ]
+}

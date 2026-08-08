@@ -47,8 +47,9 @@ WITH authority_changed AS (
     RETURNING invocation.invocation_id
 ), authority_terminal_approvals AS (
     UPDATE integration_gateway.approvals AS approval SET
-        status = 'CANCELLED', decided_at = clock_timestamp(),
-        payload = jsonb_set(approval.payload, '{Status}', '"CANCELLED"'::jsonb, false)
+        status = 'CANCELLED', version = approval.version + 1, decided_at = clock_timestamp(),
+        payload = jsonb_set(jsonb_set(approval.payload, '{Status}', '"CANCELLED"'::jsonb, false),
+                            '{Version}', to_jsonb(approval.version + 1), true)
      WHERE approval.invocation_id IN (SELECT invocation_id FROM authority_terminal_invocations)
        AND approval.status IN ('PENDING', 'APPROVED')
     RETURNING approval.invocation_id
@@ -112,8 +113,9 @@ WITH authority_changed AS (
          ORDER BY expires_at LIMIT @limit FOR UPDATE SKIP LOCKED
      ) RETURNING transport_session_id, tenant_id, project_id
 ), expired_approvals AS (
-    UPDATE integration_gateway.approvals SET status = 'EXPIRED', decided_at = clock_timestamp(),
-        payload = jsonb_set(payload, '{Status}', '"EXPIRED"'::jsonb, false)
+    UPDATE integration_gateway.approvals SET status = 'EXPIRED', version = version + 1, decided_at = clock_timestamp(),
+        payload = jsonb_set(jsonb_set(payload, '{Status}', '"EXPIRED"'::jsonb, false),
+                            '{Version}', to_jsonb(version + 1), true)
      WHERE approval_id IN (
         SELECT approval_id FROM integration_gateway.approvals
          WHERE status = 'PENDING' AND expires_at <= clock_timestamp()
@@ -135,8 +137,9 @@ WITH authority_changed AS (
     )
     RETURNING invocation_id, tenant_id, project_id, canonical_request_hash
 ), expired_approved_approvals AS (
-    UPDATE integration_gateway.approvals SET status = 'EXPIRED', decided_at = clock_timestamp(),
-        payload = jsonb_set(payload, '{Status}', '"EXPIRED"'::jsonb, false)
+    UPDATE integration_gateway.approvals SET status = 'EXPIRED', version = version + 1, decided_at = clock_timestamp(),
+        payload = jsonb_set(jsonb_set(payload, '{Status}', '"EXPIRED"'::jsonb, false),
+                            '{Version}', to_jsonb(version + 1), true)
      WHERE invocation_id IN (SELECT invocation_id FROM expired_approved_invocations)
        AND status = 'APPROVED'
     RETURNING invocation_id

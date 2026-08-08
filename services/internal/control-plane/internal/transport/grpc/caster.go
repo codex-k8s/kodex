@@ -297,22 +297,33 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 		if err != nil {
 			return nil, err
 		}
+		resetsAt, err := optionalTime(value.CredentialBinding.GetProviderResetsAt())
+		if err != nil {
+			return nil, err
+		}
+		observationExpiresAt, err := optionalTime(value.CredentialBinding.GetProviderObservationExpiresAt())
+		if err != nil {
+			return nil, err
+		}
 		return entity.CredentialBindingSpec{
-			Purpose:                     value.CredentialBinding.GetPurpose(),
-			SecretRef:                   value.CredentialBinding.GetSecretRef(),
-			PrincipalRef:                value.CredentialBinding.GetPrincipalRef(),
-			Revision:                    value.CredentialBinding.GetRevision(),
-			ExpiresAt:                   expiresAt,
-			ProviderEligible:            value.CredentialBinding.GetProviderEligible(),
-			ProviderCapabilities:        value.CredentialBinding.GetProviderCapabilities(),
-			ProviderObservedUsage:       value.CredentialBinding.GetProviderObservedUsage(),
-			ProviderObservedLimit:       value.CredentialBinding.GetProviderObservedLimit(),
-			ProviderObservationRevision: value.CredentialBinding.GetProviderObservationRevision(),
-			ProviderObservedAt:          observedAt,
-			ImmutableSecretRef:          value.CredentialBinding.GetImmutableSecretRef(),
-			ProviderContentVersion:      value.CredentialBinding.GetProviderContentVersion(),
-			ContentSHA256:               value.CredentialBinding.GetContentSha256(),
-			Ownership:                   configurationOwnershipFromProto(value.CredentialBinding.GetOwnership()),
+			Purpose:                       value.CredentialBinding.GetPurpose(),
+			SecretRef:                     value.CredentialBinding.GetSecretRef(),
+			PrincipalRef:                  value.CredentialBinding.GetPrincipalRef(),
+			Revision:                      value.CredentialBinding.GetRevision(),
+			ExpiresAt:                     expiresAt,
+			ProviderEligible:              value.CredentialBinding.GetProviderEligible(),
+			ProviderCapabilities:          value.CredentialBinding.GetProviderCapabilities(),
+			ProviderObservedUsage:         value.CredentialBinding.GetProviderObservedUsage(),
+			ProviderObservedLimit:         value.CredentialBinding.GetProviderObservedLimit(),
+			ProviderObservationRevision:   value.CredentialBinding.GetProviderObservationRevision(),
+			ProviderObservedAt:            observedAt,
+			ImmutableSecretRef:            value.CredentialBinding.GetImmutableSecretRef(),
+			ProviderContentVersion:        value.CredentialBinding.GetProviderContentVersion(),
+			ContentSHA256:                 value.CredentialBinding.GetContentSha256(),
+			ProviderWindowDurationSeconds: value.CredentialBinding.GetProviderWindowDurationSeconds(),
+			ProviderResetsAt:              resetsAt,
+			ProviderObservationExpiresAt:  observationExpiresAt,
+			Ownership:                     configurationOwnershipFromProto(value.CredentialBinding.GetOwnership()),
 		}, nil
 	case *controlplanev1.ResourceSpec_RepositoryWorkspace:
 		return entity.RepositoryWorkspaceSpec{
@@ -813,17 +824,22 @@ func toProtoResource(resource entity.Resource) (*controlplanev1.Resource, error)
 	if err != nil {
 		return nil, err
 	}
+	projectionSHA256, err := entity.ProjectionSHA256(resource)
+	if err != nil {
+		return nil, err
+	}
 	return &controlplanev1.Resource{
-		Id:        resource.ID,
-		Kind:      toProtoKind(resource.Kind),
-		Name:      resource.Name,
-		State:     toProtoState(resource.State),
-		Version:   resource.Version,
-		ProjectId: resource.ProjectID,
-		ParentId:  resource.ParentID,
-		Spec:      spec,
-		CreatedAt: timestamppb.New(resource.CreatedAt),
-		UpdatedAt: timestamppb.New(resource.UpdatedAt),
+		Id:               resource.ID,
+		Kind:             toProtoKind(resource.Kind),
+		Name:             resource.Name,
+		State:            toProtoState(resource.State),
+		Version:          resource.Version,
+		ProjectId:        resource.ProjectID,
+		ParentId:         resource.ParentID,
+		Spec:             spec,
+		CreatedAt:        timestamppb.New(resource.CreatedAt),
+		UpdatedAt:        timestamppb.New(resource.UpdatedAt),
+		ProjectionSha256: projectionSHA256,
 	}, nil
 }
 
@@ -908,21 +924,24 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 	case entity.CredentialBindingSpec:
 		result.Value = &controlplanev1.ResourceSpec_CredentialBinding{
 			CredentialBinding: &controlplanev1.CredentialBindingSpec{
-				Purpose:                     value.Purpose,
-				SecretRef:                   value.SecretRef,
-				PrincipalRef:                value.PrincipalRef,
-				Revision:                    value.Revision,
-				ExpiresAt:                   optionalTimestamp(value.ExpiresAt),
-				ProviderEligible:            value.ProviderEligible,
-				ProviderCapabilities:        value.ProviderCapabilities,
-				ProviderObservedUsage:       value.ProviderObservedUsage,
-				ProviderObservedLimit:       value.ProviderObservedLimit,
-				ProviderObservationRevision: value.ProviderObservationRevision,
-				ProviderObservedAt:          optionalTimestamp(value.ProviderObservedAt),
-				ImmutableSecretRef:          value.ImmutableSecretRef,
-				ProviderContentVersion:      value.ProviderContentVersion,
-				ContentSha256:               value.ContentSHA256,
-				Ownership:                   configurationOwnershipToProto(value.Ownership),
+				Purpose:                       value.Purpose,
+				SecretRef:                     value.SecretRef,
+				PrincipalRef:                  value.PrincipalRef,
+				Revision:                      value.Revision,
+				ExpiresAt:                     optionalTimestamp(value.ExpiresAt),
+				ProviderEligible:              value.ProviderEligible,
+				ProviderCapabilities:          value.ProviderCapabilities,
+				ProviderObservedUsage:         value.ProviderObservedUsage,
+				ProviderObservedLimit:         value.ProviderObservedLimit,
+				ProviderObservationRevision:   value.ProviderObservationRevision,
+				ProviderObservedAt:            optionalTimestamp(value.ProviderObservedAt),
+				ImmutableSecretRef:            value.ImmutableSecretRef,
+				ProviderContentVersion:        value.ProviderContentVersion,
+				ContentSha256:                 value.ContentSHA256,
+				ProviderWindowDurationSeconds: value.ProviderWindowDurationSeconds,
+				ProviderResetsAt:              optionalTimestamp(value.ProviderResetsAt),
+				ProviderObservationExpiresAt:  optionalTimestamp(value.ProviderObservationExpiresAt),
+				Ownership:                     configurationOwnershipToProto(value.Ownership),
 			},
 		}
 	case entity.RepositoryWorkspaceSpec:

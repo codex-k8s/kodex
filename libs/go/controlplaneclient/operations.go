@@ -152,6 +152,23 @@ func IntegrationGatewayOperations() map[string]string {
 	}
 }
 
+// IntegrationGatewayManagementOperations отделяет owner/effect receipts от
+// agent-session профиля того же deployable. Один full method имеет ровно один
+// purpose в этом client connection.
+func IntegrationGatewayManagementOperations() map[string]string {
+	return map[string]string{
+		"control.integration-gateway.readiness":                controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.integration.provider-reference.manage":        controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName,
+		"control.integration.provider-reference.readback.get":  controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName,
+		"control.integration.provider-reference.readback.list": controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
+		"control.integration.provider-pool.manage":             controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName,
+		"control.role-definition.git.reconcile":                controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName,
+		"control.agent.git.reconcile":                          controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName,
+		"control.instruction-set.git.reconcile":                controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName,
+		"control.provider-pool.git.reconcile":                  controlplanev1.ControlPlaneService_ReconcileGitProviderPool_FullMethodName,
+	}
+}
+
 // ControlAPIGatewayOperations возвращает закрытый набор owner HTTP/WS mappings.
 // Actor, tenant, project и ownership разрешаются proof resolver на стороне
 // control-plane; adapter не принимает эти значения из HTTP payload.

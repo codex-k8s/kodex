@@ -29,8 +29,18 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/provider-health-adapter ./cmd/provider-health-adapter
+FROM docker.io/library/node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS runtime
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS runtime
+ARG CODEX_PACKAGE=@openai/codex@0.144.1
+
+RUN set -eu; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates git; \
+    npm install --global --omit=dev "${CODEX_PACKAGE}"; \
+    npm cache clean --force; \
+    groupadd --gid 10001 mattercodex; \
+    useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin mattercodex; \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=build --chmod=0555 /out/ /usr/local/bin/
 

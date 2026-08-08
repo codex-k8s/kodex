@@ -128,16 +128,23 @@ spec:
             - {name: postgres-context, mountPath: /var/run/secrets/mattercodex/integration-gateway/postgres-context, readOnly: true}
             - {name: postgres-ca, mountPath: /var/run/config/mattercodex/integration-gateway/postgres, readOnly: true}
             - {name: definitions, mountPath: /var/run/config/mattercodex/integration-gateway/definitions, readOnly: true}
+            - {name: provider-catalog, mountPath: /var/run/config/mattercodex/integration-gateway/provider-catalog, readOnly: true}
+            - {name: git-sources, mountPath: /var/run/config/mattercodex/integration-gateway/git-sources, readOnly: true}
             - {name: credentials, mountPath: /var/run/secrets/mattercodex/integration-gateway/credentials, readOnly: true}
             - {name: payload-keyset, mountPath: /var/run/secrets/mattercodex/integration-gateway/payload-keyset, readOnly: true}
             - {name: control-plane-client, mountPath: /var/run/secrets/mattercodex/integration-gateway/control-plane-client, readOnly: true}
             - {name: control-plane-ca, mountPath: /var/run/config/mattercodex/integration-gateway/control-plane, readOnly: true}
             - {name: application-grant, mountPath: /var/run/secrets/mattercodex/integration-gateway/application-grant, readOnly: true}
+            - {name: provider-receipt-signer, mountPath: /var/run/secrets/mattercodex/integration-gateway/provider-receipt, readOnly: true}
+            - {name: git-receipt-signer, mountPath: /var/run/secrets/mattercodex/integration-gateway/git-receipt, readOnly: true}
+            - {name: vault-ca, mountPath: /var/run/config/mattercodex/integration-gateway/vault, readOnly: true}
+            - {name: vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
             - {name: provider-proxy-ca, mountPath: /var/run/config/mattercodex/integration-gateway/provider-proxy, readOnly: true}
             - {name: oidc-ca, mountPath: /var/run/config/mattercodex/integration-gateway/oidc, readOnly: true}
             - {name: observability-ca, mountPath: /var/run/config/mattercodex/integration-gateway/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/integration-gateway/observability, readOnly: true}
             - {name: tmp, mountPath: /tmp}
+            - {name: management-runtime, mountPath: /var/run/mattercodex/integration-gateway}
         - name: internal-rpc-authority-issuer
           image: ghcr.io/codex-k8s/matter-codex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/internal-rpc-authority-issuer]
@@ -287,6 +294,10 @@ spec:
           secret: {secretName: integration-gateway-postgresql-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}
         - name: definitions
           configMap: {name: integration-gateway-definitions, defaultMode: 0440}
+        - name: provider-catalog
+          configMap: {name: integration-gateway-provider-catalog, defaultMode: 0440}
+        - name: git-sources
+          configMap: {name: integration-gateway-git-sources, defaultMode: 0440}
         - name: credentials
           secret: {secretName: integration-gateway-provider-health-credential, defaultMode: 0440}
         - name: payload-keyset
@@ -297,6 +308,17 @@ spec:
           configMap: {name: mattercodex-internal-ca, defaultMode: 0440}
         - name: application-grant
           csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-application-grant}}
+        - name: provider-receipt-signer
+          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-provider-receipt-signer}}
+        - name: git-receipt-signer
+          csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: integration-gateway-git-receipt-signer}}
+        - name: vault-ca
+          secret: {secretName: integration-gateway-vault-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}
+        - name: vault-token
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken: {path: token, audience: vault, expirationSeconds: 600}
         - name: provider-proxy-ca
           configMap: {name: integration-egress-proxy-ca, defaultMode: 0440}
         - name: oidc-ca
@@ -341,3 +363,4 @@ spec:
         - name: authority-sentry-dsn
           secret: {secretName: internal-rpc-authority-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}
         - {name: tmp, emptyDir: {sizeLimit: 16Mi}}
+        - {name: management-runtime, emptyDir: {sizeLimit: 64Mi}}

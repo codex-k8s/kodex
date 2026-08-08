@@ -43,6 +43,7 @@ type transaction struct {
 	tx        pgx.Tx
 	tenantID  string
 	projectID string
+	actorID   string
 }
 
 var (
@@ -74,7 +75,7 @@ func (repository *Repository) Transact(ctx context.Context, scope domainrepo.Sco
 		if err := repository.setScope(ctx, tx, scope); err != nil {
 			return errors.Join(err, repository.rollback(tx))
 		}
-		err = callback(&transaction{tx: tx, tenantID: scope.TenantID, projectID: scope.ProjectID})
+		err = callback(&transaction{tx: tx, tenantID: scope.TenantID, projectID: scope.ProjectID, actorID: scope.ActorID})
 		if err == nil {
 			err = tx.Commit(ctx)
 		} else {

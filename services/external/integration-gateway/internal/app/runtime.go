@@ -19,8 +19,7 @@ func loadPublicTLSConfig(config Config) (*tls.Config, error) {
 }
 
 func loadResultTLSConfig(config Config) (*tls.Config, error) {
-	return loadServerTLSConfig(config,
-		"spiffe://mattercodex.local/ns/mattercodex-system/sa/agent-runner")
+	return loadServerTLSConfig(config, config.TLSAllowedClientSPIFFEIDs)
 }
 
 func loadServerTLSConfig(config Config, allowedIdentities string) (*tls.Config, error) {
