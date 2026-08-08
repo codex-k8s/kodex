@@ -672,7 +672,7 @@ func validateLegacyReferences(operations []entity.LegacyGraphOperation, kinds ma
 				return err
 			}
 			for _, component := range operation.RuntimeRevision.Components {
-				if _, ok := kinds[component.LocalRef]; !ok || !validSHA256Text(component.ProjectionSHA256) {
+				if _, ok := kinds[component.LocalRef]; !ok || component.ProjectionSHA256 != "" {
 					return errs.ErrFailedPrecondition
 				}
 			}

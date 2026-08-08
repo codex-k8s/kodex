@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mattercodex.dev/contracts/runtime/legacy-data-migration/v1/restore-verification.schema.json",
+  "title": "MatterCodex legacy data restore verification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "planId", "sourceSha256", "backupSha256", "manifestSha256",
+    "materializationSha256", "materializationCount", "tableCounts", "outcome", "verifiedAt"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "mattercodex.legacy-data-restore-verification.v1"},
+    "planId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{15,127}$"},
+    "sourceSha256": {"$ref": "#/$defs/sha256"},
+    "backupSha256": {"$ref": "#/$defs/sha256"},
+    "manifestSha256": {"$ref": "#/$defs/sha256"},
+    "materializationSha256": {"$ref": "#/$defs/sha256"},
+    "materializationCount": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "tableCounts": {
+      "type": "object",
+      "propertyNames": {"pattern": "^matter_codex_[a-z0-9_]+$"},
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "outcome": {"const": "verified"},
+    "verifiedAt": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

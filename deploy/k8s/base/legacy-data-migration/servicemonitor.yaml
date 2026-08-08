@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: legacy-data-migration
+  labels:
+    app.kubernetes.io/name: legacy-data-migration
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: legacy-data-migration
+  endpoints:
+    - port: technical
+      path: /metrics
+      interval: 15s

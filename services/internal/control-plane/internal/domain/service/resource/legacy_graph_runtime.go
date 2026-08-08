@@ -101,7 +101,7 @@ func (service *Service) compileLegacyRuntimeRevisions(principal value.Principal,
 				return errs.ErrFailedPrecondition
 			}
 			projectionSHA256, err := entity.ProjectionSHA256(resource)
-			if err != nil || projectionSHA256 != component.ProjectionSHA256 {
+			if err != nil || component.ProjectionSHA256 != "" {
 				return errs.ErrFailedPrecondition
 			}
 			if _, exists := componentIDs[resource.ID]; exists {
@@ -162,14 +162,14 @@ func (service *Service) compileLegacyRuntimeRevisions(principal value.Principal,
 			roleDefinition.Version, instruction.ID, instructionSHA, instruction.Version,
 			pool.ID, poolSHA, pool.Version, service.authorityPolicySHA256,
 			service.authorityPolicyRevision, components})
-		if err != nil || effectiveSHA256 != input.EffectiveRuntimeSHA256 {
+		if err != nil || input.EffectiveRuntimeSHA256 != "" {
 			return errs.ErrFailedPrecondition
 		}
 		manifestSHA256, err := canonicalHash(struct {
 			EffectiveRuntimeSHA256 string
 			CreatedAt              time.Time
 		}{effectiveSHA256, input.CreatedAt.UTC().Truncate(time.Microsecond)})
-		if err != nil || manifestSHA256 != input.ManifestSHA256 {
+		if err != nil || input.ManifestSHA256 != "" {
 			return errs.ErrFailedPrecondition
 		}
 		spec := entity.RuntimeRevisionSpec{
@@ -250,7 +250,7 @@ func (service *Service) compileLegacySchedules(principal value.Principal, projec
 			RoomID, RuntimeProfileRef                              string
 		}{agent.ID, agentSHA, instruction.ID, instructionSHA, pool.ID, poolSHA,
 			assignment.ID, assignmentSHA, legacyTargetIDFromOperations(operations, input.RoomRef), agentSpec.RuntimeProfileRef})
-		if err != nil || effectiveSHA256 != input.EffectiveInputSHA256 ||
+		if err != nil || input.EffectiveInputSHA256 != "" ||
 			agentSpec.RuntimeProfileRef != "control-plane://runtime-profile/"+recipe.ID ||
 			agentSpec.RuntimeProfileVersion != recipe.Version || agentSpec.RuntimeProfileSHA256 != recipeSHA {
 			return errs.ErrFailedPrecondition

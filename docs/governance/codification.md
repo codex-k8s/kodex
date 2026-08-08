@@ -131,5 +131,7 @@ updated: 2026-07-28
 | `RUN-MC-013`       | `docs/runbooks/control-api-gateway.md`                      |
 | `SVC-MC-014`       | `services/internal/control-plane/owner-configuration-contract.md` |
 | `SVC-MC-015`       | `services/internal/control-plane/legacy-data-materializer-contract.md` |
+| `SVC-MC-016`       | `services/jobs/legacy-data-migration/README.md`                    |
+| `RUN-MC-014`       | `docs/runbooks/legacy-data-migration.md`                           |
 
 При добавлении управляемого документа реестр обновляется в том же PR.
