@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: egress-gateway
+  labels:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+spec:
+  minAvailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: egress-gateway
+      app.kubernetes.io/component: platform-egress

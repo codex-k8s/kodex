@@ -4,8 +4,8 @@ title: Карта интеграций
 type: architecture
 status: approved
 owner: architect
-version: 0.2.0
-updated: 2026-08-04
+version: 0.2.1
+updated: 2026-08-07
 ---
 
 # Карта интеграций
@@ -86,6 +86,27 @@ spec:
 | Электронная почта | Прием и исходящая коммуникация | Управляемый MCP |
 | CRM/1С | Бизнес-операции | Управляемый MCP с согласованиями |
 | OCI registry | Образы платформы и ролей | Адаптер цепочки поставки |
+
+## Исходящий HTTPS-транспорт platform gateway
+
+Provider и Git clients `integration-gateway`, которым нужен изменяемый SaaS
+address set, используют
+`egress-gateway.mattercodex-system.svc.cluster.local:8080` как HTTP proxy.
+Этот же exact URL поддерживает только bodyless `GET /readyz` без query для
+совместимости management readiness: `204` требует фактически ACTIVE policy и
+validated resolver; `503` означает закрытый отказ. Technical readback остаётся
+на отдельном monitoring-only Service `:9090`, consumer к нему не допускается.
+`NO_PROXY` сохраняет внутренние `.svc` и `.svc.cluster.local` calls внутри
+кластера. Consumer `NetworkPolicy` разрешает только точные endpoint Pod labels
+`app.kubernetes.io/name=egress-gateway` и
+`app.kubernetes.io/component=platform-egress` на `8080/TCP`; объект Service и
+request fields не являются authority.
+
+Gateway допускает только exact policy FQDN на `443`, требует совпадения
+CONNECT authority и фактического ClientHello SNI, запрещает ECH и выполняет
+server-owned A/AAAA resolution с TTL/CNAME/special-purpose validation. TLS
+остаётся end-to-end, поэтому application credentials и проверка сертификата
+не переходят к gateway.
 
 ## Контракт согласования
 

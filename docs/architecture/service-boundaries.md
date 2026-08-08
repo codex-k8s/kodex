@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.4
-updated: 2026-08-05
+version: 1.2.5
+updated: 2026-08-07
 ---
 
 # Границы сервисов и структура репозитория
@@ -26,6 +26,7 @@ services/
     runtime-controller/
   external/
     control-api-gateway/
+    egress-gateway/
     interaction-gateway/
     integration-gateway/
   jobs/
@@ -54,6 +55,7 @@ runbook и ручная проверка входят в один Issue и од�
 | `control-plane`          | internal service                | проекты, чаты, роли, bindings, integrations metadata, runtime revisions, sessions, processes, schedules, memory, gates и artifact metadata | Mattermost transport, Kubernetes resources, MCP execution и AI process  |
 | `runtime-controller`     | internal controller             | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL, archive/restore и runtime health                                                   | бизнесовая конфигурация, Codex process и пользовательские сообщения     |
 | `control-api-gateway`    | external gateway                | HTTP/WebSocket transport state и owner session boundary                                                                                    | domain state и прямой доступ к PostgreSQL                               |
+| `egress-gateway`         | platform external gateway       | immutable FQDN/443 policy, CONNECT+ClientHello SNI validation, server-owned DNS snapshot и literal dial                                    | TLS termination, application credentials, provider lifecycle и business state |
 | `interaction-gateway`    | external gateway                | Mattermost transport, idempotency, cards, bot identities и file delivery                                                                   | sessions, processes, schedules и Kubernetes state                       |
 | `integration-gateway`    | external gateway                | MCP/API/CLI integration execution, grants, approvals и credential isolation                                                                | чужое domain state и agent orchestration                                |
 | `agent-runner`           | job/runtime process             | один claimed turn, локальный process lifecycle, workspace и session materialization                                                        | authoritative session state и orchestration decisions                   |
@@ -65,6 +67,18 @@ runbook и ручная проверка входят в один Issue и од�
 Один aggregate имеет одного авторитетного владельца. Gateway, runner, cache,
 search projection и UI не читают БД другого компонента и не изменяют его
 состояние напрямую.
+
+`egress-gateway` материализует переиспользуемую сетевую границу в
+`services/external/egress-gateway` и `deploy/k8s/base/egress-gateway`. Он
+принимает только exact bodyless `CONNECT` к policy FQDN на `443`, до внешнего
+dial проверяет фактический ClientHello SNI и полный A/AAAA DNS snapshot, а
+`net.Dialer` получает только проверенный literal `AddrPort`. TLS peer,
+сертификат и application authentication остаются у consumer. Gateway не
+владеет management lifecycle `integration-gateway` и не получает его secrets.
+На том же Service `:8080` доступен только совместимый bodyless `GET /readyz`
+без query, связанный с тем же effective readiness; произвольная HTTP
+поверхность не открывается. Environment overlays принадлежат gateway, а policy
+rollout выбирает отдельный content-addressed immutable ConfigMap.
 
 `control-plane` материализует эту границу в
 `services/internal/control-plane`: транзакция PostgreSQL одновременно фиксирует

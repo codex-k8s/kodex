@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/net/netutil"
@@ -27,6 +28,13 @@ type Readiness interface {
 	Ready() (bool, string)
 }
 
+// ExactGETRoute добавляет безопасный service-owned read-only endpoint.
+type ExactGETRoute struct {
+	Path        string
+	ContentType string
+	Handler     http.Handler
+}
+
 // Server владеет listener и стандартным http.Server без фоновых goroutine.
 type Server struct {
 	server             *http.Server
@@ -34,8 +42,8 @@ type Server struct {
 	maximumConnections int
 }
 
-// New валидирует конфигурацию и связывает три технических маршрута.
-func New(config Config, readiness Readiness, metrics http.Handler) (*Server, error) {
+// New валидирует конфигурацию и связывает стандартные и exact service-owned маршруты.
+func New(config Config, readiness Readiness, metrics http.Handler, routes ...ExactGETRoute) (*Server, error) {
 	if config.Address == "" || readiness == nil || metrics == nil ||
 		config.ReadHeaderTimeout < time.Second || config.ReadHeaderTimeout > 10*time.Second ||
 		config.ReadTimeout < config.ReadHeaderTimeout || config.ReadTimeout > 30*time.Second ||
@@ -63,6 +71,23 @@ func New(config Config, readiness Readiness, metrics http.Handler) (*Server, err
 		setHeaders(writer)
 		metrics.ServeHTTP(writer, request)
 	}))
+	registered := map[string]struct{}{"/livez": {}, "/readyz": {}, "/metrics": {}}
+	for _, route := range routes {
+		if !validExactGETRoute(route, registered) {
+			return nil, errors.New("technical HTTP route configuration is invalid")
+		}
+		registered[route.Path] = struct{}{}
+		current := route
+		mux.Handle("GET "+current.Path, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			setHeaders(writer)
+			writer.Header().Set("Content-Type", current.ContentType)
+			if request.URL.RawQuery != "" || request.ContentLength != 0 || len(request.TransferEncoding) != 0 {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			current.Handler.ServeHTTP(writer, request)
+		}))
+	}
 	return &Server{maximumConnections: config.MaximumConnections, server: &http.Server{
 		Addr:              config.Address,
 		Handler:           http.MaxBytesHandler(mux, 1<<20),
@@ -72,6 +97,16 @@ func New(config Config, readiness Readiness, metrics http.Handler) (*Server, err
 		IdleTimeout:       config.IdleTimeout,
 		MaxHeaderBytes:    config.MaximumHeaderBytes,
 	}}, nil
+}
+
+func validExactGETRoute(route ExactGETRoute, registered map[string]struct{}) bool {
+	if route.Handler == nil || route.ContentType == "" || len(route.Path) < 2 || len(route.Path) > 128 ||
+		!strings.HasPrefix(route.Path, "/") || strings.HasSuffix(route.Path, "/") ||
+		strings.ContainsAny(route.Path, "?#{} \\") || strings.Contains(route.Path, "..") {
+		return false
+	}
+	_, exists := registered[route.Path]
+	return !exists
 }
 
 // Listen резервирует listener до startup barrier.

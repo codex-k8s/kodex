@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-gateway
+  labels:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+  ports:
+    - {name: connect, port: 8080, targetPort: connect, protocol: TCP}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-gateway-technical
+  labels:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+    mattercodex.dev/endpoint: technical
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+  ports:
+    - {name: metrics, port: 9090, targetPort: metrics, protocol: TCP}

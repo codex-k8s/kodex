@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-gateway
+  labels:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  minReadySeconds: 10
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: egress-gateway
+      app.kubernetes.io/component: platform-egress
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: egress-gateway
+        app.kubernetes.io/component: platform-egress
+      annotations:
+        kubectl.kubernetes.io/default-container: egress-gateway
+    spec:
+      serviceAccountName: egress-gateway
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      hostNetwork: false
+      dnsPolicy: ClusterFirst
+      # 20s CONNECT cancel/join + 5s worker + 5s technical + 15s process margin.
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: egress-gateway
+          image: mattercodex-image-registry.mattercodex-system.svc.cluster.local:5000/mattercodex/egress-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: EGRESS_GATEWAY_POLICY_FILE, value: /var/run/config/mattercodex/egress-gateway/policy.json}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_REVISION, value: 2026-08-07.1}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: 5c71fefd60e624d6891e857442302c2b119f21b76b474d3c34f1c6df330f62ae}
+            - {name: EGRESS_GATEWAY_CONNECT_LISTEN, value: ":8080"}
+            - {name: EGRESS_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
+            - {name: EGRESS_GATEWAY_RESOLV_CONF, value: /etc/resolv.conf}
+          ports:
+            - {name: connect, containerPort: 8080, protocol: TCP}
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+          startupProbe:
+            httpGet: {path: /livez, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: {path: /livez, port: metrics}
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: policy
+              mountPath: /var/run/config/mattercodex/egress-gateway
+              readOnly: true
+      volumes:
+        - name: policy
+          configMap:
+            name: egress-gateway-policy
+            defaultMode: 0444
+            items:
+              - {key: policy.json, path: policy.json}

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: egress-gateway-dashboard
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+data:
+  egress-gateway.json: |
+    {"uid":"mattercodex-egress-gateway","title":"MatterCodex egress gateway","schemaVersion":39,"panels":[{"type":"stat","title":"Ready replicas","targets":[{"expr":"sum(mattercodex_egress_gateway_readiness{ready=\"true\"})"}]},{"type":"stat","title":"Not-ready scraped replicas","targets":[{"expr":"sum(up{service=\"egress-gateway-technical\"} == 1) - (sum(mattercodex_egress_gateway_readiness{ready=\"true\"} == 1) or vector(0))"}]},{"type":"timeseries","title":"CONNECT outcomes","targets":[{"expr":"sum by (outcome,stage,reason) (rate(mattercodex_egress_gateway_connection_attempts_total[5m]))"}]},{"type":"timeseries","title":"Connection limit rejections","targets":[{"expr":"sum(rate(mattercodex_egress_gateway_connection_attempts_total{outcome=\"rejected\",stage=\"accept\",reason=\"connection_limit\"}[5m]))"}]},{"type":"timeseries","title":"DNS validation outcomes","targets":[{"expr":"sum by (outcome,reason) (rate(mattercodex_egress_gateway_dns_resolutions_total[5m]))"}]},{"type":"timeseries","title":"Literal dial outcomes","targets":[{"expr":"sum by (outcome,reason) (rate(mattercodex_egress_gateway_external_dials_total[5m]))"}]}]}

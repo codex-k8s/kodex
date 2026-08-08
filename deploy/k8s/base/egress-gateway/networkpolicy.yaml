@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-gateway-deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: egress-gateway
+      app.kubernetes.io/component: platform-egress
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-gateway-exact-runtime-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: egress-gateway
+      app.kubernetes.io/component: platform-egress
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
+              app.kubernetes.io/component: external-gateway
+      ports:
+        - {protocol: TCP, port: 8080}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - {protocol: TCP, port: 9090}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    # Destination-less TCP/443 — осознанное исключение на L3/L4 boundary:
+    # application Pod его не получает, а gateway до dial проверяет CONNECT,
+    # ClientHello SNI, immutable policy и полный DNS snapshot.
+    - ports:
+        - {protocol: TCP, port: 443}
