@@ -554,6 +554,7 @@ Enum mapping является точный и не использует `enum.St
 | `AUTHORITY_SOURCE_IMAGE_BUILD` | `IMAGE_BUILD` |
 | `AUTHORITY_SOURCE_IMAGE_ARTIFACT` | `IMAGE_ARTIFACT` |
 | `AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM` | `IMAGE_PROMOTION_CLAIM` |
+| `AUTHORITY_SOURCE_LEGACY_MIGRATION` | `LEGACY_MIGRATION` |
 
 `UNSPECIFIED`, неизвестный enum number и любое canonical JSON enum вне таблицы
 дают `InvalidArgument/MALFORMED_REQUEST` до подписи. Project message отсутствует

@@ -83,6 +83,9 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 - закрытый реестр owner-конфигурации, карты сценариев, execution graph и полная
   lifecycle/authority matrix Issue #234:
   `services/internal/control-plane/owner-configuration-contract.md`.
+- Typed owner materializer исторического полного графа и его authority,
+  dependency, provenance, lifecycle/replay/error matrices зафиксированы в
+  `services/internal/control-plane/legacy-data-materializer-contract.md`.
 
 Внешнее отображение принадлежит будущему `control-api-gateway`; этот компонент
 публикует только внутренний gRPC. Политика deny-by-default регистрирует

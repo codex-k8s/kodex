@@ -636,6 +636,15 @@ func rpcError(correlationID string, err error) error {
 	case errors.Is(err, errs.ErrIdempotencyConflict):
 		code, reason = codes.AlreadyExists, controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT
 		message, safeCode = "control-plane idempotency conflict", "IDEMPOTENCY_CONFLICT"
+	case errors.Is(err, errs.ErrAborted):
+		code, reason = codes.Aborted, controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT
+		message, safeCode = "control-plane operation aborted", "ABORTED"
+	case errors.Is(err, errs.ErrFailedPrecondition):
+		code, reason = codes.FailedPrecondition, controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT
+		message, safeCode = "control-plane precondition failed", "FAILED_PRECONDITION"
+	case errors.Is(err, errs.ErrDataLoss):
+		code, reason = codes.DataLoss, controlplanev1.ErrorReason_ERROR_REASON_INTERNAL
+		message, safeCode = "control-plane stored data is corrupt", "DATA_LOSS"
 	case errors.Is(err, errs.ErrStateConflict):
 		code, reason = codes.FailedPrecondition, controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT
 		message, safeCode = "control-plane state conflict", "STATE_CONFLICT"

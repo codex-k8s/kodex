@@ -121,6 +121,29 @@ func TestAutomationSchedulerOperationSetIsPollingOnly(t *testing.T) {
 	}
 }
 
+func TestLegacyDataMigrationOperationSetIsMaterializerOnly(t *testing.T) {
+	t.Parallel()
+
+	operations := LegacyDataMigrationOperations()
+	if len(operations) != 5 {
+		t.Fatalf("legacy-data-migration operation set must contain exact owner methods: %d", len(operations))
+	}
+	for _, operation := range []string{
+		"control.legacy-data-migration.readiness",
+		"control.legacy-graph-migration.prepare",
+		"control.legacy-graph-migration.materialize",
+		"control.legacy-graph-migration.read",
+		"control.legacy-graph-migration.abort",
+	} {
+		if operations[operation] == "" {
+			t.Fatalf("legacy materializer operation is absent: %s", operation)
+		}
+	}
+	if _, exists := operations["control.resource.create"]; exists {
+		t.Fatal("legacy migration job must not receive generic resource mutation")
+	}
+}
+
 func TestImagePromotionOperationSetConsumesClaimBeforeSideEffect(t *testing.T) {
 	t.Parallel()
 	operations := ImagePromotionOperations()

@@ -21,6 +21,17 @@ func AutomationSchedulerOperations() map[string]string {
 	}
 }
 
+// LegacyDataMigrationOperations выдаёт prerequisite job только owner materializer lifecycle.
+func LegacyDataMigrationOperations() map[string]string {
+	return map[string]string{
+		"control.legacy-data-migration.readiness":    controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,
+		"control.legacy-graph-migration.prepare":     controlplanev1.ControlPlaneService_PrepareLegacyGraphMigration_FullMethodName,
+		"control.legacy-graph-migration.materialize": controlplanev1.ControlPlaneService_MaterializeLegacyGraphMigration_FullMethodName,
+		"control.legacy-graph-migration.read":        controlplanev1.ControlPlaneService_GetLegacyGraphMigration_FullMethodName,
+		"control.legacy-graph-migration.abort":       controlplanev1.ControlPlaneService_AbortLegacyGraphMigration_FullMethodName,
+	}
+}
+
 func ArtifactScannerOperations() map[string]string {
 	return map[string]string{
 		"control.artifact-scanner.readiness": controlplanev1.ControlPlaneService_CheckReadiness_FullMethodName,

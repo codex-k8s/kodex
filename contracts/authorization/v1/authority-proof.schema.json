@@ -150,7 +150,8 @@
             "IMAGE_ARTIFACT",
             "IMAGE_PROMOTION_CLAIM",
             "PROCESS_RUN",
-            "AUTOMATION_OCCURRENCE"
+            "AUTOMATION_OCCURRENCE",
+            "LEGACY_MIGRATION"
           ]
         },
         "reference": {

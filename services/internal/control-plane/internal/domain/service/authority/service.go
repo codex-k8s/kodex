@@ -169,6 +169,8 @@ func (service *Service) Resolve(
 		BoundInvocationID           string
 		ProviderReceiptFullMethod   string
 		ProviderReceiptPurpose      string
+		SourceRootReference         string
+		SourceRootSHA256            string
 	}{
 		input.Identity.ProducerID,
 		input.Identity.CredentialPurpose,
@@ -196,6 +198,8 @@ func (service *Service) Resolve(
 		input.Identity.BoundInvocationID,
 		input.Identity.ProviderReceiptFullMethod,
 		input.Identity.ProviderReceiptPurpose,
+		input.Identity.SourceRootReference,
+		input.Identity.SourceRootSHA256,
 	})
 	if err != nil {
 		return authoritytype.Proof{}, errs.ErrInternal
@@ -347,6 +351,11 @@ func (service *Service) Resolve(
 				provenance.Revision = input.Identity.BoundGeneration
 				provenance.DigestSHA256 = input.Identity.BoundInputSHA256
 			}
+			if input.Identity.CallerWorkload == "legacy-data-migration" {
+				provenance.Reference = input.Identity.SourceRootReference
+				provenance.Revision = input.Identity.CredentialGeneration
+				provenance.DigestSHA256 = input.Identity.SourceRootSHA256
+			}
 			claims := authoritytype.ProofClaims{
 				Version:  1,
 				Issuer:   service.config.Issuer,
@@ -481,6 +490,14 @@ func validateApplicationIdentity(identity authoritytype.ApplicationIdentity) err
 	}
 	if (identity.ProviderReceiptFullMethod == "") != (identity.ProviderReceiptPurpose == "") {
 		return errors.New("provider receipt binding is invalid")
+	}
+	legacyMigration := identity.CallerWorkload == "legacy-data-migration"
+	if legacyMigration && (identity.ProjectID != "" || value.ValidateID(identity.SourceRootReference) != nil ||
+		!validDigest(identity.SourceRootSHA256) || !identity.TenantOwner) {
+		return errors.New("legacy migration source root binding is invalid")
+	}
+	if !legacyMigration && (identity.SourceRootReference != "" || identity.SourceRootSHA256 != "") {
+		return errors.New("unexpected legacy migration source root binding")
 	}
 	return nil
 }

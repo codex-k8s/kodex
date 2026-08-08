@@ -955,3 +955,72 @@ type ProtectedRepository interface {
 	GetRuntimeIncident(context.Context, string, string, string, string) (RuntimeIncident, error)
 	ListRuntimeIncidentHistory(context.Context, string, string, string, string, uint64, int) ([]RuntimeIncidentHistory, error)
 }
+
+// LegacyGraphPlanRecord — immutable owner plan; Payload содержит только
+// типизированный domain JSON и никогда не исполняется SQL.
+type LegacyGraphPlanRecord struct {
+	PlanID, OrganizationID, OwnerActorID                        string
+	SourceRootReference, SourceRootSHA256, SourceSnapshotSHA256 string
+	IdempotencyKeySHA256, RequestSHA256, SemanticSHA256         string
+	ProjectID, State, VerificationState                         string
+	Payload                                                     []byte
+	OperationCount, ArchivedSourceCount                         uint32
+	PreparedAt, TerminalAt                                      time.Time
+}
+
+type LegacySourceDispositionRecord struct {
+	PlanID, SourceTable, Disposition, SourceSHA256, TerminalStateSHA256 string
+	RowCount                                                            uint64
+}
+
+type LegacyOperationRecord struct {
+	PlanID, OperationKind, InputSHA256, TargetID                 string
+	TargetKind                                                   string
+	Ordinal                                                      uint32
+	TargetVersion                                                uint64
+	TargetState                                                  enum.State
+	ProjectionSHA256, ProvenanceSHA256, ProvenanceEvidenceSHA256 string
+	AuditIDs, EventIDs                                           []string
+	EventSequences                                               []uint64
+	MaterializedAt                                               time.Time
+}
+
+type LegacyProvenanceRecord struct {
+	PlanID, TargetID, TargetKind, SourceTable, SourceRef, SourceSHA256                  string
+	RootActorID, RootSessionID, RootTurnID, RuntimeRevisionID                           string
+	ParentTargetID, LaunchingTurnID, LaunchingAttemptTargetID                           string
+	ImmutableInputSHA256, MachinePolicySHA256, LegacyPolicySHA256, LineageSHA256        string
+	Ordinal                                                                             uint32
+	SourceRevision, RuntimeRevisionVersion, MachinePolicyRevision, LegacyPolicyRevision uint64
+	RootAttempt, LaunchingAttempt                                                       uint32
+}
+
+type LegacyCallbackManifest struct {
+	ID, PlanID, DelegationID, CallbackProcessID, ManifestSHA256 string
+	Destinations                                                []string
+	CreatedAt                                                   time.Time
+}
+
+type LegacyCallbackDelivery struct {
+	ID, PlanID, ManifestID, Destination, ReceiptSHA256, State string
+	DeliveredAt                                               time.Time
+}
+
+// LegacyGraphMigrationTransaction — узкий typed port Issue #247.
+type LegacyGraphMigrationTransaction interface {
+	InsertLegacyGraphPlan(context.Context, LegacyGraphPlanRecord) error
+	GetLegacyGraphPlanForUpdate(context.Context, string) (LegacyGraphPlanRecord, error)
+	InsertLegacySourceDisposition(context.Context, LegacySourceDispositionRecord) error
+	ListLegacySourceDispositions(context.Context, string) ([]LegacySourceDispositionRecord, error)
+	InsertLegacyOperationIntent(context.Context, LegacyOperationRecord) error
+	ListLegacyOperationReceipts(context.Context, string) ([]LegacyOperationRecord, error)
+	MaterializeLegacyOperationReceipt(context.Context, LegacyOperationRecord) error
+	SetLegacyGraphPlanTerminal(context.Context, string, string, string, time.Time) error
+	AppendLegacyProvenance(context.Context, LegacyProvenanceRecord) error
+	GetLegacyProvenanceProjection(context.Context, string, uint32) (string, error)
+	SaveLegacyCallbackManifest(context.Context, LegacyCallbackManifest) error
+	SaveLegacyCallbackDelivery(context.Context, LegacyCallbackDelivery) error
+	SaveLegacyTurnAttempt(context.Context, TurnAttempt, string, uint64) error
+	GetLegacyCustomOperationProjection(context.Context, string, uint32) (string, error)
+	VerifyLegacyOperationEvidence(context.Context, LegacyOperationRecord) (bool, error)
+}

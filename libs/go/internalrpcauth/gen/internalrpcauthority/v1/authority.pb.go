@@ -96,6 +96,7 @@ const (
 	AuthoritySource_AUTHORITY_SOURCE_IMAGE_BUILD              AuthoritySource = 8
 	AuthoritySource_AUTHORITY_SOURCE_IMAGE_ARTIFACT           AuthoritySource = 9
 	AuthoritySource_AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM    AuthoritySource = 10
+	AuthoritySource_AUTHORITY_SOURCE_LEGACY_MIGRATION         AuthoritySource = 11
 )
 
 // Enum value maps for AuthoritySource.
@@ -112,6 +113,7 @@ var (
 		8:  "AUTHORITY_SOURCE_IMAGE_BUILD",
 		9:  "AUTHORITY_SOURCE_IMAGE_ARTIFACT",
 		10: "AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM",
+		11: "AUTHORITY_SOURCE_LEGACY_MIGRATION",
 	}
 	AuthoritySource_value = map[string]int32{
 		"AUTHORITY_SOURCE_UNSPECIFIED":              0,
@@ -125,6 +127,7 @@ var (
 		"AUTHORITY_SOURCE_IMAGE_BUILD":              8,
 		"AUTHORITY_SOURCE_IMAGE_ARTIFACT":           9,
 		"AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM":    10,
+		"AUTHORITY_SOURCE_LEGACY_MIGRATION":         11,
 	}
 )
 
@@ -4523,7 +4526,7 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x10ACTOR_KIND_HUMAN\x10\x01\x12\x14\n" +
 	"\x10ACTOR_KIND_AGENT\x10\x02\x12\x16\n" +
 	"\x12ACTOR_KIND_SERVICE\x10\x03\x12\x19\n" +
-	"\x15ACTOR_KIND_AUTOMATION\x10\x04*\xb4\x03\n" +
+	"\x15ACTOR_KIND_AUTOMATION\x10\x04*\xdb\x03\n" +
 	"\x0fAuthoritySource\x12 \n" +
 	"\x1cAUTHORITY_SOURCE_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dAUTHORITY_SOURCE_OIDC_SESSION\x10\x01\x12%\n" +
@@ -4536,7 +4539,8 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x1cAUTHORITY_SOURCE_IMAGE_BUILD\x10\b\x12#\n" +
 	"\x1fAUTHORITY_SOURCE_IMAGE_ARTIFACT\x10\t\x12*\n" +
 	"&AUTHORITY_SOURCE_IMAGE_PROMOTION_CLAIM\x10\n" +
-	"*\xdc\x01\n" +
+	"\x12%\n" +
+	"!AUTHORITY_SOURCE_LEGACY_MIGRATION\x10\v*\xdc\x01\n" +
 	"\x15WorkloadAuthorityRole\x12'\n" +
 	"#WORKLOAD_AUTHORITY_ROLE_UNSPECIFIED\x10\x00\x120\n" +
 	",WORKLOAD_AUTHORITY_ROLE_AUTHORIZATION_ISSUER\x10\x01\x122\n" +

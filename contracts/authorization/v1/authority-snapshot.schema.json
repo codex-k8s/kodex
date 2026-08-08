@@ -457,7 +457,8 @@
               "IMAGE_ARTIFACT",
               "IMAGE_PROMOTION_CLAIM",
               "PROCESS_RUN",
-              "AUTOMATION_OCCURRENCE"
+              "AUTOMATION_OCCURRENCE",
+              "LEGACY_MIGRATION"
             ]
           }
         },
@@ -533,6 +534,7 @@
             "AGENT_SESSION_GRANT",
             "PROCESS_RUN_GRANT",
             "AUTOMATION_OCCURRENCE_GRANT",
+            "LEGACY_DATA_MIGRATION_GRANT",
             "OWNER_GATE_DELIVERY_GRANT",
             "RUNTIME_REVISION_GRANT",
             "RUNTIME_RESTORE_VERIFIER_GRANT",
@@ -614,7 +616,8 @@
               "IMAGE_ARTIFACT",
               "IMAGE_PROMOTION_CLAIM",
               "PROCESS_RUN",
-              "AUTOMATION_OCCURRENCE"
+              "AUTOMATION_OCCURRENCE",
+              "LEGACY_MIGRATION"
             ]
           }
         },

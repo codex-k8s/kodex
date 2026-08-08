@@ -494,8 +494,8 @@ func Run(
 	state.grpcServer = stdgrpc.NewServer(
 		stdgrpc.Creds(transportCredentials),
 		stdgrpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
-		stdgrpc.MaxRecvMsgSize(1<<20),
-		stdgrpc.MaxSendMsgSize(1<<20),
+		stdgrpc.MaxRecvMsgSize(9<<20),
+		stdgrpc.MaxSendMsgSize(9<<20),
 		stdgrpc.ChainUnaryInterceptor(
 			state.metrics.UnaryServerInterceptor(),
 			state.telemetry.UnaryServerInterceptor(methods),

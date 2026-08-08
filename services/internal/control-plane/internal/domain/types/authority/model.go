@@ -40,6 +40,8 @@ type ApplicationIdentity struct {
 	AllowedOperationIDs         []string
 	ProviderReceiptFullMethod   string
 	ProviderReceiptPurpose      string
+	SourceRootReference         string
+	SourceRootSHA256            string
 }
 
 type Provenance struct {

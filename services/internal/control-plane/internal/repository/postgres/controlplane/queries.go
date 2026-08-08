@@ -192,6 +192,51 @@ var sqlLegacyConfigurationCutoverList string
 //go:embed sql/legacy_configuration_cutover__mark_migrated.sql
 var sqlLegacyConfigurationCutoverMarkMigrated string
 
+//go:embed sql/legacy_graph_plan__insert.sql
+var sqlLegacyGraphPlanInsert string
+
+//go:embed sql/legacy_graph_plan__get_for_update.sql
+var sqlLegacyGraphPlanGetForUpdate string
+
+//go:embed sql/legacy_graph_source__insert.sql
+var sqlLegacyGraphSourceInsert string
+
+//go:embed sql/legacy_graph_source__list.sql
+var sqlLegacyGraphSourceList string
+
+//go:embed sql/legacy_graph_operation__insert.sql
+var sqlLegacyGraphOperationInsert string
+
+//go:embed sql/legacy_graph_operation__list.sql
+var sqlLegacyGraphOperationList string
+
+//go:embed sql/legacy_graph_operation__materialize.sql
+var sqlLegacyGraphOperationMaterialize string
+
+//go:embed sql/legacy_graph_plan__terminal.sql
+var sqlLegacyGraphPlanTerminal string
+
+//go:embed sql/legacy_graph_provenance__insert.sql
+var sqlLegacyGraphProvenanceInsert string
+
+//go:embed sql/legacy_graph_provenance__projection.sql
+var sqlLegacyGraphProvenanceProjection string
+
+//go:embed sql/legacy_graph_callback_manifest__insert.sql
+var sqlLegacyGraphCallbackManifestInsert string
+
+//go:embed sql/legacy_graph_callback_delivery__insert.sql
+var sqlLegacyGraphCallbackDeliveryInsert string
+
+//go:embed sql/legacy_graph_operation__verify.sql
+var sqlLegacyGraphOperationVerify string
+
+//go:embed sql/legacy_graph_operation__custom_projection.sql
+var sqlLegacyGraphOperationCustomProjection string
+
+//go:embed sql/legacy_graph_turn_attempt__insert.sql
+var sqlLegacyGraphTurnAttemptInsert string
+
 //go:embed sql/runtime_revision__latest.sql
 var sqlRuntimeRevisionLatest string
 
