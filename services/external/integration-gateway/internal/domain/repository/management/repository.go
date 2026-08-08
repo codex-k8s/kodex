@@ -154,6 +154,7 @@ type (
 		Scope             domainrepo.Scope
 		EffectID, LeaseID string
 		LeaseFence        uint64
+		InputDigest       string
 		Binding           entity.GitSourceBinding
 		Reconciliation    entity.GitReconciliation
 		At                time.Time

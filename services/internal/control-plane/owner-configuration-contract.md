@@ -163,6 +163,15 @@ detach/copy, но не подписывать Git provenance. Readiness integrat
 control-plane path; receive-side JWK/profile #234 сам по себе готовность
 producer не доказывает.
 
+Для provider authorization unit #236 использует только специализированный
+`ProviderEffectReadbackReceipt`: одна owner transaction материализует
+immutable `CredentialBinding` с opaque Vault ref/version/content digest и
+safe capacity observation вместе с `ProviderConnectionReference`. Частичный
+commit запрещён. Ответ `ManageProviderConnectionReference` возвращает typed
+readback обоих ресурсов; последующие Get/List сверяют exact
+ID/version/projection digest. Generic credential CRUD и raw secret transport в
+control-plane не открываются.
+
 ## Lifecycle и authority matrix
 
 | Вид/переход | Допустимый predecessor | Authority и дополнительные проверки | Atomic successor / revoke | Event либо authoritative read |

@@ -64,14 +64,6 @@ spec:
             summary: Egress proxy integration gateway недоступен
             description: Exact mTLS provider path закрыт до восстановления proxy readiness.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayManagementEgressProxyUnavailable
-          expr: kube_deployment_status_replicas_available{namespace="mattercodex-system",deployment="integration-management-egress-proxy"} < 1
-          for: 5m
-          labels: {severity: critical}
-          annotations:
-            summary: Management egress proxy integration gateway недоступен
-            description: Device authorization и allowlisted Git fetch закрыты до восстановления proxy readiness.
-            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/integration-gateway.md
         - alert: IntegrationGatewayPostgresqlUnavailable
           expr: sum(kube_pod_status_ready{namespace="mattercodex-system",condition="true",pod=~"integration-gateway-postgresql-.*"}) < 2
           for: 5m

@@ -175,6 +175,17 @@ func (client *ManagementClient) SyncProvider(ctx context.Context, scope domainre
 	if resource == nil || resource.GetId() == "" || resource.GetVersion() == 0 || !validDigest(resource.GetProjectionSha256()) {
 		return managementeffect.Readback{}, errors.Join(managementeffect.ErrOutcomeUnknown, errors.New("control-plane provider readback is incomplete"))
 	}
+	if action != "archive" {
+		binding := response.GetCredentialBinding()
+		if binding == nil || binding.GetId() != credential.CredentialBindingID ||
+			binding.GetVersion() != credential.CredentialBindingVersion ||
+			binding.GetSpec().GetCredentialBinding() == nil ||
+			binding.GetSpec().GetCredentialBinding().GetContentSha256() != credential.SecretContentDigest ||
+			!validDigest(binding.GetProjectionSha256()) {
+			return managementeffect.Readback{}, errors.Join(managementeffect.ErrOutcomeUnknown,
+				errors.New("control-plane credential binding materialization readback mismatch"))
+		}
+	}
 	getReceipt := baseReceipt
 	getReceipt.FullMethod, getReceipt.ReceiptID, getReceipt.TargetResourceID = controlplanev1.ControlPlaneService_GetProviderConnectionReference_FullMethodName, uuid.NewString(), resource.GetId()
 	getCredential, err := client.signer.SignProvider(getReceipt)

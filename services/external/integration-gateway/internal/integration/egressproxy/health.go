@@ -1,4 +1,4 @@
-// Package egressproxy проверяет тот же namespace-local proxy path, который
+// Package egressproxy проверяет тот же platform egress path, который
 // используют внешние provider/Git effects.
 package egressproxy
 
@@ -15,7 +15,7 @@ import (
 func Check(ctx context.Context, rawURL string) error {
 	proxy, err := url.Parse(rawURL)
 	if err != nil || proxy.Scheme != "http" || proxy.Host == "" {
-		return errors.New("management egress proxy URL is invalid")
+		return errors.New("platform egress gateway URL is invalid")
 	}
 	ready := *proxy
 	ready.Path = "/readyz"
@@ -28,16 +28,16 @@ func Check(ctx context.Context, rawURL string) error {
 	defer transport.CloseIdleConnections()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, ready.String(), nil)
 	if err != nil {
-		return errors.New("create management egress readiness request")
+		return errors.New("create platform egress readiness request")
 	}
 	response, err := (&http.Client{Transport: transport}).Do(request)
 	if err != nil {
-		return errors.New("management egress proxy is unavailable")
+		return errors.New("platform egress gateway is unavailable")
 	}
 	defer response.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1024))
 	if response.StatusCode != http.StatusNoContent {
-		return errors.New("management egress proxy readiness was rejected")
+		return errors.New("platform egress readiness was rejected")
 	}
 	return nil
 }

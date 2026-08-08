@@ -27,7 +27,7 @@ WITH binding_changed AS (
        AND effect.owner_kind = 'git_source_binding'
        AND effect.owner_id = @binding_id AND effect.owner_version = @binding_version
        AND effect.owner_generation = @binding_generation AND effect.owner_status = 'ACTIVE'
-       AND effect.input_sha256 = @command_intent_sha256
+       AND effect.input_sha256 = @fetch_input_sha256
     RETURNING effect_id
 )
 INSERT INTO integration_gateway.management_effects (

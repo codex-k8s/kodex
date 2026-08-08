@@ -1515,7 +1515,7 @@ func (service *Service) materializeProviderCredential(
 	materialization := controlplanecontract.ProviderCredentialMaterialization{
 		CredentialBindingID: receipt.CredentialBindingID, BindingVersion: receipt.CredentialBindingVersion,
 		CredentialGeneration: receipt.EffectGeneration,
-		Provider: receipt.Provider, ProviderObjectRef: receipt.ProviderObjectRef,
+		Provider:             receipt.Provider, ProviderObjectRef: receipt.ProviderObjectRef,
 		SecretRef: receipt.SecretRef, SecretVersion: receipt.SecretVersion,
 		SecretContentSHA256: receipt.SecretContentSHA256, MaskedAccount: receipt.MaskedAccount,
 		MaskedLabel: receipt.MaskedLabel, Capabilities: slices.Clone(receipt.Capabilities),
@@ -1635,6 +1635,35 @@ func (service *Service) GetProtectedConfiguration(
 	kind enum.Kind,
 ) (entity.Resource, error) {
 	return service.Get(ctx, GetInput{Principal: principal, ResourceID: resourceID, Kind: kind})
+}
+
+// GetMaterializedProviderCredential возвращает только exact binding,
+// материализованный специализированным provider receipt path. Generic
+// credential CRUD для integration-gateway не открывается.
+func (service *Service) GetMaterializedProviderCredential(
+	ctx context.Context,
+	principal value.Principal,
+	credentialBindingID string,
+) (entity.Resource, error) {
+	if err := authorize(principal, permissionProviderReferenceManage); err != nil ||
+		principal.CallerWorkload != service.integrationGatewayWorkload ||
+		principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
+		principal.AuthoritySource != "PROVIDER_READBACK" || value.ValidateID(credentialBindingID) != nil {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	resource, err := service.repository.Get(ctx, principal.OrganizationID, principal.ProjectID,
+		credentialBindingID, enum.KindCredentialBinding)
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	if resource.OwnerActorID != principal.ActorID || resource.State != enum.StateActive ||
+		resource.Version != 1 {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	if _, ok := resource.Spec.(entity.CredentialBindingSpec); !ok {
+		return entity.Resource{}, errs.ErrInternal
+	}
+	return resource, nil
 }
 
 func (service *Service) ListProtectedConfigurations(

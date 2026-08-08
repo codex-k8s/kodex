@@ -9,7 +9,11 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-const serviceName = "integration-gateway"
+const (
+	serviceName                      = "integration-gateway"
+	platformManagementEgressProxyURL = "http://egress-gateway.mattercodex-system.svc.cluster.local:8080"
+	managementEgressNoProxy          = "localhost,127.0.0.1,::1,.svc,.svc.cluster.local"
+)
 
 type Config struct {
 	HTTPListen                        string        `env:"INTEGRATION_GATEWAY_HTTP_LISTEN"`
@@ -42,6 +46,7 @@ type Config struct {
 	ProviderProxyTLSServerName        string        `env:"INTEGRATION_GATEWAY_PROVIDER_PROXY_TLS_SERVER_NAME"`
 	ProviderProxyCAFile               string        `env:"INTEGRATION_GATEWAY_PROVIDER_PROXY_CA_FILE"`
 	ManagementEgressProxyURL          string        `env:"INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_PROXY_URL"`
+	ManagementEgressNoProxy           string        `env:"INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_NO_PROXY"`
 	ProviderCatalogFile               string        `env:"INTEGRATION_GATEWAY_PROVIDER_CATALOG_FILE"`
 	GitSourceCatalogFile              string        `env:"INTEGRATION_GATEWAY_GIT_SOURCE_CATALOG_FILE"`
 	GitExecutable                     string        `env:"INTEGRATION_GATEWAY_GIT_EXECUTABLE"`
@@ -113,7 +118,8 @@ func loadConfig() (Config, error) {
 		ProviderProxyURL:                  "https://integration-egress-proxy.mattercodex-system.svc:8443",
 		ProviderProxyTLSServerName:        "integration-egress-proxy.mattercodex-system.svc.cluster.local",
 		ProviderProxyCAFile:               "/var/run/config/mattercodex/integration-gateway/provider-proxy/ca.pem",
-		ManagementEgressProxyURL:          "http://integration-management-egress-proxy.mattercodex-system.svc:8080",
+		ManagementEgressProxyURL:          platformManagementEgressProxyURL,
+		ManagementEgressNoProxy:           managementEgressNoProxy,
 		ProviderCatalogFile:               "/var/run/config/mattercodex/integration-gateway/provider-catalog/catalog.json",
 		GitSourceCatalogFile:              "/var/run/config/mattercodex/integration-gateway/git-sources/catalog.json",
 		GitExecutable:                     "/usr/bin/git",
@@ -192,7 +198,7 @@ func (config Config) validate() error {
 		config.MaximumGlobalConcurrency < 1 || config.MaximumGlobalConcurrency > 1024 {
 		return errors.New("integration gateway bounded configuration is invalid")
 	}
-	if config.ManagementEgressProxyURL == "" || config.VaultAddress == "" || config.VaultRole == "" || config.VaultAuthMount == "" || config.VaultKVMount == "" || config.VaultCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == config.VaultCredentialPathPrefix ||
+	if config.ManagementEgressProxyURL != platformManagementEgressProxyURL || config.ManagementEgressNoProxy != managementEgressNoProxy || config.VaultAddress == "" || config.VaultRole == "" || config.VaultAuthMount == "" || config.VaultKVMount == "" || config.VaultCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == "" || config.VaultGitCredentialPathPrefix == config.VaultCredentialPathPrefix ||
 		config.ProviderReceiptIssuer == "" || config.GitReceiptIssuer == "" || config.ManagementLeaseDuration < 5*time.Second || config.ManagementLeaseDuration > time.Minute ||
 		config.AuthorizationTTL < time.Minute || config.AuthorizationTTL > 15*time.Minute || config.ProviderAuthorizationTimeout < time.Minute || config.ProviderAuthorizationTimeout > 20*time.Minute ||
 		config.ProviderAuthorizationPollInterval < 100*time.Millisecond || config.ProviderAuthorizationPollInterval > 5*time.Second || config.GitFetchTimeout < time.Second || config.GitFetchTimeout > time.Minute ||

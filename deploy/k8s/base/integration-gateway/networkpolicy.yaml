@@ -78,12 +78,6 @@ spec:
       ports:
         - {protocol: TCP, port: 8443}
     - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: integration-management-egress-proxy
-      ports:
-        - {protocol: TCP, port: 8080}
-    - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: mattercodex-system

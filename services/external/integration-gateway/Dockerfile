@@ -29,10 +29,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/provider-health-adapter ./cmd/provider-health-adapter
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
-    -ldflags="-s -w" \
-    -o /out/management-egress-proxy ./cmd/management-egress-proxy
-
 FROM docker.io/library/node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS runtime
 
 ARG CODEX_PACKAGE=@openai/codex@0.144.1

@@ -2079,6 +2079,9 @@ message ManageProviderConnectionReferenceRequest {
 
 message ManageProviderConnectionReferenceResponse {
   Resource provider_connection_reference = 1;
+  // credential_binding — exact typed readback immutable binding, созданного
+  // атомарно с reference; отсутствует только для ARCHIVE.
+  Resource credential_binding = 2;
 }
 
 message ManageProviderPoolRequest {

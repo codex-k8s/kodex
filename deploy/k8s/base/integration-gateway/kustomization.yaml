@@ -11,7 +11,6 @@ resources:
   - migration-job.yaml
   - postgresql.yaml
   - egress-proxy.yaml
-  - management-egress-proxy.yaml
   - networkpolicy.yaml
   - vault-secret-provider-classes.yaml
   - vault-resources.yaml
@@ -26,6 +25,8 @@ configMapGenerator:
       - INTEGRATION_GATEWAY_POSTGRES_PRINCIPAL_NAME=integration_gateway_runtime_g1
       - INTEGRATION_GATEWAY_POSTGRES_PRINCIPAL_GENERATION=1
       - INTEGRATION_GATEWAY_POSTGRES_CONTEXT_KEY_ID=integration-gateway-db-context-g1
+      - INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_PROXY_URL=http://egress-gateway.mattercodex-system.svc.cluster.local:8080
+      - INTEGRATION_GATEWAY_MANAGEMENT_EGRESS_NO_PROXY=localhost,127.0.0.1,::1,.svc,.svc.cluster.local
   - name: integration-gateway-db-principals
     literals:
       - INTEGRATION_GATEWAY_POSTGRES_CONTEXT_KEY_ID=integration-gateway-db-context-g1

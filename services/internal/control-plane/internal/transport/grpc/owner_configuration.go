@@ -354,7 +354,24 @@ func (server *Server) ManageProviderConnectionReference(
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.ManageProviderConnectionReferenceResponse{ProviderConnectionReference: managed}, nil
+	response := &controlplanev1.ManageProviderConnectionReferenceResponse{ProviderConnectionReference: managed}
+	if action != "archive" {
+		principal, principalErr := authorization.Principal(ctx,
+			controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName)
+		bindingID := managed.GetSpec().GetProviderConnectionReference().GetCredentialBindingId()
+		if principalErr != nil || bindingID == "" {
+			return nil, rpcError("", errs.ErrInternal)
+		}
+		binding, bindingErr := server.service.GetMaterializedProviderCredential(ctx, principal, bindingID)
+		if bindingErr != nil {
+			return nil, rpcError(principal.CorrelationID, bindingErr)
+		}
+		response.CredentialBinding, bindingErr = toProtoResource(binding)
+		if bindingErr != nil {
+			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+		}
+	}
+	return response, nil
 }
 
 func (server *Server) ManageProviderPool(

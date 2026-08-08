@@ -18,8 +18,8 @@ import (
 
 type (
 	FetcherConfig struct {
-		GitExecutable, TemporaryRoot, CAFile, HTTPSProxy string
-		Timeout                                          time.Duration
+		GitExecutable, TemporaryRoot, CAFile, HTTPSProxy, NoProxy string
+		Timeout                                                   time.Duration
 	}
 	Fetcher struct {
 		catalog *Catalog
@@ -30,7 +30,7 @@ type (
 
 func NewFetcher(catalog *Catalog, secrets secretstore.Store, config FetcherConfig) (*Fetcher, error) {
 	proxy, proxyErr := url.Parse(config.HTTPSProxy)
-	if catalog == nil || secrets == nil || !filepath.IsAbs(config.GitExecutable) || !filepath.IsAbs(config.TemporaryRoot) || !filepath.IsAbs(config.CAFile) || proxyErr != nil || proxy.Scheme != "http" || proxy.Hostname() == "" || proxy.Port() == "" || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || config.Timeout < time.Second || config.Timeout > time.Minute {
+	if catalog == nil || secrets == nil || !filepath.IsAbs(config.GitExecutable) || !filepath.IsAbs(config.TemporaryRoot) || !filepath.IsAbs(config.CAFile) || proxyErr != nil || proxy.Scheme != "http" || proxy.Hostname() == "" || proxy.Port() == "" || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || config.NoProxy == "" || config.Timeout < time.Second || config.Timeout > time.Minute {
 		return nil, errors.New("Git fetcher configuration is invalid")
 	}
 	return &Fetcher{catalog: catalog, secrets: secrets, config: config}, nil
@@ -71,7 +71,7 @@ func (fetcher *Fetcher) Fetch(ctx context.Context, repositoryKey, refKey, pathKe
 	}
 	runCtx, cancel := context.WithTimeout(ctx, fetcher.config.Timeout)
 	defer cancel()
-	environment := []string{"HOME=" + work, "PATH=" + filepath.Dir(fetcher.config.GitExecutable) + ":/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=" + askPassPath, "MATTERCODEX_GIT_TOKEN_FILE=" + tokenPath, "HTTPS_PROXY=" + fetcher.config.HTTPSProxy, "NO_PROXY=", "GIT_SSL_CAINFO=" + fetcher.config.CAFile}
+	environment := fetcher.environment(work, askPassPath, tokenPath)
 	if _, err = run(runCtx, environment, 64<<10, fetcher.config.GitExecutable, "-C", repositoryPath, "init"); err != nil {
 		return gitfetcher.Fetched{}, err
 	}
@@ -99,6 +99,15 @@ func (fetcher *Fetcher) Fetch(ctx context.Context, repositoryKey, refKey, pathKe
 		return gitfetcher.Fetched{}, errors.New("Git source document is empty")
 	}
 	return gitfetcher.Fetched{Commit: commit, SourceRef: source.URL + "#" + commit + ":" + source.Path, Content: content}, nil
+}
+
+func (fetcher *Fetcher) environment(work, askPassPath, tokenPath string) []string {
+	return []string{
+		"HOME=" + work, "PATH=" + filepath.Dir(fetcher.config.GitExecutable) + ":/usr/bin:/bin",
+		"GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=" + askPassPath,
+		"MATTERCODEX_GIT_TOKEN_FILE=" + tokenPath, "HTTPS_PROXY=" + fetcher.config.HTTPSProxy,
+		"NO_PROXY=" + fetcher.config.NoProxy, "GIT_SSL_CAINFO=" + fetcher.config.CAFile,
+	}
 }
 
 func (fetcher *Fetcher) Check(ctx context.Context) error {

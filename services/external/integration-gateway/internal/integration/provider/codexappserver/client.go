@@ -25,15 +25,15 @@ const maximumProtocolMessageBytes = 256 << 10
 
 type (
 	Config struct {
-		Executable, TemporaryRoot, SSLCertificateFile, HTTPSProxy string
-		Timeout, PollInterval                                     time.Duration
+		Executable, TemporaryRoot, SSLCertificateFile, HTTPSProxy, NoProxy string
+		Timeout, PollInterval                                              time.Duration
 	}
 	Client struct{ config Config }
 )
 
 func New(config Config) (*Client, error) {
 	proxy, proxyErr := url.Parse(config.HTTPSProxy)
-	if !filepath.IsAbs(config.Executable) || !filepath.IsAbs(config.TemporaryRoot) || !filepath.IsAbs(config.SSLCertificateFile) || proxyErr != nil || proxy.Scheme != "http" || proxy.Hostname() == "" || proxy.Port() == "" || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || config.Timeout < time.Minute || config.Timeout > 20*time.Minute || config.PollInterval < 100*time.Millisecond || config.PollInterval > 5*time.Second {
+	if !filepath.IsAbs(config.Executable) || !filepath.IsAbs(config.TemporaryRoot) || !filepath.IsAbs(config.SSLCertificateFile) || proxyErr != nil || proxy.Scheme != "http" || proxy.Hostname() == "" || proxy.Port() == "" || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || config.NoProxy == "" || config.Timeout < time.Minute || config.Timeout > 20*time.Minute || config.PollInterval < 100*time.Millisecond || config.PollInterval > 5*time.Second {
 		return nil, errors.New("Codex app-server configuration is invalid")
 	}
 	return &Client{config: config}, nil
@@ -242,29 +242,54 @@ func readCapacity(ctx context.Context, send func(any) error, messages <-chan env
 	if err != nil {
 		return providerauthorization.CapacityObservation{}, err
 	}
+	return parseCapacityObservation(response.Result, time.Now().UTC())
+}
+
+type rateLimitWindow struct {
+	UsedPercent        int32 `json:"usedPercent"`
+	WindowDurationMins int64 `json:"windowDurationMins"`
+	ResetsAt           int64 `json:"resetsAt"`
+}
+
+func parseCapacityObservation(raw []byte, now time.Time) (providerauthorization.CapacityObservation, error) {
 	var value struct {
 		RateLimits struct {
-			Primary *struct {
-				UsedPercent        int32 `json:"usedPercent"`
-				WindowDurationMins int64 `json:"windowDurationMins"`
-				ResetsAt           int64 `json:"resetsAt"`
-			} `json:"primary"`
+			Primary              *rateLimitWindow `json:"primary"`
+			Secondary            *rateLimitWindow `json:"secondary"`
+			RateLimitReachedType *string          `json:"rateLimitReachedType"`
 		} `json:"rateLimits"`
 	}
-	if json.Unmarshal(response.Result, &value) != nil || value.RateLimits.Primary == nil ||
-		value.RateLimits.Primary.UsedPercent < 0 || value.RateLimits.Primary.UsedPercent > 100 ||
-		value.RateLimits.Primary.WindowDurationMins <= 0 || value.RateLimits.Primary.WindowDurationMins > 31*24*60 ||
-		value.RateLimits.Primary.ResetsAt <= 0 {
+	if json.Unmarshal(raw, &value) != nil || value.RateLimits.Primary == nil {
 		return providerauthorization.CapacityObservation{}, errors.New("Codex rate limit readback is invalid")
 	}
-	now := time.Now().UTC()
-	reset := time.Unix(value.RateLimits.Primary.ResetsAt, 0).UTC()
+	windows := []*rateLimitWindow{value.RateLimits.Primary}
+	if value.RateLimits.Secondary != nil {
+		windows = append(windows, value.RateLimits.Secondary)
+	}
+	selected := windows[0]
+	for _, window := range windows {
+		if window.UsedPercent < 0 || window.UsedPercent > 100 ||
+			window.WindowDurationMins <= 0 || window.WindowDurationMins > 31*24*60 || window.ResetsAt <= 0 {
+			return providerauthorization.CapacityObservation{}, errors.New("Codex rate limit readback is invalid")
+		}
+		if window.UsedPercent > selected.UsedPercent ||
+			window.UsedPercent == selected.UsedPercent && window.WindowDurationMins > selected.WindowDurationMins {
+			selected = window
+		}
+	}
+	usage := selected.UsedPercent
+	if value.RateLimits.RateLimitReachedType != nil && *value.RateLimits.RateLimitReachedType != "" {
+		usage = 100
+	}
+	reset := time.Unix(selected.ResetsAt, 0).UTC()
 	if !reset.After(now.Add(-time.Minute)) || reset.After(now.Add(32*24*time.Hour)) {
 		return providerauthorization.CapacityObservation{}, errors.New("Codex rate limit reset window is invalid")
 	}
 	return providerauthorization.CapacityObservation{
-		Usage: uint64(value.RateLimits.Primary.UsedPercent), Limit: 100, Revision: uint64(now.UnixMicro()),
-		WindowSeconds: uint64(value.RateLimits.Primary.WindowDurationMins) * 60,
+		// App-server exposes usedPercent, therefore the exact provider unit is a
+		// percentage scale and its limit is 100, not an invented request quota.
+		Usage: uint64(usage), Limit: 100, Revision: uint64(now.UnixMicro()),
+		WindowSeconds: uint64(selected.WindowDurationMins) * 60,
 		ObservedAt:    now, ResetsAt: reset, ExpiresAt: now.Add(5 * time.Minute),
 	}, nil
 }
@@ -518,5 +543,5 @@ func (client *Client) Check(ctx context.Context) error {
 }
 
 func (client *Client) environment(home string) []string {
-	return []string{"CODEX_HOME=" + home, "HOME=" + home, "PATH=" + filepath.Dir(client.config.Executable) + ":/usr/bin:/bin", "SSL_CERT_FILE=" + client.config.SSLCertificateFile, "HTTPS_PROXY=" + client.config.HTTPSProxy, "HTTP_PROXY=" + client.config.HTTPSProxy, "NO_PROXY=", "NO_COLOR=1"}
+	return []string{"CODEX_HOME=" + home, "HOME=" + home, "PATH=" + filepath.Dir(client.config.Executable) + ":/usr/bin:/bin", "SSL_CERT_FILE=" + client.config.SSLCertificateFile, "HTTPS_PROXY=" + client.config.HTTPSProxy, "HTTP_PROXY=" + client.config.HTTPSProxy, "NO_PROXY=" + client.config.NoProxy, "NO_COLOR=1"}
 }

@@ -35,13 +35,14 @@ timestamps, generation и opaque UUID/digest.
 4. Проверить не менее двух ready Pod CNPG, primary Service
    `integration-gateway-postgresql-rw` и exact destinations: PostgreSQL,
    control-plane, internal authority,
-   Vault, identity SSO, telemetry и `integration-egress-proxy`. Прямой provider
-   egress отсутствует.
+   Vault, identity SSO, telemetry, runtime `integration-egress-proxy` и
+   platform `egress-gateway` на TCP/8080. Прямой provider/Git TCP/443 egress
+   отсутствует.
 5. Проверить, что authority publisher target имеет workload
    `integration-gateway`, а issuer/verifier используют только собственные
    Vault/readback/restore paths. Не читать key material.
-6. Проверить две готовые реплики `integration-egress-proxy`,
-   `integration-management-egress-proxy` и `provider-health-adapter`,
+6. Проверить две готовые реплики runtime `integration-egress-proxy`,
+   platform `egress-gateway` и `provider-health-adapter`,
    downstream client-mTLS SAN gateway, upstream
    client identity proxy и exact закрытые `/readyz|/validate|/health` routes.
    `direct_response` отсутствует; proxy имеет egress только к adapter, adapter
@@ -78,10 +79,14 @@ Startup barrier должен пройти до обслуживания MCP/API:
   Codex app-server, Git executable, два exact Vault capability/readback path,
   signer и protected control-plane client. До startup barrier effect не
   claim-ится; активная fenced lease продлевается на всём внешнем действии.
-- management proxy принимает только `CONNECT` к закрытому host registry на
-  `443`, повторно разрешает DNS и отклоняет private/loopback/link-local
-  адреса. Provider/Git TLS остаётся end-to-end с exact CA; proxy не видит raw
-  token и не является plaintext fallback.
+- management provider/Git процессы получают exact
+  `HTTPS_PROXY=http://egress-gateway.mattercodex-system.svc.cluster.local:8080`
+  и `NO_PROXY=localhost,127.0.0.1,::1,.svc,.svc.cluster.local`; readiness
+  выполняет compatibility `GET /readyz` на том же TCP/8080. Итоговая
+  `NetworkPolicy` разрешает consumer egress только к platform selector
+  `name=egress-gateway,component=platform-egress`. Закрытый FQDN registry
+  принадлежит platform policy; прямой внешний TCP/443, port 9090, wildcard,
+  plaintext fallback и `skipTLSVerify` запрещены.
 
 Не отключать issuer, OIDC, RLS, TLS verify, schema validation или dependency
 readiness. Не подменять provider proxy прямым HTTPS egress.
@@ -237,8 +242,11 @@ pending attempts/leases/eligibility, помечает все credential generati
 JIT-читает только active credential для однократного
 `account/logout`+`account/read`, уничтожает все immutable Vault versions этого
 connection и архивирует control-plane reference. При неизвестном provider
-outcome повтор logout запрещён; повторное уничтожение Vault versions допустимо
-как идемпотентный cleanup, состояние остаётся `REVOKED`, а effect — `UNKNOWN`.
+outcome повтор logout запрещён. Provider, Vault destroy/readback и
+control-plane archive/readback имеют отдельные durable checkpoints; crash
+возобновляет только незавершённые безопасно повторяемые фазы. Effect не
+становится terminal, пока Vault и control-plane фазы не подтверждены;
+итоговый `UNKNOWN` относится только к уже неоднозначному logout.
 
 Provider-reference mutation подписывается только после Vault/provider
 readback. `command_intent_sha256` producer и control-plane consumer вычисляют
@@ -342,9 +350,9 @@ digest запрещены.
 - `IntegrationGatewayManagementFailures`: проверить fenced management effect,
   Vault/Codex/Git/control-plane safe category и generation; неизвестный внешний
   outcome не повторять;
-- `IntegrationGatewayManagementEgressProxyUnavailable`: provider device и Git
-  path закрыты; проверить replicas, closed host registry и DNS без расширения
-  allowlist либо прямого HTTPS egress;
+- при отрицательной management readiness проверить platform `egress-gateway`
+  replicas, compatibility `/readyz`, exact consumer selector:8080 и FQDN
+  policy без расширения allowlist либо прямого HTTPS egress;
 - `IntegrationGatewayPostgresqlUnavailable`: проверить минимум две ready CNPG
   replicas и exact PostgreSQL TLS path.
 

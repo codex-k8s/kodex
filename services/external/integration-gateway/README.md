@@ -46,7 +46,7 @@ Git source binding и integration configuration; `control-plane` остаётс�
 | --- | --- | --- | --- | --- |
 | Provider catalog | verified owner OIDC либо exact internal application proof | `ListProviders`, `GetProvider` | закрытый server registry с immutable version/digest, auth modes и capabilities | отсутствует |
 | Device authorization | owner context; provider и idempotency intent из bounded request | `StartProviderAuthorization`, `GetProviderAuthorization`, `RestartProviderAuthorization`, `CancelProviderAuthorization` | durable server-owned attempt; code выдаётся только до `code_expires_at`, token не сохраняется в business tables | Codex app-server `account/login/start`, notification/read/cancel; completion передаётся только secret writer |
-| Connection lifecycle | owner context и locator после tenant resolution | `List/Get/Reauthorize/RevokeProviderConnection` | immutable credential generation, opaque secret ref/content digest, masked account metadata, monotonic revoke generation | provider readback, signed `ProviderEffectReadbackReceipt`, exact `ManageProviderConnectionReference`, затем Get readback |
+| Connection lifecycle | owner context и locator после tenant resolution | `List/Get/Reauthorize/RevokeProviderConnection` | immutable credential generation, opaque secret ref/content digest, masked account metadata, monotonic revoke generation | provider readback, signed `ProviderEffectReadbackReceipt`, атомарная материализация `CredentialBinding` + `ProviderConnectionReference`, затем typed Get/List readback обоих |
 | Provider pool | owner context; connection IDs являются locators | `Create/Update/Archive/DeleteProviderPool`, `Get/ListProviderPool` | desired policy/weights принадлежит control-plane; gateway сохраняет только fresh bounded observations и exact refs; effective digest связывает обе версии | specialized control-plane RPC и version-pinned readback |
 | Integration definition/configuration | owner context | `List/GetIntegrationDefinition`, `ConfigureIntegration`, `TestIntegrationConnection` | immutable closed definition registry и immutable typed configuration revision; arbitrary kind/schema/YAML/secret defaults запрещены | test проходит тот же credential/TLS/egress adapter path и сохраняет bounded receipt |
 | Capability assignment | owner context; caller предлагает подмножество | `ConfigureIntegration` | пересечение definition capabilities, provider capabilities и control-plane assignment; runtime получает только следующий server-created `RuntimeRevision` | control-plane readback, без локальной выдачи grant |
@@ -93,9 +93,9 @@ exact full method, а readiness проверяет тот же путь.
 
 | Команда | Одна owner transaction | Effect вне transaction | Recovery / ambiguity |
 | --- | --- | --- | --- |
-| Start/restart auth | attempt + idempotency receipt + audit + durable provider intent | app-server start/poll | provider login ID checkpointed один раз; crash не создаёт вторую authorization; неизвестный исход закрывается `FAILED` |
+| Start/restart auth | attempt + idempotency receipt + audit + durable provider intent | app-server start/poll | до `account/login/start` фиксируется durable dispatch fence; `loginId` живёт только в памяти private adapter, поэтому crash закрывает attempt без повторного provider call, а новый код требует новую attempt |
 | Authorization complete | immutable generation metadata + opaque pending secret ref + audit + provider-reference intent | secret writer создаёт immutable secret и выполняет exact Vault readback; отдельный durable effect публикует provider reference | candidate остаётся `PENDING`, а active pointer, binding и eligibility меняются одной transaction только после exact control-plane Get/List readback; raw token не входит в receipt/audit/event |
-| Revoke | connection revoke generation + terminal attempts/leases/claims + все credential generations + receipt + audit + revoke intent | однократный provider logout, уничтожение всех immutable Vault versions и control-plane archive/readback | provider worker сверяет generation непосредственно до effect; late completion rejected; partial cleanup закрывается `UNKNOWN` без повтора provider effect |
+| Revoke | connection revoke generation + terminal attempts/leases/claims + все credential generations + receipt + audit + revoke intent | однократный provider logout, уничтожение всех immutable Vault versions и control-plane archive/readback | durable provider/secret/control-plane checkpoints; ambiguous logout не повторяется, но effect не terminal до подтверждения обязательных Vault destroy/readback и control-plane archive/readback |
 | Pool/config mutation | local observation/config revision + receipt + audit + control-plane intent | specialized generated control-plane call/readback | exact command digest/JTI; stale readback закрывает intent без local eligibility |
 | Test | bounded intent + receipt reservation + audit | same adapter/TLS/egress/credential path | timeout/protocol ambiguity даёт closed safe category; no repeat после dispatch marker |
 | Approval transition | существующие approval/invocation/receipt/audit/continuation effect rows | existing continuation worker | replay returns exact receipt; late decision rejected; no parallel approval model |
@@ -280,9 +280,9 @@ migration Job, PDB, CSI/Vault delivery, default-deny/exact-destination
 NetworkPolicy, ServiceMonitor/PodMonitor, dashboard и alerts. Migration Job
 использует отдельные migrator DSN/context credentials. Runtime readiness
 проверяет тот же PostgreSQL, control-plane authority и
-`integration-egress-proxy` path, что рабочий вызов. Unit материализует CNPG
+`integration-egress-proxy` path, что рабочий invocation. Unit материализует CNPG
 `Cluster` с тремя экземплярами и точным `-rw` TLS endpoint, а также
-двухрепличный Envoy egress proxy с client-mTLS, закрытым route registry и без
+двухрепличный Envoy runtime egress proxy с client-mTLS, закрытым route registry и без
 прямого внешнего egress. Envoy не имеет `direct_response`: `/readyz`,
 `/validate` и `/health` проходят upstream TLS/SNI/CA к отдельному
 `provider-health-adapter`; validation и рабочий GET проверяют один Vault-owned
@@ -301,6 +301,19 @@ VaultStaticSecret|VaultPKISecret -> generated Secret -> workload`. Общий
 code-first владельцем фактических Service/default/kubernetes и ready IPv4
 EndpointSlice destinations; manifests не содержат фиктивный apiserver selector.
 
+Management provider authorization и Git fetch не создают второй proxy. Их
+`HTTPS_PROXY` указывает точно на platform deployable
+`http://egress-gateway.mattercodex-system.svc.cluster.local:8080`, а
+`NO_PROXY=localhost,127.0.0.1,::1,.svc,.svc.cluster.local` оставляет
+PostgreSQL, Vault и внутренние RPC внутри cluster boundary. Consumer
+`NetworkPolicy` разрешает только Pod с labels
+`app.kubernetes.io/name=egress-gateway` и
+`app.kubernetes.io/component=platform-egress` в namespace
+`mattercodex-system` на TCP/8080; прямой внешний TCP/443 и management port
+9090 отсутствуют. Readiness использует compatibility `GET /readyz` на том же
+8080. Exact FQDN registry принадлежит platform egress policy, не копируется в
+этот deployable.
+
 ### Проверенные документы внешних библиотек
 
 В исходной реализации через Context7 проверены актуальные документы:
@@ -313,6 +326,13 @@ EndpointSlice destinations; manifests не содержат фиктивный a
 - `/hashicorp/vault-secrets-operator`: workload-local `VaultAuth` через
   Kubernetes ServiceAccount, bounded token audience/TTL и связка
   `VaultStaticSecret.vaultAuthRef`.
+
+Для текущего fix-пакета повторный Context7 lookup OpenAI Codex вернул
+`Monthly quota exceeded`. Shape `account/rateLimits/read` (`usedPercent`,
+`windowDurationMins`, `resetsAt`) и device authorization lifecycle сверены с
+официальным `openai/codex` app-server README; локальный лимит не выдумывается,
+а percentage observation хранится в точной шкале `0..100` и при отсутствии
+fresh window закрыто исключается из eligibility.
 
 В review cycle 2 квота Context7 была исчерпана. Поэтому дополнительно проверены
 официальные HashiCorp VSO API (`VaultConnection.caCertSecretRef`,

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
+	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/event"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -43,6 +45,116 @@ func TestProtectedConfigurationRegistriesAreSpecialized(t *testing.T) {
 				t.Fatalf("generic authority-bearing action %s/%s is present", kind, forbidden)
 			}
 		}
+	}
+}
+
+type providerMaterializationTestTransaction struct {
+	domainrepo.Transaction
+	domainrepo.ProtectedTransaction
+	resources map[string]entity.Resource
+	history   []domainrepo.ProtectedResourceHistory
+	audits    []domainrepo.Audit
+}
+
+func (tx *providerMaterializationTestTransaction) GetForUpdate(_ context.Context, _, _, id string) (entity.Resource, error) {
+	resource, ok := tx.resources[id]
+	if !ok {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	return resource, nil
+}
+
+func (tx *providerMaterializationTestTransaction) Insert(_ context.Context, resource entity.Resource) error {
+	if _, exists := tx.resources[resource.ID]; exists {
+		return errs.ErrStateConflict
+	}
+	tx.resources[resource.ID] = resource
+	return nil
+}
+
+func (tx *providerMaterializationTestTransaction) AppendProtectedResourceHistory(_ context.Context, history domainrepo.ProtectedResourceHistory) error {
+	tx.history = append(tx.history, history)
+	return nil
+}
+
+func (tx *providerMaterializationTestTransaction) AppendAudit(_ context.Context, audit domainrepo.Audit) error {
+	tx.audits = append(tx.audits, audit)
+	return nil
+}
+
+type providerMaterializationTestRepository struct {
+	domainrepo.Repository
+	tx *providerMaterializationTestTransaction
+}
+
+func (repository *providerMaterializationTestRepository) Get(_ context.Context, organizationID, projectID, id string, kind enum.Kind) (entity.Resource, error) {
+	resource, ok := repository.tx.resources[id]
+	if !ok || resource.OrganizationID != organizationID || resource.ProjectID != projectID || resource.Kind != kind {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	return resource, nil
+}
+
+func TestProviderCredentialMaterializationAndReadbackAreExact(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 8, 12, 0, 0, 0, time.UTC)
+	digest := strings.Repeat("a", 64)
+	receipt := value.ProviderEffectReceipt{
+		CredentialBindingID: "11111111-1111-4111-8111-111111111111", CredentialBindingVersion: 1,
+		EffectGeneration: 3, Provider: "openai-codex", ProviderObjectRef: "22222222-2222-4222-8222-222222222222",
+		SecretRef: "mattercodex/integration-gateway/provider-credentials/tenant/connection/3", SecretVersion: 7,
+		SecretContentSHA256: digest, MaskedAccount: "o***@example.test", MaskedLabel: "plus",
+		Capabilities: []string{"model-invoke"}, Eligible: true, ObservedUsage: 25, ObservedLimit: 100,
+		ObservationRevision: 9, ObservedAt: now, WindowDurationSeconds: 300 * 60,
+		ResetsAt: now.Add(time.Hour), ObservationExpiresAt: now.Add(5 * time.Minute), ObservationSHA256: digest,
+		ReceiptID: "33333333-3333-4333-8333-333333333333", ReceiptRevision: 4,
+	}
+	materialization := controlplanecontract.ProviderCredentialMaterialization{
+		CredentialBindingID: receipt.CredentialBindingID, BindingVersion: receipt.CredentialBindingVersion,
+		CredentialGeneration: receipt.EffectGeneration, Provider: receipt.Provider, ProviderObjectRef: receipt.ProviderObjectRef,
+		SecretRef: receipt.SecretRef, SecretVersion: receipt.SecretVersion, SecretContentSHA256: receipt.SecretContentSHA256,
+		MaskedAccount: receipt.MaskedAccount, MaskedLabel: receipt.MaskedLabel, Capabilities: receipt.Capabilities,
+		ObservedUsage: receipt.ObservedUsage, ObservedLimit: receipt.ObservedLimit, ObservationRevision: receipt.ObservationRevision,
+		ObservedAt: receipt.ObservedAt, WindowSeconds: receipt.WindowDurationSeconds, ResetsAt: receipt.ResetsAt,
+		ObservationExpiresAt: receipt.ObservationExpiresAt, ObservationSHA256: receipt.ObservationSHA256,
+	}
+	var err error
+	receipt.CredentialBindingSHA256, err = controlplanecontract.ProviderCredentialMaterializationSHA256(materialization)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := value.Principal{
+		ActorID: "44444444-4444-4444-8444-444444444444", OrganizationID: "55555555-5555-4555-8555-555555555555",
+		ProjectID: "66666666-6666-4666-8666-666666666666", Permission: permissionProviderReferenceManage,
+		CallerWorkload: "integration-gateway", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/integration-gateway",
+		AuthoritySource: "PROVIDER_READBACK", AuthorityReference: receipt.ReceiptID,
+		AuthorityRevision: receipt.ReceiptRevision, AuthorityGeneration: 1, AuthorityDigest: digest,
+		CorrelationID: "77777777-7777-4777-8777-777777777777", PolicyRevision: 1,
+	}
+	tx := &providerMaterializationTestTransaction{resources: make(map[string]entity.Resource)}
+	repository := &providerMaterializationTestRepository{tx: tx}
+	service := &Service{repository: repository, integrationGatewayWorkload: principal.CallerWorkload,
+		integrationGatewaySPIFFEID: principal.CallerSPIFFEID, now: func() time.Time { return now }}
+	input := ManageProtectedConfigurationInput{Principal: principal, ProviderReceipt: receipt}
+
+	created, err := service.materializeProviderCredential(context.Background(), tx, tx, input)
+	if err != nil || created.ID != receipt.CredentialBindingID || created.Version != 1 ||
+		len(tx.resources) != 1 || len(tx.history) != 1 || len(tx.audits) != 1 {
+		t.Fatalf("atomic provider credential materialization failed: %#v %v", created, err)
+	}
+	replayed, err := service.materializeProviderCredential(context.Background(), tx, tx, input)
+	if err != nil || replayed.ID != created.ID || len(tx.resources) != 1 || len(tx.history) != 1 {
+		t.Fatalf("immutable provider credential replay failed: %#v %v", replayed, err)
+	}
+	readback, err := service.GetMaterializedProviderCredential(context.Background(), principal, created.ID)
+	if err != nil || readback.ID != created.ID || readback.Version != created.Version {
+		t.Fatalf("typed provider credential readback failed: %#v %v", readback, err)
+	}
+	conflict := input
+	conflict.ProviderReceipt.SecretVersion++
+	if _, err := service.materializeProviderCredential(context.Background(), tx, tx, conflict); err == nil || len(tx.resources) != 1 {
+		t.Fatal("changed immutable secret coordinates mutated materialized credential")
 	}
 }
 

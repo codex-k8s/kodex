@@ -191,7 +191,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	}
 	authorizer, err := codexappserver.New(codexappserver.Config{
 		Executable: config.CodexExecutable, TemporaryRoot: config.CodexTemporaryRoot,
-		SSLCertificateFile: config.CodexCAFile, HTTPSProxy: config.ManagementEgressProxyURL,
+		SSLCertificateFile: config.CodexCAFile, HTTPSProxy: config.ManagementEgressProxyURL, NoProxy: config.ManagementEgressNoProxy,
 		Timeout: config.ProviderAuthorizationTimeout, PollInterval: config.ProviderAuthorizationPollInterval,
 	})
 	if err != nil {
@@ -211,7 +211,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	}
 	gitFetcher, err := gitsource.NewFetcher(gitCatalog, gitSecretBoundary, gitsource.FetcherConfig{
 		GitExecutable: config.GitExecutable, TemporaryRoot: config.GitTemporaryRoot, CAFile: config.GitCAFile,
-		HTTPSProxy: config.ManagementEgressProxyURL, Timeout: config.GitFetchTimeout,
+		HTTPSProxy: config.ManagementEgressProxyURL, NoProxy: config.ManagementEgressNoProxy, Timeout: config.GitFetchTimeout,
 	})
 	if err != nil {
 		return err

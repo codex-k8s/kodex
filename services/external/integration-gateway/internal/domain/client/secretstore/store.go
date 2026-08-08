@@ -1,6 +1,11 @@
 package secretstore
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrNotFound = errors.New("secret version is not found")
 
 type Version struct {
 	Ref           string

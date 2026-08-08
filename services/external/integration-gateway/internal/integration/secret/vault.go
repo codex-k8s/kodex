@@ -161,8 +161,11 @@ func (vault *Vault) Get(ctx context.Context, ref string) ([]byte, secretstore.Ve
 	if err = vault.request(ctx, http.MethodGet, vault.dataPath(ref), token, nil, &response); err != nil {
 		return nil, secretstore.Version{}, err
 	}
+	if response.Data.Metadata.Destroyed || response.Data.Metadata.DeletionTime != "" {
+		return nil, secretstore.Version{}, secretstore.ErrNotFound
+	}
 	raw, err := base64.StdEncoding.DecodeString(response.Data.Data.Value)
-	if err != nil || len(raw) == 0 || response.Data.Metadata.Version == 0 || response.Data.Metadata.Destroyed || response.Data.Metadata.DeletionTime != "" {
+	if err != nil || len(raw) == 0 || response.Data.Metadata.Version == 0 {
 		return nil, secretstore.Version{}, errors.New("Vault credential readback is invalid")
 	}
 	sum := sha256.Sum256(raw)
@@ -193,10 +196,21 @@ func (vault *Vault) Revoke(ctx context.Context, ref string, version uint64) erro
 			} `json:"metadata"`
 		} `json:"data"`
 	}
-	if err = vault.request(ctx, http.MethodGet, vault.dataPath(ref)+"?version="+strconv.FormatUint(version, 10), token, nil, &readback); err != nil {
+	err = vault.request(ctx, http.MethodGet, vault.dataPath(ref)+"?version="+strconv.FormatUint(version, 10), token, nil, &readback)
+	if err = confirmVaultDestroy(version, readback.Data.Metadata.Version, readback.Data.Metadata.Destroyed, err); err != nil {
+		return err
+	}
+	return nil
+}
+
+func confirmVaultDestroy(expectedVersion, observedVersion uint64, destroyed bool, readErr error) error {
+	if errors.Is(readErr, secretstore.ErrNotFound) {
+		return nil
+	}
+	if readErr != nil {
 		return errors.New("Vault destroy readback failed")
 	}
-	if readback.Data.Metadata.Version != version || !readback.Data.Metadata.Destroyed {
+	if observedVersion != expectedVersion || !destroyed {
 		return errors.New("Vault destroy readback mismatch")
 	}
 	return nil
@@ -252,6 +266,9 @@ func (vault *Vault) request(ctx context.Context, method, relative, token string,
 		return errors.New("read Vault response")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if method == http.MethodGet && response.StatusCode == http.StatusNotFound {
+			return secretstore.ErrNotFound
+		}
 		return errors.New("Vault request rejected")
 	}
 	if output != nil && json.Unmarshal(raw, output) != nil {
