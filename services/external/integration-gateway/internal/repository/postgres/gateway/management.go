@@ -27,6 +27,7 @@ var _ managementrepo.Repository = (*Repository)(nil)
 type managementReceipt struct {
 	Kind, ID, Digest, RequestDigest string
 	Version                         uint64
+	Payload                         []byte
 }
 
 func managementSQL(name string) string {
@@ -61,7 +62,7 @@ func lockManagementReceipt(ctx context.Context, tx *transaction, operation, keyH
 	err := tx.tx.QueryRow(ctx, managementSQL("receipt__get"), pgx.StrictNamedArgs{
 		"tenant_id": tx.tenantID, "project_id": tx.projectID,
 		"operation": operation, "key_sha256": keyHash,
-	}).Scan(&value.Kind, &value.ID, &value.Version, &value.Digest, &value.RequestDigest)
+	}).Scan(&value.Kind, &value.ID, &value.Version, &value.Digest, &value.RequestDigest, &value.Payload)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return managementReceipt{}, false, nil
 	}
@@ -74,14 +75,42 @@ func lockManagementReceipt(ctx context.Context, tx *transaction, operation, keyH
 	return value, true, nil
 }
 
-func insertManagementReceipt(ctx context.Context, tx *transaction, operation, keyHash, requestHash, kind, id string, version uint64, digest string, at time.Time) error {
+func insertManagementReceipt(ctx context.Context, tx *transaction, operation, keyHash, requestHash, kind, id string, version uint64, payload []byte, at time.Time) error {
+	digest := sha256.Sum256(payload)
 	_, err := tx.tx.Exec(ctx, managementSQL("receipt__insert"), pgx.StrictNamedArgs{
 		"tenant_id": tx.tenantID, "project_id": tx.projectID,
 		"operation": operation, "key_sha256": keyHash, "request_sha256": requestHash,
 		"resource_kind": kind, "resource_id": id, "result_version": version,
-		"result_sha256": digest, "created_at": at,
+		"result_sha256": hex.EncodeToString(digest[:]), "result_payload": payload, "created_at": at,
 	})
 	return err
+}
+
+func replayManagementReceipt[T any](stored managementReceipt) (T, error) {
+	var result T
+	actual := sha256.Sum256(stored.Payload)
+	if hex.EncodeToString(actual[:]) != stored.Digest || json.Unmarshal(stored.Payload, &result) != nil {
+		return result, errors.New("stored management receipt is invalid")
+	}
+	return result, nil
+}
+
+func (repository *Repository) ReplayManagement(ctx context.Context, scope domainrepo.Scope, operation, keyHash, requestHash string) ([]byte, bool, error) {
+	var payload []byte
+	var found bool
+	err := repository.managementTransact(ctx, scope, func(tx *transaction) error {
+		stored, exists, err := lockManagementReceipt(ctx, tx, operation, keyHash, requestHash)
+		if err != nil || !exists {
+			return err
+		}
+		actual := sha256.Sum256(stored.Payload)
+		if hex.EncodeToString(actual[:]) != stored.Digest {
+			return errors.New("stored management receipt is invalid")
+		}
+		payload, found = append([]byte(nil), stored.Payload...), true
+		return nil
+	})
+	return payload, found, err
 }
 
 func managementPayload(value any) ([]byte, string, error) {
@@ -102,13 +131,20 @@ func managementEffectPayload(resourceID string, version, generation uint64) []by
 	return raw
 }
 
-func insertManagementEffect(ctx context.Context, tx *transaction, kind, resourceKind, resourceID string, version, generation uint64, intentDigest string, at time.Time) error {
+type managementEffectOwner struct {
+	Kind, ID, Status    string
+	Version, Generation uint64
+}
+
+func insertManagementEffect(ctx context.Context, tx *transaction, kind, resourceKind, resourceID string, version, generation uint64, owner managementEffectOwner, intentDigest string, at time.Time) error {
 	_, err := tx.tx.Exec(ctx, managementSQL("effect__insert"), pgx.StrictNamedArgs{
 		"effect_id": uuid.NewString(), "tenant_id": tx.tenantID, "project_id": tx.projectID,
 		"actor_id":    tx.actorID,
 		"effect_kind": kind, "resource_kind": resourceKind, "resource_id": resourceID,
 		"resource_version": version, "resource_generation": generation,
-		"intent_sha256": intentDigest, "available_at": at,
+		"owner_kind": owner.Kind, "owner_id": owner.ID, "owner_version": owner.Version,
+		"owner_generation": owner.Generation, "owner_status": owner.Status,
+		"intent_sha256": intentDigest, "input_sha256": intentDigest, "available_at": at,
 		"payload":    managementEffectPayload(resourceID, version, generation),
 		"created_at": at, "updated_at": at,
 	})
@@ -124,7 +160,7 @@ func (repository *Repository) StartAuthorization(ctx context.Context, command ma
 			return err
 		}
 		if found {
-			result, err = getAuthorizationTx(ctx, tx, stored.ID)
+			result, err = replayManagementReceipt[entity.ProviderAuthorization](stored)
 			replay = true
 			return err
 		}
@@ -148,7 +184,7 @@ func (repository *Repository) StartAuthorization(ctx context.Context, command ma
 		}); err != nil {
 			return err
 		}
-		authorizationRaw, authorizationDigest, err := managementPayload(command.Authorization)
+		authorizationRaw, _, err := managementPayload(command.Authorization)
 		if err != nil {
 			return err
 		}
@@ -164,11 +200,11 @@ func (repository *Repository) StartAuthorization(ctx context.Context, command ma
 			return err
 		}
 		if err = insertManagementEffect(ctx, tx, "PROVIDER_AUTHORIZE", "provider_authorization", command.Authorization.ID,
-			command.Authorization.Version, command.Authorization.Generation, command.Authorization.IntentDigest, command.Authorization.CreatedAt); err != nil {
+			command.Authorization.Version, command.Authorization.Generation, managementEffectOwner{"managed_provider_connection", command.Connection.ID, command.Connection.Status, command.Connection.Version, command.Connection.Generation}, command.Authorization.IntentDigest, command.Authorization.CreatedAt); err != nil {
 			return err
 		}
 		if err = insertManagementReceipt(ctx, tx, "provider_authorization.start", command.IdempotencyHash, command.RequestHash,
-			"provider_authorization", command.Authorization.ID, command.Authorization.Version, authorizationDigest, command.Authorization.CreatedAt); err != nil {
+			"provider_authorization", command.Authorization.ID, command.Authorization.Version, authorizationRaw, command.Authorization.CreatedAt); err != nil {
 			return err
 		}
 		if err = tx.appendAudit(ctx, command.Audit); err != nil {
@@ -294,19 +330,14 @@ func (repository *Repository) ListConnections(ctx context.Context, scope domainr
 func (repository *Repository) RestartAuthorization(ctx context.Context, command managementrepo.RestartAuthorizationCommand) (entity.ProviderAuthorization, bool, error) {
 	var result entity.ProviderAuthorization
 	var replay bool
+	operation := command.Operation
+	if operation == "" {
+		operation = "provider_authorization.restart"
+	}
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
-		stored, found, err := lockManagementReceipt(ctx, tx, "provider_authorization.restart", command.IdempotencyHash, command.RequestHash)
-		if err != nil {
-			return err
-		}
-		if found {
-			result, err = getAuthorizationTx(ctx, tx, stored.ID)
-			replay = true
-			return err
-		}
 		var previousRaw, connectionRaw []byte
 		var databaseNow time.Time
-		if err = tx.tx.QueryRow(ctx, managementSQL("authorization__restart_lock"), pgx.StrictNamedArgs{
+		if err := tx.tx.QueryRow(ctx, managementSQL("authorization__restart_lock"), pgx.StrictNamedArgs{
 			"authorization_id": command.PreviousID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
 		}).Scan(&previousRaw, &connectionRaw, &databaseNow); err != nil {
 			return err
@@ -316,7 +347,18 @@ func (repository *Repository) RestartAuthorization(ctx context.Context, command 
 		if json.Unmarshal(previousRaw, &previous) != nil || json.Unmarshal(connectionRaw, &connection) != nil {
 			return errors.New("stored provider reauthorization state is invalid")
 		}
-		if previous.Version != command.ExpectedVersion || previous.State == "CANCELLED" || connection.Status == "REVOKED" {
+		stored, found, err := lockManagementReceipt(ctx, tx, operation, command.IdempotencyHash, command.RequestHash)
+		if err != nil {
+			return err
+		}
+		if found {
+			result, err = replayManagementReceipt[entity.ProviderAuthorization](stored)
+			replay = true
+			return err
+		}
+		if previous.Version != command.ExpectedVersion || previous.State == "CANCELLED" || connection.Status == "REVOKED" ||
+			command.ExpectedConnectionVersion > 0 && connection.Version != command.ExpectedConnectionVersion ||
+			command.ExpectedConnectionGeneration > 0 && connection.Generation != command.ExpectedConnectionGeneration {
 			return errs.ErrConflict
 		}
 		previous.State, previous.Version, previous.UpdatedAt = "CANCELLED", previous.Version+1, databaseNow
@@ -330,7 +372,7 @@ func (repository *Repository) RestartAuthorization(ctx context.Context, command 
 		command.Authorization.CreatedAt, command.Authorization.UpdatedAt = databaseNow, databaseNow
 		previousPayload, _, _ := managementPayload(previous)
 		connectionPayload, _, _ := managementPayload(connection)
-		authorizationPayload, authorizationDigest, _ := managementPayload(command.Authorization)
+		authorizationPayload, _, _ := managementPayload(command.Authorization)
 		var inserted string
 		if err = tx.tx.QueryRow(ctx, managementSQL("authorization__replace"), pgx.StrictNamedArgs{
 			"previous_id": previous.ID, "previous_version": command.ExpectedVersion, "previous_payload": previousPayload,
@@ -345,11 +387,11 @@ func (repository *Repository) RestartAuthorization(ctx context.Context, command 
 			return err
 		}
 		if err = insertManagementEffect(ctx, tx, "PROVIDER_AUTHORIZE", "provider_authorization", inserted,
-			command.Authorization.Version, command.Authorization.Generation, command.Authorization.IntentDigest, databaseNow); err != nil {
+			command.Authorization.Version, command.Authorization.Generation, managementEffectOwner{"managed_provider_connection", connection.ID, connection.Status, connection.Version, connection.Generation}, command.Authorization.IntentDigest, databaseNow); err != nil {
 			return err
 		}
-		if err = insertManagementReceipt(ctx, tx, "provider_authorization.restart", command.IdempotencyHash, command.RequestHash,
-			"provider_authorization", inserted, command.Authorization.Version, authorizationDigest, databaseNow); err != nil {
+		if err = insertManagementReceipt(ctx, tx, operation, command.IdempotencyHash, command.RequestHash,
+			"provider_authorization", inserted, command.Authorization.Version, authorizationPayload, databaseNow); err != nil {
 			return err
 		}
 		command.Audit.ResourceID, command.Audit.OccurredAt = inserted, databaseNow
@@ -366,18 +408,9 @@ func (repository *Repository) CancelAuthorization(ctx context.Context, command m
 	var result entity.ProviderAuthorization
 	var replay bool
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
-		stored, found, err := lockManagementReceipt(ctx, tx, "provider_authorization.cancel", command.IdempotencyHash, command.RequestHash)
-		if err != nil {
-			return err
-		}
-		if found {
-			result, err = getAuthorizationTx(ctx, tx, stored.ID)
-			replay = true
-			return err
-		}
 		var authRaw, connectionRaw []byte
 		var databaseNow time.Time
-		if err = tx.tx.QueryRow(ctx, managementSQL("authorization__cancel_lock"), pgx.StrictNamedArgs{
+		if err := tx.tx.QueryRow(ctx, managementSQL("authorization__cancel_lock"), pgx.StrictNamedArgs{
 			"authorization_id": command.AuthorizationID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
 		}).Scan(&authRaw, &connectionRaw, &databaseNow); err != nil {
 			return err
@@ -387,6 +420,15 @@ func (repository *Repository) CancelAuthorization(ctx context.Context, command m
 		if json.Unmarshal(authRaw, &authorization) != nil || json.Unmarshal(connectionRaw, &connection) != nil {
 			return errors.New("stored provider cancellation state is invalid")
 		}
+		stored, found, err := lockManagementReceipt(ctx, tx, "provider_authorization.cancel", command.IdempotencyHash, command.RequestHash)
+		if err != nil {
+			return err
+		}
+		if found {
+			result, err = replayManagementReceipt[entity.ProviderAuthorization](stored)
+			replay = true
+			return err
+		}
 		if authorization.Version != command.ExpectedVersion || authorization.State != "PENDING" && authorization.State != "CODE_ISSUED" {
 			return errs.ErrConflict
 		}
@@ -395,7 +437,7 @@ func (repository *Repository) CancelAuthorization(ctx context.Context, command m
 		if connection.ActiveCredential == 0 {
 			connection.Status = "INVALID"
 		}
-		authorizationPayload, digest, _ := managementPayload(authorization)
+		authorizationPayload, _, _ := managementPayload(authorization)
 		connectionPayload, _, _ := managementPayload(connection)
 		_, err = tx.tx.Exec(ctx, managementSQL("authorization__cancel"), pgx.StrictNamedArgs{
 			"authorization_id": authorization.ID, "expected_version": command.ExpectedVersion,
@@ -406,7 +448,7 @@ func (repository *Repository) CancelAuthorization(ctx context.Context, command m
 			return err
 		}
 		if err = insertManagementReceipt(ctx, tx, "provider_authorization.cancel", command.IdempotencyHash, command.RequestHash,
-			"provider_authorization", authorization.ID, authorization.Version, digest, databaseNow); err != nil {
+			"provider_authorization", authorization.ID, authorization.Version, authorizationPayload, databaseNow); err != nil {
 			return err
 		}
 		command.Audit.OccurredAt = databaseNow
@@ -423,18 +465,9 @@ func (repository *Repository) RevokeConnection(ctx context.Context, command mana
 	var result entity.ManagedProviderConnection
 	var replay bool
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
-		stored, found, err := lockManagementReceipt(ctx, tx, "provider_connection.revoke", command.IdempotencyHash, command.RequestHash)
-		if err != nil {
-			return err
-		}
-		if found {
-			result, err = getManagedConnectionTx(ctx, tx.tx, command.Scope, stored.ID)
-			replay = true
-			return err
-		}
 		var raw []byte
 		var databaseNow time.Time
-		if err = tx.tx.QueryRow(ctx, managementSQL("connection__revoke_lock"), pgx.StrictNamedArgs{
+		if err := tx.tx.QueryRow(ctx, managementSQL("connection__revoke_lock"), pgx.StrictNamedArgs{
 			"connection_id": command.ConnectionID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
 		}).Scan(&raw, &databaseNow); err != nil {
 			return err
@@ -442,11 +475,20 @@ func (repository *Repository) RevokeConnection(ctx context.Context, command mana
 		if json.Unmarshal(raw, &result) != nil {
 			return errors.New("stored provider revocation state is invalid")
 		}
+		stored, found, err := lockManagementReceipt(ctx, tx, "provider_connection.revoke", command.IdempotencyHash, command.RequestHash)
+		if err != nil {
+			return err
+		}
+		if found {
+			result, err = replayManagementReceipt[entity.ManagedProviderConnection](stored)
+			replay = true
+			return err
+		}
 		if result.Version != command.ExpectedVersion || result.Generation != command.ExpectedGeneration || result.Status == "REVOKED" {
 			return errs.ErrConflict
 		}
 		result.Version, result.RevokeGeneration, result.Status, result.UpdatedAt = result.Version+1, result.RevokeGeneration+1, "REVOKED", databaseNow
-		payload, digest, _ := managementPayload(result)
+		payload, _, _ := managementPayload(result)
 		var changed string
 		if err = tx.tx.QueryRow(ctx, managementSQL("connection__revoke"), pgx.StrictNamedArgs{
 			"connection_id": result.ID, "expected_version": command.ExpectedVersion,
@@ -456,11 +498,11 @@ func (repository *Repository) RevokeConnection(ctx context.Context, command mana
 			return err
 		}
 		if err = insertManagementEffect(ctx, tx, "PROVIDER_REVOKE", "managed_provider_connection", changed,
-			result.Version, result.Generation, command.RequestHash, databaseNow); err != nil {
+			result.Version, result.Generation, managementEffectOwner{"managed_provider_connection", result.ID, result.Status, result.Version, result.Generation}, command.RequestHash, databaseNow); err != nil {
 			return err
 		}
 		if err = insertManagementReceipt(ctx, tx, "provider_connection.revoke", command.IdempotencyHash, command.RequestHash,
-			"managed_provider_connection", changed, result.Version, digest, databaseNow); err != nil {
+			"managed_provider_connection", changed, result.Version, payload, databaseNow); err != nil {
 			return err
 		}
 		command.Audit.OccurredAt = databaseNow
@@ -492,6 +534,8 @@ func (repository *Repository) ClaimManagementEffect(ctx context.Context, scope d
 			"lease_id": leaseID, "lease_duration": fmt.Sprintf("%f seconds", lease.Seconds()),
 		}).Scan(&result.ID, &result.Kind, &result.ResourceKind, &result.ResourceID,
 			&result.ResourceVersion, &result.ResourceGeneration, &result.IntentDigest,
+			&result.OwnerKind, &result.OwnerID, &result.OwnerVersion, &result.OwnerGeneration, &result.OwnerStatus,
+			&result.InputDigest, &result.DispatchState, &result.ProviderPhase, &result.SecretPhase, &result.ControlPlanePhase, &result.Checkpoint,
 			&result.Status, &result.LeaseID, &result.LeaseFence, &result.LeaseExpiresAt,
 			&result.Attempts, &result.Payload)
 	})
@@ -499,6 +543,25 @@ func (repository *Repository) ClaimManagementEffect(ctx context.Context, scope d
 		return entity.ManagementEffect{}, false, nil
 	}
 	return result, err == nil, err
+}
+
+func (repository *Repository) BeginManagementEffectDispatch(ctx context.Context, scope domainrepo.Scope, effectID, leaseID string, fence uint64) error {
+	return repository.managementTransact(ctx, scope, func(tx *transaction) error {
+		var id string
+		return tx.tx.QueryRow(ctx, managementSQL("effect__dispatch"), pgx.StrictNamedArgs{
+			"effect_id": effectID, "lease_id": leaseID, "lease_fence": fence,
+		}).Scan(&id)
+	})
+}
+
+func (repository *Repository) AdvanceProviderRevoke(ctx context.Context, scope domainrepo.Scope, effectID, leaseID string, fence uint64, step string, at time.Time) (entity.ManagementEffect, error) {
+	var result entity.ManagementEffect
+	err := repository.managementTransact(ctx, scope, func(tx *transaction) error {
+		return tx.tx.QueryRow(ctx, managementSQL("effect__revoke_checkpoint"), pgx.StrictNamedArgs{
+			"effect_id": effectID, "lease_id": leaseID, "lease_fence": fence, "step": step, "updated_at": at,
+		}).Scan(&result.ProviderPhase, &result.SecretPhase, &result.ControlPlanePhase)
+	})
+	return result, err
 }
 
 func (repository *Repository) RenewManagementEffect(ctx context.Context, scope domainrepo.Scope, effectID, leaseID string, fence uint64, lease time.Duration) error {
@@ -571,8 +634,9 @@ func (repository *Repository) CompleteProviderSync(ctx context.Context, completi
 		current.ActiveCredential = credential.Generation
 		current.CredentialBindingID = credential.CredentialBindingID
 		current.CredentialBindingVersion = credential.CredentialBindingVersion
-		current.CredentialBindingDigest = credential.CredentialBindingDigest
+		current.CredentialBindingDigest = completion.CredentialBindingDigest
 		current.MaskedAccount, current.MaskedLabel = credential.MaskedAccount, credential.MaskedLabel
+		current.Capacity = credential.Capacity
 		current.ObservationDigest, current.ObservedAt, current.UpdatedAt = completion.ObservationDigest, &completion.ObservedAt, completion.ObservedAt
 		current.ControlPlaneID, current.ControlPlaneVersion, current.ControlPlaneDigest = completion.ControlPlaneID, completion.ControlPlaneVersion, completion.ControlPlaneDigest
 		payload, _, err := managementPayload(current)
@@ -586,7 +650,8 @@ func (repository *Repository) CompleteProviderSync(ctx context.Context, completi
 			"observed_at": completion.ObservedAt, "control_plane_resource_id": completion.ControlPlaneID,
 			"control_plane_version": completion.ControlPlaneVersion, "control_plane_sha256": completion.ControlPlaneDigest,
 			"active_credential_generation": credential.Generation, "masked_account": credential.MaskedAccount, "masked_label": credential.MaskedLabel,
-			"payload": payload, "effect_id": completion.EffectID, "lease_id": completion.LeaseID,
+			"credential_binding_sha256": completion.CredentialBindingDigest,
+			"payload":                   payload, "effect_id": completion.EffectID, "lease_id": completion.LeaseID,
 			"lease_fence": completion.LeaseFence,
 		}).Scan(&changed); err != nil {
 			return err

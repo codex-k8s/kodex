@@ -3,6 +3,7 @@ WITH selected AS (
       FROM integration_gateway.management_effects
      WHERE effect_id = @effect_id AND status = 'CLAIMED'
        AND lease_id = @lease_id AND lease_fence = @lease_fence
+       AND dispatch_state = 'DISPATCHED'
      FOR UPDATE
 ), connection_failed AS (
     UPDATE integration_gateway.managed_provider_connections AS connection
@@ -58,7 +59,7 @@ WITH selected AS (
     RETURNING reconciliation.reconciliation_id
 ), completed AS (
     UPDATE integration_gateway.management_effects AS effect
-       SET status = @status, lease_id = '', lease_expires_at = NULL,
+       SET status = @status, dispatch_state = 'COMPLETED', lease_id = '', lease_expires_at = NULL,
            payload = jsonb_set(effect.payload, '{failure_category}', to_jsonb(@failure_category::text)),
            updated_at = @updated_at
       FROM selected

@@ -23,29 +23,41 @@ type ProviderDescriptor struct {
 // ManagedProviderConnection — целевой owner aggregate Issue #236. Он не
 // синхронизируется с legacy bot-service до one-shot cutover #196.
 type ManagedProviderConnection struct {
-	ID                       string     `json:"connection_id"`
-	StableKey                string     `json:"stable_key"`
-	ProviderID               string     `json:"provider_id"`
-	DisplayName              string     `json:"display_name"`
-	Version                  uint64     `json:"version"`
-	Generation               uint64     `json:"generation"`
-	RevokeGeneration         uint64     `json:"revoke_generation"`
-	Status                   string     `json:"status"`
-	ActiveCredential         uint64     `json:"active_credential_generation"`
-	MaskedLabel              string     `json:"masked_label,omitempty"`
-	MaskedAccount            string     `json:"masked_account,omitempty"`
-	Capabilities             []string   `json:"capabilities"`
-	CapabilityDigest         string     `json:"capability_sha256"`
-	CredentialBindingID      string     `json:"credential_binding_id,omitempty"`
-	CredentialBindingVersion uint64     `json:"credential_binding_version,omitempty"`
-	CredentialBindingDigest  string     `json:"credential_binding_sha256,omitempty"`
-	ObservationDigest        string     `json:"observation_sha256"`
-	ObservedAt               *time.Time `json:"observed_at,omitempty"`
-	ControlPlaneID           string     `json:"control_plane_resource_id,omitempty"`
-	ControlPlaneVersion      uint64     `json:"control_plane_version,omitempty"`
-	ControlPlaneDigest       string     `json:"control_plane_sha256,omitempty"`
-	CreatedAt                time.Time  `json:"created_at"`
-	UpdatedAt                time.Time  `json:"updated_at"`
+	ID                       string                      `json:"connection_id"`
+	StableKey                string                      `json:"stable_key"`
+	ProviderID               string                      `json:"provider_id"`
+	DisplayName              string                      `json:"display_name"`
+	Version                  uint64                      `json:"version"`
+	Generation               uint64                      `json:"generation"`
+	RevokeGeneration         uint64                      `json:"revoke_generation"`
+	Status                   string                      `json:"status"`
+	ActiveCredential         uint64                      `json:"active_credential_generation"`
+	MaskedLabel              string                      `json:"masked_label,omitempty"`
+	MaskedAccount            string                      `json:"masked_account,omitempty"`
+	Capabilities             []string                    `json:"capabilities"`
+	CapabilityDigest         string                      `json:"capability_sha256"`
+	CredentialBindingID      string                      `json:"credential_binding_id,omitempty"`
+	CredentialBindingVersion uint64                      `json:"credential_binding_version,omitempty"`
+	CredentialBindingDigest  string                      `json:"credential_binding_sha256,omitempty"`
+	ObservationDigest        string                      `json:"observation_sha256"`
+	ObservedAt               *time.Time                  `json:"observed_at,omitempty"`
+	Capacity                 ProviderCapacityObservation `json:"capacity"`
+	ControlPlaneID           string                      `json:"control_plane_resource_id,omitempty"`
+	ControlPlaneVersion      uint64                      `json:"control_plane_version,omitempty"`
+	ControlPlaneDigest       string                      `json:"control_plane_sha256,omitempty"`
+	CreatedAt                time.Time                   `json:"created_at"`
+	UpdatedAt                time.Time                   `json:"updated_at"`
+}
+
+type ProviderCapacityObservation struct {
+	Usage         uint64    `json:"usage"`
+	Limit         uint64    `json:"limit"`
+	Revision      uint64    `json:"revision"`
+	ObservedAt    time.Time `json:"observed_at"`
+	WindowSeconds uint64    `json:"window_duration_seconds"`
+	ResetsAt      time.Time `json:"resets_at"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	Digest        string    `json:"digest_sha256"`
 }
 
 type ProviderAuthorization struct {
@@ -83,19 +95,21 @@ type CredentialGeneration struct {
 	CredentialBindingDigest  string
 	MaskedAccount            string
 	MaskedLabel              string
+	Capacity                 ProviderCapacityObservation
 }
 
 type ProviderPoolMember struct {
-	ConnectionID         string `json:"connection_id"`
-	ConnectionStableKey  string `json:"connection_stable_key"`
-	ConnectionVersion    uint64 `json:"connection_version"`
-	ConnectionGeneration uint64 `json:"connection_generation"`
-	ObservationDigest    string `json:"observation_sha256"`
-	Weight               uint32 `json:"weight"`
-	Eligible             bool   `json:"eligible"`
-	ControlPlaneID       string `json:"control_plane_resource_id,omitempty"`
-	ControlPlaneVersion  uint64 `json:"control_plane_version,omitempty"`
-	ControlPlaneDigest   string `json:"control_plane_sha256,omitempty"`
+	ConnectionID         string                      `json:"connection_id"`
+	ConnectionStableKey  string                      `json:"connection_stable_key"`
+	ConnectionVersion    uint64                      `json:"connection_version"`
+	ConnectionGeneration uint64                      `json:"connection_generation"`
+	ObservationDigest    string                      `json:"observation_sha256"`
+	Capacity             ProviderCapacityObservation `json:"capacity"`
+	Weight               uint32                      `json:"weight"`
+	Eligible             bool                        `json:"eligible"`
+	ControlPlaneID       string                      `json:"control_plane_resource_id,omitempty"`
+	ControlPlaneVersion  uint64                      `json:"control_plane_version,omitempty"`
+	ControlPlaneDigest   string                      `json:"control_plane_sha256,omitempty"`
 }
 
 type ManagedProviderPool struct {
@@ -137,16 +151,24 @@ type IntegrationConfiguration struct {
 }
 
 type IntegrationTestReceipt struct {
-	ID                   string
-	ConnectionID         string
-	ConnectionVersion    uint64
-	ConnectionGeneration uint64
-	DefinitionID         string
-	DefinitionVersion    uint64
-	Category             string
-	Digest               string
-	ExpiresAt            time.Time
-	TestedAt             *time.Time
+	ID                       string
+	ConnectionID             string
+	ConnectionVersion        uint64
+	ConnectionGeneration     uint64
+	DefinitionID             string
+	DefinitionVersion        uint64
+	DefinitionDigest         string
+	ConfigurationID          string
+	ConfigurationVersion     uint64
+	ConfigurationDigest      string
+	CredentialGeneration     uint64
+	CredentialBindingID      string
+	CredentialBindingVersion uint64
+	CredentialBindingDigest  string
+	Category                 string
+	Digest                   string
+	ExpiresAt                time.Time
+	TestedAt                 *time.Time
 }
 
 // GitSource содержит только server-owned ссылки из закрытого реестра. Значения
@@ -167,6 +189,7 @@ type GitSourceBinding struct {
 	ID                          string     `json:"binding_id"`
 	StableKey                   string     `json:"stable_key"`
 	Version                     uint64     `json:"version"`
+	Generation                  uint64     `json:"generation"`
 	Status                      string     `json:"status"`
 	RepositoryKey               string     `json:"repository_key"`
 	RefKey                      string     `json:"ref_key"`
@@ -213,6 +236,17 @@ type ManagementEffect struct {
 	ResourceID         string
 	ResourceVersion    uint64
 	ResourceGeneration uint64
+	OwnerKind          string
+	OwnerID            string
+	OwnerVersion       uint64
+	OwnerGeneration    uint64
+	OwnerStatus        string
+	InputDigest        string
+	DispatchState      string
+	ProviderPhase      string
+	SecretPhase        string
+	ControlPlanePhase  string
+	Checkpoint         json.RawMessage
 	IntentDigest       string
 	Status             string
 	LeaseID            string

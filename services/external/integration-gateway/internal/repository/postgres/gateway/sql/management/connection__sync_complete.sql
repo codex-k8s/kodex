@@ -1,6 +1,6 @@
 WITH credential_activated AS (
     UPDATE integration_gateway.provider_credential_generations
-       SET status = 'ACTIVE', activated_at = @observed_at
+       SET status = 'ACTIVE', credential_binding_sha256 = @credential_binding_sha256, activated_at = @observed_at
      WHERE connection_id = @connection_id AND generation = @expected_generation
        AND status = 'PENDING'
     RETURNING connection_id, generation
@@ -19,10 +19,11 @@ WITH credential_activated AS (
     RETURNING connection.connection_id
 ), completed AS (
     UPDATE integration_gateway.management_effects AS effect
-       SET status = 'SUCCEEDED', lease_id = '', lease_expires_at = NULL, updated_at = @observed_at
+       SET status = 'SUCCEEDED', dispatch_state = 'COMPLETED', lease_id = '', lease_expires_at = NULL, updated_at = @observed_at
       FROM changed
      WHERE effect.effect_id = @effect_id AND effect.status = 'CLAIMED'
        AND effect.lease_id = @lease_id AND effect.lease_fence = @lease_fence
+       AND effect.dispatch_state = 'DISPATCHED'
     RETURNING effect.effect_id
 )
 SELECT connection_id FROM changed WHERE EXISTS (SELECT 1 FROM completed)

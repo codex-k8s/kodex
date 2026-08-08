@@ -223,7 +223,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		return err
 	}
 	if err = managementService.ConfigureWorker(managementservice.WorkerDependencies{
-		Authorizer: authorizer, Secrets: secretBoundary, GitSecrets: gitSecretBoundary, Effects: managementEffects, Git: gitFetcher,
+		Authorizer: authorizer, Provider: provider, Secrets: secretBoundary, GitSecrets: gitSecretBoundary, Effects: managementEffects, Git: gitFetcher,
 		SecretPathPrefix: config.VaultCredentialPathPrefix, LeaseDuration: config.ManagementLeaseDuration,
 	}); err != nil {
 		return err

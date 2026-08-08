@@ -11,6 +11,8 @@ metadata:
   name: payments
   version: 1
 spec:
+  validation:
+    endpointRef: payments.readonly
   tools:
     - name: list-payments
       version: 1

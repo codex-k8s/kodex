@@ -118,6 +118,135 @@ func TestProviderIntentBindsEveryStableAuthorityAndBusinessField(t *testing.T) {
 	}
 }
 
+func TestProviderPoolIntentProducerConsumerCanonicalEquality(t *testing.T) {
+	t.Parallel()
+	authority := testAuthority(controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName)
+	request := testProviderPoolRequest()
+	producer, err := ProviderPoolIntentSHA256(authority, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumer := proto.Clone(request).(*controlplanev1.ManageProviderPoolRequest)
+	consumer.IdempotencyKey = "another-transport-key"
+	consumer.ProviderReceipt = &controlplanev1.ProviderEffectReadbackReceipt{ReceiptId: "88888888-8888-4888-8888-888888888888", CommandIntentSha256: producer}
+	actual, err := ProviderPoolIntentSHA256(authority, consumer)
+	if err != nil || actual != producer {
+		t.Fatalf("provider pool producer/consumer canonical mismatch: %q %q %v", producer, actual, err)
+	}
+}
+
+func TestProviderPoolIntentBindsAuthorityAndCapacityBusinessFields(t *testing.T) {
+	t.Parallel()
+	authority := testAuthority(controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName)
+	request := testProviderPoolRequest()
+	base, err := ProviderPoolIntentSHA256(authority, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*VerifiedCommandAuthority){
+		"actor":        func(value *VerifiedCommandAuthority) { value.ActorID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+		"organization": func(value *VerifiedCommandAuthority) { value.OrganizationID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+		"project":      func(value *VerifiedCommandAuthority) { value.ProjectID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+		"workload":     func(value *VerifiedCommandAuthority) { value.WorkloadID = "integration-gateway-canary" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := authority
+			mutate(&changed)
+			digest, digestErr := ProviderPoolIntentSHA256(changed, request)
+			if digestErr != nil || digest == base {
+				t.Fatalf("authority field is not bound: %q %v", digest, digestErr)
+			}
+		})
+	}
+	mutations := map[string]func(*controlplanev1.ManageProviderPoolRequest){
+		"action": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Action = controlplanev1.ProviderPoolAction_PROVIDER_POOL_ACTION_ARCHIVE
+		},
+		"target": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.ProviderPoolId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+		},
+		"version":         func(value *controlplanev1.ManageProviderPoolRequest) { value.ExpectedVersion++ },
+		"name":            func(value *controlplanev1.ManageProviderPoolRequest) { value.Name += " changed" },
+		"stable-key":      func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.StableKey += "-changed" },
+		"policy":          func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.Policy = "WEIGHTED" },
+		"policy-revision": func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.PolicyRevision++ },
+		"eligibility-digest": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.EligibilitySnapshotSha256 = repeatHex("b")
+		},
+		"connection-ref": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.Bindings[0].ProviderConnectionReferenceId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+		},
+		"connection-version": func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.Bindings[0].ReferenceVersion++ },
+		"connection-digest": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.Bindings[0].ReferenceSha256 = repeatHex("c")
+		},
+		"weight":               func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.Bindings[0].Weight++ },
+		"eligible":             func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.Bindings[0].Eligible = false },
+		"usage":                func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.Bindings[0].ObservedUsage++ },
+		"limit":                func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.Bindings[0].ObservedLimit++ },
+		"observation-revision": func(value *controlplanev1.ManageProviderPoolRequest) { value.Spec.Bindings[0].ObservationRevision++ },
+		"observation-time": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.Bindings[0].ObservedAt = timestamppb.New(value.Spec.Bindings[0].ObservedAt.AsTime().Add(time.Second))
+		},
+		"observation-expiry": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.Bindings[0].ObservationExpiresAt = timestamppb.New(value.Spec.Bindings[0].ObservationExpiresAt.AsTime().Add(time.Second))
+		},
+		"observation-digest": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.Bindings[0].ObservationSha256 = repeatHex("d")
+		},
+		"window-duration": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.Bindings[0].WindowDurationSeconds++
+		},
+		"reset-time": func(value *controlplanev1.ManageProviderPoolRequest) {
+			value.Spec.Bindings[0].ResetsAt = timestamppb.New(value.Spec.Bindings[0].ResetsAt.AsTime().Add(time.Second))
+		},
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			changed := proto.Clone(request).(*controlplanev1.ManageProviderPoolRequest)
+			mutate(changed)
+			digest, digestErr := ProviderPoolIntentSHA256(authority, changed)
+			if digestErr != nil || digest == base {
+				t.Fatalf("provider pool business field is not bound: %q %v", digest, digestErr)
+			}
+		})
+	}
+	wrongMethod := authority
+	wrongMethod.FullMethod = controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName
+	if _, err = ProviderPoolIntentSHA256(wrongMethod, request); err == nil {
+		t.Fatal("changed provider pool full method was accepted")
+	}
+}
+
+func TestProviderCredentialMaterializationBindsGenerationAndObservation(t *testing.T) {
+	t.Parallel()
+	value := ProviderCredentialMaterialization{
+		CredentialBindingID: "44444444-4444-4444-8444-444444444444", BindingVersion: 1, CredentialGeneration: 3,
+		Provider: "openai-codex", ProviderObjectRef: "connection-primary", SecretRef: "credentials/provider/3",
+		SecretVersion: 2, SecretContentSHA256: repeatHex("a"), MaskedAccount: "a***@example.invalid", MaskedLabel: "configured",
+		Capabilities: []string{"reasoning", "model-invoke"}, ObservedUsage: 10, ObservedLimit: 100, ObservationRevision: 7,
+		ObservedAt: time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC), WindowSeconds: 3600,
+		ResetsAt: time.Date(2026, 8, 7, 13, 0, 0, 0, time.UTC), ObservationExpiresAt: time.Date(2026, 8, 7, 12, 5, 0, 0, time.UTC),
+		ObservationSHA256: repeatHex("b"),
+	}
+	base, err := ProviderCredentialMaterializationSHA256(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := value
+	changed.CredentialGeneration++
+	digest, err := ProviderCredentialMaterializationSHA256(changed)
+	if err != nil || digest == base {
+		t.Fatalf("credential generation is not bound: %q %v", digest, err)
+	}
+	changed = value
+	changed.ObservationSHA256 = repeatHex("c")
+	digest, err = ProviderCredentialMaterializationSHA256(changed)
+	if err != nil || digest == base {
+		t.Fatalf("capacity observation digest is not bound: %q %v", digest, err)
+	}
+}
+
 func TestGitIntentBindsTypedCommandAndIgnoresTransportProof(t *testing.T) {
 	t.Parallel()
 
@@ -235,6 +364,18 @@ func testAuthority(fullMethod string) VerifiedCommandAuthority {
 
 func testProviderRequest() *controlplanev1.ManageProviderConnectionReferenceRequest {
 	return &controlplanev1.ManageProviderConnectionReferenceRequest{IdempotencyKey: "transport-key", Action: controlplanev1.ProviderConnectionReferenceAction_PROVIDER_CONNECTION_REFERENCE_ACTION_REGISTER, Name: "Provider", Spec: &controlplanev1.ProviderConnectionReferenceSpec{StableKey: "provider-primary", Provider: "openai-codex", ServerReference: "connection-primary", ReferenceVersion: 1, ReferenceGeneration: 1, ReferenceSha256: repeatHex("a"), MaskedLabel: "primary", MaskedStatus: controlplanev1.ProviderConnectionStatus_PROVIDER_CONNECTION_STATUS_AVAILABLE, Capabilities: []string{"model-invoke"}, Eligible: true, ObservedAt: timestamppb.New(time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)), CredentialBindingId: "44444444-4444-4444-8444-444444444444", CredentialBindingVersion: 1, CredentialBindingSha256: repeatHex("d")}}
+}
+
+func testProviderPoolRequest() *controlplanev1.ManageProviderPoolRequest {
+	observed := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	return &controlplanev1.ManageProviderPoolRequest{
+		IdempotencyKey: "transport-key", Action: controlplanev1.ProviderPoolAction_PROVIDER_POOL_ACTION_UPDATE,
+		ProviderPoolId: "55555555-5555-4555-8555-555555555555", ExpectedVersion: 3, Name: "Primary pool",
+		Spec: &controlplanev1.ProviderPoolSpec{StableKey: "primary-pool", Policy: "LEAST_USED", PolicyRevision: 4,
+			EligibilitySnapshotSha256: repeatHex("a"),
+			Bindings:                  []*controlplanev1.ProviderPoolBinding{{ProviderConnectionReferenceId: "66666666-6666-4666-8666-666666666666", ProviderConnectionStableKey: "primary-provider", ReferenceVersion: 2, ReferenceSha256: repeatHex("f"), Weight: 100, Eligible: true, ObservedUsage: 25, ObservedLimit: 100, ObservationRevision: 9, ObservedAt: timestamppb.New(observed), ObservationExpiresAt: timestamppb.New(observed.Add(5 * time.Minute)), ObservationSha256: repeatHex("e"), WindowDurationSeconds: 3600, ResetsAt: timestamppb.New(observed.Add(time.Hour))}},
+		},
+	}
 }
 
 func repeatHex(symbol string) string {

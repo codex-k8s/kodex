@@ -113,6 +113,14 @@ func providerReferenceFromProto(value *controlplanev1.ProviderConnectionReferenc
 	if err != nil {
 		return nil, err
 	}
+	observationExpiresAt, err := optionalTime(value.GetObservationExpiresAt())
+	if err != nil {
+		return nil, err
+	}
+	resetsAt, err := optionalTime(value.GetResetsAt())
+	if err != nil {
+		return nil, err
+	}
 	return entity.ProviderConnectionReferenceSpec{
 		StableKey: value.GetStableKey(), Provider: value.GetProvider(), ServerReference: value.GetServerReference(),
 		ReferenceVersion: value.GetReferenceVersion(), ReferenceGeneration: value.GetReferenceGeneration(),
@@ -122,6 +130,10 @@ func providerReferenceFromProto(value *controlplanev1.ProviderConnectionReferenc
 		ReceiptID: value.GetReceiptId(), ReceiptVersion: value.GetReceiptVersion(), ReceiptSHA256: value.GetReceiptSha256(),
 		CredentialBindingID: value.GetCredentialBindingId(), CredentialBindingVersion: value.GetCredentialBindingVersion(),
 		CredentialBindingSHA256: value.GetCredentialBindingSha256(),
+		ObservedUsage:           value.GetObservedUsage(), ObservedLimit: value.GetObservedLimit(),
+		ObservationRevision: value.GetObservationRevision(), ObservationExpiresAt: observationExpiresAt,
+		WindowDurationSeconds: value.GetWindowDurationSeconds(), ResetsAt: resetsAt,
+		ObservationSHA256: value.GetObservationSha256(),
 	}, nil
 }
 
@@ -135,6 +147,10 @@ func providerReferenceToProto(value entity.ProviderConnectionReferenceSpec) *con
 		ReceiptId: value.ReceiptID, ReceiptVersion: value.ReceiptVersion, ReceiptSha256: value.ReceiptSHA256,
 		CredentialBindingId: value.CredentialBindingID, CredentialBindingVersion: value.CredentialBindingVersion,
 		CredentialBindingSha256: value.CredentialBindingSHA256,
+		ObservedUsage:           value.ObservedUsage, ObservedLimit: value.ObservedLimit,
+		ObservationRevision: value.ObservationRevision, ObservationExpiresAt: optionalTimestamp(value.ObservationExpiresAt),
+		WindowDurationSeconds: value.WindowDurationSeconds, ResetsAt: optionalTimestamp(value.ResetsAt),
+		ObservationSha256: value.ObservationSHA256,
 	}
 }
 
@@ -168,7 +184,11 @@ func providerPoolFromProto(value *controlplanev1.ProviderPoolSpec) (entity.Spec,
 			ProviderConnectionStableKey:   binding.GetProviderConnectionStableKey(),
 			ReferenceVersion:              binding.GetReferenceVersion(), ReferenceSHA256: binding.GetReferenceSha256(),
 			Weight: binding.GetWeight(), Eligible: binding.GetEligible(),
-			MaskedStatus: trimEnum(binding.GetMaskedStatus().String(), "PROVIDER_CONNECTION_STATUS_"),
+			MaskedStatus:  trimEnum(binding.GetMaskedStatus().String(), "PROVIDER_CONNECTION_STATUS_"),
+			ObservedUsage: binding.GetObservedUsage(), ObservedLimit: binding.GetObservedLimit(),
+			ObservationRevision: binding.GetObservationRevision(), ObservedAt: binding.GetObservedAt().AsTime(),
+			ObservationExpiresAt: binding.GetObservationExpiresAt().AsTime(), ObservationSHA256: binding.GetObservationSha256(),
+			WindowDurationSeconds: binding.GetWindowDurationSeconds(), ResetsAt: binding.GetResetsAt().AsTime(),
 		})
 	}
 	return entity.ProviderPoolSpec{
@@ -187,7 +207,11 @@ func providerPoolToProto(value entity.ProviderPoolSpec) *controlplanev1.Provider
 			ProviderConnectionStableKey:   binding.ProviderConnectionStableKey,
 			ReferenceVersion:              binding.ReferenceVersion, ReferenceSha256: binding.ReferenceSHA256,
 			Weight: binding.Weight, Eligible: binding.Eligible,
-			MaskedStatus: providerConnectionStatusToProto(binding.MaskedStatus),
+			MaskedStatus:  providerConnectionStatusToProto(binding.MaskedStatus),
+			ObservedUsage: binding.ObservedUsage, ObservedLimit: binding.ObservedLimit,
+			ObservationRevision: binding.ObservationRevision, ObservedAt: timestamppb.New(binding.ObservedAt),
+			ObservationExpiresAt: timestamppb.New(binding.ObservationExpiresAt), ObservationSha256: binding.ObservationSHA256,
+			WindowDurationSeconds: binding.WindowDurationSeconds, ResetsAt: timestamppb.New(binding.ResetsAt),
 		})
 	}
 	return &controlplanev1.ProviderPoolSpec{

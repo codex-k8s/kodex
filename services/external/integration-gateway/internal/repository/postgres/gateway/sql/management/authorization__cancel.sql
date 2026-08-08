@@ -1,7 +1,7 @@
 WITH closed AS (
     UPDATE integration_gateway.provider_authorization_attempts
        SET state = 'CANCELLED', version = version + 1, payload = @authorization_payload::jsonb,
-           device_result_ciphertext = ''::bytea, provider_login_id_ciphertext = ''::bytea,
+           device_result_ciphertext = ''::bytea,
            lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
      WHERE authorization_id = @authorization_id AND version = @expected_version
        AND state IN ('PENDING', 'CODE_ISSUED')
@@ -15,7 +15,8 @@ WITH closed AS (
     RETURNING connection.connection_id
 )
 UPDATE integration_gateway.management_effects AS effect
-   SET status = 'CANCELLED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
+   SET status = CASE WHEN dispatch_state = 'DISPATCHED' THEN 'UNKNOWN' ELSE 'CANCELLED' END,
+       dispatch_state = 'COMPLETED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
   FROM closed
  WHERE effect.resource_kind = 'provider_authorization'
    AND effect.resource_id = @authorization_id

@@ -15,18 +15,20 @@ WITH locked AS (
         connection_id, generation, tenant_id, project_id, authorization_id,
         status, secret_ref, secret_version, secret_content_sha256,
         credential_binding_id, credential_binding_version, credential_binding_sha256,
-        masked_account, masked_label, created_at
+        masked_account, masked_label, observed_usage, observed_limit, observation_revision,
+        observed_at, window_duration_seconds, resets_at, observation_expires_at, observation_sha256, created_at
     ) SELECT connection_id, generation, @tenant_id, @project_id, @authorization_id,
              'PENDING', @secret_ref, @secret_version, @secret_content_sha256,
              @credential_binding_id, @credential_binding_version, @credential_binding_sha256,
-             @masked_account, @masked_label, @updated_at
+             @masked_account, @masked_label, @observed_usage, @observed_limit, @observation_revision,
+             @capacity_observed_at, @window_duration_seconds, @resets_at, @observation_expires_at, @observation_sha256, @updated_at
         FROM locked
     ON CONFLICT (connection_id, generation) DO NOTHING
     RETURNING connection_id, generation
 ), completed AS (
     UPDATE integration_gateway.provider_authorization_attempts AS authorization
        SET state = 'AUTHORIZED', version = authorization.version + 1,
-           provider_login_id_ciphertext = ''::bytea, device_result_ciphertext = ''::bytea,
+           device_result_ciphertext = ''::bytea,
            lease_id = '', lease_expires_at = NULL, updated_at = @updated_at,
            payload = jsonb_set(jsonb_set(authorization.payload, '{state}', '"AUTHORIZED"'::jsonb),
                                '{version}', to_jsonb(authorization.version + 1))
@@ -39,22 +41,25 @@ WITH locked AS (
            updated_at = @updated_at
       FROM completed
      WHERE connection.connection_id = completed.connection_id
-    RETURNING connection.connection_id, connection.version, connection.generation
+    RETURNING connection.connection_id, connection.version, connection.generation, connection.status
 ), authorization_effect_completed AS (
     UPDATE integration_gateway.management_effects AS effect
-       SET status = 'SUCCEEDED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
+       SET status = 'SUCCEEDED', dispatch_state = 'COMPLETED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
       FROM connection_changed
      WHERE effect.effect_id = @authorization_effect_id AND effect.status = 'CLAIMED'
        AND effect.lease_id = @lease_id AND effect.lease_fence = @lease_generation
+       AND effect.dispatch_state = 'DISPATCHED'
     RETURNING effect.effect_id
 )
 INSERT INTO integration_gateway.management_effects (
     effect_id, tenant_id, project_id, actor_id, effect_kind, resource_kind, resource_id,
-    resource_version, resource_generation, intent_sha256, status, available_at,
+    resource_version, resource_generation, intent_sha256, owner_kind, owner_id,
+    owner_version, owner_generation, owner_status, input_sha256, status, available_at,
     payload, created_at, updated_at
 )
 SELECT @effect_id, @tenant_id, @project_id, @actor_id, 'PROVIDER_REFERENCE_SYNC',
        'managed_provider_connection', connection_id, version, generation,
-       @intent_sha256, 'PENDING', @updated_at, @effect_payload::jsonb, @updated_at, @updated_at
+       @intent_sha256, 'managed_provider_connection', connection_id, version, generation,
+       status, @intent_sha256, 'PENDING', @updated_at, @effect_payload::jsonb, @updated_at, @updated_at
   FROM connection_changed WHERE EXISTS (SELECT 1 FROM authorization_effect_completed)
 RETURNING effect_id

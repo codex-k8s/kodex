@@ -9,7 +9,7 @@ WITH changed AS (
     UPDATE integration_gateway.provider_authorization_attempts AS authorization
        SET state = 'CANCELLED', version = version + 1,
            payload = jsonb_set(authorization.payload, '{state}', '"CANCELLED"'::jsonb),
-           device_result_ciphertext = ''::bytea, provider_login_id_ciphertext = ''::bytea,
+           device_result_ciphertext = ''::bytea,
            lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
       FROM changed
      WHERE authorization.connection_id = changed.connection_id
@@ -25,12 +25,32 @@ WITH changed AS (
        SET status = 'REVOKED', payload = jsonb_set(grant.payload, '{Status}', '"REVOKED"'::jsonb)
       FROM changed
      WHERE grant.connection_id = changed.connection_id AND grant.status = 'ACTIVE'
+), closed_tests AS (
+    UPDATE integration_gateway.integration_test_receipts AS receipt
+       SET category = 'CREDENTIAL_UNAVAILABLE', tested_at = @updated_at
+      FROM changed
+     WHERE receipt.connection_id = changed.connection_id AND receipt.category = 'PENDING'
+    RETURNING receipt.test_id
+), ambiguous_effects AS (
+    UPDATE integration_gateway.management_effects AS effect
+       SET status = 'UNKNOWN', dispatch_state = 'COMPLETED', lease_id = '',
+           lease_expires_at = NULL, updated_at = @updated_at
+      FROM changed
+     WHERE (effect.owner_kind = 'managed_provider_connection' AND effect.owner_id = changed.connection_id
+            OR effect.resource_id = changed.connection_id
+            OR effect.resource_id IN (SELECT authorization_id FROM closed_authorizations)
+            OR effect.resource_id IN (SELECT test_id FROM closed_tests))
+       AND effect.status = 'CLAIMED' AND effect.dispatch_state = 'DISPATCHED'
+    RETURNING effect.effect_id
 ), cancelled_effects AS (
     UPDATE integration_gateway.management_effects AS effect
-       SET status = 'CANCELLED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
+       SET status = 'CANCELLED', dispatch_state = 'COMPLETED', lease_id = '',
+           lease_expires_at = NULL, updated_at = @updated_at
       FROM changed
-     WHERE (effect.resource_id = changed.connection_id
-            OR effect.resource_id IN (SELECT authorization_id FROM closed_authorizations))
-       AND effect.status IN ('PENDING', 'CLAIMED')
+     WHERE (effect.owner_kind = 'managed_provider_connection' AND effect.owner_id = changed.connection_id
+            OR effect.resource_id = changed.connection_id
+            OR effect.resource_id IN (SELECT authorization_id FROM closed_authorizations)
+            OR effect.resource_id IN (SELECT test_id FROM closed_tests))
+       AND effect.status IN ('PENDING', 'CLAIMED') AND effect.dispatch_state = 'PENDING'
 )
 SELECT connection_id FROM changed

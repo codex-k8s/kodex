@@ -1,8 +1,23 @@
 WITH candidate AS (
     SELECT effect_id
-      FROM integration_gateway.management_effects
-     WHERE (status = 'PENDING' AND available_at <= clock_timestamp())
-        OR (status = 'CLAIMED' AND lease_expires_at <= clock_timestamp())
+      FROM integration_gateway.management_effects AS effect
+     WHERE ((status = 'PENDING' AND available_at <= clock_timestamp())
+        OR (status = 'CLAIMED' AND lease_expires_at <= clock_timestamp()))
+       AND CASE effect.owner_kind
+             WHEN 'managed_provider_connection' THEN EXISTS (
+               SELECT 1 FROM integration_gateway.managed_provider_connections AS owner
+                WHERE owner.connection_id = effect.owner_id AND owner.version = effect.owner_version
+                  AND owner.generation = effect.owner_generation AND owner.status = effect.owner_status)
+             WHEN 'managed_provider_pool' THEN EXISTS (
+               SELECT 1 FROM integration_gateway.managed_provider_pools AS owner
+                WHERE owner.provider_pool_id = effect.owner_id AND owner.version = effect.owner_version
+                  AND owner.status = effect.owner_status)
+             WHEN 'git_source_binding' THEN EXISTS (
+               SELECT 1 FROM integration_gateway.git_source_bindings AS owner
+                WHERE owner.binding_id = effect.owner_id AND owner.version = effect.owner_version
+                  AND owner.generation = effect.owner_generation AND owner.status = effect.owner_status)
+             ELSE false
+           END
      ORDER BY available_at, effect_id
      FOR UPDATE SKIP LOCKED
      LIMIT 1
@@ -28,7 +43,9 @@ WITH candidate AS (
     RETURNING authorization.authorization_id
 )
 SELECT effect_id, effect_kind, resource_kind, resource_id, resource_version,
-       resource_generation, intent_sha256, status, lease_id, lease_fence,
+       resource_generation, intent_sha256, owner_kind, owner_id, owner_version,
+       owner_generation, owner_status, input_sha256, dispatch_state, provider_phase,
+       secret_phase, control_plane_phase, checkpoint, status, lease_id, lease_fence,
        lease_expires_at, attempts, payload
   FROM claimed
  WHERE claimed.effect_kind <> 'PROVIDER_AUTHORIZE'

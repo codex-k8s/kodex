@@ -12,12 +12,13 @@ import (
 )
 
 type Definition struct {
-	ID        string
-	Version   uint64
-	Digest    string
-	Source    []byte
-	Tools     []Tool
-	CreatedAt time.Time
+	ID                    string
+	Version               uint64
+	Digest                string
+	ValidationEndpointRef string
+	Source                []byte
+	Tools                 []Tool
+	CreatedAt             time.Time
 }
 
 type Tool struct {

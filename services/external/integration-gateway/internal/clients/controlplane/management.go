@@ -41,7 +41,68 @@ func NewManagementClient(client *controlplaneclient.Client, signer *effectreceip
 	return &ManagementClient{client: client, signer: signer}, nil
 }
 
-func (client *ManagementClient) SyncProvider(ctx context.Context, scope domainrepo.Scope, connection entity.ManagedProviderConnection, intentDigest string) (managementeffect.Readback, error) {
+func (client *ManagementClient) resolveProviderReference(ctx context.Context, scope domainrepo.Scope, connection entity.ManagedProviderConnection, intentDigest string) (managementeffect.Readback, bool, error) {
+	observation := sha256.Sum256([]byte(connection.ID + "\x00" + connection.ProviderID + "\x00archive-discovery\x00" + intentDigest))
+	observationDigest := hex.EncodeToString(observation[:])
+	request := &controlplanev1.ManageProviderConnectionReferenceRequest{
+		Action: controlplanev1.ProviderConnectionReferenceAction_PROVIDER_CONNECTION_REFERENCE_ACTION_ARCHIVE,
+		Name:   connection.DisplayName,
+		Spec: &controlplanev1.ProviderConnectionReferenceSpec{StableKey: connection.StableKey, Provider: connection.ProviderID,
+			ServerReference: connection.ID, ReferenceVersion: connection.Version + 1, ReferenceGeneration: connection.Generation,
+			ReferenceSha256: observationDigest, MaskedLabel: connection.MaskedLabel, MaskedStatus: controlplanev1.ProviderConnectionStatus_PROVIDER_CONNECTION_STATUS_ARCHIVED},
+	}
+	authority := controlplanecontract.VerifiedCommandAuthority{ActorID: scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID, WorkloadID: "integration-gateway", FullMethod: controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName}
+	commandIntent, err := controlplanecontract.ProviderConnectionReferenceIntentSHA256(authority, request)
+	if err != nil {
+		return managementeffect.Readback{}, false, err
+	}
+	maskedLabel := connection.MaskedLabel
+	if maskedLabel == "" {
+		maskedLabel = connection.DisplayName
+	}
+	credential, err := client.signer.SignProvider(effectreceipt.ProviderReceipt{
+		FullMethod: controlplanev1.ControlPlaneService_ListProviderConnectionReferences_FullMethodName,
+		ActorID:    scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID,
+		Action: "archive", Effect: "provider-reference-discovery", EffectVersion: connection.Version + 1,
+		EffectGeneration: connection.Generation, EffectSHA256: observationDigest, ReceiptID: uuid.NewString(),
+		ReceiptRevision: connection.Version + 1, ProviderObjectRef: connection.ID, MaskedStatus: "ARCHIVED",
+		Provider: connection.ProviderID, MaskedLabel: maskedLabel, TargetKind: "provider_connection_reference",
+		TargetStableKey: connection.StableKey, CommandIntentSHA256: commandIntent,
+	})
+	if err != nil {
+		return managementeffect.Readback{}, false, err
+	}
+	requestContext, err := controlplaneclient.WithApplicationGrant(ctx, credential.CompactJWS)
+	if err != nil {
+		return managementeffect.Readback{}, false, err
+	}
+	response, err := client.client.ControlPlane.ListProviderConnectionReferences(requestContext, &controlplanev1.ListProviderConnectionReferencesRequest{PageSize: 100})
+	if err != nil {
+		return managementeffect.Readback{}, false, errors.Join(managementeffect.ErrOutcomeUnknown, err)
+	}
+	if response.GetNextPageToken() != "" {
+		return managementeffect.Readback{}, false, errors.New("control-plane provider reference discovery is not bounded")
+	}
+	var found *controlplanev1.Resource
+	for _, candidate := range response.GetProviderConnectionReferences() {
+		spec := candidate.GetSpec().GetProviderConnectionReference()
+		if spec != nil && spec.GetStableKey() == connection.StableKey && spec.GetServerReference() == connection.ID {
+			if found != nil {
+				return managementeffect.Readback{}, false, errors.New("control-plane provider reference discovery is ambiguous")
+			}
+			found = candidate
+		}
+	}
+	if found == nil {
+		return managementeffect.Readback{}, false, nil
+	}
+	if found.GetId() == "" || found.GetVersion() == 0 || !validDigest(found.GetProjectionSha256()) {
+		return managementeffect.Readback{}, false, errors.New("control-plane provider reference discovery readback is invalid")
+	}
+	return resourceReadback(found), true, nil
+}
+
+func (client *ManagementClient) SyncProvider(ctx context.Context, scope domainrepo.Scope, connection entity.ManagedProviderConnection, credential entity.CredentialGeneration, intentDigest string) (managementeffect.Readback, error) {
 	action := "register"
 	protoAction := controlplanev1.ProviderConnectionReferenceAction_PROVIDER_CONNECTION_REFERENCE_ACTION_REGISTER
 	maskedStatus := "AVAILABLE"
@@ -56,31 +117,55 @@ func (client *ManagementClient) SyncProvider(ctx context.Context, scope domainre
 		maskedStatus = "ARCHIVED"
 		eligible = false
 	}
+	if connection.Status == "REVOKED" && connection.ControlPlaneID == "" {
+		resolved, found, resolveErr := client.resolveProviderReference(ctx, scope, connection, intentDigest)
+		if resolveErr != nil {
+			return managementeffect.Readback{}, resolveErr
+		}
+		if !found {
+			return managementeffect.Readback{}, nil
+		}
+		connection.ControlPlaneID, connection.ControlPlaneVersion, connection.ControlPlaneDigest = resolved.ResourceID, resolved.Version, resolved.Digest
+	}
 	observation := sha256.Sum256([]byte(connection.ID + "\x00" + connection.ProviderID + "\x00" + connection.CredentialBindingDigest + "\x00" + intentDigest))
 	observationDigest := hex.EncodeToString(observation[:])
-	receiptID := stableReceiptID(scope.TenantID, scope.ProjectID, connection.ID, action, intentDigest)
+	idempotencyKey := stableReceiptID(scope.TenantID, scope.ProjectID, connection.ID, action, intentDigest)
 	status := controlplanev1.ProviderConnectionStatus_PROVIDER_CONNECTION_STATUS_AVAILABLE
 	if !eligible {
 		status = controlplanev1.ProviderConnectionStatus_PROVIDER_CONNECTION_STATUS_ARCHIVED
 	}
-	request := &controlplanev1.ManageProviderConnectionReferenceRequest{IdempotencyKey: receiptID, Action: protoAction, ProviderConnectionReferenceId: connection.ControlPlaneID, ExpectedVersion: connection.ControlPlaneVersion, Name: connection.DisplayName, Spec: &controlplanev1.ProviderConnectionReferenceSpec{StableKey: connection.StableKey, Provider: connection.ProviderID, ServerReference: connection.ID, ReferenceVersion: connection.Version + 1, ReferenceSha256: observationDigest, MaskedLabel: connection.MaskedLabel, MaskedStatus: status, Capabilities: connection.Capabilities, Eligible: eligible, ObservedAt: timestamppb.New(connection.UpdatedAt), CredentialBindingId: connection.CredentialBindingID, CredentialBindingVersion: connection.CredentialBindingVersion, CredentialBindingSha256: connection.CredentialBindingDigest, ReferenceGeneration: connection.Generation}}
+	observedAt := connection.Capacity.ObservedAt
+	if observedAt.IsZero() {
+		observedAt = connection.UpdatedAt
+	}
+	request := &controlplanev1.ManageProviderConnectionReferenceRequest{IdempotencyKey: idempotencyKey, Action: protoAction, ProviderConnectionReferenceId: connection.ControlPlaneID, ExpectedVersion: connection.ControlPlaneVersion, Name: connection.DisplayName, Spec: &controlplanev1.ProviderConnectionReferenceSpec{StableKey: connection.StableKey, Provider: connection.ProviderID, ServerReference: connection.ID, ReferenceVersion: connection.Version + 1, ReferenceSha256: observationDigest, MaskedLabel: connection.MaskedLabel, MaskedStatus: status, Capabilities: connection.Capabilities, Eligible: eligible, ObservedAt: timestamppb.New(observedAt), CredentialBindingId: connection.CredentialBindingID, CredentialBindingVersion: connection.CredentialBindingVersion, CredentialBindingSha256: connection.CredentialBindingDigest, ReferenceGeneration: connection.Generation,
+		ObservedUsage: connection.Capacity.Usage, ObservedLimit: connection.Capacity.Limit,
+		ObservationRevision: connection.Capacity.Revision, ObservationExpiresAt: optionalReceiptTime(connection.Capacity.ExpiresAt),
+		WindowDurationSeconds: connection.Capacity.WindowSeconds, ResetsAt: optionalReceiptTime(connection.Capacity.ResetsAt),
+		ObservationSha256: connection.Capacity.Digest}}
 	authority := controlplanecontract.VerifiedCommandAuthority{ActorID: scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID, WorkloadID: "integration-gateway", FullMethod: controlplanev1.ControlPlaneService_ManageProviderConnectionReference_FullMethodName}
 	commandIntent, err := controlplanecontract.ProviderConnectionReferenceIntentSHA256(authority, request)
 	if err != nil {
 		return managementeffect.Readback{}, err
 	}
-	baseReceipt := effectreceipt.ProviderReceipt{ActorID: scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID, Action: action, Effect: "provider_connection_reference", EffectVersion: connection.Version + 1, EffectGeneration: connection.Generation, EffectSHA256: observationDigest, ReceiptRevision: connection.Version + 1, CredentialBindingID: connection.CredentialBindingID, CredentialBindingVersion: connection.CredentialBindingVersion, CredentialBindingSHA256: connection.CredentialBindingDigest, ProviderObjectRef: connection.ID, MaskedStatus: maskedStatus, Provider: connection.ProviderID, MaskedLabel: connection.MaskedLabel, Capabilities: connection.Capabilities, Eligible: eligible, TargetKind: "provider_connection_reference", TargetResourceID: connection.ControlPlaneID, TargetStableKey: connection.StableKey, CommandIntentSHA256: commandIntent}
+	baseReceipt := effectreceipt.ProviderReceipt{ActorID: scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID, Action: action, Effect: "provider_connection_reference", EffectVersion: connection.Version + 1, EffectGeneration: connection.Generation, EffectSHA256: observationDigest, ReceiptRevision: connection.Version + 1, CredentialBindingID: connection.CredentialBindingID, CredentialBindingVersion: connection.CredentialBindingVersion, CredentialBindingSHA256: connection.CredentialBindingDigest, ProviderObjectRef: connection.ID, MaskedStatus: maskedStatus, Provider: connection.ProviderID, MaskedLabel: connection.MaskedLabel, Capabilities: connection.Capabilities, Eligible: eligible, TargetKind: "provider_connection_reference", TargetResourceID: connection.ControlPlaneID, TargetStableKey: connection.StableKey, CommandIntentSHA256: commandIntent,
+		SecretRef: credential.SecretRef, SecretVersion: credential.SecretVersion, SecretContentSHA256: credential.SecretContentDigest,
+		MaskedAccount: credential.MaskedAccount, ObservedUsage: credential.Capacity.Usage, ObservedLimit: credential.Capacity.Limit,
+		ObservationRevision: credential.Capacity.Revision, ObservedAt: credential.Capacity.ObservedAt,
+		WindowDurationSeconds: credential.Capacity.WindowSeconds, ResetsAt: credential.Capacity.ResetsAt,
+		ObservationExpiresAt: credential.Capacity.ExpiresAt}
+	baseReceipt.ObservationSHA256 = credential.Capacity.Digest
 	manageReceipt := baseReceipt
-	manageReceipt.FullMethod, manageReceipt.ReceiptID = authority.FullMethod, receiptID
-	credential, err := client.signer.SignProvider(manageReceipt)
+	manageReceipt.FullMethod, manageReceipt.ReceiptID = authority.FullMethod, uuid.NewString()
+	signedCredential, err := client.signer.SignProvider(manageReceipt)
 	if err != nil {
 		return managementeffect.Readback{}, err
 	}
-	requestContext, err := controlplaneclient.WithApplicationGrant(ctx, credential.CompactJWS)
+	requestContext, err := controlplaneclient.WithApplicationGrant(ctx, signedCredential.CompactJWS)
 	if err != nil {
 		return managementeffect.Readback{}, err
 	}
-	receipt := providerReceiptProto(credential.Receipt)
+	receipt := providerReceiptProto(signedCredential.Receipt)
 	request.ProviderReceipt = receipt
 	response, err := client.client.ControlPlane.ManageProviderConnectionReference(requestContext, request)
 	if err != nil {
@@ -129,11 +214,32 @@ func (client *ManagementClient) SyncProvider(ctx context.Context, scope domainre
 		get.GetProviderConnectionReference().GetProjectionSha256() != resource.GetProjectionSha256() {
 		return managementeffect.Readback{}, errors.Join(managementeffect.ErrOutcomeUnknown, errors.New("control-plane provider version-pinned readback mismatch"))
 	}
-	return resourceReadback(resource), nil
+	storedSpec := get.GetProviderConnectionReference().GetSpec().GetProviderConnectionReference()
+	if action != "archive" && (storedSpec == nil || storedSpec.GetCredentialBindingId() != credential.CredentialBindingID ||
+		storedSpec.GetCredentialBindingVersion() != credential.CredentialBindingVersion || !validDigest(storedSpec.GetCredentialBindingSha256())) {
+		return managementeffect.Readback{}, errors.Join(managementeffect.ErrOutcomeUnknown, errors.New("control-plane credential binding typed readback mismatch"))
+	}
+	result := resourceReadback(resource)
+	if storedSpec != nil {
+		result.CredentialBindingID, result.CredentialBindingVersion, result.CredentialBindingDigest = storedSpec.GetCredentialBindingId(), storedSpec.GetCredentialBindingVersion(), storedSpec.GetCredentialBindingSha256()
+	}
+	return result, nil
 }
 
 func providerReceiptProto(value effectreceipt.ProviderReceipt) *controlplanev1.ProviderEffectReadbackReceipt {
-	return &controlplanev1.ProviderEffectReadbackReceipt{ContractVersion: value.ContractVersion, Issuer: value.Issuer, Purpose: value.Purpose, WorkloadId: value.WorkloadID, CallerSpiffeId: value.CallerSPIFFEID, FullMethod: value.FullMethod, ActorId: value.ActorID, OrganizationId: value.OrganizationID, ProjectId: value.ProjectID, ProviderObjectRef: value.ProviderObjectRef, Action: value.Action, Effect: value.Effect, EffectVersion: value.EffectVersion, EffectGeneration: value.EffectGeneration, EffectSha256: value.EffectSHA256, ReceiptId: value.ReceiptID, ReceiptRevision: value.ReceiptRevision, IssuedAt: timestamppb.New(value.IssuedAt), NotBefore: timestamppb.New(value.NotBefore), ExpiresAt: timestamppb.New(value.ExpiresAt), CredentialBindingId: value.CredentialBindingID, CredentialBindingVersion: value.CredentialBindingVersion, CredentialBindingSha256: value.CredentialBindingSHA256, ProviderUsername: value.ProviderUsername, MaskedStatus: value.MaskedStatus, Provider: value.Provider, MaskedLabel: value.MaskedLabel, Capabilities: value.Capabilities, Eligible: value.Eligible, TargetKind: value.TargetKind, TargetResourceId: value.TargetResourceID, TargetStableKey: value.TargetStableKey, CommandIntentSha256: value.CommandIntentSHA256}
+	return &controlplanev1.ProviderEffectReadbackReceipt{ContractVersion: value.ContractVersion, Issuer: value.Issuer, Purpose: value.Purpose, WorkloadId: value.WorkloadID, CallerSpiffeId: value.CallerSPIFFEID, FullMethod: value.FullMethod, ActorId: value.ActorID, OrganizationId: value.OrganizationID, ProjectId: value.ProjectID, ProviderObjectRef: value.ProviderObjectRef, Action: value.Action, Effect: value.Effect, EffectVersion: value.EffectVersion, EffectGeneration: value.EffectGeneration, EffectSha256: value.EffectSHA256, ReceiptId: value.ReceiptID, ReceiptRevision: value.ReceiptRevision, IssuedAt: timestamppb.New(value.IssuedAt), NotBefore: timestamppb.New(value.NotBefore), ExpiresAt: timestamppb.New(value.ExpiresAt), CredentialBindingId: value.CredentialBindingID, CredentialBindingVersion: value.CredentialBindingVersion, CredentialBindingSha256: value.CredentialBindingSHA256, ProviderUsername: value.ProviderUsername, MaskedStatus: value.MaskedStatus, Provider: value.Provider, MaskedLabel: value.MaskedLabel, Capabilities: value.Capabilities, Eligible: value.Eligible, TargetKind: value.TargetKind, TargetResourceId: value.TargetResourceID, TargetStableKey: value.TargetStableKey, CommandIntentSha256: value.CommandIntentSHA256,
+		SecretRef: value.SecretRef, SecretVersion: value.SecretVersion, SecretContentSha256: value.SecretContentSHA256,
+		MaskedAccount: value.MaskedAccount, ObservedUsage: value.ObservedUsage, ObservedLimit: value.ObservedLimit,
+		ObservationRevision: value.ObservationRevision, ObservedAt: optionalReceiptTime(value.ObservedAt),
+		WindowDurationSeconds: value.WindowDurationSeconds, ResetsAt: optionalReceiptTime(value.ResetsAt),
+		ObservationExpiresAt: optionalReceiptTime(value.ObservationExpiresAt), ObservationSha256: value.ObservationSHA256}
+}
+
+func optionalReceiptTime(value time.Time) *timestamppb.Timestamp {
+	if value.IsZero() {
+		return nil
+	}
+	return timestamppb.New(value)
 }
 
 func resourceReadback(value *controlplanev1.Resource) managementeffect.Readback {
@@ -160,14 +266,28 @@ func (client *ManagementClient) SyncPool(ctx context.Context, scope domainrepo.S
 		if member.ControlPlaneID == "" || member.ControlPlaneVersion == 0 || member.ControlPlaneDigest == "" {
 			return managementeffect.Readback{}, errors.New("provider pool member version-pinned readback mismatch")
 		}
-		bindings = append(bindings, &controlplanev1.ProviderPoolBinding{ProviderConnectionReferenceId: member.ControlPlaneID, ReferenceVersion: member.ControlPlaneVersion, ReferenceSha256: member.ControlPlaneDigest, Weight: member.Weight, Eligible: member.Eligible, MaskedStatus: controlplanev1.ProviderConnectionStatus_PROVIDER_CONNECTION_STATUS_AVAILABLE, ProviderConnectionStableKey: member.ConnectionStableKey})
+		if member.Capacity.Limit == 0 || member.Capacity.Usage > member.Capacity.Limit || member.Capacity.Revision == 0 ||
+			member.Capacity.ObservedAt.IsZero() || !member.Capacity.ExpiresAt.After(time.Now().UTC()) || !validDigest(member.Capacity.Digest) {
+			return managementeffect.Readback{}, errors.New("provider pool capacity observation is stale")
+		}
+		bindings = append(bindings, &controlplanev1.ProviderPoolBinding{ProviderConnectionReferenceId: member.ControlPlaneID, ReferenceVersion: member.ControlPlaneVersion, ReferenceSha256: member.ControlPlaneDigest, Weight: member.Weight, Eligible: member.Eligible, MaskedStatus: controlplanev1.ProviderConnectionStatus_PROVIDER_CONNECTION_STATUS_AVAILABLE, ProviderConnectionStableKey: member.ConnectionStableKey,
+			ObservedUsage: member.Capacity.Usage, ObservedLimit: member.Capacity.Limit,
+			ObservationRevision: member.Capacity.Revision, ObservedAt: timestamppb.New(member.Capacity.ObservedAt),
+			ObservationExpiresAt: timestamppb.New(member.Capacity.ExpiresAt), ObservationSha256: member.Capacity.Digest,
+			WindowDurationSeconds: member.Capacity.WindowSeconds, ResetsAt: timestamppb.New(member.Capacity.ResetsAt)})
 	}
 	sort.Slice(bindings, func(left, right int) bool {
 		return bindings[left].ProviderConnectionReferenceId < bindings[right].ProviderConnectionReferenceId
 	})
 	observation := sha256.Sum256([]byte(pool.ID + "\x00" + pool.EffectiveDigest + "\x00" + intentDigest))
 	receiptID := stableReceiptID(scope.TenantID, scope.ProjectID, pool.ID, actionName, intentDigest)
-	credential, err := client.signer.SignProvider(effectreceipt.ProviderReceipt{FullMethod: controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName, ActorID: scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID, Action: actionName, Effect: "pool-observation", EffectVersion: pool.Version, EffectGeneration: pool.ObservationVersion, EffectSHA256: hex.EncodeToString(observation[:]), ReceiptID: receiptID, ReceiptRevision: pool.Version, MaskedStatus: pool.Status, Provider: "provider-pool", MaskedLabel: pool.DisplayName, Eligible: pool.Status == "ACTIVE", TargetKind: "provider_pool", TargetResourceID: pool.ControlPlaneID, TargetStableKey: pool.StableKey, CommandIntentSHA256: intentDigest})
+	request := &controlplanev1.ManageProviderPoolRequest{IdempotencyKey: receiptID, Action: action, ProviderPoolId: pool.ControlPlaneID, ExpectedVersion: pool.ControlPlaneVersion, Name: pool.DisplayName, Spec: &controlplanev1.ProviderPoolSpec{StableKey: pool.StableKey, Policy: pool.Policy, PolicyRevision: pool.Version, ObservationMaxAge: durationpb.New(5 * time.Minute), Bindings: bindings, EligibilitySnapshotSha256: pool.EffectiveDigest, Ownership: &controlplanev1.ConfigurationOwnership{ManagedBy: controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI}}}
+	authority := controlplanecontract.VerifiedCommandAuthority{ActorID: scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID, WorkloadID: "integration-gateway", FullMethod: controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName}
+	commandIntent, err := controlplanecontract.ProviderPoolIntentSHA256(authority, request)
+	if err != nil {
+		return managementeffect.Readback{}, err
+	}
+	credential, err := client.signer.SignProvider(effectreceipt.ProviderReceipt{FullMethod: authority.FullMethod, ActorID: scope.ActorID, OrganizationID: scope.TenantID, ProjectID: scope.ProjectID, Action: actionName, Effect: "pool-observation", EffectVersion: pool.Version, EffectGeneration: pool.ObservationVersion, EffectSHA256: hex.EncodeToString(observation[:]), ReceiptID: receiptID, ReceiptRevision: pool.Version, MaskedStatus: pool.Status, Provider: "provider-pool", MaskedLabel: pool.DisplayName, Eligible: pool.Status == "ACTIVE", TargetKind: "provider_pool", TargetResourceID: pool.ControlPlaneID, TargetStableKey: pool.StableKey, CommandIntentSHA256: commandIntent})
 	if err != nil {
 		return managementeffect.Readback{}, err
 	}
@@ -175,7 +295,8 @@ func (client *ManagementClient) SyncPool(ctx context.Context, scope domainrepo.S
 	if err != nil {
 		return managementeffect.Readback{}, err
 	}
-	response, err := client.client.ControlPlane.ManageProviderPool(requestContext, &controlplanev1.ManageProviderPoolRequest{IdempotencyKey: credential.Receipt.ReceiptID, Action: action, ProviderPoolId: pool.ControlPlaneID, ExpectedVersion: pool.ControlPlaneVersion, Name: pool.DisplayName, Spec: &controlplanev1.ProviderPoolSpec{StableKey: pool.StableKey, Policy: pool.Policy, PolicyRevision: pool.Version, ObservationMaxAge: durationpb.New(5 * time.Minute), Bindings: bindings, EligibilitySnapshotSha256: pool.EffectiveDigest, Ownership: &controlplanev1.ConfigurationOwnership{ManagedBy: controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_UI}}})
+	request.ProviderReceipt = providerReceiptProto(credential.Receipt)
+	response, err := client.client.ControlPlane.ManageProviderPool(requestContext, request)
 	if err != nil {
 		return managementeffect.Readback{}, errors.Join(managementeffect.ErrOutcomeUnknown, err)
 	}

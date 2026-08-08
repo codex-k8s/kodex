@@ -9,10 +9,11 @@ WITH changed AS (
     RETURNING provider_pool_id
 ), completed AS (
     UPDATE integration_gateway.management_effects AS effect
-       SET status = 'SUCCEEDED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
+       SET status = 'SUCCEEDED', dispatch_state = 'COMPLETED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
       FROM changed
      WHERE effect.effect_id = @effect_id AND effect.status = 'CLAIMED'
        AND effect.lease_id = @lease_id AND effect.lease_fence = @lease_fence
+       AND effect.dispatch_state = 'DISPATCHED'
     RETURNING effect_id
 )
 SELECT provider_pool_id FROM changed WHERE EXISTS (SELECT 1 FROM completed)

@@ -176,6 +176,9 @@ func (service *Service) StartAuthorization(ctx context.Context, input StartAutho
 	sort.Strings(capabilities)
 	capabilityDigest := digest(capabilities)
 	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, input.ProviderID, input.StableKey, input.DisplayName, provider.Version, provider.Digest})
+	if replay, found, replayErr := replayManagement[entity.ProviderAuthorization](ctx, service.repository, input.Scope, "provider_authorization.start", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
 	connection := entity.ManagedProviderConnection{
 		ID: connectionID, StableKey: input.StableKey, ProviderID: provider.ID, DisplayName: input.DisplayName,
 		Version: 1, Generation: 1, Status: "PENDING", Capabilities: capabilities,
@@ -247,6 +250,9 @@ func (service *Service) RestartAuthorization(ctx context.Context, input RestartA
 	}
 	now := service.now().UTC()
 	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, previous.ID, input.ExpectedVersion, previous.IntentDigest})
+	if replay, found, replayErr := replayManagement[entity.ProviderAuthorization](ctx, service.repository, input.Scope, "provider_authorization.restart", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
 	next := entity.ProviderAuthorization{
 		ID: uuid.NewString(), ProviderID: previous.ProviderID, ConnectionID: previous.ConnectionID,
 		Attempt: previous.Attempt + 1, Version: 1, Generation: previous.Generation + 1,
@@ -254,7 +260,7 @@ func (service *Service) RestartAuthorization(ctx context.Context, input RestartA
 	}
 	audit := managementAudit(input.Scope, "provider_authorization.restart", "PROVIDER_AUTHORIZATION", next.ID, requestHash, "PENDING", now)
 	value, _, err := service.repository.RestartAuthorization(ctx, managementrepo.RestartAuthorizationCommand{
-		Scope: input.Scope, PreviousID: previous.ID, ExpectedVersion: input.ExpectedVersion,
+		Scope: input.Scope, Operation: "provider_authorization.restart", PreviousID: previous.ID, ExpectedVersion: input.ExpectedVersion,
 		Authorization: next, IdempotencyHash: idempotencyHash, RequestHash: requestHash, Audit: audit,
 	})
 	return value, err
@@ -263,6 +269,17 @@ func (service *Service) RestartAuthorization(ctx context.Context, input RestartA
 func (service *Service) ReauthorizeConnection(ctx context.Context, scope domainrepo.Scope, connectionID string, expectedVersion, expectedGeneration uint64, idempotencyKey string) (entity.ProviderAuthorization, error) {
 	if !validScope(scope) {
 		return entity.ProviderAuthorization{}, errs.ErrForbidden
+	}
+	if !validID(connectionID) || expectedVersion == 0 || expectedGeneration == 0 {
+		return entity.ProviderAuthorization{}, errs.ErrInvalid
+	}
+	idempotencyHash, err := hashIdempotency(scope, "provider_connection.reauthorize", idempotencyKey)
+	if err != nil {
+		return entity.ProviderAuthorization{}, err
+	}
+	requestHash := digest([]any{scope.TenantID, scope.ProjectID, connectionID, expectedVersion, expectedGeneration, "REAUTHORIZE"})
+	if replay, found, replayErr := replayManagement[entity.ProviderAuthorization](ctx, service.repository, scope, "provider_connection.reauthorize", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
 	}
 	connection, err := service.repository.GetManagedConnection(ctx, scope, connectionID)
 	if err != nil {
@@ -275,7 +292,19 @@ func (service *Service) ReauthorizeConnection(ctx context.Context, scope domainr
 	if err != nil {
 		return entity.ProviderAuthorization{}, err
 	}
-	return service.RestartAuthorization(ctx, RestartAuthorizationInput{scope, previous.ID, previous.Version, idempotencyKey})
+	now := service.now().UTC()
+	next := entity.ProviderAuthorization{
+		ID: uuid.NewString(), ProviderID: previous.ProviderID, ConnectionID: previous.ConnectionID,
+		Attempt: previous.Attempt + 1, Version: 1, Generation: previous.Generation + 1,
+		State: "PENDING", IntentDigest: requestHash, ExpiresAt: now.Add(service.config.AuthorizationTTL), CreatedAt: now, UpdatedAt: now,
+	}
+	value, _, err := service.repository.RestartAuthorization(ctx, managementrepo.RestartAuthorizationCommand{
+		Scope: scope, Operation: "provider_connection.reauthorize", PreviousID: previous.ID, ExpectedVersion: previous.Version,
+		ExpectedConnectionVersion: expectedVersion, ExpectedConnectionGeneration: expectedGeneration,
+		Authorization: next, IdempotencyHash: idempotencyHash, RequestHash: requestHash,
+		Audit: managementAudit(scope, "provider_connection.reauthorize", "PROVIDER_AUTHORIZATION", next.ID, requestHash, "PENDING", now),
+	})
+	return value, err
 }
 
 func (service *Service) CancelAuthorization(ctx context.Context, scope domainrepo.Scope, id string, expectedVersion uint64, idempotencyKey string) (entity.ProviderAuthorization, error) {
@@ -291,6 +320,9 @@ func (service *Service) CancelAuthorization(ctx context.Context, scope domainrep
 	}
 	now := service.now().UTC()
 	requestHash := digest([]any{scope.TenantID, scope.ProjectID, id, expectedVersion, "CANCELLED"})
+	if replay, found, replayErr := replayManagement[entity.ProviderAuthorization](ctx, service.repository, scope, "provider_authorization.cancel", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
 	value, _, err := service.repository.CancelAuthorization(ctx, managementrepo.CancelAuthorizationCommand{
 		Scope: scope, AuthorizationID: id, ExpectedVersion: expectedVersion,
 		IdempotencyHash: idempotencyHash, RequestHash: requestHash, At: now,
@@ -349,6 +381,9 @@ func (service *Service) RevokeConnection(ctx context.Context, scope domainrepo.S
 	}
 	now := service.now().UTC()
 	requestHash := digest([]any{scope.TenantID, scope.ProjectID, id, expectedVersion, expectedGeneration, "REVOKED"})
+	if replay, found, replayErr := replayManagement[entity.ManagedProviderConnection](ctx, service.repository, scope, "provider_connection.revoke", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
 	value, _, err := service.repository.RevokeConnection(ctx, managementrepo.RevokeConnectionCommand{
 		Scope: scope, ConnectionID: id, ExpectedVersion: expectedVersion, ExpectedGeneration: expectedGeneration,
 		IdempotencyHash: idempotencyHash, RequestHash: requestHash, At: now,
@@ -363,4 +398,16 @@ func managementAudit(scope domainrepo.Scope, action, kind, id, requestHash, outc
 		ActorID: scope.ActorID, Action: action, ResourceKind: kind, ResourceID: id,
 		RequestHash: requestHash, Outcome: outcome, ReasonCode: "OWNER_COMMAND", OccurredAt: at,
 	}
+}
+
+func replayManagement[T any](ctx context.Context, repository managementrepo.Repository, scope domainrepo.Scope, operation, keyHash, requestHash string) (T, bool, error) {
+	var result T
+	payload, found, err := repository.ReplayManagement(ctx, scope, operation, keyHash, requestHash)
+	if err != nil || !found {
+		return result, found, err
+	}
+	if json.Unmarshal(payload, &result) != nil {
+		return result, false, errors.New("stored management replay is invalid")
+	}
+	return result, true, nil
 }

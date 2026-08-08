@@ -32,16 +32,28 @@ func (repository *Repository) ManagePool(ctx context.Context, command management
 	var result entity.ManagedProviderPool
 	var replay bool
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
+		var current entity.ManagedProviderPool
+		databaseNow := command.Pool.UpdatedAt
+		if command.Action != "CREATE" {
+			var currentRaw []byte
+			if err := tx.tx.QueryRow(ctx, managementSQL("pool__lock"), pgx.StrictNamedArgs{
+				"provider_pool_id": command.Pool.ID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
+			}).Scan(&currentRaw, &databaseNow); err != nil {
+				return err
+			}
+			if json.Unmarshal(currentRaw, &current) != nil {
+				return errors.New("stored provider pool update is invalid")
+			}
+		}
 		stored, found, err := lockManagementReceipt(ctx, tx, "provider_pool."+command.Action, command.IdempotencyHash, command.RequestHash)
 		if err != nil {
 			return err
 		}
 		if found {
-			result, err = getPoolTx(ctx, tx.tx, command.Scope, stored.ID)
+			result, err = replayManagementReceipt[entity.ManagedProviderPool](stored)
 			replay = true
 			return err
 		}
-		databaseNow := command.Pool.UpdatedAt
 		if command.Action == "CREATE" {
 			for _, member := range command.Pool.Members {
 				connection, getErr := getManagedConnectionTx(ctx, tx.tx, command.Scope, member.ConnectionID)
@@ -70,16 +82,6 @@ func (repository *Repository) ManagePool(ctx context.Context, command management
 			}
 			result = command.Pool
 		} else {
-			var currentRaw []byte
-			if err = tx.tx.QueryRow(ctx, managementSQL("pool__lock"), pgx.StrictNamedArgs{
-				"provider_pool_id": command.Pool.ID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
-			}).Scan(&currentRaw, &databaseNow); err != nil {
-				return err
-			}
-			var current entity.ManagedProviderPool
-			if json.Unmarshal(currentRaw, &current) != nil {
-				return errors.New("stored provider pool update is invalid")
-			}
 			if current.Version != command.ExpectedVersion || current.StableKey != command.Pool.StableKey ||
 				command.Action == "UPDATE" && current.Status != "ACTIVE" ||
 				command.Action == "ARCHIVE" && current.Status != "ACTIVE" ||
@@ -126,13 +128,13 @@ func (repository *Repository) ManagePool(ctx context.Context, command management
 			}
 			result = command.Pool
 		}
-		_, digest, _ := managementPayload(result)
+		resultPayload, _, _ := managementPayload(result)
 		if err = insertManagementEffect(ctx, tx, "PROVIDER_POOL_SYNC", "managed_provider_pool", result.ID,
-			result.Version, 0, command.RequestHash, databaseNow); err != nil {
+			result.Version, 0, managementEffectOwner{"managed_provider_pool", result.ID, result.Status, result.Version, 0}, command.RequestHash, databaseNow); err != nil {
 			return err
 		}
 		if err = insertManagementReceipt(ctx, tx, "provider_pool."+command.Action, command.IdempotencyHash, command.RequestHash,
-			"managed_provider_pool", result.ID, result.Version, digest, databaseNow); err != nil {
+			"managed_provider_pool", result.ID, result.Version, resultPayload, databaseNow); err != nil {
 			return err
 		}
 		command.Audit.ResourceID, command.Audit.OccurredAt = result.ID, databaseNow
@@ -143,9 +145,12 @@ func (repository *Repository) ManagePool(ctx context.Context, command management
 
 func connectionEligibleSnapshot(connection entity.ManagedProviderConnection, now time.Time) bool {
 	return connection.Status == "VALID" && connection.Generation > 0 && connection.ActiveCredential == connection.Generation &&
-		connection.CredentialBindingID != "" && connection.CredentialBindingVersion == connection.Generation && len(connection.CredentialBindingDigest) == 64 &&
+		connection.CredentialBindingID != "" && connection.CredentialBindingVersion > 0 && len(connection.CredentialBindingDigest) == 64 &&
 		connection.ControlPlaneID != "" && connection.ControlPlaneVersion > 0 && len(connection.ControlPlaneDigest) == 64 && connection.ObservedAt != nil &&
-		!connection.ObservedAt.After(now.Add(time.Second)) && now.Sub(*connection.ObservedAt) <= 5*time.Minute
+		!connection.ObservedAt.After(now.Add(time.Second)) && now.Sub(*connection.ObservedAt) <= 5*time.Minute &&
+		connection.Capacity.Limit > 0 && connection.Capacity.Usage <= connection.Capacity.Limit &&
+		connection.Capacity.Revision > 0 && len(connection.Capacity.Digest) == 64 &&
+		connection.Capacity.ExpiresAt.After(now)
 }
 
 func (repository *Repository) GetPool(ctx context.Context, scope domainrepo.Scope, id string) (entity.ManagedProviderPool, error) {
@@ -196,20 +201,28 @@ func (repository *Repository) ConfigureIntegration(ctx context.Context, command 
 	var result entity.IntegrationConfiguration
 	var replay bool
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
+		var current entity.IntegrationConfiguration
+		if command.ExpectedVersion > 0 {
+			var raw []byte
+			if err := tx.tx.QueryRow(ctx, managementSQL("configuration__lock"), pgx.StrictNamedArgs{
+				"configuration_id": command.Configuration.ID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
+			}).Scan(&raw); err != nil {
+				return err
+			}
+			if json.Unmarshal(raw, &current) != nil {
+				return errors.New("stored integration configuration update is invalid")
+			}
+		}
 		stored, found, err := lockManagementReceipt(ctx, tx, "integration.configure", command.IdempotencyHash, command.RequestHash)
 		if err != nil {
 			return err
 		}
 		if found {
-			result, err = getConfigurationTx(ctx, tx.tx, command.Scope, stored.ID)
+			result, err = replayManagementReceipt[entity.IntegrationConfiguration](stored)
 			replay = true
 			return err
 		}
 		if command.ExpectedVersion > 0 {
-			current, getErr := getConfigurationTx(ctx, tx.tx, command.Scope, command.Configuration.ID)
-			if getErr != nil {
-				return getErr
-			}
 			if current.Version != command.ExpectedVersion {
 				return errs.ErrConflict
 			}
@@ -223,7 +236,7 @@ func (repository *Repository) ConfigureIntegration(ctx context.Context, command 
 		if connection.Version != command.Configuration.ConnectionVersion || connection.Generation != command.Configuration.ConnectionGeneration || connection.Status != "VALID" {
 			return errs.ErrConflict
 		}
-		payload, digest, err := managementPayload(command.Configuration)
+		payload, _, err := managementPayload(command.Configuration)
 		if err != nil {
 			return err
 		}
@@ -242,7 +255,7 @@ func (repository *Repository) ConfigureIntegration(ctx context.Context, command 
 			return err
 		}
 		if err = insertManagementReceipt(ctx, tx, "integration.configure", command.IdempotencyHash, command.RequestHash,
-			"integration_configuration", command.Configuration.ID, command.Configuration.Version, digest, command.Configuration.UpdatedAt); err != nil {
+			"integration_configuration", command.Configuration.ID, command.Configuration.Version, payload, command.Configuration.UpdatedAt); err != nil {
 			return err
 		}
 		if err = tx.appendAudit(ctx, command.Audit); err != nil {
@@ -257,6 +270,23 @@ func (repository *Repository) ConfigureIntegration(ctx context.Context, command 
 func (repository *Repository) GetIntegrationConfiguration(ctx context.Context, scope domainrepo.Scope, id string) (entity.IntegrationConfiguration, error) {
 	var value entity.IntegrationConfiguration
 	err := repository.read(ctx, scope, func(tx pgx.Tx) error { var err error; value, err = getConfigurationTx(ctx, tx, scope, id); return err })
+	return value, err
+}
+
+func (repository *Repository) GetIntegrationConfigurationVersion(ctx context.Context, scope domainrepo.Scope, id string, version uint64) (entity.IntegrationConfiguration, error) {
+	var value entity.IntegrationConfiguration
+	err := repository.read(ctx, scope, func(tx pgx.Tx) error {
+		var raw []byte
+		if err := tx.QueryRow(ctx, managementSQL("configuration__get_version"), pgx.StrictNamedArgs{
+			"configuration_id": id, "version": version, "tenant_id": scope.TenantID, "project_id": scope.ProjectID,
+		}).Scan(&raw); err != nil {
+			return err
+		}
+		if json.Unmarshal(raw, &value) != nil {
+			return errors.New("stored integration configuration version is invalid")
+		}
+		return nil
+	})
 	return value, err
 }
 
@@ -289,7 +319,10 @@ func getTestTx(ctx context.Context, tx pgx.Tx, scope domainrepo.Scope, id string
 	err := tx.QueryRow(ctx, managementSQL("test__get"), pgx.StrictNamedArgs{
 		"test_id": id, "tenant_id": scope.TenantID, "project_id": scope.ProjectID,
 	}).Scan(&value.ConnectionID, &value.ConnectionVersion, &value.ConnectionGeneration,
-		&value.DefinitionID, &value.DefinitionVersion, &value.Category, &value.Digest, &value.ExpiresAt, &value.TestedAt)
+		&value.DefinitionID, &value.DefinitionVersion, &value.DefinitionDigest,
+		&value.ConfigurationID, &value.ConfigurationVersion, &value.ConfigurationDigest,
+		&value.CredentialGeneration, &value.CredentialBindingID, &value.CredentialBindingVersion,
+		&value.CredentialBindingDigest, &value.Category, &value.Digest, &value.ExpiresAt, &value.TestedAt)
 	return value, err
 }
 
@@ -307,38 +340,54 @@ func (repository *Repository) CreateTest(ctx context.Context, command management
 	var result entity.IntegrationTestReceipt
 	var replay bool
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
+		var connectionRaw []byte
+		var databaseNow time.Time
+		if err := tx.tx.QueryRow(ctx, managementSQL("connection__revoke_lock"), pgx.StrictNamedArgs{
+			"connection_id": command.Receipt.ConnectionID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
+		}).Scan(&connectionRaw, &databaseNow); err != nil {
+			return err
+		}
+		var connection entity.ManagedProviderConnection
+		if json.Unmarshal(connectionRaw, &connection) != nil {
+			return errors.New("stored integration test connection is invalid")
+		}
 		stored, found, err := lockManagementReceipt(ctx, tx, "integration.test", command.IdempotencyHash, command.RequestHash)
 		if err != nil {
 			return err
 		}
 		if found {
-			result, err = getTestTx(ctx, tx.tx, command.Scope, stored.ID)
+			result, err = replayManagementReceipt[entity.IntegrationTestReceipt](stored)
 			replay = true
-			return err
-		}
-		connection, err := getManagedConnectionTx(ctx, tx.tx, command.Scope, command.Receipt.ConnectionID)
-		if err != nil {
 			return err
 		}
 		if connection.Version != command.Receipt.ConnectionVersion || connection.Generation != command.Receipt.ConnectionGeneration || connection.Status != "VALID" {
 			return errs.ErrConflict
 		}
+		command.At = databaseNow
 		_, err = tx.tx.Exec(ctx, managementSQL("test__insert"), pgx.StrictNamedArgs{
 			"test_id": command.Receipt.ID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
 			"connection_id": command.Receipt.ConnectionID, "connection_version": command.Receipt.ConnectionVersion,
 			"connection_generation": command.Receipt.ConnectionGeneration, "definition_id": command.Receipt.DefinitionID,
-			"definition_version": command.Receipt.DefinitionVersion, "category": command.Receipt.Category,
+			"definition_version": command.Receipt.DefinitionVersion, "definition_sha256": command.Receipt.DefinitionDigest,
+			"configuration_id": command.Receipt.ConfigurationID, "configuration_version": command.Receipt.ConfigurationVersion,
+			"configuration_sha256": command.Receipt.ConfigurationDigest, "credential_generation": command.Receipt.CredentialGeneration,
+			"credential_binding_id": command.Receipt.CredentialBindingID, "credential_binding_version": command.Receipt.CredentialBindingVersion,
+			"credential_binding_sha256": command.Receipt.CredentialBindingDigest, "category": command.Receipt.Category,
 			"receipt_sha256": command.Receipt.Digest, "expires_at": command.Receipt.ExpiresAt, "created_at": command.At,
 		})
 		if err != nil {
 			return err
 		}
 		if err = insertManagementEffect(ctx, tx, "INTEGRATION_TEST", "integration_test", command.Receipt.ID,
-			1, command.Receipt.ConnectionGeneration, command.RequestHash, command.At); err != nil {
+			1, command.Receipt.ConnectionGeneration, managementEffectOwner{"managed_provider_connection", command.Connection.ID, command.Connection.Status, command.Connection.Version, command.Connection.Generation}, command.RequestHash, command.At); err != nil {
+			return err
+		}
+		receiptPayload, _, err := managementPayload(command.Receipt)
+		if err != nil {
 			return err
 		}
 		if err = insertManagementReceipt(ctx, tx, "integration.test", command.IdempotencyHash, command.RequestHash,
-			"integration_test", command.Receipt.ID, 1, command.Receipt.Digest, command.At); err != nil {
+			"integration_test", command.Receipt.ID, 1, receiptPayload, command.At); err != nil {
 			return err
 		}
 		if err = tx.appendAudit(ctx, command.Audit); err != nil {
@@ -368,12 +417,25 @@ func (repository *Repository) ManageGitBinding(ctx context.Context, command mana
 	var result entity.GitSourceBinding
 	var replay bool
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
+		var current entity.GitSourceBinding
+		var databaseNow time.Time
+		if command.Action != "CREATE" {
+			var raw []byte
+			if err := tx.tx.QueryRow(ctx, managementSQL("git_binding__lock"), pgx.StrictNamedArgs{
+				"binding_id": command.Binding.ID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
+			}).Scan(&raw, &databaseNow); err != nil {
+				return err
+			}
+			if json.Unmarshal(raw, &current) != nil {
+				return errors.New("stored Git source binding update is invalid")
+			}
+		}
 		stored, found, err := lockManagementReceipt(ctx, tx, "git_binding."+command.Action, command.IdempotencyHash, command.RequestHash)
 		if err != nil {
 			return err
 		}
 		if found {
-			result, err = getGitBindingTx(ctx, tx.tx, command.Scope, stored.ID)
+			result, err = replayManagementReceipt[entity.GitSourceBinding](stored)
 			replay = true
 			return err
 		}
@@ -384,7 +446,7 @@ func (repository *Repository) ManageGitBinding(ctx context.Context, command mana
 			}
 			_, err = tx.tx.Exec(ctx, managementSQL("git_binding__insert"), pgx.StrictNamedArgs{
 				"binding_id": command.Binding.ID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
-				"stable_key": command.Binding.StableKey, "version": command.Binding.Version, "status": command.Binding.Status,
+				"stable_key": command.Binding.StableKey, "version": command.Binding.Version, "generation": command.Binding.Generation, "status": command.Binding.Status,
 				"repository_key": command.Binding.RepositoryKey, "ref_key": command.Binding.RefKey, "path_key": command.Binding.PathKey,
 				"repository_connection_id":      command.Binding.RepositoryConnectionID,
 				"repository_connection_version": command.Binding.RepositoryConnectionVersion,
@@ -400,21 +462,10 @@ func (repository *Repository) ManageGitBinding(ctx context.Context, command mana
 			}
 			result = command.Binding
 		} else {
-			var raw []byte
-			var databaseNow time.Time
-			if err = tx.tx.QueryRow(ctx, managementSQL("git_binding__lock"), pgx.StrictNamedArgs{
-				"binding_id": command.Binding.ID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
-			}).Scan(&raw, &databaseNow); err != nil {
-				return err
-			}
-			var current entity.GitSourceBinding
-			if json.Unmarshal(raw, &current) != nil {
-				return errors.New("stored Git source binding update is invalid")
-			}
 			if current.Version != command.ExpectedVersion || current.Status == "ARCHIVED" {
 				return errs.ErrConflict
 			}
-			command.Binding.Version, command.Binding.CreatedAt, command.Binding.UpdatedAt = current.Version+1, current.CreatedAt, databaseNow
+			command.Binding.Version, command.Binding.Generation, command.Binding.CreatedAt, command.Binding.UpdatedAt = current.Version+1, current.Generation+1, current.CreatedAt, databaseNow
 			if command.Action == "ARCHIVE" {
 				command.Binding.Status = "ARCHIVED"
 			}
@@ -422,7 +473,7 @@ func (repository *Repository) ManageGitBinding(ctx context.Context, command mana
 			var changed string
 			if err = tx.tx.QueryRow(ctx, managementSQL("git_binding__update"), pgx.StrictNamedArgs{
 				"binding_id": command.Binding.ID, "expected_version": command.ExpectedVersion,
-				"version": command.Binding.Version, "status": command.Binding.Status,
+				"version": command.Binding.Version, "generation": command.Binding.Generation, "status": command.Binding.Status,
 				"repository_key": command.Binding.RepositoryKey, "ref_key": command.Binding.RefKey, "path_key": command.Binding.PathKey,
 				"repository_connection_id":      command.Binding.RepositoryConnectionID,
 				"repository_connection_version": command.Binding.RepositoryConnectionVersion,
@@ -439,9 +490,9 @@ func (repository *Repository) ManageGitBinding(ctx context.Context, command mana
 			}
 			result = command.Binding
 		}
-		_, digest, _ := managementPayload(result)
+		resultPayload, _, _ := managementPayload(result)
 		if err = insertManagementReceipt(ctx, tx, "git_binding."+command.Action, command.IdempotencyHash, command.RequestHash,
-			"git_source_binding", result.ID, result.Version, digest, result.UpdatedAt); err != nil {
+			"git_source_binding", result.ID, result.Version, resultPayload, result.UpdatedAt); err != nil {
 			return err
 		}
 		command.Audit.ResourceID, command.Audit.OccurredAt = result.ID, result.UpdatedAt
@@ -484,19 +535,27 @@ func (repository *Repository) CreateGitReconciliation(ctx context.Context, comma
 	var result entity.GitReconciliation
 	var replay bool
 	err := repository.managementTransact(ctx, command.Scope, func(tx *transaction) error {
+		var raw []byte
+		var databaseNow time.Time
+		if err := tx.tx.QueryRow(ctx, managementSQL("git_binding__lock"), pgx.StrictNamedArgs{
+			"binding_id": command.BindingID, "tenant_id": tx.tenantID, "project_id": tx.projectID,
+		}).Scan(&raw, &databaseNow); err != nil {
+			return err
+		}
+		var binding entity.GitSourceBinding
+		if json.Unmarshal(raw, &binding) != nil {
+			return errors.New("stored Git reconciliation binding is invalid")
+		}
 		stored, found, err := lockManagementReceipt(ctx, tx, "git_binding.reconcile", command.IdempotencyHash, command.RequestHash)
 		if err != nil {
 			return err
 		}
 		if found {
-			result, err = getGitReconciliationTx(ctx, tx.tx, command.Scope, stored.ID)
+			result, err = replayManagementReceipt[entity.GitReconciliation](stored)
 			replay = true
 			return err
 		}
-		binding, err := getGitBindingTx(ctx, tx.tx, command.Scope, command.BindingID)
-		if err != nil {
-			return err
-		}
+		command.Reconciliation.UpdatedAt = databaseNow
 		if binding.Version != command.ExpectedVersion || binding.Status != "ACTIVE" || binding.SourceRevision != command.ExpectedSourceRevision {
 			return errs.ErrConflict
 		}
@@ -511,12 +570,12 @@ func (repository *Repository) CreateGitReconciliation(ctx context.Context, comma
 			return err
 		}
 		if err = insertManagementEffect(ctx, tx, "GIT_FETCH", "git_reconciliation", command.Reconciliation.ID,
-			binding.Version, 0, command.RequestHash, command.Reconciliation.UpdatedAt); err != nil {
+			binding.Version, binding.Generation, managementEffectOwner{"git_source_binding", binding.ID, binding.Status, binding.Version, binding.Generation}, command.RequestHash, command.Reconciliation.UpdatedAt); err != nil {
 			return err
 		}
-		_, digest, _ := managementPayload(command.Reconciliation)
+		resultPayload, _, _ := managementPayload(command.Reconciliation)
 		if err = insertManagementReceipt(ctx, tx, "git_binding.reconcile", command.IdempotencyHash, command.RequestHash,
-			"git_reconciliation", command.Reconciliation.ID, 1, digest, command.Reconciliation.UpdatedAt); err != nil {
+			"git_reconciliation", command.Reconciliation.ID, 1, resultPayload, command.Reconciliation.UpdatedAt); err != nil {
 			return err
 		}
 		if err = tx.appendAudit(ctx, command.Audit); err != nil {
@@ -596,13 +655,13 @@ func (repository *Repository) ListApprovals(ctx context.Context, scope domainrep
 	return values, next, err
 }
 
-func (repository *Repository) MarkAuthorizationCode(ctx context.Context, scope domainrepo.Scope, id, leaseID string, fence uint64, encryptedLoginID, encryptedDeviceResult []byte, expiresAt, at time.Time) error {
+func (repository *Repository) MarkAuthorizationCode(ctx context.Context, scope domainrepo.Scope, id, leaseID string, fence uint64, encryptedDeviceResult []byte, expiresAt, at time.Time) error {
 	return repository.managementTransact(ctx, scope, func(tx *transaction) error {
 		var changed string
 		return tx.tx.QueryRow(ctx, managementSQL("authorization__code"), pgx.StrictNamedArgs{
 			"authorization_id": id, "lease_id": leaseID, "lease_generation": fence,
-			"login_id_ciphertext": encryptedLoginID, "device_result_ciphertext": encryptedDeviceResult,
-			"code_expires_at": expiresAt, "updated_at": at,
+			"device_result_ciphertext": encryptedDeviceResult,
+			"code_expires_at":          expiresAt, "updated_at": at,
 		}).Scan(&changed)
 	})
 }
@@ -646,7 +705,9 @@ func (repository *Repository) ListCredentialGenerations(ctx context.Context, sco
 			if err = rows.Scan(&value.Generation, &value.AuthorizationID, &value.Status, &value.SecretRef,
 				&value.SecretVersion, &value.SecretContentDigest, &value.CredentialBindingID,
 				&value.CredentialBindingVersion, &value.CredentialBindingDigest,
-				&value.MaskedAccount, &value.MaskedLabel); err != nil {
+				&value.MaskedAccount, &value.MaskedLabel, &value.Capacity.Usage, &value.Capacity.Limit,
+				&value.Capacity.Revision, &value.Capacity.ObservedAt, &value.Capacity.WindowSeconds,
+				&value.Capacity.ResetsAt, &value.Capacity.ExpiresAt, &value.Capacity.Digest); err != nil {
 				return err
 			}
 			values = append(values, value)
@@ -658,7 +719,7 @@ func (repository *Repository) ListCredentialGenerations(ctx context.Context, sco
 
 func getCredentialGenerationTx(ctx context.Context, tx pgx.Tx, scope domainrepo.Scope, connectionID string, generation uint64) (entity.CredentialGeneration, error) {
 	value := entity.CredentialGeneration{ConnectionID: connectionID, Generation: generation}
-	err := tx.QueryRow(ctx, managementSQL("credential__get"), pgx.StrictNamedArgs{"connection_id": connectionID, "generation": generation, "tenant_id": scope.TenantID, "project_id": scope.ProjectID}).Scan(&value.AuthorizationID, &value.Status, &value.SecretRef, &value.SecretVersion, &value.SecretContentDigest, &value.CredentialBindingID, &value.CredentialBindingVersion, &value.CredentialBindingDigest, &value.MaskedAccount, &value.MaskedLabel)
+	err := tx.QueryRow(ctx, managementSQL("credential__get"), pgx.StrictNamedArgs{"connection_id": connectionID, "generation": generation, "tenant_id": scope.TenantID, "project_id": scope.ProjectID}).Scan(&value.AuthorizationID, &value.Status, &value.SecretRef, &value.SecretVersion, &value.SecretContentDigest, &value.CredentialBindingID, &value.CredentialBindingVersion, &value.CredentialBindingDigest, &value.MaskedAccount, &value.MaskedLabel, &value.Capacity.Usage, &value.Capacity.Limit, &value.Capacity.Revision, &value.Capacity.ObservedAt, &value.Capacity.WindowSeconds, &value.Capacity.ResetsAt, &value.Capacity.ExpiresAt, &value.Capacity.Digest)
 	return value, err
 }
 
@@ -716,7 +777,7 @@ func (repository *Repository) CompleteGitFetch(ctx context.Context, completion m
 			return err
 		}
 		var applyEffectID string
-		if err = tx.tx.QueryRow(ctx, managementSQL("git__fetch_complete"), pgx.StrictNamedArgs{"binding_id": completion.Binding.ID, "binding_version": completion.Binding.Version, "fetched_commit": completion.Reconciliation.FetchedCommit, "source_revision": completion.Reconciliation.SourceRevision, "source_sha256": completion.Reconciliation.SourceDigest, "command_intent_sha256": completion.Reconciliation.CommandIntentDigest, "fetched_at": completion.At, "binding_payload": bindingPayload, "reconciliation_id": completion.Reconciliation.ID, "encrypted_snapshot": completion.Reconciliation.EncryptedSnapshot, "receipt_sha256": completion.Reconciliation.ReceiptDigest, "effect_id": completion.EffectID, "lease_id": completion.LeaseID, "lease_fence": completion.LeaseFence, "apply_effect_id": uuid.NewString(), "tenant_id": completion.Scope.TenantID, "project_id": completion.Scope.ProjectID, "actor_id": completion.Scope.ActorID, "intent_sha256": completion.Reconciliation.CommandIntentDigest, "effect_payload": managementEffectPayload(completion.Reconciliation.ID, completion.Binding.Version, 0)}).Scan(&applyEffectID); err != nil {
+		if err = tx.tx.QueryRow(ctx, managementSQL("git__fetch_complete"), pgx.StrictNamedArgs{"binding_id": completion.Binding.ID, "binding_version": completion.Binding.Version, "binding_generation": completion.Binding.Generation, "fetched_commit": completion.Reconciliation.FetchedCommit, "source_revision": completion.Reconciliation.SourceRevision, "source_sha256": completion.Reconciliation.SourceDigest, "command_intent_sha256": completion.Reconciliation.CommandIntentDigest, "fetched_at": completion.At, "binding_payload": bindingPayload, "reconciliation_id": completion.Reconciliation.ID, "encrypted_snapshot": completion.Reconciliation.EncryptedSnapshot, "receipt_sha256": completion.Reconciliation.ReceiptDigest, "effect_id": completion.EffectID, "lease_id": completion.LeaseID, "lease_fence": completion.LeaseFence, "apply_effect_id": uuid.NewString(), "tenant_id": completion.Scope.TenantID, "project_id": completion.Scope.ProjectID, "actor_id": completion.Scope.ActorID, "intent_sha256": completion.Reconciliation.CommandIntentDigest, "effect_payload": managementEffectPayload(completion.Reconciliation.ID, completion.Binding.Version, completion.Binding.Generation)}).Scan(&applyEffectID); err != nil {
 			return err
 		}
 		result, err = getGitReconciliationTx(ctx, tx.tx, completion.Scope, completion.Reconciliation.ID)
@@ -729,7 +790,7 @@ func (repository *Repository) CompleteGitApply(ctx context.Context, completion m
 	var result entity.GitReconciliation
 	err := repository.managementTransact(ctx, completion.Scope, func(tx *transaction) error {
 		var changed string
-		if err := tx.tx.QueryRow(ctx, managementSQL("git__apply_complete"), pgx.StrictNamedArgs{"reconciliation_id": completion.ReconciliationID, "target_resource_id": completion.ReadbackID, "target_version": completion.ReadbackVersion, "target_sha256": completion.ReadbackDigest, "updated_at": completion.At, "effect_id": completion.EffectID, "lease_id": completion.LeaseID, "lease_fence": completion.LeaseFence}).Scan(&changed); err != nil {
+		if err := tx.tx.QueryRow(ctx, managementSQL("git__apply_complete"), pgx.StrictNamedArgs{"reconciliation_id": completion.ReconciliationID, "binding_id": completion.BindingID, "binding_version": completion.BindingVersion, "binding_generation": completion.BindingGeneration, "source_revision": completion.SourceRevision, "source_sha256": completion.SourceDigest, "target_resource_id": completion.ReadbackID, "target_version": completion.ReadbackVersion, "target_sha256": completion.ReadbackDigest, "updated_at": completion.At, "effect_id": completion.EffectID, "lease_id": completion.LeaseID, "lease_fence": completion.LeaseFence}).Scan(&changed); err != nil {
 			return err
 		}
 		var err error
@@ -759,6 +820,10 @@ func (repository *Repository) CompleteAuthorization(ctx context.Context, scope d
 			"credential_binding_version": credential.CredentialBindingVersion,
 			"credential_binding_sha256":  credential.CredentialBindingDigest,
 			"masked_account":             credential.MaskedAccount, "masked_label": maskedLabel,
+			"observed_usage": credential.Capacity.Usage, "observed_limit": credential.Capacity.Limit,
+			"observation_revision": credential.Capacity.Revision, "capacity_observed_at": credential.Capacity.ObservedAt,
+			"window_duration_seconds": credential.Capacity.WindowSeconds, "resets_at": credential.Capacity.ResetsAt,
+			"observation_expires_at": credential.Capacity.ExpiresAt, "observation_sha256": credential.Capacity.Digest,
 			"effect_id": uuid.NewString(), "actor_id": scope.ActorID,
 			"intent_sha256": intentDigest, "effect_payload": effectPayload, "updated_at": at,
 		}).Scan(&providerSyncEffectID)

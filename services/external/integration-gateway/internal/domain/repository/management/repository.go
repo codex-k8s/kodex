@@ -19,13 +19,15 @@ type StartAuthorizationCommand struct {
 }
 
 type RestartAuthorizationCommand struct {
-	Scope           domainrepo.Scope
-	PreviousID      string
-	ExpectedVersion uint64
-	Authorization   entity.ProviderAuthorization
-	IdempotencyHash string
-	RequestHash     string
-	Audit           entity.AuditEvent
+	Scope                                                   domainrepo.Scope
+	Operation                                               string
+	PreviousID                                              string
+	ExpectedVersion                                         uint64
+	ExpectedConnectionVersion, ExpectedConnectionGeneration uint64
+	Authorization                                           entity.ProviderAuthorization
+	IdempotencyHash                                         string
+	RequestHash                                             string
+	Audit                                                   entity.AuditEvent
 }
 
 type CancelAuthorizationCommand struct {
@@ -92,6 +94,7 @@ type ReconcileGitCommand struct {
 type CreateTestCommand struct {
 	Scope           domainrepo.Scope
 	Receipt         entity.IntegrationTestReceipt
+	Connection      entity.ManagedProviderConnection
 	IdempotencyHash string
 	RequestHash     string
 	Audit           entity.AuditEvent
@@ -126,6 +129,7 @@ type ProviderSyncCompletion struct {
 	ControlPlaneID                        string
 	ControlPlaneVersion                   uint64
 	ControlPlaneDigest, ObservationDigest string
+	CredentialBindingDigest               string
 	ObservedAt                            time.Time
 }
 
@@ -159,6 +163,11 @@ type (
 		EffectID, LeaseID            string
 		LeaseFence                   uint64
 		ReconciliationID, ReadbackID string
+		BindingID                    string
+		BindingVersion               uint64
+		BindingGeneration            uint64
+		SourceRevision               uint64
+		SourceDigest                 string
 		ReadbackVersion              uint64
 		ReadbackDigest               string
 		At                           time.Time
@@ -166,6 +175,7 @@ type (
 )
 
 type Repository interface {
+	ReplayManagement(context.Context, domainrepo.Scope, string, string, string) ([]byte, bool, error)
 	StartAuthorization(context.Context, StartAuthorizationCommand) (entity.ProviderAuthorization, bool, error)
 	RestartAuthorization(context.Context, RestartAuthorizationCommand) (entity.ProviderAuthorization, bool, error)
 	CancelAuthorization(context.Context, CancelAuthorizationCommand) (entity.ProviderAuthorization, bool, error)
@@ -181,6 +191,7 @@ type Repository interface {
 	ListPools(context.Context, domainrepo.Scope, int, string) ([]entity.ManagedProviderPool, string, error)
 	ConfigureIntegration(context.Context, ConfigureIntegrationCommand) (entity.IntegrationConfiguration, bool, error)
 	GetIntegrationConfiguration(context.Context, domainrepo.Scope, string) (entity.IntegrationConfiguration, error)
+	GetIntegrationConfigurationVersion(context.Context, domainrepo.Scope, string, uint64) (entity.IntegrationConfiguration, error)
 	ListIntegrationConfigurations(context.Context, domainrepo.Scope, int, string) ([]entity.IntegrationConfiguration, string, error)
 	CreateTest(context.Context, CreateTestCommand) (entity.IntegrationTestReceipt, bool, error)
 	GetTest(context.Context, domainrepo.Scope, string) (entity.IntegrationTestReceipt, error)
@@ -193,6 +204,8 @@ type Repository interface {
 	GetApproval(context.Context, domainrepo.Scope, string) (entity.Approval, error)
 	NextManagementScope(context.Context) (domainrepo.Scope, bool, error)
 	ClaimManagementEffect(context.Context, domainrepo.Scope, time.Time, time.Duration) (entity.ManagementEffect, bool, error)
+	BeginManagementEffectDispatch(context.Context, domainrepo.Scope, string, string, uint64) error
+	AdvanceProviderRevoke(context.Context, domainrepo.Scope, string, string, uint64, string, time.Time) (entity.ManagementEffect, error)
 	RenewManagementEffect(context.Context, domainrepo.Scope, string, string, uint64, time.Duration) error
 	ManagementEffectSucceeded(context.Context, domainrepo.Scope, string) (bool, error)
 	CompleteManagementEffect(context.Context, EffectCompletion) error
@@ -202,7 +215,7 @@ type Repository interface {
 	CompleteTest(context.Context, TestCompletion) (entity.IntegrationTestReceipt, error)
 	CompleteGitFetch(context.Context, GitFetchCompletion) (entity.GitReconciliation, error)
 	CompleteGitApply(context.Context, GitApplyCompletion) (entity.GitReconciliation, error)
-	MarkAuthorizationCode(context.Context, domainrepo.Scope, string, string, uint64, []byte, []byte, time.Time, time.Time) error
+	MarkAuthorizationCode(context.Context, domainrepo.Scope, string, string, uint64, []byte, time.Time, time.Time) error
 	AuthorizationCancelled(context.Context, domainrepo.Scope, string, string, uint64) (bool, error)
 	CompleteAuthorization(context.Context, domainrepo.Scope, string, string, string, uint64, entity.CredentialGeneration, string, string, time.Time) error
 	FailAuthorization(context.Context, domainrepo.Scope, string, string, uint64, string, time.Time) error

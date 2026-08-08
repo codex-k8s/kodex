@@ -42,16 +42,12 @@ func (service *Service) ManagePool(ctx context.Context, input ManagePoolInput) (
 		return entity.ManagedProviderPool{}, errsInvalid()
 	}
 	retainedMembers := map[string]entity.ProviderPoolMember{}
+	var current entity.ManagedProviderPool
 	if input.Action != "CREATE" {
-		current, getErr := service.repository.GetPool(ctx, input.Scope, input.ID)
+		var getErr error
+		current, getErr = service.repository.GetPool(ctx, input.Scope, input.ID)
 		if getErr != nil {
 			return entity.ManagedProviderPool{}, getErr
-		}
-		if current.Version != input.ExpectedVersion ||
-			input.Action == "UPDATE" && (current.Status != "ACTIVE" || current.StableKey != input.StableKey) ||
-			input.Action == "ARCHIVE" && current.Status != "ACTIVE" ||
-			input.Action == "DELETE" && current.Status != "ARCHIVED" {
-			return entity.ManagedProviderPool{}, errsConflict()
 		}
 		if input.Action == "ARCHIVE" || input.Action == "DELETE" {
 			input.StableKey, input.DisplayName, input.Policy = current.StableKey, current.DisplayName, current.Policy
@@ -72,7 +68,6 @@ func (service *Service) ManagePool(ctx context.Context, input ManagePoolInput) (
 	if id == "" {
 		id = uuid.NewString()
 	}
-	members := make([]entity.ProviderPoolMember, 0, len(input.Members))
 	desiredMembers := make([]PoolMemberInput, 0, len(input.Members))
 	seen := make(map[string]struct{}, len(input.Members))
 	for _, requested := range input.Members {
@@ -84,6 +79,22 @@ func (service *Service) ManagePool(ctx context.Context, input ManagePoolInput) (
 		}
 		seen[requested.ConnectionID] = struct{}{}
 		desiredMembers = append(desiredMembers, requested)
+	}
+	sort.Slice(desiredMembers, func(left, right int) bool {
+		return desiredMembers[left].ConnectionID < desiredMembers[right].ConnectionID
+	})
+	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, input.Action, input.ID, input.ExpectedVersion, input.StableKey, input.DisplayName, input.Policy, desiredMembers})
+	if replay, found, replayErr := replayManagement[entity.ManagedProviderPool](ctx, service.repository, input.Scope, "provider_pool."+input.Action, idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
+	if input.Action != "CREATE" && (current.Version != input.ExpectedVersion ||
+		input.Action == "UPDATE" && (current.Status != "ACTIVE" || current.StableKey != input.StableKey) ||
+		input.Action == "ARCHIVE" && current.Status != "ACTIVE" ||
+		input.Action == "DELETE" && current.Status != "ARCHIVED") {
+		return entity.ManagedProviderPool{}, errsConflict()
+	}
+	members := make([]entity.ProviderPoolMember, 0, len(input.Members))
+	for _, requested := range input.Members {
 		if retained, ok := retainedMembers[requested.ConnectionID]; ok {
 			members = append(members, retained)
 			continue
@@ -98,15 +109,13 @@ func (service *Service) ManagePool(ctx context.Context, input ManagePoolInput) (
 		members = append(members, entity.ProviderPoolMember{
 			ConnectionID: connection.ID, ConnectionStableKey: connection.StableKey, ConnectionVersion: connection.Version,
 			ConnectionGeneration: connection.Generation, ObservationDigest: connection.ObservationDigest,
-			Weight: requested.Weight, Eligible: connectionEligible(connection, now),
+			Capacity: connection.Capacity,
+			Weight:   requested.Weight, Eligible: connectionEligible(connection, now),
 			ControlPlaneID: connection.ControlPlaneID, ControlPlaneVersion: connection.ControlPlaneVersion,
 			ControlPlaneDigest: connection.ControlPlaneDigest,
 		})
 	}
 	sort.Slice(members, func(left, right int) bool { return members[left].ConnectionID < members[right].ConnectionID })
-	sort.Slice(desiredMembers, func(left, right int) bool {
-		return desiredMembers[left].ConnectionID < desiredMembers[right].ConnectionID
-	})
 	desiredDigest := digest(struct {
 		StableKey, DisplayName, Policy string
 		Members                        []PoolMemberInput
@@ -125,7 +134,6 @@ func (service *Service) ManagePool(ctx context.Context, input ManagePoolInput) (
 		ObservationDigest: observationDigest, EffectiveDigest: digest([]string{desiredDigest, observationDigest}),
 		Status: status, Members: members, CreatedAt: now, UpdatedAt: now,
 	}
-	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, input.Action, input.ID, input.ExpectedVersion, input.StableKey, input.DisplayName, input.Policy, desiredMembers})
 	value, _, err := service.repository.ManagePool(ctx, managementrepo.ManagePoolCommand{
 		Scope: input.Scope, Action: input.Action, ExpectedVersion: input.ExpectedVersion, Pool: pool,
 		IdempotencyHash: idempotencyHash, RequestHash: requestHash,
@@ -208,6 +216,28 @@ func (service *Service) ConfigureIntegration(ctx context.Context, input Configur
 	if definition.Digest != input.DefinitionDigest {
 		return entity.IntegrationConfiguration{}, errsConflict()
 	}
+	capabilities := slices.Clone(input.Capabilities)
+	sort.Strings(capabilities)
+	for index, capability := range capabilities {
+		if index > 0 && capabilities[index-1] == capability {
+			return entity.IntegrationConfiguration{}, errsInvalid()
+		}
+	}
+	idempotencyHash, err := hashIdempotency(input.Scope, "integration.configure", input.IdempotencyKey)
+	if err != nil {
+		return entity.IntegrationConfiguration{}, err
+	}
+	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, input.ID, input.ExpectedVersion, input.StableKey, input.DefinitionID, input.DefinitionVersion, input.DefinitionDigest, input.ConnectionID, input.ConnectionVersion, input.ConnectionGeneration, capabilities, input.EffectKind})
+	var current entity.IntegrationConfiguration
+	if input.ID != "" {
+		current, err = service.repository.GetIntegrationConfiguration(ctx, input.Scope, input.ID)
+		if err != nil {
+			return entity.IntegrationConfiguration{}, err
+		}
+	}
+	if replay, found, replayErr := replayManagement[entity.IntegrationConfiguration](ctx, service.repository, input.Scope, "integration.configure", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
 	connection, err := service.repository.GetManagedConnection(ctx, input.Scope, input.ConnectionID)
 	if err != nil {
 		return entity.IntegrationConfiguration{}, err
@@ -230,19 +260,10 @@ func (service *Service) ConfigureIntegration(ctx context.Context, input Configur
 	if !effectAllowed {
 		return entity.IntegrationConfiguration{}, errsForbidden()
 	}
-	capabilities := slices.Clone(input.Capabilities)
-	sort.Strings(capabilities)
-	for index, capability := range capabilities {
-		if index > 0 && capabilities[index-1] == capability {
-			return entity.IntegrationConfiguration{}, errsInvalid()
-		}
+	for _, capability := range capabilities {
 		if _, allowed := allowedCapabilities[capability]; !allowed {
 			return entity.IntegrationConfiguration{}, errsForbidden()
 		}
-	}
-	idempotencyHash, err := hashIdempotency(input.Scope, "integration.configure", input.IdempotencyKey)
-	if err != nil {
-		return entity.IntegrationConfiguration{}, err
 	}
 	now := service.now().UTC()
 	id := input.ID
@@ -252,13 +273,6 @@ func (service *Service) ConfigureIntegration(ctx context.Context, input Configur
 	version := uint64(1)
 	createdAt := now
 	if input.ID != "" {
-		current, getErr := service.repository.GetIntegrationConfiguration(ctx, input.Scope, input.ID)
-		if getErr != nil {
-			return entity.IntegrationConfiguration{}, getErr
-		}
-		if current.Version != input.ExpectedVersion || current.StableKey != input.StableKey || current.Status != "ACTIVE" {
-			return entity.IntegrationConfiguration{}, errsConflict()
-		}
 		version, createdAt = current.Version+1, current.CreatedAt
 	}
 	configuration := entity.IntegrationConfiguration{
@@ -269,7 +283,9 @@ func (service *Service) ConfigureIntegration(ctx context.Context, input Configur
 		CapabilityDigest: digest(capabilities), EffectKind: input.EffectKind, Status: "ACTIVE", CreatedAt: createdAt, UpdatedAt: now,
 	}
 	configuration.Digest = digest(configuration)
-	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, input.ID, input.ExpectedVersion, input.StableKey, input.DefinitionID, input.DefinitionVersion, input.DefinitionDigest, input.ConnectionID, input.ConnectionVersion, input.ConnectionGeneration, capabilities, input.EffectKind})
+	if input.ID != "" && (current.Version != input.ExpectedVersion || current.StableKey != input.StableKey || current.Status != "ACTIVE") {
+		return entity.IntegrationConfiguration{}, errsConflict()
+	}
 	value, _, err := service.repository.ConfigureIntegration(ctx, managementrepo.ConfigureIntegrationCommand{
 		Scope: input.Scope, ExpectedVersion: input.ExpectedVersion, Configuration: configuration,
 		IdempotencyHash: idempotencyHash, RequestHash: requestHash,
@@ -299,34 +315,65 @@ func (service *Service) ListConfigurations(ctx context.Context, scope domainrepo
 	return service.repository.ListIntegrationConfigurations(ctx, scope, limit, after)
 }
 
-func (service *Service) TestConnection(ctx context.Context, scope domainrepo.Scope, connectionID string, connectionVersion, connectionGeneration uint64, definitionID string, definitionVersion uint64, idempotencyKey string) (entity.IntegrationTestReceipt, error) {
-	if !validScope(scope) {
+type TestConnectionInput struct {
+	Scope                                                         domainrepo.Scope
+	ConnectionID, DefinitionID, DefinitionDigest, ConfigurationID string
+	ConnectionVersion, ConnectionGeneration, DefinitionVersion    uint64
+	ConfigurationVersion                                          uint64
+	ConfigurationDigest, IdempotencyKey                           string
+}
+
+func (service *Service) TestConnection(ctx context.Context, input TestConnectionInput) (entity.IntegrationTestReceipt, error) {
+	if !validScope(input.Scope) {
 		return entity.IntegrationTestReceipt{}, errsForbidden()
 	}
-	if !validID(connectionID) || connectionVersion == 0 || connectionGeneration == 0 || definitionID == "" || definitionVersion == 0 {
+	if !validID(input.ConnectionID) || input.ConnectionVersion == 0 || input.ConnectionGeneration == 0 || input.DefinitionID == "" || input.DefinitionVersion == 0 ||
+		len(input.DefinitionDigest) != 64 || !validID(input.ConfigurationID) || input.ConfigurationVersion == 0 || len(input.ConfigurationDigest) != 64 {
 		return entity.IntegrationTestReceipt{}, errsInvalid()
 	}
-	definition, ok := service.definitions.Get(definitionID, definitionVersion)
+	definition, ok := service.definitions.Get(input.DefinitionID, input.DefinitionVersion)
 	if !ok {
 		return entity.IntegrationTestReceipt{}, errsNotFound()
 	}
-	connection, err := service.repository.GetManagedConnection(ctx, scope, connectionID)
-	if err != nil {
-		return entity.IntegrationTestReceipt{}, err
-	}
-	if connection.Version != connectionVersion || connection.Generation != connectionGeneration || !connectionEligible(connection, service.now().UTC()) {
+	if definition.Digest != input.DefinitionDigest {
 		return entity.IntegrationTestReceipt{}, errsConflict()
 	}
-	idempotencyHash, err := hashIdempotency(scope, "integration.test", idempotencyKey)
+	idempotencyHash, err := hashIdempotency(input.Scope, "integration.test", input.IdempotencyKey)
 	if err != nil {
 		return entity.IntegrationTestReceipt{}, err
 	}
+	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, input.ConnectionID, input.ConnectionVersion, input.ConnectionGeneration, definition.ID, definition.Version, definition.Digest, input.ConfigurationID, input.ConfigurationVersion, input.ConfigurationDigest})
+	if replay, found, replayErr := replayManagement[entity.IntegrationTestReceipt](ctx, service.repository, input.Scope, "integration.test", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
+	configuration, err := service.repository.GetIntegrationConfiguration(ctx, input.Scope, input.ConfigurationID)
+	if err != nil {
+		return entity.IntegrationTestReceipt{}, err
+	}
+	if configuration.Version != input.ConfigurationVersion || configuration.Digest != input.ConfigurationDigest || configuration.Status != "ACTIVE" ||
+		configuration.DefinitionID != definition.ID || configuration.DefinitionVersion != definition.Version || configuration.DefinitionDigest != definition.Digest ||
+		configuration.ConnectionID != input.ConnectionID || configuration.ConnectionVersion != input.ConnectionVersion || configuration.ConnectionGeneration != input.ConnectionGeneration {
+		return entity.IntegrationTestReceipt{}, errsConflict()
+	}
+	connection, err := service.repository.GetManagedConnection(ctx, input.Scope, input.ConnectionID)
+	if err != nil {
+		return entity.IntegrationTestReceipt{}, err
+	}
+	if connection.Version != input.ConnectionVersion || connection.Generation != input.ConnectionGeneration || !connectionEligible(connection, service.now().UTC()) {
+		return entity.IntegrationTestReceipt{}, errsConflict()
+	}
 	now := service.now().UTC()
-	requestHash := digest([]any{scope.TenantID, scope.ProjectID, connectionID, connectionVersion, connectionGeneration, definition.ID, definition.Version, definition.Digest})
-	receipt := entity.IntegrationTestReceipt{ID: uuid.NewString(), ConnectionID: connection.ID, ConnectionVersion: connection.Version, ConnectionGeneration: connection.Generation, DefinitionID: definition.ID, DefinitionVersion: definition.Version, Category: "PENDING", Digest: requestHash, ExpiresAt: now.Add(5 * time.Minute)}
+	receipt := entity.IntegrationTestReceipt{
+		ID: uuid.NewString(), ConnectionID: connection.ID, ConnectionVersion: connection.Version, ConnectionGeneration: connection.Generation,
+		DefinitionID: definition.ID, DefinitionVersion: definition.Version, DefinitionDigest: definition.Digest,
+		ConfigurationID: configuration.ID, ConfigurationVersion: configuration.Version, ConfigurationDigest: configuration.Digest,
+		CredentialGeneration: connection.ActiveCredential, CredentialBindingID: connection.CredentialBindingID,
+		CredentialBindingVersion: connection.CredentialBindingVersion, CredentialBindingDigest: connection.CredentialBindingDigest,
+		Category: "PENDING", Digest: requestHash, ExpiresAt: now.Add(5 * time.Minute),
+	}
 	value, _, err := service.repository.CreateTest(ctx, managementrepo.CreateTestCommand{
-		Scope: scope, Receipt: receipt, IdempotencyHash: idempotencyHash, RequestHash: requestHash, At: now,
-		Audit: managementAudit(scope, "integration.test", "INTEGRATION_TEST", receipt.ID, requestHash, "PENDING", now),
+		Scope: input.Scope, Receipt: receipt, Connection: connection, IdempotencyHash: idempotencyHash, RequestHash: requestHash, At: now,
+		Audit: managementAudit(input.Scope, "integration.test", "INTEGRATION_TEST", receipt.ID, requestHash, "PENDING", now),
 	})
 	return value, err
 }
@@ -401,13 +448,6 @@ func (service *Service) ManageGitBinding(ctx context.Context, input ManageGitBin
 		if getErr != nil {
 			return entity.GitSourceBinding{}, getErr
 		}
-		if current.Version != input.ExpectedVersion || current.Status != "ACTIVE" {
-			return entity.GitSourceBinding{}, errsConflict()
-		}
-		if input.Action == "UPDATE" && (current.StableKey != input.StableKey ||
-			current.TargetKind != input.TargetKind || current.TargetStableKey != input.TargetStableKey) {
-			return entity.GitSourceBinding{}, errsConflict()
-		}
 		if input.Action == "ARCHIVE" {
 			input.StableKey, input.RepositoryKey, input.RefKey, input.PathKey = current.StableKey, current.RepositoryKey, current.RefKey, current.PathKey
 			input.TargetKind, input.TargetStableKey = current.TargetKind, current.TargetStableKey
@@ -444,7 +484,7 @@ func (service *Service) ManageGitBinding(ctx context.Context, input ManageGitBin
 		id = uuid.NewString()
 	}
 	binding := entity.GitSourceBinding{
-		ID: id, StableKey: input.StableKey, Version: 1, Status: "ACTIVE",
+		ID: id, StableKey: input.StableKey, Version: 1, Generation: 1, Status: "ACTIVE",
 		RepositoryKey: source.RepositoryKey, RefKey: source.RefKey, PathKey: source.PathKey,
 		RepositoryConnectionID: source.RepositoryConnectionID, RepositoryConnectionVersion: source.RepositoryConnectionVersion,
 		RepositoryConnectionDigest: source.RepositoryConnectionDigest,
@@ -461,6 +501,13 @@ func (service *Service) ManageGitBinding(ctx context.Context, input ManageGitBin
 		binding.Status = "ARCHIVED"
 	}
 	requestHash := digest([]any{input.Scope.TenantID, input.Scope.ProjectID, input.Action, input.ID, input.ExpectedVersion, input.StableKey, input.RepositoryKey, input.RefKey, input.PathKey, source.RepositoryConnectionID, source.RepositoryConnectionVersion, source.RepositoryConnectionDigest, source.CredentialBindingID, source.CredentialBindingVersion, source.CredentialBindingDigest, input.TargetKind, input.TargetStableKey})
+	if replay, found, replayErr := replayManagement[entity.GitSourceBinding](ctx, service.repository, input.Scope, "git_binding."+input.Action, idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
+	if input.Action != "CREATE" && (previous.Version != input.ExpectedVersion || previous.Status != "ACTIVE" ||
+		input.Action == "UPDATE" && (previous.StableKey != input.StableKey || previous.TargetKind != input.TargetKind || previous.TargetStableKey != input.TargetStableKey)) {
+		return entity.GitSourceBinding{}, errsConflict()
+	}
 	value, _, err := service.repository.ManageGitBinding(ctx, managementrepo.ManageGitBindingCommand{
 		Scope: input.Scope, Action: input.Action, ExpectedVersion: input.ExpectedVersion, Binding: binding,
 		IdempotencyHash: idempotencyHash, RequestHash: requestHash,
@@ -501,15 +548,18 @@ func (service *Service) ReconcileGitBinding(ctx context.Context, scope domainrep
 	if err != nil {
 		return entity.GitReconciliation{}, err
 	}
-	if binding.Version != expectedVersion || binding.SourceRevision != expectedSourceRevision || binding.Status != "ACTIVE" {
-		return entity.GitReconciliation{}, errsConflict()
-	}
 	idempotencyHash, err := hashIdempotency(scope, "git_binding.reconcile", idempotencyKey)
 	if err != nil {
 		return entity.GitReconciliation{}, err
 	}
 	now := service.now().UTC()
-	requestHash := digest([]any{scope.TenantID, scope.ProjectID, binding.ID, binding.Version, expectedSourceRevision, binding.RepositoryConnectionDigest, binding.CredentialBindingDigest})
+	requestHash := digest([]any{scope.TenantID, scope.ProjectID, binding.ID, expectedVersion, expectedSourceRevision, binding.RepositoryConnectionDigest, binding.CredentialBindingDigest})
+	if replay, found, replayErr := replayManagement[entity.GitReconciliation](ctx, service.repository, scope, "git_binding.reconcile", idempotencyHash, requestHash); replayErr != nil || found {
+		return replay, replayErr
+	}
+	if binding.Version != expectedVersion || binding.SourceRevision != expectedSourceRevision || binding.Status != "ACTIVE" {
+		return entity.GitReconciliation{}, errsConflict()
+	}
 	reconciliation := entity.GitReconciliation{
 		ID: uuid.NewString(), BindingID: binding.ID, BindingVersion: binding.Version, State: "PENDING",
 		ReceiptID: uuid.NewString(), ReceiptDigest: digest([]string{requestHash, binding.ID}), UpdatedAt: now,
@@ -574,9 +624,11 @@ func definitionCapabilities(definition entity.Definition) []entity.ProviderCapab
 
 func connectionEligible(connection entity.ManagedProviderConnection, now time.Time) bool {
 	return connection.Status == "VALID" && connection.Generation > 0 && connection.ActiveCredential == connection.Generation &&
-		validID(connection.CredentialBindingID) && connection.CredentialBindingVersion == connection.Generation && digestPattern.MatchString(connection.CredentialBindingDigest) &&
+		validID(connection.CredentialBindingID) && connection.CredentialBindingVersion > 0 && digestPattern.MatchString(connection.CredentialBindingDigest) &&
 		validID(connection.ControlPlaneID) && connection.ControlPlaneVersion > 0 && digestPattern.MatchString(connection.ControlPlaneDigest) &&
-		connection.ObservedAt != nil && !connection.ObservedAt.After(now.Add(time.Second)) && now.Sub(*connection.ObservedAt) <= 5*time.Minute
+		connection.ObservedAt != nil && !connection.ObservedAt.After(now.Add(time.Second)) && now.Sub(*connection.ObservedAt) <= 5*time.Minute &&
+		connection.Capacity.Limit > 0 && connection.Capacity.Usage <= connection.Capacity.Limit &&
+		connection.Capacity.Revision > 0 && digestPattern.MatchString(connection.Capacity.Digest) && connection.Capacity.ExpiresAt.After(now)
 }
 
 func errsForbidden() error { return errs.ErrForbidden }

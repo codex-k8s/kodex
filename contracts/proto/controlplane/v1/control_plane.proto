@@ -984,6 +984,13 @@ message ProviderConnectionReferenceSpec {
   uint64 credential_binding_version = 15;
   string credential_binding_sha256 = 16;
   uint64 reference_generation = 17;
+  uint64 observed_usage = 18;
+  uint64 observed_limit = 19;
+  uint64 observation_revision = 20;
+  google.protobuf.Timestamp observation_expires_at = 21;
+  uint64 window_duration_seconds = 22;
+  google.protobuf.Timestamp resets_at = 23;
+  string observation_sha256 = 24;
 }
 
 message ProviderPoolBinding {
@@ -996,6 +1003,14 @@ message ProviderPoolBinding {
   // provider_connection_stable_key используется только как owner-friendly input;
   // сохранённый snapshot возвращает server-resolved ID/version/digest.
   string provider_connection_stable_key = 7;
+  uint64 observed_usage = 8;
+  uint64 observed_limit = 9;
+  uint64 observation_revision = 10;
+  google.protobuf.Timestamp observed_at = 11;
+  google.protobuf.Timestamp observation_expires_at = 12;
+  string observation_sha256 = 13;
+  uint64 window_duration_seconds = 14;
+  google.protobuf.Timestamp resets_at = 15;
 }
 
 // ProviderPoolSpec хранит точный immutable eligibility snapshot.
@@ -1129,6 +1144,9 @@ message CredentialBindingSpec {
   string immutable_secret_ref = 13;
   string provider_content_version = 14;
   string content_sha256 = 15;
+  uint64 provider_window_duration_seconds = 16;
+  google.protobuf.Timestamp provider_resets_at = 17;
+  google.protobuf.Timestamp provider_observation_expires_at = 18;
 }
 
 // RepositoryWorkspaceSpec описывает версионированное сообщение контракта control-plane.
@@ -1888,6 +1906,20 @@ message ProviderEffectReadbackReceipt {
   string target_resource_id = 33;
   string target_stable_key = 34;
   string command_intent_sha256 = 35;
+  // Opaque immutable secret coordinates and a bounded provider observation.
+  // Raw credentials and provider payload are forbidden in this receipt.
+  string secret_ref = 36;
+  uint64 secret_version = 37;
+  string secret_content_sha256 = 38;
+  string masked_account = 39;
+  uint64 observed_usage = 40;
+  uint64 observed_limit = 41;
+  uint64 observation_revision = 42;
+  google.protobuf.Timestamp observed_at = 43;
+  uint64 window_duration_seconds = 44;
+  google.protobuf.Timestamp resets_at = 45;
+  google.protobuf.Timestamp observation_expires_at = 46;
+  string observation_sha256 = 47;
 }
 
 enum ProviderConnectionReferenceAction {
@@ -2056,6 +2088,7 @@ message ManageProviderPoolRequest {
   uint64 expected_version = 4;
   string name = 5;
   ProviderPoolSpec spec = 6;
+  ProviderEffectReadbackReceipt provider_receipt = 7;
 }
 
 message ManageProviderPoolResponse {

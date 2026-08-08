@@ -1493,6 +1493,7 @@ type ProviderConnection struct {
 	ObservedAt                 *timestamppb.Timestamp         `protobuf:"bytes,16,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
 	UpdatedAt                  *timestamppb.Timestamp         `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	ActiveCredentialGeneration uint64                         `protobuf:"varint,18,opt,name=active_credential_generation,json=activeCredentialGeneration,proto3" json:"active_credential_generation,omitempty"`
+	Capacity                   *ProviderCapacityObservation   `protobuf:"bytes,19,opt,name=capacity,proto3" json:"capacity,omitempty"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -1653,6 +1654,115 @@ func (x *ProviderConnection) GetActiveCredentialGeneration() uint64 {
 	return 0
 }
 
+func (x *ProviderConnection) GetCapacity() *ProviderCapacityObservation {
+	if x != nil {
+		return x.Capacity
+	}
+	return nil
+}
+
+// ProviderCapacityObservation — нормализованный bounded readback provider-а.
+// Он не содержит account payload, headers или credential material.
+type ProviderCapacityObservation struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Usage                 uint64                 `protobuf:"varint,1,opt,name=usage,proto3" json:"usage,omitempty"`
+	Limit                 uint64                 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Revision              uint64                 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	ObservedAt            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	WindowDurationSeconds uint64                 `protobuf:"varint,5,opt,name=window_duration_seconds,json=windowDurationSeconds,proto3" json:"window_duration_seconds,omitempty"`
+	ResetsAt              *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=resets_at,json=resetsAt,proto3" json:"resets_at,omitempty"`
+	ExpiresAt             *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	DigestSha256          string                 `protobuf:"bytes,8,opt,name=digest_sha256,json=digestSha256,proto3" json:"digest_sha256,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *ProviderCapacityObservation) Reset() {
+	*x = ProviderCapacityObservation{}
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProviderCapacityObservation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProviderCapacityObservation) ProtoMessage() {}
+
+func (x *ProviderCapacityObservation) ProtoReflect() protoreflect.Message {
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProviderCapacityObservation.ProtoReflect.Descriptor instead.
+func (*ProviderCapacityObservation) Descriptor() ([]byte, []int) {
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ProviderCapacityObservation) GetUsage() uint64 {
+	if x != nil {
+		return x.Usage
+	}
+	return 0
+}
+
+func (x *ProviderCapacityObservation) GetLimit() uint64 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ProviderCapacityObservation) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *ProviderCapacityObservation) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
+func (x *ProviderCapacityObservation) GetWindowDurationSeconds() uint64 {
+	if x != nil {
+		return x.WindowDurationSeconds
+	}
+	return 0
+}
+
+func (x *ProviderCapacityObservation) GetResetsAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ResetsAt
+	}
+	return nil
+}
+
+func (x *ProviderCapacityObservation) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+func (x *ProviderCapacityObservation) GetDigestSha256() string {
+	if x != nil {
+		return x.DigestSha256
+	}
+	return ""
+}
+
 type ListProviderConnectionsRequest struct {
 	state         protoimpl.MessageState           `protogen:"open.v1"`
 	States        []ManagedProviderConnectionState `protobuf:"varint,1,rep,packed,name=states,proto3,enum=integrationgateway.v1.ManagedProviderConnectionState" json:"states,omitempty"`
@@ -1664,7 +1774,7 @@ type ListProviderConnectionsRequest struct {
 
 func (x *ListProviderConnectionsRequest) Reset() {
 	*x = ListProviderConnectionsRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[18]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1676,7 +1786,7 @@ func (x *ListProviderConnectionsRequest) String() string {
 func (*ListProviderConnectionsRequest) ProtoMessage() {}
 
 func (x *ListProviderConnectionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[18]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1689,7 +1799,7 @@ func (x *ListProviderConnectionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProviderConnectionsRequest.ProtoReflect.Descriptor instead.
 func (*ListProviderConnectionsRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{18}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListProviderConnectionsRequest) GetStates() []ManagedProviderConnectionState {
@@ -1723,7 +1833,7 @@ type ListProviderConnectionsResponse struct {
 
 func (x *ListProviderConnectionsResponse) Reset() {
 	*x = ListProviderConnectionsResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[19]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1735,7 +1845,7 @@ func (x *ListProviderConnectionsResponse) String() string {
 func (*ListProviderConnectionsResponse) ProtoMessage() {}
 
 func (x *ListProviderConnectionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[19]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1748,7 +1858,7 @@ func (x *ListProviderConnectionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProviderConnectionsResponse.ProtoReflect.Descriptor instead.
 func (*ListProviderConnectionsResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{19}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListProviderConnectionsResponse) GetConnections() []*ProviderConnection {
@@ -1775,7 +1885,7 @@ type GetProviderConnectionRequest struct {
 
 func (x *GetProviderConnectionRequest) Reset() {
 	*x = GetProviderConnectionRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[20]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1787,7 +1897,7 @@ func (x *GetProviderConnectionRequest) String() string {
 func (*GetProviderConnectionRequest) ProtoMessage() {}
 
 func (x *GetProviderConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[20]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1800,7 +1910,7 @@ func (x *GetProviderConnectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProviderConnectionRequest.ProtoReflect.Descriptor instead.
 func (*GetProviderConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{20}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetProviderConnectionRequest) GetConnectionId() string {
@@ -1826,7 +1936,7 @@ type GetProviderConnectionResponse struct {
 
 func (x *GetProviderConnectionResponse) Reset() {
 	*x = GetProviderConnectionResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[21]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1838,7 +1948,7 @@ func (x *GetProviderConnectionResponse) String() string {
 func (*GetProviderConnectionResponse) ProtoMessage() {}
 
 func (x *GetProviderConnectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[21]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1851,7 +1961,7 @@ func (x *GetProviderConnectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProviderConnectionResponse.ProtoReflect.Descriptor instead.
 func (*GetProviderConnectionResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{21}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetProviderConnectionResponse) GetConnection() *ProviderConnection {
@@ -1873,7 +1983,7 @@ type ReauthorizeProviderConnectionRequest struct {
 
 func (x *ReauthorizeProviderConnectionRequest) Reset() {
 	*x = ReauthorizeProviderConnectionRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[22]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1885,7 +1995,7 @@ func (x *ReauthorizeProviderConnectionRequest) String() string {
 func (*ReauthorizeProviderConnectionRequest) ProtoMessage() {}
 
 func (x *ReauthorizeProviderConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[22]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1898,7 +2008,7 @@ func (x *ReauthorizeProviderConnectionRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ReauthorizeProviderConnectionRequest.ProtoReflect.Descriptor instead.
 func (*ReauthorizeProviderConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{22}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ReauthorizeProviderConnectionRequest) GetConnectionId() string {
@@ -1938,7 +2048,7 @@ type ReauthorizeProviderConnectionResponse struct {
 
 func (x *ReauthorizeProviderConnectionResponse) Reset() {
 	*x = ReauthorizeProviderConnectionResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[23]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1950,7 +2060,7 @@ func (x *ReauthorizeProviderConnectionResponse) String() string {
 func (*ReauthorizeProviderConnectionResponse) ProtoMessage() {}
 
 func (x *ReauthorizeProviderConnectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[23]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1963,7 +2073,7 @@ func (x *ReauthorizeProviderConnectionResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ReauthorizeProviderConnectionResponse.ProtoReflect.Descriptor instead.
 func (*ReauthorizeProviderConnectionResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{23}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ReauthorizeProviderConnectionResponse) GetAuthorization() *ProviderAuthorization {
@@ -1985,7 +2095,7 @@ type RevokeProviderConnectionRequest struct {
 
 func (x *RevokeProviderConnectionRequest) Reset() {
 	*x = RevokeProviderConnectionRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[24]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1997,7 +2107,7 @@ func (x *RevokeProviderConnectionRequest) String() string {
 func (*RevokeProviderConnectionRequest) ProtoMessage() {}
 
 func (x *RevokeProviderConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[24]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2010,7 +2120,7 @@ func (x *RevokeProviderConnectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeProviderConnectionRequest.ProtoReflect.Descriptor instead.
 func (*RevokeProviderConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{24}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RevokeProviderConnectionRequest) GetConnectionId() string {
@@ -2050,7 +2160,7 @@ type RevokeProviderConnectionResponse struct {
 
 func (x *RevokeProviderConnectionResponse) Reset() {
 	*x = RevokeProviderConnectionResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[25]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2062,7 +2172,7 @@ func (x *RevokeProviderConnectionResponse) String() string {
 func (*RevokeProviderConnectionResponse) ProtoMessage() {}
 
 func (x *RevokeProviderConnectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[25]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2075,7 +2185,7 @@ func (x *RevokeProviderConnectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeProviderConnectionResponse.ProtoReflect.Descriptor instead.
 func (*RevokeProviderConnectionResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{25}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RevokeProviderConnectionResponse) GetConnection() *ProviderConnection {
@@ -2097,7 +2207,7 @@ type ProviderPoolMemberIntent struct {
 
 func (x *ProviderPoolMemberIntent) Reset() {
 	*x = ProviderPoolMemberIntent{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[26]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2109,7 +2219,7 @@ func (x *ProviderPoolMemberIntent) String() string {
 func (*ProviderPoolMemberIntent) ProtoMessage() {}
 
 func (x *ProviderPoolMemberIntent) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[26]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2122,7 +2232,7 @@ func (x *ProviderPoolMemberIntent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderPoolMemberIntent.ProtoReflect.Descriptor instead.
 func (*ProviderPoolMemberIntent) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{26}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ProviderPoolMemberIntent) GetConnectionId() string {
@@ -2167,7 +2277,7 @@ type ProviderPoolMember struct {
 
 func (x *ProviderPoolMember) Reset() {
 	*x = ProviderPoolMember{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[27]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2179,7 +2289,7 @@ func (x *ProviderPoolMember) String() string {
 func (*ProviderPoolMember) ProtoMessage() {}
 
 func (x *ProviderPoolMember) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[27]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2192,7 +2302,7 @@ func (x *ProviderPoolMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderPoolMember.ProtoReflect.Descriptor instead.
 func (*ProviderPoolMember) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{27}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ProviderPoolMember) GetConnectionId() string {
@@ -2257,7 +2367,7 @@ type ProviderPool struct {
 
 func (x *ProviderPool) Reset() {
 	*x = ProviderPool{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[28]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2269,7 +2379,7 @@ func (x *ProviderPool) String() string {
 func (*ProviderPool) ProtoMessage() {}
 
 func (x *ProviderPool) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[28]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2282,7 +2392,7 @@ func (x *ProviderPool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderPool.ProtoReflect.Descriptor instead.
 func (*ProviderPool) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{28}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ProviderPool) GetProviderPoolId() string {
@@ -2385,7 +2495,7 @@ type ManageProviderPoolRequest struct {
 
 func (x *ManageProviderPoolRequest) Reset() {
 	*x = ManageProviderPoolRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[29]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2397,7 +2507,7 @@ func (x *ManageProviderPoolRequest) String() string {
 func (*ManageProviderPoolRequest) ProtoMessage() {}
 
 func (x *ManageProviderPoolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[29]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2410,7 +2520,7 @@ func (x *ManageProviderPoolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageProviderPoolRequest.ProtoReflect.Descriptor instead.
 func (*ManageProviderPoolRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{29}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ManageProviderPoolRequest) GetAction() ProviderPoolAction {
@@ -2478,7 +2588,7 @@ type ManageProviderPoolResponse struct {
 
 func (x *ManageProviderPoolResponse) Reset() {
 	*x = ManageProviderPoolResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[30]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2490,7 +2600,7 @@ func (x *ManageProviderPoolResponse) String() string {
 func (*ManageProviderPoolResponse) ProtoMessage() {}
 
 func (x *ManageProviderPoolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[30]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2503,7 +2613,7 @@ func (x *ManageProviderPoolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageProviderPoolResponse.ProtoReflect.Descriptor instead.
 func (*ManageProviderPoolResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{30}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ManageProviderPoolResponse) GetProviderPool() *ProviderPool {
@@ -2522,7 +2632,7 @@ type GetProviderPoolRequest struct {
 
 func (x *GetProviderPoolRequest) Reset() {
 	*x = GetProviderPoolRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[31]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2534,7 +2644,7 @@ func (x *GetProviderPoolRequest) String() string {
 func (*GetProviderPoolRequest) ProtoMessage() {}
 
 func (x *GetProviderPoolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[31]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2547,7 +2657,7 @@ func (x *GetProviderPoolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProviderPoolRequest.ProtoReflect.Descriptor instead.
 func (*GetProviderPoolRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{31}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *GetProviderPoolRequest) GetProviderPoolId() string {
@@ -2566,7 +2676,7 @@ type GetProviderPoolResponse struct {
 
 func (x *GetProviderPoolResponse) Reset() {
 	*x = GetProviderPoolResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[32]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2578,7 +2688,7 @@ func (x *GetProviderPoolResponse) String() string {
 func (*GetProviderPoolResponse) ProtoMessage() {}
 
 func (x *GetProviderPoolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[32]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2591,7 +2701,7 @@ func (x *GetProviderPoolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProviderPoolResponse.ProtoReflect.Descriptor instead.
 func (*GetProviderPoolResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{32}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetProviderPoolResponse) GetProviderPool() *ProviderPool {
@@ -2611,7 +2721,7 @@ type ListProviderPoolsRequest struct {
 
 func (x *ListProviderPoolsRequest) Reset() {
 	*x = ListProviderPoolsRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[33]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2623,7 +2733,7 @@ func (x *ListProviderPoolsRequest) String() string {
 func (*ListProviderPoolsRequest) ProtoMessage() {}
 
 func (x *ListProviderPoolsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[33]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2636,7 +2746,7 @@ func (x *ListProviderPoolsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProviderPoolsRequest.ProtoReflect.Descriptor instead.
 func (*ListProviderPoolsRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{33}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListProviderPoolsRequest) GetPageSize() uint32 {
@@ -2663,7 +2773,7 @@ type ListProviderPoolsResponse struct {
 
 func (x *ListProviderPoolsResponse) Reset() {
 	*x = ListProviderPoolsResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[34]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2675,7 +2785,7 @@ func (x *ListProviderPoolsResponse) String() string {
 func (*ListProviderPoolsResponse) ProtoMessage() {}
 
 func (x *ListProviderPoolsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[34]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2688,7 +2798,7 @@ func (x *ListProviderPoolsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProviderPoolsResponse.ProtoReflect.Descriptor instead.
 func (*ListProviderPoolsResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{34}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListProviderPoolsResponse) GetProviderPools() []*ProviderPool {
@@ -2719,7 +2829,7 @@ type IntegrationDefinitionSummary struct {
 
 func (x *IntegrationDefinitionSummary) Reset() {
 	*x = IntegrationDefinitionSummary{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[35]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2731,7 +2841,7 @@ func (x *IntegrationDefinitionSummary) String() string {
 func (*IntegrationDefinitionSummary) ProtoMessage() {}
 
 func (x *IntegrationDefinitionSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[35]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2744,7 +2854,7 @@ func (x *IntegrationDefinitionSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntegrationDefinitionSummary.ProtoReflect.Descriptor instead.
 func (*IntegrationDefinitionSummary) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{35}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *IntegrationDefinitionSummary) GetDefinitionId() string {
@@ -2797,7 +2907,7 @@ type ListIntegrationDefinitionsRequest struct {
 
 func (x *ListIntegrationDefinitionsRequest) Reset() {
 	*x = ListIntegrationDefinitionsRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[36]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2809,7 +2919,7 @@ func (x *ListIntegrationDefinitionsRequest) String() string {
 func (*ListIntegrationDefinitionsRequest) ProtoMessage() {}
 
 func (x *ListIntegrationDefinitionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[36]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2822,7 +2932,7 @@ func (x *ListIntegrationDefinitionsRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListIntegrationDefinitionsRequest.ProtoReflect.Descriptor instead.
 func (*ListIntegrationDefinitionsRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{36}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{37}
 }
 
 type ListIntegrationDefinitionsResponse struct {
@@ -2834,7 +2944,7 @@ type ListIntegrationDefinitionsResponse struct {
 
 func (x *ListIntegrationDefinitionsResponse) Reset() {
 	*x = ListIntegrationDefinitionsResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[37]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2846,7 +2956,7 @@ func (x *ListIntegrationDefinitionsResponse) String() string {
 func (*ListIntegrationDefinitionsResponse) ProtoMessage() {}
 
 func (x *ListIntegrationDefinitionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[37]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2859,7 +2969,7 @@ func (x *ListIntegrationDefinitionsResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListIntegrationDefinitionsResponse.ProtoReflect.Descriptor instead.
 func (*ListIntegrationDefinitionsResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{37}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListIntegrationDefinitionsResponse) GetDefinitions() []*IntegrationDefinitionSummary {
@@ -2880,7 +2990,7 @@ type GetIntegrationDefinitionRequest struct {
 
 func (x *GetIntegrationDefinitionRequest) Reset() {
 	*x = GetIntegrationDefinitionRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[38]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2892,7 +3002,7 @@ func (x *GetIntegrationDefinitionRequest) String() string {
 func (*GetIntegrationDefinitionRequest) ProtoMessage() {}
 
 func (x *GetIntegrationDefinitionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[38]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2905,7 +3015,7 @@ func (x *GetIntegrationDefinitionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIntegrationDefinitionRequest.ProtoReflect.Descriptor instead.
 func (*GetIntegrationDefinitionRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{38}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *GetIntegrationDefinitionRequest) GetDefinitionId() string {
@@ -2938,7 +3048,7 @@ type GetIntegrationDefinitionResponse struct {
 
 func (x *GetIntegrationDefinitionResponse) Reset() {
 	*x = GetIntegrationDefinitionResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[39]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2950,7 +3060,7 @@ func (x *GetIntegrationDefinitionResponse) String() string {
 func (*GetIntegrationDefinitionResponse) ProtoMessage() {}
 
 func (x *GetIntegrationDefinitionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[39]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2963,7 +3073,7 @@ func (x *GetIntegrationDefinitionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIntegrationDefinitionResponse.ProtoReflect.Descriptor instead.
 func (*GetIntegrationDefinitionResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{39}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetIntegrationDefinitionResponse) GetDefinition() *IntegrationDefinitionSummary {
@@ -2996,7 +3106,7 @@ type IntegrationConfiguration struct {
 
 func (x *IntegrationConfiguration) Reset() {
 	*x = IntegrationConfiguration{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[40]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3008,7 +3118,7 @@ func (x *IntegrationConfiguration) String() string {
 func (*IntegrationConfiguration) ProtoMessage() {}
 
 func (x *IntegrationConfiguration) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[40]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3021,7 +3131,7 @@ func (x *IntegrationConfiguration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntegrationConfiguration.ProtoReflect.Descriptor instead.
 func (*IntegrationConfiguration) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{40}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *IntegrationConfiguration) GetConfigurationId() string {
@@ -3149,7 +3259,7 @@ type ConfigureIntegrationRequest struct {
 
 func (x *ConfigureIntegrationRequest) Reset() {
 	*x = ConfigureIntegrationRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[41]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3161,7 +3271,7 @@ func (x *ConfigureIntegrationRequest) String() string {
 func (*ConfigureIntegrationRequest) ProtoMessage() {}
 
 func (x *ConfigureIntegrationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[41]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3174,7 +3284,7 @@ func (x *ConfigureIntegrationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigureIntegrationRequest.ProtoReflect.Descriptor instead.
 func (*ConfigureIntegrationRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{41}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ConfigureIntegrationRequest) GetConfigurationId() string {
@@ -3270,7 +3380,7 @@ type ConfigureIntegrationResponse struct {
 
 func (x *ConfigureIntegrationResponse) Reset() {
 	*x = ConfigureIntegrationResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[42]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3282,7 +3392,7 @@ func (x *ConfigureIntegrationResponse) String() string {
 func (*ConfigureIntegrationResponse) ProtoMessage() {}
 
 func (x *ConfigureIntegrationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[42]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3295,7 +3405,7 @@ func (x *ConfigureIntegrationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigureIntegrationResponse.ProtoReflect.Descriptor instead.
 func (*ConfigureIntegrationResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{42}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ConfigureIntegrationResponse) GetConfiguration() *IntegrationConfiguration {
@@ -3314,7 +3424,7 @@ type GetIntegrationConfigurationRequest struct {
 
 func (x *GetIntegrationConfigurationRequest) Reset() {
 	*x = GetIntegrationConfigurationRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[43]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3326,7 +3436,7 @@ func (x *GetIntegrationConfigurationRequest) String() string {
 func (*GetIntegrationConfigurationRequest) ProtoMessage() {}
 
 func (x *GetIntegrationConfigurationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[43]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3339,7 +3449,7 @@ func (x *GetIntegrationConfigurationRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetIntegrationConfigurationRequest.ProtoReflect.Descriptor instead.
 func (*GetIntegrationConfigurationRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{43}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetIntegrationConfigurationRequest) GetConfigurationId() string {
@@ -3358,7 +3468,7 @@ type GetIntegrationConfigurationResponse struct {
 
 func (x *GetIntegrationConfigurationResponse) Reset() {
 	*x = GetIntegrationConfigurationResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[44]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3370,7 +3480,7 @@ func (x *GetIntegrationConfigurationResponse) String() string {
 func (*GetIntegrationConfigurationResponse) ProtoMessage() {}
 
 func (x *GetIntegrationConfigurationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[44]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3383,7 +3493,7 @@ func (x *GetIntegrationConfigurationResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use GetIntegrationConfigurationResponse.ProtoReflect.Descriptor instead.
 func (*GetIntegrationConfigurationResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{44}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetIntegrationConfigurationResponse) GetConfiguration() *IntegrationConfiguration {
@@ -3403,7 +3513,7 @@ type ListIntegrationConfigurationsRequest struct {
 
 func (x *ListIntegrationConfigurationsRequest) Reset() {
 	*x = ListIntegrationConfigurationsRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[45]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3415,7 +3525,7 @@ func (x *ListIntegrationConfigurationsRequest) String() string {
 func (*ListIntegrationConfigurationsRequest) ProtoMessage() {}
 
 func (x *ListIntegrationConfigurationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[45]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3428,7 +3538,7 @@ func (x *ListIntegrationConfigurationsRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ListIntegrationConfigurationsRequest.ProtoReflect.Descriptor instead.
 func (*ListIntegrationConfigurationsRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{45}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ListIntegrationConfigurationsRequest) GetPageSize() uint32 {
@@ -3455,7 +3565,7 @@ type ListIntegrationConfigurationsResponse struct {
 
 func (x *ListIntegrationConfigurationsResponse) Reset() {
 	*x = ListIntegrationConfigurationsResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[46]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3467,7 +3577,7 @@ func (x *ListIntegrationConfigurationsResponse) String() string {
 func (*ListIntegrationConfigurationsResponse) ProtoMessage() {}
 
 func (x *ListIntegrationConfigurationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[46]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3480,7 +3590,7 @@ func (x *ListIntegrationConfigurationsResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ListIntegrationConfigurationsResponse.ProtoReflect.Descriptor instead.
 func (*ListIntegrationConfigurationsResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{46}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListIntegrationConfigurationsResponse) GetConfigurations() []*IntegrationConfiguration {
@@ -3498,24 +3608,32 @@ func (x *ListIntegrationConfigurationsResponse) GetNextPageToken() string {
 }
 
 type IntegrationTestReceipt struct {
-	state                protoimpl.MessageState  `protogen:"open.v1"`
-	TestId               string                  `protobuf:"bytes,1,opt,name=test_id,json=testId,proto3" json:"test_id,omitempty"`
-	ConnectionId         string                  `protobuf:"bytes,2,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
-	ConnectionVersion    uint64                  `protobuf:"varint,3,opt,name=connection_version,json=connectionVersion,proto3" json:"connection_version,omitempty"`
-	ConnectionGeneration uint64                  `protobuf:"varint,4,opt,name=connection_generation,json=connectionGeneration,proto3" json:"connection_generation,omitempty"`
-	DefinitionId         string                  `protobuf:"bytes,5,opt,name=definition_id,json=definitionId,proto3" json:"definition_id,omitempty"`
-	DefinitionVersion    uint64                  `protobuf:"varint,6,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
-	Category             IntegrationTestCategory `protobuf:"varint,7,opt,name=category,proto3,enum=integrationgateway.v1.IntegrationTestCategory" json:"category,omitempty"`
-	ReceiptSha256        string                  `protobuf:"bytes,8,opt,name=receipt_sha256,json=receiptSha256,proto3" json:"receipt_sha256,omitempty"`
-	TestedAt             *timestamppb.Timestamp  `protobuf:"bytes,9,opt,name=tested_at,json=testedAt,proto3" json:"tested_at,omitempty"`
-	ExpiresAt            *timestamppb.Timestamp  `protobuf:"bytes,10,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                     protoimpl.MessageState  `protogen:"open.v1"`
+	TestId                    string                  `protobuf:"bytes,1,opt,name=test_id,json=testId,proto3" json:"test_id,omitempty"`
+	ConnectionId              string                  `protobuf:"bytes,2,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	ConnectionVersion         uint64                  `protobuf:"varint,3,opt,name=connection_version,json=connectionVersion,proto3" json:"connection_version,omitempty"`
+	ConnectionGeneration      uint64                  `protobuf:"varint,4,opt,name=connection_generation,json=connectionGeneration,proto3" json:"connection_generation,omitempty"`
+	DefinitionId              string                  `protobuf:"bytes,5,opt,name=definition_id,json=definitionId,proto3" json:"definition_id,omitempty"`
+	DefinitionVersion         uint64                  `protobuf:"varint,6,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
+	Category                  IntegrationTestCategory `protobuf:"varint,7,opt,name=category,proto3,enum=integrationgateway.v1.IntegrationTestCategory" json:"category,omitempty"`
+	ReceiptSha256             string                  `protobuf:"bytes,8,opt,name=receipt_sha256,json=receiptSha256,proto3" json:"receipt_sha256,omitempty"`
+	TestedAt                  *timestamppb.Timestamp  `protobuf:"bytes,9,opt,name=tested_at,json=testedAt,proto3" json:"tested_at,omitempty"`
+	ExpiresAt                 *timestamppb.Timestamp  `protobuf:"bytes,10,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	DefinitionDigestSha256    string                  `protobuf:"bytes,11,opt,name=definition_digest_sha256,json=definitionDigestSha256,proto3" json:"definition_digest_sha256,omitempty"`
+	ConfigurationId           string                  `protobuf:"bytes,12,opt,name=configuration_id,json=configurationId,proto3" json:"configuration_id,omitempty"`
+	ConfigurationVersion      uint64                  `protobuf:"varint,13,opt,name=configuration_version,json=configurationVersion,proto3" json:"configuration_version,omitempty"`
+	ConfigurationDigestSha256 string                  `protobuf:"bytes,14,opt,name=configuration_digest_sha256,json=configurationDigestSha256,proto3" json:"configuration_digest_sha256,omitempty"`
+	CredentialGeneration      uint64                  `protobuf:"varint,15,opt,name=credential_generation,json=credentialGeneration,proto3" json:"credential_generation,omitempty"`
+	CredentialBindingId       string                  `protobuf:"bytes,16,opt,name=credential_binding_id,json=credentialBindingId,proto3" json:"credential_binding_id,omitempty"`
+	CredentialBindingVersion  uint64                  `protobuf:"varint,17,opt,name=credential_binding_version,json=credentialBindingVersion,proto3" json:"credential_binding_version,omitempty"`
+	CredentialBindingSha256   string                  `protobuf:"bytes,18,opt,name=credential_binding_sha256,json=credentialBindingSha256,proto3" json:"credential_binding_sha256,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *IntegrationTestReceipt) Reset() {
 	*x = IntegrationTestReceipt{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[47]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3527,7 +3645,7 @@ func (x *IntegrationTestReceipt) String() string {
 func (*IntegrationTestReceipt) ProtoMessage() {}
 
 func (x *IntegrationTestReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[47]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3540,7 +3658,7 @@ func (x *IntegrationTestReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntegrationTestReceipt.ProtoReflect.Descriptor instead.
 func (*IntegrationTestReceipt) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{47}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *IntegrationTestReceipt) GetTestId() string {
@@ -3613,21 +3731,81 @@ func (x *IntegrationTestReceipt) GetExpiresAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *IntegrationTestReceipt) GetDefinitionDigestSha256() string {
+	if x != nil {
+		return x.DefinitionDigestSha256
+	}
+	return ""
+}
+
+func (x *IntegrationTestReceipt) GetConfigurationId() string {
+	if x != nil {
+		return x.ConfigurationId
+	}
+	return ""
+}
+
+func (x *IntegrationTestReceipt) GetConfigurationVersion() uint64 {
+	if x != nil {
+		return x.ConfigurationVersion
+	}
+	return 0
+}
+
+func (x *IntegrationTestReceipt) GetConfigurationDigestSha256() string {
+	if x != nil {
+		return x.ConfigurationDigestSha256
+	}
+	return ""
+}
+
+func (x *IntegrationTestReceipt) GetCredentialGeneration() uint64 {
+	if x != nil {
+		return x.CredentialGeneration
+	}
+	return 0
+}
+
+func (x *IntegrationTestReceipt) GetCredentialBindingId() string {
+	if x != nil {
+		return x.CredentialBindingId
+	}
+	return ""
+}
+
+func (x *IntegrationTestReceipt) GetCredentialBindingVersion() uint64 {
+	if x != nil {
+		return x.CredentialBindingVersion
+	}
+	return 0
+}
+
+func (x *IntegrationTestReceipt) GetCredentialBindingSha256() string {
+	if x != nil {
+		return x.CredentialBindingSha256
+	}
+	return ""
+}
+
 type TestIntegrationConnectionRequest struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	ConnectionId         string                 `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
-	ConnectionVersion    uint64                 `protobuf:"varint,2,opt,name=connection_version,json=connectionVersion,proto3" json:"connection_version,omitempty"`
-	ConnectionGeneration uint64                 `protobuf:"varint,3,opt,name=connection_generation,json=connectionGeneration,proto3" json:"connection_generation,omitempty"`
-	DefinitionId         string                 `protobuf:"bytes,4,opt,name=definition_id,json=definitionId,proto3" json:"definition_id,omitempty"`
-	DefinitionVersion    uint64                 `protobuf:"varint,5,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
-	IdempotencyKey       string                 `protobuf:"bytes,6,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	ConnectionId              string                 `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	ConnectionVersion         uint64                 `protobuf:"varint,2,opt,name=connection_version,json=connectionVersion,proto3" json:"connection_version,omitempty"`
+	ConnectionGeneration      uint64                 `protobuf:"varint,3,opt,name=connection_generation,json=connectionGeneration,proto3" json:"connection_generation,omitempty"`
+	DefinitionId              string                 `protobuf:"bytes,4,opt,name=definition_id,json=definitionId,proto3" json:"definition_id,omitempty"`
+	DefinitionVersion         uint64                 `protobuf:"varint,5,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
+	IdempotencyKey            string                 `protobuf:"bytes,6,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	DefinitionDigestSha256    string                 `protobuf:"bytes,7,opt,name=definition_digest_sha256,json=definitionDigestSha256,proto3" json:"definition_digest_sha256,omitempty"`
+	ConfigurationId           string                 `protobuf:"bytes,8,opt,name=configuration_id,json=configurationId,proto3" json:"configuration_id,omitempty"`
+	ConfigurationVersion      uint64                 `protobuf:"varint,9,opt,name=configuration_version,json=configurationVersion,proto3" json:"configuration_version,omitempty"`
+	ConfigurationDigestSha256 string                 `protobuf:"bytes,10,opt,name=configuration_digest_sha256,json=configurationDigestSha256,proto3" json:"configuration_digest_sha256,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *TestIntegrationConnectionRequest) Reset() {
 	*x = TestIntegrationConnectionRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[48]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3639,7 +3817,7 @@ func (x *TestIntegrationConnectionRequest) String() string {
 func (*TestIntegrationConnectionRequest) ProtoMessage() {}
 
 func (x *TestIntegrationConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[48]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3652,7 +3830,7 @@ func (x *TestIntegrationConnectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestIntegrationConnectionRequest.ProtoReflect.Descriptor instead.
 func (*TestIntegrationConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{48}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *TestIntegrationConnectionRequest) GetConnectionId() string {
@@ -3697,6 +3875,34 @@ func (x *TestIntegrationConnectionRequest) GetIdempotencyKey() string {
 	return ""
 }
 
+func (x *TestIntegrationConnectionRequest) GetDefinitionDigestSha256() string {
+	if x != nil {
+		return x.DefinitionDigestSha256
+	}
+	return ""
+}
+
+func (x *TestIntegrationConnectionRequest) GetConfigurationId() string {
+	if x != nil {
+		return x.ConfigurationId
+	}
+	return ""
+}
+
+func (x *TestIntegrationConnectionRequest) GetConfigurationVersion() uint64 {
+	if x != nil {
+		return x.ConfigurationVersion
+	}
+	return 0
+}
+
+func (x *TestIntegrationConnectionRequest) GetConfigurationDigestSha256() string {
+	if x != nil {
+		return x.ConfigurationDigestSha256
+	}
+	return ""
+}
+
 type TestIntegrationConnectionResponse struct {
 	state         protoimpl.MessageState  `protogen:"open.v1"`
 	Receipt       *IntegrationTestReceipt `protobuf:"bytes,1,opt,name=receipt,proto3" json:"receipt,omitempty"`
@@ -3706,7 +3912,7 @@ type TestIntegrationConnectionResponse struct {
 
 func (x *TestIntegrationConnectionResponse) Reset() {
 	*x = TestIntegrationConnectionResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[49]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3718,7 +3924,7 @@ func (x *TestIntegrationConnectionResponse) String() string {
 func (*TestIntegrationConnectionResponse) ProtoMessage() {}
 
 func (x *TestIntegrationConnectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[49]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3731,7 +3937,7 @@ func (x *TestIntegrationConnectionResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use TestIntegrationConnectionResponse.ProtoReflect.Descriptor instead.
 func (*TestIntegrationConnectionResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{49}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *TestIntegrationConnectionResponse) GetReceipt() *IntegrationTestReceipt {
@@ -3750,7 +3956,7 @@ type GetIntegrationTestReceiptRequest struct {
 
 func (x *GetIntegrationTestReceiptRequest) Reset() {
 	*x = GetIntegrationTestReceiptRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[50]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3762,7 +3968,7 @@ func (x *GetIntegrationTestReceiptRequest) String() string {
 func (*GetIntegrationTestReceiptRequest) ProtoMessage() {}
 
 func (x *GetIntegrationTestReceiptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[50]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3775,7 +3981,7 @@ func (x *GetIntegrationTestReceiptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIntegrationTestReceiptRequest.ProtoReflect.Descriptor instead.
 func (*GetIntegrationTestReceiptRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{50}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *GetIntegrationTestReceiptRequest) GetTestId() string {
@@ -3794,7 +4000,7 @@ type GetIntegrationTestReceiptResponse struct {
 
 func (x *GetIntegrationTestReceiptResponse) Reset() {
 	*x = GetIntegrationTestReceiptResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[51]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3806,7 +4012,7 @@ func (x *GetIntegrationTestReceiptResponse) String() string {
 func (*GetIntegrationTestReceiptResponse) ProtoMessage() {}
 
 func (x *GetIntegrationTestReceiptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[51]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3819,7 +4025,7 @@ func (x *GetIntegrationTestReceiptResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetIntegrationTestReceiptResponse.ProtoReflect.Descriptor instead.
 func (*GetIntegrationTestReceiptResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{51}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *GetIntegrationTestReceiptResponse) GetReceipt() *IntegrationTestReceipt {
@@ -3846,7 +4052,7 @@ type IntegrationApproval struct {
 
 func (x *IntegrationApproval) Reset() {
 	*x = IntegrationApproval{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[52]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3858,7 +4064,7 @@ func (x *IntegrationApproval) String() string {
 func (*IntegrationApproval) ProtoMessage() {}
 
 func (x *IntegrationApproval) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[52]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3871,7 +4077,7 @@ func (x *IntegrationApproval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntegrationApproval.ProtoReflect.Descriptor instead.
 func (*IntegrationApproval) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{52}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *IntegrationApproval) GetApprovalId() string {
@@ -3948,7 +4154,7 @@ type ListIntegrationApprovalsRequest struct {
 
 func (x *ListIntegrationApprovalsRequest) Reset() {
 	*x = ListIntegrationApprovalsRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[53]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3960,7 +4166,7 @@ func (x *ListIntegrationApprovalsRequest) String() string {
 func (*ListIntegrationApprovalsRequest) ProtoMessage() {}
 
 func (x *ListIntegrationApprovalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[53]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3973,7 +4179,7 @@ func (x *ListIntegrationApprovalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIntegrationApprovalsRequest.ProtoReflect.Descriptor instead.
 func (*ListIntegrationApprovalsRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{53}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ListIntegrationApprovalsRequest) GetStatuses() []string {
@@ -4007,7 +4213,7 @@ type ListIntegrationApprovalsResponse struct {
 
 func (x *ListIntegrationApprovalsResponse) Reset() {
 	*x = ListIntegrationApprovalsResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[54]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4019,7 +4225,7 @@ func (x *ListIntegrationApprovalsResponse) String() string {
 func (*ListIntegrationApprovalsResponse) ProtoMessage() {}
 
 func (x *ListIntegrationApprovalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[54]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4032,7 +4238,7 @@ func (x *ListIntegrationApprovalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIntegrationApprovalsResponse.ProtoReflect.Descriptor instead.
 func (*ListIntegrationApprovalsResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{54}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ListIntegrationApprovalsResponse) GetApprovals() []*IntegrationApproval {
@@ -4058,7 +4264,7 @@ type GetIntegrationApprovalRequest struct {
 
 func (x *GetIntegrationApprovalRequest) Reset() {
 	*x = GetIntegrationApprovalRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[55]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4070,7 +4276,7 @@ func (x *GetIntegrationApprovalRequest) String() string {
 func (*GetIntegrationApprovalRequest) ProtoMessage() {}
 
 func (x *GetIntegrationApprovalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[55]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4083,7 +4289,7 @@ func (x *GetIntegrationApprovalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIntegrationApprovalRequest.ProtoReflect.Descriptor instead.
 func (*GetIntegrationApprovalRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{55}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *GetIntegrationApprovalRequest) GetApprovalId() string {
@@ -4102,7 +4308,7 @@ type GetIntegrationApprovalResponse struct {
 
 func (x *GetIntegrationApprovalResponse) Reset() {
 	*x = GetIntegrationApprovalResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[56]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4114,7 +4320,7 @@ func (x *GetIntegrationApprovalResponse) String() string {
 func (*GetIntegrationApprovalResponse) ProtoMessage() {}
 
 func (x *GetIntegrationApprovalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[56]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4127,7 +4333,7 @@ func (x *GetIntegrationApprovalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIntegrationApprovalResponse.ProtoReflect.Descriptor instead.
 func (*GetIntegrationApprovalResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{56}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *GetIntegrationApprovalResponse) GetApproval() *IntegrationApproval {
@@ -4151,7 +4357,7 @@ type DecideIntegrationApprovalRequest struct {
 
 func (x *DecideIntegrationApprovalRequest) Reset() {
 	*x = DecideIntegrationApprovalRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[57]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4163,7 +4369,7 @@ func (x *DecideIntegrationApprovalRequest) String() string {
 func (*DecideIntegrationApprovalRequest) ProtoMessage() {}
 
 func (x *DecideIntegrationApprovalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[57]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4176,7 +4382,7 @@ func (x *DecideIntegrationApprovalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DecideIntegrationApprovalRequest.ProtoReflect.Descriptor instead.
 func (*DecideIntegrationApprovalRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{57}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *DecideIntegrationApprovalRequest) GetApprovalId() string {
@@ -4230,7 +4436,7 @@ type DecideIntegrationApprovalResponse struct {
 
 func (x *DecideIntegrationApprovalResponse) Reset() {
 	*x = DecideIntegrationApprovalResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[58]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4242,7 +4448,7 @@ func (x *DecideIntegrationApprovalResponse) String() string {
 func (*DecideIntegrationApprovalResponse) ProtoMessage() {}
 
 func (x *DecideIntegrationApprovalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[58]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4255,7 +4461,7 @@ func (x *DecideIntegrationApprovalResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use DecideIntegrationApprovalResponse.ProtoReflect.Descriptor instead.
 func (*DecideIntegrationApprovalResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{58}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *DecideIntegrationApprovalResponse) GetApproval() *IntegrationApproval {
@@ -4287,13 +4493,14 @@ type GitSourceBinding struct {
 	SourceDigestSha256          string                 `protobuf:"bytes,18,opt,name=source_digest_sha256,json=sourceDigestSha256,proto3" json:"source_digest_sha256,omitempty"`
 	FetchedAt                   *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=fetched_at,json=fetchedAt,proto3" json:"fetched_at,omitempty"`
 	UpdatedAt                   *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Generation                  uint64                 `protobuf:"varint,21,opt,name=generation,proto3" json:"generation,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *GitSourceBinding) Reset() {
 	*x = GitSourceBinding{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[59]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4305,7 +4512,7 @@ func (x *GitSourceBinding) String() string {
 func (*GitSourceBinding) ProtoMessage() {}
 
 func (x *GitSourceBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[59]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4318,7 +4525,7 @@ func (x *GitSourceBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitSourceBinding.ProtoReflect.Descriptor instead.
 func (*GitSourceBinding) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{59}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *GitSourceBinding) GetBindingId() string {
@@ -4461,6 +4668,13 @@ func (x *GitSourceBinding) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *GitSourceBinding) GetGeneration() uint64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
 type ManageGitSourceBindingRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Action          GitSourceBindingAction `protobuf:"varint,1,opt,name=action,proto3,enum=integrationgateway.v1.GitSourceBindingAction" json:"action,omitempty"`
@@ -4479,7 +4693,7 @@ type ManageGitSourceBindingRequest struct {
 
 func (x *ManageGitSourceBindingRequest) Reset() {
 	*x = ManageGitSourceBindingRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[60]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4491,7 +4705,7 @@ func (x *ManageGitSourceBindingRequest) String() string {
 func (*ManageGitSourceBindingRequest) ProtoMessage() {}
 
 func (x *ManageGitSourceBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[60]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4504,7 +4718,7 @@ func (x *ManageGitSourceBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageGitSourceBindingRequest.ProtoReflect.Descriptor instead.
 func (*ManageGitSourceBindingRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{60}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ManageGitSourceBindingRequest) GetAction() GitSourceBindingAction {
@@ -4586,7 +4800,7 @@ type ManageGitSourceBindingResponse struct {
 
 func (x *ManageGitSourceBindingResponse) Reset() {
 	*x = ManageGitSourceBindingResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[61]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4598,7 +4812,7 @@ func (x *ManageGitSourceBindingResponse) String() string {
 func (*ManageGitSourceBindingResponse) ProtoMessage() {}
 
 func (x *ManageGitSourceBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[61]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4611,7 +4825,7 @@ func (x *ManageGitSourceBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageGitSourceBindingResponse.ProtoReflect.Descriptor instead.
 func (*ManageGitSourceBindingResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{61}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ManageGitSourceBindingResponse) GetBinding() *GitSourceBinding {
@@ -4630,7 +4844,7 @@ type GetGitSourceBindingRequest struct {
 
 func (x *GetGitSourceBindingRequest) Reset() {
 	*x = GetGitSourceBindingRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[62]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4642,7 +4856,7 @@ func (x *GetGitSourceBindingRequest) String() string {
 func (*GetGitSourceBindingRequest) ProtoMessage() {}
 
 func (x *GetGitSourceBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[62]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4655,7 +4869,7 @@ func (x *GetGitSourceBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGitSourceBindingRequest.ProtoReflect.Descriptor instead.
 func (*GetGitSourceBindingRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{62}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *GetGitSourceBindingRequest) GetBindingId() string {
@@ -4674,7 +4888,7 @@ type GetGitSourceBindingResponse struct {
 
 func (x *GetGitSourceBindingResponse) Reset() {
 	*x = GetGitSourceBindingResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[63]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4686,7 +4900,7 @@ func (x *GetGitSourceBindingResponse) String() string {
 func (*GetGitSourceBindingResponse) ProtoMessage() {}
 
 func (x *GetGitSourceBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[63]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4699,7 +4913,7 @@ func (x *GetGitSourceBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGitSourceBindingResponse.ProtoReflect.Descriptor instead.
 func (*GetGitSourceBindingResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{63}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *GetGitSourceBindingResponse) GetBinding() *GitSourceBinding {
@@ -4719,7 +4933,7 @@ type ListGitSourceBindingsRequest struct {
 
 func (x *ListGitSourceBindingsRequest) Reset() {
 	*x = ListGitSourceBindingsRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[64]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4731,7 +4945,7 @@ func (x *ListGitSourceBindingsRequest) String() string {
 func (*ListGitSourceBindingsRequest) ProtoMessage() {}
 
 func (x *ListGitSourceBindingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[64]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4744,7 +4958,7 @@ func (x *ListGitSourceBindingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitSourceBindingsRequest.ProtoReflect.Descriptor instead.
 func (*ListGitSourceBindingsRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{64}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ListGitSourceBindingsRequest) GetPageSize() uint32 {
@@ -4771,7 +4985,7 @@ type ListGitSourceBindingsResponse struct {
 
 func (x *ListGitSourceBindingsResponse) Reset() {
 	*x = ListGitSourceBindingsResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[65]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4783,7 +4997,7 @@ func (x *ListGitSourceBindingsResponse) String() string {
 func (*ListGitSourceBindingsResponse) ProtoMessage() {}
 
 func (x *ListGitSourceBindingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[65]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4796,7 +5010,7 @@ func (x *ListGitSourceBindingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitSourceBindingsResponse.ProtoReflect.Descriptor instead.
 func (*ListGitSourceBindingsResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{65}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ListGitSourceBindingsResponse) GetBindings() []*GitSourceBinding {
@@ -4835,7 +5049,7 @@ type GitReconciliation struct {
 
 func (x *GitReconciliation) Reset() {
 	*x = GitReconciliation{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[66]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4847,7 +5061,7 @@ func (x *GitReconciliation) String() string {
 func (*GitReconciliation) ProtoMessage() {}
 
 func (x *GitReconciliation) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[66]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4860,7 +5074,7 @@ func (x *GitReconciliation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitReconciliation.ProtoReflect.Descriptor instead.
 func (*GitReconciliation) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{66}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *GitReconciliation) GetReconciliationId() string {
@@ -4967,13 +5181,14 @@ type ReconcileGitSourceBindingRequest struct {
 	ExpectedVersion        uint64                 `protobuf:"varint,2,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
 	ExpectedSourceRevision uint64                 `protobuf:"varint,3,opt,name=expected_source_revision,json=expectedSourceRevision,proto3" json:"expected_source_revision,omitempty"`
 	IdempotencyKey         string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ExpectedGeneration     uint64                 `protobuf:"varint,5,opt,name=expected_generation,json=expectedGeneration,proto3" json:"expected_generation,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ReconcileGitSourceBindingRequest) Reset() {
 	*x = ReconcileGitSourceBindingRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[67]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4985,7 +5200,7 @@ func (x *ReconcileGitSourceBindingRequest) String() string {
 func (*ReconcileGitSourceBindingRequest) ProtoMessage() {}
 
 func (x *ReconcileGitSourceBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[67]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4998,7 +5213,7 @@ func (x *ReconcileGitSourceBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcileGitSourceBindingRequest.ProtoReflect.Descriptor instead.
 func (*ReconcileGitSourceBindingRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{67}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *ReconcileGitSourceBindingRequest) GetBindingId() string {
@@ -5029,6 +5244,13 @@ func (x *ReconcileGitSourceBindingRequest) GetIdempotencyKey() string {
 	return ""
 }
 
+func (x *ReconcileGitSourceBindingRequest) GetExpectedGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedGeneration
+	}
+	return 0
+}
+
 type ReconcileGitSourceBindingResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Reconciliation *GitReconciliation     `protobuf:"bytes,1,opt,name=reconciliation,proto3" json:"reconciliation,omitempty"`
@@ -5038,7 +5260,7 @@ type ReconcileGitSourceBindingResponse struct {
 
 func (x *ReconcileGitSourceBindingResponse) Reset() {
 	*x = ReconcileGitSourceBindingResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[68]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5050,7 +5272,7 @@ func (x *ReconcileGitSourceBindingResponse) String() string {
 func (*ReconcileGitSourceBindingResponse) ProtoMessage() {}
 
 func (x *ReconcileGitSourceBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[68]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5063,7 +5285,7 @@ func (x *ReconcileGitSourceBindingResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ReconcileGitSourceBindingResponse.ProtoReflect.Descriptor instead.
 func (*ReconcileGitSourceBindingResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{68}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ReconcileGitSourceBindingResponse) GetReconciliation() *GitReconciliation {
@@ -5081,7 +5303,7 @@ type GetManagementDiagnosticsRequest struct {
 
 func (x *GetManagementDiagnosticsRequest) Reset() {
 	*x = GetManagementDiagnosticsRequest{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[69]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5093,7 +5315,7 @@ func (x *GetManagementDiagnosticsRequest) String() string {
 func (*GetManagementDiagnosticsRequest) ProtoMessage() {}
 
 func (x *GetManagementDiagnosticsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[69]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5106,7 +5328,7 @@ func (x *GetManagementDiagnosticsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetManagementDiagnosticsRequest.ProtoReflect.Descriptor instead.
 func (*GetManagementDiagnosticsRequest) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{69}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{70}
 }
 
 type ManagementDependencyStatus struct {
@@ -5122,7 +5344,7 @@ type ManagementDependencyStatus struct {
 
 func (x *ManagementDependencyStatus) Reset() {
 	*x = ManagementDependencyStatus{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[70]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5134,7 +5356,7 @@ func (x *ManagementDependencyStatus) String() string {
 func (*ManagementDependencyStatus) ProtoMessage() {}
 
 func (x *ManagementDependencyStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[70]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5147,7 +5369,7 @@ func (x *ManagementDependencyStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagementDependencyStatus.ProtoReflect.Descriptor instead.
 func (*ManagementDependencyStatus) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{70}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ManagementDependencyStatus) GetDependency() string {
@@ -5195,7 +5417,7 @@ type GetManagementDiagnosticsResponse struct {
 
 func (x *GetManagementDiagnosticsResponse) Reset() {
 	*x = GetManagementDiagnosticsResponse{}
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[71]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5207,7 +5429,7 @@ func (x *GetManagementDiagnosticsResponse) String() string {
 func (*GetManagementDiagnosticsResponse) ProtoMessage() {}
 
 func (x *GetManagementDiagnosticsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[71]
+	mi := &file_integrationgateway_v1_integration_gateway_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5220,7 +5442,7 @@ func (x *GetManagementDiagnosticsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetManagementDiagnosticsResponse.ProtoReflect.Descriptor instead.
 func (*GetManagementDiagnosticsResponse) Descriptor() ([]byte, []int) {
-	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{71}
+	return file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *GetManagementDiagnosticsResponse) GetStatus() string {
@@ -5315,7 +5537,7 @@ const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"\x10expected_version\x18\x02 \x01(\x04R\x0fexpectedVersion\x12'\n" +
 	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"y\n" +
 	"#CancelProviderAuthorizationResponse\x12R\n" +
-	"\rauthorization\x18\x01 \x01(\v2,.integrationgateway.v1.ProviderAuthorizationR\rauthorization\"\xef\x06\n" +
+	"\rauthorization\x18\x01 \x01(\v2,.integrationgateway.v1.ProviderAuthorizationR\rauthorization\"\xbf\a\n" +
 	"\x12ProviderConnection\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x1d\n" +
 	"\n" +
@@ -5341,7 +5563,19 @@ const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"observedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12@\n" +
-	"\x1cactive_credential_generation\x18\x12 \x01(\x04R\x1aactiveCredentialGeneration\"\xab\x01\n" +
+	"\x1cactive_credential_generation\x18\x12 \x01(\x04R\x1aactiveCredentialGeneration\x12N\n" +
+	"\bcapacity\x18\x13 \x01(\v22.integrationgateway.v1.ProviderCapacityObservationR\bcapacity\"\xf3\x02\n" +
+	"\x1bProviderCapacityObservation\x12\x14\n" +
+	"\x05usage\x18\x01 \x01(\x04R\x05usage\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x04R\x05limit\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\x04R\brevision\x12;\n" +
+	"\vobserved_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\x126\n" +
+	"\x17window_duration_seconds\x18\x05 \x01(\x04R\x15windowDurationSeconds\x127\n" +
+	"\tresets_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\bresetsAt\x129\n" +
+	"\n" +
+	"expires_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12#\n" +
+	"\rdigest_sha256\x18\b \x01(\tR\fdigestSha256\"\xab\x01\n" +
 	"\x1eListProviderConnectionsRequest\x12M\n" +
 	"\x06states\x18\x01 \x03(\x0e25.integrationgateway.v1.ManagedProviderConnectionStateR\x06states\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\rR\bpageSize\x12\x1d\n" +
@@ -5490,7 +5724,7 @@ const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"page_token\x18\x02 \x01(\tR\tpageToken\"\xa8\x01\n" +
 	"%ListIntegrationConfigurationsResponse\x12W\n" +
 	"\x0econfigurations\x18\x01 \x03(\v2/.integrationgateway.v1.IntegrationConfigurationR\x0econfigurations\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xf5\x03\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xb2\a\n" +
 	"\x16IntegrationTestReceipt\x12\x17\n" +
 	"\atest_id\x18\x01 \x01(\tR\x06testId\x12#\n" +
 	"\rconnection_id\x18\x02 \x01(\tR\fconnectionId\x12-\n" +
@@ -5503,14 +5737,27 @@ const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"\ttested_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\btestedAt\x129\n" +
 	"\n" +
 	"expires_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xa8\x02\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x128\n" +
+	"\x18definition_digest_sha256\x18\v \x01(\tR\x16definitionDigestSha256\x12)\n" +
+	"\x10configuration_id\x18\f \x01(\tR\x0fconfigurationId\x123\n" +
+	"\x15configuration_version\x18\r \x01(\x04R\x14configurationVersion\x12>\n" +
+	"\x1bconfiguration_digest_sha256\x18\x0e \x01(\tR\x19configurationDigestSha256\x123\n" +
+	"\x15credential_generation\x18\x0f \x01(\x04R\x14credentialGeneration\x122\n" +
+	"\x15credential_binding_id\x18\x10 \x01(\tR\x13credentialBindingId\x12<\n" +
+	"\x1acredential_binding_version\x18\x11 \x01(\x04R\x18credentialBindingVersion\x12:\n" +
+	"\x19credential_binding_sha256\x18\x12 \x01(\tR\x17credentialBindingSha256\"\x82\x04\n" +
 	" TestIntegrationConnectionRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12-\n" +
 	"\x12connection_version\x18\x02 \x01(\x04R\x11connectionVersion\x123\n" +
 	"\x15connection_generation\x18\x03 \x01(\x04R\x14connectionGeneration\x12#\n" +
 	"\rdefinition_id\x18\x04 \x01(\tR\fdefinitionId\x12-\n" +
 	"\x12definition_version\x18\x05 \x01(\x04R\x11definitionVersion\x12'\n" +
-	"\x0fidempotency_key\x18\x06 \x01(\tR\x0eidempotencyKey\"l\n" +
+	"\x0fidempotency_key\x18\x06 \x01(\tR\x0eidempotencyKey\x128\n" +
+	"\x18definition_digest_sha256\x18\a \x01(\tR\x16definitionDigestSha256\x12)\n" +
+	"\x10configuration_id\x18\b \x01(\tR\x0fconfigurationId\x123\n" +
+	"\x15configuration_version\x18\t \x01(\x04R\x14configurationVersion\x12>\n" +
+	"\x1bconfiguration_digest_sha256\x18\n" +
+	" \x01(\tR\x19configurationDigestSha256\"l\n" +
 	"!TestIntegrationConnectionResponse\x12G\n" +
 	"\areceipt\x18\x01 \x01(\v2-.integrationgateway.v1.IntegrationTestReceiptR\areceipt\";\n" +
 	" GetIntegrationTestReceiptRequest\x12\x17\n" +
@@ -5554,7 +5801,7 @@ const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"reasonCode\x12'\n" +
 	"\x0fidempotency_key\x18\x06 \x01(\tR\x0eidempotencyKey\"k\n" +
 	"!DecideIntegrationApprovalResponse\x12F\n" +
-	"\bapproval\x18\x01 \x01(\v2*.integrationgateway.v1.IntegrationApprovalR\bapproval\"\xb4\a\n" +
+	"\bapproval\x18\x01 \x01(\v2*.integrationgateway.v1.IntegrationApprovalR\bapproval\"\xd4\a\n" +
 	"\x10GitSourceBinding\x12\x1d\n" +
 	"\n" +
 	"binding_id\x18\x01 \x01(\tR\tbindingId\x12\x1d\n" +
@@ -5581,7 +5828,10 @@ const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"\n" +
 	"fetched_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\tfetchedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc6\x03\n" +
+	"updated_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x15 \x01(\x04R\n" +
+	"generation\"\xc6\x03\n" +
 	"\x1dManageGitSourceBindingRequest\x12E\n" +
 	"\x06action\x18\x01 \x01(\x0e2-.integrationgateway.v1.GitSourceBindingActionR\x06action\x12\x1d\n" +
 	"\n" +
@@ -5629,13 +5879,14 @@ const file_integrationgateway_v1_integration_gateway_proto_rawDesc = "" +
 	"\x0ereceipt_sha256\x18\f \x01(\tR\rreceiptSha256\x12)\n" +
 	"\x10failure_category\x18\r \x01(\tR\x0ffailureCategory\x129\n" +
 	"\n" +
-	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xcf\x01\n" +
+	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x80\x02\n" +
 	" ReconcileGitSourceBindingRequest\x12\x1d\n" +
 	"\n" +
 	"binding_id\x18\x01 \x01(\tR\tbindingId\x12)\n" +
 	"\x10expected_version\x18\x02 \x01(\x04R\x0fexpectedVersion\x128\n" +
 	"\x18expected_source_revision\x18\x03 \x01(\x04R\x16expectedSourceRevision\x12'\n" +
-	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"u\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12/\n" +
+	"\x13expected_generation\x18\x05 \x01(\x04R\x12expectedGeneration\"u\n" +
 	"!ReconcileGitSourceBindingResponse\x12P\n" +
 	"\x0ereconciliation\x18\x01 \x01(\v2(.integrationgateway.v1.GitReconciliationR\x0ereconciliation\"!\n" +
 	"\x1fGetManagementDiagnosticsRequest\"\xce\x01\n" +
@@ -5749,7 +6000,7 @@ func file_integrationgateway_v1_integration_gateway_proto_rawDescGZIP() []byte {
 }
 
 var file_integrationgateway_v1_integration_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_integrationgateway_v1_integration_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
+var file_integrationgateway_v1_integration_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
 var file_integrationgateway_v1_integration_gateway_proto_goTypes = []any{
 	(ProviderAuthorizationState)(0),                        // 0: integrationgateway.v1.ProviderAuthorizationState
 	(ManagedProviderConnectionState)(0),                    // 1: integrationgateway.v1.ManagedProviderConnectionState
@@ -5777,183 +6028,188 @@ var file_integrationgateway_v1_integration_gateway_proto_goTypes = []any{
 	(*CancelProviderAuthorizationRequest)(nil),             // 23: integrationgateway.v1.CancelProviderAuthorizationRequest
 	(*CancelProviderAuthorizationResponse)(nil),            // 24: integrationgateway.v1.CancelProviderAuthorizationResponse
 	(*ProviderConnection)(nil),                             // 25: integrationgateway.v1.ProviderConnection
-	(*ListProviderConnectionsRequest)(nil),                 // 26: integrationgateway.v1.ListProviderConnectionsRequest
-	(*ListProviderConnectionsResponse)(nil),                // 27: integrationgateway.v1.ListProviderConnectionsResponse
-	(*GetProviderConnectionRequest)(nil),                   // 28: integrationgateway.v1.GetProviderConnectionRequest
-	(*GetProviderConnectionResponse)(nil),                  // 29: integrationgateway.v1.GetProviderConnectionResponse
-	(*ReauthorizeProviderConnectionRequest)(nil),           // 30: integrationgateway.v1.ReauthorizeProviderConnectionRequest
-	(*ReauthorizeProviderConnectionResponse)(nil),          // 31: integrationgateway.v1.ReauthorizeProviderConnectionResponse
-	(*RevokeProviderConnectionRequest)(nil),                // 32: integrationgateway.v1.RevokeProviderConnectionRequest
-	(*RevokeProviderConnectionResponse)(nil),               // 33: integrationgateway.v1.RevokeProviderConnectionResponse
-	(*ProviderPoolMemberIntent)(nil),                       // 34: integrationgateway.v1.ProviderPoolMemberIntent
-	(*ProviderPoolMember)(nil),                             // 35: integrationgateway.v1.ProviderPoolMember
-	(*ProviderPool)(nil),                                   // 36: integrationgateway.v1.ProviderPool
-	(*ManageProviderPoolRequest)(nil),                      // 37: integrationgateway.v1.ManageProviderPoolRequest
-	(*ManageProviderPoolResponse)(nil),                     // 38: integrationgateway.v1.ManageProviderPoolResponse
-	(*GetProviderPoolRequest)(nil),                         // 39: integrationgateway.v1.GetProviderPoolRequest
-	(*GetProviderPoolResponse)(nil),                        // 40: integrationgateway.v1.GetProviderPoolResponse
-	(*ListProviderPoolsRequest)(nil),                       // 41: integrationgateway.v1.ListProviderPoolsRequest
-	(*ListProviderPoolsResponse)(nil),                      // 42: integrationgateway.v1.ListProviderPoolsResponse
-	(*IntegrationDefinitionSummary)(nil),                   // 43: integrationgateway.v1.IntegrationDefinitionSummary
-	(*ListIntegrationDefinitionsRequest)(nil),              // 44: integrationgateway.v1.ListIntegrationDefinitionsRequest
-	(*ListIntegrationDefinitionsResponse)(nil),             // 45: integrationgateway.v1.ListIntegrationDefinitionsResponse
-	(*GetIntegrationDefinitionRequest)(nil),                // 46: integrationgateway.v1.GetIntegrationDefinitionRequest
-	(*GetIntegrationDefinitionResponse)(nil),               // 47: integrationgateway.v1.GetIntegrationDefinitionResponse
-	(*IntegrationConfiguration)(nil),                       // 48: integrationgateway.v1.IntegrationConfiguration
-	(*ConfigureIntegrationRequest)(nil),                    // 49: integrationgateway.v1.ConfigureIntegrationRequest
-	(*ConfigureIntegrationResponse)(nil),                   // 50: integrationgateway.v1.ConfigureIntegrationResponse
-	(*GetIntegrationConfigurationRequest)(nil),             // 51: integrationgateway.v1.GetIntegrationConfigurationRequest
-	(*GetIntegrationConfigurationResponse)(nil),            // 52: integrationgateway.v1.GetIntegrationConfigurationResponse
-	(*ListIntegrationConfigurationsRequest)(nil),           // 53: integrationgateway.v1.ListIntegrationConfigurationsRequest
-	(*ListIntegrationConfigurationsResponse)(nil),          // 54: integrationgateway.v1.ListIntegrationConfigurationsResponse
-	(*IntegrationTestReceipt)(nil),                         // 55: integrationgateway.v1.IntegrationTestReceipt
-	(*TestIntegrationConnectionRequest)(nil),               // 56: integrationgateway.v1.TestIntegrationConnectionRequest
-	(*TestIntegrationConnectionResponse)(nil),              // 57: integrationgateway.v1.TestIntegrationConnectionResponse
-	(*GetIntegrationTestReceiptRequest)(nil),               // 58: integrationgateway.v1.GetIntegrationTestReceiptRequest
-	(*GetIntegrationTestReceiptResponse)(nil),              // 59: integrationgateway.v1.GetIntegrationTestReceiptResponse
-	(*IntegrationApproval)(nil),                            // 60: integrationgateway.v1.IntegrationApproval
-	(*ListIntegrationApprovalsRequest)(nil),                // 61: integrationgateway.v1.ListIntegrationApprovalsRequest
-	(*ListIntegrationApprovalsResponse)(nil),               // 62: integrationgateway.v1.ListIntegrationApprovalsResponse
-	(*GetIntegrationApprovalRequest)(nil),                  // 63: integrationgateway.v1.GetIntegrationApprovalRequest
-	(*GetIntegrationApprovalResponse)(nil),                 // 64: integrationgateway.v1.GetIntegrationApprovalResponse
-	(*DecideIntegrationApprovalRequest)(nil),               // 65: integrationgateway.v1.DecideIntegrationApprovalRequest
-	(*DecideIntegrationApprovalResponse)(nil),              // 66: integrationgateway.v1.DecideIntegrationApprovalResponse
-	(*GitSourceBinding)(nil),                               // 67: integrationgateway.v1.GitSourceBinding
-	(*ManageGitSourceBindingRequest)(nil),                  // 68: integrationgateway.v1.ManageGitSourceBindingRequest
-	(*ManageGitSourceBindingResponse)(nil),                 // 69: integrationgateway.v1.ManageGitSourceBindingResponse
-	(*GetGitSourceBindingRequest)(nil),                     // 70: integrationgateway.v1.GetGitSourceBindingRequest
-	(*GetGitSourceBindingResponse)(nil),                    // 71: integrationgateway.v1.GetGitSourceBindingResponse
-	(*ListGitSourceBindingsRequest)(nil),                   // 72: integrationgateway.v1.ListGitSourceBindingsRequest
-	(*ListGitSourceBindingsResponse)(nil),                  // 73: integrationgateway.v1.ListGitSourceBindingsResponse
-	(*GitReconciliation)(nil),                              // 74: integrationgateway.v1.GitReconciliation
-	(*ReconcileGitSourceBindingRequest)(nil),               // 75: integrationgateway.v1.ReconcileGitSourceBindingRequest
-	(*ReconcileGitSourceBindingResponse)(nil),              // 76: integrationgateway.v1.ReconcileGitSourceBindingResponse
-	(*GetManagementDiagnosticsRequest)(nil),                // 77: integrationgateway.v1.GetManagementDiagnosticsRequest
-	(*ManagementDependencyStatus)(nil),                     // 78: integrationgateway.v1.ManagementDependencyStatus
-	(*GetManagementDiagnosticsResponse)(nil),               // 79: integrationgateway.v1.GetManagementDiagnosticsResponse
-	(*timestamppb.Timestamp)(nil),                          // 80: google.protobuf.Timestamp
+	(*ProviderCapacityObservation)(nil),                    // 26: integrationgateway.v1.ProviderCapacityObservation
+	(*ListProviderConnectionsRequest)(nil),                 // 27: integrationgateway.v1.ListProviderConnectionsRequest
+	(*ListProviderConnectionsResponse)(nil),                // 28: integrationgateway.v1.ListProviderConnectionsResponse
+	(*GetProviderConnectionRequest)(nil),                   // 29: integrationgateway.v1.GetProviderConnectionRequest
+	(*GetProviderConnectionResponse)(nil),                  // 30: integrationgateway.v1.GetProviderConnectionResponse
+	(*ReauthorizeProviderConnectionRequest)(nil),           // 31: integrationgateway.v1.ReauthorizeProviderConnectionRequest
+	(*ReauthorizeProviderConnectionResponse)(nil),          // 32: integrationgateway.v1.ReauthorizeProviderConnectionResponse
+	(*RevokeProviderConnectionRequest)(nil),                // 33: integrationgateway.v1.RevokeProviderConnectionRequest
+	(*RevokeProviderConnectionResponse)(nil),               // 34: integrationgateway.v1.RevokeProviderConnectionResponse
+	(*ProviderPoolMemberIntent)(nil),                       // 35: integrationgateway.v1.ProviderPoolMemberIntent
+	(*ProviderPoolMember)(nil),                             // 36: integrationgateway.v1.ProviderPoolMember
+	(*ProviderPool)(nil),                                   // 37: integrationgateway.v1.ProviderPool
+	(*ManageProviderPoolRequest)(nil),                      // 38: integrationgateway.v1.ManageProviderPoolRequest
+	(*ManageProviderPoolResponse)(nil),                     // 39: integrationgateway.v1.ManageProviderPoolResponse
+	(*GetProviderPoolRequest)(nil),                         // 40: integrationgateway.v1.GetProviderPoolRequest
+	(*GetProviderPoolResponse)(nil),                        // 41: integrationgateway.v1.GetProviderPoolResponse
+	(*ListProviderPoolsRequest)(nil),                       // 42: integrationgateway.v1.ListProviderPoolsRequest
+	(*ListProviderPoolsResponse)(nil),                      // 43: integrationgateway.v1.ListProviderPoolsResponse
+	(*IntegrationDefinitionSummary)(nil),                   // 44: integrationgateway.v1.IntegrationDefinitionSummary
+	(*ListIntegrationDefinitionsRequest)(nil),              // 45: integrationgateway.v1.ListIntegrationDefinitionsRequest
+	(*ListIntegrationDefinitionsResponse)(nil),             // 46: integrationgateway.v1.ListIntegrationDefinitionsResponse
+	(*GetIntegrationDefinitionRequest)(nil),                // 47: integrationgateway.v1.GetIntegrationDefinitionRequest
+	(*GetIntegrationDefinitionResponse)(nil),               // 48: integrationgateway.v1.GetIntegrationDefinitionResponse
+	(*IntegrationConfiguration)(nil),                       // 49: integrationgateway.v1.IntegrationConfiguration
+	(*ConfigureIntegrationRequest)(nil),                    // 50: integrationgateway.v1.ConfigureIntegrationRequest
+	(*ConfigureIntegrationResponse)(nil),                   // 51: integrationgateway.v1.ConfigureIntegrationResponse
+	(*GetIntegrationConfigurationRequest)(nil),             // 52: integrationgateway.v1.GetIntegrationConfigurationRequest
+	(*GetIntegrationConfigurationResponse)(nil),            // 53: integrationgateway.v1.GetIntegrationConfigurationResponse
+	(*ListIntegrationConfigurationsRequest)(nil),           // 54: integrationgateway.v1.ListIntegrationConfigurationsRequest
+	(*ListIntegrationConfigurationsResponse)(nil),          // 55: integrationgateway.v1.ListIntegrationConfigurationsResponse
+	(*IntegrationTestReceipt)(nil),                         // 56: integrationgateway.v1.IntegrationTestReceipt
+	(*TestIntegrationConnectionRequest)(nil),               // 57: integrationgateway.v1.TestIntegrationConnectionRequest
+	(*TestIntegrationConnectionResponse)(nil),              // 58: integrationgateway.v1.TestIntegrationConnectionResponse
+	(*GetIntegrationTestReceiptRequest)(nil),               // 59: integrationgateway.v1.GetIntegrationTestReceiptRequest
+	(*GetIntegrationTestReceiptResponse)(nil),              // 60: integrationgateway.v1.GetIntegrationTestReceiptResponse
+	(*IntegrationApproval)(nil),                            // 61: integrationgateway.v1.IntegrationApproval
+	(*ListIntegrationApprovalsRequest)(nil),                // 62: integrationgateway.v1.ListIntegrationApprovalsRequest
+	(*ListIntegrationApprovalsResponse)(nil),               // 63: integrationgateway.v1.ListIntegrationApprovalsResponse
+	(*GetIntegrationApprovalRequest)(nil),                  // 64: integrationgateway.v1.GetIntegrationApprovalRequest
+	(*GetIntegrationApprovalResponse)(nil),                 // 65: integrationgateway.v1.GetIntegrationApprovalResponse
+	(*DecideIntegrationApprovalRequest)(nil),               // 66: integrationgateway.v1.DecideIntegrationApprovalRequest
+	(*DecideIntegrationApprovalResponse)(nil),              // 67: integrationgateway.v1.DecideIntegrationApprovalResponse
+	(*GitSourceBinding)(nil),                               // 68: integrationgateway.v1.GitSourceBinding
+	(*ManageGitSourceBindingRequest)(nil),                  // 69: integrationgateway.v1.ManageGitSourceBindingRequest
+	(*ManageGitSourceBindingResponse)(nil),                 // 70: integrationgateway.v1.ManageGitSourceBindingResponse
+	(*GetGitSourceBindingRequest)(nil),                     // 71: integrationgateway.v1.GetGitSourceBindingRequest
+	(*GetGitSourceBindingResponse)(nil),                    // 72: integrationgateway.v1.GetGitSourceBindingResponse
+	(*ListGitSourceBindingsRequest)(nil),                   // 73: integrationgateway.v1.ListGitSourceBindingsRequest
+	(*ListGitSourceBindingsResponse)(nil),                  // 74: integrationgateway.v1.ListGitSourceBindingsResponse
+	(*GitReconciliation)(nil),                              // 75: integrationgateway.v1.GitReconciliation
+	(*ReconcileGitSourceBindingRequest)(nil),               // 76: integrationgateway.v1.ReconcileGitSourceBindingRequest
+	(*ReconcileGitSourceBindingResponse)(nil),              // 77: integrationgateway.v1.ReconcileGitSourceBindingResponse
+	(*GetManagementDiagnosticsRequest)(nil),                // 78: integrationgateway.v1.GetManagementDiagnosticsRequest
+	(*ManagementDependencyStatus)(nil),                     // 79: integrationgateway.v1.ManagementDependencyStatus
+	(*GetManagementDiagnosticsResponse)(nil),               // 80: integrationgateway.v1.GetManagementDiagnosticsResponse
+	(*timestamppb.Timestamp)(nil),                          // 81: google.protobuf.Timestamp
 }
 var file_integrationgateway_v1_integration_gateway_proto_depIdxs = []int32{
 	10, // 0: integrationgateway.v1.Provider.capabilities:type_name -> integrationgateway.v1.ProviderCapability
 	11, // 1: integrationgateway.v1.ListProvidersResponse.providers:type_name -> integrationgateway.v1.Provider
 	11, // 2: integrationgateway.v1.GetProviderResponse.provider:type_name -> integrationgateway.v1.Provider
 	0,  // 3: integrationgateway.v1.ProviderAuthorization.state:type_name -> integrationgateway.v1.ProviderAuthorizationState
-	80, // 4: integrationgateway.v1.ProviderAuthorization.code_expires_at:type_name -> google.protobuf.Timestamp
-	80, // 5: integrationgateway.v1.ProviderAuthorization.expires_at:type_name -> google.protobuf.Timestamp
-	80, // 6: integrationgateway.v1.ProviderAuthorization.updated_at:type_name -> google.protobuf.Timestamp
+	81, // 4: integrationgateway.v1.ProviderAuthorization.code_expires_at:type_name -> google.protobuf.Timestamp
+	81, // 5: integrationgateway.v1.ProviderAuthorization.expires_at:type_name -> google.protobuf.Timestamp
+	81, // 6: integrationgateway.v1.ProviderAuthorization.updated_at:type_name -> google.protobuf.Timestamp
 	16, // 7: integrationgateway.v1.StartProviderAuthorizationResponse.authorization:type_name -> integrationgateway.v1.ProviderAuthorization
 	16, // 8: integrationgateway.v1.GetProviderAuthorizationResponse.authorization:type_name -> integrationgateway.v1.ProviderAuthorization
 	16, // 9: integrationgateway.v1.RestartProviderAuthorizationResponse.authorization:type_name -> integrationgateway.v1.ProviderAuthorization
 	16, // 10: integrationgateway.v1.CancelProviderAuthorizationResponse.authorization:type_name -> integrationgateway.v1.ProviderAuthorization
 	1,  // 11: integrationgateway.v1.ProviderConnection.state:type_name -> integrationgateway.v1.ManagedProviderConnectionState
-	80, // 12: integrationgateway.v1.ProviderConnection.observed_at:type_name -> google.protobuf.Timestamp
-	80, // 13: integrationgateway.v1.ProviderConnection.updated_at:type_name -> google.protobuf.Timestamp
-	1,  // 14: integrationgateway.v1.ListProviderConnectionsRequest.states:type_name -> integrationgateway.v1.ManagedProviderConnectionState
-	25, // 15: integrationgateway.v1.ListProviderConnectionsResponse.connections:type_name -> integrationgateway.v1.ProviderConnection
-	25, // 16: integrationgateway.v1.GetProviderConnectionResponse.connection:type_name -> integrationgateway.v1.ProviderConnection
-	16, // 17: integrationgateway.v1.ReauthorizeProviderConnectionResponse.authorization:type_name -> integrationgateway.v1.ProviderAuthorization
-	25, // 18: integrationgateway.v1.RevokeProviderConnectionResponse.connection:type_name -> integrationgateway.v1.ProviderConnection
-	35, // 19: integrationgateway.v1.ProviderPool.members:type_name -> integrationgateway.v1.ProviderPoolMember
-	80, // 20: integrationgateway.v1.ProviderPool.updated_at:type_name -> google.protobuf.Timestamp
-	2,  // 21: integrationgateway.v1.ManageProviderPoolRequest.action:type_name -> integrationgateway.v1.ProviderPoolAction
-	34, // 22: integrationgateway.v1.ManageProviderPoolRequest.members:type_name -> integrationgateway.v1.ProviderPoolMemberIntent
-	36, // 23: integrationgateway.v1.ManageProviderPoolResponse.provider_pool:type_name -> integrationgateway.v1.ProviderPool
-	36, // 24: integrationgateway.v1.GetProviderPoolResponse.provider_pool:type_name -> integrationgateway.v1.ProviderPool
-	36, // 25: integrationgateway.v1.ListProviderPoolsResponse.provider_pools:type_name -> integrationgateway.v1.ProviderPool
-	10, // 26: integrationgateway.v1.IntegrationDefinitionSummary.capabilities:type_name -> integrationgateway.v1.ProviderCapability
-	43, // 27: integrationgateway.v1.ListIntegrationDefinitionsResponse.definitions:type_name -> integrationgateway.v1.IntegrationDefinitionSummary
-	43, // 28: integrationgateway.v1.GetIntegrationDefinitionResponse.definition:type_name -> integrationgateway.v1.IntegrationDefinitionSummary
-	80, // 29: integrationgateway.v1.IntegrationConfiguration.updated_at:type_name -> google.protobuf.Timestamp
-	48, // 30: integrationgateway.v1.ConfigureIntegrationResponse.configuration:type_name -> integrationgateway.v1.IntegrationConfiguration
-	48, // 31: integrationgateway.v1.GetIntegrationConfigurationResponse.configuration:type_name -> integrationgateway.v1.IntegrationConfiguration
-	48, // 32: integrationgateway.v1.ListIntegrationConfigurationsResponse.configurations:type_name -> integrationgateway.v1.IntegrationConfiguration
-	3,  // 33: integrationgateway.v1.IntegrationTestReceipt.category:type_name -> integrationgateway.v1.IntegrationTestCategory
-	80, // 34: integrationgateway.v1.IntegrationTestReceipt.tested_at:type_name -> google.protobuf.Timestamp
-	80, // 35: integrationgateway.v1.IntegrationTestReceipt.expires_at:type_name -> google.protobuf.Timestamp
-	55, // 36: integrationgateway.v1.TestIntegrationConnectionResponse.receipt:type_name -> integrationgateway.v1.IntegrationTestReceipt
-	55, // 37: integrationgateway.v1.GetIntegrationTestReceiptResponse.receipt:type_name -> integrationgateway.v1.IntegrationTestReceipt
-	80, // 38: integrationgateway.v1.IntegrationApproval.expires_at:type_name -> google.protobuf.Timestamp
-	80, // 39: integrationgateway.v1.IntegrationApproval.decided_at:type_name -> google.protobuf.Timestamp
-	60, // 40: integrationgateway.v1.ListIntegrationApprovalsResponse.approvals:type_name -> integrationgateway.v1.IntegrationApproval
-	60, // 41: integrationgateway.v1.GetIntegrationApprovalResponse.approval:type_name -> integrationgateway.v1.IntegrationApproval
-	4,  // 42: integrationgateway.v1.DecideIntegrationApprovalRequest.decision:type_name -> integrationgateway.v1.ApprovalDecision
-	60, // 43: integrationgateway.v1.DecideIntegrationApprovalResponse.approval:type_name -> integrationgateway.v1.IntegrationApproval
-	6,  // 44: integrationgateway.v1.GitSourceBinding.target_kind:type_name -> integrationgateway.v1.GitTargetKind
-	80, // 45: integrationgateway.v1.GitSourceBinding.fetched_at:type_name -> google.protobuf.Timestamp
-	80, // 46: integrationgateway.v1.GitSourceBinding.updated_at:type_name -> google.protobuf.Timestamp
-	5,  // 47: integrationgateway.v1.ManageGitSourceBindingRequest.action:type_name -> integrationgateway.v1.GitSourceBindingAction
-	6,  // 48: integrationgateway.v1.ManageGitSourceBindingRequest.target_kind:type_name -> integrationgateway.v1.GitTargetKind
-	67, // 49: integrationgateway.v1.ManageGitSourceBindingResponse.binding:type_name -> integrationgateway.v1.GitSourceBinding
-	67, // 50: integrationgateway.v1.GetGitSourceBindingResponse.binding:type_name -> integrationgateway.v1.GitSourceBinding
-	67, // 51: integrationgateway.v1.ListGitSourceBindingsResponse.bindings:type_name -> integrationgateway.v1.GitSourceBinding
-	7,  // 52: integrationgateway.v1.GitReconciliation.state:type_name -> integrationgateway.v1.GitReconciliationState
-	80, // 53: integrationgateway.v1.GitReconciliation.updated_at:type_name -> google.protobuf.Timestamp
-	74, // 54: integrationgateway.v1.ReconcileGitSourceBindingResponse.reconciliation:type_name -> integrationgateway.v1.GitReconciliation
-	80, // 55: integrationgateway.v1.ManagementDependencyStatus.checked_at:type_name -> google.protobuf.Timestamp
-	78, // 56: integrationgateway.v1.GetManagementDiagnosticsResponse.dependencies:type_name -> integrationgateway.v1.ManagementDependencyStatus
-	8,  // 57: integrationgateway.v1.IntegrationResultService.CheckReadiness:input_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessRequest
-	12, // 58: integrationgateway.v1.IntegrationManagementService.ListProviders:input_type -> integrationgateway.v1.ListProvidersRequest
-	14, // 59: integrationgateway.v1.IntegrationManagementService.GetProvider:input_type -> integrationgateway.v1.GetProviderRequest
-	17, // 60: integrationgateway.v1.IntegrationManagementService.StartProviderAuthorization:input_type -> integrationgateway.v1.StartProviderAuthorizationRequest
-	19, // 61: integrationgateway.v1.IntegrationManagementService.GetProviderAuthorization:input_type -> integrationgateway.v1.GetProviderAuthorizationRequest
-	21, // 62: integrationgateway.v1.IntegrationManagementService.RestartProviderAuthorization:input_type -> integrationgateway.v1.RestartProviderAuthorizationRequest
-	23, // 63: integrationgateway.v1.IntegrationManagementService.CancelProviderAuthorization:input_type -> integrationgateway.v1.CancelProviderAuthorizationRequest
-	26, // 64: integrationgateway.v1.IntegrationManagementService.ListProviderConnections:input_type -> integrationgateway.v1.ListProviderConnectionsRequest
-	28, // 65: integrationgateway.v1.IntegrationManagementService.GetProviderConnection:input_type -> integrationgateway.v1.GetProviderConnectionRequest
-	30, // 66: integrationgateway.v1.IntegrationManagementService.ReauthorizeProviderConnection:input_type -> integrationgateway.v1.ReauthorizeProviderConnectionRequest
-	32, // 67: integrationgateway.v1.IntegrationManagementService.RevokeProviderConnection:input_type -> integrationgateway.v1.RevokeProviderConnectionRequest
-	37, // 68: integrationgateway.v1.IntegrationManagementService.ManageProviderPool:input_type -> integrationgateway.v1.ManageProviderPoolRequest
-	39, // 69: integrationgateway.v1.IntegrationManagementService.GetProviderPool:input_type -> integrationgateway.v1.GetProviderPoolRequest
-	41, // 70: integrationgateway.v1.IntegrationManagementService.ListProviderPools:input_type -> integrationgateway.v1.ListProviderPoolsRequest
-	44, // 71: integrationgateway.v1.IntegrationManagementService.ListIntegrationDefinitions:input_type -> integrationgateway.v1.ListIntegrationDefinitionsRequest
-	46, // 72: integrationgateway.v1.IntegrationManagementService.GetIntegrationDefinition:input_type -> integrationgateway.v1.GetIntegrationDefinitionRequest
-	49, // 73: integrationgateway.v1.IntegrationManagementService.ConfigureIntegration:input_type -> integrationgateway.v1.ConfigureIntegrationRequest
-	51, // 74: integrationgateway.v1.IntegrationManagementService.GetIntegrationConfiguration:input_type -> integrationgateway.v1.GetIntegrationConfigurationRequest
-	53, // 75: integrationgateway.v1.IntegrationManagementService.ListIntegrationConfigurations:input_type -> integrationgateway.v1.ListIntegrationConfigurationsRequest
-	56, // 76: integrationgateway.v1.IntegrationManagementService.TestIntegrationConnection:input_type -> integrationgateway.v1.TestIntegrationConnectionRequest
-	58, // 77: integrationgateway.v1.IntegrationManagementService.GetIntegrationTestReceipt:input_type -> integrationgateway.v1.GetIntegrationTestReceiptRequest
-	61, // 78: integrationgateway.v1.IntegrationManagementService.ListIntegrationApprovals:input_type -> integrationgateway.v1.ListIntegrationApprovalsRequest
-	63, // 79: integrationgateway.v1.IntegrationManagementService.GetIntegrationApproval:input_type -> integrationgateway.v1.GetIntegrationApprovalRequest
-	65, // 80: integrationgateway.v1.IntegrationManagementService.DecideIntegrationApproval:input_type -> integrationgateway.v1.DecideIntegrationApprovalRequest
-	68, // 81: integrationgateway.v1.IntegrationManagementService.ManageGitSourceBinding:input_type -> integrationgateway.v1.ManageGitSourceBindingRequest
-	70, // 82: integrationgateway.v1.IntegrationManagementService.GetGitSourceBinding:input_type -> integrationgateway.v1.GetGitSourceBindingRequest
-	72, // 83: integrationgateway.v1.IntegrationManagementService.ListGitSourceBindings:input_type -> integrationgateway.v1.ListGitSourceBindingsRequest
-	75, // 84: integrationgateway.v1.IntegrationManagementService.ReconcileGitSourceBinding:input_type -> integrationgateway.v1.ReconcileGitSourceBindingRequest
-	77, // 85: integrationgateway.v1.IntegrationManagementService.GetManagementDiagnostics:input_type -> integrationgateway.v1.GetManagementDiagnosticsRequest
-	9,  // 86: integrationgateway.v1.IntegrationResultService.CheckReadiness:output_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessResponse
-	13, // 87: integrationgateway.v1.IntegrationManagementService.ListProviders:output_type -> integrationgateway.v1.ListProvidersResponse
-	15, // 88: integrationgateway.v1.IntegrationManagementService.GetProvider:output_type -> integrationgateway.v1.GetProviderResponse
-	18, // 89: integrationgateway.v1.IntegrationManagementService.StartProviderAuthorization:output_type -> integrationgateway.v1.StartProviderAuthorizationResponse
-	20, // 90: integrationgateway.v1.IntegrationManagementService.GetProviderAuthorization:output_type -> integrationgateway.v1.GetProviderAuthorizationResponse
-	22, // 91: integrationgateway.v1.IntegrationManagementService.RestartProviderAuthorization:output_type -> integrationgateway.v1.RestartProviderAuthorizationResponse
-	24, // 92: integrationgateway.v1.IntegrationManagementService.CancelProviderAuthorization:output_type -> integrationgateway.v1.CancelProviderAuthorizationResponse
-	27, // 93: integrationgateway.v1.IntegrationManagementService.ListProviderConnections:output_type -> integrationgateway.v1.ListProviderConnectionsResponse
-	29, // 94: integrationgateway.v1.IntegrationManagementService.GetProviderConnection:output_type -> integrationgateway.v1.GetProviderConnectionResponse
-	31, // 95: integrationgateway.v1.IntegrationManagementService.ReauthorizeProviderConnection:output_type -> integrationgateway.v1.ReauthorizeProviderConnectionResponse
-	33, // 96: integrationgateway.v1.IntegrationManagementService.RevokeProviderConnection:output_type -> integrationgateway.v1.RevokeProviderConnectionResponse
-	38, // 97: integrationgateway.v1.IntegrationManagementService.ManageProviderPool:output_type -> integrationgateway.v1.ManageProviderPoolResponse
-	40, // 98: integrationgateway.v1.IntegrationManagementService.GetProviderPool:output_type -> integrationgateway.v1.GetProviderPoolResponse
-	42, // 99: integrationgateway.v1.IntegrationManagementService.ListProviderPools:output_type -> integrationgateway.v1.ListProviderPoolsResponse
-	45, // 100: integrationgateway.v1.IntegrationManagementService.ListIntegrationDefinitions:output_type -> integrationgateway.v1.ListIntegrationDefinitionsResponse
-	47, // 101: integrationgateway.v1.IntegrationManagementService.GetIntegrationDefinition:output_type -> integrationgateway.v1.GetIntegrationDefinitionResponse
-	50, // 102: integrationgateway.v1.IntegrationManagementService.ConfigureIntegration:output_type -> integrationgateway.v1.ConfigureIntegrationResponse
-	52, // 103: integrationgateway.v1.IntegrationManagementService.GetIntegrationConfiguration:output_type -> integrationgateway.v1.GetIntegrationConfigurationResponse
-	54, // 104: integrationgateway.v1.IntegrationManagementService.ListIntegrationConfigurations:output_type -> integrationgateway.v1.ListIntegrationConfigurationsResponse
-	57, // 105: integrationgateway.v1.IntegrationManagementService.TestIntegrationConnection:output_type -> integrationgateway.v1.TestIntegrationConnectionResponse
-	59, // 106: integrationgateway.v1.IntegrationManagementService.GetIntegrationTestReceipt:output_type -> integrationgateway.v1.GetIntegrationTestReceiptResponse
-	62, // 107: integrationgateway.v1.IntegrationManagementService.ListIntegrationApprovals:output_type -> integrationgateway.v1.ListIntegrationApprovalsResponse
-	64, // 108: integrationgateway.v1.IntegrationManagementService.GetIntegrationApproval:output_type -> integrationgateway.v1.GetIntegrationApprovalResponse
-	66, // 109: integrationgateway.v1.IntegrationManagementService.DecideIntegrationApproval:output_type -> integrationgateway.v1.DecideIntegrationApprovalResponse
-	69, // 110: integrationgateway.v1.IntegrationManagementService.ManageGitSourceBinding:output_type -> integrationgateway.v1.ManageGitSourceBindingResponse
-	71, // 111: integrationgateway.v1.IntegrationManagementService.GetGitSourceBinding:output_type -> integrationgateway.v1.GetGitSourceBindingResponse
-	73, // 112: integrationgateway.v1.IntegrationManagementService.ListGitSourceBindings:output_type -> integrationgateway.v1.ListGitSourceBindingsResponse
-	76, // 113: integrationgateway.v1.IntegrationManagementService.ReconcileGitSourceBinding:output_type -> integrationgateway.v1.ReconcileGitSourceBindingResponse
-	79, // 114: integrationgateway.v1.IntegrationManagementService.GetManagementDiagnostics:output_type -> integrationgateway.v1.GetManagementDiagnosticsResponse
-	86, // [86:115] is the sub-list for method output_type
-	57, // [57:86] is the sub-list for method input_type
-	57, // [57:57] is the sub-list for extension type_name
-	57, // [57:57] is the sub-list for extension extendee
-	0,  // [0:57] is the sub-list for field type_name
+	81, // 12: integrationgateway.v1.ProviderConnection.observed_at:type_name -> google.protobuf.Timestamp
+	81, // 13: integrationgateway.v1.ProviderConnection.updated_at:type_name -> google.protobuf.Timestamp
+	26, // 14: integrationgateway.v1.ProviderConnection.capacity:type_name -> integrationgateway.v1.ProviderCapacityObservation
+	81, // 15: integrationgateway.v1.ProviderCapacityObservation.observed_at:type_name -> google.protobuf.Timestamp
+	81, // 16: integrationgateway.v1.ProviderCapacityObservation.resets_at:type_name -> google.protobuf.Timestamp
+	81, // 17: integrationgateway.v1.ProviderCapacityObservation.expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 18: integrationgateway.v1.ListProviderConnectionsRequest.states:type_name -> integrationgateway.v1.ManagedProviderConnectionState
+	25, // 19: integrationgateway.v1.ListProviderConnectionsResponse.connections:type_name -> integrationgateway.v1.ProviderConnection
+	25, // 20: integrationgateway.v1.GetProviderConnectionResponse.connection:type_name -> integrationgateway.v1.ProviderConnection
+	16, // 21: integrationgateway.v1.ReauthorizeProviderConnectionResponse.authorization:type_name -> integrationgateway.v1.ProviderAuthorization
+	25, // 22: integrationgateway.v1.RevokeProviderConnectionResponse.connection:type_name -> integrationgateway.v1.ProviderConnection
+	36, // 23: integrationgateway.v1.ProviderPool.members:type_name -> integrationgateway.v1.ProviderPoolMember
+	81, // 24: integrationgateway.v1.ProviderPool.updated_at:type_name -> google.protobuf.Timestamp
+	2,  // 25: integrationgateway.v1.ManageProviderPoolRequest.action:type_name -> integrationgateway.v1.ProviderPoolAction
+	35, // 26: integrationgateway.v1.ManageProviderPoolRequest.members:type_name -> integrationgateway.v1.ProviderPoolMemberIntent
+	37, // 27: integrationgateway.v1.ManageProviderPoolResponse.provider_pool:type_name -> integrationgateway.v1.ProviderPool
+	37, // 28: integrationgateway.v1.GetProviderPoolResponse.provider_pool:type_name -> integrationgateway.v1.ProviderPool
+	37, // 29: integrationgateway.v1.ListProviderPoolsResponse.provider_pools:type_name -> integrationgateway.v1.ProviderPool
+	10, // 30: integrationgateway.v1.IntegrationDefinitionSummary.capabilities:type_name -> integrationgateway.v1.ProviderCapability
+	44, // 31: integrationgateway.v1.ListIntegrationDefinitionsResponse.definitions:type_name -> integrationgateway.v1.IntegrationDefinitionSummary
+	44, // 32: integrationgateway.v1.GetIntegrationDefinitionResponse.definition:type_name -> integrationgateway.v1.IntegrationDefinitionSummary
+	81, // 33: integrationgateway.v1.IntegrationConfiguration.updated_at:type_name -> google.protobuf.Timestamp
+	49, // 34: integrationgateway.v1.ConfigureIntegrationResponse.configuration:type_name -> integrationgateway.v1.IntegrationConfiguration
+	49, // 35: integrationgateway.v1.GetIntegrationConfigurationResponse.configuration:type_name -> integrationgateway.v1.IntegrationConfiguration
+	49, // 36: integrationgateway.v1.ListIntegrationConfigurationsResponse.configurations:type_name -> integrationgateway.v1.IntegrationConfiguration
+	3,  // 37: integrationgateway.v1.IntegrationTestReceipt.category:type_name -> integrationgateway.v1.IntegrationTestCategory
+	81, // 38: integrationgateway.v1.IntegrationTestReceipt.tested_at:type_name -> google.protobuf.Timestamp
+	81, // 39: integrationgateway.v1.IntegrationTestReceipt.expires_at:type_name -> google.protobuf.Timestamp
+	56, // 40: integrationgateway.v1.TestIntegrationConnectionResponse.receipt:type_name -> integrationgateway.v1.IntegrationTestReceipt
+	56, // 41: integrationgateway.v1.GetIntegrationTestReceiptResponse.receipt:type_name -> integrationgateway.v1.IntegrationTestReceipt
+	81, // 42: integrationgateway.v1.IntegrationApproval.expires_at:type_name -> google.protobuf.Timestamp
+	81, // 43: integrationgateway.v1.IntegrationApproval.decided_at:type_name -> google.protobuf.Timestamp
+	61, // 44: integrationgateway.v1.ListIntegrationApprovalsResponse.approvals:type_name -> integrationgateway.v1.IntegrationApproval
+	61, // 45: integrationgateway.v1.GetIntegrationApprovalResponse.approval:type_name -> integrationgateway.v1.IntegrationApproval
+	4,  // 46: integrationgateway.v1.DecideIntegrationApprovalRequest.decision:type_name -> integrationgateway.v1.ApprovalDecision
+	61, // 47: integrationgateway.v1.DecideIntegrationApprovalResponse.approval:type_name -> integrationgateway.v1.IntegrationApproval
+	6,  // 48: integrationgateway.v1.GitSourceBinding.target_kind:type_name -> integrationgateway.v1.GitTargetKind
+	81, // 49: integrationgateway.v1.GitSourceBinding.fetched_at:type_name -> google.protobuf.Timestamp
+	81, // 50: integrationgateway.v1.GitSourceBinding.updated_at:type_name -> google.protobuf.Timestamp
+	5,  // 51: integrationgateway.v1.ManageGitSourceBindingRequest.action:type_name -> integrationgateway.v1.GitSourceBindingAction
+	6,  // 52: integrationgateway.v1.ManageGitSourceBindingRequest.target_kind:type_name -> integrationgateway.v1.GitTargetKind
+	68, // 53: integrationgateway.v1.ManageGitSourceBindingResponse.binding:type_name -> integrationgateway.v1.GitSourceBinding
+	68, // 54: integrationgateway.v1.GetGitSourceBindingResponse.binding:type_name -> integrationgateway.v1.GitSourceBinding
+	68, // 55: integrationgateway.v1.ListGitSourceBindingsResponse.bindings:type_name -> integrationgateway.v1.GitSourceBinding
+	7,  // 56: integrationgateway.v1.GitReconciliation.state:type_name -> integrationgateway.v1.GitReconciliationState
+	81, // 57: integrationgateway.v1.GitReconciliation.updated_at:type_name -> google.protobuf.Timestamp
+	75, // 58: integrationgateway.v1.ReconcileGitSourceBindingResponse.reconciliation:type_name -> integrationgateway.v1.GitReconciliation
+	81, // 59: integrationgateway.v1.ManagementDependencyStatus.checked_at:type_name -> google.protobuf.Timestamp
+	79, // 60: integrationgateway.v1.GetManagementDiagnosticsResponse.dependencies:type_name -> integrationgateway.v1.ManagementDependencyStatus
+	8,  // 61: integrationgateway.v1.IntegrationResultService.CheckReadiness:input_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessRequest
+	12, // 62: integrationgateway.v1.IntegrationManagementService.ListProviders:input_type -> integrationgateway.v1.ListProvidersRequest
+	14, // 63: integrationgateway.v1.IntegrationManagementService.GetProvider:input_type -> integrationgateway.v1.GetProviderRequest
+	17, // 64: integrationgateway.v1.IntegrationManagementService.StartProviderAuthorization:input_type -> integrationgateway.v1.StartProviderAuthorizationRequest
+	19, // 65: integrationgateway.v1.IntegrationManagementService.GetProviderAuthorization:input_type -> integrationgateway.v1.GetProviderAuthorizationRequest
+	21, // 66: integrationgateway.v1.IntegrationManagementService.RestartProviderAuthorization:input_type -> integrationgateway.v1.RestartProviderAuthorizationRequest
+	23, // 67: integrationgateway.v1.IntegrationManagementService.CancelProviderAuthorization:input_type -> integrationgateway.v1.CancelProviderAuthorizationRequest
+	27, // 68: integrationgateway.v1.IntegrationManagementService.ListProviderConnections:input_type -> integrationgateway.v1.ListProviderConnectionsRequest
+	29, // 69: integrationgateway.v1.IntegrationManagementService.GetProviderConnection:input_type -> integrationgateway.v1.GetProviderConnectionRequest
+	31, // 70: integrationgateway.v1.IntegrationManagementService.ReauthorizeProviderConnection:input_type -> integrationgateway.v1.ReauthorizeProviderConnectionRequest
+	33, // 71: integrationgateway.v1.IntegrationManagementService.RevokeProviderConnection:input_type -> integrationgateway.v1.RevokeProviderConnectionRequest
+	38, // 72: integrationgateway.v1.IntegrationManagementService.ManageProviderPool:input_type -> integrationgateway.v1.ManageProviderPoolRequest
+	40, // 73: integrationgateway.v1.IntegrationManagementService.GetProviderPool:input_type -> integrationgateway.v1.GetProviderPoolRequest
+	42, // 74: integrationgateway.v1.IntegrationManagementService.ListProviderPools:input_type -> integrationgateway.v1.ListProviderPoolsRequest
+	45, // 75: integrationgateway.v1.IntegrationManagementService.ListIntegrationDefinitions:input_type -> integrationgateway.v1.ListIntegrationDefinitionsRequest
+	47, // 76: integrationgateway.v1.IntegrationManagementService.GetIntegrationDefinition:input_type -> integrationgateway.v1.GetIntegrationDefinitionRequest
+	50, // 77: integrationgateway.v1.IntegrationManagementService.ConfigureIntegration:input_type -> integrationgateway.v1.ConfigureIntegrationRequest
+	52, // 78: integrationgateway.v1.IntegrationManagementService.GetIntegrationConfiguration:input_type -> integrationgateway.v1.GetIntegrationConfigurationRequest
+	54, // 79: integrationgateway.v1.IntegrationManagementService.ListIntegrationConfigurations:input_type -> integrationgateway.v1.ListIntegrationConfigurationsRequest
+	57, // 80: integrationgateway.v1.IntegrationManagementService.TestIntegrationConnection:input_type -> integrationgateway.v1.TestIntegrationConnectionRequest
+	59, // 81: integrationgateway.v1.IntegrationManagementService.GetIntegrationTestReceipt:input_type -> integrationgateway.v1.GetIntegrationTestReceiptRequest
+	62, // 82: integrationgateway.v1.IntegrationManagementService.ListIntegrationApprovals:input_type -> integrationgateway.v1.ListIntegrationApprovalsRequest
+	64, // 83: integrationgateway.v1.IntegrationManagementService.GetIntegrationApproval:input_type -> integrationgateway.v1.GetIntegrationApprovalRequest
+	66, // 84: integrationgateway.v1.IntegrationManagementService.DecideIntegrationApproval:input_type -> integrationgateway.v1.DecideIntegrationApprovalRequest
+	69, // 85: integrationgateway.v1.IntegrationManagementService.ManageGitSourceBinding:input_type -> integrationgateway.v1.ManageGitSourceBindingRequest
+	71, // 86: integrationgateway.v1.IntegrationManagementService.GetGitSourceBinding:input_type -> integrationgateway.v1.GetGitSourceBindingRequest
+	73, // 87: integrationgateway.v1.IntegrationManagementService.ListGitSourceBindings:input_type -> integrationgateway.v1.ListGitSourceBindingsRequest
+	76, // 88: integrationgateway.v1.IntegrationManagementService.ReconcileGitSourceBinding:input_type -> integrationgateway.v1.ReconcileGitSourceBindingRequest
+	78, // 89: integrationgateway.v1.IntegrationManagementService.GetManagementDiagnostics:input_type -> integrationgateway.v1.GetManagementDiagnosticsRequest
+	9,  // 90: integrationgateway.v1.IntegrationResultService.CheckReadiness:output_type -> integrationgateway.v1.IntegrationResultServiceCheckReadinessResponse
+	13, // 91: integrationgateway.v1.IntegrationManagementService.ListProviders:output_type -> integrationgateway.v1.ListProvidersResponse
+	15, // 92: integrationgateway.v1.IntegrationManagementService.GetProvider:output_type -> integrationgateway.v1.GetProviderResponse
+	18, // 93: integrationgateway.v1.IntegrationManagementService.StartProviderAuthorization:output_type -> integrationgateway.v1.StartProviderAuthorizationResponse
+	20, // 94: integrationgateway.v1.IntegrationManagementService.GetProviderAuthorization:output_type -> integrationgateway.v1.GetProviderAuthorizationResponse
+	22, // 95: integrationgateway.v1.IntegrationManagementService.RestartProviderAuthorization:output_type -> integrationgateway.v1.RestartProviderAuthorizationResponse
+	24, // 96: integrationgateway.v1.IntegrationManagementService.CancelProviderAuthorization:output_type -> integrationgateway.v1.CancelProviderAuthorizationResponse
+	28, // 97: integrationgateway.v1.IntegrationManagementService.ListProviderConnections:output_type -> integrationgateway.v1.ListProviderConnectionsResponse
+	30, // 98: integrationgateway.v1.IntegrationManagementService.GetProviderConnection:output_type -> integrationgateway.v1.GetProviderConnectionResponse
+	32, // 99: integrationgateway.v1.IntegrationManagementService.ReauthorizeProviderConnection:output_type -> integrationgateway.v1.ReauthorizeProviderConnectionResponse
+	34, // 100: integrationgateway.v1.IntegrationManagementService.RevokeProviderConnection:output_type -> integrationgateway.v1.RevokeProviderConnectionResponse
+	39, // 101: integrationgateway.v1.IntegrationManagementService.ManageProviderPool:output_type -> integrationgateway.v1.ManageProviderPoolResponse
+	41, // 102: integrationgateway.v1.IntegrationManagementService.GetProviderPool:output_type -> integrationgateway.v1.GetProviderPoolResponse
+	43, // 103: integrationgateway.v1.IntegrationManagementService.ListProviderPools:output_type -> integrationgateway.v1.ListProviderPoolsResponse
+	46, // 104: integrationgateway.v1.IntegrationManagementService.ListIntegrationDefinitions:output_type -> integrationgateway.v1.ListIntegrationDefinitionsResponse
+	48, // 105: integrationgateway.v1.IntegrationManagementService.GetIntegrationDefinition:output_type -> integrationgateway.v1.GetIntegrationDefinitionResponse
+	51, // 106: integrationgateway.v1.IntegrationManagementService.ConfigureIntegration:output_type -> integrationgateway.v1.ConfigureIntegrationResponse
+	53, // 107: integrationgateway.v1.IntegrationManagementService.GetIntegrationConfiguration:output_type -> integrationgateway.v1.GetIntegrationConfigurationResponse
+	55, // 108: integrationgateway.v1.IntegrationManagementService.ListIntegrationConfigurations:output_type -> integrationgateway.v1.ListIntegrationConfigurationsResponse
+	58, // 109: integrationgateway.v1.IntegrationManagementService.TestIntegrationConnection:output_type -> integrationgateway.v1.TestIntegrationConnectionResponse
+	60, // 110: integrationgateway.v1.IntegrationManagementService.GetIntegrationTestReceipt:output_type -> integrationgateway.v1.GetIntegrationTestReceiptResponse
+	63, // 111: integrationgateway.v1.IntegrationManagementService.ListIntegrationApprovals:output_type -> integrationgateway.v1.ListIntegrationApprovalsResponse
+	65, // 112: integrationgateway.v1.IntegrationManagementService.GetIntegrationApproval:output_type -> integrationgateway.v1.GetIntegrationApprovalResponse
+	67, // 113: integrationgateway.v1.IntegrationManagementService.DecideIntegrationApproval:output_type -> integrationgateway.v1.DecideIntegrationApprovalResponse
+	70, // 114: integrationgateway.v1.IntegrationManagementService.ManageGitSourceBinding:output_type -> integrationgateway.v1.ManageGitSourceBindingResponse
+	72, // 115: integrationgateway.v1.IntegrationManagementService.GetGitSourceBinding:output_type -> integrationgateway.v1.GetGitSourceBindingResponse
+	74, // 116: integrationgateway.v1.IntegrationManagementService.ListGitSourceBindings:output_type -> integrationgateway.v1.ListGitSourceBindingsResponse
+	77, // 117: integrationgateway.v1.IntegrationManagementService.ReconcileGitSourceBinding:output_type -> integrationgateway.v1.ReconcileGitSourceBindingResponse
+	80, // 118: integrationgateway.v1.IntegrationManagementService.GetManagementDiagnostics:output_type -> integrationgateway.v1.GetManagementDiagnosticsResponse
+	90, // [90:119] is the sub-list for method output_type
+	61, // [61:90] is the sub-list for method input_type
+	61, // [61:61] is the sub-list for extension type_name
+	61, // [61:61] is the sub-list for extension extendee
+	0,  // [0:61] is the sub-list for field type_name
 }
 
 func init() { file_integrationgateway_v1_integration_gateway_proto_init() }
@@ -5967,7 +6223,7 @@ func file_integrationgateway_v1_integration_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_integrationgateway_v1_integration_gateway_proto_rawDesc), len(file_integrationgateway_v1_integration_gateway_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   72,
+			NumMessages:   73,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

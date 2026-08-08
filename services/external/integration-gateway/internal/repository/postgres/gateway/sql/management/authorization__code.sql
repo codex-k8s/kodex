@@ -1,6 +1,5 @@
 UPDATE integration_gateway.provider_authorization_attempts
    SET state = 'CODE_ISSUED', version = version + 1,
-       provider_login_id_ciphertext = @login_id_ciphertext,
        device_result_ciphertext = @device_result_ciphertext,
        code_expires_at = @code_expires_at, updated_at = @updated_at,
        payload = jsonb_set(jsonb_set(payload, '{state}', '"CODE_ISSUED"'::jsonb),

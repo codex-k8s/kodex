@@ -72,6 +72,18 @@ type (
 		TargetResourceID         string    `json:"target_resource_id,omitempty"`
 		TargetStableKey          string    `json:"target_stable_key"`
 		CommandIntentSHA256      string    `json:"command_intent_sha256"`
+		SecretRef                string    `json:"secret_ref,omitempty"`
+		SecretVersion            uint64    `json:"secret_version,omitempty"`
+		SecretContentSHA256      string    `json:"secret_content_sha256,omitempty"`
+		MaskedAccount            string    `json:"masked_account,omitempty"`
+		ObservedUsage            uint64    `json:"observed_usage,omitempty"`
+		ObservedLimit            uint64    `json:"observed_limit,omitempty"`
+		ObservationRevision      uint64    `json:"observation_revision,omitempty"`
+		ObservedAt               time.Time `json:"observed_at,omitempty"`
+		WindowDurationSeconds    uint64    `json:"window_duration_seconds,omitempty"`
+		ResetsAt                 time.Time `json:"resets_at,omitempty"`
+		ObservationExpiresAt     time.Time `json:"observation_expires_at,omitempty"`
+		ObservationSHA256        string    `json:"observation_sha256,omitempty"`
 	}
 	GitReceipt struct {
 		ContractVersion     uint32    `json:"contract_version"`
@@ -171,7 +183,12 @@ func (signer *Signer) SignGit(input GitReceipt) (Credential[GitReceipt], error) 
 func validProvider(value ProviderReceipt) bool {
 	credentialBound := value.CredentialBindingID != "" || value.CredentialBindingVersion != 0 || value.CredentialBindingSHA256 != ""
 	providerRefValid := value.TargetKind != "provider_connection_reference" || value.ProviderObjectRef != ""
-	return strings.HasPrefix(value.FullMethod, "/controlplane.v1.ControlPlaneService/") && uuid.Validate(value.ActorID) == nil && uuid.Validate(value.OrganizationID) == nil && uuid.Validate(value.ProjectID) == nil && value.Action != "" && value.Effect != "" && value.EffectVersion > 0 && value.EffectGeneration > 0 && validDigest(value.EffectSHA256) && uuid.Validate(value.ReceiptID) == nil && value.ReceiptRevision > 0 && value.MaskedStatus != "" && value.Provider != "" && value.MaskedLabel != "" && (value.TargetKind == "provider_connection_reference" || value.TargetKind == "provider_pool") && (value.TargetResourceID == "" || uuid.Validate(value.TargetResourceID) == nil) && value.TargetStableKey != "" && validDigest(value.CommandIntentSHA256) && providerRefValid && (!credentialBound || uuid.Validate(value.CredentialBindingID) == nil && value.CredentialBindingVersion > 0 && validDigest(value.CredentialBindingSHA256))
+	materialized := value.TargetKind != "provider_connection_reference" || value.Action == "archive" ||
+		(value.SecretRef != "" && value.SecretVersion > 0 && validDigest(value.SecretContentSHA256) && value.MaskedAccount != "" &&
+			value.ObservedLimit > 0 && value.ObservedUsage <= value.ObservedLimit && value.ObservationRevision > 0 &&
+			!value.ObservedAt.IsZero() && value.WindowDurationSeconds > 0 && !value.ResetsAt.IsZero() &&
+			value.ObservationExpiresAt.After(value.ObservedAt) && validDigest(value.ObservationSHA256))
+	return strings.HasPrefix(value.FullMethod, "/controlplane.v1.ControlPlaneService/") && uuid.Validate(value.ActorID) == nil && uuid.Validate(value.OrganizationID) == nil && uuid.Validate(value.ProjectID) == nil && value.Action != "" && value.Effect != "" && value.EffectVersion > 0 && value.EffectGeneration > 0 && validDigest(value.EffectSHA256) && uuid.Validate(value.ReceiptID) == nil && value.ReceiptRevision > 0 && value.MaskedStatus != "" && value.Provider != "" && value.MaskedLabel != "" && (value.TargetKind == "provider_connection_reference" || value.TargetKind == "provider_pool") && (value.TargetResourceID == "" || uuid.Validate(value.TargetResourceID) == nil) && value.TargetStableKey != "" && validDigest(value.CommandIntentSHA256) && providerRefValid && materialized && (!credentialBound || uuid.Validate(value.CredentialBindingID) == nil && value.CredentialBindingVersion > 0 && validDigest(value.CredentialBindingSHA256))
 }
 
 func validGit(value GitReceipt) bool {

@@ -52,7 +52,12 @@ type metadata struct {
 }
 
 type spec struct {
-	Tools []tool `yaml:"tools"`
+	Validation validation `yaml:"validation"`
+	Tools      []tool     `yaml:"tools"`
+}
+
+type validation struct {
+	EndpointRef string `yaml:"endpointRef"`
 }
 
 type tool struct {
@@ -127,10 +132,11 @@ func Parse(source []byte) (entity.Definition, error) {
 	}
 	if value.APIVersion != "mattercodex.io/v1" || value.Kind != "IntegrationDefinition" ||
 		!identifierPattern.MatchString(value.Metadata.Name) || value.Metadata.Version == 0 ||
+		!permissionPattern.MatchString(value.Spec.Validation.EndpointRef) ||
 		len(value.Spec.Tools) == 0 || len(value.Spec.Tools) > MaximumTools {
 		return entity.Definition{}, errors.New("integration definition metadata is invalid")
 	}
-	definition := entity.Definition{ID: value.Metadata.Name, Version: value.Metadata.Version, Source: append([]byte(nil), source...)}
+	definition := entity.Definition{ID: value.Metadata.Name, Version: value.Metadata.Version, ValidationEndpointRef: value.Spec.Validation.EndpointRef, Source: append([]byte(nil), source...)}
 	seen := make(map[string]struct{}, len(value.Spec.Tools))
 	for _, candidate := range value.Spec.Tools {
 		parsed, err := parseTool(candidate)
@@ -145,10 +151,11 @@ func Parse(source []byte) (entity.Definition, error) {
 		definition.Tools = append(definition.Tools, parsed)
 	}
 	canonicalPackage, err := json.Marshal(struct {
-		ID      string        `json:"id"`
-		Version uint64        `json:"version"`
-		Tools   []entity.Tool `json:"tools"`
-	}{ID: definition.ID, Version: definition.Version, Tools: definition.Tools})
+		ID                    string        `json:"id"`
+		Version               uint64        `json:"version"`
+		ValidationEndpointRef string        `json:"validation_endpoint_ref"`
+		Tools                 []entity.Tool `json:"tools"`
+	}{ID: definition.ID, Version: definition.Version, ValidationEndpointRef: definition.ValidationEndpointRef, Tools: definition.Tools})
 	if err != nil {
 		return entity.Definition{}, errors.New("canonicalize integration definition")
 	}

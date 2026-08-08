@@ -211,6 +211,20 @@ message ProviderConnection {
   google.protobuf.Timestamp observed_at = 16;
   google.protobuf.Timestamp updated_at = 17;
   uint64 active_credential_generation = 18;
+  ProviderCapacityObservation capacity = 19;
+}
+
+// ProviderCapacityObservation — нормализованный bounded readback provider-а.
+// Он не содержит account payload, headers или credential material.
+message ProviderCapacityObservation {
+  uint64 usage = 1;
+  uint64 limit = 2;
+  uint64 revision = 3;
+  google.protobuf.Timestamp observed_at = 4;
+  uint64 window_duration_seconds = 5;
+  google.protobuf.Timestamp resets_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  string digest_sha256 = 8;
 }
 message ListProviderConnectionsRequest {
   repeated ManagedProviderConnectionState states = 1;
@@ -362,6 +376,14 @@ message IntegrationTestReceipt {
   string receipt_sha256 = 8;
   google.protobuf.Timestamp tested_at = 9;
   google.protobuf.Timestamp expires_at = 10;
+  string definition_digest_sha256 = 11;
+  string configuration_id = 12;
+  uint64 configuration_version = 13;
+  string configuration_digest_sha256 = 14;
+  uint64 credential_generation = 15;
+  string credential_binding_id = 16;
+  uint64 credential_binding_version = 17;
+  string credential_binding_sha256 = 18;
 }
 message TestIntegrationConnectionRequest {
   string connection_id = 1;
@@ -370,6 +392,10 @@ message TestIntegrationConnectionRequest {
   string definition_id = 4;
   uint64 definition_version = 5;
   string idempotency_key = 6;
+  string definition_digest_sha256 = 7;
+  string configuration_id = 8;
+  uint64 configuration_version = 9;
+  string configuration_digest_sha256 = 10;
 }
 message TestIntegrationConnectionResponse { IntegrationTestReceipt receipt = 1; }
 message GetIntegrationTestReceiptRequest { string test_id = 1; }
@@ -428,6 +454,7 @@ message GitSourceBinding {
   string source_digest_sha256 = 18;
   google.protobuf.Timestamp fetched_at = 19;
   google.protobuf.Timestamp updated_at = 20;
+  uint64 generation = 21;
 }
 message ManageGitSourceBindingRequest {
   GitSourceBindingAction action = 1;
@@ -473,6 +500,7 @@ message ReconcileGitSourceBindingRequest {
   uint64 expected_version = 2;
   uint64 expected_source_revision = 3;
   string idempotency_key = 4;
+  uint64 expected_generation = 5;
 }
 message ReconcileGitSourceBindingResponse { GitReconciliation reconciliation = 1; }
 

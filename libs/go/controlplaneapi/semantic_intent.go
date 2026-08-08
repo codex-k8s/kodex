@@ -5,12 +5,67 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 )
+
+type ProviderCredentialMaterialization struct {
+	CredentialBindingID  string    `json:"credential_binding_id"`
+	BindingVersion       uint64    `json:"binding_version"`
+	CredentialGeneration uint64    `json:"credential_generation"`
+	Provider             string    `json:"provider"`
+	ProviderObjectRef    string    `json:"provider_object_ref"`
+	SecretRef            string    `json:"secret_ref"`
+	SecretVersion        uint64    `json:"secret_version"`
+	SecretContentSHA256  string    `json:"secret_content_sha256"`
+	MaskedAccount        string    `json:"masked_account"`
+	MaskedLabel          string    `json:"masked_label"`
+	Capabilities         []string  `json:"capabilities"`
+	ObservedUsage        uint64    `json:"observed_usage"`
+	ObservedLimit        uint64    `json:"observed_limit"`
+	ObservationRevision  uint64    `json:"observation_revision"`
+	ObservedAt           time.Time `json:"observed_at"`
+	WindowSeconds        uint64    `json:"window_seconds"`
+	ResetsAt             time.Time `json:"resets_at"`
+	ObservationExpiresAt time.Time `json:"observation_expires_at"`
+	ObservationSHA256    string    `json:"observation_sha256"`
+}
+
+func ProviderCredentialMaterializationSHA256(value ProviderCredentialMaterialization) (string, error) {
+	if uuid.Validate(value.CredentialBindingID) != nil || value.BindingVersion == 0 || value.CredentialGeneration == 0 || value.Provider == "" ||
+		value.ProviderObjectRef == "" || value.SecretRef == "" || value.SecretVersion == 0 ||
+		len(value.SecretContentSHA256) != 64 || value.MaskedAccount == "" || value.MaskedLabel == "" ||
+		len(value.Capabilities) == 0 || value.ObservedLimit == 0 || value.ObservedUsage > value.ObservedLimit ||
+		value.ObservationRevision == 0 || value.ObservedAt.IsZero() || value.WindowSeconds == 0 ||
+		value.ResetsAt.IsZero() || !value.ObservationExpiresAt.After(value.ObservedAt) || !semanticDigest(value.SecretContentSHA256) || !semanticDigest(value.ObservationSHA256) {
+		return "", errors.New("provider credential materialization is invalid")
+	}
+	value.Capabilities = append([]string(nil), value.Capabilities...)
+	sort.Strings(value.Capabilities)
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", errors.New("encode provider credential materialization")
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func semanticDigest(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	for _, symbol := range value {
+		if (symbol < '0' || symbol > '9') && (symbol < 'a' || symbol > 'f') {
+			return false
+		}
+	}
+	return true
+}
 
 // VerifiedCommandAuthority содержит только стабильную authority, уже
 // проверенную consumer-ом. Transport proof, JTI, policy/signer revision и
@@ -71,6 +126,34 @@ func ProviderConnectionReferenceIntentSHA256(
 		Name:            request.GetName(),
 		TypedIntentType: "controlplane.v1.ProviderConnectionReferenceSpec",
 		TypedIntent:     encoded,
+	})
+}
+
+// ProviderPoolIntentSHA256 связывает provider observation receipt с exact
+// owner command и immutable eligibility/capacity snapshot. Transport proof и
+// provider_receipt не входят в canonical bytes.
+func ProviderPoolIntentSHA256(
+	authority VerifiedCommandAuthority,
+	request *controlplanev1.ManageProviderPoolRequest,
+) (string, error) {
+	if request == nil || request.GetSpec() == nil ||
+		authority.FullMethod != controlplanev1.ControlPlaneService_ManageProviderPool_FullMethodName {
+		return "", errors.New("provider pool intent is invalid")
+	}
+	action := strings.ToLower(strings.TrimPrefix(request.GetAction().String(), "PROVIDER_POOL_ACTION_"))
+	if action != "create" && action != "update" && action != "archive" && action != "delete" {
+		return "", errors.New("provider pool action is invalid")
+	}
+	spec := proto.Clone(request.GetSpec()).(*controlplanev1.ProviderPoolSpec)
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(spec)
+	if err != nil {
+		return "", errors.New("encode provider pool intent")
+	}
+	return hashSemanticBusinessIntent(semanticBusinessIntent{
+		ContractVersion: 1, Authority: authority, TargetKind: "provider_pool",
+		TargetResource: request.GetProviderPoolId(), TargetStableKey: spec.GetStableKey(),
+		Action: action, ExpectedVersion: request.GetExpectedVersion(), Name: request.GetName(),
+		TypedIntentType: "controlplane.v1.ProviderPoolSpec", TypedIntent: encoded,
 	})
 }
 

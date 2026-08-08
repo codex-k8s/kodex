@@ -5,6 +5,21 @@ WITH renewed AS (
      WHERE effect.effect_id = @effect_id AND effect.status = 'CLAIMED'
        AND effect.lease_id = @lease_id AND effect.lease_fence = @lease_fence
        AND effect.lease_expires_at > clock_timestamp()
+       AND CASE effect.owner_kind
+             WHEN 'managed_provider_connection' THEN EXISTS (
+               SELECT 1 FROM integration_gateway.managed_provider_connections AS owner
+                WHERE owner.connection_id = effect.owner_id AND owner.version = effect.owner_version
+                  AND owner.generation = effect.owner_generation AND owner.status = effect.owner_status)
+             WHEN 'managed_provider_pool' THEN EXISTS (
+               SELECT 1 FROM integration_gateway.managed_provider_pools AS owner
+                WHERE owner.provider_pool_id = effect.owner_id AND owner.version = effect.owner_version
+                  AND owner.status = effect.owner_status)
+             WHEN 'git_source_binding' THEN EXISTS (
+               SELECT 1 FROM integration_gateway.git_source_bindings AS owner
+                WHERE owner.binding_id = effect.owner_id AND owner.version = effect.owner_version
+                  AND owner.generation = effect.owner_generation AND owner.status = effect.owner_status)
+             ELSE false
+           END
     RETURNING effect.effect_id, effect.effect_kind, effect.resource_id,
               effect.resource_version, effect.resource_generation,
               effect.lease_expires_at

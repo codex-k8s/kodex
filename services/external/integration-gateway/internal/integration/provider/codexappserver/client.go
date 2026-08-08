@@ -142,7 +142,7 @@ func (client *Client) Authorize(ctx context.Context, onCode func(providerauthori
 		return providerauthorization.Result{}, errors.New("Codex device authorization response is invalid")
 	}
 	expiresAt := time.Now().UTC().Add(time.Duration(started.ExpiresIn) * time.Second)
-	if err = onCode(providerauthorization.DeviceCode{LoginID: started.LoginID, VerificationURL: started.VerificationURL, UserCode: started.UserCode, ExpiresAt: expiresAt}); err != nil {
+	if err = onCode(providerauthorization.DeviceCode{VerificationURL: started.VerificationURL, UserCode: started.UserCode, ExpiresAt: expiresAt}); err != nil {
 		return providerauthorization.Result{}, err
 	}
 	ticker := time.NewTicker(client.config.PollInterval)
@@ -213,6 +213,10 @@ func (client *Client) readResult(ctx context.Context, send func(any) error, mess
 	if json.Unmarshal(response.Result, &account) != nil || account.Account == nil {
 		return providerauthorization.Result{}, errors.New("Codex account readback is invalid")
 	}
+	capacity, err := readCapacity(ctx, send, messages, readErrors, "5")
+	if err != nil {
+		return providerauthorization.Result{}, err
+	}
 	path := filepath.Join(work, "auth.json")
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 128<<10 {
@@ -227,7 +231,42 @@ func (client *Client) readResult(ctx context.Context, send func(any) error, mess
 	if len(label) > 64 {
 		label = label[:64]
 	}
-	return providerauthorization.Result{Credential: raw, MaskedAccount: masked, MaskedLabel: label}, nil
+	return providerauthorization.Result{Credential: raw, MaskedAccount: masked, MaskedLabel: label, Capacity: capacity}, nil
+}
+
+func readCapacity(ctx context.Context, send func(any) error, messages <-chan envelope, readErrors <-chan error, id string) (providerauthorization.CapacityObservation, error) {
+	if err := send(map[string]any{"id": json.Number(id), "method": "account/rateLimits/read", "params": map[string]any{}}); err != nil {
+		return providerauthorization.CapacityObservation{}, errors.New("write Codex rate limit readback")
+	}
+	response, err := waitResponse(ctx, messages, readErrors, id)
+	if err != nil {
+		return providerauthorization.CapacityObservation{}, err
+	}
+	var value struct {
+		RateLimits struct {
+			Primary *struct {
+				UsedPercent        int32 `json:"usedPercent"`
+				WindowDurationMins int64 `json:"windowDurationMins"`
+				ResetsAt           int64 `json:"resetsAt"`
+			} `json:"primary"`
+		} `json:"rateLimits"`
+	}
+	if json.Unmarshal(response.Result, &value) != nil || value.RateLimits.Primary == nil ||
+		value.RateLimits.Primary.UsedPercent < 0 || value.RateLimits.Primary.UsedPercent > 100 ||
+		value.RateLimits.Primary.WindowDurationMins <= 0 || value.RateLimits.Primary.WindowDurationMins > 31*24*60 ||
+		value.RateLimits.Primary.ResetsAt <= 0 {
+		return providerauthorization.CapacityObservation{}, errors.New("Codex rate limit readback is invalid")
+	}
+	now := time.Now().UTC()
+	reset := time.Unix(value.RateLimits.Primary.ResetsAt, 0).UTC()
+	if !reset.After(now.Add(-time.Minute)) || reset.After(now.Add(32*24*time.Hour)) {
+		return providerauthorization.CapacityObservation{}, errors.New("Codex rate limit reset window is invalid")
+	}
+	return providerauthorization.CapacityObservation{
+		Usage: uint64(value.RateLimits.Primary.UsedPercent), Limit: 100, Revision: uint64(now.UnixMicro()),
+		WindowSeconds: uint64(value.RateLimits.Primary.WindowDurationMins) * 60,
+		ObservedAt:    now, ResetsAt: reset, ExpiresAt: now.Add(5 * time.Minute),
+	}, nil
 }
 
 func maskAccount(value string) string {
@@ -290,25 +329,25 @@ func (writer *boundedWriter) Write(value []byte) (int, error) {
 	return size, nil
 }
 
-func (client *Client) Test(ctx context.Context, credential []byte) error {
+func (client *Client) Test(ctx context.Context, credential []byte) (providerauthorization.CapacityObservation, error) {
 	if len(credential) == 0 || len(credential) > 128<<10 {
-		return errors.New("Codex credential is invalid")
+		return providerauthorization.CapacityObservation{}, errors.New("Codex credential is invalid")
 	}
 	var value map[string]any
 	if json.Unmarshal(credential, &value) != nil || len(value) == 0 {
-		return errors.New("Codex credential format is invalid")
+		return providerauthorization.CapacityObservation{}, errors.New("Codex credential format is invalid")
 	}
 	work, err := os.MkdirTemp(client.config.TemporaryRoot, "codex-test-")
 	if err != nil {
-		return errors.New("create Codex test home")
+		return providerauthorization.CapacityObservation{}, errors.New("create Codex test home")
 	}
 	defer os.RemoveAll(work)
 	if err = os.Chmod(work, 0o700); err != nil {
-		return errors.New("secure Codex test home")
+		return providerauthorization.CapacityObservation{}, errors.New("secure Codex test home")
 	}
 	credentialPath := filepath.Join(work, "auth.json")
 	if err = os.WriteFile(credentialPath, credential, 0o600); err != nil {
-		return errors.New("stage Codex test credential")
+		return providerauthorization.CapacityObservation{}, errors.New("stage Codex test credential")
 	}
 	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -316,15 +355,15 @@ func (client *Client) Test(ctx context.Context, credential []byte) error {
 	command.Env = client.environment(work)
 	stdin, err := command.StdinPipe()
 	if err != nil {
-		return errors.New("open Codex test stdin")
+		return providerauthorization.CapacityObservation{}, errors.New("open Codex test stdin")
 	}
 	stdout, err := command.StdoutPipe()
 	if err != nil {
-		return errors.New("open Codex test stdout")
+		return providerauthorization.CapacityObservation{}, errors.New("open Codex test stdout")
 	}
 	command.Stderr = &boundedWriter{target: &bytes.Buffer{}, remaining: 8 << 10}
 	if err = command.Start(); err != nil {
-		return errors.New("start Codex test app-server")
+		return providerauthorization.CapacityObservation{}, errors.New("start Codex test app-server")
 	}
 	done := make(chan error, 1)
 	go func() { done <- command.Wait() }()
@@ -352,28 +391,28 @@ func (client *Client) Test(ctx context.Context, credential []byte) error {
 		return writeErr
 	}
 	if err = send(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]string{"name": "mattercodex-integration-test", "version": "1"}, "capabilities": map[string]any{}}}); err != nil {
-		return errors.New("write Codex test initialize")
+		return providerauthorization.CapacityObservation{}, errors.New("write Codex test initialize")
 	}
 	if _, err = waitResponse(testCtx, messages, readErrors, "1"); err != nil {
-		return err
+		return providerauthorization.CapacityObservation{}, err
 	}
 	if err = send(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
-		return errors.New("write Codex test initialized")
+		return providerauthorization.CapacityObservation{}, errors.New("write Codex test initialized")
 	}
 	if err = send(map[string]any{"id": 2, "method": "account/read", "params": map[string]bool{"refreshToken": false}}); err != nil {
-		return errors.New("write Codex account readback")
+		return providerauthorization.CapacityObservation{}, errors.New("write Codex account readback")
 	}
 	response, err := waitResponse(testCtx, messages, readErrors, "2")
 	if err != nil {
-		return err
+		return providerauthorization.CapacityObservation{}, err
 	}
 	var account struct {
 		Account json.RawMessage `json:"account"`
 	}
 	if json.Unmarshal(response.Result, &account) != nil || len(account.Account) == 0 || string(account.Account) == "null" {
-		return errors.New("Codex test account readback is invalid")
+		return providerauthorization.CapacityObservation{}, errors.New("Codex test account readback is invalid")
 	}
-	return nil
+	return readCapacity(testCtx, send, messages, readErrors, "3")
 }
 
 func (client *Client) Revoke(ctx context.Context, credential []byte) error {

@@ -3,11 +3,13 @@ package resource
 import (
 	"context"
 	"errors"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -133,19 +135,19 @@ func (service *Service) ManageProtectedConfiguration(
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
 	if input.ProviderReceipt.ContractVersion != 0 {
-		if input.Kind == enum.KindProviderReference {
+		if input.Kind == enum.KindProviderReference || input.Kind == enum.KindProviderPool {
 			if input.Principal.CallerWorkload != service.integrationGatewayWorkload ||
 				input.Principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
 				input.Principal.AuthoritySource != "PROVIDER_READBACK" ||
 				validateProviderReceipt(input.Principal, input.ProviderReceipt,
 					"AI_PROVIDER_READBACK_RECEIPT", input.Action,
-					"provider_connection_reference", input.FullMethod, service.now().UTC()) != nil {
+					map[enum.Kind]string{enum.KindProviderReference: "provider_connection_reference", enum.KindProviderPool: "pool-observation"}[input.Kind], input.FullMethod, service.now().UTC()) != nil {
 				return entity.Resource{}, errs.ErrPermissionDenied
 			}
 		}
 		intentHash := input.SemanticIntentSHA256
 		var intentErr error
-		if input.Kind != enum.KindProviderReference {
+		if input.Kind != enum.KindProviderReference && input.Kind != enum.KindProviderPool {
 			intentHash, intentErr = protectedProviderIntentSHA256(input)
 		}
 		if intentErr != nil || !validSHA256Text(intentHash) ||
@@ -721,7 +723,8 @@ func protectedExternalSemanticReplay(input ManageProtectedConfigurationInput) bo
 	if input.Kind == enum.KindAgent {
 		return input.Action == "bind_bot" || input.Action == "rebind_bot" || input.Action == "revoke_bot"
 	}
-	return input.Kind == enum.KindProviderReference && input.Action == "refresh"
+	return input.Kind == enum.KindProviderReference && input.Action == "refresh" ||
+		input.Kind == enum.KindProviderPool && (input.Action == "update" || input.Action == "archive" || input.Action == "delete")
 }
 
 // replayProtectedExternalCommand выполняется до generic idempotency и любых
@@ -784,6 +787,14 @@ func (service *Service) replayProtectedExternalCommand(
 				err = validateProviderReceipt(input.Principal, input.ProviderReceipt,
 					"AI_PROVIDER_READBACK_RECEIPT", input.Action,
 					"provider_connection_reference", input.FullMethod, now)
+			case enum.KindProviderPool:
+				if input.Principal.CallerWorkload != service.integrationGatewayWorkload ||
+					input.Principal.CallerSPIFFEID != service.integrationGatewaySPIFFEID ||
+					input.Principal.AuthoritySource != "PROVIDER_READBACK" {
+					return errs.ErrPermissionDenied
+				}
+				err = validateProviderReceipt(input.Principal, input.ProviderReceipt,
+					"AI_PROVIDER_READBACK_RECEIPT", input.Action, "pool-observation", input.FullMethod, now)
 			default:
 				return errs.ErrStateConflict
 			}
@@ -1084,17 +1095,21 @@ func (service *Service) resolveProtectedSpec(
 			input.ProviderReceipt.MaskedLabel, input.ProviderReceipt.MaskedStatus
 		spec.Capabilities, spec.Eligible, spec.ObservedAt = slices.Clone(input.ProviderReceipt.Capabilities),
 			input.ProviderReceipt.Eligible, input.ProviderReceipt.IssuedAt
-		spec.CredentialBindingID, spec.CredentialBindingVersion, spec.CredentialBindingSHA256 =
-			input.ProviderReceipt.CredentialBindingID, input.ProviderReceipt.CredentialBindingVersion,
-			input.ProviderReceipt.CredentialBindingSHA256
-		binding, bindingErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, spec.CredentialBindingID)
-		if bindingErr != nil {
-			return nil, bindingErr
-		}
-		bindingSHA, digestErr := entity.ProjectionSHA256(binding)
-		if digestErr != nil || binding.Kind != enum.KindCredentialBinding || binding.State != enum.StateActive ||
-			binding.Version != spec.CredentialBindingVersion || bindingSHA != spec.CredentialBindingSHA256 {
-			return nil, errs.ErrStateConflict
+		spec.ObservedUsage, spec.ObservedLimit = input.ProviderReceipt.ObservedUsage, input.ProviderReceipt.ObservedLimit
+		spec.ObservationRevision, spec.ObservationExpiresAt = input.ProviderReceipt.ObservationRevision, input.ProviderReceipt.ObservationExpiresAt
+		spec.WindowDurationSeconds, spec.ResetsAt = input.ProviderReceipt.WindowDurationSeconds, input.ProviderReceipt.ResetsAt
+		spec.ObservationSHA256 = input.ProviderReceipt.ObservationSHA256
+		if input.Action != "archive" {
+			binding, bindingErr := service.materializeProviderCredential(ctx, tx, protected, input)
+			if bindingErr != nil {
+				return nil, bindingErr
+			}
+			bindingSHA, digestErr := entity.ProjectionSHA256(binding)
+			if digestErr != nil {
+				return nil, errs.ErrInternal
+			}
+			spec.CredentialBindingID, spec.CredentialBindingVersion, spec.CredentialBindingSHA256 =
+				binding.ID, binding.Version, bindingSHA
 		}
 		if current.ID != "" {
 			currentSpec, ok := current.Spec.(entity.ProviderConnectionReferenceSpec)
@@ -1113,12 +1128,12 @@ func (service *Service) resolveProtectedSpec(
 		if !ok || len(spec.Bindings) != len(input.ReferenceKeys) || len(input.ReferenceKeys) == 0 {
 			return nil, errs.ErrInvalidInput
 		}
-		weights := make(map[string]uint32, len(input.ReferenceKeys))
+		requested := make(map[string]entity.ProviderPoolBinding, len(input.ReferenceKeys))
 		for index, key := range input.ReferenceKeys {
 			if value.ValidateStableKey(key) != nil || spec.Bindings[index].Weight == 0 {
 				return nil, errs.ErrInvalidInput
 			}
-			weights[key] = spec.Bindings[index].Weight
+			requested[key] = spec.Bindings[index]
 		}
 		keys := slices.Clone(input.ReferenceKeys)
 		slices.Sort(keys)
@@ -1130,7 +1145,13 @@ func (service *Service) resolveProtectedSpec(
 				return nil, err
 			}
 			referenceSpec, ok := reference.Spec.(entity.ProviderConnectionReferenceSpec)
-			if !ok || !referenceSpec.Eligible || now.Sub(referenceSpec.ObservedAt) > spec.ObservationMaxAge {
+			candidate := requested[key]
+			if !ok || !referenceSpec.Eligible || now.Sub(referenceSpec.ObservedAt) > spec.ObservationMaxAge ||
+				!referenceSpec.ObservationExpiresAt.After(now) || candidate.ObservedUsage != referenceSpec.ObservedUsage ||
+				candidate.ObservedLimit != referenceSpec.ObservedLimit || candidate.ObservationRevision != referenceSpec.ObservationRevision ||
+				!candidate.ObservedAt.Equal(referenceSpec.ObservedAt) || !candidate.ObservationExpiresAt.Equal(referenceSpec.ObservationExpiresAt) ||
+				candidate.ObservationSHA256 != referenceSpec.ObservationSHA256 || candidate.WindowDurationSeconds != referenceSpec.WindowDurationSeconds ||
+				!candidate.ResetsAt.Equal(referenceSpec.ResetsAt) {
 				return nil, errs.ErrStateConflict
 			}
 			referenceID, referenceVersion, referenceSHA, err := protectedTuple(reference)
@@ -1140,8 +1161,12 @@ func (service *Service) resolveProtectedSpec(
 			spec.Bindings = append(spec.Bindings, entity.ProviderPoolBinding{
 				ProviderConnectionReferenceID: referenceID, ReferenceVersion: referenceVersion,
 				ProviderConnectionStableKey: key,
-				ReferenceSHA256:             referenceSHA, Weight: weights[key], Eligible: true,
-				MaskedStatus: referenceSpec.MaskedStatus,
+				ReferenceSHA256:             referenceSHA, Weight: candidate.Weight, Eligible: true,
+				MaskedStatus:  referenceSpec.MaskedStatus,
+				ObservedUsage: referenceSpec.ObservedUsage, ObservedLimit: referenceSpec.ObservedLimit,
+				ObservationRevision: referenceSpec.ObservationRevision, ObservedAt: referenceSpec.ObservedAt,
+				ObservationExpiresAt: referenceSpec.ObservationExpiresAt, ObservationSHA256: referenceSpec.ObservationSHA256,
+				WindowDurationSeconds: referenceSpec.WindowDurationSeconds, ResetsAt: referenceSpec.ResetsAt,
 			})
 		}
 		snapshot := spec
@@ -1475,6 +1500,81 @@ func (service *Service) appendProtectedRecords(
 	}
 	return appendOwnerStateAudit(ctx, tx, principal, protectedConfigurationScope(resource.Kind, action),
 		resource.OrganizationID, resource.ProjectID, resource.ID, string(resource.Kind), resource.Version, resource.UpdatedAt)
+}
+
+// materializeProviderCredential фиксирует opaque CredentialBinding в той же
+// owner transaction, что и ProviderConnectionReference. Повторный receipt
+// принимает только полностью совпавшее immutable поколение.
+func (service *Service) materializeProviderCredential(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	protected domainrepo.ProtectedTransaction,
+	input ManageProtectedConfigurationInput,
+) (entity.Resource, error) {
+	receipt := input.ProviderReceipt
+	materialization := controlplanecontract.ProviderCredentialMaterialization{
+		CredentialBindingID: receipt.CredentialBindingID, BindingVersion: receipt.CredentialBindingVersion,
+		CredentialGeneration: receipt.EffectGeneration,
+		Provider: receipt.Provider, ProviderObjectRef: receipt.ProviderObjectRef,
+		SecretRef: receipt.SecretRef, SecretVersion: receipt.SecretVersion,
+		SecretContentSHA256: receipt.SecretContentSHA256, MaskedAccount: receipt.MaskedAccount,
+		MaskedLabel: receipt.MaskedLabel, Capabilities: slices.Clone(receipt.Capabilities),
+		ObservedUsage: receipt.ObservedUsage, ObservedLimit: receipt.ObservedLimit,
+		ObservationRevision: receipt.ObservationRevision, ObservedAt: receipt.ObservedAt,
+		WindowSeconds: receipt.WindowDurationSeconds, ResetsAt: receipt.ResetsAt,
+		ObservationExpiresAt: receipt.ObservationExpiresAt, ObservationSHA256: receipt.ObservationSHA256,
+	}
+	digest, err := controlplanecontract.ProviderCredentialMaterializationSHA256(materialization)
+	if err != nil || digest != receipt.CredentialBindingSHA256 || receipt.CredentialBindingVersion != 1 {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	escapedRef := url.PathEscape(receipt.SecretRef)
+	spec := entity.CredentialBindingSpec{
+		Purpose: "provider-account", SecretRef: "vault://integration-gateway/" + escapedRef,
+		PrincipalRef: "provider-account:" + receipt.Provider + ":" + receipt.ProviderObjectRef,
+		Revision:     receipt.EffectGeneration, ProviderEligible: receipt.Eligible,
+		ProviderCapabilities: slices.Clone(receipt.Capabilities), ProviderObservedUsage: receipt.ObservedUsage,
+		ProviderObservedLimit: receipt.ObservedLimit, ProviderObservationRevision: receipt.ObservationRevision,
+		ProviderObservedAt:            receipt.ObservedAt,
+		ImmutableSecretRef:            "vault-versioned://integration-gateway/" + escapedRef + "/" + strconv.FormatUint(receipt.SecretVersion, 10),
+		ProviderContentVersion:        "vault-version:" + strconv.FormatUint(receipt.SecretVersion, 10),
+		ContentSHA256:                 receipt.SecretContentSHA256,
+		ProviderWindowDurationSeconds: receipt.WindowDurationSeconds, ProviderResetsAt: receipt.ResetsAt,
+		ProviderObservationExpiresAt: receipt.ObservationExpiresAt,
+		Ownership: entity.ConfigurationOwnership{ManagedBy: "UI", SourceRef: "provider-receipt:" + receipt.ReceiptID,
+			SourceRevision: receipt.ReceiptRevision, SourceSHA256: input.Principal.AuthorityDigest},
+	}
+	if spec.Validate() != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	existing, readErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID, input.Principal.ProjectID, receipt.CredentialBindingID)
+	if readErr == nil {
+		stored, ok := existing.Spec.(entity.CredentialBindingSpec)
+		storedDigest, storedErr := canonicalHash(stored)
+		expectedDigest, expectedErr := canonicalHash(spec)
+		if !ok || existing.Kind != enum.KindCredentialBinding || existing.OwnerActorID != input.Principal.ActorID ||
+			existing.State != enum.StateActive || existing.Version != 1 || storedErr != nil || expectedErr != nil || storedDigest != expectedDigest {
+			return entity.Resource{}, errs.ErrStateConflict
+		}
+		return existing, nil
+	}
+	if !errors.Is(readErr, errs.ErrNotFound) {
+		return entity.Resource{}, readErr
+	}
+	now := service.now().UTC().Truncate(time.Microsecond)
+	created, err := entity.New(receipt.CredentialBindingID, input.Principal.OrganizationID,
+		input.Principal.ProjectID, input.Principal.ProjectID, input.Principal.ActorID,
+		enum.KindCredentialBinding, "Provider account "+receipt.MaskedLabel, spec, now)
+	if err != nil {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if err = tx.Insert(ctx, created); err != nil {
+		return entity.Resource{}, err
+	}
+	if err = service.appendProtectedRecords(ctx, tx, protected, input.Principal, "materialize_provider_credential", created); err != nil {
+		return entity.Resource{}, err
+	}
+	return created, nil
 }
 
 func (service *Service) requireNoLiveProtectedReferences(

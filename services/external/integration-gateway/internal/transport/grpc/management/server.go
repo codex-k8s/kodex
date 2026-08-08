@@ -451,7 +451,7 @@ func testCategory(value string) integrationgatewayv1.IntegrationTestCategory {
 }
 
 func testToProto(value entity.IntegrationTestReceipt) *integrationgatewayv1.IntegrationTestReceipt {
-	return &integrationgatewayv1.IntegrationTestReceipt{TestId: value.ID, ConnectionId: value.ConnectionID, ConnectionVersion: value.ConnectionVersion, ConnectionGeneration: value.ConnectionGeneration, DefinitionId: value.DefinitionID, DefinitionVersion: value.DefinitionVersion, Category: testCategory(value.Category), ReceiptSha256: value.Digest, TestedAt: optionalTimestamp(value.TestedAt), ExpiresAt: timestamp(value.ExpiresAt)}
+	return &integrationgatewayv1.IntegrationTestReceipt{TestId: value.ID, ConnectionId: value.ConnectionID, ConnectionVersion: value.ConnectionVersion, ConnectionGeneration: value.ConnectionGeneration, DefinitionId: value.DefinitionID, DefinitionVersion: value.DefinitionVersion, DefinitionDigestSha256: value.DefinitionDigest, ConfigurationId: value.ConfigurationID, ConfigurationVersion: value.ConfigurationVersion, ConfigurationDigestSha256: value.ConfigurationDigest, CredentialGeneration: value.CredentialGeneration, CredentialBindingId: value.CredentialBindingID, CredentialBindingVersion: value.CredentialBindingVersion, CredentialBindingSha256: value.CredentialBindingDigest, Category: testCategory(value.Category), ReceiptSha256: value.Digest, TestedAt: optionalTimestamp(value.TestedAt), ExpiresAt: timestamp(value.ExpiresAt)}
 }
 
 func (server *Server) TestIntegrationConnection(ctx context.Context, request *integrationgatewayv1.TestIntegrationConnectionRequest) (*integrationgatewayv1.TestIntegrationConnectionResponse, error) {
@@ -459,7 +459,7 @@ func (server *Server) TestIntegrationConnection(ctx context.Context, request *in
 	if err != nil {
 		return nil, err
 	}
-	value, err := server.service.TestConnection(ctx, scope, request.GetConnectionId(), request.GetConnectionVersion(), request.GetConnectionGeneration(), request.GetDefinitionId(), request.GetDefinitionVersion(), request.GetIdempotencyKey())
+	value, err := server.service.TestConnection(ctx, managementservice.TestConnectionInput{Scope: scope, ConnectionID: request.GetConnectionId(), ConnectionVersion: request.GetConnectionVersion(), ConnectionGeneration: request.GetConnectionGeneration(), DefinitionID: request.GetDefinitionId(), DefinitionVersion: request.GetDefinitionVersion(), DefinitionDigest: request.GetDefinitionDigestSha256(), ConfigurationID: request.GetConfigurationId(), ConfigurationVersion: request.GetConfigurationVersion(), ConfigurationDigest: request.GetConfigurationDigestSha256(), IdempotencyKey: request.GetIdempotencyKey()})
 	if err != nil {
 		return nil, mapError(err)
 	}

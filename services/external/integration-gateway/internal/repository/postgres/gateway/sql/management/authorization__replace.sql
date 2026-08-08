@@ -10,7 +10,7 @@ WITH previous AS (
     UPDATE integration_gateway.provider_authorization_attempts AS authorization
        SET state = 'CANCELLED', version = authorization.version + 1,
            payload = @previous_payload::jsonb,
-           device_result_ciphertext = ''::bytea, provider_login_id_ciphertext = ''::bytea,
+           device_result_ciphertext = ''::bytea,
            lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
       FROM previous
      WHERE authorization.authorization_id = @previous_id AND previous.was_open
@@ -22,13 +22,23 @@ WITH previous AS (
       FROM previous
      WHERE connection.connection_id = previous.connection_id AND connection.status <> 'REVOKED'
     RETURNING connection.connection_id, previous.was_open
+), old_effect_unknown AS (
+    UPDATE integration_gateway.management_effects AS effect
+       SET status = 'UNKNOWN', dispatch_state = 'COMPLETED', lease_id = '',
+           lease_expires_at = NULL, updated_at = @updated_at
+      FROM previous
+     WHERE effect.resource_kind = 'provider_authorization'
+       AND effect.resource_id = @previous_id
+       AND effect.status = 'CLAIMED' AND effect.dispatch_state = 'DISPATCHED'
+    RETURNING effect.effect_id
 ), old_effect_cancelled AS (
     UPDATE integration_gateway.management_effects AS effect
-       SET status = 'CANCELLED', lease_id = '', lease_expires_at = NULL, updated_at = @updated_at
+       SET status = 'CANCELLED', dispatch_state = 'COMPLETED', lease_id = '',
+           lease_expires_at = NULL, updated_at = @updated_at
       FROM open_closed
      WHERE effect.resource_kind = 'provider_authorization'
        AND effect.resource_id = @previous_id
-       AND effect.status IN ('PENDING', 'CLAIMED')
+       AND effect.status IN ('PENDING', 'CLAIMED') AND effect.dispatch_state = 'PENDING'
     RETURNING effect.effect_id
 )
 INSERT INTO integration_gateway.provider_authorization_attempts (
@@ -40,5 +50,7 @@ SELECT @authorization_id, @tenant_id, @project_id, connection_id, @provider_id,
        @attempt, @version, @generation, @state, @intent_sha256, @expires_at,
        @failure_category, @payload::jsonb, @created_at, @updated_at
   FROM connection_changed
- WHERE NOT was_open OR EXISTS (SELECT 1 FROM old_effect_cancelled)
+ WHERE NOT was_open
+    OR EXISTS (SELECT 1 FROM old_effect_cancelled)
+    OR EXISTS (SELECT 1 FROM old_effect_unknown)
 RETURNING authorization_id

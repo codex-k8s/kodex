@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -181,7 +182,24 @@ func (vault *Vault) Revoke(ctx context.Context, ref string, version uint64) erro
 		return err
 	}
 	body, _ := json.Marshal(map[string][]uint64{"versions": {version}})
-	return vault.request(ctx, http.MethodPost, "v1/"+path.Clean(vault.config.KVMount)+"/destroy/"+path.Clean(ref), token, body, nil)
+	if err = vault.request(ctx, http.MethodPost, "v1/"+path.Clean(vault.config.KVMount)+"/destroy/"+path.Clean(ref), token, body, nil); err != nil {
+		return err
+	}
+	var readback struct {
+		Data struct {
+			Metadata struct {
+				Version   uint64 `json:"version"`
+				Destroyed bool   `json:"destroyed"`
+			} `json:"metadata"`
+		} `json:"data"`
+	}
+	if err = vault.request(ctx, http.MethodGet, vault.dataPath(ref)+"?version="+strconv.FormatUint(version, 10), token, nil, &readback); err != nil {
+		return errors.New("Vault destroy readback failed")
+	}
+	if readback.Data.Metadata.Version != version || !readback.Data.Metadata.Destroyed {
+		return errors.New("Vault destroy readback mismatch")
+	}
+	return nil
 }
 
 func (vault *Vault) Check(ctx context.Context) error {

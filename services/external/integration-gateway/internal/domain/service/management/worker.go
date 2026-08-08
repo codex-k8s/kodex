@@ -8,13 +8,16 @@ import (
 	"strings"
 	"time"
 
+	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/client/gitfetcher"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/client/managementeffect"
+	providerport "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/client/provider"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/client/providerauthorization"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/client/secretstore"
 	domainrepo "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/repository/gateway"
 	managementrepo "github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/repository/management"
 	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/entity"
+	"github.com/codex-k8s/matter-codex/services/external/integration-gateway/internal/domain/types/enum"
 	"github.com/google/uuid"
 )
 
@@ -22,6 +25,7 @@ var credentialNamespace = uuid.MustParse("5979616e-c052-4e61-b537-cbf67fbfd431")
 
 type WorkerDependencies struct {
 	Authorizer       providerauthorization.Client
+	Provider         providerport.Client
 	Secrets          secretstore.Store
 	GitSecrets       secretstore.Store
 	Effects          managementeffect.Client
@@ -31,7 +35,7 @@ type WorkerDependencies struct {
 }
 
 func (service *Service) ConfigureWorker(dependencies WorkerDependencies) error {
-	if dependencies.Authorizer == nil || dependencies.Secrets == nil || dependencies.GitSecrets == nil || dependencies.Effects == nil || dependencies.Git == nil || dependencies.SecretPathPrefix == "" || dependencies.LeaseDuration < 5*time.Second || dependencies.LeaseDuration > time.Minute {
+	if dependencies.Authorizer == nil || dependencies.Provider == nil || dependencies.Secrets == nil || dependencies.GitSecrets == nil || dependencies.Effects == nil || dependencies.Git == nil || dependencies.SecretPathPrefix == "" || dependencies.LeaseDuration < 5*time.Second || dependencies.LeaseDuration > time.Minute {
 		return errors.New("integration management worker configuration is invalid")
 	}
 	service.worker = &dependencies
@@ -53,7 +57,7 @@ func (service *Service) ProcessOne(ctx, finalizationBase context.Context) (bool,
 	if err != nil || !found {
 		return false, err
 	}
-	if effect.Attempts > 1 && singleDispatchEffect(effect.Kind) {
+	if effect.Attempts > 1 && singleDispatchEffect(effect.Kind) && effect.Kind != "PROVIDER_REVOKE" {
 		if effect.Kind == "PROVIDER_AUTHORIZE" {
 			return true, service.closeAmbiguousAuthorization(ctx, scope, effect)
 		}
@@ -62,6 +66,16 @@ func (service *Service) ProcessOne(ctx, finalizationBase context.Context) (bool,
 	effectCtx, cancelEffect := context.WithCancel(ctx)
 	renewed := make(chan error, 1)
 	go service.renewEffectLease(effectCtx, cancelEffect, renewed, scope, effect)
+	if effect.DispatchState == "PENDING" {
+		err = service.repository.BeginManagementEffectDispatch(effectCtx, scope, effect.ID, effect.LeaseID, effect.LeaseFence)
+	} else if effect.Kind != "PROVIDER_REVOKE" || effect.DispatchState != "DISPATCHED" {
+		err = errors.New("management effect dispatch state is invalid")
+	}
+	if err != nil {
+		cancelEffect()
+		<-renewed
+		return true, errors.New("management effect pre-dispatch fence rejected stale owner")
+	}
 	switch effect.Kind {
 	case "PROVIDER_AUTHORIZE":
 		err = service.authorizeProvider(effectCtx, scope, effect)
@@ -88,6 +102,9 @@ func (service *Service) ProcessOne(ctx, finalizationBase context.Context) (bool,
 		if !succeeded || checkErr != nil || err != nil {
 			err = errors.Join(managementeffect.ErrOutcomeUnknown, renewErr, checkErr, err)
 		}
+	}
+	if effect.Kind == "PROVIDER_REVOKE" && errors.Is(err, managementeffect.ErrCleanupIncomplete) {
+		return true, err
 	}
 	if err != nil && effect.Kind == "PROVIDER_REFERENCE_SYNC" {
 		err = errors.Join(err, service.revokePendingCredential(finalizeCtx, scope, effect))
@@ -208,15 +225,11 @@ func (service *Service) authorizeProvider(ctx context.Context, scope domainrepo.
 			codeExpiresAt = authorization.ExpiresAt
 		}
 		deviceRaw, _ := json.Marshal(map[string]string{"verification_url": code.VerificationURL, "user_code": code.UserCode})
-		encryptedLoginID, encryptErr := service.cipher.Encrypt(ctx, []byte(code.LoginID))
-		if encryptErr != nil {
-			return encryptErr
-		}
 		encryptedDeviceResult, encryptErr := service.cipher.Encrypt(ctx, deviceRaw)
 		if encryptErr != nil {
 			return encryptErr
 		}
-		return service.repository.MarkAuthorizationCode(ctx, scope, authorization.ID, effect.LeaseID, effect.LeaseFence, encryptedLoginID, encryptedDeviceResult, codeExpiresAt, service.now().UTC())
+		return service.repository.MarkAuthorizationCode(ctx, scope, authorization.ID, effect.LeaseID, effect.LeaseFence, encryptedDeviceResult, codeExpiresAt, service.now().UTC())
 	}, func(checkCtx context.Context) (bool, error) {
 		return service.repository.AuthorizationCancelled(checkCtx, scope, authorization.ID, effect.LeaseID, effect.LeaseFence)
 	})
@@ -232,11 +245,32 @@ func (service *Service) authorizeProvider(ctx context.Context, scope domainrepo.
 		return service.failAuthorizationAfterProvider(ctx, scope, effect, authorization.ID, err)
 	}
 	bindingID := uuid.NewSHA1(credentialNamespace, []byte(authorization.ConnectionID+"\x00"+fmt.Sprint(authorization.Generation))).String()
-	bindingDigest := digest([]any{bindingID, authorization.Generation, version.Ref, version.Version, version.ContentDigest})
-	credential := entity.CredentialGeneration{ConnectionID: authorization.ConnectionID, Generation: authorization.Generation, AuthorizationID: authorization.ID, Status: "PENDING", SecretRef: version.Ref, SecretVersion: version.Version, SecretContentDigest: version.ContentDigest, CredentialBindingID: bindingID, CredentialBindingVersion: authorization.Generation, CredentialBindingDigest: bindingDigest, MaskedAccount: result.MaskedAccount, MaskedLabel: result.MaskedLabel}
-	if err = service.repository.CompleteAuthorization(ctx, scope, authorization.ID, effect.ID, effect.LeaseID, effect.LeaseFence, credential, result.MaskedLabel, effect.IntentDigest, service.now().UTC()); err != nil {
-		_ = service.worker.Secrets.Revoke(ctx, version.Ref, version.Version)
+	capacity := entity.ProviderCapacityObservation{Usage: result.Capacity.Usage, Limit: result.Capacity.Limit, Revision: result.Capacity.Revision, ObservedAt: result.Capacity.ObservedAt, WindowSeconds: result.Capacity.WindowSeconds, ResetsAt: result.Capacity.ResetsAt, ExpiresAt: result.Capacity.ExpiresAt}
+	capacity.Digest = digest([]any{authorization.ConnectionID, authorization.Generation, capacity.Usage, capacity.Limit, capacity.Revision, capacity.ObservedAt, capacity.WindowSeconds, capacity.ResetsAt, capacity.ExpiresAt})
+	provider, providerOK := service.providers[authorization.ProviderID]
+	if !providerOK {
+		return service.failAuthorizationAfterProvider(ctx, scope, effect, authorization.ID, errors.New("provider catalog entry is unavailable"))
+	}
+	capabilities := make([]string, 0, len(provider.Capabilities))
+	for _, capability := range provider.Capabilities {
+		capabilities = append(capabilities, capability.Name)
+	}
+	bindingDigest, err := controlplanecontract.ProviderCredentialMaterializationSHA256(controlplanecontract.ProviderCredentialMaterialization{
+		CredentialBindingID: bindingID, BindingVersion: 1, CredentialGeneration: authorization.Generation, Provider: authorization.ProviderID,
+		ProviderObjectRef: authorization.ConnectionID, SecretRef: version.Ref, SecretVersion: version.Version,
+		SecretContentSHA256: version.ContentDigest, MaskedAccount: result.MaskedAccount, MaskedLabel: result.MaskedLabel,
+		Capabilities:  capabilities,
+		ObservedUsage: capacity.Usage, ObservedLimit: capacity.Limit, ObservationRevision: capacity.Revision,
+		ObservedAt: capacity.ObservedAt, WindowSeconds: capacity.WindowSeconds, ResetsAt: capacity.ResetsAt,
+		ObservationExpiresAt: capacity.ExpiresAt, ObservationSHA256: capacity.Digest,
+	})
+	if err != nil {
 		return service.failAuthorizationAfterProvider(ctx, scope, effect, authorization.ID, err)
+	}
+	credential := entity.CredentialGeneration{ConnectionID: authorization.ConnectionID, Generation: authorization.Generation, AuthorizationID: authorization.ID, Status: "PENDING", SecretRef: version.Ref, SecretVersion: version.Version, SecretContentDigest: version.ContentDigest, CredentialBindingID: bindingID, CredentialBindingVersion: 1, CredentialBindingDigest: bindingDigest, MaskedAccount: result.MaskedAccount, MaskedLabel: result.MaskedLabel, Capacity: capacity}
+	if err = service.repository.CompleteAuthorization(ctx, scope, authorization.ID, effect.ID, effect.LeaseID, effect.LeaseFence, credential, result.MaskedLabel, effect.IntentDigest, service.now().UTC()); err != nil {
+		cleanupErr := service.worker.Secrets.Revoke(ctx, version.Ref, version.Version)
+		return service.failAuthorizationAfterProvider(ctx, scope, effect, authorization.ID, errors.Join(err, cleanupErr))
 	}
 	return nil
 }
@@ -266,12 +300,17 @@ func (service *Service) syncProvider(ctx context.Context, scope domainrepo.Scope
 	candidate.CredentialBindingDigest = credential.CredentialBindingDigest
 	candidate.MaskedAccount = credential.MaskedAccount
 	candidate.MaskedLabel = credential.MaskedLabel
-	readback, err := service.worker.Effects.SyncProvider(ctx, scope, candidate, effect.IntentDigest)
+	candidate.Capacity = credential.Capacity
+	readback, err := service.worker.Effects.SyncProvider(ctx, scope, candidate, credential, effect.IntentDigest)
 	if err != nil {
 		return err
 	}
 	observationDigest := digest([]any{candidate.ID, candidate.Version + 1, candidate.Generation, candidate.CredentialBindingDigest, readback.ResourceID, readback.Version, readback.Digest})
-	_, err = service.repository.CompleteProviderSync(ctx, managementrepo.ProviderSyncCompletion{Scope: scope, EffectID: effect.ID, LeaseID: effect.LeaseID, LeaseFence: effect.LeaseFence, ExpectedVersion: connection.Version, ExpectedGeneration: connection.Generation, ControlPlaneID: readback.ResourceID, ControlPlaneVersion: readback.Version, ControlPlaneDigest: readback.Digest, ObservationDigest: observationDigest, ObservedAt: service.now().UTC()})
+	if readback.CredentialBindingID != credential.CredentialBindingID || readback.CredentialBindingVersion != credential.CredentialBindingVersion || readback.CredentialBindingDigest == "" {
+		return errors.New("control-plane credential binding readback mismatch")
+	}
+	credential.CredentialBindingDigest = readback.CredentialBindingDigest
+	_, err = service.repository.CompleteProviderSync(ctx, managementrepo.ProviderSyncCompletion{Scope: scope, EffectID: effect.ID, LeaseID: effect.LeaseID, LeaseFence: effect.LeaseFence, ExpectedVersion: connection.Version, ExpectedGeneration: connection.Generation, ControlPlaneID: readback.ResourceID, ControlPlaneVersion: readback.Version, ControlPlaneDigest: readback.Digest, ObservationDigest: observationDigest, ObservedAt: service.now().UTC(), CredentialBindingDigest: readback.CredentialBindingDigest})
 	return err
 }
 
@@ -283,7 +322,7 @@ func (service *Service) revokeProvider(ctx context.Context, scope domainrepo.Sco
 	if connection.Status != "REVOKED" || connection.Version != effect.ResourceVersion || connection.Generation != effect.ResourceGeneration {
 		return errors.New("provider revoke effect binding is stale")
 	}
-	var providerErr, secretErr, controlErr error
+	var activeCredential entity.CredentialGeneration
 	credentials, credentialListErr := service.repository.ListCredentialGenerations(ctx, scope, connection.ID)
 	if credentialListErr != nil {
 		return credentialListErr
@@ -297,25 +336,56 @@ func (service *Service) revokeProvider(ctx context.Context, scope domainrepo.Sco
 			}
 		}
 		if active != nil {
-			raw, _, getErr := service.worker.Secrets.Get(ctx, active.SecretRef)
-			if getErr == nil {
-				providerErr = service.worker.Authorizer.Revoke(ctx, raw)
-				zeroBytes(raw)
-			} else {
-				providerErr = getErr
-			}
-		} else {
-			providerErr = errors.New("active provider credential generation is absent")
+			activeCredential = *active
 		}
 	}
-	secretErr = service.revokeCredentialSecretsFromList(ctx, credentials)
-	if connection.ControlPlaneID != "" {
-		_, controlErr = service.worker.Effects.SyncProvider(ctx, scope, connection, effect.IntentDigest)
+	providerPhase := effect.ProviderPhase
+	if providerPhase == "PENDING" {
+		checkpoint, checkpointErr := service.repository.AdvanceProviderRevoke(ctx, scope, effect.ID, effect.LeaseID, effect.LeaseFence, "PROVIDER_DISPATCHED", service.now().UTC())
+		if checkpointErr != nil {
+			return errors.Join(managementeffect.ErrCleanupIncomplete, checkpointErr)
+		}
+		providerPhase = checkpoint.ProviderPhase
 	}
-	if err = errors.Join(providerErr, secretErr, controlErr); err != nil {
-		return err
+	if providerPhase == "DISPATCHED" {
+		providerStep := "PROVIDER_UNKNOWN"
+		if effect.Attempts == 1 && activeCredential.Generation > 0 {
+			raw, _, getErr := service.worker.Secrets.Get(ctx, activeCredential.SecretRef)
+			if getErr == nil {
+				revokeErr := service.worker.Authorizer.Revoke(ctx, raw)
+				zeroBytes(raw)
+				if revokeErr == nil {
+					providerStep = "PROVIDER_SUCCEEDED"
+				}
+			}
+		}
+		checkpoint, checkpointErr := service.repository.AdvanceProviderRevoke(ctx, scope, effect.ID, effect.LeaseID, effect.LeaseFence, providerStep, service.now().UTC())
+		if checkpointErr != nil {
+			return errors.Join(managementeffect.ErrCleanupIncomplete, checkpointErr)
+		}
+		providerPhase = checkpoint.ProviderPhase
 	}
-	return service.repository.CompleteManagementEffect(ctx, managementrepo.EffectCompletion{Scope: scope, EffectID: effect.ID, LeaseID: effect.LeaseID, LeaseFence: effect.LeaseFence, Status: "SUCCEEDED", At: service.now().UTC()})
+	if effect.SecretPhase != "SUCCEEDED" {
+		if secretErr := service.revokeCredentialSecretsFromList(ctx, credentials); secretErr != nil {
+			return errors.Join(managementeffect.ErrCleanupIncomplete, secretErr)
+		}
+		if _, checkpointErr := service.repository.AdvanceProviderRevoke(ctx, scope, effect.ID, effect.LeaseID, effect.LeaseFence, "SECRET_SUCCEEDED", service.now().UTC()); checkpointErr != nil {
+			return errors.Join(managementeffect.ErrCleanupIncomplete, checkpointErr)
+		}
+	}
+	if effect.ControlPlanePhase != "SUCCEEDED" {
+		if _, controlErr := service.worker.Effects.SyncProvider(ctx, scope, connection, activeCredential, effect.IntentDigest); controlErr != nil {
+			return errors.Join(managementeffect.ErrCleanupIncomplete, controlErr)
+		}
+		if _, checkpointErr := service.repository.AdvanceProviderRevoke(ctx, scope, effect.ID, effect.LeaseID, effect.LeaseFence, "CONTROL_PLANE_SUCCEEDED", service.now().UTC()); checkpointErr != nil {
+			return errors.Join(managementeffect.ErrCleanupIncomplete, checkpointErr)
+		}
+	}
+	status := "SUCCEEDED"
+	if providerPhase == "UNKNOWN" {
+		status = "UNKNOWN"
+	}
+	return service.repository.CompleteManagementEffect(ctx, managementrepo.EffectCompletion{Scope: scope, EffectID: effect.ID, LeaseID: effect.LeaseID, LeaseFence: effect.LeaseFence, Status: status, At: service.now().UTC()})
 }
 
 func (service *Service) revokeCredentialSecrets(ctx context.Context, scope domainrepo.Scope, connectionID string) error {
@@ -366,12 +436,32 @@ func (service *Service) testProvider(ctx context.Context, scope domainrepo.Scope
 	if err != nil {
 		return err
 	}
-	if connection.Version != receipt.ConnectionVersion || connection.Generation != receipt.ConnectionGeneration || connection.Status != "VALID" {
+	if connection.Version != receipt.ConnectionVersion || connection.Generation != receipt.ConnectionGeneration || connection.Status != "VALID" ||
+		connection.ActiveCredential != receipt.CredentialGeneration || connection.CredentialBindingID != receipt.CredentialBindingID ||
+		connection.CredentialBindingVersion != receipt.CredentialBindingVersion || connection.CredentialBindingDigest != receipt.CredentialBindingDigest {
 		return errors.New("integration test connection binding is stale")
 	}
-	credential, err := service.repository.GetCredentialGeneration(ctx, scope, connection.ID, connection.ActiveCredential)
+	configuration, err := service.repository.GetIntegrationConfigurationVersion(ctx, scope, receipt.ConfigurationID, receipt.ConfigurationVersion)
 	if err != nil {
 		return err
+	}
+	if configuration.ID != receipt.ConfigurationID || configuration.Version != receipt.ConfigurationVersion || configuration.Digest != receipt.ConfigurationDigest ||
+		configuration.Status != "ACTIVE" || configuration.ConnectionID != receipt.ConnectionID || configuration.ConnectionVersion != receipt.ConnectionVersion ||
+		configuration.ConnectionGeneration != receipt.ConnectionGeneration || configuration.DefinitionID != receipt.DefinitionID ||
+		configuration.DefinitionVersion != receipt.DefinitionVersion || configuration.DefinitionDigest != receipt.DefinitionDigest {
+		return errors.New("integration test configuration binding is stale")
+	}
+	definition, ok := service.definitions.Get(receipt.DefinitionID, receipt.DefinitionVersion)
+	if !ok || definition.Digest != receipt.DefinitionDigest || definition.ValidationEndpointRef == "" {
+		return errors.New("integration test definition binding is stale")
+	}
+	credential, err := service.repository.GetCredentialGeneration(ctx, scope, connection.ID, receipt.CredentialGeneration)
+	if err != nil {
+		return err
+	}
+	if credential.Status != "ACTIVE" || credential.CredentialBindingID != receipt.CredentialBindingID ||
+		credential.CredentialBindingVersion != receipt.CredentialBindingVersion || credential.CredentialBindingDigest != receipt.CredentialBindingDigest {
+		return errors.New("integration test credential binding is stale")
 	}
 	raw, version, err := service.worker.Secrets.Get(ctx, credential.SecretRef)
 	if err != nil {
@@ -382,14 +472,49 @@ func (service *Service) testProvider(ctx context.Context, scope domainrepo.Scope
 		return errors.New("integration test credential readback mismatch")
 	}
 	category := "OK"
-	testErr := service.worker.Authorizer.Test(ctx, raw)
+	capacity, testErr := service.worker.Authorizer.Test(ctx, raw)
 	if testErr != nil {
 		category = closedFailureCategory(testErr)
+	} else if capacity.Usage > capacity.Limit || capacity.Limit == 0 || !capacity.ExpiresAt.After(testedAt) {
+		category = "PROTOCOL_ERROR"
+	} else {
+		credentials := make(map[string]string)
+		for _, tool := range definition.Tools {
+			for _, purpose := range tool.HTTP.CredentialHeaders {
+				credentials[purpose] = string(raw)
+			}
+		}
+		validation := service.worker.Provider.Validate(ctx, entity.Connection{
+			ID: connection.ID, TenantID: scope.TenantID, ProjectID: scope.ProjectID,
+			IntegrationID: configuration.ID, IntegrationVersion: configuration.Version, IntegrationDigest: configuration.Digest,
+			DefinitionID: definition.ID, DefinitionVersion: definition.Version, EndpointRef: definition.ValidationEndpointRef,
+			Revision: connection.Version, Generation: connection.Generation,
+		}, credentials)
+		category = integrationTestCategory(validation)
 	}
 	testedAt = service.now().UTC()
-	testDigest := digest([]any{receipt.ID, connection.ID, connection.Version, connection.Generation, receipt.DefinitionID, receipt.DefinitionVersion, category, testedAt})
+	testDigest := digest([]any{receipt.ID, connection.ID, connection.Version, connection.Generation, receipt.CredentialGeneration, receipt.CredentialBindingID, receipt.CredentialBindingVersion, receipt.CredentialBindingDigest, receipt.DefinitionID, receipt.DefinitionVersion, receipt.DefinitionDigest, receipt.ConfigurationID, receipt.ConfigurationVersion, receipt.ConfigurationDigest, category, testedAt})
 	_, completeErr := service.repository.CompleteTest(ctx, managementrepo.TestCompletion{Scope: scope, EffectID: effect.ID, LeaseID: effect.LeaseID, LeaseFence: effect.LeaseFence, TestID: receipt.ID, Category: category, Digest: testDigest, At: testedAt})
 	return completeErr
+}
+
+func integrationTestCategory(code enum.ValidationCode) string {
+	switch code {
+	case enum.ValidationOK:
+		return "OK"
+	case enum.ValidationCredentialUnavailable:
+		return "CREDENTIAL_UNAVAILABLE"
+	case enum.ValidationUnauthorized:
+		return "UNAUTHORIZED"
+	case enum.ValidationForbidden:
+		return "FORBIDDEN"
+	case enum.ValidationEndpointUnavailable:
+		return "ENDPOINT_UNAVAILABLE"
+	case enum.ValidationTimeout:
+		return "TIMEOUT"
+	default:
+		return "PROTOCOL_ERROR"
+	}
 }
 
 func (service *Service) fetchGit(ctx context.Context, scope domainrepo.Scope, effect entity.ManagementEffect) error {
@@ -457,7 +582,7 @@ func (service *Service) applyGit(ctx context.Context, scope domainrepo.Scope, ef
 	if err != nil {
 		return err
 	}
-	_, err = service.repository.CompleteGitApply(ctx, managementrepo.GitApplyCompletion{Scope: scope, EffectID: effect.ID, LeaseID: effect.LeaseID, LeaseFence: effect.LeaseFence, ReconciliationID: reconciliation.ID, ReadbackID: readback.ResourceID, ReadbackVersion: readback.Version, ReadbackDigest: readback.Digest, At: service.now().UTC()})
+	_, err = service.repository.CompleteGitApply(ctx, managementrepo.GitApplyCompletion{Scope: scope, EffectID: effect.ID, LeaseID: effect.LeaseID, LeaseFence: effect.LeaseFence, ReconciliationID: reconciliation.ID, BindingID: binding.ID, BindingVersion: binding.Version, BindingGeneration: binding.Generation, SourceRevision: reconciliation.SourceRevision, SourceDigest: reconciliation.SourceDigest, ReadbackID: readback.ResourceID, ReadbackVersion: readback.Version, ReadbackDigest: readback.Digest, At: service.now().UTC()})
 	return err
 }
 

@@ -33,6 +33,18 @@ func providerEffectReceiptFromProto(receipt *controlplanev1.ProviderEffectReadba
 	if err != nil {
 		return value.ProviderEffectReceipt{}, err
 	}
+	observedAt, err := optionalTime(receipt.GetObservedAt())
+	if err != nil {
+		return value.ProviderEffectReceipt{}, err
+	}
+	resetsAt, err := optionalTime(receipt.GetResetsAt())
+	if err != nil {
+		return value.ProviderEffectReceipt{}, err
+	}
+	observationExpiresAt, err := optionalTime(receipt.GetObservationExpiresAt())
+	if err != nil {
+		return value.ProviderEffectReceipt{}, err
+	}
 	result := value.ProviderEffectReceipt{
 		ContractVersion: receipt.GetContractVersion(), Issuer: receipt.GetIssuer(), Purpose: receipt.GetPurpose(),
 		WorkloadID: receipt.GetWorkloadId(), CallerSPIFFEID: receipt.GetCallerSpiffeId(), FullMethod: receipt.GetFullMethod(),
@@ -48,6 +60,13 @@ func providerEffectReceiptFromProto(receipt *controlplanev1.ProviderEffectReadba
 		Eligible: receipt.GetEligible(), TargetKind: receipt.GetTargetKind(),
 		TargetResourceID: receipt.GetTargetResourceId(), TargetStableKey: receipt.GetTargetStableKey(),
 		CommandIntentSHA256: receipt.GetCommandIntentSha256(),
+		SecretRef:           receipt.GetSecretRef(), SecretVersion: receipt.GetSecretVersion(),
+		SecretContentSHA256: receipt.GetSecretContentSha256(), MaskedAccount: receipt.GetMaskedAccount(),
+		ObservedUsage: receipt.GetObservedUsage(), ObservedLimit: receipt.GetObservedLimit(),
+		ObservationRevision: receipt.GetObservationRevision(), ObservedAt: observedAt,
+		WindowDurationSeconds: receipt.GetWindowDurationSeconds(), ResetsAt: resetsAt,
+		ObservationExpiresAt: observationExpiresAt,
+		ObservationSHA256:    receipt.GetObservationSha256(),
 	}
 	result.Audience = map[string]string{
 		"MATTERMOST_PROVIDER_READBACK_RECEIPT": "urn:mattercodex:provider-readback:mattermost",
@@ -342,6 +361,10 @@ func (server *Server) ManageProviderPool(
 	ctx context.Context,
 	request *controlplanev1.ManageProviderPoolRequest,
 ) (*controlplanev1.ManageProviderPoolResponse, error) {
+	receipt, receiptErr := providerEffectReceiptFromProto(request.GetProviderReceipt())
+	if receiptErr != nil {
+		return nil, rpcError("", errs.ErrInvalidInput)
+	}
 	spec, castErr := providerPoolFromProto(request.GetSpec())
 	if castErr != nil {
 		return nil, rpcError("", errs.ErrInvalidInput)
@@ -356,7 +379,9 @@ func (server *Server) ManageProviderPool(
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindProviderPool,
 			Action:     trimEnum(request.GetAction().String(), "PROVIDER_POOL_ACTION_"),
 			ResourceID: request.GetProviderPoolId(), ExpectedVersion: request.GetExpectedVersion(),
-			Name: request.GetName(), Spec: spec, ReferenceKeys: keys,
+			Name: request.GetName(), Spec: spec, ReferenceKeys: keys, ProviderReceipt: receipt,
+		}, func(authority controlplanecontract.VerifiedCommandAuthority) (string, error) {
+			return controlplanecontract.ProviderPoolIntentSHA256(authority, request)
 		})
 	if err != nil {
 		return nil, err
