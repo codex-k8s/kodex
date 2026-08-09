@@ -16,7 +16,7 @@ metadata:
 spec:
   selector:
     matchLabels: {app.kubernetes.io/name: interaction-gateway, mattercodex.dev/internal-rpc-authority-issuer: enabled}
-  podMetricsEndpoints: [{port: authority-metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}]
+  podMetricsEndpoints: [{port: auth-metrics, path: /metrics, interval: 30s, scrapeTimeout: 5s}]
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor

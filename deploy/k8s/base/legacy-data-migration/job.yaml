@@ -76,13 +76,13 @@ spec:
                   name: internal-rpc-authority-legacy-data-migration-issuer-postgresql
                   key: username
           ports:
-            - {name: authority-metrics, containerPort: 9091, protocol: TCP}
+            - {name: auth-metrics, containerPort: 9091, protocol: TCP}
           readinessProbe:
-            httpGet: {path: /readyz, port: authority-metrics}
+            httpGet: {path: /readyz, port: auth-metrics}
             timeoutSeconds: 3
             periodSeconds: 5
           livenessProbe:
-            httpGet: {path: /livez, port: authority-metrics}
+            httpGet: {path: /livez, port: auth-metrics}
             timeoutSeconds: 2
             periodSeconds: 10
           resources:

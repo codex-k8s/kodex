@@ -14,7 +14,7 @@ spec:
       port: 9090
       targetPort: metrics
       protocol: TCP
-    - name: authority-metrics
+    - name: auth-metrics
       port: 9091
-      targetPort: authority-metrics
+      targetPort: auth-metrics
       protocol: TCP

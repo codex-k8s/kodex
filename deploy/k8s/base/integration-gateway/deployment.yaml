@@ -176,13 +176,13 @@ spec:
             - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
             - {name: SENTRY_EXPECTED_HOST, value: "sentry-relay.observability.svc:8443"}
           ports:
-            - {name: authority-metrics, containerPort: 9091}
+            - {name: auth-metrics, containerPort: 9091}
           readinessProbe:
-            httpGet: {path: /readyz, port: authority-metrics}
+            httpGet: {path: /readyz, port: auth-metrics}
             timeoutSeconds: 3
             periodSeconds: 5
           livenessProbe:
-            httpGet: {path: /livez, port: authority-metrics}
+            httpGet: {path: /livez, port: auth-metrics}
             timeoutSeconds: 2
             periodSeconds: 10
           resources:

@@ -182,9 +182,9 @@ spec:
             - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/postgres/dsn}
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
               valueFrom: {secretKeyRef: {name: internal-rpc-authority-bot-service-issuer-postgresql, key: username}}
-          ports: [{name: authority-metrics, containerPort: 9091, protocol: TCP}]
-          readinessProbe: {httpGet: {path: /readyz, port: authority-metrics}, periodSeconds: 5, failureThreshold: 3}
-          livenessProbe: {httpGet: {path: /livez, port: authority-metrics}, periodSeconds: 10, failureThreshold: 3}
+          ports: [{name: auth-metrics, containerPort: 9091, protocol: TCP}]
+          readinessProbe: {httpGet: {path: /readyz, port: auth-metrics}, periodSeconds: 5, failureThreshold: 3}
+          livenessProbe: {httpGet: {path: /livez, port: auth-metrics}, periodSeconds: 10, failureThreshold: 3}
           securityContext:
             runAsNonRoot: true
             runAsUser: 29001

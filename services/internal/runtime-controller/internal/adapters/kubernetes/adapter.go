@@ -1383,7 +1383,7 @@ func authorityIssuerContainer(image string) corev1.Container {
 			{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "otel-collector.observability.svc:4317"}, {Name: "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME", Value: "otel-collector.observability.svc.cluster.local"},
 			{Name: "OTEL_EXPORTER_OTLP_CA_FILE", Value: "/var/run/config/mattercodex/internal-rpc-authority/observability/otel-ca.pem"}, {Name: "OTEL_TRACES_SAMPLER_ARG", Value: "0.1"},
 			{Name: "SENTRY_DSN_FILE", Value: "/var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn"}, {Name: "SENTRY_EXPECTED_HOST", Value: "sentry-relay.observability.svc:8443"}},
-		Ports: []corev1.ContainerPort{{Name: "authority-metrics", ContainerPort: 9091}}, SecurityContext: restrictedSecurityContext(29001), Resources: smallResources(),
+		Ports: []corev1.ContainerPort{{Name: "auth-metrics", ContainerPort: 9091}}, SecurityContext: restrictedSecurityContext(29001), Resources: smallResources(),
 		ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(9091)}}, PeriodSeconds: 5, TimeoutSeconds: 3},
 		LivenessProbe:  &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/livez", Port: intstr.FromInt32(9091)}}, PeriodSeconds: 10, TimeoutSeconds: 2},
 		VolumeMounts: []corev1.VolumeMount{{Name: "authority-sockets", MountPath: "/run/mattercodex"},
@@ -2498,7 +2498,7 @@ func (adapter *Adapter) workerJob(
 					Command:       []string{"/usr/local/bin/internal-rpc-authority-issuer"},
 					RestartPolicy: restartPolicyPointer(corev1.ContainerRestartPolicyAlways),
 					Env:           authorityIssuerEnv(workload, spiffe), SecurityContext: restrictedSecurityContext(29001),
-					Ports: []corev1.ContainerPort{{Name: "authority-metrics", ContainerPort: 9091, Protocol: corev1.ProtocolTCP}},
+					Ports: []corev1.ContainerPort{{Name: "auth-metrics", ContainerPort: 9091, Protocol: corev1.ProtocolTCP}},
 					StartupProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
 						Path: "/readyz", Port: intstr.FromInt32(9091),
 					}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30},

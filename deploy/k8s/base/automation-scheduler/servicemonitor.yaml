@@ -14,7 +14,7 @@ spec:
       path: /metrics
       interval: 30s
       scrapeTimeout: 5s
-    - port: authority-metrics
+    - port: auth-metrics
       path: /metrics
       interval: 30s
       scrapeTimeout: 5s
