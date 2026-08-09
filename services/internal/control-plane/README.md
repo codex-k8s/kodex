@@ -9,7 +9,9 @@ integration-continuation контуром Issue
 Project/Schedule/OwnerGate/Backup/Restore path Issue
 [#231](https://github.com/codex-k8s/matter-codex/issues/231) и полной
 owner-конфигурацией Issue
-[#234](https://github.com/codex-k8s/matter-codex/issues/234).
+[#234](https://github.com/codex-k8s/matter-codex/issues/234) и authoritative
+owner readbacks Issue
+[#263](https://github.com/codex-k8s/matter-codex/issues/263).
 
 Сервис владеет:
 
@@ -35,11 +37,14 @@ owner-конфигурацией Issue
 - расписаниями, шлюзами владельца, памятью и заявками на работу;
 - owner readback и закрытыми действиями Run/Incident, а также полным
   `WORKSPACE|ALL_WORKSPACES` backup/restore envelope;
-- метаданными артефактов; immutable Instruction content записывается через
+- server-derived Agent runtime catalog, versioned Schedule presets/defaults,
+  immutable inline prompt materialization, closed `nextActions`, safe
+  Run/Incident/Restore display projections и bounded typed configuration diff;
+- метаданными артефактов; immutable Instruction и Schedule prompt content записывается через
   узкий versioned S3 client, а остальные artifact bytes остаются вне сервиса.
   Readiness перед каждым canary Put получает PostgreSQL transaction-scoped
   advisory fence на выделенной connection и только затем bounded согласует все
-  versions/delete markers выделенного prefix. Поэтому replica не удаляет live
+  versions/delete markers двух выделенных readiness prefixes. Поэтому replica не удаляет live
   VersionID соседнего probe, а ambiguous S3 commit переживает replacement pod и
   не создаёт неограниченную цепочку orphan versions.
 
@@ -97,12 +102,18 @@ TTL, ревизию сессии и JTI. Полномочия проекта р�
 сканированием байтов, а `control-plane` — метаданными и автоматом состояний.
 Неизвестные производитель, назначение учётных данных, рабочая нагрузка,
 SPIFFE ID, полный метод, audience или полномочие закрыто отклоняются.
-Новые owner operations входят в policy revision 23. Provider reference
+Новые owner operations входят в policy revision 27. Provider reference
 mutation принимает только exact `integration-gateway` provider-readback
 receipt. Workspace↔Mattermost mapping и Agent bot identity принимают только
 exact `interaction-gateway` provider-readback receipt; team/object refs
 выводятся из проверенного proof, а OIDC-профиль имеет лишь безопасные typed
 reads. Git reconcile отделён от обычного UI update точными RPC и permission.
+
+Owner readbacks Issue #263 зарегистрированы отдельными operation IDs
+`control.owner-configuration.catalog`, `control.owner-schedule.manage|get|list`
+и `control.run.list`. Startup загружает их из той же exact authority policy, а
+наблюдаемость строит bounded method labels из generated descriptor. Новых
+workers, async consumers, broker subjects, egress либо deployable не добавлено.
 
 Это receive-side contract, а не заявление готовности внешних producers.
 После merge #234 Issue #235 обязана rebase, добавить Mattermost Team/bot

@@ -50,6 +50,9 @@ func (service *Service) ManageRun(ctx context.Context, input ManageRunInput) (Ma
 			ExpectedVersion: input.ExpectedVersion, ReasonCode: input.ReasonCode})
 		return ManageRunResult{ProcessRun: cancelled}, err
 	}
+	if process.Version != input.ExpectedVersion {
+		return ManageRunResult{}, errs.ErrVersionMismatch
+	}
 	spec, ok := process.Spec.(entity.ProcessRunSpec)
 	if !ok {
 		return ManageRunResult{}, errs.ErrStateConflict
@@ -66,13 +69,10 @@ func (service *Service) ManageRun(ctx context.Context, input ManageRunInput) (Ma
 		}
 		return ManageRunResult{}, errs.ErrStateConflict
 	}
-	if turn.Version != input.ExpectedVersion {
-		return ManageRunResult{}, errs.ErrVersionMismatch
-	}
 	principal := input.Principal
 	principal.Permission = permissionRetryTurn
 	retried, err := service.RetryTurn(ctx, RetryTurnInput{Principal: principal,
-		IdempotencyKey: input.IdempotencyKey, TurnID: turn.ID, ExpectedVersion: input.ExpectedVersion,
+		IdempotencyKey: input.IdempotencyKey, TurnID: turn.ID, ExpectedVersion: turn.Version,
 		ReasonCode: input.ReasonCode})
 	if err != nil {
 		return ManageRunResult{}, err

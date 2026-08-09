@@ -141,6 +141,8 @@ type CompareInstructionVersionsInput struct {
 	InstructionSetID string
 	LeftVersion      uint64
 	RightVersion     uint64
+	PageSize         int
+	PageToken        string
 }
 
 type CompareInstructionVersionsResult struct {
@@ -148,6 +150,7 @@ type CompareInstructionVersionsResult struct {
 	Right            domainrepo.ProtectedResourceHistory
 	ContentEqual     bool
 	ComparisonSHA256 string
+	Page             OwnerConfigurationPage
 }
 
 type BindScheduleConfigurationInput struct {
@@ -169,6 +172,9 @@ type CreateScheduleFromOwnerSelectionsInput struct {
 	ProviderPoolStableKey   string
 	RoomStableKey           string
 	PromptArtifactName      string
+	PromptKind              string
+	PromptInlineMarkdown    string
+	PromptObject            domainobjectstore.Object
 	Spec                    entity.ScheduleSpec
 }
 

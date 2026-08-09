@@ -1738,7 +1738,8 @@ func (service *Service) CompareInstructionVersions(
 		return CompareInstructionVersionsResult{}, err
 	}
 	if value.ValidateID(input.InstructionSetID) != nil || input.LeftVersion == 0 ||
-		input.RightVersion == 0 || input.LeftVersion == input.RightVersion {
+		input.RightVersion == 0 || input.LeftVersion == input.RightVersion ||
+		input.PageSize < 1 || input.PageSize > 100 {
 		return CompareInstructionVersionsResult{}, errs.ErrInvalidInput
 	}
 	var result CompareInstructionVersionsResult
@@ -1765,17 +1766,34 @@ func (service *Service) CompareInstructionVersions(
 		if err != nil {
 			return err
 		}
-		left := result.Left.Resource.Spec.(entity.InstructionSetSpec)
-		right := result.Right.Resource.Spec.(entity.InstructionSetSpec)
+		left, leftOK := result.Left.Resource.Spec.(entity.InstructionSetSpec)
+		right, rightOK := result.Right.Resource.Spec.(entity.InstructionSetSpec)
+		if !leftOK || !rightOK {
+			return errs.ErrStateConflict
+		}
 		result.ContentEqual = left.ContentSHA256 == right.ContentSHA256
 		result.ComparisonSHA256, err = canonicalHash(struct {
-			InstructionSetID string
-			LeftVersion      uint64
-			LeftSHA256       string
-			RightVersion     uint64
-			RightSHA256      string
-		}{current.ID, input.LeftVersion, left.ContentSHA256, input.RightVersion, right.ContentSHA256})
+			InstructionSetID    string
+			LeftVersion         uint64
+			LeftSHA256          string
+			LeftSnapshotSHA256  string
+			RightVersion        uint64
+			RightSHA256         string
+			RightSnapshotSHA256 string
+		}{current.ID, input.LeftVersion, left.ContentSHA256, result.Left.SnapshotSHA256,
+			input.RightVersion, right.ContentSHA256, result.Right.SnapshotSHA256})
 		return err
 	})
+	if err != nil {
+		return CompareInstructionVersionsResult{}, err
+	}
+	left, leftOK := result.Left.Resource.Spec.(entity.InstructionSetSpec)
+	right, rightOK := result.Right.Resource.Spec.(entity.InstructionSetSpec)
+	if !leftOK || !rightOK {
+		return CompareInstructionVersionsResult{}, errs.ErrStateConflict
+	}
+	result.Page, err = service.buildConfigurationDiffPage(input.LeftVersion, left.ContentSHA256,
+		result.Left.SnapshotSHA256, left.Content, input.RightVersion, right.ContentSHA256,
+		result.Right.SnapshotSHA256, right.Content, result.ComparisonSHA256, input.PageToken, input.PageSize)
 	return result, err
 }

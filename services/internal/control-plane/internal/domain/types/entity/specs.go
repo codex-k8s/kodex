@@ -1106,6 +1106,16 @@ type ScheduleSpec struct {
 	AgentAssignmentID        string                 `json:"agentAssignmentId,omitempty"`
 	AgentAssignmentVersion   uint64                 `json:"agentAssignmentVersion,omitempty"`
 	AgentAssignmentSHA256    string                 `json:"agentAssignmentSha256,omitempty"`
+	OwnerPresetKey           string                 `json:"ownerPresetKey,omitempty"`
+	OwnerPresetRevision      uint64                 `json:"ownerPresetRevision,omitempty"`
+	OwnerPresetSHA256        string                 `json:"ownerPresetSha256,omitempty"`
+	OwnerDefaultsRevision    uint64                 `json:"ownerDefaultsRevision,omitempty"`
+	OwnerDefaultsSHA256      string                 `json:"ownerDefaultsSha256,omitempty"`
+	PromptIntentKind         string                 `json:"promptIntentKind,omitempty"`
+	PromptDisplay            string                 `json:"promptDisplay,omitempty"`
+	PromptArtifactVersion    uint64                 `json:"promptArtifactVersion,omitempty"`
+	PromptSHA256             string                 `json:"promptSha256,omitempty"`
+	AdvancedOverrides        []string               `json:"advancedOverrides,omitempty"`
 }
 
 func (ScheduleSpec) Kind() enum.Kind { return enum.KindSchedule }
@@ -1183,6 +1193,19 @@ func (spec ScheduleSpec) Validate() error {
 		}
 	} else if spec.PlaybookRef != "" || spec.PlaybookVersion != 0 {
 		return errors.New("schedule agent target is invalid")
+	}
+	ownerIntent := spec.OwnerPresetKey != "" || spec.OwnerPresetRevision != 0 || spec.OwnerPresetSHA256 != "" ||
+		spec.OwnerDefaultsRevision != 0 || spec.OwnerDefaultsSHA256 != "" || spec.PromptIntentKind != "" ||
+		spec.PromptDisplay != "" || spec.PromptArtifactVersion != 0 || spec.PromptSHA256 != "" ||
+		len(spec.AdvancedOverrides) != 0
+	if ownerIntent && (value.ValidateStableKey(spec.OwnerPresetKey) != nil || spec.OwnerPresetRevision == 0 ||
+		!validSHA256(spec.OwnerPresetSHA256) || spec.OwnerDefaultsRevision == 0 ||
+		!validSHA256(spec.OwnerDefaultsSHA256) ||
+		(spec.PromptIntentKind != "INLINE" && spec.PromptIntentKind != "SELECTOR") ||
+		len(spec.PromptDisplay) == 0 || len(spec.PromptDisplay) > 256 || spec.PromptArtifactVersion == 0 ||
+		!validSHA256(spec.PromptSHA256) ||
+		(len(spec.AdvancedOverrides) != 0 && !validBoundedKeys(spec.AdvancedOverrides, 16))) {
+		return errors.New("schedule owner intent is invalid")
 	}
 	if spec.SessionPolicy == "NEW" {
 		if spec.ExecutionSessionID != "" {

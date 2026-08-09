@@ -112,12 +112,29 @@ func (server *Server) manageProtectedConfiguration(
 	input resource.ManageProtectedConfigurationInput,
 	semanticIntent ...func(controlplanecontract.VerifiedCommandAuthority) (string, error),
 ) (*controlplanev1.Resource, error) {
+	managed, principal, err := server.manageProtectedConfigurationResource(ctx, fullMethod, input, semanticIntent...)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := toProtoResource(managed)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
+	return encoded, nil
+}
+
+func (server *Server) manageProtectedConfigurationResource(
+	ctx context.Context,
+	fullMethod string,
+	input resource.ManageProtectedConfigurationInput,
+	semanticIntent ...func(controlplanecontract.VerifiedCommandAuthority) (string, error),
+) (entity.Resource, value.Principal, error) {
 	principal, err := authorization.Principal(ctx, fullMethod)
 	if err != nil {
-		return nil, rpcError("", errs.ErrUnauthenticated)
+		return entity.Resource{}, value.Principal{}, rpcError("", errs.ErrUnauthenticated)
 	}
 	if len(semanticIntent) > 1 {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+		return entity.Resource{}, principal, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
 	if len(semanticIntent) == 1 {
 		input.SemanticIntentSHA256, err = semanticIntent[0](controlplanecontract.VerifiedCommandAuthority{
@@ -125,20 +142,16 @@ func (server *Server) manageProtectedConfiguration(
 			ProjectID: principal.ProjectID, WorkloadID: principal.CallerWorkload, FullMethod: fullMethod,
 		})
 		if err != nil {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+			return entity.Resource{}, principal, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 		}
 	}
 	input.Principal = principal
 	input.FullMethod = fullMethod
 	managed, err := server.service.ManageProtectedConfiguration(ctx, input)
 	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
+		return entity.Resource{}, principal, rpcError(principal.CorrelationID, err)
 	}
-	encoded, err := toProtoResource(managed)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return encoded, nil
+	return managed, principal, nil
 }
 
 func (server *Server) ManageRoleDefinition(
@@ -186,7 +199,7 @@ func (server *Server) ManageAgent(
 	ctx context.Context,
 	request *controlplanev1.ManageAgentRequest,
 ) (*controlplanev1.ManageAgentResponse, error) {
-	managed, err := server.manageProtectedConfiguration(ctx,
+	managed, principal, err := server.manageProtectedConfigurationResource(ctx,
 		controlplanev1.ControlPlaneService_ManageAgent_FullMethodName,
 		resource.ManageProtectedConfigurationInput{
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindAgent,
@@ -201,7 +214,11 @@ func (server *Server) ManageAgent(
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.ManageAgentResponse{Agent: managed}, nil
+	projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, managed)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	return &controlplanev1.ManageAgentResponse{Projection: agentOwnerProjectionToProto(projection)}, nil
 }
 
 func (server *Server) ReconcileGitAgent(
@@ -250,7 +267,7 @@ func (server *Server) ManageAgentMattermostBotIdentity(
 	default:
 		return nil, rpcError("", errs.ErrInvalidInput)
 	}
-	managed, err := server.manageProtectedConfiguration(ctx,
+	managed, principal, err := server.manageProtectedConfigurationResource(ctx,
 		controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
 		resource.ManageProtectedConfigurationInput{
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindAgent,
@@ -260,7 +277,12 @@ func (server *Server) ManageAgentMattermostBotIdentity(
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.ManageAgentMattermostBotIdentityResponse{Agent: managed}, nil
+	projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, managed)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	return &controlplanev1.ManageAgentMattermostBotIdentityResponse{
+		Projection: agentOwnerProjectionToProto(projection)}, nil
 }
 
 func (server *Server) ManageAgentAssignment(
@@ -570,18 +592,99 @@ func (server *Server) ListRoleDefinitionHistory(ctx context.Context, request *co
 }
 
 func (server *Server) GetAgent(ctx context.Context, request *controlplanev1.GetAgentRequest) (*controlplanev1.GetAgentResponse, error) {
-	item, err := server.getProtectedConfiguration(ctx, controlplanev1.ControlPlaneService_GetAgent_FullMethodName, request.GetAgentId(), enum.KindAgent)
-	return &controlplanev1.GetAgentResponse{Agent: item}, err
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_GetAgent_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	agent, err := server.service.GetProtectedConfiguration(ctx, principal, request.GetAgentId(), enum.KindAgent)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, agent)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	return &controlplanev1.GetAgentResponse{Projection: agentOwnerProjectionToProto(projection)}, nil
 }
 
 func (server *Server) ListAgents(ctx context.Context, request *controlplanev1.ListAgentsRequest) (*controlplanev1.ListAgentsResponse, error) {
-	items, next, err := server.listProtectedConfigurations(ctx, controlplanev1.ControlPlaneService_ListAgents_FullMethodName, enum.KindAgent, request.GetStates(), request.GetPageToken(), request.GetPageSize())
-	return &controlplanev1.ListAgentsResponse{Agents: items, NextPageToken: next}, err
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_ListAgents_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	states := make([]enum.State, 0, len(request.GetStates()))
+	for _, state := range request.GetStates() {
+		states = append(states, fromProtoState(state))
+	}
+	limit := pageSize(request.GetPageSize())
+	items, err := server.service.ListProtectedConfigurations(ctx, principal, enum.KindAgent,
+		states, request.GetPageToken(), limit)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	response := &controlplanev1.ListAgentsResponse{}
+	for _, item := range items {
+		projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, item)
+		if projectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectionErr)
+		}
+		response.Projections = append(response.Projections, agentOwnerProjectionToProto(projection))
+	}
+	if len(items) == limit {
+		response.NextPageToken = items[len(items)-1].ID
+	}
+	return response, nil
 }
 
 func (server *Server) ListAgentHistory(ctx context.Context, request *controlplanev1.ListAgentHistoryRequest) (*controlplanev1.ListAgentHistoryResponse, error) {
-	items, next, err := server.listProtectedHistory(ctx, controlplanev1.ControlPlaneService_ListAgentHistory_FullMethodName, request.GetAgentId(), enum.KindAgent, request.GetPageToken(), request.GetPageSize())
-	return &controlplanev1.ListAgentHistoryResponse{Entries: items, NextPageToken: next}, err
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_ListAgentHistory_FullMethodName)
+	if err != nil {
+		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	beforeVersion, err := parseUint64PageToken(request.GetPageToken())
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	limit := pageSize(request.GetPageSize())
+	items, err := server.service.ListProtectedResourceHistory(ctx, resource.ProtectedResourceHistoryInput{
+		Principal: principal, ResourceID: request.GetAgentId(), Kind: enum.KindAgent,
+		BeforeVersion: beforeVersion, Limit: limit,
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	response := &controlplanev1.ListAgentHistoryResponse{}
+	for _, item := range items {
+		projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, item.Resource)
+		if projectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectionErr)
+		}
+		response.Projections = append(response.Projections, &controlplanev1.AgentOwnerHistoryEntry{
+			Projection: agentOwnerProjectionToProto(projection), Action: agentHistoryActionToProto(item.Action),
+			SnapshotSha256: item.SnapshotSHA256, OccurredAt: timestamppb.New(item.OccurredAt),
+		})
+	}
+	if len(items) == limit {
+		response.NextPageToken = formatUint64PageToken(items[len(items)-1].Resource.Version)
+	}
+	return response, nil
+}
+
+func agentHistoryActionToProto(action string) controlplanev1.AgentHistoryAction {
+	return map[string]controlplanev1.AgentHistoryAction{
+		"create":        controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_CREATE,
+		"update":        controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_UPDATE,
+		"reconcile_git": controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_RECONCILE_GIT,
+		"pause":         controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_PAUSE,
+		"resume":        controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_RESUME,
+		"disable":       controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_DISABLE,
+		"enable":        controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_ENABLE,
+		"bind_bot":      controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_BIND_BOT,
+		"rebind_bot":    controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_REBIND_BOT,
+		"revoke_bot":    controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_REVOKE_BOT,
+		"archive":       controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_ARCHIVE,
+		"delete":        controlplanev1.AgentHistoryAction_AGENT_HISTORY_ACTION_DELETE,
+	}[action]
 }
 
 func (server *Server) GetAgentAssignment(ctx context.Context, request *controlplanev1.GetAgentAssignmentRequest) (*controlplanev1.GetAgentAssignmentResponse, error) {
@@ -663,22 +766,38 @@ func (server *Server) CompareInstructionSetVersions(ctx context.Context, request
 	result, err := server.service.CompareInstructionVersions(ctx, resource.CompareInstructionVersionsInput{
 		Principal: principal, InstructionSetID: request.GetInstructionSetId(),
 		LeftVersion: request.GetLeftVersion(), RightVersion: request.GetRightVersion(),
+		PageSize: pageSize(request.GetPageSize()), PageToken: request.GetPageToken(),
 	})
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	left, err := protectedHistoryToProto(result.Left)
-	if err != nil {
+	leftSpec, leftOK := result.Left.Resource.Spec.(entity.InstructionSetSpec)
+	rightSpec, rightOK := result.Right.Resource.Spec.(entity.InstructionSetSpec)
+	if !leftOK || !rightOK {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
-	right, err := protectedHistoryToProto(result.Right)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-	}
-	return &controlplanev1.CompareInstructionSetVersionsResponse{
-		Left: left, Right: right,
+	response := &controlplanev1.CompareInstructionSetVersionsResponse{
 		ContentEqual: result.ContentEqual, ComparisonSha256: result.ComparisonSHA256,
-	}, nil
+		Truncated: result.Page.Truncated, NextPageToken: result.Page.NextPageToken,
+		LeftVersionRef: &controlplanev1.ConfigurationVersionRef{Version: result.Left.Resource.Version,
+			ContentSha256: leftSpec.ContentSHA256, SnapshotSha256: result.Left.SnapshotSHA256},
+		RightVersionRef: &controlplanev1.ConfigurationVersionRef{Version: result.Right.Resource.Version,
+			ContentSha256: rightSpec.ContentSHA256, SnapshotSha256: result.Right.SnapshotSHA256},
+	}
+	for _, change := range result.Page.Changes {
+		response.Changes = append(response.Changes, &controlplanev1.ConfigurationChange{
+			Kind: map[string]controlplanev1.ConfigurationChangeKind{
+				"ADDED":   controlplanev1.ConfigurationChangeKind_CONFIGURATION_CHANGE_KIND_ADDED,
+				"REMOVED": controlplanev1.ConfigurationChangeKind_CONFIGURATION_CHANGE_KIND_REMOVED,
+				"CHANGED": controlplanev1.ConfigurationChangeKind_CONFIGURATION_CHANGE_KIND_CHANGED,
+			}[change.Kind], Path: change.Path,
+			Display: map[string]controlplanev1.ConfigurationChangeDisplay{
+				"TEXT":     controlplanev1.ConfigurationChangeDisplay_CONFIGURATION_CHANGE_DISPLAY_TEXT,
+				"REDACTED": controlplanev1.ConfigurationChangeDisplay_CONFIGURATION_CHANGE_DISPLAY_REDACTED,
+			}[change.Display], Before: change.Before, After: change.After,
+		})
+	}
+	return response, nil
 }
 
 func (server *Server) BindScheduleConfiguration(
@@ -718,6 +837,32 @@ func (server *Server) CreateScheduleFromOwnerSelections(
 	if intent == nil {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
+	if intent.GetPresetKey() != "" {
+		selection, selectionErr := ownerScheduleSelectionFromProto(intent)
+		if selectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+		}
+		spec, specErr := resource.BuildOwnerScheduleSpec(selection)
+		if specErr != nil {
+			return nil, rpcError(principal.CorrelationID, specErr)
+		}
+		created, createErr := server.service.CreateScheduleFromOwnerSelections(ctx, resource.CreateScheduleFromOwnerSelectionsInput{
+			Principal: principal, IdempotencyKey: request.GetIdempotencyKey(), Name: request.GetName(),
+			AgentStableKey: request.GetAgentStableKey(), InstructionSetStableKey: request.GetInstructionSetStableKey(),
+			ProviderPoolStableKey: request.GetProviderPoolStableKey(), RoomStableKey: selection.RoomStableKey,
+			PromptArtifactName: selection.Prompt.ArtifactName, PromptKind: selection.Prompt.Kind,
+			PromptInlineMarkdown: selection.Prompt.InlineMarkdown, Spec: spec,
+		})
+		if createErr != nil {
+			return nil, rpcError(principal.CorrelationID, createErr)
+		}
+		projection, projectionOK := resource.OwnerScheduleProjectionFromResource(created)
+		if !projectionOK {
+			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+		}
+		return &controlplanev1.CreateScheduleFromOwnerSelectionsResponse{
+			Projection: ownerScheduleProjectionToProto(projection)}, nil
+	}
 	interval, intervalErr := optionalDuration(intent.GetInterval())
 	misfireGrace, misfireErr := optionalDuration(intent.GetMisfireGrace())
 	initialBackoff, initialErr := optionalDuration(intent.GetInitialBackoff())
@@ -746,11 +891,12 @@ func (server *Server) CreateScheduleFromOwnerSelections(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	encoded, err := toProtoResource(created)
-	if err != nil {
+	projection, projectionOK := resource.OwnerScheduleProjectionFromResource(created)
+	if !projectionOK {
 		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
 	}
-	return &controlplanev1.CreateScheduleFromOwnerSelectionsResponse{Schedule: encoded}, nil
+	return &controlplanev1.CreateScheduleFromOwnerSelectionsResponse{
+		Projection: ownerScheduleProjectionToProto(projection)}, nil
 }
 
 func (server *Server) ManageWorkspaceMattermostMapping(
@@ -909,37 +1055,68 @@ func (server *Server) ManageWorkspaceRestore(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	encoded, err := toProtoResource(managed)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	projection, projectionErr := server.service.WorkspaceRestoreOwnerProjection(ctx, principal, managed)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
-	return &controlplanev1.ManageWorkspaceRestoreResponse{Restore: encoded}, nil
+	return &controlplanev1.ManageWorkspaceRestoreResponse{
+		Projection: workspaceRestoreOwnerProjectionToProto(projection)}, nil
 }
 
 func (server *Server) GetWorkspaceRestore(ctx context.Context, request *controlplanev1.GetWorkspaceRestoreRequest) (*controlplanev1.GetWorkspaceRestoreResponse, error) {
-	item, err := server.getProtectedConfiguration(ctx, controlplanev1.ControlPlaneService_GetWorkspaceRestore_FullMethodName, request.GetRestoreId(), enum.KindWorkspaceRestore)
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_GetWorkspaceRestore_FullMethodName)
 	if err != nil {
-		return nil, err
+		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	return &controlplanev1.GetWorkspaceRestoreResponse{Restore: item}, nil
+	item, err := server.service.GetProtectedConfiguration(ctx, principal, request.GetRestoreId(), enum.KindWorkspaceRestore)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	projection, projectionErr := server.service.WorkspaceRestoreOwnerProjection(ctx, principal, item)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	return &controlplanev1.GetWorkspaceRestoreResponse{
+		Projection: workspaceRestoreOwnerProjectionToProto(projection)}, nil
 }
 
 func (server *Server) ListWorkspaceRestores(ctx context.Context, request *controlplanev1.ListWorkspaceRestoresRequest) (*controlplanev1.ListWorkspaceRestoresResponse, error) {
-	items, next, err := server.listProtectedConfigurations(ctx, controlplanev1.ControlPlaneService_ListWorkspaceRestores_FullMethodName,
-		enum.KindWorkspaceRestore, request.GetStates(), request.GetPageToken(), request.GetPageSize())
+	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_ListWorkspaceRestores_FullMethodName)
 	if err != nil {
-		return nil, err
+		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	if request.GetBackupId() != "" {
-		filtered := items[:0]
-		for _, item := range items {
-			if spec := item.GetSpec().GetWorkspaceRestore(); spec != nil && spec.GetBackupId() == request.GetBackupId() {
-				filtered = append(filtered, item)
-			}
+	if request.GetBackupId() != "" && value.ValidateID(request.GetBackupId()) != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
+	}
+	states := make([]enum.State, 0, len(request.GetStates()))
+	for _, state := range request.GetStates() {
+		states = append(states, fromProtoState(state))
+	}
+	limit := pageSize(request.GetPageSize())
+	items, err := server.service.ListProtectedConfigurations(ctx, principal, enum.KindWorkspaceRestore,
+		states, request.GetPageToken(), limit)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	response := &controlplanev1.ListWorkspaceRestoresResponse{}
+	for _, item := range items {
+		spec, ok := item.Spec.(entity.WorkspaceRestoreSpec)
+		if !ok {
+			return nil, rpcError(principal.CorrelationID, errs.ErrStateConflict)
 		}
-		items = filtered
+		if request.GetBackupId() != "" && spec.BackupID != request.GetBackupId() {
+			continue
+		}
+		projection, projectionErr := server.service.WorkspaceRestoreOwnerProjection(ctx, principal, item)
+		if projectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectionErr)
+		}
+		response.Projections = append(response.Projections, workspaceRestoreOwnerProjectionToProto(projection))
 	}
-	return &controlplanev1.ListWorkspaceRestoresResponse{Restores: items, NextPageToken: next}, nil
+	if len(items) == limit {
+		response.NextPageToken = items[len(items)-1].ID
+	}
+	return response, nil
 }
 
 func (server *Server) ManageRuntimeIncident(
@@ -959,16 +1136,12 @@ func (server *Server) ManageRuntimeIncident(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	response := &controlplanev1.ManageRuntimeIncidentResponse{Incident: runtimeIncidentToProto(result.Incident)}
-	if result.SuccessorTurn.ID != "" {
-		response.SuccessorTurn, err = toProtoResource(result.SuccessorTurn)
-		if err != nil {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-		}
+	response := &controlplanev1.ManageRuntimeIncidentResponse{}
+	projection, projectionErr := server.service.RuntimeIncidentOwnerProjection(ctx, principal, result.Incident)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
-	if result.ReleasedExecution != nil {
-		response.ReleasedExecution = toProtoRuntimeExecution(*result.ReleasedExecution)
-	}
+	response.Projection = runtimeIncidentOwnerProjectionToProto(projection)
 	return response, nil
 }
 
@@ -986,7 +1159,12 @@ func (server *Server) GetRuntimeIncident(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	return &controlplanev1.GetRuntimeIncidentResponse{Incident: runtimeIncidentToProto(incident)}, nil
+	projection, projectionErr := server.service.RuntimeIncidentOwnerProjection(ctx, principal, incident)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	return &controlplanev1.GetRuntimeIncidentResponse{
+		Projection: runtimeIncidentOwnerProjectionToProto(projection)}, nil
 }
 
 func (server *Server) ListRuntimeIncidentHistory(
@@ -1008,31 +1186,35 @@ func (server *Server) ListRuntimeIncidentHistory(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
+	incident, err := server.service.GetRuntimeIncident(ctx, resource.GetRuntimeIncidentInput{
+		Principal: principal, IncidentID: request.GetIncidentId(),
+	})
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
+	projection, err := server.service.RuntimeIncidentOwnerProjection(ctx, principal, incident)
+	if err != nil {
+		return nil, rpcError(principal.CorrelationID, err)
+	}
 	response := &controlplanev1.ListRuntimeIncidentHistoryResponse{
-		Entries: make([]*controlplanev1.RuntimeIncidentHistoryEntry, 0, len(history)),
+		Entries:     make([]*controlplanev1.RuntimeIncidentHistoryEntry, 0, len(history)),
+		NextActions: runtimeIncidentNextActionsToProto(projection.NextActions),
 	}
 	for _, entry := range history {
-		response.Entries = append(response.Entries, &controlplanev1.RuntimeIncidentHistoryEntry{
+		item := &controlplanev1.RuntimeIncidentHistoryEntry{
 			Version: entry.Version, State: runtimeIncidentStateToProto(entry.State),
 			Action: runtimeIncidentActionToProto(entry.Action), ReasonCode: entry.ReasonCode,
-			OccurredAt: timestamppb.New(entry.OccurredAt), ExecutionFence: entry.ExecutionFence,
-		})
+			OccurredAt: timestamppb.New(entry.OccurredAt),
+		}
+		if entry.Version == projection.Version {
+			item.NextActions = runtimeIncidentNextActionsToProto(projection.NextActions)
+		}
+		response.Entries = append(response.Entries, item)
 	}
 	if len(history) == limit {
 		response.NextPageToken = formatUint64PageToken(history[len(history)-1].Version)
 	}
 	return response, nil
-}
-
-func runtimeIncidentToProto(incident domainrepo.RuntimeIncident) *controlplanev1.RuntimeIncident {
-	return &controlplanev1.RuntimeIncident{
-		IncidentId: incident.ID, ExecutionId: incident.ExecutionID,
-		ExecutionFence: incident.ExecutionFence, Kind: toProtoRuntimeIncidentKind(incident.Kind),
-		EvidenceSha256: incident.EvidenceSHA256, WorkloadId: incident.WorkloadID,
-		OccurredAt: timestamppb.New(incident.OccurredAt), Version: incident.Version,
-		State: runtimeIncidentStateToProto(incident.State), ActionReasonCode: incident.ReasonCode,
-		UpdatedAt: timestamppb.New(incident.UpdatedAt),
-	}
 }
 
 func runtimeIncidentStateToProto(state string) controlplanev1.RuntimeIncidentState {
@@ -1072,16 +1254,17 @@ func (server *Server) ManageRun(
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.ManageRunResponse{}
-	response.ProcessRun, err = toProtoResource(result.ProcessRun)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	readPrincipal := principal
+	readPrincipal.Permission = "controlplane.resource.read"
+	detail, detailErr := server.service.GetRunDetail(ctx, readPrincipal, result.ProcessRun.ID)
+	if detailErr != nil {
+		return nil, rpcError(principal.CorrelationID, detailErr)
 	}
-	if result.SuccessorTurn.ID != "" {
-		response.SuccessorTurn, err = toProtoResource(result.SuccessorTurn)
-		if err != nil {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-		}
+	projection, projectionErr := server.service.RunOwnerProjection(ctx, principal, detail)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
+	response.Projection = runOwnerProjectionToProto(projection)
 	return response, nil
 }
 
@@ -1097,26 +1280,20 @@ func (server *Server) GetRunDetail(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	response := &controlplanev1.GetRunDetailResponse{Incidents: make([]*controlplanev1.RuntimeIncident, 0, len(result.Incidents))}
-	for source, target := range map[*entity.Resource]**controlplanev1.Resource{
-		&result.ProcessRun: &response.ProcessRun, &result.Session: &response.Session,
-		&result.Turn: &response.Turn, &result.RuntimeRevision: &response.RuntimeRevision,
-	} {
-		if source.ID == "" {
-			continue
-		}
-		encoded, castErr := toProtoResource(*source)
-		if castErr != nil {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-		}
-		*target = encoded
-	}
-	if result.Runtime != nil {
-		response.RuntimeExecution = toProtoRuntimeExecution(*result.Runtime)
-	}
+	response := &controlplanev1.GetRunDetailResponse{}
 	for _, incident := range result.Incidents {
-		response.Incidents = append(response.Incidents, runtimeIncidentToProto(incident))
+		projection, projectionErr := server.service.RuntimeIncidentOwnerProjection(ctx, principal, incident)
+		if projectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectionErr)
+		}
+		response.IncidentProjections = append(response.IncidentProjections,
+			runtimeIncidentOwnerProjectionToProto(projection))
 	}
+	projection, projectionErr := server.service.RunOwnerProjection(ctx, principal, result)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	response.Projection = runOwnerProjectionToProto(projection)
 	return response, nil
 }
 
@@ -1132,33 +1309,31 @@ func (server *Server) GetRunLineage(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	encoded := &controlplanev1.RunLineage{
-		RootSessionId: lineage.RootSessionID, RootTurnId: lineage.RootTurnID,
-		ParentProcessRunId: lineage.ParentProcessRunID, CurrentSessionId: lineage.CurrentSessionID,
-		CurrentSessionVersion: lineage.CurrentSessionVersion, CurrentTurnId: lineage.CurrentTurnID,
-		CurrentTurnVersion: lineage.CurrentTurnVersion, CurrentAttempt: lineage.CurrentAttempt,
-		RuntimeRevisionId: lineage.RuntimeRevisionID, RuntimeRevisionVersion: lineage.RuntimeRevisionVersion,
-		ImmutableInputSha256: lineage.ImmutableInputSHA256, RootProcessRunId: lineage.RootProcessRunID,
-		Complete: lineage.Complete,
+	detail, detailErr := server.service.GetRunDetail(ctx, principal, request.GetProcessRunId())
+	if detailErr != nil {
+		return nil, rpcError(principal.CorrelationID, detailErr)
 	}
-	for _, process := range lineage.Processes {
-		encoded.Processes = append(encoded.Processes, &controlplanev1.RunProcessLineage{
-			ProcessRunId: process.ID, ParentProcessRunId: process.ParentProcessRunID,
-			State: process.State, Version: process.Version, ChildProcessRunIds: process.ChildIDs,
-			CreatedAt: timestamppb.New(process.OccurredAt), UpdatedAt: timestamppb.New(process.UpdatedAt),
+	ownerProjection, projectionErr := server.service.RunOwnerProjection(ctx, principal, detail)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	response := &controlplanev1.GetRunLineageResponse{}
+	lineageProjections, lineageProjectionErr := resource.RunLineageOwnerProjections(lineage)
+	if lineageProjectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, lineageProjectionErr)
+	}
+	for _, item := range lineageProjections {
+		response.Projections = append(response.Projections, &controlplanev1.RunLineageNode{
+			NodeRef: item.NodeRef, ParentRef: item.ParentRef,
+			Kind: runLineageKindToProto(item.Kind), State: runLineageStateToProto(item.State),
+			Version: item.Version, Attempt: item.Attempt, CreatedAt: timestamppb.New(item.CreatedAt),
+			UpdatedAt: timestamppb.New(item.UpdatedAt),
 		})
 	}
-	for _, attempt := range lineage.Attempts {
-		encoded.Attempts = append(encoded.Attempts, &controlplanev1.RunAttemptLineage{
-			ExecutionId: attempt.ID, ProcessRunId: attempt.ProcessRunID, SessionId: attempt.SessionID,
-			TurnId: attempt.TurnID, Attempt: attempt.Attempt, RuntimeRevisionId: attempt.RuntimeRevisionID,
-			RuntimeRevisionVersion: attempt.RuntimeRevisionVersion, State: attempt.State,
-			ExecutionVersion: attempt.Version, CreatedAt: timestamppb.New(attempt.OccurredAt),
-			UpdatedAt: timestamppb.New(attempt.UpdatedAt), PredecessorExecutionId: attempt.PredecessorID,
-			SuccessorExecutionId: attempt.SuccessorID,
-		})
+	for _, action := range ownerProjection.NextActions {
+		response.NextActions = append(response.NextActions, runNextActionToProto(action))
 	}
-	return &controlplanev1.GetRunLineageResponse{Lineage: encoded}, nil
+	return response, nil
 }
 
 func (server *Server) ListRunTimeline(
@@ -1174,15 +1349,27 @@ func (server *Server) ListRunTimeline(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	response := &controlplanev1.ListRunTimelineResponse{Events: make([]*controlplanev1.AuditEvent, 0, len(items))}
-	for _, item := range items {
-		response.Events = append(response.Events, &controlplanev1.AuditEvent{
-			Id: item.ID, Action: item.Action,
-			ResourceId: item.ResourceID, ResourceKind: toProtoKind(enum.Kind(item.ResourceKind)),
-			ResourceVersion: item.ResourceVersion, Outcome: item.Outcome, ActorId: item.ActorID,
-			CorrelationId: item.CorrelationID, PolicyRevision: item.PolicyRevision,
-			OccurredAt: timestamppb.New(item.OccurredAt),
-		})
+	response := &controlplanev1.ListRunTimelineResponse{}
+	detail, detailErr := server.service.GetRunDetail(ctx, principal, request.GetProcessRunId())
+	if detailErr != nil {
+		return nil, rpcError(principal.CorrelationID, detailErr)
+	}
+	ownerProjection, projectionErr := server.service.RunOwnerProjection(ctx, principal, detail)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	for _, item := range resource.RunTimelineOwnerProjections(items, ownerProjection.NextActions) {
+		projection := &controlplanev1.RunTimelineEntry{EventRef: item.EventRef,
+			Kind: runTimelineKindToProto(item.Kind), Display: item.Display,
+			Outcome: runTimelineOutcomeToProto(item.Outcome), Version: item.Version,
+			OccurredAt: timestamppb.New(item.OccurredAt)}
+		for _, action := range item.NextActions {
+			projection.NextActions = append(projection.NextActions, runNextActionToProto(action))
+		}
+		response.Projections = append(response.Projections, projection)
+	}
+	for _, action := range ownerProjection.NextActions {
+		response.NextActions = append(response.NextActions, runNextActionToProto(action))
 	}
 	response.NextPageToken = next
 	return response, nil
@@ -1201,16 +1388,28 @@ func (server *Server) ListRunArtifacts(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	response := &controlplanev1.ListRunArtifactsResponse{Artifacts: make([]*controlplanev1.Resource, 0, len(items))}
-	for _, item := range items {
-		encoded, castErr := toProtoResource(item)
-		if castErr != nil {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
-		}
-		response.Artifacts = append(response.Artifacts, encoded)
+	response := &controlplanev1.ListRunArtifactsResponse{}
+	detail, detailErr := server.service.GetRunDetail(ctx, principal, request.GetProcessRunId())
+	if detailErr != nil {
+		return nil, rpcError(principal.CorrelationID, detailErr)
 	}
-	if len(items) == limit {
-		response.NextPageToken = items[len(items)-1].ID
+	ownerProjection, ownerProjectionErr := server.service.RunOwnerProjection(ctx, principal, detail)
+	if ownerProjectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, ownerProjectionErr)
+	}
+	projections, projectionErr := resource.RunArtifactOwnerProjections(items)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
+	}
+	for _, item := range projections {
+		response.Projections = append(response.Projections, &controlplanev1.RunArtifactProjection{
+			ArtifactRef: item.ArtifactRef, DisplayName: item.DisplayName, Kind: item.Kind,
+			MediaType: item.MediaType, SizeBytes: item.SizeBytes, Sha256: item.SHA256,
+			Status: runArtifactStatusToProto(item.Status), CreatedAt: timestamppb.New(item.CreatedAt),
+		})
+	}
+	for _, action := range ownerProjection.NextActions {
+		response.NextActions = append(response.NextActions, runNextActionToProto(action))
 	}
 	response.NextPageToken = next
 	return response, nil

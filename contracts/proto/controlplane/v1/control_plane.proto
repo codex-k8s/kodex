@@ -45,6 +45,8 @@ service ControlPlaneService {
   rpc ReconcileGitAgent(ReconcileGitAgentRequest) returns (ReconcileGitAgentResponse);
   // ManageAgentMattermostBotIdentity принимает только exact interaction-gateway readback.
   rpc ManageAgentMattermostBotIdentity(ManageAgentMattermostBotIdentityRequest) returns (ManageAgentMattermostBotIdentityResponse);
+  // GetOwnerConfigurationCatalog возвращает server-authored runtime и Schedule selections.
+  rpc GetOwnerConfigurationCatalog(GetOwnerConfigurationCatalogRequest) returns (GetOwnerConfigurationCatalogResponse);
   // ManageAgentAssignment разрешает только assign/unassign server-owned связи.
   rpc ManageAgentAssignment(ManageAgentAssignmentRequest) returns (ManageAgentAssignmentResponse);
   // ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
@@ -165,6 +167,12 @@ service ControlPlaneService {
   // CreateScheduleFromOwnerSelections принимает только человекочитаемые
   // selections и атомарно закрепляет server-resolved target tuple.
   rpc CreateScheduleFromOwnerSelections(CreateScheduleFromOwnerSelectionsRequest) returns (CreateScheduleFromOwnerSelectionsResponse);
+  // ManageOwnerSchedule создаёт либо обновляет Schedule из basic owner intent.
+  rpc ManageOwnerSchedule(ManageOwnerScheduleRequest) returns (ManageOwnerScheduleResponse);
+  // GetOwnerSchedule возвращает безопасную effective basic/advanced проекцию.
+  rpc GetOwnerSchedule(GetOwnerScheduleRequest) returns (GetOwnerScheduleResponse);
+  // ListOwnerSchedules применяет ту же owner eligibility и redaction границу.
+  rpc ListOwnerSchedules(ListOwnerSchedulesRequest) returns (ListOwnerSchedulesResponse);
   // BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
   rpc BindScheduleConfiguration(BindScheduleConfigurationRequest) returns (BindScheduleConfigurationResponse);
   // RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
@@ -194,6 +202,8 @@ service ControlPlaneService {
   rpc CompleteProcess(CompleteProcessRequest) returns (CompleteProcessResponse);
   // ManageRun закрыто отменяет либо повторяет полный Process/Session/Turn/Runtime graph.
   rpc ManageRun(ManageRunRequest) returns (ManageRunResponse);
+  // ListOwnerRuns возвращает bounded safe owner projections без UUID joins.
+  rpc ListOwnerRuns(ListOwnerRunsRequest) returns (ListOwnerRunsResponse);
   // GetRunDetail возвращает exact current graph без authority-bearing token.
   rpc GetRunDetail(GetRunDetailRequest) returns (GetRunDetailResponse);
   // ListRunTimeline возвращает bounded typed audit timeline.
@@ -1586,6 +1596,16 @@ message ScheduleSpec {
   string agent_assignment_id = 44;
   uint64 agent_assignment_version = 45;
   string agent_assignment_sha256 = 46;
+  string owner_preset_key = 47;
+  uint64 owner_preset_revision = 48;
+  string owner_preset_sha256 = 49;
+  uint64 owner_defaults_revision = 50;
+  string owner_defaults_sha256 = 51;
+  string prompt_intent_kind = 52;
+  string prompt_display = 53;
+  uint64 prompt_artifact_version = 54;
+  string prompt_sha256 = 55;
+  repeated string advanced_overrides = 56;
 }
 
 // OwnerGateSpec описывает версионированное сообщение контракта control-plane.
@@ -1979,6 +1999,7 @@ message ManageAgentRequest {
 
 message ManageAgentResponse {
   Resource agent = 1;
+  AgentOwnerProjection projection = 2;
 }
 
 message ReconcileGitAgentRequest {
@@ -2007,6 +2028,77 @@ message ManageAgentMattermostBotIdentityRequest {
 
 message ManageAgentMattermostBotIdentityResponse {
   Resource agent = 1;
+  AgentOwnerProjection projection = 2;
+}
+
+enum OwnerProjectionStatus {
+  OWNER_PROJECTION_STATUS_UNSPECIFIED = 0;
+  OWNER_PROJECTION_STATUS_PRESENT = 1;
+  OWNER_PROJECTION_STATUS_UNAVAILABLE = 2;
+  OWNER_PROJECTION_STATUS_STALE = 3;
+  OWNER_PROJECTION_STATUS_INELIGIBLE = 4;
+}
+
+enum AgentBotIdentityStatus {
+  AGENT_BOT_IDENTITY_STATUS_UNSPECIFIED = 0;
+  AGENT_BOT_IDENTITY_STATUS_UNBOUND = 1;
+  AGENT_BOT_IDENTITY_STATUS_BOUND = 2;
+  AGENT_BOT_IDENTITY_STATUS_REVOKED = 3;
+}
+
+// AgentBotIdentityProjection не содержит provider object/team refs и receipt payload.
+message AgentBotIdentityProjection {
+  AgentBotIdentityStatus status = 1;
+  string username = 2;
+  string masked_status = 3;
+  uint64 provider_generation = 4;
+}
+
+// AgentRuntimeSelectionProjection выводится только из active RoleDefinition/RoleImageRecipe.
+message AgentRuntimeSelectionProjection {
+  string selection_key = 1;
+  string display_name = 2;
+  uint64 role_definition_version = 3;
+  string role_definition_sha256 = 4;
+  uint64 runtime_profile_version = 5;
+  string runtime_profile_sha256 = 6;
+  OwnerProjectionStatus status = 7;
+}
+
+message AgentOwnerProjection {
+  string agent_ref = 1;
+  string display_name = 2;
+  string stable_key = 3;
+  uint64 version = 4;
+  LifecycleState state = 5;
+  bool enabled = 6;
+  repeated string capabilities = 7;
+  AgentBotIdentityProjection bot_identity = 8;
+  AgentRuntimeSelectionProjection runtime_selection = 9;
+}
+
+message OwnerRuntimeSelectionCatalogEntry {
+  string selection_key = 1;
+  string display_name = 2;
+  string description = 3;
+  uint64 role_definition_version = 4;
+  string role_definition_sha256 = 5;
+  uint64 runtime_profile_version = 6;
+  string runtime_profile_sha256 = 7;
+  repeated string capabilities = 8;
+  OwnerProjectionStatus status = 9;
+}
+
+message GetOwnerConfigurationCatalogRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+message GetOwnerConfigurationCatalogResponse {
+  repeated OwnerRuntimeSelectionCatalogEntry runtime_selections = 1;
+  repeated OwnerSchedulePreset schedule_presets = 2;
+  OwnerScheduleDefaults schedule_defaults = 3;
+  string next_page_token = 4;
 }
 
 message ManageAgentAssignmentRequest {
@@ -2058,6 +2150,35 @@ message CompareInstructionSetVersionsRequest {
   string instruction_set_id = 1;
   uint64 left_version = 2;
   uint64 right_version = 3;
+  uint32 page_size = 4;
+  string page_token = 5;
+}
+
+enum ConfigurationChangeKind {
+  CONFIGURATION_CHANGE_KIND_UNSPECIFIED = 0;
+  CONFIGURATION_CHANGE_KIND_ADDED = 1;
+  CONFIGURATION_CHANGE_KIND_REMOVED = 2;
+  CONFIGURATION_CHANGE_KIND_CHANGED = 3;
+}
+
+enum ConfigurationChangeDisplay {
+  CONFIGURATION_CHANGE_DISPLAY_UNSPECIFIED = 0;
+  CONFIGURATION_CHANGE_DISPLAY_TEXT = 1;
+  CONFIGURATION_CHANGE_DISPLAY_REDACTED = 2;
+}
+
+message ConfigurationChange {
+  ConfigurationChangeKind kind = 1;
+  string path = 2;
+  ConfigurationChangeDisplay display = 3;
+  string before = 4;
+  string after = 5;
+}
+
+message ConfigurationVersionRef {
+  uint64 version = 1;
+  string content_sha256 = 2;
+  string snapshot_sha256 = 3;
 }
 
 message CompareInstructionSetVersionsResponse {
@@ -2065,6 +2186,11 @@ message CompareInstructionSetVersionsResponse {
   ProtectedResourceHistoryEntry right = 2;
   bool content_equal = 3;
   string comparison_sha256 = 4;
+  repeated ConfigurationChange changes = 5;
+  bool truncated = 6;
+  string next_page_token = 7;
+  ConfigurationVersionRef left_version_ref = 8;
+  ConfigurationVersionRef right_version_ref = 9;
 }
 
 message ManageProviderConnectionReferenceRequest {
@@ -2180,6 +2306,7 @@ message GetAgentRequest {
 }
 message GetAgentResponse {
   Resource agent = 1;
+  AgentOwnerProjection projection = 2;
 }
 message ListAgentsRequest {
   repeated LifecycleState states = 1;
@@ -2189,6 +2316,7 @@ message ListAgentsRequest {
 message ListAgentsResponse {
   repeated Resource agents = 1;
   string next_page_token = 2;
+  repeated AgentOwnerProjection projections = 3;
 }
 message ListAgentHistoryRequest {
   string agent_id = 1;
@@ -2198,6 +2326,30 @@ message ListAgentHistoryRequest {
 message ListAgentHistoryResponse {
   repeated ProtectedResourceHistoryEntry entries = 1;
   string next_page_token = 2;
+  repeated AgentOwnerHistoryEntry projections = 3;
+}
+
+enum AgentHistoryAction {
+  AGENT_HISTORY_ACTION_UNSPECIFIED = 0;
+  AGENT_HISTORY_ACTION_CREATE = 1;
+  AGENT_HISTORY_ACTION_UPDATE = 2;
+  AGENT_HISTORY_ACTION_RECONCILE_GIT = 3;
+  AGENT_HISTORY_ACTION_PAUSE = 4;
+  AGENT_HISTORY_ACTION_RESUME = 5;
+  AGENT_HISTORY_ACTION_DISABLE = 6;
+  AGENT_HISTORY_ACTION_ENABLE = 7;
+  AGENT_HISTORY_ACTION_BIND_BOT = 8;
+  AGENT_HISTORY_ACTION_REBIND_BOT = 9;
+  AGENT_HISTORY_ACTION_REVOKE_BOT = 10;
+  AGENT_HISTORY_ACTION_ARCHIVE = 11;
+  AGENT_HISTORY_ACTION_DELETE = 12;
+}
+
+message AgentOwnerHistoryEntry {
+  AgentOwnerProjection projection = 1;
+  AgentHistoryAction action = 2;
+  string snapshot_sha256 = 3;
+  google.protobuf.Timestamp occurred_at = 4;
 }
 
 message GetAgentAssignmentRequest {
@@ -2378,6 +2530,38 @@ enum RuntimeIncidentAction {
   RUNTIME_INCIDENT_ACTION_CLOSE = 4;
 }
 
+enum RuntimeIncidentNextAction {
+  RUNTIME_INCIDENT_NEXT_ACTION_UNSPECIFIED = 0;
+  RUNTIME_INCIDENT_NEXT_ACTION_ACKNOWLEDGE = 1;
+  RUNTIME_INCIDENT_NEXT_ACTION_RETRY = 2;
+  RUNTIME_INCIDENT_NEXT_ACTION_RELEASE = 3;
+  RUNTIME_INCIDENT_NEXT_ACTION_CLOSE = 4;
+}
+
+enum RuntimeIncidentSeverity {
+  RUNTIME_INCIDENT_SEVERITY_UNSPECIFIED = 0;
+  RUNTIME_INCIDENT_SEVERITY_WARNING = 1;
+  RUNTIME_INCIDENT_SEVERITY_ERROR = 2;
+  RUNTIME_INCIDENT_SEVERITY_CRITICAL = 3;
+}
+
+message RuntimeIncidentOwnerProjection {
+  string incident_ref = 1;
+  uint64 version = 2;
+  RuntimeIncidentKind kind = 3;
+  RuntimeIncidentState state = 4;
+  RuntimeIncidentSeverity severity = 5;
+  string impact = 6;
+  OwnerDisplayValue workspace = 7;
+  OwnerDisplayValue run = 8;
+  string safe_correlation = 9;
+  string diagnostic_summary = 10;
+  string runbook_url = 11;
+  google.protobuf.Timestamp occurred_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  repeated RuntimeIncidentNextAction next_actions = 14;
+}
+
 message ManageRuntimeIncidentRequest {
   string idempotency_key = 1;
   string incident_id = 2;
@@ -2391,6 +2575,7 @@ message ManageRuntimeIncidentResponse {
   Resource successor_turn = 2;
   // released_execution подтверждает фактическое закрытие полного graph для RELEASE.
   RuntimeExecution released_execution = 3;
+  RuntimeIncidentOwnerProjection projection = 4;
 }
 
 message GetRuntimeIncidentRequest {
@@ -2398,6 +2583,7 @@ message GetRuntimeIncidentRequest {
 }
 message GetRuntimeIncidentResponse {
   RuntimeIncident incident = 1;
+  RuntimeIncidentOwnerProjection projection = 2;
 }
 
 message RuntimeIncidentHistoryEntry {
@@ -2407,6 +2593,7 @@ message RuntimeIncidentHistoryEntry {
   string reason_code = 4;
   google.protobuf.Timestamp occurred_at = 5;
   uint64 execution_fence = 6;
+  repeated RuntimeIncidentNextAction next_actions = 7;
 }
 
 message ListRuntimeIncidentHistoryRequest {
@@ -2418,6 +2605,7 @@ message ListRuntimeIncidentHistoryRequest {
 message ListRuntimeIncidentHistoryResponse {
   repeated RuntimeIncidentHistoryEntry entries = 1;
   string next_page_token = 2;
+  repeated RuntimeIncidentNextAction next_actions = 3;
 }
 
 message ListRuntimeIncidentsRequest {
@@ -2428,6 +2616,7 @@ message ListRuntimeIncidentsRequest {
 message ListRuntimeIncidentsResponse {
   repeated RuntimeIncident incidents = 1;
   string next_page_token = 2;
+  repeated RuntimeIncidentOwnerProjection projections = 3;
 }
 
 // AdmitOwnerSessionRequest связывается только с verified OIDC provenance.
@@ -2858,6 +3047,100 @@ message OwnerScheduleIntent {
   google.protobuf.Duration maximum_execution_duration = 16;
   bool coalesce = 17;
   string prompt_artifact_name = 18;
+  string preset_key = 19;
+  OwnerSchedulePromptIntent prompt = 20;
+  OwnerScheduleAdvancedOverrides advanced_overrides = 21;
+}
+
+message OwnerSchedulePromptIntent {
+  oneof source {
+    string inline_markdown = 1;
+    string artifact_name = 2;
+  }
+}
+
+message OwnerScheduleAdvancedOverrides {
+  optional string cron = 1;
+  google.protobuf.Duration interval = 2;
+  optional string calendar = 3;
+  optional ScheduleOverlapPolicy overlap_policy = 4;
+  optional ScheduleMisfirePolicy misfire_policy = 5;
+  google.protobuf.Duration misfire_grace = 6;
+  optional string delivery_policy = 7;
+  optional uint32 maximum_attempts = 8;
+  google.protobuf.Duration initial_backoff = 9;
+  google.protobuf.Duration maximum_backoff = 10;
+  google.protobuf.Duration dead_letter_after = 11;
+  optional ScheduleSessionPolicy session_policy = 12;
+  optional ScheduleNotificationPolicy notification_policy = 13;
+  google.protobuf.Duration maximum_execution_duration = 14;
+  optional bool coalesce = 15;
+}
+
+message OwnerSchedulePreset {
+  string key = 1;
+  string display_name = 2;
+  string description = 3;
+  uint64 revision = 4;
+  string sha256 = 5;
+  string cron = 6;
+}
+
+message OwnerScheduleDefaults {
+  uint64 revision = 1;
+  string sha256 = 2;
+  string calendar = 3;
+  ScheduleOverlapPolicy overlap_policy = 4;
+  ScheduleMisfirePolicy misfire_policy = 5;
+  string delivery_policy = 6;
+  uint32 maximum_attempts = 7;
+  google.protobuf.Duration initial_backoff = 8;
+  google.protobuf.Duration maximum_backoff = 9;
+  google.protobuf.Duration dead_letter_after = 10;
+  ScheduleSessionPolicy session_policy = 11;
+  ScheduleNotificationPolicy notification_policy = 12;
+  google.protobuf.Duration maximum_execution_duration = 13;
+  bool coalesce = 14;
+}
+
+message OwnerScheduleProjection {
+  string schedule_ref = 1;
+  string display_name = 2;
+  uint64 version = 3;
+  LifecycleState state = 4;
+  string preset_key = 5;
+  uint64 preset_revision = 6;
+  string preset_sha256 = 7;
+  uint64 defaults_revision = 8;
+  string defaults_sha256 = 9;
+  string timezone = 10;
+  string cron = 11;
+  google.protobuf.Duration interval = 12;
+  string prompt_kind = 13;
+  string prompt_display = 14;
+  uint64 prompt_version = 15;
+  string prompt_sha256 = 16;
+  repeated string advanced_overrides = 17;
+  ScheduleOverlapPolicy overlap_policy = 18;
+  ScheduleMisfirePolicy misfire_policy = 19;
+  ScheduleSessionPolicy session_policy = 20;
+  ScheduleNotificationPolicy notification_policy = 21;
+  bool coalesce = 22;
+  google.protobuf.Timestamp next_run_at = 23;
+  string calendar = 24;
+  google.protobuf.Duration misfire_grace = 25;
+  string delivery_policy = 26;
+  uint32 maximum_attempts = 27;
+  google.protobuf.Duration initial_backoff = 28;
+  google.protobuf.Duration maximum_backoff = 29;
+  google.protobuf.Duration dead_letter_after = 30;
+  google.protobuf.Duration maximum_execution_duration = 31;
+}
+
+enum OwnerScheduleCommandAction {
+  OWNER_SCHEDULE_COMMAND_ACTION_UNSPECIFIED = 0;
+  OWNER_SCHEDULE_COMMAND_ACTION_CREATE = 1;
+  OWNER_SCHEDULE_COMMAND_ACTION_UPDATE = 2;
 }
 
 message CreateScheduleFromOwnerSelectionsRequest {
@@ -2871,6 +3154,42 @@ message CreateScheduleFromOwnerSelectionsRequest {
 
 message CreateScheduleFromOwnerSelectionsResponse {
   Resource schedule = 1;
+  OwnerScheduleProjection projection = 2;
+}
+
+message ManageOwnerScheduleRequest {
+  string idempotency_key = 1;
+  OwnerScheduleCommandAction action = 2;
+  string schedule_id = 3;
+  uint64 expected_version = 4;
+  string name = 5;
+  string agent_stable_key = 6;
+  string instruction_set_stable_key = 7;
+  string provider_pool_stable_key = 8;
+  OwnerScheduleIntent intent = 9;
+}
+
+message ManageOwnerScheduleResponse {
+  OwnerScheduleProjection schedule = 1;
+}
+
+message GetOwnerScheduleRequest {
+  string schedule_id = 1;
+}
+
+message GetOwnerScheduleResponse {
+  OwnerScheduleProjection schedule = 1;
+}
+
+message ListOwnerSchedulesRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListOwnerSchedulesResponse {
+  repeated OwnerScheduleProjection schedules = 1;
+  string next_page_token = 2;
 }
 
 message BindScheduleConfigurationRequest {
@@ -3098,6 +3417,93 @@ enum RunAction {
   RUN_ACTION_RETRY = 2;
 }
 
+enum RunNextAction {
+  RUN_NEXT_ACTION_UNSPECIFIED = 0;
+  RUN_NEXT_ACTION_CANCEL = 1;
+  RUN_NEXT_ACTION_RETRY = 2;
+}
+
+message OwnerDisplayValue {
+  OwnerProjectionStatus status = 1;
+  string value = 2;
+}
+
+message RunOwnerProjection {
+  string run_ref = 1;
+  string display_name = 2;
+  uint64 version = 3;
+  LifecycleState state = 4;
+  OwnerDisplayValue workspace = 5;
+  OwnerDisplayValue trigger = 6;
+  OwnerDisplayValue runtime_status = 7;
+  uint32 attempt = 8;
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  google.protobuf.Duration duration = 11;
+  repeated RunNextAction next_actions = 12;
+}
+
+enum RunTimelineKind {
+  RUN_TIMELINE_KIND_UNSPECIFIED = 0;
+  RUN_TIMELINE_KIND_STATE_CHANGE = 1;
+}
+
+enum RunTimelineOutcome {
+  RUN_TIMELINE_OUTCOME_UNSPECIFIED = 0;
+  RUN_TIMELINE_OUTCOME_SUCCEEDED = 1;
+  RUN_TIMELINE_OUTCOME_FAILED = 2;
+  RUN_TIMELINE_OUTCOME_CANCELLED = 3;
+  RUN_TIMELINE_OUTCOME_EXPIRED = 4;
+  RUN_TIMELINE_OUTCOME_RETRIED = 5;
+  RUN_TIMELINE_OUTCOME_REQUIRES_OWNER = 6;
+  RUN_TIMELINE_OUTCOME_OTHER = 7;
+}
+
+message RunTimelineEntry {
+  string event_ref = 1;
+  RunTimelineKind kind = 2;
+  string display = 3;
+  RunTimelineOutcome outcome = 4;
+  uint64 version = 5;
+  google.protobuf.Timestamp occurred_at = 6;
+  repeated RunNextAction next_actions = 7;
+}
+
+enum RunLineageKind {
+  RUN_LINEAGE_KIND_UNSPECIFIED = 0;
+  RUN_LINEAGE_KIND_PROCESS = 1;
+  RUN_LINEAGE_KIND_ATTEMPT = 2;
+}
+
+enum RunLineageState {
+  RUN_LINEAGE_STATE_UNSPECIFIED = 0;
+  RUN_LINEAGE_STATE_PENDING = 1;
+  RUN_LINEAGE_STATE_ADMITTED = 2;
+  RUN_LINEAGE_STATE_QUEUED = 3;
+  RUN_LINEAGE_STATE_CLAIMED = 4;
+  RUN_LINEAGE_STATE_RUNNING = 5;
+  RUN_LINEAGE_STATE_WAITING_OWNER = 6;
+  RUN_LINEAGE_STATE_WAITING_EXTERNAL = 7;
+  RUN_LINEAGE_STATE_BLOCKED = 8;
+  RUN_LINEAGE_STATE_SUCCEEDED = 9;
+  RUN_LINEAGE_STATE_FAILED = 10;
+  RUN_LINEAGE_STATE_CANCELLED = 11;
+  RUN_LINEAGE_STATE_EXPIRED = 12;
+  RUN_LINEAGE_STATE_RETRIED = 13;
+  RUN_LINEAGE_STATE_SUSPENDED = 14;
+}
+
+message RunLineageNode {
+  string node_ref = 1;
+  string parent_ref = 2;
+  RunLineageKind kind = 3;
+  RunLineageState state = 4;
+  uint64 version = 5;
+  uint32 attempt = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
 message ManageRunRequest {
   string idempotency_key = 1;
   string process_run_id = 2;
@@ -3109,6 +3515,18 @@ message ManageRunRequest {
 message ManageRunResponse {
   Resource process_run = 1;
   Resource successor_turn = 2;
+  RunOwnerProjection projection = 3;
+}
+
+message ListOwnerRunsRequest {
+  repeated LifecycleState states = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListOwnerRunsResponse {
+  repeated RunOwnerProjection runs = 1;
+  string next_page_token = 2;
 }
 
 message GetRunDetailRequest {
@@ -3121,6 +3539,8 @@ message GetRunDetailResponse {
   Resource runtime_revision = 4;
   RuntimeExecution runtime_execution = 5;
   repeated RuntimeIncident incidents = 6;
+  RunOwnerProjection projection = 7;
+  repeated RuntimeIncidentOwnerProjection incident_projections = 8;
 }
 
 message ListRunTimelineRequest {
@@ -3131,6 +3551,8 @@ message ListRunTimelineRequest {
 message ListRunTimelineResponse {
   repeated AuditEvent events = 1;
   string next_page_token = 2;
+  repeated RunTimelineEntry projections = 3;
+  repeated RunNextAction next_actions = 4;
 }
 
 message GetRunLineageRequest {
@@ -3179,6 +3601,8 @@ message RunAttemptLineage {
 }
 message GetRunLineageResponse {
   RunLineage lineage = 1;
+  repeated RunLineageNode projections = 2;
+  repeated RunNextAction next_actions = 3;
 }
 
 message ListRunArtifactsRequest {
@@ -3189,6 +3613,28 @@ message ListRunArtifactsRequest {
 message ListRunArtifactsResponse {
   repeated Resource artifacts = 1;
   string next_page_token = 2;
+  repeated RunArtifactProjection projections = 3;
+  repeated RunNextAction next_actions = 4;
+}
+
+message RunArtifactProjection {
+  string artifact_ref = 1;
+  string display_name = 2;
+  string kind = 3;
+  string media_type = 4;
+  uint64 size_bytes = 5;
+  string sha256 = 6;
+  RunArtifactStatus status = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+enum RunArtifactStatus {
+  RUN_ARTIFACT_STATUS_UNSPECIFIED = 0;
+  RUN_ARTIFACT_STATUS_PENDING = 1;
+  RUN_ARTIFACT_STATUS_SCANNING = 2;
+  RUN_ARTIFACT_STATUS_CLEAN = 3;
+  RUN_ARTIFACT_STATUS_QUARANTINED = 4;
+  RUN_ARTIFACT_STATUS_FAILED = 5;
 }
 
 message LegacyConfigurationCutover {
@@ -3637,6 +4083,26 @@ enum WorkspaceRestoreAction {
   reserved "WORKSPACE_RESTORE_ACTION_COMPLETE", "WORKSPACE_RESTORE_ACTION_FAIL", "WORKSPACE_RESTORE_ACTION_EXPIRE";
 }
 
+enum WorkspaceRestoreNextAction {
+  WORKSPACE_RESTORE_NEXT_ACTION_UNSPECIFIED = 0;
+  WORKSPACE_RESTORE_NEXT_ACTION_CANCEL = 1;
+  WORKSPACE_RESTORE_NEXT_ACTION_RETRY = 2;
+}
+
+message WorkspaceRestoreOwnerProjection {
+  string restore_ref = 1;
+  string display_name = 2;
+  uint64 version = 3;
+  WorkspaceRestoreState state = 4;
+  uint32 attempt = 5;
+  uint64 generation = 6;
+  uint32 member_count = 7;
+  string terminal_reason_code = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  repeated WorkspaceRestoreNextAction next_actions = 11;
+}
+
 message ManageWorkspaceRestoreRequest {
   string idempotency_key = 1;
   WorkspaceRestoreAction action = 2;
@@ -3651,6 +4117,7 @@ message ManageWorkspaceRestoreRequest {
 
 message ManageWorkspaceRestoreResponse {
   Resource restore = 1;
+  WorkspaceRestoreOwnerProjection projection = 2;
 }
 
 message GetWorkspaceRestoreRequest {
@@ -3659,6 +4126,7 @@ message GetWorkspaceRestoreRequest {
 
 message GetWorkspaceRestoreResponse {
   Resource restore = 1;
+  WorkspaceRestoreOwnerProjection projection = 2;
 }
 
 message ListWorkspaceRestoresRequest {
@@ -3671,6 +4139,7 @@ message ListWorkspaceRestoresRequest {
 message ListWorkspaceRestoresResponse {
   repeated Resource restores = 1;
   string next_page_token = 2;
+  repeated WorkspaceRestoreOwnerProjection projections = 3;
 }
 
 enum WorkspaceMattermostMappingAction {

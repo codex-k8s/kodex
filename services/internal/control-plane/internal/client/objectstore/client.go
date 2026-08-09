@@ -1,5 +1,5 @@
 // Package objectstore реализует service-owned S3 writer для immutable
-// InstructionSet content. Metadata authority остаётся в control-plane.
+// InstructionSet и Schedule prompt content. Metadata authority остаётся в control-plane.
 package objectstore
 
 import (
@@ -42,15 +42,18 @@ type readinessFence interface {
 	WithInstructionObjectReadinessFence(context.Context, func(context.Context) error) error
 }
 
-var errReadinessCleanup = errors.New("S3 instruction object store readiness cleanup failed")
+var errReadinessCleanup = errors.New("S3 control-plane content object store readiness cleanup failed")
 
 const (
 	readinessObjectPrefix    = "projects/00000000-0000-0000-0000-000000000000/instruction-sets/control-plane-readiness/"
 	readinessObjectKey       = readinessObjectPrefix + "probe.md"
+	scheduleReadinessPrefix  = "projects/00000000-0000-0000-0000-000000000000/schedule-prompts/control-plane-readiness/"
+	scheduleReadinessKey     = scheduleReadinessPrefix + "probe.md"
 	readinessMaximumVersions = 32
 )
 
 var readinessContent = []byte("# MatterCodex control-plane readiness\n")
+var scheduleReadinessContent = []byte("# MatterCodex Schedule prompt readiness\n")
 
 func New(config Config, fence readinessFence) (*Client, error) {
 	parsed, err := url.Parse(config.Endpoint)
@@ -58,7 +61,7 @@ func New(config Config, fence readinessFence) (*Client, error) {
 		parsed.Path != "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 		invalidBucket(config.Bucket) || config.MaximumObjectBytes < 1 || config.MaximumObjectBytes > 262144 ||
 		config.Timeout < time.Second || config.Timeout > time.Minute || fence == nil {
-		return nil, errors.New("S3 instruction object store configuration is invalid")
+		return nil, errors.New("S3 control-plane content object store configuration is invalid")
 	}
 	accessKey, err := readCredential(config.AccessKeyFile)
 	if err != nil {
@@ -94,7 +97,7 @@ func New(config Config, fence readinessFence) (*Client, error) {
 	configured, err := minio.New(parsed.Host, &minio.Options{Creds: credentials.NewStaticV4(accessKey,
 		secretKey, sessionToken), Secure: true, Transport: transport})
 	if err != nil {
-		return nil, errors.New("create S3 instruction object store client")
+		return nil, errors.New("create S3 control-plane content object store client")
 	}
 	return &Client{config: config, client: configured, fence: fence}, nil
 }
@@ -104,11 +107,11 @@ func (client *Client) Check(ctx context.Context) error {
 	defer cancel()
 	exists, err := client.client.BucketExists(checkCtx, client.config.Bucket)
 	if err != nil || !exists {
-		return errors.New("S3 instruction object store bucket is not ready")
+		return errors.New("S3 control-plane content object store bucket is not ready")
 	}
 	versioning, err := client.client.GetBucketVersioning(checkCtx, client.config.Bucket)
 	if err != nil || !versioning.Enabled() {
-		return errors.New("S3 instruction object store bucket versioning is not ready")
+		return errors.New("S3 control-plane content object store bucket versioning is not ready")
 	}
 	return client.withReadinessFence(checkCtx, func(fencedCtx context.Context) error {
 		// Все replica сначала восстанавливают authoritative S3 state под одним
@@ -117,7 +120,15 @@ func (client *Client) Check(ctx context.Context) error {
 		if err := reconcileReadinessObjects(fencedCtx, client.client, client.config.Bucket); err != nil {
 			return err
 		}
-		return client.checkWorkingPath(fencedCtx)
+		if err := reconcileReadinessObjectsAtPrefix(fencedCtx, client.client, client.config.Bucket,
+			scheduleReadinessPrefix); err != nil {
+			return err
+		}
+		if err := client.checkWorkingPath(fencedCtx); err != nil {
+			return err
+		}
+		return client.checkWorkingPathAt(fencedCtx, scheduleReadinessKey,
+			scheduleReadinessPrefix, scheduleReadinessContent)
 	})
 }
 
@@ -126,19 +137,27 @@ func (client *Client) withReadinessFence(
 	callback func(context.Context) error,
 ) error {
 	if client.fence == nil || callback == nil {
-		return errors.New("S3 instruction object store readiness fence is unavailable")
+		return errors.New("S3 control-plane content object store readiness fence is unavailable")
 	}
 	return client.fence.WithInstructionObjectReadinessFence(ctx, callback)
 }
 
 func (client *Client) checkWorkingPath(ctx context.Context) (resultErr error) {
-	expectedSHA256 := digest(readinessContent)
-	put, err := client.client.PutObject(ctx, client.config.Bucket, readinessObjectKey,
-		bytes.NewReader(readinessContent), int64(len(readinessContent)), minio.PutObjectOptions{
+	return client.checkWorkingPathAt(ctx, readinessObjectKey, readinessObjectPrefix, readinessContent)
+}
+
+func (client *Client) checkWorkingPathAt(
+	ctx context.Context,
+	objectKey, objectPrefix string,
+	content []byte,
+) (resultErr error) {
+	expectedSHA256 := digest(content)
+	put, err := client.client.PutObject(ctx, client.config.Bucket, objectKey,
+		bytes.NewReader(content), int64(len(content)), minio.PutObjectOptions{
 			ContentType: "text/markdown", UserMetadata: map[string]string{"mattercodex-sha256": expectedSHA256},
 			DisableMultipart: true,
 		})
-	if err != nil || put.Key != readinessObjectKey || put.Size != int64(len(readinessContent)) || put.VersionID == "" {
+	if err != nil || put.Key != objectKey || put.Size != int64(len(content)) || put.VersionID == "" {
 		// Commit мог состояться без доступного VersionID. Следующий probe любой
 		// replica обязан найти версию через ListObjectVersions до нового Put.
 		return errReadinessCleanup
@@ -146,31 +165,31 @@ func (client *Client) checkWorkingPath(ctx context.Context) (resultErr error) {
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), client.config.Timeout)
 		defer cancel()
-		if err := client.client.RemoveObject(cleanupCtx, client.config.Bucket, readinessObjectKey,
+		if err := client.client.RemoveObject(cleanupCtx, client.config.Bucket, objectKey,
 			minio.RemoveObjectOptions{VersionID: put.VersionID}); err != nil {
 			resultErr = errReadinessCleanup
 			return
 		}
-		if err := reconcileReadinessObjects(cleanupCtx, client.client, client.config.Bucket); err != nil {
+		if err := reconcileReadinessObjectsAtPrefix(cleanupCtx, client.client, client.config.Bucket, objectPrefix); err != nil {
 			resultErr = errReadinessCleanup
 		}
 	}()
-	info, err := client.client.StatObject(ctx, client.config.Bucket, readinessObjectKey,
+	info, err := client.client.StatObject(ctx, client.config.Bucket, objectKey,
 		minio.StatObjectOptions{VersionID: put.VersionID})
-	if err != nil || info.Key != readinessObjectKey || info.VersionID != put.VersionID ||
-		info.Size != int64(len(readinessContent)) || info.ContentType != "text/markdown" ||
+	if err != nil || info.Key != objectKey || info.VersionID != put.VersionID ||
+		info.Size != int64(len(content)) || info.ContentType != "text/markdown" ||
 		objectMetadataSHA256(info) != expectedSHA256 {
-		return errors.New("S3 instruction object store readiness stat failed")
+		return errors.New("S3 control-plane content object store readiness stat failed")
 	}
-	object, err := client.client.GetObject(ctx, client.config.Bucket, readinessObjectKey,
+	object, err := client.client.GetObject(ctx, client.config.Bucket, objectKey,
 		minio.GetObjectOptions{VersionID: put.VersionID})
 	if err != nil {
-		return errors.New("S3 instruction object store readiness read failed")
+		return errors.New("S3 control-plane content object store readiness read failed")
 	}
-	raw, readErr := io.ReadAll(io.LimitReader(object, int64(len(readinessContent))+1))
+	raw, readErr := io.ReadAll(io.LimitReader(object, int64(len(content))+1))
 	closeErr := object.Close()
-	if readErr != nil || closeErr != nil || !bytes.Equal(raw, readinessContent) || digest(raw) != expectedSHA256 {
-		return errors.New("S3 instruction object store readiness readback failed")
+	if readErr != nil || closeErr != nil || !bytes.Equal(raw, content) || digest(raw) != expectedSHA256 {
+		return errors.New("S3 control-plane content object store readiness readback failed")
 	}
 	return nil
 }
@@ -184,7 +203,15 @@ type readinessObjectStore interface {
 // выделенного deterministic prefix, затем отдельным list доказывает пустоту.
 // Bounds не позволяют readiness превратиться в неограниченный cleanup worker.
 func reconcileReadinessObjects(ctx context.Context, store readinessObjectStore, bucket string) error {
-	versions, overflow, err := listReadinessVersions(ctx, store, bucket)
+	return reconcileReadinessObjectsAtPrefix(ctx, store, bucket, readinessObjectPrefix)
+}
+
+func reconcileReadinessObjectsAtPrefix(
+	ctx context.Context,
+	store readinessObjectStore,
+	bucket, prefix string,
+) error {
+	versions, overflow, err := listReadinessVersionsAtPrefix(ctx, store, bucket, prefix)
 	if err != nil {
 		return errReadinessCleanup
 	}
@@ -194,25 +221,25 @@ func reconcileReadinessObjects(ctx context.Context, store readinessObjectStore, 
 			return errReadinessCleanup
 		}
 	}
-	remaining, remainingOverflow, err := listReadinessVersions(ctx, store, bucket)
+	remaining, remainingOverflow, err := listReadinessVersionsAtPrefix(ctx, store, bucket, prefix)
 	if err != nil || overflow || remainingOverflow || len(remaining) != 0 {
 		return errReadinessCleanup
 	}
 	return nil
 }
 
-func listReadinessVersions(
+func listReadinessVersionsAtPrefix(
 	ctx context.Context,
 	store readinessObjectStore,
-	bucket string,
+	bucket, prefix string,
 ) ([]minio.ObjectInfo, bool, error) {
 	objects := make([]minio.ObjectInfo, 0, 1)
 	overflow := false
 	for object := range store.ListObjects(ctx, bucket, minio.ListObjectsOptions{
-		Prefix: readinessObjectPrefix, Recursive: true, WithVersions: true,
+		Prefix: prefix, Recursive: true, WithVersions: true,
 	}) {
 		if object.Err != nil || object.Key == "" ||
-			!strings.HasPrefix(object.Key, readinessObjectPrefix) || object.VersionID == "" {
+			!strings.HasPrefix(object.Key, prefix) || object.VersionID == "" {
 			return nil, false, errReadinessCleanup
 		}
 		if len(objects) == readinessMaximumVersions {

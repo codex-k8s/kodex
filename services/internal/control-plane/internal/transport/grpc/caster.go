@@ -615,6 +615,16 @@ func fromProtoSpec(spec *controlplanev1.ResourceSpec) (entity.Spec, error) {
 			AgentAssignmentID:       value.Schedule.GetAgentAssignmentId(),
 			AgentAssignmentVersion:  value.Schedule.GetAgentAssignmentVersion(),
 			AgentAssignmentSHA256:   value.Schedule.GetAgentAssignmentSha256(),
+			OwnerPresetKey:          value.Schedule.GetOwnerPresetKey(),
+			OwnerPresetRevision:     value.Schedule.GetOwnerPresetRevision(),
+			OwnerPresetSHA256:       value.Schedule.GetOwnerPresetSha256(),
+			OwnerDefaultsRevision:   value.Schedule.GetOwnerDefaultsRevision(),
+			OwnerDefaultsSHA256:     value.Schedule.GetOwnerDefaultsSha256(),
+			PromptIntentKind:        value.Schedule.GetPromptIntentKind(),
+			PromptDisplay:           value.Schedule.GetPromptDisplay(),
+			PromptArtifactVersion:   value.Schedule.GetPromptArtifactVersion(),
+			PromptSHA256:            value.Schedule.GetPromptSha256(),
+			AdvancedOverrides:       value.Schedule.GetAdvancedOverrides(),
 		}, nil
 	case *controlplanev1.ResourceSpec_OwnerGate:
 		expiresAt, err := requiredTime(value.OwnerGate.GetExpiresAt())
@@ -1200,6 +1210,16 @@ func toProtoSpec(spec entity.Spec) (*controlplanev1.ResourceSpec, error) {
 				AgentAssignmentId:        value.AgentAssignmentID,
 				AgentAssignmentVersion:   value.AgentAssignmentVersion,
 				AgentAssignmentSha256:    value.AgentAssignmentSHA256,
+				OwnerPresetKey:           value.OwnerPresetKey,
+				OwnerPresetRevision:      value.OwnerPresetRevision,
+				OwnerPresetSha256:        value.OwnerPresetSHA256,
+				OwnerDefaultsRevision:    value.OwnerDefaultsRevision,
+				OwnerDefaultsSha256:      value.OwnerDefaultsSHA256,
+				PromptIntentKind:         value.PromptIntentKind,
+				PromptDisplay:            value.PromptDisplay,
+				PromptArtifactVersion:    value.PromptArtifactVersion,
+				PromptSha256:             value.PromptSHA256,
+				AdvancedOverrides:        value.AdvancedOverrides,
 			},
 		}
 	case entity.OwnerGateSpec:

@@ -28,6 +28,10 @@ func TestInstructionObjectInputGuards(t *testing.T) {
 		digest(readinessContent) == "" {
 		t.Fatal("readiness canary is outside the bounded production key shape")
 	}
+	if invalidObjectKey(strings.TrimPrefix(scheduleReadinessKey, "projects/00000000-0000-0000-0000-000000000000/")) ||
+		digest(scheduleReadinessContent) == "" {
+		t.Fatal("schedule prompt readiness canary is outside the bounded production key shape")
+	}
 }
 
 type readinessStoreStep struct {

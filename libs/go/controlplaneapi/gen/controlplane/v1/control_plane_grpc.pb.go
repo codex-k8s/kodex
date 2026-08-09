@@ -35,6 +35,7 @@ const (
 	ControlPlaneService_ManageAgent_FullMethodName                              = "/controlplane.v1.ControlPlaneService/ManageAgent"
 	ControlPlaneService_ReconcileGitAgent_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ReconcileGitAgent"
 	ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName         = "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity"
+	ControlPlaneService_GetOwnerConfigurationCatalog_FullMethodName             = "/controlplane.v1.ControlPlaneService/GetOwnerConfigurationCatalog"
 	ControlPlaneService_ManageAgentAssignment_FullMethodName                    = "/controlplane.v1.ControlPlaneService/ManageAgentAssignment"
 	ControlPlaneService_ManageInstructionSet_FullMethodName                     = "/controlplane.v1.ControlPlaneService/ManageInstructionSet"
 	ControlPlaneService_ReconcileGitInstructionSet_FullMethodName               = "/controlplane.v1.ControlPlaneService/ReconcileGitInstructionSet"
@@ -89,6 +90,9 @@ const (
 	ControlPlaneService_ManageWorkClaim_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ManageWorkClaim"
 	ControlPlaneService_ManageSchedule_FullMethodName                           = "/controlplane.v1.ControlPlaneService/ManageSchedule"
 	ControlPlaneService_CreateScheduleFromOwnerSelections_FullMethodName        = "/controlplane.v1.ControlPlaneService/CreateScheduleFromOwnerSelections"
+	ControlPlaneService_ManageOwnerSchedule_FullMethodName                      = "/controlplane.v1.ControlPlaneService/ManageOwnerSchedule"
+	ControlPlaneService_GetOwnerSchedule_FullMethodName                         = "/controlplane.v1.ControlPlaneService/GetOwnerSchedule"
+	ControlPlaneService_ListOwnerSchedules_FullMethodName                       = "/controlplane.v1.ControlPlaneService/ListOwnerSchedules"
 	ControlPlaneService_BindScheduleConfiguration_FullMethodName                = "/controlplane.v1.ControlPlaneService/BindScheduleConfiguration"
 	ControlPlaneService_RunScheduleNow_FullMethodName                           = "/controlplane.v1.ControlPlaneService/RunScheduleNow"
 	ControlPlaneService_ClaimDueSchedules_FullMethodName                        = "/controlplane.v1.ControlPlaneService/ClaimDueSchedules"
@@ -102,6 +106,7 @@ const (
 	ControlPlaneService_CancelProcess_FullMethodName                            = "/controlplane.v1.ControlPlaneService/CancelProcess"
 	ControlPlaneService_CompleteProcess_FullMethodName                          = "/controlplane.v1.ControlPlaneService/CompleteProcess"
 	ControlPlaneService_ManageRun_FullMethodName                                = "/controlplane.v1.ControlPlaneService/ManageRun"
+	ControlPlaneService_ListOwnerRuns_FullMethodName                            = "/controlplane.v1.ControlPlaneService/ListOwnerRuns"
 	ControlPlaneService_GetRunDetail_FullMethodName                             = "/controlplane.v1.ControlPlaneService/GetRunDetail"
 	ControlPlaneService_ListRunTimeline_FullMethodName                          = "/controlplane.v1.ControlPlaneService/ListRunTimeline"
 	ControlPlaneService_GetRunLineage_FullMethodName                            = "/controlplane.v1.ControlPlaneService/GetRunLineage"
@@ -240,6 +245,8 @@ type ControlPlaneServiceClient interface {
 	ReconcileGitAgent(ctx context.Context, in *ReconcileGitAgentRequest, opts ...grpc.CallOption) (*ReconcileGitAgentResponse, error)
 	// ManageAgentMattermostBotIdentity принимает только exact interaction-gateway readback.
 	ManageAgentMattermostBotIdentity(ctx context.Context, in *ManageAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*ManageAgentMattermostBotIdentityResponse, error)
+	// GetOwnerConfigurationCatalog возвращает server-authored runtime и Schedule selections.
+	GetOwnerConfigurationCatalog(ctx context.Context, in *GetOwnerConfigurationCatalogRequest, opts ...grpc.CallOption) (*GetOwnerConfigurationCatalogResponse, error)
 	// ManageAgentAssignment разрешает только assign/unassign server-owned связи.
 	ManageAgentAssignment(ctx context.Context, in *ManageAgentAssignmentRequest, opts ...grpc.CallOption) (*ManageAgentAssignmentResponse, error)
 	// ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
@@ -357,6 +364,12 @@ type ControlPlaneServiceClient interface {
 	// CreateScheduleFromOwnerSelections принимает только человекочитаемые
 	// selections и атомарно закрепляет server-resolved target tuple.
 	CreateScheduleFromOwnerSelections(ctx context.Context, in *CreateScheduleFromOwnerSelectionsRequest, opts ...grpc.CallOption) (*CreateScheduleFromOwnerSelectionsResponse, error)
+	// ManageOwnerSchedule создаёт либо обновляет Schedule из basic owner intent.
+	ManageOwnerSchedule(ctx context.Context, in *ManageOwnerScheduleRequest, opts ...grpc.CallOption) (*ManageOwnerScheduleResponse, error)
+	// GetOwnerSchedule возвращает безопасную effective basic/advanced проекцию.
+	GetOwnerSchedule(ctx context.Context, in *GetOwnerScheduleRequest, opts ...grpc.CallOption) (*GetOwnerScheduleResponse, error)
+	// ListOwnerSchedules применяет ту же owner eligibility и redaction границу.
+	ListOwnerSchedules(ctx context.Context, in *ListOwnerSchedulesRequest, opts ...grpc.CallOption) (*ListOwnerSchedulesResponse, error)
 	// BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
 	BindScheduleConfiguration(ctx context.Context, in *BindScheduleConfigurationRequest, opts ...grpc.CallOption) (*BindScheduleConfigurationResponse, error)
 	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
@@ -385,6 +398,8 @@ type ControlPlaneServiceClient interface {
 	CompleteProcess(ctx context.Context, in *CompleteProcessRequest, opts ...grpc.CallOption) (*CompleteProcessResponse, error)
 	// ManageRun закрыто отменяет либо повторяет полный Process/Session/Turn/Runtime graph.
 	ManageRun(ctx context.Context, in *ManageRunRequest, opts ...grpc.CallOption) (*ManageRunResponse, error)
+	// ListOwnerRuns возвращает bounded safe owner projections без UUID joins.
+	ListOwnerRuns(ctx context.Context, in *ListOwnerRunsRequest, opts ...grpc.CallOption) (*ListOwnerRunsResponse, error)
 	// GetRunDetail возвращает exact current graph без authority-bearing token.
 	GetRunDetail(ctx context.Context, in *GetRunDetailRequest, opts ...grpc.CallOption) (*GetRunDetailResponse, error)
 	// ListRunTimeline возвращает bounded typed audit timeline.
@@ -759,6 +774,16 @@ func (c *controlPlaneServiceClient) ManageAgentMattermostBotIdentity(ctx context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageAgentMattermostBotIdentityResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetOwnerConfigurationCatalog(ctx context.Context, in *GetOwnerConfigurationCatalogRequest, opts ...grpc.CallOption) (*GetOwnerConfigurationCatalogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOwnerConfigurationCatalogResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetOwnerConfigurationCatalog_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1305,6 +1330,36 @@ func (c *controlPlaneServiceClient) CreateScheduleFromOwnerSelections(ctx contex
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ManageOwnerSchedule(ctx context.Context, in *ManageOwnerScheduleRequest, opts ...grpc.CallOption) (*ManageOwnerScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ManageOwnerScheduleResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ManageOwnerSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetOwnerSchedule(ctx context.Context, in *GetOwnerScheduleRequest, opts ...grpc.CallOption) (*GetOwnerScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOwnerScheduleResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetOwnerSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListOwnerSchedules(ctx context.Context, in *ListOwnerSchedulesRequest, opts ...grpc.CallOption) (*ListOwnerSchedulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOwnerSchedulesResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListOwnerSchedules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) BindScheduleConfiguration(ctx context.Context, in *BindScheduleConfigurationRequest, opts ...grpc.CallOption) (*BindScheduleConfigurationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BindScheduleConfigurationResponse)
@@ -1429,6 +1484,16 @@ func (c *controlPlaneServiceClient) ManageRun(ctx context.Context, in *ManageRun
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ManageRunResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ManageRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListOwnerRuns(ctx context.Context, in *ListOwnerRunsRequest, opts ...grpc.CallOption) (*ListOwnerRunsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOwnerRunsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListOwnerRuns_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2417,6 +2482,8 @@ type ControlPlaneServiceServer interface {
 	ReconcileGitAgent(context.Context, *ReconcileGitAgentRequest) (*ReconcileGitAgentResponse, error)
 	// ManageAgentMattermostBotIdentity принимает только exact interaction-gateway readback.
 	ManageAgentMattermostBotIdentity(context.Context, *ManageAgentMattermostBotIdentityRequest) (*ManageAgentMattermostBotIdentityResponse, error)
+	// GetOwnerConfigurationCatalog возвращает server-authored runtime и Schedule selections.
+	GetOwnerConfigurationCatalog(context.Context, *GetOwnerConfigurationCatalogRequest) (*GetOwnerConfigurationCatalogResponse, error)
 	// ManageAgentAssignment разрешает только assign/unassign server-owned связи.
 	ManageAgentAssignment(context.Context, *ManageAgentAssignmentRequest) (*ManageAgentAssignmentResponse, error)
 	// ManageInstructionSet владеет immutable версиями, publish/rollback и UI/Git ownership.
@@ -2534,6 +2601,12 @@ type ControlPlaneServiceServer interface {
 	// CreateScheduleFromOwnerSelections принимает только человекочитаемые
 	// selections и атомарно закрепляет server-resolved target tuple.
 	CreateScheduleFromOwnerSelections(context.Context, *CreateScheduleFromOwnerSelectionsRequest) (*CreateScheduleFromOwnerSelectionsResponse, error)
+	// ManageOwnerSchedule создаёт либо обновляет Schedule из basic owner intent.
+	ManageOwnerSchedule(context.Context, *ManageOwnerScheduleRequest) (*ManageOwnerScheduleResponse, error)
+	// GetOwnerSchedule возвращает безопасную effective basic/advanced проекцию.
+	GetOwnerSchedule(context.Context, *GetOwnerScheduleRequest) (*GetOwnerScheduleResponse, error)
+	// ListOwnerSchedules применяет ту же owner eligibility и redaction границу.
+	ListOwnerSchedules(context.Context, *ListOwnerSchedulesRequest) (*ListOwnerSchedulesResponse, error)
 	// BindScheduleConfiguration разрешает owner-friendly stable keys и закрепляет exact версии.
 	BindScheduleConfiguration(context.Context, *BindScheduleConfigurationRequest) (*BindScheduleConfigurationResponse, error)
 	// RunScheduleNow создаёт отдельную немедленную occurrence, не сдвигая
@@ -2562,6 +2635,8 @@ type ControlPlaneServiceServer interface {
 	CompleteProcess(context.Context, *CompleteProcessRequest) (*CompleteProcessResponse, error)
 	// ManageRun закрыто отменяет либо повторяет полный Process/Session/Turn/Runtime graph.
 	ManageRun(context.Context, *ManageRunRequest) (*ManageRunResponse, error)
+	// ListOwnerRuns возвращает bounded safe owner projections без UUID joins.
+	ListOwnerRuns(context.Context, *ListOwnerRunsRequest) (*ListOwnerRunsResponse, error)
 	// GetRunDetail возвращает exact current graph без authority-bearing token.
 	GetRunDetail(context.Context, *GetRunDetailRequest) (*GetRunDetailResponse, error)
 	// ListRunTimeline возвращает bounded typed audit timeline.
@@ -2830,6 +2905,9 @@ func (UnimplementedControlPlaneServiceServer) ReconcileGitAgent(context.Context,
 func (UnimplementedControlPlaneServiceServer) ManageAgentMattermostBotIdentity(context.Context, *ManageAgentMattermostBotIdentityRequest) (*ManageAgentMattermostBotIdentityResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageAgentMattermostBotIdentity not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) GetOwnerConfigurationCatalog(context.Context, *GetOwnerConfigurationCatalogRequest) (*GetOwnerConfigurationCatalogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOwnerConfigurationCatalog not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) ManageAgentAssignment(context.Context, *ManageAgentAssignmentRequest) (*ManageAgentAssignmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageAgentAssignment not implemented")
 }
@@ -2992,6 +3070,15 @@ func (UnimplementedControlPlaneServiceServer) ManageSchedule(context.Context, *M
 func (UnimplementedControlPlaneServiceServer) CreateScheduleFromOwnerSelections(context.Context, *CreateScheduleFromOwnerSelectionsRequest) (*CreateScheduleFromOwnerSelectionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateScheduleFromOwnerSelections not implemented")
 }
+func (UnimplementedControlPlaneServiceServer) ManageOwnerSchedule(context.Context, *ManageOwnerScheduleRequest) (*ManageOwnerScheduleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ManageOwnerSchedule not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetOwnerSchedule(context.Context, *GetOwnerScheduleRequest) (*GetOwnerScheduleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOwnerSchedule not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListOwnerSchedules(context.Context, *ListOwnerSchedulesRequest) (*ListOwnerSchedulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOwnerSchedules not implemented")
+}
 func (UnimplementedControlPlaneServiceServer) BindScheduleConfiguration(context.Context, *BindScheduleConfigurationRequest) (*BindScheduleConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BindScheduleConfiguration not implemented")
 }
@@ -3030,6 +3117,9 @@ func (UnimplementedControlPlaneServiceServer) CompleteProcess(context.Context, *
 }
 func (UnimplementedControlPlaneServiceServer) ManageRun(context.Context, *ManageRunRequest) (*ManageRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ManageRun not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListOwnerRuns(context.Context, *ListOwnerRunsRequest) (*ListOwnerRunsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOwnerRuns not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetRunDetail(context.Context, *GetRunDetailRequest) (*GetRunDetailResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRunDetail not implemented")
@@ -3618,6 +3708,24 @@ func _ControlPlaneService_ManageAgentMattermostBotIdentity_Handler(srv interface
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ManageAgentMattermostBotIdentity(ctx, req.(*ManageAgentMattermostBotIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetOwnerConfigurationCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOwnerConfigurationCatalogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetOwnerConfigurationCatalog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetOwnerConfigurationCatalog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetOwnerConfigurationCatalog(ctx, req.(*GetOwnerConfigurationCatalogRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4594,6 +4702,60 @@ func _ControlPlaneService_CreateScheduleFromOwnerSelections_Handler(srv interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ManageOwnerSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ManageOwnerScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ManageOwnerSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ManageOwnerSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ManageOwnerSchedule(ctx, req.(*ManageOwnerScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetOwnerSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOwnerScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetOwnerSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetOwnerSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetOwnerSchedule(ctx, req.(*GetOwnerScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListOwnerSchedules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOwnerSchedulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListOwnerSchedules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListOwnerSchedules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListOwnerSchedules(ctx, req.(*ListOwnerSchedulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_BindScheduleConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BindScheduleConfigurationRequest)
 	if err := dec(in); err != nil {
@@ -4824,6 +4986,24 @@ func _ControlPlaneService_ManageRun_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ManageRun(ctx, req.(*ManageRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListOwnerRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOwnerRunsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListOwnerRuns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListOwnerRuns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListOwnerRuns(ctx, req.(*ListOwnerRunsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6592,6 +6772,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_ManageAgentMattermostBotIdentity_Handler,
 		},
 		{
+			MethodName: "GetOwnerConfigurationCatalog",
+			Handler:    _ControlPlaneService_GetOwnerConfigurationCatalog_Handler,
+		},
+		{
 			MethodName: "ManageAgentAssignment",
 			Handler:    _ControlPlaneService_ManageAgentAssignment_Handler,
 		},
@@ -6808,6 +6992,18 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_CreateScheduleFromOwnerSelections_Handler,
 		},
 		{
+			MethodName: "ManageOwnerSchedule",
+			Handler:    _ControlPlaneService_ManageOwnerSchedule_Handler,
+		},
+		{
+			MethodName: "GetOwnerSchedule",
+			Handler:    _ControlPlaneService_GetOwnerSchedule_Handler,
+		},
+		{
+			MethodName: "ListOwnerSchedules",
+			Handler:    _ControlPlaneService_ListOwnerSchedules_Handler,
+		},
+		{
 			MethodName: "BindScheduleConfiguration",
 			Handler:    _ControlPlaneService_BindScheduleConfiguration_Handler,
 		},
@@ -6858,6 +7054,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ManageRun",
 			Handler:    _ControlPlaneService_ManageRun_Handler,
+		},
+		{
+			MethodName: "ListOwnerRuns",
+			Handler:    _ControlPlaneService_ListOwnerRuns_Handler,
 		},
 		{
 			MethodName: "GetRunDetail",

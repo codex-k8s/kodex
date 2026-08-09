@@ -76,10 +76,14 @@ func (server *Server) ListRuntimeIncidents(ctx context.Context,
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.ListRuntimeIncidentsResponse{
-		Incidents: make([]*controlplanev1.RuntimeIncident, 0, len(incidents)),
+		Projections: make([]*controlplanev1.RuntimeIncidentOwnerProjection, 0, len(incidents)),
 	}
 	for _, incident := range incidents {
-		response.Incidents = append(response.Incidents, runtimeIncidentToProto(incident))
+		projection, projectionErr := server.service.RuntimeIncidentOwnerProjection(ctx, principal, incident)
+		if projectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectionErr)
+		}
+		response.Projections = append(response.Projections, runtimeIncidentOwnerProjectionToProto(projection))
 	}
 	if len(incidents) == limit {
 		response.NextPageToken = incidents[len(incidents)-1].ID

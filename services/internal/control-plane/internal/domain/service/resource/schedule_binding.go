@@ -28,10 +28,23 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 		value.ValidateStableKey(input.AgentStableKey) != nil ||
 		value.ValidateStableKey(input.InstructionSetStableKey) != nil ||
 		value.ValidateStableKey(input.ProviderPoolStableKey) != nil ||
-		(input.RoomStableKey != "" && value.ValidateStableKey(input.RoomStableKey) != nil) ||
-		value.ValidateName(input.PromptArtifactName) != nil {
+		(input.RoomStableKey != "" && value.ValidateStableKey(input.RoomStableKey) != nil) {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	if input.PromptKind == "" {
+		input.PromptKind = "SELECTOR"
+	}
+	if err := ensureOwnerScheduleMetadata(&input.Spec); err != nil {
+		return entity.Resource{}, err
+	}
+	prompt, err := service.prepareOwnerSchedulePrompt(ctx, input.Principal, OwnerSchedulePromptInput{
+		Kind: input.PromptKind, InlineMarkdown: input.PromptInlineMarkdown,
+		ArtifactName: input.PromptArtifactName, Object: input.PromptObject,
+	})
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	input.PromptObject = prompt.Object
 	// Owner выбирает только поведение Schedule. Весь authority-bearing tuple
 	// очищается до semantic hash и затем назначается сервером под locks.
 	input.Spec.TargetResourceID, input.Spec.TargetKind, input.Spec.TargetVersion = "", "", 0
@@ -45,11 +58,13 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 	input.Spec.ExecutionSessionID, input.Spec.EffectiveInputSHA = "", ""
 	input.Spec.Ownership, input.Spec.NextRunAt = entity.ConfigurationOwnership{}, time.Time{}
 	requestHash, err := canonicalHash(struct {
-		Identity                                             commandIdentity
-		Name, Agent, Instruction, Pool, Room, PromptArtifact string
-		Spec                                                 entity.ScheduleSpec
+		Identity                                         commandIdentity
+		Name, Agent, Instruction, Pool, Room, PromptKind string
+		PromptArtifact, PromptInlineSHA256               string
+		Spec                                             entity.ScheduleSpec
 	}{identity(input.Principal), input.Name, input.AgentStableKey, input.InstructionSetStableKey,
-		input.ProviderPoolStableKey, input.RoomStableKey, input.PromptArtifactName, input.Spec})
+		input.ProviderPoolStableKey, input.RoomStableKey, input.PromptKind, input.PromptArtifactName,
+		hashString(input.PromptInlineMarkdown), input.Spec})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
@@ -133,16 +148,12 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 			if err != nil {
 				return entity.Resource{}, errs.ErrInternal
 			}
-			prompt, err := protected.GetByNameForUpdate(ctx, input.Principal.OrganizationID,
-				input.Principal.ProjectID, enum.KindArtifact, input.PromptArtifactName)
+			prompt, promptSpec, err := service.resolveOwnerSchedulePrompt(ctx, tx, protected,
+				input.Principal, OwnerSchedulePromptInput{Kind: input.PromptKind,
+					InlineMarkdown: input.PromptInlineMarkdown, ArtifactName: input.PromptArtifactName,
+					Object: input.PromptObject}, now)
 			if err != nil {
 				return entity.Resource{}, err
-			}
-			promptSpec, ok := prompt.Spec.(entity.ArtifactSpec)
-			if !ok || prompt.Kind != enum.KindArtifact || prompt.State != enum.StateActive ||
-				prompt.OwnerActorID != input.Principal.ActorID || promptSpec.Direction != "INPUT" ||
-				promptSpec.MediaType != "text/markdown" || promptSpec.ScanStatus != "CLEAN" {
-				return entity.Resource{}, errs.ErrStateConflict
 			}
 			spec := input.Spec
 			spec.TargetResourceID, spec.TargetKind, spec.TargetVersion = agentID, enum.KindAgent, agentVersion
@@ -156,6 +167,13 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 			spec.AgentAssignmentID, spec.AgentAssignmentVersion, spec.AgentAssignmentSHA256 =
 				assignment.ID, assignment.Version, assignmentSHA
 			spec.PromptProfileID, spec.PromptRevision, spec.RuntimeRevisionID = "", 0, ""
+			spec.PromptIntentKind, spec.PromptArtifactVersion, spec.PromptSHA256 =
+				input.PromptKind, prompt.Version, promptSpec.SHA256
+			if input.PromptKind == "INLINE" {
+				spec.PromptDisplay = "Встроенный prompt"
+			} else {
+				spec.PromptDisplay = prompt.Name
+			}
 			spec.Ownership = entity.ConfigurationOwnership{ManagedBy: "UI"}
 			if spec.SessionPolicy != "NEW" {
 				session, sessionErr := uniqueScheduleSession(ctx, tx, input.Principal, spec)

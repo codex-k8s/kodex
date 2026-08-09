@@ -1,4 +1,4 @@
-// Package objectstore задаёт узкий порт immutable instruction artifacts.
+// Package objectstore задаёт узкий порт immutable Instruction и Schedule prompt artifacts.
 package objectstore
 
 import "context"
