@@ -1728,6 +1728,10 @@ func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(
 			t.Run(mode+"/"+test.name, func(t *testing.T) {
 				svc, store, runner, publisher := terminalReconciliationTestDeps(t, clusterAdmin)
 				test.configure(store, runner, publisher)
+				if clusterAdmin && test.name == "reset" {
+					store.snapshotSessionErrors = store.resetSessionErrors
+					store.resetSessionErrors = nil
+				}
 				command := StopAgentSessionTurnsCommand{TurnIDs: []int64{1}, UserID: "owner-user", UserName: "owner"}
 				_, err := svc.StopAgentSessionTurns(context.Background(), command)
 				if !errors.Is(err, test.want) {
@@ -1747,6 +1751,7 @@ func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(
 
 				runner.sessionCleanupErrors = nil
 				store.resetSessionErrors = nil
+				store.snapshotSessionErrors = nil
 				store.reconcileErr = nil
 				publisher.cardUpdateErr = nil
 				result, retryErr := svc.StopAgentSessionTurns(context.Background(), command)
@@ -1768,18 +1773,24 @@ func TestAgentSessionStopReconcilesCanceledTurnAfterFinalizeFaultMatrixAndRetry(
 				}
 				turn, readErr = store.GetAgentSessionTurn(context.Background(), 1)
 				state, stateErr := agentTurnStopStateFromArtifacts(turn.Artifacts)
-				if readErr != nil || stateErr != nil || !state.completed() || !agentSessionRuntimeCleared(store.agentSessions["session-1"]) {
+				persisted := store.agentSessions["session-1"]
+				runtimeCleanupComplete := agentSessionRuntimeCleared(persisted)
+				if clusterAdmin {
+					runtimeCleanupComplete = agentSessionActivityCleared(persisted) && persisted.PodName == "session-pod" && persisted.PVCName == "session-pvc" && persisted.TokenSecretRef == "session-secret"
+				}
+				if readErr != nil || stateErr != nil || !state.completed() || !runtimeCleanupComplete {
 					t.Fatalf("recovered state=%#v session=%#v read=%v state_error=%v", state, store.agentSessions["session-1"], readErr, stateErr)
 				}
 				cleanupCalls := len(runner.cleanedSessionKeys)
 				resetCalls := store.resetSessionCalls
+				snapshotCalls := store.snapshotSessionCalls
 				cardCalls := len(publisher.cardUpdates)
 				reconcileCalls := store.reconcileCalls
 				if _, retryErr = svc.StopAgentSessionTurns(context.Background(), command); retryErr != nil {
 					t.Fatalf("completed replay error=%v", retryErr)
 				}
-				if len(runner.cleanedSessionKeys) != cleanupCalls || store.resetSessionCalls != resetCalls || len(publisher.cardUpdates) != cardCalls || store.reconcileCalls != reconcileCalls {
-					t.Fatalf("completed replay duplicated effects cleanup=%d/%d reset=%d/%d card=%d/%d reconcile=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, store.resetSessionCalls, resetCalls, len(publisher.cardUpdates), cardCalls, store.reconcileCalls, reconcileCalls)
+				if len(runner.cleanedSessionKeys) != cleanupCalls || store.resetSessionCalls != resetCalls || store.snapshotSessionCalls != snapshotCalls || len(publisher.cardUpdates) != cardCalls || store.reconcileCalls != reconcileCalls {
+					t.Fatalf("completed replay duplicated effects cleanup=%d/%d reset=%d/%d snapshot=%d/%d card=%d/%d reconcile=%d/%d", len(runner.cleanedSessionKeys), cleanupCalls, store.resetSessionCalls, resetCalls, store.snapshotSessionCalls, snapshotCalls, len(publisher.cardUpdates), cardCalls, store.reconcileCalls, reconcileCalls)
 				}
 			})
 		}
