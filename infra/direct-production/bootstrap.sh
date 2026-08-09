@@ -50,8 +50,27 @@ kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation
   --scope bootstrap --output "$temporary_directory/application-owner.yaml" >/dev/null
 "$repository_root/tools/release/render-direct-production-applications.sh" \
   --scope interfaces --output "$temporary_directory/application-interfaces.yaml" >/dev/null
+contract_source="$temporary_directory/workload-contract-source.yaml"
+contract_lock="$temporary_directory/workload-contract-release-lock.json"
+contract_source_sha=1111111111111111111111111111111111111111
+contract_digest=sha256:2222222222222222222222222222222222222222222222222222222222222222
+jq -S --arg source_sha "$contract_source_sha" --arg digest "$contract_digest" '
+  {schema_version:1,profile:"direct-production single-node prototype",source_sha:$source_sha,
+   build_run_id:"local",registry_push:"matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000",
+   node_pull:"localhost:5001",images:[.images[]|{component,repository:("mattercodex/"+.component),
+     digest:$digest,pull_ref:("localhost:5001/mattercodex/"+.component+"@"+$digest)}]}
+' "$repository_root/tools/release/images.json" >"$contract_lock"
+contract_lock_sha256=$(sha256sum "$contract_lock" | awk '{print $1}')
+"$repository_root/tools/release/render-direct-production.sh" \
+  --lock "$contract_lock" --source-sha "$contract_source_sha" \
+  --sha256 "$contract_lock_sha256" --output "$contract_source" >/dev/null
+workload_contracts="$temporary_directory/workload-contracts.yaml"
+"$repository_root/tools/release/render-production-workload-contracts.sh" \
+  --manifest "$contract_source" --output "$workload_contracts" >/dev/null
+workload_policy="$script_directory/workload-policy.yaml"
 
-for manifest in "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" "$temporary_directory/application-owner.yaml"; do
+for manifest in "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
+  "$temporary_directory/application-owner.yaml" "$workload_contracts" "$workload_policy"; do
   kubectl --context "$expected_context" apply --dry-run=client -f "$manifest" >/dev/null
 done
 
@@ -107,11 +126,18 @@ fi
 
 if [[ "$mode" == apply ]]; then
   kubectl --context "$expected_context" apply -f "$script_directory/bootstrap.yaml" >/dev/null
+  kubectl --context "$expected_context" apply -f "$workload_contracts" >/dev/null
+  kubectl --context "$expected_context" apply -f "$workload_policy" >/dev/null
   kubectl --context "$expected_context" apply -f "$temporary_directory/foundation-owner.yaml" >/dev/null
   kubectl --context "$expected_context" apply -f "$temporary_directory/application-owner.yaml" >/dev/null
   "$repository_root/tools/deploy/bootstrap-direct-production-secrets.sh" --context "$expected_context" --mode apply >/dev/null
   kubectl --context "$expected_context" apply -f "$application_material_file" >/dev/null
 fi
+
+kubectl --context "$expected_context" diff -f "$workload_contracts" >/dev/null ||
+  fail "production workload contract readback mismatch"
+kubectl --context "$expected_context" diff -f "$workload_policy" >/dev/null ||
+  fail "production workload admission policy readback mismatch"
 
 "$repository_root/tools/deploy/bootstrap-direct-production-secrets.sh" --context "$expected_context" --mode readback >/dev/null
 while IFS= read -r secret_name; do
@@ -159,7 +185,8 @@ kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-syst
   fail "routine deployer unexpectedly has Secret read access"
 
 bootstrap_digest=$(sha256sum "$script_directory/bootstrap.yaml" "$temporary_directory/foundation-owner.yaml" \
-  "$temporary_directory/application-owner.yaml" | sha256sum | awk '{print $1}')
+  "$temporary_directory/application-owner.yaml" "$workload_contracts" "$workload_policy" |
+  sha256sum | awk '{print $1}')
 readiness_manifest="$temporary_directory/readiness.yaml"
 printf '%s\n' \
   'apiVersion: v1' 'kind: ConfigMap' 'metadata:' '  name: mattercodex-bootstrap-readiness' \

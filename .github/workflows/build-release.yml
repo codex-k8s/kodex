@@ -15,7 +15,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: mattercodex-build
+    runs-on:
+      group: mattercodex-production-build
+      labels: mattercodex-build
     timeout-minutes: 45
     environment: production-build
     steps:
@@ -25,10 +27,10 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid exact source SHA' >&2; exit 1; }
-      - name: Checkout exact SHA
+      - name: Checkout exact owner-authorized SHA
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
           persist-credentials: false
           fetch-depth: 1
       - name: Verify checkout
@@ -36,10 +38,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SHA: ${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}
+          OWNER_ACTOR_ID: ${{ vars.MATTERCODEX_BUILD_OWNER_ACTOR_ID }}
         run: |
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
           tools/release/verify-github-owner-gate.sh \
             --workflow .github/workflows/build-release.yml --environment production-build \
+            --workflow-sha "$WORKFLOW_SHA" --owner-actor-id "$OWNER_ACTOR_ID" \
             --source-sha "$SOURCE_SHA" --mode build --output owner-gate.json
       - name: Build and publish immutable release
         shell: bash

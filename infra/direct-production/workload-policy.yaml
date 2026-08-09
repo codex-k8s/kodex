@@ -1,0 +1,177 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: mattercodex-production-workload-contracts
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments, statefulsets]
+        scope: Namespaced
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [jobs, cronjobs]
+        scope: Namespaced
+  variables:
+    - name: isProductionDeployer
+      expression: >-
+        request.userInfo.username ==
+        'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer'
+    - name: workloadKey
+      expression: object.kind.lowerAscii() + '.' + object.metadata.name
+    - name: podSpec
+      expression: >-
+        object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec :
+        object.spec.template.spec
+    - name: containers
+      expression: variables.podSpec.containers
+    - name: initContainers
+      expression: >-
+        has(variables.podSpec.initContainers) ? variables.podSpec.initContainers : []
+    - name: volumes
+      expression: >-
+        has(variables.podSpec.volumes) ? variables.podSpec.volumes : []
+    - name: volumeContract
+      expression: >-
+        variables.volumes.map(v,
+          v.name + '\u001e' +
+          (has(v.secret) ? 'secret\u001e' + v.secret.secretName + '\u001d' +
+             ((has(v.secret.optional) && v.secret.optional) ? 'true' : 'false') + '\u001d' +
+             (has(v.secret.defaultMode) ? string(v.secret.defaultMode) : '0') + '\u001d' +
+             (has(v.secret.items) ? v.secret.items.map(i,
+               i.key + '\u001b' + i.path + '\u001b' +
+               (has(i.mode) ? string(i.mode) : '0')).join('\u001c') : '') :
+           has(v.configMap) ? 'configMap\u001e' + v.configMap.name + '\u001d' +
+             ((has(v.configMap.optional) && v.configMap.optional) ? 'true' : 'false') + '\u001d' +
+             (has(v.configMap.defaultMode) ? string(v.configMap.defaultMode) : '0') + '\u001d' +
+             (has(v.configMap.items) ? v.configMap.items.map(i,
+               i.key + '\u001b' + i.path + '\u001b' +
+               (has(i.mode) ? string(i.mode) : '0')).join('\u001c') : '') :
+           has(v.persistentVolumeClaim) ? 'pvc\u001e' + v.persistentVolumeClaim.claimName +
+             '\u001d' + ((has(v.persistentVolumeClaim.readOnly) &&
+               v.persistentVolumeClaim.readOnly) ? 'true' : 'false') :
+           has(v.emptyDir) ? 'emptyDir\u001e' +
+             (has(v.emptyDir.medium) ? v.emptyDir.medium : '') + '\u001d' +
+             (has(v.emptyDir.sizeLimit) ? string(v.emptyDir.sizeLimit) : '') :
+           has(v.projected) ? 'projected\u001e' +
+             (has(v.projected.defaultMode) ? string(v.projected.defaultMode) : '0') + '\u001d' +
+             v.projected.sources.map(s,
+             has(s.serviceAccountToken) ? 'serviceAccountToken\u001d' +
+               s.serviceAccountToken.audience + '\u001d' +
+               string(s.serviceAccountToken.expirationSeconds) + '\u001d' +
+               s.serviceAccountToken.path :
+             has(s.configMap) ? 'configMap\u001d' + s.configMap.name + '\u001d' +
+               (has(s.configMap.items) ? s.configMap.items.map(i,
+                 i.key + '\u001b' + i.path + '\u001b' +
+                 (has(i.mode) ? string(i.mode) : '0')).join('\u001c') : '') :
+             has(s.secret) ? 'secret\u001d' + s.secret.name + '\u001d' +
+               (has(s.secret.items) ? s.secret.items.map(i,
+                 i.key + '\u001b' + i.path + '\u001b' +
+                 (has(i.mode) ? string(i.mode) : '0')).join('\u001c') : '') :
+             has(s.downwardAPI) ? 'downwardAPI\u001d' +
+               (has(s.downwardAPI.items) ? s.downwardAPI.items.map(i,
+                 (has(i.fieldRef) ? i.fieldRef.fieldPath :
+                   has(i.resourceFieldRef) ? i.resourceFieldRef.resource : '') + '\u001b' +
+                 i.path + '\u001b' + (has(i.mode) ? string(i.mode) : '0')).join('\u001c') : '') :
+             'forbidden').join('\u001c') :
+           'forbidden')).join('\u001f')
+  validations:
+    - expression: >-
+        !variables.isProductionDeployer ||
+        variables.workloadKey + '.serviceAccountName' in params.data
+      message: Production workload is absent from the owner contract.
+    - expression: >-
+        !variables.isProductionDeployer ||
+        (variables.podSpec.serviceAccountName ==
+           params.data[variables.workloadKey + '.serviceAccountName'] &&
+         has(variables.podSpec.automountServiceAccountToken) &&
+         variables.podSpec.automountServiceAccountToken == false &&
+         params.data[variables.workloadKey + '.automountServiceAccountToken'] == 'false')
+      message: Production workload ServiceAccount or token automount differs from the owner contract.
+    - expression: >-
+        !variables.isProductionDeployer ||
+        variables.volumeContract == params.data[variables.workloadKey + '.volumes']
+      message: Production workload volume sources differ from the owner contract.
+    - expression: >-
+        !variables.isProductionDeployer ||
+        (variables.containers.map(c, c.name).join('\u001f') ==
+           params.data[variables.workloadKey + '.containerNames'] &&
+         variables.containers.all(c,
+           c.image.matches('^[^@]+@sha256:[a-f0-9]{64}$') &&
+           !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000') &&
+           c.image.split('@')[0] ==
+             params.data[variables.workloadKey + '.container.' + c.name + '.imagePrefix'] &&
+           (has(c.command) ? c.command.join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.container.' + c.name + '.command'] &&
+           (has(c.args) ? c.args.join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.container.' + c.name + '.args'] &&
+           (has(c.volumeMounts) ? c.volumeMounts.map(m,
+             m.name + '\u001e' + m.mountPath + '\u001e' +
+             (has(m.subPath) ? m.subPath : '') + '\u001e' +
+             ((has(m.readOnly) && m.readOnly) ? 'true' : 'false')).join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.container.' + c.name + '.mounts'] &&
+           (has(c.env) ? c.env.filter(e,
+             has(e.valueFrom) && has(e.valueFrom.secretKeyRef)).map(e,
+               e.name + '\u001e' + e.valueFrom.secretKeyRef.name + '\u001e' +
+               e.valueFrom.secretKeyRef.key + '\u001e' +
+               ((has(e.valueFrom.secretKeyRef.optional) && e.valueFrom.secretKeyRef.optional) ?
+                 'true' : 'false')).join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.container.' + c.name + '.secretEnv'] &&
+           (has(c.envFrom) ? c.envFrom.filter(e, has(e.secretRef)).map(e,
+             e.secretRef.name + '\u001e' +
+             ((has(e.secretRef.optional) && e.secretRef.optional) ? 'true' : 'false')).join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.container.' + c.name + '.secretEnvFrom']))
+      message: Production container identity, image, command, mounts or Secret env differs from the owner contract.
+    - expression: >-
+        !variables.isProductionDeployer ||
+        (variables.initContainers.map(c, c.name).join('\u001f') ==
+           params.data[variables.workloadKey + '.initContainerNames'] &&
+         variables.initContainers.all(c,
+           c.image.matches('^[^@]+@sha256:[a-f0-9]{64}$') &&
+           !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000') &&
+           c.image.split('@')[0] ==
+             params.data[variables.workloadKey + '.initContainer.' + c.name + '.imagePrefix'] &&
+           (has(c.command) ? c.command.join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.initContainer.' + c.name + '.command'] &&
+           (has(c.args) ? c.args.join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.initContainer.' + c.name + '.args'] &&
+           (has(c.volumeMounts) ? c.volumeMounts.map(m,
+             m.name + '\u001e' + m.mountPath + '\u001e' +
+             (has(m.subPath) ? m.subPath : '') + '\u001e' +
+             ((has(m.readOnly) && m.readOnly) ? 'true' : 'false')).join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.initContainer.' + c.name + '.mounts'] &&
+           (has(c.env) ? c.env.filter(e,
+             has(e.valueFrom) && has(e.valueFrom.secretKeyRef)).map(e,
+               e.name + '\u001e' + e.valueFrom.secretKeyRef.name + '\u001e' +
+               e.valueFrom.secretKeyRef.key + '\u001e' +
+               ((has(e.valueFrom.secretKeyRef.optional) && e.valueFrom.secretKeyRef.optional) ?
+                 'true' : 'false')).join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.initContainer.' + c.name + '.secretEnv'] &&
+           (has(c.envFrom) ? c.envFrom.filter(e, has(e.secretRef)).map(e,
+             e.secretRef.name + '\u001e' +
+             ((has(e.secretRef.optional) && e.secretRef.optional) ? 'true' : 'false')).join('\u001f') : '') ==
+             params.data[variables.workloadKey + '.initContainer.' + c.name + '.secretEnvFrom']))
+      message: Production init container identity, image, command, mounts or Secret env differs from the owner contract.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: mattercodex-production-workload-contracts
+spec:
+  policyName: mattercodex-production-workload-contracts
+  validationActions: [Deny]
+  paramRef:
+    name: mattercodex-production-workload-contracts
+    namespace: mattercodex-system
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system

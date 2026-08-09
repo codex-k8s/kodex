@@ -3,11 +3,13 @@ set -euo pipefail
 
 fail() { printf 'GitHub owner gate verification failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --workflow <path> --environment <name> --source-sha <40-hex> --mode build|dark|cutover|rollback --output <path>\n' "$0" >&2
+  printf 'Usage: %s --workflow <path> --environment <name> --workflow-sha <40-hex> --owner-actor-id <numeric-id> --source-sha <40-hex> --mode build|dark|cutover|rollback --output <path>\n' "$0" >&2
 }
 
 workflow=""
 environment=""
+workflow_sha=""
+owner_actor_id=""
 source_sha=""
 mode=""
 output=""
@@ -15,6 +17,8 @@ while (($# > 0)); do
   case "$1" in
     --workflow) workflow="${2:-}"; shift 2 ;;
     --environment) environment="${2:-}"; shift 2 ;;
+    --workflow-sha) workflow_sha="${2:-}"; shift 2 ;;
+    --owner-actor-id) owner_actor_id="${2:-}"; shift 2 ;;
     --source-sha) source_sha="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
@@ -26,6 +30,8 @@ done
 [[ "$workflow" == .github/workflows/build-release.yml || "$workflow" == .github/workflows/deploy-production.yml ]] ||
   fail "workflow path is not allowlisted"
 [[ "$environment" == production-build || "$environment" == production ]] || fail "environment is not allowlisted"
+[[ "$workflow_sha" =~ ^[a-f0-9]{40}$ ]] || fail "workflow SHA must be exact lowercase 40-hex"
+[[ "$owner_actor_id" =~ ^[1-9][0-9]*$ ]] || fail "owner actor ID is invalid"
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail "source SHA must be exact lowercase 40-hex"
 case "$mode" in build|dark|cutover|rollback) ;; *) fail "mode is invalid" ;; esac
 [[ -n "$output" ]] || fail "output path is required"
@@ -48,22 +54,24 @@ jq -e --arg repository "$GITHUB_REPOSITORY" --arg workflow "$workflow" '
   .event == "workflow_dispatch" and .head_branch == "main" and
   .head_repository.full_name == $repository and .path == $workflow and
   (.status == "in_progress" or .status == "queued") and
-  (.head_sha | test("^[a-f0-9]{40}$"))
+  (.head_sha | test("^[a-f0-9]{40}$")) and
+  (.actor.id | type == "number") and (.triggering_actor.id | type == "number")
 ' "$temporary_directory/run.json" >/dev/null || fail "workflow run provenance mismatch"
 jq -e '.default_branch == "main"' "$temporary_directory/repository.json" >/dev/null ||
   fail "repository default branch is not main"
 workflow_head_sha=$(jq -r '.head_sha' "$temporary_directory/run.json")
+[[ "$workflow_head_sha" == "$workflow_sha" ]] || fail "workflow run is not pinned to the owner-authorized SHA"
+run_actor_id=$(jq -r '.actor.id' "$temporary_directory/run.json")
+triggering_actor_id=$(jq -r '.triggering_actor.id' "$temporary_directory/run.json")
+[[ "$run_actor_id" == "$owner_actor_id" && "$triggering_actor_id" == "$owner_actor_id" ]] ||
+  fail "workflow dispatch and rerun actor are not the owner-authorized identity"
 if [[ "$mode" != rollback && "$workflow_head_sha" != "$source_sha" ]]; then
   fail "requested source SHA is not the exact workflow main SHA"
 fi
 gh api "repos/$GITHUB_REPOSITORY/commits/$source_sha" --jq '.sha' | grep -qx "$source_sha" ||
   fail "source SHA is not reachable in the repository"
 
-required_reviewers=$(jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length' \
-  "$temporary_directory/environment.json")
-((required_reviewers > 0)) || fail "environment has no required reviewer"
 jq -e '
-  any(.protection_rules[]?; .type == "required_reviewers" and .prevent_self_review == true) and
   .deployment_branch_policy.custom_branch_policies == true and
   .deployment_branch_policy.protected_branches == false
 ' "$temporary_directory/environment.json" >/dev/null || fail "environment protection policy mismatch"
@@ -77,12 +85,12 @@ jq -n \
   --arg workflow "$workflow" \
   --arg workflow_ref "$expected_workflow_ref" \
   --arg environment "$environment" \
+  --arg workflow_sha "$workflow_sha" \
   --arg source_sha "$source_sha" \
   --arg mode "$mode" \
   --arg run_id "$GITHUB_RUN_ID" \
   --arg workflow_head_sha "$workflow_head_sha" \
-  --argjson required_reviewers "$required_reviewers" \
-  '{schema_version:1,repository:$repository,workflow:$workflow,workflow_ref:$workflow_ref,
-    environment:$environment,source_sha:$source_sha,mode:$mode,run_id:$run_id,
-    workflow_head_sha:$workflow_head_sha,required_reviewers:$required_reviewers}' >"$output"
+  '{schema_version:2,repository:$repository,workflow:$workflow,workflow_ref:$workflow_ref,
+    environment:$environment,workflow_sha:$workflow_sha,source_sha:$source_sha,mode:$mode,run_id:$run_id,
+    workflow_head_sha:$workflow_head_sha,owner_actor_verified:true}' >"$output"
 printf 'GitHub owner gate verified for %s\n' "$environment"

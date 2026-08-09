@@ -4,7 +4,7 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 0.3.0
+version: 0.4.0
 updated: 2026-08-09
 ---
 
@@ -18,7 +18,10 @@ prototype`. Отдельного staging нет. Новый backend сначал
 переключения пользовательского трафика. Build CI изолирован в `mattercodex-ci`,
 а deploy CI и его namespaced Kubernetes identity — в `mattercodex-ci-deploy`.
 Оба scale set имеют отдельные ARC controller и non-default runner group,
-ограниченный точным workflow из `refs/heads/main`.
+ограниченный точным workflow на owner-authorized full SHA. Запуск дополнительно
+требует совпадения immutable GitHub run actor/triggering actor с owner-controlled
+repository variable; Environment используется для main-only deployment history,
+но не выдаётся за недоступный тарифу manual approval.
 
 Legacy Mattermost, PostgreSQL и bot-service в `matter-kodex-prod` остаются
 авторитетным пользовательским путём и rollback path. Первый выпуск использует

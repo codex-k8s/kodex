@@ -45,12 +45,15 @@ renderer="$repository_root/tools/release/render-direct-production.sh"
 if [[ "$operation" != preflight ]]; then
   [[ -r "$gate_evidence" ]] || fail "owner gate evidence is required"
   jq -e --arg source_sha "$source_sha" --arg mode "$mode" '
-    .schema_version == 1 and
+    .schema_version == 2 and
     .repository == "codex-k8s/matter-codex" and
     .workflow == ".github/workflows/deploy-production.yml" and
     .workflow_ref == "codex-k8s/matter-codex/.github/workflows/deploy-production.yml@refs/heads/main" and
-    .environment == "production" and .required_reviewers > 0 and
+    .environment == "production" and .owner_actor_verified == true and
+    (.workflow_sha | type == "string" and test("^[a-f0-9]{40}$")) and
+    .workflow_head_sha == .workflow_sha and
     .source_sha == $source_sha and .mode == $mode and
+    ($mode == "rollback" or .workflow_sha == $source_sha) and
     (.run_id | type == "string" and test("^[0-9]+$"))
   ' "$gate_evidence" >/dev/null || fail "owner gate evidence mismatch"
 fi
@@ -78,13 +81,19 @@ can_i() {
 for permission in \
   'get configmaps' 'list configmaps' 'create configmaps' 'patch configmaps' 'update configmaps' \
   'get services' 'list services' 'create services' 'patch services' 'update services' \
-  'get deployments.apps' 'list deployments.apps' 'create deployments.apps' 'patch deployments.apps' 'update deployments.apps' \
-  'get statefulsets.apps' 'list statefulsets.apps' 'create statefulsets.apps' 'patch statefulsets.apps' 'update statefulsets.apps' \
-  'get jobs.batch' 'list jobs.batch' 'create jobs.batch' 'patch jobs.batch' 'update jobs.batch' 'delete jobs.batch' \
+  'get deployments.apps' 'list deployments.apps' 'watch deployments.apps' 'create deployments.apps' 'patch deployments.apps' 'update deployments.apps' \
+  'get statefulsets.apps' 'list statefulsets.apps' 'watch statefulsets.apps' 'create statefulsets.apps' 'patch statefulsets.apps' 'update statefulsets.apps' \
+  'get jobs.batch' 'list jobs.batch' 'watch jobs.batch' 'create jobs.batch' 'patch jobs.batch' 'update jobs.batch' \
   'get cronjobs.batch' 'list cronjobs.batch' 'create cronjobs.batch' 'patch cronjobs.batch' 'update cronjobs.batch' \
-  'get pods' 'list pods' 'get persistentvolumeclaims' 'list persistentvolumeclaims' 'get ingresses.networking.k8s.io' 'list ingresses.networking.k8s.io'; do
+  'get pods' 'list pods' \
+  'get persistentvolumeclaims' 'list persistentvolumeclaims' \
+  'get ingresses.networking.k8s.io' 'list ingresses.networking.k8s.io'; do
   read -r verb resource <<<"$permission"
   can_i "$verb" "$resource" mattercodex-system
+done
+for migration in control-plane-migrate integration-gateway-migrate interaction-gateway-migrate \
+  internal-rpc-authority-migrate runtime-controller-migration; do
+  can_i delete "jobs.batch/$migration" mattercodex-system
 done
 for permission in 'get services' 'list services' 'get deployments.apps' 'list deployments.apps' 'get statefulsets.apps' 'list statefulsets.apps' 'get ingresses.networking.k8s.io' 'list ingresses.networking.k8s.io'; do
   read -r verb resource <<<"$permission"
@@ -92,13 +101,37 @@ for permission in 'get services' 'list services' 'get deployments.apps' 'list de
 done
 kubectl --context "$expected_context" auth can-i get secrets -n mattercodex-system | grep -qx no ||
   fail "routine deployer must not read Secrets"
+kubectl --context "$expected_context" auth can-i get pods/log -n mattercodex-system | grep -qx no ||
+  fail "routine deployer must not read Pod logs"
 kubectl --context "$expected_context" auth can-i create certificates.cert-manager.io -n mattercodex-system | grep -qx no ||
   fail "routine deployer must not create Certificates"
 kubectl --context "$expected_context" -n mattercodex-system get configmap mattercodex-bootstrap-readiness \
   -o json | jq -e '.data.status == "ready" and .data.profile == "direct-production single-node prototype"' >/dev/null ||
   fail "owner bootstrap readiness is absent or invalid"
 kubectl --context "$expected_context" -n matter-kodex-prod get service matter-codex-registry >/dev/null
-kubectl --context "$expected_context" apply --dry-run=server -f "$render_file" >/dev/null
+non_job_render="$temporary_directory/non-jobs.yaml"
+yq eval-all 'select(.kind != "Job")' "$render_file" >"$non_job_render"
+kubectl --context "$expected_context" apply --dry-run=server -f "$non_job_render" >/dev/null
+while IFS= read -r migration; do
+  [[ -n "$migration" && "$migration" != '---' ]] || continue
+  migration_manifest="$temporary_directory/job-$migration.yaml"
+  MIGRATION="$migration" yq eval-all 'select(.kind == "Job" and .metadata.name == strenv(MIGRATION))' \
+    "$render_file" >"$migration_manifest"
+  if kubectl --context "$expected_context" -n mattercodex-system get job "$migration" >/dev/null 2>&1; then
+    kubectl --context "$expected_context" replace --force --dry-run=server -f "$migration_manifest" >/dev/null
+  else
+    kubectl --context "$expected_context" create --dry-run=server -f "$migration_manifest" >/dev/null
+  fi
+done < <(yq eval-all -r 'select(.kind == "Job") | .metadata.name' "$render_file")
+
+negative_secret_mount="$temporary_directory/negative-secret-mount.yaml"
+yq eval-all '
+  select(.kind == "Deployment" and .metadata.name == "control-plane") |
+  (.spec.template.spec.volumes[] | select(.secret != null) | .secret.secretName) = "forbidden-production-secret"
+' "$render_file" >"$negative_secret_mount"
+if kubectl --context "$expected_context" apply --dry-run=server -f "$negative_secret_mount" >/dev/null 2>&1; then
+  fail "production admission accepted a forged Secret mount"
+fi
 
 if [[ "$operation" == preflight ]]; then
   printf 'Direct production preflight completed for mode %s\n' "$mode"

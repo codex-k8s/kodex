@@ -47,6 +47,124 @@ if yq eval-all -e 'select(.kind == "Deployment" and .metadata.name == "role-imag
   exit 1
 fi
 
+"$repository_root/tools/release/render-production-workload-contracts.sh" \
+  --manifest "$temporary_directory/direct-production.yaml" \
+  --output "$temporary_directory/workload-contracts.yaml" >/dev/null
+yq -o=json '.data' "$temporary_directory/workload-contracts.yaml" |
+  jq -e 'length > 0 and all(to_entries[];
+    (.key | endswith(".automountServiceAccountToken") | not) or .value == "false")' >/dev/null || {
+  printf 'Production workload contract is empty or allows ServiceAccount token automount\n' >&2
+  exit 1
+}
+cp "$temporary_directory/direct-production.yaml" "$temporary_directory/forged-secret.yaml"
+yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "control-plane");
+    (.spec.template.spec.volumes[] | select(.secret != null) | .secret.secretName) =
+      "forbidden-production-secret")
+' "$temporary_directory/forged-secret.yaml"
+"$repository_root/tools/release/render-production-workload-contracts.sh" \
+  --manifest "$temporary_directory/forged-secret.yaml" \
+  --output "$temporary_directory/forged-contracts.yaml" >/dev/null
+if diff -q <(yq -o=json '.data' "$temporary_directory/workload-contracts.yaml" | jq -S .) \
+  <(yq -o=json '.data' "$temporary_directory/forged-contracts.yaml" | jq -S .) >/dev/null; then
+  printf 'Production workload contract did not detect a forged Secret mount\n' >&2
+  exit 1
+fi
+
+yq -o=json eval-all '.' "$repository_root/infra/direct-production/bootstrap.yaml" | jq -sc -e '
+  (map(select(.kind == "Role" and .metadata.name == "mattercodex-production-deployer"))[0]) as $role |
+  ([$role.rules[] | select(.resources | index("pods/log"))] | length) == 0 and
+  ([$role.rules[] | select((.verbs | index("delete")) and (.resources == ["jobs"])) |
+    .resourceNames] | add | sort) ==
+  ["control-plane-migrate","integration-gateway-migrate","interaction-gateway-migrate",
+   "internal-rpc-authority-migrate","runtime-controller-migration"]
+' >/dev/null || {
+  printf 'Routine production deployer RBAC is broader than the exact workload contract\n' >&2
+  exit 1
+}
+
+kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" |
+  yq eval-all 'select(.kind == "NetworkPolicy")' >"$temporary_directory/network-policies.yaml"
+"$repository_root/tools/release/render-direct-production-applications.sh" \
+  --scope bootstrap --output "$temporary_directory/application-bootstrap.yaml" >/dev/null
+yq eval-all 'select(.kind == "NetworkPolicy")' "$temporary_directory/application-bootstrap.yaml" \
+  >>"$temporary_directory/network-policies.yaml"
+yq -o=json eval-all '.' "$temporary_directory/network-policies.yaml" | jq -sc -e '
+  def ingress_peers: [(.spec.ingress // [])[]? | (.from // [])[]?];
+  def egress_peers: [(.spec.egress // [])[]? | (.to // [])[]?];
+  def egress_ports: [(.spec.egress // [])[]? | (.ports // [])[]?];
+  length > 0 and
+  all(.[];
+    all(ingress_peers[];
+      (.namespaceSelector == null) or (.podSelector != null) or (.ipBlock != null)) and
+    all(egress_peers[];
+      (.namespaceSelector == null) or (.podSelector != null) or (.ipBlock != null)) and
+    all(egress_ports[]; .port != 8222))
+' >/dev/null || {
+  printf 'Direct-production NetworkPolicy contains a namespace-wide data destination\n' >&2
+  exit 1
+}
+yq eval-all -e '
+  select(.kind == "NetworkPolicy" and .metadata.name == "build-registry") |
+  .spec.egress[0].to[0].namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "matter-kodex-prod" and
+  .spec.egress[0].to[0].podSelector.matchLabels."app.kubernetes.io/name" == "matter-codex-registry" and
+  (.spec.egress[0].ports | length) == 1 and
+  .spec.egress[0].ports[0].protocol == "TCP" and .spec.egress[0].ports[0].port == 5000
+' "$repository_root/infra/arc/network-policy.yaml" >/dev/null || {
+  printf 'Build runner registry NetworkPolicy destination is not exact\n' >&2
+  exit 1
+}
+yq eval-all -e '
+  select(.kind == "ConfigMap" and .metadata.name == "mattercodex-postgresql-init") |
+  (.data."pg_hba.conf" | contains("hostnossl all all 0.0.0.0/0 reject")) and
+  (.data."pg_hba.conf" | contains("hostssl all all 0.0.0.0/0 scram-sha-256"))
+' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" >/dev/null || {
+  printf 'PostgreSQL TLS-only pg_hba contract is absent\n' >&2
+  exit 1
+}
+yq -o=json eval-all '.' "$repository_root/deploy/k8s/base/direct-production-foundation/foundation.yaml" |
+  jq -sc -e '
+    (map(select(.kind == "StatefulSet" and .metadata.name == "mattercodex-postgresql"))[0]
+      .spec.template.spec.containers[0]) as $postgres |
+    (map(select(.kind == "StatefulSet" and .metadata.name == "mattercodex-redis"))[0]
+      .spec.template.spec.containers[0]) as $redis |
+    all([$postgres.startupProbe,$postgres.readinessProbe,$postgres.livenessProbe][];
+      (.exec.command | join(" ") | contains("sslmode=verify-full"))) and
+    all([$redis.readinessProbe,$redis.livenessProbe][];
+      (.exec.command | index("--tls")) != null and
+      (.exec.command | index("--sni")) != null and
+      (.exec.command | index("--cacert")) != null and
+      (.exec.command | index("mattercodex-redis")) != null)
+  ' >/dev/null || {
+  printf 'Foundation TLS probes do not verify the intended hostname and CA\n' >&2
+  exit 1
+}
+yq -e '
+  .jobs.build."runs-on".group == "mattercodex-production-build" and
+  .jobs.build."runs-on".labels == "mattercodex-build" and
+  .jobs.build.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
+  (.jobs.build.steps[2].run | contains("verify-github-owner-gate.sh")) and
+  (.jobs.build.steps[3].run | contains("build-release.sh"))
+' "$repository_root/.github/workflows/build-release.yml" >/dev/null || {
+  printf 'Build workflow may run mutable source before the owner gate\n' >&2
+  exit 1
+}
+yq -e '
+  .jobs.deploy."runs-on".group == "mattercodex-production-deploy" and
+  .jobs.deploy."runs-on".labels == "mattercodex-deploy" and
+  .jobs.deploy.steps[1].with.ref == "${{ vars.MATTERCODEX_PRODUCTION_WORKFLOW_SHA }}" and
+  (.jobs.deploy.steps[2].run | contains("verify-github-owner-gate.sh")) and
+  (.jobs.deploy.steps[-1].run | contains("direct-production.sh"))
+' "$repository_root/.github/workflows/deploy-production.yml" >/dev/null || {
+  printf 'Deploy workflow may run mutable source before the owner gate\n' >&2
+  exit 1
+}
+grep -Fq '"$repository/$workflow_path@$workflow_sha"' \
+  "$repository_root/infra/github/bootstrap-actions-policy.sh" || {
+  printf 'Runner group workflow restriction is not pinned to the owner SHA\n' >&2
+  exit 1
+}
+
 jq '.images[0].pull_ref = "localhost:5001/mattercodex/control-plane:latest"' "$temporary_directory/valid.json" >"$temporary_directory/mutable.json"
 mutable_sha=$(sha256sum "$temporary_directory/mutable.json" | awk '{print $1}')
 if "$validator" --lock "$temporary_directory/mutable.json" --source-sha "$source_sha" --sha256 "$mutable_sha" >/dev/null 2>&1; then

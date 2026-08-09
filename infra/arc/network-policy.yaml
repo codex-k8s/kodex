@@ -211,7 +211,7 @@ spec:
             matchLabels:
               app.kubernetes.io/name: matter-codex-registry
               app.kubernetes.io/component: image-registry
-      ports: [{ protocol: TCP, port: 5001 }]
+      ports: [{ protocol: TCP, port: 5000 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -71,9 +71,7 @@ yq eval-all '
   with(select(.kind == "Deployment" or .kind == "DaemonSet" or .kind == "Job");
     .spec.template.metadata.labels."mattercodex.dev/profile" = "direct-production-single-node-prototype" |
     .spec.template.metadata.labels."mattercodex.dev/release-managed" = "true" |
-    with(select(.spec.template.spec.automountServiceAccountToken == null);
-      .spec.template.spec.automountServiceAccountToken = false
-    ) |
+    .spec.template.spec.automountServiceAccountToken = false |
     .spec.template.spec.containers[] |= (
       .env = ((.env // []) |
         map(select((.name | test("^(OTEL_|SENTRY_)")) | not)) +
@@ -102,9 +100,7 @@ yq eval-all '
   with(select(.kind == "CronJob");
     .spec.jobTemplate.spec.template.metadata.labels."mattercodex.dev/profile" = "direct-production-single-node-prototype" |
     .spec.jobTemplate.spec.template.metadata.labels."mattercodex.dev/release-managed" = "true" |
-    with(select(.spec.jobTemplate.spec.template.spec.automountServiceAccountToken == null);
-      .spec.jobTemplate.spec.template.spec.automountServiceAccountToken = false
-    ) |
+    .spec.jobTemplate.spec.template.spec.automountServiceAccountToken = false |
     .spec.jobTemplate.spec.template.spec.containers[] |= (
       .env = ((.env // []) |
         map(select((.name | test("^(OTEL_|SENTRY_)")) | not)) +

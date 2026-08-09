@@ -19,19 +19,31 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: [configmaps, services]
-    verbs: [get, list, watch, create, update, patch]
+    verbs: [get, list, create, update, patch]
   - apiGroups: [""]
-    resources: [pods, pods/log, persistentvolumeclaims]
-    verbs: [get, list, watch]
+    resources: [pods, persistentvolumeclaims]
+    verbs: [get, list]
   - apiGroups: [apps]
-    resources: [deployments, statefulsets, replicasets]
+    resources: [deployments, statefulsets]
     verbs: [get, list, watch, create, update, patch]
   - apiGroups: [batch]
-    resources: [jobs, cronjobs]
-    verbs: [get, list, watch, create, update, patch, delete]
+    resources: [jobs]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    verbs: [get, list, create, update, patch]
+  - apiGroups: [batch]
+    resources: [jobs]
+    resourceNames:
+      - control-plane-migrate
+      - integration-gateway-migrate
+      - interaction-gateway-migrate
+      - internal-rpc-authority-migrate
+      - runtime-controller-migration
+    verbs: [delete]
   - apiGroups: [networking.k8s.io]
     resources: [ingresses]
-    verbs: [get, list, watch]
+    verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -55,13 +67,13 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: [services, pods]
-    verbs: [get, list, watch]
+    verbs: [get, list]
   - apiGroups: [apps]
-    resources: [deployments, statefulsets, replicasets]
-    verbs: [get, list, watch]
+    resources: [deployments, statefulsets]
+    verbs: [get, list]
   - apiGroups: [networking.k8s.io]
     resources: [ingresses]
-    verbs: [get, list, watch]
+    verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

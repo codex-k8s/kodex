@@ -4,7 +4,7 @@ title: Direct-production single-node prototype
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.2.0
 updated: 2026-08-09
 ---
 
@@ -29,41 +29,57 @@ Legacy Mattermost, PostgreSQL, bot-service, Kaniko и registry в
 ## Шлюзы
 
 До merge допускаются только read-only preflight и локальный render. После merge
-нужен отдельный owner gate на каждый production bootstrap/build/deploy. Gate
-состоит из GitHub Environment с обязательным reviewer, запретом self-review и
-branch policy `main`; строка input/env не является доказательством допуска. В Wave A
-исполняется только `dark`. Режим `cutover` закрыто отклоняется до закрытия #241,
-#237, #194, отдельного owner gate и материализации cutover manifest. Наличие
-режима workflow не является разрешением на переключение.
+нужен отдельный owner gate на каждый production bootstrap/build/deploy. Для
+private repository gate не полагается на недоступные в части тарифов required
+reviewers GitHub Environment. Owner code-first закрепляет оба runner group за
+точными workflow path на одном full 40-hex SHA, записывает этот SHA и числовые
+owner actor ID в repository Actions variables и ограничивает Environment веткой
+`main`. Workflow допускает только `workflow_dispatch`, у которого и исходный
+`actor`, и `triggering_actor` совпадают с owner-controlled ID; строка input/env не
+является доказательством допуска. В Wave A исполняется только `dark`. Режим
+`cutover` закрыто отклоняется до закрытия #241, #237, #194, отдельного owner gate
+и материализации cutover manifest.
 
 ## Code-first bootstrap
 
-Сначала owner с GitHub organization administration настраивает две Environment и
-два non-default runner group, каждый с единственным разрешённым workflow из
-`refs/heads/main`:
+Сначала owner с GitHub organization administration настраивает две Environment,
+repository variables и два non-default runner group. Каждый group разрешает
+единственный workflow на exact merged SHA. Файлы actor ID и SHA не печатаются и
+не включаются в Git:
 
 ```bash
 infra/github/bootstrap-actions-policy.sh --mode preflight \
-  --build-reviewer-team-id-file PATH --deploy-reviewer-team-id-file PATH
+  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
+  --deploy-owner-actor-id-file PATH
 infra/github/bootstrap-actions-policy.sh --mode apply \
-  --build-reviewer-team-id-file PATH --deploy-reviewer-team-id-file PATH
+  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
+  --deploy-owner-actor-id-file PATH
 infra/github/bootstrap-actions-policy.sh --mode readback \
-  --build-reviewer-team-id-file PATH --deploy-reviewer-team-id-file PATH
+  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
+  --deploy-owner-actor-id-file PATH
 ```
 
 Затем одноразовый операторский ARC bootstrap требует cluster-admin и не
 выполняется routine runner:
 
 ```bash
-infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode preflight
+infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode preflight \
+  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
+  --deploy-owner-actor-id-file PATH
 infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode apply \
+  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
+  --deploy-owner-actor-id-file PATH \
   --github-app-id-file PATH --github-app-installation-id-file PATH \
   --github-app-private-key-file PATH
-infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode readback
+infra/arc/bootstrap.sh --context EXACT_CONTEXT --mode readback \
+  --workflow-sha-file PATH --build-owner-actor-id-file PATH \
+  --deploy-owner-actor-id-file PATH
 ```
 
 Значения GitHub App передаются только файлами. Скрипт не печатает их и не
-заменяет существующие Secrets. Bootstrap создаёт два namespace, два независимых
+заменяет существующие Secrets. ARC preflight/apply/readback сначала повторяет
+GitHub policy readback; runners не создаются при отсутствующем exact-SHA group
+или owner actor variable. Bootstrap создаёт два namespace, два независимых
 controller и scale set, default-deny NetworkPolicy, allowlisted egress proxy,
 динамически привязанный exact Kubernetes API egress и admission allowlist.
 `mattercodex-build` не получает Kubernetes token; `mattercodex-deploy` получает
@@ -79,8 +95,11 @@ Build namespace имеет Pod Security audit/warn `restricted`, но enforce
 pinned images. Deploy и application namespace используют enforce `restricted`.
 
 Отдельный owner-controlled production bootstrap применяет namespace security,
-ServiceAccount/RBAC, Secret/CA interfaces и admission allowlist. Routine deploy
-не читает и не создаёт Secrets/Certificates:
+ServiceAccount/RBAC, Secret/CA interfaces и admission allowlist. Он генерирует
+из канонического render параметризованный contract точных ServiceAccount, token
+automount, volumes, container images, command/args, volumeMounts и Secret env для
+каждого workload. Routine deploy не читает и не создаёт Secrets/Certificates, не
+читает Pod logs и может удалять только пять точно названных migration Jobs:
 
 ```bash
 infra/direct-production/bootstrap.sh --context EXACT_CONTEXT --mode preflight
@@ -98,8 +117,9 @@ Certificates, отсутствие пустых Secret data и пишет без
 
 ## Release и dark deploy
 
-1. После Environment approval вручную запустить `Build exact release` с exact
-   lowercase 40-hex SHA, совпадающим с текущим `main`.
+1. После owner policy readback owner вручную запускает `Build exact release` с
+   exact lowercase 40-hex SHA, совпадающим с pinned workflow SHA и текущим
+   `main`.
 2. Сохранить `build_run_id` и SHA-256 файла `release-lock.json`.
 3. Проверить lock через `tools/release/validate-release-lock.sh`.
 4. Вручную запустить `Deploy exact production release` с теми же SHA, run ID,
@@ -112,6 +132,12 @@ Certificates, отсутствие пустых Secret data и пишет без
 Release lock связывает source SHA, build run, закрытый список компонентов,
 repository, image digest и node pull reference. Deploy дополнительно проверяет
 provenance исходного workflow run и artifact digest.
+
+Preflight до первой мутации проверяет все фактически используемые
+`get|list|watch|create|patch|update` permissions, exact-name delete для migrations,
+запрет `Secret`/`pods/log`, server-side admission всего render и отрицательный
+forged Secret mount. Повторный release проверяет migration Jobs через
+server-side dry-run delete/recreate без фактического удаления.
 
 ## Secrets
 
@@ -142,6 +168,15 @@ supply chain. `role-image-builder` и динамический `agent-runner` н
 остаются в release lock, но не выдаются за работающий контур. Наблюдаемость —
 #254, HA/DR — #255, supply chain/Vault — #256,
 поддерживаемый полный тестовый контур — #216.
+
+Foundation PostgreSQL использует только `hostssl` с SCRAM и явный
+`hostnossl reject`; PostgreSQL и Redis probes проходят authenticated TLS с
+точным service hostname/SNI и CA. Data policies содержат одновременно точные namespace и Pod
+selectors. Build registry path допускает только Service port `5000`; Kubernetes
+API для controller/listener/deployer материализуется как read-only discovered
+exact `/32` destinations. Единственное внешнее `0.0.0.0/0:443` принадлежит
+изолированному allowlist proxy без application credentials; application/build
+Pods имеют egress только к самому proxy.
 
 ## Rollback
 

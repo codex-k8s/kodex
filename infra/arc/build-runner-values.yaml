@@ -16,7 +16,7 @@ listenerTemplate:
           - {name: NO_PROXY, value: "kubernetes.default.svc,localhost,127.0.0.1"}
 controllerServiceAccount:
   namespace: mattercodex-ci
-  name: mattercodex-arc-gha-rs-controller
+  name: mattercodex-arc-build-gha-rs-controller
 template:
   metadata:
     labels: {mattercodex.dev/arc-role: build-runner}

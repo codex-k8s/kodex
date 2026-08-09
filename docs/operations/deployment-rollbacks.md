@@ -4,7 +4,7 @@ title: Развертывание и откат
 type: operations
 status: approved
 owner: sre
-version: 0.5.0
+version: 0.6.0
 updated: 2026-08-09
 ---
 
@@ -20,11 +20,14 @@ Build и deploy запускаются только через `workflow_dispatc
 выполняет schema down, удаление PVC или изменение legacy traffic. Процедура и
 bounded smoke определены в `RUN-MC-015`.
 
-Build и deploy jobs начинают работу только после GitHub Environment approval с
-обязательным reviewer и запретом self-review. Workflow проверяет собственный
-`workflow_dispatch`, exact workflow path/ref `main`, branch policy и число
-reviewer через GitHub API, сохраняет безопасное gate evidence и передаёт его
-production script. Caller-controlled значение `approved` не используется.
+Build и deploy jobs доступны только через non-default runner group, закреплённый
+owner bootstrap за exact workflow path на full merged SHA. Workflow проверяет
+собственный `workflow_dispatch`, exact workflow path/ref `main`, текущий run/head
+SHA, main-only Environment, а также immutable `actor` и `triggering_actor` против
+owner-controlled Actions variable; затем сохраняет безопасное gate evidence и
+передаёт его production script. Caller-controlled значение `approved` не
+используется. Такая граница работает и для private repository, где тариф может
+не предоставлять required reviewers.
 
 ## Процесс
 

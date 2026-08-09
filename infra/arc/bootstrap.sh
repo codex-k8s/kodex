@@ -3,7 +3,7 @@ set -euo pipefail
 
 fail() { printf 'ARC bootstrap failed: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback [--github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
+  printf 'Usage: %s --context <exact-context> --mode preflight|apply|readback --workflow-sha-file <path> --build-owner-actor-id-file <path> --deploy-owner-actor-id-file <path> [--github-app-id-file <path> --github-app-installation-id-file <path> --github-app-private-key-file <path>]\n' "$0" >&2
 }
 
 expected_context=""
@@ -11,6 +11,9 @@ mode=""
 github_app_id_file=""
 github_app_installation_id_file=""
 github_app_private_key_file=""
+workflow_sha_file=""
+build_owner_actor_file=""
+deploy_owner_actor_file=""
 while (($# > 0)); do
   case "$1" in
     --context) expected_context="${2:-}"; shift 2 ;;
@@ -18,6 +21,9 @@ while (($# > 0)); do
     --github-app-id-file) github_app_id_file="${2:-}"; shift 2 ;;
     --github-app-installation-id-file) github_app_installation_id_file="${2:-}"; shift 2 ;;
     --github-app-private-key-file) github_app_private_key_file="${2:-}"; shift 2 ;;
+    --workflow-sha-file) workflow_sha_file="${2:-}"; shift 2 ;;
+    --build-owner-actor-id-file) build_owner_actor_file="${2:-}"; shift 2 ;;
+    --deploy-owner-actor-id-file) deploy_owner_actor_file="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -25,6 +31,8 @@ done
 
 [[ -n "$expected_context" ]] || fail "exact Kubernetes context is required"
 case "$mode" in preflight|apply|readback) ;; *) fail "mode must be preflight, apply or readback" ;; esac
+[[ -r "$workflow_sha_file" && -r "$build_owner_actor_file" && -r "$deploy_owner_actor_file" ]] ||
+  fail "GitHub owner policy files are required before ARC"
 for command_name in kubectl helm sha256sum awk grep jq yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -32,6 +40,10 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+"$repository_root/infra/github/bootstrap-actions-policy.sh" --mode readback \
+  --workflow-sha-file "$workflow_sha_file" \
+  --build-owner-actor-id-file "$build_owner_actor_file" \
+  --deploy-owner-actor-id-file "$deploy_owner_actor_file" >/dev/null
 lock_file="$script_directory/chart.lock"
 credential_secret=mattercodex-github-runner-auth
 build_namespace=mattercodex-ci
@@ -196,6 +208,10 @@ readback_scale_set "$build_namespace" mattercodex-build mattercodex-production-b
   mattercodex-build-gha-rs-no-permission false
 readback_scale_set "$deploy_namespace" mattercodex-deploy mattercodex-production-deploy \
   mattercodex-production-deployer true
+"$repository_root/infra/github/bootstrap-actions-policy.sh" --mode readback \
+  --workflow-sha-file "$workflow_sha_file" \
+  --build-owner-actor-id-file "$build_owner_actor_file" \
+  --deploy-owner-actor-id-file "$deploy_owner_actor_file" >/dev/null
 kubectl --context "$expected_context" auth can-i get secrets -n "$deploy_namespace" \
   --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer | grep -qx no ||
   fail "deploy runner unexpectedly has Secret read access"
