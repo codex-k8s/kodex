@@ -124,6 +124,21 @@ func (store *admittedAdminStore) UpsertAgentSession(ctx context.Context, input a
 	return store.fakeAdminStore.UpsertAgentSession(ctx, input)
 }
 
+func (store *admittedAdminStore) ResetAgentSessionRuntime(ctx context.Context, sessionKey string, status string) (entity.AgentSession, error) {
+	session, err := store.fakeAdminStore.GetAgentSession(ctx, sessionKey)
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	required, err := store.RequiresClusterAdminSessionGuard(ctx, session.RoleID, sessionKey)
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	if required {
+		return entity.AgentSession{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return store.fakeAdminStore.ResetAgentSessionRuntime(ctx, sessionKey, status)
+}
+
 func (store *admittedAdminStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
 	return store.fakeAdminStore.WithExactAgentSessionsRuntimeGuard(ctx, expected, func(adminrepo.Repository) error {
 		return sideEffect(store)
@@ -946,6 +961,27 @@ func TestClusterAdminRepairGuardsStaleAndRunningSessionAtEveryEffectBoundary(t *
 			})
 		}
 	}
+
+	t.Run("terminal repair preserves frozen runtime identity", func(t *testing.T) {
+		store, runner, sessionKey := clusterAdminRepairFixture(agentSessionTurnRunning, true)
+		runner.sessionRuntimeHealth = runtimerepo.AgentSessionRuntimeHealth{SessionKey: sessionKey, Exists: true, Terminal: true, Phase: "Failed", Reason: "synthetic"}
+		guarded := &admittedAdminStore{fakeAdminStore: store, allowed: true, frozenSessions: map[string]bool{sessionKey: true}}
+		svc := NewChatRunService(ChatRunServiceConfig{
+			Store: guarded, RuntimeRunner: runner, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+			TerminalReconciler: &fakeTerminalReconciler{},
+		})
+		result, err := svc.RepairAgentSessions(context.Background(), 10)
+		if err != nil || result.Failed != 0 || result.StaleSessionsReset != 1 {
+			t.Fatalf("result=%#v error=%v", result, err)
+		}
+		persisted := store.agentSessions[sessionKey]
+		if persisted.Status != agentSessionStatusIdle || persisted.ActiveTurnID != 0 || persisted.ActiveRunID != "" {
+			t.Fatalf("active runtime state was not cleared: %#v", persisted)
+		}
+		if persisted.PodName != "admin-pod" || store.resetSessionCalls != 0 || store.snapshotSessionCalls != 1 {
+			t.Fatalf("frozen runtime identity changed: session=%#v reset=%d snapshot=%d", persisted, store.resetSessionCalls, store.snapshotSessionCalls)
+		}
+	})
 }
 
 func TestClusterAdminStopTurnGuardsTargetAtEveryBoundary(t *testing.T) {
@@ -955,12 +991,13 @@ func TestClusterAdminStopTurnGuardsTargetAtEveryBoundary(t *testing.T) {
 		wantCanceled    bool
 		wantCleanup     int
 		wantReset       int
+		wantSnapshot    int
 		wantCardUpdates int
 	}{
 		{name: "prepare", denyOperation: "agent_session.stop_prepare.side_effect"},
 		{name: "cleanup", denyOperation: "agent_session.stop_cleanup.side_effect", wantCanceled: true},
 		{name: "reset", denyOperation: "agent_session.stop_reset.side_effect", wantCanceled: true, wantCleanup: 1},
-		{name: "card", denyOperation: "agent_session.stop_card.side_effect", wantCanceled: true, wantCleanup: 1, wantReset: 1},
+		{name: "card", denyOperation: "agent_session.stop_card.side_effect", wantCanceled: true, wantCleanup: 1, wantSnapshot: 1},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -981,8 +1018,8 @@ func TestClusterAdminStopTurnGuardsTargetAtEveryBoundary(t *testing.T) {
 			if turnErr != nil || (turn.Status == agentSessionTurnCanceled) != test.wantCanceled {
 				t.Fatalf("turn=%#v error=%v", turn, turnErr)
 			}
-			if len(runner.cleanedSessionKeys) != test.wantCleanup || baseStore.resetSessionCalls != test.wantReset || len(publisher.cardUpdates) != test.wantCardUpdates {
-				t.Fatalf("effects cleanup=%d reset=%d cards=%d", len(runner.cleanedSessionKeys), baseStore.resetSessionCalls, len(publisher.cardUpdates))
+			if len(runner.cleanedSessionKeys) != test.wantCleanup || baseStore.resetSessionCalls != test.wantReset || baseStore.snapshotSessionCalls != test.wantSnapshot || len(publisher.cardUpdates) != test.wantCardUpdates {
+				t.Fatalf("effects cleanup=%d reset=%d snapshot=%d cards=%d", len(runner.cleanedSessionKeys), baseStore.resetSessionCalls, baseStore.snapshotSessionCalls, len(publisher.cardUpdates))
 			}
 			for _, input := range guarded.guardInputs {
 				if input.SessionKey != "session-admin" || input.RoleID != 1 || input.ChatID != 1 || input.MattermostChannelID != "channel-admin" {
