@@ -21,18 +21,38 @@ func Route(path string) string {
 		return "session"
 	case path == "/api/v1/projects":
 		return "projects"
-	case path == "/api/v1/access-resources" || strings.HasPrefix(path, "/api/v1/access-resources/"):
+	case strings.HasPrefix(path, "/api/v1/access-resources"):
 		return "access"
-	case path == "/api/v1/runs":
+	case strings.HasPrefix(path, "/api/v1/role-image-recipes") || strings.HasPrefix(path, "/api/v1/image-builds"):
+		return "role_images"
+	case strings.HasPrefix(path, "/api/v1/schedules") || path == "/api/v1/schedule-selectors":
+		return "schedules"
+	case strings.HasPrefix(path, "/api/v1/owner-gates"):
+		return "owner_gates"
+	case strings.HasPrefix(path, "/api/v1/backups") || strings.HasPrefix(path, "/api/v1/restore-operations") || strings.HasPrefix(path, "/api/v1/workspace-backups") || strings.HasPrefix(path, "/api/v1/workspace-restores"):
+		return "backups"
+	case strings.HasPrefix(path, "/api/v1/runs"):
 		return "runs"
-	case path == "/api/v1/audit":
+	case strings.HasPrefix(path, "/api/v1/audit"):
 		return "audit"
-	case path == "/api/v1/incidents":
+	case strings.HasPrefix(path, "/api/v1/incidents"):
 		return "incidents"
-	case path == "/api/v1/configuration-changes":
+	case path == "/api/v1/configuration-changes" || path == "/api/v1/configuration-diff" || strings.HasPrefix(path, "/api/v1/configuration-source/"):
 		return "configuration_changes"
-	case path == "/api/v1/diagnostics":
+	case path == "/api/v1/diagnostics" || path == "/api/v1/health-series":
 		return "diagnostics"
+	case strings.HasPrefix(path, "/api/v1/mattermost/"):
+		return "workspaces"
+	case strings.HasPrefix(path, "/api/v1/role-definitions"):
+		return "role_definitions"
+	case strings.HasPrefix(path, "/api/v1/agents") || strings.HasPrefix(path, "/api/v1/agent-assignments"):
+		return "agents"
+	case strings.HasPrefix(path, "/api/v1/instruction-sets"):
+		return "instructions"
+	case strings.HasPrefix(path, "/api/v1/providers") || strings.HasPrefix(path, "/api/v1/provider-"):
+		return "providers"
+	case strings.HasPrefix(path, "/api/v1/integration-"):
+		return "integrations"
 	case path == "/api/v1/realtime":
 		return "realtime"
 	case path == "/api/v1/resources" || strings.HasPrefix(path, "/api/v1/resources/"):
@@ -85,7 +105,7 @@ func (metrics *Metrics) ObserveSnapshot(channel, outcome string) {
 
 func normalizeRoute(value string) string {
 	switch value {
-	case "session", "projects", "resources", "access", "runs", "audit", "incidents", "configuration_changes", "diagnostics", "realtime", "technical":
+	case "session", "projects", "resources", "access", "role_images", "schedules", "owner_gates", "backups", "runs", "audit", "incidents", "configuration_changes", "diagnostics", "workspaces", "role_definitions", "agents", "instructions", "providers", "integrations", "realtime", "technical":
 		return value
 	default:
 		return "unknown"
@@ -94,7 +114,7 @@ func normalizeRoute(value string) string {
 
 func normalizeStatus(value int) string {
 	switch value {
-	case 101, 200, 201, 204, 400, 401, 403, 404, 405, 409, 412, 413, 415, 429, 500, 503:
+	case 101, 200, 201, 202, 204, 400, 401, 403, 404, 405, 409, 412, 413, 415, 429, 500, 503:
 		return strconv.Itoa(value)
 	default:
 		return "unknown"
@@ -103,7 +123,7 @@ func normalizeStatus(value int) string {
 
 func normalizeChannel(value string) string {
 	switch value {
-	case "RUNS", "INCIDENTS", "RESOURCES", "CONFIGURATION_CHANGES":
+	case "RUNS", "INCIDENTS", "RESOURCES", "CONFIGURATION_CHANGES", "WORKSPACE_TEAMS", "PROVIDERS", "INTEGRATIONS", "APPROVALS", "BACKUPS", "HEALTH":
 		return value
 	default:
 		return "UNKNOWN"

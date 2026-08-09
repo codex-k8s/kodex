@@ -143,6 +143,129 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 			projection.PromotedAt = &promotedAt
 		}
 		return generated.ResourceSpecProjection{ImageArtifact: projection}, nil
+	case *controlplanev1.ResourceSpec_RoleDefinition:
+		ownership, err := projectionOwnership(value.RoleDefinition.GetOwnership(), version)
+		recipeRef, recipeVersion, recipeDigest := value.RoleDefinition.GetRoleImageRecipeId(), value.RoleDefinition.GetRoleImageRecipeVersion(), value.RoleDefinition.GetRoleImageRecipeSha256()
+		hasRecipe := recipeRef != "" || recipeVersion != 0 || recipeDigest != ""
+		if err != nil || value.RoleDefinition.GetStableKey() == "" || (hasRecipe && (recipeRef == "" || recipeVersion == 0 || !validSHA256(recipeDigest))) {
+			return generated.ResourceSpecProjection{}, errors.New("role definition projection is invalid")
+		}
+		var recipeSHA *generated.Sha256
+		if recipeDigest != "" {
+			item := generated.Sha256(strings.ToLower(recipeDigest))
+			recipeSHA = &item
+		}
+		return generated.ResourceSpecProjection{RoleDefinition: &generated.RoleDefinitionProjection{
+			StableKey: value.RoleDefinition.GetStableKey(), Description: value.RoleDefinition.GetDescription(),
+			Capabilities: value.RoleDefinition.GetCapabilities(), AllowedTargetRoleDefinitionRefs: value.RoleDefinition.GetAllowedTargetRoleDefinitionIds(),
+			RoleImageRecipeRef: optionalString(value.RoleDefinition.GetRoleImageRecipeId()), RoleImageRecipeVersion: int64(value.RoleDefinition.GetRoleImageRecipeVersion()),
+			RoleImageRecipeSha256: recipeSHA, Ownership: ownership,
+		}}, nil
+	case *controlplanev1.ResourceSpec_Agent:
+		ownership, err := projectionOwnership(value.Agent.GetOwnership(), version)
+		if err != nil || value.Agent.GetStableKey() == "" || value.Agent.GetRoleDefinitionId() == "" ||
+			value.Agent.GetInstructionSetId() == "" || value.Agent.GetProviderPoolId() == "" {
+			return generated.ResourceSpecProjection{}, errors.New("agent projection is invalid")
+		}
+		return generated.ResourceSpecProjection{Agent: &generated.AgentProjection{
+			StableKey: value.Agent.GetStableKey(), RoleDefinitionRef: value.Agent.GetRoleDefinitionId(),
+			InstructionSetRef: value.Agent.GetInstructionSetId(), ProviderPoolRef: value.Agent.GetProviderPoolId(),
+			RuntimeProfileRef: optionalString(value.Agent.GetRuntimeProfileRef()), Capabilities: value.Agent.GetCapabilities(),
+			BotUsername: optionalString(value.Agent.GetBotUsername()), BotMaskedStatus: optionalString(value.Agent.GetBotMaskedStatus()),
+			Enabled: value.Agent.GetEnabled(), Ownership: ownership,
+		}}, nil
+	case *controlplanev1.ResourceSpec_AgentAssignment:
+		if value.AgentAssignment.GetAgentId() == "" || value.AgentAssignment.GetWorkspaceId() == "" || value.AgentAssignment.GetAssignmentGeneration() == 0 {
+			return generated.ResourceSpecProjection{}, errors.New("agent assignment projection is invalid")
+		}
+		return generated.ResourceSpecProjection{AgentAssignment: &generated.AgentAssignmentProjection{
+			AgentRef: value.AgentAssignment.GetAgentId(), WorkspaceRef: value.AgentAssignment.GetWorkspaceId(),
+			RoomRef: optionalString(value.AgentAssignment.GetRoomId()), Generation: int64(value.AgentAssignment.GetAssignmentGeneration()),
+		}}, nil
+	case *controlplanev1.ResourceSpec_InstructionSet:
+		ownership, err := projectionOwnership(value.InstructionSet.GetOwnership(), version)
+		state := generated.InstructionVersionState(strings.TrimPrefix(value.InstructionSet.GetVersionState().String(), "INSTRUCTION_VERSION_STATE_"))
+		if err != nil || value.InstructionSet.GetStableKey() == "" || value.InstructionSet.GetCurrentVersion() == 0 || !validSHA256(value.InstructionSet.GetContentSha256()) || !state.Valid() {
+			return generated.ResourceSpecProjection{}, errors.New("instruction set projection is invalid")
+		}
+		problems := make([]generated.InstructionValidationProblem, 0, len(value.InstructionSet.GetValidationErrors()))
+		for _, problem := range value.InstructionSet.GetValidationErrors() {
+			problems = append(problems, generated.InstructionValidationProblem{Code: problem.GetCode(), Field: problem.GetField(), Line: int(problem.GetLine()), Column: int(problem.GetColumn()), Message: problem.GetMessage()})
+		}
+		return generated.ResourceSpecProjection{InstructionSet: &generated.InstructionSetProjection{
+			StableKey: value.InstructionSet.GetStableKey(), Locale: value.InstructionSet.GetLocale(),
+			CurrentVersion: int64(value.InstructionSet.GetCurrentVersion()), PublishedVersion: int64(value.InstructionSet.GetPublishedVersion()),
+			Content: value.InstructionSet.GetContent(), ContentSha256: generated.Sha256(strings.ToLower(value.InstructionSet.GetContentSha256())),
+			VersionState: state, ValidationSucceeded: value.InstructionSet.GetValidationSucceeded(), ValidationProblems: problems, Ownership: ownership,
+		}}, nil
+	case *controlplanev1.ResourceSpec_ProviderConnectionReference:
+		masked := generated.ProviderConnectionMaskedStatus(strings.TrimPrefix(value.ProviderConnectionReference.GetMaskedStatus().String(), "PROVIDER_CONNECTION_STATUS_"))
+		if !masked.Valid() || value.ProviderConnectionReference.GetObservedAt() == nil || value.ProviderConnectionReference.GetObservedAt().CheckValid() != nil ||
+			value.ProviderConnectionReference.GetObservationExpiresAt() == nil || value.ProviderConnectionReference.GetObservationExpiresAt().CheckValid() != nil {
+			return generated.ResourceSpecProjection{}, errors.New("provider connection reference projection is invalid")
+		}
+		return generated.ResourceSpecProjection{ProviderConnectionReference: &generated.ProviderConnectionReferenceProjection{
+			StableKey: value.ProviderConnectionReference.GetStableKey(), Provider: value.ProviderConnectionReference.GetProvider(),
+			ReferenceVersion: int64(value.ProviderConnectionReference.GetReferenceVersion()), MaskedLabel: value.ProviderConnectionReference.GetMaskedLabel(),
+			MaskedStatus: masked, Capabilities: value.ProviderConnectionReference.GetCapabilities(), Eligible: value.ProviderConnectionReference.GetEligible(),
+			ObservedAt: value.ProviderConnectionReference.GetObservedAt().AsTime(), ObservedUsage: int64(value.ProviderConnectionReference.GetObservedUsage()),
+			ObservedLimit: int64(value.ProviderConnectionReference.GetObservedLimit()), ObservationExpiresAt: value.ProviderConnectionReference.GetObservationExpiresAt().AsTime(),
+		}}, nil
+	case *controlplanev1.ResourceSpec_ProviderPool:
+		ownership, err := projectionOwnership(value.ProviderPool.GetOwnership(), version)
+		policy := generated.ProviderPoolPolicy(value.ProviderPool.GetPolicy())
+		eligible := 0
+		for _, member := range value.ProviderPool.GetBindings() {
+			if member.GetEligible() {
+				eligible++
+			}
+		}
+		if err != nil || !policy.Valid() || value.ProviderPool.GetPolicyRevision() == 0 || value.ProviderPool.GetObservationMaxAge() == nil ||
+			value.ProviderPool.GetObservationMaxAge().CheckValid() != nil || value.ProviderPool.GetObservationMaxAge().AsDuration() <= 0 || !validSHA256(value.ProviderPool.GetEligibilitySnapshotSha256()) {
+			return generated.ResourceSpecProjection{}, errors.New("provider pool projection is invalid")
+		}
+		return generated.ResourceSpecProjection{ProviderPool: &generated.ProviderPoolResourceProjection{
+			StableKey: value.ProviderPool.GetStableKey(), Policy: policy, PolicyRevision: int64(value.ProviderPool.GetPolicyRevision()),
+			ObservationMaxAgeSeconds: int64(value.ProviderPool.GetObservationMaxAge().AsDuration() / time.Second), EligibleMembers: eligible,
+			TotalMembers: len(value.ProviderPool.GetBindings()), EligibilitySnapshotSha256: generated.Sha256(strings.ToLower(value.ProviderPool.GetEligibilitySnapshotSha256())), Ownership: ownership,
+		}}, nil
+	case *controlplanev1.ResourceSpec_WorkspaceBackup:
+		scope := generated.WorkspaceBackupScope(strings.TrimPrefix(value.WorkspaceBackup.GetScope().String(), "WORKSPACE_BACKUP_SCOPE_"))
+		state := generated.WorkspaceBackupState(strings.TrimPrefix(value.WorkspaceBackup.GetBackupState().String(), "WORKSPACE_BACKUP_STATE_"))
+		if !scope.Valid() || !state.Valid() || value.WorkspaceBackup.GetAttempt() == 0 || value.WorkspaceBackup.GetGeneration() == 0 ||
+			!validSHA256(value.WorkspaceBackup.GetMembershipSha256()) || value.WorkspaceBackup.GetRetainUntil() == nil || value.WorkspaceBackup.GetRetainUntil().CheckValid() != nil || len(value.WorkspaceBackup.GetMembers()) == 0 {
+			return generated.ResourceSpecProjection{}, errors.New("workspace backup projection is invalid")
+		}
+		return generated.ResourceSpecProjection{WorkspaceBackup: &generated.WorkspaceBackupProjection{
+			Scope: scope, MemberCount: len(value.WorkspaceBackup.GetMembers()), MembershipSha256: generated.Sha256(strings.ToLower(value.WorkspaceBackup.GetMembershipSha256())),
+			State: state, Attempt: int(value.WorkspaceBackup.GetAttempt()), Generation: int64(value.WorkspaceBackup.GetGeneration()),
+			TerminalReasonCode: optionalString(value.WorkspaceBackup.GetTerminalReasonCode()), RetainUntil: value.WorkspaceBackup.GetRetainUntil().AsTime(),
+		}}, nil
+	case *controlplanev1.ResourceSpec_WorkspaceRestore:
+		state := generated.WorkspaceRestoreState(strings.TrimPrefix(value.WorkspaceRestore.GetRestoreState().String(), "WORKSPACE_RESTORE_STATE_"))
+		if !state.Valid() || value.WorkspaceRestore.GetBackupId() == "" || value.WorkspaceRestore.GetBackupVersion() == 0 || !validSHA256(value.WorkspaceRestore.GetMembershipSha256()) ||
+			value.WorkspaceRestore.GetAttempt() == 0 || value.WorkspaceRestore.GetGeneration() == 0 || len(value.WorkspaceRestore.GetMembers()) == 0 {
+			return generated.ResourceSpecProjection{}, errors.New("workspace restore projection is invalid")
+		}
+		return generated.ResourceSpecProjection{WorkspaceRestore: &generated.WorkspaceRestoreProjection{
+			BackupRef: value.WorkspaceRestore.GetBackupId(), BackupVersion: int64(value.WorkspaceRestore.GetBackupVersion()),
+			MembershipSha256: generated.Sha256(strings.ToLower(value.WorkspaceRestore.GetMembershipSha256())), MemberCount: len(value.WorkspaceRestore.GetMembers()),
+			State: state, Attempt: int(value.WorkspaceRestore.GetAttempt()), Generation: int64(value.WorkspaceRestore.GetGeneration()),
+			Partial: value.WorkspaceRestore.GetPartial(), TerminalReasonCode: optionalString(value.WorkspaceRestore.GetTerminalReasonCode()),
+		}}, nil
+	case *controlplanev1.ResourceSpec_WorkspaceMattermostMapping:
+		state := generated.WorkspaceMattermostMappingState(strings.TrimPrefix(value.WorkspaceMattermostMapping.GetMappingState().String(), "WORKSPACE_MATTERMOST_MAPPING_STATE_"))
+		if !state.Valid() || value.WorkspaceMattermostMapping.GetWorkspaceId() == "" || value.WorkspaceMattermostMapping.GetWorkspaceVersion() == 0 ||
+			value.WorkspaceMattermostMapping.GetMappingGeneration() == 0 || value.WorkspaceMattermostMapping.GetProviderObservedAt() == nil || value.WorkspaceMattermostMapping.GetProviderObservedAt().CheckValid() != nil ||
+			value.WorkspaceMattermostMapping.GetProviderEffectVersion() == 0 || value.WorkspaceMattermostMapping.GetProviderEffectGeneration() == 0 {
+			return generated.ResourceSpecProjection{}, errors.New("workspace Mattermost mapping projection is invalid")
+		}
+		return generated.ResourceSpecProjection{WorkspaceMattermostMapping: &generated.WorkspaceMattermostMappingProjection{
+			WorkspaceRef: value.WorkspaceMattermostMapping.GetWorkspaceId(), WorkspaceVersion: int64(value.WorkspaceMattermostMapping.GetWorkspaceVersion()),
+			MappingGeneration: int64(value.WorkspaceMattermostMapping.GetMappingGeneration()), State: state,
+			ProviderObservedAt: value.WorkspaceMattermostMapping.GetProviderObservedAt().AsTime(), ProviderEffectVersion: int64(value.WorkspaceMattermostMapping.GetProviderEffectVersion()),
+			ProviderEffectGeneration: int64(value.WorkspaceMattermostMapping.GetProviderEffectGeneration()),
+		}}, nil
 	case *controlplanev1.ResourceSpec_RuntimeRevision:
 		prompt, err := requiredUUID(value.RuntimeRevision.GetPromptProfileId())
 		if err != nil {
@@ -190,20 +313,7 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 			EffectiveRuntimeSha256: value.RuntimeRevision.GetEffectiveRuntimeSha256(), AuthorityPolicyRevision: int64(value.RuntimeRevision.GetAuthorityPolicyRevision()),
 		}}, nil
 	case *controlplanev1.ResourceSpec_Session:
-		agent, err := requiredUUID(value.Session.GetAgentId())
-		if err != nil {
-			return generated.ResourceSpecProjection{}, err
-		}
-		binding, err := requiredUUID(value.Session.GetProviderAccountBindingId())
-		if err != nil {
-			return generated.ResourceSpecProjection{}, err
-		}
-		conversation, err := optionalUUID(value.Session.GetConversationId())
-		if err != nil {
-			return generated.ResourceSpecProjection{}, err
-		}
-		archive := optionalString(value.Session.GetArchiveRef())
-		return generated.ResourceSpecProjection{Session: &generated.SessionProjection{AgentId: agent, ProviderAccountBindingId: binding, ConversationId: conversation, ArchiveRef: archive, LastTurnSequence: int64(value.Session.GetLastTurnSequence())}}, nil
+		return generated.ResourceSpecProjection{Session: &generated.SessionProjection{LastTurnSequence: int64(value.Session.GetLastTurnSequence())}}, nil
 	case *controlplanev1.ResourceSpec_Turn:
 		return turnProjection(value.Turn)
 	case *controlplanev1.ResourceSpec_ProcessRun:
@@ -219,11 +329,13 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		kind := generated.ResourceKind(strings.TrimPrefix(value.Schedule.GetTargetKind().String(), "RESOURCE_KIND_"))
 		overlap := generated.ScheduleOverlapPolicy(strings.TrimPrefix(value.Schedule.GetOverlapPolicy().String(), "SCHEDULE_OVERLAP_POLICY_"))
 		misfire := generated.ScheduleMisfirePolicy(strings.TrimPrefix(value.Schedule.GetMisfirePolicy().String(), "SCHEDULE_MISFIRE_POLICY_"))
+		calendar := generated.ScheduleCalendar(value.Schedule.GetCalendar())
+		delivery := generated.ScheduleDeliveryPolicy(value.Schedule.GetDeliveryPolicy())
 		sessionPolicy := generated.ScheduleSessionPolicy(strings.TrimPrefix(value.Schedule.GetSessionPolicy().String(), "SCHEDULE_SESSION_POLICY_"))
 		notification := generated.ScheduleNotificationPolicy(strings.TrimPrefix(value.Schedule.GetNotificationPolicy().String(), "SCHEDULE_NOTIFICATION_POLICY_"))
 		targetType := generated.ScheduleTargetType(strings.TrimPrefix(value.Schedule.GetTargetType().String(), "SCHEDULE_TARGET_TYPE_"))
 		if err != nil || targetErr != nil || promptErr != nil || runtimeErr != nil || artifactErr != nil ||
-			roomErr != nil || sessionErr != nil || !kind.Valid() || !overlap.Valid() || !misfire.Valid() ||
+			roomErr != nil || sessionErr != nil || !kind.Valid() || !calendar.Valid() || !overlap.Valid() || !misfire.Valid() || !delivery.Valid() ||
 			!sessionPolicy.Valid() || !notification.Valid() || !targetType.Valid() ||
 			value.Schedule.GetNextRunAt() == nil || value.Schedule.GetMisfireGrace() == nil ||
 			value.Schedule.GetInitialBackoff() == nil || value.Schedule.GetMaximumBackoff() == nil ||
@@ -245,10 +357,10 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 		return generated.ResourceSpecProjection{Schedule: &generated.ScheduleProjection{
 			TargetResourceId: target, TargetKind: kind, TargetVersion: int64(value.Schedule.GetTargetVersion()),
 			Cron: cron, IntervalSeconds: interval, Timezone: value.Schedule.GetTimezone(),
-			NextRunAt: value.Schedule.GetNextRunAt().AsTime(), Calendar: generated.ScheduleProjectionCalendar(value.Schedule.GetCalendar()),
+			NextRunAt: value.Schedule.GetNextRunAt().AsTime(), Calendar: calendar,
 			OverlapPolicy: overlap, MisfirePolicy: misfire,
 			MisfireGraceSeconds:    int64(value.Schedule.GetMisfireGrace().AsDuration() / time.Second),
-			DeliveryPolicy:         generated.ScheduleProjectionDeliveryPolicy(value.Schedule.GetDeliveryPolicy()),
+			DeliveryPolicy:         delivery,
 			MaximumAttempts:        int(value.Schedule.GetMaximumAttempts()),
 			InitialBackoffSeconds:  int64(value.Schedule.GetInitialBackoff().AsDuration() / time.Second),
 			MaximumBackoffSeconds:  int64(value.Schedule.GetMaximumBackoff().AsDuration() / time.Second),
@@ -437,8 +549,8 @@ func ownerGateProjection(resource *controlplanev1.Resource, value *controlplanev
 	if value.GetExpiresAt() == nil || !decision.Valid() {
 		return generated.ResourceSpecProjection{}, errors.New("owner gate projection is invalid")
 	}
-	deliveryState := generated.OwnerGateProjectionDeliveryStateAWAITINGDELIVERYPROOF
-	nextAction := generated.OwnerGateProjectionNextActionWAITFORDELIVERY
+	deliveryState := generated.OwnerGateDeliveryStateAWAITINGDELIVERYPROOF
+	nextAction := generated.OwnerGateNextActionWAITFORDELIVERY
 	resolvable := false
 	var deliveredAt *time.Time
 	if value.GetDeliveredAt() != nil {
@@ -447,14 +559,14 @@ func ownerGateProjection(resource *controlplanev1.Resource, value *controlplanev
 	}
 	state := strings.TrimPrefix(resource.GetState().String(), "LIFECYCLE_STATE_")
 	if state == "EXPIRED" {
-		deliveryState = generated.OwnerGateProjectionDeliveryStateEXPIRED
-		nextAction = generated.OwnerGateProjectionNextActionREADTERMINAL
+		deliveryState = generated.OwnerGateDeliveryStateEXPIRED
+		nextAction = generated.OwnerGateNextActionREADTERMINAL
 	} else if state != "WAITING_OWNER" {
-		deliveryState = generated.OwnerGateProjectionDeliveryStateTERMINAL
-		nextAction = generated.OwnerGateProjectionNextActionREADTERMINAL
+		deliveryState = generated.OwnerGateDeliveryStateTERMINAL
+		nextAction = generated.OwnerGateNextActionREADTERMINAL
 	} else if value.GetDeliveryProviderReceiptSha256() != "" && deliveredAt != nil {
-		deliveryState = generated.OwnerGateProjectionDeliveryStateREADY
-		nextAction = generated.OwnerGateProjectionNextActionRESOLVE
+		deliveryState = generated.OwnerGateDeliveryStateREADY
+		nextAction = generated.OwnerGateNextActionRESOLVE
 		resolvable = true
 	}
 	return generated.ResourceSpecProjection{OwnerGate: &generated.OwnerGateProjection{
@@ -494,12 +606,12 @@ func projectionOwnership(value *controlplanev1.ConfigurationOwnership, resourceV
 			return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
 		}
 		if value.GetSourceRef() != "" || value.GetSourceRevision() != 0 {
-			return generated.ConfigurationOwnershipProjection{}, errors.New("UI ownership lineage is incomplete")
+			return generated.ConfigurationOwnershipProjection{}, errors.New("ui ownership lineage is incomplete")
 		}
 		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: "owner-ui", Revision: int64(resourceVersion)}, nil
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_GIT:
 		if value.GetSourceRef() == "" || value.GetSourceRevision() == 0 {
-			return generated.ConfigurationOwnershipProjection{}, errors.New("Git ownership is incomplete")
+			return generated.ConfigurationOwnershipProjection{}, errors.New("git ownership is incomplete")
 		}
 		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Git, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
 	default:
@@ -535,21 +647,10 @@ func optionalString(value string) *string {
 	return &value
 }
 
-func ConvertRuntimeIncident(input *controlplanev1.RuntimeIncident) (generated.RuntimeIncident, error) {
-	if input == nil || input.GetOccurredAt() == nil || input.GetExecutionFence() == 0 {
-		return generated.RuntimeIncident{}, errors.New("runtime incident is incomplete")
-	}
-	incidentID, err := requiredUUID(input.GetIncidentId())
-	if err != nil {
-		return generated.RuntimeIncident{}, err
-	}
-	executionID, err := requiredUUID(input.GetExecutionId())
-	if err != nil {
-		return generated.RuntimeIncident{}, err
-	}
-	kind := generated.RuntimeIncidentKind(strings.TrimPrefix(input.GetKind().String(), "RUNTIME_INCIDENT_KIND_"))
-	if !kind.Valid() {
-		return generated.RuntimeIncident{}, errors.New("runtime incident kind is invalid")
-	}
-	return generated.RuntimeIncident{IncidentId: incidentID, ExecutionId: executionID, ExecutionFence: int64(input.GetExecutionFence()), Kind: kind, EvidenceSha256: input.GetEvidenceSha256(), WorkloadId: input.GetWorkloadId(), OccurredAt: input.GetOccurredAt().AsTime()}, nil
+func ConvertIncidentOwnerProjection(input *controlplanev1.RuntimeIncidentOwnerProjection) (generated.IncidentView, error) {
+	return castIncidentView(input)
+}
+
+func ConvertRunOwnerProjection(input *controlplanev1.RunOwnerProjection) (generated.RunView, error) {
+	return castRunView(input)
 }

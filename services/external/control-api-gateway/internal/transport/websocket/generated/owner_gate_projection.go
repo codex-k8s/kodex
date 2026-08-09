@@ -10,4 +10,8 @@ type OwnerGateProjection struct {
   TurnId string
   Attempt int
   ImmutableInputSha256 string
+  DeliveryState *OwnerGateDeliveryState
+  Resolvable bool
+  DeliveredAt string
+  NextAction *OwnerGateNextAction
 }

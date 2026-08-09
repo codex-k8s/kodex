@@ -14,8 +14,24 @@ func TestSnapshotItemsMarshalExactlyOneProjection(t *testing.T) {
 	}
 	if _, err := json.Marshal(SnapshotItems{
 		Resources: make([]httpgenerated.Resource, 0),
-		Incidents: make([]httpgenerated.RuntimeIncident, 0),
+		Incidents: make([]httpgenerated.IncidentView, 0),
 	}); err == nil {
 		t.Fatal("multi-projection snapshot was accepted")
+	}
+}
+
+func TestSnapshotItemsRejectStaleOwnerProjectionVersion(t *testing.T) {
+	if _, err := json.Marshal(SnapshotItems{Runs: []httpgenerated.RunView{{
+		State:   httpgenerated.LifecycleStateACTIVE,
+		Version: 0,
+	}}}); err == nil {
+		t.Fatal("stale Run projection version was accepted")
+	}
+	if _, err := json.Marshal(SnapshotItems{Runs: []httpgenerated.RunView{{
+		State:       httpgenerated.LifecycleStateACTIVE,
+		Version:     1,
+		NextActions: []httpgenerated.RunNextAction{httpgenerated.RunNextAction("FUTURE_ACTION")},
+	}}}); err == nil {
+		t.Fatal("unknown authoritative Run action was accepted")
 	}
 }

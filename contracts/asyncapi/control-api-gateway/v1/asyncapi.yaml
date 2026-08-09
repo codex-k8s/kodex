@@ -5,7 +5,8 @@ info:
   description: >-
     Защищённый WebSocket snapshot/rejoin contract. Gateway не подписывается на
     NATS и не хранит проекции: каждый snapshot получается через owner-scoped
-    control-plane RPC после проверки той же session/CSRF/Origin boundary.
+    control-plane, interaction-gateway или integration-gateway RPC после
+    проверки той же session/CSRF/Origin boundary.
 servers:
   owner:
     host: control-api.mattercodex.local
@@ -30,10 +31,16 @@ operations:
     messages: [{ $ref: '#/channels/realtime/messages/subscribe' }]
     x-gateway-mapping: CONTROL_PLANE_AUTHORITY_PROOF_AND_RPC
     x-authoritative-rpcs:
-      RUNS: /controlplane.v1.ControlPlaneService/ListResources
+      RUNS: /controlplane.v1.ControlPlaneService/ListOwnerRuns
       INCIDENTS: /controlplane.v1.ControlPlaneService/ListRuntimeIncidents
       RESOURCES: /controlplane.v1.ControlPlaneService/ListResources
       CONFIGURATION_CHANGES: /controlplane.v1.ControlPlaneService/ListAuditEvents
+      WORKSPACE_TEAMS: /interactiongateway.v1.MattermostTeamService/ListMattermostTeams
+      PROVIDERS: /integrationgateway.v1.IntegrationManagementService/ListProviderConnections
+      INTEGRATIONS: /integrationgateway.v1.IntegrationManagementService/ListIntegrationConfigurations
+      APPROVALS: /integrationgateway.v1.IntegrationManagementService/ListIntegrationApprovals
+      BACKUPS: /controlplane.v1.ControlPlaneService/ListWorkspaceBackups
+      HEALTH: /controlplane.v1.ControlPlaneService/GetDiagnostics
   publishRealtime:
     action: send
     channel: { $ref: '#/channels/realtime' }
@@ -117,9 +124,15 @@ components:
       minProperties: 1
       maxProperties: 1
       properties:
+        runs: { $ref: '#/components/schemas/RunProjectionList' }
         resources: { $ref: '#/components/schemas/ResourceProjectionList' }
-        incidents: { $ref: '#/components/schemas/RuntimeIncidentProjectionList' }
+        incidents: { $ref: '#/components/schemas/IncidentProjectionList' }
         configurationChanges: { $ref: '#/components/schemas/ConfigurationChangeProjectionList' }
+        teams: { $ref: '#/components/schemas/MattermostTeamProjectionList' }
+        providerConnections: { $ref: '#/components/schemas/ProviderConnectionProjectionList' }
+        integrationConfigurations: { $ref: '#/components/schemas/IntegrationConfigurationProjectionList' }
+        approvals: { $ref: '#/components/schemas/IntegrationApprovalProjectionList' }
+        health: { $ref: '#/components/schemas/HealthObservationProjectionList' }
     ProblemEnvelope:
       title: ProblemEnvelope
       $id: urn:mattercodex:control-api:ws:ProblemEnvelope
@@ -140,13 +153,13 @@ components:
       title: ProjectionChannel
       $id: urn:mattercodex:control-api:ws:ProjectionChannel
       type: string
-      enum: [RUNS, INCIDENTS, RESOURCES, CONFIGURATION_CHANGES]
+      enum: [RUNS, INCIDENTS, RESOURCES, CONFIGURATION_CHANGES, WORKSPACE_TEAMS, PROVIDERS, INTEGRATIONS, APPROVALS, BACKUPS, HEALTH]
     ProjectionChannelList:
       title: ProjectionChannelList
       $id: urn:mattercodex:control-api:ws:ProjectionChannelList
       type: array
       minItems: 1
-      maxItems: 4
+      maxItems: 8
       uniqueItems: true
       items: { $ref: '#/components/schemas/ProjectionChannel' }
     ResourceKind:
@@ -170,16 +183,26 @@ components:
       type: array
       maxItems: 500
       items: { $ref: '#/components/schemas/ResourceProjection' }
-    RuntimeIncidentProjection:
-      title: RuntimeIncidentProjection
-      $id: urn:mattercodex:control-api:ws:RuntimeIncidentProjection
-      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/RuntimeIncident'
-    RuntimeIncidentProjectionList:
-      title: RuntimeIncidentProjectionList
-      $id: urn:mattercodex:control-api:ws:RuntimeIncidentProjectionList
+    RunProjection:
+      title: RunProjection
+      $id: urn:mattercodex:control-api:ws:RunProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/RunView'
+    RunProjectionList:
+      title: RunProjectionList
+      $id: urn:mattercodex:control-api:ws:RunProjectionList
       type: array
       maxItems: 500
-      items: { $ref: '#/components/schemas/RuntimeIncidentProjection' }
+      items: { $ref: '#/components/schemas/RunProjection' }
+    IncidentProjection:
+      title: IncidentProjection
+      $id: urn:mattercodex:control-api:ws:IncidentProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/IncidentView'
+    IncidentProjectionList:
+      title: IncidentProjectionList
+      $id: urn:mattercodex:control-api:ws:IncidentProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/IncidentProjection' }
     ConfigurationChangeProjection:
       title: ConfigurationChangeProjection
       $id: urn:mattercodex:control-api:ws:ConfigurationChangeProjection
@@ -190,6 +213,56 @@ components:
       type: array
       maxItems: 500
       items: { $ref: '#/components/schemas/ConfigurationChangeProjection' }
+    MattermostTeamProjection:
+      title: MattermostTeamProjection
+      $id: urn:mattercodex:control-api:ws:MattermostTeamProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/MattermostTeam'
+    MattermostTeamProjectionList:
+      title: MattermostTeamProjectionList
+      $id: urn:mattercodex:control-api:ws:MattermostTeamProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/MattermostTeamProjection' }
+    ProviderConnectionProjection:
+      title: ProviderConnectionProjection
+      $id: urn:mattercodex:control-api:ws:ProviderConnectionProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/ProviderConnection'
+    ProviderConnectionProjectionList:
+      title: ProviderConnectionProjectionList
+      $id: urn:mattercodex:control-api:ws:ProviderConnectionProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/ProviderConnectionProjection' }
+    IntegrationConfigurationProjection:
+      title: IntegrationConfigurationProjection
+      $id: urn:mattercodex:control-api:ws:IntegrationConfigurationProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/IntegrationConfiguration'
+    IntegrationConfigurationProjectionList:
+      title: IntegrationConfigurationProjectionList
+      $id: urn:mattercodex:control-api:ws:IntegrationConfigurationProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/IntegrationConfigurationProjection' }
+    IntegrationApprovalProjection:
+      title: IntegrationApprovalProjection
+      $id: urn:mattercodex:control-api:ws:IntegrationApprovalProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/IntegrationApproval'
+    IntegrationApprovalProjectionList:
+      title: IntegrationApprovalProjectionList
+      $id: urn:mattercodex:control-api:ws:IntegrationApprovalProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/IntegrationApprovalProjection' }
+    HealthObservationProjection:
+      title: HealthObservationProjection
+      $id: urn:mattercodex:control-api:ws:HealthObservationProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/HealthObservation'
+    HealthObservationProjectionList:
+      title: HealthObservationProjectionList
+      $id: urn:mattercodex:control-api:ws:HealthObservationProjectionList
+      type: array
+      maxItems: 64
+      items: { $ref: '#/components/schemas/HealthObservationProjection' }
     RequestId:
       title: RequestId
       $id: urn:mattercodex:control-api:ws:RequestId

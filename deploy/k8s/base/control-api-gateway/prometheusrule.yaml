@@ -21,7 +21,7 @@ spec:
           labels: {severity: critical}
           annotations:
             summary: Защищённый control API path не готов
-            description: Проверить OIDC, resolver, local issuer, mTLS и control-plane readiness.
+            description: Проверить OIDC, resolver, local issuer, mTLS и exact control-plane/interaction/integration readiness.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/control-api-gateway.md
         - alert: ControlAPIGatewayUnexpectedFailures
           expr: sum(rate(mattercodex_control_api_gateway_http_requests_total{status="500"}[5m])) > 0.1

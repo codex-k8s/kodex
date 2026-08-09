@@ -2,9 +2,12 @@ package httptransport
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
+	ownerclient "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/clients/owner"
 	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -30,6 +33,7 @@ var reasonMatrix = map[controlplanev1.ErrorReason]mappedProblem{
 	controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH:     {http.StatusPreconditionFailed, "VERSION_MISMATCH", true, true},
 	controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE:          {http.StatusServiceUnavailable, "UNAVAILABLE", true, true},
 	controlplanev1.ErrorReason_ERROR_REASON_INTERNAL:             {http.StatusInternalServerError, "INTERNAL", false, true},
+	controlplanev1.ErrorReason_ERROR_REASON_RATE_LIMITED:         {http.StatusTooManyRequests, "RATE_LIMITED", true, true},
 }
 
 var grpcMatrix = map[controlplanev1.ErrorReason]codes.Code{
@@ -42,6 +46,7 @@ var grpcMatrix = map[controlplanev1.ErrorReason]codes.Code{
 	controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH:     codes.Aborted,
 	controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE:          codes.Unavailable,
 	controlplanev1.ErrorReason_ERROR_REASON_INTERNAL:             codes.Internal,
+	controlplanev1.ErrorReason_ERROR_REASON_RATE_LIMITED:         codes.ResourceExhausted,
 }
 
 func mapRPCError(err error, mutation bool) (generated.Problem, bool) {
@@ -49,33 +54,103 @@ func mapRPCError(err error, mutation bool) (generated.Problem, bool) {
 	if err == nil {
 		return fallback, false
 	}
-	current, ok := status.FromError(err)
+	currentError := err
+	var downstream *ownerclient.DownstreamError
+	if errors.As(err, &downstream) {
+		if !downstream.Valid() {
+			return fallback, false
+		}
+		currentError = downstream.Err
+	}
+	current, ok := status.FromError(currentError)
 	if !ok {
 		return fallback, false
 	}
 	var detail *controlplanev1.ErrorDetail
+	var interactionDetail *interactiongatewayv1.ErrorDetail
 	for _, candidate := range current.Details() {
 		if typed, match := candidate.(*controlplanev1.ErrorDetail); match {
-			if detail != nil {
+			if detail != nil || interactionDetail != nil {
 				return fallback, false
 			}
 			detail = typed
 		}
+		if typed, match := candidate.(*interactiongatewayv1.ErrorDetail); match {
+			if detail != nil || interactionDetail != nil {
+				return fallback, false
+			}
+			interactionDetail = typed
+		}
+	}
+	if downstream != nil && downstream.NormalizedDetail != nil {
+		if detail != nil || interactionDetail != nil {
+			return fallback, false
+		}
+		detail = downstream.NormalizedDetail
+	}
+	if downstream != nil && downstream.Source == ownerclient.RPCSourceIntegration && downstream.NormalizedDetail == nil {
+		return fallback, false
+	}
+	if downstream != nil && downstream.Source == ownerclient.RPCSourceInteraction && downstream.NormalizedDetail == nil {
+		if interactionDetail == nil {
+			return fallback, false
+		}
+		reason, known := interactionReason(interactionDetail.GetReason())
+		mapping := reasonMatrix[reason]
+		if !known || (!mutation && mutationOnlyReason(reason)) || uuid.Validate(interactionDetail.GetCorrelationId()) != nil || grpcMatrix[reason] != current.Code() ||
+			!interactionProblemCodeAllowed(interactionDetail.GetReason(), interactionDetail.GetCode()) || mapping.Retryable != interactionDetail.GetRetryable() {
+			return fallback, false
+		}
+		return newProblem(mapping.Status, interactionDetail.GetCode(), mapping.Retryable, interactionDetail.GetCorrelationId()), true
 	}
 	if detail == nil || uuid.Validate(detail.GetCorrelationId()) != nil {
 		return fallback, false
 	}
 	mapping, known := reasonMatrix[detail.GetReason()]
-	if !known || grpcMatrix[detail.GetReason()] != current.Code() || mapping.Code != detail.GetCode() ||
+	if detail.GetReason() == controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE && current.Code() == codes.DeadlineExceeded && detail.GetCode() == "DEADLINE_EXCEEDED" && detail.GetRetryable() {
+		return newProblem(http.StatusGatewayTimeout, detail.GetCode(), true, detail.GetCorrelationId()), true
+	}
+	if !known || (!mutation && mutationOnlyReason(detail.GetReason())) || grpcMatrix[detail.GetReason()] != current.Code() || mapping.Code != detail.GetCode() ||
 		mapping.Retryable != detail.GetRetryable() {
 		return fallback, false
 	}
-	if !mutation && (detail.GetReason() == controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT ||
-		detail.GetReason() == controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT ||
-		detail.GetReason() == controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH) {
-		return fallback, false
-	}
 	return newProblem(mapping.Status, mapping.Code, mapping.Retryable, detail.GetCorrelationId()), true
+}
+
+func mutationOnlyReason(reason controlplanev1.ErrorReason) bool {
+	return reason == controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT || reason == controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH
+}
+
+func interactionReason(value interactiongatewayv1.ErrorReason) (controlplanev1.ErrorReason, bool) {
+	mapping := map[interactiongatewayv1.ErrorReason]controlplanev1.ErrorReason{
+		interactiongatewayv1.ErrorReason_ERROR_REASON_INVALID_REQUEST:      controlplanev1.ErrorReason_ERROR_REASON_INVALID_REQUEST,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_UNAUTHENTICATED:      controlplanev1.ErrorReason_ERROR_REASON_UNAUTHENTICATED,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_PERMISSION_DENIED:    controlplanev1.ErrorReason_ERROR_REASON_PERMISSION_DENIED,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_NOT_FOUND:            controlplanev1.ErrorReason_ERROR_REASON_NOT_FOUND,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_STATE_CONFLICT:       controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT: controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_VERSION_MISMATCH:     controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_UNAVAILABLE:          controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE,
+		interactiongatewayv1.ErrorReason_ERROR_REASON_INTERNAL:             controlplanev1.ErrorReason_ERROR_REASON_INTERNAL,
+	}
+	result, ok := mapping[value]
+	return result, ok
+}
+
+func interactionProblemCodeAllowed(reason interactiongatewayv1.ErrorReason, code string) bool {
+	allowed := map[interactiongatewayv1.ErrorReason]map[string]struct{}{
+		interactiongatewayv1.ErrorReason_ERROR_REASON_INVALID_REQUEST:      {"INVALID_REQUEST": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_UNAUTHENTICATED:      {"UNAUTHENTICATED": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_PERMISSION_DENIED:    {"PERMISSION_DENIED": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_NOT_FOUND:            {"NOT_FOUND": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_STATE_CONFLICT:       {"STATE_CONFLICT": {}, "MATTERMOST_BOT_CONFLICT": {}, "MATTERMOST_BOT_DELETED": {}, "MATTERMOST_BOT_REPAIR_REQUIRED": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT: {"IDEMPOTENCY_CONFLICT": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_VERSION_MISMATCH:     {"VERSION_MISMATCH": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_UNAVAILABLE:          {"UNAVAILABLE": {}, "MATTERMOST_BOT_OPERATION_BUSY": {}, "MATTERMOST_BOT_EFFECT_AMBIGUOUS": {}},
+		interactiongatewayv1.ErrorReason_ERROR_REASON_INTERNAL:             {"INTERNAL": {}},
+	}
+	_, ok := allowed[reason][code]
+	return ok
 }
 
 // MapRPCProblem предоставляет WebSocket boundary тот же fail-closed error contract.

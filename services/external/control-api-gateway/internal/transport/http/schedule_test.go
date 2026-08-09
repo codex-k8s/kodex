@@ -84,8 +84,9 @@ func TestScheduleFreshReadContainsCompleteEditableRoundTrip(t *testing.T) {
 	converted, err := ConvertResource(&controlplanev1.Resource{
 		Id: uuid.NewString(), Kind: controlplanev1.ResourceKind_RESOURCE_KIND_SCHEDULE,
 		Name: "weekday", State: controlplanev1.LifecycleState_LIFECYCLE_STATE_ACTIVE, Version: 3,
-		Spec:      &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Schedule{Schedule: source}},
-		CreatedAt: timestamppb.New(now), UpdatedAt: timestamppb.New(now),
+		ProjectionSha256: strings.Repeat("f", 64),
+		Spec:             &controlplanev1.ResourceSpec{Value: &controlplanev1.ResourceSpec_Schedule{Schedule: source}},
+		CreatedAt:        timestamppb.New(now), UpdatedAt: timestamppb.New(now),
 	})
 	if err != nil {
 		t.Fatalf("ConvertResource() error = %v", err)
@@ -105,9 +106,9 @@ func TestScheduleFreshReadContainsCompleteEditableRoundTrip(t *testing.T) {
 	roundTrip, ok := scheduleSpec(generated.ScheduleInput{
 		TargetResourceId: projection.TargetResourceId, Cron: projection.Cron,
 		IntervalSeconds: projection.IntervalSeconds, Timezone: projection.Timezone,
-		Calendar: generated.ScheduleInputCalendar(projection.Calendar), OverlapPolicy: projection.OverlapPolicy,
+		Calendar: generated.ScheduleCalendar(projection.Calendar), OverlapPolicy: projection.OverlapPolicy,
 		MisfirePolicy: projection.MisfirePolicy, MisfireGraceSeconds: projection.MisfireGraceSeconds,
-		DeliveryPolicy: generated.ScheduleInputDeliveryPolicy(projection.DeliveryPolicy), MaximumAttempts: projection.MaximumAttempts,
+		DeliveryPolicy: generated.ScheduleDeliveryPolicy(projection.DeliveryPolicy), MaximumAttempts: projection.MaximumAttempts,
 		InitialBackoffSeconds: projection.InitialBackoffSeconds, MaximumBackoffSeconds: projection.MaximumBackoffSeconds,
 		DeadLetterAfterSeconds: projection.DeadLetterAfterSeconds, PromptProfileId: projection.PromptProfileId,
 		PromptRevision: projection.PromptRevision, SessionPolicy: projection.SessionPolicy, RoomId: projection.RoomId,
@@ -142,23 +143,23 @@ func TestOwnerGateProjectionRequiresProviderDeliveryProof(t *testing.T) {
 	if err != nil || projection.OwnerGate == nil {
 		t.Fatalf("ownerGateProjection() error = %v", err)
 	}
-	if projection.OwnerGate.DeliveryState != generated.OwnerGateProjectionDeliveryStateAWAITINGDELIVERYPROOF ||
-		projection.OwnerGate.Resolvable || projection.OwnerGate.NextAction != generated.OwnerGateProjectionNextActionWAITFORDELIVERY {
+	if projection.OwnerGate.DeliveryState != generated.OwnerGateDeliveryStateAWAITINGDELIVERYPROOF ||
+		projection.OwnerGate.Resolvable || projection.OwnerGate.NextAction != generated.OwnerGateNextActionWAITFORDELIVERY {
 		t.Fatalf("pre-delivery projection is unsafe: %+v", projection.OwnerGate)
 	}
 	spec.DeliveredAt = timestamppb.New(now)
 	spec.DeliveryProviderReceiptSha256 = strings.Repeat("c", 64)
 	projection, err = ownerGateProjection(resource, spec)
 	if err != nil || projection.OwnerGate == nil ||
-		projection.OwnerGate.DeliveryState != generated.OwnerGateProjectionDeliveryStateREADY ||
-		!projection.OwnerGate.Resolvable || projection.OwnerGate.NextAction != generated.OwnerGateProjectionNextActionRESOLVE {
+		projection.OwnerGate.DeliveryState != generated.OwnerGateDeliveryStateREADY ||
+		!projection.OwnerGate.Resolvable || projection.OwnerGate.NextAction != generated.OwnerGateNextActionRESOLVE {
 		t.Fatalf("provider-proven projection is not ready: projection=%+v error=%v", projection.OwnerGate, err)
 	}
 	resource.State = controlplanev1.LifecycleState_LIFECYCLE_STATE_EXPIRED
 	projection, err = ownerGateProjection(resource, spec)
 	if err != nil || projection.OwnerGate == nil ||
-		projection.OwnerGate.DeliveryState != generated.OwnerGateProjectionDeliveryStateEXPIRED ||
-		projection.OwnerGate.Resolvable || projection.OwnerGate.NextAction != generated.OwnerGateProjectionNextActionREADTERMINAL {
+		projection.OwnerGate.DeliveryState != generated.OwnerGateDeliveryStateEXPIRED ||
+		projection.OwnerGate.Resolvable || projection.OwnerGate.NextAction != generated.OwnerGateNextActionREADTERMINAL {
 		t.Fatalf("expired projection is unsafe: projection=%+v error=%v", projection.OwnerGate, err)
 	}
 }

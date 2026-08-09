@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-api-gatewa
 type: runbook
 status: approved
 owner: sre
-version: 1.3.0
-updated: 2026-08-04
+version: 1.4.0
+updated: 2026-08-09
 ---
 
 # Диагностика и восстановление control-api-gateway
@@ -13,8 +13,8 @@ updated: 2026-08-04
 ## Назначение и запреты
 
 Runbook применяется при отказе startup/readiness, OIDC/session/CSRF/CORS,
-protected control-plane RPC, WebSocket snapshots, rate limits, TLS или
-observability. Он не разрешает deploy, production change, чтение Secret,
+protected control-plane/interaction/integration RPC, WebSocket snapshots, rate
+limits, TLS или observability. Он не разрешает deploy, production change, чтение Secret,
 сброс authority watermark/replay state или ручное изменение control-plane.
 
 Не выводить OIDC bearer/JWT claims, encrypted cookie, CSRF token, session key,
@@ -40,9 +40,10 @@ kubectl kustomize deploy/k8s/overlays/staging/control-api-gateway \
    а каждый `startupProbe`/`readinessProbe` — ровно один handler `httpGet` на
    `/readyz`; TLS-only `8443`, технический `9090`,
    non-root/read-only filesystem, отсутствующий Kubernetes API token.
-5. Egress destination обязаны быть точными: DNS, control-plane, identity SSO,
-   Vault, issuer persistence/readback, OTel и Sentry. Правило только по порту,
-   wildcard CIDR, plaintext или `skipTLSVerify` запрещены.
+5. Egress destination обязаны быть точными: DNS, control-plane,
+   interaction-gateway, integration-gateway, identity SSO, Vault, issuer
+   persistence/readback, OTel и Sentry. Правило только по порту, wildcard CIDR,
+   plaintext или `skipTLSVerify` запрещены.
 
 Доступ к среде и любая команда `kubectl get` выполняются только после
 отдельного подтверждения владельца. Secret data не читать.
@@ -57,8 +58,9 @@ Startup fail-closed до обслуживания `8443`. Проверять п�
   `mattercodex-control-api`, discovery/JWKS без redirect/proxy;
 - current и previous session keys — два обязательных 32-byte hex файла в
   deploy-профиле; значения не сравнивать в выводе;
-- control-plane client certificate/key и CA доступны отдельно, target имеет
-  exact SNI;
+- общая workload client certificate/key и internal CA доступны отдельно;
+  control-plane, interaction-gateway и integration-gateway targets имеют exact
+  DNS target и exact SNI;
 - readiness application grant доступен как файл безопасного mode;
 - local issuer UDS проверил peer UID/GID, snapshot, proof trust, durable replay
   и served-state readback;
@@ -67,7 +69,9 @@ Startup fail-closed до обслуживания `8443`. Проверять п�
   `ConfirmGatewayPublicTLS` продвигает APPLIED; readiness использует read-only
   `CheckGatewayPublicTLS`;
 - `controlplaneclient.Check` последовательно проходит resolver, local issuer и
-  защищённый `CheckReadiness` тем же путём, что рабочие RPC;
+  защищённый `CheckReadiness`, затем owner clients тем же local issuer и
+  application proof проходят interaction `CheckReadiness` и integration
+  `GetManagementDiagnostics`; любой отказ снимает readiness всего gateway;
 - OTLP TLS и Sentry file/expected host настроены.
 
 Нельзя заменять `/readyz` проверкой TCP, наличием файла или отдельным health
@@ -143,13 +147,21 @@ bounded overlap. Unknown/skipped/rollback/mismatched digest закрыто
 ## WebSocket snapshots
 
 WebSocket хранит только connection-local sequence. При reconnect client
-повторяет `SUBSCRIBE`; gateway заново читает authoritative state:
+повторяет `SUBSCRIBE`; один запрос содержит не более восьми из десяти закрытых
+channels, gateway заново читает authoritative state:
 
 - `RUNS` — `ListResources(PROCESS_RUN)`;
 - `RESOURCES` — `ListResources` для каждого из ≤8 закрытых kind;
 - `INCIDENTS` — все страницы typed `ListRuntimeIncidents`;
 - `CONFIGURATION_CHANGES` — все страницы `ListAuditEvents` с закрытыми
   external action/outcome enums и общим scan cap.
+- `WORKSPACE_TEAMS` — полный `ListMattermostTeams` catalog;
+- `PROVIDERS` — полный `ListProviderConnections` masked readback;
+- `INTEGRATIONS` — полный `ListIntegrationConfigurations` readback;
+- `APPROVALS` — полный `ListIntegrationApprovals` redacted readback;
+- `BACKUPS` — полный `ListWorkspaceBackups` readback;
+- `HEALTH` — текущие exact control-plane diagnostics, interaction readiness и
+  integration dependency observations без синтетической истории.
 
 Нет NATS subscription, durable cursor или локальной БД. Gap/duplicate лечится
 одним `complete=true` snapshot до 500 items. При следующей странице сверх cap

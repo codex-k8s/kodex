@@ -22,4 +22,13 @@ type ResourceSpecProjection struct {
   RoleImageRecipe *RoleImageRecipeProjection
   ImageBuild *ImageBuildProjection
   ImageArtifact *ImageArtifactProjection
+  RoleDefinition *RoleDefinitionProjection
+  Agent *AgentProjection
+  AgentAssignment *AgentAssignmentProjection
+  InstructionSet *InstructionSetProjection
+  ProviderConnectionReference *ProviderConnectionReferenceProjection
+  ProviderPool *ProviderPoolResourceProjection
+  WorkspaceBackup *WorkspaceBackupProjection
+  WorkspaceRestore *WorkspaceRestoreProjection
+  WorkspaceMattermostMapping *WorkspaceMattermostMappingProjection
 }

@@ -26,6 +26,8 @@ func TestStrictBoundaryMatchesNamedGeneratedEnums(t *testing.T) {
 		{name: "problem message type", generated: keys(wsgenerated.ValuesToProblemMessageType), boundary: []string{string(ProblemMessageTypeProblem)}},
 		{name: "projection channel", generated: keys(wsgenerated.ValuesToProjectionChannel), boundary: []string{
 			string(ProjectionChannelRuns), string(ProjectionChannelIncidents), string(ProjectionChannelResources), string(ProjectionChannelConfigurationChanges),
+			string(ProjectionChannelWorkspaceTeams), string(ProjectionChannelProviders), string(ProjectionChannelIntegrations), string(ProjectionChannelApprovals),
+			string(ProjectionChannelBackups), string(ProjectionChannelHealth),
 		}},
 		{name: "resource kind", generated: keys(wsgenerated.ValuesToResourceKind), boundary: []string{
 			string(ResourceKindProject), string(ResourceKindTeam), string(ResourceKindChat), string(ResourceKindRole),
@@ -33,7 +35,10 @@ func TestStrictBoundaryMatchesNamedGeneratedEnums(t *testing.T) {
 			string(ResourceKindIntegration), string(ResourceKindRuntimeRevision), string(ResourceKindSession), string(ResourceKindTurn),
 			string(ResourceKindProcessRun), string(ResourceKindSchedule), string(ResourceKindOwnerGate), string(ResourceKindMemoryRecord),
 			string(ResourceKindWorkClaim), string(ResourceKindArtifact), string(ResourceKindRoleImageRecipe),
-			string(ResourceKindImageBuild), string(ResourceKindImageArtifact),
+			string(ResourceKindImageBuild), string(ResourceKindImageArtifact), string(ResourceKindRoleDefinition),
+			string(ResourceKindAgent), string(ResourceKindAgentAssignment), string(ResourceKindInstructionSet),
+			string(ResourceKindProviderConnection), string(ResourceKindProviderPool), string(ResourceKindWorkspaceBackup),
+			string(ResourceKindWorkspaceRestore), string(ResourceKindWorkspaceMapping),
 		}},
 	}
 	for _, test := range tests {
@@ -95,7 +100,7 @@ func TestProjectionClosedEnumsFailBeforeWebSocketMarshal(t *testing.T) {
 		}},
 		{name: "role managed by", mutate: func(value *httpgenerated.Resource) {
 			value.Kind = httpgenerated.ResourceKindROLE
-			value.Spec = httpgenerated.ResourceSpecProjection{Role: &httpgenerated.RoleProjection{Ownership: ownership(), ProviderAccountPool: httpgenerated.ProviderPoolProjection{Policy: httpgenerated.LeastUsed}}}
+			value.Spec = httpgenerated.ResourceSpecProjection{Role: &httpgenerated.RoleProjection{Ownership: ownership(), ProviderAccountPool: httpgenerated.ProviderPoolProjection{Policy: httpgenerated.ProviderPoolPolicyLeastUsed}}}
 			value.Spec.Role.Ownership.ManagedBy = "UNKNOWN"
 		}},
 		{name: "schedule target kind", mutate: func(value *httpgenerated.Resource) {
@@ -130,10 +135,16 @@ func TestProjectionClosedEnumsFailBeforeWebSocketMarshal(t *testing.T) {
 		name  string
 		items SnapshotItems
 	}{
-		{name: "incident kind", items: SnapshotItems{Incidents: []httpgenerated.RuntimeIncident{{Kind: "UNKNOWN"}}}},
+		{name: "incident kind", items: SnapshotItems{Incidents: []httpgenerated.IncidentView{{Kind: "UNKNOWN"}}}},
+		{name: "incident state", items: SnapshotItems{Incidents: []httpgenerated.IncidentView{{Kind: httpgenerated.HEARTBEATMISSED, State: "UNKNOWN"}}}},
 		{name: "configuration action", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: "UNKNOWN", Outcome: httpgenerated.Succeeded, ResourceKind: httpgenerated.ResourceKindPROJECT}}}},
 		{name: "configuration outcome", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.ConfigurationChangeActionCreate, Outcome: "", ResourceKind: httpgenerated.ResourceKindPROJECT}}}},
 		{name: "configuration resource kind", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.ConfigurationChangeActionCreate, Outcome: httpgenerated.Succeeded, ResourceKind: "UNKNOWN"}}}},
+		{name: "team status", items: SnapshotItems{Teams: []httpgenerated.MattermostTeam{{Status: "UNKNOWN"}}}},
+		{name: "provider connection state", items: SnapshotItems{ProviderConnections: []httpgenerated.ProviderConnection{{State: "UNKNOWN"}}}},
+		{name: "approval status", items: SnapshotItems{Approvals: []httpgenerated.IntegrationApproval{{Status: "UNKNOWN"}}}},
+		{name: "health source", items: SnapshotItems{Health: []httpgenerated.HealthObservation{{Source: "UNKNOWN", Status: httpgenerated.HealthObservationStatusOK}}}},
+		{name: "health status", items: SnapshotItems{Health: []httpgenerated.HealthObservation{{Source: httpgenerated.CONTROLPLANE, Status: "OUT_OF_RANGE"}}}},
 	}
 	for _, test := range otherCases {
 		t.Run(test.name, func(t *testing.T) {
@@ -177,6 +188,12 @@ func TestClosedWebSocketEnumsFailClosed(t *testing.T) {
 				string(ProjectionChannelIncidents),
 				string(ProjectionChannelResources),
 				string(ProjectionChannelConfigurationChanges),
+				string(ProjectionChannelWorkspaceTeams),
+				string(ProjectionChannelProviders),
+				string(ProjectionChannelIntegrations),
+				string(ProjectionChannelApprovals),
+				string(ProjectionChannelBackups),
+				string(ProjectionChannelHealth),
 			},
 			newValue: func() json.Unmarshaler {
 				return new(ProjectionChannel)
@@ -192,7 +209,10 @@ func TestClosedWebSocketEnumsFailClosed(t *testing.T) {
 				string(ResourceKindSession), string(ResourceKindTurn), string(ResourceKindProcessRun),
 				string(ResourceKindSchedule), string(ResourceKindOwnerGate), string(ResourceKindMemoryRecord),
 				string(ResourceKindWorkClaim), string(ResourceKindArtifact), string(ResourceKindRoleImageRecipe),
-				string(ResourceKindImageBuild), string(ResourceKindImageArtifact),
+				string(ResourceKindImageBuild), string(ResourceKindImageArtifact), string(ResourceKindRoleDefinition),
+				string(ResourceKindAgent), string(ResourceKindAgentAssignment), string(ResourceKindInstructionSet),
+				string(ResourceKindProviderConnection), string(ResourceKindProviderPool), string(ResourceKindWorkspaceBackup),
+				string(ResourceKindWorkspaceRestore), string(ResourceKindWorkspaceMapping),
 			},
 			newValue: func() json.Unmarshaler {
 				return new(ResourceKind)
