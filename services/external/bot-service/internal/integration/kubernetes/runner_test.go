@@ -267,14 +267,34 @@ func TestCodexAuthSecretCheckJobMountsSavedAuthSecret(t *testing.T) {
 	podSpec := job.Spec.Template.Spec
 	assertRunnerPodSecurity(t, podSpec)
 	assertRunnerUtilityResources(t, podSpec.Containers[0].Resources)
-	if got := podSpec.Containers[0].Args[0]; got != "codex-auth-secret-check" {
+	if got := strings.Join(podSpec.Containers[0].Command, " "); got != "/usr/local/bin/codex" {
+		t.Fatalf("command = %q", got)
+	}
+	if got := strings.Join(podSpec.Containers[0].Args, " "); !strings.Contains(got, "exec --skip-git-repo-check --cd /workspace") || !strings.Contains(got, codexAuthCheckPrompt) {
 		t.Fatalf("args = %q", got)
 	}
-	if !hasVolume(podSpec.Volumes, "workspace") || !hasSecretVolume(podSpec.Volumes, codexAuthSecretVolume, "matter-codex-codex-auth-primary") {
+	if len(podSpec.InitContainers) != 1 {
+		t.Fatalf("init containers = %#v", podSpec.InitContainers)
+	}
+	prepare := podSpec.InitContainers[0]
+	assertRunnerUtilityResources(t, prepare.Resources)
+	if got := strings.Join(prepare.Command, " "); got != "/usr/bin/install" {
+		t.Fatalf("prepare command = %q", got)
+	}
+	if got := strings.Join(prepare.Args, " "); got != "-m 0600 "+codexAuthCheckSecretPath+" "+codexAuthCheckHomePath+"/auth.json" {
+		t.Fatalf("prepare args = %q", got)
+	}
+	if !hasVolume(podSpec.Volumes, "workspace") || !hasVolume(podSpec.Volumes, codexAuthCheckHomeVolume) || !hasSecretVolume(podSpec.Volumes, codexAuthSecretVolume, "matter-codex-codex-auth-primary") {
 		t.Fatalf("volumes = %#v", podSpec.Volumes)
 	}
-	if !hasVolumeMount(podSpec.Containers[0].VolumeMounts, codexAuthSecretVolume, "/var/run/secrets/matter-codex-codex") {
-		t.Fatalf("codex auth secret mount missing: %#v", podSpec.Containers[0].VolumeMounts)
+	if !hasVolumeMount(prepare.VolumeMounts, codexAuthSecretVolume, "/var/run/secrets/matter-codex-codex") || !hasVolumeMount(prepare.VolumeMounts, codexAuthCheckHomeVolume, codexAuthCheckHomePath) {
+		t.Fatalf("prepare auth mounts missing: %#v", prepare.VolumeMounts)
+	}
+	if hasVolumeMount(podSpec.Containers[0].VolumeMounts, codexAuthSecretVolume, "/var/run/secrets/matter-codex-codex") || !hasVolumeMount(podSpec.Containers[0].VolumeMounts, codexAuthCheckHomeVolume, codexAuthCheckHomePath) {
+		t.Fatalf("runtime auth mounts = %#v", podSpec.Containers[0].VolumeMounts)
+	}
+	if got := envValue(podSpec.Containers[0].Env, "CODEX_HOME"); got != codexAuthCheckHomePath {
+		t.Fatalf("CODEX_HOME = %q", got)
 	}
 	if got := envValue(podSpec.Containers[0].Env, "MATTERCODEX_CODEX_CONFIG_OVERLAY"); got != "" {
 		t.Fatalf("auth check must not receive config overlay, got %q", got)

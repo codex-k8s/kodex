@@ -1001,12 +1001,24 @@ func (svc *AgentSessionService) completeAgentTurnStopPhase(ctx context.Context, 
 			}
 			state.CleanupCompleted = true
 		case agentTurnStopPhaseReset:
-			if state.CleanupRequired && !agentSessionRuntimeCleared(current) {
-				reset, resetErr := guardedStore.ResetAgentSessionRuntime(ctx, current.SessionKey, agentSessionStatusIdle)
+			role, roleErr := guardedStore.GetAgentRole(ctx, current.RoleID)
+			if roleErr != nil {
+				return roleErr
+			}
+			cleanupComplete, cleanupErr := agentSessionCleanupComplete(ctx, guardedStore, role, current)
+			if cleanupErr != nil {
+				return cleanupErr
+			}
+			if state.CleanupRequired && !cleanupComplete {
+				reset, resetErr := resetAgentSessionAfterRuntimeCleanup(ctx, guardedStore, role, current, agentSessionStatusIdle)
 				if resetErr != nil {
 					return resetErr
 				}
-				if !agentSessionRuntimeCleared(reset) {
+				cleanupComplete, cleanupErr = agentSessionCleanupComplete(ctx, guardedStore, role, reset)
+				if cleanupErr != nil {
+					return cleanupErr
+				}
+				if !cleanupComplete {
 					return fmt.Errorf("agent session runtime reset remains incomplete")
 				}
 				current = reset
@@ -1113,7 +1125,15 @@ func (svc *AgentSessionService) GuardStopAgentSessionTurnsResponse(ctx context.C
 			return err
 		}
 		state, err := agentTurnStopStateFromArtifacts(turn.Artifacts)
-		if err != nil || !state.completed() || (state.CleanupRequired && !agentSessionRuntimeCleared(current)) {
+		if err != nil || !state.completed() {
+			return adminrepo.ErrClusterAdminAdmissionDenied
+		}
+		role, err := guardedStore.GetAgentRole(ctx, current.RoleID)
+		if err != nil {
+			return err
+		}
+		cleanupComplete, err := agentSessionCleanupComplete(ctx, guardedStore, role, current)
+		if err != nil || state.CleanupRequired && !cleanupComplete {
 			return adminrepo.ErrClusterAdminAdmissionDenied
 		}
 		return sideEffect()

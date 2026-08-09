@@ -53,9 +53,14 @@ const (
 	runnerHomeVolume             = "runner-home"
 	runnerTmpVolume              = "runner-tmp"
 	runnerDevShmVolume           = "runner-dev-shm"
+	codexAuthCheckHomeVolume     = "codex-auth-check-home"
 	runnerHomePath               = "/home/matter-codex"
 	runnerTmpPath                = "/tmp"
 	runnerDevShmPath             = "/dev/shm"
+	codexAuthCheckHomePath       = "/codex-home"
+	codexAuthCheckWorkspacePath  = "/workspace"
+	codexAuthCheckSecretPath     = "/var/run/secrets/matter-codex-codex/auth.json"
+	codexAuthCheckPrompt         = "ping: answer with exactly one word, pong. Do not use tools."
 	runtimeEnvAllowlist          = "MATTERCODEX_RUNTIME_ENV_ALLOWLIST"
 	runtimeSensitiveEnvAllowlist = "MATTERCODEX_RUNTIME_SENSITIVE_ENV_ALLOWLIST"
 	runnerInitPath               = "/sbin/tini"
@@ -2407,6 +2412,8 @@ func (runner *Runner) codexAuthJob(accountName string, secretName string) *batch
 func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretCheckInput, jobName string) *batchv1.Job {
 	backoffLimit := int32(0)
 	labels := codexAuthCheckLabels(input.AccountName, jobName)
+	securityContext := runnerContainerSecurityContext()
+	resources := runner.runnerUtilityResourceRequirements()
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   jobName,
@@ -2422,28 +2429,48 @@ func (runner *Runner) codexAuthSecretCheckJob(input runtimerepo.CodexAuthSecretC
 					AutomountServiceAccountToken: boolPtr(false),
 					SecurityContext:              runnerPodSecurityContext(),
 					RestartPolicy:                corev1.RestartPolicyNever,
+					InitContainers: []corev1.Container{
+						{
+							Name:            "prepare-codex-auth",
+							Image:           runner.agentRunnerImage,
+							Command:         []string{"/usr/bin/install"},
+							Args:            []string{"-m", "0600", codexAuthCheckSecretPath, codexAuthCheckHomePath + "/auth.json"},
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							SecurityContext: securityContext,
+							Resources:       resources,
+							VolumeMounts: []corev1.VolumeMount{
+								{Name: codexAuthCheckHomeVolume, MountPath: codexAuthCheckHomePath},
+								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:            "runner",
 							Image:           runner.agentRunnerImage,
-							Command:         runnerCommand(),
-							Args:            []string{"codex-auth-secret-check"},
+							Command:         []string{"/usr/local/bin/codex"},
+							Args:            []string{"exec", "--skip-git-repo-check", "--cd", codexAuthCheckWorkspacePath, codexAuthCheckPrompt},
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							SecurityContext: runnerContainerSecurityContext(),
-							Resources:       runner.runnerUtilityResourceRequirements(),
+							SecurityContext: securityContext,
+							Resources:       resources,
 							Env: []corev1.EnvVar{
-								{Name: "MATTERCODEX_OPENAI_ACCOUNT", Value: input.AccountName},
-								{Name: "MATTERCODEX_CODEX_AUTH_SECRET", Value: input.SecretName},
+								{Name: "CODEX_HOME", Value: codexAuthCheckHomePath},
 							},
 							VolumeMounts: append([]corev1.VolumeMount{
-								{Name: "workspace", MountPath: "/workspace"},
-								{Name: codexAuthSecretVolume, MountPath: "/var/run/secrets/matter-codex-codex", ReadOnly: true},
+								{Name: "workspace", MountPath: codexAuthCheckWorkspacePath},
+								{Name: codexAuthCheckHomeVolume, MountPath: codexAuthCheckHomePath},
 							}, runnerWritableVolumeMounts()...),
 						},
 					},
 					Volumes: append([]corev1.Volume{
 						{
 							Name: "workspace",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: codexAuthCheckHomeVolume,
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},

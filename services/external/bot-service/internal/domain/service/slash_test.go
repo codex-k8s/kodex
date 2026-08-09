@@ -4032,6 +4032,8 @@ type fakeAdminStore struct {
 	clearIdleCalls        int
 	resetSessionCalls     int
 	resetSessionErrors    []error
+	snapshotSessionCalls  int
+	snapshotSessionErrors []error
 	completeTurnCalls     int
 	completeTurnInput     adminrepo.CompleteAgentSessionTurnInput
 	exactGuardCalls       int
@@ -4965,6 +4967,14 @@ func (store *fakeAdminStore) ResetAgentSessionRuntime(_ context.Context, session
 }
 
 func (store *fakeAdminStore) UpdateAgentSessionSnapshot(_ context.Context, input adminrepo.UpdateAgentSessionSnapshotInput) (entity.AgentSession, error) {
+	store.snapshotSessionCalls++
+	if len(store.snapshotSessionErrors) > 0 {
+		err := store.snapshotSessionErrors[0]
+		store.snapshotSessionErrors = store.snapshotSessionErrors[1:]
+		if err != nil {
+			return entity.AgentSession{}, err
+		}
+	}
 	store.ensureAgentSessions()
 	session, ok := store.agentSessions[input.SessionKey]
 	if !ok {

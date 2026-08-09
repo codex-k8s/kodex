@@ -1003,7 +1003,7 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 			}
 		}
 		if guardErr := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.repair_stale_reset.side_effect", func(guardedStore adminrepo.Repository) error {
-			_, resetErr := guardedStore.ResetAgentSessionRuntime(ctx, current.SessionKey, agentSessionStatusIdle)
+			_, resetErr := resetAgentSessionAfterRuntimeCleanup(ctx, guardedStore, role, current, agentSessionStatusIdle)
 			return resetErr
 		}); guardErr != nil {
 			result.Failed++
@@ -1065,7 +1065,7 @@ func (svc *ChatRunService) RepairAgentSessions(ctx context.Context, limit int) (
 			continue
 		}
 		if guardErr := svc.withClusterAdminPersistenceGuard(ctx, role, chat.ID, chat.Slug, current.MattermostChannelID, current.SessionKey, "agent_session.repair_running_reset.side_effect", func(guardedStore adminrepo.Repository) error {
-			_, resetErr := guardedStore.ResetAgentSessionRuntime(ctx, current.SessionKey, agentSessionStatusIdle)
+			_, resetErr := resetAgentSessionAfterRuntimeCleanup(ctx, guardedStore, role, current, agentSessionStatusIdle)
 			return resetErr
 		}); guardErr != nil {
 			result.Failed++

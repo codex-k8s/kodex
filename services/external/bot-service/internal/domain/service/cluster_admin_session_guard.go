@@ -24,6 +24,63 @@ func clusterAdminSessionGuardRequired(ctx context.Context, store adminrepo.Repos
 	return strings.EqualFold(strings.TrimSpace(role.KubernetesAccess), "cluster-admin"), nil
 }
 
+func resetAgentSessionAfterRuntimeCleanup(
+	ctx context.Context,
+	store adminrepo.Repository,
+	role entity.AgentRole,
+	current entity.AgentSession,
+	status string,
+) (entity.AgentSession, error) {
+	preserveRuntimeIdentity, err := clusterAdminSessionGuardRequired(ctx, store, role, current.SessionKey)
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	if !preserveRuntimeIdentity {
+		return store.ResetAgentSessionRuntime(ctx, current.SessionKey, status)
+	}
+
+	updated, err := store.UpdateAgentSessionSnapshot(ctx, adminrepo.UpdateAgentSessionSnapshotInput{
+		SessionKey: current.SessionKey,
+		Status:     status,
+	})
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	if !sameFrozenClusterAdminRuntimeIdentity(current, updated) || !agentSessionActivityCleared(updated) {
+		return entity.AgentSession{}, adminrepo.ErrClusterAdminAdmissionDenied
+	}
+	return updated, nil
+}
+
+func agentSessionCleanupComplete(
+	ctx context.Context,
+	store adminrepo.Repository,
+	role entity.AgentRole,
+	session entity.AgentSession,
+) (bool, error) {
+	preserveRuntimeIdentity, err := clusterAdminSessionGuardRequired(ctx, store, role, session.SessionKey)
+	if err != nil {
+		return false, err
+	}
+	if preserveRuntimeIdentity {
+		return agentSessionActivityCleared(session), nil
+	}
+	return agentSessionRuntimeCleared(session), nil
+}
+
+func agentSessionActivityCleared(session entity.AgentSession) bool {
+	return session.Status != agentSessionStatusRunning && session.ActiveTurnID == 0 && strings.TrimSpace(session.ActiveRunID) == ""
+}
+
+func sameFrozenClusterAdminRuntimeIdentity(left entity.AgentSession, right entity.AgentSession) bool {
+	return left.ID == right.ID && left.SessionKey == right.SessionKey && left.ProjectID == right.ProjectID &&
+		left.ChatID == right.ChatID && left.RoleID == right.RoleID && left.SessionScope == right.SessionScope &&
+		left.MattermostChannelID == right.MattermostChannelID && left.MattermostRootPostID == right.MattermostRootPostID &&
+		left.OpenAIAccountName == right.OpenAIAccountName && left.KubernetesNamespace == right.KubernetesNamespace &&
+		left.PodName == right.PodName && left.PVCName == right.PVCName && left.TokenSecretRef == right.TokenSecretRef &&
+		left.Capabilities == right.Capabilities
+}
+
 func verifyClusterAdminSessionSecretIntegrity(ctx context.Context, store adminrepo.Repository, runner runtimerepo.Runner, roleID int64, sessionKey string) error {
 	_, err := verifyClusterAdminSessionSecretIntegrityWithToken(ctx, store, runner, roleID, sessionKey, "")
 	return err
