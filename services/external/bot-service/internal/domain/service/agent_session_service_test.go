@@ -1311,11 +1311,11 @@ func TestAgentSessionRequestAgentGuardsEveryClusterAdminSideEffect(t *testing.T)
 		wantGuardOps    []string
 		wantSessionKeys []string
 	}{
-		{name: "membership", denyAt: 1, wantGuardOps: []string{"agent_request.membership.side_effect"}, wantSessionKeys: []string{"target"}},
-		{name: "delegation create", denyAt: 2, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect"}, wantSessionKeys: []string{"target", ""}},
-		{name: "enqueue", denyAt: 3, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect"}, wantSessionKeys: []string{"target", "", ""}},
-		{name: "delegation target", denyAt: 4, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect", "agent_request.delegation_target.side_effect"}, wantSessionKeys: []string{"target", "", "", "target"}},
-		{name: "audit post", denyAt: 5, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect", "agent_request.delegation_target.side_effect", "agent_request.audit.side_effect"}, wantSessionKeys: []string{"target", "", "", "target", "target"}},
+		{name: "membership", denyAt: 1, wantGuardOps: []string{"agent_request.membership.side_effect"}, wantSessionKeys: []string{""}},
+		{name: "delegation create", denyAt: 2, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect"}, wantSessionKeys: []string{"", ""}},
+		{name: "enqueue", denyAt: 3, wantMembership: true, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect"}, wantSessionKeys: []string{"", "", ""}},
+		{name: "delegation target", denyAt: 4, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect", "agent_request.delegation_target.side_effect"}, wantSessionKeys: []string{"", "", "", "target"}},
+		{name: "audit post", denyAt: 5, wantMembership: true, wantDispatches: 1, wantGuardOps: []string{"agent_request.membership.side_effect", "agent_request.delegation_create.side_effect", "agent_request.enqueue.side_effect", "agent_request.delegation_target.side_effect", "agent_request.audit.side_effect"}, wantSessionKeys: []string{"", "", "", "target", "target"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

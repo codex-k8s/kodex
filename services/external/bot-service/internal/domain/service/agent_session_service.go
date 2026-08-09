@@ -1393,7 +1393,7 @@ func (svc *AgentSessionService) requestAgent(ctx context.Context, sessionKey str
 		if current.ActiveTurnID != sourceTurnID {
 			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
 		}
-		return svc.ensureRequestedRoleChannelMember(ctx, project, chat, role, targetSessionKey, requesterUserName)
+		return svc.ensureRequestedRoleChannelMember(ctx, project, chat, role, "", requesterUserName)
 	}); err != nil {
 		return AgentSessionAgentRequest{}, err
 	}
