@@ -128,9 +128,9 @@ spec:
             - name: LEGACY_DATA_MIGRATION_SOURCE_ROOT_SHA256
               value: replace-with-immutable-source-root-sha256
             - name: LEGACY_DATA_MIGRATION_SOURCE_DSN_FILE
-              value: /var/run/secrets/mattercodex/legacy-migration/source-dsn
+              value: /var/run/secrets/mattercodex/legacy-migration/source-postgresql/source-dsn
             - name: LEGACY_DATA_MIGRATION_SOURCE_TLS_SERVER_NAME
-              value: mattermost-postgres.mattercodex-system.svc.cluster.local
+              value: mattermost-postgres-migration.matter-kodex-prod.svc.cluster.local
             - name: LEGACY_DATA_MIGRATION_SOURCE_CA_FILE
               value: /var/run/config/mattercodex/legacy-migration/source-ca/ca.pem
             - name: LEGACY_DATA_MIGRATION_CONTROL_PLANE_TARGET
@@ -212,6 +212,9 @@ spec:
             - name: credentials
               mountPath: /var/run/secrets/mattercodex/legacy-migration
               readOnly: true
+            - name: source-postgresql
+              mountPath: /var/run/secrets/mattercodex/legacy-migration/source-postgresql
+              readOnly: true
             - name: source-ca
               mountPath: /var/run/config/mattercodex/legacy-migration/source-ca
               readOnly: true
@@ -241,6 +244,13 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: legacy-data-migration
+        - name: source-postgresql
+          secret:
+            secretName: legacy-data-migration-source-postgresql-g1
+            defaultMode: 0440
+            items:
+              - key: source-dsn
+                path: source-dsn
         - name: source-ca
           configMap:
             name: mattermost-postgresql-ca

@@ -48,7 +48,10 @@ spec:
         - protocol: TCP
           port: 53
     - to:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: matter-kodex-prod
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: mattermost-postgres
       ports:

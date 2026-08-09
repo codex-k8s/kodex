@@ -4,8 +4,8 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-08-08
+version: 1.3.0
+updated: 2026-08-09
 ---
 
 # Перенос legacy MatterCodex data
@@ -14,17 +14,215 @@ Runbook относится к `services/jobs/legacy-data-migration` и
 `deploy/k8s/base/legacy-data-migration`. Он описывает code-first protocol, но
 не разрешает deploy, backup, restore или migration.
 
+## Подготовка legacy PostgreSQL source по #241
+
+Source boundary материализуется только скриптами
+`tools/legacy-postgresql-source/apply-schema-000041.sh` и
+`tools/legacy-postgresql-source/manage.sh` из exact merged Git revision. Они не
+запускают `legacy-data-migration` и не читают строки предметных таблиц. Каждая
+изменяющая production команда требует одновременно `--owner-approved`, exact
+`--revision`, идентификатор согласованного окна
+`--maintenance-window-id` и bounded `--max-outage-seconds`; наличие
+cluster-admin доступа само по себе gate не даёт.
+
+### Exact подготовительная migration 000041
+
+До source apply отдельное owner-approved окно применяет ровно
+`000041_legacy_data_cutover.sql` штатным startup lifecycle bot-service. Это
+создание capability-role, закрытого inventory, snapshot/fence functions и
+receipt table, а не data migration #196. Команда закрыто проверяет clean exact
+checkout, hash `000041`, inventory без revision после `000041`, текущую goose
+version ровно `40` и тем самым отсутствие любой другой pending migration.
+Reviewed bot-service image обязан быть закреплён по digest и содержать ту же
+merged revision:
+
+```bash
+revision="$(git rev-parse HEAD)"
+bot_image='<reviewed-registry/bot-service@sha256:...>'
+maintenance_window='owner-window-000041'
+tools/legacy-postgresql-source/apply-schema-000041.sh \
+  --owner-approved \
+  --revision "$revision" \
+  --bot-service-image "$bot_image" \
+  --maintenance-window-id "$maintenance_window" \
+  --max-outage-seconds 300
+```
+
+Скрипт сохраняет immutable previous bot-service PodTemplate, Deployment UID,
+exact image, Git SHA и migration hash; затем разворачивает только закреплённый
+image. Успех требует version `41`, metadata readback таблицы, функций и exact
+capability-role, а также functional checks Mattermost и bot-service. При
+ошибке прежний PodTemplate восстанавливается только при совпадении UID и
+current/candidate digest. Если `000041` уже зафиксирована, schema остаётся на
+`41`: `goose down` и DDL rollback запрещены, это явная forward-only boundary.
+Повтор допустим только новой reviewed revision и новым owner gate.
+
+### Render, preflight и maintenance window source endpoint
+
+После принятой `000041` из того же checkout выполнить read-only подготовку:
+
+```bash
+revision="$(git rev-parse HEAD)"
+tools/legacy-postgresql-source/manage.sh render \
+  --revision "$revision" \
+  --render-dir /tmp/legacy-postgresql-source-render
+tools/legacy-postgresql-source/manage.sh preflight --revision "$revision"
+```
+
+Владелец явно допускает короткий restart single-node PostgreSQL. Zero downtime
+не заявляется. Для initial apply, каждого leaf renewal и rollback окно имеет
+один порядок:
+
+1. До изменения проверить `pg_isready`, readiness и функциональные HTTP probes
+   Mattermost `/api/v4/system/ping` и bot-service `/readyz`.
+2. Закрыть client ingress, перевести principal в bounded `PENDING`, сохранить
+   durable attempt и выполнить ожидаемый restart PostgreSQL.
+3. Уложиться в `--max-outage-seconds` для каждой restart стадии; превышение,
+   TLS/ACL readback failure или post-check failure является rollback trigger.
+4. После acceptance повторить database readiness и оба функциональных probe.
+   При rollback сначала закрыть LOGIN и доказать zero sessions, затем вернуть
+   exact predecessor PodTemplate и повторить те же post-checks.
+
+После отдельного owner OK source применяется тем же кодом и окном:
+
+```bash
+tools/legacy-postgresql-source/manage.sh apply \
+  --owner-approved \
+  --revision "$revision" \
+  --maintenance-window-id 'owner-window-source-initial' \
+  --max-outage-seconds 300
+```
+
+Apply один раз создаёт versioned immutable CA generation `g1`, а cert-manager
+использует её только как CA Issuer для candidate leaf с единственным SAN
+`mattermost-postgres-migration.matter-kodex-prod.svc.cluster.local`, отдельный
+Service и exact NetworkPolicy. Mutable cert-manager Secret никогда не
+монтируется PostgreSQL: скрипт проверяет CA, SAN и key match, затем создаёт
+versioned immutable runtime Secret и trust ConfigMap. PostgreSQL получает key
+из этого snapshot через initContainer в `emptyDir` с owner UID/GID `999` и mode
+`0600`; server разрешает только `TLSv1.3`. Отдельный immutable activation
+marker держит candidate pod NotReady до независимого served-state readback.
+Существующие Mattermost и legacy bot-service используют прежний Service и
+сохраняют внутренний plaintext path, но на каждом restart в согласованном окне
+возможен короткий перерыв.
+
+Credential generation `g1` создаётся один раз без вывода значения в immutable Secret
+`legacy-data-migration-source-postgresql-g1`. LOGIN
+`matter_codex_migration_g1` сначала создаётся как `NOLOGIN`, получает ровно одну
+membership в `matter_codex_migration`. PostgreSQL catalog comment хранит
+durable `PENDING|CURRENT|RETIRED`, Secret UID/resourceVersion и rollout attempt.
+`PENDING` получает LOGIN только на пять минут и bounded statement/lock/idle
+timeouts. Только после двух TLS/served-certificate/ACL readback и post-checks
+состояние атомарно становится `CURRENT` с unlimited validity. Crash/retry
+обнаруживает non-CURRENT, выполняет `NOLOGIN`, revoke membership, bounded
+session termination и exact rollback. `RETIRED` generation `g1` не
+воскрешается.
+
+Capability-role даёт `SELECT` только на закрытый source inventory,
+`SELECT|INSERT|UPDATE` на
+`public.matter_codex_legacy_data_cutovers` и `EXECUTE` только на утверждённые
+snapshot/fence functions. Superuser, owner, database/schema/role creation,
+replication, RLS bypass, business DML, receipt `DELETE` и дополнительная
+membership запрещены и проверяются фактически под LOGIN principal.
+
+Readback Job устанавливает соединение только с `sslmode=verify-full`, exact
+hostname/SNI, доверенной `g1` CA и min/max `TLSv1.3`. Она сравнивает фактически
+обслуживаемый DER certificate с immutable candidate/accepted snapshot, а не с
+mutable cert-manager Secret, требует единственный exact SAN, проверяет
+`pg_stat_ssl` и запускает канонический
+`principal__readback.sql`. Probe читает только certificate, transport,
+catalog/ACL metadata; snapshot/fence functions и receipt/business rows не
+вызываются и не читаются.
+
+Namespace `mattercodex-system` и migration Job принадлежат отдельной wave.
+После их появления credential, публичная CA и bounded readback публикуются
+явной командой, которая сразу проверяет путь из client namespace:
+
+```bash
+tools/legacy-postgresql-source/manage.sh publish-client \
+  --owner-approved \
+  --revision "$revision" \
+  --maintenance-window-id 'owner-window-source-publish'
+```
+
+Повторный served-state readback без запуска миграции:
+
+```bash
+tools/legacy-postgresql-source/manage.sh readback \
+  --owner-approved \
+  --revision "$revision" \
+  --maintenance-window-id 'owner-window-source-readback' \
+  --scope source
+```
+
+### Ротация и rollback source endpoint
+
+Leaf Certificate имеет `rotationPolicy: Always`, срок 90 дней и окно renewal
+30 дней. Изменение cert-manager Secret создаёт только candidate. Оно не меняет
+runtime автоматически: owner выполняет `renew` в новом maintenance window, а
+accepted snapshot меняется только после independent readback:
+
+```bash
+tools/legacy-postgresql-source/manage.sh renew \
+  --owner-approved \
+  --revision "$revision" \
+  --maintenance-window-id 'owner-window-source-leaf-renewal' \
+  --max-outage-seconds 300
+```
+
+CA `g1` не является cert-manager `Certificate`, не имеет `renewBefore` и не
+заменяется in-place. Переход на `g2` требует отдельного reviewed PR с новыми
+именами CA/Secret/Issuer, overlap trust обоих поколений, новым leaf, client
+publication и served-state readback. Retirement `g1` разрешён только после
+доказательства отсутствия клиентов старого trust root; пропущенное поколение
+и автоматическая подмена запрещены.
+
+Каждый source rollout, включая тот же Git SHA, retry и leaf renewal, атомарно
+получает новый 20-значный monotonic attempt в mutable index. Immutable pending
+record связывает Git SHA, maintenance window, Certificate generation,
+candidate Secret resourceVersion/fingerprint, CA fingerprint, StatefulSet UID,
+current revision, predecessor attempt и digest трёх PodTemplate. Полный exact
+predecessor PodTemplate хранится независимо от ControllerRevision retention.
+После успеха отдельный immutable acceptance record сохраняет applied revision,
+accepted PodTemplate snapshot/digest и served fingerprint. Crash recovery и
+rollback допускают изменение только при совпадении current attempt,
+StatefulSet UID, current digest и fingerprint; missing, recreated, stale или
+изменённый последующим Mattermost rollout state отклоняется.
+
+До cutover #196 owner-approved rollback выполняется с exact attempt из ledger:
+
+```bash
+tools/legacy-postgresql-source/manage.sh rollback \
+  --owner-approved \
+  --revision "$revision" \
+  --attempt '<20-digit-current-attempt>' \
+  --maintenance-window-id 'owner-window-source-rollback' \
+  --max-outage-seconds 300
+```
+
+Rollback с ненулевыми statement/lock timeout проверяет boolean каждого
+`pg_terminate_backend`, повторно доказывает zero live sessions и при
+недоказанном revoke останавливается. Затем он восстанавливает exact predecessor
+PodTemplate из immutable record и подтверждает PostgreSQL, Mattermost и
+bot-service. Credential становится `RETIRED`; PKI snapshots и ledger
+сохраняются для расследования. После необратимой owner границы #196 этот
+transport rollback не является rollback данных и не разрешён вместо forward
+recovery протокола #196.
+
 ## Обязательный внешний gate
 
 Перед **любым исполнением** `dry-run`, `pre-commit`, `commit`, `rollback` или
 `restore-verify` Issue
 [#241](https://github.com/codex-k8s/matter-codex/issues/241) должен быть закрыт
 и принят владельцем. Это обязательный prerequisite и для cutover #196, и для
-cleanup #197. До него запрещены Job unsuspend, source connection probe, backup,
+post-COMMITTED cleanup [#271](https://github.com/codex-k8s/matter-codex/issues/271).
+Issue #197 владеет только своей dark-deploy wave и не владеет TLS/credential
+cleanup. До закрытия #241 запрещены Job unsuspend, source connection probe, backup,
 restore и live migration. Наличие реализации в репозитории gate не снимает.
 
 #241 должен материализовать TLS 1.3 endpoint legacy PostgreSQL, exact SAN/SNI,
-trusted CA, Vault credential и NetworkPolicy/readback. Job дополнительно
+trusted cert-manager CA, отдельный Kubernetes credential и
+NetworkPolicy/readback. Job дополнительно
 проверяет URL и отклоняет plaintext, `sslmode=disable`, `sslmode=require`, IP,
 host override, другой CA и negotiated protocol не `TLSv1.3`. Отключать
 проверку для диагностики запрещено.
@@ -191,8 +389,10 @@ target projection, protected history/runtime components, audit и provenance;
 missing/drift блокирует source `COMMITTED`. Receipt tuple неизменяем с первого
 `PREPARED`; caller не имеет target IDs, generic JSON/DML или table-wide update,
 а terminal winner выбирается одной owner transaction. Owner `COMMITTED` — irreversible cutover boundary: rollback и
-возврат legacy writer запрещены. Переключение consumers и #197 выполняются
-отдельными owner-approved действиями, не этой job.
+возврат legacy writer запрещены. Переключение consumers выполняется отдельным
+owner-approved действием. Вывод transport/credential из эксплуатации после
+проверенного окна принадлежит только
+[#271](https://github.com/codex-k8s/matter-codex/issues/271), не этой job и не #197.
 
 Crash recovery:
 
@@ -201,7 +401,7 @@ Crash recovery:
 | `PREPARED` | `PREPARED` | До owner gate допустим `rollback`; иначе повтор exact `commit` |
 | `FROZEN` | `PREPARED` | Legacy writes уже закрыты; выбрать повтор `commit` либо до cutover `rollback` по owner decision |
 | `FROZEN` | `COMMITTED` | Только повтор exact `commit`, rollback запрещён |
-| `COMMITTED` | `COMMITTED` | Полный authoritative readback каждой operation/audit/provenance receipt; дальнейшие действия только #197 |
+| `COMMITTED` | `COMMITTED` | Полный authoritative readback каждой operation/audit/provenance receipt; затем отдельный consumer cutover и cleanup #271 |
 | любой mismatch/missing receipt | любой | Fail closed, не создавать receipt вручную |
 
 ## Rollback и restore boundary
@@ -213,7 +413,7 @@ manifest не удаляются. После abort тот же plan ID не пе
 `restore-verify` восстанавливает только disposable verification DB и не
 является production rollback. После owner `COMMITTED` job никогда не обещает
 возврат к legacy source: разрешены только forward recovery, authoritative
-readback и отдельная cleanup wave #197. Production restore, если когда-либо
+readback и отдельная cleanup wave #271. Production restore, если когда-либо
 понадобится, требует отдельного Issue, owner protocol и нового code-first PR.
 
 ## Observability и инциденты
@@ -242,11 +442,17 @@ recovery выше.
    `services/jobs/legacy-data-migration`.
 2. Структурно проверить новые forward-only migration files и named SQL без их
    применения к live DB.
-3. Выполнить `kubectl kustomize deploy/k8s/base/legacy-data-migration` и
-   убедиться, что render содержит suspended Job, exact NetworkPolicy, retained
-   PVC, Vault CSI, ServiceMonitor и HTTPS `runbook_url`.
-4. Проверить JSON syntax четырёх report schemas и `contracts/registry.yaml`.
-5. Просмотреть safe report schema: в нём нет row payload, secret/DSN/token,
+3. Выполнить `tools/legacy-postgresql-source/manage.sh render` с exact SHA,
+   разобрать обычные ресурсы через `kubectl apply --dry-run=client`, readback
+   Job с `generateName` через `kubectl create --dry-run=client`, а StatefulSet
+   patch через `kubectl patch --dry-run=client`. Убедиться, что source endpoint
+   содержит exact SAN/FQDN, TLS 1.3 и deny-all/exact NetworkPolicy.
+4. Выполнить `kubectl kustomize deploy/k8s/base/legacy-data-migration` и
+   убедиться, что render содержит suspended Job, отдельный source PostgreSQL
+   Secret, exact cross-namespace NetworkPolicy, retained PVC, Vault CSI для
+   остальных credentials, ServiceMonitor и HTTPS `runbook_url`.
+5. Проверить JSON syntax четырёх report schemas и `contracts/registry.yaml`.
+6. Просмотреть safe report schema: в нём нет row payload, secret/DSN/token,
    actor, message, channel/post или credential values.
 
 Фактические `dry-run`, backup, restore, commit, deploy или доступ к

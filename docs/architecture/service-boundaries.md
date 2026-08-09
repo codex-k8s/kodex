@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.2.5
-updated: 2026-08-07
+version: 1.2.6
+updated: 2026-08-09
 ---
 
 # Границы сервисов и структура репозитория
@@ -138,6 +138,8 @@ identifier не являются источником полномочий.
 - меняются только для критического сохранения работоспособности dogfooding;
 - не требуют постоянного compatibility facade в новых unit.
 
-После готовности новых компонентов выполняются backup, dry-run и one-shot
-forward migration из #196, затем staging acceptance и переключение из #197.
-Старый контур удаляется только после проверенного rollback window.
+После dark deploy нового контура из #197 отдельная граница #241 материализует
+TLS 1.3 source transport. Затем #196 выполняет backup, dry-run и one-shot
+forward migration; consumer switch остаётся отдельным owner-approved действием.
+Старый transport, credential и client trust выводятся только по #271 после
+authoritative `COMMITTED`, полного readback и проверенного rollback window.
