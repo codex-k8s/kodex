@@ -1,12 +1,91 @@
 package mattermost
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 	model "github.com/mattermost/mattermost/server/public/model"
 )
+
+func TestCheckBotIdentityPermissionsUsesManifestManagementBot(t *testing.T) {
+	const (
+		primaryBotID = "provider-management-bot"
+		ownerUserID  = "provider-human-owner"
+		providerTeam = "provider-team"
+	)
+	principal := entity.TeamPrincipal{
+		ActorID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", OrganizationID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		ProjectID: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+	}
+	authenticated := &model.User{Id: primaryBotID, IsBot: true, Roles: "system_user"}
+	permissions := slices.Clone(requiredBotIdentityPermissions)
+	enabled := true
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v4/users/me":
+			_ = json.NewEncoder(writer).Encode(authenticated)
+		case request.Method == http.MethodGet && request.URL.Path ==
+			"/api/v4/teams/"+providerTeam+"/members/"+primaryBotID:
+			_ = json.NewEncoder(writer).Encode(&model.TeamMember{
+				TeamId: providerTeam, UserId: primaryBotID, Roles: "team_user",
+			})
+		case request.Method == http.MethodGet && request.URL.Path == "/api/v4/config":
+			config := &model.Config{}
+			config.ServiceSettings.EnableBotAccountCreation = &enabled
+			config.ServiceSettings.EnableUserAccessTokens = &enabled
+			_ = json.NewEncoder(writer).Encode(config)
+		case request.Method == http.MethodPost && request.URL.Path == "/api/v4/roles/names":
+			var names []string
+			if json.NewDecoder(request.Body).Decode(&names) != nil {
+				http.Error(writer, "invalid role request", http.StatusBadRequest)
+				return
+			}
+			roles := make([]*model.Role, 0, len(names))
+			for _, name := range names {
+				role := &model.Role{Name: name}
+				if name == "system_user" {
+					role.Permissions = slices.Clone(permissions)
+				}
+				roles = append(roles, role)
+			}
+			_ = json.NewEncoder(writer).Encode(roles)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	t.Cleanup(server.Close)
+	api := model.NewAPIv4Client(server.URL)
+	client := &Client{
+		primary: &botClient{identity: BotIdentity{UserID: primaryBotID}, api: api},
+		index: &index{actors: map[string]ActorBinding{
+			ownerUserID: {
+				MattermostUserID: ownerUserID, ActorID: principal.ActorID,
+				OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+			},
+		}},
+	}
+
+	if err := client.CheckBotIdentityPermissions(context.Background(), principal, providerTeam); err != nil {
+		t.Fatalf("manifest management Bot distinct from human owner was rejected: %v", err)
+	}
+	authenticated = &model.User{Id: ownerUserID, IsBot: false, Roles: "system_user"}
+	if err := client.CheckBotIdentityPermissions(context.Background(), principal, providerTeam); err == nil {
+		t.Fatal("human owner authenticated by primary credential was accepted")
+	}
+	authenticated = &model.User{Id: primaryBotID, IsBot: true, Roles: "system_user"}
+	permissions = slices.DeleteFunc(permissions, func(permission string) bool {
+		return permission == model.PermissionManageOthersBots.Id
+	})
+	if err := client.CheckBotIdentityPermissions(context.Background(), principal, providerTeam); err == nil {
+		t.Fatal("management Bot without manage_others_bots was accepted")
+	}
+}
 
 func TestBotIdentityPermissionProfileRequiresExactLifecycleSet(t *testing.T) {
 	t.Parallel()

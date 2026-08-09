@@ -324,9 +324,12 @@ control-plane verifier сравнивает его с policy audience и для 
 RLS-scoped DML и тот же joined owner mapping+Mattermost Team/channel route;
 recovery worker
 запускается только после barrier и завершается до PostgreSQL.
-Server-owned primary bot credential должен иметь только необходимые для этого
-пути Mattermost права на Team catalog/create и membership readback/add; значение
-credential не попадает в конфигурацию, ответы, логи или provider receipt.
+Server-owned primary bot credential должен принадлежать exact Bot identity из
+immutable manifest и иметь только необходимые для этого пути Mattermost права,
+включая `read_others_bots`/`manage_others_bots`, Team catalog/create и membership
+readback/add; значение credential не попадает в конфигурацию, ответы, логи или
+provider receipt. Verified human owner этого Bot независимо доказывается свежим
+provider `Bot.OwnerId` readback перед каждым effect.
 
 ## Ручная проверка
 

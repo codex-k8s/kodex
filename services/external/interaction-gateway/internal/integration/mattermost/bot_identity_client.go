@@ -28,7 +28,9 @@ var requiredBotIdentityPermissions = []string{
 	model.PermissionCreateBot.Id,
 	model.PermissionCreateUserAccessToken.Id,
 	model.PermissionManageBots.Id,
+	model.PermissionManageOthersBots.Id,
 	model.PermissionReadBots.Id,
+	model.PermissionReadOthersBots.Id,
 	model.PermissionReadUserAccessToken.Id,
 	model.PermissionRevokeUserAccessToken.Id,
 	model.PermissionViewMembers.Id,
@@ -51,20 +53,21 @@ func (client *Client) CheckBotIdentityLifecycle(ctx context.Context) error {
 // CheckBotIdentityPermissions без mutation доказывает тот же effective role
 // path, от которого Mattermost зависит для create, Team membership, token
 // lifecycle, bot readback и revoke. Роли читаются для exact authenticated
-// provider owner и exact Team; одного успешного GetBots для этого недостаточно.
+// management Bot из immutable manifest и exact Team; одного успешного GetBots
+// для этого недостаточно. Human owner независимо разрешается из server-owned
+// actor mapping и сверяется с fresh Bot.OwnerId в provider predecessor path.
 func (client *Client) CheckBotIdentityPermissions(ctx context.Context, principal entity.TeamPrincipal,
 	providerTeamID string,
 ) error {
 	if client.primary == nil || client.index == nil || invalidProviderID(providerTeamID) {
 		return errBotIdentityPermissionProfile
 	}
-	owner, err := client.index.resolveOwner(principal)
-	if err != nil {
+	if _, err := client.index.resolveOwner(principal); err != nil {
 		return errBotIdentityPermissionProfile
 	}
 	user, response, err := client.primary.api.GetMe(ctx, "")
-	if err != nil || response == nil || user == nil || user.Id != owner.MattermostUserID ||
-		user.DeleteAt != 0 || user.IsBot {
+	if err != nil || response == nil || user == nil || user.Id != client.primary.identity.UserID ||
+		user.DeleteAt != 0 || !user.IsBot {
 		return errBotIdentityPermissionProfile
 	}
 	member, response, err := client.primary.api.GetTeamMember(ctx, providerTeamID, user.Id, "")
