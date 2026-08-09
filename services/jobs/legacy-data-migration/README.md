@@ -4,8 +4,8 @@ title: Legacy data migration
 type: service
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-08-08
+version: 1.2.0
+updated: 2026-08-09
 ---
 
 # Legacy data migration
@@ -34,6 +34,15 @@ hostname/SNI и отдельным абсолютным путём trusted CA. P
 фактически обслуживаемая сессия через `pg_stat_ssl`. Target transport использует
 exact TLS hostname/CA, workload certificate, signed application grant и
 deploy-owned authority policy из общего `controlplaneclient`.
+
+Source credential поступает из отдельного Secret
+`legacy-data-migration-source-postgresql-g1`, подготовленного code-first
+контуром #241, а не из общего Vault CSI mount. Exact endpoint —
+`mattermost-postgres-migration.matter-kodex-prod.svc.cluster.local`; его leaf
+имеет единственный совпадающий SAN. LOGIN principal наследует только
+`matter_codex_migration`: read-only доступ к закрытому source inventory и
+минимальные receipt/snapshot/fence capabilities, необходимые уже утверждённому
+протоколу #196. Readiness не вызывает эти функции и не читает source rows.
 
 ## Source и target inventory
 
@@ -148,7 +157,7 @@ audit и provenance evidence; missing/drift не позволяет source пе�
 | Idempotency / one-winner | Plan ID + immutable hashes; source advisory lock, owner idempotency receipt и единственный owner `COMMITTED` winner |
 | State / audit | Source `PREPARED → FROZEN → COMMITTED`, owner plan `PREPARED → COMMITTED`; до owner cutover возможен `ABORTED`. Full graph, provenance, audit и operation receipts фиксируются одной owner transaction; любой повтор `COMMITTED` выполняет полный authoritative readback |
 | Failure / retry / cancel | До target commit повторяет exact plan либо abort; после target commit только forward recovery. SIGTERM отменяет operation и join; по неизвестному outcome сначала читаются receipts |
-| Readiness / deploy | Exact TLS readback source/restore DB и рабочий owner RPC path до operation; suspended Kubernetes Job, Vault CSI, retained PVC, pod-private staging, exact NetworkPolicy, metrics/alerts; запуск принадлежит отдельному owner-approved execution PR |
+| Readiness / deploy | Exact TLS readback source/restore DB и рабочий owner RPC path до operation; suspended Kubernetes Job, отдельный source PostgreSQL Secret, Vault CSI для остальных credentials, retained PVC, pod-private staging, exact NetworkPolicy, metrics/alerts; запуск принадлежит отдельному owner-approved execution PR |
 
 | Mode | Effects | Повтор / terminal |
 | --- | --- | --- |
@@ -209,7 +218,8 @@ SHA/counts, после чего ставит идемпотентный durable 
 
 Docker image включает только бинарь и pinned PostgreSQL 18 `pg_dump/pg_restore`.
 `deploy/k8s/base/legacy-data-migration` содержит suspended Job, отдельный
-ServiceAccount, retained PVC, Vault CSI, source/internal RPC CA, exact NetworkPolicy,
+ServiceAccount, retained PVC, отдельный source PostgreSQL Secret, Vault CSI для
+остальных credentials, source/internal RPC CA, exact NetworkPolicy,
 ServiceMonitor и alerts. Manifest по умолчанию — `suspend: true`, placeholder
 digest/plan и `dry-run`; он не является разрешением на запуск. Отдельный
 owner-approved execution PR обязан закрепить digest, plan ID, один mode и для

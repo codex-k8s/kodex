@@ -4,8 +4,8 @@ title: Перенос legacy MatterCodex data
 type: runbook
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-08-08
+version: 1.2.0
+updated: 2026-08-09
 ---
 
 # Перенос legacy MatterCodex data
@@ -13,6 +13,115 @@ updated: 2026-08-08
 Runbook относится к `services/jobs/legacy-data-migration` и
 `deploy/k8s/base/legacy-data-migration`. Он описывает code-first protocol, но
 не разрешает deploy, backup, restore или migration.
+
+## Подготовка legacy PostgreSQL source по #241
+
+Source boundary материализуется только скриптом
+`tools/legacy-postgresql-source/manage.sh` из exact merged Git revision. Скрипт
+не запускает `legacy-data-migration` и не читает строки предметных таблиц.
+Команды `apply`, `publish-client`, `readback` и `rollback` требуют явного
+`--owner-approved`; наличие cluster-admin доступа само по себе gate не даёт.
+
+До source apply штатный lifecycle bot-service должен отдельно применить schema
+migration `000041_legacy_data_cutover.sql`. Это подготовка capability-role,
+закрытого inventory, snapshot/fence functions и receipt table, а не запуск
+переноса #196. `manage.sh preflight` проверяет только Kubernetes readiness,
+закреплённый image, PostgreSQL metadata и наличие этих объектов. Отсутствие
+`000041` закрыто останавливает apply до любых изменений.
+
+Из checkout принятой revision выполнить:
+
+```bash
+revision="$(git rev-parse HEAD)"
+tools/legacy-postgresql-source/manage.sh render \
+  --revision "$revision" \
+  --render-dir /tmp/legacy-postgresql-source-render
+tools/legacy-postgresql-source/manage.sh preflight --revision "$revision"
+```
+
+После отдельного owner OK source применяется тем же кодом:
+
+```bash
+tools/legacy-postgresql-source/manage.sh apply \
+  --owner-approved \
+  --revision "$revision"
+```
+
+Apply создаёт namespaced cert-manager CA generation `g1`, leaf Certificate с
+единственным SAN
+`mattermost-postgres-migration.matter-kodex-prod.svc.cluster.local`, отдельный
+Service и exact NetworkPolicy. PostgreSQL получает key через initContainer в
+`emptyDir` с owner UID/GID `999` и mode `0600`; server разрешает только
+`TLSv1.3`. Существующие Mattermost и legacy bot-service продолжают использовать
+прежний Service и могут сохранить внутренний plaintext path.
+
+Credential создаётся один раз без вывода значения в Secret
+`legacy-data-migration-source-postgresql-g1`. LOGIN
+`matter_codex_migration_g1` сначала создаётся как `NOLOGIN`, получает ровно одну
+membership в `matter_codex_migration` и включается только после успешного TLS
+rollout. Capability-role даёт `SELECT` только на закрытый source inventory,
+`SELECT|INSERT|UPDATE` на
+`public.matter_codex_legacy_data_cutovers` и `EXECUTE` только на утверждённые
+snapshot/fence functions. Superuser, owner, database/schema/role creation,
+replication, RLS bypass, business DML, receipt `DELETE` и дополнительная
+membership запрещены и проверяются фактически под LOGIN principal.
+
+Readback Job устанавливает соединение только с `sslmode=verify-full`, exact
+hostname/SNI, доверенной `g1` CA и min/max `TLSv1.3`. Она сравнивает фактически
+обслуживаемый DER certificate с текущим cert-manager leaf, требует единственный
+exact SAN, проверяет `pg_stat_ssl` и запускает канонический
+`principal__readback.sql`. Probe читает только certificate, transport,
+catalog/ACL metadata; snapshot/fence functions и receipt/business rows не
+вызываются и не читаются.
+
+Namespace `mattercodex-system` и migration Job принадлежат отдельной wave.
+После их появления credential, публичная CA и bounded readback публикуются
+явной командой, которая сразу проверяет путь из client namespace:
+
+```bash
+tools/legacy-postgresql-source/manage.sh publish-client \
+  --owner-approved \
+  --revision "$revision"
+```
+
+Повторный served-state readback без запуска миграции:
+
+```bash
+tools/legacy-postgresql-source/manage.sh readback \
+  --owner-approved \
+  --revision "$revision" \
+  --scope source
+```
+
+### Ротация и rollback source endpoint
+
+Leaf Certificate имеет `rotationPolicy: Always`, срок 90 дней и окно renewal
+30 дней. После изменения cert-manager Secret повтор той же команды `apply` с
+merged revision пересчитывает certificate fingerprint, перезапускает
+StatefulSet и выполняет served-state readback; пропущенное обновление не
+считается принятым, пока этот readback не успешен. CA `g1` не ротируется на
+месте. Переход на `g2` требует отдельного reviewed PR с новым именем CA/Secret,
+явным overlap trust, новым leaf, client publication, served-state readback и
+только затем retirement `g1`; перезапись trust root на месте запрещена.
+
+Перед каждым source rollout скрипт сохраняет immutable ConfigMap
+`mattermost-postgres-migration-rollout-<git-sha-12>` с exact previous
+ControllerRevision number/name, Git SHA и certificate fingerprint. До cutover
+#196 owner-approved rollback выполняется кодом:
+
+```bash
+tools/legacy-postgresql-source/manage.sh rollback \
+  --owner-approved \
+  --revision "$revision"
+```
+
+Rollback сначала переводит LOGIN в `NOLOGIN` и завершает его sessions, затем
+возвращает exact previous StatefulSet revision, удаляет migration Service/HBA
+и source NetworkPolicy текущего render и подтверждает readiness Mattermost и
+bot-service. Credential, PKI и immutable rollout record сохраняются для
+расследования и воспроизводимого повторного apply. После необратимой owner
+границы #196 этот transport rollback не является rollback данных и не
+разрешён вместо forward recovery протокола #196.
 
 ## Обязательный внешний gate
 
@@ -24,7 +133,8 @@ cleanup #197. До него запрещены Job unsuspend, source connection 
 restore и live migration. Наличие реализации в репозитории gate не снимает.
 
 #241 должен материализовать TLS 1.3 endpoint legacy PostgreSQL, exact SAN/SNI,
-trusted CA, Vault credential и NetworkPolicy/readback. Job дополнительно
+trusted cert-manager CA, отдельный Kubernetes credential и
+NetworkPolicy/readback. Job дополнительно
 проверяет URL и отклоняет plaintext, `sslmode=disable`, `sslmode=require`, IP,
 host override, другой CA и negotiated protocol не `TLSv1.3`. Отключать
 проверку для диагностики запрещено.
@@ -242,11 +352,17 @@ recovery выше.
    `services/jobs/legacy-data-migration`.
 2. Структурно проверить новые forward-only migration files и named SQL без их
    применения к live DB.
-3. Выполнить `kubectl kustomize deploy/k8s/base/legacy-data-migration` и
-   убедиться, что render содержит suspended Job, exact NetworkPolicy, retained
-   PVC, Vault CSI, ServiceMonitor и HTTPS `runbook_url`.
-4. Проверить JSON syntax четырёх report schemas и `contracts/registry.yaml`.
-5. Просмотреть safe report schema: в нём нет row payload, secret/DSN/token,
+3. Выполнить `tools/legacy-postgresql-source/manage.sh render` с exact SHA,
+   разобрать обычные ресурсы через `kubectl apply --dry-run=client`, readback
+   Job с `generateName` через `kubectl create --dry-run=client`, а StatefulSet
+   patch через `kubectl patch --dry-run=client`. Убедиться, что source endpoint
+   содержит exact SAN/FQDN, TLS 1.3 и deny-all/exact NetworkPolicy.
+4. Выполнить `kubectl kustomize deploy/k8s/base/legacy-data-migration` и
+   убедиться, что render содержит suspended Job, отдельный source PostgreSQL
+   Secret, exact cross-namespace NetworkPolicy, retained PVC, Vault CSI для
+   остальных credentials, ServiceMonitor и HTTPS `runbook_url`.
+5. Проверить JSON syntax четырёх report schemas и `contracts/registry.yaml`.
+6. Просмотреть safe report schema: в нём нет row payload, secret/DSN/token,
    actor, message, channel/post или credential values.
 
 Фактические `dry-run`, backup, restore, commit, deploy или доступ к
