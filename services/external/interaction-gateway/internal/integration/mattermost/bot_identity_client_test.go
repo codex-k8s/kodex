@@ -1,11 +1,59 @@
 package mattermost
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/types/entity"
 	model "github.com/mattermost/mattermost/server/public/model"
 )
+
+func TestBotIdentityPermissionProfileRequiresExactLifecycleSet(t *testing.T) {
+	t.Parallel()
+	roleNames := []string{"system-agent-bot-lifecycle", "team-agent-bot-lifecycle"}
+	roles := []*model.Role{
+		{Name: roleNames[0], Permissions: slices.Clone(requiredBotIdentityPermissions)},
+		{Name: roleNames[1]},
+	}
+	if !botIdentityPermissionProfile(roleNames, roles) {
+		t.Fatal("exact Agent bot lifecycle permission profile was rejected")
+	}
+	for index, permission := range requiredBotIdentityPermissions {
+		permissions := slices.Clone(requiredBotIdentityPermissions)
+		permissions = append(permissions[:index], permissions[index+1:]...)
+		candidate := []*model.Role{{Name: roleNames[0], Permissions: permissions}, {Name: roleNames[1]}}
+		if botIdentityPermissionProfile(roleNames, candidate) {
+			t.Fatalf("missing provider permission %q was accepted", permission)
+		}
+	}
+	if botIdentityPermissionProfile(roleNames, roles[:1]) {
+		t.Fatal("incomplete effective role readback was accepted")
+	}
+	duplicated := []*model.Role{roles[0], roles[0]}
+	if botIdentityPermissionProfile(roleNames, duplicated) {
+		t.Fatal("duplicated role readback was accepted")
+	}
+}
+
+func TestBotIdentityPermissionProfileRequiresProviderFeatures(t *testing.T) {
+	t.Parallel()
+	enabled, disabled := true, false
+	config := &model.Config{}
+	config.ServiceSettings.EnableBotAccountCreation = &enabled
+	config.ServiceSettings.EnableUserAccessTokens = &enabled
+	if !botIdentityFeaturesReady(config) {
+		t.Fatal("enabled bot and token provider features were rejected")
+	}
+	config.ServiceSettings.EnableUserAccessTokens = &disabled
+	if botIdentityFeaturesReady(config) {
+		t.Fatal("disabled user access tokens were accepted")
+	}
+	config.ServiceSettings.EnableUserAccessTokens = &enabled
+	config.ServiceSettings.EnableBotAccountCreation = &disabled
+	if botIdentityFeaturesReady(config) {
+		t.Fatal("disabled bot creation was accepted")
+	}
+}
 
 func TestCreatedBotMatchRequiresExactServerMarkerAndOwner(t *testing.T) {
 	t.Parallel()

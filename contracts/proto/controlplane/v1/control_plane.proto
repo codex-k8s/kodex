@@ -2030,9 +2030,14 @@ message ManageAgentMattermostBotIdentityRequest {
   string agent_id = 3;
   uint64 expected_version = 4;
   ProviderEffectReadbackReceipt provider_receipt = 5;
+  // readiness проходит тот же Manage application grant/receipt/intent path,
+  // но разрешает только exact current owner readback без изменения состояния.
+  bool readiness = 6;
 }
 
 message ManageAgentMattermostBotIdentityResponse {
+  // agent заполняется только для exact signed interaction-gateway profile;
+  // owner/browser consumer получает safe projection без внутренних refs.
   Resource agent = 1;
   AgentOwnerProjection projection = 2;
 }
@@ -2324,6 +2329,8 @@ message GetAgentRequest {
   string agent_id = 1;
 }
 message GetAgentResponse {
+  // agent заполняется только для exact signed interaction-gateway profile;
+  // owner/browser consumer получает safe projection без внутренних refs.
   Resource agent = 1;
   AgentOwnerProjection projection = 2;
 }

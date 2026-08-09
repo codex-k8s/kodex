@@ -64,6 +64,9 @@ func TestAgentMattermostBotIntentBindsAuthorityTargetActionAndVersion(t *testing
 	changed = proto.Clone(request).(*controlplanev1.ManageAgentMattermostBotIdentityRequest)
 	changed.AgentId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 	assertChanged("target", authority, changed, "agent-primary")
+	changed = proto.Clone(request).(*controlplanev1.ManageAgentMattermostBotIdentityRequest)
+	changed.Readiness = true
+	assertChanged("readiness", authority, changed, "agent-primary")
 	assertChanged("stable-key", authority, request, "agent-secondary")
 }
 

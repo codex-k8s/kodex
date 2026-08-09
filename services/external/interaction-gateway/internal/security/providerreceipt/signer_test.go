@@ -42,7 +42,7 @@ func TestSignerProducesVersionedAgentReceiptWithoutSecretValue(t *testing.T) {
 		EffectSHA256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 		ReceiptID:    "ffffffff-ffff-4fff-8fff-ffffffffffff", ReceiptRevision: 3,
 		Provider: "mattermost", MaskedLabel: "Agent bot", MaskedStatus: "AVAILABLE", Eligible: true,
-		Capabilities: []string{"mattermost.post", "mattermost.readback"},
+		Capabilities: []string{"mattermost_post", "mattermost_readback"},
 		TargetKind:   "agent_bot_identity", TargetResourceID: "33333333-3333-4333-8333-333333333333",
 		TargetStableKey:     "agent-primary",
 		CommandIntentSHA256: "4444444444444444444444444444444444444444444444444444444444444444",

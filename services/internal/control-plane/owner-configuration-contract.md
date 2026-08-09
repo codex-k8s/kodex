@@ -60,8 +60,12 @@ unit #236.
 
 Новых AsyncAPI facts и consumers нет. Все шесть сценариев используют version-pinned
 RPC read/rejoin. Поля старых raw response envelopes сохранены в wire schema для
-совместимости descriptor, но owner handlers их не заполняют: browser получает
-только новые safe projections.
+совместимости descriptor. Owner handlers их не заполняют: browser получает
+только новые safe projections. Исключение ограничено подписанными
+interaction-gateway provider-readback profiles `GetAgent` и
+`ManageAgentMattermostBotIdentity`: внутри trusted gateway boundary они
+возвращают exact Agent owner/receipt для provider effect и readiness, но этот
+результат не доступен owner/browser consumer.
 
 Каждая owner list page получает mutation-fence внутри той же `SERIALIZABLE`
 transaction, что eligibility, filters и composite fields. HMAC continuation

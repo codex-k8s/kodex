@@ -216,6 +216,7 @@ type ManageAgentMattermostBotIdentityInput struct {
 	Action          string
 	AgentRef        string
 	ExpectedVersion uint64
+	Readiness       bool
 	Credential      ProviderCredential
 }
 

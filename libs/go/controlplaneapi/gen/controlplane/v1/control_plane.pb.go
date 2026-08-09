@@ -14442,8 +14442,11 @@ type ManageAgentMattermostBotIdentityRequest struct {
 	AgentId         string                           `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	ExpectedVersion uint64                           `protobuf:"varint,4,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
 	ProviderReceipt *ProviderEffectReadbackReceipt   `protobuf:"bytes,5,opt,name=provider_receipt,json=providerReceipt,proto3" json:"provider_receipt,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// readiness проходит тот же Manage application grant/receipt/intent path,
+	// но разрешает только exact current owner readback без изменения состояния.
+	Readiness     bool `protobuf:"varint,6,opt,name=readiness,proto3" json:"readiness,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ManageAgentMattermostBotIdentityRequest) Reset() {
@@ -14511,10 +14514,19 @@ func (x *ManageAgentMattermostBotIdentityRequest) GetProviderReceipt() *Provider
 	return nil
 }
 
+func (x *ManageAgentMattermostBotIdentityRequest) GetReadiness() bool {
+	if x != nil {
+		return x.Readiness
+	}
+	return false
+}
+
 type ManageAgentMattermostBotIdentityResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Agent         *Resource              `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
-	Projection    *AgentOwnerProjection  `protobuf:"bytes,2,opt,name=projection,proto3" json:"projection,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// agent заполняется только для exact signed interaction-gateway profile;
+	// owner/browser consumer получает safe projection без внутренних refs.
+	Agent         *Resource             `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Projection    *AgentOwnerProjection `protobuf:"bytes,2,opt,name=projection,proto3" json:"projection,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -16977,9 +16989,11 @@ func (x *GetAgentRequest) GetAgentId() string {
 }
 
 type GetAgentResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Agent         *Resource              `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
-	Projection    *AgentOwnerProjection  `protobuf:"bytes,2,opt,name=projection,proto3" json:"projection,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// agent заполняется только для exact signed interaction-gateway profile;
+	// owner/browser consumer получает safe projection без внутренних refs.
+	Agent         *Resource             `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Projection    *AgentOwnerProjection `protobuf:"bytes,2,opt,name=projection,proto3" json:"projection,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -48464,13 +48478,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x18provider_pool_stable_key\x18\b \x01(\tR\x15providerPoolStableKey\x12`\n" +
 	"\x16reconciliation_receipt\x18\t \x01(\v2).controlplane.v1.GitReconciliationReceiptR\x15reconciliationReceipt\"L\n" +
 	"\x19ReconcileGitAgentResponse\x12/\n" +
-	"\x05agent\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x05agent\"\xbe\x02\n" +
+	"\x05agent\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x05agent\"\xdc\x02\n" +
 	"'ManageAgentMattermostBotIdentityRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12I\n" +
 	"\x06action\x18\x02 \x01(\x0e21.controlplane.v1.AgentMattermostBotIdentityActionR\x06action\x12\x19\n" +
 	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12)\n" +
 	"\x10expected_version\x18\x04 \x01(\x04R\x0fexpectedVersion\x12Y\n" +
-	"\x10provider_receipt\x18\x05 \x01(\v2..controlplane.v1.ProviderEffectReadbackReceiptR\x0fproviderReceipt\"\xa2\x01\n" +
+	"\x10provider_receipt\x18\x05 \x01(\v2..controlplane.v1.ProviderEffectReadbackReceiptR\x0fproviderReceipt\x12\x1c\n" +
+	"\treadiness\x18\x06 \x01(\bR\treadiness\"\xa2\x01\n" +
 	"(ManageAgentMattermostBotIdentityResponse\x12/\n" +
 	"\x05agent\x18\x01 \x01(\v2\x19.controlplane.v1.ResourceR\x05agent\x12E\n" +
 	"\n" +

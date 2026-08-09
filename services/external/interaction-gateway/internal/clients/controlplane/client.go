@@ -654,6 +654,7 @@ func (client *Client) ManageAgentMattermostBotIdentity(ctx context.Context,
 		&controlplanev1.ManageAgentMattermostBotIdentityRequest{
 			IdempotencyKey: input.IdempotencyKey, Action: action, AgentId: input.AgentRef,
 			ExpectedVersion: input.ExpectedVersion, ProviderReceipt: providerReceiptToProto(input.Credential.Receipt),
+			Readiness: input.Readiness,
 		})
 	if err != nil {
 		return domaincontrol.AgentMattermostBotOwner{}, mappingRPCError(err)

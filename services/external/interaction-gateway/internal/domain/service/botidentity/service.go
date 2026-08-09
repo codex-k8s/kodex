@@ -479,7 +479,7 @@ func (service *Service) CheckAgent(ctx context.Context, principal entity.TeamPri
 		result.FailureCode = "IDENTITY_BINDING_NOT_READY"
 		return result
 	}
-	_, teamBinding, err := service.resolveOwner(ctx, principal, agentRef)
+	_, teamBinding, err := service.resolveOwnerReadback(ctx, principal, agentRef, false)
 	if err != nil {
 		result.FailureCode = "CONTROL_PLANE_READBACK_NOT_READY"
 		return result
@@ -493,7 +493,8 @@ func (service *Service) CheckAgent(ctx context.Context, principal entity.TeamPri
 	_, _, failure := service.proveRuntimeBotToken(ctx, principal, binding.Identity.AgentStableKey,
 		binding.Identity.ProviderUserID, binding.Identity.ProviderGeneration)
 	if failure != "" {
-		if failure == "CONTROL_PLANE_READBACK_NOT_READY" {
+		if failure == "CONTROL_PLANE_READBACK_NOT_READY" ||
+			failure == "CONTROL_PLANE_MANAGE_PROFILE_NOT_READY" {
 			result.ControlPlaneReady = false
 		}
 		result.FailureCode = failure
@@ -712,15 +713,32 @@ func (service *Service) proveRuntimeBotToken(ctx context.Context, principal enti
 		fresh.ProviderSnapshotSHA256 != identity.ProviderSnapshotSHA256 {
 		return entity.AgentMattermostBotIdentity{}, "", "MATTERMOST_IDENTITY_NOT_READY"
 	}
-	owner, teamBinding, err := service.resolveOwner(ctx, principal, identity.AgentRef)
+	owner, teamBinding, err := service.resolveOwnerReadback(ctx, principal, identity.AgentRef, false)
 	if err != nil {
 		return entity.AgentMattermostBotIdentity{}, "", "CONTROL_PLANE_READBACK_NOT_READY"
 	}
+	mappingProofRef, err := agentBotMappingProofRef(teamBinding.Mapping)
+	if err != nil {
+		return entity.AgentMattermostBotIdentity{}, "", "OWNER_PREDECESSOR_NOT_READY"
+	}
 	if owner.BotIdentityRef != identity.ProviderObjectRef ||
+		owner.BotUsername != identity.Username ||
+		owner.BotProviderRevision != identity.ProviderVersion ||
 		owner.BotProviderGeneration != identity.ProviderGeneration ||
+		owner.BotProviderTeamRef != mappingProofRef ||
 		owner.BotMaskedStatus != string(identity.Status) ||
+		uuid.Validate(owner.BotReceiptID) != nil ||
+		owner.BotReceiptVersion != identity.ProviderGeneration ||
+		!validDigest(owner.BotReceiptSHA256) ||
 		teamBinding.Mapping.ID == "" || identity.ProviderTeamID != teamBinding.Team.ProviderTeamID {
 		return entity.AgentMattermostBotIdentity{}, "", "OWNER_PREDECESSOR_NOT_READY"
+	}
+	if err := service.provider.CheckBotIdentityPermissions(ctx, principal, identity.ProviderTeamID); err != nil {
+		return entity.AgentMattermostBotIdentity{}, "", "MATTERMOST_PERMISSION_NOT_READY"
+	}
+	if err := service.checkOwnerManageReceiptProfile(ctx, operationForReadiness(principal, owner, identity),
+		owner, teamBinding); err != nil {
+		return entity.AgentMattermostBotIdentity{}, "", "CONTROL_PLANE_MANAGE_PROFILE_NOT_READY"
 	}
 	token, err := service.credentials.ReadBotToken(ctx, identity.CredentialBindingID,
 		identity.CredentialSecretVersion, identity.CredentialSHA256)
@@ -902,52 +920,11 @@ func (service *Service) applyOwner(ctx context.Context, operation entity.AgentMa
 		_ = service.repository.MarkRepairRequired(ctx, operation, "OWNER_PREDECESSOR_MISMATCH")
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
 	}
-	actionValue := controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND
-	if action == enum.AgentBotActionRebind {
-		actionValue = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND
-	} else if action == enum.AgentBotActionRevoke {
-		actionValue = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
-	}
-	authority := controlplanecontract.VerifiedCommandAuthority{
-		ActorID:        operation.Principal.ActorID,
-		OrganizationID: operation.Principal.OrganizationID, ProjectID: operation.Principal.ProjectID,
-		WorkloadID: "interaction-gateway", FullMethod: ownerManageFullMethod,
-	}
-	intentSHA, err := controlplanecontract.AgentMattermostBotIdentityIntentSHA256(authority,
-		&controlplanev1.ManageAgentMattermostBotIdentityRequest{
-			Action:  actionValue,
-			AgentId: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion,
-		}, owner.AgentStableKey)
+	credential, receiptSHA, err := service.signOwnerManageReceipt(operation, owner, teamBinding, false)
 	if err != nil {
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
 	}
-	receiptID := uuid.NewString()
-	mappingProofRef, err := agentBotMappingProofRef(teamBinding.Mapping)
-	if err != nil {
-		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
-	}
-	receipt := domaincontrol.ProviderEffectReceipt{
-		FullMethod: ownerManageFullMethod, ActorID: operation.Principal.ActorID,
-		OrganizationID: operation.Principal.OrganizationID, ProjectID: operation.Principal.ProjectID,
-		WorkspaceID: operation.Principal.ProjectID, ProviderTeamRef: mappingProofRef,
-		ProviderObjectRef: operation.Identity.ProviderObjectRef, ProviderUsername: operation.Identity.Username,
-		Action: action, Effect: "agent_bot_identity", EffectVersion: operation.Identity.ProviderVersion,
-		EffectGeneration: operation.Identity.ProviderGeneration, EffectSHA256: operation.Identity.ProviderSnapshotSHA256,
-		ReceiptID: receiptID, ReceiptRevision: operation.Identity.ProviderGeneration,
-		Provider: providerName, MaskedLabel: operation.Identity.DisplayName,
-		Capabilities: []string{"mattermost.post", "mattermost.readback"},
-		MaskedStatus: string(operation.Identity.Status), Eligible: operation.Identity.Status == enum.AgentBotIdentityAvailable,
-		TargetKind: "agent_bot_identity", TargetResourceID: operation.AgentRef,
-		TargetStableKey: owner.AgentStableKey, CommandIntentSHA256: intentSHA,
-	}
-	credential, err := service.receipts.Sign(receipt)
-	if err != nil {
-		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
-	}
-	receiptSHA, err := internalrpcauth.CanonicalJSONSHA256(credential.Receipt)
-	if err != nil {
-		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
-	}
+	receiptID := credential.Receipt.ReceiptID
 	managed, err := service.owner.ManageAgentMattermostBotIdentity(ctx,
 		domaincontrol.ManageAgentMattermostBotIdentityInput{
 			IdempotencyKey: operation.IdempotencyKey,
@@ -967,6 +944,94 @@ func (service *Service) applyOwner(ctx context.Context, operation entity.AgentMa
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
 	}
 	return service.finishOwnerOutcome(ctx, operation, managed)
+}
+
+// signOwnerManageReceipt — общий producer proof рабочего Manage path. Readiness
+// передаёт его в non-mutating режим того же generated Manage RPC, а effect path
+// — в обычную команду. Source receipt отдельно потребляется реальным GetAgent.
+func (service *Service) signOwnerManageReceipt(operation entity.AgentMattermostBotOperation,
+	owner domaincontrol.AgentMattermostBotOwner, teamBinding entity.WorkspaceMattermostBinding, readiness bool,
+) (domaincontrol.ProviderCredential, string, error) {
+	action := operation.Action
+	if action == enum.AgentBotActionCreateAndBind {
+		action = enum.AgentBotActionBind
+	}
+	actionValue := controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND
+	if action == enum.AgentBotActionRebind {
+		actionValue = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND
+	} else if action == enum.AgentBotActionRevoke {
+		actionValue = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
+	} else if action != enum.AgentBotActionBind {
+		return domaincontrol.ProviderCredential{}, "", errors.New("agent bot owner receipt action is invalid")
+	}
+	authority := controlplanecontract.VerifiedCommandAuthority{
+		ActorID:        operation.Principal.ActorID,
+		OrganizationID: operation.Principal.OrganizationID, ProjectID: operation.Principal.ProjectID,
+		WorkloadID: "interaction-gateway", FullMethod: ownerManageFullMethod,
+	}
+	intentSHA, err := controlplanecontract.AgentMattermostBotIdentityIntentSHA256(authority,
+		&controlplanev1.ManageAgentMattermostBotIdentityRequest{
+			Action: actionValue, AgentId: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion,
+			Readiness: readiness,
+		}, owner.AgentStableKey)
+	if err != nil {
+		return domaincontrol.ProviderCredential{}, "", err
+	}
+	mappingProofRef, err := agentBotMappingProofRef(teamBinding.Mapping)
+	if err != nil {
+		return domaincontrol.ProviderCredential{}, "", err
+	}
+	receipt := domaincontrol.ProviderEffectReceipt{
+		FullMethod: ownerManageFullMethod, ActorID: operation.Principal.ActorID,
+		OrganizationID: operation.Principal.OrganizationID, ProjectID: operation.Principal.ProjectID,
+		WorkspaceID: operation.Principal.ProjectID, ProviderTeamRef: mappingProofRef,
+		ProviderObjectRef: operation.Identity.ProviderObjectRef, ProviderUsername: operation.Identity.Username,
+		Action: action, Effect: "agent_bot_identity", EffectVersion: operation.Identity.ProviderVersion,
+		EffectGeneration: operation.Identity.ProviderGeneration, EffectSHA256: operation.Identity.ProviderSnapshotSHA256,
+		ReceiptID: uuid.NewString(), ReceiptRevision: operation.Identity.ProviderGeneration,
+		Provider: providerName, MaskedLabel: operation.Identity.DisplayName,
+		Capabilities: []string{"mattermost_post", "mattermost_readback"},
+		MaskedStatus: string(operation.Identity.Status), Eligible: operation.Identity.Status == enum.AgentBotIdentityAvailable,
+		TargetKind: "agent_bot_identity", TargetResourceID: operation.AgentRef,
+		TargetStableKey: owner.AgentStableKey, CommandIntentSHA256: intentSHA,
+	}
+	credential, err := service.receipts.Sign(receipt)
+	if err != nil || credential.CompactJWS == "" {
+		return domaincontrol.ProviderCredential{}, "", errors.New("agent bot owner receipt signing path is not ready")
+	}
+	receiptSHA, err := internalrpcauth.CanonicalJSONSHA256(credential.Receipt)
+	if err != nil {
+		return domaincontrol.ProviderCredential{}, "", err
+	}
+	return credential, receiptSHA, nil
+}
+
+func (service *Service) checkOwnerManageReceiptProfile(ctx context.Context, operation entity.AgentMattermostBotOperation,
+	owner domaincontrol.AgentMattermostBotOwner, teamBinding entity.WorkspaceMattermostBinding,
+) error {
+	credential, _, err := service.signOwnerManageReceipt(operation, owner, teamBinding, true)
+	if err != nil {
+		return err
+	}
+	readback, err := service.owner.ManageAgentMattermostBotIdentity(ctx,
+		domaincontrol.ManageAgentMattermostBotIdentityInput{
+			IdempotencyKey: uuid.NewString(), Action: enum.AgentBotActionRebind,
+			AgentRef: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion,
+			Readiness: true, Credential: credential,
+		})
+	if err != nil || !sameOwnerPredecessor(owner, readback) {
+		return errors.New("agent bot owner manage readiness path is not ready")
+	}
+	return nil
+}
+
+func operationForReadiness(principal entity.TeamPrincipal, owner domaincontrol.AgentMattermostBotOwner,
+	identity entity.AgentMattermostBotIdentity,
+) entity.AgentMattermostBotOperation {
+	return entity.AgentMattermostBotOperation{
+		Principal: principal, Action: enum.AgentBotActionRebind, AgentRef: owner.AgentRef,
+		ExpectedAgentVersion: owner.AgentVersion, Identity: identity,
+	}
 }
 
 func (service *Service) finishOwnerOutcome(ctx context.Context, operation entity.AgentMattermostBotOperation,
@@ -1067,12 +1132,23 @@ func ownerMatchesTerminal(operation entity.AgentMattermostBotOperation,
 func (service *Service) resolveOwner(ctx context.Context, principal entity.TeamPrincipal,
 	agentRef string,
 ) (domaincontrol.AgentMattermostBotOwner, entity.WorkspaceMattermostBinding, error) {
+	return service.resolveOwnerReadback(ctx, principal, agentRef, true)
+}
+
+func (service *Service) resolveOwnerReadback(ctx context.Context, principal entity.TeamPrincipal,
+	agentRef string, requireProviderPermissions bool,
+) (domaincontrol.AgentMattermostBotOwner, entity.WorkspaceMattermostBinding, error) {
 	if validatePrincipal(principal) != nil || uuid.Validate(agentRef) != nil {
 		return domaincontrol.AgentMattermostBotOwner{}, entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnauthorized
 	}
 	binding, err := service.teams.GetBinding(ctx, principal)
 	if err != nil || binding.Mapping.State != "BOUND" || binding.Team.ProviderTeamID == "" {
 		return domaincontrol.AgentMattermostBotOwner{}, entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+	}
+	if requireProviderPermissions {
+		if err := service.provider.CheckBotIdentityPermissions(ctx, principal, binding.Team.ProviderTeamID); err != nil {
+			return domaincontrol.AgentMattermostBotOwner{}, entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+		}
 	}
 	intentSHA := requestDigest(principal, "agent_source_read", agentRef,
 		fmt.Sprint(binding.Mapping.Version), fmt.Sprint(binding.Mapping.Generation), binding.Team.ProviderSnapshotSHA256)

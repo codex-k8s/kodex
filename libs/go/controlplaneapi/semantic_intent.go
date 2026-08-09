@@ -97,9 +97,10 @@ func AgentMattermostBotIdentityIntentSHA256(
 		return "", errors.New("agent Mattermost bot identity action is invalid")
 	}
 	type typedIntent struct {
-		AgentID string `json:"agent_id"`
+		AgentID   string `json:"agent_id"`
+		Readiness bool   `json:"readiness,omitempty"`
 	}
-	encoded, err := json.Marshal(typedIntent{AgentID: request.GetAgentId()})
+	encoded, err := json.Marshal(typedIntent{AgentID: request.GetAgentId(), Readiness: request.GetReadiness()})
 	if err != nil {
 		return "", errors.New("encode agent Mattermost bot identity intent")
 	}

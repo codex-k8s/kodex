@@ -267,12 +267,40 @@ func (server *Server) ManageAgentMattermostBotIdentity(
 	default:
 		return nil, rpcError("", errs.ErrInvalidInput)
 	}
+	if request.GetReadiness() {
+		principal, principalErr := authorization.Principal(ctx,
+			controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName)
+		if principalErr != nil {
+			return nil, rpcError("", errs.ErrUnauthenticated)
+		}
+		checked, checkErr := server.service.CheckAgentMattermostBotIdentityManageReadiness(ctx,
+			resource.ManageProtectedConfigurationInput{
+				Principal:      principal,
+				FullMethod:     controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
+				IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindAgent,
+				Action: action, ResourceID: request.GetAgentId(), ExpectedVersion: request.GetExpectedVersion(),
+				ProviderReceipt: receipt, Readiness: true,
+			})
+		if checkErr != nil {
+			return nil, rpcError(principal.CorrelationID, checkErr)
+		}
+		encoded, encodeErr := toProtoResource(checked)
+		if encodeErr != nil {
+			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+		}
+		projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, checked)
+		if projectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectionErr)
+		}
+		return &controlplanev1.ManageAgentMattermostBotIdentityResponse{
+			Agent: encoded, Projection: agentOwnerProjectionToProto(projection)}, nil
+	}
 	managed, principal, err := server.manageProtectedConfigurationResource(ctx,
 		controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
 		resource.ManageProtectedConfigurationInput{
 			IdempotencyKey: request.GetIdempotencyKey(), Kind: enum.KindAgent,
 			Action: action, ResourceID: request.GetAgentId(), ExpectedVersion: request.GetExpectedVersion(),
-			ProviderReceipt: receipt,
+			ProviderReceipt: receipt, Readiness: false,
 		})
 	if err != nil {
 		return nil, err
@@ -281,8 +309,12 @@ func (server *Server) ManageAgentMattermostBotIdentity(
 	if projectionErr != nil {
 		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
+	encoded, encodeErr := toProtoResource(managed)
+	if encodeErr != nil {
+		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	}
 	return &controlplanev1.ManageAgentMattermostBotIdentityResponse{
-		Projection: agentOwnerProjectionToProto(projection)}, nil
+		Agent: encoded, Projection: agentOwnerProjectionToProto(projection)}, nil
 }
 
 func (server *Server) ManageAgentAssignment(
@@ -595,6 +627,17 @@ func (server *Server) GetAgent(ctx context.Context, request *controlplanev1.GetA
 	principal, err := authorization.Principal(ctx, controlplanev1.ControlPlaneService_GetAgent_FullMethodName)
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
+	}
+	private, handled, privateErr := server.service.GetAgentMattermostBotIdentityReadback(ctx, principal, request.GetAgentId())
+	if handled {
+		if privateErr != nil {
+			return nil, rpcError(principal.CorrelationID, privateErr)
+		}
+		encoded, encodeErr := toProtoResource(private)
+		if encodeErr != nil {
+			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+		}
+		return &controlplanev1.GetAgentResponse{Agent: encoded}, nil
 	}
 	projection, projectionErr := server.service.GetAgentOwner(ctx, principal, request.GetAgentId())
 	if projectionErr != nil {

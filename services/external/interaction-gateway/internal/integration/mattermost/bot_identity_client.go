@@ -23,6 +23,20 @@ const (
 	providerTokenPage    = 100
 )
 
+var requiredBotIdentityPermissions = []string{
+	model.PermissionAddUserToTeam.Id,
+	model.PermissionCreateBot.Id,
+	model.PermissionCreateUserAccessToken.Id,
+	model.PermissionManageBots.Id,
+	model.PermissionReadBots.Id,
+	model.PermissionReadUserAccessToken.Id,
+	model.PermissionRevokeUserAccessToken.Id,
+	model.PermissionViewMembers.Id,
+	model.PermissionViewTeam.Id,
+}
+
+var errBotIdentityPermissionProfile = errors.New("mattermost bot identity permission profile is not ready")
+
 func (client *Client) CheckBotIdentityLifecycle(ctx context.Context) error {
 	if client.primary == nil {
 		return errors.New("mattermost bot identity administrator is unavailable")
@@ -32,6 +46,89 @@ func (client *Client) CheckBotIdentityLifecycle(ctx context.Context) error {
 		return errors.New("mattermost bot identity catalog working path is not ready")
 	}
 	return nil
+}
+
+// CheckBotIdentityPermissions без mutation доказывает тот же effective role
+// path, от которого Mattermost зависит для create, Team membership, token
+// lifecycle, bot readback и revoke. Роли читаются для exact authenticated
+// provider owner и exact Team; одного успешного GetBots для этого недостаточно.
+func (client *Client) CheckBotIdentityPermissions(ctx context.Context, principal entity.TeamPrincipal,
+	providerTeamID string,
+) error {
+	if client.primary == nil || client.index == nil || invalidProviderID(providerTeamID) {
+		return errBotIdentityPermissionProfile
+	}
+	owner, err := client.index.resolveOwner(principal)
+	if err != nil {
+		return errBotIdentityPermissionProfile
+	}
+	user, response, err := client.primary.api.GetMe(ctx, "")
+	if err != nil || response == nil || user == nil || user.Id != owner.MattermostUserID ||
+		user.DeleteAt != 0 || user.IsBot {
+		return errBotIdentityPermissionProfile
+	}
+	member, response, err := client.primary.api.GetTeamMember(ctx, providerTeamID, user.Id, "")
+	if err != nil || response == nil || member == nil || member.TeamId != providerTeamID ||
+		member.UserId != user.Id || member.DeleteAt != 0 {
+		return errBotIdentityPermissionProfile
+	}
+	config, response, err := client.primary.api.GetConfig(ctx)
+	if err != nil || response == nil || !botIdentityFeaturesReady(config) {
+		return errBotIdentityPermissionProfile
+	}
+	roleNames := append(user.GetRoles(), member.GetRoles()...)
+	slices.Sort(roleNames)
+	roleNames = slices.Compact(roleNames)
+	if len(roleNames) == 0 {
+		return errBotIdentityPermissionProfile
+	}
+	roles, response, err := client.primary.api.GetRolesByNames(ctx, roleNames)
+	if err != nil || response == nil || !botIdentityPermissionProfile(roleNames, roles) {
+		return errBotIdentityPermissionProfile
+	}
+	return nil
+}
+
+func botIdentityFeaturesReady(config *model.Config) bool {
+	return config != nil && config.ServiceSettings.EnableBotAccountCreation != nil &&
+		*config.ServiceSettings.EnableBotAccountCreation && config.ServiceSettings.EnableUserAccessTokens != nil &&
+		*config.ServiceSettings.EnableUserAccessTokens
+}
+
+func botIdentityPermissionProfile(roleNames []string, roles []*model.Role) bool {
+	expectedRoles := make(map[string]struct{}, len(roleNames))
+	for _, name := range roleNames {
+		if name == "" {
+			return false
+		}
+		expectedRoles[name] = struct{}{}
+	}
+	if len(expectedRoles) != len(roleNames) || len(roles) != len(roleNames) {
+		return false
+	}
+	permissions := make(map[string]struct{}, len(requiredBotIdentityPermissions))
+	observedRoles := make(map[string]struct{}, len(roles))
+	for _, role := range roles {
+		if role == nil {
+			return false
+		}
+		if _, expected := expectedRoles[role.Name]; !expected {
+			return false
+		}
+		if _, duplicate := observedRoles[role.Name]; duplicate {
+			return false
+		}
+		observedRoles[role.Name] = struct{}{}
+		for _, permission := range role.Permissions {
+			permissions[permission] = struct{}{}
+		}
+	}
+	for _, required := range requiredBotIdentityPermissions {
+		if _, allowed := permissions[required]; !allowed {
+			return false
+		}
+	}
+	return true
 }
 
 func (client *Client) ListBotIdentities(ctx context.Context, principal entity.TeamPrincipal,

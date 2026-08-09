@@ -16,6 +16,7 @@ var (
 
 type BotIdentityClient interface {
 	CheckBotIdentityLifecycle(context.Context) error
+	CheckBotIdentityPermissions(context.Context, entity.TeamPrincipal, string) error
 	ListBotIdentities(context.Context, entity.TeamPrincipal, string, uint32, uint32) ([]entity.AgentMattermostBotIdentity, bool, error)
 	CreateBotIdentity(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotCreateIntent, string) (entity.AgentMattermostBotIdentity, error)
 	RecoverCreatedBotIdentity(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotCreateIntent, string) (entity.AgentMattermostBotIdentity, error)

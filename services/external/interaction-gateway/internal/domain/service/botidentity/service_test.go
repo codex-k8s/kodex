@@ -226,13 +226,26 @@ func TestAgentReadinessUsesFullRuntimeProofAndBoundedFailures(t *testing.T) {
 	}, admit: identity}
 	provider := &fakeProvider{readIdentity: identity}
 	owner := ownerWithoutBot()
-	owner.value.BotIdentityRef, owner.value.BotProviderGeneration = identity.ProviderObjectRef, identity.ProviderGeneration
+	mappingProofRef, err := agentBotMappingProofRef(teamSource().binding.Mapping)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.value.BotIdentityRef = identity.ProviderObjectRef
+	owner.value.BotUsername = identity.Username
+	owner.value.BotProviderRevision = identity.ProviderVersion
+	owner.value.BotProviderGeneration = identity.ProviderGeneration
+	owner.value.BotProviderTeamRef = mappingProofRef
 	owner.value.BotMaskedStatus = string(identity.Status)
+	owner.value.BotReceiptID = "77777777-7777-4777-8777-777777777777"
+	owner.value.BotReceiptVersion = identity.ProviderGeneration
+	owner.value.BotReceiptSHA256 = hexDigest("7")
 	service := newTestService(t, repository, provider, &fakeCredentials{}, owner, teamSource())
 	ready := service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
 	if !ready.Ready || !ready.PostgresReady || !ready.ControlPlaneReady || !ready.MattermostReady ||
-		!ready.IdentityGenerationReady || provider.verifyCalls != 1 {
-		t.Fatalf("full runtime proof was not used by readiness: %#v calls=%d", ready, provider.verifyCalls)
+		!ready.IdentityGenerationReady || provider.verifyCalls != 1 || provider.permissionCalls != 1 ||
+		owner.getCalls != 2 || owner.manageCalls != 0 || owner.readinessCalls != 1 {
+		t.Fatalf("full non-mutating runtime proof was not used by readiness: %#v verify=%d permission=%d get=%d manage=%d readiness=%d",
+			ready, provider.verifyCalls, provider.permissionCalls, owner.getCalls, owner.manageCalls, owner.readinessCalls)
 	}
 
 	provider.verifyErr = domainmattermost.ErrBotForbidden
@@ -242,6 +255,13 @@ func TestAgentReadinessUsesFullRuntimeProofAndBoundedFailures(t *testing.T) {
 	}
 
 	provider.verifyErr = nil
+	provider.permissionErr = domainmattermost.ErrBotForbidden
+	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.FailureCode != "MATTERMOST_PERMISSION_NOT_READY" {
+		t.Fatalf("incomplete create/Team/token/revoke permissions did not fail closed: %#v", failed)
+	}
+
+	provider.permissionErr = nil
 	provider.readErr = domainmattermost.ErrBotConflict
 	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
 	if failed.Ready || failed.FailureCode != "MATTERMOST_IDENTITY_NOT_READY" {
@@ -256,6 +276,20 @@ func TestAgentReadinessUsesFullRuntimeProofAndBoundedFailures(t *testing.T) {
 	}
 
 	owner.value.BotIdentityRef = identity.ProviderObjectRef
+	service.receipts = manageFailingSigner{}
+	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.ControlPlaneReady || failed.FailureCode != "CONTROL_PLANE_MANAGE_PROFILE_NOT_READY" {
+		t.Fatalf("broken generated owner manage receipt profile did not fail closed: %#v", failed)
+	}
+
+	service.receipts = fakeSigner{}
+	owner.readinessErr = errors.New("manage application profile is unavailable")
+	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.ControlPlaneReady || failed.FailureCode != "CONTROL_PLANE_MANAGE_PROFILE_NOT_READY" {
+		t.Fatalf("broken generated owner Manage RPC did not fail closed: %#v", failed)
+	}
+
+	owner.readinessErr = nil
 	service.receipts = failingSigner{}
 	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
 	if failed.Ready || failed.ControlPlaneReady || failed.FailureCode != "CONTROL_PLANE_READBACK_NOT_READY" {
@@ -267,6 +301,20 @@ func TestAgentReadinessUsesFullRuntimeProofAndBoundedFailures(t *testing.T) {
 	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
 	if failed.Ready || failed.FailureCode != "IDENTITY_GENERATION_NOT_READY" {
 		t.Fatalf("stale generation did not fail closed: %#v", failed)
+	}
+}
+
+func TestCreateChecksProviderPermissionProfileBeforeEffect(t *testing.T) {
+	t.Parallel()
+	provider := &fakeProvider{permissionErr: domainmattermost.ErrBotForbidden}
+	owner := ownerWithoutBot()
+	service := newTestService(t, &fakeRepository{}, provider, &fakeCredentials{}, owner, teamSource())
+	_, _, err := service.CreateAndBind(context.Background(), testPrincipal, testAgentRef, 7,
+		"agent-primary", "Agent primary", testKey)
+	if !errors.Is(err, domainerrs.ErrUnavailable) || provider.createCalls != 0 ||
+		provider.permissionCalls != 1 || owner.getCalls != 0 {
+		t.Fatalf("provider effect crossed incomplete permission predecessor: err=%v create=%d permission=%d owner=%d",
+			err, provider.createCalls, provider.permissionCalls, owner.getCalls)
 	}
 }
 
@@ -499,20 +547,26 @@ func (repository *fakeRepository) ResolveRuntimeIdentity(context.Context, entity
 }
 
 type fakeProvider struct {
-	createCalls  int
-	createErr    error
-	revoke       func(entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotIdentity, error)
-	resolveToken func(entity.AgentMattermostBotIdentity, string) (string, bool, error)
-	recoverErr   error
-	readIdentity entity.AgentMattermostBotIdentity
-	readErr      error
-	verifyErr    error
-	verifyCalls  int
-	readCalls    int
-	read         func(int) (entity.AgentMattermostBotIdentity, error)
+	createCalls     int
+	createErr       error
+	revoke          func(entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotIdentity, error)
+	resolveToken    func(entity.AgentMattermostBotIdentity, string) (string, bool, error)
+	recoverErr      error
+	readIdentity    entity.AgentMattermostBotIdentity
+	readErr         error
+	verifyErr       error
+	verifyCalls     int
+	permissionErr   error
+	permissionCalls int
+	readCalls       int
+	read            func(int) (entity.AgentMattermostBotIdentity, error)
 }
 
 func (provider *fakeProvider) CheckBotIdentityLifecycle(context.Context) error { return nil }
+func (provider *fakeProvider) CheckBotIdentityPermissions(context.Context, entity.TeamPrincipal, string) error {
+	provider.permissionCalls++
+	return provider.permissionErr
+}
 func (provider *fakeProvider) ListBotIdentities(context.Context, entity.TeamPrincipal, string, uint32, uint32) ([]entity.AgentMattermostBotIdentity, bool, error) {
 	return nil, false, nil
 }
@@ -608,10 +662,12 @@ func (*fakeCredentials) CheckBotTokenRevoked(context.Context, string, uint64) er
 func (*fakeCredentials) Check(context.Context) error                                { return nil }
 
 type fakeOwner struct {
-	value       domaincontrol.AgentMattermostBotOwner
-	getCalls    int
-	manageCalls int
-	manage      func(domaincontrol.ManageAgentMattermostBotIdentityInput) domaincontrol.AgentMattermostBotOwner
+	value          domaincontrol.AgentMattermostBotOwner
+	getCalls       int
+	manageCalls    int
+	readinessCalls int
+	readinessErr   error
+	manage         func(domaincontrol.ManageAgentMattermostBotIdentityInput) domaincontrol.AgentMattermostBotOwner
 }
 
 func (owner *fakeOwner) GetAgentMattermostBotIdentity(context.Context, domaincontrol.ProviderCredential, string) (domaincontrol.AgentMattermostBotOwner, error) {
@@ -620,6 +676,13 @@ func (owner *fakeOwner) GetAgentMattermostBotIdentity(context.Context, domaincon
 }
 
 func (owner *fakeOwner) ManageAgentMattermostBotIdentity(_ context.Context, input domaincontrol.ManageAgentMattermostBotIdentityInput) (domaincontrol.AgentMattermostBotOwner, error) {
+	if input.Readiness {
+		owner.readinessCalls++
+		if owner.readinessErr != nil {
+			return domaincontrol.AgentMattermostBotOwner{}, owner.readinessErr
+		}
+		return owner.manage(input), nil
+	}
 	owner.manageCalls++
 	return owner.manage(input), nil
 }
@@ -642,6 +705,15 @@ type failingSigner struct{}
 
 func (failingSigner) Sign(domaincontrol.ProviderEffectReceipt) (domaincontrol.ProviderCredential, error) {
 	return domaincontrol.ProviderCredential{}, errors.New("signer trust profile is unavailable")
+}
+
+type manageFailingSigner struct{}
+
+func (manageFailingSigner) Sign(receipt domaincontrol.ProviderEffectReceipt) (domaincontrol.ProviderCredential, error) {
+	if receipt.FullMethod == ownerManageFullMethod {
+		return domaincontrol.ProviderCredential{}, errors.New("manage receipt profile is unavailable")
+	}
+	return fakeSigner{}.Sign(receipt)
 }
 
 type fakeMetrics struct{}

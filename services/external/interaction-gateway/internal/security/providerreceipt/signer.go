@@ -174,7 +174,7 @@ func validAgentReceipt(input domaincontrol.ProviderEffectReceipt) bool {
 		input.MaskedLabel == "" || len(input.MaskedLabel) > 64 || len(input.Capabilities) != 2 {
 		return false
 	}
-	return input.Capabilities[0] == "mattermost.post" && input.Capabilities[1] == "mattermost.readback"
+	return input.Capabilities[0] == "mattermost_post" && input.Capabilities[1] == "mattermost_readback"
 }
 
 func validDigest(value string) bool {
