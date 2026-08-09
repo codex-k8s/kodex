@@ -195,8 +195,9 @@ type ProblemEnvelope struct {
 }
 
 type SnapshotItems struct {
+	Runs                 []httpgenerated.RunView                  `json:"-"`
 	Resources            []httpgenerated.Resource                 `json:"-"`
-	Incidents            []httpgenerated.RuntimeIncident          `json:"-"`
+	Incidents            []httpgenerated.IncidentView             `json:"-"`
 	ConfigurationChanges []httpgenerated.ConfigurationChange      `json:"-"`
 	Teams                []httpgenerated.MattermostTeam           `json:"-"`
 	ProviderConnections  []httpgenerated.ProviderConnection       `json:"-"`
@@ -207,7 +208,21 @@ type SnapshotItems struct {
 
 func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 	switch {
-	case items.Resources != nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+	case items.Runs != nil && items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+		for index := range items.Runs {
+			if !items.Runs[index].State.Valid() || items.Runs[index].Version < 1 {
+				return nil, errors.New(errClosedEnum)
+			}
+			for _, action := range items.Runs[index].NextActions {
+				if !action.Valid() {
+					return nil, errors.New(errClosedEnum)
+				}
+			}
+		}
+		return json.Marshal(struct {
+			Runs []httpgenerated.RunView `json:"runs"`
+		}{Runs: items.Runs})
+	case items.Runs == nil && items.Resources != nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.Resources {
 			if err := validateResourceProjection(items.Resources[index]); err != nil {
 				return nil, err
@@ -216,16 +231,21 @@ func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 		return json.Marshal(struct {
 			Resources []httpgenerated.Resource `json:"resources"`
 		}{Resources: items.Resources})
-	case items.Resources == nil && items.Incidents != nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+	case items.Runs == nil && items.Resources == nil && items.Incidents != nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.Incidents {
-			if !items.Incidents[index].Kind.Valid() || !items.Incidents[index].State.Valid() {
+			if !items.Incidents[index].Kind.Valid() || !items.Incidents[index].State.Valid() || !items.Incidents[index].Severity.Valid() || items.Incidents[index].Version < 1 {
 				return nil, errors.New(errClosedEnum)
+			}
+			for _, action := range items.Incidents[index].NextActions {
+				if !action.Valid() {
+					return nil, errors.New(errClosedEnum)
+				}
 			}
 		}
 		return json.Marshal(struct {
-			Incidents []httpgenerated.RuntimeIncident `json:"incidents"`
+			Incidents []httpgenerated.IncidentView `json:"incidents"`
 		}{Incidents: items.Incidents})
-	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges != nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+	case items.Runs == nil && items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges != nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.ConfigurationChanges {
 			change := items.ConfigurationChanges[index]
 			if !change.Action.Valid() || !change.Outcome.Valid() || !change.ResourceKind.Valid() {
@@ -235,7 +255,7 @@ func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 		return json.Marshal(struct {
 			ConfigurationChanges []httpgenerated.ConfigurationChange `json:"configurationChanges"`
 		}{ConfigurationChanges: items.ConfigurationChanges})
-	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams != nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+	case items.Runs == nil && items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams != nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.Teams {
 			if !items.Teams[index].Status.Valid() {
 				return nil, errors.New(errClosedEnum)
@@ -244,7 +264,7 @@ func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 		return json.Marshal(struct {
 			Teams []httpgenerated.MattermostTeam `json:"teams"`
 		}{Teams: items.Teams})
-	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections != nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+	case items.Runs == nil && items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections != nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.ProviderConnections {
 			if !items.ProviderConnections[index].State.Valid() {
 				return nil, errors.New(errClosedEnum)
@@ -253,11 +273,16 @@ func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 		return json.Marshal(struct {
 			ProviderConnections []httpgenerated.ProviderConnection `json:"providerConnections"`
 		}{ProviderConnections: items.ProviderConnections})
-	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs != nil && items.Approvals == nil && items.Health == nil:
+	case items.Runs == nil && items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs != nil && items.Approvals == nil && items.Health == nil:
+		for index := range items.IntegrationConfigs {
+			if !items.IntegrationConfigs[index].EffectKind.Valid() || !items.IntegrationConfigs[index].State.Valid() {
+				return nil, errors.New(errClosedEnum)
+			}
+		}
 		return json.Marshal(struct {
 			IntegrationConfigurations []httpgenerated.IntegrationConfiguration `json:"integrationConfigurations"`
 		}{IntegrationConfigurations: items.IntegrationConfigs})
-	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals != nil && items.Health == nil:
+	case items.Runs == nil && items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals != nil && items.Health == nil:
 		for index := range items.Approvals {
 			if !items.Approvals[index].Status.Valid() {
 				return nil, errors.New(errClosedEnum)
@@ -266,7 +291,7 @@ func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 		return json.Marshal(struct {
 			Approvals []httpgenerated.IntegrationApproval `json:"approvals"`
 		}{Approvals: items.Approvals})
-	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health != nil:
+	case items.Runs == nil && items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health != nil:
 		for index := range items.Health {
 			if !items.Health[index].Source.Valid() || !items.Health[index].Status.Valid() {
 				return nil, errors.New(errClosedEnum)

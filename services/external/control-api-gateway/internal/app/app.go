@@ -124,7 +124,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	state.readiness.Set(false, "listener_starting")
 	state.metrics.SetReady(false)
 	state.security = security
-	httpAPI, err := httptransport.New(state.control.ControlPlane, state.owner.Interaction, state.owner.Integration, security, state.logger)
+	httpAPI, err := httptransport.New(state.control.ControlPlane, state.owner.Interaction, state.owner.Bot, state.owner.Integration, security, state.logger)
 	if err != nil {
 		return err
 	}

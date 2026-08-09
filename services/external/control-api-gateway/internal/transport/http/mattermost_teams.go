@@ -50,12 +50,12 @@ func (server *Server) CreateMattermostTeam(writer http.ResponseWriter, request *
 	}
 	result, convertErr := mattermostMutation(response.GetBinding(), response.GetMappingOperation())
 	if convertErr != nil || response.GetOperation() == nil {
-		server.writeInternal(writer, request.Context(), errors.New("Mattermost team create readback is invalid"))
+		server.writeInternal(writer, request.Context(), errors.New("mattermost team create readback is invalid"))
 		return
 	}
 	state, ok := teamOperationState(response.GetOperation().GetState())
 	if !ok {
-		server.writeInternal(writer, request.Context(), errors.New("Mattermost provider operation state is invalid"))
+		server.writeInternal(writer, request.Context(), errors.New("mattermost provider operation state is invalid"))
 		return
 	}
 	result.ProviderOperationState = &state
@@ -70,7 +70,7 @@ func (server *Server) GetMattermostTeamProviderReadback(writer http.ResponseWrit
 	}
 	team, convertErr := ConvertMattermostTeam(response.GetTeam())
 	if convertErr != nil || team.Selector != string(selector) {
-		server.writeInternal(writer, request.Context(), errors.New("Mattermost provider readback is invalid"))
+		server.writeInternal(writer, request.Context(), errors.New("mattermost provider readback is invalid"))
 		return
 	}
 	writeJSON(writer, http.StatusOK, team)
@@ -184,14 +184,14 @@ func mattermostMutation(binding *interactiongatewayv1.WorkspaceMattermostTeamBin
 // ConvertMattermostTeam возвращает только bounded owner-safe provider readback.
 func ConvertMattermostTeam(input *interactiongatewayv1.MattermostTeamView) (generated.MattermostTeam, error) {
 	if input == nil || input.GetSelector() == "" || input.GetDisplayName() == "" || input.GetSlug() == "" || !validSHA256(input.GetProviderSnapshotSha256()) {
-		return generated.MattermostTeam{}, errors.New("Mattermost team projection is incomplete")
+		return generated.MattermostTeam{}, errors.New("mattermost team projection is incomplete")
 	}
 	status, ok := mapMattermostTeamStatus(input.GetStatus())
 	created, createdErr := requiredTimestamp(input.GetCreatedAt())
 	updated, updatedErr := requiredTimestamp(input.GetUpdatedAt())
 	observed, observedErr := requiredTimestamp(input.GetObservedAt())
 	if !ok || createdErr != nil || updatedErr != nil || observedErr != nil {
-		return generated.MattermostTeam{}, errors.New("Mattermost team projection values are invalid")
+		return generated.MattermostTeam{}, errors.New("mattermost team projection values are invalid")
 	}
 	return generated.MattermostTeam{Selector: input.GetSelector(), DisplayName: input.GetDisplayName(), Slug: input.GetSlug(), Status: status,
 		ProviderSnapshotSha256: generated.Sha256(strings.ToLower(input.GetProviderSnapshotSha256())), CreatedAt: created, UpdatedAt: updated, ObservedAt: observed}, nil
@@ -199,14 +199,14 @@ func ConvertMattermostTeam(input *interactiongatewayv1.MattermostTeamView) (gene
 
 func convertMattermostBinding(input *interactiongatewayv1.WorkspaceMattermostTeamBindingView) (generated.MattermostTeamBinding, error) {
 	if input == nil || input.GetMappingRef() == "" || input.GetMappingVersion() == 0 || input.GetMappingGeneration() == 0 || input.GetProviderEffectVersion() == 0 || input.GetProviderEffectGeneration() == 0 {
-		return generated.MattermostTeamBinding{}, errors.New("Mattermost binding projection is incomplete")
+		return generated.MattermostTeamBinding{}, errors.New("mattermost binding projection is incomplete")
 	}
 	team, err := ConvertMattermostTeam(input.GetTeam())
 	state, ok := mapMattermostBindingState(input.GetState())
 	observed, observedErr := requiredTimestamp(input.GetProviderObservedAt())
 	updated, updatedErr := requiredTimestamp(input.GetUpdatedAt())
 	if err != nil || !ok || observedErr != nil || updatedErr != nil {
-		return generated.MattermostTeamBinding{}, errors.New("Mattermost binding projection values are invalid")
+		return generated.MattermostTeamBinding{}, errors.New("mattermost binding projection values are invalid")
 	}
 	return generated.MattermostTeamBinding{MappingRef: input.GetMappingRef(), MappingVersion: int64(input.GetMappingVersion()), MappingGeneration: int64(input.GetMappingGeneration()), State: state, Team: team,
 		ProviderEffectVersion: int64(input.GetProviderEffectVersion()), ProviderEffectGeneration: int64(input.GetProviderEffectGeneration()), ProviderObservedAt: observed, UpdatedAt: updated}, nil
@@ -214,14 +214,14 @@ func convertMattermostBinding(input *interactiongatewayv1.WorkspaceMattermostTea
 
 func convertMattermostOperation(input *interactiongatewayv1.WorkspaceMattermostMappingOperationView) (generated.MattermostMappingOperation, error) {
 	if input == nil || input.GetOperationId() == "" {
-		return generated.MattermostMappingOperation{}, errors.New("Mattermost mapping operation is missing")
+		return generated.MattermostMappingOperation{}, errors.New("mattermost mapping operation is missing")
 	}
 	action, actionOK := mapMattermostAction(input.GetAction())
 	state, stateOK := mapMattermostOperationState(input.GetState())
 	created, createdErr := requiredTimestamp(input.GetCreatedAt())
 	updated, updatedErr := requiredTimestamp(input.GetUpdatedAt())
 	if !actionOK || !stateOK || createdErr != nil || updatedErr != nil {
-		return generated.MattermostMappingOperation{}, errors.New("Mattermost mapping operation values are invalid")
+		return generated.MattermostMappingOperation{}, errors.New("mattermost mapping operation values are invalid")
 	}
 	result := generated.MattermostMappingOperation{OperationRef: input.GetOperationId(), Action: action, State: state, CreatedAt: created, UpdatedAt: updated,
 		FailureCode: optionalString(input.GetFailureCode())}

@@ -92,13 +92,13 @@ func (server *Server) ConfigureIntegration(writer http.ResponseWriter, request *
 	if !ok {
 		return
 	}
-	if body.StableKey == "" || body.DefinitionRef == "" || body.DefinitionVersion < 1 || !validSHA256(string(body.DefinitionDigestSha256)) || body.ConnectionRef == "" || body.ConnectionVersion < 1 || body.ConnectionGeneration < 1 || len(body.Capabilities) == 0 || body.EffectKind == "" {
+	if body.StableKey == "" || body.DefinitionRef == "" || body.DefinitionVersion < 1 || !validSHA256(string(body.DefinitionDigestSha256)) || body.ConnectionRef == "" || body.ConnectionVersion < 1 || body.ConnectionGeneration < 1 || len(body.Capabilities) == 0 || !body.EffectKind.Valid() {
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
 	response, err := server.integration.ConfigureIntegration(request.Context(), &integrationgatewayv1.ConfigureIntegrationRequest{ConfigurationId: stringValue(body.ConfigurationRef), ExpectedVersion: version, StableKey: body.StableKey,
 		DefinitionId: body.DefinitionRef, DefinitionVersion: uint64(body.DefinitionVersion), DefinitionDigestSha256: string(body.DefinitionDigestSha256), ConnectionId: body.ConnectionRef, ConnectionVersion: uint64(body.ConnectionVersion),
-		ConnectionGeneration: uint64(body.ConnectionGeneration), Capabilities: append([]string(nil), body.Capabilities...), EffectKind: body.EffectKind, IdempotencyKey: params.IdempotencyKey.String()})
+		ConnectionGeneration: uint64(body.ConnectionGeneration), Capabilities: append([]string(nil), body.Capabilities...), EffectKind: string(body.EffectKind), IdempotencyKey: params.IdempotencyKey.String()})
 	if err != nil {
 		server.writeRPCError(writer, request.Context(), err, true)
 		return
@@ -236,10 +236,14 @@ func ConvertIntegrationDefinition(input *integrationgatewayv1.IntegrationDefinit
 		return generated.IntegrationDefinition{}, errors.New("integration definition projection is invalid")
 	}
 	capabilities, err := convertCapabilities(input.GetCapabilities())
+	state := generated.IntegrationDefinitionState(input.GetState())
 	if err != nil {
 		return generated.IntegrationDefinition{}, err
 	}
-	return generated.IntegrationDefinition{DefinitionRef: input.GetDefinitionId(), Version: int64(input.GetVersion()), DigestSha256: generated.Sha256(strings.ToLower(input.GetDigestSha256())), DisplayName: input.GetDisplayName(), State: input.GetState(), Capabilities: capabilities}, nil
+	if !state.Valid() {
+		return generated.IntegrationDefinition{}, errors.New("integration definition state is invalid")
+	}
+	return generated.IntegrationDefinition{DefinitionRef: input.GetDefinitionId(), Version: int64(input.GetVersion()), DigestSha256: generated.Sha256(strings.ToLower(input.GetDigestSha256())), DisplayName: input.GetDisplayName(), State: state, Capabilities: capabilities}, nil
 }
 
 func ConvertIntegrationConfiguration(input *integrationgatewayv1.IntegrationConfiguration) (generated.IntegrationConfiguration, error) {
@@ -248,12 +252,17 @@ func ConvertIntegrationConfiguration(input *integrationgatewayv1.IntegrationConf
 		return generated.IntegrationConfiguration{}, errors.New("integration configuration projection is invalid")
 	}
 	updated, err := requiredTimestamp(input.GetUpdatedAt())
+	effectKind := generated.IntegrationEffectKind(input.GetEffectKind())
+	state := generated.IntegrationConfigurationState(input.GetState())
 	if err != nil {
 		return generated.IntegrationConfiguration{}, err
 	}
+	if !effectKind.Valid() || !state.Valid() {
+		return generated.IntegrationConfiguration{}, errors.New("integration configuration enum is invalid")
+	}
 	return generated.IntegrationConfiguration{ConfigurationRef: input.GetConfigurationId(), StableKey: input.GetStableKey(), Version: int64(input.GetVersion()), DigestSha256: generated.Sha256(strings.ToLower(input.GetDigestSha256())),
 		DefinitionRef: input.GetDefinitionId(), DefinitionVersion: int64(input.GetDefinitionVersion()), DefinitionDigestSha256: generated.Sha256(strings.ToLower(input.GetDefinitionDigestSha256())), ConnectionRef: input.GetConnectionId(), ConnectionVersion: int64(input.GetConnectionVersion()),
-		ConnectionGeneration: int64(input.GetConnectionGeneration()), Capabilities: append([]string(nil), input.GetCapabilities()...), CapabilityDigestSha256: generated.Sha256(strings.ToLower(input.GetCapabilityDigestSha256())), EffectKind: input.GetEffectKind(), State: input.GetState(), UpdatedAt: updated}, nil
+		ConnectionGeneration: int64(input.GetConnectionGeneration()), Capabilities: append([]string(nil), input.GetCapabilities()...), CapabilityDigestSha256: generated.Sha256(strings.ToLower(input.GetCapabilityDigestSha256())), EffectKind: effectKind, State: state, UpdatedAt: updated}, nil
 }
 
 func ConvertIntegrationTestReceipt(input *integrationgatewayv1.IntegrationTestReceipt) (generated.IntegrationTestReceipt, error) {

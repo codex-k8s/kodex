@@ -14,7 +14,7 @@ type IntegrationConfigurationProjection struct {
   ConnectionGeneration int
   Capabilities []string
   CapabilityDigestSha256 string
-  EffectKind string
-  State string
+  EffectKind *IntegrationEffectKind
+  State *IntegrationConfigurationState
   UpdatedAt string
 }

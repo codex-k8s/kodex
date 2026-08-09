@@ -359,12 +359,16 @@ func ConvertProviderPool(input *integrationgatewayv1.ProviderPool) (generated.Pr
 		return generated.ProviderPoolView{}, errors.New("provider pool projection is invalid")
 	}
 	updated, err := requiredTimestamp(input.GetUpdatedAt())
+	state := generated.ProviderPoolState(input.GetState())
 	if err != nil {
 		return generated.ProviderPoolView{}, err
 	}
+	if !state.Valid() {
+		return generated.ProviderPoolView{}, errors.New("provider pool state is invalid")
+	}
 	result := generated.ProviderPoolView{PoolRef: input.GetProviderPoolId(), StableKey: input.GetStableKey(), DisplayName: input.GetDisplayName(), Policy: generated.ProviderPoolViewPolicy(input.GetPolicy()), Version: int64(input.GetVersion()),
 		DesiredDigestSha256: generated.Sha256(strings.ToLower(input.GetDesiredDigestSha256())), ObservationVersion: int64(input.GetObservationVersion()), ObservationDigestSha256: generated.Sha256(strings.ToLower(input.GetObservationDigestSha256())),
-		EffectiveDigestSha256: generated.Sha256(strings.ToLower(input.GetEffectiveDigestSha256())), State: input.GetState(), UpdatedAt: updated, Members: make([]generated.ProviderPoolMemberView, 0, len(input.GetMembers()))}
+		EffectiveDigestSha256: generated.Sha256(strings.ToLower(input.GetEffectiveDigestSha256())), State: state, UpdatedAt: updated, Members: make([]generated.ProviderPoolMemberView, 0, len(input.GetMembers()))}
 	for _, item := range input.GetMembers() {
 		if item == nil || item.GetConnectionId() == "" || item.GetConnectionVersion() == 0 || item.GetConnectionGeneration() == 0 || item.GetWeight() == 0 || !validSHA256(item.GetObservationDigestSha256()) {
 			return generated.ProviderPoolView{}, errors.New("provider pool member is invalid")

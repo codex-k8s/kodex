@@ -6,7 +6,7 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 	t.Parallel()
 
 	operations := ControlAPIGatewayOperations()
-	if len(operations) != 82 {
+	if len(operations) != 87 {
 		t.Fatalf("control-api-gateway operation set must contain exact materialized methods: %d", len(operations))
 	}
 	for _, operation := range []string{
@@ -32,11 +32,16 @@ func TestControlAPIGatewayOperationSetIsExact(t *testing.T) {
 		"control.agent.manage",
 		"control.agent-assignment.manage",
 		"control.instruction-set.manage",
+		"control.owner-configuration.catalog",
 		"control.provider-reference.get",
 		"control.provider-pool.manage",
 		"control.schedule.bind",
 		"control.schedule.create-from-selections",
+		"control.owner-schedule.manage",
+		"control.owner-schedule.get",
+		"control.owner-schedule.list",
 		"control.run.manage",
+		"control.run.list",
 		"control.run.timeline",
 		"control.workspace-backup.manage",
 		"control.workspace-restore.manage",

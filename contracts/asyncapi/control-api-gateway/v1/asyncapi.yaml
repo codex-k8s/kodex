@@ -31,7 +31,7 @@ operations:
     messages: [{ $ref: '#/channels/realtime/messages/subscribe' }]
     x-gateway-mapping: CONTROL_PLANE_AUTHORITY_PROOF_AND_RPC
     x-authoritative-rpcs:
-      RUNS: /controlplane.v1.ControlPlaneService/ListResources
+      RUNS: /controlplane.v1.ControlPlaneService/ListOwnerRuns
       INCIDENTS: /controlplane.v1.ControlPlaneService/ListRuntimeIncidents
       RESOURCES: /controlplane.v1.ControlPlaneService/ListResources
       CONFIGURATION_CHANGES: /controlplane.v1.ControlPlaneService/ListAuditEvents
@@ -124,8 +124,9 @@ components:
       minProperties: 1
       maxProperties: 1
       properties:
+        runs: { $ref: '#/components/schemas/RunProjectionList' }
         resources: { $ref: '#/components/schemas/ResourceProjectionList' }
-        incidents: { $ref: '#/components/schemas/RuntimeIncidentProjectionList' }
+        incidents: { $ref: '#/components/schemas/IncidentProjectionList' }
         configurationChanges: { $ref: '#/components/schemas/ConfigurationChangeProjectionList' }
         teams: { $ref: '#/components/schemas/MattermostTeamProjectionList' }
         providerConnections: { $ref: '#/components/schemas/ProviderConnectionProjectionList' }
@@ -182,16 +183,26 @@ components:
       type: array
       maxItems: 500
       items: { $ref: '#/components/schemas/ResourceProjection' }
-    RuntimeIncidentProjection:
-      title: RuntimeIncidentProjection
-      $id: urn:mattercodex:control-api:ws:RuntimeIncidentProjection
-      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/RuntimeIncident'
-    RuntimeIncidentProjectionList:
-      title: RuntimeIncidentProjectionList
-      $id: urn:mattercodex:control-api:ws:RuntimeIncidentProjectionList
+    RunProjection:
+      title: RunProjection
+      $id: urn:mattercodex:control-api:ws:RunProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/RunView'
+    RunProjectionList:
+      title: RunProjectionList
+      $id: urn:mattercodex:control-api:ws:RunProjectionList
       type: array
       maxItems: 500
-      items: { $ref: '#/components/schemas/RuntimeIncidentProjection' }
+      items: { $ref: '#/components/schemas/RunProjection' }
+    IncidentProjection:
+      title: IncidentProjection
+      $id: urn:mattercodex:control-api:ws:IncidentProjection
+      $ref: '../../../openapi/control-api-gateway/v1/openapi.yaml#/components/schemas/IncidentView'
+    IncidentProjectionList:
+      title: IncidentProjectionList
+      $id: urn:mattercodex:control-api:ws:IncidentProjectionList
+      type: array
+      maxItems: 500
+      items: { $ref: '#/components/schemas/IncidentProjection' }
     ConfigurationChangeProjection:
       title: ConfigurationChangeProjection
       $id: urn:mattercodex:control-api:ws:ConfigurationChangeProjection

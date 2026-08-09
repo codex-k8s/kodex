@@ -19,7 +19,7 @@ for required in \
   subscribe_envelope.go subscribe_message_type.go projection_channel.go \
   resource_kind.go snapshot_envelope.go snapshot_message_type.go \
   snapshot_items.go problem_envelope.go problem_message_type.go \
-  resource.go runtime_incident.go configuration_change.go; do
+  resource.go run_projection.go incident_projection.go configuration_change.go; do
   if [ ! -f "$generated_dir/$required" ]; then
     echo "named AsyncAPI model is missing: $required" >&2
     exit 1

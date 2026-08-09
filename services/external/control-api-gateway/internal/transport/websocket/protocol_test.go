@@ -135,8 +135,8 @@ func TestProjectionClosedEnumsFailBeforeWebSocketMarshal(t *testing.T) {
 		name  string
 		items SnapshotItems
 	}{
-		{name: "incident kind", items: SnapshotItems{Incidents: []httpgenerated.RuntimeIncident{{Kind: "UNKNOWN"}}}},
-		{name: "incident state", items: SnapshotItems{Incidents: []httpgenerated.RuntimeIncident{{Kind: httpgenerated.HEARTBEATMISSED, State: "UNKNOWN"}}}},
+		{name: "incident kind", items: SnapshotItems{Incidents: []httpgenerated.IncidentView{{Kind: "UNKNOWN"}}}},
+		{name: "incident state", items: SnapshotItems{Incidents: []httpgenerated.IncidentView{{Kind: httpgenerated.HEARTBEATMISSED, State: "UNKNOWN"}}}},
 		{name: "configuration action", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: "UNKNOWN", Outcome: httpgenerated.Succeeded, ResourceKind: httpgenerated.ResourceKindPROJECT}}}},
 		{name: "configuration outcome", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.ConfigurationChangeActionCreate, Outcome: "", ResourceKind: httpgenerated.ResourceKindPROJECT}}}},
 		{name: "configuration resource kind", items: SnapshotItems{ConfigurationChanges: []httpgenerated.ConfigurationChange{{Action: httpgenerated.ConfigurationChangeActionCreate, Outcome: httpgenerated.Succeeded, ResourceKind: "UNKNOWN"}}}},

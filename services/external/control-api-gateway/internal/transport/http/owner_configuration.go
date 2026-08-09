@@ -69,12 +69,30 @@ func (server *Server) ListAgents(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 	response, err := server.control.ListAgents(request.Context(), &controlplanev1.ListAgentsRequest{PageSize: size, PageToken: token})
-	server.writeResourcePage(writer, request, response.GetAgents(), response.GetNextPageToken(), err)
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	result := generated.AgentPage{Agents: make([]generated.AgentView, 0, len(response.GetProjections()))}
+	for _, item := range response.GetProjections() {
+		value, castErr := castAgentView(item)
+		if castErr != nil {
+			server.writeInternal(writer, request.Context(), castErr)
+			return
+		}
+		result.Agents = append(result.Agents, value)
+	}
+	if len(response.GetAgents()) != len(response.GetProjections()) {
+		server.writeInternal(writer, request.Context(), errors.New("agent projection page is incomplete"))
+		return
+	}
+	result.NextPageToken = optionalString(response.GetNextPageToken())
+	writeJSON(writer, http.StatusOK, result)
 }
 
 func (server *Server) GetAgent(writer http.ResponseWriter, request *http.Request, resourceRef generated.ResourceRef) {
 	response, err := server.control.GetAgent(request.Context(), &controlplanev1.GetAgentRequest{AgentId: string(resourceRef)})
-	server.writeResourceResponse(writer, request.Context(), http.StatusOK, response.GetAgent(), err, false)
+	server.writeAgentView(writer, request, http.StatusOK, string(resourceRef), response.GetProjection(), err, false)
 }
 
 func (server *Server) ListAgentHistory(writer http.ResponseWriter, request *http.Request, resourceRef generated.ResourceRef, params generated.ListAgentHistoryParams) {
@@ -83,7 +101,27 @@ func (server *Server) ListAgentHistory(writer http.ResponseWriter, request *http
 		return
 	}
 	response, err := server.control.ListAgentHistory(request.Context(), &controlplanev1.ListAgentHistoryRequest{AgentId: string(resourceRef), PageSize: size, PageToken: token})
-	server.writeHistoryPage(writer, request, response.GetEntries(), response.GetNextPageToken(), err)
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	if len(response.GetEntries()) != len(response.GetProjections()) {
+		server.writeInternal(writer, request.Context(), errors.New("agent history projection is incomplete"))
+		return
+	}
+	result := generated.AgentHistoryPage{Entries: make([]generated.AgentHistoryEntry, 0, len(response.GetProjections()))}
+	for _, item := range response.GetProjections() {
+		agent, castErr := castAgentView(item.GetProjection())
+		action, actionErr := castClosedEnum(item.GetAction().String(), "AGENT_HISTORY_ACTION_", generated.AgentHistoryAction.Valid)
+		occurred, timeErr := requiredTimestamp(item.GetOccurredAt())
+		if castErr != nil || actionErr != nil || timeErr != nil || !validSHA256(item.GetSnapshotSha256()) || agent.AgentRef != string(resourceRef) {
+			server.writeInternal(writer, request.Context(), errors.New("agent history entry is invalid"))
+			return
+		}
+		result.Entries = append(result.Entries, generated.AgentHistoryEntry{Agent: agent, Action: action, SnapshotSha256: generated.Sha256(strings.ToLower(item.GetSnapshotSha256())), OccurredAt: occurred})
+	}
+	result.NextPageToken = optionalString(response.GetNextPageToken())
+	writeJSON(writer, http.StatusOK, result)
 }
 
 func (server *Server) ManageAgent(writer http.ResponseWriter, request *http.Request, params generated.ManageAgentParams) {
@@ -101,7 +139,7 @@ func (server *Server) ManageAgent(writer http.ResponseWriter, request *http.Requ
 	}
 	response, err := server.control.ManageAgent(request.Context(), &controlplanev1.ManageAgentRequest{
 		IdempotencyKey: params.IdempotencyKey.String(), Action: action, AgentId: stringValue(body.ResourceRef), ExpectedVersion: version,
-		Name: stringValue(body.Name), RoleDefinitionStableKey: stringValue(body.RoleDefinitionStableKey),
+		Name: stringValue(body.Name), RoleDefinitionStableKey: stringValue(body.RuntimeSelectionKey),
 		InstructionSetStableKey: stringValue(body.InstructionSetStableKey), ProviderPoolStableKey: stringValue(body.ProviderPoolStableKey),
 		Spec: &controlplanev1.AgentSpec{StableKey: stringValue(body.StableKey), Capabilities: sliceValue(body.Capabilities), Enabled: boolValue(body.Enabled), Ownership: uiOwnership()},
 	})
@@ -109,7 +147,57 @@ func (server *Server) ManageAgent(writer http.ResponseWriter, request *http.Requ
 	if action == controlplanev1.ProtectedConfigurationAction_PROTECTED_CONFIGURATION_ACTION_CREATE {
 		statusCode = http.StatusCreated
 	}
-	server.writeResourceResponse(writer, request.Context(), statusCode, response.GetAgent(), err, true)
+	server.writeAgentView(writer, request, statusCode, stringValue(body.ResourceRef), response.GetProjection(), err, true)
+}
+
+func (server *Server) writeAgentView(writer http.ResponseWriter, request *http.Request, status int, expected string, input *controlplanev1.AgentOwnerProjection, err error, mutation bool) {
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, mutation)
+		return
+	}
+	value, castErr := castAgentView(input)
+	if castErr != nil || (expected != "" && value.AgentRef != expected) {
+		server.writeInternal(writer, request.Context(), errors.New("agent projection readback is invalid"))
+		return
+	}
+	writer.Header().Set("ETag", etag(uint64(value.Version)))
+	writeJSON(writer, status, value)
+}
+
+func (server *Server) GetOwnerConfigurationCatalog(writer http.ResponseWriter, request *http.Request, params generated.GetOwnerConfigurationCatalogParams) {
+	size, token, ok := ownerPage(writer, params.PageSize, params.PageToken)
+	if !ok {
+		return
+	}
+	response, err := server.control.GetOwnerConfigurationCatalog(request.Context(), &controlplanev1.GetOwnerConfigurationCatalogRequest{PageSize: size, PageToken: token})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	defaults, castErr := castScheduleDefaults(response.GetScheduleDefaults())
+	if castErr != nil {
+		server.writeInternal(writer, request.Context(), castErr)
+		return
+	}
+	result := generated.OwnerConfigurationCatalog{RuntimeSelections: make([]generated.RuntimeSelectionCatalogEntry, 0, len(response.GetRuntimeSelections())), SchedulePresets: make([]generated.SchedulePreset, 0, len(response.GetSchedulePresets())), ScheduleDefaults: defaults}
+	for _, item := range response.GetRuntimeSelections() {
+		value, itemErr := castRuntimeSelectionCatalogEntry(item)
+		if itemErr != nil {
+			server.writeInternal(writer, request.Context(), itemErr)
+			return
+		}
+		result.RuntimeSelections = append(result.RuntimeSelections, value)
+	}
+	for _, item := range response.GetSchedulePresets() {
+		value, itemErr := castSchedulePreset(item)
+		if itemErr != nil {
+			server.writeInternal(writer, request.Context(), itemErr)
+			return
+		}
+		result.SchedulePresets = append(result.SchedulePresets, value)
+	}
+	result.NextPageToken = optionalString(response.GetNextPageToken())
+	writeJSON(writer, http.StatusOK, result)
 }
 
 func (server *Server) ListAgentAssignments(writer http.ResponseWriter, request *http.Request, params generated.ListAgentAssignmentsParams) {
@@ -194,8 +282,43 @@ func (server *Server) CompareInstructionSetVersions(writer http.ResponseWriter, 
 }
 
 func (server *Server) GetConfigurationDiff(writer http.ResponseWriter, request *http.Request, params generated.GetConfigurationDiffParams) {
-	response, err := server.control.CompareInstructionSetVersions(request.Context(), &controlplanev1.CompareInstructionSetVersionsRequest{InstructionSetId: params.InstructionSetRef, LeftVersion: uint64(params.LeftVersion), RightVersion: uint64(params.RightVersion)})
-	server.writeInstructionComparison(writer, request, response, err)
+	size, token, ok := ownerPage(writer, params.PageSize, params.PageToken)
+	if !ok {
+		return
+	}
+	response, err := server.control.CompareInstructionSetVersions(request.Context(), &controlplanev1.CompareInstructionSetVersionsRequest{InstructionSetId: params.InstructionSetRef, LeftVersion: uint64(params.LeftVersion), RightVersion: uint64(params.RightVersion), PageSize: size, PageToken: token})
+	if err != nil {
+		server.writeRPCError(writer, request.Context(), err, false)
+		return
+	}
+	left, leftErr := configurationVersionRef(response.GetLeftVersionRef())
+	right, rightErr := configurationVersionRef(response.GetRightVersionRef())
+	if leftErr != nil || rightErr != nil || response.GetTruncated() != (response.GetNextPageToken() != "") || len(response.GetChanges()) > int(size) {
+		server.writeInternal(writer, request.Context(), errors.New("configuration diff readback is invalid"))
+		return
+	}
+	result := generated.ConfigurationDiff{Left: left, Right: right, Changes: make([]generated.ConfigurationDiffChange, 0, len(response.GetChanges())), Truncated: response.GetTruncated(), NextPageToken: optionalString(response.GetNextPageToken())}
+	for _, item := range response.GetChanges() {
+		if item == nil || item.GetPath() == "" || len(item.GetPath()) > 512 || len(item.GetBefore()) > 4000 || len(item.GetAfter()) > 4000 {
+			server.writeInternal(writer, request.Context(), errors.New("configuration diff change is invalid"))
+			return
+		}
+		kind, kindErr := castClosedEnum(item.GetKind().String(), "CONFIGURATION_CHANGE_KIND_", generated.ConfigurationChangeKind.Valid)
+		display, displayErr := castClosedEnum(item.GetDisplay().String(), "CONFIGURATION_CHANGE_DISPLAY_", generated.ConfigurationChangeDisplay.Valid)
+		if kindErr != nil || displayErr != nil || (display == generated.REDACTED && (item.GetBefore() != "[REDACTED]" || item.GetAfter() != "[REDACTED]")) {
+			server.writeInternal(writer, request.Context(), errors.New("configuration diff change values are invalid"))
+			return
+		}
+		result.Changes = append(result.Changes, generated.ConfigurationDiffChange{Kind: kind, Path: item.GetPath(), Display: display, Before: item.GetBefore(), After: item.GetAfter()})
+	}
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func configurationVersionRef(input *controlplanev1.ConfigurationVersionRef) (generated.ConfigurationVersionRef, error) {
+	if input == nil || input.GetVersion() == 0 || !validSHA256(input.GetContentSha256()) || !validSHA256(input.GetSnapshotSha256()) {
+		return generated.ConfigurationVersionRef{}, errors.New("configuration version ref is invalid")
+	}
+	return generated.ConfigurationVersionRef{Version: int64(input.GetVersion()), ContentSha256: generated.Sha256(strings.ToLower(input.GetContentSha256())), SnapshotSha256: generated.Sha256(strings.ToLower(input.GetSnapshotSha256()))}, nil
 }
 
 func (server *Server) ManageInstructionSet(writer http.ResponseWriter, request *http.Request, params generated.ManageInstructionSetParams) {
@@ -297,7 +420,7 @@ func validateRoleDefinitionCommand(body generated.RoleDefinitionCommand, action 
 
 func validateAgentCommand(body generated.AgentCommand, action controlplanev1.ProtectedConfigurationAction) bool {
 	if action == controlplanev1.ProtectedConfigurationAction_PROTECTED_CONFIGURATION_ACTION_CREATE || action == controlplanev1.ProtectedConfigurationAction_PROTECTED_CONFIGURATION_ACTION_UPDATE {
-		return stringValue(body.Name) != "" && stringValue(body.StableKey) != "" && stringValue(body.RoleDefinitionStableKey) != "" &&
+		return stringValue(body.Name) != "" && stringValue(body.StableKey) != "" && stringValue(body.RuntimeSelectionKey) != "" &&
 			stringValue(body.InstructionSetStableKey) != "" && stringValue(body.ProviderPoolStableKey) != "" && body.Capabilities != nil && body.Enabled != nil
 	}
 	return stringValue(body.ResourceRef) != ""

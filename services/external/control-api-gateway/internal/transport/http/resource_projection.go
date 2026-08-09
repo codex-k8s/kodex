@@ -313,20 +313,7 @@ func resourceProjection(resource *controlplanev1.Resource) (generated.ResourceSp
 			EffectiveRuntimeSha256: value.RuntimeRevision.GetEffectiveRuntimeSha256(), AuthorityPolicyRevision: int64(value.RuntimeRevision.GetAuthorityPolicyRevision()),
 		}}, nil
 	case *controlplanev1.ResourceSpec_Session:
-		agent, err := requiredUUID(value.Session.GetAgentId())
-		if err != nil {
-			return generated.ResourceSpecProjection{}, err
-		}
-		binding, err := requiredUUID(value.Session.GetProviderAccountBindingId())
-		if err != nil {
-			return generated.ResourceSpecProjection{}, err
-		}
-		conversation, err := optionalUUID(value.Session.GetConversationId())
-		if err != nil {
-			return generated.ResourceSpecProjection{}, err
-		}
-		archive := optionalString(value.Session.GetArchiveRef())
-		return generated.ResourceSpecProjection{Session: &generated.SessionProjection{AgentId: agent, ProviderAccountBindingId: binding, ConversationId: conversation, ArchiveRef: archive, LastTurnSequence: int64(value.Session.GetLastTurnSequence())}}, nil
+		return generated.ResourceSpecProjection{Session: &generated.SessionProjection{LastTurnSequence: int64(value.Session.GetLastTurnSequence())}}, nil
 	case *controlplanev1.ResourceSpec_Turn:
 		return turnProjection(value.Turn)
 	case *controlplanev1.ResourceSpec_ProcessRun:
@@ -619,12 +606,12 @@ func projectionOwnership(value *controlplanev1.ConfigurationOwnership, resourceV
 			return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
 		}
 		if value.GetSourceRef() != "" || value.GetSourceRevision() != 0 {
-			return generated.ConfigurationOwnershipProjection{}, errors.New("UI ownership lineage is incomplete")
+			return generated.ConfigurationOwnershipProjection{}, errors.New("ui ownership lineage is incomplete")
 		}
 		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Ui, Source: "owner-ui", Revision: int64(resourceVersion)}, nil
 	case controlplanev1.ConfigurationManager_CONFIGURATION_MANAGER_GIT:
 		if value.GetSourceRef() == "" || value.GetSourceRevision() == 0 {
-			return generated.ConfigurationOwnershipProjection{}, errors.New("Git ownership is incomplete")
+			return generated.ConfigurationOwnershipProjection{}, errors.New("git ownership is incomplete")
 		}
 		return generated.ConfigurationOwnershipProjection{ManagedBy: generated.Git, Source: value.GetSourceRef(), Revision: int64(value.GetSourceRevision())}, nil
 	default:
@@ -660,23 +647,10 @@ func optionalString(value string) *string {
 	return &value
 }
 
-func ConvertRuntimeIncident(input *controlplanev1.RuntimeIncident) (generated.RuntimeIncident, error) {
-	if input == nil || input.GetOccurredAt() == nil || input.GetOccurredAt().CheckValid() != nil || input.GetUpdatedAt() == nil || input.GetUpdatedAt().CheckValid() != nil ||
-		input.GetExecutionFence() == 0 || input.GetVersion() == 0 || !validSHA256(input.GetEvidenceSha256()) || input.GetWorkloadId() == "" || len(input.GetWorkloadId()) > 128 || len(input.GetActionReasonCode()) > 96 {
-		return generated.RuntimeIncident{}, errors.New("runtime incident is incomplete")
-	}
-	incidentID, err := requiredUUID(input.GetIncidentId())
-	if err != nil {
-		return generated.RuntimeIncident{}, err
-	}
-	executionID, err := requiredUUID(input.GetExecutionId())
-	if err != nil {
-		return generated.RuntimeIncident{}, err
-	}
-	kind := generated.RuntimeIncidentKind(strings.TrimPrefix(input.GetKind().String(), "RUNTIME_INCIDENT_KIND_"))
-	state := generated.IncidentState(strings.TrimPrefix(input.GetState().String(), "RUNTIME_INCIDENT_STATE_"))
-	if !kind.Valid() || !state.Valid() {
-		return generated.RuntimeIncident{}, errors.New("runtime incident kind is invalid")
-	}
-	return generated.RuntimeIncident{IncidentId: incidentID, ExecutionId: executionID, ExecutionFence: int64(input.GetExecutionFence()), Kind: kind, EvidenceSha256: strings.ToLower(input.GetEvidenceSha256()), WorkloadId: input.GetWorkloadId(), OccurredAt: input.GetOccurredAt().AsTime(), Version: int64(input.GetVersion()), State: state, ActionReasonCode: optionalString(input.GetActionReasonCode()), UpdatedAt: input.GetUpdatedAt().AsTime()}, nil
+func ConvertIncidentOwnerProjection(input *controlplanev1.RuntimeIncidentOwnerProjection) (generated.IncidentView, error) {
+	return castIncidentView(input)
+}
+
+func ConvertRunOwnerProjection(input *controlplanev1.RunOwnerProjection) (generated.RunView, error) {
+	return castRunView(input)
 }

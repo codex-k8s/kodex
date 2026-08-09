@@ -61,6 +61,156 @@ func (e AgentAssignmentCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for AgentBindingStatus.
+const (
+	AgentBindingStatusBOUND   AgentBindingStatus = "BOUND"
+	AgentBindingStatusREVOKED AgentBindingStatus = "REVOKED"
+	AgentBindingStatusUNBOUND AgentBindingStatus = "UNBOUND"
+)
+
+// Valid indicates whether the value is a known member of the AgentBindingStatus enum.
+func (e AgentBindingStatus) Valid() bool {
+	switch e {
+	case AgentBindingStatusBOUND:
+		return true
+	case AgentBindingStatusREVOKED:
+		return true
+	case AgentBindingStatusUNBOUND:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentBotIdentityAction.
+const (
+	AgentBotIdentityActionBIND          AgentBotIdentityAction = "BIND"
+	AgentBotIdentityActionCREATEANDBIND AgentBotIdentityAction = "CREATE_AND_BIND"
+	AgentBotIdentityActionREBIND        AgentBotIdentityAction = "REBIND"
+	AgentBotIdentityActionREVOKE        AgentBotIdentityAction = "REVOKE"
+)
+
+// Valid indicates whether the value is a known member of the AgentBotIdentityAction enum.
+func (e AgentBotIdentityAction) Valid() bool {
+	switch e {
+	case AgentBotIdentityActionBIND:
+		return true
+	case AgentBotIdentityActionCREATEANDBIND:
+		return true
+	case AgentBotIdentityActionREBIND:
+		return true
+	case AgentBotIdentityActionREVOKE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentBotIdentityOperationState.
+const (
+	AgentBotIdentityOperationStateAMBIGUOUS         AgentBotIdentityOperationState = "AMBIGUOUS"
+	AgentBotIdentityOperationStateBOUND             AgentBotIdentityOperationState = "BOUND"
+	AgentBotIdentityOperationStateEFFECTPENDING     AgentBotIdentityOperationState = "EFFECT_PENDING"
+	AgentBotIdentityOperationStateMEMBERSHIPPENDING AgentBotIdentityOperationState = "MEMBERSHIP_PENDING"
+	AgentBotIdentityOperationStatePROVIDERACCEPTED  AgentBotIdentityOperationState = "PROVIDER_ACCEPTED"
+	AgentBotIdentityOperationStateREPAIRREQUIRED    AgentBotIdentityOperationState = "REPAIR_REQUIRED"
+	AgentBotIdentityOperationStateREVOKED           AgentBotIdentityOperationState = "REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the AgentBotIdentityOperationState enum.
+func (e AgentBotIdentityOperationState) Valid() bool {
+	switch e {
+	case AgentBotIdentityOperationStateAMBIGUOUS:
+		return true
+	case AgentBotIdentityOperationStateBOUND:
+		return true
+	case AgentBotIdentityOperationStateEFFECTPENDING:
+		return true
+	case AgentBotIdentityOperationStateMEMBERSHIPPENDING:
+		return true
+	case AgentBotIdentityOperationStatePROVIDERACCEPTED:
+		return true
+	case AgentBotIdentityOperationStateREPAIRREQUIRED:
+		return true
+	case AgentBotIdentityOperationStateREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentBotIdentityStatus.
+const (
+	AgentBotIdentityStatusAVAILABLE AgentBotIdentityStatus = "AVAILABLE"
+	AgentBotIdentityStatusDELETED   AgentBotIdentityStatus = "DELETED"
+	AgentBotIdentityStatusREVOKED   AgentBotIdentityStatus = "REVOKED"
+	AgentBotIdentityStatusUNKNOWN   AgentBotIdentityStatus = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the AgentBotIdentityStatus enum.
+func (e AgentBotIdentityStatus) Valid() bool {
+	switch e {
+	case AgentBotIdentityStatusAVAILABLE:
+		return true
+	case AgentBotIdentityStatusDELETED:
+		return true
+	case AgentBotIdentityStatusREVOKED:
+		return true
+	case AgentBotIdentityStatusUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentHistoryAction.
+const (
+	AgentHistoryActionARCHIVE      AgentHistoryAction = "ARCHIVE"
+	AgentHistoryActionBINDBOT      AgentHistoryAction = "BIND_BOT"
+	AgentHistoryActionCREATE       AgentHistoryAction = "CREATE"
+	AgentHistoryActionDELETE       AgentHistoryAction = "DELETE"
+	AgentHistoryActionDISABLE      AgentHistoryAction = "DISABLE"
+	AgentHistoryActionENABLE       AgentHistoryAction = "ENABLE"
+	AgentHistoryActionPAUSE        AgentHistoryAction = "PAUSE"
+	AgentHistoryActionREBINDBOT    AgentHistoryAction = "REBIND_BOT"
+	AgentHistoryActionRECONCILEGIT AgentHistoryAction = "RECONCILE_GIT"
+	AgentHistoryActionRESUME       AgentHistoryAction = "RESUME"
+	AgentHistoryActionREVOKEBOT    AgentHistoryAction = "REVOKE_BOT"
+	AgentHistoryActionUPDATE       AgentHistoryAction = "UPDATE"
+)
+
+// Valid indicates whether the value is a known member of the AgentHistoryAction enum.
+func (e AgentHistoryAction) Valid() bool {
+	switch e {
+	case AgentHistoryActionARCHIVE:
+		return true
+	case AgentHistoryActionBINDBOT:
+		return true
+	case AgentHistoryActionCREATE:
+		return true
+	case AgentHistoryActionDELETE:
+		return true
+	case AgentHistoryActionDISABLE:
+		return true
+	case AgentHistoryActionENABLE:
+		return true
+	case AgentHistoryActionPAUSE:
+		return true
+	case AgentHistoryActionREBINDBOT:
+		return true
+	case AgentHistoryActionRECONCILEGIT:
+		return true
+	case AgentHistoryActionRESUME:
+		return true
+	case AgentHistoryActionREVOKEBOT:
+		return true
+	case AgentHistoryActionUPDATE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactScanStatus.
 const (
 	ArtifactScanStatusCLEAN       ArtifactScanStatus = "CLEAN"
@@ -226,6 +376,45 @@ func (e ConfigurationChangeAction) Valid() bool {
 	case ConfigurationChangeActionUpdate:
 		return true
 	case ConfigurationChangeActionUpdateProject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigurationChangeDisplay.
+const (
+	REDACTED ConfigurationChangeDisplay = "REDACTED"
+	TEXT     ConfigurationChangeDisplay = "TEXT"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationChangeDisplay enum.
+func (e ConfigurationChangeDisplay) Valid() bool {
+	switch e {
+	case REDACTED:
+		return true
+	case TEXT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigurationChangeKind.
+const (
+	ADDED   ConfigurationChangeKind = "ADDED"
+	CHANGED ConfigurationChangeKind = "CHANGED"
+	REMOVED ConfigurationChangeKind = "REMOVED"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationChangeKind enum.
+func (e ConfigurationChangeKind) Valid() bool {
+	switch e {
+	case ADDED:
+		return true
+	case CHANGED:
+		return true
+	case REMOVED:
 		return true
 	default:
 		return false
@@ -463,6 +652,51 @@ func (e IncidentHistoryEntryAction) Valid() bool {
 	}
 }
 
+// Defines values for IncidentNextAction.
+const (
+	IncidentNextActionACKNOWLEDGE IncidentNextAction = "ACKNOWLEDGE"
+	IncidentNextActionCLOSE       IncidentNextAction = "CLOSE"
+	IncidentNextActionRELEASE     IncidentNextAction = "RELEASE"
+	IncidentNextActionRETRY       IncidentNextAction = "RETRY"
+)
+
+// Valid indicates whether the value is a known member of the IncidentNextAction enum.
+func (e IncidentNextAction) Valid() bool {
+	switch e {
+	case IncidentNextActionACKNOWLEDGE:
+		return true
+	case IncidentNextActionCLOSE:
+		return true
+	case IncidentNextActionRELEASE:
+		return true
+	case IncidentNextActionRETRY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentSeverity.
+const (
+	CRITICAL IncidentSeverity = "CRITICAL"
+	ERROR    IncidentSeverity = "ERROR"
+	WARNING  IncidentSeverity = "WARNING"
+)
+
+// Valid indicates whether the value is a known member of the IncidentSeverity enum.
+func (e IncidentSeverity) Valid() bool {
+	switch e {
+	case CRITICAL:
+		return true
+	case ERROR:
+		return true
+	case WARNING:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IncidentState.
 const (
 	IncidentStateACKNOWLEDGED IncidentState = "ACKNOWLEDGED"
@@ -577,6 +811,63 @@ func (e IntegrationApprovalStatus) Valid() bool {
 	case IntegrationApprovalStatusPENDING:
 		return true
 	case IntegrationApprovalStatusREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationConfigurationState.
+const (
+	IntegrationConfigurationStateACTIVE   IntegrationConfigurationState = "ACTIVE"
+	IntegrationConfigurationStateARCHIVED IntegrationConfigurationState = "ARCHIVED"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationConfigurationState enum.
+func (e IntegrationConfigurationState) Valid() bool {
+	switch e {
+	case IntegrationConfigurationStateACTIVE:
+		return true
+	case IntegrationConfigurationStateARCHIVED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationDefinitionState.
+const (
+	IntegrationDefinitionStateACTIVE   IntegrationDefinitionState = "ACTIVE"
+	IntegrationDefinitionStateARCHIVED IntegrationDefinitionState = "ARCHIVED"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionState enum.
+func (e IntegrationDefinitionState) Valid() bool {
+	switch e {
+	case IntegrationDefinitionStateACTIVE:
+		return true
+	case IntegrationDefinitionStateARCHIVED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationEffectKind.
+const (
+	CLI         IntegrationEffectKind = "CLI"
+	ENVIRONMENT IntegrationEffectKind = "ENVIRONMENT"
+	MCPTOOL     IntegrationEffectKind = "MCP_TOOL"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationEffectKind enum.
+func (e IntegrationEffectKind) Valid() bool {
+	switch e {
+	case CLI:
+		return true
+	case ENVIRONMENT:
+		return true
+	case MCPTOOL:
 		return true
 	default:
 		return false
@@ -970,36 +1261,114 @@ func (e OwnerGateNextAction) Valid() bool {
 	}
 }
 
-// Defines values for OwnerScheduleIntentCalendar.
+// Defines values for OwnerProjectionStatus.
 const (
-	OwnerScheduleIntentCalendarBUSINESS  OwnerScheduleIntentCalendar = "BUSINESS"
-	OwnerScheduleIntentCalendarGREGORIAN OwnerScheduleIntentCalendar = "GREGORIAN"
+	OwnerProjectionStatusINELIGIBLE  OwnerProjectionStatus = "INELIGIBLE"
+	OwnerProjectionStatusPRESENT     OwnerProjectionStatus = "PRESENT"
+	OwnerProjectionStatusSTALE       OwnerProjectionStatus = "STALE"
+	OwnerProjectionStatusUNAVAILABLE OwnerProjectionStatus = "UNAVAILABLE"
 )
 
-// Valid indicates whether the value is a known member of the OwnerScheduleIntentCalendar enum.
-func (e OwnerScheduleIntentCalendar) Valid() bool {
+// Valid indicates whether the value is a known member of the OwnerProjectionStatus enum.
+func (e OwnerProjectionStatus) Valid() bool {
 	switch e {
-	case OwnerScheduleIntentCalendarBUSINESS:
+	case OwnerProjectionStatusINELIGIBLE:
 		return true
-	case OwnerScheduleIntentCalendarGREGORIAN:
+	case OwnerProjectionStatusPRESENT:
+		return true
+	case OwnerProjectionStatusSTALE:
+		return true
+	case OwnerProjectionStatusUNAVAILABLE:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for OwnerScheduleIntentDeliveryPolicy.
+// Defines values for OwnerScheduleAdvancedOverridesCalendar.
 const (
-	OwnerScheduleIntentDeliveryPolicyATLEASTONCE       OwnerScheduleIntentDeliveryPolicy = "AT_LEAST_ONCE"
-	OwnerScheduleIntentDeliveryPolicyEXACTLYONCEEFFECT OwnerScheduleIntentDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+	OwnerScheduleAdvancedOverridesCalendarBUSINESS  OwnerScheduleAdvancedOverridesCalendar = "BUSINESS"
+	OwnerScheduleAdvancedOverridesCalendarGREGORIAN OwnerScheduleAdvancedOverridesCalendar = "GREGORIAN"
 )
 
-// Valid indicates whether the value is a known member of the OwnerScheduleIntentDeliveryPolicy enum.
-func (e OwnerScheduleIntentDeliveryPolicy) Valid() bool {
+// Valid indicates whether the value is a known member of the OwnerScheduleAdvancedOverridesCalendar enum.
+func (e OwnerScheduleAdvancedOverridesCalendar) Valid() bool {
 	switch e {
-	case OwnerScheduleIntentDeliveryPolicyATLEASTONCE:
+	case OwnerScheduleAdvancedOverridesCalendarBUSINESS:
 		return true
-	case OwnerScheduleIntentDeliveryPolicyEXACTLYONCEEFFECT:
+	case OwnerScheduleAdvancedOverridesCalendarGREGORIAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerScheduleAdvancedOverridesDeliveryPolicy.
+const (
+	OwnerScheduleAdvancedOverridesDeliveryPolicyATLEASTONCE       OwnerScheduleAdvancedOverridesDeliveryPolicy = "AT_LEAST_ONCE"
+	OwnerScheduleAdvancedOverridesDeliveryPolicyEXACTLYONCEEFFECT OwnerScheduleAdvancedOverridesDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+)
+
+// Valid indicates whether the value is a known member of the OwnerScheduleAdvancedOverridesDeliveryPolicy enum.
+func (e OwnerScheduleAdvancedOverridesDeliveryPolicy) Valid() bool {
+	switch e {
+	case OwnerScheduleAdvancedOverridesDeliveryPolicyATLEASTONCE:
+		return true
+	case OwnerScheduleAdvancedOverridesDeliveryPolicyEXACTLYONCEEFFECT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerSchedulePromptViewKind.
+const (
+	INLINE   OwnerSchedulePromptViewKind = "INLINE"
+	SELECTOR OwnerSchedulePromptViewKind = "SELECTOR"
+)
+
+// Valid indicates whether the value is a known member of the OwnerSchedulePromptViewKind enum.
+func (e OwnerSchedulePromptViewKind) Valid() bool {
+	switch e {
+	case INLINE:
+		return true
+	case SELECTOR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerScheduleViewCalendar.
+const (
+	OwnerScheduleViewCalendarBUSINESS  OwnerScheduleViewCalendar = "BUSINESS"
+	OwnerScheduleViewCalendarGREGORIAN OwnerScheduleViewCalendar = "GREGORIAN"
+)
+
+// Valid indicates whether the value is a known member of the OwnerScheduleViewCalendar enum.
+func (e OwnerScheduleViewCalendar) Valid() bool {
+	switch e {
+	case OwnerScheduleViewCalendarBUSINESS:
+		return true
+	case OwnerScheduleViewCalendarGREGORIAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerScheduleViewDeliveryPolicy.
+const (
+	OwnerScheduleViewDeliveryPolicyATLEASTONCE       OwnerScheduleViewDeliveryPolicy = "AT_LEAST_ONCE"
+	OwnerScheduleViewDeliveryPolicyEXACTLYONCEEFFECT OwnerScheduleViewDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+)
+
+// Valid indicates whether the value is a known member of the OwnerScheduleViewDeliveryPolicy enum.
+func (e OwnerScheduleViewDeliveryPolicy) Valid() bool {
+	switch e {
+	case OwnerScheduleViewDeliveryPolicyATLEASTONCE:
+		return true
+	case OwnerScheduleViewDeliveryPolicyEXACTLYONCEEFFECT:
 		return true
 	default:
 		return false
@@ -1119,22 +1488,22 @@ func (e ProviderConnectionMaskedStatus) Valid() bool {
 
 // Defines values for ProviderConnectionState.
 const (
-	INVALID ProviderConnectionState = "INVALID"
-	PENDING ProviderConnectionState = "PENDING"
-	REVOKED ProviderConnectionState = "REVOKED"
-	VALID   ProviderConnectionState = "VALID"
+	ProviderConnectionStateINVALID ProviderConnectionState = "INVALID"
+	ProviderConnectionStatePENDING ProviderConnectionState = "PENDING"
+	ProviderConnectionStateREVOKED ProviderConnectionState = "REVOKED"
+	ProviderConnectionStateVALID   ProviderConnectionState = "VALID"
 )
 
 // Valid indicates whether the value is a known member of the ProviderConnectionState enum.
 func (e ProviderConnectionState) Valid() bool {
 	switch e {
-	case INVALID:
+	case ProviderConnectionStateINVALID:
 		return true
-	case PENDING:
+	case ProviderConnectionStatePENDING:
 		return true
-	case REVOKED:
+	case ProviderConnectionStateREVOKED:
 		return true
-	case VALID:
+	case ProviderConnectionStateVALID:
 		return true
 	default:
 		return false
@@ -1195,6 +1564,30 @@ func (e ProviderPoolPolicy) Valid() bool {
 	case ProviderPoolPolicyLeastUsed:
 		return true
 	case ProviderPoolPolicyWeighted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderPoolState.
+const (
+	ProviderPoolStateACTIVE   ProviderPoolState = "ACTIVE"
+	ProviderPoolStateARCHIVED ProviderPoolState = "ARCHIVED"
+	ProviderPoolStateDELETED  ProviderPoolState = "DELETED"
+	ProviderPoolStatePENDING  ProviderPoolState = "PENDING"
+)
+
+// Valid indicates whether the value is a known member of the ProviderPoolState enum.
+func (e ProviderPoolState) Valid() bool {
+	switch e {
+	case ProviderPoolStateACTIVE:
+		return true
+	case ProviderPoolStateARCHIVED:
+		return true
+	case ProviderPoolStateDELETED:
+		return true
+	case ProviderPoolStatePENDING:
 		return true
 	default:
 		return false
@@ -1519,6 +1912,33 @@ func (e RoleImagePlatformOS) Valid() bool {
 	}
 }
 
+// Defines values for RunArtifactStatus.
+const (
+	RunArtifactStatusCLEAN       RunArtifactStatus = "CLEAN"
+	RunArtifactStatusFAILED      RunArtifactStatus = "FAILED"
+	RunArtifactStatusPENDING     RunArtifactStatus = "PENDING"
+	RunArtifactStatusQUARANTINED RunArtifactStatus = "QUARANTINED"
+	RunArtifactStatusSCANNING    RunArtifactStatus = "SCANNING"
+)
+
+// Valid indicates whether the value is a known member of the RunArtifactStatus enum.
+func (e RunArtifactStatus) Valid() bool {
+	switch e {
+	case RunArtifactStatusCLEAN:
+		return true
+	case RunArtifactStatusFAILED:
+		return true
+	case RunArtifactStatusPENDING:
+		return true
+	case RunArtifactStatusQUARANTINED:
+		return true
+	case RunArtifactStatusSCANNING:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunCommandAction.
 const (
 	RunCommandActionCANCEL RunCommandAction = "CANCEL"
@@ -1537,15 +1957,138 @@ func (e RunCommandAction) Valid() bool {
 	}
 }
 
-// Defines values for RunLineageComplete.
+// Defines values for RunLineageKind.
 const (
-	RunLineageCompleteTrue RunLineageComplete = true
+	ATTEMPT RunLineageKind = "ATTEMPT"
+	PROCESS RunLineageKind = "PROCESS"
 )
 
-// Valid indicates whether the value is a known member of the RunLineageComplete enum.
-func (e RunLineageComplete) Valid() bool {
+// Valid indicates whether the value is a known member of the RunLineageKind enum.
+func (e RunLineageKind) Valid() bool {
 	switch e {
-	case RunLineageCompleteTrue:
+	case ATTEMPT:
+		return true
+	case PROCESS:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunLineageState.
+const (
+	RunLineageStateADMITTED        RunLineageState = "ADMITTED"
+	RunLineageStateBLOCKED         RunLineageState = "BLOCKED"
+	RunLineageStateCANCELLED       RunLineageState = "CANCELLED"
+	RunLineageStateCLAIMED         RunLineageState = "CLAIMED"
+	RunLineageStateEXPIRED         RunLineageState = "EXPIRED"
+	RunLineageStateFAILED          RunLineageState = "FAILED"
+	RunLineageStatePENDING         RunLineageState = "PENDING"
+	RunLineageStateQUEUED          RunLineageState = "QUEUED"
+	RunLineageStateRETRIED         RunLineageState = "RETRIED"
+	RunLineageStateRUNNING         RunLineageState = "RUNNING"
+	RunLineageStateSUCCEEDED       RunLineageState = "SUCCEEDED"
+	RunLineageStateSUSPENDED       RunLineageState = "SUSPENDED"
+	RunLineageStateWAITINGEXTERNAL RunLineageState = "WAITING_EXTERNAL"
+	RunLineageStateWAITINGOWNER    RunLineageState = "WAITING_OWNER"
+)
+
+// Valid indicates whether the value is a known member of the RunLineageState enum.
+func (e RunLineageState) Valid() bool {
+	switch e {
+	case RunLineageStateADMITTED:
+		return true
+	case RunLineageStateBLOCKED:
+		return true
+	case RunLineageStateCANCELLED:
+		return true
+	case RunLineageStateCLAIMED:
+		return true
+	case RunLineageStateEXPIRED:
+		return true
+	case RunLineageStateFAILED:
+		return true
+	case RunLineageStatePENDING:
+		return true
+	case RunLineageStateQUEUED:
+		return true
+	case RunLineageStateRETRIED:
+		return true
+	case RunLineageStateRUNNING:
+		return true
+	case RunLineageStateSUCCEEDED:
+		return true
+	case RunLineageStateSUSPENDED:
+		return true
+	case RunLineageStateWAITINGEXTERNAL:
+		return true
+	case RunLineageStateWAITINGOWNER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunNextAction.
+const (
+	RunNextActionCANCEL RunNextAction = "CANCEL"
+	RunNextActionRETRY  RunNextAction = "RETRY"
+)
+
+// Valid indicates whether the value is a known member of the RunNextAction enum.
+func (e RunNextAction) Valid() bool {
+	switch e {
+	case RunNextActionCANCEL:
+		return true
+	case RunNextActionRETRY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunTimelineKind.
+const (
+	STATECHANGE RunTimelineKind = "STATE_CHANGE"
+)
+
+// Valid indicates whether the value is a known member of the RunTimelineKind enum.
+func (e RunTimelineKind) Valid() bool {
+	switch e {
+	case STATECHANGE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunTimelineOutcome.
+const (
+	RunTimelineOutcomeCANCELLED     RunTimelineOutcome = "CANCELLED"
+	RunTimelineOutcomeEXPIRED       RunTimelineOutcome = "EXPIRED"
+	RunTimelineOutcomeFAILED        RunTimelineOutcome = "FAILED"
+	RunTimelineOutcomeOTHER         RunTimelineOutcome = "OTHER"
+	RunTimelineOutcomeREQUIRESOWNER RunTimelineOutcome = "REQUIRES_OWNER"
+	RunTimelineOutcomeRETRIED       RunTimelineOutcome = "RETRIED"
+	RunTimelineOutcomeSUCCEEDED     RunTimelineOutcome = "SUCCEEDED"
+)
+
+// Valid indicates whether the value is a known member of the RunTimelineOutcome enum.
+func (e RunTimelineOutcome) Valid() bool {
+	switch e {
+	case RunTimelineOutcomeCANCELLED:
+		return true
+	case RunTimelineOutcomeEXPIRED:
+		return true
+	case RunTimelineOutcomeFAILED:
+		return true
+	case RunTimelineOutcomeOTHER:
+		return true
+	case RunTimelineOutcomeREQUIRESOWNER:
+		return true
+	case RunTimelineOutcomeRETRIED:
+		return true
+	case RunTimelineOutcomeSUCCEEDED:
 		return true
 	default:
 		return false
@@ -1585,6 +2128,42 @@ func (e ScheduleCalendar) Valid() bool {
 	case ScheduleCalendarBUSINESS:
 		return true
 	case ScheduleCalendarGREGORIAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleDefaultsCalendar.
+const (
+	ScheduleDefaultsCalendarBUSINESS  ScheduleDefaultsCalendar = "BUSINESS"
+	ScheduleDefaultsCalendarGREGORIAN ScheduleDefaultsCalendar = "GREGORIAN"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleDefaultsCalendar enum.
+func (e ScheduleDefaultsCalendar) Valid() bool {
+	switch e {
+	case ScheduleDefaultsCalendarBUSINESS:
+		return true
+	case ScheduleDefaultsCalendarGREGORIAN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleDefaultsDeliveryPolicy.
+const (
+	ScheduleDefaultsDeliveryPolicyATLEASTONCE       ScheduleDefaultsDeliveryPolicy = "AT_LEAST_ONCE"
+	ScheduleDefaultsDeliveryPolicyEXACTLYONCEEFFECT ScheduleDefaultsDeliveryPolicy = "EXACTLY_ONCE_EFFECT"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleDefaultsDeliveryPolicy enum.
+func (e ScheduleDefaultsDeliveryPolicy) Valid() bool {
+	switch e {
+	case ScheduleDefaultsDeliveryPolicyATLEASTONCE:
+		return true
+	case ScheduleDefaultsDeliveryPolicyEXACTLYONCEEFFECT:
 		return true
 	default:
 		return false
@@ -1749,13 +2328,13 @@ func (e ScheduleSelectorKind) Valid() bool {
 
 // Defines values for ScheduleSelectorCatalogComplete.
 const (
-	True ScheduleSelectorCatalogComplete = true
+	ScheduleSelectorCatalogCompleteTrue ScheduleSelectorCatalogComplete = true
 )
 
 // Valid indicates whether the value is a known member of the ScheduleSelectorCatalogComplete enum.
 func (e ScheduleSelectorCatalogComplete) Valid() bool {
 	switch e {
-	case True:
+	case ScheduleSelectorCatalogCompleteTrue:
 		return true
 	default:
 		return false
@@ -1924,30 +2503,48 @@ func (e WorkspaceRestoreCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for WorkspaceRestoreNextAction.
+const (
+	WorkspaceRestoreNextActionCANCEL WorkspaceRestoreNextAction = "CANCEL"
+	WorkspaceRestoreNextActionRETRY  WorkspaceRestoreNextAction = "RETRY"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceRestoreNextAction enum.
+func (e WorkspaceRestoreNextAction) Valid() bool {
+	switch e {
+	case WorkspaceRestoreNextActionCANCEL:
+		return true
+	case WorkspaceRestoreNextActionRETRY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkspaceRestoreState.
 const (
-	CANCELLED WorkspaceRestoreState = "CANCELLED"
-	EXPIRED   WorkspaceRestoreState = "EXPIRED"
-	FAILED    WorkspaceRestoreState = "FAILED"
-	QUEUED    WorkspaceRestoreState = "QUEUED"
-	RUNNING   WorkspaceRestoreState = "RUNNING"
-	SUCCEEDED WorkspaceRestoreState = "SUCCEEDED"
+	WorkspaceRestoreStateCANCELLED WorkspaceRestoreState = "CANCELLED"
+	WorkspaceRestoreStateEXPIRED   WorkspaceRestoreState = "EXPIRED"
+	WorkspaceRestoreStateFAILED    WorkspaceRestoreState = "FAILED"
+	WorkspaceRestoreStateQUEUED    WorkspaceRestoreState = "QUEUED"
+	WorkspaceRestoreStateRUNNING   WorkspaceRestoreState = "RUNNING"
+	WorkspaceRestoreStateSUCCEEDED WorkspaceRestoreState = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the WorkspaceRestoreState enum.
 func (e WorkspaceRestoreState) Valid() bool {
 	switch e {
-	case CANCELLED:
+	case WorkspaceRestoreStateCANCELLED:
 		return true
-	case EXPIRED:
+	case WorkspaceRestoreStateEXPIRED:
 		return true
-	case FAILED:
+	case WorkspaceRestoreStateFAILED:
 		return true
-	case QUEUED:
+	case WorkspaceRestoreStateQUEUED:
 		return true
-	case RUNNING:
+	case WorkspaceRestoreStateRUNNING:
 		return true
-	case SUCCEEDED:
+	case WorkspaceRestoreStateSUCCEEDED:
 		return true
 	default:
 		return false
@@ -1980,19 +2577,19 @@ func (e GetConfigurationSourceDetailParamsKind) Valid() bool {
 
 // Defines values for GetMattermostTeamMappingOperationParamsAction.
 const (
-	GetMattermostTeamMappingOperationParamsActionBIND   GetMattermostTeamMappingOperationParamsAction = "BIND"
-	GetMattermostTeamMappingOperationParamsActionRELINK GetMattermostTeamMappingOperationParamsAction = "RELINK"
-	GetMattermostTeamMappingOperationParamsActionUNLINK GetMattermostTeamMappingOperationParamsAction = "UNLINK"
+	BIND   GetMattermostTeamMappingOperationParamsAction = "BIND"
+	RELINK GetMattermostTeamMappingOperationParamsAction = "RELINK"
+	UNLINK GetMattermostTeamMappingOperationParamsAction = "UNLINK"
 )
 
 // Valid indicates whether the value is a known member of the GetMattermostTeamMappingOperationParamsAction enum.
 func (e GetMattermostTeamMappingOperationParamsAction) Valid() bool {
 	switch e {
-	case GetMattermostTeamMappingOperationParamsActionBIND:
+	case BIND:
 		return true
-	case GetMattermostTeamMappingOperationParamsActionRELINK:
+	case RELINK:
 		return true
-	case GetMattermostTeamMappingOperationParamsActionUNLINK:
+	case UNLINK:
 		return true
 	default:
 		return false
@@ -2029,6 +2626,85 @@ type AgentAssignmentProjection struct {
 	WorkspaceRef string  `json:"workspaceRef"`
 }
 
+// AgentBindingStatus defines model for AgentBindingStatus.
+type AgentBindingStatus string
+
+// AgentBotIdentity defines model for AgentBotIdentity.
+type AgentBotIdentity struct {
+	DisplayName            string                 `json:"displayName"`
+	ObservedAt             time.Time              `json:"observedAt"`
+	ProviderGeneration     int64                  `json:"providerGeneration"`
+	ProviderSnapshotSha256 Sha256                 `json:"providerSnapshotSha256"`
+	ProviderVersion        int64                  `json:"providerVersion"`
+	Selector               string                 `json:"selector"`
+	Status                 AgentBotIdentityStatus `json:"status"`
+	UpdatedAt              time.Time              `json:"updatedAt"`
+	Username               string                 `json:"username"`
+}
+
+// AgentBotIdentityAction defines model for AgentBotIdentityAction.
+type AgentBotIdentityAction string
+
+// AgentBotIdentityBinding defines model for AgentBotIdentityBinding.
+type AgentBotIdentityBinding struct {
+	AgentRef      string           `json:"agentRef"`
+	AgentVersion  int64            `json:"agentVersion"`
+	Identity      AgentBotIdentity `json:"identity"`
+	ReceiptSha256 Sha256           `json:"receiptSha256"`
+	UpdatedAt     time.Time        `json:"updatedAt"`
+}
+
+// AgentBotIdentityCommand defines model for AgentBotIdentityCommand.
+type AgentBotIdentityCommand struct {
+	Action                     AgentBotIdentityAction `json:"action"`
+	DisplayName                *string                `json:"displayName,omitempty"`
+	ExpectedProviderGeneration *int64                 `json:"expectedProviderGeneration,omitempty"`
+	IdentitySelector           *string                `json:"identitySelector,omitempty"`
+	UsernameIntent             *string                `json:"usernameIntent,omitempty"`
+}
+
+// AgentBotIdentityCommandResult defines model for AgentBotIdentityCommandResult.
+type AgentBotIdentityCommandResult struct {
+	Binding   *AgentBotIdentityBinding  `json:"binding,omitempty"`
+	Operation AgentBotIdentityOperation `json:"operation"`
+}
+
+// AgentBotIdentityOperation defines model for AgentBotIdentityOperation.
+type AgentBotIdentityOperation struct {
+	Action                AgentBotIdentityAction         `json:"action"`
+	AgentRef              string                         `json:"agentRef"`
+	CreatedAt             time.Time                      `json:"createdAt"`
+	ExpectedAgentVersion  int64                          `json:"expectedAgentVersion"`
+	FailureCode           *string                        `json:"failureCode,omitempty"`
+	OperationRef          string                         `json:"operationRef"`
+	PredecessorGeneration int64                          `json:"predecessorGeneration"`
+	RecoveryDeadline      *time.Time                     `json:"recoveryDeadline,omitempty"`
+	Result                *AgentBotIdentityBinding       `json:"result,omitempty"`
+	RetryNotBefore        *time.Time                     `json:"retryNotBefore,omitempty"`
+	State                 AgentBotIdentityOperationState `json:"state"`
+	UpdatedAt             time.Time                      `json:"updatedAt"`
+}
+
+// AgentBotIdentityOperationState defines model for AgentBotIdentityOperationState.
+type AgentBotIdentityOperationState string
+
+// AgentBotIdentityPage defines model for AgentBotIdentityPage.
+type AgentBotIdentityPage struct {
+	Identities    []AgentBotIdentity `json:"identities"`
+	NextPageToken *string            `json:"nextPageToken,omitempty"`
+}
+
+// AgentBotIdentityStatus defines model for AgentBotIdentityStatus.
+type AgentBotIdentityStatus string
+
+// AgentBotIdentitySummary defines model for AgentBotIdentitySummary.
+type AgentBotIdentitySummary struct {
+	MaskedStatus       string             `json:"maskedStatus"`
+	ProviderGeneration int64              `json:"providerGeneration"`
+	Status             AgentBindingStatus `json:"status"`
+	Username           string             `json:"username"`
+}
+
 // AgentCommand defines model for AgentCommand.
 type AgentCommand struct {
 	Action                  ProtectedConfigurationAction `json:"action"`
@@ -2038,8 +2714,33 @@ type AgentCommand struct {
 	Name                    *string                      `json:"name,omitempty"`
 	ProviderPoolStableKey   *string                      `json:"providerPoolStableKey,omitempty"`
 	ResourceRef             *string                      `json:"resourceRef,omitempty"`
-	RoleDefinitionStableKey *string                      `json:"roleDefinitionStableKey,omitempty"`
-	StableKey               *string                      `json:"stableKey,omitempty"`
+
+	// RuntimeSelectionKey Только selectionKey из authoritative owner configuration catalog.
+	RuntimeSelectionKey *string `json:"runtimeSelectionKey,omitempty"`
+	StableKey           *string `json:"stableKey,omitempty"`
+}
+
+// AgentHistoryAction defines model for AgentHistoryAction.
+type AgentHistoryAction string
+
+// AgentHistoryEntry defines model for AgentHistoryEntry.
+type AgentHistoryEntry struct {
+	Action         AgentHistoryAction `json:"action"`
+	Agent          AgentView          `json:"agent"`
+	OccurredAt     time.Time          `json:"occurredAt"`
+	SnapshotSha256 Sha256             `json:"snapshotSha256"`
+}
+
+// AgentHistoryPage defines model for AgentHistoryPage.
+type AgentHistoryPage struct {
+	Entries       []AgentHistoryEntry `json:"entries"`
+	NextPageToken *string             `json:"nextPageToken,omitempty"`
+}
+
+// AgentPage defines model for AgentPage.
+type AgentPage struct {
+	Agents        []AgentView `json:"agents"`
+	NextPageToken *string     `json:"nextPageToken,omitempty"`
 }
 
 // AgentProjection defines model for AgentProjection.
@@ -2054,6 +2755,32 @@ type AgentProjection struct {
 	RoleDefinitionRef string                           `json:"roleDefinitionRef"`
 	RuntimeProfileRef *string                          `json:"runtimeProfileRef,omitempty"`
 	StableKey         string                           `json:"stableKey"`
+}
+
+// AgentRuntimeSelection defines model for AgentRuntimeSelection.
+type AgentRuntimeSelection struct {
+	DisplayName           string                `json:"displayName"`
+	RoleDefinitionSha256  Sha256                `json:"roleDefinitionSha256"`
+	RoleDefinitionVersion int64                 `json:"roleDefinitionVersion"`
+	RuntimeProfileSha256  Sha256                `json:"runtimeProfileSha256"`
+	RuntimeProfileVersion int64                 `json:"runtimeProfileVersion"`
+	SelectionKey          string                `json:"selectionKey"`
+	Status                OwnerProjectionStatus `json:"status"`
+}
+
+// AgentView defines model for AgentView.
+type AgentView struct {
+	AgentRef              string                  `json:"agentRef"`
+	BotIdentity           AgentBotIdentitySummary `json:"botIdentity"`
+	Capabilities          []string                `json:"capabilities"`
+	DisplayName           string                  `json:"displayName"`
+	Enabled               bool                    `json:"enabled"`
+	InstructionSelection  OwnerSafeSelection      `json:"instructionSelection"`
+	ProviderPoolSelection OwnerSafeSelection      `json:"providerPoolSelection"`
+	RuntimeSelection      AgentRuntimeSelection   `json:"runtimeSelection"`
+	StableKey             string                  `json:"stableKey"`
+	State                 LifecycleState          `json:"state"`
+	Version               int64                   `json:"version"`
 }
 
 // ArtifactProjection defines model for ArtifactProjection.
@@ -2126,9 +2853,11 @@ type BackupState string
 
 // BindScheduleConfiguration defines model for BindScheduleConfiguration.
 type BindScheduleConfiguration struct {
-	AgentStableKey          string `json:"agentStableKey"`
-	InstructionSetStableKey string `json:"instructionSetStableKey"`
-	ProviderPoolStableKey   string `json:"providerPoolStableKey"`
+	AgentStableKey          string              `json:"agentStableKey"`
+	InstructionSetStableKey string              `json:"instructionSetStableKey"`
+	Intent                  OwnerScheduleIntent `json:"intent"`
+	Name                    string              `json:"name"`
+	ProviderPoolStableKey   string              `json:"providerPoolStableKey"`
 }
 
 // ChatProjection defines model for ChatProjection.
@@ -2170,6 +2899,12 @@ type ConfigurationChange struct {
 // ConfigurationChangeAction defines model for ConfigurationChangeAction.
 type ConfigurationChangeAction string
 
+// ConfigurationChangeDisplay defines model for ConfigurationChangeDisplay.
+type ConfigurationChangeDisplay string
+
+// ConfigurationChangeKind defines model for ConfigurationChangeKind.
+type ConfigurationChangeKind string
+
 // ConfigurationChangeOutcome defines model for ConfigurationChangeOutcome.
 type ConfigurationChangeOutcome string
 
@@ -2177,6 +2912,24 @@ type ConfigurationChangeOutcome string
 type ConfigurationChangePage struct {
 	Changes       []ConfigurationChange `json:"changes"`
 	NextPageToken *string               `json:"nextPageToken,omitempty"`
+}
+
+// ConfigurationDiff defines model for ConfigurationDiff.
+type ConfigurationDiff struct {
+	Changes       []ConfigurationDiffChange `json:"changes"`
+	Left          ConfigurationVersionRef   `json:"left"`
+	NextPageToken *string                   `json:"nextPageToken,omitempty"`
+	Right         ConfigurationVersionRef   `json:"right"`
+	Truncated     bool                      `json:"truncated"`
+}
+
+// ConfigurationDiffChange defines model for ConfigurationDiffChange.
+type ConfigurationDiffChange struct {
+	After   string                     `json:"after"`
+	Before  string                     `json:"before"`
+	Display ConfigurationChangeDisplay `json:"display"`
+	Kind    ConfigurationChangeKind    `json:"kind"`
+	Path    string                     `json:"path"`
 }
 
 // ConfigurationManagedBy defines model for ConfigurationManagedBy.
@@ -2201,18 +2954,25 @@ type ConfigurationSourceDetail struct {
 	Version        int64                  `json:"version"`
 }
 
+// ConfigurationVersionRef defines model for ConfigurationVersionRef.
+type ConfigurationVersionRef struct {
+	ContentSha256  Sha256 `json:"contentSha256"`
+	SnapshotSha256 Sha256 `json:"snapshotSha256"`
+	Version        int64  `json:"version"`
+}
+
 // ConfigureIntegration defines model for ConfigureIntegration.
 type ConfigureIntegration struct {
-	Capabilities           []string `json:"capabilities"`
-	ConfigurationRef       *string  `json:"configurationRef,omitempty"`
-	ConnectionGeneration   int64    `json:"connectionGeneration"`
-	ConnectionRef          string   `json:"connectionRef"`
-	ConnectionVersion      int64    `json:"connectionVersion"`
-	DefinitionDigestSha256 Sha256   `json:"definitionDigestSha256"`
-	DefinitionRef          string   `json:"definitionRef"`
-	DefinitionVersion      int64    `json:"definitionVersion"`
-	EffectKind             string   `json:"effectKind"`
-	StableKey              string   `json:"stableKey"`
+	Capabilities           []string              `json:"capabilities"`
+	ConfigurationRef       *string               `json:"configurationRef,omitempty"`
+	ConnectionGeneration   int64                 `json:"connectionGeneration"`
+	ConnectionRef          string                `json:"connectionRef"`
+	ConnectionVersion      int64                 `json:"connectionVersion"`
+	DefinitionDigestSha256 Sha256                `json:"definitionDigestSha256"`
+	DefinitionRef          string                `json:"definitionRef"`
+	DefinitionVersion      int64                 `json:"definitionVersion"`
+	EffectKind             IntegrationEffectKind `json:"effectKind"`
+	StableKey              string                `json:"stableKey"`
 }
 
 // CopyAccessResource defines model for CopyAccessResource.
@@ -2406,14 +3166,14 @@ type IncidentCommandAction string
 
 // IncidentCommandResult defines model for IncidentCommandResult.
 type IncidentCommandResult struct {
-	Incident      RuntimeIncident `json:"incident"`
-	SuccessorTurn *Resource       `json:"successorTurn,omitempty"`
+	Incident IncidentView `json:"incident"`
 }
 
 // IncidentHistoryEntry defines model for IncidentHistoryEntry.
 type IncidentHistoryEntry struct {
 	Action         IncidentHistoryEntryAction `json:"action"`
 	ExecutionFence int64                      `json:"executionFence"`
+	NextActions    []IncidentNextAction       `json:"nextActions"`
 	OccurredAt     time.Time                  `json:"occurredAt"`
 	ReasonCode     string                     `json:"reasonCode"`
 	State          IncidentState              `json:"state"`
@@ -2426,17 +3186,43 @@ type IncidentHistoryEntryAction string
 // IncidentHistoryPage defines model for IncidentHistoryPage.
 type IncidentHistoryPage struct {
 	Entries       []IncidentHistoryEntry `json:"entries"`
+	NextActions   []IncidentNextAction   `json:"nextActions"`
 	NextPageToken *string                `json:"nextPageToken,omitempty"`
 }
 
+// IncidentNextAction defines model for IncidentNextAction.
+type IncidentNextAction string
+
 // IncidentPage defines model for IncidentPage.
 type IncidentPage struct {
-	Incidents     []RuntimeIncident `json:"incidents"`
-	NextPageToken *string           `json:"nextPageToken,omitempty"`
+	Incidents     []IncidentView `json:"incidents"`
+	NextPageToken *string        `json:"nextPageToken,omitempty"`
 }
+
+// IncidentSeverity defines model for IncidentSeverity.
+type IncidentSeverity string
 
 // IncidentState defines model for IncidentState.
 type IncidentState string
+
+// IncidentView defines model for IncidentView.
+type IncidentView struct {
+	DiagnosticSummary string               `json:"diagnosticSummary"`
+	ExecutionFence    int64                `json:"executionFence"`
+	Impact            string               `json:"impact"`
+	IncidentRef       string               `json:"incidentRef"`
+	Kind              RuntimeIncidentKind  `json:"kind"`
+	NextActions       []IncidentNextAction `json:"nextActions"`
+	OccurredAt        time.Time            `json:"occurredAt"`
+	Run               OwnerDisplayValue    `json:"run"`
+	RunbookUrl        string               `json:"runbookUrl"`
+	SafeCorrelation   string               `json:"safeCorrelation"`
+	Severity          IncidentSeverity     `json:"severity"`
+	State             IncidentState        `json:"state"`
+	UpdatedAt         time.Time            `json:"updatedAt"`
+	Version           int64                `json:"version"`
+	Workspace         OwnerDisplayValue    `json:"workspace"`
+}
 
 // InstructionSetCommand defines model for InstructionSetCommand.
 type InstructionSetCommand struct {
@@ -2516,21 +3302,21 @@ type IntegrationApprovalStatus string
 
 // IntegrationConfiguration defines model for IntegrationConfiguration.
 type IntegrationConfiguration struct {
-	Capabilities           []string  `json:"capabilities"`
-	CapabilityDigestSha256 Sha256    `json:"capabilityDigestSha256"`
-	ConfigurationRef       string    `json:"configurationRef"`
-	ConnectionGeneration   int64     `json:"connectionGeneration"`
-	ConnectionRef          string    `json:"connectionRef"`
-	ConnectionVersion      int64     `json:"connectionVersion"`
-	DefinitionDigestSha256 Sha256    `json:"definitionDigestSha256"`
-	DefinitionRef          string    `json:"definitionRef"`
-	DefinitionVersion      int64     `json:"definitionVersion"`
-	DigestSha256           Sha256    `json:"digestSha256"`
-	EffectKind             string    `json:"effectKind"`
-	StableKey              string    `json:"stableKey"`
-	State                  string    `json:"state"`
-	UpdatedAt              time.Time `json:"updatedAt"`
-	Version                int64     `json:"version"`
+	Capabilities           []string                      `json:"capabilities"`
+	CapabilityDigestSha256 Sha256                        `json:"capabilityDigestSha256"`
+	ConfigurationRef       string                        `json:"configurationRef"`
+	ConnectionGeneration   int64                         `json:"connectionGeneration"`
+	ConnectionRef          string                        `json:"connectionRef"`
+	ConnectionVersion      int64                         `json:"connectionVersion"`
+	DefinitionDigestSha256 Sha256                        `json:"definitionDigestSha256"`
+	DefinitionRef          string                        `json:"definitionRef"`
+	DefinitionVersion      int64                         `json:"definitionVersion"`
+	DigestSha256           Sha256                        `json:"digestSha256"`
+	EffectKind             IntegrationEffectKind         `json:"effectKind"`
+	StableKey              string                        `json:"stableKey"`
+	State                  IntegrationConfigurationState `json:"state"`
+	UpdatedAt              time.Time                     `json:"updatedAt"`
+	Version                int64                         `json:"version"`
 }
 
 // IntegrationConfigurationPage defines model for IntegrationConfigurationPage.
@@ -2539,20 +3325,29 @@ type IntegrationConfigurationPage struct {
 	NextPageToken  *string                    `json:"nextPageToken,omitempty"`
 }
 
+// IntegrationConfigurationState defines model for IntegrationConfigurationState.
+type IntegrationConfigurationState string
+
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
-	Capabilities  []ProviderCapability `json:"capabilities"`
-	DefinitionRef string               `json:"definitionRef"`
-	DigestSha256  Sha256               `json:"digestSha256"`
-	DisplayName   string               `json:"displayName"`
-	State         string               `json:"state"`
-	Version       int64                `json:"version"`
+	Capabilities  []ProviderCapability       `json:"capabilities"`
+	DefinitionRef string                     `json:"definitionRef"`
+	DigestSha256  Sha256                     `json:"digestSha256"`
+	DisplayName   string                     `json:"displayName"`
+	State         IntegrationDefinitionState `json:"state"`
+	Version       int64                      `json:"version"`
 }
 
 // IntegrationDefinitionPage defines model for IntegrationDefinitionPage.
 type IntegrationDefinitionPage struct {
 	Definitions []IntegrationDefinition `json:"definitions"`
 }
+
+// IntegrationDefinitionState defines model for IntegrationDefinitionState.
+type IntegrationDefinitionState string
+
+// IntegrationEffectKind defines model for IntegrationEffectKind.
+type IntegrationEffectKind string
 
 // IntegrationProjection defines model for IntegrationProjection.
 type IntegrationProjection struct {
@@ -2713,6 +3508,20 @@ type MemoryRecordProjection struct {
 // MutableResourceKind defines model for MutableResourceKind.
 type MutableResourceKind string
 
+// OwnerConfigurationCatalog defines model for OwnerConfigurationCatalog.
+type OwnerConfigurationCatalog struct {
+	NextPageToken     *string                        `json:"nextPageToken,omitempty"`
+	RuntimeSelections []RuntimeSelectionCatalogEntry `json:"runtimeSelections"`
+	ScheduleDefaults  ScheduleDefaults               `json:"scheduleDefaults"`
+	SchedulePresets   []SchedulePreset               `json:"schedulePresets"`
+}
+
+// OwnerDisplayValue defines model for OwnerDisplayValue.
+type OwnerDisplayValue struct {
+	Status OwnerProjectionStatus `json:"status"`
+	Value  string                `json:"value"`
+}
+
 // OwnerGateDecision defines model for OwnerGateDecision.
 type OwnerGateDecision string
 
@@ -2738,33 +3547,120 @@ type OwnerGateProjection struct {
 	TurnId               openapi_types.UUID     `json:"turnId"`
 }
 
-// OwnerScheduleIntent defines model for OwnerScheduleIntent.
-type OwnerScheduleIntent struct {
-	Calendar                OwnerScheduleIntentCalendar       `json:"calendar"`
-	Coalesce                bool                              `json:"coalesce"`
-	Cron                    *string                           `json:"cron,omitempty"`
-	DeadLetterAfterSeconds  int64                             `json:"deadLetterAfterSeconds"`
-	DeliveryPolicy          OwnerScheduleIntentDeliveryPolicy `json:"deliveryPolicy"`
-	InitialBackoffSeconds   int64                             `json:"initialBackoffSeconds"`
-	IntervalSeconds         *int64                            `json:"intervalSeconds,omitempty"`
-	MaximumAttempts         int                               `json:"maximumAttempts"`
-	MaximumBackoffSeconds   int64                             `json:"maximumBackoffSeconds"`
-	MaximumExecutionSeconds int64                             `json:"maximumExecutionSeconds"`
-	MisfireGraceSeconds     int64                             `json:"misfireGraceSeconds"`
-	MisfirePolicy           ScheduleMisfirePolicy             `json:"misfirePolicy"`
-	NotificationPolicy      ScheduleNotificationPolicy        `json:"notificationPolicy"`
-	OverlapPolicy           ScheduleOverlapPolicy             `json:"overlapPolicy"`
-	PromptArtifactName      string                            `json:"promptArtifactName"`
-	RoomStableKey           *string                           `json:"roomStableKey,omitempty"`
-	SessionPolicy           ScheduleSessionPolicy             `json:"sessionPolicy"`
-	Timezone                string                            `json:"timezone"`
+// OwnerProjectionStatus defines model for OwnerProjectionStatus.
+type OwnerProjectionStatus string
+
+// OwnerSafeSelection defines model for OwnerSafeSelection.
+type OwnerSafeSelection struct {
+	DigestSha256 *Sha256               `json:"digestSha256,omitempty"`
+	DisplayName  string                `json:"displayName"`
+	MaskedStatus *string               `json:"maskedStatus,omitempty"`
+	Selector     string                `json:"selector"`
+	Status       OwnerProjectionStatus `json:"status"`
+	Version      int64                 `json:"version"`
 }
 
-// OwnerScheduleIntentCalendar defines model for OwnerScheduleIntent.Calendar.
-type OwnerScheduleIntentCalendar string
+// OwnerScheduleAdvancedOverrides defines model for OwnerScheduleAdvancedOverrides.
+type OwnerScheduleAdvancedOverrides struct {
+	Calendar                *OwnerScheduleAdvancedOverridesCalendar       `json:"calendar,omitempty"`
+	Coalesce                *bool                                         `json:"coalesce,omitempty"`
+	Cron                    *string                                       `json:"cron,omitempty"`
+	DeadLetterAfterSeconds  *int64                                        `json:"deadLetterAfterSeconds,omitempty"`
+	DeliveryPolicy          *OwnerScheduleAdvancedOverridesDeliveryPolicy `json:"deliveryPolicy,omitempty"`
+	InitialBackoffSeconds   *int64                                        `json:"initialBackoffSeconds,omitempty"`
+	IntervalSeconds         *int64                                        `json:"intervalSeconds,omitempty"`
+	MaximumAttempts         *int                                          `json:"maximumAttempts,omitempty"`
+	MaximumBackoffSeconds   *int64                                        `json:"maximumBackoffSeconds,omitempty"`
+	MaximumExecutionSeconds *int64                                        `json:"maximumExecutionSeconds,omitempty"`
+	MisfireGraceSeconds     *int64                                        `json:"misfireGraceSeconds,omitempty"`
+	MisfirePolicy           *ScheduleMisfirePolicy                        `json:"misfirePolicy,omitempty"`
+	NotificationPolicy      *ScheduleNotificationPolicy                   `json:"notificationPolicy,omitempty"`
+	OverlapPolicy           *ScheduleOverlapPolicy                        `json:"overlapPolicy,omitempty"`
+	SessionPolicy           *ScheduleSessionPolicy                        `json:"sessionPolicy,omitempty"`
+}
 
-// OwnerScheduleIntentDeliveryPolicy defines model for OwnerScheduleIntent.DeliveryPolicy.
-type OwnerScheduleIntentDeliveryPolicy string
+// OwnerScheduleAdvancedOverridesCalendar defines model for OwnerScheduleAdvancedOverrides.Calendar.
+type OwnerScheduleAdvancedOverridesCalendar string
+
+// OwnerScheduleAdvancedOverridesDeliveryPolicy defines model for OwnerScheduleAdvancedOverrides.DeliveryPolicy.
+type OwnerScheduleAdvancedOverridesDeliveryPolicy string
+
+// OwnerScheduleIntent defines model for OwnerScheduleIntent.
+type OwnerScheduleIntent struct {
+	AdvancedOverrides *OwnerScheduleAdvancedOverrides `json:"advancedOverrides,omitempty"`
+	PresetKey         string                          `json:"presetKey"`
+	Prompt            OwnerSchedulePromptIntent       `json:"prompt"`
+	RoomStableKey     *string                         `json:"roomStableKey,omitempty"`
+	Timezone          string                          `json:"timezone"`
+}
+
+// OwnerSchedulePage defines model for OwnerSchedulePage.
+type OwnerSchedulePage struct {
+	Items         []OwnerScheduleView `json:"items"`
+	NextPageToken *string             `json:"nextPageToken,omitempty"`
+}
+
+// OwnerSchedulePromptIntent defines model for OwnerSchedulePromptIntent.
+type OwnerSchedulePromptIntent struct {
+	ArtifactSelector *string `json:"artifactSelector,omitempty"`
+	InlineMarkdown   *string `json:"inlineMarkdown,omitempty"`
+}
+
+// OwnerSchedulePromptView defines model for OwnerSchedulePromptView.
+type OwnerSchedulePromptView struct {
+	ArtifactSelector *string                     `json:"artifactSelector,omitempty"`
+	DigestSha256     *Sha256                     `json:"digestSha256,omitempty"`
+	DisplayName      string                      `json:"displayName"`
+	InlineMarkdown   *string                     `json:"inlineMarkdown,omitempty"`
+	Kind             OwnerSchedulePromptViewKind `json:"kind"`
+	Status           OwnerProjectionStatus       `json:"status"`
+	Version          int64                       `json:"version"`
+}
+
+// OwnerSchedulePromptViewKind defines model for OwnerSchedulePromptView.Kind.
+type OwnerSchedulePromptViewKind string
+
+// OwnerScheduleView defines model for OwnerScheduleView.
+type OwnerScheduleView struct {
+	AdvancedOverrides       []string                        `json:"advancedOverrides"`
+	AgentSelection          OwnerSafeSelection              `json:"agentSelection"`
+	Calendar                OwnerScheduleViewCalendar       `json:"calendar"`
+	Coalesce                bool                            `json:"coalesce"`
+	Cron                    *string                         `json:"cron,omitempty"`
+	DeadLetterAfterSeconds  int64                           `json:"deadLetterAfterSeconds"`
+	DefaultsRevision        int64                           `json:"defaultsRevision"`
+	DefaultsSha256          Sha256                          `json:"defaultsSha256"`
+	DeliveryPolicy          OwnerScheduleViewDeliveryPolicy `json:"deliveryPolicy"`
+	DisplayName             string                          `json:"displayName"`
+	InitialBackoffSeconds   int64                           `json:"initialBackoffSeconds"`
+	InstructionSelection    OwnerSafeSelection              `json:"instructionSelection"`
+	IntervalSeconds         *int64                          `json:"intervalSeconds,omitempty"`
+	MaximumAttempts         int                             `json:"maximumAttempts"`
+	MaximumBackoffSeconds   int64                           `json:"maximumBackoffSeconds"`
+	MaximumExecutionSeconds int64                           `json:"maximumExecutionSeconds"`
+	MisfireGraceSeconds     int64                           `json:"misfireGraceSeconds"`
+	MisfirePolicy           ScheduleMisfirePolicy           `json:"misfirePolicy"`
+	NextRunAt               *time.Time                      `json:"nextRunAt,omitempty"`
+	NotificationPolicy      ScheduleNotificationPolicy      `json:"notificationPolicy"`
+	OverlapPolicy           ScheduleOverlapPolicy           `json:"overlapPolicy"`
+	PresetKey               string                          `json:"presetKey"`
+	PresetRevision          int64                           `json:"presetRevision"`
+	PresetSha256            Sha256                          `json:"presetSha256"`
+	Prompt                  OwnerSchedulePromptView         `json:"prompt"`
+	ProviderPoolSelection   OwnerSafeSelection              `json:"providerPoolSelection"`
+	RoomSelection           OwnerSafeSelection              `json:"roomSelection"`
+	ScheduleRef             string                          `json:"scheduleRef"`
+	SessionPolicy           ScheduleSessionPolicy           `json:"sessionPolicy"`
+	State                   LifecycleState                  `json:"state"`
+	Timezone                string                          `json:"timezone"`
+	Version                 int64                           `json:"version"`
+}
+
+// OwnerScheduleViewCalendar defines model for OwnerScheduleView.Calendar.
+type OwnerScheduleViewCalendar string
+
+// OwnerScheduleViewDeliveryPolicy defines model for OwnerScheduleView.DeliveryPolicy.
+type OwnerScheduleViewDeliveryPolicy string
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -3002,6 +3898,9 @@ type ProviderPoolResourceProjection struct {
 	TotalMembers              int                              `json:"totalMembers"`
 }
 
+// ProviderPoolState defines model for ProviderPoolState.
+type ProviderPoolState string
+
 // ProviderPoolView defines model for ProviderPoolView.
 type ProviderPoolView struct {
 	DesiredDigestSha256     Sha256                   `json:"desiredDigestSha256"`
@@ -3013,7 +3912,7 @@ type ProviderPoolView struct {
 	Policy                  ProviderPoolViewPolicy   `json:"policy"`
 	PoolRef                 string                   `json:"poolRef"`
 	StableKey               string                   `json:"stableKey"`
-	State                   string                   `json:"state"`
+	State                   ProviderPoolState        `json:"state"`
 	UpdatedAt               time.Time                `json:"updatedAt"`
 	Version                 int64                    `json:"version"`
 }
@@ -3352,6 +4251,28 @@ type RoleSpec struct {
 	StableKey                    string               `json:"stableKey"`
 }
 
+// RunArtifactPage defines model for RunArtifactPage.
+type RunArtifactPage struct {
+	Artifacts     []RunArtifactView `json:"artifacts"`
+	NextActions   []RunNextAction   `json:"nextActions"`
+	NextPageToken *string           `json:"nextPageToken,omitempty"`
+}
+
+// RunArtifactStatus defines model for RunArtifactStatus.
+type RunArtifactStatus string
+
+// RunArtifactView defines model for RunArtifactView.
+type RunArtifactView struct {
+	ArtifactRef string            `json:"artifactRef"`
+	CreatedAt   time.Time         `json:"createdAt"`
+	DisplayName string            `json:"displayName"`
+	Kind        string            `json:"kind"`
+	MediaType   string            `json:"mediaType"`
+	Sha256      Sha256            `json:"sha256"`
+	SizeBytes   int64             `json:"sizeBytes"`
+	Status      RunArtifactStatus `json:"status"`
+}
+
 // RunCommand defines model for RunCommand.
 type RunCommand struct {
 	Action     RunCommandAction `json:"action"`
@@ -3363,54 +4284,123 @@ type RunCommandAction string
 
 // RunCommandResult defines model for RunCommandResult.
 type RunCommandResult struct {
-	Run           Resource  `json:"run"`
-	SuccessorTurn *Resource `json:"successorTurn,omitempty"`
+	Incidents              []IncidentView `json:"incidents"`
+	IncidentsNextPageToken *string        `json:"incidentsNextPageToken,omitempty"`
+	Run                    RunView        `json:"run"`
 }
 
 // RunDetail defines model for RunDetail.
 type RunDetail struct {
-	Incidents       []RuntimeIncident `json:"incidents"`
-	Run             Resource          `json:"run"`
-	RuntimeRevision *Resource         `json:"runtimeRevision,omitempty"`
-	Session         *Resource         `json:"session,omitempty"`
-	Turn            *Resource         `json:"turn,omitempty"`
+	Incidents              []IncidentView  `json:"incidents"`
+	IncidentsNextPageToken *string         `json:"incidentsNextPageToken,omitempty"`
+	Run                    RunView         `json:"run"`
+	Session                *RunSessionView `json:"session,omitempty"`
+	Turn                   *RunTurnView    `json:"turn,omitempty"`
 }
 
 // RunLineage defines model for RunLineage.
 type RunLineage struct {
-	Complete             RunLineageComplete `json:"complete"`
-	ImmutableInputSha256 Sha256             `json:"immutableInputSha256"`
-	Nodes                []RunLineageNode   `json:"nodes"`
-	RootRunRef           string             `json:"rootRunRef"`
+	NextActions   []RunNextAction  `json:"nextActions"`
+	NextPageToken *string          `json:"nextPageToken,omitempty"`
+	Nodes         []RunLineageNode `json:"nodes"`
+	Run           RunView          `json:"run"`
+	Truncated     bool             `json:"truncated"`
 }
 
-// RunLineageComplete defines model for RunLineage.Complete.
-type RunLineageComplete bool
+// RunLineageKind defines model for RunLineageKind.
+type RunLineageKind string
 
 // RunLineageNode defines model for RunLineageNode.
 type RunLineageNode struct {
-	Attempt   int       `json:"attempt"`
-	CreatedAt time.Time `json:"createdAt"`
-	ParentRef *string   `json:"parentRef,omitempty"`
-	Ref       string    `json:"ref"`
-	State     string    `json:"state"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Version   int64     `json:"version"`
+	Agent       OwnerDisplayValue `json:"agent"`
+	Attempt     int               `json:"attempt"`
+	CreatedAt   time.Time         `json:"createdAt"`
+	DisplayName string            `json:"displayName"`
+	Kind        RunLineageKind    `json:"kind"`
+	Model       OwnerDisplayValue `json:"model"`
+	NodeRef     string            `json:"nodeRef"`
+	ParentRef   *string           `json:"parentRef,omitempty"`
+	Provider    OwnerDisplayValue `json:"provider"`
+	Role        OwnerDisplayValue `json:"role"`
+	State       RunLineageState   `json:"state"`
+	UpdatedAt   time.Time         `json:"updatedAt"`
+	Version     int64             `json:"version"`
 }
 
-// RuntimeIncident defines model for RuntimeIncident.
-type RuntimeIncident struct {
-	ActionReasonCode *string             `json:"actionReasonCode,omitempty"`
-	EvidenceSha256   string              `json:"evidenceSha256"`
-	ExecutionFence   int64               `json:"executionFence"`
-	ExecutionId      openapi_types.UUID  `json:"executionId"`
-	IncidentId       openapi_types.UUID  `json:"incidentId"`
-	Kind             RuntimeIncidentKind `json:"kind"`
-	OccurredAt       time.Time           `json:"occurredAt"`
-	State            IncidentState       `json:"state"`
-	UpdatedAt        time.Time           `json:"updatedAt"`
-	Version          int64               `json:"version"`
-	WorkloadId       string              `json:"workloadId"`
+// RunLineageState defines model for RunLineageState.
+type RunLineageState string
+
+// RunNextAction defines model for RunNextAction.
+type RunNextAction string
+
+// RunPage defines model for RunPage.
+type RunPage struct {
+	NextPageToken *string   `json:"nextPageToken,omitempty"`
+	Runs          []RunView `json:"runs"`
+}
+
+// RunSessionView defines model for RunSessionView.
+type RunSessionView struct {
+	DisplayName string         `json:"displayName"`
+	SessionRef  string         `json:"sessionRef"`
+	State       LifecycleState `json:"state"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+	Version     int64          `json:"version"`
+}
+
+// RunTimelineEntry defines model for RunTimelineEntry.
+type RunTimelineEntry struct {
+	Display     string             `json:"display"`
+	EventRef    string             `json:"eventRef"`
+	Kind        RunTimelineKind    `json:"kind"`
+	NextActions []RunNextAction    `json:"nextActions"`
+	OccurredAt  time.Time          `json:"occurredAt"`
+	Outcome     RunTimelineOutcome `json:"outcome"`
+	Version     int64              `json:"version"`
+}
+
+// RunTimelineKind defines model for RunTimelineKind.
+type RunTimelineKind string
+
+// RunTimelineOutcome defines model for RunTimelineOutcome.
+type RunTimelineOutcome string
+
+// RunTimelinePage defines model for RunTimelinePage.
+type RunTimelinePage struct {
+	Entries       []RunTimelineEntry `json:"entries"`
+	NextActions   []RunNextAction    `json:"nextActions"`
+	NextPageToken *string            `json:"nextPageToken,omitempty"`
+	Run           RunView            `json:"run"`
+}
+
+// RunTurnView defines model for RunTurnView.
+type RunTurnView struct {
+	DisplayName string         `json:"displayName"`
+	State       LifecycleState `json:"state"`
+	TurnRef     string         `json:"turnRef"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+	Version     int64          `json:"version"`
+}
+
+// RunView defines model for RunView.
+type RunView struct {
+	Agent           OwnerDisplayValue `json:"agent"`
+	Attempt         int               `json:"attempt"`
+	DisplayName     string            `json:"displayName"`
+	DurationSeconds int64             `json:"durationSeconds"`
+	Initiator       OwnerDisplayValue `json:"initiator"`
+	Model           OwnerDisplayValue `json:"model"`
+	NextActions     []RunNextAction   `json:"nextActions"`
+	Provider        OwnerDisplayValue `json:"provider"`
+	Role            OwnerDisplayValue `json:"role"`
+	RunRef          string            `json:"runRef"`
+	RuntimeStatus   OwnerDisplayValue `json:"runtimeStatus"`
+	StartedAt       *time.Time        `json:"startedAt,omitempty"`
+	State           LifecycleState    `json:"state"`
+	Trigger         OwnerDisplayValue `json:"trigger"`
+	UpdatedAt       time.Time         `json:"updatedAt"`
+	Version         int64             `json:"version"`
+	Workspace       OwnerDisplayValue `json:"workspace"`
 }
 
 // RuntimeIncidentKind defines model for RuntimeIncidentKind.
@@ -3447,8 +4437,45 @@ type RuntimeRevisionProjection struct {
 	SessionId                              openapi_types.UUID  `json:"sessionId"`
 }
 
+// RuntimeSelectionCatalogEntry defines model for RuntimeSelectionCatalogEntry.
+type RuntimeSelectionCatalogEntry struct {
+	Capabilities          []string              `json:"capabilities"`
+	Description           string                `json:"description"`
+	DisplayName           string                `json:"displayName"`
+	RoleDefinitionSha256  Sha256                `json:"roleDefinitionSha256"`
+	RoleDefinitionVersion int64                 `json:"roleDefinitionVersion"`
+	RuntimeProfileSha256  Sha256                `json:"runtimeProfileSha256"`
+	RuntimeProfileVersion int64                 `json:"runtimeProfileVersion"`
+	SelectionKey          string                `json:"selectionKey"`
+	Status                OwnerProjectionStatus `json:"status"`
+}
+
 // ScheduleCalendar defines model for ScheduleCalendar.
 type ScheduleCalendar string
+
+// ScheduleDefaults defines model for ScheduleDefaults.
+type ScheduleDefaults struct {
+	Calendar                ScheduleDefaultsCalendar       `json:"calendar"`
+	Coalesce                bool                           `json:"coalesce"`
+	DeadLetterAfterSeconds  int64                          `json:"deadLetterAfterSeconds"`
+	DeliveryPolicy          ScheduleDefaultsDeliveryPolicy `json:"deliveryPolicy"`
+	DigestSha256            Sha256                         `json:"digestSha256"`
+	InitialBackoffSeconds   int64                          `json:"initialBackoffSeconds"`
+	MaximumAttempts         int                            `json:"maximumAttempts"`
+	MaximumBackoffSeconds   int64                          `json:"maximumBackoffSeconds"`
+	MaximumExecutionSeconds int64                          `json:"maximumExecutionSeconds"`
+	MisfirePolicy           ScheduleMisfirePolicy          `json:"misfirePolicy"`
+	NotificationPolicy      ScheduleNotificationPolicy     `json:"notificationPolicy"`
+	OverlapPolicy           ScheduleOverlapPolicy          `json:"overlapPolicy"`
+	Revision                int64                          `json:"revision"`
+	SessionPolicy           ScheduleSessionPolicy          `json:"sessionPolicy"`
+}
+
+// ScheduleDefaultsCalendar defines model for ScheduleDefaults.Calendar.
+type ScheduleDefaultsCalendar string
+
+// ScheduleDefaultsDeliveryPolicy defines model for ScheduleDefaults.DeliveryPolicy.
+type ScheduleDefaultsDeliveryPolicy string
 
 // ScheduleDeliveryPolicy defines model for ScheduleDeliveryPolicy.
 type ScheduleDeliveryPolicy string
@@ -3526,6 +4553,16 @@ type ScheduleOccurrenceState string
 // ScheduleOverlapPolicy defines model for ScheduleOverlapPolicy.
 type ScheduleOverlapPolicy string
 
+// SchedulePreset defines model for SchedulePreset.
+type SchedulePreset struct {
+	Cron         string `json:"cron"`
+	Description  string `json:"description"`
+	DigestSha256 Sha256 `json:"digestSha256"`
+	DisplayName  string `json:"displayName"`
+	Key          string `json:"key"`
+	Revision     int64  `json:"revision"`
+}
+
 // ScheduleProjection defines model for ScheduleProjection.
 type ScheduleProjection struct {
 	Calendar                ScheduleCalendar                 `json:"calendar"`
@@ -3576,8 +4613,11 @@ type ScheduleSelectorKind string
 
 // ScheduleSelectorCatalog defines model for ScheduleSelectorCatalog.
 type ScheduleSelectorCatalog struct {
-	Complete  ScheduleSelectorCatalogComplete `json:"complete"`
-	Selectors []ScheduleSelector              `json:"selectors"`
+	Complete          ScheduleSelectorCatalogComplete `json:"complete"`
+	Defaults          ScheduleDefaults                `json:"defaults"`
+	Presets           []SchedulePreset                `json:"presets"`
+	RuntimeSelections []RuntimeSelectionCatalogEntry  `json:"runtimeSelections"`
+	Selectors         []ScheduleSelector              `json:"selectors"`
 }
 
 // ScheduleSelectorCatalogComplete defines model for ScheduleSelectorCatalog.Complete.
@@ -3591,11 +4631,7 @@ type ScheduleTargetType string
 
 // SessionProjection defines model for SessionProjection.
 type SessionProjection struct {
-	AgentId                  openapi_types.UUID  `json:"agentId"`
-	ArchiveRef               *string             `json:"archiveRef,omitempty"`
-	ConversationId           *openapi_types.UUID `json:"conversationId,omitempty"`
-	LastTurnSequence         int64               `json:"lastTurnSequence"`
-	ProviderAccountBindingId openapi_types.UUID  `json:"providerAccountBindingId"`
+	LastTurnSequence int64 `json:"lastTurnSequence"`
 }
 
 // Sha256 defines model for Sha256.
@@ -3750,6 +4786,15 @@ type WorkspaceRestoreCommand struct {
 // WorkspaceRestoreCommandAction defines model for WorkspaceRestoreCommand.Action.
 type WorkspaceRestoreCommandAction string
 
+// WorkspaceRestoreNextAction defines model for WorkspaceRestoreNextAction.
+type WorkspaceRestoreNextAction string
+
+// WorkspaceRestorePage defines model for WorkspaceRestorePage.
+type WorkspaceRestorePage struct {
+	NextPageToken *string                `json:"nextPageToken,omitempty"`
+	Restores      []WorkspaceRestoreView `json:"restores"`
+}
+
 // WorkspaceRestoreProjection defines model for WorkspaceRestoreProjection.
 type WorkspaceRestoreProjection struct {
 	Attempt            int                   `json:"attempt"`
@@ -3765,6 +4810,21 @@ type WorkspaceRestoreProjection struct {
 
 // WorkspaceRestoreState defines model for WorkspaceRestoreState.
 type WorkspaceRestoreState string
+
+// WorkspaceRestoreView defines model for WorkspaceRestoreView.
+type WorkspaceRestoreView struct {
+	Attempt            int                          `json:"attempt"`
+	CreatedAt          time.Time                    `json:"createdAt"`
+	DisplayName        string                       `json:"displayName"`
+	Generation         int64                        `json:"generation"`
+	MemberCount        int                          `json:"memberCount"`
+	NextActions        []WorkspaceRestoreNextAction `json:"nextActions"`
+	RestoreRef         string                       `json:"restoreRef"`
+	State              WorkspaceRestoreState        `json:"state"`
+	TerminalReasonCode string                       `json:"terminalReasonCode"`
+	UpdatedAt          time.Time                    `json:"updatedAt"`
+	Version            int64                        `json:"version"`
+}
 
 // ApprovalRef defines model for ApprovalRef.
 type ApprovalRef = string
@@ -3909,6 +4969,12 @@ type ListAgentAssignmentHistoryParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListAgentBotIdentitiesParams defines parameters for ListAgentBotIdentities.
+type ListAgentBotIdentitiesParams struct {
+	PageSize  *PageSize `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *string   `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -3920,6 +4986,24 @@ type ManageAgentParams struct {
 	XCSRFToken     CSRFToken        `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
 	IfMatch        *OptionalIfMatch `json:"If-Match,omitempty"`
+}
+
+// ManageAgentBotIdentityParams defines parameters for ManageAgentBotIdentity.
+type ManageAgentBotIdentityParams struct {
+	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// GetAgentBotIdentityOperationParams defines parameters for GetAgentBotIdentityOperation.
+type GetAgentBotIdentityOperationParams struct {
+	Action         AgentBotIdentityAction `form:"action" json:"action"`
+	IdempotencyKey IdempotencyKey         `json:"Idempotency-Key"`
+}
+
+// GetAgentBotIdentityProviderReadbackParams defines parameters for GetAgentBotIdentityProviderReadback.
+type GetAgentBotIdentityProviderReadbackParams struct {
+	IdentitySelector string `form:"identitySelector" json:"identitySelector"`
 }
 
 // ListAgentHistoryParams defines parameters for ListAgentHistory.
@@ -3965,9 +5049,11 @@ type ListConfigurationChangesParams struct {
 
 // GetConfigurationDiffParams defines parameters for GetConfigurationDiff.
 type GetConfigurationDiffParams struct {
-	InstructionSetRef string `form:"instructionSetRef" json:"instructionSetRef"`
-	LeftVersion       int64  `form:"leftVersion" json:"leftVersion"`
-	RightVersion      int64  `form:"rightVersion" json:"rightVersion"`
+	InstructionSetRef string     `form:"instructionSetRef" json:"instructionSetRef"`
+	LeftVersion       int64      `form:"leftVersion" json:"leftVersion"`
+	RightVersion      int64      `form:"rightVersion" json:"rightVersion"`
+	PageSize          *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken         *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // GetConfigurationSourceDetailParams defines parameters for GetConfigurationSourceDetail.
@@ -4115,11 +5201,23 @@ type CreateMattermostTeamParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// GetOwnerConfigurationCatalogParams defines parameters for GetOwnerConfigurationCatalog.
+type GetOwnerConfigurationCatalogParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ResolveOwnerGateParams defines parameters for ResolveOwnerGate.
 type ResolveOwnerGateParams struct {
 	XCSRFToken     CSRFToken      `json:"X-CSRF-Token"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// ListOwnerSchedulesParams defines parameters for ListOwnerSchedules.
+type ListOwnerSchedulesParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListProjectsParams defines parameters for ListProjects.
@@ -4318,6 +5416,12 @@ type ManageRunParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 }
 
+// GetRunLineageParams defines parameters for GetRunLineage.
+type GetRunLineageParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ListRunTimelineParams defines parameters for ListRunTimeline.
 type ListRunTimelineParams struct {
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
@@ -4430,6 +5534,9 @@ type ManageAgentAssignmentJSONRequestBody = AgentAssignmentCommand
 
 // ManageAgentJSONRequestBody defines body for ManageAgent for application/json ContentType.
 type ManageAgentJSONRequestBody = AgentCommand
+
+// ManageAgentBotIdentityJSONRequestBody defines body for ManageAgentBotIdentity for application/json ContentType.
+type ManageAgentBotIdentityJSONRequestBody = AgentBotIdentityCommand
 
 // RestoreBackupJSONRequestBody defines body for RestoreBackup for application/json ContentType.
 type RestoreBackupJSONRequestBody = RestoreBackup
@@ -4945,6 +6052,9 @@ type ServerInterface interface {
 	// Получить immutable AgentAssignment history
 	// (GET /agent-assignments/{resourceRef}/history)
 	ListAgentAssignmentHistory(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ListAgentAssignmentHistoryParams)
+	// Получить безопасный Mattermost bot identity catalog
+	// (GET /agent-bot-identities)
+	ListAgentBotIdentities(w http.ResponseWriter, r *http.Request, params ListAgentBotIdentitiesParams)
 	// Получить owner Agent catalog
 	// (GET /agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams)
@@ -4954,6 +6064,18 @@ type ServerInterface interface {
 	// Прочитать exact Agent
 	// (GET /agents/{resourceRef})
 	GetAgent(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef)
+	// Получить текущую Mattermost bot identity binding
+	// (GET /agents/{resourceRef}/bot-identity)
+	GetAgentBotIdentity(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef)
+	// Создать, bind, rebind или revoke Mattermost bot identity
+	// (POST /agents/{resourceRef}/bot-identity)
+	ManageAgentBotIdentity(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ManageAgentBotIdentityParams)
+	// Получить durable bot identity operation readback
+	// (GET /agents/{resourceRef}/bot-identity/operations)
+	GetAgentBotIdentityOperation(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params GetAgentBotIdentityOperationParams)
+	// Повторно разрешить opaque bot selector owner-side
+	// (GET /agents/{resourceRef}/bot-identity/provider-readback)
+	GetAgentBotIdentityProviderReadback(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params GetAgentBotIdentityProviderReadbackParams)
 	// Получить immutable Agent history
 	// (GET /agents/{resourceRef}/history)
 	ListAgentHistory(w http.ResponseWriter, r *http.Request, resourceRef ResourceRef, params ListAgentHistoryParams)
@@ -5074,9 +6196,18 @@ type ServerInterface interface {
 	// Повторно разрешить opaque Team selector provider-side
 	// (GET /mattermost/teams/{selector})
 	GetMattermostTeamProviderReadback(w http.ResponseWriter, r *http.Request, selector Selector)
+	// Получить server-authored runtime и Schedule catalog
+	// (GET /owner-configuration/catalog)
+	GetOwnerConfigurationCatalog(w http.ResponseWriter, r *http.Request, params GetOwnerConfigurationCatalogParams)
 	// Принять решение по exact delivered OwnerGate
 	// (POST /owner-gates/{ownerGateId}/resolution)
 	ResolveOwnerGate(w http.ResponseWriter, r *http.Request, ownerGateId openapi_types.UUID, params ResolveOwnerGateParams)
+	// Получить owner-facing Schedule projections
+	// (GET /owner-schedules)
+	ListOwnerSchedules(w http.ResponseWriter, r *http.Request, params ListOwnerSchedulesParams)
+	// Получить exact owner-facing Schedule projection
+	// (GET /owner-schedules/{scheduleRef})
+	GetOwnerSchedule(w http.ResponseWriter, r *http.Request, scheduleRef string)
 	// Получить доступные owner проекты
 	// (GET /projects)
 	ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams)
@@ -5187,7 +6318,7 @@ type ServerInterface interface {
 	ManageRun(w http.ResponseWriter, r *http.Request, runRef RunRef, params ManageRunParams)
 	// Получить полный versioned Run lineage
 	// (GET /runs/{runRef}/lineage)
-	GetRunLineage(w http.ResponseWriter, r *http.Request, runRef RunRef)
+	GetRunLineage(w http.ResponseWriter, r *http.Request, runRef RunRef, params GetRunLineageParams)
 	// Получить bounded Run timeline
 	// (GET /runs/{runRef}/timeline)
 	ListRunTimeline(w http.ResponseWriter, r *http.Request, runRef RunRef, params ListRunTimelineParams)
@@ -5215,7 +6346,7 @@ type ServerInterface interface {
 	// Создать отдельный немедленный запуск без сдвига watermark
 	// (POST /schedules/{scheduleId}/run-now)
 	RunScheduleNow(w http.ResponseWriter, r *http.Request, scheduleId openapi_types.UUID, params RunScheduleNowParams)
-	// Перепривязать Schedule к exact current selections
+	// Обновить Schedule basic intent и exact current selections
 	// (PUT /schedules/{scheduleRef}/configuration)
 	BindScheduleConfiguration(w http.ResponseWriter, r *http.Request, scheduleRef string, params BindScheduleConfigurationParams)
 	// Завершить локальную owner-сессию
@@ -5809,6 +6940,58 @@ func (siw *ServerInterfaceWrapper) ListAgentAssignmentHistory(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// ListAgentBotIdentities operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentBotIdentities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentBotIdentitiesParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentBotIdentities(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListAgents operation middleware
 func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
 
@@ -5977,6 +7160,265 @@ func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAgent(w, r, resourceRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentBotIdentity operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentBotIdentity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "resourceRef" -------------
+	var resourceRef ResourceRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentBotIdentity(w, r, resourceRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ManageAgentBotIdentity operation middleware
+func (siw *ServerInterfaceWrapper) ManageAgentBotIdentity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "resourceRef" -------------
+	var resourceRef ResourceRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ManageAgentBotIdentityParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ManageAgentBotIdentity(w, r, resourceRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentBotIdentityOperation operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentBotIdentityOperation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "resourceRef" -------------
+	var resourceRef ResourceRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAgentBotIdentityOperationParams
+
+	// ------------- Required query parameter "action" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uuid"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentBotIdentityOperation(w, r, resourceRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentBotIdentityProviderReadback operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentBotIdentityProviderReadback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "resourceRef" -------------
+	var resourceRef ResourceRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "resourceRef", r.PathValue("resourceRef"), &resourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAgentBotIdentityProviderReadbackParams
+
+	// ------------- Required query parameter "identitySelector" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "identitySelector", r.URL.Query(), &params.IdentitySelector, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "identitySelector"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "identitySelector", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentBotIdentityProviderReadback(w, r, resourceRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6495,6 +7937,32 @@ func (siw *ServerInterfaceWrapper) GetConfigurationDiff(w http.ResponseWriter, r
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "rightVersion"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rightVersion", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
 		}
 		return
 	}
@@ -8395,6 +9863,58 @@ func (siw *ServerInterfaceWrapper) GetMattermostTeamProviderReadback(w http.Resp
 	handler.ServeHTTP(w, r)
 }
 
+// GetOwnerConfigurationCatalog operation middleware
+func (siw *ServerInterfaceWrapper) GetOwnerConfigurationCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOwnerConfigurationCatalogParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOwnerConfigurationCatalog(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ResolveOwnerGate operation middleware
 func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *http.Request) {
 
@@ -8492,6 +10012,90 @@ func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResolveOwnerGate(w, r, ownerGateId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOwnerSchedules operation middleware
+func (siw *ServerInterfaceWrapper) ListOwnerSchedules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOwnerSchedulesParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOwnerSchedules(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOwnerSchedule operation middleware
+func (siw *ServerInterfaceWrapper) GetOwnerSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "scheduleRef" -------------
+	var scheduleRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "scheduleRef", r.PathValue("scheduleRef"), &scheduleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scheduleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, OwnerSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOwnerSchedule(w, r, scheduleRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11145,8 +12749,37 @@ func (siw *ServerInterfaceWrapper) GetRunLineage(w http.ResponseWriter, r *http.
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRunLineageParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRunLineage(w, r, runRef)
+		siw.Handler.GetRunLineage(w, r, runRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12627,9 +14260,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-assignments/commands", wrapper.ManageAgentAssignment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agent-assignments/{resourceRef}", wrapper.GetAgentAssignment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agent-assignments/{resourceRef}/history", wrapper.ListAgentAssignmentHistory)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agent-bot-identities", wrapper.ListAgentBotIdentities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/commands", wrapper.ManageAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity", wrapper.GetAgentBotIdentity)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity", wrapper.ManageAgentBotIdentity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity/operations", wrapper.GetAgentBotIdentityOperation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/bot-identity/provider-readback", wrapper.GetAgentBotIdentityProviderReadback)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{resourceRef}/history", wrapper.ListAgentHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAuditEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit/export", wrapper.ExportAudit)
@@ -12670,7 +14308,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/teams", wrapper.ListMattermostTeams)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/mattermost/teams", wrapper.CreateMattermostTeam)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/mattermost/teams/{selector}", wrapper.GetMattermostTeamProviderReadback)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/owner-configuration/catalog", wrapper.GetOwnerConfigurationCatalog)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/owner-gates/{ownerGateId}/resolution", wrapper.ResolveOwnerGate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/owner-schedules", wrapper.ListOwnerSchedules)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/owner-schedules/{scheduleRef}", wrapper.GetOwnerSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/projects", wrapper.ListProjects)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/projects", wrapper.CreateProject)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/projects/{projectId}", wrapper.DeleteProject)

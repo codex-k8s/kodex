@@ -19,11 +19,11 @@ tags:
   - { name: backups, description: Безопасные backup projections и restore commands. }
   - { name: role-images, description: Специализированные owner-команды image recipe/build. }
   - { name: workspaces, description: Workspace и Mattermost Team mapping. }
-  - { name: agents, description: RoleDefinition, Agent и Assignment. }
+  - { name: agents, description: "RoleDefinition, Agent и Assignment." }
   - { name: instructions, description: Версионируемые InstructionSet. }
-  - { name: providers, description: Provider authorization, accounts и pools. }
-  - { name: integrations, description: Definition, configuration, tests и approvals. }
-  - { name: operations, description: Run, incident, health, backup и restore. }
+  - { name: providers, description: "Provider authorization, accounts и pools." }
+  - { name: integrations, description: "Definition, configuration, tests и approvals." }
+  - { name: operations, description: "Run, incident, health, backup и restore." }
 paths:
   /session:
     post:
@@ -43,6 +43,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
     delete:
       tags: [session]
       summary: Завершить локальную owner-сессию
@@ -62,6 +63,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /projects:
     get:
       tags: [projects]
@@ -81,6 +83,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [projects]
       summary: Создать проект с назначенным сервером owner
@@ -858,14 +861,15 @@ paths:
         - { $ref: '#/components/parameters/PageToken' }
       responses:
         '200':
-          description: Авторитетные PROCESS_RUN resources.
-          content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } }
+          description: Авторитетные безопасные Run projections.
+          content: { application/json: { schema: { $ref: '#/components/schemas/RunPage' } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /audit:
     get:
       tags: [projections]
@@ -888,6 +892,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /incidents:
     get:
       tags: [projections]
@@ -907,6 +912,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /configuration-changes:
     get:
       tags: [projections]
@@ -926,6 +932,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /diagnostics:
     get:
       tags: [projections]
@@ -941,6 +948,7 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /mattermost/teams:
     get:
       tags: [workspaces]
@@ -953,6 +961,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [workspaces]
       summary: Создать Team и получить durable readback
@@ -965,6 +974,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /mattermost/teams/{selector}:
     get:
       tags: [workspaces]
@@ -976,6 +986,7 @@ paths:
         '200': { description: Fresh provider readback., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeam' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /mattermost/team-binding:
     get:
       tags: [workspaces]
@@ -986,6 +997,7 @@ paths:
         '200': { description: Current binding., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamBinding' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [workspaces]
       summary: Связать Workspace с Team из owner catalog
@@ -997,6 +1009,7 @@ paths:
         '200': { description: Authoritative binding., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamMutationResult' } } } }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
     put:
       tags: [workspaces]
       summary: Пересвязать Workspace с другой Team
@@ -1008,6 +1021,7 @@ paths:
         '200': { description: Authoritative binding., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamMutationResult' } } } }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
     delete:
       tags: [workspaces]
       summary: Закрыть exact Workspace Team mapping
@@ -1018,6 +1032,7 @@ paths:
         '200': { description: Terminal mapping readback., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamMutationResult' } } } }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /mattermost/team-operations:
     get:
       tags: [workspaces]
@@ -1031,6 +1046,7 @@ paths:
         '200': { description: Durable operation readback., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostMappingOperation' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
+        default: { $ref: '#/components/responses/Problem' }
   /role-definitions:
     get:
       tags: [agents]
@@ -1038,7 +1054,7 @@ paths:
       operationId: listRoleDefinitions
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: RoleDefinition page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } }, '503': { $ref: '#/components/responses/Unavailable' } }
+      responses: { '200': { description: RoleDefinition page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } }, '503': { $ref: '#/components/responses/Unavailable' }, default: { $ref: '#/components/responses/Problem' } }
   /role-definitions/{resourceRef}:
     get:
       tags: [agents]
@@ -1046,7 +1062,7 @@ paths:
       operationId: getRoleDefinition
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
-      responses: { '200': { description: Current RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+      responses: { '200': { description: Current RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '404': { $ref: '#/components/responses/NotFound' }, default: { $ref: '#/components/responses/Problem' } }
   /role-definitions/{resourceRef}/history:
     get:
       tags: [agents]
@@ -1054,7 +1070,7 @@ paths:
       operationId: listRoleDefinitionHistory
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /role-definitions/commands:
     post:
       tags: [agents]
@@ -1063,7 +1079,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleDefinitionCommand' } } } }
-      responses: { '200': { description: Authoritative RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '412': { $ref: '#/components/responses/PreconditionFailed' } }
+      responses: { '200': { description: Authoritative RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '412': { $ref: '#/components/responses/PreconditionFailed' }, default: { $ref: '#/components/responses/Problem' } }
   /agents:
     get:
       tags: [agents]
@@ -1071,7 +1087,7 @@ paths:
       operationId: listAgents
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Agent page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+      responses: { '200': { description: Безопасная owner Agent page., content: { application/json: { schema: { $ref: '#/components/schemas/AgentPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /agents/{resourceRef}:
     get:
       tags: [agents]
@@ -1079,7 +1095,7 @@ paths:
       operationId: getAgent
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
-      responses: { '200': { description: Current Agent., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Безопасная current Agent projection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/AgentView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /agents/{resourceRef}/history:
     get:
       tags: [agents]
@@ -1087,7 +1103,7 @@ paths:
       operationId: listAgentHistory
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+      responses: { '200': { description: Безопасная immutable Agent history., content: { application/json: { schema: { $ref: '#/components/schemas/AgentHistoryPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /agents/commands:
     post:
       tags: [agents]
@@ -1096,7 +1112,55 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentCommand' } } } }
-      responses: { '200': { description: Authoritative Agent., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created Agent., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Authoritative Agent projection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/AgentView' } } } }, '201': { description: Created Agent projection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/AgentView' } } } }, default: { $ref: '#/components/responses/Problem' } }
+  /owner-configuration/catalog:
+    get:
+      tags: [agents, schedules]
+      summary: Получить server-authored runtime и Schedule catalog
+      operationId: getOwnerConfigurationCatalog
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Versioned owner configuration catalog., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerConfigurationCatalog' } } } }, default: { $ref: '#/components/responses/Problem' } }
+  /agent-bot-identities:
+    get:
+      tags: [agents]
+      summary: Получить безопасный Mattermost bot identity catalog
+      operationId: listAgentBotIdentities
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { name: pageToken, in: query, schema: { type: string, maxLength: 1024 } }]
+      responses: { '200': { description: Безопасный selector catalog без provider IDs., content: { application/json: { schema: { $ref: '#/components/schemas/AgentBotIdentityPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
+  /agents/{resourceRef}/bot-identity:
+    get:
+      tags: [agents]
+      summary: Получить текущую Mattermost bot identity binding
+      operationId: getAgentBotIdentity
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
+      responses: { '200': { description: Authoritative safe binding., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/AgentBotIdentityBinding' } } } }, default: { $ref: '#/components/responses/Problem' } }
+    post:
+      tags: [agents]
+      summary: Создать, bind, rebind или revoke Mattermost bot identity
+      operationId: manageAgentBotIdentity
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentBotIdentityCommand' } } } }
+      responses: { '200': { description: Durable bot operation и authoritative binding., content: { application/json: { schema: { $ref: '#/components/schemas/AgentBotIdentityCommandResult' } } } }, '202': { description: Provider effect принят., content: { application/json: { schema: { $ref: '#/components/schemas/AgentBotIdentityCommandResult' } } } }, default: { $ref: '#/components/responses/Problem' } }
+  /agents/{resourceRef}/bot-identity/operations:
+    get:
+      tags: [agents]
+      summary: Получить durable bot identity operation readback
+      operationId: getAgentBotIdentityOperation
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { name: action, in: query, required: true, schema: { $ref: '#/components/schemas/AgentBotIdentityAction' } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Durable bot identity operation., content: { application/json: { schema: { $ref: '#/components/schemas/AgentBotIdentityOperation' } } } }, default: { $ref: '#/components/responses/Problem' } }
+  /agents/{resourceRef}/bot-identity/provider-readback:
+    get:
+      tags: [agents]
+      summary: Повторно разрешить opaque bot selector owner-side
+      operationId: getAgentBotIdentityProviderReadback
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { name: identitySelector, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }]
+      responses: { '200': { description: Safe provider readback., content: { application/json: { schema: { $ref: '#/components/schemas/AgentBotIdentity' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /agent-assignments:
     get:
       tags: [agents]
@@ -1104,7 +1168,7 @@ paths:
       operationId: listAgentAssignments
       security: [{ ownerSession: [] }]
       parameters: [{ name: agentRef, in: query, schema: { type: string, maxLength: 160 } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Assignment page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+      responses: { '200': { description: Assignment page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /agent-assignments/{resourceRef}:
     get:
       tags: [agents]
@@ -1112,7 +1176,7 @@ paths:
       operationId: getAgentAssignment
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
-      responses: { '200': { description: Current assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Current assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /agent-assignments/{resourceRef}/history:
     get:
       tags: [agents]
@@ -1120,7 +1184,7 @@ paths:
       operationId: listAgentAssignmentHistory
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /agent-assignments/commands:
     post:
       tags: [agents]
@@ -1129,7 +1193,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentAssignmentCommand' } } } }
-      responses: { '200': { description: Authoritative assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Authoritative assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /instruction-sets:
     get:
       tags: [instructions]
@@ -1137,7 +1201,7 @@ paths:
       operationId: listInstructionSets
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: InstructionSet page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+      responses: { '200': { description: InstructionSet page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /instruction-sets/{resourceRef}:
     get:
       tags: [instructions]
@@ -1145,7 +1209,7 @@ paths:
       operationId: getInstructionSet
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
-      responses: { '200': { description: Current InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Current InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /instruction-sets/{resourceRef}/history:
     get:
       tags: [instructions]
@@ -1153,7 +1217,7 @@ paths:
       operationId: listInstructionSetHistory
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /instruction-sets/{resourceRef}/compare:
     get:
       tags: [instructions]
@@ -1161,7 +1225,7 @@ paths:
       operationId: compareInstructionSetVersions
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { name: leftVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: rightVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
-      responses: { '200': { description: Authoritative compare., content: { application/json: { schema: { $ref: '#/components/schemas/InstructionSetComparison' } } } } }
+      responses: { '200': { description: Authoritative compare., content: { application/json: { schema: { $ref: '#/components/schemas/InstructionSetComparison' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /instruction-sets/commands:
     post:
       tags: [instructions]
@@ -1170,14 +1234,14 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InstructionSetCommand' } } } }
-      responses: { '200': { description: Authoritative InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Authoritative InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /providers:
     get:
       tags: [providers]
       summary: Получить versioned provider catalog
       operationId: listProviders
       security: [{ ownerSession: [] }]
-      responses: { '200': { description: Provider catalog., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderCatalog' } } } } }
+      responses: { '200': { description: Provider catalog., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderCatalog' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /providers/{providerRef}:
     get:
       tags: [providers]
@@ -1185,7 +1249,7 @@ paths:
       operationId: getProvider
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ProviderRef' }, { name: version, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: digestSha256, in: query, required: true, schema: { $ref: '#/components/schemas/Sha256' } }]
-      responses: { '200': { description: Provider definition., content: { application/json: { schema: { $ref: '#/components/schemas/Provider' } } } } }
+      responses: { '200': { description: Provider definition., content: { application/json: { schema: { $ref: '#/components/schemas/Provider' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-authorizations:
     post:
       tags: [providers]
@@ -1194,7 +1258,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/StartProviderAuthorization' } } } }
-      responses: { '202': { description: Authorization attempt., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+      responses: { '202': { description: Authorization attempt., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-authorizations/{authorizationRef}:
     get:
       tags: [providers]
@@ -1202,14 +1266,14 @@ paths:
       operationId: getProviderAuthorization
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/AuthorizationRef' }]
-      responses: { '200': { description: Authorization readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+      responses: { '200': { description: Authorization readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } }, default: { $ref: '#/components/responses/Problem' } }
     delete:
       tags: [providers]
       summary: Отменить exact provider authorization attempt
       operationId: cancelProviderAuthorization
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/AuthorizationRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
-      responses: { '200': { description: Cancelled authorization., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+      responses: { '200': { description: Cancelled authorization., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-authorizations/{authorizationRef}/new-code:
     post:
       tags: [providers]
@@ -1217,7 +1281,7 @@ paths:
       operationId: restartProviderAuthorization
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/AuthorizationRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
-      responses: { '202': { description: Fresh authorization attempt., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+      responses: { '202': { description: Fresh authorization attempt., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-connections:
     get:
       tags: [providers]
@@ -1225,7 +1289,7 @@ paths:
       operationId: listProviderConnections
       security: [{ ownerSession: [] }]
       parameters: [{ name: state, in: query, schema: { $ref: '#/components/schemas/ProviderConnectionState' } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Provider connection page., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnectionPage' } } } } }
+      responses: { '200': { description: Provider connection page., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnectionPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-connections/{connectionRef}:
     get:
       tags: [providers]
@@ -1233,14 +1297,14 @@ paths:
       operationId: getProviderConnection
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ConnectionRef' }]
-      responses: { '200': { description: Provider connection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } } }
+      responses: { '200': { description: Provider connection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }, default: { $ref: '#/components/responses/Problem' } }
     delete:
       tags: [providers]
       summary: Отозвать provider account
       operationId: revokeProviderConnection
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }, { name: generation, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
-      responses: { '200': { description: Revoked connection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } } }
+      responses: { '200': { description: Revoked connection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-connections/{connectionRef}/reauthorize:
     post:
       tags: [providers]
@@ -1248,7 +1312,7 @@ paths:
       operationId: reauthorizeProviderConnection
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }, { name: generation, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
-      responses: { '202': { description: Authorization attempt., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+      responses: { '202': { description: Authorization attempt., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-pools:
     get:
       tags: [providers]
@@ -1256,7 +1320,7 @@ paths:
       operationId: listProviderPools
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Pool page., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolPage' } } } } }
+      responses: { '200': { description: Pool page., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-pools/{poolRef}:
     get:
       tags: [providers]
@@ -1264,7 +1328,7 @@ paths:
       operationId: getProviderPool
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/PoolRef' }]
-      responses: { '200': { description: Provider pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } } }
+      responses: { '200': { description: Provider pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /provider-pools/commands:
     post:
       tags: [providers]
@@ -1273,14 +1337,14 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolCommand' } } } }
-      responses: { '200': { description: Authoritative pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } }, '201': { description: Created pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } } }
+      responses: { '200': { description: Authoritative pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } }, '201': { description: Created pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-definitions:
     get:
       tags: [integrations]
       summary: Получить IntegrationDefinition catalog
       operationId: listIntegrationDefinitions
       security: [{ ownerSession: [] }]
-      responses: { '200': { description: Definition catalog., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinitionPage' } } } } }
+      responses: { '200': { description: Definition catalog., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinitionPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-definitions/{definitionRef}:
     get:
       tags: [integrations]
@@ -1288,7 +1352,7 @@ paths:
       operationId: getIntegrationDefinition
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/DefinitionRef' }, { name: version, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: digestSha256, in: query, required: true, schema: { $ref: '#/components/schemas/Sha256' } }]
-      responses: { '200': { description: Integration definition., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinition' } } } } }
+      responses: { '200': { description: Integration definition., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinition' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-configurations:
     get:
       tags: [integrations]
@@ -1296,7 +1360,7 @@ paths:
       operationId: listIntegrationConfigurations
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Configuration page., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfigurationPage' } } } } }
+      responses: { '200': { description: Configuration page., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfigurationPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
     post:
       tags: [integrations]
       summary: Настроить IntegrationDefinition через catalog refs
@@ -1304,7 +1368,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ConfigureIntegration' } } } }
-      responses: { '200': { description: Integration configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } }, '201': { description: Created configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } } }
+      responses: { '200': { description: Integration configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } }, '201': { description: Created configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-configurations/{configurationRef}:
     get:
       tags: [integrations]
@@ -1312,7 +1376,7 @@ paths:
       operationId: getIntegrationConfiguration
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }]
-      responses: { '200': { description: Configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } } }
+      responses: { '200': { description: Configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-tests:
     post:
       tags: [integrations]
@@ -1321,7 +1385,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TestIntegrationConnection' } } } }
-      responses: { '202': { description: Test receipt., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationTestReceipt' } } } } }
+      responses: { '202': { description: Test receipt., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationTestReceipt' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-tests/{testRef}:
     get:
       tags: [integrations]
@@ -1329,7 +1393,7 @@ paths:
       operationId: getIntegrationTestReceipt
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/TestRef' }]
-      responses: { '200': { description: Test receipt., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationTestReceipt' } } } } }
+      responses: { '200': { description: Test receipt., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationTestReceipt' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-approvals:
     get:
       tags: [integrations]
@@ -1337,7 +1401,7 @@ paths:
       operationId: listIntegrationApprovals
       security: [{ ownerSession: [] }]
       parameters: [{ name: status, in: query, schema: { type: string, maxLength: 32 } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Approval page., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApprovalPage' } } } } }
+      responses: { '200': { description: Approval page., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApprovalPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-approvals/{approvalRef}:
     get:
       tags: [integrations]
@@ -1345,7 +1409,7 @@ paths:
       operationId: getIntegrationApproval
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ApprovalRef' }]
-      responses: { '200': { description: Approval., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApproval' } } } } }
+      responses: { '200': { description: Approval., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApproval' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /integration-approvals/{approvalRef}/decision:
     post:
       tags: [integrations]
@@ -1354,14 +1418,30 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ApprovalRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DecideIntegrationApproval' } } } }
-      responses: { '200': { description: Terminal approval readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApproval' } } } } }
+      responses: { '200': { description: Terminal approval readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApproval' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /schedule-selectors:
     get:
       tags: [schedules]
       summary: Получить UI-friendly selectors для Schedule
       operationId: listScheduleSelectors
       security: [{ ownerSession: [] }]
-      responses: { '200': { description: Versioned selectors из owner catalogs., content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleSelectorCatalog' } } } } }
+      responses: { '200': { description: "Versioned selectors, presets и defaults из owner catalogs.", content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleSelectorCatalog' } } } }, default: { $ref: '#/components/responses/Problem' } }
+  /owner-schedules:
+    get:
+      tags: [schedules]
+      summary: Получить owner-facing Schedule projections
+      operationId: listOwnerSchedules
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Schedule projections with authoritative effective values., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerSchedulePage' } } } }, default: { $ref: '#/components/responses/Problem' } }
+  /owner-schedules/{scheduleRef}:
+    get:
+      tags: [schedules]
+      summary: Получить exact owner-facing Schedule projection
+      operationId: getOwnerSchedule
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: scheduleRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }]
+      responses: { '200': { description: Current Schedule projection with authoritative effective values., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OwnerScheduleView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /schedules/from-selections:
     post:
       tags: [schedules]
@@ -1370,16 +1450,16 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateScheduleFromSelections' } } } }
-      responses: { '201': { description: Authoritative Schedule., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '201': { description: Authoritative Schedule projection with effective values., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OwnerScheduleView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /schedules/{scheduleRef}/configuration:
     put:
       tags: [schedules]
-      summary: Перепривязать Schedule к exact current selections
+      summary: Обновить Schedule basic intent и exact current selections
       operationId: bindScheduleConfiguration
       security: [{ ownerSession: [] }]
       parameters: [{ name: scheduleRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BindScheduleConfiguration' } } } }
-      responses: { '200': { description: Current Schedule projection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Current Schedule projection with effective values., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OwnerScheduleView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /runs/{runRef}:
     get:
       tags: [operations]
@@ -1387,7 +1467,7 @@ paths:
       operationId: getRunDetail
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/RunRef' }]
-      responses: { '200': { description: Run detail., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/RunDetail' } } } } }
+      responses: { '200': { description: Безопасный owner Run detail., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/RunDetail' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /runs/{runRef}/timeline:
     get:
       tags: [operations]
@@ -1395,15 +1475,15 @@ paths:
       operationId: listRunTimeline
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/RunRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Timeline page., content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } } } }
+      responses: { '200': { description: Безопасная typed timeline page., content: { application/json: { schema: { $ref: '#/components/schemas/RunTimelinePage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /runs/{runRef}/lineage:
     get:
       tags: [operations]
       summary: Получить полный versioned Run lineage
       operationId: getRunLineage
       security: [{ ownerSession: [] }]
-      parameters: [{ $ref: '#/components/parameters/RunRef' }]
-      responses: { '200': { description: Complete lineage., content: { application/json: { schema: { $ref: '#/components/schemas/RunLineage' } } } } }
+      parameters: [{ $ref: '#/components/parameters/RunRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Bounded typed lineage page., content: { application/json: { schema: { $ref: '#/components/schemas/RunLineage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /runs/{runRef}/artifacts:
     get:
       tags: [operations]
@@ -1411,7 +1491,7 @@ paths:
       operationId: listRunArtifacts
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/RunRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Artifact resource page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+      responses: { '200': { description: Безопасная typed artifact page., content: { application/json: { schema: { $ref: '#/components/schemas/RunArtifactPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /runs/{runRef}/commands:
     post:
       tags: [operations]
@@ -1420,7 +1500,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/RunRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RunCommand' } } } }
-      responses: { '200': { description: Run command readback., content: { application/json: { schema: { $ref: '#/components/schemas/RunCommandResult' } } } } }
+      responses: { '200': { description: Run command typed readback., content: { application/json: { schema: { $ref: '#/components/schemas/RunCommandResult' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /incidents/{incidentRef}:
     get:
       tags: [operations]
@@ -1428,7 +1508,7 @@ paths:
       operationId: getIncident
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/IncidentRef' }]
-      responses: { '200': { description: Incident detail., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeIncident' } } } } }
+      responses: { '200': { description: Безопасная owner Incident projection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IncidentView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /incidents/{incidentRef}/history:
     get:
       tags: [operations]
@@ -1436,7 +1516,7 @@ paths:
       operationId: listIncidentHistory
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/IncidentRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Incident history., content: { application/json: { schema: { $ref: '#/components/schemas/IncidentHistoryPage' } } } } }
+      responses: { '200': { description: Incident history with current authoritative actions., content: { application/json: { schema: { $ref: '#/components/schemas/IncidentHistoryPage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /incidents/{incidentRef}/commands:
     post:
       tags: [operations]
@@ -1445,14 +1525,14 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/IncidentRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/IncidentCommand' } } } }
-      responses: { '200': { description: Incident command readback., content: { application/json: { schema: { $ref: '#/components/schemas/IncidentCommandResult' } } } } }
+      responses: { '200': { description: Incident command typed readback., content: { application/json: { schema: { $ref: '#/components/schemas/IncidentCommandResult' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /health-series:
     get:
       tags: [operations]
       summary: Получить bounded current health observations
       operationId: getHealthSeries
       security: [{ ownerSession: [] }]
-      responses: { '200': { description: Current exact observations; не synthetic history., content: { application/json: { schema: { $ref: '#/components/schemas/HealthSeries' } } } } }
+      responses: { '200': { description: "Current exact observations, включая valid degraded state; не synthetic history.", content: { application/json: { schema: { $ref: '#/components/schemas/HealthSeries' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /workspace-backups:
     get:
       tags: [operations]
@@ -1460,7 +1540,7 @@ paths:
       operationId: listWorkspaceBackups
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Backup resource page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+      responses: { '200': { description: Backup resource page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /workspace-backups/{backupRef}:
     get:
       tags: [operations]
@@ -1468,7 +1548,7 @@ paths:
       operationId: getWorkspaceBackup
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/BackupRef' }]
-      responses: { '200': { description: Backup readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Backup readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /workspace-backups/commands:
     post:
       tags: [operations]
@@ -1477,7 +1557,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceBackupCommand' } } } }
-      responses: { '200': { description: Backup readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '202': { description: Backup operation accepted., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Backup readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '202': { description: Backup operation accepted., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /workspace-restores:
     get:
       tags: [operations]
@@ -1485,7 +1565,7 @@ paths:
       operationId: listWorkspaceRestores
       security: [{ ownerSession: [] }]
       parameters: [{ name: backupRef, in: query, schema: { type: string, maxLength: 160 } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
-      responses: { '200': { description: Restore resource page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+      responses: { '200': { description: Typed restore page., content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceRestorePage' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /workspace-restores/{restoreRef}:
     get:
       tags: [operations]
@@ -1493,7 +1573,7 @@ paths:
       operationId: getWorkspaceRestore
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/RestoreRef' }]
-      responses: { '200': { description: Restore readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Typed restore readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceRestoreView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /workspace-restores/commands:
     post:
       tags: [operations]
@@ -1502,7 +1582,7 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceRestoreCommand' } } } }
-      responses: { '200': { description: Restore readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '202': { description: Restore accepted., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+      responses: { '200': { description: Typed restore readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceRestoreView' } } } }, '202': { description: Restore accepted., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceRestoreView' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /audit/export:
     get:
       tags: [operations]
@@ -1510,15 +1590,15 @@ paths:
       operationId: exportAudit
       security: [{ ownerSession: [] }]
       parameters: [{ name: resourceKind, in: query, schema: { $ref: '#/components/schemas/ResourceKind' } }, { name: resourceRef, in: query, schema: { type: string, maxLength: 160 } }, { name: action, in: query, schema: { type: string, maxLength: 96 } }]
-      responses: { '200': { description: Не более 500 audit rows., content: { text/csv: { schema: { type: string, maxLength: 524288 } } } } }
+      responses: { '200': { description: Полный bounded audit export не более 500 rows., content: { text/csv: { schema: { type: string, maxLength: 524288 } } } }, default: { $ref: '#/components/responses/Problem' } }
   /configuration-diff:
     get:
       tags: [operations]
       summary: Получить authoritative InstructionSet version diff
       operationId: getConfigurationDiff
       security: [{ ownerSession: [] }]
-      parameters: [{ name: instructionSetRef, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }, { name: leftVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: rightVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
-      responses: { '200': { description: Server-computed compare., content: { application/json: { schema: { $ref: '#/components/schemas/InstructionSetComparison' } } } } }
+      parameters: [{ name: instructionSetRef, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }, { name: leftVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: rightVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Bounded redacted authoritative diff page., content: { application/json: { schema: { $ref: '#/components/schemas/ConfigurationDiff' } } } }, default: { $ref: '#/components/responses/Problem' } }
   /configuration-source/{resourceRef}:
     get:
       tags: [operations]
@@ -1526,7 +1606,7 @@ paths:
       operationId: getConfigurationSourceDetail
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { name: kind, in: query, required: true, schema: { type: string, enum: [ROLE_DEFINITION, AGENT, INSTRUCTION_SET, PROVIDER_POOL] } }]
-      responses: { '200': { description: Safe owner source detail., content: { application/json: { schema: { $ref: '#/components/schemas/ConfigurationSourceDetail' } } } } }
+      responses: { '200': { description: Safe owner source detail., content: { application/json: { schema: { $ref: '#/components/schemas/ConfigurationSourceDetail' } } } }, default: { $ref: '#/components/responses/Problem' } }
 components:
   securitySchemes:
     oidcBearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1665,12 +1745,194 @@ components:
         resourceRef: { type: string, maxLength: 160 }
         name: { type: string, maxLength: 160 }
         stableKey: { type: string, maxLength: 160 }
-        roleDefinitionStableKey: { type: string, maxLength: 160 }
+        runtimeSelectionKey: { type: string, maxLength: 160, description: Только selectionKey из authoritative owner configuration catalog. }
         instructionSetStableKey: { type: string, maxLength: 160 }
         providerPoolStableKey: { type: string, maxLength: 160 }
         capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
         enabled: { type: boolean }
       required: [action]
+    OwnerProjectionStatus:
+      title: OwnerProjectionStatus
+      type: string
+      enum: [PRESENT, UNAVAILABLE, STALE, INELIGIBLE]
+    OwnerDisplayValue:
+      title: OwnerDisplayValue
+      type: object
+      additionalProperties: false
+      properties:
+        status: { $ref: '#/components/schemas/OwnerProjectionStatus' }
+        value: { type: string, maxLength: 256 }
+      required: [status, value]
+    OwnerSafeSelection:
+      type: object
+      additionalProperties: false
+      properties:
+        selector: { type: string, maxLength: 160 }
+        displayName: { type: string, maxLength: 160 }
+        status: { $ref: '#/components/schemas/OwnerProjectionStatus' }
+        version: { type: integer, format: int64, minimum: 0 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+        maskedStatus: { type: string, maxLength: 160 }
+      required: [selector, displayName, status, version]
+    AgentRuntimeSelection:
+      type: object
+      additionalProperties: false
+      properties:
+        selectionKey: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        roleDefinitionVersion: { type: integer, format: int64, minimum: 1 }
+        roleDefinitionSha256: { $ref: '#/components/schemas/Sha256' }
+        runtimeProfileVersion: { type: integer, format: int64, minimum: 1 }
+        runtimeProfileSha256: { $ref: '#/components/schemas/Sha256' }
+        status: { $ref: '#/components/schemas/OwnerProjectionStatus' }
+      required: [selectionKey, displayName, roleDefinitionVersion, roleDefinitionSha256, runtimeProfileVersion, runtimeProfileSha256, status]
+    AgentBindingStatus:
+      title: AgentBindingStatus
+      type: string
+      enum: [UNBOUND, BOUND, REVOKED]
+    AgentBotIdentitySummary:
+      type: object
+      additionalProperties: false
+      properties:
+        status: { $ref: '#/components/schemas/AgentBindingStatus' }
+        username: { type: string, maxLength: 160 }
+        maskedStatus: { type: string, maxLength: 160 }
+        providerGeneration: { type: integer, format: int64, minimum: 0 }
+      required: [status, username, maskedStatus, providerGeneration]
+    AgentView:
+      type: object
+      additionalProperties: false
+      properties:
+        agentRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/LifecycleState' }
+        enabled: { type: boolean }
+        capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        botIdentity: { $ref: '#/components/schemas/AgentBotIdentitySummary' }
+        runtimeSelection: { $ref: '#/components/schemas/AgentRuntimeSelection' }
+        instructionSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
+        providerPoolSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
+      required: [agentRef, displayName, stableKey, version, state, enabled, capabilities, botIdentity, runtimeSelection, instructionSelection, providerPoolSelection]
+    AgentPage:
+      type: object
+      additionalProperties: false
+      properties:
+        agents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentView' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [agents]
+    AgentHistoryAction:
+      title: AgentHistoryAction
+      type: string
+      enum: [CREATE, UPDATE, RECONCILE_GIT, PAUSE, RESUME, DISABLE, ENABLE, BIND_BOT, REBIND_BOT, REVOKE_BOT, ARCHIVE, DELETE]
+    AgentHistoryEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        agent: { $ref: '#/components/schemas/AgentView' }
+        action: { $ref: '#/components/schemas/AgentHistoryAction' }
+        snapshotSha256: { $ref: '#/components/schemas/Sha256' }
+        occurredAt: { type: string, format: date-time }
+      required: [agent, action, snapshotSha256, occurredAt]
+    AgentHistoryPage:
+      type: object
+      additionalProperties: false
+      properties:
+        entries: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentHistoryEntry' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [entries]
+    RuntimeSelectionCatalogEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        selectionKey: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        roleDefinitionVersion: { type: integer, format: int64, minimum: 1 }
+        roleDefinitionSha256: { $ref: '#/components/schemas/Sha256' }
+        runtimeProfileVersion: { type: integer, format: int64, minimum: 1 }
+        runtimeProfileSha256: { $ref: '#/components/schemas/Sha256' }
+        capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        status: { $ref: '#/components/schemas/OwnerProjectionStatus' }
+      required: [selectionKey, displayName, description, roleDefinitionVersion, roleDefinitionSha256, runtimeProfileVersion, runtimeProfileSha256, capabilities, status]
+    AgentBotIdentityStatus:
+      title: AgentBotIdentityStatus
+      type: string
+      enum: [AVAILABLE, REVOKED, DELETED, UNKNOWN]
+    AgentBotIdentityAction:
+      title: AgentBotIdentityAction
+      type: string
+      enum: [CREATE_AND_BIND, BIND, REBIND, REVOKE]
+    AgentBotIdentityOperationState:
+      title: AgentBotIdentityOperationState
+      type: string
+      enum: [EFFECT_PENDING, MEMBERSHIP_PENDING, AMBIGUOUS, PROVIDER_ACCEPTED, BOUND, REVOKED, REPAIR_REQUIRED]
+    AgentBotIdentity:
+      type: object
+      additionalProperties: false
+      properties:
+        selector: { type: string, minLength: 1, maxLength: 160 }
+        username: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        status: { $ref: '#/components/schemas/AgentBotIdentityStatus' }
+        providerVersion: { type: integer, format: int64, minimum: 1 }
+        providerGeneration: { type: integer, format: int64, minimum: 1 }
+        providerSnapshotSha256: { $ref: '#/components/schemas/Sha256' }
+        observedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [selector, username, displayName, status, providerVersion, providerGeneration, providerSnapshotSha256, observedAt, updatedAt]
+    AgentBotIdentityPage:
+      type: object
+      additionalProperties: false
+      properties:
+        identities: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentBotIdentity' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [identities]
+    AgentBotIdentityBinding:
+      type: object
+      additionalProperties: false
+      properties:
+        agentRef: { type: string, minLength: 1, maxLength: 160 }
+        agentVersion: { type: integer, format: int64, minimum: 1 }
+        identity: { $ref: '#/components/schemas/AgentBotIdentity' }
+        receiptSha256: { $ref: '#/components/schemas/Sha256' }
+        updatedAt: { type: string, format: date-time }
+      required: [agentRef, agentVersion, identity, receiptSha256, updatedAt]
+    AgentBotIdentityOperation:
+      type: object
+      additionalProperties: false
+      properties:
+        operationRef: { type: string, minLength: 1, maxLength: 160 }
+        action: { $ref: '#/components/schemas/AgentBotIdentityAction' }
+        state: { $ref: '#/components/schemas/AgentBotIdentityOperationState' }
+        agentRef: { type: string, minLength: 1, maxLength: 160 }
+        expectedAgentVersion: { type: integer, format: int64, minimum: 1 }
+        predecessorGeneration: { type: integer, format: int64, minimum: 0 }
+        failureCode: { type: string, maxLength: 96 }
+        retryNotBefore: { type: string, format: date-time }
+        recoveryDeadline: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        result: { $ref: '#/components/schemas/AgentBotIdentityBinding' }
+      required: [operationRef, action, state, agentRef, expectedAgentVersion, predecessorGeneration, createdAt, updatedAt]
+    AgentBotIdentityCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { $ref: '#/components/schemas/AgentBotIdentityAction' }
+        identitySelector: { type: string, maxLength: 160 }
+        usernameIntent: { type: string, maxLength: 160 }
+        displayName: { type: string, maxLength: 160 }
+        expectedProviderGeneration: { type: integer, format: int64, minimum: 1 }
+      required: [action]
+    AgentBotIdentityCommandResult:
+      type: object
+      additionalProperties: false
+      properties:
+        operation: { $ref: '#/components/schemas/AgentBotIdentityOperation' }
+        binding: { $ref: '#/components/schemas/AgentBotIdentityBinding' }
+      required: [operation]
     AgentAssignmentCommand:
       type: object
       additionalProperties: false
@@ -1864,10 +2126,14 @@ components:
         observationVersion: { type: integer, format: int64, minimum: 1 }
         observationDigestSha256: { $ref: '#/components/schemas/Sha256' }
         effectiveDigestSha256: { $ref: '#/components/schemas/Sha256' }
-        state: { type: string, maxLength: 64 }
+        state: { $ref: '#/components/schemas/ProviderPoolState' }
         members: { type: array, maxItems: 64, items: { $ref: '#/components/schemas/ProviderPoolMemberView' } }
         updatedAt: { type: string, format: date-time }
       required: [poolRef, stableKey, displayName, policy, version, desiredDigestSha256, observationVersion, observationDigestSha256, effectiveDigestSha256, state, members, updatedAt]
+    ProviderPoolState:
+      title: ProviderPoolState
+      type: string
+      enum: [PENDING, ACTIVE, ARCHIVED, DELETED]
     ProviderPoolPage:
       type: object
       additionalProperties: false
@@ -1883,9 +2149,13 @@ components:
         version: { type: integer, format: int64, minimum: 1 }
         digestSha256: { $ref: '#/components/schemas/Sha256' }
         displayName: { type: string, minLength: 1, maxLength: 160 }
-        state: { type: string, maxLength: 64 }
+        state: { $ref: '#/components/schemas/IntegrationDefinitionState' }
         capabilities: { type: array, maxItems: 64, items: { $ref: '#/components/schemas/ProviderCapability' } }
       required: [definitionRef, version, digestSha256, displayName, state, capabilities]
+    IntegrationDefinitionState:
+      title: IntegrationDefinitionState
+      type: string
+      enum: [ACTIVE, ARCHIVED]
     IntegrationDefinitionPage:
       type: object
       additionalProperties: false
@@ -1904,7 +2174,7 @@ components:
         connectionVersion: { type: integer, format: int64, minimum: 1 }
         connectionGeneration: { type: integer, format: int64, minimum: 1 }
         capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
-        effectKind: { type: string, minLength: 1, maxLength: 96 }
+        effectKind: { $ref: '#/components/schemas/IntegrationEffectKind' }
       required: [stableKey, definitionRef, definitionVersion, definitionDigestSha256, connectionRef, connectionVersion, connectionGeneration, capabilities, effectKind]
     IntegrationConfiguration:
       type: object
@@ -1922,10 +2192,18 @@ components:
         connectionGeneration: { type: integer, format: int64, minimum: 1 }
         capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
         capabilityDigestSha256: { $ref: '#/components/schemas/Sha256' }
-        effectKind: { type: string, maxLength: 96 }
-        state: { type: string, maxLength: 64 }
+        effectKind: { $ref: '#/components/schemas/IntegrationEffectKind' }
+        state: { $ref: '#/components/schemas/IntegrationConfigurationState' }
         updatedAt: { type: string, format: date-time }
       required: [configurationRef, stableKey, version, digestSha256, definitionRef, definitionVersion, definitionDigestSha256, connectionRef, connectionVersion, connectionGeneration, capabilities, capabilityDigestSha256, effectKind, state, updatedAt]
+    IntegrationEffectKind:
+      title: IntegrationEffectKind
+      type: string
+      enum: [MCP_TOOL, CLI, ENVIRONMENT]
+    IntegrationConfigurationState:
+      title: IntegrationConfigurationState
+      type: string
+      enum: [ACTIVE, ARCHIVED]
     IntegrationConfigurationPage:
       type: object
       additionalProperties: false
@@ -2028,15 +2306,53 @@ components:
       additionalProperties: false
       properties:
         selectors: { type: array, maxItems: 300, items: { $ref: '#/components/schemas/ScheduleSelector' } }
+        runtimeSelections: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeSelectionCatalogEntry' } }
+        presets: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/SchedulePreset' } }
+        defaults: { $ref: '#/components/schemas/ScheduleDefaults' }
         complete: { type: boolean, enum: [true] }
-      required: [selectors, complete]
-    OwnerScheduleIntent:
+      required: [selectors, runtimeSelections, presets, defaults, complete]
+    SchedulePreset:
+      type: object
+      additionalProperties: false
+      properties:
+        key: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        revision: { type: integer, format: int64, minimum: 1 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+        cron: { type: string, minLength: 1, maxLength: 128 }
+      required: [key, displayName, description, revision, digestSha256, cron]
+    ScheduleDefaults:
+      type: object
+      additionalProperties: false
+      properties:
+        revision: { type: integer, format: int64, minimum: 1 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+        calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
+        overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
+        misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
+        deliveryPolicy: { type: string, enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT] }
+        maximumAttempts: { type: integer, minimum: 1, maximum: 100 }
+        initialBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        maximumBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        deadLetterAfterSeconds: { type: integer, format: int64, minimum: 1, maximum: 2592000 }
+        sessionPolicy: { $ref: '#/components/schemas/ScheduleSessionPolicy' }
+        notificationPolicy: { $ref: '#/components/schemas/ScheduleNotificationPolicy' }
+        maximumExecutionSeconds: { type: integer, format: int64, minimum: 60, maximum: 86400 }
+        coalesce: { type: boolean }
+      required: [revision, digestSha256, calendar, overlapPolicy, misfirePolicy, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce]
+    OwnerSchedulePromptIntent:
+      type: object
+      additionalProperties: false
+      properties:
+        inlineMarkdown: { type: string, minLength: 1, maxLength: 131072 }
+        artifactSelector: { type: string, minLength: 1, maxLength: 160 }
+    OwnerScheduleAdvancedOverrides:
       type: object
       additionalProperties: false
       properties:
         cron: { type: string, maxLength: 128 }
         intervalSeconds: { type: integer, format: int64, minimum: 60, maximum: 31536000 }
-        timezone: { type: string, minLength: 1, maxLength: 64 }
         calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
         overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
         misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
@@ -2047,12 +2363,19 @@ components:
         maximumBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
         deadLetterAfterSeconds: { type: integer, format: int64, minimum: 1, maximum: 2592000 }
         sessionPolicy: { $ref: '#/components/schemas/ScheduleSessionPolicy' }
-        roomStableKey: { type: string, maxLength: 160 }
         notificationPolicy: { $ref: '#/components/schemas/ScheduleNotificationPolicy' }
         maximumExecutionSeconds: { type: integer, format: int64, minimum: 60, maximum: 86400 }
         coalesce: { type: boolean }
-        promptArtifactName: { type: string, minLength: 1, maxLength: 160 }
-      required: [timezone, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, promptArtifactName]
+    OwnerScheduleIntent:
+      type: object
+      additionalProperties: false
+      properties:
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        presetKey: { type: string, minLength: 1, maxLength: 160 }
+        prompt: { $ref: '#/components/schemas/OwnerSchedulePromptIntent' }
+        roomStableKey: { type: string, maxLength: 160 }
+        advancedOverrides: { $ref: '#/components/schemas/OwnerScheduleAdvancedOverrides' }
+      required: [timezone, presetKey, prompt]
     CreateScheduleFromSelections:
       type: object
       additionalProperties: false
@@ -2067,10 +2390,77 @@ components:
       type: object
       additionalProperties: false
       properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
         agentStableKey: { type: string, minLength: 1, maxLength: 160 }
         instructionSetStableKey: { type: string, minLength: 1, maxLength: 160 }
         providerPoolStableKey: { type: string, minLength: 1, maxLength: 160 }
-      required: [agentStableKey, instructionSetStableKey, providerPoolStableKey]
+        intent: { $ref: '#/components/schemas/OwnerScheduleIntent' }
+      required: [name, agentStableKey, instructionSetStableKey, providerPoolStableKey, intent]
+    OwnerConfigurationCatalog:
+      type: object
+      additionalProperties: false
+      properties:
+        runtimeSelections: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeSelectionCatalogEntry' } }
+        schedulePresets: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/SchedulePreset' } }
+        scheduleDefaults: { $ref: '#/components/schemas/ScheduleDefaults' }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [runtimeSelections, schedulePresets, scheduleDefaults]
+    OwnerSchedulePromptView:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [INLINE, SELECTOR] }
+        inlineMarkdown: { type: string, maxLength: 131072 }
+        artifactSelector: { type: string, maxLength: 160 }
+        displayName: { type: string, maxLength: 160 }
+        status: { $ref: '#/components/schemas/OwnerProjectionStatus' }
+        version: { type: integer, format: int64, minimum: 0 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [kind, displayName, status, version]
+    OwnerScheduleView:
+      type: object
+      additionalProperties: false
+      properties:
+        scheduleRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/LifecycleState' }
+        presetKey: { type: string, minLength: 1, maxLength: 160 }
+        presetRevision: { type: integer, format: int64, minimum: 1 }
+        presetSha256: { $ref: '#/components/schemas/Sha256' }
+        defaultsRevision: { type: integer, format: int64, minimum: 1 }
+        defaultsSha256: { $ref: '#/components/schemas/Sha256' }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        cron: { type: string, maxLength: 128 }
+        intervalSeconds: { type: integer, format: int64, minimum: 0 }
+        advancedOverrides: { type: array, maxItems: 16, items: { type: string, maxLength: 96 } }
+        calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
+        overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
+        misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
+        misfireGraceSeconds: { type: integer, format: int64, minimum: 0 }
+        deliveryPolicy: { type: string, enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT] }
+        maximumAttempts: { type: integer, minimum: 1, maximum: 100 }
+        initialBackoffSeconds: { type: integer, format: int64, minimum: 1 }
+        maximumBackoffSeconds: { type: integer, format: int64, minimum: 1 }
+        deadLetterAfterSeconds: { type: integer, format: int64, minimum: 1 }
+        sessionPolicy: { $ref: '#/components/schemas/ScheduleSessionPolicy' }
+        notificationPolicy: { $ref: '#/components/schemas/ScheduleNotificationPolicy' }
+        maximumExecutionSeconds: { type: integer, format: int64, minimum: 60 }
+        coalesce: { type: boolean }
+        nextRunAt: { type: string, format: date-time }
+        agentSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
+        instructionSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
+        providerPoolSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
+        roomSelection: { $ref: '#/components/schemas/OwnerSafeSelection' }
+        prompt: { $ref: '#/components/schemas/OwnerSchedulePromptView' }
+      required: [scheduleRef, displayName, version, state, presetKey, presetRevision, presetSha256, defaultsRevision, defaultsSha256, timezone, advancedOverrides, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, agentSelection, instructionSelection, providerPoolSelection, roomSelection, prompt]
+    OwnerSchedulePage:
+      type: object
+      additionalProperties: false
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/OwnerScheduleView' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [items]
     RunCommand:
       type: object
       additionalProperties: false
@@ -2078,44 +2468,167 @@ components:
         action: { type: string, enum: [CANCEL, RETRY] }
         reasonCode: { type: string, minLength: 1, maxLength: 96 }
       required: [action, reasonCode]
+    RunNextAction:
+      title: RunNextAction
+      type: string
+      enum: [CANCEL, RETRY]
+    RunView:
+      type: object
+      additionalProperties: false
+      properties:
+        runRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/LifecycleState' }
+        workspace: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        trigger: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        runtimeStatus: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        attempt: { type: integer, minimum: 0, maximum: 100 }
+        startedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        durationSeconds: { type: integer, format: int64, minimum: 0 }
+        nextActions: { type: array, maxItems: 2, uniqueItems: true, items: { $ref: '#/components/schemas/RunNextAction' } }
+        initiator: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        agent: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        role: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        model: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        provider: { $ref: '#/components/schemas/OwnerDisplayValue' }
+      required: [runRef, displayName, version, state, workspace, trigger, runtimeStatus, attempt, updatedAt, durationSeconds, nextActions, initiator, agent, role, model, provider]
+    RunPage:
+      type: object
+      additionalProperties: false
+      properties:
+        runs: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RunView' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [runs]
+    RunSessionView:
+      type: object
+      additionalProperties: false
+      properties:
+        sessionRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        state: { $ref: '#/components/schemas/LifecycleState' }
+        version: { type: integer, format: int64, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
+      required: [sessionRef, displayName, state, version, updatedAt]
+    RunTurnView:
+      type: object
+      additionalProperties: false
+      properties:
+        turnRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        state: { $ref: '#/components/schemas/LifecycleState' }
+        version: { type: integer, format: int64, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
+      required: [turnRef, displayName, state, version, updatedAt]
     RunCommandResult:
       type: object
       additionalProperties: false
       properties:
-        run: { $ref: '#/components/schemas/Resource' }
-        successorTurn: { $ref: '#/components/schemas/Resource' }
-      required: [run]
+        run: { $ref: '#/components/schemas/RunView' }
+        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IncidentView' } }
+        incidentsNextPageToken: { type: string, maxLength: 1024 }
+      required: [run, incidents]
     RunDetail:
       type: object
       additionalProperties: false
       properties:
-        run: { $ref: '#/components/schemas/Resource' }
-        session: { $ref: '#/components/schemas/Resource' }
-        turn: { $ref: '#/components/schemas/Resource' }
-        runtimeRevision: { $ref: '#/components/schemas/Resource' }
-        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeIncident' } }
+        run: { $ref: '#/components/schemas/RunView' }
+        session: { $ref: '#/components/schemas/RunSessionView' }
+        turn: { $ref: '#/components/schemas/RunTurnView' }
+        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IncidentView' } }
+        incidentsNextPageToken: { type: string, maxLength: 1024 }
       required: [run, incidents]
+    RunTimelineKind:
+      title: RunTimelineKind
+      type: string
+      enum: [STATE_CHANGE]
+    RunTimelineOutcome:
+      title: RunTimelineOutcome
+      type: string
+      enum: [SUCCEEDED, FAILED, CANCELLED, EXPIRED, RETRIED, REQUIRES_OWNER, OTHER]
+    RunTimelineEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        eventRef: { type: string, minLength: 1, maxLength: 160 }
+        kind: { $ref: '#/components/schemas/RunTimelineKind' }
+        display: { type: string, minLength: 1, maxLength: 2000 }
+        outcome: { $ref: '#/components/schemas/RunTimelineOutcome' }
+        version: { type: integer, format: int64, minimum: 1 }
+        occurredAt: { type: string, format: date-time }
+        nextActions: { type: array, maxItems: 2, uniqueItems: true, items: { $ref: '#/components/schemas/RunNextAction' } }
+      required: [eventRef, kind, display, outcome, version, occurredAt, nextActions]
+    RunTimelinePage:
+      type: object
+      additionalProperties: false
+      properties:
+        run: { $ref: '#/components/schemas/RunView' }
+        entries: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RunTimelineEntry' } }
+        nextActions: { type: array, maxItems: 2, uniqueItems: true, items: { $ref: '#/components/schemas/RunNextAction' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [run, entries, nextActions]
+    RunLineageKind:
+      title: RunLineageKind
+      type: string
+      enum: [PROCESS, ATTEMPT]
+    RunLineageState:
+      title: RunLineageState
+      type: string
+      enum: [PENDING, ADMITTED, QUEUED, CLAIMED, RUNNING, WAITING_OWNER, WAITING_EXTERNAL, BLOCKED, SUCCEEDED, FAILED, CANCELLED, EXPIRED, RETRIED, SUSPENDED]
     RunLineageNode:
       type: object
       additionalProperties: false
       properties:
-        ref: { type: string, minLength: 1, maxLength: 160 }
+        nodeRef: { type: string, minLength: 1, maxLength: 160 }
         parentRef: { type: string, maxLength: 160 }
-        state: { type: string, maxLength: 64 }
+        kind: { $ref: '#/components/schemas/RunLineageKind' }
+        state: { $ref: '#/components/schemas/RunLineageState' }
         version: { type: integer, format: int64, minimum: 1 }
         attempt: { type: integer, minimum: 0, maximum: 100 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [ref, state, version, attempt, createdAt, updatedAt]
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        agent: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        role: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        model: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        provider: { $ref: '#/components/schemas/OwnerDisplayValue' }
+      required: [nodeRef, kind, state, version, attempt, createdAt, updatedAt, displayName, agent, role, model, provider]
     RunLineage:
       type: object
       additionalProperties: false
       properties:
-        rootRunRef: { type: string, minLength: 1, maxLength: 160 }
-        immutableInputSha256: { $ref: '#/components/schemas/Sha256' }
+        run: { $ref: '#/components/schemas/RunView' }
         nodes: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/RunLineageNode' } }
-        complete: { type: boolean, enum: [true] }
-      required: [rootRunRef, immutableInputSha256, nodes, complete]
+        nextActions: { type: array, maxItems: 2, uniqueItems: true, items: { $ref: '#/components/schemas/RunNextAction' } }
+        truncated: { type: boolean }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [run, nodes, nextActions, truncated]
+    RunArtifactStatus:
+      title: RunArtifactStatus
+      type: string
+      enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]
+    RunArtifactView:
+      type: object
+      additionalProperties: false
+      properties:
+        artifactRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        kind: { type: string, minLength: 1, maxLength: 96 }
+        mediaType: { type: string, minLength: 1, maxLength: 160 }
+        sizeBytes: { type: integer, format: int64, minimum: 0 }
+        sha256: { $ref: '#/components/schemas/Sha256' }
+        status: { $ref: '#/components/schemas/RunArtifactStatus' }
+        createdAt: { type: string, format: date-time }
+      required: [artifactRef, displayName, kind, mediaType, sizeBytes, sha256, status, createdAt]
+    RunArtifactPage:
+      type: object
+      additionalProperties: false
+      properties:
+        artifacts: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RunArtifactView' } }
+        nextActions: { type: array, maxItems: 2, uniqueItems: true, items: { $ref: '#/components/schemas/RunNextAction' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [artifacts, nextActions]
     IncidentState:
       title: IncidentState
       type: string
@@ -2130,14 +2643,16 @@ components:
         reasonCode: { type: string, maxLength: 96 }
         occurredAt: { type: string, format: date-time }
         executionFence: { type: integer, format: int64, minimum: 1 }
-      required: [version, state, action, reasonCode, occurredAt, executionFence]
+        nextActions: { type: array, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/IncidentNextAction' } }
+      required: [version, state, action, reasonCode, occurredAt, executionFence, nextActions]
     IncidentHistoryPage:
       type: object
       additionalProperties: false
       properties:
         entries: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IncidentHistoryEntry' } }
+        nextActions: { type: array, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/IncidentNextAction' } }
         nextPageToken: { type: string, maxLength: 1024 }
-      required: [entries]
+      required: [entries, nextActions]
     IncidentCommand:
       type: object
       additionalProperties: false
@@ -2149,9 +2664,36 @@ components:
       type: object
       additionalProperties: false
       properties:
-        incident: { $ref: '#/components/schemas/RuntimeIncident' }
-        successorTurn: { $ref: '#/components/schemas/Resource' }
+        incident: { $ref: '#/components/schemas/IncidentView' }
       required: [incident]
+    IncidentNextAction:
+      title: IncidentNextAction
+      type: string
+      enum: [ACKNOWLEDGE, RETRY, RELEASE, CLOSE]
+    IncidentSeverity:
+      title: IncidentSeverity
+      type: string
+      enum: [WARNING, ERROR, CRITICAL]
+    IncidentView:
+      type: object
+      additionalProperties: false
+      properties:
+        incidentRef: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        kind: { $ref: '#/components/schemas/RuntimeIncidentKind' }
+        state: { $ref: '#/components/schemas/IncidentState' }
+        severity: { $ref: '#/components/schemas/IncidentSeverity' }
+        impact: { type: string, maxLength: 2000 }
+        workspace: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        run: { $ref: '#/components/schemas/OwnerDisplayValue' }
+        safeCorrelation: { type: string, maxLength: 160 }
+        diagnosticSummary: { type: string, maxLength: 4000 }
+        runbookUrl: { type: string, format: uri, maxLength: 2048 }
+        occurredAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        nextActions: { type: array, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/IncidentNextAction' } }
+        executionFence: { type: integer, format: int64, minimum: 1 }
+      required: [incidentRef, version, kind, state, severity, impact, workspace, run, safeCorrelation, diagnosticSummary, runbookUrl, occurredAt, updatedAt, nextActions, executionFence]
     HealthObservation:
       title: HealthObservation
       type: object
@@ -2203,6 +2745,73 @@ components:
         name: { type: string, maxLength: 160 }
         terminalReasonCode: { type: string, maxLength: 96 }
       required: [action]
+    WorkspaceRestoreState:
+      title: WorkspaceRestoreState
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, EXPIRED]
+    WorkspaceRestoreNextAction:
+      title: WorkspaceRestoreNextAction
+      type: string
+      enum: [CANCEL, RETRY]
+    WorkspaceRestoreView:
+      type: object
+      additionalProperties: false
+      properties:
+        restoreRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/WorkspaceRestoreState' }
+        attempt: { type: integer, minimum: 1, maximum: 100 }
+        generation: { type: integer, format: int64, minimum: 1 }
+        memberCount: { type: integer, minimum: 0 }
+        terminalReasonCode: { type: string, maxLength: 96 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        nextActions: { type: array, maxItems: 2, uniqueItems: true, items: { $ref: '#/components/schemas/WorkspaceRestoreNextAction' } }
+      required: [restoreRef, displayName, version, state, attempt, generation, memberCount, terminalReasonCode, createdAt, updatedAt, nextActions]
+    WorkspaceRestorePage:
+      type: object
+      additionalProperties: false
+      properties:
+        restores: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/WorkspaceRestoreView' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [restores]
+    ConfigurationChangeKind:
+      title: ConfigurationChangeKind
+      type: string
+      enum: [ADDED, REMOVED, CHANGED]
+    ConfigurationChangeDisplay:
+      title: ConfigurationChangeDisplay
+      type: string
+      enum: [TEXT, REDACTED]
+    ConfigurationDiffChange:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { $ref: '#/components/schemas/ConfigurationChangeKind' }
+        path: { type: string, minLength: 1, maxLength: 512 }
+        display: { $ref: '#/components/schemas/ConfigurationChangeDisplay' }
+        before: { type: string, maxLength: 4000 }
+        after: { type: string, maxLength: 4000 }
+      required: [kind, path, display, before, after]
+    ConfigurationVersionRef:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int64, minimum: 1 }
+        contentSha256: { $ref: '#/components/schemas/Sha256' }
+        snapshotSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [version, contentSha256, snapshotSha256]
+    ConfigurationDiff:
+      type: object
+      additionalProperties: false
+      properties:
+        left: { $ref: '#/components/schemas/ConfigurationVersionRef' }
+        right: { $ref: '#/components/schemas/ConfigurationVersionRef' }
+        changes: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ConfigurationDiffChange' } }
+        truncated: { type: boolean }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [left, right, changes, truncated]
     ConfigurationSourceDetail:
       type: object
       additionalProperties: false
@@ -2786,12 +3395,8 @@ components:
       type: object
       additionalProperties: false
       properties:
-        agentId: { type: string, format: uuid }
-        providerAccountBindingId: { type: string, format: uuid }
-        conversationId: { type: string, format: uuid }
-        archiveRef: { type: string }
         lastTurnSequence: { type: integer, format: int64, minimum: 0 }
-      required: [agentId, providerAccountBindingId, lastTurnSequence]
+      required: [lastTurnSequence]
     TurnProjection:
       title: TurnProjection
       type: object
@@ -3284,10 +3889,6 @@ components:
         partial: { type: boolean }
         terminalReasonCode: { type: string, maxLength: 96 }
       required: [backupRef, backupVersion, membershipSha256, memberCount, state, attempt, generation, partial]
-    WorkspaceRestoreState:
-      title: WorkspaceRestoreState
-      type: string
-      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, EXPIRED]
     WorkspaceMattermostMappingProjection:
       title: WorkspaceMattermostMappingProjection
       type: object
@@ -3422,28 +4023,11 @@ components:
       title: RuntimeIncidentKind
       type: string
       enum: [HEARTBEAT_MISSED, RECONCILE_FAILED, WORKLOAD_UNAVAILABLE]
-    RuntimeIncident:
-      title: RuntimeIncident
-      type: object
-      additionalProperties: false
-      properties:
-        incidentId: { type: string, format: uuid }
-        executionId: { type: string, format: uuid }
-        executionFence: { type: integer, format: int64, minimum: 1 }
-        kind: { $ref: '#/components/schemas/RuntimeIncidentKind' }
-        evidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-        workloadId: { type: string, maxLength: 128 }
-        occurredAt: { type: string, format: date-time }
-        version: { type: integer, format: int64, minimum: 1 }
-        state: { $ref: '#/components/schemas/IncidentState' }
-        actionReasonCode: { type: string, maxLength: 96 }
-        updatedAt: { type: string, format: date-time }
-      required: [incidentId, executionId, executionFence, kind, evidenceSha256, workloadId, occurredAt, version, state, updatedAt]
     IncidentPage:
       type: object
       additionalProperties: false
       properties:
-        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeIncident' } }
+        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IncidentView' } }
         nextPageToken: { type: string }
       required: [incidents]
     Diagnostics:
@@ -3471,6 +4055,7 @@ components:
         retryable: { type: boolean }
       required: [type, title, status, code, correlationId, retryable]
   responses:
+    Problem: { description: Единый typed Problem для достижимой ошибки boundary/downstream., headers: { Retry-After: { schema: { type: integer, minimum: 1 } } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
     BadRequest: { description: Запрос не соответствует закрытому контракту., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
     UnsupportedMediaType: { description: Поддерживается только application/json., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
     Unauthorized: { description: Owner credential или session недействительны., content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }

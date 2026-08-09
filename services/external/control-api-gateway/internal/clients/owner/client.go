@@ -10,13 +10,18 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
 	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth/authorityclient"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 const maximumRPCMessageBytes = 4 << 20
@@ -37,6 +42,7 @@ type Config struct {
 
 type Client struct {
 	Interaction interactiongatewayv1.MattermostTeamServiceClient
+	Bot         interactiongatewayv1.AgentMattermostBotIdentityServiceClient
 	Integration integrationgatewayv1.IntegrationManagementServiceClient
 	issuer      *authorityclient.LocalConnection
 	interaction *grpc.ClientConn
@@ -44,6 +50,39 @@ type Client struct {
 }
 
 type operationSet map[string]string
+
+type RPCSource string
+
+const (
+	RPCSourceInteraction RPCSource = "interaction"
+	RPCSourceIntegration RPCSource = "integration"
+)
+
+type DownstreamError struct {
+	Source           RPCSource
+	Method           string
+	NormalizedDetail *controlplanev1.ErrorDetail
+	Err              error
+}
+
+func (err *DownstreamError) Error() string { return err.Err.Error() }
+func (err *DownstreamError) Unwrap() error { return err.Err }
+
+func (err *DownstreamError) Valid() bool {
+	if err == nil || err.Err == nil || err.Method == "" {
+		return false
+	}
+	switch err.Source {
+	case RPCSourceInteraction:
+		_, ok := interactionOperations()[err.Method]
+		return ok
+	case RPCSourceIntegration:
+		_, ok := integrationOperations()[err.Method]
+		return ok
+	default:
+		return false
+	}
+}
 
 func (operations operationSet) OperationID(fullMethod string) (string, bool) {
 	operation, ok := operations[fullMethod]
@@ -67,22 +106,23 @@ func Dial(ctx context.Context, config Config, proofs authorityclient.ProofProvid
 		return nil, err
 	}
 	client := &Client{issuer: issuer}
-	client.interaction, err = dial(ctx, config.InteractionTarget, config.InteractionTLSServerName, config, issuer, interactionOperations(), proofs)
+	client.interaction, err = dial(ctx, config.InteractionTarget, config.InteractionTLSServerName, config, issuer, interactionOperations(), proofs, RPCSourceInteraction)
 	if err != nil {
 		_ = client.Close()
 		return nil, err
 	}
-	client.integration, err = dial(ctx, config.IntegrationTarget, config.IntegrationTLSServerName, config, issuer, integrationOperations(), proofs)
+	client.integration, err = dial(ctx, config.IntegrationTarget, config.IntegrationTLSServerName, config, issuer, integrationOperations(), proofs, RPCSourceIntegration)
 	if err != nil {
 		_ = client.Close()
 		return nil, err
 	}
 	client.Interaction = interactiongatewayv1.NewMattermostTeamServiceClient(client.interaction)
+	client.Bot = interactiongatewayv1.NewAgentMattermostBotIdentityServiceClient(client.interaction)
 	client.Integration = integrationgatewayv1.NewIntegrationManagementServiceClient(client.integration)
 	return client, nil
 }
 
-func dial(ctx context.Context, target, serverName string, config Config, issuer *authorityclient.LocalConnection, operations operationSet, proofs authorityclient.ProofProvider) (*grpc.ClientConn, error) {
+func dial(ctx context.Context, target, serverName string, config Config, issuer *authorityclient.LocalConnection, operations operationSet, proofs authorityclient.ProofProvider, source RPCSource) (*grpc.ClientConn, error) {
 	transport, err := transportCredentials(config.CAFile, config.ClientCertificateFile, config.ClientPrivateKeyFile, serverName)
 	if err != nil {
 		return nil, err
@@ -91,6 +131,7 @@ func dial(ctx context.Context, target, serverName string, config Config, issuer 
 	if config.UnaryClientInterceptor != nil {
 		interceptors = append(interceptors, config.UnaryClientInterceptor)
 	}
+	interceptors = append(interceptors, sourceErrorInterceptor(source))
 	connection, err := grpc.NewClient(target,
 		grpc.WithTransportCredentials(transport),
 		grpc.WithChainUnaryInterceptor(interceptors...),
@@ -105,6 +146,45 @@ func dial(ctx context.Context, target, serverName string, config Config, issuer 
 	}
 	connection.Connect()
 	return connection, nil
+}
+
+func sourceErrorInterceptor(source RPCSource) grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, request, reply any, connection *grpc.ClientConn, invoker grpc.UnaryInvoker, options ...grpc.CallOption) error {
+		err := invoker(ctx, method, request, reply, connection, options...)
+		if err == nil {
+			return nil
+		}
+		return &DownstreamError{Source: source, Method: method, NormalizedDetail: normalizeBareError(source, method, err), Err: err}
+	}
+}
+
+func normalizeBareError(source RPCSource, method string, err error) *controlplanev1.ErrorDetail {
+	current, ok := status.FromError(err)
+	if !ok || len(current.Details()) != 0 || source == RPCSourceInteraction && strings.HasPrefix(method, "/interactiongateway.v1.AgentMattermostBotIdentityService/") {
+		return nil
+	}
+	type normalized struct {
+		reason    controlplanev1.ErrorReason
+		code      string
+		retryable bool
+	}
+	value, known := map[codes.Code]normalized{
+		codes.InvalidArgument:    {controlplanev1.ErrorReason_ERROR_REASON_INVALID_REQUEST, "INVALID_REQUEST", false},
+		codes.Unauthenticated:    {controlplanev1.ErrorReason_ERROR_REASON_UNAUTHENTICATED, "UNAUTHENTICATED", false},
+		codes.PermissionDenied:   {controlplanev1.ErrorReason_ERROR_REASON_PERMISSION_DENIED, "PERMISSION_DENIED", false},
+		codes.NotFound:           {controlplanev1.ErrorReason_ERROR_REASON_NOT_FOUND, "NOT_FOUND", false},
+		codes.FailedPrecondition: {controlplanev1.ErrorReason_ERROR_REASON_STATE_CONFLICT, "STATE_CONFLICT", false},
+		codes.AlreadyExists:      {controlplanev1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT, "IDEMPOTENCY_CONFLICT", false},
+		codes.Aborted:            {controlplanev1.ErrorReason_ERROR_REASON_VERSION_MISMATCH, "VERSION_MISMATCH", true},
+		codes.ResourceExhausted:  {controlplanev1.ErrorReason_ERROR_REASON_RATE_LIMITED, "RATE_LIMITED", true},
+		codes.Unavailable:        {controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE, "UNAVAILABLE", true},
+		codes.DeadlineExceeded:   {controlplanev1.ErrorReason_ERROR_REASON_UNAVAILABLE, "DEADLINE_EXCEEDED", true},
+		codes.Internal:           {controlplanev1.ErrorReason_ERROR_REASON_INTERNAL, "INTERNAL", false},
+	}[current.Code()]
+	if !known {
+		return nil
+	}
+	return &controlplanev1.ErrorDetail{Reason: value.reason, Code: value.code, CorrelationId: uuid.NewString(), Retryable: value.retryable}
 }
 
 func transportCredentials(caFile, certificateFile, keyFile, serverName string) (credentials.TransportCredentials, error) {
@@ -124,10 +204,14 @@ func transportCredentials(caFile, certificateFile, keyFile, serverName string) (
 }
 
 func (client *Client) Check(ctx context.Context) error {
+	if client == nil || client.Interaction == nil || client.Bot == nil || client.Integration == nil {
+		return errors.New("protected owner RPC path is not ready")
+	}
 	interaction, interactionErr := client.Interaction.CheckReadiness(ctx, &interactiongatewayv1.MattermostTeamServiceCheckReadinessRequest{})
+	bot, botErr := client.Bot.ListAgentMattermostBotIdentities(ctx, &interactiongatewayv1.ListAgentMattermostBotIdentitiesRequest{PageSize: 1})
 	integration, integrationErr := client.Integration.GetManagementDiagnostics(ctx, &integrationgatewayv1.GetManagementDiagnosticsRequest{})
 	if interactionErr != nil || interaction == nil || !interaction.GetReady() || !interaction.GetAuthorityReady() ||
-		integrationErr != nil || integration == nil || integration.GetStatus() != "READY" {
+		botErr != nil || bot == nil || integrationErr != nil || integration == nil || integration.GetStatus() != "READY" {
 		return errors.New("protected owner RPC path is not ready")
 	}
 	return nil
@@ -152,15 +236,24 @@ func (client *Client) Close() error {
 
 func interactionOperations() operationSet {
 	return operationSet{
-		interactiongatewayv1.MattermostTeamService_ListMattermostTeams_FullMethodName:               "interaction.team.catalog.read",
-		interactiongatewayv1.MattermostTeamService_CreateMattermostTeam_FullMethodName:              "interaction.team.create",
-		interactiongatewayv1.MattermostTeamService_LinkMattermostTeam_FullMethodName:                "interaction.team.link",
-		interactiongatewayv1.MattermostTeamService_GetMattermostTeamBinding_FullMethodName:          "interaction.team.binding.get",
-		interactiongatewayv1.MattermostTeamService_RelinkMattermostTeam_FullMethodName:              "interaction.team.relink",
-		interactiongatewayv1.MattermostTeamService_UnlinkMattermostTeam_FullMethodName:              "interaction.team.unlink",
-		interactiongatewayv1.MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName: "interaction.team.mapping-operation.get",
-		interactiongatewayv1.MattermostTeamService_GetMattermostTeamProviderReadback_FullMethodName: "interaction.team.provider.readback",
-		interactiongatewayv1.MattermostTeamService_CheckReadiness_FullMethodName:                    "interaction.team.readiness",
+		interactiongatewayv1.MattermostTeamService_ListMattermostTeams_FullMethodName:                                       "interaction.team.catalog.read",
+		interactiongatewayv1.MattermostTeamService_CreateMattermostTeam_FullMethodName:                                      "interaction.team.create",
+		interactiongatewayv1.MattermostTeamService_LinkMattermostTeam_FullMethodName:                                        "interaction.team.link",
+		interactiongatewayv1.MattermostTeamService_GetMattermostTeamBinding_FullMethodName:                                  "interaction.team.binding.get",
+		interactiongatewayv1.MattermostTeamService_RelinkMattermostTeam_FullMethodName:                                      "interaction.team.relink",
+		interactiongatewayv1.MattermostTeamService_UnlinkMattermostTeam_FullMethodName:                                      "interaction.team.unlink",
+		interactiongatewayv1.MattermostTeamService_GetMattermostTeamMappingOperation_FullMethodName:                         "interaction.team.mapping-operation.get",
+		interactiongatewayv1.MattermostTeamService_GetMattermostTeamProviderReadback_FullMethodName:                         "interaction.team.provider.readback",
+		interactiongatewayv1.MattermostTeamService_CheckReadiness_FullMethodName:                                            "interaction.team.readiness",
+		interactiongatewayv1.AgentMattermostBotIdentityService_ListAgentMattermostBotIdentities_FullMethodName:              "interaction.agent-bot.catalog.read",
+		interactiongatewayv1.AgentMattermostBotIdentityService_CreateAndBindAgentMattermostBotIdentity_FullMethodName:       "interaction.agent-bot.create-and-bind",
+		interactiongatewayv1.AgentMattermostBotIdentityService_BindAgentMattermostBotIdentity_FullMethodName:                "interaction.agent-bot.bind",
+		interactiongatewayv1.AgentMattermostBotIdentityService_GetAgentMattermostBotIdentity_FullMethodName:                 "interaction.agent-bot.get",
+		interactiongatewayv1.AgentMattermostBotIdentityService_RebindAgentMattermostBotIdentity_FullMethodName:              "interaction.agent-bot.rebind",
+		interactiongatewayv1.AgentMattermostBotIdentityService_RevokeAgentMattermostBotIdentity_FullMethodName:              "interaction.agent-bot.revoke",
+		interactiongatewayv1.AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityOperation_FullMethodName:        "interaction.agent-bot.operation.get",
+		interactiongatewayv1.AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityProviderReadback_FullMethodName: "interaction.agent-bot.provider.readback",
+		interactiongatewayv1.AgentMattermostBotIdentityService_CheckAgentMattermostBotIdentityReadiness_FullMethodName:      "interaction.agent-bot.readiness",
 	}
 }
 

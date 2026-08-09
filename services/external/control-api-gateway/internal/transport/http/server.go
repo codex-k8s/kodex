@@ -83,6 +83,7 @@ type ControlPlane interface {
 	GetAgent(context.Context, *controlplanev1.GetAgentRequest, ...grpc.CallOption) (*controlplanev1.GetAgentResponse, error)
 	ListAgents(context.Context, *controlplanev1.ListAgentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentsResponse, error)
 	ListAgentHistory(context.Context, *controlplanev1.ListAgentHistoryRequest, ...grpc.CallOption) (*controlplanev1.ListAgentHistoryResponse, error)
+	GetOwnerConfigurationCatalog(context.Context, *controlplanev1.GetOwnerConfigurationCatalogRequest, ...grpc.CallOption) (*controlplanev1.GetOwnerConfigurationCatalogResponse, error)
 	ManageAgentAssignment(context.Context, *controlplanev1.ManageAgentAssignmentRequest, ...grpc.CallOption) (*controlplanev1.ManageAgentAssignmentResponse, error)
 	GetAgentAssignment(context.Context, *controlplanev1.GetAgentAssignmentRequest, ...grpc.CallOption) (*controlplanev1.GetAgentAssignmentResponse, error)
 	ListAgentAssignments(context.Context, *controlplanev1.ListAgentAssignmentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentAssignmentsResponse, error)
@@ -94,7 +95,11 @@ type ControlPlane interface {
 	CompareInstructionSetVersions(context.Context, *controlplanev1.CompareInstructionSetVersionsRequest, ...grpc.CallOption) (*controlplanev1.CompareInstructionSetVersionsResponse, error)
 	CreateScheduleFromOwnerSelections(context.Context, *controlplanev1.CreateScheduleFromOwnerSelectionsRequest, ...grpc.CallOption) (*controlplanev1.CreateScheduleFromOwnerSelectionsResponse, error)
 	BindScheduleConfiguration(context.Context, *controlplanev1.BindScheduleConfigurationRequest, ...grpc.CallOption) (*controlplanev1.BindScheduleConfigurationResponse, error)
+	ManageOwnerSchedule(context.Context, *controlplanev1.ManageOwnerScheduleRequest, ...grpc.CallOption) (*controlplanev1.ManageOwnerScheduleResponse, error)
+	GetOwnerSchedule(context.Context, *controlplanev1.GetOwnerScheduleRequest, ...grpc.CallOption) (*controlplanev1.GetOwnerScheduleResponse, error)
+	ListOwnerSchedules(context.Context, *controlplanev1.ListOwnerSchedulesRequest, ...grpc.CallOption) (*controlplanev1.ListOwnerSchedulesResponse, error)
 	ManageRun(context.Context, *controlplanev1.ManageRunRequest, ...grpc.CallOption) (*controlplanev1.ManageRunResponse, error)
+	ListOwnerRuns(context.Context, *controlplanev1.ListOwnerRunsRequest, ...grpc.CallOption) (*controlplanev1.ListOwnerRunsResponse, error)
 	GetRunDetail(context.Context, *controlplanev1.GetRunDetailRequest, ...grpc.CallOption) (*controlplanev1.GetRunDetailResponse, error)
 	ListRunTimeline(context.Context, *controlplanev1.ListRunTimelineRequest, ...grpc.CallOption) (*controlplanev1.ListRunTimelineResponse, error)
 	GetRunLineage(context.Context, *controlplanev1.GetRunLineageRequest, ...grpc.CallOption) (*controlplanev1.GetRunLineageResponse, error)
@@ -256,6 +261,7 @@ func scheduleOccurrenceProjection(input *controlplanev1.ScheduleOccurrence) (gen
 type Server struct {
 	control     ControlPlane
 	interaction interactiongatewayv1.MattermostTeamServiceClient
+	bot         interactiongatewayv1.AgentMattermostBotIdentityServiceClient
 	integration integrationgatewayv1.IntegrationManagementServiceClient
 	boundary    *boundary.Boundary
 	logger      *slog.Logger
@@ -266,11 +272,11 @@ func (server *Server) AttachRealtime(handler http.Handler) {
 	server.realtime = handler
 }
 
-func New(control ControlPlane, interaction interactiongatewayv1.MattermostTeamServiceClient, integration integrationgatewayv1.IntegrationManagementServiceClient, security *boundary.Boundary, logger *slog.Logger) (*Server, error) {
-	if control == nil || interaction == nil || integration == nil || security == nil || logger == nil {
+func New(control ControlPlane, interaction interactiongatewayv1.MattermostTeamServiceClient, bot interactiongatewayv1.AgentMattermostBotIdentityServiceClient, integration integrationgatewayv1.IntegrationManagementServiceClient, security *boundary.Boundary, logger *slog.Logger) (*Server, error) {
+	if control == nil || interaction == nil || bot == nil || integration == nil || security == nil || logger == nil {
 		return nil, errors.New("control API HTTP server configuration is invalid")
 	}
-	return &Server{control: control, interaction: interaction, integration: integration, boundary: security, logger: logger}, nil
+	return &Server{control: control, interaction: interaction, bot: bot, integration: integration, boundary: security, logger: logger}, nil
 }
 
 func (server *Server) Handler() http.Handler {
@@ -1226,18 +1232,19 @@ func (server *Server) ListRuns(writer http.ResponseWriter, request *http.Request
 		writeProblem(writer, localProblem(http.StatusBadRequest, "INVALID_REQUEST", false))
 		return
 	}
-	response, err := server.control.ListResources(request.Context(), &controlplanev1.ListResourcesRequest{
-		Kind: controlplanev1.ResourceKind_RESOURCE_KIND_PROCESS_RUN, States: states,
-		PageSize: pageLimit, PageToken: value(params.PageToken),
-	})
+	response, err := server.control.ListOwnerRuns(request.Context(), &controlplanev1.ListOwnerRunsRequest{States: states, PageSize: pageLimit, PageToken: value(params.PageToken)})
 	if err != nil {
 		server.writeRPCError(writer, request.Context(), err, false)
 		return
 	}
-	page, err := resourcePage(response.GetResources(), response.GetNextPageToken())
-	if err != nil {
-		server.writeInternal(writer, request.Context(), err)
-		return
+	page := generated.RunPage{Runs: make([]generated.RunView, 0, len(response.GetRuns())), NextPageToken: optionalString(response.GetNextPageToken())}
+	for _, item := range response.GetRuns() {
+		value, castErr := castRunView(item)
+		if castErr != nil {
+			server.writeInternal(writer, request.Context(), castErr)
+			return
+		}
+		page.Runs = append(page.Runs, value)
 	}
 	writeJSON(writer, http.StatusOK, page)
 }
@@ -1292,9 +1299,13 @@ func (server *Server) ListIncidents(writer http.ResponseWriter, request *http.Re
 		server.writeRPCError(writer, request.Context(), err, false)
 		return
 	}
-	incidents := make([]generated.RuntimeIncident, 0, len(response.GetIncidents()))
-	for _, item := range response.GetIncidents() {
-		converted, convertErr := ConvertRuntimeIncident(item)
+	if len(response.GetIncidents()) != len(response.GetProjections()) {
+		server.writeInternal(writer, request.Context(), errors.New("incident projection page is incomplete"))
+		return
+	}
+	incidents := make([]generated.IncidentView, 0, len(response.GetProjections()))
+	for _, item := range response.GetProjections() {
+		converted, convertErr := castIncidentView(item)
 		if convertErr != nil {
 			server.writeInternal(writer, request.Context(), convertErr)
 			return

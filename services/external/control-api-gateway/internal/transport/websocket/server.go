@@ -45,6 +45,7 @@ var errSnapshotLimit = errors.New("snapshot limit exceeded")
 
 type ControlPlane interface {
 	ListResources(context.Context, *controlplanev1.ListResourcesRequest, ...grpc.CallOption) (*controlplanev1.ListResourcesResponse, error)
+	ListOwnerRuns(context.Context, *controlplanev1.ListOwnerRunsRequest, ...grpc.CallOption) (*controlplanev1.ListOwnerRunsResponse, error)
 	ListAuditEvents(context.Context, *controlplanev1.ListAuditEventsRequest, ...grpc.CallOption) (*controlplanev1.ListAuditEventsResponse, error)
 	ListRuntimeIncidents(context.Context, *controlplanev1.ListRuntimeIncidentsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeIncidentsResponse, error)
 	ListWorkspaceBackups(context.Context, *controlplanev1.ListWorkspaceBackupsRequest, ...grpc.CallOption) (*controlplanev1.ListWorkspaceBackupsResponse, error)
@@ -233,8 +234,8 @@ func (server *Server) snapshot(ctx context.Context, channel ProjectionChannel, k
 	defer cancel()
 	switch channel {
 	case ProjectionChannelRuns:
-		items, err := server.allResources(rpcContext, controlplanev1.ResourceKind_RESOURCE_KIND_PROCESS_RUN)
-		return SnapshotItems{Resources: items}, err
+		items, err := server.allRuns(rpcContext)
+		return SnapshotItems{Runs: items}, err
 	case ProjectionChannelResources:
 		items := make([]httpgenerated.Resource, 0)
 		for _, kind := range kinds {
@@ -301,7 +302,7 @@ func (server *Server) allMattermostTeams(ctx context.Context) ([]httpgenerated.M
 		}
 		next := response.GetNextCursor()
 		if next != "" && (len(response.GetTeams()) == 0 || next == token) {
-			return nil, errors.New("Mattermost team pagination did not advance")
+			return nil, errors.New("mattermost team pagination did not advance")
 		}
 		token = next
 		if token == "" {
@@ -440,22 +441,38 @@ func (server *Server) currentHealth(ctx context.Context) ([]httpgenerated.Health
 	if integrationErr != nil {
 		return nil, integrationErr
 	}
-	if control == nil || interaction == nil || integration == nil || !interaction.GetReady() || !interaction.GetAuthorityReady() || integration.GetStatus() != "READY" {
+	if control == nil || interaction == nil || integration == nil || control.GetSchemaVersion() == 0 || interaction.GetSchemaVersion() == 0 {
 		return nil, errors.New("owner health readback is unavailable")
+	}
+	interactionStatus := httpgenerated.HealthObservationStatusDEGRADED
+	interactionValue := int64(0)
+	if interaction.GetReady() {
+		interactionStatus = httpgenerated.HealthObservationStatusOK
+		interactionValue = 1
+	}
+	integrationStatus, integrationStatusOK := websocketHealthStatus(integration.GetStatus())
+	if !integrationStatusOK {
+		return nil, errors.New("integration health status is invalid")
 	}
 	items := []httpgenerated.HealthObservation{
 		{Source: "CONTROL_PLANE", Component: "schema", Status: "OK", Value: int64(control.GetSchemaVersion()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
-		{Source: "CONTROL_PLANE", Component: "pending_outbox", Status: "OK", Value: int64(control.GetPendingOutboxEvents()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
-		{Source: "CONTROL_PLANE", Component: "terminal_outbox", Status: "OK", Value: int64(control.GetTerminalOutboxEvents()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
-		{Source: "CONTROL_PLANE", Component: "active_turn_leases", Status: "OK", Value: int64(control.GetActiveTurnLeases()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
-		{Source: "CONTROL_PLANE", Component: "queued_schedule_occurrences", Status: "OK", Value: int64(control.GetQueuedScheduleOccurrences()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
-		{Source: "INTERACTION_GATEWAY", Component: "mattermost_team_working_path", Status: "OK", Value: 1, Version: int64(interaction.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "pending_outbox", Status: "UNKNOWN", Value: int64(control.GetPendingOutboxEvents()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "terminal_outbox", Status: "UNKNOWN", Value: int64(control.GetTerminalOutboxEvents()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "active_turn_leases", Status: "UNKNOWN", Value: int64(control.GetActiveTurnLeases()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "queued_schedule_occurrences", Status: "UNKNOWN", Value: int64(control.GetQueuedScheduleOccurrences()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "INTERACTION_GATEWAY", Component: "mattermost_team_working_path", Status: interactionStatus, Value: interactionValue, Version: int64(interaction.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "INTEGRATION_GATEWAY", Component: "overall", Status: integrationStatus, Value: websocketHealthValue(integrationStatus), Version: 0, ObservedAt: observedAt},
 	}
 	for _, item := range integration.GetDependencies() {
-		if item == nil || item.GetDependency() == "" || item.GetStatus() != "READY" || item.GetVersion() == 0 || item.GetCheckedAt() == nil || item.GetCheckedAt().CheckValid() != nil {
+		status, ok := websocketHealthStatus(item.GetStatus())
+		if item == nil || item.GetDependency() == "" || !ok || item.GetVersion() == 0 || item.GetCheckedAt() == nil || item.GetCheckedAt().CheckValid() != nil {
 			return nil, errors.New("integration health observation is invalid")
 		}
-		value := httpgenerated.HealthObservation{Source: "INTEGRATION_GATEWAY", Component: item.GetDependency(), Status: "OK", Value: 1, Version: int64(item.GetVersion()), ObservedAt: item.GetCheckedAt().AsTime()}
+		healthValue := int64(0)
+		if status == httpgenerated.HealthObservationStatusOK {
+			healthValue = 1
+		}
+		value := httpgenerated.HealthObservation{Source: "INTEGRATION_GATEWAY", Component: item.GetDependency(), Status: status, Value: healthValue, Version: int64(item.GetVersion()), ObservedAt: item.GetCheckedAt().AsTime()}
 		if digest := item.GetDigestSha256(); digest != "" {
 			if len(digest) != 64 {
 				return nil, errors.New("integration health digest is invalid")
@@ -469,6 +486,18 @@ func (server *Server) currentHealth(ctx context.Context) ([]httpgenerated.Health
 		items = append(items, value)
 	}
 	return items, nil
+}
+
+func websocketHealthValue(status httpgenerated.HealthObservationStatus) int64 {
+	if status == httpgenerated.HealthObservationStatusOK {
+		return 1
+	}
+	return 0
+}
+
+func websocketHealthStatus(value string) (httpgenerated.HealthObservationStatus, bool) {
+	result, ok := map[string]httpgenerated.HealthObservationStatus{"READY": "OK", "DEGRADED": "DEGRADED", "UNAVAILABLE": "UNAVAILABLE", "UNKNOWN": "UNKNOWN"}[value]
+	return result, ok
 }
 
 func (server *Server) allResources(ctx context.Context, kind controlplanev1.ResourceKind) ([]httpgenerated.Resource, error) {
@@ -503,19 +532,51 @@ func (server *Server) allResources(ctx context.Context, kind controlplanev1.Reso
 	}
 }
 
-func (server *Server) allIncidents(ctx context.Context) ([]httpgenerated.RuntimeIncident, error) {
-	items := make([]httpgenerated.RuntimeIncident, 0)
+func (server *Server) allRuns(ctx context.Context) ([]httpgenerated.RunView, error) {
+	items := make([]httpgenerated.RunView, 0)
+	token := ""
+	for {
+		response, err := server.control.ListOwnerRuns(ctx, &controlplanev1.ListOwnerRunsRequest{PageSize: rpcPageSize, PageToken: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetRuns() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			external, convertErr := httptransport.ConvertRunOwnerProjection(item)
+			if convertErr != nil {
+				return nil, convertErr
+			}
+			items = append(items, external)
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetRuns()) == 0 || next == token) {
+			return nil, errors.New("run pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+	}
+}
+
+func (server *Server) allIncidents(ctx context.Context) ([]httpgenerated.IncidentView, error) {
+	items := make([]httpgenerated.IncidentView, 0)
 	token := ""
 	for {
 		response, err := server.control.ListRuntimeIncidents(ctx, &controlplanev1.ListRuntimeIncidentsRequest{PageSize: rpcPageSize, PageToken: token})
 		if err != nil {
 			return nil, err
 		}
-		for _, item := range response.GetIncidents() {
+		if len(response.GetIncidents()) != len(response.GetProjections()) {
+			return nil, errors.New("incident projection page is incomplete")
+		}
+		for _, item := range response.GetProjections() {
 			if len(items) >= maximumItems {
 				return nil, errSnapshotLimit
 			}
-			external, err := httptransport.ConvertRuntimeIncident(item)
+			external, err := httptransport.ConvertIncidentOwnerProjection(item)
 			if err != nil {
 				return nil, err
 			}
