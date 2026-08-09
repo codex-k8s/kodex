@@ -14,6 +14,7 @@ import (
 	sharedobservability "github.com/codex-k8s/matter-codex/libs/go/observability"
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	oidcauth "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/authorization/oidc"
+	ownerclient "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/clients/owner"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/observability"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/publictls"
@@ -36,6 +37,7 @@ type runtimeState struct {
 	readiness *serviceruntime.Readiness
 	oidc      *oidcauth.Verifier
 	control   *controlplaneclient.Client
+	owner     *ownerclient.Client
 	public    *http.Server
 	technical *http.Server
 	workers   *serviceruntime.WorkerGroup
@@ -106,14 +108,27 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := state.control.Check(startup); err != nil {
 		return err
 	}
-	state.readiness.Set(false, "listener_starting")
-	state.metrics.SetReady(false)
-	state.security = security
-	httpAPI, err := httptransport.New(state.control.ControlPlane, security, state.logger)
+	state.owner, err = ownerclient.Dial(startup, ownerclient.Config{
+		InteractionTarget: config.InteractionTarget, InteractionTLSServerName: config.InteractionTLSServerName,
+		IntegrationTarget: config.IntegrationTarget, IntegrationTLSServerName: config.IntegrationTLSServerName,
+		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile,
+		ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
+		DialTimeout: config.RPCTimeout, UnaryClientInterceptor: state.telemetry.UnaryClientInterceptor(ownerMethodOperations()),
+	}, state.control)
 	if err != nil {
 		return err
 	}
-	state.realtime, err = websockettransport.New(state.control.ControlPlane, security, businessMetrics, state.logger, config.origins(), config.RealtimePollInterval, config.RPCTimeout)
+	if err := state.owner.Check(startup); err != nil {
+		return err
+	}
+	state.readiness.Set(false, "listener_starting")
+	state.metrics.SetReady(false)
+	state.security = security
+	httpAPI, err := httptransport.New(state.control.ControlPlane, state.owner.Interaction, state.owner.Integration, security, state.logger)
+	if err != nil {
+		return err
+	}
+	state.realtime, err = websockettransport.New(state.control.ControlPlane, state.owner.Interaction, state.owner.Integration, security, businessMetrics, state.logger, config.origins(), config.RealtimePollInterval, config.RPCTimeout)
 	if err != nil {
 		return err
 	}
@@ -137,7 +152,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		lifecycle,
 		httpWorker(state.public, true, config.ShutdownTimeout),
 		httpWorker(state.technical, false, config.ShutdownTimeout),
-		readinessWorker(publicTLSReady, state.control, state.publicTLS, config.HTTPListen, state.readiness, state.metrics, state.logger, config.ReadinessInterval, config.RPCTimeout),
+		readinessWorker(publicTLSReady, state.control, state.owner, state.publicTLS, config.HTTPListen, state.readiness, state.metrics, state.logger, config.ReadinessInterval, config.RPCTimeout),
 		admissionWorker(security, state.realtime, config.ShutdownTimeout),
 	)
 	if err := completePublicTLSStartup(startup, state.publicTLS, state.control, config.HTTPListen); err != nil {
@@ -201,7 +216,7 @@ func completePublicTLSStartup(ctx context.Context, publicTLS *publictls.Manager,
 	return publicTLS.Check(ctx, control.ControlPlane)
 }
 
-func readinessWorker(started <-chan struct{}, control *controlplaneclient.Client, publicTLS *publictls.Manager, listen string, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
+func readinessWorker(started <-chan struct{}, control *controlplaneclient.Client, owner *ownerclient.Client, publicTLS *publictls.Manager, listen string, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, interval, timeout time.Duration) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
@@ -215,6 +230,7 @@ func readinessWorker(started <-chan struct{}, control *controlplaneclient.Client
 			err := errors.Join(
 				publicTLS.Check(check, control.ControlPlane),
 				control.Check(check),
+				owner.Check(check),
 				publicTLS.VerifyServed(check, listen),
 			)
 			cancel()
@@ -253,6 +269,10 @@ func controlPlaneMethodOperations() map[string]string {
 	return result
 }
 
+func ownerMethodOperations() map[string]string {
+	return ownerclient.MethodOperations()
+}
+
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
@@ -279,6 +299,9 @@ func (state *runtimeState) shutdown(base context.Context) error {
 	var result error
 	if state.workers != nil {
 		result = errors.Join(result, serviceruntime.RunShutdown(base, serviceruntime.ShutdownOperation{Name: "workers", Timeout: state.config.ShutdownTimeout, Run: state.workers.Wait}))
+	}
+	if state.owner != nil {
+		result = errors.Join(result, state.owner.Close())
 	}
 	if state.control != nil {
 		result = errors.Join(result, state.control.Close())

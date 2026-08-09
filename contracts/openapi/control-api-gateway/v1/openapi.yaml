@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: MatterCodex Control API Gateway
-  version: 1.0.0
+  version: 1.1.0
   description: >-
     Owner API для проектов, управляемой конфигурации и авторитетных проекций
-    control-plane. Actor, organization, project и ownership выводятся только из
-    проверенной OIDC-сессии и состояния control-plane; request body не является
-    источником полномочий.
+    control-plane, interaction-gateway и integration-gateway. Actor,
+    organization, project и ownership выводятся только из проверенной
+    OIDC-сессии и owner state; request body не является источником полномочий.
 servers:
   - url: https://control-api.mattercodex.local/api/v1
 tags:
@@ -18,6 +18,12 @@ tags:
   - { name: owner-gates, description: Специализированные решения owner gate. }
   - { name: backups, description: Безопасные backup projections и restore commands. }
   - { name: role-images, description: Специализированные owner-команды image recipe/build. }
+  - { name: workspaces, description: Workspace и Mattermost Team mapping. }
+  - { name: agents, description: RoleDefinition, Agent и Assignment. }
+  - { name: instructions, description: Версионируемые InstructionSet. }
+  - { name: providers, description: Provider authorization, accounts и pools. }
+  - { name: integrations, description: Definition, configuration, tests и approvals. }
+  - { name: operations, description: Run, incident, health, backup и restore. }
 paths:
   /session:
     post:
@@ -935,6 +941,592 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /mattermost/teams:
+    get:
+      tags: [workspaces]
+      summary: Получить авторитетный owner Team catalog
+      operationId: listMattermostTeams
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200': { description: Safe Team catalog., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      tags: [workspaces]
+      summary: Создать Team и получить durable readback
+      operationId: createMattermostTeam
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateMattermostTeam' } } } }
+      responses:
+        '202': { description: Provider operation принята., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamMutationResult' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /mattermost/teams/{selector}:
+    get:
+      tags: [workspaces]
+      summary: Повторно разрешить opaque Team selector provider-side
+      operationId: getMattermostTeamProviderReadback
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/Selector' }]
+      responses:
+        '200': { description: Fresh provider readback., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeam' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /mattermost/team-binding:
+    get:
+      tags: [workspaces]
+      summary: Прочитать current Workspace Team binding
+      operationId: getMattermostTeamBinding
+      security: [{ ownerSession: [] }]
+      responses:
+        '200': { description: Current binding., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamBinding' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      tags: [workspaces]
+      summary: Связать Workspace с Team из owner catalog
+      operationId: linkMattermostTeam
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LinkMattermostTeam' } } } }
+      responses:
+        '200': { description: Authoritative binding., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamMutationResult' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    put:
+      tags: [workspaces]
+      summary: Пересвязать Workspace с другой Team
+      operationId: relinkMattermostTeam
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RelinkMattermostTeam' } } } }
+      responses:
+        '200': { description: Authoritative binding., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamMutationResult' } } } }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [workspaces]
+      summary: Закрыть exact Workspace Team mapping
+      operationId: unlinkMattermostTeam
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }, { name: generation, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
+      responses:
+        '200': { description: Terminal mapping readback., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostTeamMutationResult' } } } }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /mattermost/team-operations:
+    get:
+      tags: [workspaces]
+      summary: Восстановить durable outcome mapping command
+      operationId: getMattermostTeamMappingOperation
+      security: [{ ownerSession: [] }]
+      parameters:
+        - { name: action, in: query, required: true, schema: { type: string, enum: [BIND, RELINK, UNLINK] } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '200': { description: Durable operation readback., content: { application/json: { schema: { $ref: '#/components/schemas/MattermostMappingOperation' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /role-definitions:
+    get:
+      tags: [agents]
+      summary: Получить owner RoleDefinition catalog
+      operationId: listRoleDefinitions
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: RoleDefinition page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } }, '503': { $ref: '#/components/responses/Unavailable' } }
+  /role-definitions/{resourceRef}:
+    get:
+      tags: [agents]
+      summary: Прочитать exact RoleDefinition
+      operationId: getRoleDefinition
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
+      responses: { '200': { description: Current RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+  /role-definitions/{resourceRef}/history:
+    get:
+      tags: [agents]
+      summary: Получить immutable RoleDefinition history
+      operationId: listRoleDefinitionHistory
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+  /role-definitions/commands:
+    post:
+      tags: [agents]
+      summary: Выполнить специализированную RoleDefinition command
+      operationId: manageRoleDefinition
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleDefinitionCommand' } } } }
+      responses: { '200': { description: Authoritative RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created RoleDefinition., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '412': { $ref: '#/components/responses/PreconditionFailed' } }
+  /agents:
+    get:
+      tags: [agents]
+      summary: Получить owner Agent catalog
+      operationId: listAgents
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Agent page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+  /agents/{resourceRef}:
+    get:
+      tags: [agents]
+      summary: Прочитать exact Agent
+      operationId: getAgent
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
+      responses: { '200': { description: Current Agent., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /agents/{resourceRef}/history:
+    get:
+      tags: [agents]
+      summary: Получить immutable Agent history
+      operationId: listAgentHistory
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+  /agents/commands:
+    post:
+      tags: [agents]
+      summary: Выполнить специализированную Agent command
+      operationId: manageAgent
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentCommand' } } } }
+      responses: { '200': { description: Authoritative Agent., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created Agent., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /agent-assignments:
+    get:
+      tags: [agents]
+      summary: Получить owner AgentAssignment catalog
+      operationId: listAgentAssignments
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: agentRef, in: query, schema: { type: string, maxLength: 160 } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Assignment page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+  /agent-assignments/{resourceRef}:
+    get:
+      tags: [agents]
+      summary: Прочитать exact AgentAssignment
+      operationId: getAgentAssignment
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
+      responses: { '200': { description: Current assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /agent-assignments/{resourceRef}/history:
+    get:
+      tags: [agents]
+      summary: Получить immutable AgentAssignment history
+      operationId: listAgentAssignmentHistory
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+  /agent-assignments/commands:
+    post:
+      tags: [agents]
+      summary: Назначить или снять Agent
+      operationId: manageAgentAssignment
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentAssignmentCommand' } } } }
+      responses: { '200': { description: Authoritative assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created assignment., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /instruction-sets:
+    get:
+      tags: [instructions]
+      summary: Получить owner InstructionSet catalog
+      operationId: listInstructionSets
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: InstructionSet page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+  /instruction-sets/{resourceRef}:
+    get:
+      tags: [instructions]
+      summary: Прочитать exact InstructionSet
+      operationId: getInstructionSet
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }]
+      responses: { '200': { description: Current InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /instruction-sets/{resourceRef}/history:
+    get:
+      tags: [instructions]
+      summary: Получить immutable InstructionSet history
+      operationId: listInstructionSetHistory
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: History page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourceHistoryPage' } } } } }
+  /instruction-sets/{resourceRef}/compare:
+    get:
+      tags: [instructions]
+      summary: Сравнить две immutable версии InstructionSet
+      operationId: compareInstructionSetVersions
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { name: leftVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: rightVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
+      responses: { '200': { description: Authoritative compare., content: { application/json: { schema: { $ref: '#/components/schemas/InstructionSetComparison' } } } } }
+  /instruction-sets/commands:
+    post:
+      tags: [instructions]
+      summary: Выполнить специализированную InstructionSet command
+      operationId: manageInstructionSet
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InstructionSetCommand' } } } }
+      responses: { '200': { description: Authoritative InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '201': { description: Created InstructionSet., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /providers:
+    get:
+      tags: [providers]
+      summary: Получить versioned provider catalog
+      operationId: listProviders
+      security: [{ ownerSession: [] }]
+      responses: { '200': { description: Provider catalog., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderCatalog' } } } } }
+  /providers/{providerRef}:
+    get:
+      tags: [providers]
+      summary: Прочитать exact provider definition
+      operationId: getProvider
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ProviderRef' }, { name: version, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: digestSha256, in: query, required: true, schema: { $ref: '#/components/schemas/Sha256' } }]
+      responses: { '200': { description: Provider definition., content: { application/json: { schema: { $ref: '#/components/schemas/Provider' } } } } }
+  /provider-authorizations:
+    post:
+      tags: [providers]
+      summary: Начать provider authorization без secret input
+      operationId: startProviderAuthorization
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/StartProviderAuthorization' } } } }
+      responses: { '202': { description: Authorization attempt., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+  /provider-authorizations/{authorizationRef}:
+    get:
+      tags: [providers]
+      summary: Получить status/current code provider authorization
+      operationId: getProviderAuthorization
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthorizationRef' }]
+      responses: { '200': { description: Authorization readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+    delete:
+      tags: [providers]
+      summary: Отменить exact provider authorization attempt
+      operationId: cancelProviderAuthorization
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthorizationRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses: { '200': { description: Cancelled authorization., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+  /provider-authorizations/{authorizationRef}/new-code:
+    post:
+      tags: [providers]
+      summary: Создать fresh authorization attempt и новый short code
+      operationId: restartProviderAuthorization
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/AuthorizationRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses: { '202': { description: Fresh authorization attempt., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+  /provider-connections:
+    get:
+      tags: [providers]
+      summary: Получить masked provider accounts
+      operationId: listProviderConnections
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: state, in: query, schema: { $ref: '#/components/schemas/ProviderConnectionState' } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Provider connection page., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnectionPage' } } } } }
+  /provider-connections/{connectionRef}:
+    get:
+      tags: [providers]
+      summary: Получить masked provider account readback
+      operationId: getProviderConnection
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }]
+      responses: { '200': { description: Provider connection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } } }
+    delete:
+      tags: [providers]
+      summary: Отозвать provider account
+      operationId: revokeProviderConnection
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }, { name: generation, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
+      responses: { '200': { description: Revoked connection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderConnection' } } } } }
+  /provider-connections/{connectionRef}/reauthorize:
+    post:
+      tags: [providers]
+      summary: Начать fresh reauthorization attempt
+      operationId: reauthorizeProviderConnection
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }, { name: generation, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
+      responses: { '202': { description: Authorization attempt., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAuthorization' } } } } }
+  /provider-pools:
+    get:
+      tags: [providers]
+      summary: Получить provider pools
+      operationId: listProviderPools
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Pool page., content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolPage' } } } } }
+  /provider-pools/{poolRef}:
+    get:
+      tags: [providers]
+      summary: Получить exact provider pool
+      operationId: getProviderPool
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PoolRef' }]
+      responses: { '200': { description: Provider pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } } }
+  /provider-pools/commands:
+    post:
+      tags: [providers]
+      summary: Выполнить specialized provider pool command
+      operationId: manageProviderPool
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolCommand' } } } }
+      responses: { '200': { description: Authoritative pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } }, '201': { description: Created pool., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProviderPoolView' } } } } }
+  /integration-definitions:
+    get:
+      tags: [integrations]
+      summary: Получить IntegrationDefinition catalog
+      operationId: listIntegrationDefinitions
+      security: [{ ownerSession: [] }]
+      responses: { '200': { description: Definition catalog., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinitionPage' } } } } }
+  /integration-definitions/{definitionRef}:
+    get:
+      tags: [integrations]
+      summary: Получить exact IntegrationDefinition и capabilities
+      operationId: getIntegrationDefinition
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/DefinitionRef' }, { name: version, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: digestSha256, in: query, required: true, schema: { $ref: '#/components/schemas/Sha256' } }]
+      responses: { '200': { description: Integration definition., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinition' } } } } }
+  /integration-configurations:
+    get:
+      tags: [integrations]
+      summary: Получить owner integration configurations
+      operationId: listIntegrationConfigurations
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Configuration page., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfigurationPage' } } } } }
+    post:
+      tags: [integrations]
+      summary: Настроить IntegrationDefinition через catalog refs
+      operationId: configureIntegration
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ConfigureIntegration' } } } }
+      responses: { '200': { description: Integration configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } }, '201': { description: Created configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } } }
+  /integration-configurations/{configurationRef}:
+    get:
+      tags: [integrations]
+      summary: Получить exact integration configuration
+      operationId: getIntegrationConfiguration
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }]
+      responses: { '200': { description: Configuration., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConfiguration' } } } } }
+  /integration-tests:
+    post:
+      tags: [integrations]
+      summary: Проверить exact integration configuration/connection
+      operationId: testIntegrationConnection
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TestIntegrationConnection' } } } }
+      responses: { '202': { description: Test receipt., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationTestReceipt' } } } } }
+  /integration-tests/{testRef}:
+    get:
+      tags: [integrations]
+      summary: Получить exact integration test receipt
+      operationId: getIntegrationTestReceipt
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/TestRef' }]
+      responses: { '200': { description: Test receipt., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationTestReceipt' } } } } }
+  /integration-approvals:
+    get:
+      tags: [integrations]
+      summary: Получить ApprovalRequest list
+      operationId: listIntegrationApprovals
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: status, in: query, schema: { type: string, maxLength: 32 } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Approval page., content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApprovalPage' } } } } }
+  /integration-approvals/{approvalRef}:
+    get:
+      tags: [integrations]
+      summary: Получить exact ApprovalRequest
+      operationId: getIntegrationApproval
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ApprovalRef' }]
+      responses: { '200': { description: Approval., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApproval' } } } } }
+  /integration-approvals/{approvalRef}/decision:
+    post:
+      tags: [integrations]
+      summary: Принять one-winner approval decision
+      operationId: decideIntegrationApproval
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ApprovalRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DecideIntegrationApproval' } } } }
+      responses: { '200': { description: Terminal approval readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationApproval' } } } } }
+  /schedule-selectors:
+    get:
+      tags: [schedules]
+      summary: Получить UI-friendly selectors для Schedule
+      operationId: listScheduleSelectors
+      security: [{ ownerSession: [] }]
+      responses: { '200': { description: Versioned selectors из owner catalogs., content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleSelectorCatalog' } } } } }
+  /schedules/from-selections:
+    post:
+      tags: [schedules]
+      summary: Создать Schedule из display selections
+      operationId: createScheduleFromSelections
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateScheduleFromSelections' } } } }
+      responses: { '201': { description: Authoritative Schedule., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /schedules/{scheduleRef}/configuration:
+    put:
+      tags: [schedules]
+      summary: Перепривязать Schedule к exact current selections
+      operationId: bindScheduleConfiguration
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: scheduleRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BindScheduleConfiguration' } } } }
+      responses: { '200': { description: Current Schedule projection., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /runs/{runRef}:
+    get:
+      tags: [operations]
+      summary: Получить typed Run detail
+      operationId: getRunDetail
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/RunRef' }]
+      responses: { '200': { description: Run detail., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/RunDetail' } } } } }
+  /runs/{runRef}/timeline:
+    get:
+      tags: [operations]
+      summary: Получить bounded Run timeline
+      operationId: listRunTimeline
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/RunRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Timeline page., content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } } } }
+  /runs/{runRef}/lineage:
+    get:
+      tags: [operations]
+      summary: Получить полный versioned Run lineage
+      operationId: getRunLineage
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/RunRef' }]
+      responses: { '200': { description: Complete lineage., content: { application/json: { schema: { $ref: '#/components/schemas/RunLineage' } } } } }
+  /runs/{runRef}/artifacts:
+    get:
+      tags: [operations]
+      summary: Получить безопасные Run artifacts
+      operationId: listRunArtifacts
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/RunRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Artifact resource page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+  /runs/{runRef}/commands:
+    post:
+      tags: [operations]
+      summary: Cancel или retry exact Run
+      operationId: manageRun
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/RunRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RunCommand' } } } }
+      responses: { '200': { description: Run command readback., content: { application/json: { schema: { $ref: '#/components/schemas/RunCommandResult' } } } } }
+  /incidents/{incidentRef}:
+    get:
+      tags: [operations]
+      summary: Получить exact runtime incident
+      operationId: getIncident
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/IncidentRef' }]
+      responses: { '200': { description: Incident detail., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeIncident' } } } } }
+  /incidents/{incidentRef}/history:
+    get:
+      tags: [operations]
+      summary: Получить incident lifecycle history
+      operationId: listIncidentHistory
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/IncidentRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Incident history., content: { application/json: { schema: { $ref: '#/components/schemas/IncidentHistoryPage' } } } } }
+  /incidents/{incidentRef}/commands:
+    post:
+      tags: [operations]
+      summary: Ack/retry/release/close exact incident
+      operationId: manageIncident
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/IncidentRef' }, { $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/IncidentCommand' } } } }
+      responses: { '200': { description: Incident command readback., content: { application/json: { schema: { $ref: '#/components/schemas/IncidentCommandResult' } } } } }
+  /health-series:
+    get:
+      tags: [operations]
+      summary: Получить bounded current health observations
+      operationId: getHealthSeries
+      security: [{ ownerSession: [] }]
+      responses: { '200': { description: Current exact observations; не synthetic history., content: { application/json: { schema: { $ref: '#/components/schemas/HealthSeries' } } } } }
+  /workspace-backups:
+    get:
+      tags: [operations]
+      summary: Получить Workspace/All Workspaces backups
+      operationId: listWorkspaceBackups
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Backup resource page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+  /workspace-backups/{backupRef}:
+    get:
+      tags: [operations]
+      summary: Получить exact Workspace backup
+      operationId: getWorkspaceBackup
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/BackupRef' }]
+      responses: { '200': { description: Backup readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /workspace-backups/commands:
+    post:
+      tags: [operations]
+      summary: Create/cancel/retry Workspace backup
+      operationId: manageWorkspaceBackup
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceBackupCommand' } } } }
+      responses: { '200': { description: Backup readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '202': { description: Backup operation accepted., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /workspace-restores:
+    get:
+      tags: [operations]
+      summary: Получить Workspace restore operations
+      operationId: listWorkspaceRestores
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: backupRef, in: query, schema: { type: string, maxLength: 160 } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses: { '200': { description: Restore resource page., content: { application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } } } } }
+  /workspace-restores/{restoreRef}:
+    get:
+      tags: [operations]
+      summary: Получить exact Workspace restore readback
+      operationId: getWorkspaceRestore
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/RestoreRef' }]
+      responses: { '200': { description: Restore readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /workspace-restores/commands:
+    post:
+      tags: [operations]
+      summary: Create/cancel/retry Workspace restore
+      operationId: manageWorkspaceRestore
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/CSRFToken' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/OptionalIfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceRestoreCommand' } } } }
+      responses: { '200': { description: Restore readback., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }, '202': { description: Restore accepted., headers: { ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } } }
+  /audit/export:
+    get:
+      tags: [operations]
+      summary: Экспортировать bounded safe audit CSV
+      operationId: exportAudit
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: resourceKind, in: query, schema: { $ref: '#/components/schemas/ResourceKind' } }, { name: resourceRef, in: query, schema: { type: string, maxLength: 160 } }, { name: action, in: query, schema: { type: string, maxLength: 96 } }]
+      responses: { '200': { description: Не более 500 audit rows., content: { text/csv: { schema: { type: string, maxLength: 524288 } } } } }
+  /configuration-diff:
+    get:
+      tags: [operations]
+      summary: Получить authoritative InstructionSet version diff
+      operationId: getConfigurationDiff
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: instructionSetRef, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }, { name: leftVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }, { name: rightVersion, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }]
+      responses: { '200': { description: Server-computed compare., content: { application/json: { schema: { $ref: '#/components/schemas/InstructionSetComparison' } } } } }
+  /configuration-source/{resourceRef}:
+    get:
+      tags: [operations]
+      summary: Получить human-readable configuration source detail
+      operationId: getConfigurationSourceDetail
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceRef' }, { name: kind, in: query, required: true, schema: { type: string, enum: [ROLE_DEFINITION, AGENT, INSTRUCTION_SET, PROVIDER_POOL] } }]
+      responses: { '200': { description: Safe owner source detail., content: { application/json: { schema: { $ref: '#/components/schemas/ConfigurationSourceDetail' } } } } }
 components:
   securitySchemes:
     oidcBearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -943,17 +1535,691 @@ components:
     CSRFToken: { name: X-CSRF-Token, in: header, required: true, schema: { type: string, minLength: 43, maxLength: 64 } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
     IfMatch: { name: If-Match, in: header, required: true, schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+    OptionalIfMatch: { name: If-Match, in: header, required: false, schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
     ResourceID: { name: resourceId, in: path, required: true, schema: { type: string, format: uuid } }
+    ResourceRef: { name: resourceRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    Selector: { name: selector, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 256 } }
+    ProviderRef: { name: providerRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    AuthorizationRef: { name: authorizationRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    ConnectionRef: { name: connectionRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    PoolRef: { name: poolRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    DefinitionRef: { name: definitionRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    ConfigurationRef: { name: configurationRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    TestRef: { name: testRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    ApprovalRef: { name: approvalRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    RunRef: { name: runRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    IncidentRef: { name: incidentRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    BackupRef: { name: backupRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
+    RestoreRef: { name: restoreRef, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 160 } }
     ResourceKindQuery: { name: kind, in: query, required: true, schema: { $ref: '#/components/schemas/ResourceKind' } }
     PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
     PageToken: { name: pageToken, in: query, schema: { type: string, maxLength: 1024 } }
   headers:
     ETag: { description: Точная версия ресурса для следующего If-Match., schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
   schemas:
+    Sha256:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+    MattermostTeamStatus:
+      title: MattermostTeamStatus
+      type: string
+      enum: [ACTIVE, DELETED]
+    MattermostTeam:
+      type: object
+      additionalProperties: false
+      properties:
+        selector: { type: string, minLength: 1, maxLength: 256 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        slug: { type: string, minLength: 1, maxLength: 160 }
+        status: { $ref: '#/components/schemas/MattermostTeamStatus' }
+        providerSnapshotSha256: { $ref: '#/components/schemas/Sha256' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        observedAt: { type: string, format: date-time }
+      required: [selector, displayName, slug, status, providerSnapshotSha256, createdAt, updatedAt, observedAt]
+    MattermostTeamPage:
+      type: object
+      additionalProperties: false
+      properties:
+        teams: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/MattermostTeam' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [teams]
+    MattermostTeamBinding:
+      type: object
+      additionalProperties: false
+      properties:
+        mappingRef: { type: string, minLength: 1, maxLength: 160 }
+        mappingVersion: { type: integer, format: int64, minimum: 1 }
+        mappingGeneration: { type: integer, format: int64, minimum: 1 }
+        state: { type: string, enum: [BOUND, UNLINKED] }
+        team: { $ref: '#/components/schemas/MattermostTeam' }
+        providerEffectVersion: { type: integer, format: int64, minimum: 1 }
+        providerEffectGeneration: { type: integer, format: int64, minimum: 1 }
+        providerObservedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [mappingRef, mappingVersion, mappingGeneration, state, team, providerEffectVersion, providerEffectGeneration, providerObservedAt, updatedAt]
+    MattermostMappingOperation:
+      type: object
+      additionalProperties: false
+      properties:
+        operationRef: { type: string, minLength: 1, maxLength: 160 }
+        action: { type: string, enum: [BIND, RELINK, UNLINK] }
+        state: { type: string, enum: [PENDING, AMBIGUOUS, BOUND, UNLINKED, REPAIR_REQUIRED] }
+        failureCode: { type: string, maxLength: 96 }
+        retryNotBefore: { type: string, format: date-time }
+        recoveryDeadline: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        result: { $ref: '#/components/schemas/MattermostTeamBinding' }
+      required: [operationRef, action, state, createdAt, updatedAt]
+    MattermostTeamMutationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        binding: { $ref: '#/components/schemas/MattermostTeamBinding' }
+        operation: { $ref: '#/components/schemas/MattermostMappingOperation' }
+        providerOperationState: { type: string, enum: [PENDING, AMBIGUOUS, PROVIDER_ACCEPTED, REPAIR_REQUIRED, EFFECT_PENDING] }
+      required: [operation]
+    CreateMattermostTeam:
+      type: object
+      additionalProperties: false
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        slugIntent: { type: string, minLength: 1, maxLength: 160, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+      required: [displayName, slugIntent]
+    LinkMattermostTeam:
+      type: object
+      additionalProperties: false
+      properties: { selector: { type: string, minLength: 1, maxLength: 256 } }
+      required: [selector]
+    RelinkMattermostTeam:
+      type: object
+      additionalProperties: false
+      properties:
+        selector: { type: string, minLength: 1, maxLength: 256 }
+        expectedGeneration: { type: integer, format: int64, minimum: 1 }
+      required: [selector, expectedGeneration]
+    ProtectedConfigurationAction:
+      type: string
+      enum: [CREATE, UPDATE, ARCHIVE, DELETE, PAUSE, RESUME, ENABLE, DISABLE]
+    RoleDefinitionCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { $ref: '#/components/schemas/ProtectedConfigurationAction' }
+        resourceRef: { type: string, maxLength: 160 }
+        name: { type: string, maxLength: 160 }
+        stableKey: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
+        allowedTargetRoleDefinitionRefs: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
+        roleImageRecipeRef: { type: string, maxLength: 160 }
+        roleImageRecipeVersion: { type: integer, format: int64, minimum: 1 }
+        roleImageRecipeSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [action]
+    AgentCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { $ref: '#/components/schemas/ProtectedConfigurationAction' }
+        resourceRef: { type: string, maxLength: 160 }
+        name: { type: string, maxLength: 160 }
+        stableKey: { type: string, maxLength: 160 }
+        roleDefinitionStableKey: { type: string, maxLength: 160 }
+        instructionSetStableKey: { type: string, maxLength: 160 }
+        providerPoolStableKey: { type: string, maxLength: 160 }
+        capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
+        enabled: { type: boolean }
+      required: [action]
+    AgentAssignmentCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [ASSIGN, UNASSIGN] }
+        resourceRef: { type: string, maxLength: 160 }
+        name: { type: string, maxLength: 160 }
+        agentStableKey: { type: string, maxLength: 160 }
+        roomStableKey: { type: string, maxLength: 160 }
+      required: [action]
+    InstructionSetCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [CREATE, UPDATE, VALIDATE, PUBLISH, ROLLBACK, DETACH, COPY, ARCHIVE, DELETE] }
+        resourceRef: { type: string, maxLength: 160 }
+        name: { type: string, maxLength: 160 }
+        stableKey: { type: string, maxLength: 160 }
+        locale: { type: string, minLength: 2, maxLength: 16 }
+        content: { type: string, maxLength: 131072 }
+        targetVersion: { type: integer, format: int64, minimum: 1 }
+      required: [action]
+    ResourceHistoryEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        resource: { $ref: '#/components/schemas/Resource' }
+        action: { type: string, maxLength: 96 }
+        snapshotSha256: { $ref: '#/components/schemas/Sha256' }
+        occurredAt: { type: string, format: date-time }
+      required: [resource, action, snapshotSha256, occurredAt]
+    ResourceHistoryPage:
+      type: object
+      additionalProperties: false
+      properties:
+        entries: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ResourceHistoryEntry' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [entries]
+    InstructionSetComparison:
+      type: object
+      additionalProperties: false
+      properties:
+        left: { $ref: '#/components/schemas/ResourceHistoryEntry' }
+        right: { $ref: '#/components/schemas/ResourceHistoryEntry' }
+        contentEqual: { type: boolean }
+        comparisonSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [left, right, contentEqual, comparisonSha256]
+    ProviderCapability:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 160 }
+        risk: { type: string, maxLength: 64 }
+        requiresApproval: { type: boolean }
+      required: [name, risk, requiresApproval]
+    Provider:
+      type: object
+      additionalProperties: false
+      properties:
+        providerRef: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        authorizationModes: { type: array, maxItems: 16, items: { type: string, maxLength: 64 } }
+        capabilities: { type: array, maxItems: 64, items: { $ref: '#/components/schemas/ProviderCapability' } }
+      required: [providerRef, version, digestSha256, displayName, authorizationModes, capabilities]
+    ProviderCatalog:
+      type: object
+      additionalProperties: false
+      properties:
+        providers: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Provider' } }
+        version: { type: integer, format: int64, minimum: 1 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [providers, version, digestSha256]
+    ProviderAuthorizationState:
+      type: string
+      enum: [PENDING, CODE_ISSUED, AUTHORIZED, DENIED, EXPIRED, FAILED, CANCELLED]
+    ProviderAuthorization:
+      type: object
+      additionalProperties: false
+      properties:
+        authorizationRef: { type: string, minLength: 1, maxLength: 160 }
+        providerRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionRef: { type: string, maxLength: 160 }
+        attempt: { type: integer, minimum: 1, maximum: 100 }
+        version: { type: integer, format: int64, minimum: 1 }
+        generation: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/ProviderAuthorizationState' }
+        verificationUrl: { type: string, format: uri, maxLength: 2048 }
+        userCode: { type: string, maxLength: 32 }
+        codeExpiresAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        failureCategory: { type: string, maxLength: 96 }
+        updatedAt: { type: string, format: date-time }
+      required: [authorizationRef, providerRef, attempt, version, generation, state, expiresAt, updatedAt]
+    StartProviderAuthorization:
+      type: object
+      additionalProperties: false
+      properties:
+        providerRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionStableKey: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+      required: [providerRef, connectionStableKey, displayName]
+    ProviderConnectionState:
+      title: ProviderConnectionState
+      type: string
+      enum: [PENDING, VALID, INVALID, REVOKED]
+    ProviderCapacity:
+      title: ProviderCapacity
+      type: object
+      additionalProperties: false
+      properties:
+        usage: { type: integer, format: int64, minimum: 0 }
+        limit: { type: integer, format: int64, minimum: 0 }
+        revision: { type: integer, format: int64, minimum: 1 }
+        observedAt: { type: string, format: date-time }
+        windowDurationSeconds: { type: integer, format: int64, minimum: 1 }
+        resetsAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [usage, limit, revision, observedAt, windowDurationSeconds, expiresAt, digestSha256]
+    ProviderConnection:
+      type: object
+      additionalProperties: false
+      properties:
+        connectionRef: { type: string, minLength: 1, maxLength: 160 }
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        providerRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        generation: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/ProviderConnectionState' }
+        maskedLabel: { type: string, maxLength: 160 }
+        maskedAccount: { type: string, maxLength: 160 }
+        capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        capabilityDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        observationDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        observedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        activeCredentialGeneration: { type: integer, format: int64, minimum: 1 }
+        capacity: { $ref: '#/components/schemas/ProviderCapacity' }
+      required: [connectionRef, stableKey, providerRef, displayName, version, generation, state, maskedLabel, maskedAccount, capabilities, capabilityDigestSha256, observationDigestSha256, observedAt, updatedAt, activeCredentialGeneration]
+    ProviderConnectionPage:
+      type: object
+      additionalProperties: false
+      properties:
+        connections: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ProviderConnection' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [connections]
+    ProviderPoolMemberInput:
+      type: object
+      additionalProperties: false
+      properties:
+        connectionRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        connectionGeneration: { type: integer, format: int64, minimum: 1 }
+        weight: { type: integer, minimum: 1, maximum: 10000 }
+      required: [connectionRef, connectionVersion, connectionGeneration, weight]
+    ProviderPoolMemberView:
+      type: object
+      additionalProperties: false
+      properties:
+        connectionRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        connectionGeneration: { type: integer, format: int64, minimum: 1 }
+        observationDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        weight: { type: integer, minimum: 1, maximum: 10000 }
+        eligible: { type: boolean }
+      required: [connectionRef, connectionVersion, connectionGeneration, observationDigestSha256, weight, eligible]
+    ProviderPoolCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, DELETE] }
+        poolRef: { type: string, maxLength: 160 }
+        stableKey: { type: string, maxLength: 160 }
+        displayName: { type: string, maxLength: 160 }
+        policy: { type: string, enum: [least_used, weighted] }
+        members: { type: array, maxItems: 64, items: { $ref: '#/components/schemas/ProviderPoolMemberInput' } }
+      required: [action]
+    ProviderPoolView:
+      type: object
+      additionalProperties: false
+      properties:
+        poolRef: { type: string, minLength: 1, maxLength: 160 }
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        policy: { type: string, enum: [least_used, weighted] }
+        version: { type: integer, format: int64, minimum: 1 }
+        desiredDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        observationVersion: { type: integer, format: int64, minimum: 1 }
+        observationDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        effectiveDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        state: { type: string, maxLength: 64 }
+        members: { type: array, maxItems: 64, items: { $ref: '#/components/schemas/ProviderPoolMemberView' } }
+        updatedAt: { type: string, format: date-time }
+      required: [poolRef, stableKey, displayName, policy, version, desiredDigestSha256, observationVersion, observationDigestSha256, effectiveDigestSha256, state, members, updatedAt]
+    ProviderPoolPage:
+      type: object
+      additionalProperties: false
+      properties:
+        pools: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ProviderPoolView' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [pools]
+    IntegrationDefinition:
+      type: object
+      additionalProperties: false
+      properties:
+        definitionRef: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        state: { type: string, maxLength: 64 }
+        capabilities: { type: array, maxItems: 64, items: { $ref: '#/components/schemas/ProviderCapability' } }
+      required: [definitionRef, version, digestSha256, displayName, state, capabilities]
+    IntegrationDefinitionPage:
+      type: object
+      additionalProperties: false
+      properties: { definitions: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IntegrationDefinition' } } }
+      required: [definitions]
+    ConfigureIntegration:
+      type: object
+      additionalProperties: false
+      properties:
+        configurationRef: { type: string, maxLength: 160 }
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        definitionRef: { type: string, minLength: 1, maxLength: 160 }
+        definitionVersion: { type: integer, format: int64, minimum: 1 }
+        definitionDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        connectionRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        connectionGeneration: { type: integer, format: int64, minimum: 1 }
+        capabilities: { type: array, maxItems: 64, uniqueItems: true, items: { type: string, maxLength: 160 } }
+        effectKind: { type: string, minLength: 1, maxLength: 96 }
+      required: [stableKey, definitionRef, definitionVersion, definitionDigestSha256, connectionRef, connectionVersion, connectionGeneration, capabilities, effectKind]
+    IntegrationConfiguration:
+      type: object
+      additionalProperties: false
+      properties:
+        configurationRef: { type: string, minLength: 1, maxLength: 160 }
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+        definitionRef: { type: string, minLength: 1, maxLength: 160 }
+        definitionVersion: { type: integer, format: int64, minimum: 1 }
+        definitionDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        connectionRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        connectionGeneration: { type: integer, format: int64, minimum: 1 }
+        capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        capabilityDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        effectKind: { type: string, maxLength: 96 }
+        state: { type: string, maxLength: 64 }
+        updatedAt: { type: string, format: date-time }
+      required: [configurationRef, stableKey, version, digestSha256, definitionRef, definitionVersion, definitionDigestSha256, connectionRef, connectionVersion, connectionGeneration, capabilities, capabilityDigestSha256, effectKind, state, updatedAt]
+    IntegrationConfigurationPage:
+      type: object
+      additionalProperties: false
+      properties:
+        configurations: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IntegrationConfiguration' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [configurations]
+    TestIntegrationConnection:
+      type: object
+      additionalProperties: false
+      properties:
+        connectionRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        connectionGeneration: { type: integer, format: int64, minimum: 1 }
+        definitionRef: { type: string, minLength: 1, maxLength: 160 }
+        definitionVersion: { type: integer, format: int64, minimum: 1 }
+        definitionDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        configurationRef: { type: string, maxLength: 160 }
+        configurationVersion: { type: integer, format: int64, minimum: 1 }
+        configurationDigestSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [connectionRef, connectionVersion, connectionGeneration, definitionRef, definitionVersion, definitionDigestSha256]
+    IntegrationTestCategory:
+      type: string
+      enum: [PENDING, OK, CREDENTIAL_UNAVAILABLE, UNAUTHORIZED, FORBIDDEN, ENDPOINT_UNAVAILABLE, TIMEOUT, PROTOCOL_ERROR]
+    IntegrationTestReceipt:
+      type: object
+      additionalProperties: false
+      properties:
+        testRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionRef: { type: string, minLength: 1, maxLength: 160 }
+        connectionVersion: { type: integer, format: int64, minimum: 1 }
+        connectionGeneration: { type: integer, format: int64, minimum: 1 }
+        definitionRef: { type: string, minLength: 1, maxLength: 160 }
+        definitionVersion: { type: integer, format: int64, minimum: 1 }
+        definitionDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        configurationRef: { type: string, maxLength: 160 }
+        configurationVersion: { type: integer, format: int64, minimum: 1 }
+        configurationDigestSha256: { $ref: '#/components/schemas/Sha256' }
+        category: { $ref: '#/components/schemas/IntegrationTestCategory' }
+        receiptSha256: { $ref: '#/components/schemas/Sha256' }
+        testedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+      required: [testRef, connectionRef, connectionVersion, connectionGeneration, definitionRef, definitionVersion, definitionDigestSha256, category, receiptSha256, testedAt, expiresAt]
+    IntegrationApproval:
+      title: IntegrationApproval
+      type: object
+      additionalProperties: false
+      properties:
+        approvalRef: { type: string, minLength: 1, maxLength: 160 }
+        invocationRef: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        status: { $ref: '#/components/schemas/IntegrationApprovalStatus' }
+        requestHash: { type: string, minLength: 1, maxLength: 160 }
+        redactedPreview: { $ref: '#/components/schemas/IntegrationApprovalRedactedPreview' }
+        expiresAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+        reasonCode: { type: string, maxLength: 96 }
+      required: [approvalRef, invocationRef, version, status, requestHash, redactedPreview, expiresAt]
+    IntegrationApprovalStatus:
+      title: IntegrationApprovalStatus
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, EXPIRED, CANCELLED]
+    IntegrationApprovalRedactedPreview:
+      title: IntegrationApprovalRedactedPreview
+      type: object
+      additionalProperties: false
+      properties:
+        summary: { type: string, maxLength: 2000 }
+        fields: { type: array, maxItems: 32, items: { type: string, maxLength: 160 } }
+      required: [summary, fields]
+    IntegrationApprovalPage:
+      type: object
+      additionalProperties: false
+      properties:
+        approvals: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IntegrationApproval' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [approvals]
+    DecideIntegrationApproval:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedRequestHash: { type: string, minLength: 1, maxLength: 160 }
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        reasonCode: { type: string, minLength: 1, maxLength: 96 }
+      required: [expectedRequestHash, decision, reasonCode]
+    ScheduleSelector:
+      type: object
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [AGENT, INSTRUCTION_SET, PROVIDER_POOL] }
+        ref: { type: string, minLength: 1, maxLength: 160 }
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        state: { $ref: '#/components/schemas/LifecycleState' }
+        version: { type: integer, format: int64, minimum: 1 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+      required: [kind, ref, stableKey, displayName, state, version, digestSha256]
+    ScheduleSelectorCatalog:
+      type: object
+      additionalProperties: false
+      properties:
+        selectors: { type: array, maxItems: 300, items: { $ref: '#/components/schemas/ScheduleSelector' } }
+        complete: { type: boolean, enum: [true] }
+      required: [selectors, complete]
+    OwnerScheduleIntent:
+      type: object
+      additionalProperties: false
+      properties:
+        cron: { type: string, maxLength: 128 }
+        intervalSeconds: { type: integer, format: int64, minimum: 60, maximum: 31536000 }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
+        overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
+        misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
+        misfireGraceSeconds: { type: integer, format: int64, minimum: 0, maximum: 86400 }
+        deliveryPolicy: { type: string, enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT] }
+        maximumAttempts: { type: integer, minimum: 1, maximum: 100 }
+        initialBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        maximumBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
+        deadLetterAfterSeconds: { type: integer, format: int64, minimum: 1, maximum: 2592000 }
+        sessionPolicy: { $ref: '#/components/schemas/ScheduleSessionPolicy' }
+        roomStableKey: { type: string, maxLength: 160 }
+        notificationPolicy: { $ref: '#/components/schemas/ScheduleNotificationPolicy' }
+        maximumExecutionSeconds: { type: integer, format: int64, minimum: 60, maximum: 86400 }
+        coalesce: { type: boolean }
+        promptArtifactName: { type: string, minLength: 1, maxLength: 160 }
+      required: [timezone, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, promptArtifactName]
+    CreateScheduleFromSelections:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        agentStableKey: { type: string, minLength: 1, maxLength: 160 }
+        instructionSetStableKey: { type: string, minLength: 1, maxLength: 160 }
+        providerPoolStableKey: { type: string, minLength: 1, maxLength: 160 }
+        intent: { $ref: '#/components/schemas/OwnerScheduleIntent' }
+      required: [name, agentStableKey, instructionSetStableKey, providerPoolStableKey, intent]
+    BindScheduleConfiguration:
+      type: object
+      additionalProperties: false
+      properties:
+        agentStableKey: { type: string, minLength: 1, maxLength: 160 }
+        instructionSetStableKey: { type: string, minLength: 1, maxLength: 160 }
+        providerPoolStableKey: { type: string, minLength: 1, maxLength: 160 }
+      required: [agentStableKey, instructionSetStableKey, providerPoolStableKey]
+    RunCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [CANCEL, RETRY] }
+        reasonCode: { type: string, minLength: 1, maxLength: 96 }
+      required: [action, reasonCode]
+    RunCommandResult:
+      type: object
+      additionalProperties: false
+      properties:
+        run: { $ref: '#/components/schemas/Resource' }
+        successorTurn: { $ref: '#/components/schemas/Resource' }
+      required: [run]
+    RunDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        run: { $ref: '#/components/schemas/Resource' }
+        session: { $ref: '#/components/schemas/Resource' }
+        turn: { $ref: '#/components/schemas/Resource' }
+        runtimeRevision: { $ref: '#/components/schemas/Resource' }
+        incidents: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeIncident' } }
+      required: [run, incidents]
+    RunLineageNode:
+      type: object
+      additionalProperties: false
+      properties:
+        ref: { type: string, minLength: 1, maxLength: 160 }
+        parentRef: { type: string, maxLength: 160 }
+        state: { type: string, maxLength: 64 }
+        version: { type: integer, format: int64, minimum: 1 }
+        attempt: { type: integer, minimum: 0, maximum: 100 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [ref, state, version, attempt, createdAt, updatedAt]
+    RunLineage:
+      type: object
+      additionalProperties: false
+      properties:
+        rootRunRef: { type: string, minLength: 1, maxLength: 160 }
+        immutableInputSha256: { $ref: '#/components/schemas/Sha256' }
+        nodes: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/RunLineageNode' } }
+        complete: { type: boolean, enum: [true] }
+      required: [rootRunRef, immutableInputSha256, nodes, complete]
+    IncidentState:
+      title: IncidentState
+      type: string
+      enum: [OPEN, ACKNOWLEDGED, RETRYING, RELEASED, CLOSED]
+    IncidentHistoryEntry:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/IncidentState' }
+        action: { type: string, enum: [ACKNOWLEDGE, RETRY, RELEASE, CLOSE] }
+        reasonCode: { type: string, maxLength: 96 }
+        occurredAt: { type: string, format: date-time }
+        executionFence: { type: integer, format: int64, minimum: 1 }
+      required: [version, state, action, reasonCode, occurredAt, executionFence]
+    IncidentHistoryPage:
+      type: object
+      additionalProperties: false
+      properties:
+        entries: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IncidentHistoryEntry' } }
+        nextPageToken: { type: string, maxLength: 1024 }
+      required: [entries]
+    IncidentCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [ACKNOWLEDGE, RETRY, RELEASE, CLOSE] }
+        reasonCode: { type: string, minLength: 1, maxLength: 96 }
+      required: [action, reasonCode]
+    IncidentCommandResult:
+      type: object
+      additionalProperties: false
+      properties:
+        incident: { $ref: '#/components/schemas/RuntimeIncident' }
+        successorTurn: { $ref: '#/components/schemas/Resource' }
+      required: [incident]
+    HealthObservation:
+      title: HealthObservation
+      type: object
+      additionalProperties: false
+      properties:
+        source: { $ref: '#/components/schemas/HealthObservationSource' }
+        component: { type: string, maxLength: 96 }
+        status: { $ref: '#/components/schemas/HealthObservationStatus' }
+        value: { type: integer, format: int64, minimum: 0 }
+        version: { type: integer, format: int64, minimum: 0 }
+        digestSha256: { $ref: '#/components/schemas/Sha256' }
+        observedAt: { type: string, format: date-time }
+      required: [source, component, status, value, version, observedAt]
+    HealthObservationSource:
+      title: HealthObservationSource
+      type: string
+      enum: [CONTROL_PLANE, INTERACTION_GATEWAY, INTEGRATION_GATEWAY]
+    HealthObservationStatus:
+      title: HealthObservationStatus
+      type: string
+      enum: [OK, DEGRADED, UNAVAILABLE, UNKNOWN]
+    HealthSeries:
+      type: object
+      additionalProperties: false
+      properties:
+        observations: { type: array, maxItems: 64, items: { $ref: '#/components/schemas/HealthObservation' } }
+        complete: { type: boolean, enum: [true] }
+      required: [observations, complete]
+    WorkspaceBackupCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [CREATE, CANCEL, RETRY] }
+        backupRef: { type: string, maxLength: 160 }
+        scope: { type: string, enum: [WORKSPACE, ALL_WORKSPACES] }
+        name: { type: string, maxLength: 160 }
+        terminalReasonCode: { type: string, maxLength: 96 }
+        retainUntil: { type: string, format: date-time }
+      required: [action]
+    WorkspaceRestoreCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [CREATE, CANCEL, RETRY] }
+        restoreRef: { type: string, maxLength: 160 }
+        backupRef: { type: string, maxLength: 160 }
+        backupVersion: { type: integer, format: int64, minimum: 1 }
+        membershipSha256: { $ref: '#/components/schemas/Sha256' }
+        name: { type: string, maxLength: 160 }
+        terminalReasonCode: { type: string, maxLength: 96 }
+      required: [action]
+    ConfigurationSourceDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        resourceRef: { type: string, minLength: 1, maxLength: 160 }
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1 }
+        managedBy: { $ref: '#/components/schemas/ConfigurationManagedBy' }
+        source: { type: string, minLength: 1, maxLength: 512 }
+        sourceRevision: { type: integer, format: int64, minimum: 1 }
+        sourceSha256: { $ref: '#/components/schemas/Sha256' }
+        updatedAt: { type: string, format: date-time }
+      required: [resourceRef, displayName, version, managedBy, source, sourceRevision, updatedAt]
     ResourceKind:
       title: ResourceKind
       type: string
-      enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT, ROLE_IMAGE_RECIPE, IMAGE_BUILD, IMAGE_ARTIFACT]
+      enum: [PROJECT, TEAM, CHAT, ROLE, PROMPT_PROFILE, CREDENTIAL_BINDING, REPOSITORY_WORKSPACE, INTEGRATION, RUNTIME_REVISION, SESSION, TURN, PROCESS_RUN, SCHEDULE, OWNER_GATE, MEMORY_RECORD, WORK_CLAIM, ARTIFACT, ROLE_IMAGE_RECIPE, IMAGE_BUILD, IMAGE_ARTIFACT, ROLE_DEFINITION, AGENT, AGENT_ASSIGNMENT, INSTRUCTION_SET, PROVIDER_CONNECTION_REFERENCE, PROVIDER_POOL, WORKSPACE_BACKUP, WORKSPACE_RESTORE, WORKSPACE_MATTERMOST_MAPPING]
     MutableResourceKind:
       title: MutableResourceKind
       type: string
@@ -983,6 +2249,14 @@ components:
       title: OwnerGateDecision
       type: string
       enum: [PENDING, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED]
+    OwnerGateDeliveryState:
+      title: OwnerGateDeliveryState
+      type: string
+      enum: [AWAITING_DELIVERY_PROOF, READY, TERMINAL, EXPIRED]
+    OwnerGateNextAction:
+      title: OwnerGateNextAction
+      type: string
+      enum: [WAIT_FOR_DELIVERY, RESOLVE, READ_TERMINAL, NONE]
     ArtifactScanStatus:
       title: ArtifactScanStatus
       type: string
@@ -1010,20 +2284,33 @@ components:
         spec: { $ref: '#/components/schemas/ProjectSpec' }
       required: [name, spec]
     ScheduleOverlapPolicy:
+      title: ScheduleOverlapPolicy
       type: string
       enum: [FORBID, SKIP, QUEUE]
     ScheduleMisfirePolicy:
+      title: ScheduleMisfirePolicy
       type: string
       enum: [SKIP, RUN_ONCE, CATCH_UP, WITHIN_GRACE]
     ScheduleSessionPolicy:
+      title: ScheduleSessionPolicy
       type: string
       enum: [NEW, PERSISTENT, ROLLING]
     ScheduleNotificationPolicy:
+      title: ScheduleNotificationPolicy
       type: string
       enum: [ALWAYS, ON_ACTION, ON_FAILURE, ON_ACTION_OR_FAILURE, AUDIT_ONLY]
     ScheduleTargetType:
+      title: ScheduleTargetType
       type: string
       enum: [AGENT, PLAYBOOK]
+    ScheduleCalendar:
+      title: ScheduleCalendar
+      type: string
+      enum: [GREGORIAN, BUSINESS]
+    ScheduleDeliveryPolicy:
+      title: ScheduleDeliveryPolicy
+      type: string
+      enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT]
     ScheduleInput:
       type: object
       additionalProperties: false
@@ -1032,11 +2319,11 @@ components:
         cron: { type: string, minLength: 1, maxLength: 128 }
         intervalSeconds: { type: integer, format: int64, minimum: 60, maximum: 31536000 }
         timezone: { type: string, minLength: 1, maxLength: 64 }
-        calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
+        calendar: { $ref: '#/components/schemas/ScheduleCalendar' }
         overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
         misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
         misfireGraceSeconds: { type: integer, format: int64, minimum: 0, maximum: 86400 }
-        deliveryPolicy: { type: string, enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT] }
+        deliveryPolicy: { $ref: '#/components/schemas/ScheduleDeliveryPolicy' }
         maximumAttempts: { type: integer, minimum: 1, maximum: 100 }
         initialBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
         maximumBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
@@ -1549,11 +2836,11 @@ components:
         intervalSeconds: { type: integer, format: int64, minimum: 60, maximum: 31536000 }
         timezone: { type: string }
         nextRunAt: { type: string, format: date-time }
-        calendar: { type: string, enum: [GREGORIAN, BUSINESS] }
+        calendar: { $ref: '#/components/schemas/ScheduleCalendar' }
         overlapPolicy: { $ref: '#/components/schemas/ScheduleOverlapPolicy' }
         misfirePolicy: { $ref: '#/components/schemas/ScheduleMisfirePolicy' }
         misfireGraceSeconds: { type: integer, format: int64, minimum: 0, maximum: 86400 }
-        deliveryPolicy: { type: string, enum: [AT_LEAST_ONCE, EXACTLY_ONCE_EFFECT] }
+        deliveryPolicy: { $ref: '#/components/schemas/ScheduleDeliveryPolicy' }
         maximumAttempts: { type: integer, minimum: 1 }
         initialBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
         maximumBackoffSeconds: { type: integer, format: int64, minimum: 1, maximum: 86400 }
@@ -1573,11 +2860,6 @@ components:
         executionSessionId: { type: string, format: uuid }
         ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
       required: [targetResourceId, targetKind, targetVersion, timezone, nextRunAt, calendar, overlapPolicy, misfirePolicy, misfireGraceSeconds, deliveryPolicy, maximumAttempts, initialBackoffSeconds, maximumBackoffSeconds, deadLetterAfterSeconds, promptProfileId, promptRevision, sessionPolicy, notificationPolicy, maximumExecutionSeconds, coalesce, runtimeRevisionId, targetType, promptArtifactId, ownership]
-      oneOf:
-        - required: [cron]
-          not: { required: [intervalSeconds] }
-        - required: [intervalSeconds]
-          not: { required: [cron] }
     ScheduleOccurrenceState:
       title: ScheduleOccurrenceState
       type: string
@@ -1631,10 +2913,10 @@ components:
         turnId: { type: string, format: uuid }
         attempt: { type: integer, minimum: 1 }
         immutableInputSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
-        deliveryState: { type: string, enum: [AWAITING_DELIVERY_PROOF, READY, TERMINAL, EXPIRED] }
+        deliveryState: { $ref: '#/components/schemas/OwnerGateDeliveryState' }
         resolvable: { type: boolean }
         deliveredAt: { type: string, format: date-time }
-        nextAction: { type: string, enum: [WAIT_FOR_DELIVERY, RESOLVE, READ_TERMINAL, NONE] }
+        nextAction: { $ref: '#/components/schemas/OwnerGateNextAction' }
       required: [processRunId, resultSha256, expiresAt, decision, sessionId, turnId, attempt, immutableInputSha256, deliveryState, resolvable, nextAction]
     ResolveOwnerGateDecision:
       type: string
@@ -1859,6 +3141,170 @@ components:
       title: ImageAdmissionVerdict
       type: string
       enum: [ACCEPTED, REJECTED]
+    RoleDefinitionProjection:
+      title: RoleDefinitionProjection
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        allowedTargetRoleDefinitionRefs: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        roleImageRecipeRef: { type: string, maxLength: 160 }
+        roleImageRecipeVersion: { type: integer, format: int64, minimum: 0 }
+        roleImageRecipeSha256: { $ref: '#/components/schemas/Sha256' }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [stableKey, description, capabilities, allowedTargetRoleDefinitionRefs, roleImageRecipeVersion, ownership]
+    AgentProjection:
+      title: AgentProjection
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        roleDefinitionRef: { type: string, minLength: 1, maxLength: 160 }
+        instructionSetRef: { type: string, minLength: 1, maxLength: 160 }
+        providerPoolRef: { type: string, minLength: 1, maxLength: 160 }
+        runtimeProfileRef: { type: string, maxLength: 160 }
+        capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        botUsername: { type: string, maxLength: 160 }
+        botMaskedStatus: { type: string, maxLength: 96 }
+        enabled: { type: boolean }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [stableKey, roleDefinitionRef, instructionSetRef, providerPoolRef, capabilities, enabled, ownership]
+    AgentAssignmentProjection:
+      title: AgentAssignmentProjection
+      type: object
+      additionalProperties: false
+      properties:
+        agentRef: { type: string, minLength: 1, maxLength: 160 }
+        workspaceRef: { type: string, minLength: 1, maxLength: 160 }
+        roomRef: { type: string, maxLength: 160 }
+        generation: { type: integer, format: int64, minimum: 1 }
+      required: [agentRef, workspaceRef, generation]
+    InstructionValidationProblem:
+      title: InstructionValidationProblem
+      type: object
+      additionalProperties: false
+      properties:
+        code: { type: string, maxLength: 96 }
+        field: { type: string, maxLength: 160 }
+        line: { type: integer, minimum: 0 }
+        column: { type: integer, minimum: 0 }
+        message: { type: string, maxLength: 2000 }
+      required: [code, field, line, column, message]
+    InstructionSetProjection:
+      title: InstructionSetProjection
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        locale: { type: string, minLength: 2, maxLength: 16 }
+        currentVersion: { type: integer, format: int64, minimum: 1 }
+        publishedVersion: { type: integer, format: int64, minimum: 0 }
+        content: { type: string, maxLength: 131072 }
+        contentSha256: { $ref: '#/components/schemas/Sha256' }
+        versionState: { $ref: '#/components/schemas/InstructionVersionState' }
+        validationSucceeded: { type: boolean }
+        validationProblems: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/InstructionValidationProblem' } }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [stableKey, locale, currentVersion, publishedVersion, content, contentSha256, versionState, validationSucceeded, validationProblems, ownership]
+    InstructionVersionState:
+      title: InstructionVersionState
+      type: string
+      enum: [DRAFT, VALIDATED, PUBLISHED, REJECTED, ARCHIVED]
+    ProviderConnectionReferenceProjection:
+      title: ProviderConnectionReferenceProjection
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        provider: { type: string, minLength: 1, maxLength: 96 }
+        referenceVersion: { type: integer, format: int64, minimum: 1 }
+        maskedLabel: { type: string, maxLength: 160 }
+        maskedStatus: { $ref: '#/components/schemas/ProviderConnectionMaskedStatus' }
+        capabilities: { type: array, maxItems: 64, items: { type: string, maxLength: 160 } }
+        eligible: { type: boolean }
+        observedAt: { type: string, format: date-time }
+        observedUsage: { type: integer, format: int64, minimum: 0 }
+        observedLimit: { type: integer, format: int64, minimum: 0 }
+        observationExpiresAt: { type: string, format: date-time }
+      required: [stableKey, provider, referenceVersion, maskedLabel, maskedStatus, capabilities, eligible, observedAt, observedUsage, observedLimit, observationExpiresAt]
+    ProviderConnectionMaskedStatus:
+      title: ProviderConnectionMaskedStatus
+      type: string
+      enum: [AVAILABLE, DEGRADED, INELIGIBLE, ARCHIVED]
+    ProviderPoolResourceProjection:
+      title: ProviderPoolResourceProjection
+      type: object
+      additionalProperties: false
+      properties:
+        stableKey: { type: string, minLength: 1, maxLength: 160 }
+        policy: { $ref: '#/components/schemas/ProviderPoolPolicy' }
+        policyRevision: { type: integer, format: int64, minimum: 1 }
+        observationMaxAgeSeconds: { type: integer, format: int64, minimum: 1 }
+        eligibleMembers: { type: integer, minimum: 0, maximum: 64 }
+        totalMembers: { type: integer, minimum: 0, maximum: 64 }
+        eligibilitySnapshotSha256: { $ref: '#/components/schemas/Sha256' }
+        ownership: { $ref: '#/components/schemas/ConfigurationOwnershipProjection' }
+      required: [stableKey, policy, policyRevision, observationMaxAgeSeconds, eligibleMembers, totalMembers, eligibilitySnapshotSha256, ownership]
+    WorkspaceBackupProjection:
+      title: WorkspaceBackupProjection
+      type: object
+      additionalProperties: false
+      properties:
+        scope: { $ref: '#/components/schemas/WorkspaceBackupScope' }
+        memberCount: { type: integer, minimum: 1, maximum: 500 }
+        membershipSha256: { $ref: '#/components/schemas/Sha256' }
+        state: { $ref: '#/components/schemas/WorkspaceBackupState' }
+        attempt: { type: integer, minimum: 1, maximum: 100 }
+        generation: { type: integer, format: int64, minimum: 1 }
+        terminalReasonCode: { type: string, maxLength: 96 }
+        retainUntil: { type: string, format: date-time }
+      required: [scope, memberCount, membershipSha256, state, attempt, generation, retainUntil]
+    WorkspaceBackupScope:
+      title: WorkspaceBackupScope
+      type: string
+      enum: [WORKSPACE, ALL_WORKSPACES]
+    WorkspaceBackupState:
+      title: WorkspaceBackupState
+      type: string
+      enum: [VERIFYING, AVAILABLE, FAILED, CANCELLED, EXPIRED]
+    WorkspaceRestoreProjection:
+      title: WorkspaceRestoreProjection
+      type: object
+      additionalProperties: false
+      properties:
+        backupRef: { type: string, minLength: 1, maxLength: 160 }
+        backupVersion: { type: integer, format: int64, minimum: 1 }
+        membershipSha256: { $ref: '#/components/schemas/Sha256' }
+        memberCount: { type: integer, minimum: 1, maximum: 500 }
+        state: { $ref: '#/components/schemas/WorkspaceRestoreState' }
+        attempt: { type: integer, minimum: 1, maximum: 100 }
+        generation: { type: integer, format: int64, minimum: 1 }
+        partial: { type: boolean }
+        terminalReasonCode: { type: string, maxLength: 96 }
+      required: [backupRef, backupVersion, membershipSha256, memberCount, state, attempt, generation, partial]
+    WorkspaceRestoreState:
+      title: WorkspaceRestoreState
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, EXPIRED]
+    WorkspaceMattermostMappingProjection:
+      title: WorkspaceMattermostMappingProjection
+      type: object
+      additionalProperties: false
+      properties:
+        workspaceRef: { type: string, minLength: 1, maxLength: 160 }
+        workspaceVersion: { type: integer, format: int64, minimum: 1 }
+        mappingGeneration: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/WorkspaceMattermostMappingState' }
+        providerObservedAt: { type: string, format: date-time }
+        providerEffectVersion: { type: integer, format: int64, minimum: 1 }
+        providerEffectGeneration: { type: integer, format: int64, minimum: 1 }
+      required: [workspaceRef, workspaceVersion, mappingGeneration, state, providerObservedAt, providerEffectVersion, providerEffectGeneration]
+    WorkspaceMattermostMappingState:
+      title: WorkspaceMattermostMappingState
+      type: string
+      enum: [BOUND, UNLINKED]
     ResourceSpecProjection:
       title: ResourceSpecProjection
       type: object
@@ -1886,6 +3332,15 @@ components:
         roleImageRecipe: { $ref: '#/components/schemas/RoleImageRecipeProjection' }
         imageBuild: { $ref: '#/components/schemas/ImageBuildProjection' }
         imageArtifact: { $ref: '#/components/schemas/ImageArtifactProjection' }
+        roleDefinition: { $ref: '#/components/schemas/RoleDefinitionProjection' }
+        agent: { $ref: '#/components/schemas/AgentProjection' }
+        agentAssignment: { $ref: '#/components/schemas/AgentAssignmentProjection' }
+        instructionSet: { $ref: '#/components/schemas/InstructionSetProjection' }
+        providerConnectionReference: { $ref: '#/components/schemas/ProviderConnectionReferenceProjection' }
+        providerPool: { $ref: '#/components/schemas/ProviderPoolResourceProjection' }
+        workspaceBackup: { $ref: '#/components/schemas/WorkspaceBackupProjection' }
+        workspaceRestore: { $ref: '#/components/schemas/WorkspaceRestoreProjection' }
+        workspaceMattermostMapping: { $ref: '#/components/schemas/WorkspaceMattermostMappingProjection' }
     Resource:
       title: Resource
       type: object
@@ -1896,12 +3351,13 @@ components:
         name: { type: string }
         state: { $ref: '#/components/schemas/LifecycleState' }
         version: { type: integer, format: int64, minimum: 1 }
+        projectionSha256: { $ref: '#/components/schemas/Sha256' }
         projectId: { type: string, format: uuid }
         parentId: { type: string, format: uuid }
         spec: { $ref: '#/components/schemas/ResourceSpecProjection' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, kind, name, state, version, spec, createdAt, updatedAt]
+      required: [id, kind, name, state, version, projectionSha256, spec, createdAt, updatedAt]
     ResourcePage:
       type: object
       additionalProperties: false
@@ -1978,7 +3434,11 @@ components:
         evidenceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         workloadId: { type: string, maxLength: 128 }
         occurredAt: { type: string, format: date-time }
-      required: [incidentId, executionId, executionFence, kind, evidenceSha256, workloadId, occurredAt]
+        version: { type: integer, format: int64, minimum: 1 }
+        state: { $ref: '#/components/schemas/IncidentState' }
+        actionReasonCode: { type: string, maxLength: 96 }
+        updatedAt: { type: string, format: date-time }
+      required: [incidentId, executionId, executionFence, kind, evidenceSha256, workloadId, occurredAt, version, state, updatedAt]
     IncidentPage:
       type: object
       additionalProperties: false

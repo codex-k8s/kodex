@@ -24,6 +24,15 @@ const (
   ResourceKindRoleImageRecipe
   ResourceKindImageBuild
   ResourceKindImageArtifact
+  ResourceKindRoleDefinition
+  ResourceKindAgent
+  ResourceKindAgentAssignment
+  ResourceKindInstructionSet
+  ResourceKindProviderConnectionReference
+  ResourceKindProviderPool
+  ResourceKindWorkspaceBackup
+  ResourceKindWorkspaceRestore
+  ResourceKindWorkspaceMattermostMapping
 )
 
 // Value returns the value of the enum.
@@ -34,7 +43,7 @@ func (op ResourceKind) Value() any {
 	return ResourceKindValues[op]
 }
 
-var ResourceKindValues = []any{"PROJECT","TEAM","CHAT","ROLE","PROMPT_PROFILE","CREDENTIAL_BINDING","REPOSITORY_WORKSPACE","INTEGRATION","RUNTIME_REVISION","SESSION","TURN","PROCESS_RUN","SCHEDULE","OWNER_GATE","MEMORY_RECORD","WORK_CLAIM","ARTIFACT","ROLE_IMAGE_RECIPE","IMAGE_BUILD","IMAGE_ARTIFACT"}
+var ResourceKindValues = []any{"PROJECT","TEAM","CHAT","ROLE","PROMPT_PROFILE","CREDENTIAL_BINDING","REPOSITORY_WORKSPACE","INTEGRATION","RUNTIME_REVISION","SESSION","TURN","PROCESS_RUN","SCHEDULE","OWNER_GATE","MEMORY_RECORD","WORK_CLAIM","ARTIFACT","ROLE_IMAGE_RECIPE","IMAGE_BUILD","IMAGE_ARTIFACT","ROLE_DEFINITION","AGENT","AGENT_ASSIGNMENT","INSTRUCTION_SET","PROVIDER_CONNECTION_REFERENCE","PROVIDER_POOL","WORKSPACE_BACKUP","WORKSPACE_RESTORE","WORKSPACE_MATTERMOST_MAPPING"}
 var ValuesToResourceKind = map[any]ResourceKind{
   ResourceKindValues[ResourceKindProject]: ResourceKindProject,
   ResourceKindValues[ResourceKindTeam]: ResourceKindTeam,
@@ -56,4 +65,13 @@ var ValuesToResourceKind = map[any]ResourceKind{
   ResourceKindValues[ResourceKindRoleImageRecipe]: ResourceKindRoleImageRecipe,
   ResourceKindValues[ResourceKindImageBuild]: ResourceKindImageBuild,
   ResourceKindValues[ResourceKindImageArtifact]: ResourceKindImageArtifact,
+  ResourceKindValues[ResourceKindRoleDefinition]: ResourceKindRoleDefinition,
+  ResourceKindValues[ResourceKindAgent]: ResourceKindAgent,
+  ResourceKindValues[ResourceKindAgentAssignment]: ResourceKindAgentAssignment,
+  ResourceKindValues[ResourceKindInstructionSet]: ResourceKindInstructionSet,
+  ResourceKindValues[ResourceKindProviderConnectionReference]: ResourceKindProviderConnectionReference,
+  ResourceKindValues[ResourceKindProviderPool]: ResourceKindProviderPool,
+  ResourceKindValues[ResourceKindWorkspaceBackup]: ResourceKindWorkspaceBackup,
+  ResourceKindValues[ResourceKindWorkspaceRestore]: ResourceKindWorkspaceRestore,
+  ResourceKindValues[ResourceKindWorkspaceMattermostMapping]: ResourceKindWorkspaceMattermostMapping,
 }

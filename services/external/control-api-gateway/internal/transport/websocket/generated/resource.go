@@ -7,6 +7,7 @@ type Resource struct {
   Name string
   State *LifecycleState
   Version int
+  ProjectionSha256 string
   ProjectId string
   ParentId string
   Spec *ResourceSpecProjection

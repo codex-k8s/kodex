@@ -64,6 +64,10 @@ spec:
             - {name: CONTROL_API_GATEWAY_PER_SUBJECT_WEBSOCKET_CONCURRENCY, value: "4"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TARGET, value: "dns:///control-plane.mattercodex-system.svc:8443"}
             - {name: CONTROL_API_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME, value: control-plane.mattercodex-system.svc.cluster.local}
+            - {name: CONTROL_API_GATEWAY_INTERACTION_TARGET, value: "dns:///interaction-gateway.mattercodex-system.svc:9443"}
+            - {name: CONTROL_API_GATEWAY_INTERACTION_TLS_SERVER_NAME, value: interaction-gateway.mattercodex-system.svc.cluster.local}
+            - {name: CONTROL_API_GATEWAY_INTEGRATION_TARGET, value: "dns:///integration-gateway.mattercodex-system.svc:9443"}
+            - {name: CONTROL_API_GATEWAY_INTEGRATION_TLS_SERVER_NAME, value: integration-gateway.mattercodex-system.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/mattercodex/control-api-gateway/observability/otel-ca.pem}
@@ -103,7 +107,7 @@ spec:
             - {name: oidc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/oidc, readOnly: true}
             - {name: session-keys, mountPath: /var/run/secrets/mattercodex/control-api-gateway/session, readOnly: true}
             - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/mattercodex/control-api-gateway/control-plane-client, readOnly: true}
-            - {name: control-plane-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/control-plane, readOnly: true}
+            - {name: internal-rpc-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/control-plane, readOnly: true}
             - {name: application-grant, mountPath: /var/run/secrets/mattercodex/control-api-gateway/application-grant, readOnly: true}
             - {name: observability-ca, mountPath: /var/run/config/mattercodex/control-api-gateway/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/control-api-gateway/observability, readOnly: true}
@@ -115,7 +119,7 @@ spec:
           configMap: {name: mattercodex-oidc-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: session-keys
           secret: {secretName: control-api-gateway-session-keys, defaultMode: 0440}
-        - name: control-plane-ca
+        - name: internal-rpc-ca
           configMap: {name: mattercodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
         - name: application-grant
           secret: {secretName: control-api-gateway-application-grant, defaultMode: 0440, items: [{key: readiness.jwt, path: readiness.jwt}]}

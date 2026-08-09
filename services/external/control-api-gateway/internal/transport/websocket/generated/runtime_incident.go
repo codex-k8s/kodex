@@ -9,4 +9,8 @@ type RuntimeIncident struct {
   EvidenceSha256 string
   WorkloadId string
   OccurredAt string
+  Version int
+  State *IncidentState
+  ActionReasonCode string
+  UpdatedAt string
 }

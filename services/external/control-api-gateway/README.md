@@ -4,16 +4,18 @@ title: Control API gateway
 type: service
 status: approved
 owner: backend
-version: 1.4.0
-updated: 2026-08-06
+version: 1.5.0
+updated: 2026-08-09
 ---
 
 # Control API gateway
 
-`control-api-gateway` — внешняя owner HTTP/WebSocket boundary Issue
-[#191](https://github.com/codex-k8s/matter-codex/issues/191). Gateway проверяет
+`control-api-gateway` — внешняя owner HTTP/WebSocket boundary Issues
+[#191](https://github.com/codex-k8s/matter-codex/issues/191) и
+[#237](https://github.com/codex-k8s/matter-codex/issues/237). Gateway проверяет
 OIDC, выдаёт короткую защищённую browser session, применяет CORS/CSRF/rate
-limits и преобразует запросы в сгенерированный gRPC client `control-plane`.
+limits и преобразует запросы в сгенерированные gRPC clients `control-plane`,
+`interaction-gateway` и `integration-gateway`.
 
 Gateway не читает PostgreSQL, Redis, NATS или Vault API напрямую, не хранит
 бизнес-состояние и не принимает `actor`, organization, project, owner или
@@ -27,7 +29,9 @@ tenant из payload. Эти поля разрешает `AuthorityProofResolverS
   `internal/transport/http/generated/control_api_gateway.gen.go`;
 - source AsyncAPI: `contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml`;
 - generated WebSocket models: `internal/transport/websocket/generated`;
-- internal RPC: `contracts/proto/controlplane/v1/control_plane.proto`;
+- internal RPC: `contracts/proto/controlplane/v1/control_plane.proto`,
+  `contracts/proto/interactiongateway/v1/mattermost_team.proto` и
+  `contracts/proto/integrationgateway/v1/integration_management.proto`;
 - authority policy: существующий профиль `control-api-gateway` в
   `deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`.
 
@@ -136,13 +140,57 @@ issuer. Payload identity не используется.
 
 ## Материализация рабочего пути
 
+## Сквозная карта Issue #237
+
+Во всех строках actor, organization и workspace выводятся из проверенной
+OIDC/session application grant. Browser передаёт только opaque selector/ref,
+полученный предыдущим catalog/readback. Gateway выполняет transport-проверки и
+безопасную проекцию; eligibility, lifecycle, owner resolution, OCC и receipt
+принадлежат указанному RPC-владельцу.
+
+| Owner-сценарий | External operation | Generated internal RPC | Version / результат / realtime |
+| --- | --- | --- | --- |
+| Team catalog/create/link/read/relink/unlink | `listMattermostTeams`, `createMattermostTeam`, `linkMattermostTeam`, `getMattermostTeamBinding`, `relinkMattermostTeam`, `unlinkMattermostTeam`, `getMattermostTeamMappingOperation`, `getMattermostTeamProviderReadback` | exact `interactiongateway.v1.MattermostTeamService/*` | mutation: CSRF, `Idempotency-Key`, для relink/unlink `If-Match` плюс authoritative generation; response содержит safe Team selector, mapping version/generation и operation state; канал `WORKSPACE_TEAMS` заменяется только полным snapshot |
+| RoleDefinition | `listRoleDefinitions`, `getRoleDefinition`, `manageRoleDefinition`, `listRoleDefinitionHistory` | `ListRoleDefinitions`, `GetRoleDefinition`, `ManageRoleDefinition`, `ListRoleDefinitionHistory` | специализированные `CREATE|UPDATE|ARCHIVE|DELETE`, ID/owner server-owned, `If-Match` для existing aggregate; typed resource/history и ETag; `CONFIGURATION` snapshot |
+| Agent | `listAgents`, `getAgent`, `manageAgent`, `listAgentHistory` | `ListAgents`, `GetAgent`, `ManageAgent`, `ListAgentHistory` | тот же closed command contract; profile/resource/image/pool refs повторно разрешяет control-plane; current resource и immutable history |
+| AgentAssignment | `listAgentAssignments`, `getAgentAssignment`, `manageAgentAssignment`, `listAgentAssignmentHistory` | `ListAgentAssignments`, `GetAgentAssignment`, `ManageAgentAssignment`, `ListAgentAssignmentHistory` | только `ASSIGN|UNASSIGN`; agent/role/room stable refs разрешаются owner-side до OCC/receipt; current/history |
+| InstructionSet | `listInstructionSets`, `getInstructionSet`, `manageInstructionSet`, `listInstructionSetHistory`, `compareInstructionSetVersions` | exact одноимённые control-plane RPC | `CREATE|UPDATE|VALIDATE|PUBLISH|ROLLBACK|DETACH|COPY|ARCHIVE|DELETE`; Git-owned edit закрыт до detach/copy; immutable version/digest, validation problems и server compare |
+| Provider catalog/authorization/connections | `listProviders`, `getProvider`, `startProviderAuthorization`, `getProviderAuthorization`, `restartProviderAuthorization`, `cancelProviderAuthorization`, `listProviderConnections`, `getProviderConnection`, `reauthorizeProviderConnection`, `revokeProviderConnection` | exact `integrationgateway.v1.IntegrationManagementService/*` | provider/connection refs только из catalog/readback; mutation имеет receipt, OCC и generation; выдаются URL, short user code и masked account, но не credential/token/raw payload; `PROVIDERS` snapshot |
+| Provider pools | `listProviderPools`, `getProviderPool`, `manageProviderPool` | integration `List/Get/ManageProviderPool` | `CREATE|UPDATE|ARCHIVE|DELETE`; каждый member привязан к exact connection version/generation, weight bounded; effective eligibility и state только из response |
+| Integration definitions/config/tests | `listIntegrationDefinitions`, `getIntegrationDefinition`, `listIntegrationConfigurations`, `getIntegrationConfiguration`, `configureIntegration`, `testIntegrationConnection`, `getIntegrationTestReceipt` | exact integration management RPC | catalog version/digest/capabilities и connection generation закрепляются в command; secret input отсутствует; test возвращает закрытую category и safe receipt digests |
+| ApprovalRequest | `listIntegrationApprovals`, `getIntegrationApproval`, `decideIntegrationApproval` | `ListIntegrationApprovals`, `GetIntegrationApproval`, `DecideIntegrationApproval` | decision one-winner по request hash/version/receipt; preview повторно декодируется как bounded JSON и redacted; terminal response является readback |
+| Schedule selectors/bind/current | `listScheduleSelectors`, `createScheduleFromSelections`, `bindScheduleConfiguration`, существующие schedule read paths | `ListAgents`, `ListInstructionSets`, `ListResources(PROVIDER_POOL)`, `CreateScheduleFromOwnerSelections`, `BindScheduleConfiguration`, `GetResource` | browser выбирает display entries и opaque refs; control-plane pin-ит версии/дайджесты; current projection несёт owner-managed source/version и ETag |
+| Run | `listRuns`, `getRunDetail`, `listRunTimeline`, `getRunLineage`, `listRunArtifacts`, `manageRun` | exact `ListResources`, `GetRunDetail`, `ListRunTimeline`, `GetRunLineage`, `ListRunArtifacts`, `ManageRun` | только `CANCEL|RETRY`; retry создаёт fresh attempt/RuntimeRevision/grant owner-side; gateway публикует typed state без вычисления отсутствующих в RPC affordances; `RUNS` complete snapshot |
+| OwnerGate | существующий `resolveOwnerGate` | `ResolveOwnerGate` | exact delivered gate, owner graph и ETag; terminal/continuation создаёт control-plane; gateway не принимает lineage |
+| Incident | `listIncidents`, `getIncident`, `listIncidentHistory`, `manageIncident` | `ListRuntimeIncidents`, `GetRuntimeIncident`, `ListRuntimeIncidentHistory`, `ManageRuntimeIncident` | только `ACKNOWLEDGE|RETRY|RELEASE|CLOSE`; state и affected graph авторитетны, gateway не выводит affordances из state; `INCIDENTS` complete snapshot |
+| Health | `getHealthSeries` | `GetDiagnostics`, integration `GetManagementDiagnostics`, interaction `CheckReadiness` | один bounded synchronous observation на dependency/queue/resource series из текущих exact readbacks; gateway не создаёт историю и не подменяет неизвестное состояние |
+| Workspace backup/restore | `listWorkspaceBackups`, `getWorkspaceBackup`, `manageWorkspaceBackup`, `listWorkspaceRestores`, `getWorkspaceRestore`, `manageWorkspaceRestore` | exact `List/Get/ManageWorkspaceBackup`, `List/Get/ManageWorkspaceRestore` | scope `WORKSPACE|ALL_WORKSPACES`, source snapshot/version/digests server-owned; `CREATE|CANCEL|RETRY`; partial/terminal typed readback не вычисляется gateway; `BACKUPS` snapshot |
+| Diagnostics/audit/configuration | `getDiagnostics`, `exportAudit`, `getConfigurationDiff`, `getConfigurationSourceDetail` | `GetDiagnostics`, integration `GetManagementDiagnostics`, bounded `ListAuditEvents`, exact history/`CompareInstructionSetVersions` | synchronous export ограничен 500 строками и safe CSV; diff берётся из owner compare/history без generic JSON business diff; source detail проецирует только managed-by/source revision/digest/display metadata |
+
+## Lifecycle matrix Issue #237
+
+| Aggregate | Create/read/update/archive/assign | Terminal/cancel/retry/expiry/stale | Авторитетный readback |
+| --- | --- | --- | --- |
+| Team mapping | create Team и bind используют semantic idempotency; read заново проверяет catalog selector/provider membership; relink требует version+generation | unlink закрывает mapping только после owner graph gate; ambiguous/provider-accepted/repair states остаются явными, gateway их не продвигает | binding + durable mapping operation; stale ETag не вызывает provider effect |
+| RoleDefinition/Agent | create назначает ID/owner; update/archive выполняются специализированным registry | delete только по owner lifecycle; stale/hidden/Git-owned дают typed owner error; generic resource transition отсутствует | current `Resource` и immutable history |
+| Assignment | assign разрешает оба aggregate и room внутри owner boundary | unassign закрывает exact assignment; повтор возвращает receipt, stale version конфликтует | assignment current/history |
+| InstructionSet | validate не публикует; publish выбирает validated immutable version; rollback создаёт новую current version; detach/copy — единственные Git→UI пути | archive/delete только из разрешённого owner state; stale source/version/digest закрываются | current, history и exact two-version compare |
+| Provider authorization | start создаёт attempt; status read-only; new-code/reauthorize создают fresh attempt/generation | cancel/revoke terminal; denied/expired/failed нельзя оживить старым code; retry всегда fresh attempt | authorization/connection state, masked display, expiry |
+| Provider pool/integration | create/update закрепляют catalog, connection и capability versions | archive/delete/revoke invalidates eligibility owner-side; stale member/definition закрывается | effective state/capabilities/digests из integration gateway |
+| Approval | pending exact request hash/version → approve/reject one-winner | expiry/terminal decision необратимы; stale decision не меняет invocation | approval terminal readback |
+| Schedule | create из selections и bind конфигурации pin-ят authoritative versions | существующие pause/resume/delete/recovery остаются control-plane; stale selector/version закрывается | полный current Schedule и occurrences |
+| Run | read-only detail/timeline/lineage/artifacts | cancel атомарно закрывает leases/grants/claims; retry создаёт fresh attempt; terminal/expired/stale action отклоняется | typed state; gateway не добавляет affordances, которых нет в exact RPC |
+| Incident | read/ack работают только на exact incident graph | retry/release/close специализированы; terminal/expiry/stale version закрываются | incident state/history без gateway-derived affordances |
+| Backup/restore | create назначает immutable scope/source/operation | cancel/retry закрывают previous generation; retry создаёт fresh attempt; expired/unavailable/stale source не восстанавливается | typed backup/restore state, progress и partial readback без gateway-derived affordances |
+| Realtime | subscribe проходит ту же Origin/session/CSRF owner boundary | lower version/sequence и `complete=false` никогда не replace-ят current UI state; overflow закрывает connection без partial snapshot | versioned `complete=true` snapshot, reconnect = fresh read/rejoin |
+
 | Часть | Исполняемая материализация |
 | --- | --- |
 | Producer profile | существующий `control-plane.oidc`: OIDC bearer metadata, resolver exact mTLS SPIFFE, server-resolved actor/tenant/project/ownership и durable owner-session fence |
-| Client operation profile | `controlplaneclient.ControlAPIGatewayOperations`; exact 37 materialized methods, включая project update/delete, Schedule, OwnerGate, backup/restore discovery, session/search/detach/copy/incidents, специализированные TLS prepare/confirm/check и readiness, без broad lifecycle permissions |
-| Generated adapters | OpenAPI std HTTP server/models, named structural AsyncAPI Go models, strict handwritten WebSocket JSON adapter и generated control-plane gRPC client |
+| Client operation profile | Закрытые registries `controlplaneclient.ControlAPIGatewayOperations` и `internal/clients/owner`: только materialized control-plane, interaction team и integration management methods, без broad lifecycle permissions |
+| Generated adapters | OpenAPI std HTTP server/models, named structural AsyncAPI Go models, strict WebSocket JSON adapter и generated control-plane/interaction/integration gRPC clients |
 | Consumer effect | typed REST page либо connection-local atomic complete replace-snapshot; browser не подтверждает domain effect и не влияет на state owner |
-| Readiness | OIDC/session/TLS state прочитаны; local served material разрешён read-only `CheckGatewayPublicTLS` как APPLIED, PENDING до confirm recovery либо неистёкший PREVIOUS; `controlplaneclient.Check` проходит resolver → local issuer → protected `CheckReadiness`; loopback TLS readback сверяет exact peer digest/expiry и не продвигает watermark |
+| Readiness | OIDC/session/TLS state прочитаны; local served material разрешён read-only `CheckGatewayPublicTLS` как APPLIED, PENDING до confirm recovery либо неистёкший PREVIOUS; control-plane, interaction и integration clients проходят один local issuer/application proof и exact protected readiness RPC; loopback TLS readback сверяет exact peer digest/expiry и не продвигает watermark |
 | Deploy ownership | Dockerfile, Kustomize base/overlays, Service/Ingress TLS passthrough, issuer component, Vault Secrets Operator, exact NetworkPolicy, PDB, metrics/dashboard/alerts |
 | Failure policy | startup fail-closed; readiness снимается при protected RPC/TLS mismatch; HTTP/WS unknown error detail → `INTERNAL`; admission останавливается, tracked WebSocket закрываются параллельно и force-close/join подчиняется shutdown budget до client/OIDC/telemetry shutdown |
 
@@ -154,8 +202,9 @@ issuer. Payload identity не используется.
   bearer никогда не логируется и не сохраняется вне encrypted cookie;
 - OIDC HTTP client запрещает proxy/redirect, принимает только pinned HTTPS
   origin, exact SNI и CA;
-- control-plane client использует exact SNI/CA, client certificate, application
-  bearer, resolver proof, local issuer и internal authorization context;
+- все три internal clients используют exact SNI/CA, одну workload client
+  certificate, application proof, resolver proof, local issuer и internal
+  authorization context;
 - `mTLS` не заменяет OIDC/session, permission, owner resolution или replay
   protection;
 - metric `route/status/channel/outcome` нормализованы закрытыми множествами;
@@ -184,90 +233,62 @@ certificate имеют bounded TTL; session key rotation forward-only испол
 key-файла.
 
 NetworkPolicy разрешает только ingress controller, Prometheus, DNS,
-control-plane, identity SSO, Vault, OTel, Sentry и точные issuer component
-destinations. Правил только по порту, wildcard egress, plaintext fallback и
-`skipTLSVerify` нет.
+control-plane, interaction-gateway, integration-gateway, identity SSO, Vault,
+OTel, Sentry и точные issuer component destinations. Правил только по порту,
+wildcard egress, plaintext fallback и `skipTLSVerify` нет.
 
-## Ручная проверка dependency #231
+## Ручная проверка Issue #237
 
 На локальном или отдельно разрешённом staging-профиле с owner session и
-заранее созданными тестовыми данными:
+заранее подготовленными authoritative данными:
 
-1. Выполнить update Project с текущим `ETag`, проверить новый `ETag`, сохранение
-   server-owned owner/ownership и `412` для прежней версии.
-2. Создать Schedule, затем в новой browser session прочитать его через owner
-   resource GET. Не используя локальный cache/defaults, собрать `PUT` из `name`
-   и полного `ScheduleProjection`: cron либо interval, calendar, overlap,
-   misfire/grace, delivery/retry/backoff/dead-letter, prompt/session/room,
-   notification, coalesce, runtime/target/playbook/artifact bindings. Изменить
-   timezone, проверить сохранение остальных полей, новый `ETag`, затем удалить;
-   проверить `409` при незакрытом occurrence/run.
-3. Создать Project через `POST /projects`: ожидать server-assigned ID/owner и
-   `201`. Затем вызвать generic create/update/transition/delete для `PROJECT`,
-   `SCHEDULE` и `OWNER_GATE`: ожидать закрытый отказ без версии/audit/event.
-   Удалить пустой Project через `DELETE /projects/{id}` и получить `409`, если
-   есть live resources.
-4. Для нового OwnerGate до Mattermost read-after-write проверить
-   `AWAITING_DELIVERY_PROOF`, `resolvable=false`, `WAIT_FOR_DELIVERY`; решение
-   не должно менять graph. После provider proof проверить `READY`, `RESOLVE`.
-5. На отдельных gates выполнить `APPROVED`, `REJECTED`, `CANCELLED` и
-   `CHANGES_REQUESTED`. Для первых трёх проверить terminal gate/process и
-   `READ_TERMINAL`; для `CHANGES_REQUESTED` — fresh continuation tuple. После
-   продвижения continuation повторить исходный `Idempotency-Key`: должен
-   вернуться сохранённый receipt, а не conflict.
-6. Довести gate до expiry как до, так и после delivery proof; проверить
-   `EXPIRED`, `resolvable=false`, `READ_TERMINAL`. Позднее решение должно
-   вернуть terminal readback/закрытый conflict и не создавать continuation.
-7. Прочитать список и single backup, убедиться, что JSON не содержит DSN,
-   `archiveReference`, object key, credential, PVC, proof/evidence или grant.
-8. Только после отдельного разрешения на фактический restore вызвать команду с
-   public backup `ETag`, отдельным `sourceVersion`, archive/provenance digests
-   и `SESSION` scope. Потерять
-   `Location`, затем восстановить operation через `Backup.restoreOperationId`
-   и `GET /restore-operations?backupId=...`; обе ссылки должны дать один ID.
-   Дождаться `FAILED|CANCELLED|EXPIRED` и повторить исходный запрос с теми же
-   body/`If-Match`/`Idempotency-Key`: должен вернуться тот же operation ID и
-   текущий terminal readback, несмотря на изменившиеся backup version/state.
-9. Параллельно прочитать backup и restore operation до и после
-   `RESTORING`→terminal и между двумя generation: новый `version`/`ETag`
-   должен быть больше, `updatedAt` — не меньше, при неизменном
-   `sourceVersion`; list и single обязаны совпасть. Pre-target
-   `QUEUED`→`CANCELLED|EXPIRED` также обязан менять restore-operation ETag.
-   Отдельно пересечь `archiveRetainUntil` без restore и создать более новый
-   eligible backup той же session: старый backup должен получить больший
-   `version`, новый `updatedAt`, соответственно `EXPIRED` либо
-   `UNAVAILABLE/restorable=false`; list/get обязаны вернуть одну tuple.
-10. Для cancel до runtime claim ожидать `CANCELLED`, `partial=false`, `NONE`:
-   без созданного runtime автоматический retry закрыто запрещён. Для expiry
-   после claim, но до `BOUND`, ожидать `EXPIRED`, `partial=false` и
-   `RETRY_RUNTIME`. Для `FAILED|CANCELLED|EXPIRED` после `BOUND|CONSUMED`
-   ожидать `partial=true`, соответствующий backup `RESTORE_*` и не `RESTORED`.
-   `CANCELLED` всегда показывает `NONE`; `FAILED|EXPIRED` показывают retry
-   только при attempt < 100, attempt 100 — `NONE`. При допустимом retry
-   проверить рост `generation`, exact прежний backup/source tuple, новый target
-   attempt и `RETRYING|QUEUED`; prior `CONSUMED` не выбирает другой archive.
-11. Между admission и каждым первым Kubernetes/PVC либо S3 credential effect
-   выполнить cancel/expiry: controller/exchanger должны повторно прочитать
-   current operation/generation/digest и закрыто отклонить stale generation по
-   durable revoke watermark до Create/STS. Проверить, что `PENDING` ticket не
-   принимается, current `ADMITTED` effect slot расходуется один раз, exact replay
-   повторно сверяет watermark, а retry принимает только fresh generation. Только
-   target `SUCCEEDED` даёт `RESTORED` и `READ_BACKUP`.
+1. Пройти Team catalog → create → provider readback → link → relink → unlink.
+   Проверить selector из catalog, `ETag`, mapping generation и durable operation
+   readback; внутренние provider ID вручную не вводить.
+2. Создать RoleDefinition и Agent, назначить/снять AgentAssignment. Для
+   InstructionSet пройти edit → validate → publish → history → compare →
+   rollback, а Git-owned вариант менять только через detach/copy. Повторить
+   stale `If-Match` и убедиться в `412` без изменения owner state.
+3. Пройти provider catalog → authorization → status/new-code → masked account →
+   pool policy/weights → reauthorize/revoke. Проверить отсутствие token,
+   credential, raw provider payload и secret input во всех JSON и логах.
+4. Выбрать IntegrationDefinition, настроить connection/capabilities, выполнить
+   bounded test и принять/отклонить ApprovalRequest. Preview должен содержать
+   только summary и имена полей, но не их значения.
+5. Создать Schedule из catalog selectors и выполнить bind current
+   configuration. Проверить, что browser не передаёт UUID/owner/project и что
+   gateway возвращает pinned owner readback с новым `ETag`.
+6. Для Run проверить list/detail/timeline/lineage/artifacts, затем отдельно
+   cancel и retry. Для Incident проверить list/detail/history и допустимые
+   acknowledge/retry/release/close. Состояния берутся из RPC; gateway не
+   добавляет вычисленные `nextActions`.
+7. Для Workspace и All Workspaces backup/restore пройти list/get/create,
+   cancel/retry/readback. Проверить рост version/generation, fresh attempt при
+   retry и отсутствие DSN, object key, private evidence или grant.
+8. Получить bounded health, diagnostics, source detail, configuration diff и
+   audit CSV. CSV должен быть полным либо запрос должен закрыто завершиться до
+   выдачи заголовков; ни один результат не содержит session/security material.
+9. Подписаться двумя запросами на все десять WebSocket channels, не более
+   восьми за один запрос. Каждый replace должен иметь `complete=true`,
+   возрастающий sequence и typed version/digest; после reconnect выполняется
+   fresh authoritative snapshot. Частичный/overflow snapshot должен дать
+   bounded problem и закрыть connection.
+10. Снять readiness interaction либо integration owner RPC и убедиться, что
+    `/readyz` становится false тем же generated client/application authority
+    path, который обслуживает рабочие запросы; после восстановления перечитать
+    текущие authoritative projections.
 
-Фактический backup/restore в рамках Issue #231 агентом не запускался; пункты
-8–11 являются ручной acceptance matrix для отдельно разрешённого окружения, а
-не разрешением на destructive действие.
+Фактические provider effects, cancel/retry и backup/restore выполняются только
+в отдельно разрешённом окружении; этот список не разрешает production action.
 
 ## Rollback
 
-Приложения и source/generated contracts можно вернуть на предшествующий образ.
-Миграция `20260806000100_owner_backup_restore.sql` forward-only: additive
-restore operation table и private source fence/proof columns остаются и не
-обслуживаются старым кодом. Authority policy
-нельзя откатывать на меньшую ревизию; rollback публикует новую, большую
-ревизию без новых operation bindings и подтверждает exact served readback.
-Созданные restore operations не удаляются: их target graph закрывает
-control-plane штатными terminal/cancel/expiry переходами.
+Приложение и source/generated contracts можно вернуть на предшествующий image
+только если он совместим с уже опубликованными owner RPC и текущей authority
+revision. Authority policy нельзя откатывать на меньшую ревизию. Созданные Team,
+provider, integration, schedule, run/incident и backup/restore operations не
+удаляются: их lifecycle остаётся у соответствующего owner RPC и закрывается
+штатным terminal/cancel/expiry переходом.
 
 ## Локальная проверка
 

@@ -15,6 +15,8 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
+	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
+	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/projection"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/transport/http/generated"
@@ -73,6 +75,39 @@ type ControlPlane interface {
 	GetRoleImageRecipe(context.Context, *controlplanev1.GetRoleImageRecipeRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageRecipeResponse, error)
 	ManageImageBuild(context.Context, *controlplanev1.ManageImageBuildRequest, ...grpc.CallOption) (*controlplanev1.ManageImageBuildResponse, error)
 	GetRoleImageBuild(context.Context, *controlplanev1.GetRoleImageBuildRequest, ...grpc.CallOption) (*controlplanev1.GetRoleImageBuildResponse, error)
+	ManageRoleDefinition(context.Context, *controlplanev1.ManageRoleDefinitionRequest, ...grpc.CallOption) (*controlplanev1.ManageRoleDefinitionResponse, error)
+	GetRoleDefinition(context.Context, *controlplanev1.GetRoleDefinitionRequest, ...grpc.CallOption) (*controlplanev1.GetRoleDefinitionResponse, error)
+	ListRoleDefinitions(context.Context, *controlplanev1.ListRoleDefinitionsRequest, ...grpc.CallOption) (*controlplanev1.ListRoleDefinitionsResponse, error)
+	ListRoleDefinitionHistory(context.Context, *controlplanev1.ListRoleDefinitionHistoryRequest, ...grpc.CallOption) (*controlplanev1.ListRoleDefinitionHistoryResponse, error)
+	ManageAgent(context.Context, *controlplanev1.ManageAgentRequest, ...grpc.CallOption) (*controlplanev1.ManageAgentResponse, error)
+	GetAgent(context.Context, *controlplanev1.GetAgentRequest, ...grpc.CallOption) (*controlplanev1.GetAgentResponse, error)
+	ListAgents(context.Context, *controlplanev1.ListAgentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentsResponse, error)
+	ListAgentHistory(context.Context, *controlplanev1.ListAgentHistoryRequest, ...grpc.CallOption) (*controlplanev1.ListAgentHistoryResponse, error)
+	ManageAgentAssignment(context.Context, *controlplanev1.ManageAgentAssignmentRequest, ...grpc.CallOption) (*controlplanev1.ManageAgentAssignmentResponse, error)
+	GetAgentAssignment(context.Context, *controlplanev1.GetAgentAssignmentRequest, ...grpc.CallOption) (*controlplanev1.GetAgentAssignmentResponse, error)
+	ListAgentAssignments(context.Context, *controlplanev1.ListAgentAssignmentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentAssignmentsResponse, error)
+	ListAgentAssignmentHistory(context.Context, *controlplanev1.ListAgentAssignmentHistoryRequest, ...grpc.CallOption) (*controlplanev1.ListAgentAssignmentHistoryResponse, error)
+	ManageInstructionSet(context.Context, *controlplanev1.ManageInstructionSetRequest, ...grpc.CallOption) (*controlplanev1.ManageInstructionSetResponse, error)
+	GetInstructionSet(context.Context, *controlplanev1.GetInstructionSetRequest, ...grpc.CallOption) (*controlplanev1.GetInstructionSetResponse, error)
+	ListInstructionSets(context.Context, *controlplanev1.ListInstructionSetsRequest, ...grpc.CallOption) (*controlplanev1.ListInstructionSetsResponse, error)
+	ListInstructionSetHistory(context.Context, *controlplanev1.ListInstructionSetHistoryRequest, ...grpc.CallOption) (*controlplanev1.ListInstructionSetHistoryResponse, error)
+	CompareInstructionSetVersions(context.Context, *controlplanev1.CompareInstructionSetVersionsRequest, ...grpc.CallOption) (*controlplanev1.CompareInstructionSetVersionsResponse, error)
+	CreateScheduleFromOwnerSelections(context.Context, *controlplanev1.CreateScheduleFromOwnerSelectionsRequest, ...grpc.CallOption) (*controlplanev1.CreateScheduleFromOwnerSelectionsResponse, error)
+	BindScheduleConfiguration(context.Context, *controlplanev1.BindScheduleConfigurationRequest, ...grpc.CallOption) (*controlplanev1.BindScheduleConfigurationResponse, error)
+	ManageRun(context.Context, *controlplanev1.ManageRunRequest, ...grpc.CallOption) (*controlplanev1.ManageRunResponse, error)
+	GetRunDetail(context.Context, *controlplanev1.GetRunDetailRequest, ...grpc.CallOption) (*controlplanev1.GetRunDetailResponse, error)
+	ListRunTimeline(context.Context, *controlplanev1.ListRunTimelineRequest, ...grpc.CallOption) (*controlplanev1.ListRunTimelineResponse, error)
+	GetRunLineage(context.Context, *controlplanev1.GetRunLineageRequest, ...grpc.CallOption) (*controlplanev1.GetRunLineageResponse, error)
+	ListRunArtifacts(context.Context, *controlplanev1.ListRunArtifactsRequest, ...grpc.CallOption) (*controlplanev1.ListRunArtifactsResponse, error)
+	ManageRuntimeIncident(context.Context, *controlplanev1.ManageRuntimeIncidentRequest, ...grpc.CallOption) (*controlplanev1.ManageRuntimeIncidentResponse, error)
+	GetRuntimeIncident(context.Context, *controlplanev1.GetRuntimeIncidentRequest, ...grpc.CallOption) (*controlplanev1.GetRuntimeIncidentResponse, error)
+	ListRuntimeIncidentHistory(context.Context, *controlplanev1.ListRuntimeIncidentHistoryRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeIncidentHistoryResponse, error)
+	ManageWorkspaceBackup(context.Context, *controlplanev1.ManageWorkspaceBackupRequest, ...grpc.CallOption) (*controlplanev1.ManageWorkspaceBackupResponse, error)
+	GetWorkspaceBackup(context.Context, *controlplanev1.GetWorkspaceBackupRequest, ...grpc.CallOption) (*controlplanev1.GetWorkspaceBackupResponse, error)
+	ListWorkspaceBackups(context.Context, *controlplanev1.ListWorkspaceBackupsRequest, ...grpc.CallOption) (*controlplanev1.ListWorkspaceBackupsResponse, error)
+	ManageWorkspaceRestore(context.Context, *controlplanev1.ManageWorkspaceRestoreRequest, ...grpc.CallOption) (*controlplanev1.ManageWorkspaceRestoreResponse, error)
+	GetWorkspaceRestore(context.Context, *controlplanev1.GetWorkspaceRestoreRequest, ...grpc.CallOption) (*controlplanev1.GetWorkspaceRestoreResponse, error)
+	ListWorkspaceRestores(context.Context, *controlplanev1.ListWorkspaceRestoresRequest, ...grpc.CallOption) (*controlplanev1.ListWorkspaceRestoresResponse, error)
 }
 
 func (server *Server) RunScheduleNow(writer http.ResponseWriter, request *http.Request,
@@ -219,21 +254,23 @@ func scheduleOccurrenceProjection(input *controlplanev1.ScheduleOccurrence) (gen
 }
 
 type Server struct {
-	control  ControlPlane
-	boundary *boundary.Boundary
-	logger   *slog.Logger
-	realtime http.Handler
+	control     ControlPlane
+	interaction interactiongatewayv1.MattermostTeamServiceClient
+	integration integrationgatewayv1.IntegrationManagementServiceClient
+	boundary    *boundary.Boundary
+	logger      *slog.Logger
+	realtime    http.Handler
 }
 
 func (server *Server) AttachRealtime(handler http.Handler) {
 	server.realtime = handler
 }
 
-func New(control ControlPlane, security *boundary.Boundary, logger *slog.Logger) (*Server, error) {
-	if control == nil || security == nil || logger == nil {
+func New(control ControlPlane, interaction interactiongatewayv1.MattermostTeamServiceClient, integration integrationgatewayv1.IntegrationManagementServiceClient, security *boundary.Boundary, logger *slog.Logger) (*Server, error) {
+	if control == nil || interaction == nil || integration == nil || security == nil || logger == nil {
 		return nil, errors.New("control API HTTP server configuration is invalid")
 	}
-	return &Server{control: control, boundary: security, logger: logger}, nil
+	return &Server{control: control, interaction: interaction, integration: integration, boundary: security, logger: logger}, nil
 }
 
 func (server *Server) Handler() http.Handler {
@@ -1393,13 +1430,13 @@ func (server *Server) writeRPCError(writer http.ResponseWriter, ctx context.Cont
 	problem, expected := mapRPCError(err, mutation)
 	grpcStatus, isGRPC := status.FromError(err)
 	if !expected && (!isGRPC || !grpcserver.IsUnexpectedCode(grpcStatus.Code())) {
-		server.logger.ErrorContext(ctx, "unexpected control-plane RPC outcome", "error_class", "rpc_contract")
+		server.logger.ErrorContext(ctx, "unexpected owner RPC outcome", "error_class", "rpc_contract")
 	}
 	writeProblem(writer, problem)
 }
 
 func (server *Server) writeInternal(writer http.ResponseWriter, ctx context.Context, _ error) {
-	server.logger.ErrorContext(ctx, "invalid control-plane response", "error_class", "response_contract")
+	server.logger.ErrorContext(ctx, "invalid owner RPC response", "error_class", "response_contract")
 	writeProblem(writer, localProblem(http.StatusInternalServerError, "INTERNAL", false))
 }
 
@@ -1682,7 +1719,8 @@ func resourcePage(resources []*controlplanev1.Resource, next string) (generated.
 }
 
 func ConvertResource(input *controlplanev1.Resource) (generated.Resource, error) {
-	if input == nil || input.GetVersion() == 0 || input.GetCreatedAt() == nil || input.GetUpdatedAt() == nil || input.GetSpec() == nil {
+	if input == nil || input.GetVersion() == 0 || !validSHA256(input.GetProjectionSha256()) || input.GetCreatedAt() == nil || input.GetCreatedAt().CheckValid() != nil ||
+		input.GetUpdatedAt() == nil || input.GetUpdatedAt().CheckValid() != nil || input.GetSpec() == nil {
 		return generated.Resource{}, errors.New("resource response is incomplete")
 	}
 	id, err := uuid.Parse(input.GetId())
@@ -1700,7 +1738,7 @@ func ConvertResource(input *controlplanev1.Resource) (generated.Resource, error)
 	if err != nil {
 		return generated.Resource{}, err
 	}
-	result := generated.Resource{Id: id, Kind: kind, Name: input.GetName(), State: state, Version: int64(input.GetVersion()), Spec: spec, CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime()}
+	result := generated.Resource{Id: id, Kind: kind, Name: input.GetName(), State: state, Version: int64(input.GetVersion()), ProjectionSha256: generated.Sha256(strings.ToLower(input.GetProjectionSha256())), Spec: spec, CreatedAt: input.GetCreatedAt().AsTime(), UpdatedAt: input.GetUpdatedAt().AsTime()}
 	if input.GetProjectId() != "" {
 		parsed, parseErr := uuid.Parse(input.GetProjectId())
 		if parseErr != nil {
@@ -1719,7 +1757,7 @@ func ConvertResource(input *controlplanev1.Resource) (generated.Resource, error)
 }
 
 func ConvertAuditEvent(input *controlplanev1.AuditEvent) (generated.AuditEvent, error) {
-	if input == nil || input.GetOccurredAt() == nil || input.GetResourceVersion() == 0 || input.GetPolicyRevision() == 0 {
+	if input == nil || input.GetOccurredAt() == nil || input.GetOccurredAt().CheckValid() != nil || input.GetResourceVersion() == 0 || input.GetPolicyRevision() == 0 {
 		return generated.AuditEvent{}, errors.New("audit response is incomplete")
 	}
 	id, err := uuid.Parse(input.GetId())

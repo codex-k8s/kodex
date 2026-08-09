@@ -15,6 +15,10 @@ const (
 	serviceName               = "control-api-gateway"
 	controlPlaneTarget        = "dns:///control-plane.mattercodex-system.svc:8443"
 	controlPlaneTLSServerName = "control-plane.mattercodex-system.svc.cluster.local"
+	interactionTarget         = "dns:///interaction-gateway.mattercodex-system.svc:9443"
+	interactionTLSServerName  = "interaction-gateway.mattercodex-system.svc.cluster.local"
+	integrationTarget         = "dns:///integration-gateway.mattercodex-system.svc:9443"
+	integrationTLSServerName  = "integration-gateway.mattercodex-system.svc.cluster.local"
 )
 
 type Config struct {
@@ -39,6 +43,10 @@ type Config struct {
 	ControlPlaneClientCertificateFile string        `env:"CONTROL_API_GATEWAY_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE"`
 	ControlPlaneClientPrivateKeyFile  string        `env:"CONTROL_API_GATEWAY_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE"`
 	ControlPlaneApplicationGrantFile  string        `env:"CONTROL_API_GATEWAY_CONTROL_PLANE_APPLICATION_GRANT_FILE"`
+	InteractionTarget                 string        `env:"CONTROL_API_GATEWAY_INTERACTION_TARGET"`
+	InteractionTLSServerName          string        `env:"CONTROL_API_GATEWAY_INTERACTION_TLS_SERVER_NAME"`
+	IntegrationTarget                 string        `env:"CONTROL_API_GATEWAY_INTEGRATION_TARGET"`
+	IntegrationTLSServerName          string        `env:"CONTROL_API_GATEWAY_INTEGRATION_TLS_SERVER_NAME"`
 	RequestTimeout                    time.Duration `env:"CONTROL_API_GATEWAY_REQUEST_TIMEOUT"`
 	RPCTimeout                        time.Duration `env:"CONTROL_API_GATEWAY_RPC_TIMEOUT"`
 	StartupTimeout                    time.Duration `env:"CONTROL_API_GATEWAY_STARTUP_TIMEOUT"`
@@ -74,7 +82,9 @@ func loadConfig() (Config, error) {
 		ControlPlaneClientCertificateFile: "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.crt",
 		ControlPlaneClientPrivateKeyFile:  "/var/run/secrets/mattercodex/control-api-gateway/control-plane-client/tls.key",
 		ControlPlaneApplicationGrantFile:  "/var/run/secrets/mattercodex/control-api-gateway/application-grant/readiness.jwt",
-		RequestTimeout:                    15 * time.Second, RPCTimeout: 5 * time.Second, StartupTimeout: 20 * time.Second,
+		InteractionTarget:                 interactionTarget, InteractionTLSServerName: interactionTLSServerName,
+		IntegrationTarget: integrationTarget, IntegrationTLSServerName: integrationTLSServerName,
+		RequestTimeout: 15 * time.Second, RPCTimeout: 5 * time.Second, StartupTimeout: 20 * time.Second,
 		ShutdownTimeout: 20 * time.Second, ReadinessInterval: 10 * time.Second, RealtimePollInterval: 3 * time.Second,
 		RateWindow: time.Minute, RateLimit: 120, MaximumRateKeys: 10000,
 		PreAuthConcurrency: 32, MaximumHTTPConcurrency: 256, PerSubjectHTTPConcurrency: 16,
@@ -109,7 +119,9 @@ func (config Config) validate() error {
 	}
 	if config.PublicTLSServerName == "" || net.ParseIP(config.PublicTLSServerName) != nil ||
 		config.OIDCAudience != "mattercodex-control-api" || config.OIDCTLSServerName == "" || net.ParseIP(config.OIDCTLSServerName) != nil ||
-		config.ControlPlaneTarget != controlPlaneTarget || config.ControlPlaneTLSServerName != controlPlaneTLSServerName {
+		config.ControlPlaneTarget != controlPlaneTarget || config.ControlPlaneTLSServerName != controlPlaneTLSServerName ||
+		config.InteractionTarget != interactionTarget || config.InteractionTLSServerName != interactionTLSServerName ||
+		config.IntegrationTarget != integrationTarget || config.IntegrationTLSServerName != integrationTLSServerName {
 		return errors.New("control API identity or TLS configuration is invalid")
 	}
 	origins := strings.Split(config.AllowedOrigins, ",")

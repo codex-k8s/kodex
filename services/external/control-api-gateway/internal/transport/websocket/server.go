@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"github.com/coder/websocket"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/grpcserver"
+	integrationgatewayv1 "github.com/codex-k8s/matter-codex/libs/go/integrationgatewayapi/gen/integrationgateway/v1"
+	interactiongatewayv1 "github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/observability"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/projection"
 	"github.com/codex-k8s/matter-codex/services/external/control-api-gateway/internal/security/boundary"
@@ -44,6 +47,8 @@ type ControlPlane interface {
 	ListResources(context.Context, *controlplanev1.ListResourcesRequest, ...grpc.CallOption) (*controlplanev1.ListResourcesResponse, error)
 	ListAuditEvents(context.Context, *controlplanev1.ListAuditEventsRequest, ...grpc.CallOption) (*controlplanev1.ListAuditEventsResponse, error)
 	ListRuntimeIncidents(context.Context, *controlplanev1.ListRuntimeIncidentsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeIncidentsResponse, error)
+	ListWorkspaceBackups(context.Context, *controlplanev1.ListWorkspaceBackupsRequest, ...grpc.CallOption) (*controlplanev1.ListWorkspaceBackupsResponse, error)
+	GetDiagnostics(context.Context, *controlplanev1.GetDiagnosticsRequest, ...grpc.CallOption) (*controlplanev1.GetDiagnosticsResponse, error)
 }
 
 type trackedConnection interface {
@@ -52,6 +57,8 @@ type trackedConnection interface {
 
 type Server struct {
 	control        ControlPlane
+	interaction    interactiongatewayv1.MattermostTeamServiceClient
+	integration    integrationgatewayv1.IntegrationManagementServiceClient
 	security       *boundary.Boundary
 	metrics        *internalobservability.Metrics
 	logger         *slog.Logger
@@ -65,8 +72,8 @@ type Server struct {
 	stopping       bool
 }
 
-func New(control ControlPlane, security *boundary.Boundary, metrics *internalobservability.Metrics, logger *slog.Logger, origins []string, pollInterval, rpcTimeout time.Duration) (*Server, error) {
-	if control == nil || security == nil || metrics == nil || logger == nil || len(origins) == 0 ||
+func New(control ControlPlane, interaction interactiongatewayv1.MattermostTeamServiceClient, integration integrationgatewayv1.IntegrationManagementServiceClient, security *boundary.Boundary, metrics *internalobservability.Metrics, logger *slog.Logger, origins []string, pollInterval, rpcTimeout time.Duration) (*Server, error) {
+	if control == nil || interaction == nil || integration == nil || security == nil || metrics == nil || logger == nil || len(origins) == 0 ||
 		pollInterval < time.Second || pollInterval > time.Minute || rpcTimeout < time.Second || rpcTimeout > 10*time.Second {
 		return nil, errors.New("control API WebSocket configuration is invalid")
 	}
@@ -78,7 +85,7 @@ func New(control ControlPlane, security *boundary.Boundary, metrics *internalobs
 		}
 		patterns = append(patterns, parsed.Hostname())
 	}
-	return &Server{control: control, security: security, metrics: metrics, logger: logger, originPatterns: patterns, pollInterval: pollInterval, rpcTimeout: rpcTimeout, active: make(map[trackedConnection]struct{})}, nil
+	return &Server{control: control, interaction: interaction, integration: integration, security: security, metrics: metrics, logger: logger, originPatterns: patterns, pollInterval: pollInterval, rpcTimeout: rpcTimeout, active: make(map[trackedConnection]struct{})}, nil
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -177,7 +184,7 @@ func readSubscribe(ctx context.Context, connection *websocket.Conn) (SubscribeEn
 	decoder.DisallowUnknownFields()
 	var input SubscribeEnvelope
 	if decoder.Decode(&input) != nil || decoder.Decode(&struct{}{}) != io.EOF || input.Type != SubscribeMessageTypeSubscribe ||
-		uuid.Validate(input.RequestID) != nil || len(input.Channels) == 0 || len(input.Channels) > 4 || len(input.ResourceKinds) > 8 {
+		uuid.Validate(input.RequestID) != nil || len(input.Channels) == 0 || len(input.Channels) > 8 || len(input.ResourceKinds) > 8 {
 		return SubscribeEnvelope{}, errors.New("subscription payload is invalid")
 	}
 	seenChannels := make(map[ProjectionChannel]struct{}, len(input.Channels))
@@ -251,9 +258,217 @@ func (server *Server) snapshot(ctx context.Context, channel ProjectionChannel, k
 	case ProjectionChannelConfigurationChanges:
 		items, err := server.allConfigurationChanges(rpcContext)
 		return SnapshotItems{ConfigurationChanges: items}, err
+	case ProjectionChannelWorkspaceTeams:
+		items, err := server.allMattermostTeams(rpcContext)
+		return SnapshotItems{Teams: items}, err
+	case ProjectionChannelProviders:
+		items, err := server.allProviderConnections(rpcContext)
+		return SnapshotItems{ProviderConnections: items}, err
+	case ProjectionChannelIntegrations:
+		items, err := server.allIntegrationConfigurations(rpcContext)
+		return SnapshotItems{IntegrationConfigs: items}, err
+	case ProjectionChannelApprovals:
+		items, err := server.allIntegrationApprovals(rpcContext)
+		return SnapshotItems{Approvals: items}, err
+	case ProjectionChannelBackups:
+		items, err := server.allWorkspaceBackups(rpcContext)
+		return SnapshotItems{Resources: items}, err
+	case ProjectionChannelHealth:
+		items, err := server.currentHealth(rpcContext)
+		return SnapshotItems{Health: items}, err
 	default:
 		return SnapshotItems{}, errors.New("subscription channel is invalid")
 	}
+}
+
+func (server *Server) allMattermostTeams(ctx context.Context) ([]httpgenerated.MattermostTeam, error) {
+	items := make([]httpgenerated.MattermostTeam, 0)
+	token := ""
+	for {
+		response, err := server.interaction.ListMattermostTeams(ctx, &interactiongatewayv1.ListMattermostTeamsRequest{PageSize: rpcPageSize, Cursor: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetTeams() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			value, convertErr := httptransport.ConvertMattermostTeam(item)
+			if convertErr != nil {
+				return nil, convertErr
+			}
+			items = append(items, value)
+		}
+		next := response.GetNextCursor()
+		if next != "" && (len(response.GetTeams()) == 0 || next == token) {
+			return nil, errors.New("Mattermost team pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+	}
+}
+
+func (server *Server) allProviderConnections(ctx context.Context) ([]httpgenerated.ProviderConnection, error) {
+	items := make([]httpgenerated.ProviderConnection, 0)
+	token := ""
+	for {
+		response, err := server.integration.ListProviderConnections(ctx, &integrationgatewayv1.ListProviderConnectionsRequest{PageSize: rpcPageSize, PageToken: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetConnections() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			value, convertErr := httptransport.ConvertProviderConnection(item)
+			if convertErr != nil {
+				return nil, convertErr
+			}
+			items = append(items, value)
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetConnections()) == 0 || next == token) {
+			return nil, errors.New("provider connection pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+	}
+}
+
+func (server *Server) allIntegrationConfigurations(ctx context.Context) ([]httpgenerated.IntegrationConfiguration, error) {
+	items := make([]httpgenerated.IntegrationConfiguration, 0)
+	token := ""
+	for {
+		response, err := server.integration.ListIntegrationConfigurations(ctx, &integrationgatewayv1.ListIntegrationConfigurationsRequest{PageSize: rpcPageSize, PageToken: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetConfigurations() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			value, convertErr := httptransport.ConvertIntegrationConfiguration(item)
+			if convertErr != nil {
+				return nil, convertErr
+			}
+			items = append(items, value)
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetConfigurations()) == 0 || next == token) {
+			return nil, errors.New("integration configuration pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+	}
+}
+
+func (server *Server) allIntegrationApprovals(ctx context.Context) ([]httpgenerated.IntegrationApproval, error) {
+	items := make([]httpgenerated.IntegrationApproval, 0)
+	token := ""
+	for {
+		response, err := server.integration.ListIntegrationApprovals(ctx, &integrationgatewayv1.ListIntegrationApprovalsRequest{PageSize: rpcPageSize, PageToken: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetApprovals() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			value, convertErr := httptransport.ConvertIntegrationApproval(item)
+			if convertErr != nil {
+				return nil, convertErr
+			}
+			items = append(items, value)
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetApprovals()) == 0 || next == token) {
+			return nil, errors.New("integration approval pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+	}
+}
+
+func (server *Server) allWorkspaceBackups(ctx context.Context) ([]httpgenerated.Resource, error) {
+	items := make([]httpgenerated.Resource, 0)
+	token := ""
+	for {
+		response, err := server.control.ListWorkspaceBackups(ctx, &controlplanev1.ListWorkspaceBackupsRequest{PageSize: rpcPageSize, PageToken: token})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range response.GetBackups() {
+			if len(items) >= maximumItems {
+				return nil, errSnapshotLimit
+			}
+			value, convertErr := httptransport.ConvertResource(item)
+			if convertErr != nil {
+				return nil, convertErr
+			}
+			items = append(items, value)
+		}
+		next := response.GetNextPageToken()
+		if next != "" && (len(response.GetBackups()) == 0 || next == token) {
+			return nil, errors.New("workspace backup pagination did not advance")
+		}
+		token = next
+		if token == "" {
+			return items, nil
+		}
+	}
+}
+
+func (server *Server) currentHealth(ctx context.Context) ([]httpgenerated.HealthObservation, error) {
+	observedAt := time.Now().UTC()
+	control, controlErr := server.control.GetDiagnostics(ctx, &controlplanev1.GetDiagnosticsRequest{})
+	interaction, interactionErr := server.interaction.CheckReadiness(ctx, &interactiongatewayv1.MattermostTeamServiceCheckReadinessRequest{})
+	integration, integrationErr := server.integration.GetManagementDiagnostics(ctx, &integrationgatewayv1.GetManagementDiagnosticsRequest{})
+	if controlErr != nil {
+		return nil, controlErr
+	}
+	if interactionErr != nil {
+		return nil, interactionErr
+	}
+	if integrationErr != nil {
+		return nil, integrationErr
+	}
+	if control == nil || interaction == nil || integration == nil || !interaction.GetReady() || !interaction.GetAuthorityReady() || integration.GetStatus() != "READY" {
+		return nil, errors.New("owner health readback is unavailable")
+	}
+	items := []httpgenerated.HealthObservation{
+		{Source: "CONTROL_PLANE", Component: "schema", Status: "OK", Value: int64(control.GetSchemaVersion()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "pending_outbox", Status: "OK", Value: int64(control.GetPendingOutboxEvents()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "terminal_outbox", Status: "OK", Value: int64(control.GetTerminalOutboxEvents()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "active_turn_leases", Status: "OK", Value: int64(control.GetActiveTurnLeases()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "CONTROL_PLANE", Component: "queued_schedule_occurrences", Status: "OK", Value: int64(control.GetQueuedScheduleOccurrences()), Version: int64(control.GetSchemaVersion()), ObservedAt: observedAt},
+		{Source: "INTERACTION_GATEWAY", Component: "mattermost_team_working_path", Status: "OK", Value: 1, Version: int64(interaction.GetSchemaVersion()), ObservedAt: observedAt},
+	}
+	for _, item := range integration.GetDependencies() {
+		if item == nil || item.GetDependency() == "" || item.GetStatus() != "READY" || item.GetVersion() == 0 || item.GetCheckedAt() == nil || item.GetCheckedAt().CheckValid() != nil {
+			return nil, errors.New("integration health observation is invalid")
+		}
+		value := httpgenerated.HealthObservation{Source: "INTEGRATION_GATEWAY", Component: item.GetDependency(), Status: "OK", Value: 1, Version: int64(item.GetVersion()), ObservedAt: item.GetCheckedAt().AsTime()}
+		if digest := item.GetDigestSha256(); digest != "" {
+			if len(digest) != 64 {
+				return nil, errors.New("integration health digest is invalid")
+			}
+			if _, err := hex.DecodeString(digest); err != nil {
+				return nil, errors.New("integration health digest is invalid")
+			}
+			normalized := httpgenerated.Sha256(strings.ToLower(digest))
+			value.DigestSha256 = &normalized
+		}
+		items = append(items, value)
+	}
+	return items, nil
 }
 
 func (server *Server) allResources(ctx context.Context, kind controlplanev1.ResourceKind) ([]httpgenerated.Resource, error) {

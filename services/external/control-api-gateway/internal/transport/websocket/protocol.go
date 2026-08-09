@@ -58,12 +58,21 @@ const (
 	ProjectionChannelIncidents            ProjectionChannel = "INCIDENTS"
 	ProjectionChannelResources            ProjectionChannel = "RESOURCES"
 	ProjectionChannelConfigurationChanges ProjectionChannel = "CONFIGURATION_CHANGES"
+	ProjectionChannelWorkspaceTeams       ProjectionChannel = "WORKSPACE_TEAMS"
+	ProjectionChannelProviders            ProjectionChannel = "PROVIDERS"
+	ProjectionChannelIntegrations         ProjectionChannel = "INTEGRATIONS"
+	ProjectionChannelApprovals            ProjectionChannel = "APPROVALS"
+	ProjectionChannelBackups              ProjectionChannel = "BACKUPS"
+	ProjectionChannelHealth               ProjectionChannel = "HEALTH"
 )
 
 func (value ProjectionChannel) valid() bool {
 	switch value {
 	case ProjectionChannelRuns, ProjectionChannelIncidents,
-		ProjectionChannelResources, ProjectionChannelConfigurationChanges:
+		ProjectionChannelResources, ProjectionChannelConfigurationChanges,
+		ProjectionChannelWorkspaceTeams, ProjectionChannelProviders,
+		ProjectionChannelIntegrations, ProjectionChannelApprovals,
+		ProjectionChannelBackups, ProjectionChannelHealth:
 		return true
 	default:
 		return false
@@ -101,6 +110,15 @@ const (
 	ResourceKindRoleImageRecipe     ResourceKind = "ROLE_IMAGE_RECIPE"
 	ResourceKindImageBuild          ResourceKind = "IMAGE_BUILD"
 	ResourceKindImageArtifact       ResourceKind = "IMAGE_ARTIFACT"
+	ResourceKindRoleDefinition      ResourceKind = "ROLE_DEFINITION"
+	ResourceKindAgent               ResourceKind = "AGENT"
+	ResourceKindAgentAssignment     ResourceKind = "AGENT_ASSIGNMENT"
+	ResourceKindInstructionSet      ResourceKind = "INSTRUCTION_SET"
+	ResourceKindProviderConnection  ResourceKind = "PROVIDER_CONNECTION_REFERENCE"
+	ResourceKindProviderPool        ResourceKind = "PROVIDER_POOL"
+	ResourceKindWorkspaceBackup     ResourceKind = "WORKSPACE_BACKUP"
+	ResourceKindWorkspaceRestore    ResourceKind = "WORKSPACE_RESTORE"
+	ResourceKindWorkspaceMapping    ResourceKind = "WORKSPACE_MATTERMOST_MAPPING"
 )
 
 func (value ResourceKind) valid() bool {
@@ -110,7 +128,10 @@ func (value ResourceKind) valid() bool {
 		ResourceKindIntegration, ResourceKindRuntimeRevision, ResourceKindSession, ResourceKindTurn,
 		ResourceKindProcessRun, ResourceKindSchedule, ResourceKindOwnerGate, ResourceKindMemoryRecord,
 		ResourceKindWorkClaim, ResourceKindArtifact, ResourceKindRoleImageRecipe,
-		ResourceKindImageBuild, ResourceKindImageArtifact:
+		ResourceKindImageBuild, ResourceKindImageArtifact, ResourceKindRoleDefinition,
+		ResourceKindAgent, ResourceKindAgentAssignment, ResourceKindInstructionSet,
+		ResourceKindProviderConnection, ResourceKindProviderPool, ResourceKindWorkspaceBackup,
+		ResourceKindWorkspaceRestore, ResourceKindWorkspaceMapping:
 		return true
 	default:
 		return false
@@ -174,14 +195,19 @@ type ProblemEnvelope struct {
 }
 
 type SnapshotItems struct {
-	Resources            []httpgenerated.Resource            `json:"-"`
-	Incidents            []httpgenerated.RuntimeIncident     `json:"-"`
-	ConfigurationChanges []httpgenerated.ConfigurationChange `json:"-"`
+	Resources            []httpgenerated.Resource                 `json:"-"`
+	Incidents            []httpgenerated.RuntimeIncident          `json:"-"`
+	ConfigurationChanges []httpgenerated.ConfigurationChange      `json:"-"`
+	Teams                []httpgenerated.MattermostTeam           `json:"-"`
+	ProviderConnections  []httpgenerated.ProviderConnection       `json:"-"`
+	IntegrationConfigs   []httpgenerated.IntegrationConfiguration `json:"-"`
+	Approvals            []httpgenerated.IntegrationApproval      `json:"-"`
+	Health               []httpgenerated.HealthObservation        `json:"-"`
 }
 
 func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 	switch {
-	case items.Resources != nil && items.Incidents == nil && items.ConfigurationChanges == nil:
+	case items.Resources != nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.Resources {
 			if err := validateResourceProjection(items.Resources[index]); err != nil {
 				return nil, err
@@ -190,16 +216,16 @@ func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 		return json.Marshal(struct {
 			Resources []httpgenerated.Resource `json:"resources"`
 		}{Resources: items.Resources})
-	case items.Resources == nil && items.Incidents != nil && items.ConfigurationChanges == nil:
+	case items.Resources == nil && items.Incidents != nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.Incidents {
-			if !items.Incidents[index].Kind.Valid() {
+			if !items.Incidents[index].Kind.Valid() || !items.Incidents[index].State.Valid() {
 				return nil, errors.New(errClosedEnum)
 			}
 		}
 		return json.Marshal(struct {
 			Incidents []httpgenerated.RuntimeIncident `json:"incidents"`
 		}{Incidents: items.Incidents})
-	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges != nil:
+	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges != nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
 		for index := range items.ConfigurationChanges {
 			change := items.ConfigurationChanges[index]
 			if !change.Action.Valid() || !change.Outcome.Valid() || !change.ResourceKind.Valid() {
@@ -209,6 +235,46 @@ func (items SnapshotItems) MarshalJSON() ([]byte, error) {
 		return json.Marshal(struct {
 			ConfigurationChanges []httpgenerated.ConfigurationChange `json:"configurationChanges"`
 		}{ConfigurationChanges: items.ConfigurationChanges})
+	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams != nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+		for index := range items.Teams {
+			if !items.Teams[index].Status.Valid() {
+				return nil, errors.New(errClosedEnum)
+			}
+		}
+		return json.Marshal(struct {
+			Teams []httpgenerated.MattermostTeam `json:"teams"`
+		}{Teams: items.Teams})
+	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections != nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health == nil:
+		for index := range items.ProviderConnections {
+			if !items.ProviderConnections[index].State.Valid() {
+				return nil, errors.New(errClosedEnum)
+			}
+		}
+		return json.Marshal(struct {
+			ProviderConnections []httpgenerated.ProviderConnection `json:"providerConnections"`
+		}{ProviderConnections: items.ProviderConnections})
+	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs != nil && items.Approvals == nil && items.Health == nil:
+		return json.Marshal(struct {
+			IntegrationConfigurations []httpgenerated.IntegrationConfiguration `json:"integrationConfigurations"`
+		}{IntegrationConfigurations: items.IntegrationConfigs})
+	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals != nil && items.Health == nil:
+		for index := range items.Approvals {
+			if !items.Approvals[index].Status.Valid() {
+				return nil, errors.New(errClosedEnum)
+			}
+		}
+		return json.Marshal(struct {
+			Approvals []httpgenerated.IntegrationApproval `json:"approvals"`
+		}{Approvals: items.Approvals})
+	case items.Resources == nil && items.Incidents == nil && items.ConfigurationChanges == nil && items.Teams == nil && items.ProviderConnections == nil && items.IntegrationConfigs == nil && items.Approvals == nil && items.Health != nil:
+		for index := range items.Health {
+			if !items.Health[index].Source.Valid() || !items.Health[index].Status.Valid() {
+				return nil, errors.New(errClosedEnum)
+			}
+		}
+		return json.Marshal(struct {
+			Health []httpgenerated.HealthObservation `json:"health"`
+		}{Health: items.Health})
 	default:
 		return nil, errors.New("snapshot items must contain exactly one projection")
 	}
@@ -298,14 +364,16 @@ func validateResourceProjection(resource httpgenerated.Resource) error {
 	if value := resource.Spec.Schedule; value != nil {
 		selected++
 		validKind = validKind || resource.Kind == httpgenerated.ResourceKindSCHEDULE
-		if !value.TargetKind.Valid() || !validateOwnership(value.Ownership) {
+		if !value.TargetKind.Valid() || !value.Calendar.Valid() || !value.OverlapPolicy.Valid() || !value.MisfirePolicy.Valid() ||
+			!value.DeliveryPolicy.Valid() || !value.SessionPolicy.Valid() || !value.NotificationPolicy.Valid() || !value.TargetType.Valid() ||
+			!validateOwnership(value.Ownership) {
 			return errors.New(errClosedEnum)
 		}
 	}
 	if value := resource.Spec.OwnerGate; value != nil {
 		selected++
 		validKind = validKind || resource.Kind == httpgenerated.ResourceKindOWNERGATE
-		if !value.Decision.Valid() {
+		if !value.Decision.Valid() || !value.DeliveryState.Valid() || !value.NextAction.Valid() {
 			return errors.New(errClosedEnum)
 		}
 	}
@@ -355,6 +423,66 @@ func validateResourceProjection(resource httpgenerated.Resource) error {
 			if !platform.Os.Valid() || !platform.Architecture.Valid() {
 				return errors.New(errClosedEnum)
 			}
+		}
+	}
+	if value := resource.Spec.RoleDefinition; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindROLEDEFINITION
+		if !validateOwnership(value.Ownership) {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.Agent; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindAGENT
+		if !validateOwnership(value.Ownership) {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if resource.Spec.AgentAssignment != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindAGENTASSIGNMENT
+	}
+	if value := resource.Spec.InstructionSet; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindINSTRUCTIONSET
+		if !value.VersionState.Valid() || !validateOwnership(value.Ownership) {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.ProviderConnectionReference; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindPROVIDERCONNECTIONREFERENCE
+		if !value.MaskedStatus.Valid() {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.ProviderPool; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindPROVIDERPOOL
+		if !value.Policy.Valid() || !validateOwnership(value.Ownership) {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.WorkspaceBackup; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindWORKSPACEBACKUP
+		if !value.Scope.Valid() || !value.State.Valid() {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.WorkspaceRestore; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindWORKSPACERESTORE
+		if !value.State.Valid() {
+			return errors.New(errClosedEnum)
+		}
+	}
+	if value := resource.Spec.WorkspaceMattermostMapping; value != nil {
+		selected++
+		validKind = validKind || resource.Kind == httpgenerated.ResourceKindWORKSPACEMATTERMOSTMAPPING
+		if !value.State.Valid() {
+			return errors.New(errClosedEnum)
 		}
 	}
 	if selected != 1 || !validKind {
