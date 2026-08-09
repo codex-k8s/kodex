@@ -12,7 +12,7 @@ ENV GOTOOLCHAIN=local
 WORKDIR /src/services/jobs/agent-runner
 
 COPY services/jobs/agent-runner /src/services/jobs/agent-runner
-COPY libs/go/controlplaneapi libs/go/controlplaneclient libs/go/grpcserver libs/go/internalrpcauth libs/go/observability libs/go/runtimecontract /src/libs/go/
+COPY libs/go /src/libs/go/
 
 RUN go mod download
 
