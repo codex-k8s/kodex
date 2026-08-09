@@ -1060,52 +1060,69 @@ func (spec ProcessRunSpec) Validate() error {
 }
 
 type ScheduleSpec struct {
-	TargetResourceID         string                 `json:"targetResourceId"`
-	TargetKind               enum.Kind              `json:"targetKind"`
-	TargetVersion            uint64                 `json:"targetVersion"`
-	EffectiveInputSHA        string                 `json:"effectiveInputSha256"`
-	Cron                     string                 `json:"cron,omitempty"`
-	Interval                 time.Duration          `json:"interval,omitempty"`
-	Timezone                 string                 `json:"timezone"`
-	Calendar                 string                 `json:"calendar"`
-	OverlapPolicy            string                 `json:"overlapPolicy"`
-	MisfirePolicy            string                 `json:"misfirePolicy"`
-	MisfireGrace             time.Duration          `json:"misfireGrace"`
-	NextRunAt                time.Time              `json:"nextRunAt"`
-	DeliveryPolicy           string                 `json:"deliveryPolicy"`
-	MaximumAttempts          uint32                 `json:"maximumAttempts"`
-	InitialBackoff           time.Duration          `json:"initialBackoff"`
-	MaximumBackoff           time.Duration          `json:"maximumBackoff"`
-	DeadLetterAfter          time.Duration          `json:"deadLetterAfter"`
-	PromptProfileID          string                 `json:"promptProfileId"`
-	PromptRevision           uint64                 `json:"promptRevision"`
-	SessionPolicy            string                 `json:"sessionPolicy"`
-	RoomID                   string                 `json:"roomId,omitempty"`
-	NotificationPolicy       string                 `json:"notificationPolicy"`
-	MaximumExecutionDuration time.Duration          `json:"maximumExecutionDuration"`
-	Coalesce                 bool                   `json:"coalesce"`
-	RuntimeRevisionID        string                 `json:"runtimeRevisionId"`
-	TargetType               string                 `json:"targetType"`
-	PlaybookRef              string                 `json:"playbookRef,omitempty"`
-	PlaybookVersion          uint64                 `json:"playbookVersion,omitempty"`
-	PromptArtifactID         string                 `json:"promptArtifactId"`
-	ExecutionSessionID       string                 `json:"executionSessionId,omitempty"`
-	Ownership                ConfigurationOwnership `json:"ownership"`
-	AgentID                  string                 `json:"agentId,omitempty"`
-	AgentVersion             uint64                 `json:"agentVersion,omitempty"`
-	AgentSHA256              string                 `json:"agentSha256,omitempty"`
-	InstructionSetID         string                 `json:"instructionSetId,omitempty"`
-	InstructionSetVersion    uint64                 `json:"instructionSetVersion,omitempty"`
-	InstructionSetSHA256     string                 `json:"instructionSetSha256,omitempty"`
-	RuntimeSelectionRef      string                 `json:"runtimeSelectionRef,omitempty"`
-	RuntimeSelectionVersion  uint64                 `json:"runtimeSelectionVersion,omitempty"`
-	RuntimeSelectionSHA256   string                 `json:"runtimeSelectionSha256,omitempty"`
-	ProviderPoolID           string                 `json:"providerPoolId,omitempty"`
-	ProviderPoolVersion      uint64                 `json:"providerPoolVersion,omitempty"`
-	ProviderPoolSHA256       string                 `json:"providerPoolSha256,omitempty"`
-	AgentAssignmentID        string                 `json:"agentAssignmentId,omitempty"`
-	AgentAssignmentVersion   uint64                 `json:"agentAssignmentVersion,omitempty"`
-	AgentAssignmentSHA256    string                 `json:"agentAssignmentSha256,omitempty"`
+	TargetResourceID          string                 `json:"targetResourceId"`
+	TargetKind                enum.Kind              `json:"targetKind"`
+	TargetVersion             uint64                 `json:"targetVersion"`
+	EffectiveInputSHA         string                 `json:"effectiveInputSha256"`
+	Cron                      string                 `json:"cron,omitempty"`
+	Interval                  time.Duration          `json:"interval,omitempty"`
+	Timezone                  string                 `json:"timezone"`
+	Calendar                  string                 `json:"calendar"`
+	OverlapPolicy             string                 `json:"overlapPolicy"`
+	MisfirePolicy             string                 `json:"misfirePolicy"`
+	MisfireGrace              time.Duration          `json:"misfireGrace"`
+	NextRunAt                 time.Time              `json:"nextRunAt"`
+	DeliveryPolicy            string                 `json:"deliveryPolicy"`
+	MaximumAttempts           uint32                 `json:"maximumAttempts"`
+	InitialBackoff            time.Duration          `json:"initialBackoff"`
+	MaximumBackoff            time.Duration          `json:"maximumBackoff"`
+	DeadLetterAfter           time.Duration          `json:"deadLetterAfter"`
+	PromptProfileID           string                 `json:"promptProfileId"`
+	PromptRevision            uint64                 `json:"promptRevision"`
+	SessionPolicy             string                 `json:"sessionPolicy"`
+	RoomID                    string                 `json:"roomId,omitempty"`
+	NotificationPolicy        string                 `json:"notificationPolicy"`
+	MaximumExecutionDuration  time.Duration          `json:"maximumExecutionDuration"`
+	Coalesce                  bool                   `json:"coalesce"`
+	RuntimeRevisionID         string                 `json:"runtimeRevisionId"`
+	TargetType                string                 `json:"targetType"`
+	PlaybookRef               string                 `json:"playbookRef,omitempty"`
+	PlaybookVersion           uint64                 `json:"playbookVersion,omitempty"`
+	PromptArtifactID          string                 `json:"promptArtifactId"`
+	ExecutionSessionID        string                 `json:"executionSessionId,omitempty"`
+	Ownership                 ConfigurationOwnership `json:"ownership"`
+	AgentID                   string                 `json:"agentId,omitempty"`
+	AgentVersion              uint64                 `json:"agentVersion,omitempty"`
+	AgentSHA256               string                 `json:"agentSha256,omitempty"`
+	InstructionSetID          string                 `json:"instructionSetId,omitempty"`
+	InstructionSetVersion     uint64                 `json:"instructionSetVersion,omitempty"`
+	InstructionSetSHA256      string                 `json:"instructionSetSha256,omitempty"`
+	RuntimeSelectionRef       string                 `json:"runtimeSelectionRef,omitempty"`
+	RuntimeSelectionVersion   uint64                 `json:"runtimeSelectionVersion,omitempty"`
+	RuntimeSelectionSHA256    string                 `json:"runtimeSelectionSha256,omitempty"`
+	ProviderPoolID            string                 `json:"providerPoolId,omitempty"`
+	ProviderPoolVersion       uint64                 `json:"providerPoolVersion,omitempty"`
+	ProviderPoolSHA256        string                 `json:"providerPoolSha256,omitempty"`
+	AgentAssignmentID         string                 `json:"agentAssignmentId,omitempty"`
+	AgentAssignmentVersion    uint64                 `json:"agentAssignmentVersion,omitempty"`
+	AgentAssignmentSHA256     string                 `json:"agentAssignmentSha256,omitempty"`
+	OwnerPresetKey            string                 `json:"ownerPresetKey,omitempty"`
+	OwnerPresetRevision       uint64                 `json:"ownerPresetRevision,omitempty"`
+	OwnerPresetSHA256         string                 `json:"ownerPresetSha256,omitempty"`
+	OwnerDefaultsRevision     uint64                 `json:"ownerDefaultsRevision,omitempty"`
+	OwnerDefaultsSHA256       string                 `json:"ownerDefaultsSha256,omitempty"`
+	PromptIntentKind          string                 `json:"promptIntentKind,omitempty"`
+	PromptDisplay             string                 `json:"promptDisplay,omitempty"`
+	PromptArtifactVersion     uint64                 `json:"promptArtifactVersion,omitempty"`
+	PromptSHA256              string                 `json:"promptSha256,omitempty"`
+	AdvancedOverrides         []string               `json:"advancedOverrides,omitempty"`
+	OwnerAgentSelector        string                 `json:"ownerAgentSelector,omitempty"`
+	OwnerInstructionSelector  string                 `json:"ownerInstructionSelector,omitempty"`
+	OwnerProviderPoolSelector string                 `json:"ownerProviderPoolSelector,omitempty"`
+	OwnerRoomSelector         string                 `json:"ownerRoomSelector,omitempty"`
+	OwnerRoomVersion          uint64                 `json:"ownerRoomVersion,omitempty"`
+	OwnerRoomSHA256           string                 `json:"ownerRoomSha256,omitempty"`
+	OwnerPromptSelector       string                 `json:"ownerPromptSelector,omitempty"`
 }
 
 func (ScheduleSpec) Kind() enum.Kind { return enum.KindSchedule }
@@ -1183,6 +1200,29 @@ func (spec ScheduleSpec) Validate() error {
 		}
 	} else if spec.PlaybookRef != "" || spec.PlaybookVersion != 0 {
 		return errors.New("schedule agent target is invalid")
+	}
+	ownerIntent := spec.OwnerPresetKey != "" || spec.OwnerPresetRevision != 0 || spec.OwnerPresetSHA256 != "" ||
+		spec.OwnerDefaultsRevision != 0 || spec.OwnerDefaultsSHA256 != "" || spec.PromptIntentKind != "" ||
+		spec.PromptDisplay != "" || spec.PromptArtifactVersion != 0 || spec.PromptSHA256 != "" ||
+		len(spec.AdvancedOverrides) != 0
+	if ownerIntent && (value.ValidateStableKey(spec.OwnerPresetKey) != nil || spec.OwnerPresetRevision == 0 ||
+		!validSHA256(spec.OwnerPresetSHA256) || spec.OwnerDefaultsRevision == 0 ||
+		!validSHA256(spec.OwnerDefaultsSHA256) ||
+		(spec.PromptIntentKind != "INLINE" && spec.PromptIntentKind != "SELECTOR") ||
+		len(spec.PromptDisplay) == 0 || len(spec.PromptDisplay) > 256 || spec.PromptArtifactVersion == 0 ||
+		!validSHA256(spec.PromptSHA256) ||
+		(len(spec.AdvancedOverrides) != 0 && !validBoundedKeys(spec.AdvancedOverrides, 16)) ||
+		value.ValidateStableKey(spec.OwnerAgentSelector) != nil ||
+		value.ValidateStableKey(spec.OwnerInstructionSelector) != nil ||
+		value.ValidateStableKey(spec.OwnerProviderPoolSelector) != nil ||
+		(spec.RoomID == "") != (spec.OwnerRoomSelector == "") ||
+		(spec.RoomID == "") != (spec.OwnerRoomVersion == 0) ||
+		(spec.RoomID == "") != (spec.OwnerRoomSHA256 == "") ||
+		(spec.OwnerRoomSelector != "" && (value.ValidateStableKey(spec.OwnerRoomSelector) != nil ||
+			spec.OwnerRoomVersion == 0 || !validSHA256(spec.OwnerRoomSHA256))) ||
+		(spec.PromptIntentKind == "SELECTOR") != (spec.OwnerPromptSelector != "") ||
+		(spec.OwnerPromptSelector != "" && value.ValidateName(spec.OwnerPromptSelector) != nil)) {
+		return errors.New("schedule owner intent is invalid")
 	}
 	if spec.SessionPolicy == "NEW" {
 		if spec.ExecutionSessionID != "" {

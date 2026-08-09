@@ -2,7 +2,10 @@ package resource
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,6 +21,160 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
 )
+
+type runActionDecision struct {
+	Cancel bool
+	Retry  bool
+}
+
+func (decision runActionDecision) actions() []string {
+	result := make([]string, 0, 2)
+	if decision.Cancel {
+		result = append(result, "CANCEL")
+	}
+	if decision.Retry {
+		result = append(result, "RETRY")
+	}
+	return result
+}
+
+// decideRunActionsLocked — единственный предикат projection и command path.
+// Он выполняется только после канонического owner-graph lock и закрыто
+// отклоняет неизвестный/stale tuple до формирования nextActions.
+func (service *Service) decideRunActionsLocked(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	graph lockedOwnerGraph,
+) (runActionDecision, error) {
+	if graph.Process.Kind != enum.KindProcessRun || graph.Turn.Kind != enum.KindTurn ||
+		graph.Process.OwnerActorID != principal.ActorID || graph.Turn.OwnerActorID != principal.ActorID {
+		return runActionDecision{}, errs.ErrNotFound
+	}
+	processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+	turnSpec, turnOK := graph.Turn.Spec.(entity.TurnSpec)
+	if !processOK || !turnOK {
+		return runActionDecision{}, errs.ErrStateConflict
+	}
+	current, err := currentExecution(processSpec)
+	if err != nil || current.TurnID != graph.Turn.ID || current.TurnVersion != graph.Turn.Version ||
+		current.Attempt != turnSpec.Attempt || current.SessionID != turnSpec.SessionID ||
+		current.RuntimeRevisionID != turnSpec.RuntimeRevisionID || current.InputSHA256 != turnSpec.EffectiveInputSHA256 {
+		return runActionDecision{}, errs.ErrStateConflict
+	}
+	decision := runActionDecision{}
+	var previous domainrepo.TurnAttempt
+	previousLoaded := false
+	loadPrevious := func() error {
+		if previousLoaded {
+			return nil
+		}
+		loaded, loadErr := tx.GetTurnAttemptForUpdate(ctx, graph.Turn.ID, turnSpec.Attempt)
+		if loadErr != nil {
+			return loadErr
+		}
+		previous = loaded
+		previousLoaded = true
+		return nil
+	}
+	var lease domainrepo.TurnLease
+	leaseFound, leaseLoaded := false, false
+	loadLease := func() error {
+		if leaseLoaded {
+			return nil
+		}
+		loaded, loadErr := tx.GetTurnLeaseForUpdate(ctx, graph.Turn.ID)
+		leaseLoaded = true
+		if errors.Is(loadErr, errs.ErrNotFound) {
+			return nil
+		}
+		if loadErr != nil {
+			return loadErr
+		}
+		lease, leaseFound = loaded, true
+		return nil
+	}
+	if !graph.Process.State.Terminal() && !graph.Turn.State.Terminal() &&
+		ownerGraphRuntimeDisposition(graph) == runtimeDispositionAbsent {
+		children, childErr := tx.HasActiveChildProcesses(ctx, graph.Process.OrganizationID,
+			graph.Process.ProjectID, graph.Process.ID)
+		if childErr != nil {
+			return runActionDecision{}, childErr
+		}
+		turns, turnErr := tx.ActiveProcessTurnCandidates(ctx, graph.Process.OrganizationID,
+			graph.Process.ProjectID, graph.Process.ID)
+		if turnErr != nil {
+			return runActionDecision{}, turnErr
+		}
+		candidate := !children && len(turns) == 1 && turns[0].ID == graph.Turn.ID &&
+			turns[0].Version == graph.Turn.Version
+		if candidate {
+			if err := loadPrevious(); err != nil {
+				if !errors.Is(err, errs.ErrNotFound) {
+					return runActionDecision{}, err
+				}
+				candidate = false
+			}
+		}
+		if candidate && (previous.InputSHA256 != turnSpec.EffectiveInputSHA256 ||
+			!previous.FinishedAt.IsZero()) {
+			candidate = false
+		}
+		if candidate {
+			if err := loadLease(); err != nil {
+				return runActionDecision{}, err
+			}
+			if leaseFound && (lease.Attempt != turnSpec.Attempt || lease.Fence != graph.Turn.Version ||
+				lease.AuthorityGeneration != previous.AuthorityGeneration) {
+				candidate = false
+			}
+		}
+		decision.Cancel = candidate
+	}
+	if graph.Process.State.Terminal() || turnSpec.Attempt >= 100 ||
+		!slices.Contains([]enum.State{enum.StateFailed, enum.StateBlocked,
+			enum.StateWaitingOwner, enum.StateCancelled}, graph.Turn.State) {
+		return decision, nil
+	}
+	if graph.Runtime != nil && (graph.Runtime.State != "SUSPENDED" || graph.Turn.State != enum.StateWaitingOwner) {
+		return decision, nil
+	}
+	if err := requireOwnerGraphRuntimeDisposition(graph, runtimeDispositionAbsent, runtimeDispositionTerminal); err != nil {
+		return decision, nil
+	}
+	err = loadPrevious()
+	if err != nil || previous.InputSHA256 != turnSpec.EffectiveInputSHA256 {
+		if err != nil && !errors.Is(err, errs.ErrNotFound) {
+			return runActionDecision{}, err
+		}
+		return decision, nil
+	}
+	switch graph.Turn.State {
+	case enum.StateFailed:
+		decision.Retry = !previous.FinishedAt.IsZero()
+	case enum.StateCancelled:
+		decision.Retry = previous.State == string(enum.StateCancelled) && !previous.FinishedAt.IsZero()
+	case enum.StateWaitingOwner:
+		decision.Retry = previous.State == "WAITING_OWNER" && !previous.FinishedAt.IsZero() &&
+			previous.Outcome == "owner_gate_pending"
+	case enum.StateBlocked:
+		decision.Retry = previous.FinishedAt.IsZero()
+	}
+	if !decision.Retry {
+		return decision, nil
+	}
+	leaseErr := loadLease()
+	if leaseErr != nil {
+		return runActionDecision{}, leaseErr
+	}
+	if leaseFound {
+		if graph.Turn.State == enum.StateWaitingOwner || lease.Attempt != turnSpec.Attempt ||
+			lease.AuthorityGeneration != previous.AuthorityGeneration {
+			decision.Retry = false
+		}
+	}
+	return decision, nil
+}
 
 // ManageRun маршрутизирует закрытые cancel/retry действия в уже авторитетные
 // owner graph команды, не вводя второй lifecycle path.
@@ -50,6 +207,9 @@ func (service *Service) ManageRun(ctx context.Context, input ManageRunInput) (Ma
 			ExpectedVersion: input.ExpectedVersion, ReasonCode: input.ReasonCode})
 		return ManageRunResult{ProcessRun: cancelled}, err
 	}
+	if process.Version != input.ExpectedVersion {
+		return ManageRunResult{}, errs.ErrVersionMismatch
+	}
 	spec, ok := process.Spec.(entity.ProcessRunSpec)
 	if !ok {
 		return ManageRunResult{}, errs.ErrStateConflict
@@ -66,13 +226,10 @@ func (service *Service) ManageRun(ctx context.Context, input ManageRunInput) (Ma
 		}
 		return ManageRunResult{}, errs.ErrStateConflict
 	}
-	if turn.Version != input.ExpectedVersion {
-		return ManageRunResult{}, errs.ErrVersionMismatch
-	}
 	principal := input.Principal
 	principal.Permission = permissionRetryTurn
 	retried, err := service.RetryTurn(ctx, RetryTurnInput{Principal: principal,
-		IdempotencyKey: input.IdempotencyKey, TurnID: turn.ID, ExpectedVersion: input.ExpectedVersion,
+		IdempotencyKey: input.IdempotencyKey, TurnID: turn.ID, ExpectedVersion: turn.Version,
 		ReasonCode: input.ReasonCode})
 	if err != nil {
 		return ManageRunResult{}, err
@@ -90,69 +247,204 @@ func (service *Service) GetRunDetail(
 	principal value.Principal,
 	processRunID string,
 ) (RunDetailResult, error) {
+	return service.GetRunDetailPage(ctx, principal, processRunID, 100, "")
+}
+
+type runSnapshotCursor struct {
+	Kind            string    `json:"kind"`
+	ProcessRunID    string    `json:"processRunId"`
+	ProcessVersion  uint64    `json:"processVersion"`
+	SnapshotSHA256  string    `json:"snapshotSha256,omitempty"`
+	ExecutionID     string    `json:"executionId,omitempty"`
+	AfterType       string    `json:"afterType,omitempty"`
+	AfterID         string    `json:"afterId"`
+	AfterOccurredAt time.Time `json:"afterOccurredAt,omitempty"`
+}
+
+func (service *Service) encodeRunSnapshotCursor(cursor runSnapshotCursor) (string, error) {
+	payload, err := json.Marshal(cursor)
+	if err != nil {
+		return "", errs.ErrInternal
+	}
+	mac := hmac.New(sha256.New, service.leaseSigningKey)
+	_, _ = mac.Write([]byte("control-plane:owner-run-page:v1\x00"))
+	_, _ = mac.Write(payload)
+	return base64.RawURLEncoding.EncodeToString(payload) + "." + hex.EncodeToString(mac.Sum(nil)), nil
+}
+
+func (service *Service) decodeRunSnapshotCursor(token string) (runSnapshotCursor, error) {
+	if token == "" {
+		return runSnapshotCursor{}, nil
+	}
+	if len(token) > 2048 {
+		return runSnapshotCursor{}, errs.ErrInvalidInput
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 {
+		return runSnapshotCursor{}, errs.ErrInvalidInput
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	signature, signatureErr := hex.DecodeString(parts[1])
+	if err != nil || signatureErr != nil {
+		return runSnapshotCursor{}, errs.ErrInvalidInput
+	}
+	mac := hmac.New(sha256.New, service.leaseSigningKey)
+	_, _ = mac.Write([]byte("control-plane:owner-run-page:v1\x00"))
+	_, _ = mac.Write(payload)
+	if !hmac.Equal(signature, mac.Sum(nil)) {
+		return runSnapshotCursor{}, errs.ErrStateConflict
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(payload)))
+	decoder.DisallowUnknownFields()
+	var cursor runSnapshotCursor
+	if err := decoder.Decode(&cursor); err != nil {
+		return runSnapshotCursor{}, errs.ErrInvalidInput
+	}
+	listCursor := slices.Contains([]string{"AGENT_LIST", "CATALOG_LIST", "SCHEDULE_LIST", "RUN_LIST",
+		"INCIDENT_LIST", "RESTORE_LIST"}, cursor.Kind)
+	if (!listCursor && cursor.Kind != "INCIDENT" && cursor.Kind != "LINEAGE" && cursor.Kind != "TIMELINE") ||
+		(!listCursor && (value.ValidateID(cursor.ProcessRunID) != nil || cursor.ProcessVersion == 0)) ||
+		(listCursor && (cursor.ProcessRunID != "" || cursor.ProcessVersion != 0 ||
+			!validSHA256Text(cursor.SnapshotSHA256))) ||
+		value.ValidateID(cursor.AfterID) != nil ||
+		(cursor.ExecutionID != "" && value.ValidateID(cursor.ExecutionID) != nil) ||
+		(cursor.AfterType != "" && cursor.AfterType != "PROCESS" && cursor.AfterType != "ATTEMPT") {
+		return runSnapshotCursor{}, errs.ErrInvalidInput
+	}
+	if (cursor.Kind == "TIMELINE") != !cursor.AfterOccurredAt.IsZero() {
+		return runSnapshotCursor{}, errs.ErrInvalidInput
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return runSnapshotCursor{}, errs.ErrInvalidInput
+	}
+	return cursor, nil
+}
+
+func (service *Service) decodeOwnerListCursor(token, kind string) (runSnapshotCursor, error) {
+	if token == "" {
+		return runSnapshotCursor{Kind: kind}, nil
+	}
+	cursor, err := service.decodeRunSnapshotCursor(token)
+	if err != nil || cursor.Kind != kind {
+		return runSnapshotCursor{}, errs.ErrStateConflict
+	}
+	return cursor, nil
+}
+
+func ownerListSnapshot(ctx context.Context, tx domainrepo.Transaction, expectedSHA256 string) (string, error) {
+	ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+	if !ok {
+		return "", errs.ErrInternal
+	}
+	snapshot, err := ownerRead.OwnerSnapshotFence(ctx)
+	if err != nil {
+		return "", err
+	}
+	digest := hashString(snapshot)
+	if expectedSHA256 != "" && expectedSHA256 != digest {
+		return "", errs.ErrVersionMismatch
+	}
+	return digest, nil
+}
+
+// GetRunDetailPage возвращает Run, actions и exact execution incidents из
+// одного serializable owner snapshot; cursor привязан к версии ProcessRun.
+func (service *Service) GetRunDetailPage(
+	ctx context.Context,
+	principal value.Principal,
+	processRunID string,
+	incidentLimit int,
+	incidentPageToken string,
+) (RunDetailResult, error) {
 	if err := authorize(principal, permissionRead); err != nil {
 		return RunDetailResult{}, err
 	}
-	process, tuple, err := service.resolveRun(ctx, principal, processRunID)
-	if err != nil {
-		return RunDetailResult{}, err
+	if value.ValidateID(processRunID) != nil || incidentLimit < 1 || incidentLimit > 100 {
+		return RunDetailResult{}, errs.ErrInvalidInput
 	}
-	result := RunDetailResult{ProcessRun: process}
-	for _, target := range []struct {
-		id   string
-		kind enum.Kind
-		set  func(entity.Resource)
-	}{
-		{tuple.SessionID, enum.KindSession, func(item entity.Resource) { result.Session = item }},
-		{tuple.TurnID, enum.KindTurn, func(item entity.Resource) { result.Turn = item }},
-		{tuple.RuntimeRevisionID, enum.KindRuntimeRevision, func(item entity.Resource) { result.RuntimeRevision = item }},
-	} {
-		if target.id == "" {
-			continue
-		}
-		item, getErr := service.repository.Get(ctx, principal.OrganizationID, principal.ProjectID, target.id, target.kind)
-		if getErr != nil || item.OwnerActorID != principal.ActorID {
-			if getErr != nil {
-				return RunDetailResult{}, getErr
-			}
-			return RunDetailResult{}, errs.ErrNotFound
-		}
-		target.set(item)
+	cursor, err := service.decodeRunSnapshotCursor(incidentPageToken)
+	if err != nil || (incidentPageToken != "" && (cursor.Kind != "INCIDENT" || cursor.ProcessRunID != processRunID)) {
+		return RunDetailResult{}, errs.ErrStateConflict
 	}
+	var result RunDetailResult
 	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
 		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
-		execution, executionErr := tx.GetRuntimeExecutionByTurn(ctx, tuple.TurnID, tuple.Attempt)
-		if executionErr == nil {
-			if execution.ProcessID != process.ID || execution.SessionID != tuple.SessionID ||
-				execution.RuntimeRevisionID != tuple.RuntimeRevisionID || execution.ImmutableInputSHA256 != tuple.InputSHA256 {
-				return errs.ErrStateConflict
+		graph, graphErr := service.lockOwnerGraphByProcess(ctx, tx, principal, processRunID)
+		if graphErr != nil {
+			return graphErr
+		}
+		if cursor.ProcessVersion != 0 && cursor.ProcessVersion != graph.Process.Version {
+			return errs.ErrVersionMismatch
+		}
+		processSpec, ok := graph.Process.Spec.(entity.ProcessRunSpec)
+		if !ok {
+			return errs.ErrStateConflict
+		}
+		tuple, tupleErr := currentExecution(processSpec)
+		if tupleErr != nil {
+			return tupleErr
+		}
+		revision, revisionErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, tuple.RuntimeRevisionID)
+		if revisionErr != nil || revision.Kind != enum.KindRuntimeRevision ||
+			revision.OwnerActorID != principal.ActorID || revision.Version != tuple.RuntimeRevisionVersion {
+			if revisionErr != nil {
+				return revisionErr
 			}
-			result.Runtime = &execution
+			return errs.ErrStateConflict
+		}
+		result = RunDetailResult{ProcessRun: graph.Process, Session: graph.Session,
+			Turn: graph.Turn, RuntimeRevision: revision, Runtime: graph.Runtime}
+		decision, decisionErr := service.decideRunActionsLocked(ctx, tx, principal, graph)
+		if decisionErr != nil {
+			return decisionErr
+		}
+		result.Projection, decisionErr = service.runOwnerProjectionFromTx(ctx, tx, principal, result, decision)
+		if decisionErr != nil {
+			return decisionErr
+		}
+		if graph.Runtime == nil {
+			if cursor.ExecutionID != "" {
+				return errs.ErrVersionMismatch
+			}
 			return nil
 		}
-		if errors.Is(executionErr, errs.ErrNotFound) {
-			return nil
+		if cursor.ExecutionID != "" && cursor.ExecutionID != graph.Runtime.ID {
+			return errs.ErrVersionMismatch
 		}
-		return executionErr
-	})
-	if err != nil {
-		return RunDetailResult{}, err
-	}
-	incidents, err := service.repository.ListRuntimeIncidents(ctx, query.RuntimeIncidentFilter{
-		OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
-		ActorID: principal.ActorID, Limit: 100,
-	})
-	if err != nil {
-		return RunDetailResult{}, err
-	}
-	if result.Runtime != nil {
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		incidents, incidentErr := ownerRead.ListRuntimeIncidentsSnapshot(ctx, query.RuntimeIncidentFilter{
+			OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+			ActorID: principal.ActorID, ExecutionID: graph.Runtime.ID, AfterID: cursor.AfterID,
+			Limit: incidentLimit + 1,
+		})
+		if incidentErr != nil {
+			return incidentErr
+		}
+		truncated := len(incidents) > incidentLimit
+		if truncated {
+			incidents = incidents[:incidentLimit]
+		}
+		result.Incidents = incidents
+		result.IncidentProjections = make([]RuntimeIncidentOwnerProjection, 0, len(incidents))
 		for _, incident := range incidents {
-			if incident.ExecutionID == result.Runtime.ID {
-				result.Incidents = append(result.Incidents, incident)
+			projection, projectionErr := service.runtimeIncidentOwnerProjectionFromTx(ctx, tx, principal, incident)
+			if projectionErr != nil {
+				return projectionErr
 			}
+			result.IncidentProjections = append(result.IncidentProjections, projection)
 		}
-	}
-	return result, nil
+		if truncated {
+			result.IncidentsNextPageToken, incidentErr = service.encodeRunSnapshotCursor(runSnapshotCursor{
+				Kind: "INCIDENT", ProcessRunID: graph.Process.ID, ProcessVersion: graph.Process.Version,
+				ExecutionID: graph.Runtime.ID, AfterID: incidents[len(incidents)-1].ID,
+			})
+		}
+		return incidentErr
+	})
+	return result, err
 }
 
 func (service *Service) GetRunLineage(ctx context.Context, principal value.Principal, processRunID string) (RunLineageResult, error) {
@@ -199,6 +491,183 @@ func (service *Service) GetRunLineage(ctx context.Context, principal value.Princ
 		return RunLineageResult{}, errs.ErrStateConflict
 	}
 	return result, nil
+}
+
+// GetRunLineagePage ограничивает обход до SQL allocation, возвращает
+// snapshot-bound continuation и никогда не помечает неполную страницу полной.
+func (service *Service) GetRunLineagePage(
+	ctx context.Context,
+	principal value.Principal,
+	processRunID string,
+	limit int,
+	pageToken string,
+) (RunLineageOwnerPage, error) {
+	if err := authorize(principal, permissionRead); err != nil {
+		return RunLineageOwnerPage{}, err
+	}
+	if value.ValidateID(processRunID) != nil || limit < 1 || limit > 100 {
+		return RunLineageOwnerPage{}, errs.ErrInvalidInput
+	}
+	cursor, err := service.decodeRunSnapshotCursor(pageToken)
+	if err != nil || (pageToken != "" && (cursor.Kind != "LINEAGE" || cursor.ProcessRunID != processRunID)) {
+		return RunLineageOwnerPage{}, errs.ErrStateConflict
+	}
+	var result RunLineageOwnerPage
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		graph, graphErr := service.lockOwnerGraphByProcess(ctx, tx, principal, processRunID)
+		if graphErr != nil {
+			return graphErr
+		}
+		if cursor.ProcessVersion != 0 && cursor.ProcessVersion != graph.Process.Version {
+			return errs.ErrVersionMismatch
+		}
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		nodes, truncated, nodeErr := ownerRead.ListRunGraphNodesPage(ctx, processRunID,
+			cursor.AfterType, cursor.AfterID, limit)
+		if nodeErr != nil {
+			return nodeErr
+		}
+		lineage, nodeErr := runLineagePage(nodes, truncated)
+		if nodeErr != nil {
+			return nodeErr
+		}
+		if pageToken == "" && len(lineage.Processes) == 0 {
+			return errs.ErrStateConflict
+		}
+		projections, projectionErr := RunLineageOwnerProjections(lineage)
+		if projectionErr != nil {
+			return projectionErr
+		}
+		projectionByNodeID := make(map[string]int, len(projections))
+		for index, node := range lineage.Processes {
+			projectionByNodeID[node.ID] = index
+		}
+		for index, node := range lineage.Attempts {
+			projectionByNodeID[node.ID] = len(lineage.Processes) + index
+		}
+		for _, node := range nodes {
+			if node.RuntimeRevisionID == "" {
+				continue
+			}
+			index, found := projectionByNodeID[node.ID]
+			if !found {
+				return errs.ErrStateConflict
+			}
+			agent, role, model, provider, displayErr := service.runRevisionOwnerDisplaysFromTx(ctx, tx,
+				principal, node.RuntimeRevisionID, node.RuntimeRevisionVersion)
+			if displayErr != nil {
+				return displayErr
+			}
+			projections[index].Agent, projections[index].Role = agent, role
+			projections[index].Model, projections[index].Provider = model, provider
+		}
+		processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+		if !processOK {
+			return errs.ErrStateConflict
+		}
+		tuple, tupleErr := currentExecution(processSpec)
+		if tupleErr != nil {
+			return tupleErr
+		}
+		revision, revisionErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID,
+			tuple.RuntimeRevisionID)
+		if revisionErr != nil || revision.Version != tuple.RuntimeRevisionVersion {
+			if revisionErr != nil {
+				return revisionErr
+			}
+			return errs.ErrVersionMismatch
+		}
+		decision, decisionErr := service.decideRunActionsLocked(ctx, tx, principal, graph)
+		if decisionErr != nil {
+			return decisionErr
+		}
+		run, projectionErr := service.runOwnerProjectionFromTx(ctx, tx, principal,
+			RunDetailResult{ProcessRun: graph.Process, Session: graph.Session, Turn: graph.Turn,
+				RuntimeRevision: revision, Runtime: graph.Runtime}, decision)
+		if projectionErr != nil {
+			return projectionErr
+		}
+		result = RunLineageOwnerPage{Lineage: lineage, Projections: projections, Run: run, Truncated: truncated}
+		if truncated {
+			last := nodes[len(nodes)-1]
+			result.NextPageToken, nodeErr = service.encodeRunSnapshotCursor(runSnapshotCursor{
+				Kind: "LINEAGE", ProcessRunID: graph.Process.ID, ProcessVersion: graph.Process.Version,
+				AfterType: last.NodeType, AfterID: last.ID,
+			})
+		}
+		return nodeErr
+	})
+	return result, err
+}
+
+// runLineagePage разделяет только уже bounded repository page. Допуск
+// запрошенного ProcessRun доказан lockOwnerGraphByProcess до запроса страницы
+// и не зависит от того, попал ли его UUID в текущую детерминированную страницу.
+func runLineagePage(nodes []domainrepo.RunGraphNode, truncated bool) (RunLineageResult, error) {
+	lineage := RunLineageResult{Complete: !truncated}
+	for _, node := range nodes {
+		switch node.NodeType {
+		case "PROCESS":
+			lineage.Processes = append(lineage.Processes, node)
+		case "ATTEMPT":
+			lineage.Attempts = append(lineage.Attempts, node)
+		default:
+			return RunLineageResult{}, errs.ErrStateConflict
+		}
+	}
+	return lineage, nil
+}
+
+func (service *Service) runRevisionOwnerDisplaysFromTx(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	revisionID string,
+	expectedVersion uint64,
+) (OwnerDisplayValue, OwnerDisplayValue, OwnerDisplayValue, OwnerDisplayValue, error) {
+	unavailable := OwnerDisplayValue{Status: OwnerProjectionUnavailable}
+	revision, err := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, revisionID)
+	if err != nil {
+		return unavailable, unavailable, unavailable, unavailable, err
+	}
+	if revision.Kind != enum.KindRuntimeRevision || revision.OwnerActorID != principal.ActorID ||
+		(expectedVersion != 0 && revision.Version != expectedVersion) {
+		return unavailable, unavailable, unavailable, unavailable, errs.ErrVersionMismatch
+	}
+	spec, ok := revision.Spec.(entity.RuntimeRevisionSpec)
+	if !ok {
+		return unavailable, unavailable, unavailable, unavailable, errs.ErrStateConflict
+	}
+	agent, role, model, provider := unavailable, unavailable, unavailable, unavailable
+	if validOwnerRunDisplay(spec.CodexModel) {
+		model = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: spec.CodexModel}
+	}
+	if spec.AgentID != "" {
+		agent, err = ownerPinnedRunDisplay(ctx, tx, principal, enum.KindAgent,
+			spec.AgentID, spec.AgentVersion, spec.AgentSHA256, false)
+		if err != nil {
+			return unavailable, unavailable, unavailable, unavailable, err
+		}
+	}
+	if spec.RoleDefinitionID != "" {
+		role, err = ownerPinnedRunDisplay(ctx, tx, principal, enum.KindRoleDefinition,
+			spec.RoleDefinitionID, spec.RoleDefinitionVersion, spec.RoleDefinitionSHA256, false)
+		if err != nil {
+			return unavailable, unavailable, unavailable, unavailable, err
+		}
+	}
+	if spec.ProviderPoolID != "" {
+		provider, err = ownerPinnedRunDisplay(ctx, tx, principal, enum.KindProviderPool,
+			spec.ProviderPoolID, spec.ProviderPoolVersion, spec.ProviderPoolSHA256, true)
+		if err != nil {
+			return unavailable, unavailable, unavailable, unavailable, err
+		}
+	}
+	return agent, role, model, provider, nil
 }
 
 func linkRunLineage(result *RunLineageResult) {
@@ -302,6 +771,102 @@ func (service *Service) resolveRun(ctx context.Context, principal value.Principa
 type runTimelineCursor struct {
 	OccurredAt time.Time `json:"occurredAt"`
 	ID         string    `json:"id"`
+}
+
+func (service *Service) ListRunTimelineOwner(
+	ctx context.Context,
+	principal value.Principal,
+	processRunID, pageToken string,
+	limit int,
+) (RunTimelineOwnerPage, error) {
+	if err := authorize(principal, permissionAuditRead); err != nil {
+		return RunTimelineOwnerPage{}, err
+	}
+	if value.ValidateID(processRunID) != nil || limit < 1 || limit > 100 {
+		return RunTimelineOwnerPage{}, errs.ErrInvalidInput
+	}
+	cursor, err := service.decodeRunSnapshotCursor(pageToken)
+	if err != nil || (pageToken != "" && (cursor.Kind != "TIMELINE" || cursor.ProcessRunID != processRunID)) {
+		return RunTimelineOwnerPage{}, errs.ErrStateConflict
+	}
+	var result RunTimelineOwnerPage
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		graph, graphErr := service.lockOwnerGraphByProcess(ctx, tx, principal, processRunID)
+		if graphErr != nil {
+			return graphErr
+		}
+		if cursor.ProcessVersion != 0 && cursor.ProcessVersion != graph.Process.Version {
+			return errs.ErrVersionMismatch
+		}
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		nodes, graphTruncated, graphErr := ownerRead.ListRunGraphNodesPage(ctx, processRunID, "", "", 1000)
+		if graphErr != nil || graphTruncated {
+			if graphErr != nil {
+				return graphErr
+			}
+			return errs.ErrStateConflict
+		}
+		ids := make([]string, 0, len(nodes)*5)
+		for _, node := range nodes {
+			ids = append(ids, node.ID)
+			for _, id := range []string{node.ProcessRunID, node.SessionID, node.TurnID, node.RuntimeRevisionID} {
+				if id != "" {
+					ids = append(ids, id)
+				}
+			}
+		}
+		slices.Sort(ids)
+		ids = slices.Compact(ids)
+		items, listErr := ownerRead.ListRunTimelineAuditSnapshot(ctx, ids,
+			cursor.AfterOccurredAt, cursor.AfterID, limit+1)
+		if listErr != nil {
+			return listErr
+		}
+		truncated := len(items) > limit
+		if truncated {
+			items = items[:limit]
+		}
+		processSpec, processOK := graph.Process.Spec.(entity.ProcessRunSpec)
+		if !processOK {
+			return errs.ErrStateConflict
+		}
+		tuple, tupleErr := currentExecution(processSpec)
+		if tupleErr != nil {
+			return tupleErr
+		}
+		revision, revisionErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID,
+			tuple.RuntimeRevisionID)
+		if revisionErr != nil || revision.Version != tuple.RuntimeRevisionVersion {
+			if revisionErr != nil {
+				return revisionErr
+			}
+			return errs.ErrVersionMismatch
+		}
+		decision, decisionErr := service.decideRunActionsLocked(ctx, tx, principal, graph)
+		if decisionErr != nil {
+			return decisionErr
+		}
+		result.Run, decisionErr = service.runOwnerProjectionFromTx(ctx, tx, principal,
+			RunDetailResult{ProcessRun: graph.Process, Session: graph.Session, Turn: graph.Turn,
+				RuntimeRevision: revision, Runtime: graph.Runtime}, decision)
+		if decisionErr != nil {
+			return decisionErr
+		}
+		result.Projections = RunTimelineOwnerProjections(items, result.Run.NextActions)
+		if truncated {
+			last := items[len(items)-1]
+			result.NextPageToken, listErr = service.encodeRunSnapshotCursor(runSnapshotCursor{
+				Kind: "TIMELINE", ProcessRunID: graph.Process.ID, ProcessVersion: graph.Process.Version,
+				AfterID: last.ID, AfterOccurredAt: last.OccurredAt,
+			})
+		}
+		return listErr
+	})
+	return result, err
 }
 
 func (service *Service) ListRunTimeline(

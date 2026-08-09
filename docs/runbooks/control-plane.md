@@ -170,7 +170,12 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   повторное доказательство пустоты;
   IAM обязан разрешать bounded `ListBucketVersions` с condition на canary
   prefix, рабочие `PutObject`/`GetObject` и только для canary cleanup
-  `DeleteObjectVersion` на том же `projects/*/instruction-sets/*` prefix.
+  `DeleteObjectVersion` на тех же
+  `projects/*/instruction-sets/control-plane-readiness/*` и
+  `projects/*/schedule-prompts/control-plane-readiness/*` canary prefixes.
+  Рабочие `PutObject`/`GetObject` разрешены для content-addressed
+  `instruction-sets/*` и `schedule-prompts/*`; readiness обязана пройти оба
+  exact пути под одним PostgreSQL fence.
   Fence удерживается от первого reconcile до доказательства финальной пустоты;
   ожидание ограничено readiness context, crash закрывает connection и освобождает
   lock, а probe без полученного fence не считается успешным. Ambiguous Put/Delete
@@ -185,7 +190,7 @@ Startup barrier обязан завершиться до bind gRPC listener. П�
   `MaxMsgsPerSubject=5000000`, maximum message size 262144 bytes,
   max age 30 дней, dedup window 2 минуты, deny delete/purge и без
   mirror/source/republish/rollup/transform;
-- authority policy revision 23, independently delivered proof trust/private key
+- authority policy revision 27, independently delivered proof trust/private key
   и локальный verifier #186 согласованы; отсутствующие отдельные public JWK для
   `runtime-restore-verifier` или `runtime-cleanup-authorizer` закрывают startup,
   а не включают OIDC fallback;
@@ -662,7 +667,7 @@ receipt; другой intent — конфликт. Generic Resource lifecycle д
 
 При отказе configuration mutation проверить по порядку:
 
-1. caller workload/full method/permission в authority policy revision 23;
+1. caller workload/full method/permission в authority policy revision 27;
 2. owner-scoped current row и expected version до анализа receipt;
 3. exact reference versions/digests и отсутствие live зависимого graph;
 4. protected history, audit и применимый outbox predecessor одной transaction.

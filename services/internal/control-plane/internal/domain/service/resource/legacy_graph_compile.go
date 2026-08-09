@@ -387,13 +387,21 @@ func (service *Service) compileLegacyGraph(principal value.Principal,
 		if err != nil {
 			return compiledLegacyGraph{}, err
 		}
+		roleSpec, roleOK := role.Spec.(entity.RoleDefinitionSpec)
+		instructionSpec, instructionOK := instruction.Spec.(entity.InstructionSetSpec)
+		poolSpec, poolOK := pool.Spec.(entity.ProviderPoolSpec)
+		if !roleOK || !instructionOK || !poolOK {
+			return compiledLegacyGraph{}, errs.ErrStateConflict
+		}
 		spec := entity.AgentSpec{
 			StableKey: input.StableKey, RoleDefinitionID: role.ID, RoleDefinitionVersion: role.Version,
 			RoleDefinitionSHA256: roleSHA, InstructionSetID: instruction.ID,
 			InstructionSetVersion: instruction.Version, InstructionSetSHA256: instructionSHA,
 			ProviderPoolID: pool.ID, ProviderPoolVersion: pool.Version, ProviderPoolSHA256: poolSHA,
-			RuntimeProfileRef:     "control-plane://runtime-profile/" + recipe.ID,
-			RuntimeProfileVersion: recipe.Version, RuntimeProfileSHA256: recipeSHA,
+			OwnerRoleSelector: roleSpec.StableKey, OwnerInstructionSelector: instructionSpec.StableKey,
+			OwnerProviderPoolSelector: poolSpec.StableKey,
+			RuntimeProfileRef:         "control-plane://runtime-profile/" + recipe.ID,
+			RuntimeProfileVersion:     recipe.Version, RuntimeProfileSHA256: recipeSHA,
 			Capabilities: slices.Clone(input.Capabilities), Enabled: input.Enabled,
 			BotIdentityRef: input.BotIdentityRef, BotUsername: input.BotUsername,
 			BotProviderRevision: input.BotProviderRevision, BotProviderGeneration: input.BotProviderGeneration,

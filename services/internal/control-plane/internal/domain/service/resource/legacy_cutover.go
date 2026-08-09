@@ -314,8 +314,11 @@ func (service *Service) materializeLegacyConfiguration(ctx context.Context, tx d
 		RoleDefinitionSHA256: roleDefinitionSHA, InstructionSetID: instruction.ID,
 		InstructionSetVersion: instruction.Version, InstructionSetSHA256: instructionSHA,
 		ProviderPoolID: pool.ID, ProviderPoolVersion: pool.Version, ProviderPoolSHA256: poolSHA,
-		RuntimeProfileRef:     "control-plane://runtime-profile/" + recipe.ID,
-		RuntimeProfileVersion: recipe.Version, RuntimeProfileSHA256: recipeSHA,
+		OwnerRoleSelector:         roleDefinitionSpec.StableKey,
+		OwnerInstructionSelector:  instructionSpec.StableKey,
+		OwnerProviderPoolSelector: poolSpec.StableKey,
+		RuntimeProfileRef:         "control-plane://runtime-profile/" + recipe.ID,
+		RuntimeProfileVersion:     recipe.Version, RuntimeProfileSHA256: recipeSHA,
 		Capabilities: slices.Clone(roleSpec.Capabilities), Enabled: true,
 		Ownership: ownership(roleSpec.Ownership, legacyRole.ID, legacyRole.Version, roleDigest)}
 	agent, err := newLegacyTarget(cutover.TargetAgentID, input.Principal, legacyRole.ID,

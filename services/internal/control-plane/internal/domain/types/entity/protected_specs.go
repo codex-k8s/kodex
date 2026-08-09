@@ -43,31 +43,34 @@ func (spec RoleDefinitionSpec) Validate() error {
 
 // AgentSpec хранит только exact server-resolved references.
 type AgentSpec struct {
-	StableKey             string                 `json:"stableKey"`
-	RoleDefinitionID      string                 `json:"roleDefinitionId"`
-	RoleDefinitionVersion uint64                 `json:"roleDefinitionVersion"`
-	RoleDefinitionSHA256  string                 `json:"roleDefinitionSha256"`
-	InstructionSetID      string                 `json:"instructionSetId"`
-	InstructionSetVersion uint64                 `json:"instructionSetVersion"`
-	InstructionSetSHA256  string                 `json:"instructionSetSha256"`
-	ProviderPoolID        string                 `json:"providerPoolId"`
-	ProviderPoolVersion   uint64                 `json:"providerPoolVersion"`
-	ProviderPoolSHA256    string                 `json:"providerPoolSha256"`
-	RuntimeProfileRef     string                 `json:"runtimeProfileRef"`
-	RuntimeProfileVersion uint64                 `json:"runtimeProfileVersion"`
-	RuntimeProfileSHA256  string                 `json:"runtimeProfileSha256"`
-	Capabilities          []string               `json:"capabilities"`
-	BotIdentityRef        string                 `json:"botIdentityRef,omitempty"`
-	BotUsername           string                 `json:"botUsername,omitempty"`
-	BotProviderRevision   uint64                 `json:"botProviderRevision,omitempty"`
-	BotProviderGeneration uint64                 `json:"botProviderGeneration,omitempty"`
-	BotProviderTeamRef    string                 `json:"botProviderTeamRef,omitempty"`
-	BotMaskedStatus       string                 `json:"botMaskedStatus,omitempty"`
-	BotReceiptID          string                 `json:"botReceiptId,omitempty"`
-	BotReceiptVersion     uint64                 `json:"botReceiptVersion,omitempty"`
-	BotReceiptSHA256      string                 `json:"botReceiptSha256,omitempty"`
-	Enabled               bool                   `json:"enabled"`
-	Ownership             ConfigurationOwnership `json:"ownership"`
+	StableKey                 string                 `json:"stableKey"`
+	RoleDefinitionID          string                 `json:"roleDefinitionId"`
+	RoleDefinitionVersion     uint64                 `json:"roleDefinitionVersion"`
+	RoleDefinitionSHA256      string                 `json:"roleDefinitionSha256"`
+	InstructionSetID          string                 `json:"instructionSetId"`
+	InstructionSetVersion     uint64                 `json:"instructionSetVersion"`
+	InstructionSetSHA256      string                 `json:"instructionSetSha256"`
+	ProviderPoolID            string                 `json:"providerPoolId"`
+	ProviderPoolVersion       uint64                 `json:"providerPoolVersion"`
+	ProviderPoolSHA256        string                 `json:"providerPoolSha256"`
+	OwnerRoleSelector         string                 `json:"ownerRoleSelector,omitempty"`
+	OwnerInstructionSelector  string                 `json:"ownerInstructionSelector,omitempty"`
+	OwnerProviderPoolSelector string                 `json:"ownerProviderPoolSelector,omitempty"`
+	RuntimeProfileRef         string                 `json:"runtimeProfileRef"`
+	RuntimeProfileVersion     uint64                 `json:"runtimeProfileVersion"`
+	RuntimeProfileSHA256      string                 `json:"runtimeProfileSha256"`
+	Capabilities              []string               `json:"capabilities"`
+	BotIdentityRef            string                 `json:"botIdentityRef,omitempty"`
+	BotUsername               string                 `json:"botUsername,omitempty"`
+	BotProviderRevision       uint64                 `json:"botProviderRevision,omitempty"`
+	BotProviderGeneration     uint64                 `json:"botProviderGeneration,omitempty"`
+	BotProviderTeamRef        string                 `json:"botProviderTeamRef,omitempty"`
+	BotMaskedStatus           string                 `json:"botMaskedStatus,omitempty"`
+	BotReceiptID              string                 `json:"botReceiptId,omitempty"`
+	BotReceiptVersion         uint64                 `json:"botReceiptVersion,omitempty"`
+	BotReceiptSHA256          string                 `json:"botReceiptSha256,omitempty"`
+	Enabled                   bool                   `json:"enabled"`
+	Ownership                 ConfigurationOwnership `json:"ownership"`
 }
 
 func (AgentSpec) Kind() enum.Kind                                     { return enum.KindAgent }
@@ -84,6 +87,13 @@ func (spec AgentSpec) Validate() error {
 		!validSHA256(spec.RuntimeProfileSHA256) || !validPermissions(spec.Capabilities, 64) ||
 		spec.Ownership.Validate() != nil {
 		return errors.New("agent specification is invalid")
+	}
+	ownerForm := spec.OwnerRoleSelector != "" || spec.OwnerInstructionSelector != "" ||
+		spec.OwnerProviderPoolSelector != ""
+	if ownerForm && (value.ValidateStableKey(spec.OwnerRoleSelector) != nil ||
+		value.ValidateStableKey(spec.OwnerInstructionSelector) != nil ||
+		value.ValidateStableKey(spec.OwnerProviderPoolSelector) != nil) {
+		return errors.New("agent owner form selection is invalid")
 	}
 	botBound := spec.BotIdentityRef != "" || spec.BotUsername != "" || spec.BotProviderRevision != 0 ||
 		spec.BotProviderGeneration != 0 || spec.BotProviderTeamRef != "" ||

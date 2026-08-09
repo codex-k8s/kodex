@@ -8,7 +8,6 @@ import (
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/service/resource"
-	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/query"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -68,22 +67,18 @@ func (server *Server) ListRuntimeIncidents(ctx context.Context,
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	limit := pageSize(request.GetPageSize())
-	incidents, err := server.service.ListRuntimeIncidents(ctx, resource.ListRuntimeIncidentsInput{
-		Principal: principal,
-		Filter:    query.RuntimeIncidentFilter{AfterID: request.GetPageToken(), Limit: limit},
-	})
+	incidents, next, err := server.service.ListRuntimeIncidentOwners(ctx, principal,
+		request.GetPageToken(), limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.ListRuntimeIncidentsResponse{
-		Incidents: make([]*controlplanev1.RuntimeIncident, 0, len(incidents)),
+		Projections: make([]*controlplanev1.RuntimeIncidentOwnerProjection, 0, len(incidents)),
 	}
-	for _, incident := range incidents {
-		response.Incidents = append(response.Incidents, runtimeIncidentToProto(incident))
+	for _, projection := range incidents {
+		response.Projections = append(response.Projections, runtimeIncidentOwnerProjectionToProto(projection))
 	}
-	if len(incidents) == limit {
-		response.NextPageToken = incidents[len(incidents)-1].ID
-	}
+	response.NextPageToken = next
 	return response, nil
 }
 

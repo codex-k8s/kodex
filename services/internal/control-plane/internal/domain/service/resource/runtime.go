@@ -1286,25 +1286,24 @@ func (service *Service) RetryTurn(
 			if err != nil {
 				return 0, err
 			}
-			current := graph.Turn
-			spec, ok := current.Spec.(entity.TurnSpec)
-			if !ok || requireLifecycleOwner(input.Principal, current) != nil {
-				return 0, errs.ErrStateConflict
-			}
-			if graph.Runtime != nil &&
-				(graph.Runtime.State != "SUSPENDED" ||
-					current.State != enum.StateWaitingOwner) {
-				return 0, errs.ErrStateConflict
-			}
 			if err := requireOwnerGraphRuntimeDisposition(
 				graph, runtimeDispositionAbsent, runtimeDispositionTerminal,
 			); err != nil {
 				return 0, err
 			}
-			if current.Version == input.ExpectedVersion && slices.Contains(
-				[]enum.State{enum.StateFailed, enum.StateBlocked,
-					enum.StateWaitingOwner, enum.StateCancelled}, current.State,
-			) {
+			current := graph.Turn
+			spec, ok := current.Spec.(entity.TurnSpec)
+			if !ok || requireLifecycleOwner(input.Principal, current) != nil {
+				return 0, errs.ErrStateConflict
+			}
+			if current.Version == input.ExpectedVersion {
+				decision, decisionErr := service.decideRunActionsLocked(ctx, tx, input.Principal, graph)
+				if decisionErr != nil {
+					return 0, decisionErr
+				}
+				if !decision.Retry {
+					return 0, errs.ErrStateConflict
+				}
 				return lifecycleReceiptApply, nil
 			}
 			if current.Version == input.ExpectedVersion+1 &&
@@ -1325,25 +1324,19 @@ func (service *Service) RetryTurn(
 			if err != nil {
 				return entity.Resource{}, err
 			}
-			if graph.Runtime != nil && graph.Runtime.State != "SUSPENDED" {
+			decision, err := service.decideRunActionsLocked(ctx, tx, input.Principal, graph)
+			if err != nil || !decision.Retry {
+				if err != nil {
+					return entity.Resource{}, err
+				}
 				return entity.Resource{}, errs.ErrStateConflict
-			}
-			if err := requireOwnerGraphRuntimeDisposition(
-				graph, runtimeDispositionAbsent, runtimeDispositionTerminal,
-			); err != nil {
-				return entity.Resource{}, err
 			}
 			current := graph.Turn
 			spec, ok := current.Spec.(entity.TurnSpec)
 			if err := requireLifecycleOwner(input.Principal, current); err != nil {
 				return entity.Resource{}, err
 			}
-			if !ok || current.Kind != enum.KindTurn ||
-				current.Version != input.ExpectedVersion ||
-				(current.State != enum.StateFailed &&
-					current.State != enum.StateBlocked &&
-					current.State != enum.StateWaitingOwner &&
-					current.State != enum.StateCancelled) ||
+			if !ok || current.Kind != enum.KindTurn || current.Version != input.ExpectedVersion ||
 				spec.Attempt == ^uint32(0) {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
@@ -1354,22 +1347,7 @@ func (service *Service) RetryTurn(
 			if err != nil || previousAttempt.InputSHA256 != spec.EffectiveInputSHA256 {
 				return entity.Resource{}, errs.ErrStateConflict
 			}
-			switch current.State {
-			case enum.StateFailed:
-				if previousAttempt.FinishedAt.IsZero() {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			case enum.StateCancelled:
-				if previousAttempt.State != string(enum.StateCancelled) || previousAttempt.FinishedAt.IsZero() {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			case enum.StateWaitingOwner:
-				if previousAttempt.State != "WAITING_OWNER" ||
-					previousAttempt.FinishedAt.IsZero() ||
-					previousAttempt.Outcome != "owner_gate_pending" {
-					return entity.Resource{}, errs.ErrStateConflict
-				}
-			default:
+			if current.State == enum.StateBlocked {
 				if !previousAttempt.FinishedAt.IsZero() {
 					return entity.Resource{}, errs.ErrStateConflict
 				}

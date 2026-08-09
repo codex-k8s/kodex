@@ -184,32 +184,32 @@ func gitIntent(authority VerifiedCommandAuthority, request proto.Message) (seman
 		intent.TargetKind, intent.TargetResource, intent.ExpectedVersion, intent.Name = "role_definition", value.GetRoleDefinitionId(), value.GetExpectedVersion(), value.GetName()
 		intent.TypedIntentType, intent.TargetStableKey, spec = "controlplane.v1.RoleDefinitionSpec", value.GetSpec().GetStableKey(), value.GetSpec()
 		if authority.FullMethod != controlplanev1.ControlPlaneService_ReconcileGitRoleDefinition_FullMethodName {
-			return intent, nil, errors.New("Git role definition intent is invalid")
+			return intent, nil, errors.New("git role definition intent is invalid")
 		}
 	case *controlplanev1.ReconcileGitAgentRequest:
 		intent.TargetKind, intent.TargetResource, intent.ExpectedVersion, intent.Name = "agent", value.GetAgentId(), value.GetExpectedVersion(), value.GetName()
 		intent.TypedIntentType, intent.TargetStableKey, spec = "controlplane.v1.AgentSpec", value.GetSpec().GetStableKey(), value.GetSpec()
 		intent.ReferenceKeys = []string{value.GetRoleDefinitionStableKey(), value.GetInstructionSetStableKey(), value.GetProviderPoolStableKey()}
 		if authority.FullMethod != controlplanev1.ControlPlaneService_ReconcileGitAgent_FullMethodName {
-			return intent, nil, errors.New("Git agent intent is invalid")
+			return intent, nil, errors.New("git agent intent is invalid")
 		}
 	case *controlplanev1.ReconcileGitInstructionSetRequest:
 		intent.TargetKind, intent.TargetResource, intent.ExpectedVersion, intent.Name = "instruction_set", value.GetInstructionSetId(), value.GetExpectedVersion(), value.GetName()
 		intent.TypedIntentType, intent.TargetStableKey, spec = "controlplane.v1.InstructionSetSpec", value.GetSpec().GetStableKey(), value.GetSpec()
 		if authority.FullMethod != controlplanev1.ControlPlaneService_ReconcileGitInstructionSet_FullMethodName {
-			return intent, nil, errors.New("Git instruction set intent is invalid")
+			return intent, nil, errors.New("git instruction set intent is invalid")
 		}
 	case *controlplanev1.ReconcileGitProviderPoolRequest:
 		intent.TargetKind, intent.TargetResource, intent.ExpectedVersion, intent.Name = "provider_pool", value.GetProviderPoolId(), value.GetExpectedVersion(), value.GetName()
 		intent.TypedIntentType, intent.TargetStableKey, spec = "controlplane.v1.ProviderPoolSpec", value.GetSpec().GetStableKey(), value.GetSpec()
 		if authority.FullMethod != controlplanev1.ControlPlaneService_ReconcileGitProviderPool_FullMethodName {
-			return intent, nil, errors.New("Git provider pool intent is invalid")
+			return intent, nil, errors.New("git provider pool intent is invalid")
 		}
 	default:
-		return intent, nil, errors.New("Git reconciliation request type is unsupported")
+		return intent, nil, errors.New("git reconciliation request type is unsupported")
 	}
 	if spec == nil || intent.TargetStableKey == "" {
-		return intent, nil, errors.New("Git reconciliation typed intent is absent")
+		return intent, nil, errors.New("git reconciliation typed intent is absent")
 	}
 	return intent, spec, nil
 }

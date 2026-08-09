@@ -28,9 +28,14 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 		value.ValidateStableKey(input.AgentStableKey) != nil ||
 		value.ValidateStableKey(input.InstructionSetStableKey) != nil ||
 		value.ValidateStableKey(input.ProviderPoolStableKey) != nil ||
-		(input.RoomStableKey != "" && value.ValidateStableKey(input.RoomStableKey) != nil) ||
-		value.ValidateName(input.PromptArtifactName) != nil {
+		(input.RoomStableKey != "" && value.ValidateStableKey(input.RoomStableKey) != nil) {
 		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if input.PromptKind == "" {
+		input.PromptKind = "SELECTOR"
+	}
+	if err := ensureOwnerScheduleMetadata(&input.Spec); err != nil {
+		return entity.Resource{}, err
 	}
 	// Owner выбирает только поведение Schedule. Весь authority-bearing tuple
 	// очищается до semantic hash и затем назначается сервером под locks.
@@ -44,15 +49,32 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 	input.Spec.PromptProfileID, input.Spec.PromptRevision, input.Spec.RuntimeRevisionID = "", 0, ""
 	input.Spec.ExecutionSessionID, input.Spec.EffectiveInputSHA = "", ""
 	input.Spec.Ownership, input.Spec.NextRunAt = entity.ConfigurationOwnership{}, time.Time{}
+	input.Spec.OwnerAgentSelector, input.Spec.OwnerInstructionSelector = "", ""
+	input.Spec.OwnerProviderPoolSelector, input.Spec.OwnerRoomSelector = "", ""
+	input.Spec.OwnerRoomVersion, input.Spec.OwnerRoomSHA256, input.Spec.OwnerPromptSelector = 0, "", ""
 	requestHash, err := canonicalHash(struct {
-		Identity                                             commandIdentity
-		Name, Agent, Instruction, Pool, Room, PromptArtifact string
-		Spec                                                 entity.ScheduleSpec
+		Identity                                         commandIdentity
+		Name, Agent, Instruction, Pool, Room, PromptKind string
+		PromptArtifact, PromptInlineSHA256               string
+		Spec                                             entity.ScheduleSpec
 	}{identity(input.Principal), input.Name, input.AgentStableKey, input.InstructionSetStableKey,
-		input.ProviderPoolStableKey, input.RoomStableKey, input.PromptArtifactName, input.Spec})
+		input.ProviderPoolStableKey, input.RoomStableKey, input.PromptKind, input.PromptArtifactName,
+		hashString(input.PromptInlineMarkdown), input.Spec})
 	if err != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+	preparedPrompt, err := service.prepareOwnerSchedulePrompt(ctx, ownerSchedulePromptPreparationInput{
+		Principal: input.Principal, IdempotencyKey: input.IdempotencyKey, RequestSHA256: requestHash,
+		Action: "create", AgentStableKey: input.AgentStableKey,
+		InstructionSetStableKey: input.InstructionSetStableKey,
+		ProviderPoolStableKey:   input.ProviderPoolStableKey, RoomStableKey: input.RoomStableKey,
+		SessionPolicy: input.Spec.SessionPolicy,
+	}, OwnerSchedulePromptInput{Kind: input.PromptKind, InlineMarkdown: input.PromptInlineMarkdown,
+		ArtifactName: input.PromptArtifactName})
+	if err != nil {
+		return entity.Resource{}, err
+	}
+	input.PromptObject = preparedPrompt.Object
 	return service.withResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 		"create_schedule_from_owner_selections", requestHash, func(tx domainrepo.Transaction) (entity.Resource, error) {
 			protected, ok := tx.(domainrepo.ProtectedTransaction)
@@ -76,7 +98,8 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 			if err != nil {
 				return entity.Resource{}, err
 			}
-			roomID := ""
+			roomID, roomSHA := "", ""
+			var roomVersion uint64
 			if input.RoomStableKey != "" {
 				room, roomErr := protected.GetByStableKeyForUpdate(ctx, input.Principal.OrganizationID,
 					input.Principal.ProjectID, enum.KindChat, input.RoomStableKey)
@@ -87,6 +110,11 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 					return entity.Resource{}, errs.ErrNotFound
 				}
 				roomID = room.ID
+				roomVersion = room.Version
+				roomSHA, roomErr = entity.ProjectionSHA256(room)
+				if roomErr != nil {
+					return entity.Resource{}, errs.ErrInternal
+				}
 			}
 			agent, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindAgent, input.AgentStableKey)
 			if err != nil {
@@ -133,16 +161,13 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 			if err != nil {
 				return entity.Resource{}, errs.ErrInternal
 			}
-			prompt, err := protected.GetByNameForUpdate(ctx, input.Principal.OrganizationID,
-				input.Principal.ProjectID, enum.KindArtifact, input.PromptArtifactName)
+			prompt, promptSpec, err := service.resolveOwnerSchedulePrompt(ctx, tx, protected,
+				input.Principal, OwnerSchedulePromptInput{Kind: input.PromptKind,
+					InlineMarkdown: input.PromptInlineMarkdown, ArtifactName: input.PromptArtifactName,
+					Object: input.PromptObject, PreparationKeyHash: preparedPrompt.PreparationKeyHash,
+					PreparationGeneration: preparedPrompt.PreparationGeneration}, now)
 			if err != nil {
 				return entity.Resource{}, err
-			}
-			promptSpec, ok := prompt.Spec.(entity.ArtifactSpec)
-			if !ok || prompt.Kind != enum.KindArtifact || prompt.State != enum.StateActive ||
-				prompt.OwnerActorID != input.Principal.ActorID || promptSpec.Direction != "INPUT" ||
-				promptSpec.MediaType != "text/markdown" || promptSpec.ScanStatus != "CLEAN" {
-				return entity.Resource{}, errs.ErrStateConflict
 			}
 			spec := input.Spec
 			spec.TargetResourceID, spec.TargetKind, spec.TargetVersion = agentID, enum.KindAgent, agentVersion
@@ -151,11 +176,25 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 			spec.InstructionSetID, spec.InstructionSetVersion, spec.InstructionSetSHA256 =
 				instructionID, instructionVersion, instructionSHA
 			spec.ProviderPoolID, spec.ProviderPoolVersion, spec.ProviderPoolSHA256 = poolID, poolVersion, poolSHA
+			spec.OwnerAgentSelector, spec.OwnerInstructionSelector = input.AgentStableKey, input.InstructionSetStableKey
+			spec.OwnerProviderPoolSelector = input.ProviderPoolStableKey
+			spec.OwnerRoomSelector, spec.OwnerRoomVersion, spec.OwnerRoomSHA256 =
+				input.RoomStableKey, roomVersion, roomSHA
+			if input.PromptKind == "SELECTOR" {
+				spec.OwnerPromptSelector = input.PromptArtifactName
+			}
 			spec.RuntimeSelectionRef, spec.RuntimeSelectionVersion, spec.RuntimeSelectionSHA256 =
 				agentSpec.RuntimeProfileRef, agentSpec.RuntimeProfileVersion, agentSpec.RuntimeProfileSHA256
 			spec.AgentAssignmentID, spec.AgentAssignmentVersion, spec.AgentAssignmentSHA256 =
 				assignment.ID, assignment.Version, assignmentSHA
 			spec.PromptProfileID, spec.PromptRevision, spec.RuntimeRevisionID = "", 0, ""
+			spec.PromptIntentKind, spec.PromptArtifactVersion, spec.PromptSHA256 =
+				input.PromptKind, prompt.Version, promptSpec.SHA256
+			if input.PromptKind == "INLINE" {
+				spec.PromptDisplay = "Встроенный prompt"
+			} else {
+				spec.PromptDisplay = prompt.Name
+			}
 			spec.Ownership = entity.ConfigurationOwnership{ManagedBy: "UI"}
 			if spec.SessionPolicy != "NEW" {
 				session, sessionErr := uniqueScheduleSession(ctx, tx, input.Principal, spec)
@@ -182,8 +221,22 @@ func (service *Service) CreateScheduleFromOwnerSelections(
 			if err := tx.Insert(ctx, created); err != nil {
 				return entity.Resource{}, err
 			}
-			return created, service.appendMutationRecords(ctx, tx, input.Principal,
-				"create_schedule_from_owner_selections", created)
+			if err := service.appendMutationRecords(ctx, tx, input.Principal,
+				"create_schedule_from_owner_selections", created); err != nil {
+				return entity.Resource{}, err
+			}
+			if preparedPrompt.PreparationKeyHash != "" {
+				preparations, ok := tx.(domainrepo.SchedulePromptPreparationTransaction)
+				if !ok {
+					return entity.Resource{}, errs.ErrInternal
+				}
+				if err := preparations.ConsumeSchedulePromptPreparation(ctx,
+					preparedPrompt.PreparationKeyHash, created.ID, preparedPrompt.PreparationGeneration,
+					promptSpec.SHA256, created.Version, now); err != nil {
+					return entity.Resource{}, err
+				}
+			}
+			return created, nil
 		})
 }
 
