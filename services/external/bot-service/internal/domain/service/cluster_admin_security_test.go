@@ -46,6 +46,7 @@ type admittedAdminStore struct {
 	subjectErr           error
 	upsertCalls          int
 	rejectExistingUpsert bool
+	runtimeGuardDepth    int
 }
 
 type admittedCoordinationStore struct {
@@ -135,6 +136,8 @@ func (store *admittedAdminStore) withExistingClusterAdminGuard(input securityrep
 	if !store.allowed || store.denyGuard || (store.denyGuardAt > 0 && store.guardCalls == store.denyGuardAt) || store.denyGuardOperation == input.Operation {
 		return adminrepo.ErrClusterAdminAdmissionDenied
 	}
+	store.runtimeGuardDepth++
+	defer func() { store.runtimeGuardDepth-- }()
 	return sideEffect()
 }
 
