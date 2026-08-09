@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -865,6 +866,16 @@ func TestRunActionsUseTheSameLockedCommandPredicate(t *testing.T) {
 	if err != nil || strings.Join(decision.actions(), ",") != "RETRY" {
 		t.Fatalf("runtime-absent failed command decision: %#v %v", decision, err)
 	}
+	turnSpec := graph.Turn.Spec.(entity.TurnSpec)
+	processSpec := graph.Process.Spec.(entity.ProcessRunSpec)
+	turnSpec.Attempt, processSpec.CurrentAttempt, tx.attempt.Attempt = 100, 100, 100
+	graph.Turn.Spec, graph.Process.Spec = turnSpec, processSpec
+	decision, err = service.decideRunActionsLocked(context.Background(), tx, principal, graph)
+	if err != nil || len(decision.actions()) != 0 {
+		t.Fatalf("attempt cap exposed retry: %#v %v", decision, err)
+	}
+	turnSpec.Attempt, processSpec.CurrentAttempt, tx.attempt.Attempt = 2, 2, 2
+	graph.Turn.Spec, graph.Process.Spec = turnSpec, processSpec
 	graph.Turn.State = enum.StateExpired
 	decision, err = service.decideRunActionsLocked(context.Background(), tx, principal, graph)
 	if err != nil || len(decision.actions()) != 0 {
@@ -1004,6 +1015,24 @@ func TestRunLineageContinuationIsTamperAndSnapshotBound(t *testing.T) {
 	}
 	if cursor.ProcessVersion == 8 {
 		t.Fatal("lineage continuation lost exact process version")
+	}
+}
+
+func TestRunLineageFirstPageDoesNotRequireRequestedProcessMembership(t *testing.T) {
+	requestedProcessID := "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	firstPage := make([]domainrepo.RunGraphNode, 100)
+	for index := range firstPage {
+		firstPage[index] = domainrepo.RunGraphNode{NodeType: "PROCESS",
+			ID:    fmt.Sprintf("00000000-0000-4000-8000-%012d", index),
+			State: string(enum.StateRunning), Version: 1, DisplayName: "Узел"}
+		if firstPage[index].ID == requestedProcessID {
+			t.Fatal("fixture unexpectedly contains requested Process")
+		}
+	}
+	lineage, err := runLineagePage(firstPage, true)
+	if err != nil || len(lineage.Processes) != 100 || lineage.Complete {
+		t.Fatalf("bounded first page was rejected before continuation: processes=%d complete=%t err=%v",
+			len(lineage.Processes), lineage.Complete, err)
 	}
 }
 

@@ -131,8 +131,9 @@ func (service *Service) decideRunActionsLocked(
 		}
 		decision.Cancel = candidate
 	}
-	if graph.Process.State.Terminal() || !slices.Contains([]enum.State{enum.StateFailed, enum.StateBlocked,
-		enum.StateWaitingOwner, enum.StateCancelled}, graph.Turn.State) {
+	if graph.Process.State.Terminal() || turnSpec.Attempt >= 100 ||
+		!slices.Contains([]enum.State{enum.StateFailed, enum.StateBlocked,
+			enum.StateWaitingOwner, enum.StateCancelled}, graph.Turn.State) {
 		return decision, nil
 	}
 	if graph.Runtime != nil && (graph.Runtime.State != "SUSPENDED" || graph.Turn.State != enum.StateWaitingOwner) {
@@ -530,23 +531,12 @@ func (service *Service) GetRunLineagePage(
 		if nodeErr != nil {
 			return nodeErr
 		}
-		foundRequested := false
-		lineage := RunLineageResult{Complete: !truncated}
-		for _, node := range nodes {
-			switch node.NodeType {
-			case "PROCESS":
-				lineage.Processes = append(lineage.Processes, node)
-				if node.ID == processRunID {
-					foundRequested = true
-				}
-			case "ATTEMPT":
-				lineage.Attempts = append(lineage.Attempts, node)
-			default:
-				return errs.ErrStateConflict
-			}
+		lineage, nodeErr := runLineagePage(nodes, truncated)
+		if nodeErr != nil {
+			return nodeErr
 		}
-		if pageToken == "" && !foundRequested {
-			return errs.ErrNotFound
+		if pageToken == "" && len(lineage.Processes) == 0 {
+			return errs.ErrStateConflict
 		}
 		projections, projectionErr := RunLineageOwnerProjections(lineage)
 		if projectionErr != nil {
@@ -612,6 +602,24 @@ func (service *Service) GetRunLineagePage(
 		return nodeErr
 	})
 	return result, err
+}
+
+// runLineagePage разделяет только уже bounded repository page. Допуск
+// запрошенного ProcessRun доказан lockOwnerGraphByProcess до запроса страницы
+// и не зависит от того, попал ли его UUID в текущую детерминированную страницу.
+func runLineagePage(nodes []domainrepo.RunGraphNode, truncated bool) (RunLineageResult, error) {
+	lineage := RunLineageResult{Complete: !truncated}
+	for _, node := range nodes {
+		switch node.NodeType {
+		case "PROCESS":
+			lineage.Processes = append(lineage.Processes, node)
+		case "ATTEMPT":
+			lineage.Attempts = append(lineage.Attempts, node)
+		default:
+			return RunLineageResult{}, errs.ErrStateConflict
+		}
+	}
+	return lineage, nil
 }
 
 func (service *Service) runRevisionOwnerDisplaysFromTx(
