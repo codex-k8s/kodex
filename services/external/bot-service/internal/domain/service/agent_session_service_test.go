@@ -1887,12 +1887,13 @@ func TestDelegatedAgentRequestMessageDoesNotStartRequesterAsCallback(t *testing.
 }
 
 type fakeAgentTurnDispatcher struct {
-	request      AgentTurnRequest
-	queued       AgentTurnQueued
-	calls        int
-	retryRequest AgentTurnRetryRequest
-	retryQueued  AgentTurnQueued
-	retryCalls   int
+	request       AgentTurnRequest
+	queued        AgentTurnQueued
+	calls         int
+	beforeEnqueue func()
+	retryRequest  AgentTurnRetryRequest
+	retryQueued   AgentTurnQueued
+	retryCalls    int
 }
 
 type fakeAutomationCallbackCompleter struct {
@@ -1921,6 +1922,9 @@ func (completer *fakeAutomationCallbackCompleter) CompleteCallback(_ context.Con
 }
 
 func (dispatcher *fakeAgentTurnDispatcher) EnqueueAgentTurn(_ context.Context, request AgentTurnRequest) (AgentTurnQueued, error) {
+	if dispatcher.beforeEnqueue != nil {
+		dispatcher.beforeEnqueue()
+	}
 	dispatcher.calls++
 	dispatcher.request = request
 	return dispatcher.queued, nil

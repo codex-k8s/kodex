@@ -611,25 +611,23 @@ func (svc *AgentSessionService) ContinueAgentThread(ctx context.Context, session
 		if current.ActiveTurnID != sourceTurnID {
 			return fmt.Errorf("source session active turn changed from %d to %d", sourceTurnID, current.ActiveTurnID)
 		}
-		return svc.withRequestedClusterAdminGuard(ctx, targetRole, targetChat, targetSession.SessionKey, requesterUserName, "agent_thread.continuation_enqueue.side_effect", func() error {
-			var enqueueErr error
-			queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
-				Project:       project,
-				Chat:          targetChat,
-				Role:          targetRole,
-				Repositories:  repositories,
-				UserID:        rootInitiatorUserID,
-				UserName:      requesterUserName,
-				UserMessage:   continuedAgentRequestMessage(requesterUserName, targetRole.Name, previous.ID, command.Message),
-				SourcePostID:  sourceAudit.PostID,
-				ReplyRootID:   targetSession.MattermostRootPostID,
-				SessionRootID: targetSession.MattermostRootPostID,
-				SessionScope:  agentSessionScopeThreadRole,
-				TTLSeconds:    defaultThreadSessionTTLSeconds,
-				ParentTurnID:  sourceTurnID,
-			})
-			return enqueueErr
+		var enqueueErr error
+		queued, enqueueErr = svc.cfg.TurnDispatcher.EnqueueAgentTurn(ctx, AgentTurnRequest{
+			Project:       project,
+			Chat:          targetChat,
+			Role:          targetRole,
+			Repositories:  repositories,
+			UserID:        rootInitiatorUserID,
+			UserName:      requesterUserName,
+			UserMessage:   continuedAgentRequestMessage(requesterUserName, targetRole.Name, previous.ID, command.Message),
+			SourcePostID:  sourceAudit.PostID,
+			ReplyRootID:   targetSession.MattermostRootPostID,
+			SessionRootID: targetSession.MattermostRootPostID,
+			SessionScope:  agentSessionScopeThreadRole,
+			TTLSeconds:    defaultThreadSessionTTLSeconds,
+			ParentTurnID:  sourceTurnID,
 		})
+		return enqueueErr
 	})
 	if err != nil {
 		_ = svc.setCurrentSessionDelegationFailed(ctx, sourceSession, delegation.ID)
