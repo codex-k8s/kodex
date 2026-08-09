@@ -16,4 +16,5 @@ type Object struct {
 type Client interface {
 	Check(context.Context) error
 	Put(context.Context, string, string, []byte, string, string) (Object, error)
+	Get(context.Context, Object) ([]byte, error)
 }

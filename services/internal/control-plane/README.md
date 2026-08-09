@@ -38,8 +38,10 @@ owner readbacks Issue
 - owner readback и закрытыми действиями Run/Incident, а также полным
   `WORKSPACE|ALL_WORKSPACES` backup/restore envelope;
 - server-derived Agent runtime catalog, versioned Schedule presets/defaults,
-  immutable inline prompt materialization, closed `nextActions`, safe
-  Run/Incident/Restore display projections и bounded typed configuration diff;
+  полные server-owned Role/InstructionSet/ProviderPool/bot selections,
+  immutable inline prompt materialization через durable single-winner
+  preparation, closed `nextActions`, safe Run/Incident/Restore display
+  projections, snapshot-bound list cursors и bounded typed configuration diff;
 - метаданными артефактов; immutable Instruction и Schedule prompt content записывается через
   узкий versioned S3 client, а остальные artifact bytes остаются вне сервиса.
   Readiness перед каждым canary Put получает PostgreSQL transaction-scoped
@@ -114,6 +116,21 @@ Owner readbacks Issue #263 зарегистрированы отдельными
 и `control.run.list`. Startup загружает их из той же exact authority policy, а
 наблюдаемость строит bounded method labels из generated descriptor. Новых
 workers, async consumers, broker subjects, egress либо deployable не добавлено.
+Owner list/get/history/manage строят composite projection внутри одной
+`SERIALIZABLE` transaction. HMAC list continuation закрепляет owner mutation
+fence; изменение любого owner resource/incident между страницами даёт typed
+version conflict и требует начать список заново. Run incident query применяет
+exact execution tuple до cursor/limit, а lineage обходит Process/Turn/Attempt
+через `SECURITY INVOKER` bounded PostgreSQL function: hard cap 1000 действует
+до Go allocation, overflow закрывается conflict и никогда не выдаётся как
+полный граф.
+
+Inline Schedule prompt сначала проходит owner/target/binding/OCC preflight,
+затем резервирует durable `WRITING` winner. S3 RPC ограничен 15 секундами при
+30-секундной lease, идёт вне PostgreSQL transaction и использует
+content-addressed key с stat-before-put. `READY|CONSUMED` replay возвращает тот
+же VersionID; expired/ambiguous recovery повторно валидирует semantic tuple,
+а stale/foreign dependency не оставляет нового разрешённого storage effect.
 
 Это receive-side contract, а не заявление готовности внешних producers.
 После merge #234 Issue #235 обязана rebase, добавить Mattermost Team/bot

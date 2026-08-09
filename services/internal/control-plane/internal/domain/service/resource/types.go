@@ -207,12 +207,15 @@ type ManageRunResult struct {
 }
 
 type RunDetailResult struct {
-	ProcessRun      entity.Resource
-	Session         entity.Resource
-	Turn            entity.Resource
-	RuntimeRevision entity.Resource
-	Runtime         *domainrepo.RuntimeExecution
-	Incidents       []domainrepo.RuntimeIncident
+	ProcessRun             entity.Resource
+	Session                entity.Resource
+	Turn                   entity.Resource
+	RuntimeRevision        entity.Resource
+	Runtime                *domainrepo.RuntimeExecution
+	Incidents              []domainrepo.RuntimeIncident
+	IncidentProjections    []RuntimeIncidentOwnerProjection
+	IncidentsNextPageToken string
+	Projection             RunOwnerProjection
 }
 
 type RunLineageResult struct {

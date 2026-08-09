@@ -954,6 +954,8 @@ func (service *Service) resolveProtectedSpec(
 		if spec.ProviderPoolID, spec.ProviderPoolVersion, spec.ProviderPoolSHA256, err = protectedTuple(pool); err != nil {
 			return nil, err
 		}
+		spec.OwnerRoleSelector, spec.OwnerInstructionSelector, spec.OwnerProviderPoolSelector =
+			input.ReferenceKeys[0], input.ReferenceKeys[1], input.ReferenceKeys[2]
 		if roleSpec.RoleImageRecipeID == "" {
 			return nil, errs.ErrStateConflict
 		}

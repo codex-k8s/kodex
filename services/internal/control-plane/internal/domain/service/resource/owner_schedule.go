@@ -3,10 +3,12 @@ package resource
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	domainobjectstore "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/client/objectstore"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -18,6 +20,8 @@ import (
 const (
 	ownerSchedulePresetRevision   = uint64(1)
 	ownerScheduleDefaultsRevision = uint64(1)
+	ownerSchedulePromptLease      = 30 * time.Second
+	ownerSchedulePromptRPCTimeout = 15 * time.Second
 )
 
 func ownerScheduleDefaults() (OwnerScheduleDefaults, error) {
@@ -205,7 +209,7 @@ func applyOwnerScheduleOverrides(spec *entity.ScheduleSpec, overrides OwnerSched
 
 func (service *Service) prepareOwnerSchedulePrompt(
 	ctx context.Context,
-	principal value.Principal,
+	input ownerSchedulePromptPreparationInput,
 	prompt OwnerSchedulePromptInput,
 ) (OwnerSchedulePromptInput, error) {
 	switch prompt.Kind {
@@ -215,17 +219,98 @@ func (service *Service) prepareOwnerSchedulePrompt(
 			return OwnerSchedulePromptInput{}, errs.ErrInvalidInput
 		}
 		digest := hashString(prompt.InlineMarkdown)
-		if prompt.Object.Reference != "" && prompt.Object.VersionID != "" && prompt.Object.SHA256 == digest &&
-			prompt.Object.Size == uint64(len([]byte(prompt.InlineMarkdown))) && prompt.Object.MediaType == "text/markdown" {
+		if input.RequestSHA256 == "" || input.Action == "" {
+			return OwnerSchedulePromptInput{}, errs.ErrInvalidInput
+		}
+		var preparation domainrepo.SchedulePromptPreparation
+		var claimed bool
+		err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: input.Principal.OrganizationID,
+			ProjectID: input.Principal.ProjectID, ActorID: input.Principal.ActorID}, func(tx domainrepo.Transaction) error {
+			preparations, ok := tx.(domainrepo.SchedulePromptPreparationTransaction)
+			if !ok {
+				return errs.ErrInternal
+			}
+			keyHash := hashString(input.IdempotencyKey)
+			now, timeErr := tx.CurrentTime(ctx)
+			if timeErr != nil {
+				return timeErr
+			}
+			now = now.UTC().Truncate(time.Microsecond)
+			existing, existingErr := preparations.GetSchedulePromptPreparation(ctx, keyHash)
+			if existingErr == nil {
+				if existing.RequestSHA256 != input.RequestSHA256 || existing.Action != input.Action ||
+					existing.TargetID != input.ScheduleID || existing.ExpectedVersion != input.ExpectedVersion ||
+					existing.ObjectKey != "schedule-prompts/"+digest+".md" {
+					return errs.ErrStateConflict
+				}
+				if existing.State == "READY" || existing.State == "CONSUMED" {
+					preparation = existing
+					claimed = false
+					return nil
+				}
+				semanticSHA256, preflightErr := service.validateOwnerSchedulePromptPreparation(ctx, tx, input)
+				if preflightErr != nil {
+					return preflightErr
+				}
+				if semanticSHA256 != existing.SemanticSHA256 {
+					return errs.ErrStateConflict
+				}
+				preparation, claimed, existingErr = preparations.ReserveSchedulePromptPreparation(ctx,
+					domainrepo.SchedulePromptPreparation{
+						OrganizationID: existing.OrganizationID, ProjectID: existing.ProjectID,
+						OwnerActorID: existing.OwnerActorID, KeyHash: existing.KeyHash,
+						RequestSHA256: existing.RequestSHA256, SemanticSHA256: existing.SemanticSHA256,
+						Action: existing.Action, TargetID: existing.TargetID, ExpectedVersion: existing.ExpectedVersion,
+						ObjectKey: existing.ObjectKey, State: "WRITING", Generation: existing.Generation,
+						LeaseExpiresAt: now.Add(ownerSchedulePromptLease), CreatedAt: now, UpdatedAt: now,
+					})
+				return existingErr
+			}
+			if !errors.Is(existingErr, errs.ErrNotFound) {
+				return existingErr
+			}
+			semanticSHA256, preflightErr := service.validateOwnerSchedulePromptPreparation(ctx, tx, input)
+			if preflightErr != nil {
+				return preflightErr
+			}
+			preparation, claimed, preflightErr = preparations.ReserveSchedulePromptPreparation(ctx,
+				domainrepo.SchedulePromptPreparation{
+					OrganizationID: input.Principal.OrganizationID, ProjectID: input.Principal.ProjectID,
+					OwnerActorID: input.Principal.ActorID, KeyHash: keyHash,
+					RequestSHA256: input.RequestSHA256, SemanticSHA256: semanticSHA256,
+					Action: input.Action, TargetID: input.ScheduleID, ExpectedVersion: input.ExpectedVersion,
+					ObjectKey: "schedule-prompts/" + digest + ".md", State: "WRITING", Generation: 1,
+					LeaseExpiresAt: now.Add(ownerSchedulePromptLease), CreatedAt: now, UpdatedAt: now,
+				})
+			return preflightErr
+		})
+		if err != nil {
+			return OwnerSchedulePromptInput{}, err
+		}
+		if !claimed {
+			if preparation.State != "READY" && preparation.State != "CONSUMED" {
+				return OwnerSchedulePromptInput{}, errs.ErrUnavailable
+			}
+			prompt.Object = domainobjectstore.Object{Reference: preparation.ObjectReference,
+				VersionID: preparation.ObjectVersionID, SHA256: preparation.ObjectSHA256,
+				Size: preparation.ObjectSize, MediaType: preparation.ObjectMediaType}
+			prompt.PreparationKeyHash, prompt.PreparationGeneration = preparation.KeyHash, preparation.Generation
 			return prompt, nil
 		}
-		object, err := service.instructionObjects.Put(ctx, principal.ProjectID,
-			"schedule-prompts/"+digest+".md", []byte(prompt.InlineMarkdown), "text/markdown", digest)
+		objectContext, cancelObject := context.WithTimeout(ctx, ownerSchedulePromptRPCTimeout)
+		object, err := service.instructionObjects.Put(objectContext, input.Principal.ProjectID,
+			preparation.ObjectKey, []byte(prompt.InlineMarkdown), "text/markdown", digest)
+		cancelObject()
 		if err != nil || object.Reference == "" || object.VersionID == "" || object.SHA256 != digest ||
 			object.Size != uint64(len([]byte(prompt.InlineMarkdown))) || object.MediaType != "text/markdown" {
+			_ = service.finishOwnerSchedulePromptPreparation(ctx, input.Principal, preparation, object, true)
 			return OwnerSchedulePromptInput{}, errs.ErrUnavailable
 		}
+		if err := service.finishOwnerSchedulePromptPreparation(ctx, input.Principal, preparation, object, false); err != nil {
+			return OwnerSchedulePromptInput{}, err
+		}
 		prompt.Object = object
+		prompt.PreparationKeyHash, prompt.PreparationGeneration = preparation.KeyHash, preparation.Generation
 		return prompt, nil
 	case "SELECTOR":
 		if value.ValidateName(prompt.ArtifactName) != nil {
@@ -235,6 +320,136 @@ func (service *Service) prepareOwnerSchedulePrompt(
 	default:
 		return OwnerSchedulePromptInput{}, errs.ErrInvalidInput
 	}
+}
+
+type ownerSchedulePromptPreparationInput struct {
+	Principal                                                      value.Principal
+	IdempotencyKey, RequestSHA256, Action, ScheduleID              string
+	AgentStableKey, InstructionSetStableKey, ProviderPoolStableKey string
+	RoomStableKey, SessionPolicy                                   string
+	ExpectedVersion                                                uint64
+}
+
+func (service *Service) validateOwnerSchedulePromptPreparation(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	input ownerSchedulePromptPreparationInput,
+) (string, error) {
+	protected, ok := tx.(domainrepo.ProtectedTransaction)
+	if !ok {
+		return "", errs.ErrInternal
+	}
+	if input.Action == "update" {
+		schedule, err := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, input.ScheduleID)
+		if err != nil {
+			return "", err
+		}
+		spec, specOK := schedule.Spec.(entity.ScheduleSpec)
+		if !specOK || schedule.Kind != enum.KindSchedule || schedule.OwnerActorID != input.Principal.ActorID {
+			return "", errs.ErrNotFound
+		}
+		if schedule.Version != input.ExpectedVersion {
+			return "", errs.ErrVersionMismatch
+		}
+		if (schedule.State != enum.StateActive && schedule.State != enum.StatePaused) ||
+			spec.SessionPolicy != input.SessionPolicy {
+			return "", errs.ErrStateConflict
+		}
+		open, err := tx.HasOpenScheduleOccurrence(ctx, schedule.OrganizationID, schedule.ProjectID, schedule.ID)
+		if err != nil || open {
+			if err != nil {
+				return "", err
+			}
+			return "", errs.ErrStateConflict
+		}
+	}
+	workspace, workspaceSHA, err := lockActiveWorkspace(ctx, tx, input.Principal)
+	if err != nil {
+		return "", err
+	}
+	roomID := ""
+	if input.RoomStableKey != "" {
+		room, roomErr := protected.GetByStableKeyForUpdate(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, enum.KindChat, input.RoomStableKey)
+		if roomErr != nil {
+			return "", roomErr
+		}
+		if room.State != enum.StateActive || room.OwnerActorID != input.Principal.ActorID {
+			return "", errs.ErrNotFound
+		}
+		roomID = room.ID
+	}
+	agent, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindAgent, input.AgentStableKey)
+	if err != nil {
+		return "", err
+	}
+	instruction, err := requireProtectedStable(ctx, protected, input.Principal,
+		enum.KindInstructionSet, input.InstructionSetStableKey)
+	if err != nil {
+		return "", err
+	}
+	pool, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindProviderPool, input.ProviderPoolStableKey)
+	if err != nil {
+		return "", err
+	}
+	agentSpec, agentOK := agent.Spec.(entity.AgentSpec)
+	instructionSpec, instructionOK := instruction.Spec.(entity.InstructionSetSpec)
+	agentSHA, agentSHAErr := entity.ProjectionSHA256(agent)
+	if !agentOK || !instructionOK || agentSHAErr != nil || !agentSpec.Enabled ||
+		agent.State != enum.StateActive || instructionSpec.VersionState != "PUBLISHED" ||
+		agentSpec.InstructionSetID != instruction.ID || agentSpec.InstructionSetVersion != instruction.Version ||
+		agentSpec.ProviderPoolID != pool.ID || agentSpec.ProviderPoolVersion != pool.Version {
+		return "", errs.ErrStateConflict
+	}
+	if _, _, err := lockAgentRuntimeProfile(ctx, tx, input.Principal, agentSpec); err != nil {
+		return "", err
+	}
+	assignment, err := lockActiveAgentAssignment(ctx, tx, input.Principal, agent.ID, agent.Version,
+		agentSHA, workspace.Version, workspaceSHA, roomID)
+	if err != nil {
+		return "", err
+	}
+	tuples := make([]string, 0, 5)
+	for _, item := range []entity.Resource{workspace, agent, instruction, pool, assignment} {
+		digest, digestErr := entity.ProjectionSHA256(item)
+		if digestErr != nil {
+			return "", errs.ErrInternal
+		}
+		tuples = append(tuples, fmt.Sprintf("%s:%d:%s", item.ID, item.Version, digest))
+	}
+	return canonicalHash(struct {
+		RequestSHA256 string
+		Tuples        []string
+	}{input.RequestSHA256, tuples})
+}
+
+func (service *Service) finishOwnerSchedulePromptPreparation(
+	ctx context.Context,
+	principal value.Principal,
+	preparation domainrepo.SchedulePromptPreparation,
+	object domainobjectstore.Object,
+	ambiguous bool,
+) error {
+	return service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		preparations, ok := tx.(domainrepo.SchedulePromptPreparationTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		now, err := tx.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		preparation.UpdatedAt = now.UTC().Truncate(time.Microsecond)
+		if ambiguous {
+			return preparations.MarkSchedulePromptPreparationAmbiguous(ctx, preparation)
+		}
+		preparation.ObjectReference, preparation.ObjectVersionID = object.Reference, object.VersionID
+		preparation.ObjectSHA256, preparation.ObjectSize = object.SHA256, object.Size
+		preparation.ObjectMediaType = object.MediaType
+		return preparations.CompleteSchedulePromptPreparation(ctx, preparation)
+	})
 }
 
 func schedulePromptArtifactID(projectID, digest string) string {
@@ -262,7 +477,8 @@ func (service *Service) resolveOwnerSchedulePrompt(
 		}
 		return artifact, spec, nil
 	}
-	if prompt.Kind != "INLINE" || prompt.Object.Reference == "" {
+	if prompt.Kind != "INLINE" || prompt.Object.Reference == "" ||
+		prompt.PreparationKeyHash == "" || prompt.PreparationGeneration == 0 {
 		return entity.Resource{}, entity.ArtifactSpec{}, errs.ErrInvalidInput
 	}
 	id := schedulePromptArtifactID(principal.ProjectID, prompt.Object.SHA256)

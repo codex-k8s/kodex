@@ -3933,11 +3933,17 @@ func (service *Service) CancelProcess(
 			if requireLifecycleOwner(input.Principal, process) != nil {
 				return 0, errs.ErrNotFound
 			}
-			if process.Version == input.ExpectedVersion && !process.State.Terminal() {
+			if process.Version == input.ExpectedVersion {
+				decision, decisionErr := service.decideRunActionsLocked(ctx, tx, input.Principal, graph)
+				if decisionErr != nil {
+					return 0, decisionErr
+				}
+				if !decision.Cancel {
+					return 0, errs.ErrStateConflict
+				}
 				return lifecycleReceiptApply, nil
 			}
-			if process.Version == input.ExpectedVersion+1 &&
-				process.State == enum.StateCancelled {
+			if process.Version == input.ExpectedVersion+1 && process.State == enum.StateCancelled {
 				receiptProcess = process
 				return lifecycleReceiptReplay, nil
 			}
@@ -3955,28 +3961,6 @@ func (service *Service) CancelProcess(
 			}
 			if err := requireLifecycleOwner(input.Principal, process); err != nil {
 				return entity.Resource{}, err
-			}
-			activeChildren, err := tx.HasActiveChildProcesses(
-				ctx,
-				input.Principal.OrganizationID,
-				input.Principal.ProjectID,
-				process.ID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			if activeChildren {
-				return entity.Resource{}, errs.ErrStateConflict
-			}
-			turns, err := tx.ActiveProcessTurnCandidates(
-				ctx, process.OrganizationID, process.ProjectID, process.ID,
-			)
-			if err != nil {
-				return entity.Resource{}, err
-			}
-			if len(turns) != 1 || turns[0].ID != lockedProcessGraph.Turn.ID ||
-				turns[0].Version != lockedProcessGraph.Turn.Version {
-				return entity.Resource{}, errs.ErrStateConflict
 			}
 			now := service.now().UTC().Truncate(time.Microsecond)
 			if _, err := service.cancelTurnExecution(

@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	domainobjectstore "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/client/objectstore"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
@@ -24,6 +27,29 @@ func ownerOpaqueRef(kind, id string) string {
 
 func (service *Service) AgentOwnerProjection(
 	ctx context.Context,
+	principal value.Principal,
+	agent entity.Resource,
+) (AgentOwnerProjection, error) {
+	var result AgentOwnerProjection
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		current, getErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, agent.ID)
+		if getErr != nil {
+			return getErr
+		}
+		if current.Version != agent.Version {
+			return errs.ErrVersionMismatch
+		}
+		var projectionErr error
+		result, projectionErr = service.agentOwnerProjectionFromTx(ctx, tx, principal, current)
+		return projectionErr
+	})
+	return result, err
+}
+
+func (service *Service) agentOwnerProjectionFromTx(
+	ctx context.Context,
+	tx domainrepo.Transaction,
 	principal value.Principal,
 	agent entity.Resource,
 ) (AgentOwnerProjection, error) {
@@ -59,13 +85,60 @@ func (service *Service) AgentOwnerProjection(
 	default:
 		return AgentOwnerProjection{}, errs.ErrStateConflict
 	}
+	result.InstructionSelection = OwnerSafeSelection{StableSelector: spec.OwnerInstructionSelector,
+		Version: spec.InstructionSetVersion,
+		SHA256:  spec.InstructionSetSHA256, Status: OwnerProjectionStale}
+	instruction, instructionErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, spec.InstructionSetID)
+	if instructionErr == nil {
+		instructionSpec, instructionOK := instruction.Spec.(entity.InstructionSetSpec)
+		instructionSHA, digestErr := entity.ProjectionSHA256(instruction)
+		if !instructionOK || digestErr != nil || instruction.OwnerActorID != principal.ActorID {
+			return AgentOwnerProjection{}, errs.ErrStateConflict
+		}
+		if result.InstructionSelection.StableSelector == "" {
+			result.InstructionSelection.StableSelector = instructionSpec.StableKey
+		}
+		result.InstructionSelection.DisplayName = instruction.Name
+		result.InstructionSelection.MaskedStatus = instructionSpec.VersionState
+		if instruction.State != enum.StateActive || instructionSpec.VersionState != "PUBLISHED" ||
+			result.InstructionSelection.StableSelector != instructionSpec.StableKey {
+			result.InstructionSelection.Status = OwnerProjectionIneligible
+		} else if instruction.Version == spec.InstructionSetVersion &&
+			instructionSHA == spec.InstructionSetSHA256 {
+			result.InstructionSelection.Status = OwnerProjectionPresent
+		}
+	} else if !errors.Is(instructionErr, errs.ErrNotFound) {
+		return AgentOwnerProjection{}, instructionErr
+	}
+	result.ProviderPoolSelection = OwnerSafeSelection{StableSelector: spec.OwnerProviderPoolSelector,
+		Version: spec.ProviderPoolVersion,
+		SHA256:  spec.ProviderPoolSHA256, Status: OwnerProjectionStale}
+	pool, poolErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, spec.ProviderPoolID)
+	if poolErr == nil {
+		poolSpec, poolOK := pool.Spec.(entity.ProviderPoolSpec)
+		poolSHA, digestErr := entity.ProjectionSHA256(pool)
+		if !poolOK || digestErr != nil || pool.OwnerActorID != principal.ActorID {
+			return AgentOwnerProjection{}, errs.ErrStateConflict
+		}
+		if result.ProviderPoolSelection.StableSelector == "" {
+			result.ProviderPoolSelection.StableSelector = poolSpec.StableKey
+		}
+		result.ProviderPoolSelection.DisplayName = pool.Name
+		result.ProviderPoolSelection.MaskedStatus = ownerProviderPoolStatus(poolSpec)
+		if pool.State != enum.StateActive || result.ProviderPoolSelection.StableSelector != poolSpec.StableKey {
+			result.ProviderPoolSelection.Status = OwnerProjectionIneligible
+		} else if pool.Version == spec.ProviderPoolVersion && poolSHA == spec.ProviderPoolSHA256 {
+			result.ProviderPoolSelection.Status = OwnerProjectionPresent
+		}
+	} else if !errors.Is(poolErr, errs.ErrNotFound) {
+		return AgentOwnerProjection{}, poolErr
+	}
 	result.RuntimeSelection = AgentRuntimeSelectionProjection{
 		RuntimeProfileVersion: spec.RuntimeProfileVersion, RuntimeProfileSHA256: spec.RuntimeProfileSHA256,
 		RoleDefinitionVersion: spec.RoleDefinitionVersion, RoleDefinitionSHA256: spec.RoleDefinitionSHA256,
-		Status: OwnerProjectionStale,
+		SelectionKey: spec.OwnerRoleSelector, Status: OwnerProjectionStale,
 	}
-	role, err := service.repository.Get(ctx, principal.OrganizationID, principal.ProjectID,
-		spec.RoleDefinitionID, enum.KindRoleDefinition)
+	role, err := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, spec.RoleDefinitionID)
 	if errors.Is(err, errs.ErrNotFound) {
 		return result, nil
 	}
@@ -80,16 +153,18 @@ func (service *Service) AgentOwnerProjection(
 	if role.OwnerActorID != principal.ActorID {
 		return AgentOwnerProjection{}, errs.ErrNotFound
 	}
-	result.RuntimeSelection.SelectionKey, result.RuntimeSelection.DisplayName = roleSpec.StableKey, role.Name
-	if role.State != enum.StateActive {
+	if result.RuntimeSelection.SelectionKey == "" {
+		result.RuntimeSelection.SelectionKey = roleSpec.StableKey
+	}
+	result.RuntimeSelection.DisplayName = role.Name
+	if role.State != enum.StateActive || result.RuntimeSelection.SelectionKey != roleSpec.StableKey {
 		result.RuntimeSelection.Status = OwnerProjectionIneligible
 		return result, nil
 	}
 	if roleSpec.RoleImageRecipeID == "" {
 		return result, nil
 	}
-	recipe, err := service.repository.Get(ctx, principal.OrganizationID, principal.ProjectID,
-		roleSpec.RoleImageRecipeID, enum.KindRoleImageRecipe)
+	recipe, err := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, roleSpec.RoleImageRecipeID)
 	if errors.Is(err, errs.ErrNotFound) {
 		return result, nil
 	}
@@ -120,56 +195,229 @@ func (service *Service) AgentOwnerProjection(
 	return result, nil
 }
 
+func ownerProviderPoolStatus(spec entity.ProviderPoolSpec) string {
+	status := "AVAILABLE"
+	for _, binding := range spec.Bindings {
+		if !binding.Eligible || (binding.MaskedStatus != "AVAILABLE" && binding.MaskedStatus != "DEGRADED") {
+			return "INELIGIBLE"
+		}
+		if binding.MaskedStatus == "DEGRADED" {
+			status = "DEGRADED"
+		}
+	}
+	return status
+}
+
+func (service *Service) GetAgentOwner(
+	ctx context.Context,
+	principal value.Principal,
+	agentID string,
+) (AgentOwnerProjection, error) {
+	if err := authorize(principal, permissionRead); err != nil || value.ValidateID(agentID) != nil {
+		if err != nil {
+			return AgentOwnerProjection{}, err
+		}
+		return AgentOwnerProjection{}, errs.ErrInvalidInput
+	}
+	var result AgentOwnerProjection
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		agent, getErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, agentID)
+		if getErr != nil {
+			return getErr
+		}
+		if agent.Kind != enum.KindAgent {
+			return errs.ErrNotFound
+		}
+		result, getErr = service.agentOwnerProjectionFromTx(ctx, tx, principal, agent)
+		return getErr
+	})
+	return result, err
+}
+
+func (service *Service) ListAgentOwners(
+	ctx context.Context,
+	principal value.Principal,
+	states []enum.State,
+	afterID string,
+	limit int,
+) ([]AgentOwnerProjection, string, error) {
+	if err := authorize(principal, permissionList); err != nil {
+		return nil, "", err
+	}
+	cursor, err := service.decodeOwnerListCursor(afterID, "AGENT_LIST")
+	if err != nil {
+		return nil, "", err
+	}
+	filter := query.ResourceFilter{OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, Kind: enum.KindAgent, States: states, AfterID: cursor.AfterID, Limit: limit}
+	if filter.Validate() != nil {
+		return nil, "", errs.ErrInvalidInput
+	}
+	var result []AgentOwnerProjection
+	next := ""
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		snapshotSHA256, snapshotErr := ownerListSnapshot(ctx, tx, cursor.SnapshotSHA256)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
+		items, listErr := ownerRead.ListOwnerResources(ctx, filter)
+		if listErr != nil {
+			return listErr
+		}
+		result = make([]AgentOwnerProjection, 0, len(items))
+		for _, item := range items {
+			projection, projectionErr := service.agentOwnerProjectionFromTx(ctx, tx, principal, item)
+			if projectionErr != nil {
+				return projectionErr
+			}
+			result = append(result, projection)
+		}
+		if len(items) == limit {
+			next, listErr = service.encodeRunSnapshotCursor(runSnapshotCursor{Kind: "AGENT_LIST",
+				AfterID: items[len(items)-1].ID, SnapshotSHA256: snapshotSHA256})
+		}
+		return listErr
+	})
+	return result, next, err
+}
+
+func (service *Service) ListAgentOwnerHistory(
+	ctx context.Context,
+	principal value.Principal,
+	agentID string,
+	beforeVersion uint64,
+	limit int,
+) ([]AgentOwnerHistoryProjection, string, error) {
+	if err := authorize(principal, permissionRead); err != nil ||
+		value.ValidateID(agentID) != nil || limit < 1 || limit > 100 {
+		if err != nil {
+			return nil, "", err
+		}
+		return nil, "", errs.ErrInvalidInput
+	}
+	var result []AgentOwnerHistoryProjection
+	next := ""
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		current, getErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, agentID)
+		if getErr != nil || current.Kind != enum.KindAgent || current.OwnerActorID != principal.ActorID {
+			if getErr != nil {
+				return getErr
+			}
+			return errs.ErrNotFound
+		}
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		items, listErr := ownerRead.ListProtectedResourceHistorySnapshot(ctx, agentID, beforeVersion, limit)
+		if listErr != nil {
+			return listErr
+		}
+		result = make([]AgentOwnerHistoryProjection, 0, len(items))
+		for _, item := range items {
+			projection, projectionErr := service.agentOwnerProjectionFromTx(ctx, tx, principal, item.Resource)
+			if projectionErr != nil {
+				return projectionErr
+			}
+			result = append(result, AgentOwnerHistoryProjection{Projection: projection,
+				Action: item.Action, SnapshotSHA256: item.SnapshotSHA256, OccurredAt: item.OccurredAt})
+		}
+		if len(items) == limit {
+			next = fmt.Sprint(items[len(items)-1].Resource.Version)
+		}
+		return nil
+	})
+	return result, next, err
+}
+
 func (service *Service) GetOwnerConfigurationCatalog(
 	ctx context.Context,
 	principal value.Principal,
 	afterID string,
 	limit int,
 ) (OwnerConfigurationCatalog, error) {
-	roles, err := service.ListProtectedConfigurations(ctx, principal, enum.KindRoleDefinition,
-		[]enum.State{enum.StateActive}, afterID, limit)
+	if err := authorize(principal, permissionList); err != nil {
+		return OwnerConfigurationCatalog{}, err
+	}
+	cursor, err := service.decodeOwnerListCursor(afterID, "CATALOG_LIST")
 	if err != nil {
 		return OwnerConfigurationCatalog{}, err
 	}
+	filter := query.ResourceFilter{OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, Kind: enum.KindRoleDefinition, States: []enum.State{enum.StateActive},
+		AfterID: cursor.AfterID, Limit: limit}
+	if filter.Validate() != nil {
+		return OwnerConfigurationCatalog{}, errs.ErrInvalidInput
+	}
 	result := OwnerConfigurationCatalog{}
-	for _, role := range roles {
-		spec, ok := role.Spec.(entity.RoleDefinitionSpec)
-		if !ok || role.OwnerActorID != principal.ActorID || spec.RoleImageRecipeID == "" {
-			continue
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
 		}
-		digest, digestErr := entity.ProjectionSHA256(role)
-		if digestErr != nil {
-			return OwnerConfigurationCatalog{}, errs.ErrInternal
+		snapshotSHA256, snapshotErr := ownerListSnapshot(ctx, tx, cursor.SnapshotSHA256)
+		if snapshotErr != nil {
+			return snapshotErr
 		}
-		status := OwnerProjectionStale
-		recipe, recipeErr := service.repository.Get(ctx, principal.OrganizationID, principal.ProjectID,
-			spec.RoleImageRecipeID, enum.KindRoleImageRecipe)
-		if recipeErr != nil && !errors.Is(recipeErr, errs.ErrNotFound) {
-			return OwnerConfigurationCatalog{}, recipeErr
+		roles, listErr := ownerRead.ListOwnerResources(ctx, filter)
+		if listErr != nil {
+			return listErr
 		}
-		if recipeErr == nil {
-			if recipe.OwnerActorID != principal.ActorID {
-				return OwnerConfigurationCatalog{}, errs.ErrNotFound
+		for _, role := range roles {
+			spec, ok := role.Spec.(entity.RoleDefinitionSpec)
+			if !ok || role.OwnerActorID != principal.ActorID || spec.RoleImageRecipeID == "" {
+				return errs.ErrStateConflict
 			}
-			if _, ok := recipe.Spec.(entity.RoleImageRecipeSpec); !ok {
-				return OwnerConfigurationCatalog{}, errs.ErrStateConflict
+			digest, digestErr := entity.ProjectionSHA256(role)
+			if digestErr != nil {
+				return errs.ErrInternal
 			}
-			recipeSHA, recipeSHAErr := entity.ProjectionSHA256(recipe)
-			if recipeSHAErr != nil {
-				return OwnerConfigurationCatalog{}, errs.ErrStateConflict
+			status := OwnerProjectionStale
+			recipe, recipeErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID,
+				spec.RoleImageRecipeID)
+			if recipeErr != nil && !errors.Is(recipeErr, errs.ErrNotFound) {
+				return recipeErr
 			}
-			if recipe.State != enum.StateActive {
-				status = OwnerProjectionIneligible
-			} else if recipe.Version == spec.RoleImageRecipeVersion && recipeSHA == spec.RoleImageRecipeSHA256 {
-				status = OwnerProjectionPresent
+			if recipeErr == nil {
+				if recipe.Kind != enum.KindRoleImageRecipe || recipe.OwnerActorID != principal.ActorID {
+					return errs.ErrNotFound
+				}
+				if _, ok := recipe.Spec.(entity.RoleImageRecipeSpec); !ok {
+					return errs.ErrStateConflict
+				}
+				recipeSHA, recipeSHAErr := entity.ProjectionSHA256(recipe)
+				if recipeSHAErr != nil {
+					return errs.ErrStateConflict
+				}
+				if recipe.State != enum.StateActive {
+					status = OwnerProjectionIneligible
+				} else if recipe.Version == spec.RoleImageRecipeVersion && recipeSHA == spec.RoleImageRecipeSHA256 {
+					status = OwnerProjectionPresent
+				}
 			}
+			result.RuntimeSelections = append(result.RuntimeSelections, OwnerRuntimeSelectionCatalogEntry{
+				SelectionKey: spec.StableKey, DisplayName: role.Name, Description: spec.Description,
+				RoleDefinitionVersion: role.Version, RoleDefinitionSHA256: digest,
+				RuntimeProfileVersion: spec.RoleImageRecipeVersion, RuntimeProfileSHA256: spec.RoleImageRecipeSHA256,
+				Capabilities: slices.Clone(spec.Capabilities), Status: status,
+			})
 		}
-		result.RuntimeSelections = append(result.RuntimeSelections, OwnerRuntimeSelectionCatalogEntry{
-			SelectionKey: spec.StableKey, DisplayName: role.Name, Description: spec.Description,
-			RoleDefinitionVersion: role.Version, RoleDefinitionSHA256: digest,
-			RuntimeProfileVersion: spec.RoleImageRecipeVersion, RuntimeProfileSHA256: spec.RoleImageRecipeSHA256,
-			Capabilities: slices.Clone(spec.Capabilities), Status: status,
-		})
+		if len(roles) == limit {
+			result.NextPageToken, listErr = service.encodeRunSnapshotCursor(runSnapshotCursor{Kind: "CATALOG_LIST",
+				AfterID: roles[len(roles)-1].ID, SnapshotSHA256: snapshotSHA256})
+		}
+		return listErr
+	})
+	if err != nil {
+		return OwnerConfigurationCatalog{}, err
 	}
 	result.SchedulePresets, err = ownerSchedulePresets()
 	if err != nil {
@@ -178,9 +426,6 @@ func (service *Service) GetOwnerConfigurationCatalog(
 	result.ScheduleDefaults, err = ownerScheduleDefaults()
 	if err != nil {
 		return OwnerConfigurationCatalog{}, errs.ErrInternal
-	}
-	if len(roles) == limit {
-		result.NextPageToken = roles[len(roles)-1].ID
 	}
 	return result, nil
 }
@@ -208,26 +453,20 @@ func (service *Service) ManageOwnerSchedule(
 	if err != nil {
 		return OwnerScheduleProjection{}, err
 	}
-	prompt, err := service.prepareOwnerSchedulePrompt(ctx, input.Principal, input.Selection.Prompt)
-	if err != nil {
-		return OwnerScheduleProjection{}, err
-	}
 	if input.Action == "create" {
 		created, createErr := service.CreateScheduleFromOwnerSelections(ctx, CreateScheduleFromOwnerSelectionsInput{
 			Principal: input.Principal, IdempotencyKey: input.IdempotencyKey, Name: input.Name,
 			AgentStableKey: input.AgentStableKey, InstructionSetStableKey: input.InstructionSetStableKey,
 			ProviderPoolStableKey: input.ProviderPoolStableKey, RoomStableKey: input.Selection.RoomStableKey,
-			PromptArtifactName: prompt.ArtifactName, PromptKind: prompt.Kind,
-			PromptInlineMarkdown: prompt.InlineMarkdown, PromptObject: prompt.Object, Spec: spec,
+			PromptArtifactName: input.Selection.Prompt.ArtifactName, PromptKind: input.Selection.Prompt.Kind,
+			PromptInlineMarkdown: input.Selection.Prompt.InlineMarkdown, Spec: spec,
 		})
 		if createErr != nil {
 			return OwnerScheduleProjection{}, createErr
 		}
-		projection, ok := scheduleResourceProjection(created)
-		if !ok {
-			return OwnerScheduleProjection{}, errs.ErrInternal
-		}
-		return projection, nil
+		readPrincipal := input.Principal
+		readPrincipal.Permission = permissionRead
+		return service.getOwnerScheduleAtVersion(ctx, readPrincipal, created.ID, created.Version)
 	}
 	requestHash, err := canonicalHash(struct {
 		Identity                                           commandIdentity
@@ -240,9 +479,20 @@ func (service *Service) ManageOwnerSchedule(
 	}{identity(input.Principal), input.Action, input.ScheduleID, input.Name, input.ExpectedVersion,
 		input.AgentStableKey, input.InstructionSetStableKey, input.ProviderPoolStableKey,
 		input.Selection.PresetKey, input.Selection.Timezone, input.Selection.RoomStableKey,
-		prompt.Kind, prompt.ArtifactName, hashString(prompt.InlineMarkdown), input.Selection.Overrides, spec})
+		input.Selection.Prompt.Kind, input.Selection.Prompt.ArtifactName,
+		hashString(input.Selection.Prompt.InlineMarkdown), input.Selection.Overrides, spec})
 	if err != nil {
 		return OwnerScheduleProjection{}, errs.ErrInvalidInput
+	}
+	prompt, err := service.prepareOwnerSchedulePrompt(ctx, ownerSchedulePromptPreparationInput{
+		Principal: input.Principal, IdempotencyKey: input.IdempotencyKey, RequestSHA256: requestHash,
+		Action: input.Action, ScheduleID: input.ScheduleID, ExpectedVersion: input.ExpectedVersion,
+		AgentStableKey: input.AgentStableKey, InstructionSetStableKey: input.InstructionSetStableKey,
+		ProviderPoolStableKey: input.ProviderPoolStableKey, RoomStableKey: input.Selection.RoomStableKey,
+		SessionPolicy: spec.SessionPolicy,
+	}, input.Selection.Prompt)
+	if err != nil {
+		return OwnerScheduleProjection{}, err
 	}
 	updated, err := service.withOwnerLockedResourceReceipt(ctx, input.Principal, input.IdempotencyKey,
 		"manage_owner_schedule_update", requestHash, input.ScheduleID, enum.KindSchedule, input.ExpectedVersion,
@@ -257,11 +507,9 @@ func (service *Service) ManageOwnerSchedule(
 	if err != nil {
 		return OwnerScheduleProjection{}, err
 	}
-	projection, ok := scheduleResourceProjection(updated)
-	if !ok {
-		return OwnerScheduleProjection{}, errs.ErrInternal
-	}
-	return projection, nil
+	readPrincipal := input.Principal
+	readPrincipal.Permission = permissionRead
+	return service.getOwnerScheduleAtVersion(ctx, readPrincipal, updated.ID, updated.Version)
 }
 
 func (service *Service) updateOwnerSchedule(
@@ -308,7 +556,8 @@ func (service *Service) updateOwnerSchedule(
 	if err != nil {
 		return entity.Resource{}, err
 	}
-	roomID := ""
+	roomID, roomSHA := "", ""
+	var roomVersion uint64
 	if input.Selection.RoomStableKey != "" {
 		room, roomErr := protected.GetByStableKeyForUpdate(ctx, input.Principal.OrganizationID,
 			input.Principal.ProjectID, enum.KindChat, input.Selection.RoomStableKey)
@@ -319,6 +568,11 @@ func (service *Service) updateOwnerSchedule(
 			return entity.Resource{}, errs.ErrNotFound
 		}
 		roomID = room.ID
+		roomVersion = room.Version
+		roomSHA, roomErr = entity.ProjectionSHA256(room)
+		if roomErr != nil {
+			return entity.Resource{}, errs.ErrInternal
+		}
 	}
 	agent, err := requireProtectedStable(ctx, protected, input.Principal, enum.KindAgent, input.AgentStableKey)
 	if err != nil {
@@ -374,6 +628,13 @@ func (service *Service) updateOwnerSchedule(
 	spec.AgentID, spec.AgentVersion, spec.AgentSHA256 = agentID, agentVersion, agentSHA
 	spec.InstructionSetID, spec.InstructionSetVersion, spec.InstructionSetSHA256 = instructionID, instructionVersion, instructionSHA
 	spec.ProviderPoolID, spec.ProviderPoolVersion, spec.ProviderPoolSHA256 = poolID, poolVersion, poolSHA
+	spec.OwnerAgentSelector, spec.OwnerInstructionSelector = input.AgentStableKey, input.InstructionSetStableKey
+	spec.OwnerProviderPoolSelector = input.ProviderPoolStableKey
+	spec.OwnerRoomSelector, spec.OwnerRoomVersion, spec.OwnerRoomSHA256 =
+		input.Selection.RoomStableKey, roomVersion, roomSHA
+	if prompt.Kind == "SELECTOR" {
+		spec.OwnerPromptSelector = prompt.ArtifactName
+	}
 	spec.RuntimeSelectionRef, spec.RuntimeSelectionVersion, spec.RuntimeSelectionSHA256 =
 		agentSpec.RuntimeProfileRef, agentSpec.RuntimeProfileVersion, agentSpec.RuntimeProfileSHA256
 	spec.AgentAssignmentID, spec.AgentAssignmentVersion, spec.AgentAssignmentSHA256 = assignment.ID, assignment.Version, assignmentSHA
@@ -410,7 +671,22 @@ func (service *Service) updateOwnerSchedule(
 	if err := tx.Update(ctx, updated, current.Version); err != nil {
 		return entity.Resource{}, err
 	}
-	return updated, service.appendMutationRecords(ctx, tx, input.Principal, "manage_owner_schedule_update", updated)
+	if err := service.appendMutationRecords(ctx, tx, input.Principal,
+		"manage_owner_schedule_update", updated); err != nil {
+		return entity.Resource{}, err
+	}
+	if prompt.PreparationKeyHash != "" {
+		preparations, ok := tx.(domainrepo.SchedulePromptPreparationTransaction)
+		if !ok {
+			return entity.Resource{}, errs.ErrInternal
+		}
+		if err := preparations.ConsumeSchedulePromptPreparation(ctx,
+			prompt.PreparationKeyHash, updated.ID, prompt.PreparationGeneration,
+			promptSpec.SHA256, updated.Version, now); err != nil {
+			return entity.Resource{}, err
+		}
+	}
+	return updated, nil
 }
 
 func (service *Service) GetOwnerSchedule(
@@ -418,15 +694,48 @@ func (service *Service) GetOwnerSchedule(
 	principal value.Principal,
 	id string,
 ) (OwnerScheduleProjection, error) {
-	resource, err := service.GetProtectedConfiguration(ctx, principal, id, enum.KindSchedule)
+	return service.getOwnerScheduleAtVersion(ctx, principal, id, 0)
+}
+
+// GetOwnerScheduleAtVersion не смешивает mutation result с более новым owner snapshot.
+func (service *Service) GetOwnerScheduleAtVersion(
+	ctx context.Context,
+	principal value.Principal,
+	id string,
+	expectedVersion uint64,
+) (OwnerScheduleProjection, error) {
+	return service.getOwnerScheduleAtVersion(ctx, principal, id, expectedVersion)
+}
+
+func (service *Service) getOwnerScheduleAtVersion(
+	ctx context.Context,
+	principal value.Principal,
+	id string,
+	expectedVersion uint64,
+) (OwnerScheduleProjection, error) {
+	if err := authorize(principal, permissionRead); err != nil || value.ValidateID(id) != nil {
+		if err != nil {
+			return OwnerScheduleProjection{}, err
+		}
+		return OwnerScheduleProjection{}, errs.ErrInvalidInput
+	}
+	var projection OwnerScheduleProjection
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		item, getErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, id)
+		if getErr != nil {
+			return getErr
+		}
+		if expectedVersion != 0 && item.Version != expectedVersion {
+			return errs.ErrVersionMismatch
+		}
+		projection, getErr = service.scheduleOwnerProjectionFromTx(ctx, tx, principal, item)
+		return getErr
+	})
 	if err != nil {
 		return OwnerScheduleProjection{}, err
 	}
-	projection, ok := scheduleResourceProjection(resource)
-	if !ok {
-		return OwnerScheduleProjection{}, errs.ErrStateConflict
-	}
-	return projection, nil
+	return service.hydrateOwnerSchedulePrompt(ctx, projection)
 }
 
 func (service *Service) ListOwnerSchedules(
@@ -436,43 +745,213 @@ func (service *Service) ListOwnerSchedules(
 	afterID string,
 	limit int,
 ) ([]OwnerScheduleProjection, string, error) {
-	resources, err := service.ListProtectedConfigurations(ctx, principal, enum.KindSchedule, states, afterID, limit)
+	if err := authorize(principal, permissionList); err != nil {
+		return nil, "", err
+	}
+	cursor, err := service.decodeOwnerListCursor(afterID, "SCHEDULE_LIST")
 	if err != nil {
 		return nil, "", err
 	}
-	result := make([]OwnerScheduleProjection, 0, len(resources))
-	for _, item := range resources {
-		projection, ok := scheduleResourceProjection(item)
-		if !ok {
-			return nil, "", errs.ErrStateConflict
-		}
-		result = append(result, projection)
+	filter := query.ResourceFilter{OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, Kind: enum.KindSchedule, States: states, AfterID: cursor.AfterID, Limit: limit}
+	if filter.Validate() != nil {
+		return nil, "", errs.ErrInvalidInput
 	}
+	var result []OwnerScheduleProjection
 	next := ""
-	if len(resources) == limit {
-		next = resources[len(resources)-1].ID
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		snapshotSHA256, snapshotErr := ownerListSnapshot(ctx, tx, cursor.SnapshotSHA256)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
+		resources, listErr := ownerRead.ListOwnerResources(ctx, filter)
+		if listErr != nil {
+			return listErr
+		}
+		result = make([]OwnerScheduleProjection, 0, len(resources))
+		for _, item := range resources {
+			projection, projectionErr := service.scheduleOwnerProjectionFromTx(ctx, tx, principal, item)
+			if projectionErr != nil {
+				return projectionErr
+			}
+			result = append(result, projection)
+		}
+		if len(resources) == limit {
+			next, listErr = service.encodeRunSnapshotCursor(runSnapshotCursor{Kind: "SCHEDULE_LIST",
+				AfterID: resources[len(resources)-1].ID, SnapshotSHA256: snapshotSHA256})
+		}
+		return listErr
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	for index := range result {
+		result[index], err = service.hydrateOwnerSchedulePrompt(ctx, result[index])
+		if err != nil {
+			return nil, "", err
+		}
 	}
 	return result, next, nil
 }
 
-func runNextActions(process entity.Resource, turn entity.Resource, runtime *domainrepo.RuntimeExecution) []string {
-	if process.Kind != enum.KindProcessRun || process.State == enum.StateDeleted {
-		return nil
+func (service *Service) scheduleOwnerProjectionFromTx(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	item entity.Resource,
+) (OwnerScheduleProjection, error) {
+	projection, ok := scheduleResourceProjection(item)
+	if !ok || item.Kind != enum.KindSchedule || item.OwnerActorID != principal.ActorID {
+		return OwnerScheduleProjection{}, errs.ErrNotFound
 	}
-	if !process.State.Terminal() {
-		return []string{"CANCEL"}
+	spec := item.Spec.(entity.ScheduleSpec)
+	var err error
+	projection.AgentSelection, err = ownerScheduleSelection(ctx, tx, principal, enum.KindAgent,
+		spec.AgentID, spec.OwnerAgentSelector, spec.AgentVersion, spec.AgentSHA256)
+	if err != nil {
+		return OwnerScheduleProjection{}, err
 	}
-	if turn.ID == "" || (turn.State != enum.StateFailed && turn.State != enum.StateCancelled && turn.State != enum.StateExpired) ||
-		runtime == nil || (runtime.State != "FAILED" && runtime.State != "CANCELLED" && runtime.State != "EXPIRED") {
-		return nil
+	projection.InstructionSelection, err = ownerScheduleSelection(ctx, tx, principal, enum.KindInstructionSet,
+		spec.InstructionSetID, spec.OwnerInstructionSelector, spec.InstructionSetVersion, spec.InstructionSetSHA256)
+	if err != nil {
+		return OwnerScheduleProjection{}, err
 	}
-	return []string{"RETRY"}
+	projection.ProviderPoolSelection, err = ownerScheduleSelection(ctx, tx, principal, enum.KindProviderPool,
+		spec.ProviderPoolID, spec.OwnerProviderPoolSelector, spec.ProviderPoolVersion, spec.ProviderPoolSHA256)
+	if err != nil {
+		return OwnerScheduleProjection{}, err
+	}
+	if spec.RoomID != "" {
+		projection.RoomSelection, err = ownerScheduleSelection(ctx, tx, principal, enum.KindChat,
+			spec.RoomID, spec.OwnerRoomSelector, spec.OwnerRoomVersion, spec.OwnerRoomSHA256)
+		if err != nil {
+			return OwnerScheduleProjection{}, err
+		}
+	} else {
+		projection.RoomSelection = OwnerSafeSelection{Status: OwnerProjectionUnavailable}
+	}
+	promptResource, promptErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, spec.PromptArtifactID)
+	if promptErr != nil {
+		if errors.Is(promptErr, errs.ErrNotFound) {
+			projection.Prompt = OwnerSchedulePromptProjection{Kind: spec.PromptIntentKind,
+				ArtifactSelector: spec.OwnerPromptSelector, DisplayName: spec.PromptDisplay,
+				SHA256: spec.PromptSHA256, Version: spec.PromptArtifactVersion, Status: OwnerProjectionStale}
+			return projection, nil
+		}
+		return OwnerScheduleProjection{}, promptErr
+	}
+	promptSpec, promptOK := promptResource.Spec.(entity.ArtifactSpec)
+	if !promptOK || promptResource.Kind != enum.KindArtifact || promptResource.OwnerActorID != principal.ActorID ||
+		promptSpec.MediaType != "text/markdown" || promptSpec.Direction != "INPUT" {
+		return OwnerScheduleProjection{}, errs.ErrStateConflict
+	}
+	promptStatus := OwnerProjectionStale
+	if promptResource.State != enum.StateActive || promptSpec.ScanStatus != "CLEAN" {
+		promptStatus = OwnerProjectionIneligible
+	} else if promptResource.Version == spec.PromptArtifactVersion && promptSpec.SHA256 == spec.PromptSHA256 {
+		promptStatus = OwnerProjectionPresent
+	}
+	projection.Prompt = OwnerSchedulePromptProjection{Kind: spec.PromptIntentKind,
+		ArtifactSelector: spec.OwnerPromptSelector, DisplayName: promptResource.Name,
+		SHA256: spec.PromptSHA256, Version: spec.PromptArtifactVersion, Status: promptStatus}
+	if spec.PromptIntentKind == "INLINE" && promptStatus == OwnerProjectionPresent {
+		parsed, parseErr := url.Parse(promptSpec.StorageRef)
+		if parseErr != nil || parsed.Query().Get("versionId") == "" {
+			return OwnerScheduleProjection{}, errs.ErrStateConflict
+		}
+		projection.Prompt.Object = domainobjectstore.Object{Reference: promptSpec.StorageRef,
+			VersionID: parsed.Query().Get("versionId"), SHA256: promptSpec.SHA256,
+			Size: promptSpec.SizeBytes, MediaType: promptSpec.MediaType}
+	}
+	return projection, nil
 }
 
-func (service *Service) runOwnerProjection(
+func ownerScheduleSelection(
 	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	kind enum.Kind,
+	id, stableSelector string,
+	version uint64,
+	digest string,
+) (OwnerSafeSelection, error) {
+	selection := OwnerSafeSelection{StableSelector: stableSelector, Version: version, SHA256: digest,
+		Status: OwnerProjectionStale}
+	item, err := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, id)
+	if errors.Is(err, errs.ErrNotFound) {
+		return selection, nil
+	}
+	if err != nil {
+		return OwnerSafeSelection{}, err
+	}
+	if item.Kind != kind || item.OwnerActorID != principal.ActorID {
+		return OwnerSafeSelection{}, errs.ErrNotFound
+	}
+	itemDigest, err := entity.ProjectionSHA256(item)
+	if err != nil {
+		return OwnerSafeSelection{}, errs.ErrStateConflict
+	}
+	selection.DisplayName = item.Name
+	switch spec := item.Spec.(type) {
+	case entity.AgentSpec:
+		if spec.StableKey != stableSelector || !spec.Enabled {
+			selection.Status = OwnerProjectionIneligible
+		}
+	case entity.InstructionSetSpec:
+		if spec.StableKey != stableSelector || spec.VersionState != "PUBLISHED" {
+			selection.Status = OwnerProjectionIneligible
+		}
+		selection.MaskedStatus = spec.VersionState
+	case entity.ProviderPoolSpec:
+		if spec.StableKey != stableSelector {
+			selection.Status = OwnerProjectionIneligible
+		}
+		selection.MaskedStatus = ownerProviderPoolStatus(spec)
+	case entity.ChatSpec:
+		if spec.StableKey != stableSelector {
+			selection.Status = OwnerProjectionIneligible
+		}
+	default:
+		return OwnerSafeSelection{}, errs.ErrStateConflict
+	}
+	if item.State != enum.StateActive {
+		selection.Status = OwnerProjectionIneligible
+	} else if selection.Status != OwnerProjectionIneligible && item.Version == version && itemDigest == digest {
+		selection.Status = OwnerProjectionPresent
+	}
+	return selection, nil
+}
+
+func (service *Service) hydrateOwnerSchedulePrompt(
+	ctx context.Context,
+	projection OwnerScheduleProjection,
+) (OwnerScheduleProjection, error) {
+	if projection.Prompt.Kind != "INLINE" || projection.Prompt.Status != OwnerProjectionPresent {
+		return projection, nil
+	}
+	if service.instructionObjects == nil {
+		return OwnerScheduleProjection{}, errs.ErrUnavailable
+	}
+	raw, err := service.instructionObjects.Get(ctx, projection.Prompt.Object)
+	if err != nil || len(raw) == 0 || len(raw) > 262144 || !utf8.Valid(raw) {
+		return OwnerScheduleProjection{}, errs.ErrUnavailable
+	}
+	projection.Prompt.InlineMarkdown = string(raw)
+	projection.Prompt.Object = domainobjectstore.Object{}
+	return projection, nil
+}
+
+func (service *Service) runOwnerProjectionFromTx(
+	ctx context.Context,
+	tx domainrepo.Transaction,
 	principal value.Principal,
 	detail RunDetailResult,
+	decision runActionDecision,
 ) (RunOwnerProjection, error) {
 	if detail.ProcessRun.OwnerActorID != principal.ActorID {
 		return RunOwnerProjection{}, errs.ErrNotFound
@@ -492,15 +971,19 @@ func (service *Service) runOwnerProjection(
 		Workspace:     OwnerDisplayValue{Status: OwnerProjectionUnavailable},
 		Trigger:       OwnerDisplayValue{Status: OwnerProjectionUnavailable},
 		RuntimeStatus: OwnerDisplayValue{Status: OwnerProjectionUnavailable},
-		NextActions:   runNextActions(detail.ProcessRun, detail.Turn, detail.Runtime)}
+		Initiator:     OwnerDisplayValue{Status: OwnerProjectionUnavailable},
+		Agent:         OwnerDisplayValue{Status: OwnerProjectionUnavailable},
+		Role:          OwnerDisplayValue{Status: OwnerProjectionUnavailable},
+		Model:         OwnerDisplayValue{Status: OwnerProjectionUnavailable},
+		Provider:      OwnerDisplayValue{Status: OwnerProjectionUnavailable},
+		NextActions:   decision.actions()}
 	if result.Attempt == 0 {
 		result.Attempt = spec.RootAttempt
 	}
 	if !result.StartedAt.IsZero() && !result.UpdatedAt.Before(result.StartedAt) {
 		result.Duration = result.UpdatedAt.Sub(result.StartedAt)
 	}
-	project, err := service.repository.Get(ctx, principal.OrganizationID, principal.ProjectID,
-		principal.ProjectID, enum.KindProject)
+	project, err := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, principal.ProjectID)
 	if err == nil && project.OwnerActorID == principal.ActorID {
 		result.Workspace = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: project.Name}
 	} else if err != nil && !errors.Is(err, errs.ErrNotFound) {
@@ -511,13 +994,91 @@ func (service *Service) runOwnerProjection(
 			result.Trigger = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: display}
 		}
 	}
+	if spec.RootInitiatorActorID == principal.ActorID {
+		result.Initiator = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: "Владелец"}
+	}
 	if detail.Runtime != nil {
 		if !validRuntimeExecutionState(detail.Runtime.State) {
 			return RunOwnerProjection{}, errs.ErrStateConflict
 		}
 		result.RuntimeStatus = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: detail.Runtime.State}
 	}
+	revisionSpec, revisionOK := detail.RuntimeRevision.Spec.(entity.RuntimeRevisionSpec)
+	if !revisionOK || detail.RuntimeRevision.Kind != enum.KindRuntimeRevision ||
+		detail.RuntimeRevision.OwnerActorID != principal.ActorID {
+		return RunOwnerProjection{}, errs.ErrStateConflict
+	}
+	if validOwnerRunDisplay(revisionSpec.CodexModel) {
+		result.Model = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: revisionSpec.CodexModel}
+	}
+	if revisionSpec.AgentID != "" {
+		result.Agent, err = ownerPinnedRunDisplay(ctx, tx, principal, enum.KindAgent,
+			revisionSpec.AgentID, revisionSpec.AgentVersion, revisionSpec.AgentSHA256, false)
+		if err != nil {
+			return RunOwnerProjection{}, err
+		}
+	}
+	if revisionSpec.RoleDefinitionID != "" {
+		result.Role, err = ownerPinnedRunDisplay(ctx, tx, principal, enum.KindRoleDefinition,
+			revisionSpec.RoleDefinitionID, revisionSpec.RoleDefinitionVersion, revisionSpec.RoleDefinitionSHA256, false)
+		if err != nil {
+			return RunOwnerProjection{}, err
+		}
+	}
+	if revisionSpec.ProviderPoolID != "" {
+		result.Provider, err = ownerPinnedRunDisplay(ctx, tx, principal, enum.KindProviderPool,
+			revisionSpec.ProviderPoolID, revisionSpec.ProviderPoolVersion, revisionSpec.ProviderPoolSHA256, true)
+		if err != nil {
+			return RunOwnerProjection{}, err
+		}
+	}
 	return result, nil
+}
+
+func validOwnerRunDisplay(value string) bool {
+	return value != "" && len(value) <= 128 && value == strings.TrimSpace(value) &&
+		!strings.ContainsAny(value, "\x00\r\n")
+}
+
+func ownerPinnedRunDisplay(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	kind enum.Kind,
+	id string,
+	version uint64,
+	digest string,
+	maskedProvider bool,
+) (OwnerDisplayValue, error) {
+	item, err := tx.Get(ctx, principal.OrganizationID, principal.ProjectID, id)
+	if errors.Is(err, errs.ErrNotFound) {
+		return OwnerDisplayValue{Status: OwnerProjectionStale}, nil
+	}
+	if err != nil {
+		return OwnerDisplayValue{}, err
+	}
+	if item.Kind != kind || item.OwnerActorID != principal.ActorID {
+		return OwnerDisplayValue{}, errs.ErrNotFound
+	}
+	projectionSHA, err := entity.ProjectionSHA256(item)
+	if err != nil || !validOwnerRunDisplay(item.Name) {
+		return OwnerDisplayValue{}, errs.ErrStateConflict
+	}
+	status := OwnerProjectionStale
+	if item.State != enum.StateActive {
+		status = OwnerProjectionIneligible
+	} else if item.Version == version && projectionSHA == digest {
+		status = OwnerProjectionPresent
+	}
+	display := item.Name
+	if maskedProvider {
+		pool, ok := item.Spec.(entity.ProviderPoolSpec)
+		if !ok {
+			return OwnerDisplayValue{}, errs.ErrStateConflict
+		}
+		display += " · " + ownerProviderPoolStatus(pool)
+	}
+	return OwnerDisplayValue{Status: status, Value: display}, nil
 }
 
 func (service *Service) RunOwnerProjection(
@@ -525,7 +1086,11 @@ func (service *Service) RunOwnerProjection(
 	principal value.Principal,
 	detail RunDetailResult,
 ) (RunOwnerProjection, error) {
-	return service.runOwnerProjection(ctx, principal, detail)
+	if detail.Projection.RunRef != detail.ProcessRun.ID || detail.Projection.Version != detail.ProcessRun.Version ||
+		detail.ProcessRun.OwnerActorID != principal.ActorID {
+		return RunOwnerProjection{}, errs.ErrStateConflict
+	}
+	return detail.Projection, nil
 }
 
 func RunTimelineOwnerProjections(items []domainrepo.Audit, nextActions []string) []RunTimelineProjection {
@@ -565,6 +1130,7 @@ func safeRunTimelineOutcome(outcome string) string {
 }
 
 func RunLineageOwnerProjections(lineage RunLineageResult) ([]RunLineageProjection, error) {
+	unavailable := OwnerDisplayValue{Status: OwnerProjectionUnavailable}
 	refs := make(map[string]string, len(lineage.Processes)+len(lineage.Attempts))
 	for _, node := range append(slices.Clone(lineage.Processes), lineage.Attempts...) {
 		if node.ID == "" || (node.NodeType != "PROCESS" && node.NodeType != "ATTEMPT") {
@@ -580,25 +1146,25 @@ func RunLineageOwnerProjections(lineage RunLineageResult) ([]RunLineageProjectio
 		if !validRunLineageState(node.State) {
 			return nil, errs.ErrStateConflict
 		}
+		parentRef := ""
 		if node.ParentProcessRunID != "" {
-			if _, found := refs[node.ParentProcessRunID]; !found {
-				return nil, errs.ErrStateConflict
-			}
+			parentRef = ownerOpaqueRef("process", node.ParentProcessRunID)
 		}
-		result = append(result, RunLineageProjection{NodeRef: refs[node.ID], ParentRef: refs[node.ParentProcessRunID],
-			Kind: "PROCESS", State: node.State, Version: node.Version,
-			CreatedAt: node.OccurredAt, UpdatedAt: node.UpdatedAt})
+		result = append(result, RunLineageProjection{NodeRef: refs[node.ID], ParentRef: parentRef,
+			Kind: "PROCESS", State: node.State, Version: node.Version, DisplayName: node.DisplayName,
+			CreatedAt: node.OccurredAt, UpdatedAt: node.UpdatedAt,
+			Agent: unavailable, Role: unavailable, Model: unavailable, Provider: unavailable})
 	}
 	for _, node := range lineage.Attempts {
 		if !validRunLineageState(node.State) {
 			return nil, errs.ErrStateConflict
 		}
-		if _, found := refs[node.ProcessRunID]; !found {
-			return nil, errs.ErrStateConflict
-		}
-		result = append(result, RunLineageProjection{NodeRef: refs[node.ID], ParentRef: refs[node.ProcessRunID],
-			Kind: "ATTEMPT", State: node.State, Version: node.Version, Attempt: node.Attempt,
-			CreatedAt: node.OccurredAt, UpdatedAt: node.UpdatedAt})
+		result = append(result, RunLineageProjection{NodeRef: refs[node.ID],
+			ParentRef: ownerOpaqueRef("process", node.ProcessRunID),
+			Kind:      "ATTEMPT", State: node.State, Version: node.Version, Attempt: node.Attempt,
+			DisplayName: node.DisplayName,
+			CreatedAt:   node.OccurredAt, UpdatedAt: node.UpdatedAt,
+			Agent: unavailable, Role: unavailable, Model: unavailable, Provider: unavailable})
 	}
 	return result, nil
 }
@@ -641,31 +1207,79 @@ func (service *Service) ListOwnerRuns(
 	afterID string,
 	limit int,
 ) ([]RunOwnerProjection, string, error) {
-	resources, err := service.List(ctx, ListInput{Principal: principal, Filter: query.ResourceFilter{
-		Kind: enum.KindProcessRun, States: states, AfterID: afterID, Limit: limit,
-	}})
+	if err := authorize(principal, permissionList); err != nil {
+		return nil, "", err
+	}
+	cursor, err := service.decodeOwnerListCursor(afterID, "RUN_LIST")
 	if err != nil {
 		return nil, "", err
 	}
-	result := make([]RunOwnerProjection, 0, len(resources))
-	readPrincipal := principal
-	readPrincipal.Permission = permissionRead
-	for _, process := range resources {
-		detail, detailErr := service.GetRunDetail(ctx, readPrincipal, process.ID)
-		if detailErr != nil {
-			return nil, "", detailErr
-		}
-		projection, projectionErr := service.runOwnerProjection(ctx, principal, detail)
-		if projectionErr != nil {
-			return nil, "", projectionErr
-		}
-		result = append(result, projection)
+	filter := query.ResourceFilter{OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, Kind: enum.KindProcessRun, States: states, AfterID: cursor.AfterID, Limit: limit}
+	if filter.Validate() != nil {
+		return nil, "", errs.ErrInvalidInput
 	}
+	var result []RunOwnerProjection
 	next := ""
-	if len(resources) == limit {
-		next = resources[len(resources)-1].ID
-	}
-	return result, next, nil
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		snapshotSHA256, snapshotErr := ownerListSnapshot(ctx, tx, cursor.SnapshotSHA256)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
+		resources, listErr := ownerRead.ListOwnerResources(ctx, filter)
+		if listErr != nil {
+			return listErr
+		}
+		result = make([]RunOwnerProjection, 0, len(resources))
+		for _, process := range resources {
+			graph, graphErr := service.lockOwnerGraphByProcess(ctx, tx, principal, process.ID)
+			if graphErr != nil {
+				return graphErr
+			}
+			if graph.Process.Version != process.Version {
+				return errs.ErrVersionMismatch
+			}
+			processSpec, specOK := process.Spec.(entity.ProcessRunSpec)
+			if !specOK {
+				return errs.ErrStateConflict
+			}
+			tuple, tupleErr := currentExecution(processSpec)
+			if tupleErr != nil {
+				return tupleErr
+			}
+			revision, revisionErr := tx.Get(ctx, principal.OrganizationID, principal.ProjectID,
+				tuple.RuntimeRevisionID)
+			if revisionErr != nil || revision.Version != tuple.RuntimeRevisionVersion ||
+				revision.Kind != enum.KindRuntimeRevision || revision.OwnerActorID != principal.ActorID {
+				if revisionErr != nil {
+					return revisionErr
+				}
+				return errs.ErrStateConflict
+			}
+			decision, decisionErr := service.decideRunActionsLocked(ctx, tx, principal, graph)
+			if decisionErr != nil {
+				return decisionErr
+			}
+			projection, projectionErr := service.runOwnerProjectionFromTx(ctx, tx, principal,
+				RunDetailResult{ProcessRun: graph.Process, Session: graph.Session, Turn: graph.Turn,
+					RuntimeRevision: revision, Runtime: graph.Runtime}, decision)
+			if projectionErr != nil {
+				return projectionErr
+			}
+			result = append(result, projection)
+		}
+		if len(resources) == limit {
+			next, listErr = service.encodeRunSnapshotCursor(runSnapshotCursor{Kind: "RUN_LIST",
+				AfterID: resources[len(resources)-1].ID, SnapshotSHA256: snapshotSHA256})
+		}
+		return listErr
+	})
+	return result, next, err
 }
 
 func runtimeIncidentNextActions(incidentState, executionState string, current bool) []string {
@@ -722,47 +1336,195 @@ func (service *Service) RuntimeIncidentOwnerProjection(
 	principal value.Principal,
 	incident domainrepo.RuntimeIncident,
 ) (RuntimeIncidentOwnerProjection, error) {
+	var result RuntimeIncidentOwnerProjection
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		protected, ok := tx.(domainrepo.ProtectedTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		current, getErr := protected.GetRuntimeIncidentForUpdate(ctx, incident.ID)
+		if getErr != nil {
+			return getErr
+		}
+		if current.Version != incident.Version || current.ExecutionFence != incident.ExecutionFence {
+			return errs.ErrVersionMismatch
+		}
+		var projectionErr error
+		result, projectionErr = service.runtimeIncidentOwnerProjectionFromTx(ctx, tx, principal, current)
+		return projectionErr
+	})
+	return result, err
+}
+
+func (service *Service) GetRuntimeIncidentOwner(
+	ctx context.Context,
+	principal value.Principal,
+	incidentID string,
+) (RuntimeIncidentOwnerProjection, error) {
+	if err := authorize(principal, permissionRuntimeIncidentRead); err != nil || value.ValidateID(incidentID) != nil {
+		if err != nil {
+			return RuntimeIncidentOwnerProjection{}, err
+		}
+		return RuntimeIncidentOwnerProjection{}, errs.ErrInvalidInput
+	}
+	var result RuntimeIncidentOwnerProjection
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		protected, ok := tx.(domainrepo.ProtectedTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		incident, getErr := protected.GetRuntimeIncidentForUpdate(ctx, incidentID)
+		if getErr != nil {
+			return getErr
+		}
+		result, getErr = service.runtimeIncidentOwnerProjectionFromTx(ctx, tx, principal, incident)
+		return getErr
+	})
+	return result, err
+}
+
+func (service *Service) ListRuntimeIncidentOwners(
+	ctx context.Context,
+	principal value.Principal,
+	afterID string,
+	limit int,
+) ([]RuntimeIncidentOwnerProjection, string, error) {
+	if err := authorize(principal, permissionRuntimeIncidentRead); err != nil {
+		return nil, "", err
+	}
+	cursor, err := service.decodeOwnerListCursor(afterID, "INCIDENT_LIST")
+	if err != nil {
+		return nil, "", err
+	}
+	filter := query.RuntimeIncidentFilter{OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, AfterID: cursor.AfterID, Limit: limit}
+	if filter.Validate() != nil {
+		return nil, "", errs.ErrInvalidInput
+	}
+	var result []RuntimeIncidentOwnerProjection
+	next := ""
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		snapshotSHA256, snapshotErr := ownerListSnapshot(ctx, tx, cursor.SnapshotSHA256)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
+		incidents, listErr := ownerRead.ListRuntimeIncidentsSnapshot(ctx, filter)
+		if listErr != nil {
+			return listErr
+		}
+		result = make([]RuntimeIncidentOwnerProjection, 0, len(incidents))
+		for _, incident := range incidents {
+			projection, projectionErr := service.runtimeIncidentOwnerProjectionFromTx(ctx, tx, principal, incident)
+			if projectionErr != nil {
+				return projectionErr
+			}
+			result = append(result, projection)
+		}
+		if len(incidents) == limit {
+			next, listErr = service.encodeRunSnapshotCursor(runSnapshotCursor{Kind: "INCIDENT_LIST",
+				AfterID: incidents[len(incidents)-1].ID, SnapshotSHA256: snapshotSHA256})
+		}
+		return listErr
+	})
+	return result, next, err
+}
+
+func (service *Service) ListRuntimeIncidentOwnerHistory(
+	ctx context.Context,
+	principal value.Principal,
+	incidentID string,
+	beforeVersion uint64,
+	limit int,
+) (RuntimeIncidentOwnerHistoryPage, error) {
+	if err := authorize(principal, permissionRuntimeIncidentRead); err != nil || value.ValidateID(incidentID) != nil ||
+		limit < 1 || limit > 100 {
+		if err != nil {
+			return RuntimeIncidentOwnerHistoryPage{}, err
+		}
+		return RuntimeIncidentOwnerHistoryPage{}, errs.ErrInvalidInput
+	}
+	var result RuntimeIncidentOwnerHistoryPage
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		protected, ok := tx.(domainrepo.ProtectedTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		incident, getErr := protected.GetRuntimeIncidentForUpdate(ctx, incidentID)
+		if getErr != nil {
+			return getErr
+		}
+		result.Current, getErr = service.runtimeIncidentOwnerProjectionFromTx(ctx, tx, principal, incident)
+		if getErr != nil {
+			return getErr
+		}
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		result.Entries, getErr = ownerRead.ListRuntimeIncidentHistorySnapshot(ctx, incidentID, beforeVersion, limit)
+		if getErr != nil {
+			return getErr
+		}
+		if len(result.Entries) == limit {
+			result.NextPageToken = fmt.Sprint(result.Entries[len(result.Entries)-1].Version)
+		}
+		return nil
+	})
+	return result, err
+}
+
+func (service *Service) runtimeIncidentOwnerProjectionFromTx(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	incident domainrepo.RuntimeIncident,
+) (RuntimeIncidentOwnerProjection, error) {
 	severity, impact, knownKind := incidentSeverity(incident.Kind)
 	if !knownKind || !slices.Contains([]string{"OPEN", "ACKNOWLEDGED", "RETRYING", "RELEASED", "CLOSED"}, incident.State) {
 		return RuntimeIncidentOwnerProjection{}, errs.ErrStateConflict
 	}
 	result := RuntimeIncidentOwnerProjection{IncidentRef: incident.ID,
-		Version: incident.Version, Kind: incident.Kind, State: incident.State,
+		Version: incident.Version, ExecutionFence: incident.ExecutionFence, Kind: incident.Kind, State: incident.State,
 		Workspace: OwnerDisplayValue{Status: OwnerProjectionUnavailable},
 		Run:       OwnerDisplayValue{Status: OwnerProjectionUnavailable}, RunbookURL: runtimeIncidentRunbookURL,
 		OccurredAt: incident.OccurredAt, UpdatedAt: incident.UpdatedAt,
 		SafeCorrelation: hashString(incident.ID + "\x00" + fmt.Sprint(incident.Version))[:16]}
 	result.Severity, result.Impact = severity, impact
 	result.DiagnosticSummary = result.Impact
-	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
-		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
-		execution, executionErr := tx.GetRuntimeExecutionForUpdate(ctx, incident.ExecutionID)
-		if executionErr != nil {
-			return executionErr
-		}
-		process, processErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, execution.ProcessID)
-		if processErr != nil {
-			return processErr
-		}
-		if process.Kind != enum.KindProcessRun || process.OwnerActorID != principal.ActorID {
-			return errs.ErrNotFound
-		}
-		result.Run = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: process.Name}
-		spec, ok := process.Spec.(entity.ProcessRunSpec)
-		if !ok || !validRuntimeExecutionState(execution.State) {
-			return errs.ErrStateConflict
-		}
-		current := spec.CurrentTurnID == execution.TurnID && spec.CurrentAttempt == execution.Attempt
-		result.NextActions = runtimeIncidentNextActions(incident.State, execution.State, current)
-		project, projectErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, principal.ProjectID)
-		if projectErr == nil && project.Kind == enum.KindProject && project.OwnerActorID == principal.ActorID {
-			result.Workspace = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: project.Name}
-		} else if projectErr != nil && !errors.Is(projectErr, errs.ErrNotFound) {
-			return projectErr
-		}
-		return nil
-	})
-	return result, err
+	execution, executionErr := tx.GetRuntimeExecutionForUpdate(ctx, incident.ExecutionID)
+	if executionErr != nil {
+		return RuntimeIncidentOwnerProjection{}, executionErr
+	}
+	process, processErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, execution.ProcessID)
+	if processErr != nil {
+		return RuntimeIncidentOwnerProjection{}, processErr
+	}
+	if process.Kind != enum.KindProcessRun || process.OwnerActorID != principal.ActorID {
+		return RuntimeIncidentOwnerProjection{}, errs.ErrNotFound
+	}
+	result.Run = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: process.Name}
+	spec, ok := process.Spec.(entity.ProcessRunSpec)
+	if !ok || !validRuntimeExecutionState(execution.State) {
+		return RuntimeIncidentOwnerProjection{}, errs.ErrStateConflict
+	}
+	current := spec.CurrentTurnID == execution.TurnID && spec.CurrentAttempt == execution.Attempt &&
+		incident.ExecutionFence == execution.Fence
+	result.NextActions = runtimeIncidentNextActions(incident.State, execution.State, current)
+	project, projectErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, principal.ProjectID)
+	if projectErr == nil && project.Kind == enum.KindProject && project.OwnerActorID == principal.ActorID {
+		result.Workspace = OwnerDisplayValue{Status: OwnerProjectionPresent, Value: project.Name}
+	} else if projectErr != nil && !errors.Is(projectErr, errs.ErrNotFound) {
+		return RuntimeIncidentOwnerProjection{}, projectErr
+	}
+	return result, nil
 }
 
 func workspaceRestoreNextActions(resource entity.Resource, backup entity.Resource, now time.Time) []string {
@@ -787,6 +1549,28 @@ func (service *Service) WorkspaceRestoreOwnerProjection(
 	principal value.Principal,
 	resource entity.Resource,
 ) (WorkspaceRestoreOwnerProjection, error) {
+	var result WorkspaceRestoreOwnerProjection
+	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		current, getErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, resource.ID)
+		if getErr != nil {
+			return getErr
+		}
+		if current.Version != resource.Version {
+			return errs.ErrVersionMismatch
+		}
+		result, getErr = service.workspaceRestoreOwnerProjectionFromTx(ctx, tx, principal, current)
+		return getErr
+	})
+	return result, err
+}
+
+func (service *Service) workspaceRestoreOwnerProjectionFromTx(
+	ctx context.Context,
+	tx domainrepo.Transaction,
+	principal value.Principal,
+	resource entity.Resource,
+) (WorkspaceRestoreOwnerProjection, error) {
 	if resource.Kind != enum.KindWorkspaceRestore || resource.OwnerActorID != principal.ActorID {
 		return WorkspaceRestoreOwnerProjection{}, errs.ErrNotFound
 	}
@@ -798,25 +1582,102 @@ func (service *Service) WorkspaceRestoreOwnerProjection(
 		DisplayName: resource.Name, Version: resource.Version, State: spec.RestoreState,
 		Attempt: spec.Attempt, Generation: spec.Generation, MemberCount: uint32(len(spec.Members)),
 		TerminalReasonCode: spec.TerminalReasonCode, CreatedAt: resource.CreatedAt, UpdatedAt: resource.UpdatedAt}
+	now, timeErr := tx.CurrentTime(ctx)
+	if timeErr != nil {
+		return WorkspaceRestoreOwnerProjection{}, timeErr
+	}
+	backup, backupErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, spec.BackupID)
+	if errors.Is(backupErr, errs.ErrNotFound) {
+		result.NextActions = workspaceRestoreNextActions(resource, entity.Resource{}, now)
+		return result, nil
+	}
+	if backupErr != nil {
+		return WorkspaceRestoreOwnerProjection{}, backupErr
+	}
+	if backup.OwnerActorID != principal.ActorID {
+		return WorkspaceRestoreOwnerProjection{}, errs.ErrNotFound
+	}
+	result.NextActions = workspaceRestoreNextActions(resource, backup, now)
+	return result, nil
+}
+
+func (service *Service) GetWorkspaceRestoreOwner(
+	ctx context.Context,
+	principal value.Principal,
+	restoreID string,
+) (WorkspaceRestoreOwnerProjection, error) {
+	if err := authorize(principal, permissionRead); err != nil || value.ValidateID(restoreID) != nil {
+		if err != nil {
+			return WorkspaceRestoreOwnerProjection{}, err
+		}
+		return WorkspaceRestoreOwnerProjection{}, errs.ErrInvalidInput
+	}
+	var result WorkspaceRestoreOwnerProjection
 	err := service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
 		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
-		now, timeErr := tx.CurrentTime(ctx)
-		if timeErr != nil {
-			return timeErr
+		item, getErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, restoreID)
+		if getErr != nil {
+			return getErr
 		}
-		backup, backupErr := tx.GetForUpdate(ctx, principal.OrganizationID, principal.ProjectID, spec.BackupID)
-		if errors.Is(backupErr, errs.ErrNotFound) {
-			result.NextActions = workspaceRestoreNextActions(resource, entity.Resource{}, now)
-			return nil
-		}
-		if backupErr != nil {
-			return backupErr
-		}
-		if backup.OwnerActorID != principal.ActorID {
-			return errs.ErrNotFound
-		}
-		result.NextActions = workspaceRestoreNextActions(resource, backup, now)
-		return nil
+		result, getErr = service.workspaceRestoreOwnerProjectionFromTx(ctx, tx, principal, item)
+		return getErr
 	})
 	return result, err
+}
+
+func (service *Service) ListWorkspaceRestoreOwners(
+	ctx context.Context,
+	principal value.Principal,
+	backupID string,
+	states []enum.State,
+	afterID string,
+	limit int,
+) ([]WorkspaceRestoreOwnerProjection, string, error) {
+	if err := authorize(principal, permissionList); err != nil {
+		return nil, "", err
+	}
+	if backupID != "" && value.ValidateID(backupID) != nil {
+		return nil, "", errs.ErrInvalidInput
+	}
+	cursor, err := service.decodeOwnerListCursor(afterID, "RESTORE_LIST")
+	if err != nil {
+		return nil, "", err
+	}
+	filter := query.ResourceFilter{OrganizationID: principal.OrganizationID, ProjectID: principal.ProjectID,
+		ActorID: principal.ActorID, Kind: enum.KindWorkspaceRestore, States: states, BackupID: backupID,
+		AfterID: cursor.AfterID, Limit: limit}
+	if filter.Validate() != nil {
+		return nil, "", errs.ErrInvalidInput
+	}
+	var result []WorkspaceRestoreOwnerProjection
+	next := ""
+	err = service.repository.Transact(ctx, domainrepo.Scope{OrganizationID: principal.OrganizationID,
+		ProjectID: principal.ProjectID, ActorID: principal.ActorID}, func(tx domainrepo.Transaction) error {
+		ownerRead, ok := tx.(domainrepo.OwnerReadTransaction)
+		if !ok {
+			return errs.ErrInternal
+		}
+		snapshotSHA256, snapshotErr := ownerListSnapshot(ctx, tx, cursor.SnapshotSHA256)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
+		items, listErr := ownerRead.ListOwnerResources(ctx, filter)
+		if listErr != nil {
+			return listErr
+		}
+		result = make([]WorkspaceRestoreOwnerProjection, 0, len(items))
+		for _, item := range items {
+			projection, projectionErr := service.workspaceRestoreOwnerProjectionFromTx(ctx, tx, principal, item)
+			if projectionErr != nil {
+				return projectionErr
+			}
+			result = append(result, projection)
+		}
+		if len(items) == limit {
+			next, listErr = service.encodeRunSnapshotCursor(runSnapshotCursor{Kind: "RESTORE_LIST",
+				AfterID: items[len(items)-1].ID, SnapshotSHA256: snapshotSHA256})
+		}
+		return listErr
+	})
+	return result, next, err
 }

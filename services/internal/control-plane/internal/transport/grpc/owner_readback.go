@@ -22,6 +22,12 @@ func ownerProjectionStatusToProto(status resource.OwnerProjectionStatus) control
 	}[status]
 }
 
+func ownerSafeSelectionToProto(value resource.OwnerSafeSelection) *controlplanev1.OwnerSafeSelection {
+	return &controlplanev1.OwnerSafeSelection{StableSelector: value.StableSelector,
+		DisplayName: value.DisplayName, Status: ownerProjectionStatusToProto(value.Status),
+		Version: value.Version, Sha256: value.SHA256, MaskedStatus: value.MaskedStatus}
+}
+
 func agentOwnerProjectionToProto(value resource.AgentOwnerProjection) *controlplanev1.AgentOwnerProjection {
 	botStatus := map[string]controlplanev1.AgentBotIdentityStatus{
 		"UNBOUND": controlplanev1.AgentBotIdentityStatus_AGENT_BOT_IDENTITY_STATUS_UNBOUND,
@@ -40,7 +46,8 @@ func agentOwnerProjectionToProto(value resource.AgentOwnerProjection) *controlpl
 			RuntimeProfileVersion: value.RuntimeSelection.RuntimeProfileVersion,
 			RuntimeProfileSha256:  value.RuntimeSelection.RuntimeProfileSHA256,
 			Status:                ownerProjectionStatusToProto(value.RuntimeSelection.Status),
-		}}
+		}, InstructionSelection: ownerSafeSelectionToProto(value.InstructionSelection),
+		ProviderPoolSelection: ownerSafeSelectionToProto(value.ProviderPoolSelection)}
 }
 
 func ownerSchedulePresetToProto(value resource.OwnerSchedulePreset) *controlplanev1.OwnerSchedulePreset {
@@ -160,7 +167,7 @@ func ownerScheduleSelectionFromProto(intent *controlplanev1.OwnerScheduleIntent)
 }
 
 func ownerScheduleProjectionToProto(value resource.OwnerScheduleProjection) *controlplanev1.OwnerScheduleProjection {
-	return &controlplanev1.OwnerScheduleProjection{ScheduleRef: ownerOpaqueResponseRef(value.ScheduleRef),
+	result := &controlplanev1.OwnerScheduleProjection{ScheduleRef: ownerOpaqueResponseRef(value.ScheduleRef),
 		DisplayName: value.DisplayName, Version: value.Version, State: toProtoState(value.State), PresetKey: value.PresetKey,
 		PresetRevision: value.PresetRevision, PresetSha256: value.PresetSHA256,
 		DefaultsRevision: value.DefaultsRevision, DefaultsSha256: value.DefaultsSHA256,
@@ -174,7 +181,22 @@ func ownerScheduleProjectionToProto(value resource.OwnerScheduleProjection) *con
 		MisfireGrace: optionalProtoDuration(value.MisfireGrace), DeliveryPolicy: value.DeliveryPolicy,
 		MaximumAttempts: value.MaximumAttempts, InitialBackoff: optionalProtoDuration(value.InitialBackoff),
 		MaximumBackoff: optionalProtoDuration(value.MaximumBackoff), DeadLetterAfter: optionalProtoDuration(value.DeadLetterAfter),
-		MaximumExecutionDuration: optionalProtoDuration(value.MaximumExecutionDuration)}
+		MaximumExecutionDuration: optionalProtoDuration(value.MaximumExecutionDuration),
+		AgentSelection:           ownerSafeSelectionToProto(value.AgentSelection),
+		InstructionSelection:     ownerSafeSelectionToProto(value.InstructionSelection),
+		ProviderPoolSelection:    ownerSafeSelectionToProto(value.ProviderPoolSelection),
+		RoomSelection:            ownerSafeSelectionToProto(value.RoomSelection)}
+	result.Prompt = &controlplanev1.OwnerSchedulePromptProjection{Kind: value.Prompt.Kind,
+		DisplayName: value.Prompt.DisplayName, Status: ownerProjectionStatusToProto(value.Prompt.Status),
+		Version: value.Prompt.Version, Sha256: value.Prompt.SHA256}
+	if value.Prompt.Kind == "INLINE" {
+		result.Prompt.Source = &controlplanev1.OwnerSchedulePromptProjection_InlineMarkdown{
+			InlineMarkdown: value.Prompt.InlineMarkdown}
+	} else if value.Prompt.Kind == "SELECTOR" {
+		result.Prompt.Source = &controlplanev1.OwnerSchedulePromptProjection_ArtifactSelector{
+			ArtifactSelector: value.Prompt.ArtifactSelector}
+	}
+	return result
 }
 
 func ownerOpaqueResponseRef(value string) string { return value }
@@ -278,7 +300,9 @@ func runOwnerProjectionToProto(value resource.RunOwnerProjection) *controlplanev
 		Version: value.Version, State: toProtoState(value.State), Workspace: ownerDisplayValueToProto(value.Workspace),
 		Trigger: ownerDisplayValueToProto(value.Trigger), RuntimeStatus: ownerDisplayValueToProto(value.RuntimeStatus),
 		Attempt: value.Attempt, StartedAt: timestamppb.New(value.StartedAt), UpdatedAt: timestamppb.New(value.UpdatedAt),
-		Duration: optionalProtoDuration(value.Duration)}
+		Duration: optionalProtoDuration(value.Duration), Initiator: ownerDisplayValueToProto(value.Initiator),
+		Agent: ownerDisplayValueToProto(value.Agent), Role: ownerDisplayValueToProto(value.Role),
+		Model: ownerDisplayValueToProto(value.Model), Provider: ownerDisplayValueToProto(value.Provider)}
 	for _, action := range value.NextActions {
 		result.NextActions = append(result.NextActions, runNextActionToProto(action))
 	}
@@ -330,7 +354,8 @@ func runtimeIncidentOwnerProjectionToProto(value resource.RuntimeIncidentOwnerPr
 			"CRITICAL": controlplanev1.RuntimeIncidentSeverity_RUNTIME_INCIDENT_SEVERITY_CRITICAL}[value.Severity],
 		Impact: value.Impact, Workspace: ownerDisplayValueToProto(value.Workspace), Run: ownerDisplayValueToProto(value.Run),
 		SafeCorrelation: value.SafeCorrelation, DiagnosticSummary: value.DiagnosticSummary, RunbookUrl: value.RunbookURL,
-		OccurredAt: timestamppb.New(value.OccurredAt), UpdatedAt: timestamppb.New(value.UpdatedAt)}
+		OccurredAt: timestamppb.New(value.OccurredAt), UpdatedAt: timestamppb.New(value.UpdatedAt),
+		ExecutionFence: value.ExecutionFence}
 	for _, action := range value.NextActions {
 		result.NextActions = append(result.NextActions, runtimeIncidentNextActionToProto(action))
 	}

@@ -14,22 +14,13 @@ JOIN control_plane.resources AS process
  AND process.id = execution.process_id
  AND process.kind = 'PROCESS_RUN'
  AND process.state <> 'DELETED'
- AND (
-     process.owner_actor_id = @actor_id::uuid
-     OR EXISTS (
-         SELECT 1
-         FROM control_plane.project_actor_permissions AS permission
-         WHERE permission.organization_id = incident.organization_id
-           AND permission.project_id = incident.project_id
-           AND permission.actor_id = @actor_id::uuid
-           AND permission.permission IN (
-               'controlplane.runtime_execution.incident.read',
-               'controlplane.runtime_execution.incident.manage'
-           )
-     )
- )
+ AND process.owner_actor_id = @actor_id::uuid
 WHERE incident.organization_id = @organization_id::uuid
   AND incident.project_id = @project_id::uuid
+  AND (
+      @execution_id = ''
+      OR incident.execution_id = @execution_id::uuid
+  )
   AND incident.id > coalesce(
       nullif(@after_id, '')::uuid,
       '00000000-0000-0000-0000-000000000000'::uuid

@@ -123,6 +123,24 @@ var sqlReceiptGet string
 //go:embed sql/receipt__save.sql
 var sqlReceiptSave string
 
+//go:embed sql/schedule_prompt_preparation__reserve.sql
+var sqlSchedulePromptPreparationReserve string
+
+//go:embed sql/schedule_prompt_preparation__get_for_update.sql
+var sqlSchedulePromptPreparationGetForUpdate string
+
+//go:embed sql/schedule_prompt_preparation__claim.sql
+var sqlSchedulePromptPreparationClaim string
+
+//go:embed sql/schedule_prompt_preparation__complete.sql
+var sqlSchedulePromptPreparationComplete string
+
+//go:embed sql/schedule_prompt_preparation__ambiguous.sql
+var sqlSchedulePromptPreparationAmbiguous string
+
+//go:embed sql/schedule_prompt_preparation__consume.sql
+var sqlSchedulePromptPreparationConsume string
+
 //go:embed sql/resource__get.sql
 var sqlResourceGet string
 
@@ -152,6 +170,9 @@ var sqlResourceInsert string
 
 //go:embed sql/resource__list.sql
 var sqlResourceList string
+
+//go:embed sql/owner_resource__list.sql
+var sqlOwnerResourceList string
 
 //go:embed sql/resource__list_tombstones.sql
 var sqlResourceListTombstones string
@@ -335,6 +356,9 @@ var sqlRuntimeIncidentInsert string
 
 //go:embed sql/runtime_incident__list.sql
 var sqlRuntimeIncidentList string
+
+//go:embed sql/owner_snapshot__fence.sql
+var sqlOwnerSnapshotFence string
 
 //go:embed sql/runtime_incident__get_for_update.sql
 var sqlRuntimeIncidentGetForUpdate string

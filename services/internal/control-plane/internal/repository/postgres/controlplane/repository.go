@@ -274,6 +274,7 @@ func (repository *Repository) List(
 					"actor_id":        filter.ActorID,
 					"kind":            string(filter.Kind),
 					"parent_id":       filter.ParentID,
+					"backup_id":       filter.BackupID,
 					"states":          states,
 					"after_id":        filter.AfterID,
 					"limit":           filter.Limit,
@@ -527,24 +528,33 @@ func (repository *Repository) ListRunGraphNodes(ctx context.Context, organizatio
 	var result []domainrepo.RunGraphNode
 	err := repository.read(ctx, organizationID, projectID, actorID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, sqlRunGraphNodes, pgx.StrictNamedArgs{"organization_id": organizationID,
-			"project_id": projectID, "actor_id": actorID, "process_run_id": processRunID})
+			"project_id": projectID, "actor_id": actorID, "process_run_id": processRunID,
+			"graph_process_limit": 1001, "graph_node_limit": 1001, "graph_hard_limit": 1000,
+			"after_node_type": "", "after_node_id": "", "limit": 1001})
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
+		overflow := false
 		for rows.Next() {
 			var item domainrepo.RunGraphNode
 			if err := rows.Scan(&item.NodeType, &item.ID, &item.State, &item.ParentProcessRunID,
 				&item.ProcessRunID, &item.SessionID, &item.TurnID, &item.RuntimeRevisionID,
 				&item.PredecessorID, &item.SuccessorID,
 				&item.Version, &item.RuntimeRevisionVersion, &item.Attempt,
-				&item.OccurredAt, &item.UpdatedAt); err != nil {
+				&item.OccurredAt, &item.UpdatedAt, &item.DisplayName, &overflow); err != nil {
 				return err
 			}
 			item.OccurredAt, item.UpdatedAt = item.OccurredAt.UTC(), item.UpdatedAt.UTC()
 			result = append(result, item)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if overflow {
+			return errs.ErrStateConflict
+		}
+		return nil
 	})
 	return result, err
 }
@@ -586,7 +596,8 @@ func (repository *Repository) ListRuntimeIncidents(
 		func(tx pgx.Tx) error {
 			rows, err := tx.Query(ctx, sqlRuntimeIncidentList, pgx.StrictNamedArgs{
 				"organization_id": filter.OrganizationID, "project_id": filter.ProjectID,
-				"actor_id": filter.ActorID, "after_id": filter.AfterID, "limit": filter.Limit,
+				"actor_id": filter.ActorID, "execution_id": filter.ExecutionID,
+				"after_id": filter.AfterID, "limit": filter.Limit,
 			})
 			if err != nil {
 				return err

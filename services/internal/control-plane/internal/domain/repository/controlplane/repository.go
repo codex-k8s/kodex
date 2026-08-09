@@ -845,6 +845,7 @@ type RunTimelineRepository interface {
 type RunGraphNode struct {
 	NodeType, ID, State, ParentProcessRunID            string
 	ProcessRunID, SessionID, TurnID, RuntimeRevisionID string
+	DisplayName                                        string
 	PredecessorID, SuccessorID                         string
 	ChildIDs                                           []string
 	Version, RuntimeRevisionVersion                    uint64
@@ -855,6 +856,41 @@ type RunGraphNode struct {
 type RunGraphRepository interface {
 	ListRunGraphNodes(context.Context, string, string, string, string) ([]RunGraphNode, error)
 	ListRunGraphArtifacts(context.Context, string, string, string, string, time.Time, string, int) ([]entity.Resource, error)
+}
+
+// OwnerReadTransaction строит composite owner projections из одного
+// serializable PostgreSQL snapshot. Cursor и все зависимые поля принадлежат
+// одной версии графа.
+type OwnerReadTransaction interface {
+	OwnerSnapshotFence(context.Context) (string, error)
+	ListOwnerResources(context.Context, query.ResourceFilter) ([]entity.Resource, error)
+	ListRuntimeIncidentsSnapshot(context.Context, query.RuntimeIncidentFilter) ([]RuntimeIncident, error)
+	ListProtectedResourceHistorySnapshot(context.Context, string, uint64, int) ([]ProtectedResourceHistory, error)
+	ListRuntimeIncidentHistorySnapshot(context.Context, string, uint64, int) ([]RuntimeIncidentHistory, error)
+	ListRunGraphNodesPage(context.Context, string, string, string, int) ([]RunGraphNode, bool, error)
+	ListRunTimelineAuditSnapshot(context.Context, []string, time.Time, string, int) ([]Audit, error)
+}
+
+type SchedulePromptPreparation struct {
+	OrganizationID, ProjectID, OwnerActorID string
+	KeyHash, RequestSHA256, SemanticSHA256  string
+	Action, TargetID, ObjectKey, State      string
+	ExpectedVersion, Generation             uint64
+	ObjectReference, ObjectVersionID        string
+	ObjectSHA256, ObjectMediaType           string
+	ObjectSize                              uint64
+	LeaseExpiresAt, CreatedAt, UpdatedAt    time.Time
+}
+
+// SchedulePromptPreparationTransaction предоставляет durable single-winner
+// вокруг внешнего object-store effect, не удерживая PostgreSQL transaction во
+// время сетевого RPC.
+type SchedulePromptPreparationTransaction interface {
+	GetSchedulePromptPreparation(context.Context, string) (SchedulePromptPreparation, error)
+	ReserveSchedulePromptPreparation(context.Context, SchedulePromptPreparation) (SchedulePromptPreparation, bool, error)
+	CompleteSchedulePromptPreparation(context.Context, SchedulePromptPreparation) error
+	MarkSchedulePromptPreparationAmbiguous(context.Context, SchedulePromptPreparation) error
+	ConsumeSchedulePromptPreparation(context.Context, string, string, uint64, string, uint64, time.Time) error
 }
 
 // WorkspaceRecoveryTransaction — единственный organization-wide path,

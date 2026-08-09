@@ -21,6 +21,7 @@ type ResourceFilter struct {
 	ProjectID      string
 	ActorID        string
 	ParentID       string
+	BackupID       string
 	Kind           enum.Kind
 	States         []enum.State
 	AfterID        string
@@ -69,6 +70,7 @@ type RuntimeIncidentFilter struct {
 	OrganizationID string
 	ProjectID      string
 	ActorID        string
+	ExecutionID    string
 	AfterID        string
 	Limit          int
 }
@@ -76,6 +78,7 @@ type RuntimeIncidentFilter struct {
 func (filter RuntimeIncidentFilter) Validate() error {
 	if value.ValidateID(filter.ActorID) != nil ||
 		filter.Limit < 1 || filter.Limit > MaximumPageSize ||
+		(filter.ExecutionID != "" && value.ValidateID(filter.ExecutionID) != nil) ||
 		(filter.AfterID != "" && value.ValidateID(filter.AfterID) != nil) {
 		return errors.New("runtime incident filter is invalid")
 	}
@@ -152,6 +155,9 @@ func (filter ResourceFilter) Validate() error {
 	}
 	if filter.ParentID != "" && value.ValidateID(filter.ParentID) != nil {
 		return errors.New("resource parent filter is invalid")
+	}
+	if filter.BackupID != "" && (filter.Kind != enum.KindWorkspaceRestore || value.ValidateID(filter.BackupID) != nil) {
+		return errors.New("resource backup filter is invalid")
 	}
 	if filter.AfterID != "" && value.ValidateID(filter.AfterID) != nil {
 		return errors.New("resource cursor is invalid")

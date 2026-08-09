@@ -8,15 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"regexp"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 )
-
-var configurationSecretPattern = regexp.MustCompile(`(?i)(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,})\b|\b[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\b|://[^/@[:space:]]+:[^/@[:space:]]+@)`)
 
 type configurationDiffCursor struct {
 	ComparisonSHA256    string `json:"comparisonSha256"`
@@ -99,43 +95,14 @@ func boundedLineChanges(left, right string) []ConfigurationChange {
 		if before == after {
 			continue
 		}
-		display := "TEXT"
-		if configurationLineSensitive(before) || configurationLineSensitive(after) {
-			before, after, display = "[REDACTED]", "[REDACTED]", "REDACTED"
-		} else {
-			before, after = boundedDisplayText(before), boundedDisplayText(after)
-		}
+		// InstructionSet content является произвольным owner-authored текстом и
+		// чувствителен по умолчанию. В v1 нет schema-owned allowlist безопасных
+		// typed values, поэтому add/remove/change/rename закрыто редактируются.
+		before, after, display := "[REDACTED]", "[REDACTED]", "REDACTED"
 		changes = append(changes, ConfigurationChange{Kind: kind,
 			Path: "/content/lines/" + strconv.Itoa(index+1), Display: display, Before: before, After: after})
 	}
 	return changes
-}
-
-func configurationLineSensitive(value string) bool {
-	if !utf8.ValidString(value) {
-		return true
-	}
-	lower := strings.ToLower(value)
-	for _, marker := range []string{"password", "passwd", "secret", "token", "private_key", "private key",
-		"authorization:", "cookie:", "dsn", "credential"} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return configurationSecretPattern.MatchString(value)
-}
-
-func boundedDisplayText(value string) string {
-	const maximum = 256
-	value = strings.TrimSpace(value)
-	if len(value) <= maximum {
-		return value
-	}
-	value = value[:maximum]
-	for !utf8.ValidString(value) {
-		value = value[:len(value)-1]
-	}
-	return value + "…"
 }
 
 func (service *Service) encodeConfigurationDiffCursor(cursor configurationDiffCursor) (string, error) {

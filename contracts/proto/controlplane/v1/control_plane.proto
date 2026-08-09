@@ -2065,6 +2065,17 @@ message AgentRuntimeSelectionProjection {
   OwnerProjectionStatus status = 7;
 }
 
+// OwnerSafeSelection возвращает только стабильный selector и безопасный
+// display exact server-resolved ресурса. Internal UUID в browser не попадает.
+message OwnerSafeSelection {
+  string stable_selector = 1;
+  string display_name = 2;
+  OwnerProjectionStatus status = 3;
+  uint64 version = 4;
+  string sha256 = 5;
+  string masked_status = 6;
+}
+
 message AgentOwnerProjection {
   string agent_ref = 1;
   string display_name = 2;
@@ -2075,6 +2086,8 @@ message AgentOwnerProjection {
   repeated string capabilities = 7;
   AgentBotIdentityProjection bot_identity = 8;
   AgentRuntimeSelectionProjection runtime_selection = 9;
+  OwnerSafeSelection instruction_selection = 10;
+  OwnerSafeSelection provider_pool_selection = 11;
 }
 
 message OwnerRuntimeSelectionCatalogEntry {
@@ -2560,6 +2573,7 @@ message RuntimeIncidentOwnerProjection {
   google.protobuf.Timestamp occurred_at = 12;
   google.protobuf.Timestamp updated_at = 13;
   repeated RuntimeIncidentNextAction next_actions = 14;
+  uint64 execution_fence = 15;
 }
 
 message ManageRuntimeIncidentRequest {
@@ -3135,6 +3149,23 @@ message OwnerScheduleProjection {
   google.protobuf.Duration maximum_backoff = 29;
   google.protobuf.Duration dead_letter_after = 30;
   google.protobuf.Duration maximum_execution_duration = 31;
+  OwnerSafeSelection agent_selection = 32;
+  OwnerSafeSelection instruction_selection = 33;
+  OwnerSafeSelection provider_pool_selection = 34;
+  OwnerSafeSelection room_selection = 35;
+  OwnerSchedulePromptProjection prompt = 36;
+}
+
+message OwnerSchedulePromptProjection {
+  string kind = 1;
+  oneof source {
+    string inline_markdown = 2;
+    string artifact_selector = 3;
+  }
+  string display_name = 4;
+  OwnerProjectionStatus status = 5;
+  uint64 version = 6;
+  string sha256 = 7;
 }
 
 enum OwnerScheduleCommandAction {
@@ -3441,6 +3472,11 @@ message RunOwnerProjection {
   google.protobuf.Timestamp updated_at = 10;
   google.protobuf.Duration duration = 11;
   repeated RunNextAction next_actions = 12;
+  OwnerDisplayValue initiator = 13;
+  OwnerDisplayValue agent = 14;
+  OwnerDisplayValue role = 15;
+  OwnerDisplayValue model = 16;
+  OwnerDisplayValue provider = 17;
 }
 
 enum RunTimelineKind {
@@ -3502,6 +3538,11 @@ message RunLineageNode {
   uint32 attempt = 6;
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
+  string display_name = 9;
+  OwnerDisplayValue agent = 10;
+  OwnerDisplayValue role = 11;
+  OwnerDisplayValue model = 12;
+  OwnerDisplayValue provider = 13;
 }
 
 message ManageRunRequest {
@@ -3516,6 +3557,8 @@ message ManageRunResponse {
   Resource process_run = 1;
   Resource successor_turn = 2;
   RunOwnerProjection projection = 3;
+  repeated RuntimeIncidentOwnerProjection incident_projections = 4;
+  string incidents_next_page_token = 5;
 }
 
 message ListOwnerRunsRequest {
@@ -3531,6 +3574,8 @@ message ListOwnerRunsResponse {
 
 message GetRunDetailRequest {
   string process_run_id = 1;
+  uint32 incident_page_size = 2;
+  string incident_page_token = 3;
 }
 message GetRunDetailResponse {
   Resource process_run = 1;
@@ -3541,6 +3586,7 @@ message GetRunDetailResponse {
   repeated RuntimeIncident incidents = 6;
   RunOwnerProjection projection = 7;
   repeated RuntimeIncidentOwnerProjection incident_projections = 8;
+  string incidents_next_page_token = 9;
 }
 
 message ListRunTimelineRequest {
@@ -3553,10 +3599,13 @@ message ListRunTimelineResponse {
   string next_page_token = 2;
   repeated RunTimelineEntry projections = 3;
   repeated RunNextAction next_actions = 4;
+  RunOwnerProjection run = 5;
 }
 
 message GetRunLineageRequest {
   string process_run_id = 1;
+  uint32 page_size = 2;
+  string page_token = 3;
 }
 message RunLineage {
   string root_session_id = 1;
@@ -3603,6 +3652,9 @@ message GetRunLineageResponse {
   RunLineage lineage = 1;
   repeated RunLineageNode projections = 2;
   repeated RunNextAction next_actions = 3;
+  string next_page_token = 4;
+  RunOwnerProjection run = 5;
+  bool truncated = 6;
 }
 
 message ListRunArtifactsRequest {

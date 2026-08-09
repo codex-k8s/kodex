@@ -286,6 +286,41 @@ func (client *Client) Put(ctx context.Context, projectID, key string, raw []byte
 	return readback, nil
 }
 
+func (client *Client) Get(ctx context.Context, expected domainobjectstore.Object) ([]byte, error) {
+	if expected.Reference == "" || expected.VersionID == "" || expected.Size == 0 ||
+		expected.Size > uint64(client.config.MaximumObjectBytes) || expected.MediaType != "text/markdown" ||
+		len(expected.SHA256) != sha256.Size*2 {
+		return nil, errors.New("S3 instruction object read input is invalid")
+	}
+	parsed, err := url.Parse(expected.Reference)
+	if err != nil || parsed.Scheme != "s3" || parsed.Host != client.config.Bucket ||
+		parsed.User != nil || parsed.Fragment != "" || parsed.RawQuery == "" ||
+		parsed.Query().Get("versionId") != expected.VersionID || len(parsed.Query()) != 1 {
+		return nil, errors.New("S3 instruction object read reference is invalid")
+	}
+	objectKey := strings.TrimPrefix(parsed.EscapedPath(), "/")
+	decodedKey, err := url.PathUnescape(objectKey)
+	if err != nil || invalidObjectKey(decodedKey) {
+		return nil, errors.New("S3 instruction object read key is invalid")
+	}
+	info, found, err := client.stat(ctx, decodedKey, expected.VersionID, int64(expected.Size),
+		expected.MediaType, expected.SHA256)
+	if err != nil || !found || info.Reference != expected.Reference {
+		return nil, errors.New("S3 instruction object read metadata failed")
+	}
+	object, err := client.client.GetObject(ctx, client.config.Bucket, decodedKey,
+		minio.GetObjectOptions{VersionID: expected.VersionID})
+	if err != nil {
+		return nil, errors.New("S3 instruction object read failed")
+	}
+	raw, readErr := io.ReadAll(io.LimitReader(object, int64(expected.Size)+1))
+	closeErr := object.Close()
+	if readErr != nil || closeErr != nil || uint64(len(raw)) != expected.Size || digest(raw) != expected.SHA256 {
+		return nil, errors.New("S3 instruction object readback failed")
+	}
+	return raw, nil
+}
+
 func (client *Client) stat(
 	ctx context.Context,
 	objectKey, versionID string,

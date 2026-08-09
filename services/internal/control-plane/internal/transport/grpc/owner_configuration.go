@@ -596,11 +596,7 @@ func (server *Server) GetAgent(ctx context.Context, request *controlplanev1.GetA
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	agent, err := server.service.GetProtectedConfiguration(ctx, principal, request.GetAgentId(), enum.KindAgent)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, agent)
+	projection, projectionErr := server.service.GetAgentOwner(ctx, principal, request.GetAgentId())
 	if projectionErr != nil {
 		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
@@ -617,22 +613,15 @@ func (server *Server) ListAgents(ctx context.Context, request *controlplanev1.Li
 		states = append(states, fromProtoState(state))
 	}
 	limit := pageSize(request.GetPageSize())
-	items, err := server.service.ListProtectedConfigurations(ctx, principal, enum.KindAgent,
-		states, request.GetPageToken(), limit)
+	items, next, err := server.service.ListAgentOwners(ctx, principal, states, request.GetPageToken(), limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.ListAgentsResponse{}
 	for _, item := range items {
-		projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, item)
-		if projectionErr != nil {
-			return nil, rpcError(principal.CorrelationID, projectionErr)
-		}
-		response.Projections = append(response.Projections, agentOwnerProjectionToProto(projection))
+		response.Projections = append(response.Projections, agentOwnerProjectionToProto(item))
 	}
-	if len(items) == limit {
-		response.NextPageToken = items[len(items)-1].ID
-	}
+	response.NextPageToken = next
 	return response, nil
 }
 
@@ -646,27 +635,18 @@ func (server *Server) ListAgentHistory(ctx context.Context, request *controlplan
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
 	limit := pageSize(request.GetPageSize())
-	items, err := server.service.ListProtectedResourceHistory(ctx, resource.ProtectedResourceHistoryInput{
-		Principal: principal, ResourceID: request.GetAgentId(), Kind: enum.KindAgent,
-		BeforeVersion: beforeVersion, Limit: limit,
-	})
+	items, next, err := server.service.ListAgentOwnerHistory(ctx, principal, request.GetAgentId(), beforeVersion, limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.ListAgentHistoryResponse{}
 	for _, item := range items {
-		projection, projectionErr := server.service.AgentOwnerProjection(ctx, principal, item.Resource)
-		if projectionErr != nil {
-			return nil, rpcError(principal.CorrelationID, projectionErr)
-		}
 		response.Projections = append(response.Projections, &controlplanev1.AgentOwnerHistoryEntry{
-			Projection: agentOwnerProjectionToProto(projection), Action: agentHistoryActionToProto(item.Action),
+			Projection: agentOwnerProjectionToProto(item.Projection), Action: agentHistoryActionToProto(item.Action),
 			SnapshotSha256: item.SnapshotSHA256, OccurredAt: timestamppb.New(item.OccurredAt),
 		})
 	}
-	if len(items) == limit {
-		response.NextPageToken = formatUint64PageToken(items[len(items)-1].Resource.Version)
-	}
+	response.NextPageToken = next
 	return response, nil
 }
 
@@ -856,9 +836,11 @@ func (server *Server) CreateScheduleFromOwnerSelections(
 		if createErr != nil {
 			return nil, rpcError(principal.CorrelationID, createErr)
 		}
-		projection, projectionOK := resource.OwnerScheduleProjectionFromResource(created)
-		if !projectionOK {
-			return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+		readPrincipal := principal
+		readPrincipal.Permission = "controlplane.resource.read"
+		projection, projectionErr := server.service.GetOwnerScheduleAtVersion(ctx, readPrincipal, created.ID, created.Version)
+		if projectionErr != nil {
+			return nil, rpcError(principal.CorrelationID, projectionErr)
 		}
 		return &controlplanev1.CreateScheduleFromOwnerSelectionsResponse{
 			Projection: ownerScheduleProjectionToProto(projection)}, nil
@@ -891,9 +873,11 @@ func (server *Server) CreateScheduleFromOwnerSelections(
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	projection, projectionOK := resource.OwnerScheduleProjectionFromResource(created)
-	if !projectionOK {
-		return nil, rpcError(principal.CorrelationID, errs.ErrInternal)
+	readPrincipal := principal
+	readPrincipal.Permission = "controlplane.resource.read"
+	projection, projectionErr := server.service.GetOwnerScheduleAtVersion(ctx, readPrincipal, created.ID, created.Version)
+	if projectionErr != nil {
+		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
 	return &controlplanev1.CreateScheduleFromOwnerSelectionsResponse{
 		Projection: ownerScheduleProjectionToProto(projection)}, nil
@@ -1068,11 +1052,7 @@ func (server *Server) GetWorkspaceRestore(ctx context.Context, request *controlp
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	item, err := server.service.GetProtectedConfiguration(ctx, principal, request.GetRestoreId(), enum.KindWorkspaceRestore)
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	projection, projectionErr := server.service.WorkspaceRestoreOwnerProjection(ctx, principal, item)
+	projection, projectionErr := server.service.GetWorkspaceRestoreOwner(ctx, principal, request.GetRestoreId())
 	if projectionErr != nil {
 		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
@@ -1093,29 +1073,16 @@ func (server *Server) ListWorkspaceRestores(ctx context.Context, request *contro
 		states = append(states, fromProtoState(state))
 	}
 	limit := pageSize(request.GetPageSize())
-	items, err := server.service.ListProtectedConfigurations(ctx, principal, enum.KindWorkspaceRestore,
+	items, next, err := server.service.ListWorkspaceRestoreOwners(ctx, principal, request.GetBackupId(),
 		states, request.GetPageToken(), limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.ListWorkspaceRestoresResponse{}
-	for _, item := range items {
-		spec, ok := item.Spec.(entity.WorkspaceRestoreSpec)
-		if !ok {
-			return nil, rpcError(principal.CorrelationID, errs.ErrStateConflict)
-		}
-		if request.GetBackupId() != "" && spec.BackupID != request.GetBackupId() {
-			continue
-		}
-		projection, projectionErr := server.service.WorkspaceRestoreOwnerProjection(ctx, principal, item)
-		if projectionErr != nil {
-			return nil, rpcError(principal.CorrelationID, projectionErr)
-		}
+	for _, projection := range items {
 		response.Projections = append(response.Projections, workspaceRestoreOwnerProjectionToProto(projection))
 	}
-	if len(items) == limit {
-		response.NextPageToken = items[len(items)-1].ID
-	}
+	response.NextPageToken = next
 	return response, nil
 }
 
@@ -1153,13 +1120,7 @@ func (server *Server) GetRuntimeIncident(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	incident, err := server.service.GetRuntimeIncident(ctx, resource.GetRuntimeIncidentInput{
-		Principal: principal, IncidentID: request.GetIncidentId(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	projection, projectionErr := server.service.RuntimeIncidentOwnerProjection(ctx, principal, incident)
+	projection, projectionErr := server.service.GetRuntimeIncidentOwner(ctx, principal, request.GetIncidentId())
 	if projectionErr != nil {
 		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
@@ -1180,40 +1141,27 @@ func (server *Server) ListRuntimeIncidentHistory(
 		return nil, rpcError(principal.CorrelationID, errs.ErrInvalidInput)
 	}
 	limit := pageSize(request.GetPageSize())
-	history, err := server.service.ListRuntimeIncidentHistory(ctx, resource.ListRuntimeIncidentHistoryInput{
-		Principal: principal, IncidentID: request.GetIncidentId(), BeforeVersion: beforeVersion, Limit: limit,
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	incident, err := server.service.GetRuntimeIncident(ctx, resource.GetRuntimeIncidentInput{
-		Principal: principal, IncidentID: request.GetIncidentId(),
-	})
-	if err != nil {
-		return nil, rpcError(principal.CorrelationID, err)
-	}
-	projection, err := server.service.RuntimeIncidentOwnerProjection(ctx, principal, incident)
+	history, err := server.service.ListRuntimeIncidentOwnerHistory(ctx, principal,
+		request.GetIncidentId(), beforeVersion, limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.ListRuntimeIncidentHistoryResponse{
-		Entries:     make([]*controlplanev1.RuntimeIncidentHistoryEntry, 0, len(history)),
-		NextActions: runtimeIncidentNextActionsToProto(projection.NextActions),
+		Entries:     make([]*controlplanev1.RuntimeIncidentHistoryEntry, 0, len(history.Entries)),
+		NextActions: runtimeIncidentNextActionsToProto(history.Current.NextActions),
 	}
-	for _, entry := range history {
+	for _, entry := range history.Entries {
 		item := &controlplanev1.RuntimeIncidentHistoryEntry{
 			Version: entry.Version, State: runtimeIncidentStateToProto(entry.State),
 			Action: runtimeIncidentActionToProto(entry.Action), ReasonCode: entry.ReasonCode,
-			OccurredAt: timestamppb.New(entry.OccurredAt),
+			OccurredAt: timestamppb.New(entry.OccurredAt), ExecutionFence: entry.ExecutionFence,
 		}
-		if entry.Version == projection.Version {
-			item.NextActions = runtimeIncidentNextActionsToProto(projection.NextActions)
+		if entry.Version == history.Current.Version && entry.ExecutionFence == history.Current.ExecutionFence {
+			item.NextActions = runtimeIncidentNextActionsToProto(history.Current.NextActions)
 		}
 		response.Entries = append(response.Entries, item)
 	}
-	if len(history) == limit {
-		response.NextPageToken = formatUint64PageToken(history[len(history)-1].Version)
-	}
+	response.NextPageToken = history.NextPageToken
 	return response, nil
 }
 
@@ -1256,15 +1204,23 @@ func (server *Server) ManageRun(
 	response := &controlplanev1.ManageRunResponse{}
 	readPrincipal := principal
 	readPrincipal.Permission = "controlplane.resource.read"
-	detail, detailErr := server.service.GetRunDetail(ctx, readPrincipal, result.ProcessRun.ID)
+	detail, detailErr := server.service.GetRunDetailPage(ctx, readPrincipal, result.ProcessRun.ID, 100, "")
 	if detailErr != nil {
 		return nil, rpcError(principal.CorrelationID, detailErr)
+	}
+	if detail.ProcessRun.Version != result.ProcessRun.Version {
+		return nil, rpcError(principal.CorrelationID, errs.ErrVersionMismatch)
 	}
 	projection, projectionErr := server.service.RunOwnerProjection(ctx, principal, detail)
 	if projectionErr != nil {
 		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
 	response.Projection = runOwnerProjectionToProto(projection)
+	for _, incident := range detail.IncidentProjections {
+		response.IncidentProjections = append(response.IncidentProjections,
+			runtimeIncidentOwnerProjectionToProto(incident))
+	}
+	response.IncidentsNextPageToken = detail.IncidentsNextPageToken
 	return response, nil
 }
 
@@ -1276,16 +1232,13 @@ func (server *Server) GetRunDetail(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	result, err := server.service.GetRunDetail(ctx, principal, request.GetProcessRunId())
+	result, err := server.service.GetRunDetailPage(ctx, principal, request.GetProcessRunId(),
+		pageSize(request.GetIncidentPageSize()), request.GetIncidentPageToken())
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
 	response := &controlplanev1.GetRunDetailResponse{}
-	for _, incident := range result.Incidents {
-		projection, projectionErr := server.service.RuntimeIncidentOwnerProjection(ctx, principal, incident)
-		if projectionErr != nil {
-			return nil, rpcError(principal.CorrelationID, projectionErr)
-		}
+	for _, projection := range result.IncidentProjections {
 		response.IncidentProjections = append(response.IncidentProjections,
 			runtimeIncidentOwnerProjectionToProto(projection))
 	}
@@ -1294,6 +1247,7 @@ func (server *Server) GetRunDetail(
 		return nil, rpcError(principal.CorrelationID, projectionErr)
 	}
 	response.Projection = runOwnerProjectionToProto(projection)
+	response.IncidentsNextPageToken = result.IncidentsNextPageToken
 	return response, nil
 }
 
@@ -1305,32 +1259,24 @@ func (server *Server) GetRunLineage(
 	if err != nil {
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
-	lineage, err := server.service.GetRunLineage(ctx, principal, request.GetProcessRunId())
+	lineage, err := server.service.GetRunLineagePage(ctx, principal, request.GetProcessRunId(),
+		pageSize(request.GetPageSize()), request.GetPageToken())
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	detail, detailErr := server.service.GetRunDetail(ctx, principal, request.GetProcessRunId())
-	if detailErr != nil {
-		return nil, rpcError(principal.CorrelationID, detailErr)
-	}
-	ownerProjection, projectionErr := server.service.RunOwnerProjection(ctx, principal, detail)
-	if projectionErr != nil {
-		return nil, rpcError(principal.CorrelationID, projectionErr)
-	}
-	response := &controlplanev1.GetRunLineageResponse{}
-	lineageProjections, lineageProjectionErr := resource.RunLineageOwnerProjections(lineage)
-	if lineageProjectionErr != nil {
-		return nil, rpcError(principal.CorrelationID, lineageProjectionErr)
-	}
-	for _, item := range lineageProjections {
+	response := &controlplanev1.GetRunLineageResponse{NextPageToken: lineage.NextPageToken,
+		Run: runOwnerProjectionToProto(lineage.Run), Truncated: lineage.Truncated}
+	for _, item := range lineage.Projections {
 		response.Projections = append(response.Projections, &controlplanev1.RunLineageNode{
 			NodeRef: item.NodeRef, ParentRef: item.ParentRef,
 			Kind: runLineageKindToProto(item.Kind), State: runLineageStateToProto(item.State),
 			Version: item.Version, Attempt: item.Attempt, CreatedAt: timestamppb.New(item.CreatedAt),
-			UpdatedAt: timestamppb.New(item.UpdatedAt),
+			UpdatedAt: timestamppb.New(item.UpdatedAt), DisplayName: item.DisplayName,
+			Agent: ownerDisplayValueToProto(item.Agent), Role: ownerDisplayValueToProto(item.Role),
+			Model: ownerDisplayValueToProto(item.Model), Provider: ownerDisplayValueToProto(item.Provider),
 		})
 	}
-	for _, action := range ownerProjection.NextActions {
+	for _, action := range lineage.Run.NextActions {
 		response.NextActions = append(response.NextActions, runNextActionToProto(action))
 	}
 	return response, nil
@@ -1345,20 +1291,12 @@ func (server *Server) ListRunTimeline(
 		return nil, rpcError("", errs.ErrUnauthenticated)
 	}
 	limit := pageSize(request.GetPageSize())
-	items, next, err := server.service.ListRunTimeline(ctx, principal, request.GetProcessRunId(), request.GetPageToken(), limit)
+	page, err := server.service.ListRunTimelineOwner(ctx, principal, request.GetProcessRunId(), request.GetPageToken(), limit)
 	if err != nil {
 		return nil, rpcError(principal.CorrelationID, err)
 	}
-	response := &controlplanev1.ListRunTimelineResponse{}
-	detail, detailErr := server.service.GetRunDetail(ctx, principal, request.GetProcessRunId())
-	if detailErr != nil {
-		return nil, rpcError(principal.CorrelationID, detailErr)
-	}
-	ownerProjection, projectionErr := server.service.RunOwnerProjection(ctx, principal, detail)
-	if projectionErr != nil {
-		return nil, rpcError(principal.CorrelationID, projectionErr)
-	}
-	for _, item := range resource.RunTimelineOwnerProjections(items, ownerProjection.NextActions) {
+	response := &controlplanev1.ListRunTimelineResponse{Run: runOwnerProjectionToProto(page.Run)}
+	for _, item := range page.Projections {
 		projection := &controlplanev1.RunTimelineEntry{EventRef: item.EventRef,
 			Kind: runTimelineKindToProto(item.Kind), Display: item.Display,
 			Outcome: runTimelineOutcomeToProto(item.Outcome), Version: item.Version,
@@ -1368,10 +1306,10 @@ func (server *Server) ListRunTimeline(
 		}
 		response.Projections = append(response.Projections, projection)
 	}
-	for _, action := range ownerProjection.NextActions {
+	for _, action := range page.Run.NextActions {
 		response.NextActions = append(response.NextActions, runNextActionToProto(action))
 	}
-	response.NextPageToken = next
+	response.NextPageToken = page.NextPageToken
 	return response, nil
 }
 

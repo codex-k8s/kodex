@@ -4,6 +4,7 @@ import (
 	"time"
 
 	domainobjectstore "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/client/objectstore"
+	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/enum"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/types/value"
@@ -32,6 +33,12 @@ type AgentRuntimeSelectionProjection struct {
 	Status                                       OwnerProjectionStatus
 }
 
+type OwnerSafeSelection struct {
+	StableSelector, DisplayName, SHA256, MaskedStatus string
+	Status                                            OwnerProjectionStatus
+	Version                                           uint64
+}
+
 type AgentOwnerProjection struct {
 	AgentRef, DisplayName, StableKey string
 	Version                          uint64
@@ -40,6 +47,15 @@ type AgentOwnerProjection struct {
 	Capabilities                     []string
 	BotIdentity                      AgentBotIdentityProjection
 	RuntimeSelection                 AgentRuntimeSelectionProjection
+	InstructionSelection             OwnerSafeSelection
+	ProviderPoolSelection            OwnerSafeSelection
+}
+
+type AgentOwnerHistoryProjection struct {
+	Projection     AgentOwnerProjection
+	Action         string
+	SnapshotSHA256 string
+	OccurredAt     time.Time
 }
 
 type OwnerRuntimeSelectionCatalogEntry struct {
@@ -76,6 +92,8 @@ type OwnerConfigurationCatalog struct {
 type OwnerSchedulePromptInput struct {
 	Kind, InlineMarkdown, ArtifactName string
 	Object                             domainobjectstore.Object
+	PreparationKeyHash                 string
+	PreparationGeneration              uint64
 }
 
 type OwnerScheduleOverrides struct {
@@ -121,6 +139,17 @@ type OwnerScheduleProjection struct {
 	NotificationPolicy                          string
 	Coalesce                                    bool
 	NextRunAt                                   time.Time
+	AgentSelection, InstructionSelection        OwnerSafeSelection
+	ProviderPoolSelection, RoomSelection        OwnerSafeSelection
+	Prompt                                      OwnerSchedulePromptProjection
+}
+
+type OwnerSchedulePromptProjection struct {
+	Kind, InlineMarkdown, ArtifactSelector string
+	DisplayName, SHA256                    string
+	Status                                 OwnerProjectionStatus
+	Version                                uint64
+	Object                                 domainobjectstore.Object
 }
 
 type OwnerDisplayValue struct {
@@ -133,6 +162,8 @@ type RunOwnerProjection struct {
 	Version                           uint64
 	State                             enum.State
 	Workspace, Trigger, RuntimeStatus OwnerDisplayValue
+	Initiator, Agent, Role            OwnerDisplayValue
+	Model, Provider                   OwnerDisplayValue
 	Attempt                           uint32
 	StartedAt, UpdatedAt              time.Time
 	Duration                          time.Duration
@@ -146,11 +177,18 @@ type RunTimelineProjection struct {
 	NextActions                      []string
 }
 
+type RunTimelineOwnerPage struct {
+	Projections   []RunTimelineProjection
+	Run           RunOwnerProjection
+	NextPageToken string
+}
+
 type RunLineageProjection struct {
-	NodeRef, ParentRef, Kind, State string
-	Version                         uint64
-	Attempt                         uint32
-	CreatedAt, UpdatedAt            time.Time
+	NodeRef, ParentRef, Kind, State, DisplayName string
+	Version                                      uint64
+	Attempt                                      uint32
+	CreatedAt, UpdatedAt                         time.Time
+	Agent, Role, Model, Provider                 OwnerDisplayValue
 }
 
 type RunArtifactProjection struct {
@@ -163,11 +201,26 @@ type RunArtifactProjection struct {
 type RuntimeIncidentOwnerProjection struct {
 	IncidentRef, Kind, State, Severity, Impact string
 	Version                                    uint64
+	ExecutionFence                             uint64
 	Workspace, Run                             OwnerDisplayValue
 	SafeCorrelation, DiagnosticSummary         string
 	RunbookURL                                 string
 	OccurredAt, UpdatedAt                      time.Time
 	NextActions                                []string
+}
+
+type RuntimeIncidentOwnerHistoryPage struct {
+	Entries       []domainrepo.RuntimeIncidentHistory
+	Current       RuntimeIncidentOwnerProjection
+	NextPageToken string
+}
+
+type RunLineageOwnerPage struct {
+	Lineage       RunLineageResult
+	Projections   []RunLineageProjection
+	Run           RunOwnerProjection
+	NextPageToken string
+	Truncated     bool
 }
 
 type WorkspaceRestoreOwnerProjection struct {
