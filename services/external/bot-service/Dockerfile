@@ -17,7 +17,7 @@ ENV GOTOOLCHAIN=local
 WORKDIR /workspace
 
 COPY go.mod go.sum ./
-COPY libs/go/i18n/ libs/go/i18n/
+COPY libs/go/ libs/go/
 COPY services/external/bot-service/ services/external/bot-service/
 
 RUN test "$(go env GOVERSION)" = "go1.26.5"
@@ -36,7 +36,7 @@ COPY --from=build /go/pkg/mod /go/pkg/mod
 COPY --from=build /out/bot-service /usr/local/bin/bot-service
 COPY --from=build /root/.cache/go-build /tmp/.cache/go-build
 COPY --from=build /workspace/go.mod /workspace/go.sum ./
-COPY --from=build /workspace/libs/go/i18n/ libs/go/i18n/
+COPY --from=build /workspace/libs/go/ libs/go/
 COPY --from=build /workspace/services/external/bot-service/ services/external/bot-service/
 COPY --from=control-center-build /workspace/apps/control-center/dist /srv/matter-codex/control-center
 RUN chown -R app:app /tmp/.cache
