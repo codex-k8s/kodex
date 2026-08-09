@@ -30,7 +30,7 @@ type Server struct {
 
 func New(service *domainbot.Service) (*Server, error) {
 	if service == nil {
-		return nil, errors.New("Agent Mattermost bot identity gRPC service is required")
+		return nil, errors.New("agent Mattermost bot identity gRPC service is required")
 	}
 	return &Server{service: service}, nil
 }
@@ -73,7 +73,8 @@ func (server *Server) CreateAndBindAgentMattermostBotIdentity(ctx context.Contex
 		return nil, transportError(ctx, err)
 	}
 	return &interactiongatewayv1.CreateAndBindAgentMattermostBotIdentityResponse{
-		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding)}, nil
+		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding),
+	}, nil
 }
 
 func (server *Server) BindAgentMattermostBotIdentity(ctx context.Context,
@@ -94,7 +95,8 @@ func (server *Server) BindAgentMattermostBotIdentity(ctx context.Context,
 		return nil, transportError(ctx, err)
 	}
 	return &interactiongatewayv1.BindAgentMattermostBotIdentityResponse{
-		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding)}, nil
+		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding),
+	}, nil
 }
 
 func (server *Server) GetAgentMattermostBotIdentity(ctx context.Context,
@@ -135,7 +137,8 @@ func (server *Server) RebindAgentMattermostBotIdentity(ctx context.Context,
 		return nil, transportError(ctx, err)
 	}
 	return &interactiongatewayv1.RebindAgentMattermostBotIdentityResponse{
-		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding)}, nil
+		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding),
+	}, nil
 }
 
 func (server *Server) RevokeAgentMattermostBotIdentity(ctx context.Context,
@@ -156,7 +159,8 @@ func (server *Server) RevokeAgentMattermostBotIdentity(ctx context.Context,
 		return nil, transportError(ctx, err)
 	}
 	return &interactiongatewayv1.RevokeAgentMattermostBotIdentityResponse{
-		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding)}, nil
+		Operation: casters.OperationView(operation), Binding: casters.BindingView(binding),
+	}, nil
 }
 
 func (server *Server) GetAgentMattermostBotIdentityOperation(ctx context.Context,
@@ -177,7 +181,8 @@ func (server *Server) GetAgentMattermostBotIdentityOperation(ctx context.Context
 		return nil, transportError(ctx, err)
 	}
 	return &interactiongatewayv1.GetAgentMattermostBotIdentityOperationResponse{
-		Operation: casters.OperationView(operation)}, nil
+		Operation: casters.OperationView(operation),
+	}, nil
 }
 
 func (server *Server) GetAgentMattermostBotIdentityProviderReadback(ctx context.Context,
@@ -198,7 +203,8 @@ func (server *Server) GetAgentMattermostBotIdentityProviderReadback(ctx context.
 		return nil, transportError(ctx, err)
 	}
 	return &interactiongatewayv1.GetAgentMattermostBotIdentityProviderReadbackResponse{
-		Identity: casters.IdentityView(identity)}, nil
+		Identity: casters.IdentityView(identity),
+	}, nil
 }
 
 func (server *Server) CheckAgentMattermostBotIdentityReadiness(ctx context.Context,
@@ -217,15 +223,12 @@ func (server *Server) CheckAgentMattermostBotIdentityReadiness(ctx context.Conte
 	if _, castErr := casters.AgentRequest(agentRef); castErr != nil {
 		return nil, invalidRequest(ctx)
 	}
-	if err := server.service.Check(ctx); err != nil {
-		return nil, transportError(ctx, err)
-	}
-	if err := server.service.CheckAgent(ctx, principal, agentRef); err != nil {
-		return &interactiongatewayv1.CheckAgentMattermostBotIdentityReadinessResponse{
-			SchemaVersion: 1, AuthorityReady: true, PostgresReady: true,
-			FailureCode: "IDENTITY_GENERATION_NOT_READY"}, nil
-	}
-	return &interactiongatewayv1.CheckAgentMattermostBotIdentityReadinessResponse{Ready: true,
-		SchemaVersion: 1, AuthorityReady: true, PostgresReady: true, MattermostReady: true,
-		ControlPlaneReady: true, IdentityGenerationReady: true}, nil
+	readiness := server.service.CheckAgent(ctx, principal, agentRef)
+	return &interactiongatewayv1.CheckAgentMattermostBotIdentityReadinessResponse{
+		Ready: readiness.Ready, SchemaVersion: 1, AuthorityReady: true,
+		PostgresReady: readiness.PostgresReady, MattermostReady: readiness.MattermostReady,
+		ControlPlaneReady:       readiness.ControlPlaneReady,
+		IdentityGenerationReady: readiness.IdentityGenerationReady,
+		FailureCode:             readiness.FailureCode,
+	}, nil
 }

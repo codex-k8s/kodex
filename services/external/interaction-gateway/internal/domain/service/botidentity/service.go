@@ -30,7 +30,6 @@ const (
 	ownerGetFullMethod            = "/controlplane.v1.ControlPlaneService/GetAgent"
 	failureProviderOutcomeUnknown = "PROVIDER_OUTCOME_UNKNOWN"
 	failureProviderMismatch       = "PROVIDER_READBACK_MISMATCH"
-	failureRecoveryTimeout        = "RECOVERY_TIMEOUT"
 	providerName                  = "mattermost"
 )
 
@@ -44,6 +43,7 @@ var (
 type Metrics interface {
 	ObserveBotIdentityOperation(string, string)
 	ObserveExternalEffect(string, string)
+	SetBotIdentityRepairBacklog(string, float64)
 }
 
 type OwnerClient interface {
@@ -65,6 +65,15 @@ type Config struct {
 	SelectorTTL      time.Duration
 	RecoveryInterval time.Duration
 	RecoveryWindow   time.Duration
+}
+
+type AgentReadiness struct {
+	Ready                   bool
+	PostgresReady           bool
+	MattermostReady         bool
+	ControlPlaneReady       bool
+	IdentityGenerationReady bool
+	FailureCode             string
 }
 
 type Service struct {
@@ -89,8 +98,10 @@ func New(repository domainrepo.Repository, provider domainmattermost.BotIdentity
 		config.RecoveryWindow <= config.RecoveryInterval || config.RecoveryWindow > time.Hour {
 		return nil, errors.New("agent Mattermost bot identity service configuration is invalid")
 	}
-	return &Service{repository: repository, provider: provider, credentials: credentials,
-		owner: owner, teams: teams, receipts: receipts, metrics: metrics, config: config}, nil
+	return &Service{
+		repository: repository, provider: provider, credentials: credentials,
+		owner: owner, teams: teams, receipts: receipts, metrics: metrics, config: config,
+	}, nil
 }
 
 func (service *Service) Check(ctx context.Context) error {
@@ -103,7 +114,7 @@ func (service *Service) Check(ctx context.Context) error {
 	if err := service.credentials.Check(ctx); err != nil {
 		return err
 	}
-	return nil
+	return service.refreshRepairMetrics(ctx)
 }
 
 func (service *Service) List(ctx context.Context, principal entity.TeamPrincipal, pageSize uint32,
@@ -170,8 +181,10 @@ func (service *Service) CreateAndBind(ctx context.Context, principal entity.Team
 		IdempotencyKey: idempotencyKey, AgentRef: agentRef, ExpectedAgentVersion: expectedAgentVersion,
 		RequestSHA256: requestSHA, State: enum.AgentBotOperationEffectPending,
 		IdentityRef: uuid.NewSHA1(identityNamespace, []byte(operationID)).String(),
-		Intent: entity.AgentMattermostBotCreateIntent{AgentRef: agentRef, ExpectedAgentVersion: expectedAgentVersion,
-			Username: username, DisplayName: displayName, ProviderCorrelation: correlation, RequestSHA256: requestSHA},
+		Intent: entity.AgentMattermostBotCreateIntent{
+			AgentRef: agentRef, ExpectedAgentVersion: expectedAgentVersion,
+			Username: username, DisplayName: displayName, ProviderCorrelation: correlation, RequestSHA256: requestSHA,
+		},
 	}
 	stored, disposition, err := service.repository.BeginOperation(ctx, operation, service.config.InstanceID,
 		service.config.Lease, service.config.RecoveryWindow)
@@ -277,7 +290,7 @@ func (service *Service) bindExisting(ctx context.Context, principal entity.TeamP
 		if err := service.repository.CloseGeneration(ctx, stored, predecessorGeneration); err != nil {
 			return stored, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
 		}
-		if err := service.revokeCredential(ctx, predecessor.Identity); err != nil {
+		if err := service.revokeCredential(ctx, principal, predecessor.Identity); err != nil {
 			return service.deferRecovery(ctx, stored, failureProviderOutcomeUnknown)
 		}
 	}
@@ -339,7 +352,7 @@ func (service *Service) Revoke(ctx context.Context, principal entity.TeamPrincip
 	if err != nil {
 		return stored, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
 	}
-	providerTokenRevoked, err := service.provider.RevokeBotAccessToken(ctx, binding.Identity)
+	providerTokenRevoked, err := service.provider.RevokeBotAccessToken(ctx, principal, binding.Identity)
 	if err != nil {
 		return service.deferRecovery(ctx, stored, failureProviderOutcomeUnknown)
 	}
@@ -443,30 +456,66 @@ func (service *Service) ReadProvider(ctx context.Context, principal entity.TeamP
 
 func (service *Service) CheckAgent(ctx context.Context, principal entity.TeamPrincipal,
 	agentRef string,
-) error {
-	binding, err := service.Get(ctx, principal, agentRef)
-	if err != nil || binding.Identity.Status != enum.AgentBotIdentityAvailable ||
-		binding.Identity.CredentialBindingID == "" || binding.Identity.CredentialSecretVersion == 0 {
-		return errors.New("Agent Mattermost bot identity is not ready")
+) AgentReadiness {
+	result := AgentReadiness{FailureCode: "POSTGRES_NOT_READY"}
+	if validatePrincipal(principal) != nil || uuid.Validate(agentRef) != nil {
+		result.FailureCode = "AUTHORITY_NOT_READY"
+		return result
 	}
-	admitted, err := service.repository.AdmitRuntimeIdentity(ctx, principal, binding.Identity.AgentStableKey,
-		binding.Identity.ProviderUserID, binding.Identity.ProviderGeneration)
-	if err != nil || admitted.IdentityRef != binding.Identity.IdentityRef {
-		return errors.New("Agent Mattermost bot identity generation is not ready")
+	if err := service.repository.Check(ctx); err != nil {
+		return result
 	}
-	_, err = service.credentials.ReadBotToken(ctx, binding.Identity.CredentialBindingID,
-		binding.Identity.CredentialSecretVersion, binding.Identity.CredentialSHA256)
+	result.PostgresReady = true
+	if err := service.provider.CheckBotIdentityLifecycle(ctx); err != nil {
+		result.FailureCode = "MATTERMOST_LIFECYCLE_NOT_READY"
+		return result
+	}
+	if err := service.credentials.Check(ctx); err != nil {
+		result.FailureCode = "CREDENTIAL_STORE_NOT_READY"
+		return result
+	}
+	binding, err := service.repository.GetBinding(ctx, principal, agentRef)
+	if err != nil || binding.Identity.Status != enum.AgentBotIdentityAvailable {
+		result.FailureCode = "IDENTITY_BINDING_NOT_READY"
+		return result
+	}
+	_, teamBinding, err := service.resolveOwner(ctx, principal, agentRef)
 	if err != nil {
-		return errors.New("Agent Mattermost bot credential is not ready")
+		result.FailureCode = "CONTROL_PLANE_READBACK_NOT_READY"
+		return result
 	}
-	return nil
+	result.ControlPlaneReady = true
+	if binding.Identity.ProviderTeamID != teamBinding.Team.ProviderTeamID ||
+		binding.Identity.ProviderObjectRef == "" || binding.Identity.ProviderGeneration == 0 {
+		result.FailureCode = "OWNER_PREDECESSOR_NOT_READY"
+		return result
+	}
+	_, _, failure := service.proveRuntimeBotToken(ctx, principal, binding.Identity.AgentStableKey,
+		binding.Identity.ProviderUserID, binding.Identity.ProviderGeneration)
+	if failure != "" {
+		if failure == "CONTROL_PLANE_READBACK_NOT_READY" {
+			result.ControlPlaneReady = false
+		}
+		result.FailureCode = failure
+		return result
+	}
+	result.IdentityGenerationReady, result.MattermostReady = true, true
+	result.Ready, result.FailureCode = true, ""
+	return result
 }
 
 func (service *Service) ProcessRecovery(ctx context.Context) (bool, error) {
-	operation, found, err := service.repository.ClaimRecovery(ctx, service.config.InstanceID, service.config.Lease)
-	if err != nil || !found {
+	claim, err := service.repository.ClaimRecovery(ctx, service.config.InstanceID, service.config.Lease)
+	if err != nil {
 		return false, err
 	}
+	if metricErr := service.refreshRepairMetrics(ctx); metricErr != nil {
+		return false, metricErr
+	}
+	if !claim.Found {
+		return false, nil
+	}
+	operation := claim.Operation
 	var outcomeErr error
 	if operation.State == enum.AgentBotOperationProviderAccepted {
 		_, _, outcomeErr = service.recoverOwnerOutcome(ctx, operation)
@@ -483,9 +532,6 @@ func (service *Service) ProcessRecovery(ctx context.Context) (bool, error) {
 		identity, readErr := service.provider.RecoverCreatedBotIdentity(ctx, operation.Principal,
 			operation.Intent, teamBinding.Team.ProviderTeamID)
 		if readErr != nil {
-			if time.Now().UTC().After(operation.RecoveryDeadline) {
-				_ = service.repository.MarkRepairRequired(ctx, operation, failureRecoveryTimeout)
-			}
 			outcomeErr = mapProviderError(readErr)
 			break
 		}
@@ -527,7 +573,7 @@ func (service *Service) ProcessRecovery(ctx context.Context) (bool, error) {
 				outcomeErr = domainerrs.ErrConflict
 				break
 			}
-			if revokeErr := service.revokeCredential(ctx, predecessor.Identity); revokeErr != nil {
+			if revokeErr := service.revokeCredential(ctx, operation.Principal, predecessor.Identity); revokeErr != nil {
 				outcomeErr = domainerrs.ErrUnavailable
 				break
 			}
@@ -549,7 +595,7 @@ func (service *Service) ProcessRecovery(ctx context.Context) (bool, error) {
 			outcomeErr = mapRepositoryError(bindingErr)
 			break
 		}
-		providerTokenRevoked, tokenErr := service.provider.RevokeBotAccessToken(ctx, binding.Identity)
+		providerTokenRevoked, tokenErr := service.provider.RevokeBotAccessToken(ctx, operation.Principal, binding.Identity)
 		if tokenErr != nil {
 			outcomeErr = domainerrs.ErrUnavailable
 			break
@@ -595,7 +641,18 @@ func (service *Service) ProcessRecovery(ctx context.Context) (bool, error) {
 		_, _, outcomeErr = service.applyOwner(ctx, operation, owner)
 	}
 	service.metrics.ObserveBotIdentityOperation("recovery", outcome(outcomeErr))
+	_ = service.refreshRepairMetrics(ctx)
 	return true, outcomeErr
+}
+
+func (service *Service) refreshRepairMetrics(ctx context.Context) error {
+	backlog, err := service.repository.RepairBacklog(ctx)
+	if err != nil {
+		return err
+	}
+	service.metrics.SetBotIdentityRepairBacklog("recovery_timeout", float64(backlog.RecoveryTimeout))
+	service.metrics.SetBotIdentityRepairBacklog("other", float64(backlog.Other))
+	return nil
 }
 
 func (service *Service) RequireCurrentGeneration(ctx context.Context, principal entity.TeamPrincipal,
@@ -628,31 +685,52 @@ func (service *Service) ResolveCurrentRuntimeIdentity(ctx context.Context, princ
 func (service *Service) ReadCurrentRuntimeBotToken(ctx context.Context, principal entity.TeamPrincipal,
 	agentStableKey, providerUserID string, generation uint64,
 ) (entity.AgentMattermostBotIdentity, string, error) {
+	identity, token, failure := service.proveRuntimeBotToken(ctx, principal, agentStableKey, providerUserID, generation)
+	if failure != "" {
+		return entity.AgentMattermostBotIdentity{}, "", domainerrs.ErrUnauthorized
+	}
+	return identity, token, nil
+}
+
+func (service *Service) proveRuntimeBotToken(ctx context.Context, principal entity.TeamPrincipal,
+	agentStableKey, providerUserID string, generation uint64,
+) (entity.AgentMattermostBotIdentity, string, string) {
 	var identity entity.AgentMattermostBotIdentity
 	var err error
 	if generation == 0 {
-		identity, err = service.ResolveCurrentRuntimeIdentity(ctx, principal, agentStableKey, providerUserID)
+		identity, err = service.repository.ResolveRuntimeIdentity(ctx, principal, agentStableKey, providerUserID)
 	} else {
-		identity, err = service.RequireCurrentGeneration(ctx, principal, agentStableKey, providerUserID, generation)
-		if err == nil {
-			var fresh entity.AgentMattermostBotIdentity
-			fresh, err = service.provider.ReadBotIdentity(ctx, principal, identity.ProviderUserID, identity.ProviderTeamID)
-			if err == nil && (fresh.Status != enum.AgentBotIdentityAvailable ||
-				fresh.ProviderSnapshotSHA256 != identity.ProviderSnapshotSHA256) {
-				err = domainerrs.ErrUnauthorized
-			}
-		}
+		identity, err = service.repository.AdmitRuntimeIdentity(ctx, principal, agentStableKey, providerUserID, generation)
 	}
-	if err != nil || identity.CredentialBindingID == "" || identity.CredentialSecretVersion == 0 ||
+	if err != nil || identity.Status != enum.AgentBotIdentityAvailable ||
+		identity.CredentialBindingID == "" || identity.CredentialSecretVersion == 0 ||
 		identity.CredentialSHA256 == "" {
-		return entity.AgentMattermostBotIdentity{}, "", domainerrs.ErrUnauthorized
+		return entity.AgentMattermostBotIdentity{}, "", "IDENTITY_GENERATION_NOT_READY"
+	}
+	fresh, err := service.provider.ReadBotIdentity(ctx, principal, identity.ProviderUserID, identity.ProviderTeamID)
+	if err != nil || fresh.Status != enum.AgentBotIdentityAvailable ||
+		fresh.ProviderSnapshotSHA256 != identity.ProviderSnapshotSHA256 {
+		return entity.AgentMattermostBotIdentity{}, "", "MATTERMOST_IDENTITY_NOT_READY"
+	}
+	owner, teamBinding, err := service.resolveOwner(ctx, principal, identity.AgentRef)
+	if err != nil {
+		return entity.AgentMattermostBotIdentity{}, "", "CONTROL_PLANE_READBACK_NOT_READY"
+	}
+	if owner.BotIdentityRef != identity.ProviderObjectRef ||
+		owner.BotProviderGeneration != identity.ProviderGeneration ||
+		owner.BotMaskedStatus != string(identity.Status) ||
+		teamBinding.Mapping.ID == "" || identity.ProviderTeamID != teamBinding.Team.ProviderTeamID {
+		return entity.AgentMattermostBotIdentity{}, "", "OWNER_PREDECESSOR_NOT_READY"
 	}
 	token, err := service.credentials.ReadBotToken(ctx, identity.CredentialBindingID,
 		identity.CredentialSecretVersion, identity.CredentialSHA256)
 	if err != nil || token == "" {
-		return entity.AgentMattermostBotIdentity{}, "", domainerrs.ErrUnauthorized
+		return entity.AgentMattermostBotIdentity{}, "", "CREDENTIAL_NOT_READY"
 	}
-	return identity, token, nil
+	if err := service.provider.VerifyRuntimeBotCredential(ctx, principal, identity, token); err != nil {
+		return entity.AgentMattermostBotIdentity{}, "", "MATTERMOST_RUNTIME_NOT_READY"
+	}
+	return identity, token, ""
 }
 
 func (service *Service) completeCreatedProvider(ctx context.Context, operation entity.AgentMattermostBotOperation,
@@ -692,7 +770,7 @@ func (service *Service) ensureCredential(ctx context.Context, operation entity.A
 		if correlation == "" {
 			correlation = operation.ID
 		}
-		tokenID, active, resolveErr := service.provider.ResolveBotAccessToken(ctx, identity, correlation)
+		tokenID, active, resolveErr := service.provider.ResolveBotAccessToken(ctx, operation.Principal, identity, correlation)
 		if resolveErr != nil || tokenID == "" || !active {
 			return entity.AgentMattermostBotIdentity{}, errors.New("recovered bot credential has no active provider token")
 		}
@@ -705,12 +783,12 @@ func (service *Service) ensureCredential(ctx context.Context, operation entity.A
 	if correlation == "" {
 		correlation = operation.ID
 	}
-	if _, found, err := service.provider.RecoverBotAccessToken(ctx, identity, correlation); err != nil {
+	if _, found, err := service.provider.RecoverBotAccessToken(ctx, operation.Principal, identity, correlation); err != nil {
 		return entity.AgentMattermostBotIdentity{}, err
 	} else if found {
 		service.metrics.ObserveExternalEffect("revoke_orphan_bot_token", "success")
 	}
-	tokenID, token, err := service.provider.CreateBotAccessToken(ctx, identity, correlation)
+	tokenID, token, err := service.provider.CreateBotAccessToken(ctx, operation.Principal, identity, correlation)
 	if err != nil {
 		return entity.AgentMattermostBotIdentity{}, err
 	}
@@ -776,12 +854,14 @@ func (service *Service) refreshProviderCheckpoint(ctx context.Context,
 	return operation, nil
 }
 
-func (service *Service) revokeCredential(ctx context.Context, identity entity.AgentMattermostBotIdentity) error {
+func (service *Service) revokeCredential(ctx context.Context, principal entity.TeamPrincipal,
+	identity entity.AgentMattermostBotIdentity,
+) error {
 	if identity.ProviderTokenID == "" || identity.CredentialBindingID == "" ||
 		identity.CredentialSecretVersion == 0 {
-		return errors.New("Agent bot predecessor credential is incomplete")
+		return errors.New("agent bot predecessor credential is incomplete")
 	}
-	providerRevoked, err := service.provider.RevokeBotAccessToken(ctx, identity)
+	providerRevoked, err := service.provider.RevokeBotAccessToken(ctx, principal, identity)
 	if err != nil {
 		return err
 	}
@@ -806,6 +886,18 @@ func (service *Service) applyOwner(ctx context.Context, operation entity.AgentMa
 	if action == enum.AgentBotActionCreateAndBind {
 		action = enum.AgentBotActionBind
 	}
+	if err := service.requireProviderOwnerCheckpoint(ctx, operation); err != nil {
+		_ = service.repository.MarkRepairRequired(ctx, operation, "PROVIDER_OWNER_PREDECESSOR_MISMATCH")
+		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
+	}
+	freshOwner, teamBinding, resolveErr := service.resolveOwner(ctx, operation.Principal, operation.AgentRef)
+	if resolveErr != nil || !sameOwnerPredecessor(owner, freshOwner) ||
+		teamBinding.Mapping.ID == "" || teamBinding.Mapping.State != "BOUND" ||
+		teamBinding.Team.ProviderTeamID != operation.Identity.ProviderTeamID {
+		_ = service.repository.MarkRepairRequired(ctx, operation, "OWNER_PREDECESSOR_MISMATCH")
+		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
+	}
+	owner = freshOwner
 	if !ownerMatchesPredecessor(operation, owner) {
 		_ = service.repository.MarkRepairRequired(ctx, operation, "OWNER_PREDECESSOR_MISMATCH")
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
@@ -816,28 +908,33 @@ func (service *Service) applyOwner(ctx context.Context, operation entity.AgentMa
 	} else if action == enum.AgentBotActionRevoke {
 		actionValue = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
 	}
-	authority := controlplanecontract.VerifiedCommandAuthority{ActorID: operation.Principal.ActorID,
+	authority := controlplanecontract.VerifiedCommandAuthority{
+		ActorID:        operation.Principal.ActorID,
 		OrganizationID: operation.Principal.OrganizationID, ProjectID: operation.Principal.ProjectID,
-		WorkloadID: "interaction-gateway", FullMethod: ownerManageFullMethod}
+		WorkloadID: "interaction-gateway", FullMethod: ownerManageFullMethod,
+	}
 	intentSHA, err := controlplanecontract.AgentMattermostBotIdentityIntentSHA256(authority,
-		&controlplanev1.ManageAgentMattermostBotIdentityRequest{Action: actionValue,
-			AgentId: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion}, owner.AgentStableKey)
+		&controlplanev1.ManageAgentMattermostBotIdentityRequest{
+			Action:  actionValue,
+			AgentId: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion,
+		}, owner.AgentStableKey)
 	if err != nil {
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
 	}
 	receiptID := uuid.NewString()
+	mappingProofRef, err := agentBotMappingProofRef(teamBinding.Mapping)
+	if err != nil {
+		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
+	}
 	receipt := domaincontrol.ProviderEffectReceipt{
 		FullMethod: ownerManageFullMethod, ActorID: operation.Principal.ActorID,
 		OrganizationID: operation.Principal.OrganizationID, ProjectID: operation.Principal.ProjectID,
-		WorkspaceID: operation.Principal.ProjectID, ProviderTeamRef: operation.Identity.ProviderTeamID,
+		WorkspaceID: operation.Principal.ProjectID, ProviderTeamRef: mappingProofRef,
 		ProviderObjectRef: operation.Identity.ProviderObjectRef, ProviderUsername: operation.Identity.Username,
 		Action: action, Effect: "agent_bot_identity", EffectVersion: operation.Identity.ProviderVersion,
 		EffectGeneration: operation.Identity.ProviderGeneration, EffectSHA256: operation.Identity.ProviderSnapshotSHA256,
 		ReceiptID: receiptID, ReceiptRevision: operation.Identity.ProviderGeneration,
-		CredentialBindingID:      operation.Identity.CredentialBindingID,
-		CredentialBindingVersion: operation.Identity.CredentialSecretVersion,
-		CredentialBindingSHA256:  operation.Identity.CredentialSHA256,
-		Provider:                 providerName, MaskedLabel: operation.Identity.DisplayName,
+		Provider: providerName, MaskedLabel: operation.Identity.DisplayName,
 		Capabilities: []string{"mattermost.post", "mattermost.readback"},
 		MaskedStatus: string(operation.Identity.Status), Eligible: operation.Identity.Status == enum.AgentBotIdentityAvailable,
 		TargetKind: "agent_bot_identity", TargetResourceID: operation.AgentRef,
@@ -852,15 +949,21 @@ func (service *Service) applyOwner(ctx context.Context, operation entity.AgentMa
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
 	}
 	managed, err := service.owner.ManageAgentMattermostBotIdentity(ctx,
-		domaincontrol.ManageAgentMattermostBotIdentityInput{IdempotencyKey: operation.IdempotencyKey,
-			Action: action, AgentRef: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion,
-			Credential: credential})
+		domaincontrol.ManageAgentMattermostBotIdentityInput{
+			IdempotencyKey: operation.IdempotencyKey,
+			Action:         action, AgentRef: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion,
+			Credential: credential,
+		})
 	if err != nil {
 		return service.deferRecovery(ctx, operation, "OWNER_OUTCOME_UNKNOWN")
 	}
 	if managed.BotReceiptID != receiptID || managed.BotReceiptVersion != operation.Identity.ProviderGeneration ||
 		managed.BotReceiptSHA256 != receiptSHA {
 		_ = service.repository.MarkRepairRequired(ctx, operation, "OWNER_READBACK_MISMATCH")
+		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
+	}
+	if err := service.requireProviderOwnerCheckpoint(ctx, operation); err != nil {
+		_ = service.repository.MarkRepairRequired(ctx, operation, "PROVIDER_OWNER_READBACK_MISMATCH")
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
 	}
 	return service.finishOwnerOutcome(ctx, operation, managed)
@@ -874,6 +977,10 @@ func (service *Service) finishOwnerOutcome(ctx context.Context, operation entity
 		_ = service.repository.MarkRepairRequired(ctx, operation, "OWNER_READBACK_MISMATCH")
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
 	}
+	if err := service.requireProviderOwnerCheckpoint(ctx, operation); err != nil {
+		_ = service.repository.MarkRepairRequired(ctx, operation, "PROVIDER_OWNER_READBACK_MISMATCH")
+		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrConflict
+	}
 	action := operation.Action
 	if action == enum.AgentBotActionCreateAndBind {
 		action = enum.AgentBotActionBind
@@ -884,17 +991,23 @@ func (service *Service) finishOwnerOutcome(ctx context.Context, operation entity
 	} else if action == enum.AgentBotActionRevoke {
 		actionValue = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
 	}
-	authority := controlplanecontract.VerifiedCommandAuthority{ActorID: operation.Principal.ActorID,
+	authority := controlplanecontract.VerifiedCommandAuthority{
+		ActorID:        operation.Principal.ActorID,
 		OrganizationID: operation.Principal.OrganizationID, ProjectID: operation.Principal.ProjectID,
-		WorkloadID: "interaction-gateway", FullMethod: ownerManageFullMethod}
+		WorkloadID: "interaction-gateway", FullMethod: ownerManageFullMethod,
+	}
 	intentSHA, err := controlplanecontract.AgentMattermostBotIdentityIntentSHA256(authority,
-		&controlplanev1.ManageAgentMattermostBotIdentityRequest{Action: actionValue,
-			AgentId: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion}, owner.AgentStableKey)
+		&controlplanev1.ManageAgentMattermostBotIdentityRequest{
+			Action:  actionValue,
+			AgentId: operation.AgentRef, ExpectedVersion: operation.ExpectedAgentVersion,
+		}, owner.AgentStableKey)
 	if err != nil {
 		return operation, entity.AgentMattermostBotBinding{}, domainerrs.ErrUnavailable
 	}
-	binding := entity.AgentMattermostBotBinding{AgentRef: owner.AgentRef, AgentVersion: owner.AgentVersion,
-		Identity: operation.Identity, ReceiptSHA256: owner.BotReceiptSHA256, UpdatedAt: time.Now().UTC()}
+	binding := entity.AgentMattermostBotBinding{
+		AgentRef: owner.AgentRef, AgentVersion: owner.AgentVersion,
+		Identity: operation.Identity, ReceiptSHA256: owner.BotReceiptSHA256, UpdatedAt: time.Now().UTC(),
+	}
 	operation.ReceiptID, operation.ReceiptRevision, operation.ReceiptSHA256 = owner.BotReceiptID,
 		owner.BotReceiptVersion, owner.BotReceiptSHA256
 	operation.CommandIntentSHA256, operation.Result = intentSHA, binding
@@ -909,6 +1022,20 @@ func (service *Service) finishOwnerOutcome(ctx context.Context, operation entity
 	operation.Result = binding
 	service.metrics.ObserveBotIdentityOperation(action, "success")
 	return operation, binding, nil
+}
+
+func (service *Service) requireProviderOwnerCheckpoint(ctx context.Context,
+	operation entity.AgentMattermostBotOperation,
+) error {
+	stored := operation.Identity
+	fresh, err := service.provider.ReadBotIdentity(ctx, operation.Principal,
+		stored.ProviderUserID, stored.ProviderTeamID)
+	if err != nil || fresh.ProviderUserID != stored.ProviderUserID || fresh.ProviderTeamID != stored.ProviderTeamID ||
+		fresh.Status != stored.Status || fresh.ProviderVersion != stored.ProviderVersion ||
+		fresh.ProviderSnapshotSHA256 != stored.ProviderSnapshotSHA256 {
+		return errors.New("provider owner checkpoint mismatch")
+	}
+	return nil
 }
 
 func ownerMatchesPredecessor(operation entity.AgentMattermostBotOperation,
@@ -949,10 +1076,14 @@ func (service *Service) resolveOwner(ctx context.Context, principal entity.TeamP
 	}
 	intentSHA := requestDigest(principal, "agent_source_read", agentRef,
 		fmt.Sprint(binding.Mapping.Version), fmt.Sprint(binding.Mapping.Generation), binding.Team.ProviderSnapshotSHA256)
+	mappingProofRef, err := agentBotMappingProofRef(binding.Mapping)
+	if err != nil {
+		return domaincontrol.AgentMattermostBotOwner{}, entity.WorkspaceMattermostBinding{}, domainerrs.ErrUnavailable
+	}
 	credential, err := service.receipts.Sign(domaincontrol.ProviderEffectReceipt{
 		FullMethod: ownerGetFullMethod, ActorID: principal.ActorID, OrganizationID: principal.OrganizationID,
 		ProjectID: principal.ProjectID, WorkspaceID: principal.ProjectID,
-		ProviderTeamRef: binding.Team.ProviderTeamID, ProviderObjectRef: binding.Team.ProviderTeamID,
+		ProviderTeamRef: mappingProofRef, ProviderObjectRef: mappingProofRef,
 		ProviderUsername: "source-readback", Action: "read", Effect: "agent_bot_identity_source_readback",
 		EffectVersion: binding.Mapping.ProviderEffectVersion, EffectGeneration: binding.Mapping.ProviderEffectGeneration,
 		EffectSHA256: binding.Team.ProviderSnapshotSHA256, ReceiptID: uuid.NewString(),
@@ -968,6 +1099,19 @@ func (service *Service) resolveOwner(ctx context.Context, principal entity.TeamP
 		return domaincontrol.AgentMattermostBotOwner{}, entity.WorkspaceMattermostBinding{}, mapOwnerError(err)
 	}
 	return owner, binding, nil
+}
+
+func agentBotMappingProofRef(mapping entity.WorkspaceMattermostMapping) (string, error) {
+	return controlplanecontract.AgentBotMappingProofRef(mapping.ID, mapping.Version, mapping.Generation,
+		mapping.ProviderEffectVersion, mapping.ProviderEffectGeneration)
+}
+
+func sameOwnerPredecessor(expected, current domaincontrol.AgentMattermostBotOwner) bool {
+	return expected.AgentRef == current.AgentRef && expected.AgentVersion == current.AgentVersion &&
+		expected.AgentStableKey == current.AgentStableKey && expected.BotIdentityRef == current.BotIdentityRef &&
+		expected.BotProviderGeneration == current.BotProviderGeneration &&
+		expected.BotMaskedStatus == current.BotMaskedStatus && expected.BotReceiptID == current.BotReceiptID &&
+		expected.BotReceiptVersion == current.BotReceiptVersion && expected.BotReceiptSHA256 == current.BotReceiptSHA256
 }
 
 func (service *Service) replayOutcome(operation entity.AgentMattermostBotOperation,
@@ -1040,9 +1184,11 @@ func normalizeBotIntent(usernameIntent, displayName, operationID string) (string
 func stableOperationID(principal entity.TeamPrincipal, agentRef string, expectedAgentVersion,
 	predecessorGeneration uint64,
 ) string {
-	return uuid.NewSHA1(operationNamespace, []byte(strings.Join([]string{principal.OrganizationID,
+	return uuid.NewSHA1(operationNamespace, []byte(strings.Join([]string{
+		principal.OrganizationID,
 		principal.ProjectID, agentRef, fmt.Sprint(expectedAgentVersion),
-		fmt.Sprint(predecessorGeneration)}, "\x00"))).String()
+		fmt.Sprint(predecessorGeneration),
+	}, "\x00"))).String()
 }
 
 func stableProviderObjectRef(principal entity.TeamPrincipal, providerUserID string) string {
@@ -1052,8 +1198,10 @@ func stableProviderObjectRef(principal entity.TeamPrincipal, providerUserID stri
 }
 
 func requestDigest(principal entity.TeamPrincipal, values ...string) string {
-	values = append([]string{"agent-mattermost-bot-intent-v1", principal.ActorID,
-		principal.OrganizationID, principal.ProjectID}, values...)
+	values = append([]string{
+		"agent-mattermost-bot-intent-v1", principal.ActorID,
+		principal.OrganizationID, principal.ProjectID,
+	}, values...)
 	digest := sha256.Sum256([]byte(strings.Join(values, "\x00")))
 	return hex.EncodeToString(digest[:])
 }

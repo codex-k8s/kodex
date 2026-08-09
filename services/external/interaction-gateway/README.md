@@ -175,7 +175,7 @@ operation-bound суффиксу; provider UserID, BotID, TeamID и credential b
 | Membership accepted/already present | exact bot доказан и Team разрешён current mapping | одна assign/membership mutation с последующим exact membership readback; already-present принимается только при exact bot/team | checkpoint `MEMBERSHIP_PENDING` до effect, затем `PROVIDER_ACCEPTED`; ambiguous восстанавливается readback, не повтором | BIND только после exact membership proof |
 | Membership forbidden/ambiguous | тот же operation winner | raw provider diagnostics скрыты; только exact bot/team membership readback | `AMBIGUOUS` до deadline либо `REPAIR_REQUIRED`; retry только readback | owner command отсутствует до доказательства |
 | Bind existing accepted | Agent без current identity; opaque selector scoped actor/org/project; fresh bot/user/team readback | provider mutation отсутствует | один winner по Agent+exact predecessor для всех конкурирующих action и actor; fresh receipt/JTI только после нового readback | `BIND`; terminal `BOUND` с owner version и provider generation |
-| Rebind accepted | current owner version/generation и identity predecessor совпадают | fresh target readback; provider mutation отсутствует | старый local admission atomically закрывается до owner attempt; outcome сохраняет exact predecessor | `REBIND` с OCC; успех выдаётся только после owner readback новой generation |
+| Rebind accepted | current owner version/generation и identity predecessor совпадают; свежий `Bot.OwnerId` равен server-resolved actor Mattermost User | fresh target readback; прежний exact token отзывается и новый token создаётся только между owner pre/post-readback fences | старый local admission atomically закрывается до первого credential effect; raced/foreign owner даёт ambiguous/repair без выдачи token | `REBIND` с OCC; успех выдаётся только после fresh provider owner и owner readback новой generation |
 | Rebind stale/conflict/open graph | stale expected version/generation либо owner gate запрещает переход | provider effect отсутствует | operation terminal `CONFLICT`/`FAILED_PRECONDITION`; закрытая старая admission не воскресает | typed owner error и authoritative get; новый effect отсутствует |
 | Revoke accepted | exact current owner version/generation | disable/revoke effect checkpoint фиксируется до provider call; затем include-deleted/disabled readback | `REVOKE_PENDING -> PROVIDER_ACCEPTED`; ambiguous effect восстанавливается readback; generation закрыта до provider call | signed receipt → `REVOKE`; terminal `REVOKED`; owner get/operation/provider-readback |
 | Bot disabled/deleted до команды | identity разрешена из current owner state | include-deleted readback доказывает disabled/deleted | current generation немедленно inadmissible; repair/revoke operation без synthetic success | readiness false; revoke допускается только с exact evidence и owner OCC |
@@ -187,7 +187,7 @@ operation-bound суффиксу; provider UserID, BotID, TeamID и credential b
 | Crash после owner accept/до ответа | owner receipt мог быть принят | provider effect и новый owner transition запрещены | worker выполняет owner authoritative get и связывает exact receipt/intent/version/generation | durable `BOUND`/`REVOKED` возвращается повтору |
 | Worker lease expiry | DB-time lease/fence истёк | effect запрещён до startup barrier; новый worker делает readback | monotonic lease generation; stale worker не записывает checkpoint/outcome | продолжение той же operation, не новая команда |
 | Receipt replay | existing operation и exact provider checkpoint | fresh exact readback обязателен | новый ES256 JWS: exact `aud`, `purpose`, JTI, target/action/effect, intent hash, authority tuple, provider version/generation и digests | consumer recomputes canonical intent from typed command; replay mismatch/used JTI fail closed |
-| Readiness | current owner identity, provider generation, credential binding и runtime route должны совпасть | exact bot enabled/non-deleted, Team membership и minimal authenticated read | read-only; mismatch не ремонтируется автоматически | per-identity false с safe reason; общий `/readyz` false только для обязательных current routes |
+| Readiness | current signed control-plane owner identity, provider generation, credential binding и runtime route должны совпасть | exact Bot owner/Team membership/active token и authenticated `GetMe`; тот же proof выполняется runtime admission | read-only; signer/trust, Vault, owner, token или generation mismatch не ремонтируется автоматически | bounded per-component reason; per-identity и общий `/readyz` закрыты для обязательных current routes |
 | Stale inbound/delivery/artifact | route identity generation меньше current high-watermark либо revoked | provider effect запрещён | joined admission row и high-watermark проверяются после reclaim и прямо перед effect | closed typed failure; stale identity не создаёт Session/Turn, delivery или grant |
 
 Процесс и management gRPC запускаются после dependency barrier даже до первого
@@ -201,8 +201,11 @@ workers на каждом пути всё равно требуют admitted cur
 `ProviderEffectReadbackReceipt` — единственное переносимое доказательство effect:
 gateway подписывает versioned canonical claims и сохраняет terminal JTI/digest
 операции, а control-plane в owner-транзакции выполняет one-use consume и хранит
-replay/revocation state. Ни одна сторона не сохраняет raw credential или private
-provider payload во внешнем readback. Receipt связывает exact workload, audience, full owner method,
+replay/revocation state. Для Agent bot receipt переносит только opaque proof
+exact mapping version/generation и gateway-owned bot ref: raw Team ID, credential binding ID, Vault
+version и token digest остаются исключительно в durable state gateway. Ни одна
+сторона не сохраняет raw credential или private provider payload во внешнем readback.
+Receipt связывает exact workload, audience, full owner method,
 actor/org/project, Agent stable key, action, predecessor version/generation,
 provider effect version/generation и semantic intent hash. После возможного
 provider effect разрешены только readback/recovery; любое повторение mutation

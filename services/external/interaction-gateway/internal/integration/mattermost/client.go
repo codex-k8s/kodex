@@ -360,7 +360,7 @@ func (client *Client) resolveLifecycle(ctx context.Context, raw domainmattermost
 
 func (client *Client) getMappedChannel(ctx context.Context, bot *botClient, teamID, channelID string) (*model.Channel, error) {
 	if bot == nil || invalidProviderID(teamID) || invalidProviderID(channelID) {
-		return nil, errors.New("Mattermost mapped channel reference is invalid")
+		return nil, errors.New("mattermost mapped channel reference is invalid")
 	}
 	channels, _, err := bot.api.GetChannelsForTeamForUser(ctx, teamID, bot.identity.UserID, true, "")
 	if err != nil {
@@ -371,7 +371,7 @@ func (client *Client) getMappedChannel(ctx context.Context, bot *botClient, team
 			return channel, nil
 		}
 	}
-	return nil, errors.New("Mattermost mapped channel is unavailable")
+	return nil, errors.New("mattermost mapped channel is unavailable")
 }
 
 func (client *Client) ResolveDelivery(ctx context.Context, projectID, actorID string) (entity.Boundary, error) {
@@ -397,16 +397,16 @@ func (client *Client) ValidateRuntimeBotIdentity(ctx context.Context, teamID, ch
 ) error {
 	if invalidProviderID(teamID) || invalidProviderID(channelID) || stableKey == "" ||
 		invalidProviderID(providerUserID) || generation == 0 {
-		return errors.New("Mattermost runtime bot identity boundary is invalid")
+		return errors.New("mattermost runtime bot identity boundary is invalid")
 	}
 	route, err := client.runtimeRoute(ctx, teamID, channelID)
 	if err != nil || client.runtimeBots == nil || !client.runtimeStableKeyAllowed(route, stableKey) {
-		return errors.New("Mattermost runtime bot identity route is not current")
+		return errors.New("mattermost runtime bot identity route is not current")
 	}
 	identity, err := client.runtimeBots.ResolveCurrentRuntimeIdentity(ctx, route.Principal, stableKey, providerUserID)
 	if err != nil || identity.ProviderUserID != providerUserID || identity.ProviderGeneration != generation ||
 		identity.ProviderTeamID != teamID || identity.Status != "AVAILABLE" {
-		return errors.New("Mattermost runtime bot identity generation is stale")
+		return errors.New("mattermost runtime bot identity generation is stale")
 	}
 	return nil
 }
@@ -537,10 +537,6 @@ func (client *Client) runtimeBot(ctx context.Context, principal entity.TeamPrinc
 	api := model.NewAPIv4Client(client.config.SiteURL)
 	api.AuthToken, api.AuthType, api.HTTPClient = token, model.HeaderBearer, client.httpClient
 	bot := &botClient{identity: BotIdentity{StableKey: stableKey, UserID: identity.ProviderUserID}, api: api, token: token}
-	user, _, err := api.GetMe(ctx, "")
-	if err != nil || user == nil || user.Id != identity.ProviderUserID || !user.IsBot || user.DeleteAt != 0 {
-		return nil, entity.AgentMattermostBotIdentity{}, errors.New("mattermost runtime bot credential readback failed")
-	}
 	return bot, identity, nil
 }
 
@@ -881,39 +877,39 @@ func (client *Client) ReadinessBoundary(ctx context.Context) (entity.Boundary, e
 
 func (client *Client) AuthenticateArtifactDownload(ctx context.Context, bearer string, grant entity.DownloadGrant) error {
 	if !strings.HasPrefix(bearer, "Bearer ") || strings.ContainsAny(bearer, "\r\n\x00") {
-		return errors.New("Mattermost artifact credential is invalid")
+		return errors.New("mattermost artifact credential is invalid")
 	}
 	token := strings.TrimSpace(strings.TrimPrefix(bearer, "Bearer "))
 	if len(token) < 16 || len(token) > 16<<10 {
-		return errors.New("Mattermost artifact credential is invalid")
+		return errors.New("mattermost artifact credential is invalid")
 	}
 	api := model.NewAPIv4Client(client.config.SiteURL)
 	api.AuthToken, api.AuthType, api.HTTPClient = token, model.HeaderBearer, client.httpClient
 	user, _, err := api.GetMe(ctx, "")
 	if err != nil || user == nil || user.Id != grant.MattermostUserID || user.DeleteAt != 0 || user.IsBot {
-		return errors.New("Mattermost artifact actor is invalid")
+		return errors.New("mattermost artifact actor is invalid")
 	}
 	route, err := client.runtimeRoute(ctx, grant.TeamID, grant.ChannelID)
 	if err != nil {
-		return errors.New("Mattermost artifact actor boundary mismatch")
+		return errors.New("mattermost artifact actor boundary mismatch")
 	}
 	boundary, _, err := client.resolveRuntimeBoundary(route, user.Id, false)
 	if err != nil || boundary.OrganizationID != grant.OrganizationID || boundary.ProjectID != grant.ProjectID ||
 		boundary.ActorID != grant.ActorID || boundary.TeamID != grant.TeamID || boundary.ChannelID != grant.ChannelID {
-		return errors.New("Mattermost artifact actor boundary mismatch")
+		return errors.New("mattermost artifact actor boundary mismatch")
 	}
 	if client.runtimeBots == nil {
-		return errors.New("Mattermost artifact bot identity reader is unavailable")
+		return errors.New("mattermost artifact bot identity reader is unavailable")
 	}
 	identity, err := client.runtimeBots.ResolveCurrentRuntimeIdentity(ctx, route.Principal,
 		grant.BotStableKey, grant.BotProviderUserID)
 	if err != nil || identity.ProviderUserID != grant.BotProviderUserID ||
 		identity.ProviderGeneration != grant.BotProviderGeneration || identity.ProviderTeamID != grant.TeamID {
-		return errors.New("Mattermost artifact bot identity is stale")
+		return errors.New("mattermost artifact bot identity is stale")
 	}
 	member, _, err := client.primary.api.GetChannelMember(ctx, grant.ChannelID, user.Id, "")
 	if err != nil || member == nil || member.ChannelId != grant.ChannelID || member.UserId != user.Id {
-		return errors.New("Mattermost artifact channel membership is invalid")
+		return errors.New("mattermost artifact channel membership is invalid")
 	}
 	return nil
 }

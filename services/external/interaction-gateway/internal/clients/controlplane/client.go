@@ -588,7 +588,7 @@ func (client *Client) ManageWorkspaceMattermostMapping(ctx context.Context,
 }
 
 func providerReceiptToProto(value domaincontrol.ProviderEffectReceipt) *controlplanev1.ProviderEffectReadbackReceipt {
-	return &controlplanev1.ProviderEffectReadbackReceipt{
+	receipt := &controlplanev1.ProviderEffectReadbackReceipt{
 		ContractVersion: value.ContractVersion, Issuer: value.Issuer, Purpose: value.Purpose,
 		WorkloadId: value.WorkloadID, CallerSpiffeId: value.CallerSPIFFEID, FullMethod: value.FullMethod,
 		ActorId: value.ActorID, OrganizationId: value.OrganizationID, ProjectId: value.ProjectID,
@@ -606,6 +606,12 @@ func providerReceiptToProto(value domaincontrol.ProviderEffectReceipt) *controlp
 		ProviderUsername:         value.ProviderUsername, Provider: value.Provider,
 		MaskedLabel: value.MaskedLabel, Capabilities: slices.Clone(value.Capabilities),
 	}
+	if value.TargetKind == "agent_bot_identity" {
+		receipt.CredentialBindingId = ""
+		receipt.CredentialBindingVersion = 0
+		receipt.CredentialBindingSha256 = ""
+	}
+	return receipt
 }
 
 func (client *Client) GetAgentMattermostBotIdentity(ctx context.Context,

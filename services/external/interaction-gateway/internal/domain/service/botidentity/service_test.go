@@ -76,8 +76,10 @@ func TestRevokeClosesGenerationBeforeProviderEffect(t *testing.T) {
 	t.Parallel()
 	closed := false
 	identity := testIdentity(enum.AgentBotIdentityAvailable, 4)
-	binding := entity.AgentMattermostBotBinding{AgentRef: testAgentRef, AgentVersion: 7, Identity: identity,
-		ReceiptSHA256: hexDigest("a")}
+	binding := entity.AgentMattermostBotBinding{
+		AgentRef: testAgentRef, AgentVersion: 7, Identity: identity,
+		ReceiptSHA256: hexDigest("a"),
+	}
 	repository := &fakeRepository{binding: binding}
 	repository.begin = func(operation entity.AgentMattermostBotOperation) (entity.AgentMattermostBotOperation, domainrepo.Disposition, error) {
 		operation.Fence, operation.LeaseToken = 1, "lease"
@@ -107,13 +109,15 @@ func TestRevokeClosesGenerationBeforeProviderEffect(t *testing.T) {
 		}
 		return nil
 	}
-	provider := &fakeProvider{revoke: func(value entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotIdentity, error) {
+	provider := &fakeProvider{}
+	provider.revoke = func(value entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotIdentity, error) {
 		if !closed {
 			t.Fatal("provider revoke ran before stale generation closure")
 		}
 		value.Status, value.ProviderVersion, value.ProviderSnapshotSHA256 = enum.AgentBotIdentityRevoked, 2, hexDigest("b")
+		provider.readIdentity = value
 		return value, nil
-	}}
+	}
 	credentials := &fakeCredentials{revoke: func(bindingID string, version uint64) error {
 		if bindingID != identity.CredentialBindingID || version != identity.CredentialSecretVersion {
 			t.Fatal("wrong credential version revoked")
@@ -128,11 +132,13 @@ func TestRevokeClosesGenerationBeforeProviderEffect(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return domaincontrol.AgentMattermostBotOwner{AgentRef: testAgentRef, AgentStableKey: "agent-primary",
+		return domaincontrol.AgentMattermostBotOwner{
+			AgentRef: testAgentRef, AgentStableKey: "agent-primary",
 			AgentVersion: 8, BotIdentityRef: input.Credential.Receipt.ProviderObjectRef, BotProviderGeneration: 5,
 			BotMaskedStatus: string(enum.AgentBotIdentityRevoked),
 			BotReceiptID:    input.Credential.Receipt.ReceiptID, BotReceiptVersion: input.Credential.Receipt.ReceiptRevision,
-			BotReceiptSHA256: receiptSHA}
+			BotReceiptSHA256: receiptSHA,
+		}
 	}
 	service := newTestService(t, repository, provider, credentials, owner, teamSource())
 	operation, result, err := service.Revoke(context.Background(), testPrincipal, testAgentRef, 7, 4, testKey)
@@ -169,13 +175,170 @@ func TestRecoveredCredentialResolvesExactProviderToken(t *testing.T) {
 		SecretRef: "secret/data/agent-bot", Version: 3, ContentSHA256: hexDigest("4"),
 	}}
 	service := newTestService(t, &fakeRepository{}, provider, credentials, ownerWithoutBot(), teamSource())
-	operation := entity.AgentMattermostBotOperation{ID: "33333333-3333-4333-8333-333333333333",
-		Intent: entity.AgentMattermostBotCreateIntent{ProviderCorrelation: "operation-correlation"}}
+	operation := entity.AgentMattermostBotOperation{
+		ID:     "33333333-3333-4333-8333-333333333333",
+		Intent: entity.AgentMattermostBotCreateIntent{ProviderCorrelation: "operation-correlation"},
+	}
 
 	recovered, err := service.ensureCredential(context.Background(), operation, identity)
 	if err != nil || recovered.ProviderTokenID != "provider-token-recovered" ||
 		recovered.CredentialSecretVersion != 3 || recovered.CredentialSHA256 != hexDigest("4") {
 		t.Fatalf("recovered credential lost provider token lineage: %#v %v", recovered, err)
+	}
+}
+
+func TestRecoveryDeadlineClassificationNeverUsesProcessClock(t *testing.T) {
+	t.Parallel()
+	operation := entity.AgentMattermostBotOperation{
+		ID: "33333333-3333-4333-8333-333333333333", Principal: testPrincipal,
+		Action: enum.AgentBotActionCreateAndBind, AgentRef: testAgentRef,
+		State: enum.AgentBotOperationEffectPending, RecoveryDeadline: time.Unix(1, 0).UTC(),
+	}
+	repository := &fakeRepository{claim: domainrepo.RecoveryClaim{Operation: operation, Found: true}}
+	provider := &fakeProvider{recoverErr: domainmattermost.ErrBotNotFound}
+	service := newTestService(t, repository, provider, &fakeCredentials{}, ownerWithoutBot(), teamSource())
+	worked, err := service.ProcessRecovery(context.Background())
+	if !worked || err == nil {
+		t.Fatalf("recovery provider readback outcome was not returned: worked=%v err=%v", worked, err)
+	}
+	if repository.repairCalls != 0 {
+		t.Fatalf("process clock classified DB-owned deadline: repair calls=%d", repository.repairCalls)
+	}
+}
+
+func TestRecoveryPublishesDurableRepairBacklogWithoutClaimedWork(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{backlog: domainrepo.RepairBacklog{RecoveryTimeout: 2, Other: 1}}
+	service := newTestService(t, repository, &fakeProvider{}, &fakeCredentials{}, ownerWithoutBot(), teamSource())
+	metrics := &recordingMetrics{gauges: make(map[string]float64)}
+	service.metrics = metrics
+	worked, err := service.ProcessRecovery(context.Background())
+	if err != nil || worked || metrics.gauges["recovery_timeout"] != 2 || metrics.gauges["other"] != 1 {
+		t.Fatalf("durable repair backlog was not exported: worked=%v gauges=%v err=%v", worked, metrics.gauges, err)
+	}
+}
+
+func TestAgentReadinessUsesFullRuntimeProofAndBoundedFailures(t *testing.T) {
+	t.Parallel()
+	identity := testIdentity(enum.AgentBotIdentityAvailable, 4)
+	repository := &fakeRepository{binding: entity.AgentMattermostBotBinding{
+		AgentRef: testAgentRef, AgentVersion: 7, Identity: identity,
+	}, admit: identity}
+	provider := &fakeProvider{readIdentity: identity}
+	owner := ownerWithoutBot()
+	owner.value.BotIdentityRef, owner.value.BotProviderGeneration = identity.ProviderObjectRef, identity.ProviderGeneration
+	owner.value.BotMaskedStatus = string(identity.Status)
+	service := newTestService(t, repository, provider, &fakeCredentials{}, owner, teamSource())
+	ready := service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if !ready.Ready || !ready.PostgresReady || !ready.ControlPlaneReady || !ready.MattermostReady ||
+		!ready.IdentityGenerationReady || provider.verifyCalls != 1 {
+		t.Fatalf("full runtime proof was not used by readiness: %#v calls=%d", ready, provider.verifyCalls)
+	}
+
+	provider.verifyErr = domainmattermost.ErrBotForbidden
+	failed := service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.MattermostReady || failed.FailureCode != "MATTERMOST_RUNTIME_NOT_READY" {
+		t.Fatalf("revoked/invalid runtime token did not fail closed: %#v", failed)
+	}
+
+	provider.verifyErr = nil
+	provider.readErr = domainmattermost.ErrBotConflict
+	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.FailureCode != "MATTERMOST_IDENTITY_NOT_READY" {
+		t.Fatalf("foreign owner or missing Team membership did not fail closed: %#v", failed)
+	}
+
+	provider.readErr = nil
+	owner.value.BotIdentityRef = "88888888-8888-4888-8888-888888888888"
+	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.FailureCode != "OWNER_PREDECESSOR_NOT_READY" {
+		t.Fatalf("control-plane owner mismatch did not fail closed: %#v", failed)
+	}
+
+	owner.value.BotIdentityRef = identity.ProviderObjectRef
+	service.receipts = failingSigner{}
+	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.ControlPlaneReady || failed.FailureCode != "CONTROL_PLANE_READBACK_NOT_READY" {
+		t.Fatalf("broken signer/trust readback did not fail closed: %#v", failed)
+	}
+
+	service.receipts = fakeSigner{}
+	repository.admitErr = domainrepo.ErrGenerationConflict
+	failed = service.CheckAgent(context.Background(), testPrincipal, testAgentRef)
+	if failed.Ready || failed.FailureCode != "IDENTITY_GENERATION_NOT_READY" {
+		t.Fatalf("stale generation did not fail closed: %#v", failed)
+	}
+}
+
+func TestBindRebindRevokeAndRecoveryRejectFreshForeignOwnerBeforeOwnerEffect(t *testing.T) {
+	t.Parallel()
+	for _, action := range []string{enum.AgentBotActionBind, enum.AgentBotActionRebind, enum.AgentBotActionRevoke} {
+		action := action
+		t.Run(action, func(t *testing.T) {
+			t.Parallel()
+			identity := testIdentity(enum.AgentBotIdentityAvailable, 5)
+			if action == enum.AgentBotActionRevoke {
+				identity.Status = enum.AgentBotIdentityRevoked
+			}
+			operation := entity.AgentMattermostBotOperation{
+				ID: "33333333-3333-4333-8333-333333333333", Principal: testPrincipal,
+				Action: action, AgentRef: testAgentRef, ExpectedAgentVersion: 7,
+				PredecessorGeneration: 4, Identity: identity,
+			}
+			expected := ownerWithoutBot()
+			if action != enum.AgentBotActionBind {
+				expected.value.BotIdentityRef = "77777777-7777-4777-8777-777777777777"
+				expected.value.BotProviderGeneration = 4
+				expected.value.BotMaskedStatus = string(enum.AgentBotIdentityAvailable)
+			}
+			current := *expected
+			current.value.BotIdentityRef = "88888888-8888-4888-8888-888888888888"
+			repository := &fakeRepository{}
+			provider := &fakeProvider{readIdentity: identity}
+			service := newTestService(t, repository, provider, &fakeCredentials{}, &current, teamSource())
+			_, _, err := service.applyOwner(context.Background(), operation, expected.value)
+			if !errors.Is(err, domainerrs.ErrConflict) || current.manageCalls != 0 || repository.repairCalls != 1 {
+				t.Fatalf("foreign owner reached %s owner effect: manage=%d repair=%d err=%v",
+					action, current.manageCalls, repository.repairCalls, err)
+			}
+		})
+	}
+}
+
+func TestOwnerTransferRaceAfterEffectBecomesRepairWithoutTerminalSuccess(t *testing.T) {
+	t.Parallel()
+	identity := testIdentity(enum.AgentBotIdentityAvailable, 5)
+	operation := entity.AgentMattermostBotOperation{
+		ID: "33333333-3333-4333-8333-333333333333", Principal: testPrincipal,
+		Action: enum.AgentBotActionBind, IdempotencyKey: testKey, AgentRef: testAgentRef,
+		ExpectedAgentVersion: 7, Identity: identity,
+	}
+	repository := &fakeRepository{}
+	provider := &fakeProvider{readIdentity: identity}
+	provider.read = func(call int) (entity.AgentMattermostBotIdentity, error) {
+		if call == 1 {
+			return identity, nil
+		}
+		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotConflict
+	}
+	owner := ownerWithoutBot()
+	owner.manage = func(input domaincontrol.ManageAgentMattermostBotIdentityInput) domaincontrol.AgentMattermostBotOwner {
+		receiptSHA, err := internalrpcauth.CanonicalJSONSHA256(input.Credential.Receipt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return domaincontrol.AgentMattermostBotOwner{
+			AgentRef: testAgentRef, AgentStableKey: identity.AgentStableKey, AgentVersion: 8,
+			BotIdentityRef: identity.ProviderObjectRef, BotProviderGeneration: identity.ProviderGeneration,
+			BotMaskedStatus: string(identity.Status), BotReceiptID: input.Credential.Receipt.ReceiptID,
+			BotReceiptVersion: identity.ProviderGeneration, BotReceiptSHA256: receiptSHA,
+		}
+	}
+	service := newTestService(t, repository, provider, &fakeCredentials{}, owner, teamSource())
+	_, _, err := service.applyOwner(context.Background(), operation, owner.value)
+	if !errors.Is(err, domainerrs.ErrConflict) || owner.manageCalls != 1 || repository.repairCalls != 1 {
+		t.Fatalf("owner transfer race became success: manage=%d repair=%d err=%v",
+			owner.manageCalls, repository.repairCalls, err)
 	}
 }
 
@@ -210,7 +373,7 @@ func TestProviderAcceptedRecoveryFinishesExactOwnerReadback(t *testing.T) {
 		t.Fatal("exact terminal owner readback must not repeat ManageAgentMattermostBotIdentity")
 		return domaincontrol.AgentMattermostBotOwner{}
 	}
-	service := newTestService(t, repository, &fakeProvider{}, &fakeCredentials{}, owner, teamSource())
+	service := newTestService(t, repository, &fakeProvider{readIdentity: identity}, &fakeCredentials{}, owner, teamSource())
 
 	recovered, binding, err := service.recoverOwnerOutcome(context.Background(), operation)
 	if err != nil || !finished || recovered.State != enum.AgentBotOperationRevoked || binding.AgentVersion != 8 {
@@ -253,60 +416,84 @@ type fakeRepository struct {
 	binding         entity.AgentMattermostBotBinding
 	admit           entity.AgentMattermostBotIdentity
 	admitErr        error
+	claim           domainrepo.RecoveryClaim
+	backlog         domainrepo.RepairBacklog
+	repairCalls     int
 }
 
 func (repository *fakeRepository) Check(context.Context) error { return nil }
 func (repository *fakeRepository) ResolveCatalogOffset(context.Context, entity.TeamPrincipal, string, uint32) (uint32, error) {
 	return 0, nil
 }
+
 func (repository *fakeRepository) SaveCatalogPage(context.Context, entity.TeamPrincipal, []entity.AgentMattermostBotIdentity, uint32, uint32, bool, time.Duration) ([]entity.AgentMattermostBotIdentity, string, error) {
 	return nil, "", nil
 }
+
 func (repository *fakeRepository) ResolveSelector(context.Context, entity.TeamPrincipal, string) (entity.AgentMattermostBotIdentity, error) {
 	return entity.AgentMattermostBotIdentity{}, domainrepo.ErrNotFound
 }
+
 func (*fakeRepository) ReserveProviderObject(context.Context, entity.AgentMattermostBotOperation, string) error {
 	return nil
 }
+
 func (repository *fakeRepository) BeginOperation(_ context.Context, operation entity.AgentMattermostBotOperation, _ string, _, _ time.Duration) (entity.AgentMattermostBotOperation, domainrepo.Disposition, error) {
 	return repository.begin(operation)
 }
+
 func (repository *fakeRepository) GetOperation(context.Context, entity.TeamPrincipal, string, string, string) (entity.AgentMattermostBotOperation, error) {
 	return entity.AgentMattermostBotOperation{}, domainrepo.ErrNotFound
 }
+
 func (repository *fakeRepository) MarkEffectStarted(_ context.Context, operation entity.AgentMattermostBotOperation) (entity.AgentMattermostBotOperation, error) {
 	return repository.markEffect(operation)
 }
+
 func (repository *fakeRepository) MarkMembershipPending(context.Context, entity.AgentMattermostBotOperation, entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotOperation, error) {
 	return entity.AgentMattermostBotOperation{}, errors.New("unexpected membership")
 }
+
 func (repository *fakeRepository) DeferRecovery(_ context.Context, operation entity.AgentMattermostBotOperation, _ string, _ time.Duration) (entity.AgentMattermostBotOperation, error) {
 	return repository.deferRecovery(operation)
 }
+
 func (repository *fakeRepository) AcceptProvider(_ context.Context, operation entity.AgentMattermostBotOperation, identity entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotOperation, error) {
 	return repository.accept(operation, identity)
 }
+
 func (repository *fakeRepository) Finish(_ context.Context, operation entity.AgentMattermostBotOperation, binding entity.AgentMattermostBotBinding) error {
 	return repository.finish(operation, binding)
 }
+
 func (repository *fakeRepository) MarkRepairRequired(context.Context, entity.AgentMattermostBotOperation, string) error {
+	repository.repairCalls++
 	return nil
 }
-func (repository *fakeRepository) ClaimRecovery(context.Context, string, time.Duration) (entity.AgentMattermostBotOperation, bool, error) {
-	return entity.AgentMattermostBotOperation{}, false, nil
+
+func (repository *fakeRepository) ClaimRecovery(context.Context, string, time.Duration) (domainrepo.RecoveryClaim, error) {
+	return repository.claim, nil
 }
+
+func (repository *fakeRepository) RepairBacklog(context.Context) (domainrepo.RepairBacklog, error) {
+	return repository.backlog, nil
+}
+
 func (repository *fakeRepository) GetBinding(context.Context, entity.TeamPrincipal, string) (entity.AgentMattermostBotBinding, error) {
 	if repository.binding.AgentRef == "" {
 		return entity.AgentMattermostBotBinding{}, domainrepo.ErrNotFound
 	}
 	return repository.binding, nil
 }
+
 func (repository *fakeRepository) CloseGeneration(_ context.Context, _ entity.AgentMattermostBotOperation, generation uint64) error {
 	return repository.closeGeneration(generation)
 }
+
 func (repository *fakeRepository) AdmitRuntimeIdentity(context.Context, entity.TeamPrincipal, string, string, uint64) (entity.AgentMattermostBotIdentity, error) {
 	return repository.admit, repository.admitErr
 }
+
 func (repository *fakeRepository) ResolveRuntimeIdentity(context.Context, entity.TeamPrincipal, string, string) (entity.AgentMattermostBotIdentity, error) {
 	return repository.admit, repository.admitErr
 }
@@ -316,29 +503,55 @@ type fakeProvider struct {
 	createErr    error
 	revoke       func(entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotIdentity, error)
 	resolveToken func(entity.AgentMattermostBotIdentity, string) (string, bool, error)
+	recoverErr   error
+	readIdentity entity.AgentMattermostBotIdentity
+	readErr      error
+	verifyErr    error
+	verifyCalls  int
+	readCalls    int
+	read         func(int) (entity.AgentMattermostBotIdentity, error)
 }
 
 func (provider *fakeProvider) CheckBotIdentityLifecycle(context.Context) error { return nil }
 func (provider *fakeProvider) ListBotIdentities(context.Context, entity.TeamPrincipal, string, uint32, uint32) ([]entity.AgentMattermostBotIdentity, bool, error) {
 	return nil, false, nil
 }
+
 func (provider *fakeProvider) CreateBotIdentity(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotCreateIntent, string) (entity.AgentMattermostBotIdentity, error) {
 	provider.createCalls++
 	return entity.AgentMattermostBotIdentity{}, provider.createErr
 }
+
 func (provider *fakeProvider) RecoverCreatedBotIdentity(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotCreateIntent, string) (entity.AgentMattermostBotIdentity, error) {
-	return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotNotFound
+	if provider.recoverErr == nil && provider.readIdentity.ProviderUserID == "" {
+		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotNotFound
+	}
+	return provider.readIdentity, provider.recoverErr
 }
+
 func (provider *fakeProvider) ReadBotIdentity(context.Context, entity.TeamPrincipal, string, string) (entity.AgentMattermostBotIdentity, error) {
-	return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotNotFound
+	provider.readCalls++
+	if provider.read != nil {
+		return provider.read(provider.readCalls)
+	}
+	if provider.readErr != nil {
+		return entity.AgentMattermostBotIdentity{}, provider.readErr
+	}
+	if provider.readIdentity.ProviderUserID == "" {
+		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotNotFound
+	}
+	return provider.readIdentity, nil
 }
+
 func (provider *fakeProvider) EnsureBotTeamMembership(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotIdentity, error) {
 	return entity.AgentMattermostBotIdentity{}, errors.New("unexpected membership")
 }
-func (provider *fakeProvider) CreateBotAccessToken(context.Context, entity.AgentMattermostBotIdentity, string) (string, string, error) {
+
+func (provider *fakeProvider) CreateBotAccessToken(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotIdentity, string) (string, string, error) {
 	return "", "", errors.New("unexpected token create")
 }
-func (provider *fakeProvider) ResolveBotAccessToken(_ context.Context, identity entity.AgentMattermostBotIdentity,
+
+func (provider *fakeProvider) ResolveBotAccessToken(_ context.Context, _ entity.TeamPrincipal, identity entity.AgentMattermostBotIdentity,
 	correlation string,
 ) (string, bool, error) {
 	if provider.resolveToken != nil {
@@ -346,15 +559,23 @@ func (provider *fakeProvider) ResolveBotAccessToken(_ context.Context, identity 
 	}
 	return "", false, nil
 }
-func (provider *fakeProvider) RecoverBotAccessToken(context.Context, entity.AgentMattermostBotIdentity, string) (string, bool, error) {
+
+func (provider *fakeProvider) RecoverBotAccessToken(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotIdentity, string) (string, bool, error) {
 	return "", false, nil
 }
-func (*fakeProvider) RevokeBotAccessToken(context.Context, entity.AgentMattermostBotIdentity) (bool, error) {
+
+func (*fakeProvider) RevokeBotAccessToken(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotIdentity) (bool, error) {
 	return true, nil
 }
+
 func (provider *fakeProvider) RevokeBotIdentity(_ context.Context, _ entity.TeamPrincipal, identity entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotIdentity, bool, error) {
 	revoked, err := provider.revoke(identity)
 	return revoked, err == nil, err
+}
+
+func (provider *fakeProvider) VerifyRuntimeBotCredential(context.Context, entity.TeamPrincipal, entity.AgentMattermostBotIdentity, string) error {
+	provider.verifyCalls++
+	return provider.verifyErr
 }
 
 type fakeCredentials struct {
@@ -367,16 +588,19 @@ type fakeCredentials struct {
 func (*fakeCredentials) MaterializeBotToken(context.Context, string, string) (domaincredential.Materialized, error) {
 	return domaincredential.Materialized{}, errors.New("unexpected materialization")
 }
+
 func (credentials *fakeCredentials) RecoverBotToken(context.Context, string) (domaincredential.Materialized, error) {
 	if credentials.recover.Version != 0 || credentials.recoverErr != nil {
 		return credentials.recover, credentials.recoverErr
 	}
 	return domaincredential.Materialized{}, errors.New("not found")
 }
+
 func (credentials *fakeCredentials) ReadBotToken(context.Context, string, uint64, string) (string, error) {
 	credentials.readCalls++
 	return "secret", nil
 }
+
 func (credentials *fakeCredentials) RevokeBotToken(_ context.Context, bindingID string, version uint64) (bool, error) {
 	return true, credentials.revoke(bindingID, version)
 }
@@ -384,16 +608,19 @@ func (*fakeCredentials) CheckBotTokenRevoked(context.Context, string, uint64) er
 func (*fakeCredentials) Check(context.Context) error                                { return nil }
 
 type fakeOwner struct {
-	value    domaincontrol.AgentMattermostBotOwner
-	getCalls int
-	manage   func(domaincontrol.ManageAgentMattermostBotIdentityInput) domaincontrol.AgentMattermostBotOwner
+	value       domaincontrol.AgentMattermostBotOwner
+	getCalls    int
+	manageCalls int
+	manage      func(domaincontrol.ManageAgentMattermostBotIdentityInput) domaincontrol.AgentMattermostBotOwner
 }
 
 func (owner *fakeOwner) GetAgentMattermostBotIdentity(context.Context, domaincontrol.ProviderCredential, string) (domaincontrol.AgentMattermostBotOwner, error) {
 	owner.getCalls++
 	return owner.value, nil
 }
+
 func (owner *fakeOwner) ManageAgentMattermostBotIdentity(_ context.Context, input domaincontrol.ManageAgentMattermostBotIdentityInput) (domaincontrol.AgentMattermostBotOwner, error) {
+	owner.manageCalls++
 	return owner.manage(input), nil
 }
 
@@ -411,10 +638,27 @@ func (fakeSigner) Sign(receipt domaincontrol.ProviderEffectReceipt) (domaincontr
 	return domaincontrol.ProviderCredential{CompactJWS: "signed", Receipt: receipt}, nil
 }
 
+type failingSigner struct{}
+
+func (failingSigner) Sign(domaincontrol.ProviderEffectReceipt) (domaincontrol.ProviderCredential, error) {
+	return domaincontrol.ProviderCredential{}, errors.New("signer trust profile is unavailable")
+}
+
 type fakeMetrics struct{}
 
-func (fakeMetrics) ObserveBotIdentityOperation(string, string) {}
-func (fakeMetrics) ObserveExternalEffect(string, string)       {}
+func (fakeMetrics) ObserveBotIdentityOperation(string, string)  {}
+func (fakeMetrics) ObserveExternalEffect(string, string)        {}
+func (fakeMetrics) SetBotIdentityRepairBacklog(string, float64) {}
+
+type recordingMetrics struct {
+	gauges map[string]float64
+}
+
+func (*recordingMetrics) ObserveBotIdentityOperation(string, string) {}
+func (*recordingMetrics) ObserveExternalEffect(string, string)       {}
+func (metrics *recordingMetrics) SetBotIdentityRepairBacklog(reason string, value float64) {
+	metrics.gauges[reason] = value
+}
 
 func newTestService(t *testing.T, repository *fakeRepository, provider *fakeProvider,
 	credentials *fakeCredentials, owner *fakeOwner, teams fakeTeam,
@@ -471,20 +715,25 @@ func newTestService(t *testing.T, repository *fakeRepository, provider *fakeProv
 }
 
 func ownerWithoutBot() *fakeOwner {
-	return &fakeOwner{value: domaincontrol.AgentMattermostBotOwner{AgentRef: testAgentRef,
-		AgentStableKey: "agent-primary", AgentVersion: 7}}
+	return &fakeOwner{value: domaincontrol.AgentMattermostBotOwner{
+		AgentRef:       testAgentRef,
+		AgentStableKey: "agent-primary", AgentVersion: 7,
+	}}
 }
 
 func teamSource() fakeTeam {
 	return fakeTeam{binding: entity.WorkspaceMattermostBinding{
-		Mapping: entity.WorkspaceMattermostMapping{State: "BOUND", Version: 2, Generation: 3,
-			ProviderEffectVersion: 2, ProviderEffectGeneration: 3},
+		Mapping: entity.WorkspaceMattermostMapping{
+			ID: "99999999-9999-4999-8999-999999999999", State: "BOUND", Version: 2, Generation: 3,
+			ProviderEffectVersion: 2, ProviderEffectGeneration: 3,
+		},
 		Team: entity.MattermostTeam{ProviderTeamID: "provider-team", ProviderSnapshotSHA256: hexDigest("f")},
 	}}
 }
 
 func testIdentity(status enum.AgentBotIdentityStatus, generation uint64) entity.AgentMattermostBotIdentity {
-	return entity.AgentMattermostBotIdentity{IdentityRef: "11111111-1111-4111-8111-111111111111",
+	return entity.AgentMattermostBotIdentity{
+		IdentityRef:       "11111111-1111-4111-8111-111111111111",
 		ProviderObjectRef: "11111111-1111-4111-8111-111111111111",
 		AgentRef:          testAgentRef, AgentStableKey: "agent-primary", ProviderBotID: "provider-bot",
 		ProviderUserID: "provider-user", ProviderTeamID: "provider-team", ProviderTokenID: "provider-token",

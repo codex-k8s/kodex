@@ -23,6 +23,17 @@ const (
 	Busy
 )
 
+type RecoveryClaim struct {
+	Operation          entity.AgentMattermostBotOperation
+	Found              bool
+	ExpiredTransitions uint64
+}
+
+type RepairBacklog struct {
+	RecoveryTimeout uint64
+	Other           uint64
+}
+
 type Repository interface {
 	Check(context.Context) error
 	ResolveCatalogOffset(context.Context, entity.TeamPrincipal, string, uint32) (uint32, error)
@@ -37,7 +48,8 @@ type Repository interface {
 	AcceptProvider(context.Context, entity.AgentMattermostBotOperation, entity.AgentMattermostBotIdentity) (entity.AgentMattermostBotOperation, error)
 	Finish(context.Context, entity.AgentMattermostBotOperation, entity.AgentMattermostBotBinding) error
 	MarkRepairRequired(context.Context, entity.AgentMattermostBotOperation, string) error
-	ClaimRecovery(context.Context, string, time.Duration) (entity.AgentMattermostBotOperation, bool, error)
+	ClaimRecovery(context.Context, string, time.Duration) (RecoveryClaim, error)
+	RepairBacklog(context.Context) (RepairBacklog, error)
 	GetBinding(context.Context, entity.TeamPrincipal, string) (entity.AgentMattermostBotBinding, error)
 	CloseGeneration(context.Context, entity.AgentMattermostBotOperation, uint64) error
 	AdmitRuntimeIdentity(context.Context, entity.TeamPrincipal, string, string, uint64) (entity.AgentMattermostBotIdentity, error)

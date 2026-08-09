@@ -48,11 +48,11 @@ type namedQueryer interface {
 func New(pool *pgxpool.Pool, config Config) (*Repository, error) {
 	if pool == nil || config.PrincipalGeneration == 0 || uuid.Validate(config.OrganizationID) != nil ||
 		len(config.AllowedProjectIDs) == 0 {
-		return nil, errors.New("Agent bot identity repository configuration is invalid")
+		return nil, errors.New("agent bot identity repository configuration is invalid")
 	}
 	for _, projectID := range config.AllowedProjectIDs {
 		if uuid.Validate(projectID) != nil {
-			return nil, errors.New("Agent bot identity repository project scope is invalid")
+			return nil, errors.New("agent bot identity repository project scope is invalid")
 		}
 	}
 	if err := validateQueries(); err != nil {
@@ -71,7 +71,7 @@ func (repository *Repository) Check(ctx context.Context) error {
 	if err := queryRow(ctx, repository.pool, readinessCheckSQL, repository.config.PrincipalGeneration,
 		repository.config.OrganizationID, projects).Scan(&schemaVersion, &identityReady); err != nil ||
 		schemaVersion != 1 || !identityReady {
-		return errors.New("Agent bot identity repository is not ready")
+		return errors.New("agent bot identity repository is not ready")
 	}
 	principal := entity.TeamPrincipal{
 		OrganizationID: repository.config.OrganizationID,
@@ -359,7 +359,7 @@ func (repository *Repository) AcceptProvider(ctx context.Context, operation enti
 		var generation uint64
 		if err := queryRow(ctx, tx, watermarkAdvanceSQL, operation.Principal.OrganizationID,
 			operation.Principal.ProjectID, operation.AgentRef).Scan(&generation); err != nil || generation == 0 {
-			return errors.New("Agent bot identity generation was not advanced")
+			return errors.New("agent bot identity generation was not advanced")
 		}
 		identity.ProviderGeneration = generation
 		stored, err := upsertIdentity(ctx, tx, operation.Principal, identity)
@@ -395,18 +395,18 @@ func (repository *Repository) Finish(ctx context.Context, operation entity.Agent
 			binding.Identity.AgentStableKey, binding.AgentVersion, binding.Identity.IdentityRef,
 			binding.Identity.ProviderGeneration, string(binding.Identity.Status), binding.ReceiptSHA256)
 		if err != nil || tag.RowsAffected() != 1 {
-			return errors.New("Agent bot binding was not advanced")
+			return errors.New("agent bot binding was not advanced")
 		}
 		tag, err = execNamed(ctx, tx, watermarkAdmitSQL, operation.Principal.OrganizationID,
 			operation.Principal.ProjectID, binding.AgentRef, binding.Identity.ProviderGeneration, admitted)
 		if err != nil || tag.RowsAffected() != 1 {
-			return errors.New("Agent bot generation admission was not updated")
+			return errors.New("agent bot generation admission was not updated")
 		}
 		tag, err = execNamed(ctx, tx, operationFinishSQL, operation.ID, state, operation.ReceiptID,
 			operation.ReceiptRevision, operation.ReceiptSHA256, operation.CommandIntentSHA256,
 			binding.AgentVersion, operation.Fence, digest(operation.LeaseToken))
 		if err != nil || tag.RowsAffected() != 1 {
-			return errors.New("Agent bot operation was not completed")
+			return errors.New("agent bot operation was not completed")
 		}
 		return nil
 	})
@@ -427,36 +427,68 @@ func (repository *Repository) MarkRepairRequired(ctx context.Context,
 
 func (repository *Repository) ClaimRecovery(ctx context.Context, owner string,
 	lease time.Duration,
-) (entity.AgentMattermostBotOperation, bool, error) {
+) (domainrepo.RecoveryClaim, error) {
 	var organizationID, projectID string
 	if err := queryRow(ctx, repository.pool, workScopeNextSQL).Scan(&organizationID, &projectID); errors.Is(err, pgx.ErrNoRows) {
-		return entity.AgentMattermostBotOperation{}, false, nil
+		return domainrepo.RecoveryClaim{}, nil
 	} else if err != nil {
-		return entity.AgentMattermostBotOperation{}, false, errors.New("discover Agent bot identity recovery scope")
+		return domainrepo.RecoveryClaim{}, errors.New("discover Agent bot identity recovery scope")
 	}
 	principal := entity.TeamPrincipal{OrganizationID: organizationID, ProjectID: projectID, ActorID: uuid.NewString()}
 	token, err := newLeaseToken()
 	if err != nil {
-		return entity.AgentMattermostBotOperation{}, false, err
+		return domainrepo.RecoveryClaim{}, err
 	}
-	var operation entity.AgentMattermostBotOperation
+	claim := domainrepo.RecoveryClaim{}
 	err = repository.withScope(ctx, principal, pgx.ReadWrite, func(tx pgx.Tx) error {
 		var operationID string
-		if err := queryRow(ctx, tx, operationClaimSQL, owner, digest(token), interval(lease)).Scan(&operationID); err != nil {
+		var expiredTransitions int64
+		if err := queryRow(ctx, tx, operationClaimSQL, owner, digest(token), interval(lease)).Scan(
+			&operationID, &expiredTransitions,
+		); err != nil {
 			return err
 		}
+		if expiredTransitions < 0 {
+			return errors.New("agent bot recovery expiry count is invalid")
+		}
+		claim.ExpiredTransitions = uint64(expiredTransitions)
+		if operationID == "" {
+			return nil
+		}
 		var scanErr error
-		operation, _, scanErr = scanOperation(queryRow(ctx, tx, operationLockSQL, operationID))
-		operation.LeaseToken = token
+		claim.Operation, _, scanErr = scanOperation(queryRow(ctx, tx, operationLockSQL, operationID))
+		claim.Operation.LeaseToken = token
+		claim.Found = scanErr == nil
 		return scanErr
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.AgentMattermostBotOperation{}, false, nil
-	}
 	if err != nil {
-		return entity.AgentMattermostBotOperation{}, false, errors.New("claim Agent bot identity recovery")
+		return domainrepo.RecoveryClaim{}, errors.New("claim Agent bot identity recovery")
 	}
-	return operation, true, nil
+	return claim, nil
+}
+
+func (repository *Repository) RepairBacklog(ctx context.Context) (domainrepo.RepairBacklog, error) {
+	result := domainrepo.RepairBacklog{}
+	for _, projectID := range repository.config.AllowedProjectIDs {
+		principal := entity.TeamPrincipal{
+			OrganizationID: repository.config.OrganizationID,
+			ProjectID:      projectID, ActorID: uuid.NewString(),
+		}
+		var timeout, other int64
+		err := repository.withScope(ctx, principal, pgx.ReadOnly, func(tx pgx.Tx) error {
+			return queryRow(ctx, tx, repairBacklogCountSQL, principal.OrganizationID, principal.ProjectID).
+				Scan(&timeout, &other)
+		})
+		if err != nil {
+			return domainrepo.RepairBacklog{}, errors.New("read Agent bot repair backlog")
+		}
+		if timeout < 0 || other < 0 {
+			return domainrepo.RepairBacklog{}, errors.New("agent bot repair backlog is invalid")
+		}
+		result.RecoveryTimeout += uint64(timeout)
+		result.Other += uint64(other)
+	}
+	return result, nil
 }
 
 func (repository *Repository) GetBinding(ctx context.Context, principal entity.TeamPrincipal,
@@ -590,10 +622,12 @@ func scanOperation(row rowScanner) (entity.AgentMattermostBotOperation, bool, er
 	operation.State = enum.AgentBotIdentityOperationState(state)
 	identity.Status = enum.AgentBotIdentityStatus(identityStatus)
 	identity.Selector = operation.Selector
-	operation.Intent = entity.AgentMattermostBotCreateIntent{AgentRef: operation.AgentRef,
+	operation.Intent = entity.AgentMattermostBotCreateIntent{
+		AgentRef:             operation.AgentRef,
 		ExpectedAgentVersion: operation.ExpectedAgentVersion, Username: operation.Intent.Username,
 		DisplayName: operation.Intent.DisplayName, ProviderCorrelation: correlation,
-		RequestSHA256: operation.RequestSHA256}
+		RequestSHA256: operation.RequestSHA256,
+	}
 	operation.Result.AgentRef, operation.Result.Identity = operation.AgentRef, *identity
 	return operation, leaseActive, nil
 }

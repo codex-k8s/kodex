@@ -6167,9 +6167,11 @@ type AgentSpec struct {
 	BotReceiptSha256      string                  `protobuf:"bytes,22,opt,name=bot_receipt_sha256,json=botReceiptSha256,proto3" json:"bot_receipt_sha256,omitempty"`
 	Enabled               bool                    `protobuf:"varint,23,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	BotProviderGeneration uint64                  `protobuf:"varint,24,opt,name=bot_provider_generation,json=botProviderGeneration,proto3" json:"bot_provider_generation,omitempty"`
-	BotProviderTeamRef    string                  `protobuf:"bytes,25,opt,name=bot_provider_team_ref,json=botProviderTeamRef,proto3" json:"bot_provider_team_ref,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Непрозрачное доказательство exact current WorkspaceMattermostMapping tuple;
+	// raw provider Team ID и credential coordinates здесь запрещены.
+	BotProviderTeamRef string `protobuf:"bytes,25,opt,name=bot_provider_team_ref,json=botProviderTeamRef,proto3" json:"bot_provider_team_ref,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *AgentSpec) Reset() {
@@ -13446,38 +13448,42 @@ func (x *CopyAccessResourceResponse) GetResource() *Resource {
 // canonical payload отдельно доставленного JWS. Control-plane принимает его
 // только когда digest payload совпадает с authority provenance.
 type ProviderEffectReadbackReceipt struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	ContractVersion          uint32                 `protobuf:"varint,1,opt,name=contract_version,json=contractVersion,proto3" json:"contract_version,omitempty"`
-	Issuer                   string                 `protobuf:"bytes,2,opt,name=issuer,proto3" json:"issuer,omitempty"`
-	Purpose                  string                 `protobuf:"bytes,3,opt,name=purpose,proto3" json:"purpose,omitempty"`
-	WorkloadId               string                 `protobuf:"bytes,4,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
-	CallerSpiffeId           string                 `protobuf:"bytes,5,opt,name=caller_spiffe_id,json=callerSpiffeId,proto3" json:"caller_spiffe_id,omitempty"`
-	FullMethod               string                 `protobuf:"bytes,6,opt,name=full_method,json=fullMethod,proto3" json:"full_method,omitempty"`
-	ActorId                  string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	OrganizationId           string                 `protobuf:"bytes,8,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
-	ProjectId                string                 `protobuf:"bytes,9,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	WorkspaceId              string                 `protobuf:"bytes,10,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	ProviderTeamRef          string                 `protobuf:"bytes,11,opt,name=provider_team_ref,json=providerTeamRef,proto3" json:"provider_team_ref,omitempty"`
-	ProviderObjectRef        string                 `protobuf:"bytes,12,opt,name=provider_object_ref,json=providerObjectRef,proto3" json:"provider_object_ref,omitempty"`
-	Action                   string                 `protobuf:"bytes,13,opt,name=action,proto3" json:"action,omitempty"`
-	Effect                   string                 `protobuf:"bytes,14,opt,name=effect,proto3" json:"effect,omitempty"`
-	EffectVersion            uint64                 `protobuf:"varint,15,opt,name=effect_version,json=effectVersion,proto3" json:"effect_version,omitempty"`
-	EffectGeneration         uint64                 `protobuf:"varint,16,opt,name=effect_generation,json=effectGeneration,proto3" json:"effect_generation,omitempty"`
-	EffectSha256             string                 `protobuf:"bytes,17,opt,name=effect_sha256,json=effectSha256,proto3" json:"effect_sha256,omitempty"`
-	ReceiptId                string                 `protobuf:"bytes,18,opt,name=receipt_id,json=receiptId,proto3" json:"receipt_id,omitempty"`
-	ReceiptRevision          uint64                 `protobuf:"varint,19,opt,name=receipt_revision,json=receiptRevision,proto3" json:"receipt_revision,omitempty"`
-	IssuedAt                 *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=issued_at,json=issuedAt,proto3" json:"issued_at,omitempty"`
-	NotBefore                *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
-	ExpiresAt                *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	CredentialBindingId      string                 `protobuf:"bytes,23,opt,name=credential_binding_id,json=credentialBindingId,proto3" json:"credential_binding_id,omitempty"`
-	CredentialBindingVersion uint64                 `protobuf:"varint,24,opt,name=credential_binding_version,json=credentialBindingVersion,proto3" json:"credential_binding_version,omitempty"`
-	CredentialBindingSha256  string                 `protobuf:"bytes,25,opt,name=credential_binding_sha256,json=credentialBindingSha256,proto3" json:"credential_binding_sha256,omitempty"`
-	ProviderUsername         string                 `protobuf:"bytes,26,opt,name=provider_username,json=providerUsername,proto3" json:"provider_username,omitempty"`
-	MaskedStatus             string                 `protobuf:"bytes,27,opt,name=masked_status,json=maskedStatus,proto3" json:"masked_status,omitempty"`
-	Provider                 string                 `protobuf:"bytes,28,opt,name=provider,proto3" json:"provider,omitempty"`
-	MaskedLabel              string                 `protobuf:"bytes,29,opt,name=masked_label,json=maskedLabel,proto3" json:"masked_label,omitempty"`
-	Capabilities             []string               `protobuf:"bytes,30,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	Eligible                 bool                   `protobuf:"varint,31,opt,name=eligible,proto3" json:"eligible,omitempty"`
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ContractVersion uint32                 `protobuf:"varint,1,opt,name=contract_version,json=contractVersion,proto3" json:"contract_version,omitempty"`
+	Issuer          string                 `protobuf:"bytes,2,opt,name=issuer,proto3" json:"issuer,omitempty"`
+	Purpose         string                 `protobuf:"bytes,3,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	WorkloadId      string                 `protobuf:"bytes,4,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	CallerSpiffeId  string                 `protobuf:"bytes,5,opt,name=caller_spiffe_id,json=callerSpiffeId,proto3" json:"caller_spiffe_id,omitempty"`
+	FullMethod      string                 `protobuf:"bytes,6,opt,name=full_method,json=fullMethod,proto3" json:"full_method,omitempty"`
+	ActorId         string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	OrganizationId  string                 `protobuf:"bytes,8,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	ProjectId       string                 `protobuf:"bytes,9,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	WorkspaceId     string                 `protobuf:"bytes,10,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Для target_kind=agent_bot_identity это непрозрачное доказательство exact
+	// current WorkspaceMattermostMapping tuple, а не raw provider Team ID.
+	ProviderTeamRef   string                 `protobuf:"bytes,11,opt,name=provider_team_ref,json=providerTeamRef,proto3" json:"provider_team_ref,omitempty"`
+	ProviderObjectRef string                 `protobuf:"bytes,12,opt,name=provider_object_ref,json=providerObjectRef,proto3" json:"provider_object_ref,omitempty"`
+	Action            string                 `protobuf:"bytes,13,opt,name=action,proto3" json:"action,omitempty"`
+	Effect            string                 `protobuf:"bytes,14,opt,name=effect,proto3" json:"effect,omitempty"`
+	EffectVersion     uint64                 `protobuf:"varint,15,opt,name=effect_version,json=effectVersion,proto3" json:"effect_version,omitempty"`
+	EffectGeneration  uint64                 `protobuf:"varint,16,opt,name=effect_generation,json=effectGeneration,proto3" json:"effect_generation,omitempty"`
+	EffectSha256      string                 `protobuf:"bytes,17,opt,name=effect_sha256,json=effectSha256,proto3" json:"effect_sha256,omitempty"`
+	ReceiptId         string                 `protobuf:"bytes,18,opt,name=receipt_id,json=receiptId,proto3" json:"receipt_id,omitempty"`
+	ReceiptRevision   uint64                 `protobuf:"varint,19,opt,name=receipt_revision,json=receiptRevision,proto3" json:"receipt_revision,omitempty"`
+	IssuedAt          *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=issued_at,json=issuedAt,proto3" json:"issued_at,omitempty"`
+	NotBefore         *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
+	ExpiresAt         *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	// Поля 23–25 принадлежат другим специализированным consumer profiles.
+	// target_kind=agent_bot_identity обязан передавать их пустыми.
+	CredentialBindingId      string   `protobuf:"bytes,23,opt,name=credential_binding_id,json=credentialBindingId,proto3" json:"credential_binding_id,omitempty"`
+	CredentialBindingVersion uint64   `protobuf:"varint,24,opt,name=credential_binding_version,json=credentialBindingVersion,proto3" json:"credential_binding_version,omitempty"`
+	CredentialBindingSha256  string   `protobuf:"bytes,25,opt,name=credential_binding_sha256,json=credentialBindingSha256,proto3" json:"credential_binding_sha256,omitempty"`
+	ProviderUsername         string   `protobuf:"bytes,26,opt,name=provider_username,json=providerUsername,proto3" json:"provider_username,omitempty"`
+	MaskedStatus             string   `protobuf:"bytes,27,opt,name=masked_status,json=maskedStatus,proto3" json:"masked_status,omitempty"`
+	Provider                 string   `protobuf:"bytes,28,opt,name=provider,proto3" json:"provider,omitempty"`
+	MaskedLabel              string   `protobuf:"bytes,29,opt,name=masked_label,json=maskedLabel,proto3" json:"masked_label,omitempty"`
+	Capabilities             []string `protobuf:"bytes,30,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	Eligible                 bool     `protobuf:"varint,31,opt,name=eligible,proto3" json:"eligible,omitempty"`
 	// Exact target и semantic intent связывают one-use JTI с одной
 	// специализированной командой, а не только с provider effect kind.
 	TargetKind          string `protobuf:"bytes,32,opt,name=target_kind,json=targetKind,proto3" json:"target_kind,omitempty"`

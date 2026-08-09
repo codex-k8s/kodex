@@ -41,6 +41,8 @@ var (
 	operationFinishSQL string
 	//go:embed sql/operation__claim.sql
 	operationClaimSQL string
+	//go:embed sql/repair_backlog__count.sql
+	repairBacklogCountSQL string
 	//go:embed sql/ownership__available.sql
 	ownershipAvailableSQL string
 	//go:embed sql/ownership__reserve.sql

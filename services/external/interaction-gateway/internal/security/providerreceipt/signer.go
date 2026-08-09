@@ -168,8 +168,9 @@ func validAgentReceipt(input domaincontrol.ProviderEffectReceipt) bool {
 	if input.FullMethod != "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity" ||
 		(input.Action != "bind" && input.Action != "rebind" && input.Action != "revoke") ||
 		input.Effect != "agent_bot_identity" || uuid.Validate(input.ProviderObjectRef) != nil ||
-		uuid.Validate(input.CredentialBindingID) != nil || input.CredentialBindingVersion == 0 ||
-		!validDigest(input.CredentialBindingSHA256) || input.Provider != "mattermost" ||
+		uuid.Validate(input.ProviderTeamRef) != nil || input.CredentialBindingID != "" ||
+		input.CredentialBindingVersion != 0 || input.CredentialBindingSHA256 != "" ||
+		input.Provider != "mattermost" ||
 		input.MaskedLabel == "" || len(input.MaskedLabel) > 64 || len(input.Capabilities) != 2 {
 		return false
 	}

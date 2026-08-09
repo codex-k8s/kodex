@@ -28,6 +28,16 @@ func TestOperationQueriesEnforceOneWinnerCheckpointAndFencedRecovery(t *testing.
 		!strings.Contains(operationClaimSQL, "recovery_deadline > clock_timestamp()") {
 		t.Fatal("one-winner or ambiguous-effect recovery SQL invariant is incomplete")
 	}
+	if !strings.Contains(operationClaimSQL, "failure_code = 'RECOVERY_TIMEOUT'") ||
+		!strings.Contains(operationClaimSQL, "recovery_deadline <= clock_timestamp()") ||
+		!strings.Contains(operationClaimSQL, "SELECT count(*)::bigint FROM expired") ||
+		strings.Contains(operationClaimSQL, "now()") || strings.Contains(operationClaimSQL, "CURRENT_TIMESTAMP") {
+		t.Fatal("recovery timeout classification is not a PostgreSQL-clock typed claim outcome")
+	}
+	if !strings.Contains(repairBacklogCountSQL, "state = 'REPAIR_REQUIRED'") ||
+		!strings.Contains(repairBacklogCountSQL, "failure_code = 'RECOVERY_TIMEOUT'") {
+		t.Fatal("durable repair backlog query is incomplete")
+	}
 }
 
 func TestGenerationAdvanceAndProviderAcceptAreSeparateNamedStepsForOneTransaction(t *testing.T) {

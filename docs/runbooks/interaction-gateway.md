@@ -100,6 +100,12 @@ updated: 2026-08-09
     отклонить старый tuple `stable_key + provider_user_id + generation`.
     Credential не читать и не копировать вручную; для approved bootstrap
     применяется `tools/interaction-gateway/configure-agent-bot-credential-vault.sh`.
+    Gauge `mattercodex_interaction_gateway_agent_bot_identity_repairs` берётся
+    из durable `REPAIR_REQUIRED`, а не из памяти worker. При
+    `reason="recovery_timeout"` PostgreSQL уже выбрал terminal winner своим
+    `clock_timestamp()`; не сравнивать deadline с часами Pod и не переводить
+    операцию вручную. Устранить owner/provider/readback причину и пройти
+    согласованный repair path до исчезновения backlog.
 15. До первой Agent identity общий `/readyz` остаётся закрытым, но mTLS gRPC
     доступен через внутренний `interaction-gateway-management:9443`, который
     публикует только management port для unready Pod. Static bot token не

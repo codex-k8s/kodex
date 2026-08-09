@@ -28,7 +28,7 @@ var expectedQueries = map[string]string{
 	"operation__insert": "exec", "operation__lock": "one", "operation__mark_effect": "one",
 	"operation__membership": "exec", "operation__reclaim": "exec", "operation__repair": "exec",
 	"ownership__available": "one", "ownership__reserve": "one", "ownership__reserve_operation": "one",
-	"readiness__check": "one", "readiness__probe_cursor": "one", "runtime__admit": "one",
+	"readiness__check": "one", "readiness__probe_cursor": "one", "repair_backlog__count": "one", "runtime__admit": "one",
 	"runtime__resolve": "one", "selector__resolve": "one",
 	"selector__upsert": "one", "transaction__activate_scope": "exec",
 	"watermark__admit": "exec", "watermark__advance": "one", "watermark__close": "exec",
@@ -47,21 +47,21 @@ func validateQueries() error {
 		}
 		raw, err := fs.ReadFile(embeddedSQL, "sql/"+entry.Name())
 		if err != nil {
-			return errors.New("read Agent bot identity SQL query")
+			return errors.New("read agent bot identity SQL query")
 		}
 		lines := strings.Split(string(raw), "\n")
 		if len(lines) < 3 {
-			return fmt.Errorf("Agent bot identity SQL header is missing in %q", entry.Name())
+			return fmt.Errorf("agent bot identity SQL header is missing in %q", entry.Name())
 		}
 		header := queryHeaderPattern.FindStringSubmatch(lines[0])
 		if len(header) != 3 || !strings.HasPrefix(lines[1], "-- params:") ||
 			header[1] != strings.TrimSuffix(entry.Name(), ".sql") || expectedQueries[header[1]] != header[2] {
-			return fmt.Errorf("Agent bot identity SQL header is invalid in %q", entry.Name())
+			return fmt.Errorf("agent bot identity SQL header is invalid in %q", entry.Name())
 		}
 		body := strings.Join(lines[2:], "\n")
 		if strings.Count(body, ";") != 1 || !strings.HasSuffix(strings.TrimSpace(body), ";") ||
 			positionalPattern.MatchString(body) {
-			return fmt.Errorf("Agent bot identity SQL body is invalid in %q", entry.Name())
+			return fmt.Errorf("agent bot identity SQL body is invalid in %q", entry.Name())
 		}
 		declared := strings.TrimSpace(strings.TrimPrefix(lines[1], "-- params:"))
 		declaredParams := []string(nil)
@@ -77,12 +77,12 @@ func validateQueries() error {
 		slices.Sort(declaredParams)
 		slices.Sort(used)
 		if !slices.Equal(declaredParams, used) {
-			return fmt.Errorf("Agent bot identity SQL parameter mismatch in %q", entry.Name())
+			return fmt.Errorf("agent bot identity SQL parameter mismatch in %q", entry.Name())
 		}
 		seen[header[1]] = struct{}{}
 	}
 	if len(seen) != len(expectedQueries) {
-		return errors.New("Agent bot identity SQL corpus is incomplete")
+		return errors.New("agent bot identity SQL corpus is incomplete")
 	}
 	return nil
 }

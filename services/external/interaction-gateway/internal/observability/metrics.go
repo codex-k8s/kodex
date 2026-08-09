@@ -16,6 +16,7 @@ type Metrics struct {
 	externalEffects *prometheus.CounterVec
 	teamOperations  *prometheus.CounterVec
 	botOperations   *prometheus.CounterVec
+	botRepairs      *prometheus.GaugeVec
 }
 
 func New(register func(...prometheus.Collector) error) (*Metrics, error) {
@@ -52,12 +53,30 @@ func New(register func(...prometheus.Collector) error) (*Metrics, error) {
 			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "agent_bot_identity_operations_total",
 			Help: "Total number of bounded Agent Mattermost bot identity operation outcomes.",
 		}, []string{"operation", "outcome"}),
+		botRepairs: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "agent_bot_identity_repairs",
+			Help: "Current number of durable Agent bot identity operations requiring repair.",
+		}, []string{"reason"}),
 	}
 	if err := register(metrics.httpRequests, metrics.httpDuration, metrics.workerCycles, metrics.inbound,
-		metrics.deliveries, metrics.externalEffects, metrics.teamOperations, metrics.botOperations); err != nil {
+		metrics.deliveries, metrics.externalEffects, metrics.teamOperations, metrics.botOperations,
+		metrics.botRepairs); err != nil {
 		return nil, err
 	}
 	return metrics, nil
+}
+
+func (metrics *Metrics) SetBotIdentityRepairBacklog(reason string, value float64) {
+	metrics.botRepairs.WithLabelValues(normalizeBotRepairReason(reason)).Set(value)
+}
+
+func normalizeBotRepairReason(value string) string {
+	switch value {
+	case "recovery_timeout", "other":
+		return value
+	default:
+		return "other"
+	}
 }
 
 func (metrics *Metrics) ObserveBotIdentityOperation(operation, outcome string) {

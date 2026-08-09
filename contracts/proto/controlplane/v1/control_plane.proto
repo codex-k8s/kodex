@@ -912,6 +912,8 @@ message AgentSpec {
   string bot_receipt_sha256 = 22;
   bool enabled = 23;
   uint64 bot_provider_generation = 24;
+  // Непрозрачное доказательство exact current WorkspaceMattermostMapping tuple;
+  // raw provider Team ID и credential coordinates здесь запрещены.
   string bot_provider_team_ref = 25;
 }
 
@@ -1899,6 +1901,8 @@ message ProviderEffectReadbackReceipt {
   string organization_id = 8;
   string project_id = 9;
   string workspace_id = 10;
+  // Для target_kind=agent_bot_identity это непрозрачное доказательство exact
+  // current WorkspaceMattermostMapping tuple, а не raw provider Team ID.
   string provider_team_ref = 11;
   string provider_object_ref = 12;
   string action = 13;
@@ -1911,6 +1915,8 @@ message ProviderEffectReadbackReceipt {
   google.protobuf.Timestamp issued_at = 20;
   google.protobuf.Timestamp not_before = 21;
   google.protobuf.Timestamp expires_at = 22;
+  // Поля 23–25 принадлежат другим специализированным consumer profiles.
+  // target_kind=agent_bot_identity обязан передавать их пустыми.
   string credential_binding_id = 23;
   uint64 credential_binding_version = 24;
   string credential_binding_sha256 = 25;

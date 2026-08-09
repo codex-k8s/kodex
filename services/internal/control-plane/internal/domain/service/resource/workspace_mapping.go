@@ -350,13 +350,16 @@ func lockAndRejectOpenWorkspaceGraph(ctx context.Context, tx domainrepo.Transact
 	return nil
 }
 
-func lockWorkspaceMappingForProviderTeam(
+// lockWorkspaceMappingByOpaqueRef принимает только proof exact current mapping
+// tuple, вычисленный interaction-gateway. Raw provider Team ID через Agent bot
+// receipt в control-plane не пересекает trusted gateway boundary.
+func lockWorkspaceMappingByOpaqueRef(
 	ctx context.Context,
 	tx domainrepo.Transaction,
 	principal value.Principal,
-	providerTeamRef string,
+	mappingRef string,
 ) (entity.Resource, error) {
-	if providerTeamRef == "" {
+	if uuid.Validate(mappingRef) != nil {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
 	resources, err := tx.ListSnapshotResources(ctx, principal.OrganizationID, principal.ProjectID)
@@ -366,9 +369,10 @@ func lockWorkspaceMappingForProviderTeam(
 	ids := make([]string, 0, 1)
 	for _, item := range resources {
 		spec, ok := item.Spec.(entity.WorkspaceMattermostMappingSpec)
-		if ok && item.Kind == enum.KindWorkspaceMapping && item.State == enum.StateActive &&
+		proof, proofErr := agentBotMappingProofRef(item, spec)
+		if ok && proofErr == nil && item.Kind == enum.KindWorkspaceMapping && item.State == enum.StateActive &&
 			item.OwnerActorID == principal.ActorID && spec.WorkspaceID == principal.ProjectID &&
-			spec.MappingState == "BOUND" && spec.ProviderTeamRef == providerTeamRef {
+			spec.MappingState == "BOUND" && proof == mappingRef {
 			ids = append(ids, item.ID)
 		}
 	}
@@ -381,12 +385,20 @@ func lockWorkspaceMappingForProviderTeam(
 		return entity.Resource{}, err
 	}
 	spec, ok := mapping.Spec.(entity.WorkspaceMattermostMappingSpec)
+	proof, proofErr := agentBotMappingProofRef(mapping, spec)
 	if !ok || mapping.Kind != enum.KindWorkspaceMapping || mapping.State != enum.StateActive ||
 		mapping.OwnerActorID != principal.ActorID || spec.WorkspaceID != principal.ProjectID ||
-		spec.MappingState != "BOUND" || spec.ProviderTeamRef != providerTeamRef {
+		spec.MappingState != "BOUND" || proofErr != nil || proof != mappingRef {
 		return entity.Resource{}, errs.ErrStateConflict
 	}
 	return mapping, nil
+}
+
+func agentBotMappingProofRef(mapping entity.Resource,
+	spec entity.WorkspaceMattermostMappingSpec,
+) (string, error) {
+	return controlplanecontract.AgentBotMappingProofRef(mapping.ID, mapping.Version, spec.MappingGeneration,
+		spec.ProviderEffectVersion, spec.ProviderEffectGeneration)
 }
 
 func (service *Service) appendWorkspaceMappingRecords(

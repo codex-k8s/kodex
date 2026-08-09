@@ -25,8 +25,10 @@ func TestSignerProducesVersionedAgentReceiptWithoutSecretValue(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	signer, err := New(Config{Issuer: "https://interaction-gateway.example.invalid",
-		PrivateJWKFile: path, MaximumTTL: time.Minute})
+	signer, err := New(Config{
+		Issuer:         "https://interaction-gateway.example.invalid",
+		PrivateJWKFile: path, MaximumTTL: time.Minute,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,14 +36,12 @@ func TestSignerProducesVersionedAgentReceiptWithoutSecretValue(t *testing.T) {
 		FullMethod: "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity",
 		ActorID:    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", OrganizationID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
 		ProjectID: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", WorkspaceID: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-		ProviderTeamRef: "provider-team", ProviderObjectRef: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+		ProviderTeamRef: "99999999-9999-4999-8999-999999999999", ProviderObjectRef: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
 		ProviderUsername: "agent-bot", Action: "rebind", Effect: "agent_bot_identity",
 		EffectVersion: 2, EffectGeneration: 3,
 		EffectSHA256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 		ReceiptID:    "ffffffff-ffff-4fff-8fff-ffffffffffff", ReceiptRevision: 3,
-		CredentialBindingID: "11111111-1111-4111-8111-111111111111", CredentialBindingVersion: 4,
-		CredentialBindingSHA256: "2222222222222222222222222222222222222222222222222222222222222222",
-		Provider:                "mattermost", MaskedLabel: "Agent bot", MaskedStatus: "AVAILABLE", Eligible: true,
+		Provider: "mattermost", MaskedLabel: "Agent bot", MaskedStatus: "AVAILABLE", Eligible: true,
 		Capabilities: []string{"mattermost.post", "mattermost.readback"},
 		TargetKind:   "agent_bot_identity", TargetResourceID: "33333333-3333-4333-8333-333333333333",
 		TargetStableKey:     "agent-primary",
@@ -60,12 +60,21 @@ func TestSignerProducesVersionedAgentReceiptWithoutSecretValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if payload.ContractVersion != 1 || payload.TargetKind != "agent_bot_identity" ||
-		payload.EffectGeneration != 3 || payload.CredentialBindingVersion != 4 ||
+		payload.EffectGeneration != 3 || payload.ProviderTeamRef != "99999999-9999-4999-8999-999999999999" ||
+		payload.CredentialBindingID != "" || payload.CredentialBindingVersion != 0 ||
+		payload.CredentialBindingSHA256 != "" ||
 		payload.CommandIntentSHA256 != "4444444444444444444444444444444444444444444444444444444444444444" {
 		t.Fatalf("Agent receipt exact fields mismatch: %#v", payload)
 	}
-	if bytes.Contains(verified.CanonicalPayload, []byte("secret-token-value")) {
-		t.Fatal("Agent receipt contains secret value")
+	for _, forbidden := range [][]byte{
+		[]byte("secret-token-value"), []byte("provider-team"),
+		[]byte("credential_binding_id"), []byte("credential_binding_version"),
+		[]byte("credential_binding_sha256"), []byte("secret_ref"), []byte("secret_version"),
+		[]byte("secret_content_sha256"),
+	} {
+		if bytes.Contains(verified.CanonicalPayload, forbidden) {
+			t.Fatalf("Agent receipt contains private credential/provider coordinate: %q", forbidden)
+		}
 	}
 }
 

@@ -1394,11 +1394,12 @@ func (service *Service) transitionAgent(
 			input.FullMethod, now); err != nil {
 			return entity.Resource{}, err
 		}
-		if input.ProviderReceipt.WorkspaceID != input.Principal.ProjectID || input.ProviderReceipt.ProviderObjectRef == "" ||
-			input.ProviderReceipt.ReceiptRevision <= spec.BotReceiptVersion {
+		if input.ProviderReceipt.WorkspaceID != input.Principal.ProjectID ||
+			input.ProviderReceipt.ReceiptRevision <= spec.BotReceiptVersion ||
+			!validAgentBotReceiptBoundary(input.ProviderReceipt) {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
-		if _, err := lockWorkspaceMappingForProviderTeam(ctx, tx, input.Principal,
+		if _, err := lockWorkspaceMappingByOpaqueRef(ctx, tx, input.Principal,
 			input.ProviderReceipt.ProviderTeamRef); err != nil {
 			return entity.Resource{}, err
 		}
@@ -1436,6 +1437,13 @@ func (service *Service) transitionAgent(
 	default:
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+}
+
+func validAgentBotReceiptBoundary(receipt value.ProviderEffectReceipt) bool {
+	return uuid.Validate(receipt.ProviderTeamRef) == nil && uuid.Validate(receipt.ProviderObjectRef) == nil &&
+		receipt.CredentialBindingID == "" && receipt.CredentialBindingVersion == 0 &&
+		receipt.CredentialBindingSHA256 == "" && receipt.SecretRef == "" && receipt.SecretVersion == 0 &&
+		receipt.SecretContentSHA256 == ""
 }
 
 func validateInstructionContent(content string) []entity.InstructionValidationError {
@@ -1565,8 +1573,10 @@ func (service *Service) materializeProviderCredential(
 		ContentSHA256:                 receipt.SecretContentSHA256,
 		ProviderWindowDurationSeconds: receipt.WindowDurationSeconds, ProviderResetsAt: receipt.ResetsAt,
 		ProviderObservationExpiresAt: receipt.ObservationExpiresAt,
-		Ownership: entity.ConfigurationOwnership{ManagedBy: "UI", SourceRef: "provider-receipt:" + receipt.ReceiptID,
-			SourceRevision: receipt.ReceiptRevision, SourceSHA256: input.Principal.AuthorityDigest},
+		Ownership: entity.ConfigurationOwnership{
+			ManagedBy: "UI", SourceRef: "provider-receipt:" + receipt.ReceiptID,
+			SourceRevision: receipt.ReceiptRevision, SourceSHA256: input.Principal.AuthorityDigest,
+		},
 	}
 	if spec.Validate() != nil {
 		return entity.Resource{}, errs.ErrInvalidInput

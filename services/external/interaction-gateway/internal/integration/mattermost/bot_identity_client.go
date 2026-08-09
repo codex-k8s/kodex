@@ -25,11 +25,11 @@ const (
 
 func (client *Client) CheckBotIdentityLifecycle(ctx context.Context) error {
 	if client.primary == nil {
-		return errors.New("Mattermost bot identity administrator is unavailable")
+		return errors.New("mattermost bot identity administrator is unavailable")
 	}
 	_, response, err := client.primary.api.GetBots(ctx, 0, 1, "")
 	if err != nil || response == nil {
-		return errors.New("Mattermost bot identity catalog working path is not ready")
+		return errors.New("mattermost bot identity catalog working path is not ready")
 	}
 	return nil
 }
@@ -140,7 +140,8 @@ func (client *Client) readCreatedBot(ctx context.Context, principal entity.TeamP
 func (client *Client) ReadBotIdentity(ctx context.Context, principal entity.TeamPrincipal,
 	providerUserID, providerTeamID string,
 ) (entity.AgentMattermostBotIdentity, error) {
-	if _, err := client.index.resolveOwner(principal); err != nil || invalidProviderID(providerUserID) || invalidProviderID(providerTeamID) {
+	owner, ownerErr := client.index.resolveOwner(principal)
+	if ownerErr != nil || invalidProviderID(providerUserID) || invalidProviderID(providerTeamID) {
 		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotForbidden
 	}
 	bot, response, err := client.primary.api.GetBotIncludeDeleted(ctx, providerUserID, "")
@@ -150,7 +151,7 @@ func (client *Client) ReadBotIdentity(ctx context.Context, principal entity.Team
 		}
 		return entity.AgentMattermostBotIdentity{}, botProviderReadError(response, err)
 	}
-	if bot == nil || bot.UserId != providerUserID {
+	if bot == nil || bot.UserId != providerUserID || bot.OwnerId != owner.MattermostUserID {
 		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotConflict
 	}
 	identity := safeBotIdentity(bot, providerTeamID)
@@ -167,8 +168,9 @@ func (client *Client) ReadBotIdentity(ctx context.Context, principal entity.Team
 func (client *Client) EnsureBotTeamMembership(ctx context.Context, principal entity.TeamPrincipal,
 	identity entity.AgentMattermostBotIdentity,
 ) (entity.AgentMattermostBotIdentity, error) {
-	if _, err := client.index.resolveOwner(principal); err != nil {
-		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotForbidden
+	current, err := client.readOwnedBotWithoutTeam(ctx, principal, identity.ProviderUserID, identity.ProviderTeamID)
+	if err != nil || !sameBotPredecessor(identity, current) {
+		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotConflict
 	}
 	member, response, err := client.primary.api.GetTeamMember(ctx, identity.ProviderTeamID, identity.ProviderUserID, "")
 	if err != nil && (response == nil || response.StatusCode != http.StatusNotFound) {
@@ -182,9 +184,30 @@ func (client *Client) EnsureBotTeamMembership(ctx context.Context, principal ent
 	return client.ReadBotIdentity(ctx, principal, identity.ProviderUserID, identity.ProviderTeamID)
 }
 
-func (client *Client) CreateBotAccessToken(ctx context.Context, identity entity.AgentMattermostBotIdentity,
+func (client *Client) readOwnedBotWithoutTeam(ctx context.Context, principal entity.TeamPrincipal,
+	providerUserID, providerTeamID string,
+) (entity.AgentMattermostBotIdentity, error) {
+	owner, ownerErr := client.index.resolveOwner(principal)
+	if ownerErr != nil || invalidProviderID(providerUserID) || invalidProviderID(providerTeamID) {
+		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotForbidden
+	}
+	bot, response, err := client.primary.api.GetBotIncludeDeleted(ctx, providerUserID, "")
+	if err != nil {
+		return entity.AgentMattermostBotIdentity{}, botProviderReadError(response, err)
+	}
+	if bot == nil || bot.UserId != providerUserID || bot.OwnerId != owner.MattermostUserID || bot.DeleteAt != 0 {
+		return entity.AgentMattermostBotIdentity{}, domainmattermost.ErrBotConflict
+	}
+	return safeBotIdentity(bot, providerTeamID), nil
+}
+
+func (client *Client) CreateBotAccessToken(ctx context.Context, principal entity.TeamPrincipal,
+	identity entity.AgentMattermostBotIdentity,
 	correlation string,
 ) (string, string, error) {
+	if err := client.requireOwnedBotPredecessor(ctx, principal, identity); err != nil {
+		return "", "", err
+	}
 	description := botTokenDescription(correlation)
 	token, response, err := client.primary.api.CreateUserAccessToken(ctx, identity.ProviderUserID, description)
 	if err != nil {
@@ -194,18 +217,35 @@ func (client *Client) CreateBotAccessToken(ctx context.Context, identity entity.
 		token.Description != description || !token.IsActive || token.Token == "" {
 		return "", "", domainmattermost.ErrBotAmbiguousEffect
 	}
+	if err := client.requireOwnedBotPredecessor(ctx, principal, identity); err != nil {
+		// Exact новый token закрывается до выдачи material за provider boundary.
+		// Неуспешная компенсация остаётся неоднозначным исходом.
+		response, revokeErr := client.primary.api.RevokeUserAccessToken(ctx, token.Id)
+		if revokeErr != nil {
+			return "", "", botProviderMutationError(response, revokeErr)
+		}
+		readback, response, readErr := client.primary.api.GetUserAccessToken(ctx, token.Id)
+		if readErr != nil || readback == nil || readback.UserId != identity.ProviderUserID || readback.IsActive {
+			return "", "", botProviderReadError(response, readErr)
+		}
+		return "", "", domainmattermost.ErrBotConflict
+	}
 	return token.Id, token.Token, nil
 }
 
 // ResolveBotAccessToken доказывает exact operation token без mutation. Этот
 // read path связывает уже материализованный Vault secret с provider token ID
 // после crash между Vault CAS и PostgreSQL checkpoint.
-func (client *Client) ResolveBotAccessToken(ctx context.Context, identity entity.AgentMattermostBotIdentity,
+func (client *Client) ResolveBotAccessToken(ctx context.Context, principal entity.TeamPrincipal,
+	identity entity.AgentMattermostBotIdentity,
 	correlation string,
 ) (string, bool, error) {
 	if invalidProviderID(identity.ProviderUserID) || correlation == "" || len(correlation) > 128 ||
 		strings.ContainsAny(correlation, "\x00\r\n") {
 		return "", false, domainmattermost.ErrBotForbidden
+	}
+	if err := client.requireOwnedBotPredecessor(ctx, principal, identity); err != nil {
+		return "", false, err
 	}
 	description := botTokenDescription(correlation)
 	var found *model.UserAccessToken
@@ -243,10 +283,11 @@ func (client *Client) ResolveBotAccessToken(ctx context.Context, identity entity
 // RecoverBotAccessToken закрывает точный operation token, секрет которого мог
 // быть потерян после provider accept. Только после этого service может создать
 // новую credential attempt; два активных token одного operation запрещены.
-func (client *Client) RecoverBotAccessToken(ctx context.Context, identity entity.AgentMattermostBotIdentity,
+func (client *Client) RecoverBotAccessToken(ctx context.Context, principal entity.TeamPrincipal,
+	identity entity.AgentMattermostBotIdentity,
 	correlation string,
 ) (string, bool, error) {
-	tokenID, active, err := client.ResolveBotAccessToken(ctx, identity, correlation)
+	tokenID, active, err := client.ResolveBotAccessToken(ctx, principal, identity, correlation)
 	if err != nil || tokenID == "" {
 		return "", false, err
 	}
@@ -261,14 +302,21 @@ func (client *Client) RecoverBotAccessToken(ctx context.Context, identity entity
 		readback.UserId != identity.ProviderUserID || readback.IsActive {
 		return "", false, botProviderReadError(response, readErr)
 	}
+	if err := client.requireOwnedBotPredecessor(ctx, principal, identity); err != nil {
+		return "", false, domainmattermost.ErrBotAmbiguousEffect
+	}
 	return tokenID, true, nil
 }
 
 func (client *Client) RevokeBotAccessToken(ctx context.Context,
+	principal entity.TeamPrincipal,
 	identity entity.AgentMattermostBotIdentity,
 ) (bool, error) {
 	if invalidProviderID(identity.ProviderUserID) || invalidProviderID(identity.ProviderTokenID) {
 		return false, domainmattermost.ErrBotForbidden
+	}
+	if err := client.requireOwnedBotPredecessor(ctx, principal, identity); err != nil {
+		return false, err
 	}
 	token, response, err := client.primary.api.GetUserAccessToken(ctx, identity.ProviderTokenID)
 	if err != nil {
@@ -287,6 +335,9 @@ func (client *Client) RevokeBotAccessToken(ctx context.Context,
 	if err != nil || readback == nil || readback.UserId != identity.ProviderUserID || readback.IsActive {
 		return false, botProviderReadError(response, err)
 	}
+	if err := client.requireOwnedBotPredecessor(ctx, principal, identity); err != nil {
+		return false, domainmattermost.ErrBotAmbiguousEffect
+	}
 	return true, nil
 }
 
@@ -302,6 +353,9 @@ func (client *Client) RevokeBotIdentity(ctx context.Context, principal entity.Te
 	}
 	if current.Status == enum.AgentBotIdentityRevoked {
 		return current, false, nil
+	}
+	if !sameBotPredecessor(identity, current) {
+		return entity.AgentMattermostBotIdentity{}, false, domainmattermost.ErrBotConflict
 	}
 	if current.Status != enum.AgentBotIdentityAvailable {
 		return entity.AgentMattermostBotIdentity{}, false, domainmattermost.ErrBotConflict
@@ -320,6 +374,58 @@ func (client *Client) RevokeBotIdentity(ctx context.Context, principal entity.Te
 	return result, true, nil
 }
 
+func (client *Client) VerifyRuntimeBotCredential(ctx context.Context, principal entity.TeamPrincipal,
+	identity entity.AgentMattermostBotIdentity, token string,
+) error {
+	if token == "" || identity.Status != enum.AgentBotIdentityAvailable {
+		return domainmattermost.ErrBotForbidden
+	}
+	if err := client.requireOwnedBotPredecessor(ctx, principal, identity); err != nil {
+		return err
+	}
+	if invalidProviderID(identity.ProviderTokenID) {
+		return domainmattermost.ErrBotForbidden
+	}
+	providerToken, response, err := client.primary.api.GetUserAccessToken(ctx, identity.ProviderTokenID)
+	if err != nil {
+		return botProviderReadError(response, err)
+	}
+	if providerToken == nil || providerToken.Id != identity.ProviderTokenID ||
+		providerToken.UserId != identity.ProviderUserID || !providerToken.IsActive {
+		return domainmattermost.ErrBotConflict
+	}
+	api := model.NewAPIv4Client(client.config.SiteURL)
+	api.AuthToken, api.AuthType, api.HTTPClient = token, model.HeaderBearer, client.httpClient
+	user, response, err := api.GetMe(ctx, "")
+	if err != nil {
+		return botProviderReadError(response, err)
+	}
+	if user == nil || user.Id != identity.ProviderUserID || !user.IsBot || user.DeleteAt != 0 {
+		return domainmattermost.ErrBotConflict
+	}
+	return nil
+}
+
+func (client *Client) requireOwnedBotPredecessor(ctx context.Context, principal entity.TeamPrincipal,
+	identity entity.AgentMattermostBotIdentity,
+) error {
+	current, err := client.ReadBotIdentity(ctx, principal, identity.ProviderUserID, identity.ProviderTeamID)
+	if err != nil {
+		return err
+	}
+	if !sameBotPredecessor(identity, current) {
+		return domainmattermost.ErrBotConflict
+	}
+	return nil
+}
+
+func sameBotPredecessor(expected, current entity.AgentMattermostBotIdentity) bool {
+	return expected.ProviderUserID != "" && expected.ProviderUserID == current.ProviderUserID &&
+		expected.ProviderTeamID != "" && expected.ProviderTeamID == current.ProviderTeamID &&
+		expected.ProviderSnapshotSHA256 != "" && expected.ProviderSnapshotSHA256 == current.ProviderSnapshotSHA256 &&
+		current.Status == enum.AgentBotIdentityAvailable
+}
+
 func safeBotIdentity(bot *model.Bot, providerTeamID string) entity.AgentMattermostBotIdentity {
 	status := enum.AgentBotIdentityAvailable
 	if bot.DeleteAt != 0 {
@@ -330,9 +436,11 @@ func safeBotIdentity(bot *model.Bot, providerTeamID string) entity.AgentMattermo
 	if version == 0 {
 		version = 1
 	}
-	snapshot := strings.Join([]string{"mattermost-bot-snapshot-v1", bot.UserId, bot.Username,
+	snapshot := strings.Join([]string{
+		"mattermost-bot-snapshot-v1", bot.UserId, bot.Username,
 		bot.DisplayName, bot.Description, bot.OwnerId, fmt.Sprint(bot.CreateAt), fmt.Sprint(bot.UpdateAt),
-		fmt.Sprint(bot.DeleteAt), providerTeamID}, "\x00")
+		fmt.Sprint(bot.DeleteAt), providerTeamID,
+	}, "\x00")
 	digest := sha256.Sum256([]byte(snapshot))
 	return entity.AgentMattermostBotIdentity{
 		ProviderBotID: bot.UserId, ProviderUserID: bot.UserId, ProviderTeamID: providerTeamID,
@@ -351,13 +459,16 @@ func createdBotMatches(bot *model.Bot, intent entity.AgentMattermostBotCreateInt
 func botOperationMarker(correlation string) string {
 	return "mattercodex-agent-bot-operation:" + correlation
 }
+
 func botTokenDescription(correlation string) string {
 	return "mattercodex-agent-bot-token:" + correlation
 }
 
 func botCausalityDigest(correlation string, bot *model.Bot) string {
-	digest := sha256.Sum256([]byte(strings.Join([]string{"mattermost-agent-bot-create-proof-v1",
-		correlation, bot.UserId, fmt.Sprint(bot.CreateAt)}, "\x00")))
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		"mattermost-agent-bot-create-proof-v1",
+		correlation, bot.UserId, fmt.Sprint(bot.CreateAt),
+	}, "\x00")))
 	return hex.EncodeToString(digest[:])
 }
 
