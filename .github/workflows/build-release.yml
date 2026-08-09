@@ -9,12 +9,15 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
+  deployments: read
 
 jobs:
   build:
     runs-on: mattercodex-build
     timeout-minutes: 45
+    environment: production-build
     steps:
       - name: Validate requested SHA
         shell: bash
@@ -31,8 +34,13 @@ jobs:
       - name: Verify checkout
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ inputs.source_sha }}
-        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          tools/release/verify-github-owner-gate.sh \
+            --workflow .github/workflows/build-release.yml --environment production-build \
+            --source-sha "$SOURCE_SHA" --mode build --output owner-gate.json
       - name: Build and publish immutable release
         shell: bash
         env:

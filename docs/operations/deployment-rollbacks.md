@@ -4,7 +4,7 @@ title: Развертывание и откат
 type: operations
 status: approved
 owner: sre
-version: 0.4.0
+version: 0.5.0
 updated: 2026-08-09
 ---
 
@@ -19,6 +19,12 @@ Build и deploy запускаются только через `workflow_dispatc
 проверенного release lock. Rollback выбирает ранее сохранённый exact lock и не
 выполняет schema down, удаление PVC или изменение legacy traffic. Процедура и
 bounded smoke определены в `RUN-MC-015`.
+
+Build и deploy jobs начинают работу только после GitHub Environment approval с
+обязательным reviewer и запретом self-review. Workflow проверяет собственный
+`workflow_dispatch`, exact workflow path/ref `main`, branch policy и число
+reviewer через GitHub API, сохраняет безопасное gate evidence и передаёт его
+production script. Caller-controlled значение `approved` не используется.
 
 ## Процесс
 

@@ -25,6 +25,7 @@ on:
 permissions:
   actions: read
   contents: read
+  deployments: read
 
 concurrency:
   group: mattercodex-production
@@ -60,6 +61,9 @@ jobs:
           BUILD_RUN_ID: ${{ inputs.build_run_id }}
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          tools/release/verify-github-owner-gate.sh \
+            --workflow .github/workflows/deploy-production.yml --environment production \
+            --source-sha "$SOURCE_SHA" --mode "${{ inputs.mode }}" --output owner-gate.json
           temporary_directory=$(mktemp -d)
           trap 'rm -rf -- "$temporary_directory"' EXIT
           umask 077
@@ -89,16 +93,16 @@ jobs:
           tools/release/validate-release-lock.sh --lock release-artifact/release-lock.json --source-sha "$SOURCE_SHA" --sha256 "$LOCK_SHA256"
       - name: Install pinned kubectl
         shell: bash
-        run: tools/deploy/install-pinned-kubectl.sh /var/run/mattercodex-tools/kubectl
+        run: |
+          tools/deploy/install-pinned-kubectl.sh /var/run/mattercodex-tools/kubectl
+          tools/deploy/install-pinned-yq.sh /var/run/mattercodex-tools/yq
       - name: Apply owner-gated production operation
         shell: bash
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
           MODE: ${{ inputs.mode }}
-          MATTERCODEX_PRODUCTION_OWNER_GATE: approved
-          MATTERCODEX_CUTOVER_OWNER_GATE: ${{ inputs.mode == 'cutover' && 'approved' || '' }}
-          MATTERCODEX_ROLLBACK_OWNER_GATE: ${{ inputs.mode == 'rollback' && 'approved' || '' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           temporary_directory=$(mktemp -d)
           trap 'rm -rf -- "$temporary_directory"' EXIT
@@ -107,4 +111,5 @@ jobs:
           context=$(/var/run/mattercodex-tools/kubectl config current-context)
           PATH="/var/run/mattercodex-tools:$PATH" tools/deploy/direct-production.sh \
             --context "$context" --operation apply --mode "$MODE" --source-sha "$SOURCE_SHA" \
-            --lock release-artifact/release-lock.json --lock-sha256 "$LOCK_SHA256"
+            --lock release-artifact/release-lock.json --lock-sha256 "$LOCK_SHA256" \
+            --gate-evidence owner-gate.json

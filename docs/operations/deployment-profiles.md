@@ -4,7 +4,7 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 0.2.0
+version: 0.3.0
 updated: 2026-08-09
 ---
 
@@ -15,7 +15,10 @@ updated: 2026-08-09
 Активный профиль прототипа имеет точное имя `direct-production single-node
 prototype`. Отдельного staging нет. Новый backend сначала разворачивается dark
 в `mattercodex-system` существующего production-кластера, без Ingress, cutover и
-переключения пользовательского трафика. CI изолирован в `mattercodex-ci`.
+переключения пользовательского трафика. Build CI изолирован в `mattercodex-ci`,
+а deploy CI и его namespaced Kubernetes identity — в `mattercodex-ci-deploy`.
+Оба scale set имеют отдельные ARC controller и non-default runner group,
+ограниченный точным workflow из `refs/heads/main`.
 
 Legacy Mattermost, PostgreSQL и bot-service в `matter-kodex-prod` остаются
 авторитетным пользовательским путём и rollback path. Первый выпуск использует

@@ -19,9 +19,24 @@ done
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 "$script_directory/validate-release-lock.sh" --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" >/dev/null
-kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" >"$output"
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT
+applications="$temporary_directory/applications.yaml"
+kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" |
+  yq eval-all '
+    select(.kind == "ConfigMap" or .kind == "Service" or .kind == "Deployment" or .kind == "StatefulSet") |
+    .metadata.labels."mattercodex.dev/release-managed" = "true" |
+    with(select(.kind == "Deployment" or .kind == "StatefulSet");
+      .spec.template.metadata.labels."mattercodex.dev/release-managed" = "true" |
+      .spec.template.spec.automountServiceAccountToken = false
+    )
+  ' >"$output"
+"$script_directory/render-direct-production-applications.sh" \
+  --lock "$lock_file" --scope release --output "$applications" >/dev/null
+printf '%s\n' '---' >>"$output"
+cat "$applications" >>"$output"
 {
-  printf '%s\n' '---' 'apiVersion: v1' 'kind: ConfigMap' 'metadata:' '  name: mattercodex-release-lock' '  namespace: mattercodex-system' '  labels:' '    mattercodex.dev/profile: direct-production-single-node-prototype' 'data:'
+  printf '%s\n' '---' 'apiVersion: v1' 'kind: ConfigMap' 'metadata:' '  name: mattercodex-release-lock' '  namespace: mattercodex-system' '  labels:' '    mattercodex.dev/profile: direct-production-single-node-prototype' '    mattercodex.dev/release-managed: "true"' 'data:'
   printf '  source_sha: "%s"\n  release_lock_sha256: "%s"\n' "$source_sha" "$lock_sha256"
   while IFS=$'\t' read -r component pull_ref; do
     printf '  image.%s: "%s"\n' "$component" "$pull_ref"

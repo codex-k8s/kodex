@@ -1,0 +1,181 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mattercodex-system
+  labels:
+    mattercodex.dev/profile: direct-production-single-node-prototype
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mattercodex-production-deployer
+  namespace: mattercodex-system
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, services]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [""]
+    resources: [pods, pods/log, persistentvolumeclaims]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, replicasets]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mattercodex-production-deployer
+  namespace: mattercodex-system
+subjects:
+  - kind: ServiceAccount
+    name: mattercodex-production-deployer
+    namespace: mattercodex-ci-deploy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mattercodex-production-deployer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mattercodex-production-legacy-readback
+  namespace: matter-kodex-prod
+rules:
+  - apiGroups: [""]
+    resources: [services, pods]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mattercodex-production-legacy-readback
+  namespace: matter-kodex-prod
+subjects:
+  - kind: ServiceAccount
+    name: mattercodex-production-deployer
+    namespace: mattercodex-ci-deploy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mattercodex-production-legacy-readback
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: mattercodex-production-deployer-allowlist
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [configmaps, services]
+        scope: Namespaced
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments, statefulsets]
+        scope: Namespaced
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [jobs, cronjobs]
+        scope: Namespaced
+  validations:
+    - expression: >-
+        request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
+        (object.metadata.namespace == 'mattercodex-system' &&
+         object.metadata.labels['mattercodex.dev/profile'] == 'direct-production-single-node-prototype' &&
+         object.metadata.labels['mattercodex.dev/release-managed'] == 'true')
+      message: Production deployer may manage only labeled direct-production release resources.
+    - expression: >-
+        request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
+        (object.kind == 'ConfigMap' && object.metadata.name in [
+          'automation-scheduler-runtime','control-plane-db-principals','control-plane-runtime',
+          'egress-gateway-policy-7fgk8mb2t7','integration-egress-proxy-config','integration-gateway-db-principals',
+          'integration-gateway-definitions','integration-gateway-git-sources','integration-gateway-provider-catalog',
+          'integration-gateway-runtime','interaction-gateway-runtime','internal-rpc-authority-database-credential-reconciler',
+          'internal-rpc-authority-publisher','internal-rpc-authority-publisher-postgresql-connection',
+          'internal-rpc-authority-publisher-target-registry','internal-rpc-authority-readback-attestor',
+          'internal-rpc-authority-readback-attestor-postgresql-connection','internal-rpc-authority-restore-controller',
+          'internal-rpc-authority-restore-coordination','mattercodex-image-admission-policy','mattercodex-nats-config',
+          'mattercodex-postgresql-init','mattercodex-redis-config','mattercodex-release-lock',
+          'runtime-controller-runtime','runtime-controller-s3-security-policy']) ||
+        (object.kind == 'Service' && object.metadata.name in [
+          'automation-scheduler','control-api-gateway','control-plane','control-plane-postgresql-rw','egress-gateway',
+          'egress-gateway-technical','integration-egress-proxy','integration-gateway','integration-gateway-postgresql-rw',
+          'interaction-gateway','interaction-gateway-postgresql-rw','internal-rpc-authority-database-credential-reconciler',
+          'internal-rpc-authority-postgresql-rw','internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor',
+          'internal-rpc-authority-restore-controller','mattercodex-nats','mattercodex-object-store','mattercodex-postgresql',
+          'mattercodex-redis','nats','object-store','postgresql','provider-health-adapter','redis','runtime-controller',
+          'runtime-controller-postgresql-rw','runtime-s3-archive-exchanger','runtime-s3-restore-exchanger',
+          'runtime-workload-admission','runtime-workload-materializer']) ||
+        (object.kind == 'StatefulSet' && object.metadata.name in [
+          'mattercodex-nats','mattercodex-object-store','mattercodex-postgresql','mattercodex-redis']) ||
+        (object.kind == 'Deployment' && object.metadata.name in [
+          'automation-scheduler','control-api-gateway','control-plane','egress-gateway','integration-egress-proxy',
+          'integration-gateway','interaction-gateway','internal-rpc-authority-database-credential-reconciler',
+          'internal-rpc-authority-publisher','internal-rpc-authority-readback-attestor','internal-rpc-authority-restore-controller',
+          'mattercodex-object-store-bootstrap','provider-health-adapter','runtime-controller','runtime-s3-archive-exchanger',
+          'runtime-s3-restore-exchanger','runtime-workload-admission','runtime-workload-materializer']) ||
+        (object.kind == 'Job' && object.metadata.name in [
+          'control-plane-migrate','integration-gateway-migrate','interaction-gateway-migrate',
+          'internal-rpc-authority-migrate','runtime-controller-migration']) ||
+        (object.kind == 'CronJob' && object.metadata.name in [
+          'internal-rpc-authority-restore-operator','internal-rpc-authority-restore-pitr',
+          'internal-rpc-authority-restore-recovery'])
+      message: Production deployer resource name is outside the machine allowlist.
+    - expression: >-
+        request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
+        !(object.kind in ['Deployment','StatefulSet','Job']) ||
+        (object.spec.template.spec.containers.all(c,
+           c.image.matches('^(localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller)@sha256:[a-f0-9]{64}|docker.io/(envoyproxy/envoy|library/(nats|postgres|redis)|minio/(mc|minio)):[^@]+@sha256:[a-f0-9]{64})$') &&
+           !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000')) &&
+         (!has(object.spec.template.spec.initContainers) || object.spec.template.spec.initContainers.all(c,
+           c.image.matches('^localhost:5001/mattercodex/(automation-scheduler|control-api-gateway|control-plane|egress-gateway|integration-gateway|interaction-gateway|internal-rpc-authority|runtime-controller)@sha256:[a-f0-9]{64}$') &&
+           !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000'))) &&
+         (!has(object.spec.template.spec.volumes) || object.spec.template.spec.volumes.all(v, !has(v.hostPath))))
+      message: Production workload image or volume is outside the machine allowlist.
+    - expression: >-
+        request.userInfo.username != 'system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer' ||
+        object.kind != 'CronJob' ||
+        (object.spec.jobTemplate.spec.template.spec.containers.all(c,
+           c.image.matches('^localhost:5001/mattercodex/internal-rpc-authority@sha256:[a-f0-9]{64}$') &&
+           !c.image.endsWith('@sha256:0000000000000000000000000000000000000000000000000000000000000000')) &&
+         (!has(object.spec.jobTemplate.spec.template.spec.initContainers) ||
+           object.spec.jobTemplate.spec.template.spec.initContainers.all(c,
+             c.image.matches('^localhost:5001/mattercodex/internal-rpc-authority@sha256:[a-f0-9]{64}$'))) &&
+         (!has(object.spec.jobTemplate.spec.template.spec.volumes) ||
+           object.spec.jobTemplate.spec.template.spec.volumes.all(v, !has(v.hostPath))))
+      message: Production CronJob image or volume is outside the machine allowlist.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: mattercodex-production-deployer-allowlist
+spec:
+  policyName: mattercodex-production-deployer-allowlist
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: mattercodex-system

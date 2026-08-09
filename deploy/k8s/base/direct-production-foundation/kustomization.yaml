@@ -6,5 +6,6 @@ labels:
   - pairs:
       app.kubernetes.io/part-of: mattercodex
       mattercodex.dev/environment: direct-production
+      mattercodex.dev/profile: direct-production-single-node-prototype
     includeSelectors: false
     includeTemplates: true

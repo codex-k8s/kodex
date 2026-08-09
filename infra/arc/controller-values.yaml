@@ -8,6 +8,10 @@ flags:
   logFormat: text
   watchSingleNamespace: mattercodex-ci
   runnerMaxConcurrentReconciles: 2
+env:
+  - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+  - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+  - {name: NO_PROXY, value: "kubernetes.default.svc,localhost,127.0.0.1"}
 podSecurityContext:
   runAsNonRoot: true
   seccompProfile: {type: RuntimeDefault}

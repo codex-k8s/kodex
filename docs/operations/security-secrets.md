@@ -4,7 +4,7 @@ title: Безопасность и секреты
 type: operations
 status: approved
 owner: security
-version: 0.2.0
+version: 0.3.0
 updated: 2026-08-09
 ---
 
@@ -16,6 +16,15 @@ materialized Kubernetes Secrets. Их значения создаются кри
 и не попадают в аргументы, Git, логи или отчёты. Скрипт сохраняет существующий
 Secret и закрыто отклоняет неожиданный набор ключей. Долговечная ротация,
 восстановление и hardened supply chain вынесены в #256.
+
+Одноразовый owner-controlled bootstrap является единственным writer Secret и
+Certificate для нового namespace. Routine deploy ServiceAccount не имеет
+`get|list|watch|create|update|patch` для Secrets и не управляет cert-manager.
+Application material manifest принимается только файлом, проверяется по exact
+множеству Secret/CA ConfigMap имён, required keys и непустых data, применяется
+без вывода значений. Без полного
+readback bootstrap не создаёт безопасную readiness-отметку, поэтому deploy
+закрыто останавливается до первой мутации.
 
 ## Границы доверия
 

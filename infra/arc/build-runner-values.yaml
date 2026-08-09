@@ -1,12 +1,25 @@
 githubConfigUrl: https://github.com/codex-k8s/matter-codex
 githubConfigSecret: mattercodex-github-runner-auth
 runnerScaleSetName: mattercodex-build
+runnerGroup: mattercodex-production-build
 minRunners: 0
 maxRunners: 1
+listenerTemplate:
+  metadata:
+    labels: {mattercodex.dev/arc-role: listener}
+  spec:
+    containers:
+      - name: listener
+        env:
+          - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+          - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+          - {name: NO_PROXY, value: "kubernetes.default.svc,localhost,127.0.0.1"}
 controllerServiceAccount:
   namespace: mattercodex-ci
   name: mattercodex-arc-gha-rs-controller
 template:
+  metadata:
+    labels: {mattercodex.dev/arc-role: build-runner}
   spec:
     hostUsers: false
     automountServiceAccountToken: false
@@ -38,6 +51,9 @@ template:
         command: [/home/runner/run.sh]
         env:
           - {name: BUILDKIT_HOST, value: unix:///var/run/buildkit/buildkitd.sock}
+          - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+          - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+          - {name: NO_PROXY, value: "matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1"}
         resources:
           requests: {cpu: 250m, memory: 512Mi}
           limits: {memory: 2Gi}
@@ -58,6 +74,10 @@ template:
         args:
           - --addr=unix:///var/run/buildkit/buildkitd.sock
           - --config=/var/run/config/buildkitd.toml
+        env:
+          - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+          - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+          - {name: NO_PROXY, value: "matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1"}
         startupProbe:
           exec: {command: [buildctl, --addr, unix:///var/run/buildkit/buildkitd.sock, debug, workers]}
           periodSeconds: 3

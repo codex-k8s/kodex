@@ -163,6 +163,12 @@ data:
     CREATE DATABASE interaction_gateway OWNER interaction_gateway_runtime;
     CREATE DATABASE integration_gateway OWNER integration_gateway_runtime;
     EOSQL
+  pg_hba.conf: |
+    local all all scram-sha-256
+    hostnossl all all 0.0.0.0/0 reject
+    hostnossl all all ::/0 reject
+    hostssl all all 0.0.0.0/0 scram-sha-256
+    hostssl all all ::/0 scram-sha-256
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -198,17 +204,32 @@ spec:
             - ssl_ca_file=/var/run/tls/ca.crt
             - -c
             - password_encryption=scram-sha-256
+            - -c
+            - hba_file=/var/run/config/pg_hba.conf
           env:
             - {name: POSTGRES_USER, value: postgres}
             - {name: POSTGRES_DB, value: postgres}
             - name: POSTGRES_PASSWORD
               valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}
           envFrom:
             - secretRef: {name: mattercodex-postgresql-app-passwords}
           ports: [{name: postgresql, containerPort: 5432, protocol: TCP}]
-          startupProbe: {exec: {command: [pg_isready, -h, 127.0.0.1, -U, postgres]}, periodSeconds: 3, failureThreshold: 60}
-          readinessProbe: {exec: {command: [pg_isready, -h, 127.0.0.1, -U, postgres]}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
-          livenessProbe: {exec: {command: [pg_isready, -h, 127.0.0.1, -U, postgres]}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
+          startupProbe:
+            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            periodSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
           resources:
             requests: {cpu: 250m, memory: 512Mi}
             limits: {memory: 3Gi}
@@ -217,6 +238,7 @@ spec:
             - {name: data, mountPath: /var/lib/postgresql}
             - {name: tls, mountPath: /var/run/tls, readOnly: true}
             - {name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
+            - {name: postgresql-config, mountPath: /var/run/config, readOnly: true}
             - {name: run, mountPath: /var/run/postgresql}
             - {name: tmp, mountPath: /tmp}
       volumes:
@@ -224,6 +246,10 @@ spec:
           secret: {secretName: mattercodex-postgresql-tls, defaultMode: 0440}
         - name: init
           configMap: {name: mattercodex-postgresql-init, defaultMode: 0550}
+        - name: postgresql-config
+          configMap:
+            name: mattercodex-postgresql-init
+            items: [{key: pg_hba.conf, path: pg_hba.conf}]
         - {name: run, emptyDir: {sizeLimit: 64Mi}}
         - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
   volumeClaimTemplates:
@@ -552,31 +578,134 @@ spec: {podSelector: {}, policyTypes: [Ingress, Egress]}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: {name: namespace-internal-data-paths, namespace: mattercodex-system}
+metadata: {name: dns-egress, namespace: mattercodex-system}
 spec:
   podSelector: {}
-  policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
-      ports:
-        - {protocol: TCP, port: 5432}
-        - {protocol: TCP, port: 6379}
-        - {protocol: TCP, port: 4222}
-        - {protocol: TCP, port: 8222}
-        - {protocol: TCP, port: 9000}
+  policyTypes: [Egress]
   egress:
-    - to:
-        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
-      ports:
-        - {protocol: TCP, port: 5432}
-        - {protocol: TCP, port: 6379}
-        - {protocol: TCP, port: 4222}
-        - {protocol: TCP, port: 8222}
-        - {protocol: TCP, port: 9000}
     - to:
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
           podSelector: {matchLabels: {k8s-app: kube-dns}}
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: postgresql-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql]
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: postgresql-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: redis-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-redis}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
+      ports:
+        - {protocol: TCP, port: 6379}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: redis-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-redis}}
+      ports: [{protocol: TCP, port: 6379}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: nats-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-nats}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [control-plane, runtime-controller]
+      ports:
+        - {protocol: TCP, port: 4222}
+        - {protocol: TCP, port: 8222}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: nats-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [control-plane, runtime-controller]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-nats}}
+      ports:
+        - {protocol: TCP, port: 4222}
+        - {protocol: TCP, port: 8222}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: object-store-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-object-store}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [control-plane, runtime-controller, interaction-gateway, mattercodex-object-store-bootstrap]
+      ports:
+        - {protocol: TCP, port: 9000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: object-store-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [control-plane, runtime-controller, interaction-gateway, mattercodex-object-store-bootstrap]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-object-store}}
+      ports: [{protocol: TCP, port: 9000}]
