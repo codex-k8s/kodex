@@ -10,6 +10,7 @@ spec:
       annotations:
         mattercodex.dev/legacy-postgresql-source-revision: "${MATTERCODEX_POSTGRES_MIGRATION_REVISION}"
         mattercodex.dev/legacy-postgresql-certificate-revision: "${MATTERCODEX_POSTGRES_MIGRATION_CERTIFICATE_REVISION}"
+        mattercodex.dev/legacy-postgresql-rollout-attempt: "${MATTERCODEX_POSTGRES_ROLLOUT_ATTEMPT}"
     spec:
       initContainers:
         - name: migration-tls-materializer
@@ -79,14 +80,30 @@ spec:
             - password_encryption=scram-sha-256
             - -c
             - hba_file=/var/run/postgresql-migration-tls/pg_hba.conf
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -ceu
+                - |
+                  test "$(cat /var/run/config/mattercodex/postgresql-migration-activation/state)" = CURRENT
+                  exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 6
           volumeMounts:
             - name: migration-tls-runtime
               mountPath: /var/run/postgresql-migration-tls
               readOnly: true
+            - name: migration-activation
+              mountPath: /var/run/config/mattercodex/postgresql-migration-activation
+              readOnly: true
       volumes:
         - name: migration-tls-source
           secret:
-            secretName: mattermost-postgres-migration-server-g1
+            # Только versioned immutable snapshot, никогда mutable cert-manager Secret.
+            secretName: ${MATTERCODEX_POSTGRES_RUNTIME_SECRET}
             defaultMode: 0440
             items:
               - key: tls.crt
@@ -105,3 +122,10 @@ spec:
         - name: migration-tls-runtime
           emptyDir:
             sizeLimit: 8Mi
+        - name: migration-activation
+          configMap:
+            name: ${MATTERCODEX_POSTGRES_ACTIVATION_CONFIGMAP}
+            defaultMode: 0440
+            items:
+              - key: state
+                path: state

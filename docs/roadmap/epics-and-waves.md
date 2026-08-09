@@ -4,8 +4,8 @@ title: Эпики и порядок реализации MatterCodex
 type: roadmap
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-07-29
+version: 1.1.0
+updated: 2026-08-09
 ---
 
 # Эпики и порядок реализации MatterCodex
@@ -75,11 +75,17 @@ immutable digest, который допускает Runtime Controller.
 
 GitHub: #185.
 
-- #196 проверяемая миграция данных legacy MatterCodex;
-- #197 staging deployment, QA, backup/restore, cutover и rollback.
+- #197 direct-production dark deploy нового контура без переключения legacy
+  consumers;
+- #241 code-first TLS 1.3 transport и least-privilege principal legacy
+  PostgreSQL, обязательный до execution #196;
+- #196 проверяемая forward-only миграция данных legacy MatterCodex;
+- #271 post-COMMITTED retirement TLS transport, credential и client trust.
 
-Эти задачи преимущественно последовательны. Production/cutover требует
-отдельного owner OK после доказанного restore и rollback.
+Эти задачи преимущественно последовательны. #197 не владеет TLS cleanup,
+credential retirement или data cutover. Каждый production apply, migration,
+consumer switch и post-COMMITTED cleanup требует отдельного owner OK после
+соответствующего readback; merge кода сам по себе Issue #241 не закрывает.
 
 ## Legacy freeze
 
@@ -89,5 +95,5 @@ dogfooding и не является базой новых реализаций.
 
 ## Post-MVP backlog
 
-#198 хранит требования, которые явно не входят в unit/cutover #186-#197.
+#198 хранит требования, которые явно не входят в unit/cutover активных waves.
 Менеджер не включает их в текущий эпик без отдельного решения владельца.

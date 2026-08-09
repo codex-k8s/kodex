@@ -4,7 +4,7 @@ title: Legacy data migration
 type: service
 status: approved
 owner: developer
-version: 1.2.0
+version: 1.3.0
 updated: 2026-08-09
 ---
 
@@ -224,9 +224,11 @@ ServiceMonitor и alerts. Manifest по умолчанию — `suspend: true`, 
 digest/plan и `dry-run`; он не является разрешением на запуск. Отдельный
 owner-approved execution PR обязан закрепить digest, plan ID, один mode и для
 `restore-verify` добавить отдельные restore credential/CA mounts.
-После authoritative `COMMITTED` отдельная cleanup wave #197 переводит
-выделенные LOGIN в `NOLOGIN`, отзывает membership, завершает оставшиеся
-sessions и делает exact `session_user` readback; job сама не расширяет scope до
-credential retirement.
+После authoritative `COMMITTED` отдельная cleanup wave
+[#271](https://github.com/codex-k8s/matter-codex/issues/271) закрывает client
+ingress, переводит выделенный LOGIN в `NOLOGIN`, проверяет boolean termination,
+доказывает zero sessions, отзывает membership и только затем выводит client
+Secret, CA и source TLS resources. Job сама не расширяет scope до credential
+retirement. #197 владеет dark deploy и не является владельцем этого cleanup.
 
 Runbook: [legacy-data-migration](../../../docs/runbooks/legacy-data-migration.md).

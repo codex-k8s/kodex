@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/name: mattermost-postgres
     app.kubernetes.io/component: migration-source
 spec:
+  # Независимый source readback достигает PENDING pod до открытия client ingress.
+  # Readiness всё равно закрыта activation marker и не публикует endpoint клиенту.
+  publishNotReadyAddresses: true
   ports:
     - name: postgres-tls
       port: 5432
@@ -24,6 +27,7 @@ metadata:
     app.kubernetes.io/name: mattermost-postgres
     app.kubernetes.io/component: migration-source
     mattercodex.dev/credential-generation: "1"
+immutable: true
 data:
   pg_hba.conf: |
     local all all trust
@@ -70,22 +74,6 @@ spec:
             matchLabels:
               app.kubernetes.io/name: matter-codex-bot-service
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: legacy-postgresql-source-readback
-      ports:
-        - protocol: TCP
-          port: 5432
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ${MATTERCODEX_POSTGRES_CLIENT_NAMESPACE}
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: legacy-data-migration
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ${MATTERCODEX_POSTGRES_CLIENT_NAMESPACE}
-          podSelector:
             matchLabels:
               app.kubernetes.io/name: legacy-postgresql-source-readback
       ports:

@@ -2,6 +2,8 @@
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL log_statement = 'none';
+SET LOCAL statement_timeout = '15s';
+SET LOCAL lock_timeout = '5s';
 
 SELECT format(
     'CREATE ROLE matter_codex_migration_g1 NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2 PASSWORD %L',
@@ -44,4 +46,5 @@ SELECT format(
     :'migration_password'
 ) \gexec
 GRANT matter_codex_migration TO matter_codex_migration_g1;
+SELECT format('COMMENT ON ROLE matter_codex_migration_g1 IS %L', :'lifecycle_comment') \gexec
 COMMIT;

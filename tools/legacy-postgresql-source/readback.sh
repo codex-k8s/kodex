@@ -64,7 +64,7 @@ openssl verify -CAfile "${trust_dir}/ca.pem" "$served_file" >/dev/null 2>&1 ||
   die "served certificate is not trusted"
 openssl x509 -in "$served_file" -outform DER > "$served_der"
 openssl x509 -in "${trust_dir}/server.pem" -outform DER > "$expected_der"
-cmp -s "$served_der" "$expected_der" || die "served certificate differs from cert-manager state"
+cmp -s "$served_der" "$expected_der" || die "served certificate differs from accepted immutable snapshot"
 
 actual_san="$(openssl x509 -in "$served_file" -noout -ext subjectAltName | tail -n +2 | tr -d '[:space:]')"
 [ "$actual_san" = "DNS:${PGHOST}" ] || die "served certificate SAN set is not exact"

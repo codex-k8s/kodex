@@ -91,7 +91,7 @@ spec:
             defaultMode: 0440
         - name: trust
           configMap:
-            name: mattermost-postgresql-ca
+            name: ${MATTERCODEX_POSTGRES_READBACK_TRUST_CONFIGMAP}
             defaultMode: 0440
         - name: readback
           configMap:

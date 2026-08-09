@@ -1,4 +1,8 @@
--- name: enable_migration_principal :exec
+-- name: enable_pending_migration_principal :exec
+\set ON_ERROR_STOP on
+BEGIN;
+SET LOCAL statement_timeout = '15s';
+SET LOCAL lock_timeout = '5s';
 DO $enable$
 DECLARE
     principal_oid oid;
@@ -25,5 +29,13 @@ BEGIN
 END
 $enable$;
 
-ALTER ROLE matter_codex_migration_g1
-    LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2;
+SELECT format(
+    'ALTER ROLE matter_codex_migration_g1 LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2 VALID UNTIL %L',
+    pg_catalog.clock_timestamp() + interval '5 minutes'
+) \gexec
+ALTER ROLE matter_codex_migration_g1 SET statement_timeout = '30s';
+ALTER ROLE matter_codex_migration_g1 SET lock_timeout = '5s';
+ALTER ROLE matter_codex_migration_g1 SET idle_session_timeout = '60s';
+ALTER ROLE matter_codex_migration_g1 SET idle_in_transaction_session_timeout = '30s';
+SELECT format('COMMENT ON ROLE matter_codex_migration_g1 IS %L', :'lifecycle_comment') \gexec
+COMMIT;
