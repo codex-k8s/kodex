@@ -616,6 +616,17 @@ func (svc *ChatRunService) EnqueueAgentTurn(ctx context.Context, request AgentTu
 		admissionSessionKey, "agent_session.persist.side_effect",
 		func(guardedStore adminrepo.Repository) error {
 			var persistErr error
+			if sessionExists && strings.EqualFold(strings.TrimSpace(request.Role.KubernetesAccess), "cluster-admin") {
+				current, readErr := guardedStore.GetAgentSession(ctx, sessionKey)
+				if readErr != nil {
+					return readErr
+				}
+				if !sameAgentSessionThreadBinding(current, existingSession) {
+					return adminrepo.ErrClusterAdminAdmissionDenied
+				}
+				session = current
+				return nil
+			}
 			input := adminrepo.UpsertAgentSessionInput{
 				SessionKey:            sessionKey,
 				ProjectID:             request.Project.ID,

@@ -30,20 +30,22 @@ func (reader *countingConversationReader) SearchChannelPosts(context.Context, st
 
 type admittedAdminStore struct {
 	*fakeAdminStore
-	allowed            bool
-	admission          securityrepo.ClusterAdminAdmissionInput
-	bindingAdmission   securityrepo.ClusterAdminBindingInput
-	bindingInputs      []securityrepo.ClusterAdminBindingInput
-	calls              int
-	bindingCalls       int
-	guardCalls         int
-	guardInputs        []securityrepo.ClusterAdminBindingInput
-	denyBinding        bool
-	denyGuard          bool
-	denyGuardAt        int
-	denyGuardOperation string
-	frozenSessions     map[string]bool
-	subjectErr         error
+	allowed              bool
+	admission            securityrepo.ClusterAdminAdmissionInput
+	bindingAdmission     securityrepo.ClusterAdminBindingInput
+	bindingInputs        []securityrepo.ClusterAdminBindingInput
+	calls                int
+	bindingCalls         int
+	guardCalls           int
+	guardInputs          []securityrepo.ClusterAdminBindingInput
+	denyBinding          bool
+	denyGuard            bool
+	denyGuardAt          int
+	denyGuardOperation   string
+	frozenSessions       map[string]bool
+	subjectErr           error
+	upsertCalls          int
+	rejectExistingUpsert bool
 }
 
 type admittedCoordinationStore struct {
@@ -109,6 +111,16 @@ func (store *admittedAdminStore) CreateFrozenClusterAdminSession(ctx context.Con
 		store.frozenSessions[input.SessionKey] = true
 	}
 	return session, created, err
+}
+
+func (store *admittedAdminStore) UpsertAgentSession(ctx context.Context, input adminrepo.UpsertAgentSessionInput) (entity.AgentSession, bool, error) {
+	store.upsertCalls++
+	if store.rejectExistingUpsert {
+		if _, exists := store.fakeAdminStore.agentSessions[input.SessionKey]; exists {
+			return entity.AgentSession{}, false, errors.New("existing frozen session must not be upserted")
+		}
+	}
+	return store.fakeAdminStore.UpsertAgentSession(ctx, input)
 }
 
 func (store *admittedAdminStore) WithExactAgentSessionsRuntimeGuard(ctx context.Context, expected []entity.AgentSession, sideEffect func(adminrepo.Repository) error) error {
@@ -652,6 +664,54 @@ func TestClusterAdminExistingSessionRechecksBeforeTurnAndRunSideEffects(t *testi
 	}
 	if len(baseStore.sessionTurns) != 0 || len(baseStore.agentRuns) != 0 || len(runner.sessionRuns) != 0 {
 		t.Fatalf("denied final guard caused side effects: turns=%#v runs=%#v runtime=%#v", baseStore.sessionTurns, baseStore.agentRuns, runner.sessionRuns)
+	}
+}
+
+func TestClusterAdminExistingSessionReusesFrozenBindingWithoutUpsert(t *testing.T) {
+	baseStore := chatRuntimeStore()
+	project := baseStore.projects[1]
+	role := entity.AgentRole{
+		ID: 1, ProjectID: project.ID, Name: "configured-admin", RoleType: "admin",
+		OpenAIAccountName: "main", KubernetesAccess: "cluster-admin", Enabled: true,
+	}
+	chat := entity.Chat{
+		ID: 1, ProjectID: project.ID, MattermostChannelID: "channel-existing", Name: "Admin", Slug: "admin-chat", ChatType: "single_custom",
+	}
+	sessionKey := agentSessionKey(chat.ID, role.ID, agentSessionScopeThreadRole, "root-existing")
+	baseStore.agentRoles[role.ID] = role
+	baseStore.chats[chat.ID] = chat
+	baseStore.setChatBindings(chat.ID, []int64{role.ID}, nil)
+	baseStore.agentSessions = map[string]entity.AgentSession{
+		sessionKey: {
+			ID: 1, SessionKey: sessionKey, ProjectID: project.ID, ChatID: chat.ID, RoleID: role.ID,
+			SessionScope: agentSessionScopeThreadRole, MattermostChannelID: chat.MattermostChannelID,
+			MattermostRootPostID: "root-existing", OpenAIAccountName: "main", Status: agentSessionStatusRunning,
+			ActiveTurnID: 9, ActiveRunID: "active-run", KubernetesNamespace: "synthetic",
+			PodName: "synthetic-pod", PVCName: "synthetic-pvc", TokenSecretRef: "synthetic-session-token",
+			TTLSeconds: defaultThreadSessionTTLSeconds, Capabilities: `{"frozen":true}`,
+		},
+	}
+	store := &admittedAdminStore{fakeAdminStore: baseStore, allowed: true, rejectExistingUpsert: true}
+	svc := NewChatRunService(ChatRunServiceConfig{
+		Store: store, RuntimeRunner: &fakeRuntimeRunner{}, StorageReady: true, RuntimeReady: true, DisableMonitor: true,
+	})
+
+	queued, err := svc.EnqueueAgentTurn(context.Background(), AgentTurnRequest{
+		Project: project, Chat: chat, Role: role, UserID: "owner-id", UserName: "owner",
+		UserMessage: "continue", SourcePostID: "source-post", ReplyRootID: "root-existing",
+		SessionRootID: "root-existing", SessionScope: agentSessionScopeThreadRole,
+	})
+	if err != nil {
+		t.Fatalf("EnqueueAgentTurn() error = %v", err)
+	}
+	if queued.SessionKey != sessionKey || queued.TurnID == 0 || queued.RunID == "" {
+		t.Fatalf("queued turn = %#v", queued)
+	}
+	if store.upsertCalls != 0 {
+		t.Fatalf("existing frozen session upsert calls = %d", store.upsertCalls)
+	}
+	if got := baseStore.agentSessions[sessionKey].Capabilities; string(got) != `{"frozen":true}` {
+		t.Fatalf("frozen capabilities changed to %s", got)
 	}
 }
 
