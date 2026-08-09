@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -1189,7 +1190,8 @@ func TestCredentialGuardSleepHelper(t *testing.T) {
 	time.Sleep(30 * time.Second)
 }
 
-func TestRuntimeCodexAuthMutationCancelsChildAndBlocksPublication(t *testing.T) {
+func TestRuntimeCodexAuthRefreshIsolatedAndRedacted(t *testing.T) {
+	useTestWorkspace(t)
 	const (
 		oldCredential = "mc-runtime-auth-old-6e74d901"
 		newCredential = "mc-runtime-auth-new-6e74d902"
@@ -1221,28 +1223,47 @@ func TestRuntimeCodexAuthMutationCancelsChildAndBlocksPublication(t *testing.T) 
 		path := path
 		t.Cleanup(func() { _ = os.Remove(path) })
 	}
-	_, _, runErr := testRunner.runCodexSessionTurn(context.Background(), sessionTurnClaimResponse{TurnID: turnID, Prompt: "runtime auth mutation"}, "", finalName, t.TempDir(), []string{
+	_, _, runErr := testRunner.runCodexSessionTurn(context.Background(), sessionTurnClaimResponse{TurnID: turnID, Prompt: "runtime auth refresh"}, "", finalName, t.TempDir(), []string{
 		"MATTERCODEX_TEST_RUNTIME_AUTH_MUTATION=1",
 		"MATTERCODEX_TEST_RUNTIME_AUTH_NEW=" + newCredential,
 	}, 0)
-	var rotationErr credentialRotationError
-	if !errors.As(runErr, &rotationErr) || !testRunner.safety.isUnsafe() {
-		t.Fatalf("runtime auth mutation error=%T unsafe=%t", runErr, testRunner.safety.isUnsafe())
+	if runErr != nil || testRunner.safety.isUnsafe() {
+		t.Fatalf("runtime auth refresh error=%v unsafe=%t", runErr, testRunner.safety.isUnsafe())
 	}
 	for _, path := range []string{sessionTurnEventsPath(turnID, 0), sessionTurnStderrPath(turnID, 0), filepath.Join(artifactsDir, finalName)} {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("unsafe runtime auth output опубликован: %s", filepath.Base(path))
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("runtime auth output %s не опубликован: %v", filepath.Base(path), err)
+		}
+		for _, credential := range []string{oldCredential, newCredential} {
+			if bytes.Contains(body, []byte(credential)) {
+				t.Fatalf("runtime auth output %s содержит credential", filepath.Base(path))
+			}
+		}
+	}
+	persistentAuth, err := os.ReadFile(filepath.Join(testRunner.codexHome, "auth.json"))
+	if err != nil || !bytes.Equal(persistentAuth, authBody) {
+		t.Fatalf("runtime refresh изменил canonical auth source: error=%v", err)
+	}
+	for _, credential := range []string{oldCredential, newCredential} {
+		protected, err := testRunner.secrets.protect("credential=" + credential)
+		if err != nil || strings.Contains(protected, credential) || !strings.Contains(protected, redactedSecretValue) {
+			t.Fatalf("runtime credential не добавлен в redaction inventory: error=%v", err)
 		}
 	}
 	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		requests++
+		body, _ := io.ReadAll(request.Body)
+		if bytes.Contains(body, []byte(newCredential)) || !bytes.Contains(body, []byte(redactedSecretValue)) {
+			t.Errorf("runtime credential не очищен в API payload")
+		}
 		response.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
-	err := testRunner.sessionJSONOnce(context.Background(), server.Client(), http.MethodPost, server.URL, "session", "token", "turns/status", sessionTurnStatusRequest{RunID: "run", Phase: newCredential}, nil)
-	if !errors.As(err, &rotationErr) || requests != 0 {
-		t.Fatalf("runtime auth network boundary: error=%T requests=%d", err, requests)
+	err = testRunner.sessionJSONOnce(context.Background(), server.Client(), http.MethodPost, server.URL, "session", "token", "turns/status", sessionTurnStatusRequest{RunID: "run", Phase: newCredential}, nil)
+	if err != nil || requests != 1 {
+		t.Fatalf("runtime auth network boundary: error=%v requests=%d", err, requests)
 	}
 }
 
@@ -1259,7 +1280,7 @@ func TestRuntimeCodexAuthMutationHelper(t *testing.T) {
 	if len(os.Args) > 0 {
 		_ = os.WriteFile(os.Args[len(os.Args)-1], []byte(credential), 0o600)
 	}
-	time.Sleep(30 * time.Second)
+	time.Sleep(250 * time.Millisecond)
 }
 
 func TestCredentialEventGuardRejectsAllMutationShapesAndTransientMetadataRestore(t *testing.T) {

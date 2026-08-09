@@ -1135,11 +1135,26 @@ func (guard *credentialRunGuard) captureSourceBaseline(path string, body []byte,
 }
 
 func (guard *credentialRunGuard) watchRuntimeAuthCopy(path string, body []byte, exists bool) error {
-	requested, _, err := guard.watchCredentialPath(path)
+	if !exists {
+		requested, _, err := guard.watchCredentialPath(path)
+		if err != nil {
+			return err
+		}
+		return guard.captureSourceBaseline(requested, body, false)
+	}
+	current, currentExists, err := readCredentialSource(path)
 	if err != nil {
 		return err
 	}
-	return guard.captureSourceBaseline(requested, body, exists)
+	if !currentExists || sha256.Sum256(current) != sha256.Sum256(body) {
+		guard.markRotated()
+		return credentialRotationError{}
+	}
+	// Codex обновляет токены в изолированной writable-копии CODEX_HOME.
+	// Projected Kubernetes Secret остаётся строгим immutable source, а все
+	// значения из runtime-копии попадают в redaction inventory до публикации
+	// артефактов или API payload.
+	return guard.registerRotatingCredentialPath(path)
 }
 
 func (guard *credentialRunGuard) consumeEvents() {
