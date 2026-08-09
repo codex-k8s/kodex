@@ -4,8 +4,8 @@ title: Полные unit и контролируемый cutover legacy
 type: decision
 status: approved
 owner: architect
-version: 1.0.0
-updated: 2026-07-29
+version: 1.1.0
+updated: 2026-08-09
 ---
 
 # ADR-MC-015. Полные unit и контролируемый cutover legacy
@@ -29,7 +29,7 @@ production-профилю. Платформа уже используется д
 4. До cutover legacy продолжает обслуживать dogfooding. Допустимы только
    критические эксплуатационные исправления с отдельным owner gate.
 5. После готовности unit выполняются backup, dry-run, one-shot forward
-   migration, staging acceptance и переключение.
+   migration, dark acceptance в production-кластере и последующее переключение.
 6. Rollback возвращает трафик и данные к проверенной резервной точке в пределах
    заранее установленного окна; после его закрытия legacy удаляется отдельной
    задачей.

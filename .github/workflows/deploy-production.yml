@@ -1,0 +1,110 @@
+name: Deploy exact production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact lowercase 40-hex Git SHA
+        required: true
+        type: string
+      build_run_id:
+        description: Successful Build exact release workflow run ID
+        required: true
+        type: string
+      release_lock_sha256:
+        description: Exact SHA-256 of release-lock.json
+        required: true
+        type: string
+      mode:
+        description: Deployment mode
+        required: true
+        default: dark
+        type: choice
+        options: [dark, cutover, rollback]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: mattercodex-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: mattercodex-deploy
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Validate exact inputs
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid exact source SHA' >&2; exit 1; }
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Invalid build run ID' >&2; exit 1; }
+          [[ "$LOCK_SHA256" =~ ^[a-f0-9]{64}$ && "$LOCK_SHA256" != 0000000000000000000000000000000000000000000000000000000000000000 ]] || { echo 'Invalid release lock SHA-256' >&2; exit 1; }
+      - name: Checkout exact release source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify build provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          temporary_directory=$(mktemp -d)
+          trap 'rm -rf -- "$temporary_directory"' EXIT
+          umask 077
+          printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' "$GH_TOKEN" > "$temporary_directory/curl.conf"
+          unset GH_TOKEN
+          curl --config "$temporary_directory/curl.conf" --fail --silent --show-error \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" > "$temporary_directory/run.json"
+          jq -e --arg sha "$SOURCE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success" and
+            .head_sha == $sha and .head_repository.full_name == $repo and .path == ".github/workflows/build-release.yml"
+          ' "$temporary_directory/run.json" >/dev/null || { echo 'Build run provenance mismatch' >&2; exit 1; }
+      - name: Download exact release lock
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: release-lock-${{ inputs.source_sha }}
+          path: release-artifact
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate exact release lock
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
+        run: |
+          test "$(<release-artifact/release-lock.sha256)" = "$LOCK_SHA256"
+          tools/release/validate-release-lock.sh --lock release-artifact/release-lock.json --source-sha "$SOURCE_SHA" --sha256 "$LOCK_SHA256"
+      - name: Install pinned kubectl
+        shell: bash
+        run: tools/deploy/install-pinned-kubectl.sh /var/run/mattercodex-tools/kubectl
+      - name: Apply owner-gated production operation
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          LOCK_SHA256: ${{ inputs.release_lock_sha256 }}
+          MODE: ${{ inputs.mode }}
+          MATTERCODEX_PRODUCTION_OWNER_GATE: approved
+          MATTERCODEX_CUTOVER_OWNER_GATE: ${{ inputs.mode == 'cutover' && 'approved' || '' }}
+          MATTERCODEX_ROLLBACK_OWNER_GATE: ${{ inputs.mode == 'rollback' && 'approved' || '' }}
+        run: |
+          temporary_directory=$(mktemp -d)
+          trap 'rm -rf -- "$temporary_directory"' EXIT
+          tools/deploy/prepare-incluster-kubeconfig.sh "$temporary_directory/kubeconfig"
+          export KUBECONFIG="$temporary_directory/kubeconfig"
+          context=$(/var/run/mattercodex-tools/kubectl config current-context)
+          PATH="/var/run/mattercodex-tools:$PATH" tools/deploy/direct-production.sh \
+            --context "$context" --operation apply --mode "$MODE" --source-sha "$SOURCE_SHA" \
+            --lock release-artifact/release-lock.json --lock-sha256 "$LOCK_SHA256"

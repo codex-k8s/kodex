@@ -4,11 +4,19 @@ title: Bot-Service Runbook
 type: runbook
 status: approved
 owner: sre
-version: 2.0.0
-updated: 2026-08-04
+version: 2.1.0
+updated: 2026-08-09
 ---
 
 # Bot-Service Runbook
+
+## Legacy rollback path Wave A
+
+В `direct-production single-node prototype` bot-service, его PostgreSQL,
+Mattermost, TLS contract и legacy Kaniko в `matter-kodex-prod` не изменяются.
+Dark deploy в `mattercodex-system` не создаёт Ingress и не переключает этот
+пользовательский путь. Любое удаление, миграция или cutover запрещены до #241,
+#237, #194 и отдельного owner gate; подробности — `RUN-MC-015`.
 
 ## Назначение
 

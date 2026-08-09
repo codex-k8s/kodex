@@ -4,11 +4,21 @@ title: Развертывание и откат
 type: operations
 status: approved
 owner: sre
-version: 0.3.0
-updated: 2026-07-18
+version: 0.4.0
+updated: 2026-08-09
 ---
 
 # Развертывание и откат
+
+## Direct-production single-node prototype
+
+В профиле `direct-production single-node prototype` staging отсутствует. До
+cutover новый контур разворачивается только dark в `mattercodex-system`, а
+legacy-контур `matter-kodex-prod` остаётся пользовательским и не изменяется.
+Build и deploy запускаются только через `workflow_dispatch` для exact SHA и
+проверенного release lock. Rollback выбирает ранее сохранённый exact lock и не
+выполняет schema down, удаление PVC или изменение legacy traffic. Процедура и
+bounded smoke определены в `RUN-MC-015`.
 
 ## Процесс
 

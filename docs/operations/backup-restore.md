@@ -4,11 +4,16 @@ title: Резервное копирование и восстановление
 type: operations
 status: approved
 owner: sre
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-08-09
 ---
 
 # Резервное копирование и восстановление
+
+Для dark-запуска `direct-production single-node prototype` наличие внешней
+проверенной backup/restore цели не маскируется как готовность: это принятый
+временный риск и блокер последующего cutover. Полный HA/DR и restore drill ведёт
+#255. Legacy PostgreSQL и его резервные копии Wave A не изменяет.
 
 ## Данные
 

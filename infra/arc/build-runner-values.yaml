@@ -1,0 +1,86 @@
+githubConfigUrl: https://github.com/codex-k8s/matter-codex
+githubConfigSecret: mattercodex-github-runner-auth
+runnerScaleSetName: mattercodex-build
+minRunners: 0
+maxRunners: 1
+controllerServiceAccount:
+  namespace: mattercodex-ci
+  name: mattercodex-arc-gha-rs-controller
+template:
+  spec:
+    hostUsers: false
+    automountServiceAccountToken: false
+    enableServiceLinks: false
+    restartPolicy: Never
+    terminationGracePeriodSeconds: 60
+    securityContext:
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+      supplementalGroups: [1000]
+    initContainers:
+      - name: install-buildctl
+        image: docker.io/moby/buildkit:v0.32.2-rootless@sha256:504731e577c20559c00f968f33219f30115e70be29ab96728d1d06e963fc494b
+        command: [/bin/sh, -ec]
+        args: ["cp /usr/bin/buildctl /var/run/mattercodex-tools/buildctl && chmod 0550 /var/run/mattercodex-tools/buildctl"]
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+          seccompProfile: {type: RuntimeDefault}
+        volumeMounts:
+          - {name: tools, mountPath: /var/run/mattercodex-tools}
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
+        imagePullPolicy: IfNotPresent
+        command: [/home/runner/run.sh]
+        env:
+          - {name: BUILDKIT_HOST, value: unix:///var/run/buildkit/buildkitd.sock}
+        resources:
+          requests: {cpu: 250m, memory: 512Mi}
+          limits: {memory: 2Gi}
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+          seccompProfile: {type: RuntimeDefault}
+        volumeMounts:
+          - {name: work, mountPath: /home/runner/_work}
+          - {name: socket, mountPath: /var/run/buildkit}
+          - {name: tools, mountPath: /var/run/mattercodex-tools, readOnly: true}
+      - name: buildkitd
+        image: docker.io/moby/buildkit:v0.32.2-rootless@sha256:504731e577c20559c00f968f33219f30115e70be29ab96728d1d06e963fc494b
+        imagePullPolicy: IfNotPresent
+        args:
+          - --addr=unix:///var/run/buildkit/buildkitd.sock
+          - --config=/var/run/config/buildkitd.toml
+        startupProbe:
+          exec: {command: [buildctl, --addr, unix:///var/run/buildkit/buildkitd.sock, debug, workers]}
+          periodSeconds: 3
+          failureThreshold: 60
+        resources:
+          requests: {cpu: 500m, memory: 512Mi}
+          limits: {memory: 6Gi}
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          procMount: Unmasked
+          appArmorProfile: {type: Unconfined}
+          seccompProfile: {type: Unconfined}
+          capabilities: {drop: [ALL]}
+        volumeMounts:
+          - {name: socket, mountPath: /var/run/buildkit}
+          - {name: state, mountPath: /home/user/.local/share/buildkit}
+          - {name: buildkit-config, mountPath: /var/run/config, readOnly: true}
+    volumes:
+      - {name: work, emptyDir: {sizeLimit: 8Gi}}
+      - {name: socket, emptyDir: {sizeLimit: 8Mi}}
+      - {name: tools, emptyDir: {sizeLimit: 32Mi}}
+      - {name: state, emptyDir: {sizeLimit: 30Gi}}
+      - {name: buildkit-config, configMap: {name: mattercodex-buildkit-config}}

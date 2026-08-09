@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 1.6.0
-updated: 2026-08-08
+version: 1.7.0
+updated: 2026-08-09
 ---
 
 # Кодификация документов и задач
@@ -133,5 +133,6 @@ updated: 2026-07-28
 | `SVC-MC-015`       | `services/internal/control-plane/legacy-data-materializer-contract.md` |
 | `SVC-MC-016`       | `services/jobs/legacy-data-migration/README.md`                    |
 | `RUN-MC-014`       | `docs/runbooks/legacy-data-migration.md`                           |
+| `RUN-MC-015`       | `docs/runbooks/direct-production-prototype.md`                     |
 
 При добавлении управляемого документа реестр обновляется в том же PR.

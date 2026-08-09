@@ -1,0 +1,58 @@
+name: Build exact release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact lowercase 40-hex Git SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: mattercodex-build
+    timeout-minutes: 45
+    steps:
+      - name: Validate requested SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid exact source SHA' >&2; exit 1; }
+      - name: Checkout exact SHA
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify checkout
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Build and publish immutable release
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BUILDCTL_PATH: /var/run/mattercodex-tools/buildctl
+          BUILDKIT_HOST: unix:///var/run/buildkit/buildkitd.sock
+        run: tools/release/build-release.sh --source-sha "$SOURCE_SHA" --build-run-id "$GITHUB_RUN_ID" --output release-lock.json
+      - name: Record and validate release lock
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          sha256sum release-lock.json | awk '{print $1}' > release-lock.sha256
+          tools/release/validate-release-lock.sh --lock release-lock.json --source-sha "$SOURCE_SHA" --sha256 "$(<release-lock.sha256)"
+      - name: Upload exact release lock
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-lock-${{ inputs.source_sha }}
+          path: |
+            release-lock.json
+            release-lock.sha256
+          if-no-files-found: error
+          retention-days: 30

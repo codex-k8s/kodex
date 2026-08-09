@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "images": [
+    {"component":"control-plane","dockerfile":"services/internal/control-plane/Dockerfile"},
+    {"component":"internal-rpc-authority","dockerfile":"services/internal/internal-rpc-authority/Dockerfile"},
+    {"component":"runtime-controller","dockerfile":"services/internal/runtime-controller/Dockerfile"},
+    {"component":"interaction-gateway","dockerfile":"services/external/interaction-gateway/Dockerfile"},
+    {"component":"integration-gateway","dockerfile":"services/external/integration-gateway/Dockerfile"},
+    {"component":"control-api-gateway","dockerfile":"services/external/control-api-gateway/Dockerfile"},
+    {"component":"egress-gateway","dockerfile":"services/external/egress-gateway/Dockerfile"},
+    {"component":"automation-scheduler","dockerfile":"services/jobs/automation-scheduler/Dockerfile"},
+    {"component":"role-image-builder","dockerfile":"services/jobs/role-image-builder/Dockerfile"},
+    {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"}
+  ]
+}

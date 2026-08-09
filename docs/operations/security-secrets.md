@@ -4,11 +4,18 @@ title: Безопасность и секреты
 type: operations
 status: approved
 owner: security
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-08-09
 ---
 
 # Безопасность и секреты
+
+В `direct-production single-node prototype` до полного Vault lifecycle допустимы
+materialized Kubernetes Secrets. Их значения создаются криптографически
+безопасно owner-controlled code-first скриптом, записываются через файловый ввод
+и не попадают в аргументы, Git, логи или отчёты. Скрипт сохраняет существующий
+Secret и закрыто отклоняет неожиданный набор ключей. Долговечная ротация,
+восстановление и hardened supply chain вынесены в #256.
 
 ## Границы доверия
 

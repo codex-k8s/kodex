@@ -4,11 +4,27 @@ title: Профили развертывания
 type: operations
 status: approved
 owner: sre
-version: 0.1.0
-updated: 2026-07-16
+version: 0.2.0
+updated: 2026-08-09
 ---
 
 # Профили развертывания
+
+## Direct-production single-node prototype
+
+Активный профиль прототипа имеет точное имя `direct-production single-node
+prototype`. Отдельного staging нет. Новый backend сначала разворачивается dark
+в `mattercodex-system` существующего production-кластера, без Ingress, cutover и
+переключения пользовательского трафика. CI изолирован в `mattercodex-ci`.
+
+Legacy Mattermost, PostgreSQL и bot-service в `matter-kodex-prod` остаются
+авторитетным пользовательским путём и rollback path. Первый выпуск использует
+существующий private in-cluster registry и `localhost:5001` для node pull.
+Rootless BuildKit является единственным новым build path; legacy Kaniko не
+расширяется и пока не удаляется.
+
+Ограничения прототипа и точный порядок owner-gated bootstrap, release, dark
+deploy и rollback определяет `RUN-MC-015`. Cutover запрещён до #241, #237 и #194.
 
 ## Начальный профиль
 
@@ -22,7 +38,7 @@ updated: 2026-07-16
 - отсутствие высокой доступности и NetworkPolicy явно отображается как риск;
 - обновление и восстановление должны быть воспроизводимы.
 
-Начальный профиль не считается высокодоступным или готовым к промышленной эксплуатации только потому, что работает в Kubernetes.
+Начальный профиль не считается высокодоступным только потому, что работает в Kubernetes.
 
 ## Промышленный профиль
 

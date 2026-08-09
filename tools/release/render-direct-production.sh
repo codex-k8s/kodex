@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() { printf 'Dark render failed: %s\n' "$*" >&2; exit 1; }
+lock_file=""
+source_sha=""
+lock_sha256=""
+output=""
+while (($# > 0)); do
+  case "$1" in
+    --lock) lock_file="${2:-}"; shift 2 ;;
+    --source-sha) source_sha="${2:-}"; shift 2 ;;
+    --sha256) lock_sha256="${2:-}"; shift 2 ;;
+    --output) output="${2:-}"; shift 2 ;;
+    *) fail "unsupported argument: $1" ;;
+  esac
+done
+[[ -n "$output" ]] || fail "output path is required"
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+repository_root=$(cd -- "$script_directory/../.." && pwd -P)
+"$script_directory/validate-release-lock.sh" --lock "$lock_file" --source-sha "$source_sha" --sha256 "$lock_sha256" >/dev/null
+kubectl kustomize "$repository_root/deploy/k8s/base/direct-production-foundation" >"$output"
+{
+  printf '%s\n' '---' 'apiVersion: v1' 'kind: ConfigMap' 'metadata:' '  name: mattercodex-release-lock' '  namespace: mattercodex-system' '  labels:' '    mattercodex.dev/profile: direct-production-single-node-prototype' 'data:'
+  printf '  source_sha: "%s"\n  release_lock_sha256: "%s"\n' "$source_sha" "$lock_sha256"
+  while IFS=$'\t' read -r component pull_ref; do
+    printf '  image.%s: "%s"\n' "$component" "$pull_ref"
+  done < <(jq -r '.images[] | [.component,.pull_ref] | @tsv' "$lock_file")
+} >>"$output"
+grep -Eq '^kind: Ingress$' "$output" && fail "dark render must not contain Ingress"
+grep -Eq 'namespace: matter-kodex-prod$' "$output" && fail "dark render must not target the legacy namespace"
+printf 'Dark render created: %s\n' "$output"

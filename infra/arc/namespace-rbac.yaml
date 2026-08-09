@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mattercodex-ci
+  labels:
+    mattercodex.dev/profile: direct-production-single-node-prototype
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mattercodex-system
+  labels:
+    mattercodex.dev/profile: direct-production-single-node-prototype
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mattercodex-buildkit-config
+  namespace: mattercodex-ci
+data:
+  buildkitd.toml: |
+    root = "/home/user/.local/share/buildkit"
+    [worker.oci]
+      enabled = true
+      rootless = true
+      snapshotter = "native"
+      gc = true
+    [registry."matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000"]
+      http = true
+      insecure = true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mattercodex-production-deployer
+  namespace: mattercodex-ci
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mattercodex-production-deployer
+  namespace: mattercodex-system
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, services, secrets, resourcequotas, limitranges]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [""]
+    resources: [pods, pods/log, persistentvolumeclaims]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, replicasets]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [cert-manager.io]
+    resources: [issuers, certificates]
+    verbs: [get, list, watch, create, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mattercodex-production-deployer
+  namespace: mattercodex-system
+subjects:
+  - kind: ServiceAccount
+    name: mattercodex-production-deployer
+    namespace: mattercodex-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mattercodex-production-deployer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mattercodex-production-legacy-readback
+  namespace: matter-kodex-prod
+rules:
+  - apiGroups: [""]
+    resources: [services, pods]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mattercodex-production-legacy-readback
+  namespace: matter-kodex-prod
+subjects:
+  - kind: ServiceAccount
+    name: mattercodex-production-deployer
+    namespace: mattercodex-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mattercodex-production-legacy-readback
