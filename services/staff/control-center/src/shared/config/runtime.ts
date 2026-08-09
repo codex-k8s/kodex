@@ -7,6 +7,7 @@ export interface OidcRuntimeConfig {
 }
 
 export interface RuntimeConfig {
+  revision: string;
   environment: string;
   apiBaseUrl: string;
   realtimeUrl: string;
@@ -55,6 +56,7 @@ function parseConfig(value: unknown): RuntimeConfig {
     throw new Error("Runtime config shape is invalid");
   }
   exactKeys(value, [
+    "revision",
     "environment",
     "apiBaseUrl",
     "realtimeUrl",
@@ -69,6 +71,9 @@ function parseConfig(value: unknown): RuntimeConfig {
     "scope",
   ]);
   const timeout = value.requestTimeoutMs;
+  const revision = requiredString(value, "revision");
+  if (!/^[0-9a-f]{64}$/.test(revision))
+    throw new Error("Runtime config revision is invalid");
   if (
     typeof timeout !== "number" ||
     !Number.isInteger(timeout) ||
@@ -82,12 +87,18 @@ function parseConfig(value: unknown): RuntimeConfig {
   const redirectUri = exactUrl(requiredString(value.oidc, "redirectUri"), [
     "https:",
   ]);
+  const postLogoutRedirectUri = exactUrl(
+    requiredString(value.oidc, "postLogoutRedirectUri"),
+    ["https:"],
+  );
   if (
     new URL(apiBaseUrl).origin !== new URL(redirectUri).origin ||
+    new URL(apiBaseUrl).origin !== new URL(postLogoutRedirectUri).origin ||
     new URL(realtimeUrl).host !== new URL(apiBaseUrl).host
   )
     throw new Error("Runtime API origin is invalid");
   return {
+    revision,
     environment: requiredString(value, "environment"),
     apiBaseUrl,
     realtimeUrl,
@@ -96,10 +107,7 @@ function parseConfig(value: unknown): RuntimeConfig {
       authority: exactUrl(requiredString(value.oidc, "authority"), ["https:"]),
       clientId: requiredString(value.oidc, "clientId"),
       redirectUri,
-      postLogoutRedirectUri: exactUrl(
-        requiredString(value.oidc, "postLogoutRedirectUri"),
-        ["https:"],
-      ),
+      postLogoutRedirectUri,
       scope: requiredString(value.oidc, "scope"),
     },
   };

@@ -26,8 +26,9 @@ import type {
   RunPage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
+import { collectAllPages } from "@/shared/api/pagination";
 import { unwrap } from "@/shared/api/problem";
-import { mutationHeaders } from "@/shared/lib/identity";
+import { executeMutation } from "@/shared/lib/identity";
 
 type MutationHeaders = {
   "X-CSRF-Token": string;
@@ -36,27 +37,51 @@ type MutationHeaders = {
 };
 
 export async function fetchRuns(): Promise<RunPage> {
-  return (
-    await unwrap(
-      listRuns({ query: { pageSize: 100 }, signal: requestSignal() }),
-    )
-  ).data;
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listRuns({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+    (page) => page.runs,
+  );
+  return { runs: values };
 }
 
 export async function fetchIncidents(): Promise<IncidentPage> {
-  return (
-    await unwrap(
-      listIncidents({ query: { pageSize: 100 }, signal: requestSignal() }),
-    )
-  ).data;
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listIncidents({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+    (page) => page.incidents,
+  );
+  return { incidents: values };
 }
 
 export async function fetchBackups(): Promise<BackupPage> {
-  return (
-    await unwrap(
-      listBackups({ query: { pageSize: 100 }, signal: requestSignal() }),
-    )
-  ).data;
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listBackups({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+    (page) => page.backups,
+  );
+  return { backups: values };
 }
 
 export async function fetchBackup(backupId: string): Promise<Backup> {
@@ -68,20 +93,25 @@ export async function fetchBackup(backupId: string): Promise<Backup> {
 export async function restoreSessionBackup(
   backup: Backup,
 ): Promise<RestoreOperation> {
+  const body = {
+    sourceVersion: backup.sourceVersion,
+    archiveSha256: backup.archiveSha256,
+    provenanceSha256: backup.provenanceSha256,
+    scope: backup.scope,
+    scopeId: backup.scopeId,
+  };
   return (
-    await unwrap(
-      restoreBackup({
-        body: {
-          sourceVersion: backup.sourceVersion,
-          archiveSha256: backup.archiveSha256,
-          provenanceSha256: backup.provenanceSha256,
-          scope: backup.scope,
-          scopeId: backup.scopeId,
-        },
-        path: { backupId: backup.backupId },
-        headers: mutationHeaders(backup.version) as MutationHeaders,
-        signal: requestSignal(),
-      }),
+    await executeMutation(
+      `backup:restore:${backup.backupId}`,
+      body,
+      backup.version,
+      (headers) =>
+        restoreBackup({
+          body,
+          path: { backupId: backup.backupId },
+          headers: headers as MutationHeaders,
+          signal: requestSignal(),
+        }),
     )
   ).data;
 }
@@ -89,14 +119,23 @@ export async function restoreSessionBackup(
 export async function fetchRestoreOperations(
   backupId?: string,
 ): Promise<RestoreOperationPage> {
-  return (
-    await unwrap(
-      listRestoreOperations({
-        query: { pageSize: 100, ...(backupId ? { backupId } : {}) },
-        signal: requestSignal(),
-      }),
-    )
-  ).data;
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listRestoreOperations({
+            query: {
+              pageSize: 100,
+              ...(backupId ? { backupId } : {}),
+              ...(pageToken ? { pageToken } : {}),
+            },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+    (page) => page.operations,
+  );
+  return { operations: values };
 }
 
 export async function fetchRestoreOperation(
@@ -113,22 +152,35 @@ export async function fetchRestoreOperation(
 }
 
 export async function fetchAudit(): Promise<AuditPage> {
-  return (
-    await unwrap(
-      listAuditEvents({ query: { pageSize: 100 }, signal: requestSignal() }),
-    )
-  ).data;
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listAuditEvents({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+    (page) => page.events,
+  );
+  return { events: values };
 }
 
 export async function fetchConfigurationChanges(): Promise<ConfigurationChangePage> {
-  return (
-    await unwrap(
-      listConfigurationChanges({
-        query: { pageSize: 100 },
-        signal: requestSignal(),
-      }),
-    )
-  ).data;
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listConfigurationChanges({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+    (page) => page.changes,
+  );
+  return { changes: values };
 }
 
 export async function fetchDiagnostics(): Promise<Diagnostics> {
@@ -140,13 +192,17 @@ export async function resolveGate(
   body: ResolveOwnerGate,
 ): Promise<ResolveOwnerGateResult> {
   return (
-    await unwrap(
-      resolveOwnerGate({
-        body,
-        path: { ownerGateId: resource.id },
-        headers: mutationHeaders(resource.version) as MutationHeaders,
-        signal: requestSignal(),
-      }),
+    await executeMutation(
+      `owner-gate:resolve:${resource.id}`,
+      body,
+      resource.version,
+      (headers) =>
+        resolveOwnerGate({
+          body,
+          path: { ownerGateId: resource.id },
+          headers: headers as MutationHeaders,
+          signal: requestSignal(),
+        }),
     )
   ).data;
 }

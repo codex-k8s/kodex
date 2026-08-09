@@ -11,7 +11,11 @@ import {
   probeOwnerSession,
   revokeOwnerSession,
 } from "@/shared/api/adapters/session";
-import { asProblem, type AppProblem } from "@/shared/api/problem";
+import {
+  asProblem,
+  resetUnauthorizedNotification,
+  type AppProblem,
+} from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
 
 export type SessionPhase =
@@ -53,10 +57,24 @@ export const useSessionStore = defineStore("session", () => {
   const phase = ref<SessionPhase>("checking");
   const problem = ref<AppProblem | null>(null);
   const sessionEtag = ref<string | null>(storedSessionEtag());
+  const canRetryAdmission = ref(false);
   let requestGeneration = 0;
+  let pendingAdmission:
+    | { accessToken: string; manager: UserManager }
+    | undefined;
   const canLogout = computed(
     () => phase.value === "authenticated" && sessionEtag.value !== null,
   );
+
+  function invalidate(): void {
+    requestGeneration += 1;
+    pendingAdmission = undefined;
+    canRetryAdmission.value = false;
+    sessionEtag.value = null;
+    persistSessionEtag(null);
+    problem.value = null;
+    phase.value = "unauthenticated";
+  }
 
   async function probe(): Promise<void> {
     const generation = ++requestGeneration;
@@ -66,6 +84,7 @@ export const useSessionStore = defineStore("session", () => {
       await probeOwnerSession();
       if (generation !== requestGeneration) return;
       phase.value = "authenticated";
+      resetUnauthorizedNotification();
     } catch (error) {
       if (generation !== requestGeneration) return;
       const normalized = asProblem(error);
@@ -83,8 +102,23 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
+  async function verify(): Promise<void> {
+    if (phase.value !== "authenticated") return;
+    const generation = ++requestGeneration;
+    try {
+      await probeOwnerSession();
+      if (generation === requestGeneration) resetUnauthorizedNotification();
+    } catch (error) {
+      if (generation !== requestGeneration) return;
+      const normalized = asProblem(error);
+      if (normalized.kind === "unauthorized") invalidate();
+    }
+  }
+
   async function beginLogin(): Promise<void> {
     requestGeneration += 1;
+    pendingAdmission = undefined;
+    canRetryAdmission.value = false;
     problem.value = null;
     await oidcManager().signinRedirect();
   }
@@ -93,20 +127,34 @@ export const useSessionStore = defineStore("session", () => {
     const generation = ++requestGeneration;
     phase.value = "checking";
     problem.value = null;
-    const manager = oidcManager();
+    const manager = pendingAdmission?.manager ?? oidcManager();
     try {
-      const user = await manager.signinRedirectCallback();
-      const readback = await admitOwnerSession(user.access_token);
-      await manager.removeUser();
+      if (!pendingAdmission) {
+        const user = await manager.signinRedirectCallback();
+        if (!user.access_token) throw new Error("OIDC bearer is unavailable");
+        pendingAdmission = { accessToken: user.access_token, manager };
+      }
+      const readback = await admitOwnerSession(pendingAdmission.accessToken);
+      await manager.removeUser().catch(() => undefined);
       if (generation !== requestGeneration) return;
+      pendingAdmission = undefined;
+      canRetryAdmission.value = false;
       sessionEtag.value = readback.etag ?? null;
       persistSessionEtag(sessionEtag.value);
       phase.value = "authenticated";
+      resetUnauthorizedNotification();
     } catch (error) {
       if (generation !== requestGeneration) return;
-      problem.value = asProblem(error);
+      const normalized = asProblem(error);
+      problem.value = normalized;
       phase.value = "error";
-      await manager.removeUser().catch(() => undefined);
+      canRetryAdmission.value = Boolean(
+        pendingAdmission && normalized.retryable,
+      );
+      if (!canRetryAdmission.value) {
+        pendingAdmission = undefined;
+        await manager.removeUser().catch(() => undefined);
+      }
       throw error;
     }
   }
@@ -143,9 +191,12 @@ export const useSessionStore = defineStore("session", () => {
     phase,
     problem,
     canLogout,
+    canRetryAdmission,
     probe,
+    verify,
     beginLogin,
     completeLogin,
     logout,
+    invalidate,
   };
 });

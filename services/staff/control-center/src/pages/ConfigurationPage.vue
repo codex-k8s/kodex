@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useOperationsStore } from "@/features/operations/store";
-import { useOwnerControlStore } from "@/features/owner-control/store";
+import { useInstructionsStore } from "@/features/instructions/store";
 import { formatDateTime } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
@@ -12,7 +12,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const { locale } = useI18n();
 const operations = useOperationsStore();
-const owner = useOwnerControlStore();
+const owner = useInstructionsStore();
 const instructionRef = ref("");
 const leftVersion = ref(0);
 const rightVersion = ref(0);
@@ -155,7 +155,11 @@ onMounted(load);
             >{{ owner.configurationSource.data.managedBy }} ·
             {{ owner.configurationSource.data.source }} ·
             {{ $t("common.revision") }}
-            {{ owner.configurationSource.data.sourceRevision }}</span
+            {{ owner.configurationSource.data.sourceRevision }}
+            <template v-if="owner.configurationSource.data.sourceSha256">
+              · {{ $t("common.sourceDigest") }}
+              {{ owner.configurationSource.data.sourceSha256 }}
+            </template></span
           >
         </div>
         <StatusBadge :state="owner.configurationSource.data.managedBy" />
@@ -181,25 +185,27 @@ onMounted(load);
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="item in operations.changes.data"
-                  :key="item.id"
-                  :class="{
-                    'clickable-row': [
-                      'ROLE_DEFINITION',
-                      'AGENT',
-                      'INSTRUCTION_SET',
-                      'PROVIDER_POOL',
-                    ].includes(item.resourceKind),
-                  }"
-                  tabindex="0"
-                  @click="showSource(item)"
-                  @keydown.enter="showSource(item)"
-                >
+                <tr v-for="item in operations.changes.data" :key="item.id">
                   <td class="data-table__name">
-                    <GitCompareArrows :size="15" aria-hidden="true" />{{
-                      item.action
-                    }}
+                    <button
+                      v-if="
+                        [
+                          'ROLE_DEFINITION',
+                          'AGENT',
+                          'INSTRUCTION_SET',
+                          'PROVIDER_POOL',
+                        ].includes(item.resourceKind)
+                      "
+                      class="button button--text"
+                      type="button"
+                      :aria-label="`${$t('common.details')}: ${item.resourceKind}`"
+                      @click="showSource(item)"
+                    >
+                      <GitCompareArrows :size="15" aria-hidden="true" />{{
+                        item.action
+                      }}
+                    </button>
+                    <template v-else>{{ item.action }}</template>
                   </td>
                   <td>{{ item.resourceKind }} · v{{ item.resourceVersion }}</td>
                   <td><StatusBadge :state="item.outcome" /></td>

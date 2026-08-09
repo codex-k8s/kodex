@@ -11,8 +11,7 @@ import type { ResourcePage } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap, type ApiReadback } from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
-import { newIdempotencyKey } from "@/shared/lib/identity";
-import { csrfToken } from "@/shared/lib/identity";
+import { executeMutation } from "@/shared/lib/identity";
 
 export async function admitOwnerSession(
   bearer: string,
@@ -25,12 +24,16 @@ export async function admitOwnerSession(
       credentials: "include",
     }),
   );
-  const readback = await unwrap(
-    createOwnerSession({
-      client: oneUseClient,
-      headers: { "Idempotency-Key": newIdempotencyKey() },
-      signal: requestSignal(),
-    }),
+  const readback = await executeMutation(
+    "session:admit",
+    { bearer },
+    undefined,
+    (headers) =>
+      createOwnerSession({
+        client: oneUseClient,
+        headers: { "Idempotency-Key": headers["Idempotency-Key"] ?? "" },
+        signal: requestSignal(),
+      }),
   );
   if (!readback.etag) throw new Error("Owner session response ETag is missing");
   return readback;
@@ -45,14 +48,18 @@ export async function probeOwnerSession(): Promise<ResourcePage> {
 }
 
 export async function revokeOwnerSession(sessionEtag: string): Promise<void> {
-  await unwrap(
-    deleteOwnerSession({
-      headers: {
-        "X-CSRF-Token": csrfToken(),
-        "Idempotency-Key": newIdempotencyKey(),
-        "If-Match": sessionEtag,
-      },
-      signal: requestSignal(),
-    }),
+  await executeMutation(
+    "session:revoke",
+    {},
+    Number(sessionEtag.replaceAll('"', "")),
+    (headers) =>
+      deleteOwnerSession({
+        headers: headers as {
+          "X-CSRF-Token": string;
+          "Idempotency-Key": string;
+          "If-Match": string;
+        },
+        signal: requestSignal(),
+      }),
   );
 }

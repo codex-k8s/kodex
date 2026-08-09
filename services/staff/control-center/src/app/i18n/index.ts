@@ -15,6 +15,8 @@ const ru = {
     replacingNotice:
       "Соединение восстановлено. Ожидаем полные авторитетные снимки всех каналов.",
     updateAvailable: "Доступна новая версия Control Center.",
+    updateUnavailable:
+      "Проверка обновления PWA временно недоступна. Приложение продолжает работать в текущей версии.",
     applyUpdate: "Обновить",
     environment: "Контур {name}",
   },
@@ -59,6 +61,7 @@ const ru = {
     createdAt: "Создано",
     source: "Источник",
     revision: "Ревизия",
+    sourceDigest: "SHA-256 источника",
     managedBy: "Управляется",
     ui: "UI",
     git: "Git",
@@ -136,6 +139,16 @@ const ru = {
     confirmDetach: "Перевести «{name}» из Git-управления в UI?",
     confirmCopy: "Создать отдельную UI-копию «{name}»?",
     newCopyName: "Название копии",
+    resourceEditor: "Ресурс рабочей области",
+    privateLocatorPreserved:
+      "Существующая закрытая ссылка сохранится без показа в интерфейсе.",
+    confirmResourceAction: "Выполнить {action} для ресурса «{name}»?",
+    confirmDetachRevision:
+      "Отсоединить «{name}» от Git source {source}, revision {revision}?",
+    confirmCopyRevision:
+      "Создать UI-копию «{name}» из Git source {source}, revision {revision}?",
+    contractLimit:
+      "Выбранные значения превышают ограничение browser API для этого вида ресурса.",
   },
   workspaceTeam: {
     title: "Mattermost Team",
@@ -176,12 +189,18 @@ const ru = {
     room: "Комната",
     bot: "Bot identity",
     botIdentity: "Доступный бот",
+    createBot: "Создать новую bot identity и привязать",
+    botUsernameIntent: "Желаемое имя bot identity",
     bindBot: "Привязать или заменить",
     revokeBot: "Отозвать привязку",
     history: "История",
     confirmArchive: "Архивировать «{name}»?",
+    confirmDelete: "Необратимо удалить «{name}»?",
+    confirmAction: "Выполнить {action} для «{name}»?",
     confirmUnassign: "Снять назначение «{name}»?",
     confirmRevokeBot: "Отозвать текущую bot identity?",
+    invalidCapabilities:
+      "Список возможностей должен содержать не более 64 уникальных значений длиной до 160 символов.",
     gitOwned:
       "Сотрудник управляется Git или источник недоступен. Редактирование закрыто.",
   },
@@ -206,6 +225,8 @@ const ru = {
     gitOwned:
       "Объект управляется Git. Редактирование закрыто; используйте отдельную операцию detach или copy.",
     confirmAction: "Выполнить {action} для «{name}»?",
+    confirmGitAction:
+      "Выполнить {action} для «{name}»? Git source {source}, revision {revision} перестанет быть или не станет авторитетным для результата.",
   },
   providers: {
     title: "Провайдеры",
@@ -231,8 +252,10 @@ const ru = {
     eligible: "Доступны сейчас",
     weight: "Вес",
     confirmArchivePool: "Архивировать пул «{name}»?",
+    confirmDeletePool: "Необратимо удалить пул «{name}»?",
     confirmRevoke: "Отозвать аккаунт «{name}»?",
     confirmReauthorize: "Начать повторную авторизацию «{name}»?",
+    tooManyMembers: "Пул может содержать не более 64 аккаунтов.",
     gitOwned:
       "Пул управляется Git или источник недоступен. Редактирование закрыто.",
   },
@@ -323,6 +346,10 @@ const ru = {
     reasonCode: "Код причины",
     evidence: "SHA-256 доказательства",
     confirmDelete: "Удалить расписание «{name}»?",
+    pause: "Приостановить",
+    resume: "Возобновить",
+    confirmRun: "Запустить расписание «{name}» сейчас?",
+    confirmState: "Перевести расписание «{name}» в состояние {state}?",
     targetType: "Тип цели",
     agentTarget: "ИИ-сотрудник или роль",
     playbookRef: "Ссылка на playbook",
@@ -332,6 +359,7 @@ const ru = {
     calendar: "Календарь",
     overlap: "Параллельные запуски",
     misfire: "Пропущенный запуск",
+    misfireGrace: "Окно допуска misfire, секунд",
     grace: "Окно допуска, секунд",
     delivery: "Гарантия доставки",
     maximumAttempts: "Максимум попыток",
@@ -339,6 +367,7 @@ const ru = {
     maximumBackoff: "Максимальная задержка, секунд",
     deadLetter: "Срок до dead letter, секунд",
     sessionPolicy: "Политика сессии",
+    session: "Политика сессии",
     executionSession: "Исполняющая сессия",
     notification: "Уведомления",
     maximumExecution: "Максимальное время, секунд",
@@ -501,6 +530,8 @@ const en = {
     replacingNotice:
       "Connection restored. Waiting for complete authoritative snapshots for every channel.",
     updateAvailable: "A new Control Center version is available.",
+    updateUnavailable:
+      "PWA update checks are temporarily unavailable. The current application version remains available.",
     applyUpdate: "Update",
     environment: "{name} environment",
   },
@@ -538,6 +569,7 @@ const en = {
     createdAt: "Created",
     source: "Source",
     revision: "Revision",
+    sourceDigest: "Source SHA-256",
     managedBy: "Managed by",
     select: "Select…",
     advanced: "Advanced settings",
@@ -622,6 +654,16 @@ const en = {
     confirmDetach: "Move “{name}” from Git ownership to UI?",
     confirmCopy: "Create a separate UI copy of “{name}”?",
     newCopyName: "Copy name",
+    resourceEditor: "Workspace resource",
+    privateLocatorPreserved:
+      "The existing private reference will be preserved without being displayed.",
+    confirmResourceAction: "Run {action} for resource “{name}”?",
+    confirmDetachRevision:
+      "Detach “{name}” from Git source {source}, revision {revision}?",
+    confirmCopyRevision:
+      "Create a UI copy of “{name}” from Git source {source}, revision {revision}?",
+    contractLimit:
+      "The selected values exceed the browser API limit for this resource kind.",
   },
   workspaceTeam: {
     title: "Mattermost Team",
@@ -663,10 +705,16 @@ const en = {
     room: "Room",
     bot: "Bot identity",
     botIdentity: "Available bot",
+    createBot: "Create and bind a new bot identity",
+    botUsernameIntent: "Requested bot identity username",
     bindBot: "Bind or replace",
     revokeBot: "Revoke binding",
     history: "History",
     confirmArchive: "Archive “{name}”?",
+    confirmDelete: "Permanently delete “{name}”?",
+    confirmAction: "Run {action} for “{name}”?",
+    invalidCapabilities:
+      "The capability list must contain at most 64 unique values up to 160 characters each.",
     confirmUnassign: "Remove assignment “{name}”?",
     confirmRevokeBot: "Revoke the current bot identity?",
     gitOwned:
@@ -694,6 +742,8 @@ const en = {
     gitOwned:
       "This object is Git-managed. Editing is disabled; use the explicit detach or copy operation.",
     confirmAction: "Run {action} for “{name}”?",
+    confirmGitAction:
+      "Run {action} for “{name}”? Git source {source}, revision {revision} will cease to be or will not become authoritative for the result.",
   },
   providers: {
     ...ru.providers,
@@ -720,8 +770,10 @@ const en = {
     eligible: "Currently eligible",
     weight: "Weight",
     confirmArchivePool: "Archive pool “{name}”?",
+    confirmDeletePool: "Permanently delete pool “{name}”?",
     confirmRevoke: "Revoke account “{name}”?",
     confirmReauthorize: "Start reauthorization for “{name}”?",
+    tooManyMembers: "A pool can contain at most 64 accounts.",
     gitOwned:
       "The pool is Git-managed or its source is unavailable. Editing is disabled.",
   },
@@ -823,6 +875,7 @@ const en = {
     calendar: "Calendar",
     overlap: "Overlapping runs",
     misfire: "Missed run",
+    misfireGrace: "Misfire grace window, seconds",
     grace: "Grace window, seconds",
     delivery: "Delivery guarantee",
     maximumAttempts: "Maximum attempts",
@@ -830,6 +883,7 @@ const en = {
     maximumBackoff: "Maximum backoff, seconds",
     deadLetter: "Dead-letter timeout, seconds",
     sessionPolicy: "Session policy",
+    session: "Session policy",
     executionSession: "Execution session",
     notification: "Notifications",
     maximumExecution: "Maximum execution, seconds",
@@ -838,6 +892,10 @@ const en = {
     repair: "Repair",
     skip: "Skip",
     confirmDelete: "Delete schedule “{name}”?",
+    pause: "Pause",
+    resume: "Resume",
+    confirmRun: "Run schedule “{name}” now?",
+    confirmState: "Move schedule “{name}” to {state}?",
     serverDefaults: "Server defaults",
     attempts: "attempts",
     agent: "AI employee",

@@ -12,6 +12,7 @@ import type {
   ManageImageBuild,
   ManageRoleImageRecipe,
   Resource,
+  RoleImageRecipeInput,
   RoleImageRecipeReadback,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -21,6 +22,7 @@ import {
   finishRequest,
   invalidate,
   remoteState,
+  resetRemoteState,
 } from "@/shared/lib/remote";
 
 export const useRoleImagesStore = defineStore("role-images", () => {
@@ -77,8 +79,26 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     }
   }
 
-  const commandRecipe = (body: ManageRoleImageRecipe, resource?: Resource) =>
-    mutate(() => commandRoleImage(body, resource?.version));
+  const saveRecipe = (
+    resource: Resource | null,
+    name: string,
+    input: RoleImageRecipeInput,
+  ) =>
+    mutate(() =>
+      commandRoleImage(
+        resource
+          ? { action: "UPDATE", recipeId: resource.id, name, input }
+          : { action: "CREATE", name, input },
+        resource?.version,
+      ),
+    );
+  const executeRecipeAction = (
+    resource: Resource,
+    action: Exclude<ManageRoleImageRecipe["action"], "CREATE" | "UPDATE">,
+  ) =>
+    mutate(() =>
+      commandRoleImage({ action, recipeId: resource.id }, resource.version),
+    );
   const commandBuild = (
     resource: Resource,
     action: ManageImageBuild["action"],
@@ -110,6 +130,15 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     }
   }
 
+  function reset(): void {
+    mutationVersion += 1;
+    resetRemoteState(resources, []);
+    resetRemoteState(recipeDetail, null);
+    resetRemoteState(buildDetail, null);
+    mutationProblem.value = null;
+    mutating.value = false;
+  }
+
   return {
     resources,
     recipes,
@@ -121,7 +150,14 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     load,
     loadRecipeDetail,
     loadBuildDetail,
-    commandRecipe,
+    saveRecipe,
+    executeRecipeAction,
     commandBuild,
+    reset,
   };
 });
+
+export type RoleImageAction = Exclude<
+  ManageRoleImageRecipe["action"],
+  "CREATE" | "UPDATE"
+>;

@@ -3,13 +3,13 @@ import { Link2, Plus, RefreshCw, Unlink } from "@lucide/vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { useOwnerControlStore } from "@/features/owner-control/store";
+import { useWorkspaceTeamStore } from "@/features/workspace-team/store";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-const store = useOwnerControlStore();
+const store = useWorkspaceTeamStore();
 const { t } = useI18n();
 const createOpen = ref(false);
 const selectedSelector = ref("");
@@ -19,10 +19,10 @@ const activeTeams = computed(() =>
 );
 
 async function addTeam(): Promise<void> {
-  const ok = await store.addTeam({
-    displayName: createForm.displayName.trim(),
-    slugIntent: createForm.slugIntent.trim(),
-  });
+  const ok = await store.addTeam(
+    createForm.displayName.trim(),
+    createForm.slugIntent.trim(),
+  );
   if (ok) {
     createOpen.value = false;
     createForm.displayName = "";
@@ -40,13 +40,7 @@ async function bind(): Promise<void> {
   )
     return;
   if (binding) {
-    await store.rebindTeam(
-      {
-        selector: selectedSelector.value,
-        expectedGeneration: binding.mappingGeneration,
-      },
-      binding.mappingVersion,
-    );
+    await store.rebindTeam(selectedSelector.value, binding);
   } else {
     await store.bindTeam(selectedSelector.value);
   }
@@ -193,8 +187,8 @@ onMounted(store.loadTeams);
         <input
           v-model="createForm.displayName"
           required
-          minlength="2"
-          maxlength="120"
+          minlength="1"
+          maxlength="160"
           autocomplete="off"
         />
       </label>
@@ -203,9 +197,9 @@ onMounted(store.loadTeams);
         <input
           v-model="createForm.slugIntent"
           required
-          minlength="2"
-          maxlength="63"
-          pattern="[a-z0-9-]+"
+          minlength="1"
+          maxlength="160"
+          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
           autocomplete="off"
         />
       </label>

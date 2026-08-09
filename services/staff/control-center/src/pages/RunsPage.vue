@@ -4,12 +4,11 @@ import { onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useOperationsStore } from "@/features/operations/store";
-import { useOwnerControlStore } from "@/features/owner-control/store";
-import type {
-  ResolveOwnerGate,
-  Resource,
-  RunCommand,
-} from "@/shared/api/generated/openapi/types.gen";
+import {
+  type RunAction,
+  useRunDetailsStore,
+} from "@/features/run-details/store";
+import type { Resource } from "@/shared/api/generated/openapi/types.gen";
 import {
   formatDateTime,
   formatDuration,
@@ -23,12 +22,20 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const { locale } = useI18n();
 const operations = useOperationsStore();
-const owner = useOwnerControlStore();
+const owner = useRunDetailsStore();
 const detailOpen = ref(false);
-const runCommand = reactive<RunCommand>({ action: "CANCEL", reasonCode: "" });
-const decisions = reactive<Record<string, ResolveOwnerGate>>({});
+const runCommand = reactive<{ action: RunAction; reasonCode: string }>({
+  action: "CANCEL",
+  reasonCode: "",
+});
+type OwnerGateDecision = {
+  decision: "APPROVED" | "REJECTED";
+  reason: string;
+};
 
-function decisionFor(gate: Resource): ResolveOwnerGate {
+const decisions = reactive<Record<string, OwnerGateDecision>>({});
+
+function decisionFor(gate: Resource): OwnerGateDecision {
   return (decisions[gate.id] ??= { decision: "APPROVED", reason: "" });
 }
 
@@ -41,11 +48,12 @@ function canResolve(gate: Resource): boolean {
 
 async function resolve(gate: Resource): Promise<void> {
   const decision = decisionFor(gate);
-  if (decision.reason.trim().length < 3) return;
-  const success = await operations.resolveOwnerGate(gate, {
-    ...decision,
-    reason: decision.reason.trim(),
-  });
+  if (decision.reason.trim().length < 1) return;
+  const success = await operations.resolveOwnerGate(
+    gate,
+    decision.decision,
+    decision.reason.trim(),
+  );
   if (success) decisions[gate.id] = { decision: "APPROVED", reason: "" };
 }
 
@@ -57,14 +65,18 @@ async function showRun(runRef: string): Promise<void> {
   detailOpen.value = true;
   runCommand.reasonCode = "";
   await owner.loadRun(runRef);
+  const nextAction = owner.runDetail.data?.run.nextActions[0];
+  if (nextAction) runCommand.action = nextAction;
 }
 
 async function executeRunCommand(): Promise<void> {
-  if (runCommand.reasonCode.trim().length < 2) return;
-  await owner.executeRunAction({
-    action: runCommand.action,
-    reasonCode: runCommand.reasonCode.trim(),
-  });
+  if (runCommand.reasonCode.trim().length < 1) return;
+  const success = await owner.executeRunAction(
+    runCommand.action,
+    runCommand.reasonCode.trim(),
+  );
+  const nextAction = owner.runDetail.data?.run.nextActions[0];
+  if (success && nextAction) runCommand.action = nextAction;
 }
 
 onMounted(load);
@@ -104,15 +116,17 @@ onMounted(load);
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="item in operations.runs.data"
-                  :key="item.runRef"
-                  class="clickable-row"
-                  tabindex="0"
-                  @click="showRun(item.runRef)"
-                  @keydown.enter="showRun(item.runRef)"
-                >
-                  <td class="data-table__name">{{ item.displayName }}</td>
+                <tr v-for="item in operations.runs.data" :key="item.runRef">
+                  <td class="data-table__name">
+                    <button
+                      class="button button--text"
+                      type="button"
+                      :aria-label="`${$t('common.details')}: ${item.displayName}`"
+                      @click="showRun(item.runRef)"
+                    >
+                      {{ item.displayName }}
+                    </button>
+                  </td>
                   <td><StatusBadge :state="item.state" /></td>
                   <td>{{ item.workspace.value }}</td>
                   <td>{{ item.agent.value }}</td>
@@ -172,8 +186,8 @@ onMounted(load);
                   ><input
                     v-model="decisionFor(gate).reason"
                     required
-                    minlength="3"
-                    maxlength="512"
+                    minlength="1"
+                    maxlength="2048"
                     autocomplete="off"
                 /></label>
                 <div class="button-row form-field--full">
@@ -261,8 +275,8 @@ onMounted(load);
               ><input
                 v-model="runCommand.reasonCode"
                 required
-                minlength="2"
-                maxlength="80" /></label
+                minlength="1"
+                maxlength="96" /></label
             ><button
               class="button button--danger"
               type="submit"

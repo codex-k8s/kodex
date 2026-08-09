@@ -6,6 +6,7 @@ import {
   createMattermostTeam,
   createScheduleFromSelections,
   decideIntegrationApproval,
+  deleteSchedule,
   exportAudit,
   getAgentAssignment,
   getAgentBotIdentity,
@@ -57,6 +58,7 @@ import {
   listRunArtifacts,
   listRunTimeline,
   listScheduleSelectors,
+  listScheduleOccurrences,
   listWorkspaceBackups,
   listWorkspaceRestores,
   manageAgentAssignment,
@@ -72,10 +74,12 @@ import {
   reauthorizeProviderConnection,
   relinkMattermostTeam,
   restartProviderAuthorization,
+  resolveScheduleRecovery,
   revokeProviderConnection,
   startProviderAuthorization,
   testIntegrationConnection,
   unlinkMattermostTeam,
+  runScheduleNow,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   AgentAssignmentCommand,
@@ -92,6 +96,7 @@ import type {
   ProviderPoolCommand,
   RelinkMattermostTeam,
   ResourceKind,
+  ResolveScheduleRecovery,
   RoleDefinitionCommand,
   RunCommand,
   StartProviderAuthorization,
@@ -100,8 +105,9 @@ import type {
   WorkspaceRestoreCommand,
 } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
+import { collectAllPages } from "@/shared/api/pagination";
 import { asProblem, unwrap } from "@/shared/api/problem";
-import { mutationHeaders } from "@/shared/lib/identity";
+import { executeMutation } from "@/shared/lib/identity";
 
 type BasicMutationHeaders = {
   "X-CSRF-Token": string;
@@ -110,20 +116,23 @@ type BasicMutationHeaders = {
 type RequiredMutationHeaders = BasicMutationHeaders & { "If-Match": string };
 type OptionalMutationHeaders = BasicMutationHeaders & { "If-Match"?: string };
 
-const basicHeaders = () => mutationHeaders() as BasicMutationHeaders;
-const optionalHeaders = (version?: number) =>
-  mutationHeaders(version) as OptionalMutationHeaders;
-const requiredHeaders = (version: number) =>
-  mutationHeaders(version) as RequiredMutationHeaders;
-
 const readOptions = () => ({ signal: requestSignal() });
 
-export const fetchMattermostTeams = async () =>
-  (
-    await unwrap(
-      listMattermostTeams({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchMattermostTeams = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listMattermostTeams({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.teams,
+  );
+  return { teams: values };
+};
 
 export const fetchMattermostBinding = async () => {
   try {
@@ -136,41 +145,61 @@ export const fetchMattermostBinding = async () => {
 
 export const createTeam = async (body: CreateMattermostTeam) =>
   (
-    await unwrap(
-      createMattermostTeam({ body, headers: basicHeaders(), ...readOptions() }),
+    await executeMutation(
+      "mattermost-team:create",
+      body,
+      undefined,
+      (headers) =>
+        createMattermostTeam({
+          body,
+          headers: headers as BasicMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const linkTeam = async (selector: string) =>
   (
-    await unwrap(
-      linkMattermostTeam({
-        body: { selector },
-        headers: basicHeaders(),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      "mattermost-binding:bind",
+      { selector },
+      undefined,
+      (headers) =>
+        linkMattermostTeam({
+          body: { selector },
+          headers: headers as BasicMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const relinkTeam = async (body: RelinkMattermostTeam, version: number) =>
   (
-    await unwrap(
-      relinkMattermostTeam({
-        body,
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      "mattermost-binding:relink",
+      body,
+      version,
+      (headers) =>
+        relinkMattermostTeam({
+          body,
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const unlinkTeam = async (version: number, generation: number) =>
   (
-    await unwrap(
-      unlinkMattermostTeam({
-        query: { generation },
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      "mattermost-binding:unlink",
+      { generation },
+      version,
+      (headers) =>
+        unlinkMattermostTeam({
+          query: { generation },
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -198,87 +227,161 @@ export const fetchTeamProviderReadback = async (selector: string) =>
     )
   ).data;
 
-export const fetchRoleDefinitions = async () =>
-  (
-    await unwrap(
-      listRoleDefinitions({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchRoleDefinitions = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listRoleDefinitions({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.resources,
+  );
+  return { resources: values };
+};
 
 export const fetchRoleDefinition = async (resourceRef: string) =>
   (await unwrap(getRoleDefinition({ path: { resourceRef }, ...readOptions() })))
     .data;
 
-export const fetchRoleDefinitionHistory = async (resourceRef: string) =>
-  (
-    await unwrap(
-      listRoleDefinitionHistory({
-        path: { resourceRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchRoleDefinitionHistory = async (resourceRef: string) => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listRoleDefinitionHistory({
+            path: { resourceRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.entries,
+  );
+  return { entries: values };
+};
 
 export const commandRoleDefinition = async (
   body: RoleDefinitionCommand,
   version?: number,
 ) =>
   (
-    await unwrap(
-      manageRoleDefinition({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `role-definition:${body.action}:${body.resourceRef ?? body.stableKey ?? "new"}`,
+      body,
+      version,
+      (headers) =>
+        manageRoleDefinition({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
-export const fetchAgents = async () =>
-  (await unwrap(listAgents({ query: { pageSize: 100 }, ...readOptions() })))
-    .data;
+export const fetchAgents = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listAgents({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.agents,
+  );
+  return { agents: values };
+};
 
 export const fetchAgent = async (resourceRef: string) =>
   (await unwrap(getAgent({ path: { resourceRef }, ...readOptions() }))).data;
 
-export const fetchAgentHistory = async (resourceRef: string) =>
-  (
-    await unwrap(
-      listAgentHistory({
-        path: { resourceRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchAgentHistory = async (resourceRef: string) => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listAgentHistory({
+            path: { resourceRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.entries,
+  );
+  return { entries: values };
+};
 
-export const fetchOwnerCatalog = async () =>
-  (
-    await unwrap(
-      getOwnerConfigurationCatalog({
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
+export const fetchOwnerCatalog = async () => {
+  const result = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          getOwnerConfigurationCatalog({
+            query: {
+              pageSize: 100,
+              ...(pageToken ? { pageToken } : {}),
+            },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.runtimeSelections,
+  );
+  const first = result.pages[0];
+  if (!first) throw new Error("Owner configuration catalog is empty");
+  for (const page of result.pages) {
+    if (
+      page.scheduleDefaults.digestSha256 !==
+        first.scheduleDefaults.digestSha256 ||
+      JSON.stringify(page.schedulePresets) !==
+        JSON.stringify(first.schedulePresets)
     )
-  ).data;
+      throw new Error("Owner configuration catalog changed during pagination");
+  }
+  return {
+    runtimeSelections: result.values,
+    schedulePresets: first.schedulePresets,
+    scheduleDefaults: first.scheduleDefaults,
+  };
+};
 
 export const commandAgent = async (body: AgentCommand, version?: number) =>
   (
-    await unwrap(
-      manageAgent({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `agent:${body.action}:${body.resourceRef ?? body.stableKey ?? "new"}`,
+      body,
+      version,
+      (headers) =>
+        manageAgent({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
-export const fetchBotIdentities = async () =>
-  (
-    await unwrap(
-      listAgentBotIdentities({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchBotIdentities = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listAgentBotIdentities({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.identities,
+  );
+  return { identities: values };
+};
 
 export const fetchBotIdentity = async (resourceRef: string) =>
   (
@@ -293,26 +396,31 @@ export const commandBotIdentity = async (
   body: AgentBotIdentityCommand,
 ) =>
   (
-    await unwrap(
-      manageAgentBotIdentity({
-        path: { resourceRef: agentRef },
-        body,
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `agent-bot:${agentRef}:${body.action}`,
+      body,
+      version,
+      (headers) =>
+        manageAgentBotIdentity({
+          path: { resourceRef: agentRef },
+          body,
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const fetchBotOperation = async (
   agentRef: string,
   action: AgentBotIdentityAction,
+  idempotencyKey: string,
 ) =>
   (
     await unwrap(
       getAgentBotIdentityOperation({
         path: { resourceRef: agentRef },
         query: { action },
-        headers: { "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Idempotency-Key": idempotencyKey },
         ...readOptions(),
       }),
     )
@@ -332,12 +440,21 @@ export const fetchBotProviderReadback = async (
     )
   ).data;
 
-export const fetchAssignments = async () =>
-  (
-    await unwrap(
-      listAgentAssignments({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchAssignments = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listAgentAssignments({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.resources,
+  );
+  return { resources: values };
+};
 
 export const fetchAssignment = async (resourceRef: string) =>
   (
@@ -346,52 +463,77 @@ export const fetchAssignment = async (resourceRef: string) =>
     )
   ).data;
 
-export const fetchAssignmentHistory = async (resourceRef: string) =>
-  (
-    await unwrap(
-      listAgentAssignmentHistory({
-        path: { resourceRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchAssignmentHistory = async (resourceRef: string) => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listAgentAssignmentHistory({
+            path: { resourceRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.entries,
+  );
+  return { entries: values };
+};
 
 export const commandAssignment = async (
   body: AgentAssignmentCommand,
   version?: number,
 ) =>
   (
-    await unwrap(
-      manageAgentAssignment({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `agent-assignment:${body.action}:${body.resourceRef ?? body.name ?? "new"}`,
+      body,
+      version,
+      (headers) =>
+        manageAgentAssignment({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
-export const fetchInstructionSets = async () =>
-  (
-    await unwrap(
-      listInstructionSets({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchInstructionSets = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listInstructionSets({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.resources,
+  );
+  return { resources: values };
+};
 
 export const fetchInstructionSet = async (resourceRef: string) =>
   (await unwrap(getInstructionSet({ path: { resourceRef }, ...readOptions() })))
     .data;
 
-export const fetchInstructionHistory = async (resourceRef: string) =>
-  (
-    await unwrap(
-      listInstructionSetHistory({
-        path: { resourceRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchInstructionHistory = async (resourceRef: string) => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listInstructionSetHistory({
+            path: { resourceRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.entries,
+  );
+  return { entries: values };
+};
 
 export const compareInstructionVersions = async (
   resourceRef: string,
@@ -413,12 +555,16 @@ export const commandInstructionSet = async (
   version?: number,
 ) =>
   (
-    await unwrap(
-      manageInstructionSet({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `instruction-set:${body.action}:${body.resourceRef ?? body.stableKey ?? "new"}`,
+      body,
+      version,
+      (headers) =>
+        manageInstructionSet({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -442,12 +588,16 @@ export const fetchProvider = async (
 
 export const startAuthorization = async (body: StartProviderAuthorization) =>
   (
-    await unwrap(
-      startProviderAuthorization({
-        body,
-        headers: basicHeaders(),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `provider-authorization:start:${body.connectionStableKey}`,
+      body,
+      undefined,
+      (headers) =>
+        startProviderAuthorization({
+          body,
+          headers: headers as BasicMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -466,12 +616,16 @@ export const restartAuthorization = async (
   version: number,
 ) =>
   (
-    await unwrap(
-      restartProviderAuthorization({
-        path: { authorizationRef },
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `provider-authorization:new-code:${authorizationRef}`,
+      {},
+      version,
+      (headers) =>
+        restartProviderAuthorization({
+          path: { authorizationRef },
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -480,21 +634,34 @@ export const cancelAuthorization = async (
   version: number,
 ) =>
   (
-    await unwrap(
-      cancelProviderAuthorization({
-        path: { authorizationRef },
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `provider-authorization:cancel:${authorizationRef}`,
+      {},
+      version,
+      (headers) =>
+        cancelProviderAuthorization({
+          path: { authorizationRef },
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
-export const fetchConnections = async () =>
-  (
-    await unwrap(
-      listProviderConnections({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchConnections = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listProviderConnections({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.connections,
+  );
+  return { connections: values };
+};
 
 export const fetchConnection = async (connectionRef: string) =>
   (
@@ -509,13 +676,17 @@ export const revokeConnection = async (
   generation: number,
 ) =>
   (
-    await unwrap(
-      revokeProviderConnection({
-        path: { connectionRef },
-        query: { generation },
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `provider-connection:revoke:${connectionRef}`,
+      { generation },
+      version,
+      (headers) =>
+        revokeProviderConnection({
+          path: { connectionRef },
+          query: { generation },
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -525,22 +696,35 @@ export const reauthorizeConnection = async (
   generation: number,
 ) =>
   (
-    await unwrap(
-      reauthorizeProviderConnection({
-        path: { connectionRef },
-        query: { generation },
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `provider-connection:reauthorize:${connectionRef}`,
+      { generation },
+      version,
+      (headers) =>
+        reauthorizeProviderConnection({
+          path: { connectionRef },
+          query: { generation },
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
-export const fetchProviderPools = async () =>
-  (
-    await unwrap(
-      listProviderPools({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchProviderPools = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listProviderPools({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.pools,
+  );
+  return { pools: values };
+};
 
 export const fetchProviderPool = async (poolRef: string) =>
   (await unwrap(getProviderPool({ path: { poolRef }, ...readOptions() }))).data;
@@ -550,12 +734,16 @@ export const commandProviderPool = async (
   version?: number,
 ) =>
   (
-    await unwrap(
-      manageProviderPool({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `provider-pool:${body.action}:${body.poolRef ?? body.stableKey ?? "new"}`,
+      body,
+      version,
+      (headers) =>
+        manageProviderPool({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -577,15 +765,21 @@ export const fetchIntegrationDefinition = async (
     )
   ).data;
 
-export const fetchIntegrationConfigurations = async () =>
-  (
-    await unwrap(
-      listIntegrationConfigurations({
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchIntegrationConfigurations = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listIntegrationConfigurations({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.configurations,
+  );
+  return { configurations: values };
+};
 
 export const fetchIntegrationConfiguration = async (configurationRef: string) =>
   (
@@ -602,23 +796,31 @@ export const saveIntegrationConfiguration = async (
   version?: number,
 ) =>
   (
-    await unwrap(
-      configureIntegration({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `integration-configuration:${body.configurationRef ?? body.stableKey}`,
+      body,
+      version,
+      (headers) =>
+        configureIntegration({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const testIntegration = async (body: TestIntegrationConnection) =>
   (
-    await unwrap(
-      testIntegrationConnection({
-        body,
-        headers: basicHeaders(),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `integration-test:${body.configurationRef ?? body.connectionRef}`,
+      body,
+      undefined,
+      (headers) =>
+        testIntegrationConnection({
+          body,
+          headers: headers as BasicMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -629,15 +831,21 @@ export const fetchIntegrationTest = async (testRef: string) =>
     )
   ).data;
 
-export const fetchIntegrationApprovals = async () =>
-  (
-    await unwrap(
-      listIntegrationApprovals({
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchIntegrationApprovals = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listIntegrationApprovals({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.approvals,
+  );
+  return { approvals: values };
+};
 
 export const fetchIntegrationApproval = async (approvalRef: string) =>
   (
@@ -652,25 +860,38 @@ export const decideApproval = async (
   body: DecideIntegrationApproval,
 ) =>
   (
-    await unwrap(
-      decideIntegrationApproval({
-        path: { approvalRef },
-        body,
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `integration-approval:${approvalRef}:${body.decision}`,
+      body,
+      version,
+      (headers) =>
+        decideIntegrationApproval({
+          path: { approvalRef },
+          body,
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const fetchScheduleSelectors = async () =>
   (await unwrap(listScheduleSelectors(readOptions()))).data;
 
-export const fetchOwnerSchedules = async () =>
-  (
-    await unwrap(
-      listOwnerSchedules({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchOwnerSchedules = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listOwnerSchedules({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.items,
+  );
+  return { items: values };
+};
 
 export const fetchOwnerSchedule = async (scheduleRef: string) =>
   (await unwrap(getOwnerSchedule({ path: { scheduleRef }, ...readOptions() })))
@@ -678,12 +899,16 @@ export const fetchOwnerSchedule = async (scheduleRef: string) =>
 
 export const createOwnerSchedule = async (body: CreateScheduleFromSelections) =>
   (
-    await unwrap(
-      createScheduleFromSelections({
-        body,
-        headers: basicHeaders(),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `schedule:create:${body.name}`,
+      body,
+      undefined,
+      (headers) =>
+        createScheduleFromSelections({
+          body,
+          headers: headers as BasicMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -693,51 +918,163 @@ export const updateOwnerSchedule = async (
   body: BindScheduleConfiguration,
 ) =>
   (
-    await unwrap(
-      bindScheduleConfiguration({
-        path: { scheduleRef },
-        body,
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `schedule:update:${scheduleRef}`,
+      body,
+      version,
+      (headers) =>
+        bindScheduleConfiguration({
+          path: { scheduleRef },
+          body,
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
+    )
+  ).data;
+
+export const deleteOwnerSchedule = async (
+  scheduleRef: string,
+  version: number,
+) =>
+  (
+    await executeMutation(
+      `schedule:delete:${scheduleRef}`,
+      {},
+      version,
+      (headers) =>
+        deleteSchedule({
+          path: { scheduleId: scheduleRef },
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
+    )
+  ).data;
+
+export const runOwnerScheduleNow = async (
+  scheduleRef: string,
+  version: number,
+) =>
+  (
+    await executeMutation(
+      `schedule:run-now:${scheduleRef}`,
+      {},
+      version,
+      (headers) =>
+        runScheduleNow({
+          path: { scheduleId: scheduleRef },
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
+    )
+  ).data;
+
+export const fetchScheduleOccurrences = async (scheduleRef: string) => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listScheduleOccurrences({
+            path: { scheduleId: scheduleRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.occurrences,
+  );
+  return { occurrences: values };
+};
+
+export const recoverScheduleOccurrence = async (
+  scheduleRef: string,
+  occurrenceId: string,
+  version: number,
+  body: ResolveScheduleRecovery,
+) =>
+  (
+    await executeMutation(
+      `schedule:recovery:${scheduleRef}:${occurrenceId}:${body.action}`,
+      body,
+      version,
+      (headers) =>
+        resolveScheduleRecovery({
+          path: { scheduleId: scheduleRef, occurrenceId },
+          body,
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const fetchRunDetail = async (runRef: string) =>
   (await unwrap(getRunDetail({ path: { runRef }, ...readOptions() }))).data;
 
-export const fetchRunTimeline = async (runRef: string) =>
-  (
-    await unwrap(
-      listRunTimeline({
-        path: { runRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchRunTimeline = async (runRef: string) => {
+  const result = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listRunTimeline({
+            path: { runRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.entries,
+  );
+  const first = result.pages[0];
+  if (!first) throw new Error("Run timeline page is missing");
+  return {
+    run: first.run,
+    entries: result.values,
+    nextActions: first.nextActions,
+  };
+};
 
-export const fetchRunLineage = async (runRef: string) =>
-  (
-    await unwrap(
-      getRunLineage({
-        path: { runRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchRunLineage = async (runRef: string) => {
+  const result = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          getRunLineage({
+            path: { runRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.nodes,
+  );
+  const first = result.pages[0];
+  if (!first) throw new Error("Run lineage page is missing");
+  return {
+    run: first.run,
+    nodes: result.values,
+    nextActions: first.nextActions,
+    truncated: result.pages.some((page) => page.truncated),
+  };
+};
 
-export const fetchRunArtifacts = async (runRef: string) =>
-  (
-    await unwrap(
-      listRunArtifacts({
-        path: { runRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchRunArtifacts = async (runRef: string) => {
+  const result = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listRunArtifacts({
+            path: { runRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.artifacts,
+  );
+  return {
+    artifacts: result.values,
+    nextActions: result.pages[0]?.nextActions ?? [],
+  };
+};
 
 export const commandRun = async (
   runRef: string,
@@ -745,29 +1082,42 @@ export const commandRun = async (
   body: RunCommand,
 ) =>
   (
-    await unwrap(
-      manageRun({
-        path: { runRef },
-        body,
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `run:${runRef}:${body.action}`,
+      body,
+      version,
+      (headers) =>
+        manageRun({
+          path: { runRef },
+          body,
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const fetchIncident = async (incidentRef: string) =>
   (await unwrap(getIncident({ path: { incidentRef }, ...readOptions() }))).data;
 
-export const fetchIncidentTimeline = async (incidentRef: string) =>
-  (
-    await unwrap(
-      listIncidentHistory({
-        path: { incidentRef },
-        query: { pageSize: 100 },
-        ...readOptions(),
-      }),
-    )
-  ).data;
+export const fetchIncidentTimeline = async (incidentRef: string) => {
+  const result = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listIncidentHistory({
+            path: { incidentRef },
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.entries,
+  );
+  return {
+    entries: result.values,
+    nextActions: result.pages[0]?.nextActions ?? [],
+  };
+};
 
 export const commandIncident = async (
   incidentRef: string,
@@ -775,25 +1125,38 @@ export const commandIncident = async (
   body: IncidentCommand,
 ) =>
   (
-    await unwrap(
-      manageIncident({
-        path: { incidentRef },
-        body,
-        headers: requiredHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `incident:${incidentRef}:${body.action}`,
+      body,
+      version,
+      (headers) =>
+        manageIncident({
+          path: { incidentRef },
+          body,
+          headers: headers as RequiredMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
 export const fetchHealthSeries = async () =>
   (await unwrap(getHealthSeries(readOptions()))).data;
 
-export const fetchWorkspaceBackups = async () =>
-  (
-    await unwrap(
-      listWorkspaceBackups({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchWorkspaceBackups = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listWorkspaceBackups({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.resources,
+  );
+  return { resources: values };
+};
 
 export const fetchWorkspaceBackup = async (resourceRef: string) =>
   (
@@ -810,21 +1173,34 @@ export const commandWorkspaceBackup = async (
   version?: number,
 ) =>
   (
-    await unwrap(
-      manageWorkspaceBackup({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `workspace-backup:${body.action}:${body.backupRef ?? body.name ?? "new"}`,
+      body,
+      version,
+      (headers) =>
+        manageWorkspaceBackup({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
-export const fetchWorkspaceRestores = async () =>
-  (
-    await unwrap(
-      listWorkspaceRestores({ query: { pageSize: 100 }, ...readOptions() }),
-    )
-  ).data;
+export const fetchWorkspaceRestores = async () => {
+  const { values } = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          listWorkspaceRestores({
+            query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.restores,
+  );
+  return { restores: values };
+};
 
 export const fetchWorkspaceRestore = async (restoreRef: string) =>
   (
@@ -838,12 +1214,16 @@ export const commandWorkspaceRestore = async (
   version?: number,
 ) =>
   (
-    await unwrap(
-      manageWorkspaceRestore({
-        body,
-        headers: optionalHeaders(version),
-        ...readOptions(),
-      }),
+    await executeMutation(
+      `workspace-restore:${body.action}:${body.restoreRef ?? body.name ?? "new"}`,
+      body,
+      version,
+      (headers) =>
+        manageWorkspaceRestore({
+          body,
+          headers: headers as OptionalMutationHeaders,
+          ...readOptions(),
+        }),
     )
   ).data;
 
@@ -865,20 +1245,41 @@ export const fetchConfigurationDiff = async (
   instructionSetRef: string,
   leftVersion: number,
   rightVersion: number,
-) =>
-  (
-    await unwrap(
-      getConfigurationDiff({
-        query: {
-          instructionSetRef,
-          leftVersion,
-          rightVersion,
-          pageSize: 100,
-        },
-        ...readOptions(),
-      }),
+) => {
+  const result = await collectAllPages(
+    async (pageToken) =>
+      (
+        await unwrap(
+          getConfigurationDiff({
+            query: {
+              instructionSetRef,
+              leftVersion,
+              rightVersion,
+              pageSize: 100,
+              ...(pageToken ? { pageToken } : {}),
+            },
+            ...readOptions(),
+          }),
+        )
+      ).data,
+    (page) => page.changes,
+  );
+  const first = result.pages[0];
+  if (!first) throw new Error("Configuration diff is empty");
+  for (const page of result.pages) {
+    if (
+      page.left.snapshotSha256 !== first.left.snapshotSha256 ||
+      page.right.snapshotSha256 !== first.right.snapshotSha256
     )
-  ).data;
+      throw new Error("Configuration diff changed during pagination");
+  }
+  return {
+    left: first.left,
+    right: first.right,
+    changes: result.values,
+    truncated: result.pages.some((page) => page.truncated),
+  };
+};
 
 export const fetchConfigurationSource = async (
   resourceRef: string,

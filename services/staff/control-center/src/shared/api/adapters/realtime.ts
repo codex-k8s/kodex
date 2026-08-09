@@ -21,6 +21,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { csrfToken } from "@/shared/lib/identity";
+import { resourceKinds } from "@/shared/lib/resources";
 
 export type RealtimeSnapshot = Omit<
   SnapshotEnvelope,
@@ -42,15 +43,38 @@ export type RealtimeSnapshot = Omit<
 };
 
 export type RealtimeEvent =
-  | { type: "open" }
-  | { type: "close" }
-  | { type: "snapshot"; snapshot: RealtimeSnapshot }
+  | { type: "generation"; generation: number }
+  | { type: "open"; generation: number }
+  | { type: "close"; generation: number }
+  | { type: "snapshot"; generation: number; snapshot: RealtimeSnapshot }
   | { type: "problem"; code: string; retryable: boolean };
 
-const channels: ProjectionChannel[] = [
+type ParsedRealtimeEvent =
+  | { type: "snapshot"; snapshot: RealtimeSnapshot }
+  | {
+      type: "problem";
+      requestId: string;
+      code: string;
+      retryable: boolean;
+    };
+
+export const realtimePartitions: readonly (readonly ProjectionChannel[])[] = [
+  [
+    "RESOURCES",
+    "RUNS",
+    "INCIDENTS",
+    "CONFIGURATION_CHANGES",
+    "WORKSPACE_TEAMS",
+    "PROVIDERS",
+    "INTEGRATIONS",
+    "APPROVALS",
+  ],
+  ["BACKUPS", "HEALTH"],
+] as const;
+export const realtimeChannels: readonly ProjectionChannel[] = [
+  "RESOURCES",
   "RUNS",
   "INCIDENTS",
-  "RESOURCES",
   "CONFIGURATION_CHANGES",
   "WORKSPACE_TEAMS",
   "PROVIDERS",
@@ -58,37 +82,6 @@ const channels: ProjectionChannel[] = [
   "APPROVALS",
   "BACKUPS",
   "HEALTH",
-];
-const resourceKinds: ResourceKind[] = [
-  "PROJECT",
-  "TEAM",
-  "CHAT",
-  "ROLE",
-  "PROMPT_PROFILE",
-  "CREDENTIAL_BINDING",
-  "REPOSITORY_WORKSPACE",
-  "INTEGRATION",
-  "RUNTIME_REVISION",
-  "SESSION",
-  "TURN",
-  "PROCESS_RUN",
-  "SCHEDULE",
-  "OWNER_GATE",
-  "MEMORY_RECORD",
-  "WORK_CLAIM",
-  "ARTIFACT",
-  "ROLE_IMAGE_RECIPE",
-  "IMAGE_BUILD",
-  "IMAGE_ARTIFACT",
-  "ROLE_DEFINITION",
-  "AGENT",
-  "AGENT_ASSIGNMENT",
-  "INSTRUCTION_SET",
-  "PROVIDER_CONNECTION_REFERENCE",
-  "PROVIDER_POOL",
-  "WORKSPACE_BACKUP",
-  "WORKSPACE_RESTORE",
-  "WORKSPACE_MATTERMOST_MAPPING",
 ];
 const lifecycleStates: LifecycleState[] = [
   "ACTIVE",
@@ -133,6 +126,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isVersion(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) > 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function mapDisplay(value: unknown): RunView["workspace"] | null {
@@ -183,7 +180,36 @@ function mapResource(value: unknown): Resource | null {
   return {
     ...resource,
     name: reservedName,
-    spec: resource.spec as Resource["spec"],
+    spec: {
+      ...(resource.spec as Resource["spec"]),
+      ...("credentialBinding" in resource.spec &&
+      resource.spec.credentialBinding
+        ? {
+            credentialBinding: {
+              ...resource.spec.credentialBinding,
+              immutableSecretRef: "",
+              principalRef: "",
+            },
+          }
+        : {}),
+      ...("repositoryWorkspace" in resource.spec &&
+      resource.spec.repositoryWorkspace
+        ? {
+            repositoryWorkspace: {
+              ...resource.spec.repositoryWorkspace,
+              repositoryRef: "",
+            },
+          }
+        : {}),
+      ...("integration" in resource.spec && resource.spec.integration
+        ? {
+            integration: {
+              ...resource.spec.integration,
+              endpointRef: "",
+            },
+          }
+        : {}),
+    } as Resource["spec"],
   };
 }
 
@@ -195,9 +221,10 @@ function mapRun(value: unknown): RunView | null {
     !isVersion(value.version) ||
     !lifecycleStates.includes(value.state as LifecycleState) ||
     !Array.isArray(value.nextActions) ||
+    !value.nextActions.every((item) => item === "CANCEL" || item === "RETRY") ||
     typeof value.updatedAt !== "string" ||
-    typeof value.attempt !== "number" ||
-    typeof value.durationSeconds !== "number"
+    !isVersion(value.attempt) ||
+    !isNonNegativeInteger(value.durationSeconds)
   )
     return null;
   const workspace = mapDisplay(value.workspace);
@@ -249,11 +276,23 @@ function mapIncident(value: unknown): IncidentView | null {
     typeof value.incidentRef !== "string" ||
     !isVersion(value.version) ||
     typeof value.diagnosticSummary !== "string" ||
+    typeof value.impact !== "string" ||
     typeof value.safeCorrelation !== "string" ||
     typeof value.runbookUrl !== "string" ||
+    typeof value.executionFence !== "string" ||
     typeof value.occurredAt !== "string" ||
     typeof value.updatedAt !== "string" ||
-    !Array.isArray(value.nextActions)
+    !["HEARTBEAT_MISSED", "RECONCILE_FAILED", "WORKLOAD_UNAVAILABLE"].includes(
+      String(value.kind),
+    ) ||
+    !["OPEN", "ACKNOWLEDGED", "RETRYING", "RELEASED", "CLOSED"].includes(
+      String(value.state),
+    ) ||
+    !["WARNING", "ERROR", "CRITICAL"].includes(String(value.severity)) ||
+    !Array.isArray(value.nextActions) ||
+    !value.nextActions.every((item) =>
+      ["ACKNOWLEDGE", "RETRY", "RELEASE", "CLOSE"].includes(String(item)),
+    )
   )
     return null;
   const workspace = mapDisplay(value.workspace);
@@ -284,18 +323,50 @@ function mapTeam(value: unknown): MattermostTeam | null {
     !isRecord(value) ||
     typeof value.selector !== "string" ||
     typeof value.displayName !== "string" ||
-    !["ACTIVE", "DELETED"].includes(String(value.status))
+    !["ACTIVE", "DELETED"].includes(String(value.status)) ||
+    typeof value.slug !== "string" ||
+    typeof value.providerSnapshotSha256 !== "string" ||
+    typeof value.createdAt !== "string" ||
+    typeof value.updatedAt !== "string" ||
+    typeof value.observedAt !== "string"
   )
     return null;
   return {
     selector: value.selector,
     displayName: value.displayName,
-    slug: String(value.slug),
+    slug: value.slug,
     status: value.status as MattermostTeam["status"],
-    providerSnapshotSha256: String(value.providerSnapshotSha256),
-    createdAt: String(value.createdAt),
-    updatedAt: String(value.updatedAt),
-    observedAt: String(value.observedAt),
+    providerSnapshotSha256: value.providerSnapshotSha256,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+    observedAt: value.observedAt,
+  };
+}
+
+function mapCapacity(
+  value: unknown,
+): NonNullable<ProviderConnection["capacity"]> | null {
+  if (
+    !isRecord(value) ||
+    !isNonNegativeInteger(value.usage) ||
+    !isNonNegativeInteger(value.limit) ||
+    !isVersion(value.revision) ||
+    typeof value.observedAt !== "string" ||
+    !isVersion(value.windowDurationSeconds) ||
+    typeof value.expiresAt !== "string" ||
+    typeof value.digestSha256 !== "string" ||
+    (value.resetsAt !== undefined && typeof value.resetsAt !== "string")
+  )
+    return null;
+  return {
+    usage: value.usage,
+    limit: value.limit,
+    revision: value.revision,
+    observedAt: value.observedAt,
+    windowDurationSeconds: value.windowDurationSeconds,
+    ...(value.resetsAt ? { resetsAt: value.resetsAt } : {}),
+    expiresAt: value.expiresAt,
+    digestSha256: value.digestSha256,
   };
 }
 
@@ -320,6 +391,9 @@ function mapConnection(value: unknown): ProviderConnection | null {
     !isVersion(value.activeCredentialGeneration)
   )
     return null;
+  const capacity =
+    value.capacity === undefined ? undefined : mapCapacity(value.capacity);
+  if (value.capacity !== undefined && !capacity) return null;
   const generated = value as unknown as ProviderConnectionProjection;
   return {
     connectionRef: generated.connectionRef,
@@ -337,22 +411,7 @@ function mapConnection(value: unknown): ProviderConnection | null {
     observedAt: generated.observedAt,
     updatedAt: generated.updatedAt,
     activeCredentialGeneration: generated.activeCredentialGeneration,
-    ...(generated.capacity
-      ? {
-          capacity: {
-            usage: generated.capacity.usage,
-            limit: generated.capacity.limit,
-            revision: generated.capacity.revision,
-            observedAt: generated.capacity.observedAt,
-            windowDurationSeconds: generated.capacity.windowDurationSeconds,
-            ...(generated.capacity.resetsAt
-              ? { resetsAt: generated.capacity.resetsAt }
-              : {}),
-            expiresAt: generated.capacity.expiresAt,
-            digestSha256: generated.capacity.digestSha256,
-          },
-        }
-      : {}),
+    ...(capacity ? { capacity } : {}),
   };
 }
 
@@ -370,6 +429,7 @@ function mapIntegration(value: unknown): IntegrationConfiguration | null {
     !isVersion(value.connectionVersion) ||
     !isVersion(value.connectionGeneration) ||
     !Array.isArray(value.capabilities) ||
+    !value.capabilities.every((item) => typeof item === "string") ||
     typeof value.capabilityDigestSha256 !== "string" ||
     !["MCP_TOOL", "CLI", "ENVIRONMENT"].includes(String(value.effectKind)) ||
     !["ACTIVE", "ARCHIVED"].includes(String(value.state)) ||
@@ -506,7 +566,7 @@ const expectedItems: Record<ProjectionChannel, string> = {
   HEALTH: "health",
 };
 
-export function parseRealtimeMessage(raw: string): RealtimeEvent | null {
+export function parseRealtimeMessage(raw: string): ParsedRealtimeEvent | null {
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -515,15 +575,21 @@ export function parseRealtimeMessage(raw: string): RealtimeEvent | null {
   }
   if (!isRecord(value) || typeof value.type !== "string") return null;
   if (value.type === "PROBLEM") {
-    return typeof value.code === "string" &&
+    return typeof value.requestId === "string" &&
+      typeof value.code === "string" &&
       typeof value.retryable === "boolean"
-      ? { type: "problem", code: value.code, retryable: value.retryable }
+      ? {
+          type: "problem",
+          requestId: value.requestId,
+          code: value.code,
+          retryable: value.retryable,
+        }
       : null;
   }
   if (
     value.type !== "SNAPSHOT" ||
     typeof value.requestId !== "string" ||
-    !channels.includes(value.channel as ProjectionChannel) ||
+    !realtimeChannels.includes(value.channel as ProjectionChannel) ||
     !isVersion(value.sequence) ||
     typeof value.snapshotId !== "string" ||
     value.complete !== true ||
@@ -591,28 +657,33 @@ export function parseRealtimeMessage(raw: string): RealtimeEvent | null {
 }
 
 export class RealtimeClient {
-  private socket: WebSocket | null = null;
+  private readonly sockets = new Map<number, WebSocket>();
+  private readonly opened = new Set<number>();
   private reconnectTimer: number | null = null;
   private stopped = true;
   private attempt = 0;
+  private generation = 0;
 
   constructor(private readonly publish: (event: RealtimeEvent) => void) {}
 
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
-    this.connect();
+    this.connectGeneration();
   }
 
   stop(): void {
     this.stopped = true;
     if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
-    this.socket?.close(1000, "client shutdown");
-    this.socket = null;
+    this.generation += 1;
+    for (const socket of this.sockets.values())
+      socket.close(1000, "client shutdown");
+    this.sockets.clear();
+    this.opened.clear();
   }
 
-  private connect(): void {
+  private connectGeneration(): void {
     if (this.stopped || !navigator.onLine) {
       this.scheduleReconnect();
       return;
@@ -624,43 +695,108 @@ export class RealtimeClient {
       this.scheduleReconnect();
       return;
     }
+    const generation = ++this.generation;
+    this.opened.clear();
+    this.publish({ type: "generation", generation });
+    realtimePartitions.forEach((partition, index) =>
+      this.connectPartition(generation, index, partition, token),
+    );
+  }
+
+  private connectPartition(
+    generation: number,
+    partition: number,
+    channels: readonly ProjectionChannel[],
+    token: string,
+  ): void {
     const socket = new WebSocket(runtimeConfig().realtimeUrl, [
       "mattercodex.control.v1",
       `csrf.${token}`,
     ]);
-    this.socket = socket;
+    this.sockets.set(partition, socket);
+    const requestId = crypto.randomUUID();
     socket.addEventListener("open", () => {
-      if (this.socket !== socket || this.stopped) return;
-      this.attempt = 0;
+      if (
+        this.sockets.get(partition) !== socket ||
+        this.stopped ||
+        generation !== this.generation
+      )
+        return;
       const subscribe: SubscribeEnvelope = {
         reservedType: "SUBSCRIBE",
-        requestId: crypto.randomUUID(),
-        channels,
+        requestId,
+        channels: [...channels],
+        ...(channels.includes("RESOURCES")
+          ? { resourceKinds: [...resourceKinds] }
+          : {}),
       };
       socket.send(
         JSON.stringify({
           type: subscribe.reservedType,
           requestId: subscribe.requestId,
           channels: subscribe.channels,
+          ...(subscribe.resourceKinds
+            ? { resourceKinds: subscribe.resourceKinds }
+            : {}),
         }),
       );
-      this.publish({ type: "open" });
+      this.opened.add(partition);
+      if (this.opened.size === realtimePartitions.length) {
+        this.attempt = 0;
+        this.publish({ type: "open", generation });
+      }
     });
     socket.addEventListener("message", (event) => {
-      if (this.socket !== socket || typeof event.data !== "string") return;
+      if (
+        this.sockets.get(partition) !== socket ||
+        generation !== this.generation ||
+        typeof event.data !== "string"
+      )
+        return;
       const message = parseRealtimeMessage(event.data);
       if (!message) {
         socket.close(1008, "invalid realtime envelope");
         return;
       }
-      this.publish(message);
+      if (
+        (message.type === "snapshot" &&
+          (message.snapshot.requestId !== requestId ||
+            !channels.includes(message.snapshot.channel))) ||
+        (message.type === "problem" && message.requestId !== requestId)
+      ) {
+        socket.close(1008, "invalid realtime subscription scope");
+        return;
+      }
+      if (message.type === "snapshot") {
+        this.publish({ ...message, generation });
+        return;
+      }
+      this.publish({
+        type: "problem",
+        code: message.code,
+        retryable: message.retryable,
+      });
+      if (message.retryable) socket.close(1012, "retryable realtime problem");
     });
     socket.addEventListener("close", () => {
-      if (this.socket !== socket) return;
-      this.socket = null;
-      this.publish({ type: "close" });
-      this.scheduleReconnect();
+      if (
+        this.sockets.get(partition) !== socket ||
+        generation !== this.generation
+      )
+        return;
+      this.failGeneration(generation);
     });
+  }
+
+  private failGeneration(generation: number): void {
+    if (generation !== this.generation) return;
+    this.generation += 1;
+    for (const socket of this.sockets.values())
+      socket.close(1000, "realtime generation replaced");
+    this.sockets.clear();
+    this.opened.clear();
+    this.publish({ type: "close", generation });
+    this.scheduleReconnect();
   }
 
   private scheduleReconnect(): void {
@@ -669,7 +805,7 @@ export class RealtimeClient {
     this.attempt += 1;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect();
+      this.connectGeneration();
     }, delay);
   }
 }

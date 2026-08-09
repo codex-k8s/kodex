@@ -27,19 +27,24 @@ import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 
 import { useRealtimeStore } from "@/features/realtime/store";
+import { usePwaUpdateStore } from "@/features/pwa-update/store";
 import { useSessionStore } from "@/features/session/store";
+import { bindRealtimeSnapshots } from "@/app/realtime-bindings";
 import type { ResourceKind } from "@/shared/api/generated/openapi/types.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
+import { setMutationGuard } from "@/shared/lib/identity";
+import { resourceKinds } from "@/shared/lib/resources";
 
 const router = useRouter();
 const { locale, t } = useI18n();
 const realtime = useRealtimeStore();
+const pwaUpdate = usePwaUpdateStore();
 const session = useSessionStore();
 const menuOpen = ref(false);
 const searchQuery = ref("");
-const searchKind = ref<ResourceKind>("PROJECT");
+const searchKind = ref<ResourceKind | "ALL">("ALL");
 const theme = ref(localStorage.getItem("mattercodex.theme") ?? "system");
-const updateRegistration = ref<ServiceWorkerRegistration | null>(null);
+let unbindRealtime: (() => void) | null = null;
 
 const navigation = [
   { to: "/", label: "nav.overview", icon: LayoutDashboard },
@@ -71,14 +76,8 @@ function applyTheme(): void {
   localStorage.setItem("mattercodex.theme", theme.value);
 }
 
-function handlePwaUpdate(event: Event): void {
-  updateRegistration.value = (
-    event as CustomEvent<ServiceWorkerRegistration>
-  ).detail;
-}
-
 function applyPwaUpdate(): void {
-  const registration = updateRegistration.value;
+  const registration = pwaUpdate.registration;
   if (!registration?.waiting) return;
   navigator.serviceWorker.addEventListener(
     "controllerchange",
@@ -86,6 +85,10 @@ function applyPwaUpdate(): void {
     { once: true },
   );
   registration.waiting.postMessage({ type: "SKIP_WAITING" });
+}
+
+function verifySessionAfterRealtimeClose(): void {
+  void session.verify();
 }
 
 function setLocale(value: string): void {
@@ -106,11 +109,22 @@ async function submitSearch(): Promise<void> {
 
 onMounted(() => {
   applyTheme();
-  window.addEventListener("mattercodex:pwa-update", handlePwaUpdate);
+  unbindRealtime = bindRealtimeSnapshots();
+  setMutationGuard(() => realtime.ready);
   realtime.start();
+  window.addEventListener(
+    "mattercodex:realtime-disconnected",
+    verifySessionAfterRealtimeClose,
+  );
 });
 onBeforeUnmount(() => {
-  window.removeEventListener("mattercodex:pwa-update", handlePwaUpdate);
+  window.removeEventListener(
+    "mattercodex:realtime-disconnected",
+    verifySessionAfterRealtimeClose,
+  );
+  unbindRealtime?.();
+  unbindRealtime = null;
+  setMutationGuard(null);
   realtime.stop();
 });
 </script>
@@ -192,12 +206,10 @@ onBeforeUnmount(() => {
             $t("search.kind")
           }}</label>
           <select id="global-search-kind" v-model="searchKind">
-            <option value="PROJECT">PROJECT</option>
-            <option value="CHAT">CHAT</option>
-            <option value="REPOSITORY_WORKSPACE">REPOSITORY_WORKSPACE</option>
-            <option value="PROCESS_RUN">PROCESS_RUN</option>
-            <option value="SCHEDULE">SCHEDULE</option>
-            <option value="ARTIFACT">ARTIFACT</option>
+            <option value="ALL">ALL</option>
+            <option v-for="kind in resourceKinds" :key="kind" :value="kind">
+              {{ kind }}
+            </option>
           </select>
           <label class="sr-only" for="global-search-query">{{
             $t("search.query")
@@ -229,6 +241,7 @@ onBeforeUnmount(() => {
                   ? $t("app.realtimeReplacing")
                   : $t("app.realtime")
           }}
+          <small v-if="realtime.problemCode">{{ realtime.problemCode }}</small>
         </div>
         <label class="compact-select">
           <Languages :size="15" aria-hidden="true" /><span class="sr-only">{{
@@ -263,7 +276,7 @@ onBeforeUnmount(() => {
         {{ $t("app.offlineNotice") }}
       </div>
       <div
-        v-else-if="realtime.replacing"
+        v-else-if="!realtime.connected || realtime.replacing"
         class="connectivity-banner connectivity-banner--info"
         role="status"
         aria-live="polite"
@@ -271,7 +284,7 @@ onBeforeUnmount(() => {
         {{ $t("app.replacingNotice") }}
       </div>
       <div
-        v-if="updateRegistration"
+        v-if="pwaUpdate.registration"
         class="connectivity-banner connectivity-banner--update"
         role="status"
       >
@@ -283,6 +296,13 @@ onBeforeUnmount(() => {
         >
           {{ $t("app.applyUpdate") }}
         </button>
+      </div>
+      <div
+        v-if="pwaUpdate.failed"
+        class="connectivity-banner connectivity-banner--info"
+        role="status"
+      >
+        {{ $t("app.updateUnavailable") }}
       </div>
       <main class="content"><RouterView /></main>
     </div>

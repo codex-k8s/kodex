@@ -15,6 +15,7 @@
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "config:check": "node tools/check-runtime-config.mjs",
     "generate:openapi": "openapi-ts -f openapi-ts.config.mjs",
     "generate:asyncapi": "node tools/generate-asyncapi.mjs",
     "codegen": "npm run generate:openapi && npm run generate:asyncapi"

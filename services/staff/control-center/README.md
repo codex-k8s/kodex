@@ -4,7 +4,7 @@ title: Staff Control Center MatterCodex
 type: frontend-guide
 status: approved
 owner: manager
-version: 2.0.0
+version: 2.1.0
 updated: 2026-08-09
 ---
 
@@ -53,23 +53,23 @@ PWA и API имеют один origin. Nginx проксирует `/api/v1/` к
 
 ## Пользовательские маршруты
 
-| Маршрут                                 | Исполняемые сценарии                                                                                                                                                 |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                                     | Авторитетная сводка workspaces, runs, OwnerGate, incidents, backups и diagnostics.                                                                                   |
-| `/workspaces`, `/workspaces/:projectId` | Workspace CRUD, repositories/chats, Mattermost Team create/list/link/relink/unlink, Git-owned access detach/copy.                                                    |
-| `/people`                               | RoleDefinition и Agent create/archive/history, server runtime selections, bot identity bind/rebind/revoke, AgentAssignment assign/unassign.                          |
-| `/instructions`                         | InstructionSet create/update, validate, publish, history, compare, rollback, Git-owned detach/copy.                                                                  |
-| `/providers`                            | Provider catalog, device authorization/status/new code/cancel, masked connections, reauthorize/revoke, provider pools create/update/archive и effective eligibility. |
-| `/integrations`                         | Definition catalog, configure/update, safe connection test receipt, immutable redacted approvals и approve/reject.                                                   |
-| `/role-images`                          | RoleImageRecipe и ImageBuild специализированные команды и readbacks.                                                                                                 |
-| `/automations`                          | Server-derived selectors, presets/defaults, INLINE либо CLEAN artifact prompt, create/rebind и effective schedule values.                                            |
-| `/runs`                                 | Run list/detail, timeline, lineage, artifacts, authoritative next actions и OwnerGate.                                                                               |
-| `/operations/incidents`                 | Incident detail/history/runbook и только возвращённые сервером next actions.                                                                                         |
-| `/operations/backups`                   | Workspace backup create/cancel/retry и restore create/cancel/retry с membership snapshot.                                                                            |
-| `/operations/audit`                     | Bounded audit list и CSV export.                                                                                                                                     |
-| `/operations/configuration`             | Configuration changes, safe source detail и redacted version diff.                                                                                                   |
-| `/operations/diagnostics`               | Bounded diagnostics и complete health observations от трёх владельцев состояния.                                                                                     |
-| `/search`                               | Авторитетный поиск одного закрытого `ResourceKind`.                                                                                                                  |
+| Маршрут                                 | Исполняемые сценарии                                                                                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                     | Авторитетная сводка workspaces, runs, OwnerGate, incidents, backups и diagnostics.                                                                                |
+| `/workspaces`, `/workspaces/:projectId` | Workspace CRUD, полный contract-supported lifecycle ресурсов, Mattermost Team create/list/link/relink/unlink и Git-owned access detach/copy.                      |
+| `/people`                               | RoleDefinition и Agent create/update/pause/resume/enable/disable/archive/delete/history, bot identity create/bind/rebind/revoke, AgentAssignment assign/unassign. |
+| `/instructions`                         | InstructionSet create/update/validate/publish/history/compare/rollback/archive/delete и Git-owned detach/copy.                                                    |
+| `/providers`                            | Provider authorization/status/new code/cancel, masked connections, reauthorize/revoke, provider pools create/update/archive/delete и effective eligibility.       |
+| `/integrations`                         | Definition catalog, configure/update, safe connection test receipt, immutable redacted approvals и approve/reject.                                                |
+| `/role-images`                          | RoleImageRecipe и ImageBuild специализированные команды и readbacks.                                                                                              |
+| `/automations`                          | Server-derived selectors/presets/defaults/effective values, safe inputs, create/rebind/run-now/pause/resume/delete и occurrence recovery.                         |
+| `/runs`                                 | Run list/detail, timeline, lineage, artifacts, authoritative next actions и OwnerGate.                                                                            |
+| `/operations/incidents`                 | Incident detail/history/runbook и только возвращённые сервером next actions.                                                                                      |
+| `/operations/backups`                   | Workspace backup create/cancel/retry и restore create/cancel/retry с membership snapshot.                                                                         |
+| `/operations/audit`                     | Bounded audit list и CSV export.                                                                                                                                  |
+| `/operations/configuration`             | Configuration changes, safe source detail и redacted version diff.                                                                                                |
+| `/operations/diagnostics`               | Bounded diagnostics и complete health observations от трёх владельцев состояния.                                                                                  |
+| `/search`                               | Авторитетный global либо scoped поиск по полному закрытому `ResourceKind` с cursor pagination.                                                                    |
 
 Каждая read surface имеет `loading`, `empty`, `forbidden`, `error` и `ready`.
 Mutation с `409`/`412` переводит применимую поверхность в `conflict`, после чего
@@ -80,6 +80,16 @@ Mutation с `409`/`412` переводит применимую поверхно
 Git-owned конфигурации общий edit закрыт: `detach` и `copy` являются отдельными
 подтверждаемыми командами. Secret values, private locators, tokens, cookies,
 credential material и raw provider evidence не выводятся.
+
+Слитые HTTP и realtime contracts дают `managedBy`, `source` и `revision`, но не
+дают отдельные `drift` и Git commit fields. Кроме того, специализированные
+`DETACH`/`COPY` отсутствуют для `RoleDefinition`, `Agent` и `ProviderPool`.
+Protected configuration и Schedule projections также не содержат permissions
+либо `nextActions`; такие fields есть только у Run, Incident и Restore. PWA
+показывает только доступную авторитетную provenance, отправляет лишь закрытые
+typed commands и оставляет eligibility server-side, не выдумывая значения,
+команды или lifecycle rule. Закрыть эти пробелы без изменения source contracts
+в этом PR невозможно; изменение слитых контрактов #260 явно исключено fix-pass.
 
 ## Generated boundary
 
@@ -92,10 +102,11 @@ npm run generate:asyncapi
 npm run codegen
 ```
 
-`tools/generate-asyncapi.mjs` удаляет прежний output перед генерацией. Для
-актуального контракта semantic model names определены source AsyncAPI; fallback
-canonicalizer применяется только если generator снова создаст anonymous
-schemas. Повторный `npm run codegen` должен оставлять relevant diff чистым.
+`tools/generate-asyncapi.mjs` удаляет прежний output перед генерацией и напрямую
+вызывает закреплённый generator с поддерживаемыми параметрами. Semantic model
+names определены `title`/`$id` source AsyncAPI. Скрипт лишь закрыто отклоняет
+anonymous schema и не переписывает generated files. Повторный `npm run codegen`
+должен оставлять relevant diff чистым.
 
 ## Realtime, offline и обновление PWA
 
@@ -115,17 +126,27 @@ shell обслуживаются с `no-store`; fingerprinted assets — immutab
 
 ## Сборка и deploy ownership
 
-`Dockerfile` выполняет production build и запускает nginx от UID/GID 101 с
-read-only root filesystem. Nginx задаёт CSP, `frame-ancestors`, object/base
-запреты, Permissions Policy, Referrer Policy и exact upstream TLS validation.
+`Dockerfile` собирается из canonical repository root, но Dockerfile-specific
+allowlist исключает `.env*`, `.git`, untracked/private и прочие посторонние
+inputs. Frontend, builder и runtime images закреплены exact digest. Nginx
+запускается от UID/GID 101 с read-only root filesystem.
+
+Ingress подключается к PWA только по verified mTLS: exact backend SNI, CA и
+client identity приходят из cert-manager Secrets с фиксированными именами без
+значений. PWA не имеет plaintext listener или fallback. Mounted certificate
+rotation проверяется `nginx -t`; корректный новый material перезагружается, а
+некорректный закрыто отвергается без остановки уже обслуживаемой generation.
+Отдельно nginx проверяет exact CA/SNI upstream `control-api-gateway`.
 
 Kustomize base `deploy/k8s/base/staff-control-center` содержит Deployment,
-Service, Ingress, ConfigMap, PDB, ServiceAccount и default-deny NetworkPolicy.
-Pod не получает service account token. Egress разрешён только exact kube-dns и
-`control-api-gateway` pods в namespace `mattercodex-system` на TCP 8443. В pod
-монтируется только публичная `ca.crt`, без private key. Readiness проверяет
-локальный `/readyz`; никакие deploy, staging или production actions из frontend
-волны не выполняются.
+Service, Ingress, immutable content-addressed runtime ConfigMap, PDB,
+ServiceAccount и default-deny NetworkPolicy. Runtime API/WS/OIDC/CSP revision
+привязана к Pod template и доступна в `/readyz`; изменение content создаёт новое
+имя ConfigMap и rollout. Pod не получает service account token. Egress разрешён
+только exact kube-dns и `control-api-gateway` pods в namespace
+`mattercodex-system` на TCP 8443. В Pod находится только собственный backend
+TLS key; для ingress client и upstream доступны лишь CA. Никакие deploy,
+staging или production actions из frontend волны не выполняются.
 
 ## Проверки Prototype-профиля
 
@@ -158,7 +179,12 @@ Context7 был вызван для Vue, TypeScript, Vite, Pinia, Vue Router, vu
 - Vue I18n Composition API: <https://vue-i18n.intlify.dev/guide/advanced/composition>;
 - Hey API OpenAPI TypeScript: <https://heyapi.dev/docs/openapi/typescript/get-started>;
 - AsyncAPI CLI: <https://github.com/asyncapi/cli/tree/v6.0.2>;
-- AsyncAPI Modelina: <https://github.com/asyncapi/modelina/tree/v4.4.3>.
+- AsyncAPI Modelina: <https://github.com/asyncapi/modelina/tree/v5.10.1>.
+- ingress-nginx backend mTLS: <https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#backend-certificate-authentication>;
+- cert-manager certificate lifecycle: <https://cert-manager.io/docs/usage/certificate/>;
+- Kustomize content-addressed ConfigMap: <https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/>;
+- Docker build context и Dockerfile-specific ignore: <https://docs.docker.com/build/concepts/context/>;
+- Service Worker registration/update events: <https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/register>.
 
 ## Ручная проверка владельцем
 

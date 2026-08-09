@@ -1,11 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,71 +53,22 @@ if (result.status !== 0) {
   );
 }
 
-const semanticNames = [
-  ['"GREGORIAN" | "BUSINESS"', "ScheduleCalendar"],
-  ['"FORBID" | "SKIP" | "QUEUE"', "ScheduleOverlapPolicy"],
-  [
-    '"SKIP" | "RUN_ONCE" | "CATCH_UP" | "WITHIN_GRACE"',
-    "ScheduleMisfirePolicy",
-  ],
-  ['"AT_LEAST_ONCE" | "EXACTLY_ONCE_EFFECT"', "ScheduleDeliveryPolicy"],
-  ['"NEW" | "PERSISTENT" | "ROLLING"', "ScheduleSessionPolicy"],
-  [
-    '"ALWAYS" | "ON_ACTION" | "ON_FAILURE" | "ON_ACTION_OR_FAILURE" | "AUDIT_ONLY"',
-    "ScheduleNotificationPolicy",
-  ],
-  ['"AGENT" | "PLAYBOOK"', "ScheduleTargetType"],
-  ["cron: string;", "CronScheduleProjection"],
-  ["intervalSeconds: number;", "IntervalScheduleProjection"],
-  [
-    '"AWAITING_DELIVERY_PROOF" | "READY" | "TERMINAL" | "EXPIRED"',
-    "OwnerGateDeliveryState",
-  ],
-  [
-    '"WAIT_FOR_DELIVERY" | "RESOLVE" | "READ_TERMINAL" | "NONE"',
-    "OwnerGateNextAction",
-  ],
-];
-
 const generatedFiles = readdirSync(output).filter((name) =>
   name.endsWith(".ts"),
 );
 const anonymousFiles = generatedFiles.filter((name) =>
   /^AnonymousSchema_\d+\.ts$/.test(name),
 );
-if (anonymousFiles.length === 0) {
-  process.exit(0);
-}
-const replacements = new Map();
-for (const filename of anonymousFiles) {
-  const source = readFileSync(resolve(output, filename), "utf8");
-  const match = semanticNames.find(([signature]) => source.includes(signature));
-  if (!match)
-    throw new Error(
-      `AsyncAPI anonymous model ${filename} has no semantic name`,
-    );
-  const oldName = filename.slice(0, -3);
-  const newName = match[1];
-  if ([...replacements.values()].includes(newName)) {
-    throw new Error(`AsyncAPI semantic model ${newName} is duplicated`);
-  }
-  replacements.set(oldName, newName);
-}
-if (replacements.size !== semanticNames.length) {
-  throw new Error("AsyncAPI anonymous model set is incomplete");
-}
-
-for (const filename of generatedFiles) {
-  const path = resolve(output, filename);
-  let source = readFileSync(path, "utf8");
-  for (const [oldName, newName] of replacements) {
-    source = source.replaceAll(oldName, newName);
-  }
-  writeFileSync(path, source, "utf8");
-}
-for (const [oldName, newName] of replacements) {
-  renameSync(
-    resolve(output, `${oldName}.ts`),
-    resolve(output, `${newName}.ts`),
+if (anonymousFiles.length > 0) {
+  throw new Error(
+    `AsyncAPI contract generated anonymous models: ${anonymousFiles.join(", ")}`,
   );
+}
+for (const filename of generatedFiles) {
+  const source = readFileSync(resolve(output, filename), "utf8");
+  if (/\bAnonymousSchema_\d+\b/.test(source)) {
+    throw new Error(
+      `AsyncAPI contract generated an anonymous symbol in ${filename}`,
+    );
+  }
 }

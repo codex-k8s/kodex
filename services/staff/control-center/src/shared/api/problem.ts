@@ -38,6 +38,35 @@ interface GeneratedResponse<T> {
   response?: Response;
 }
 
+let unauthorizedHandler: (() => void) | null = null;
+let unauthorizedNotified = false;
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
+  if (handler === null) unauthorizedNotified = false;
+}
+
+export function resetUnauthorizedNotification(): void {
+  unauthorizedNotified = false;
+}
+
+function notifyUnauthorized(problem: AppProblem): void {
+  if (problem.kind !== "unauthorized" || unauthorizedNotified) return;
+  unauthorizedNotified = true;
+  unauthorizedHandler?.();
+}
+
+export function notifyAuthoritativeUnauthorized(): void {
+  notifyUnauthorized(
+    new AppProblem({
+      status: 401,
+      code: "UNAUTHENTICATED",
+      retryable: false,
+      kind: "unauthorized",
+    }),
+  );
+}
+
 function isProblem(value: unknown): value is Problem {
   return (
     typeof value === "object" &&
@@ -64,7 +93,7 @@ export function normalizeProblem(
   const retryable =
     isProblem(value) && typeof value.retryable === "boolean"
       ? value.retryable
-      : status === 429 || status >= 500;
+      : status === 0 || status === 429 || status >= 500;
   const kind: ProblemKind =
     status === 401
       ? "unauthorized"
@@ -94,9 +123,16 @@ export async function unwrap<T>(
   request: Promise<GeneratedResponse<T>>,
 ): Promise<ApiReadback<NonNullable<T>>> {
   const result = await request;
-  if (!result.response) throw normalizeProblem(result.error);
-  if (!result.response.ok || result.error !== undefined)
-    throw normalizeProblem(result.error, result.response);
+  if (!result.response) {
+    const problem = normalizeProblem(result.error);
+    notifyUnauthorized(problem);
+    throw problem;
+  }
+  if (!result.response.ok || result.error !== undefined) {
+    const problem = normalizeProblem(result.error, result.response);
+    notifyUnauthorized(problem);
+    throw problem;
+  }
   const readback: ApiReadback<NonNullable<T>> = {
     data: result.data as NonNullable<T>,
   };

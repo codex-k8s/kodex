@@ -13,13 +13,13 @@ import {
   restoreSessionBackup,
 } from "@/shared/api/adapters/operations";
 import { fetchResources } from "@/shared/api/adapters/resources";
+import { downloadAudit } from "@/shared/api/adapters/owner-control";
 import type {
   AuditEvent,
   Backup,
   ConfigurationChange,
   Diagnostics,
   IncidentView,
-  ResolveOwnerGate,
   Resource,
   RestoreOperation,
   RunView,
@@ -31,6 +31,7 @@ import {
   finishRequest,
   invalidate,
   remoteState,
+  resetRemoteState,
   type RemoteState,
 } from "@/shared/lib/remote";
 
@@ -97,6 +98,11 @@ export const useOperationsStore = defineStore("operations", () => {
       async () => (await fetchAudit()).events,
       (items) => items.length === 0,
     );
+  const exportAuditFile = (filters?: {
+    resourceKind?: import("@/shared/api/generated/openapi/types.gen").ResourceKind;
+    resourceRef?: string;
+    action?: string;
+  }) => downloadAudit(filters);
   const loadChanges = () =>
     loadInto(
       changes,
@@ -131,8 +137,12 @@ export const useOperationsStore = defineStore("operations", () => {
     }
   }
 
-  const resolveOwnerGate = (resource: Resource, body: ResolveOwnerGate) =>
-    mutate(() => resolveGate(resource, body), loadGates, gates);
+  const resolveOwnerGate = (
+    resource: Resource,
+    decision: "APPROVED" | "REJECTED",
+    reason: string,
+  ) =>
+    mutate(() => resolveGate(resource, { decision, reason }), loadGates, gates);
   const restore = (backup: Backup) => {
     invalidate(restores);
     return mutate(
@@ -167,6 +177,20 @@ export const useOperationsStore = defineStore("operations", () => {
     changes.phase = items.length ? "ready" : "empty";
   }
 
+  function reset(): void {
+    mutationVersion += 1;
+    resetRemoteState(runs, []);
+    resetRemoteState(gates, []);
+    resetRemoteState(incidents, []);
+    resetRemoteState(backups, []);
+    resetRemoteState(restores, []);
+    resetRemoteState(audit, []);
+    resetRemoteState(changes, []);
+    resetRemoteState(diagnostics, null);
+    mutationProblem.value = null;
+    mutating.value = false;
+  }
+
   return {
     runs,
     gates,
@@ -184,6 +208,7 @@ export const useOperationsStore = defineStore("operations", () => {
     loadBackups,
     loadRestores,
     loadAudit,
+    exportAuditFile,
     loadChanges,
     loadDiagnostics,
     resolveOwnerGate,
@@ -192,5 +217,6 @@ export const useOperationsStore = defineStore("operations", () => {
     replaceRealtimeResources,
     replaceRealtimeIncidents,
     replaceRealtimeChanges,
+    reset,
   };
 });

@@ -9,4 +9,4 @@ spec:
     app.kubernetes.io/name: staff-control-center
     app.kubernetes.io/component: staff-frontend
   ports:
-    - {name: http, port: 8080, targetPort: http, protocol: TCP}
+    - {name: https, port: 8443, targetPort: https, protocol: TCP}

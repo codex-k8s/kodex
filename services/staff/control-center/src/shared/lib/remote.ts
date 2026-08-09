@@ -64,3 +64,10 @@ export function failRequest<T>(
 export function invalidate<T>(state: RemoteState<T>): void {
   state.requestVersion += 1;
 }
+
+export function resetRemoteState<T>(state: RemoteState<T>, initial: T): void {
+  state.requestVersion += 1;
+  state.phase = "idle";
+  state.data = initial;
+  state.problem = null;
+}

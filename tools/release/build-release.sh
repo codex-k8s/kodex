@@ -26,7 +26,7 @@ done
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail "source SHA must be exact lowercase 40-hex"
 [[ -n "$output" ]] || fail "output path is required"
 [[ "$build_run_id" == local || "$build_run_id" =~ ^[0-9]+$ ]] || fail "build run ID is invalid"
-for command_name in git jq sha256sum; do
+for command_name in git jq sha256sum tar; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -46,7 +46,9 @@ node_pull=localhost:5001
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 metadata_directory="$temporary_directory/metadata"
-mkdir -p "$metadata_directory"
+source_context="$temporary_directory/source"
+mkdir -p "$metadata_directory" "$source_context"
+git -C "$repository_root" archive "$source_sha" | tar -x -C "$source_context"
 
 while IFS=$'\t' read -r component dockerfile; do
   [[ "$component" =~ ^[a-z0-9-]+$ ]] || fail "invalid component name"
@@ -64,9 +66,10 @@ while IFS=$'\t' read -r component dockerfile; do
   else
     "$buildctl_path" --addr "$buildkit_host" build \
       --frontend dockerfile.v0 \
-      --local context="$repository_root" \
-      --local dockerfile="$repository_root/$(dirname -- "$dockerfile")" \
+      --local context="$source_context" \
+      --local dockerfile="$source_context/$(dirname -- "$dockerfile")" \
       --opt filename="$(basename -- "$dockerfile")" \
+      --opt "build-arg:SOURCE_SHA=$source_sha" \
       --output "type=image,name=$destination,push=true" \
       --metadata-file "$metadata_directory/$component.json"
   fi

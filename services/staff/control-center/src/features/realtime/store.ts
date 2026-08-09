@@ -1,13 +1,13 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 import {
   RealtimeClient,
+  realtimeChannels,
   type RealtimeEvent,
 } from "@/shared/api/adapters/realtime";
 import type { ProjectionChannel } from "@/shared/api/generated/asyncapi/ProjectionChannel";
-import { useOperationsStore } from "@/features/operations/store";
-import { useOwnerControlStore } from "@/features/owner-control/store";
+import { notifyAuthoritativeUnauthorized } from "@/shared/api/problem";
 
 export const useRealtimeStore = defineStore("realtime", () => {
   const connected = ref(false);
@@ -15,39 +15,44 @@ export const useRealtimeStore = defineStore("realtime", () => {
   const replacing = ref(true);
   const problemCode = ref<string | null>(null);
   const sequences = ref<Partial<Record<ProjectionChannel, number>>>({});
+  const generation = ref(0);
+  const ready = computed(
+    () => online.value && connected.value && !replacing.value,
+  );
   let client: RealtimeClient | null = null;
-  const expectedChannels: ProjectionChannel[] = [
-    "RUNS",
-    "INCIDENTS",
-    "RESOURCES",
-    "CONFIGURATION_CHANGES",
-    "WORKSPACE_TEAMS",
-    "PROVIDERS",
-    "INTEGRATIONS",
-    "APPROVALS",
-    "BACKUPS",
-    "HEALTH",
-  ];
   let freshChannels = new Set<ProjectionChannel>();
 
   function publish(event: RealtimeEvent): void {
-    if (event.type === "open") {
-      connected.value = true;
+    if (event.type === "generation") {
+      generation.value = event.generation;
+      connected.value = false;
       problemCode.value = null;
       sequences.value = {};
       freshChannels = new Set();
       replacing.value = true;
       return;
     }
+    if (event.type === "open") {
+      if (event.generation !== generation.value) return;
+      connected.value = true;
+      problemCode.value = null;
+      return;
+    }
     if (event.type === "close") {
+      if (event.generation !== generation.value) return;
       connected.value = false;
       replacing.value = true;
+      window.dispatchEvent(new Event("mattercodex:realtime-disconnected"));
       return;
     }
     if (event.type === "problem") {
       problemCode.value = event.code;
+      replacing.value = true;
+      if (event.code === "UNAUTHENTICATED" && !event.retryable)
+        notifyAuthoritativeUnauthorized();
       return;
     }
+    if (event.generation !== generation.value) return;
     const previous = sequences.value[event.snapshot.channel] ?? 0;
     if (event.snapshot.sequence <= previous) return;
     sequences.value = {
@@ -55,40 +60,19 @@ export const useRealtimeStore = defineStore("realtime", () => {
       [event.snapshot.channel]: event.snapshot.sequence,
     };
     freshChannels.add(event.snapshot.channel);
-    replacing.value = expectedChannels.every((channel) =>
+    replacing.value = !realtimeChannels.every((channel) =>
       freshChannels.has(channel),
     );
-    const operations = useOperationsStore();
-    const owner = useOwnerControlStore();
-    if (event.snapshot.channel === "RUNS") {
-      operations.replaceRealtimeRuns(event.snapshot.items.runs ?? []);
-    } else if (event.snapshot.channel === "RESOURCES") {
-      operations.replaceRealtimeResources(event.snapshot.items.resources ?? []);
-    } else if (event.snapshot.channel === "INCIDENTS") {
-      operations.replaceRealtimeIncidents(event.snapshot.items.incidents ?? []);
-    } else if (event.snapshot.channel === "CONFIGURATION_CHANGES") {
-      operations.replaceRealtimeChanges(
-        event.snapshot.items.configurationChanges ?? [],
-      );
-    } else if (event.snapshot.channel === "WORKSPACE_TEAMS") {
-      owner.replaceTeams(event.snapshot.items.teams ?? []);
-    } else if (event.snapshot.channel === "PROVIDERS") {
-      owner.replaceConnections(event.snapshot.items.providerConnections ?? []);
-    } else if (event.snapshot.channel === "INTEGRATIONS") {
-      owner.replaceIntegrations(
-        event.snapshot.items.integrationConfigurations ?? [],
-      );
-    } else if (event.snapshot.channel === "APPROVALS") {
-      owner.replaceApprovals(event.snapshot.items.approvals ?? []);
-    } else if (event.snapshot.channel === "BACKUPS") {
-      owner.replaceBackups(event.snapshot.items.resources ?? []);
-    } else {
-      owner.replaceHealth(event.snapshot.items.health ?? []);
-    }
+    window.dispatchEvent(
+      new CustomEvent("mattercodex:realtime-snapshot", {
+        detail: event.snapshot,
+      }),
+    );
   }
 
   function start(): void {
     if (client) return;
+    online.value = navigator.onLine;
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     client = new RealtimeClient(publish);
@@ -102,6 +86,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
     client = null;
     connected.value = false;
     replacing.value = true;
+    sequences.value = {};
+    freshChannels = new Set();
   }
 
   function handleOnline(): void {
@@ -116,5 +102,20 @@ export const useRealtimeStore = defineStore("realtime", () => {
     replacing.value = true;
   }
 
-  return { connected, online, replacing, problemCode, start, stop };
+  function reset(): void {
+    stop();
+    problemCode.value = null;
+    generation.value = 0;
+  }
+
+  return {
+    connected,
+    online,
+    replacing,
+    ready,
+    problemCode,
+    start,
+    stop,
+    reset,
+  };
 });

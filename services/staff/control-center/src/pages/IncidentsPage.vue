@@ -4,8 +4,10 @@ import { onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useOperationsStore } from "@/features/operations/store";
-import { useOwnerControlStore } from "@/features/owner-control/store";
-import type { IncidentCommand } from "@/shared/api/generated/openapi/types.gen";
+import {
+  type IncidentAction,
+  useIncidentDetailsStore,
+} from "@/features/incident-details/store";
 import { formatDateTime } from "@/shared/lib/format";
 import { safeHttpsUrl } from "@/shared/lib/url";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
@@ -16,9 +18,9 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const { locale } = useI18n();
 const operations = useOperationsStore();
-const owner = useOwnerControlStore();
+const owner = useIncidentDetailsStore();
 const detailsOpen = ref(false);
-const action = reactive<IncidentCommand>({
+const action = reactive<{ action: IncidentAction; reasonCode: string }>({
   action: "ACKNOWLEDGE",
   reasonCode: "",
 });
@@ -27,14 +29,18 @@ async function show(incidentRef: string): Promise<void> {
   detailsOpen.value = true;
   action.reasonCode = "";
   await owner.loadIncident(incidentRef);
+  const nextAction = owner.incident.data?.nextActions[0];
+  if (nextAction) action.action = nextAction;
 }
 
 async function execute(): Promise<void> {
-  if (action.reasonCode.trim().length < 2) return;
-  await owner.executeIncidentAction({
-    action: action.action,
-    reasonCode: action.reasonCode.trim(),
-  });
+  if (action.reasonCode.trim().length < 1) return;
+  const success = await owner.executeIncidentAction(
+    action.action,
+    action.reasonCode.trim(),
+  );
+  const nextAction = owner.incident.data?.nextActions[0];
+  if (success && nextAction) action.action = nextAction;
 }
 
 onMounted(operations.loadIncidents);
@@ -77,12 +83,17 @@ onMounted(operations.loadIncidents);
               <tr
                 v-for="item in operations.incidents.data"
                 :key="item.incidentRef"
-                class="clickable-row"
-                tabindex="0"
-                @click="show(item.incidentRef)"
-                @keydown.enter="show(item.incidentRef)"
               >
-                <td class="data-table__name">{{ item.kind }}</td>
+                <td class="data-table__name">
+                  <button
+                    class="button button--text"
+                    type="button"
+                    :aria-label="`${$t('common.details')}: ${item.kind}`"
+                    @click="show(item.incidentRef)"
+                  >
+                    {{ item.kind }}
+                  </button>
+                </td>
                 <td>{{ item.impact }}</td>
                 <td>{{ item.workspace.value }}</td>
                 <td><StatusBadge :state="item.severity" /></td>
@@ -164,8 +175,8 @@ onMounted(operations.loadIncidents);
               ><input
                 v-model="action.reasonCode"
                 required
-                minlength="2"
-                maxlength="80" /></label
+                minlength="1"
+                maxlength="96" /></label
             ><button
               class="button button--danger"
               type="submit"

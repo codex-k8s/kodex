@@ -12,7 +12,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
-import { mutationHeaders } from "@/shared/lib/identity";
+import { executeMutation } from "@/shared/lib/identity";
 
 export async function fetchProjects(pageToken?: string): Promise<ResourcePage> {
   return (
@@ -27,10 +27,10 @@ export async function fetchProjects(pageToken?: string): Promise<ResourcePage> {
 
 export async function createWorkspace(body: CreateProject): Promise<Resource> {
   return (
-    await unwrap(
+    await executeMutation("project:create", body, undefined, (headers) =>
       createProject({
         body,
-        headers: mutationHeaders() as {
+        headers: headers as {
           "X-CSRF-Token": string;
           "Idempotency-Key": string;
         },
@@ -45,33 +45,41 @@ export async function updateWorkspace(
   body: UpdateProject,
 ): Promise<Resource> {
   return (
-    await unwrap(
-      updateProject({
-        body,
-        path: { projectId: resource.id },
-        headers: mutationHeaders(resource.version) as {
-          "X-CSRF-Token": string;
-          "Idempotency-Key": string;
-          "If-Match": string;
-        },
-        signal: requestSignal(),
-      }),
+    await executeMutation(
+      `project:update:${resource.id}`,
+      body,
+      resource.version,
+      (headers) =>
+        updateProject({
+          body,
+          path: { projectId: resource.id },
+          headers: headers as {
+            "X-CSRF-Token": string;
+            "Idempotency-Key": string;
+            "If-Match": string;
+          },
+          signal: requestSignal(),
+        }),
     )
   ).data;
 }
 
 export async function deleteWorkspace(resource: Resource): Promise<Resource> {
   return (
-    await unwrap(
-      deleteProject({
-        path: { projectId: resource.id },
-        headers: mutationHeaders(resource.version) as {
-          "X-CSRF-Token": string;
-          "Idempotency-Key": string;
-          "If-Match": string;
-        },
-        signal: requestSignal(),
-      }),
+    await executeMutation(
+      `project:delete:${resource.id}`,
+      {},
+      resource.version,
+      (headers) =>
+        deleteProject({
+          path: { projectId: resource.id },
+          headers: headers as {
+            "X-CSRF-Token": string;
+            "Idempotency-Key": string;
+            "If-Match": string;
+          },
+          signal: requestSignal(),
+        }),
     )
   ).data;
 }

@@ -37,6 +37,7 @@ components=(
   interaction-gateway
   integration-gateway
   control-api-gateway
+  staff-control-center
   automation-scheduler
   role-image-builder
   egress-gateway
@@ -201,7 +202,7 @@ EOF
 
   grep -Eq '^kind: Ingress$' "$output" && fail "application render contains Ingress"
   grep -Eq 'sha256:0{64}' "$output" && fail "application render contains a zero digest"
-  if yq -r '.. | select(has("image")) | .image' "$output" | grep -E 'mattercodex/(control-plane|internal-rpc-authority|runtime-controller|interaction-gateway|integration-gateway|control-api-gateway|egress-gateway|automation-scheduler|role-image-builder|agent-runner)(:|@)' |
+  if yq -r '.. | select(has("image")) | .image' "$output" | grep -E 'mattercodex/(control-plane|internal-rpc-authority|runtime-controller|interaction-gateway|integration-gateway|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|role-image-builder|agent-runner)(:|@)' |
     grep -Fvxf <(jq -r '.images[].pull_ref' "$lock_file") >/dev/null; then
     fail "application render contains an internal image outside the release lock"
   fi

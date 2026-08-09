@@ -4,14 +4,14 @@ import { onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useOperationsStore } from "@/features/operations/store";
-import { useOwnerControlStore } from "@/features/owner-control/store";
+import { useDiagnosticsStore } from "@/features/diagnostics/store";
 import { formatDateTime, formatDuration } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const store = useOperationsStore();
-const owner = useOwnerControlStore();
+const owner = useDiagnosticsStore();
 const { locale } = useI18n();
 const load = () => Promise.all([store.loadDiagnostics(), owner.loadHealth()]);
 onMounted(load);

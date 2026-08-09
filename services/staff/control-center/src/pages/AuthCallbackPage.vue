@@ -35,9 +35,13 @@ onMounted(complete);
         <button
           class="button button--primary"
           type="button"
-          @click="session.beginLogin"
+          @click="session.canRetryAdmission ? complete() : session.beginLogin()"
         >
-          <RotateCcw :size="16" aria-hidden="true" />{{ $t("auth.retryLogin") }}
+          <RotateCcw :size="16" aria-hidden="true" />{{
+            session.canRetryAdmission
+              ? $t("common.retry")
+              : $t("auth.retryLogin")
+          }}
         </button>
       </template>
     </section>

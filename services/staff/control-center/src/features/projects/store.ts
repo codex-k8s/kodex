@@ -8,9 +8,8 @@ import {
   updateWorkspace,
 } from "@/shared/api/adapters/projects";
 import type {
-  CreateProject,
+  ProjectLocale,
   Resource,
-  UpdateProject,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import {
@@ -20,6 +19,7 @@ import {
   finishRequest,
   invalidate,
   remoteState,
+  resetRemoteState,
 } from "@/shared/lib/remote";
 
 export const useProjectsStore = defineStore("projects", () => {
@@ -85,11 +85,45 @@ export const useProjectsStore = defineStore("projects", () => {
     }
   }
 
-  const create = (body: CreateProject) => mutate(() => createWorkspace(body));
-  const update = (resource: Resource, body: UpdateProject) =>
-    mutate(() => updateWorkspace(resource, body));
+  const create = (
+    name: string,
+    slug: string,
+    description: string,
+    locale: ProjectLocale,
+  ) =>
+    mutate(() =>
+      createWorkspace({ name, spec: { slug, description, locale } }),
+    );
+  const update = (
+    resource: Resource,
+    name: string,
+    slug: string,
+    description: string,
+    locale: ProjectLocale,
+  ) =>
+    mutate(() =>
+      updateWorkspace(resource, {
+        name,
+        spec: { slug, description, locale },
+      }),
+    );
   const remove = (resource: Resource) =>
     mutate(() => deleteWorkspace(resource));
+
+  function invalidatePending(): void {
+    mutationVersion += 1;
+    invalidate(projects);
+    mutationProblem.value = null;
+    mutating.value = false;
+  }
+
+  function reset(): void {
+    mutationVersion += 1;
+    resetRemoteState(projects, []);
+    nextPageToken.value = null;
+    mutationProblem.value = null;
+    mutating.value = false;
+  }
 
   return {
     projects,
@@ -101,5 +135,7 @@ export const useProjectsStore = defineStore("projects", () => {
     create,
     update,
     remove,
+    invalidatePending,
+    reset,
   };
 });
