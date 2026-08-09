@@ -117,6 +117,7 @@ type ManageProtectedConfigurationInput struct {
 	Action               string
 	ResourceID           string
 	ExpectedVersion      uint64
+	Readiness            bool
 	Name                 string
 	Spec                 entity.Spec
 	TargetVersion        uint64

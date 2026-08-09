@@ -9,6 +9,8 @@ import (
 	"time"
 
 	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/event"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -85,6 +87,176 @@ func (tx *providerMaterializationTestTransaction) AppendAudit(_ context.Context,
 type providerMaterializationTestRepository struct {
 	domainrepo.Repository
 	tx *providerMaterializationTestTransaction
+}
+
+type agentBotManageReadinessTransaction struct {
+	domainrepo.Transaction
+	resources map[string]entity.Resource
+	writes    int
+}
+
+func (tx *agentBotManageReadinessTransaction) GetForUpdate(
+	_ context.Context, _, _, id string,
+) (entity.Resource, error) {
+	resource, ok := tx.resources[id]
+	if !ok {
+		return entity.Resource{}, errs.ErrNotFound
+	}
+	return resource, nil
+}
+
+func (tx *agentBotManageReadinessTransaction) ListSnapshotResources(
+	context.Context, string, string,
+) ([]entity.Resource, error) {
+	resources := make([]entity.Resource, 0, len(tx.resources))
+	for _, resource := range tx.resources {
+		resources = append(resources, resource)
+	}
+	return resources, nil
+}
+
+func (tx *agentBotManageReadinessTransaction) Insert(context.Context, entity.Resource) error {
+	tx.writes++
+	return errs.ErrInternal
+}
+
+func (tx *agentBotManageReadinessTransaction) Update(context.Context, entity.Resource, uint64) error {
+	tx.writes++
+	return errs.ErrInternal
+}
+
+func (tx *agentBotManageReadinessTransaction) SaveReceipt(context.Context, domainrepo.Receipt) error {
+	tx.writes++
+	return errs.ErrInternal
+}
+
+func (tx *agentBotManageReadinessTransaction) AppendAudit(context.Context, domainrepo.Audit) error {
+	tx.writes++
+	return errs.ErrInternal
+}
+
+func (tx *agentBotManageReadinessTransaction) AppendEvent(context.Context, event.Change) error {
+	tx.writes++
+	return errs.ErrInternal
+}
+
+type agentBotManageReadinessRepository struct {
+	domainrepo.Repository
+	tx           *agentBotManageReadinessTransaction
+	transactions int
+}
+
+func (repository *agentBotManageReadinessRepository) Transact(
+	ctx context.Context, _ domainrepo.Scope, run func(domainrepo.Transaction) error,
+) error {
+	repository.transactions++
+	return run(repository.tx)
+}
+
+func TestAgentBotManageReadinessUsesExactApplicationReceiptWithoutMutation(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 9, 17, 0, 0, 0, time.UTC)
+	actorID := "11111111-1111-4111-8111-111111111111"
+	organizationID := "22222222-2222-4222-8222-222222222222"
+	projectID := "33333333-3333-4333-8333-333333333333"
+	agentID := "44444444-4444-4444-8444-444444444444"
+	mappingID := "55555555-5555-4555-8555-555555555555"
+	receiptID := "66666666-6666-4666-8666-666666666666"
+	fullMethod := controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName
+
+	mappingSpec := entity.WorkspaceMattermostMappingSpec{
+		WorkspaceID: projectID, ProviderEffectVersion: 4, ProviderEffectGeneration: 7,
+		MappingGeneration: 3, MappingState: "BOUND",
+	}
+	mapping := entity.Resource{
+		ID: mappingID, OrganizationID: organizationID, ProjectID: projectID,
+		OwnerActorID: actorID, Kind: enum.KindWorkspaceMapping, State: enum.StateActive,
+		Version: 2, Spec: mappingSpec,
+	}
+	mappingProofRef, err := agentBotMappingProofRef(mapping, mappingSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentSpec := entity.AgentSpec{
+		StableKey: "agent-primary", BotIdentityRef: "77777777-7777-4777-8777-777777777777",
+		BotUsername: "agent-primary", BotProviderRevision: 4, BotProviderGeneration: 7,
+		BotProviderTeamRef: mappingProofRef, BotMaskedStatus: "AVAILABLE",
+		BotReceiptID: "88888888-8888-4888-8888-888888888888", BotReceiptVersion: 7,
+		BotReceiptSHA256: strings.Repeat("8", 64),
+	}
+	agent := entity.Resource{
+		ID: agentID, OrganizationID: organizationID, ProjectID: projectID,
+		OwnerActorID: actorID, Kind: enum.KindAgent, State: enum.StateActive,
+		Version: 9, Spec: agentSpec,
+	}
+	receipt := value.ProviderEffectReceipt{
+		ContractVersion: 1, Issuer: "interaction-gateway",
+		Audience: "urn:mattercodex:provider-readback:mattermost", Purpose: "MATTERMOST_PROVIDER_READBACK_RECEIPT",
+		WorkloadID: "interaction-gateway", CallerSPIFFEID: "spiffe://mattercodex.local/ns/mattercodex-system/sa/interaction-gateway",
+		FullMethod: fullMethod, ActorID: actorID, OrganizationID: organizationID, ProjectID: projectID,
+		WorkspaceID: projectID, ProviderTeamRef: mappingProofRef, ProviderObjectRef: agentSpec.BotIdentityRef,
+		ProviderUsername: agentSpec.BotUsername, Action: "rebind", Effect: "agent_bot_identity",
+		EffectVersion: agentSpec.BotProviderRevision, EffectGeneration: agentSpec.BotProviderGeneration,
+		EffectSHA256: strings.Repeat("7", 64), ReceiptID: receiptID, ReceiptRevision: agentSpec.BotReceiptVersion,
+		IssuedAt: now.Add(-time.Second), NotBefore: now.Add(-time.Second), ExpiresAt: now.Add(time.Minute),
+		MaskedStatus: "AVAILABLE", Provider: "mattermost", MaskedLabel: "Agent primary",
+		Capabilities: []string{"mattermost_post", "mattermost_readback"}, Eligible: true,
+		TargetKind: "agent_bot_identity", TargetResourceID: agentID, TargetStableKey: agentSpec.StableKey,
+	}
+	principal := value.Principal{
+		ActorID: actorID, OrganizationID: organizationID, ProjectID: projectID,
+		Permission:    permissionAgentBotIdentityManage,
+		CorrelationID: "99999999-9999-4999-8999-999999999999", PolicyRevision: 1, AuthorityGeneration: 1,
+		CallerWorkload: receipt.WorkloadID, CallerSPIFFEID: receipt.CallerSPIFFEID,
+		AuthoritySource: "PROVIDER_READBACK", AuthorityReference: receiptID,
+		AuthorityRevision: receipt.ReceiptRevision,
+	}
+	input := ManageProtectedConfigurationInput{
+		Principal: principal, IdempotencyKey: "readiness-profile-1", Kind: enum.KindAgent,
+		Action: "rebind_bot", ResourceID: agentID, ExpectedVersion: agent.Version,
+		FullMethod: fullMethod, ProviderReceipt: receipt, Readiness: true,
+	}
+	input.ProviderReceipt.CommandIntentSHA256, err = protectedProviderIntentSHA256(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Principal.AuthorityDigest, err = internalrpcauth.CanonicalJSONSHA256(input.ProviderReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx := &agentBotManageReadinessTransaction{resources: map[string]entity.Resource{
+		agent.ID: agent, mapping.ID: mapping,
+	}}
+	repository := &agentBotManageReadinessRepository{tx: tx}
+	service := &Service{
+		repository: repository, ownerGateDeliveryWorkload: principal.CallerWorkload,
+		ownerGateDeliverySPIFFEID: principal.CallerSPIFFEID, now: func() time.Time { return now },
+	}
+
+	checked, err := service.CheckAgentMattermostBotIdentityManageReadiness(context.Background(), input)
+	if err != nil || checked.ID != agentID || checked.Version != agent.Version ||
+		repository.transactions != 1 || tx.writes != 0 {
+		t.Fatalf("exact non-mutating Manage readiness failed: checked=%#v transactions=%d writes=%d err=%v",
+			checked, repository.transactions, tx.writes, err)
+	}
+	if _, err := service.ManageProtectedConfiguration(context.Background(), input); err != errs.ErrInvalidInput ||
+		repository.transactions != 1 || tx.writes != 0 {
+		t.Fatalf("readiness mode reached mutating command path: transactions=%d writes=%d err=%v",
+			repository.transactions, tx.writes, err)
+	}
+
+	stale := input
+	stale.ProviderReceipt.CommandIntentSHA256 = strings.Repeat("a", 64)
+	stale.Principal.AuthorityDigest, err = internalrpcauth.CanonicalJSONSHA256(stale.ProviderReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CheckAgentMattermostBotIdentityManageReadiness(context.Background(), stale); err != errs.ErrPermissionDenied ||
+		repository.transactions != 1 || tx.writes != 0 {
+		t.Fatalf("changed readiness intent crossed owner transaction: transactions=%d writes=%d err=%v",
+			repository.transactions, tx.writes, err)
+	}
 }
 
 func (repository *providerMaterializationTestRepository) Get(_ context.Context, organizationID, projectID, id string, kind enum.Kind) (entity.Resource, error) {

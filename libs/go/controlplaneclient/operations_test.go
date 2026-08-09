@@ -88,6 +88,7 @@ func TestInteractionGatewayOperationSetOwnsMattermostProviderSeams(t *testing.T)
 	operations := InteractionGatewayOperations()
 	for _, operation := range []string{
 		"control.interaction.agent-bot.manage",
+		"control.interaction.agent-bot.get",
 		"control.interaction.workspace-mapping.manage",
 		"control.interaction.workspace-mapping.get",
 		"control.interaction.workspace-mapping.list",

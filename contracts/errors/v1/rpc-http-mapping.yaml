@@ -17,6 +17,7 @@ groups:
       - TransitionResource
       - DeleteResource
       - ManageAccessResource
+      - ManageAgentMattermostBotIdentity
       - EnqueueTurn
       - ClaimTurn
       - RenewTurn

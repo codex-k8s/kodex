@@ -41,11 +41,12 @@ type ChannelBinding struct {
 	Assignments      []AgentAssignment `json:"assignments,omitempty"`
 }
 
-// AgentAssignment разделяет server-owned default route и точное разрешённое
-// назначение, выбранное только по проверенному Mattermost user readback.
+// AgentAssignment разделяет server-owned default route и разрешённый stable
+// key. Current provider UserID всегда подтверждает PostgreSQL admission;
+// MattermostUserID сохраняется только для совместимости старых manifest.
 type AgentAssignment struct {
 	MentionUsername  string `json:"mention_username"`
-	MattermostUserID string `json:"mattermost_user_id"`
+	MattermostUserID string `json:"mattermost_user_id,omitempty"`
 	RoleID           string `json:"role_id"`
 	BotStableKey     string `json:"bot_stable_key"`
 }
@@ -126,12 +127,12 @@ func loadManifest(path, expectedRevision, digestFile string, vaultKVVersion uint
 			channel.Locale, channel.BotStableKey, channel.LifecycleActorID,
 		}, "\x00"))).String()
 		locale, localeOK := i18n.ResolveLocale(channel.Locale)
-		_, botOK := result.bots[channel.BotStableKey]
 		if invalidProviderID(channel.TeamID) || invalidProviderID(channel.ChannelID) ||
 			uuid.Validate(channel.OrganizationID) != nil || uuid.Validate(channel.ProjectID) != nil ||
 			uuid.Validate(channel.ChatID) != nil || uuid.Validate(channel.RoleID) != nil ||
 			uuid.Validate(channel.LifecycleActorID) != nil ||
-			(channel.SessionID != "" && uuid.Validate(channel.SessionID) != nil) || !localeOK || !botOK {
+			(channel.SessionID != "" && uuid.Validate(channel.SessionID) != nil) || !localeOK ||
+			invalidStableKey(channel.BotStableKey) {
 			return Manifest{}, nil, errors.New("mattermost channel mapping is invalid")
 		}
 		channel.Locale = locale
@@ -161,9 +162,9 @@ func loadManifest(path, expectedRevision, digestFile string, vaultKVVersion uint
 		}
 		result.templates[channel.RuntimeKey] = channel
 		for _, assignment := range channel.Assignments {
-			_, assignmentBotOK := result.bots[assignment.BotStableKey]
-			if invalidUsername(assignment.MentionUsername) || invalidProviderID(assignment.MattermostUserID) ||
-				uuid.Validate(assignment.RoleID) != nil || !assignmentBotOK {
+			if invalidUsername(assignment.MentionUsername) ||
+				(assignment.MattermostUserID != "" && invalidProviderID(assignment.MattermostUserID)) ||
+				uuid.Validate(assignment.RoleID) != nil || invalidStableKey(assignment.BotStableKey) {
 				return Manifest{}, nil, errors.New("mattermost agent assignment is invalid")
 			}
 			assignmentKey := key + "\x00" + strings.ToLower(assignment.MentionUsername)
@@ -221,7 +222,7 @@ func loadManifest(path, expectedRevision, digestFile string, vaultKVVersion uint
 
 func (current *index) resolveAssignment(teamID, channelID, username, userID string) (AgentAssignment, error) {
 	assignment, ok := current.assignments[teamID+"\x00"+channelID+"\x00"+strings.ToLower(username)]
-	if !ok || assignment.MattermostUserID != userID {
+	if !ok || invalidProviderID(userID) {
 		return AgentAssignment{}, errors.New("mattermost agent assignment is unauthorized")
 	}
 	return assignment, nil

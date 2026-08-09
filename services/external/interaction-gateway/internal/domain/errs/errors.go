@@ -4,12 +4,18 @@ package errs
 import "errors"
 
 var (
-	ErrIgnored      = errors.New("inbound event ignored")
-	ErrBusy         = errors.New("inbound event is already processing")
-	ErrUnauthorized = errors.New("inbound authority is invalid")
-	ErrNotFound     = errors.New("interaction resource not found")
-	ErrConflict     = errors.New("interaction state conflict")
-	ErrUnavailable  = errors.New("interaction dependency unavailable")
+	ErrIgnored             = errors.New("inbound event ignored")
+	ErrBusy                = errors.New("inbound event is already processing")
+	ErrUnauthorized        = errors.New("inbound authority is invalid")
+	ErrNotFound            = errors.New("interaction resource not found")
+	ErrConflict            = errors.New("interaction state conflict")
+	ErrUnavailable         = errors.New("interaction dependency unavailable")
+	ErrIdempotencyConflict = errors.New("interaction idempotency conflict")
+	ErrVersionMismatch     = errors.New("interaction version mismatch")
+	ErrProviderConflict    = errors.New("interaction provider state conflict")
+	ErrProviderDeleted     = errors.New("interaction provider object is deleted")
+	ErrAmbiguousEffect     = errors.New("interaction provider effect is ambiguous")
+	ErrRepairRequired      = errors.New("interaction repair is required")
 )
 
 // ResponseError сохраняет безопасный пользовательский outcome отдельно от

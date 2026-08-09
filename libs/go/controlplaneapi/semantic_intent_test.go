@@ -9,6 +9,67 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func TestAgentMattermostBotIntentProducerConsumerCanonicalEquality(t *testing.T) {
+	t.Parallel()
+	authority := testAuthority(controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName)
+	request := &controlplanev1.ManageAgentMattermostBotIdentityRequest{
+		Action:  controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND,
+		AgentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", ExpectedVersion: 7,
+	}
+	producer, err := AgentMattermostBotIdentityIntentSHA256(authority, request, "agent-primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumer := proto.Clone(request).(*controlplanev1.ManageAgentMattermostBotIdentityRequest)
+	consumer.IdempotencyKey = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	consumer.ProviderReceipt = &controlplanev1.ProviderEffectReadbackReceipt{
+		ReceiptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", ReceiptRevision: 8,
+		CommandIntentSha256: producer,
+	}
+	actual, err := AgentMattermostBotIdentityIntentSHA256(authority, consumer, "agent-primary")
+	if err != nil || actual != producer {
+		t.Fatalf("Agent bot producer/consumer canonical mismatch: %q %q %v", producer, actual, err)
+	}
+}
+
+func TestAgentMattermostBotIntentBindsAuthorityTargetActionAndVersion(t *testing.T) {
+	t.Parallel()
+	authority := testAuthority(controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName)
+	request := &controlplanev1.ManageAgentMattermostBotIdentityRequest{
+		Action:  controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND,
+		AgentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", ExpectedVersion: 7,
+	}
+	base, err := AgentMattermostBotIdentityIntentSHA256(authority, request, "agent-primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertChanged := func(name string, changedAuthority VerifiedCommandAuthority,
+		changedRequest *controlplanev1.ManageAgentMattermostBotIdentityRequest, stableKey string,
+	) {
+		t.Helper()
+		digest, digestErr := AgentMattermostBotIdentityIntentSHA256(changedAuthority, changedRequest, stableKey)
+		if digestErr != nil || digest == base {
+			t.Fatalf("Agent bot intent field is not bound (%s): %q %v", name, digest, digestErr)
+		}
+	}
+	changedAuthority := authority
+	changedAuthority.ActorID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	assertChanged("actor", changedAuthority, request, "agent-primary")
+	changed := proto.Clone(request).(*controlplanev1.ManageAgentMattermostBotIdentityRequest)
+	changed.Action = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
+	assertChanged("action", authority, changed, "agent-primary")
+	changed = proto.Clone(request).(*controlplanev1.ManageAgentMattermostBotIdentityRequest)
+	changed.ExpectedVersion++
+	assertChanged("version", authority, changed, "agent-primary")
+	changed = proto.Clone(request).(*controlplanev1.ManageAgentMattermostBotIdentityRequest)
+	changed.AgentId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+	assertChanged("target", authority, changed, "agent-primary")
+	changed = proto.Clone(request).(*controlplanev1.ManageAgentMattermostBotIdentityRequest)
+	changed.Readiness = true
+	assertChanged("readiness", authority, changed, "agent-primary")
+	assertChanged("stable-key", authority, request, "agent-secondary")
+}
+
 func TestProviderIntentProducerConsumerCanonicalEquality(t *testing.T) {
 	t.Parallel()
 

@@ -55,6 +55,22 @@ spec:
             summary: Не восстанавливается неоднозначный Workspace Mattermost mapping
             description: Проверить owner readback, provider receipt generation, operation lease/fence и control-plane graph gate до ручного repair.
             runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayAgentBotRecoveryFailures
+          expr: sum(rate(mattercodex_interaction_gateway_agent_bot_identity_operations_total{operation="recovery",outcome="failure"}[5m])) > 0
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Не восстанавливается неоднозначный Agent Mattermost bot effect
+            description: Проверить durable pre-effect checkpoint, exact provider readback, Vault credential version, generation watermark и signed owner receipt; provider mutation вручную не повторять.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
+        - alert: InteractionGatewayAgentBotRepairRequired
+          expr: max(mattercodex_interaction_gateway_agent_bot_identity_repairs{reason="recovery_timeout"}) > 0
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Agent Mattermost bot operation требует terminal repair после recovery timeout
+            description: Durable PostgreSQL state REPAIR_REQUIRED сохраняется до устранения причины; проверить DB-clock transition, owner/provider readback и lease fence, не повторяя provider mutation вручную.
+            runbook_url: https://github.com/codex-k8s/matter-codex/blob/main/docs/runbooks/interaction-gateway.md
         - alert: InteractionGatewayPostgresqlUnavailable
           expr: sum(kube_pod_status_ready{namespace="mattercodex-system",condition="true",pod=~"interaction-gateway-postgresql-.*"}) < 2
           for: 5m

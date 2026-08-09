@@ -4,8 +4,8 @@ title: Interaction gateway
 type: service
 status: approved
 owner: manager
-version: 1.7.0
-updated: 2026-08-07
+version: 1.8.0
+updated: 2026-08-09
 ---
 
 # Interaction gateway
@@ -142,6 +142,77 @@ Bot messages и `#notrigger` завершаются до доменной ком
 Для каждой пары project/actor разрешён ровно один channel с
 `owner_delivery=true`; неоднозначная delivery route закрыто отклоняется.
 
+## Contract-first матрица Agent↔Mattermost Bot identity
+
+Authoritative source contract состоит из закрытых RPC
+`ListAgentMattermostBotIdentities`,
+`CreateAndBindAgentMattermostBotIdentity`,
+`BindAgentMattermostBotIdentity`, `GetAgentMattermostBotIdentity`,
+`RebindAgentMattermostBotIdentity`, `RevokeAgentMattermostBotIdentity`,
+`GetAgentMattermostBotIdentityOperation`,
+`GetAgentMattermostBotIdentityProviderReadback` и
+`CheckAgentMattermostBotIdentityReadiness`. Универсальный provider proxy,
+передача raw Mattermost Bot/User/Team ID, возврат token, cookie, provider
+payload либо raw error и изменение произвольного Agent lifecycle запрещены.
+
+Verified application context является единственным источником actor,
+organization, project, caller workload, полного метода и permission. `agent_ref`
+и `identity_selector` — только локаторы: gateway разрешает Agent через
+авторитетный control-plane read, а selector — через actor/tenant/project-scoped
+PostgreSQL row. Username нормализуется сервером по правилам Mattermost и
+operation-bound суффиксу; provider UserID, BotID, TeamID и credential binding
+назначаются сервером. Typed owner command `ManageAgentMattermostBotIdentity`
+вычисляет тот же canonical intent, что producer receipt; request-поле не может
+подменить authority, target, action, predecessor или generation.
+
+| Сценарий | Предшественник и authority | Provider effect/readback | Durable checkpoint, winner и допустимый retry | Owner command и terminal/read path |
+| --- | --- | --- | --- | --- |
+| Catalog success/empty | verified actor/org/project; server-resolved eligible Agents и Team mapping | bounded `GET /bots`, затем exact bot/user/team readback; пустой список допустим | server-owned selectors с TTL и provider digest; mutation/winner отсутствуют | owner command отсутствует; bounded safe catalog либо empty page |
+| Catalog forbidden/deleted/unknown | та же authority, payload IDs не используются | только read; raw status/body не сохраняются | selector не создаётся; retry только как новый read | safe `PERMISSION_DENIED` либо hidden `NOT_FOUND` |
+| Create accepted | Agent существует, принадлежит project, не имеет current identity; exact intent и idempotency key | ровно один `POST /bots`, затем создание credential и membership только после exact bot readback | `PENDING_EFFECT` с normalized username/correlation/intent hash фиксируется до POST; один PostgreSQL winner; после accept — `PROVIDER_ACCEPTED`; blind retry запрещён | signed one-use receipt → `ManageAgentMattermostBotIdentity(BIND)`; terminal `BOUND`; защищённые get/operation/provider-readback |
+| Create conflict/exact pre-existing match | тот же predecessor; чужой username не доказывает ownership | preflight/readback сравнивает exact server marker, username, owner и causality | exact operation match восстанавливается; foreign/raced bot → `REPAIR_REQUIRED`; второй POST запрещён | owner вызывается только для доказанного exact match |
+| Create timeout/5xx/connection loss | durable `PENDING_EFFECT` уже существует | effect считается ambiguous; worker выполняет только exact readback по operation username/correlation | `AMBIGUOUS`; DB-time deadline/lease/fence; тот же key+hash читает operation, другой hash конфликтует | после доказательства продолжается прежний BIND; по deadline terminal `RECOVERY_TIMEOUT`; blind retry отсутствует |
+| Membership accepted/already present | exact bot доказан и Team разрешён current mapping | одна assign/membership mutation с последующим exact membership readback; already-present принимается только при exact bot/team | checkpoint `MEMBERSHIP_PENDING` до effect, затем `PROVIDER_ACCEPTED`; ambiguous восстанавливается readback, не повтором | BIND только после exact membership proof |
+| Membership forbidden/ambiguous | тот же operation winner | raw provider diagnostics скрыты; только exact bot/team membership readback | `AMBIGUOUS` до deadline либо `REPAIR_REQUIRED`; retry только readback | owner command отсутствует до доказательства |
+| Bind existing accepted | Agent без current identity; opaque selector scoped actor/org/project; fresh bot/user/team readback | provider mutation отсутствует | один winner по Agent+exact predecessor для всех конкурирующих action и actor; fresh receipt/JTI только после нового readback | `BIND`; terminal `BOUND` с owner version и provider generation |
+| Rebind accepted | current owner version/generation и identity predecessor совпадают; свежий `Bot.OwnerId` равен server-resolved actor Mattermost User | fresh target readback; прежний exact token отзывается и новый token создаётся только между owner pre/post-readback fences | старый local admission atomically закрывается до первого credential effect; raced/foreign owner даёт ambiguous/repair без выдачи token | `REBIND` с OCC; успех выдаётся только после fresh provider owner и owner readback новой generation |
+| Rebind stale/conflict/open graph | stale expected version/generation либо owner gate запрещает переход | provider effect отсутствует | operation terminal `CONFLICT`/`FAILED_PRECONDITION`; закрытая старая admission не воскресает | typed owner error и authoritative get; новый effect отсутствует |
+| Revoke accepted | exact current owner version/generation | disable/revoke effect checkpoint фиксируется до provider call; затем include-deleted/disabled readback | `REVOKE_PENDING -> PROVIDER_ACCEPTED`; ambiguous effect восстанавливается readback; generation закрыта до provider call | signed receipt → `REVOKE`; terminal `REVOKED`; owner get/operation/provider-readback |
+| Bot disabled/deleted до команды | identity разрешена из current owner state | include-deleted readback доказывает disabled/deleted | current generation немедленно inadmissible; repair/revoke operation без synthetic success | readiness false; revoke допускается только с exact evidence и owner OCC |
+| Same key/same intent | существующая operation в том же actor/org/project/Agent/action scope | новый provider effect запрещён | возвращается durable result/checkpoint; recovery продолжает ту же lease generation | тот же owner outcome/receipt либо безопасный pending |
+| Same key/different intent | semantic digest, target, action, predecessor либо generation отличаются | provider не вызывается | durable idempotency conflict | typed `CONFLICT`; состояние не меняется |
+| Crash до provider effect | winner и `PENDING_EFFECT` сохранены | effect неизвестен, поэтому POST не повторяется | recovery начинает exact readback; DB lease/fence блокирует второго worker | pending/ambiguous read path |
+| Crash после provider accept | `PENDING_EFFECT` либо `MEMBERSHIP_PENDING` | только exact bot/membership readback | подтверждение сохраняется как `PROVIDER_ACCEPTED` | прежний owner command с тем же semantic key |
+| Crash после readback/receipt | provider checkpoint и receipt digest сохранены | новый provider вызов запрещён | новая receipt выдаётся только после fresh readback и новым one-use JTI; старый JTI не переиспользуется | тот же typed owner intent; replay receipt path version-pinned |
+| Crash после owner accept/до ответа | owner receipt мог быть принят | provider effect и новый owner transition запрещены | worker выполняет owner authoritative get и связывает exact receipt/intent/version/generation | durable `BOUND`/`REVOKED` возвращается повтору |
+| Worker lease expiry | DB-time lease/fence истёк | effect запрещён до startup barrier; новый worker делает readback | monotonic lease generation; stale worker не записывает checkpoint/outcome | продолжение той же operation, не новая команда |
+| Receipt replay | existing operation и exact provider checkpoint | fresh exact readback обязателен | новый ES256 JWS: exact `aud`, `purpose`, JTI, target/action/effect, intent hash, authority tuple, provider version/generation и digests | consumer recomputes canonical intent from typed command; replay mismatch/used JTI fail closed |
+| Readiness | current signed control-plane owner identity, provider generation, credential binding и runtime route должны совпасть | exact Bot owner/Team membership/active token и authenticated `GetMe`; тот же proof выполняется runtime admission | read-only; signer/trust, Vault, owner, token или generation mismatch не ремонтируется автоматически | bounded per-component reason; per-identity и общий `/readyz` закрыты для обязательных current routes |
+| Stale inbound/delivery/artifact | route identity generation меньше current high-watermark либо revoked | provider effect запрещён | joined admission row и high-watermark проверяются после reclaim и прямо перед effect | closed typed failure; stale identity не создаёт Session/Turn, delivery или grant |
+
+Процесс и management gRPC запускаются после dependency barrier даже до первого
+назначения Agent identity, но `/readyz` остаётся закрытым. Отдельный внутренний
+Service `interaction-gateway-management` публикует только mTLS gRPC port для
+этого bootstrap/readback path и не выводит наружу runtime HTTP. Это позволяет
+материализовать исходную identity без static credential fallback; runtime
+workers на каждом пути всё равно требуют admitted current generation. После
+назначения exact joined route readiness открывается автоматически.
+
+`ProviderEffectReadbackReceipt` — единственное переносимое доказательство effect:
+gateway подписывает versioned canonical claims и сохраняет terminal JTI/digest
+операции, а control-plane в owner-транзакции выполняет one-use consume и хранит
+replay/revocation state. Для Agent bot receipt переносит только opaque proof
+exact mapping version/generation и gateway-owned bot ref: raw Team ID, credential binding ID, Vault
+version и token digest остаются исключительно в durable state gateway. Ни одна
+сторона не сохраняет raw credential или private provider payload во внешнем readback.
+Receipt связывает exact workload, audience, full owner method,
+actor/org/project, Agent stable key, action, predecessor version/generation,
+provider effect version/generation и semantic intent hash. После возможного
+provider effect разрешены только readback/recovery; любое повторение mutation
+требует новой operation и нового доказанного predecessor. Отдельный domain event
+не публикуется: защищённые operation, owner binding и provider readback являются
+version-pinned authoritative read/rejoin paths.
+
 ## Сквозная карта сценариев
 
 | Сценарий | Actor и authority | Boundary → command | Владелец и idempotency | Результат и состояние |
@@ -177,7 +248,15 @@ readback; отдельный недостоверный AsyncAPI envelope не �
 Public listener требует TLS 1.3 и проверенный клиентский сертификат. Mattermost,
 S3, PostgreSQL и control-plane используют exact SNI/CA; plaintext fallback,
 `skipTLSVerify` и wildcard egress отсутствуют. В Vault хранятся только значения;
-в репозитории указаны имена путей/ключей. Начальный environment render использует
+в репозитории указаны имена путей/ключей. Agent bot token материализуется в
+отдельный CAS=0 KV v2 path по server-owned binding ID. Gateway получает
+короткоживущий Vault token через Kubernetes auth exact ServiceAccount/namespace/
+audience, читает только version-pinned credential с SHA-256 и при revoke пишет
+новую `REVOKED` version без token; generic secret CRUD, destroy и второй writer
+отсутствуют. Code-first policy/role задаёт
+`tools/interaction-gateway/configure-agent-bot-credential-vault.sh` и может
+применяться только после review/merge и отдельного owner OK.
+Начальный environment render использует
 generation-scoped principal `interaction_gateway_runtime_g1`, входящий в non-login роль
 `interaction_gateway_runtime`; startup проверяет exact `session_user` и членство
 до открытия barrier. Pod не подписывает и не выбирает DB scope: отдельная
@@ -245,9 +324,12 @@ control-plane verifier сравнивает его с policy audience и для 
 RLS-scoped DML и тот же joined owner mapping+Mattermost Team/channel route;
 recovery worker
 запускается только после barrier и завершается до PostgreSQL.
-Server-owned primary bot credential должен иметь только необходимые для этого
-пути Mattermost права на Team catalog/create и membership readback/add; значение
-credential не попадает в конфигурацию, ответы, логи или provider receipt.
+Server-owned primary bot credential должен принадлежать exact Bot identity из
+immutable manifest и иметь только необходимые для этого пути Mattermost права,
+включая `read_others_bots`/`manage_others_bots`, Team catalog/create и membership
+readback/add; значение credential не попадает в конфигурацию, ответы, логи или
+provider receipt. Verified human owner этого Bot независимо доказывается свежим
+provider `Bot.OwnerId` readback перед каждым effect.
 
 ## Ручная проверка
 

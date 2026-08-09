@@ -327,6 +327,9 @@ func (service *Service) OpenDecisionDialog(ctx context.Context, raw domainmatter
 }
 
 func (service *Service) resumeOwnerCallback(ctx context.Context, inbound entity.InboundEvent) (Result, error) {
+	if err := service.requireCurrentInboundBot(ctx, inbound); err != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "MATTERMOST_BOT_IDENTITY_NOT_CURRENT")
+	}
 	delivery, err := service.repository.GetDelivery(ctx, inbound.DeliveryID)
 	if err != nil || delivery.ProviderPostID != inbound.PostID ||
 		delivery.ChannelID != inbound.ChannelID || delivery.TeamID != inbound.TeamID ||
@@ -363,7 +366,7 @@ func (service *Service) resumeOwnerCallback(ctx context.Context, inbound entity.
 		return Result{}, domainerrs.ErrConflict
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateRaw)
-	if err := service.mattermost.OpenDecisionDialog(ctx, delivery.BotStableKey, inbound.TriggerID,
+	if err := service.mattermost.OpenDecisionDialog(ctx, delivery, inbound.TriggerID,
 		service.config.DialogCallbackURL, state, delivery.Locale); err != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "MATTERMOST_DIALOG_FAILED")
 	}
@@ -694,7 +697,9 @@ func (service *Service) ClaimOwnerGate(ctx context.Context) (bool, error) {
 		OrganizationID: boundary.OrganizationID, ProjectID: claim.ProjectID,
 		SessionID: claim.SessionID, TurnID: claim.TurnID, Attempt: claim.Attempt,
 		ImmutableInputSHA256: claim.ImmutableInputSHA256, TeamID: boundary.TeamID,
-		ChannelID: boundary.ChannelID, BotStableKey: boundary.BotStableKey, Locale: boundary.Locale,
+		ChannelID: boundary.ChannelID, BotStableKey: boundary.BotStableKey,
+		BotProviderUserID: boundary.BotProviderUserID, BotProviderGeneration: boundary.BotProviderGeneration,
+		Locale: boundary.Locale,
 		OwnerGate: &entity.OwnerGateBinding{
 			GateID: claim.GateID, GateVersion: claim.GateVersion, ProcessRunID: claim.ProcessRunID,
 			ProcessVersion: claim.ProcessVersion, ClaimToken: claim.ClaimToken, ClaimFence: claim.ClaimFence,
@@ -790,6 +795,7 @@ func (service *Service) ClaimInteractionDelivery(ctx context.Context) (bool, err
 		OrganizationID: work.OrganizationID, ProjectID: work.ProjectID, SessionID: work.SessionID,
 		TurnID: work.TurnID, Attempt: work.Attempt, ImmutableInputSHA256: work.ImmutableInputSHA256,
 		TeamID: boundary.TeamID, ChannelID: boundary.ChannelID, BotStableKey: boundary.BotStableKey,
+		BotProviderUserID: boundary.BotProviderUserID, BotProviderGeneration: boundary.BotProviderGeneration,
 		Locale: boundary.Locale, CreatedAt: service.now().UTC(), UpdatedAt: service.now().UTC(),
 		OwnerDelivery: &entity.OwnerDeliveryBinding{
 			Fence: work.Fence, LeaseToken: work.LeaseToken,
@@ -1071,6 +1077,7 @@ func (service *Service) issueArtifactDownload(ctx context.Context, delivery enti
 	boundary entity.Boundary, artifact entity.ArtifactBinding,
 ) (string, error) {
 	if artifact.ScanState != "CLEAN" || boundary.ActorID == "" || boundary.MattermostUserID == "" ||
+		boundary.BotStableKey == "" || boundary.BotProviderUserID == "" || boundary.BotProviderGeneration == 0 ||
 		delivery.SessionID == "" || delivery.TurnID == "" || artifact.ArtifactID == "" || artifact.Version == 0 ||
 		!validSHA256Text(artifact.SHA256) {
 		return "", errors.New("artifact download lineage is invalid")
@@ -1080,12 +1087,14 @@ func (service *Service) issueArtifactDownload(ctx context.Context, delivery enti
 	issuedDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
 		Version, Generation                                                       uint64
 		GrantID, DeliveryID, OrganizationID, ProjectID, ActorID, MattermostUserID string
-		TeamID, ChannelID, SessionID, TurnID, ArtifactID, ArtifactSHA256          string
-		ArtifactVersion                                                           uint64
+		TeamID, ChannelID, BotStableKey, BotProviderUserID, SessionID, TurnID     string
+		ArtifactID, ArtifactSHA256                                                string
+		BotProviderGeneration, ArtifactVersion                                    uint64
 	}{
 		1, generation, grantID, delivery.ID, delivery.OrganizationID, delivery.ProjectID, boundary.ActorID,
-		boundary.MattermostUserID, delivery.TeamID, delivery.ChannelID, delivery.SessionID, delivery.TurnID,
-		artifact.ArtifactID, artifact.SHA256, artifact.Version,
+		boundary.MattermostUserID, delivery.TeamID, delivery.ChannelID, boundary.BotStableKey,
+		boundary.BotProviderUserID, delivery.SessionID, delivery.TurnID, artifact.ArtifactID,
+		artifact.SHA256, boundary.BotProviderGeneration, artifact.Version,
 	})
 	if err != nil {
 		return "", errors.New("encode artifact download lineage")
@@ -1093,8 +1102,10 @@ func (service *Service) issueArtifactDownload(ctx context.Context, delivery enti
 	grant := entity.DownloadGrant{
 		ID: grantID, Generation: generation, OrganizationID: delivery.OrganizationID,
 		ProjectID: delivery.ProjectID, ActorID: boundary.ActorID, MattermostUserID: boundary.MattermostUserID,
-		TeamID: delivery.TeamID, ChannelID: delivery.ChannelID, SessionID: delivery.SessionID,
-		TurnID: delivery.TurnID, Artifact: artifact, ExpiresAt: service.now().UTC().Add(service.config.ArtifactDownloadTTL),
+		TeamID: delivery.TeamID, ChannelID: delivery.ChannelID, BotStableKey: boundary.BotStableKey,
+		BotProviderUserID: boundary.BotProviderUserID, BotProviderGeneration: boundary.BotProviderGeneration,
+		SessionID: delivery.SessionID,
+		TurnID:    delivery.TurnID, Artifact: artifact, ExpiresAt: service.now().UTC().Add(service.config.ArtifactDownloadTTL),
 		IssuedPayloadSHA256: issuedDigest,
 	}
 	if err := service.repository.SaveDownloadGrant(ctx, grant); err != nil {
@@ -1146,7 +1157,9 @@ func (service *Service) CheckInteraction(ctx context.Context) error {
 		Kind: enum.InboundPost, Revision: 1, TeamID: boundary.TeamID, ChannelID: boundary.ChannelID,
 		UserID: boundary.BotStableKey, OrganizationID: boundary.OrganizationID, ProjectID: boundary.ProjectID,
 		ChatID: boundary.ChatID, ActorID: boundary.ActorID, RoleID: boundary.RoleID,
-		Locale: boundary.Locale, BotStableKey: boundary.BotStableKey, Text: "readiness",
+		Locale: boundary.Locale, BotStableKey: boundary.BotStableKey,
+		BotProviderUserID: boundary.BotProviderUserID, BotProviderGeneration: boundary.BotProviderGeneration,
+		Text: "readiness",
 	}
 	inbound.DigestSHA256, err = eventDigest(inbound)
 	if err != nil {
@@ -1160,6 +1173,9 @@ func (service *Service) CheckInteraction(ctx context.Context) error {
 }
 
 func (service *Service) processPrompt(ctx context.Context, inbound entity.InboundEvent) (Result, error) {
+	if err := service.requireCurrentInboundBot(ctx, inbound); err != nil {
+		return Result{}, service.retryInbound(ctx, inbound, "MATTERMOST_BOT_IDENTITY_NOT_CURRENT")
+	}
 	grant, err := service.authority.Sign(inbound)
 	if err != nil {
 		return Result{}, service.retryInbound(ctx, inbound, "AUTHORITY_SIGN_FAILED")
@@ -1365,6 +1381,9 @@ func (service *Service) handleReaction(ctx context.Context, inbound entity.Inbou
 	if !ok {
 		return Result{Ignored: true}, domainerrs.ErrIgnored
 	}
+	if err := service.requireCurrentInboundBot(ctx, inbound); err != nil {
+		return Result{}, domainerrs.ErrUnavailable
+	}
 	delivery, err := service.repository.GetDeliveryByProviderPost(ctx, inbound.PostID)
 	if err != nil || delivery.OwnerGate == nil || delivery.ChannelID != inbound.ChannelID ||
 		delivery.OwnerGate.RecipientActorID != inbound.ActorID {
@@ -1387,6 +1406,15 @@ func (service *Service) handleReaction(ctx context.Context, inbound entity.Inbou
 		return Result{}, domainerrs.ErrBusy
 	}
 	return service.resolveDecision(ctx, stored, delivery)
+}
+
+func (service *Service) requireCurrentInboundBot(ctx context.Context, inbound entity.InboundEvent) error {
+	if inbound.TeamID == "" || inbound.ChannelID == "" || inbound.BotStableKey == "" ||
+		inbound.BotProviderUserID == "" || inbound.BotProviderGeneration == 0 {
+		return errors.New("Mattermost inbound bot identity boundary is invalid")
+	}
+	return service.mattermost.ValidateRuntimeBotIdentity(ctx, inbound.TeamID, inbound.ChannelID,
+		inbound.BotStableKey, inbound.BotProviderUserID, inbound.BotProviderGeneration)
 }
 
 func (service *Service) resolveDecision(ctx context.Context, inbound entity.InboundEvent, delivery entity.Delivery) (Result, error) {
@@ -1473,7 +1501,8 @@ func (service *Service) enqueueRunCard(ctx context.Context, inbound entity.Inbou
 		OrganizationID: inbound.OrganizationID, ProjectID: inbound.ProjectID,
 		SessionID: inbound.SessionID, TurnID: turnID, TeamID: inbound.TeamID,
 		ChannelID: inbound.ChannelID, RootPostID: inbound.RootPostID,
-		BotStableKey: inbound.BotStableKey, Locale: inbound.Locale,
+		BotStableKey: inbound.BotStableKey, BotProviderUserID: inbound.BotProviderUserID,
+		BotProviderGeneration: inbound.BotProviderGeneration, Locale: inbound.Locale,
 		CreatedAt: service.now(), UpdatedAt: service.now(),
 	}
 	token, err := service.authority.CallbackToken(delivery, inbound.ActorID)
@@ -1504,7 +1533,9 @@ func (service *Service) enqueueRuntimeActionCard(ctx context.Context, inbound en
 		State: enum.DeliveryPending, OrganizationID: previous.OrganizationID, ProjectID: previous.ProjectID,
 		SessionID: previous.SessionID, TurnID: previous.TurnID, Attempt: turn.Attempt,
 		ImmutableInputSHA256: turn.ImmutableInputSHA256, TeamID: previous.TeamID, ChannelID: previous.ChannelID,
-		RootPostID: previous.RootPostID, BotStableKey: previous.BotStableKey, Locale: previous.Locale,
+		RootPostID: previous.RootPostID, BotStableKey: previous.BotStableKey,
+		BotProviderUserID: previous.BotProviderUserID, BotProviderGeneration: previous.BotProviderGeneration,
+		Locale:       previous.Locale,
 		UpdatePostID: previous.ProviderPostID, CreatedAt: service.now(), UpdatedAt: service.now(),
 	}
 	token, err := service.authority.CallbackToken(delivery, inbound.ActorID)
@@ -1558,7 +1589,8 @@ func (service *Service) enqueueCard(ctx context.Context, inbound entity.InboundE
 		OrganizationID: inbound.OrganizationID, ProjectID: inbound.ProjectID,
 		SessionID: inbound.SessionID, TurnID: turnID, TeamID: inbound.TeamID,
 		ChannelID: inbound.ChannelID, RootPostID: inbound.RootPostID,
-		BotStableKey: inbound.BotStableKey, Locale: inbound.Locale,
+		BotStableKey: inbound.BotStableKey, BotProviderUserID: inbound.BotProviderUserID,
+		BotProviderGeneration: inbound.BotProviderGeneration, Locale: inbound.Locale,
 		Payload: raw, PayloadSHA256: payloadDigest, CreatedAt: service.now(), UpdatedAt: service.now(),
 	}
 	_, _, err = service.repository.EnqueueDelivery(ctx, delivery)
@@ -1668,7 +1700,8 @@ func buildInbound(raw domainmattermost.RawEvent, boundary entity.Boundary) (enti
 		FileIDs: append([]string(nil), raw.FileIDs...), OrganizationID: boundary.OrganizationID,
 		ProjectID: boundary.ProjectID, ChatID: boundary.ChatID, ActorID: boundary.ActorID,
 		RoleID: boundary.RoleID, Locale: i18n.NormalizeLocale(boundary.Locale),
-		BotStableKey: boundary.BotStableKey, SessionID: boundary.SessionID,
+		BotStableKey: boundary.BotStableKey, BotProviderUserID: boundary.BotProviderUserID,
+		BotProviderGeneration: boundary.BotProviderGeneration, SessionID: boundary.SessionID,
 		State: enum.InboundProcessing, NextAttemptAt: time.Now().UTC(),
 	}
 	var err error

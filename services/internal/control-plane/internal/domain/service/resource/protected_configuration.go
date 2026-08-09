@@ -10,6 +10,7 @@ import (
 	"time"
 
 	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -87,6 +88,9 @@ func (service *Service) ManageProtectedConfiguration(
 	ctx context.Context,
 	input ManageProtectedConfigurationInput,
 ) (entity.Resource, error) {
+	if input.Readiness {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
 	permission := protectedConfigurationPermission(input.Kind)
 	if input.Action == "reconcile_git" {
 		permission = permissionApplyGitConfiguration
@@ -242,11 +246,98 @@ func (service *Service) ManageProtectedConfiguration(
 	return result, mutationErr
 }
 
+// CheckAgentMattermostBotIdentityManageReadiness принимает application grant
+// того же generated Manage RPC, но выполняет только exact current owner и
+// mapping readback. Receipt не резервируется и доменное состояние не меняется.
+func (service *Service) CheckAgentMattermostBotIdentityManageReadiness(
+	ctx context.Context,
+	input ManageProtectedConfigurationInput,
+) (entity.Resource, error) {
+	if !input.Readiness || input.Kind != enum.KindAgent || input.Action != "rebind_bot" ||
+		input.FullMethod != protectedConfigurationMethod(enum.KindAgent, input.Action) ||
+		value.ValidateIdempotencyKey(input.IdempotencyKey) != nil || value.ValidateID(input.ResourceID) != nil ||
+		input.ExpectedVersion == 0 || input.Principal.ProjectID == "" {
+		return entity.Resource{}, errs.ErrInvalidInput
+	}
+	if err := authorize(input.Principal, permissionAgentBotIdentityManage); err != nil {
+		return entity.Resource{}, err
+	}
+	if !service.interactionGatewayPrincipal(input.Principal) ||
+		input.Principal.AuthoritySource != "PROVIDER_READBACK" ||
+		validateProviderReceipt(input.Principal, input.ProviderReceipt,
+			"MATTERMOST_PROVIDER_READBACK_RECEIPT", agentBotReceiptAction(input.Action),
+			"agent_bot_identity", input.FullMethod, service.now().UTC()) != nil ||
+		input.ProviderReceipt.WorkspaceID != input.Principal.ProjectID ||
+		!validAgentBotReceiptProfile(input.ProviderReceipt) {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	intentSHA, err := protectedProviderIntentSHA256(input)
+	if err != nil || input.ProviderReceipt.CommandIntentSHA256 != intentSHA {
+		return entity.Resource{}, errs.ErrPermissionDenied
+	}
+	var result entity.Resource
+	err = service.repository.Transact(ctx, domainrepo.Scope{
+		OrganizationID: input.Principal.OrganizationID,
+		ProjectID:      input.Principal.ProjectID,
+		ActorID:        input.Principal.ActorID,
+	}, func(tx domainrepo.Transaction) error {
+		current, getErr := tx.GetForUpdate(ctx, input.Principal.OrganizationID,
+			input.Principal.ProjectID, input.ResourceID)
+		if getErr != nil {
+			return getErr
+		}
+		spec, ok := current.Spec.(entity.AgentSpec)
+		if !ok || current.Kind != enum.KindAgent || current.OwnerActorID != input.Principal.ActorID ||
+			current.Version != input.ExpectedVersion ||
+			(current.State != enum.StateActive && current.State != enum.StatePaused) ||
+			spec.StableKey != input.ProviderReceipt.TargetStableKey || spec.BotIdentityRef == "" ||
+			spec.BotIdentityRef != input.ProviderReceipt.ProviderObjectRef ||
+			spec.BotProviderTeamRef != input.ProviderReceipt.ProviderTeamRef ||
+			spec.BotUsername != input.ProviderReceipt.ProviderUsername ||
+			spec.BotProviderRevision != input.ProviderReceipt.EffectVersion ||
+			spec.BotProviderGeneration != input.ProviderReceipt.EffectGeneration ||
+			spec.BotReceiptVersion != input.ProviderReceipt.ReceiptRevision ||
+			spec.BotMaskedStatus != "AVAILABLE" || input.ProviderReceipt.MaskedStatus != "AVAILABLE" ||
+			!input.ProviderReceipt.Eligible || input.ProviderReceipt.TargetResourceID != current.ID {
+			return errs.ErrStateConflict
+		}
+		if _, mappingErr := lockWorkspaceMappingByOpaqueRef(ctx, tx, input.Principal,
+			input.ProviderReceipt.ProviderTeamRef); mappingErr != nil {
+			return mappingErr
+		}
+		result = current
+		return nil
+	})
+	return result, err
+}
+
 func protectedCreateLike(action string) bool {
 	return action == "create" || action == "assign" || action == "register" || action == "copy"
 }
 
 func protectedProviderIntentSHA256(input ManageProtectedConfigurationInput) (string, error) {
+	if input.Kind == enum.KindAgent &&
+		(input.Action == "bind_bot" || input.Action == "rebind_bot" || input.Action == "revoke_bot") {
+		action := controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND
+		switch input.Action {
+		case "rebind_bot":
+			action = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND
+		case "revoke_bot":
+			action = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
+		}
+		return controlplanecontract.AgentMattermostBotIdentityIntentSHA256(
+			controlplanecontract.VerifiedCommandAuthority{
+				ActorID: input.Principal.ActorID, OrganizationID: input.Principal.OrganizationID,
+				ProjectID: input.Principal.ProjectID, WorkloadID: input.Principal.CallerWorkload,
+				FullMethod: input.FullMethod,
+			},
+			&controlplanev1.ManageAgentMattermostBotIdentityRequest{
+				Action: action, AgentId: input.ResourceID, ExpectedVersion: input.ExpectedVersion,
+				Readiness: input.Readiness,
+			},
+			input.ProviderReceipt.TargetStableKey,
+		)
+	}
 	return canonicalHash(struct {
 		Identity        commandIdentity
 		FullMethod      string
@@ -1368,15 +1459,16 @@ func (service *Service) transitionAgent(
 			return entity.Resource{}, errs.ErrPermissionDenied
 		}
 		if err := validateProviderReceipt(input.Principal, input.ProviderReceipt,
-			"MATTERMOST_PROVIDER_READBACK_RECEIPT", input.Action, "agent_bot_identity",
+			"MATTERMOST_PROVIDER_READBACK_RECEIPT", agentBotReceiptAction(input.Action), "agent_bot_identity",
 			input.FullMethod, now); err != nil {
 			return entity.Resource{}, err
 		}
-		if input.ProviderReceipt.WorkspaceID != input.Principal.ProjectID || input.ProviderReceipt.ProviderObjectRef == "" ||
-			input.ProviderReceipt.ReceiptRevision <= spec.BotReceiptVersion {
+		if input.ProviderReceipt.WorkspaceID != input.Principal.ProjectID ||
+			input.ProviderReceipt.ReceiptRevision <= spec.BotReceiptVersion ||
+			!validAgentBotReceiptProfile(input.ProviderReceipt) {
 			return entity.Resource{}, errs.ErrStateConflict
 		}
-		if _, err := lockWorkspaceMappingForProviderTeam(ctx, tx, input.Principal,
+		if _, err := lockWorkspaceMappingByOpaqueRef(ctx, tx, input.Principal,
 			input.ProviderReceipt.ProviderTeamRef); err != nil {
 			return entity.Resource{}, err
 		}
@@ -1414,6 +1506,23 @@ func (service *Service) transitionAgent(
 	default:
 		return entity.Resource{}, errs.ErrInvalidInput
 	}
+}
+
+func validAgentBotReceiptBoundary(receipt value.ProviderEffectReceipt) bool {
+	return uuid.Validate(receipt.ProviderTeamRef) == nil && uuid.Validate(receipt.ProviderObjectRef) == nil &&
+		receipt.CredentialBindingID == "" && receipt.CredentialBindingVersion == 0 &&
+		receipt.CredentialBindingSHA256 == "" && receipt.SecretRef == "" && receipt.SecretVersion == 0 &&
+		receipt.SecretContentSHA256 == ""
+}
+
+func validAgentBotReceiptProfile(receipt value.ProviderEffectReceipt) bool {
+	return validAgentBotReceiptBoundary(receipt) && receipt.Provider == "mattermost" &&
+		receipt.TargetKind == "agent_bot_identity" && len(receipt.Capabilities) == 2 &&
+		receipt.Capabilities[0] == "mattermost_post" && receipt.Capabilities[1] == "mattermost_readback"
+}
+
+func agentBotReceiptAction(action string) string {
+	return strings.TrimSuffix(action, "_bot")
 }
 
 func validateInstructionContent(content string) []entity.InstructionValidationError {
@@ -1543,8 +1652,10 @@ func (service *Service) materializeProviderCredential(
 		ContentSHA256:                 receipt.SecretContentSHA256,
 		ProviderWindowDurationSeconds: receipt.WindowDurationSeconds, ProviderResetsAt: receipt.ResetsAt,
 		ProviderObservationExpiresAt: receipt.ObservationExpiresAt,
-		Ownership: entity.ConfigurationOwnership{ManagedBy: "UI", SourceRef: "provider-receipt:" + receipt.ReceiptID,
-			SourceRevision: receipt.ReceiptRevision, SourceSHA256: input.Principal.AuthorityDigest},
+		Ownership: entity.ConfigurationOwnership{
+			ManagedBy: "UI", SourceRef: "provider-receipt:" + receipt.ReceiptID,
+			SourceRevision: receipt.ReceiptRevision, SourceSHA256: input.Principal.AuthorityDigest,
+		},
 	}
 	if spec.Validate() != nil {
 		return entity.Resource{}, errs.ErrInvalidInput
@@ -1637,6 +1748,37 @@ func (service *Service) GetProtectedConfiguration(
 	kind enum.Kind,
 ) (entity.Resource, error) {
 	return service.Get(ctx, GetInput{Principal: principal, ResourceID: resourceID, Kind: kind})
+}
+
+// GetAgentMattermostBotIdentityReadback материализует внутренний exact Agent
+// owner/receipt только для подписанного interaction-gateway source readback.
+// Owner HTTP path продолжает получать safe AgentOwnerProjection из Issue #263.
+func (service *Service) GetAgentMattermostBotIdentityReadback(
+	ctx context.Context,
+	principal value.Principal,
+	agentID string,
+) (entity.Resource, bool, error) {
+	if !service.interactionGatewayPrincipal(principal) || principal.AuthoritySource != "PROVIDER_READBACK" {
+		return entity.Resource{}, false, nil
+	}
+	if err := authorize(principal, permissionRead); err != nil {
+		return entity.Resource{}, true, err
+	}
+	if value.ValidateID(agentID) != nil {
+		return entity.Resource{}, true, errs.ErrInvalidInput
+	}
+	agent, err := service.GetProtectedConfiguration(ctx, principal, agentID, enum.KindAgent)
+	if err != nil {
+		return entity.Resource{}, true, err
+	}
+	if agent.OwnerActorID != principal.ActorID ||
+		(agent.State != enum.StateActive && agent.State != enum.StatePaused) {
+		return entity.Resource{}, true, errs.ErrNotFound
+	}
+	if _, ok := agent.Spec.(entity.AgentSpec); !ok {
+		return entity.Resource{}, true, errs.ErrInternal
+	}
+	return agent, true, nil
 }
 
 // GetMaterializedProviderCredential возвращает только exact binding,

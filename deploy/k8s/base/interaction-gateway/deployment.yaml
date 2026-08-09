@@ -51,7 +51,7 @@ spec:
             - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/interaction-gateway/observability/sentry-dsn}
             - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
           ports: [{name: https, containerPort: 8443}, {name: team-grpc, containerPort: 9443}, {name: metrics, containerPort: 9090}]
-          startupProbe: {httpGet: {path: /readyz, port: metrics}, timeoutSeconds: 2, periodSeconds: 2, failureThreshold: 30}
+          startupProbe: {httpGet: {path: /livez, port: metrics}, timeoutSeconds: 2, periodSeconds: 2, failureThreshold: 30}
           readinessProbe: {httpGet: {path: /readyz, port: metrics}, timeoutSeconds: 2, periodSeconds: 5, failureThreshold: 2}
           livenessProbe: {httpGet: {path: /livez, port: metrics}, timeoutSeconds: 2, periodSeconds: 10, failureThreshold: 3}
           resources:
@@ -68,6 +68,8 @@ spec:
             - {name: object-store-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/object-store, readOnly: true}
             - {name: mapping, mountPath: /var/run/config/mattercodex/interaction-gateway/mapping, readOnly: true}
             - {name: runtime, mountPath: /var/run/secrets/mattercodex/interaction-gateway/runtime, readOnly: true}
+            - {name: vault-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/vault, readOnly: true}
+            - {name: vault-token, mountPath: /var/run/secrets/tokens/vault, readOnly: true}
             - {name: bot-tokens, mountPath: /var/run/secrets/mattercodex/interaction-gateway/bots, readOnly: true}
             - {name: observability-ca, mountPath: /var/run/config/mattercodex/interaction-gateway/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/mattercodex/interaction-gateway/observability, readOnly: true}
@@ -182,6 +184,9 @@ spec:
         - {name: object-store-ca, configMap: {name: object-store-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}}
         - {name: mapping, secret: {secretName: interaction-gateway-mapping, defaultMode: 0440, items: [{key: manifest.yaml, path: manifest.yaml}, {key: manifest.sha256, path: manifest.sha256}, {key: revision, path: revision}]}}
         - {name: runtime, csi: {driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: {secretProviderClass: interaction-gateway-runtime}}}
+        - {name: vault-ca, secret: {secretName: interaction-gateway-vault-ca, defaultMode: 0440, items: [{key: ca.crt, path: ca.pem}]}}
+        - name: vault-token
+          projected: {defaultMode: 0400, sources: [{serviceAccountToken: {path: token, audience: vault, expirationSeconds: 600}}]}
         - {name: bot-tokens, secret: {secretName: interaction-gateway-bot-tokens, defaultMode: 0440}}
         - {name: observability-ca, configMap: {name: mattercodex-otel-ca, defaultMode: 0440, items: [{key: ca.pem, path: otel-ca.pem}]}}
         - {name: sentry-dsn, secret: {secretName: mattercodex-sentry, defaultMode: 0440, items: [{key: dsn, path: sentry-dsn}]}}

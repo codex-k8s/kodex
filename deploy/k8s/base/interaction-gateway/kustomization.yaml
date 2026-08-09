@@ -5,6 +5,7 @@ resources:
   - serviceaccount.yaml
   - deployment.yaml
   - service.yaml
+  - management-service.yaml
   - ingress.yaml
   - poddisruptionbudget.yaml
   - migration-job.yaml
@@ -58,6 +59,10 @@ configMapGenerator:
       - INTERACTION_GATEWAY_TEAM_SELECTOR_TTL=15m
       - INTERACTION_GATEWAY_TEAM_RECOVERY_INTERVAL=5s
       - INTERACTION_GATEWAY_TEAM_RECOVERY_WINDOW=5m
+      - INTERACTION_GATEWAY_BOT_OPERATION_LEASE=30s
+      - INTERACTION_GATEWAY_BOT_SELECTOR_TTL=15m
+      - INTERACTION_GATEWAY_BOT_RECOVERY_INTERVAL=5s
+      - INTERACTION_GATEWAY_BOT_RECOVERY_WINDOW=5m
       - INTERACTION_GATEWAY_MATTERMOST_SITE_URL=https://mattermost.mattermost.svc.cluster.local
       - INTERACTION_GATEWAY_MATTERMOST_TLS_SERVER_NAME=mattermost.mattermost.svc.cluster.local
       - INTERACTION_GATEWAY_MATTERMOST_CA_FILE=/var/run/config/mattercodex/interaction-gateway/mattermost/ca.pem
@@ -81,6 +86,14 @@ configMapGenerator:
       - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_CERTIFICATE_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.crt
       - INTERACTION_GATEWAY_CONTROL_PLANE_CLIENT_PRIVATE_KEY_FILE=/var/run/secrets/mattercodex/interaction-gateway/workload-tls/tls.key
       - INTERACTION_GATEWAY_CONTROL_PLANE_APPLICATION_GRANT_FILE=/var/run/secrets/mattercodex/interaction-gateway/runtime/owner-gate-delivery.jwt
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ADDRESS=https://vault.mattercodex-system.svc.cluster.local:8200
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_TLS_SERVER_NAME=vault.mattercodex-system.svc.cluster.local
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_CA_FILE=/var/run/config/mattercodex/interaction-gateway/vault/ca.pem
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_TOKEN_FILE=/var/run/secrets/tokens/vault/token
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_AUTH_MOUNT=kubernetes
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_ROLE=interaction-gateway-agent-bot-credential
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_MOUNT=kv
+      - INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_PATH_PREFIX=mattercodex/interaction-gateway/agent-bot-identities
       - INTERACTION_GATEWAY_BOT_SERVICE_URL=https://matter-codex-bot-service.mattercodex-system.svc.cluster.local:8443
       - INTERACTION_GATEWAY_BOT_SERVICE_TLS_SERVER_NAME=matter-codex-bot-service.mattercodex-system.svc.cluster.local
       - INTERACTION_GATEWAY_BOT_SERVICE_CA_FILE=/var/run/config/mattercodex/interaction-gateway/control-plane/ca.pem

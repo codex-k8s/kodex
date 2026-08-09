@@ -15,6 +15,8 @@ type Metrics struct {
 	deliveries      *prometheus.CounterVec
 	externalEffects *prometheus.CounterVec
 	teamOperations  *prometheus.CounterVec
+	botOperations   *prometheus.CounterVec
+	botRepairs      *prometheus.GaugeVec
 }
 
 func New(register func(...prometheus.Collector) error) (*Metrics, error) {
@@ -47,12 +49,38 @@ func New(register func(...prometheus.Collector) error) (*Metrics, error) {
 			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "mattermost_team_operations_total",
 			Help: "Total number of bounded Mattermost Team provider operation outcomes.",
 		}, []string{"operation", "outcome"}),
+		botOperations: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "agent_bot_identity_operations_total",
+			Help: "Total number of bounded Agent Mattermost bot identity operation outcomes.",
+		}, []string{"operation", "outcome"}),
+		botRepairs: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "mattercodex", Subsystem: "interaction_gateway", Name: "agent_bot_identity_repairs",
+			Help: "Current number of durable Agent bot identity operations requiring repair.",
+		}, []string{"reason"}),
 	}
 	if err := register(metrics.httpRequests, metrics.httpDuration, metrics.workerCycles, metrics.inbound,
-		metrics.deliveries, metrics.externalEffects, metrics.teamOperations); err != nil {
+		metrics.deliveries, metrics.externalEffects, metrics.teamOperations, metrics.botOperations,
+		metrics.botRepairs); err != nil {
 		return nil, err
 	}
 	return metrics, nil
+}
+
+func (metrics *Metrics) SetBotIdentityRepairBacklog(reason string, value float64) {
+	metrics.botRepairs.WithLabelValues(normalizeBotRepairReason(reason)).Set(value)
+}
+
+func normalizeBotRepairReason(value string) string {
+	switch value {
+	case "recovery_timeout", "other":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func (metrics *Metrics) ObserveBotIdentityOperation(operation, outcome string) {
+	metrics.botOperations.WithLabelValues(normalizeBotOperation(operation), normalizeOutcome(outcome)).Inc()
 }
 
 func (metrics *Metrics) ObserveTeamOperation(operation, outcome string) {
@@ -66,7 +94,9 @@ func (metrics *Metrics) ObserveExternalEffect(effect, outcome string) {
 func normalizeEffect(value string) string {
 	switch value {
 	case "upload_file", "create_post", "update_post", "create_team",
-		"workspace_mapping_bind", "workspace_mapping_relink", "workspace_mapping_unlink":
+		"workspace_mapping_bind", "workspace_mapping_relink", "workspace_mapping_unlink",
+		"create_bot_identity", "revoke_bot_identity", "create_bot_token", "revoke_provider_bot_token",
+		"revoke_vault_bot_credential", "revoke_orphan_bot_token":
 		return value
 	default:
 		return "unknown"
@@ -103,7 +133,17 @@ func normalizeRoute(value string) string {
 func normalizeWorker(value string) string {
 	switch value {
 	case "websocket", "inbound", "delivery", "turn_delivery", "owner_gate", "owner_delivery", "expiry",
-		"team_recovery", "mapping_recovery", "readiness":
+		"team_recovery", "mapping_recovery", "agent_bot_recovery", "readiness":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func normalizeBotOperation(value string) string {
+	switch value {
+	case "catalog", "create_and_bind", "bind", "get", "rebind", "revoke", "operation_get",
+		"provider_readback", "readiness", "recovery":
 		return value
 	default:
 		return "unknown"

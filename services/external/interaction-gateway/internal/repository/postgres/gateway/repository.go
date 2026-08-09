@@ -450,7 +450,8 @@ func (repository *Repository) EnqueueDelivery(ctx context.Context, delivery enti
 		stored.ProjectID != delivery.ProjectID || stored.SessionID != delivery.SessionID || stored.TurnID != delivery.TurnID ||
 		stored.Attempt != delivery.Attempt || stored.ImmutableInputSHA256 != delivery.ImmutableInputSHA256 ||
 		stored.TeamID != delivery.TeamID || stored.ChannelID != delivery.ChannelID || stored.RootPostID != delivery.RootPostID ||
-		stored.BotStableKey != delivery.BotStableKey || stored.Locale != delivery.Locale || stored.Kind != delivery.Kind ||
+		stored.BotStableKey != delivery.BotStableKey || stored.BotProviderUserID != delivery.BotProviderUserID ||
+		stored.BotProviderGeneration != delivery.BotProviderGeneration || stored.Locale != delivery.Locale || stored.Kind != delivery.Kind ||
 		stored.UpdatePostID != delivery.UpdatePostID || !reflect.DeepEqual(stored.Attachments, delivery.Attachments) {
 		return entity.Delivery{}, false, errors.New("delivery idempotency conflict")
 	}
@@ -711,6 +712,7 @@ func (repository *Repository) SaveDownloadGrant(ctx context.Context, grant entit
 	}, pgx.ReadWrite, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, downloadGrantInsertSQL, grant.ID, grant.Generation, grant.OrganizationID,
 			grant.ProjectID, grant.ActorID, grant.MattermostUserID, grant.TeamID, grant.ChannelID,
+			grant.BotStableKey, grant.BotProviderUserID, grant.BotProviderGeneration,
 			grant.SessionID, grant.TurnID, artifact, grant.IssuedPayloadSHA256, grant.ExpiresAt); err != nil {
 			return errors.New("save artifact download grant")
 		}
@@ -774,7 +776,8 @@ func (repository *Repository) scanDownloadGrant(row rowScanner) (entity.Download
 	var artifact []byte
 	var consumedAt, revokedAt, authenticatedAt *time.Time
 	if err := row.Scan(&grant.ID, &grant.Generation, &grant.OrganizationID, &grant.ProjectID, &grant.ActorID,
-		&grant.MattermostUserID, &grant.TeamID, &grant.ChannelID, &grant.SessionID, &grant.TurnID,
+		&grant.MattermostUserID, &grant.TeamID, &grant.ChannelID, &grant.BotStableKey,
+		&grant.BotProviderUserID, &grant.BotProviderGeneration, &grant.SessionID, &grant.TurnID,
 		&artifact, &grant.ExpiresAt, &consumedAt, &revokedAt, &grant.IssuedPayloadSHA256,
 		&grant.AuthenticatedUserID, &authenticatedAt); err != nil || json.Unmarshal(artifact, &grant.Artifact) != nil {
 		return entity.DownloadGrant{}, errors.New("scan artifact download grant")
@@ -903,6 +906,7 @@ func (repository *Repository) insertDelivery(ctx context.Context, tx pgx.Tx, del
 		delivery.Locale, payload, delivery.PayloadSHA256, attachments,
 		gateID, gateVersion, processID, processVersion, claimCipher, claimFence, claimExpires, recipient, gatePayloadDigest,
 		delivery.UpdatePostID, ownerFence, ownerCipher, ownerExpires, ownerTurnVersion, ownerRevisionID, ownerRevisionVersion,
+		delivery.BotProviderUserID, delivery.BotProviderGeneration,
 	)
 	if err != nil {
 		return false, errors.New("insert interaction delivery")
@@ -936,6 +940,7 @@ func (repository *Repository) getDeliveryWithSQL(ctx context.Context, source que
 		&gateID, &gateVersion, &processID, &processVersion, &claimCipher, &claimFence,
 		&claimExpires, &recipient, &gatePayloadDigest, &recordedAt, &delivery.CreatedAt, &delivery.UpdatedAt,
 		&ownerFence, &ownerCipher, &ownerExpires, &ownerTurnVersion, &ownerRevisionID, &ownerRevisionVersion, &ownerRecordedAt,
+		&delivery.BotProviderUserID, &delivery.BotProviderGeneration,
 	)
 	if err != nil {
 		return entity.Delivery{}, err

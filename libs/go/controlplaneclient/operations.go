@@ -285,6 +285,7 @@ func InteractionGatewayOperations() map[string]string {
 		"control.interaction.owner-gate.resolve":         controlplanev1.ControlPlaneService_ResolveOwnerGate_FullMethodName,
 		"control.interaction.runtime-action.manage":      controlplanev1.ControlPlaneService_ManageRuntimeAction_FullMethodName,
 		"control.interaction.agent-bot.manage":           controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName,
+		"control.interaction.agent-bot.get":              controlplanev1.ControlPlaneService_GetAgent_FullMethodName,
 		"control.interaction.workspace-mapping.manage":   controlplanev1.ControlPlaneService_ManageWorkspaceMattermostMapping_FullMethodName,
 		"control.interaction.workspace-mapping.get":      controlplanev1.ControlPlaneService_GetWorkspaceMattermostMapping_FullMethodName,
 		"control.interaction.workspace-mapping.list":     controlplanev1.ControlPlaneService_ListWorkspaceMattermostMappings_FullMethodName,

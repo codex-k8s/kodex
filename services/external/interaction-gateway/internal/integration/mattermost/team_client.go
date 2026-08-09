@@ -266,20 +266,6 @@ func (client *Client) BuildRuntimeRoutes(ctx context.Context, principal entity.T
 		if readErr != nil || target == nil || target.TeamId != providerTeamID || target.Name != source.Name || target.DeleteAt != 0 {
 			return nil, providerReadError(response, readErr)
 		}
-		botKeys := map[string]struct{}{template.BotStableKey: {}}
-		for _, assignment := range template.Assignments {
-			botKeys[assignment.BotStableKey] = struct{}{}
-		}
-		for botKey := range botKeys {
-			bot := client.bots[botKey]
-			if bot == nil {
-				return nil, domainmattermost.ErrTeamConflict
-			}
-			member, _, memberErr := bot.api.GetChannelMember(ctx, target.Id, bot.identity.UserID, "")
-			if memberErr != nil || member == nil || member.ChannelId != target.Id || member.UserId != bot.identity.UserID {
-				return nil, domainmattermost.ErrTeamForbidden
-			}
-		}
 		boundary := entity.Boundary{
 			OrganizationID: template.OrganizationID, ProjectID: template.ProjectID, ChatID: template.ChatID,
 			MappingOwnerActorID: template.LifecycleActorID, RoleID: template.RoleID, Locale: template.Locale,

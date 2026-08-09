@@ -588,7 +588,7 @@ func (client *Client) ManageWorkspaceMattermostMapping(ctx context.Context,
 }
 
 func providerReceiptToProto(value domaincontrol.ProviderEffectReceipt) *controlplanev1.ProviderEffectReadbackReceipt {
-	return &controlplanev1.ProviderEffectReadbackReceipt{
+	receipt := &controlplanev1.ProviderEffectReadbackReceipt{
 		ContractVersion: value.ContractVersion, Issuer: value.Issuer, Purpose: value.Purpose,
 		WorkloadId: value.WorkloadID, CallerSpiffeId: value.CallerSPIFFEID, FullMethod: value.FullMethod,
 		ActorId: value.ActorID, OrganizationId: value.OrganizationID, ProjectId: value.ProjectID,
@@ -600,7 +600,84 @@ func providerReceiptToProto(value domaincontrol.ProviderEffectReceipt) *controlp
 		ExpiresAt: timestamppb.New(value.ExpiresAt), MaskedStatus: value.MaskedStatus, Eligible: value.Eligible,
 		TargetKind: value.TargetKind, TargetResourceId: value.TargetResourceID,
 		TargetStableKey: value.TargetStableKey, CommandIntentSha256: value.CommandIntentSHA256,
+		CredentialBindingId:      value.CredentialBindingID,
+		CredentialBindingVersion: value.CredentialBindingVersion,
+		CredentialBindingSha256:  value.CredentialBindingSHA256,
+		ProviderUsername:         value.ProviderUsername, Provider: value.Provider,
+		MaskedLabel: value.MaskedLabel, Capabilities: slices.Clone(value.Capabilities),
 	}
+	if value.TargetKind == "agent_bot_identity" {
+		receipt.CredentialBindingId = ""
+		receipt.CredentialBindingVersion = 0
+		receipt.CredentialBindingSha256 = ""
+	}
+	return receipt
+}
+
+func (client *Client) GetAgentMattermostBotIdentity(ctx context.Context,
+	credential domaincontrol.ProviderCredential, agentRef string,
+) (domaincontrol.AgentMattermostBotOwner, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, credential.CompactJWS)
+	if err != nil {
+		return domaincontrol.AgentMattermostBotOwner{}, domaincontrol.ErrUnavailable
+	}
+	response, err := client.client.ControlPlane.GetAgent(protected,
+		&controlplanev1.GetAgentRequest{AgentId: agentRef})
+	if err != nil {
+		return domaincontrol.AgentMattermostBotOwner{}, mappingRPCError(err)
+	}
+	return projectAgentMattermostBot(response.GetAgent())
+}
+
+func (client *Client) ManageAgentMattermostBotIdentity(ctx context.Context,
+	input domaincontrol.ManageAgentMattermostBotIdentityInput,
+) (domaincontrol.AgentMattermostBotOwner, error) {
+	bounded, cancel := context.WithTimeout(ctx, client.deadline)
+	defer cancel()
+	protected, err := controlplaneclient.WithApplicationGrant(bounded, input.Credential.CompactJWS)
+	if err != nil {
+		return domaincontrol.AgentMattermostBotOwner{}, domaincontrol.ErrUnavailable
+	}
+	action := controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND
+	switch input.Action {
+	case "rebind":
+		action = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND
+	case "revoke":
+		action = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
+	case "bind":
+	default:
+		return domaincontrol.AgentMattermostBotOwner{}, domaincontrol.ErrConflict
+	}
+	response, err := client.client.ControlPlane.ManageAgentMattermostBotIdentity(protected,
+		&controlplanev1.ManageAgentMattermostBotIdentityRequest{
+			IdempotencyKey: input.IdempotencyKey, Action: action, AgentId: input.AgentRef,
+			ExpectedVersion: input.ExpectedVersion, ProviderReceipt: providerReceiptToProto(input.Credential.Receipt),
+			Readiness: input.Readiness,
+		})
+	if err != nil {
+		return domaincontrol.AgentMattermostBotOwner{}, mappingRPCError(err)
+	}
+	return projectAgentMattermostBot(response.GetAgent())
+}
+
+func projectAgentMattermostBot(resource *controlplanev1.Resource) (domaincontrol.AgentMattermostBotOwner, error) {
+	if resource == nil || resource.GetSpec().GetAgent() == nil || resource.GetVersion() == 0 {
+		return domaincontrol.AgentMattermostBotOwner{}, domaincontrol.ErrUnavailable
+	}
+	spec := resource.GetSpec().GetAgent()
+	if spec.GetStableKey() == "" {
+		return domaincontrol.AgentMattermostBotOwner{}, domaincontrol.ErrUnavailable
+	}
+	return domaincontrol.AgentMattermostBotOwner{
+		AgentRef: resource.GetId(), AgentStableKey: spec.GetStableKey(), AgentVersion: resource.GetVersion(),
+		BotIdentityRef: spec.GetBotIdentityRef(), BotUsername: spec.GetBotUsername(),
+		BotProviderRevision: spec.GetBotProviderRevision(), BotProviderGeneration: spec.GetBotProviderGeneration(),
+		BotProviderTeamRef: spec.GetBotProviderTeamRef(), BotMaskedStatus: spec.GetBotMaskedStatus(),
+		BotReceiptID:     spec.GetBotReceiptId(),
+		BotReceiptSHA256: spec.GetBotReceiptSha256(), BotReceiptVersion: spec.GetBotReceiptVersion(),
+	}, nil
 }
 
 func projectWorkspaceMapping(resource *controlplanev1.Resource) (entity.WorkspaceMattermostMapping, error) {

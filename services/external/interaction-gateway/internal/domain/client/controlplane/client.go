@@ -143,35 +143,42 @@ type RuntimeOutputAuthorization struct {
 }
 
 type ProviderEffectReceipt struct {
-	ContractVersion     uint32    `json:"contract_version"`
-	Issuer              string    `json:"iss"`
-	Audience            string    `json:"aud"`
-	Purpose             string    `json:"purpose"`
-	WorkloadID          string    `json:"workload_id"`
-	CallerSPIFFEID      string    `json:"caller_spiffe_id"`
-	FullMethod          string    `json:"full_method"`
-	ActorID             string    `json:"actor_id"`
-	OrganizationID      string    `json:"organization_id"`
-	ProjectID           string    `json:"project_id"`
-	WorkspaceID         string    `json:"workspace_id,omitempty"`
-	ProviderTeamRef     string    `json:"provider_team_ref,omitempty"`
-	ProviderObjectRef   string    `json:"provider_object_ref,omitempty"`
-	Action              string    `json:"action"`
-	Effect              string    `json:"effect"`
-	EffectVersion       uint64    `json:"effect_version"`
-	EffectGeneration    uint64    `json:"effect_generation"`
-	EffectSHA256        string    `json:"effect_sha256"`
-	ReceiptID           string    `json:"jti"`
-	ReceiptRevision     uint64    `json:"revision"`
-	IssuedAt            time.Time `json:"issued_at"`
-	NotBefore           time.Time `json:"not_before"`
-	ExpiresAt           time.Time `json:"expires_at"`
-	MaskedStatus        string    `json:"masked_status"`
-	Eligible            bool      `json:"eligible"`
-	TargetKind          string    `json:"target_kind"`
-	TargetResourceID    string    `json:"target_resource_id,omitempty"`
-	TargetStableKey     string    `json:"target_stable_key"`
-	CommandIntentSHA256 string    `json:"command_intent_sha256"`
+	ContractVersion          uint32    `json:"contract_version"`
+	Issuer                   string    `json:"iss"`
+	Audience                 string    `json:"aud"`
+	Purpose                  string    `json:"purpose"`
+	WorkloadID               string    `json:"workload_id"`
+	CallerSPIFFEID           string    `json:"caller_spiffe_id"`
+	FullMethod               string    `json:"full_method"`
+	ActorID                  string    `json:"actor_id"`
+	OrganizationID           string    `json:"organization_id"`
+	ProjectID                string    `json:"project_id"`
+	WorkspaceID              string    `json:"workspace_id,omitempty"`
+	ProviderTeamRef          string    `json:"provider_team_ref,omitempty"`
+	ProviderObjectRef        string    `json:"provider_object_ref,omitempty"`
+	Action                   string    `json:"action"`
+	Effect                   string    `json:"effect"`
+	EffectVersion            uint64    `json:"effect_version"`
+	EffectGeneration         uint64    `json:"effect_generation"`
+	EffectSHA256             string    `json:"effect_sha256"`
+	ReceiptID                string    `json:"jti"`
+	ReceiptRevision          uint64    `json:"revision"`
+	IssuedAt                 time.Time `json:"issued_at"`
+	NotBefore                time.Time `json:"not_before"`
+	ExpiresAt                time.Time `json:"expires_at"`
+	MaskedStatus             string    `json:"masked_status"`
+	Eligible                 bool      `json:"eligible"`
+	TargetKind               string    `json:"target_kind"`
+	TargetResourceID         string    `json:"target_resource_id,omitempty"`
+	TargetStableKey          string    `json:"target_stable_key"`
+	CommandIntentSHA256      string    `json:"command_intent_sha256"`
+	CredentialBindingID      string    `json:"credential_binding_id,omitempty"`
+	CredentialBindingVersion uint64    `json:"credential_binding_version,omitempty"`
+	CredentialBindingSHA256  string    `json:"credential_binding_sha256,omitempty"`
+	ProviderUsername         string    `json:"provider_username,omitempty"`
+	Provider                 string    `json:"provider,omitempty"`
+	MaskedLabel              string    `json:"masked_label,omitempty"`
+	Capabilities             []string  `json:"capabilities,omitempty"`
 }
 
 type ProviderCredential struct {
@@ -187,6 +194,30 @@ type ManageWorkspaceMappingInput struct {
 	ExpectedGeneration uint64
 	Name               string
 	Credential         ProviderCredential
+}
+
+type AgentMattermostBotOwner struct {
+	AgentRef              string
+	AgentStableKey        string
+	AgentVersion          uint64
+	BotIdentityRef        string
+	BotUsername           string
+	BotProviderRevision   uint64
+	BotProviderGeneration uint64
+	BotProviderTeamRef    string
+	BotMaskedStatus       string
+	BotReceiptID          string
+	BotReceiptSHA256      string
+	BotReceiptVersion     uint64
+}
+
+type ManageAgentMattermostBotIdentityInput struct {
+	IdempotencyKey  string
+	Action          string
+	AgentRef        string
+	ExpectedVersion uint64
+	Readiness       bool
+	Credential      ProviderCredential
 }
 
 type Client interface {
@@ -214,4 +245,6 @@ type Client interface {
 	ListWorkspaceMattermostMappings(context.Context, ProviderCredential, string) ([]entity.WorkspaceMattermostMapping, error)
 	GetWorkspaceMattermostMapping(context.Context, ProviderCredential, string) (entity.WorkspaceMattermostMapping, error)
 	ManageWorkspaceMattermostMapping(context.Context, ManageWorkspaceMappingInput) (entity.WorkspaceMattermostMapping, error)
+	GetAgentMattermostBotIdentity(context.Context, ProviderCredential, string) (AgentMattermostBotOwner, error)
+	ManageAgentMattermostBotIdentity(context.Context, ManageAgentMattermostBotIdentityInput) (AgentMattermostBotOwner, error)
 }

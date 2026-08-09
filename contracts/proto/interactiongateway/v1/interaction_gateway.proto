@@ -46,6 +46,43 @@ service MattermostTeamService {
   rpc CheckReadiness(MattermostTeamServiceCheckReadinessRequest) returns (MattermostTeamServiceCheckReadinessResponse);
 }
 
+// AgentMattermostBotIdentityService владеет только Mattermost provider
+// identity/effect/readback. Agent aggregate и его lifecycle остаются в
+// control-plane; transport request не содержит actor/tenant authority.
+service AgentMattermostBotIdentityService {
+  rpc ListAgentMattermostBotIdentities(ListAgentMattermostBotIdentitiesRequest) returns (ListAgentMattermostBotIdentitiesResponse);
+  rpc CreateAndBindAgentMattermostBotIdentity(CreateAndBindAgentMattermostBotIdentityRequest) returns (CreateAndBindAgentMattermostBotIdentityResponse);
+  rpc BindAgentMattermostBotIdentity(BindAgentMattermostBotIdentityRequest) returns (BindAgentMattermostBotIdentityResponse);
+  rpc GetAgentMattermostBotIdentity(GetAgentMattermostBotIdentityRequest) returns (GetAgentMattermostBotIdentityResponse);
+  rpc RebindAgentMattermostBotIdentity(RebindAgentMattermostBotIdentityRequest) returns (RebindAgentMattermostBotIdentityResponse);
+  rpc RevokeAgentMattermostBotIdentity(RevokeAgentMattermostBotIdentityRequest) returns (RevokeAgentMattermostBotIdentityResponse);
+  rpc GetAgentMattermostBotIdentityOperation(GetAgentMattermostBotIdentityOperationRequest) returns (GetAgentMattermostBotIdentityOperationResponse);
+  rpc GetAgentMattermostBotIdentityProviderReadback(GetAgentMattermostBotIdentityProviderReadbackRequest) returns (GetAgentMattermostBotIdentityProviderReadbackResponse);
+  rpc CheckAgentMattermostBotIdentityReadiness(CheckAgentMattermostBotIdentityReadinessRequest) returns (CheckAgentMattermostBotIdentityReadinessResponse);
+}
+
+// ErrorReason задаёт закрытый машинный класс ошибки source RPC.
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_INVALID_REQUEST = 1;
+  ERROR_REASON_UNAUTHENTICATED = 2;
+  ERROR_REASON_PERMISSION_DENIED = 3;
+  ERROR_REASON_NOT_FOUND = 4;
+  ERROR_REASON_STATE_CONFLICT = 5;
+  ERROR_REASON_IDEMPOTENCY_CONFLICT = 6;
+  ERROR_REASON_VERSION_MISMATCH = 7;
+  ERROR_REASON_UNAVAILABLE = 8;
+  ERROR_REASON_INTERNAL = 9;
+}
+
+// ErrorDetail связывает reason/code/retryable с безопасным correlation ID.
+message ErrorDetail {
+  ErrorReason reason = 1;
+  string code = 2;
+  string correlation_id = 3;
+  bool retryable = 4;
+}
+
 enum MattermostTeamStatus {
   MATTERMOST_TEAM_STATUS_UNSPECIFIED = 0;
   MATTERMOST_TEAM_STATUS_ACTIVE = 1;
@@ -219,4 +256,171 @@ message MattermostTeamServiceCheckReadinessResponse {
   bool mattermost_ready = 5;
   bool control_plane_ready = 6;
   bool mapping_ready = 7;
+}
+
+enum AgentMattermostBotIdentityStatus {
+  AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNSPECIFIED = 0;
+  AGENT_MATTERMOST_BOT_IDENTITY_STATUS_AVAILABLE = 1;
+  AGENT_MATTERMOST_BOT_IDENTITY_STATUS_REVOKED = 2;
+  AGENT_MATTERMOST_BOT_IDENTITY_STATUS_DELETED = 3;
+  AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNKNOWN = 4;
+}
+
+enum AgentMattermostBotIdentityAction {
+  AGENT_MATTERMOST_BOT_IDENTITY_ACTION_UNSPECIFIED = 0;
+  AGENT_MATTERMOST_BOT_IDENTITY_ACTION_CREATE_AND_BIND = 1;
+  AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND = 2;
+  AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND = 3;
+  AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE = 4;
+}
+
+enum AgentMattermostBotIdentityOperationState {
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_UNSPECIFIED = 0;
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_EFFECT_PENDING = 1;
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_MEMBERSHIP_PENDING = 2;
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_AMBIGUOUS = 3;
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_PROVIDER_ACCEPTED = 4;
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_BOUND = 5;
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REVOKED = 6;
+  AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REPAIR_REQUIRED = 7;
+}
+
+message AgentMattermostBotIdentityView {
+  string identity_ref = 1;
+  string selector = 2;
+  string username = 3;
+  string display_name = 4;
+  AgentMattermostBotIdentityStatus status = 5;
+  uint64 provider_version = 6;
+  uint64 provider_generation = 7;
+  string provider_snapshot_sha256 = 8;
+  reserved 9;
+  google.protobuf.Timestamp observed_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message AgentMattermostBotIdentityBindingView {
+  string agent_ref = 1;
+  uint64 agent_version = 2;
+  AgentMattermostBotIdentityView identity = 3;
+  string receipt_sha256 = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message AgentMattermostBotIdentityOperationView {
+  string operation_id = 1;
+  AgentMattermostBotIdentityAction action = 2;
+  AgentMattermostBotIdentityOperationState state = 3;
+  string agent_ref = 4;
+  uint64 expected_agent_version = 5;
+  uint64 predecessor_generation = 6;
+  string request_sha256 = 7;
+  string failure_code = 8;
+  google.protobuf.Timestamp retry_not_before = 9;
+  google.protobuf.Timestamp recovery_deadline = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  AgentMattermostBotIdentityBindingView result = 13;
+}
+
+message ListAgentMattermostBotIdentitiesRequest {
+  uint32 page_size = 1;
+  string cursor = 2;
+}
+
+message ListAgentMattermostBotIdentitiesResponse {
+  repeated AgentMattermostBotIdentityView identities = 1;
+  string next_cursor = 2;
+}
+
+message CreateAndBindAgentMattermostBotIdentityRequest {
+  string agent_ref = 1;
+  uint64 expected_agent_version = 2;
+  string username_intent = 3;
+  string display_name = 4;
+  string idempotency_key = 5;
+}
+
+message CreateAndBindAgentMattermostBotIdentityResponse {
+  AgentMattermostBotIdentityOperationView operation = 1;
+  AgentMattermostBotIdentityBindingView binding = 2;
+}
+
+message BindAgentMattermostBotIdentityRequest {
+  string agent_ref = 1;
+  uint64 expected_agent_version = 2;
+  string identity_selector = 3;
+  string idempotency_key = 4;
+}
+
+message BindAgentMattermostBotIdentityResponse {
+  AgentMattermostBotIdentityOperationView operation = 1;
+  AgentMattermostBotIdentityBindingView binding = 2;
+}
+
+message GetAgentMattermostBotIdentityRequest {
+  string agent_ref = 1;
+}
+
+message GetAgentMattermostBotIdentityResponse {
+  AgentMattermostBotIdentityBindingView binding = 1;
+}
+
+message RebindAgentMattermostBotIdentityRequest {
+  string agent_ref = 1;
+  uint64 expected_agent_version = 2;
+  uint64 expected_provider_generation = 3;
+  string identity_selector = 4;
+  string idempotency_key = 5;
+}
+
+message RebindAgentMattermostBotIdentityResponse {
+  AgentMattermostBotIdentityOperationView operation = 1;
+  AgentMattermostBotIdentityBindingView binding = 2;
+}
+
+message RevokeAgentMattermostBotIdentityRequest {
+  string agent_ref = 1;
+  uint64 expected_agent_version = 2;
+  uint64 expected_provider_generation = 3;
+  string idempotency_key = 4;
+}
+
+message RevokeAgentMattermostBotIdentityResponse {
+  AgentMattermostBotIdentityOperationView operation = 1;
+  AgentMattermostBotIdentityBindingView binding = 2;
+}
+
+message GetAgentMattermostBotIdentityOperationRequest {
+  string agent_ref = 1;
+  AgentMattermostBotIdentityAction action = 2;
+  string idempotency_key = 3;
+}
+
+message GetAgentMattermostBotIdentityOperationResponse {
+  AgentMattermostBotIdentityOperationView operation = 1;
+}
+
+message GetAgentMattermostBotIdentityProviderReadbackRequest {
+  string agent_ref = 1;
+  string identity_selector = 2;
+}
+
+message GetAgentMattermostBotIdentityProviderReadbackResponse {
+  AgentMattermostBotIdentityView identity = 1;
+}
+
+message CheckAgentMattermostBotIdentityReadinessRequest {
+  string agent_ref = 1;
+}
+
+message CheckAgentMattermostBotIdentityReadinessResponse {
+  bool ready = 1;
+  uint64 schema_version = 2;
+  bool authority_ready = 3;
+  bool postgres_ready = 4;
+  bool mattermost_ready = 5;
+  bool control_plane_ready = 6;
+  bool identity_generation_ready = 7;
+  string failure_code = 8;
 }
