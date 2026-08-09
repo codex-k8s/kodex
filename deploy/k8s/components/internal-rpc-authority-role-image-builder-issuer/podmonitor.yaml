@@ -11,7 +11,7 @@ spec:
       app.kubernetes.io/name: role-image-builder
       mattercodex.dev/internal-rpc-authority-issuer: enabled
   podMetricsEndpoints:
-    - port: authority-metrics
+    - port: auth-metrics
       path: /metrics
       scheme: http
       interval: 30s

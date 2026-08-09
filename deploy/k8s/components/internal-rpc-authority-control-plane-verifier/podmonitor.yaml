@@ -10,7 +10,7 @@ spec:
     matchLabels:
       mattercodex.dev/internal-rpc-authority-verifier: enabled
   podMetricsEndpoints:
-    - port: authority-metrics
+    - port: auth-metrics
       path: /metrics
       scheme: http
       interval: 30s

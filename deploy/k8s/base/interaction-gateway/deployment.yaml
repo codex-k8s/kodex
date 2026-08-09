@@ -99,9 +99,9 @@ spec:
             - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
             - {name: SENTRY_DSN_FILE, value: /var/run/secrets/mattercodex/internal-rpc-authority/observability/sentry-dsn}
             - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
-          ports: [{name: authority-metrics, containerPort: 9091}]
-          readinessProbe: {httpGet: {path: /readyz, port: authority-metrics}, timeoutSeconds: 3, periodSeconds: 5}
-          livenessProbe: {httpGet: {path: /livez, port: authority-metrics}, timeoutSeconds: 2, periodSeconds: 10}
+          ports: [{name: auth-metrics, containerPort: 9091}]
+          readinessProbe: {httpGet: {path: /readyz, port: auth-metrics}, timeoutSeconds: 3, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /livez, port: auth-metrics}, timeoutSeconds: 2, periodSeconds: 10}
           resources:
             requests: {cpu: 25m, memory: 32Mi}
             limits: {cpu: 250m, memory: 128Mi}
