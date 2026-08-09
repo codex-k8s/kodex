@@ -1,0 +1,66 @@
+package botidentity
+
+import _ "embed"
+
+var (
+	//go:embed sql/transaction__activate_scope.sql
+	activateScopeSQL string
+	//go:embed sql/readiness__check.sql
+	readinessCheckSQL string
+	//go:embed sql/readiness__probe_cursor.sql
+	readinessProbeCursorSQL string
+	//go:embed sql/catalog_cursor__resolve.sql
+	catalogCursorResolveSQL string
+	//go:embed sql/catalog_cursor__upsert.sql
+	catalogCursorUpsertSQL string
+	//go:embed sql/identity__upsert.sql
+	identityUpsertSQL string
+	//go:embed sql/selector__upsert.sql
+	selectorUpsertSQL string
+	//go:embed sql/selector__resolve.sql
+	selectorResolveSQL string
+	//go:embed sql/operation__insert.sql
+	operationInsertSQL string
+	//go:embed sql/operation__lock.sql
+	operationLockSQL string
+	//go:embed sql/operation__get.sql
+	operationGetSQL string
+	//go:embed sql/operation__reclaim.sql
+	operationReclaimSQL string
+	//go:embed sql/operation__mark_effect.sql
+	operationMarkEffectSQL string
+	//go:embed sql/operation__membership.sql
+	operationMembershipSQL string
+	//go:embed sql/operation__defer.sql
+	operationDeferSQL string
+	//go:embed sql/operation__accept.sql
+	operationAcceptSQL string
+	//go:embed sql/operation__repair.sql
+	operationRepairSQL string
+	//go:embed sql/operation__finish.sql
+	operationFinishSQL string
+	//go:embed sql/operation__claim.sql
+	operationClaimSQL string
+	//go:embed sql/ownership__available.sql
+	ownershipAvailableSQL string
+	//go:embed sql/ownership__reserve.sql
+	ownershipReserveSQL string
+	//go:embed sql/ownership__reserve_operation.sql
+	ownershipReserveOperationSQL string
+	//go:embed sql/binding__upsert.sql
+	bindingUpsertSQL string
+	//go:embed sql/binding__get.sql
+	bindingGetSQL string
+	//go:embed sql/watermark__advance.sql
+	watermarkAdvanceSQL string
+	//go:embed sql/watermark__close.sql
+	watermarkCloseSQL string
+	//go:embed sql/watermark__admit.sql
+	watermarkAdmitSQL string
+	//go:embed sql/runtime__admit.sql
+	runtimeAdmitSQL string
+	//go:embed sql/runtime__resolve.sql
+	runtimeResolveSQL string
+	//go:embed sql/work_scope__next.sql
+	workScopeNextSQL string
+)

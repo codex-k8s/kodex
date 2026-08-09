@@ -4,8 +4,8 @@ title: Interaction gateway
 type: runbook
 status: approved
 owner: manager
-version: 1.6.0
-updated: 2026-08-07
+version: 1.7.0
+updated: 2026-08-09
 ---
 
 # Interaction gateway
@@ -22,6 +22,8 @@ updated: 2026-08-07
   effect не подтверждён exact provider readback и требует диагностики;
 - `InteractionGatewayMappingRecoveryFailures` — специализированная mapping-команда
   не подтверждена авторитетным control-plane readback;
+- `InteractionGatewayAgentBotRecoveryFailures` — Agent bot provider effect,
+  credential materialization или owner receipt не восстановлены exact readback;
 - `InteractionGatewayPostgresqlUnavailable` — недостаточно готовых CNPG Pod.
 
 ## Диагностика
@@ -87,6 +89,23 @@ updated: 2026-08-07
     direct/owner delivery, catch-up, прямо перед publish и artifact download,
     а также в readiness; environment manifest не содержит current Team
     authority и старый tenant/project snapshot её не заменяет.
+14. Для Agent bot bind/rebind/revoke сверить один PostgreSQL winner по exact
+    Agent predecessor сразу для всех конкурирующих actor/action, semantic
+    idempotency key и immutable request digest, checkpoint до первого
+    Mattermost mutation, exact provider correlation/readback, Vault KV version
+    и подписанный `ProviderEffectReadbackReceipt`. Timeout/crash после
+    возможного effect переводит операцию только в readback recovery: повторный
+    `CreateBot` запрещён. `rebind`/`revoke` сначала закрывают прежний generation;
+    queued inbound, delivery, dialog, artifact card и readiness обязаны
+    отклонить старый tuple `stable_key + provider_user_id + generation`.
+    Credential не читать и не копировать вручную; для approved bootstrap
+    применяется `tools/interaction-gateway/configure-agent-bot-credential-vault.sh`.
+15. До первой Agent identity общий `/readyz` остаётся закрытым, но mTLS gRPC
+    доступен через внутренний `interaction-gateway-management:9443`, который
+    публикует только management port для unready Pod. Static bot token не
+    является запасным runtime credential. После bind проверить exact Agent,
+    Vault version/digest, provider membership и joined route; только затем
+    readiness должна открыться автоматически.
 
 ## Ротация ключей и PostgreSQL identity
 
@@ -117,9 +136,11 @@ updated: 2026-08-07
    новой версии Pod.
 3. Не удалять gateway PostgreSQL, S3 objects, provider receipts, cursors и
    delivery rows: они нужны для dedup/recovery.
-4. Если изменился mapping, вернуть одновременно предыдущие Git-pinned Vault
+4. Не удалять и не перезаписывать Vault bot credential versions: старый image
+   может только дочитать уже записанный exact version; revocation forward-only.
+5. Если изменился mapping, вернуть одновременно предыдущие Git-pinned Vault
    revision path, KV version, expected revision и digest. Mutable alias не
    использовать; опубликованный CAS=0 revision не перезаписывать.
-5. Восстановить readiness и только затем возобновить входящие callbacks.
+6. Восстановить readiness и только затем возобновить входящие callbacks.
 
 Production-действия требуют отдельного подтверждения владельца.

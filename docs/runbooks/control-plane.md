@@ -4,8 +4,8 @@ title: Диагностика и восстановление control-plane
 type: runbook
 status: approved
 owner: sre
-version: 1.22.1
-updated: 2026-08-07
+version: 1.22.2
+updated: 2026-08-09
 ---
 
 # Диагностика и восстановление control-plane
@@ -687,8 +687,8 @@ semantic replay возвращает сохранённый result, другой
 Один mTLS peer, payload ref или обычный OIDC token полномочием не является.
 
 Регистрация receive-side operation/profile не доказывает готовность producer.
-До rebase и принятия #235 interaction-gateway ещё не выпускает bot/mapping
-receipt и не вызывает generated control-plane RPC; до #236 integration-gateway
+Mattermost Team receipt/call site принадлежит принятому #235, Agent bot
+catalog/effect/readback/receipt — отдельному #264; до #236 integration-gateway
 ещё не выпускает Git reconciliation receipt/call site. Browser не должен
 подменять эти producers. При диагностике сверить exact full method, signer JWK,
 application audience, operation ID и рабочий protected readiness вызов; не

@@ -39,9 +39,10 @@ type Client interface {
 	ResolveDelivery(context.Context, string, string) (entity.Boundary, error)
 	ResolveRoomDelivery(context.Context, string, string, string) (entity.Boundary, error)
 	ResolveMappedChannel(context.Context, string, string) (entity.Boundary, error)
+	ValidateRuntimeBotIdentity(context.Context, string, string, string, string, uint64) error
 	DownloadFile(context.Context, string, string) ([]byte, string, string, error)
 	Publish(context.Context, entity.Delivery, []string) (Published, error)
-	OpenDecisionDialog(context.Context, string, string, string, string, string) error
+	OpenDecisionDialog(context.Context, entity.Delivery, string, string, string, string) error
 	ReconcileLifecycle(context.Context, map[string]string, func(context.Context, RawEvent) error) error
 	CatchUp(context.Context, map[string]int64, map[string]string, func(context.Context, RawEvent) error) error
 	Listen(context.Context, func(context.Context, RawEvent) error) error
@@ -55,4 +56,11 @@ type RuntimeRouteReader interface {
 	ResolveRuntimeRoute(context.Context, string, string) (entity.MattermostRuntimeRoute, error)
 	ResolveRuntimeDelivery(context.Context, string, string, string) (entity.MattermostRuntimeRoute, error)
 	ListRuntimeRoutes(context.Context) ([]entity.MattermostRuntimeRoute, error)
+}
+
+// RuntimeBotIdentityReader закрывает manifest-only Agent authority: current
+// provider UserID и generation выводятся только из admitted PostgreSQL state.
+type RuntimeBotIdentityReader interface {
+	ResolveCurrentRuntimeIdentity(context.Context, entity.TeamPrincipal, string, string) (entity.AgentMattermostBotIdentity, error)
+	ReadCurrentRuntimeBotToken(context.Context, entity.TeamPrincipal, string, string, uint64) (entity.AgentMattermostBotIdentity, string, error)
 }

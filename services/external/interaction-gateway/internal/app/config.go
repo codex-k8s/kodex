@@ -18,6 +18,7 @@ type Config struct {
 	Object     ObjectConfig     `envPrefix:"INTERACTION_GATEWAY_S3_"`
 	Control    ControlConfig    `envPrefix:"INTERACTION_GATEWAY_CONTROL_PLANE_"`
 	Bot        BotConfig        `envPrefix:"INTERACTION_GATEWAY_BOT_SERVICE_"`
+	Credential CredentialConfig `envPrefix:"INTERACTION_GATEWAY_BOT_CREDENTIAL_VAULT_"`
 }
 
 type GatewayConfig struct {
@@ -71,6 +72,10 @@ type GatewayConfig struct {
 	TeamSelectorTTL               time.Duration `env:"TEAM_SELECTOR_TTL" envDefault:"15m"`
 	TeamRecoveryInterval          time.Duration `env:"TEAM_RECOVERY_INTERVAL" envDefault:"5s"`
 	TeamRecoveryWindow            time.Duration `env:"TEAM_RECOVERY_WINDOW" envDefault:"5m"`
+	BotOperationLease             time.Duration `env:"BOT_OPERATION_LEASE" envDefault:"30s"`
+	BotSelectorTTL                time.Duration `env:"BOT_SELECTOR_TTL" envDefault:"15m"`
+	BotRecoveryInterval           time.Duration `env:"BOT_RECOVERY_INTERVAL" envDefault:"5s"`
+	BotRecoveryWindow             time.Duration `env:"BOT_RECOVERY_WINDOW" envDefault:"5m"`
 	ScanPollInterval              time.Duration `env:"SCAN_POLL_INTERVAL" envDefault:"5s"`
 	RetryBase                     time.Duration `env:"RETRY_BASE" envDefault:"2s"`
 	WorkerInterval                time.Duration `env:"WORKER_INTERVAL" envDefault:"500ms"`
@@ -133,6 +138,18 @@ type BotConfig struct {
 	Timeout               time.Duration `env:"TIMEOUT" envDefault:"8s"`
 }
 
+type CredentialConfig struct {
+	Address       string        `env:"ADDRESS,required"`
+	TLSServerName string        `env:"TLS_SERVER_NAME,required"`
+	CAFile        string        `env:"CA_FILE,required"`
+	TokenFile     string        `env:"TOKEN_FILE,required"`
+	AuthMount     string        `env:"AUTH_MOUNT" envDefault:"kubernetes"`
+	Role          string        `env:"ROLE" envDefault:"interaction-gateway-agent-bot-credential"`
+	Mount         string        `env:"MOUNT" envDefault:"mattercodex"`
+	PathPrefix    string        `env:"PATH_PREFIX" envDefault:"interaction-gateway/agent-bot-identities"`
+	Timeout       time.Duration `env:"TIMEOUT" envDefault:"5s"`
+}
+
 func loadConfig() (Config, error) {
 	var config Config
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
@@ -151,6 +168,7 @@ func (config Config) validate() error {
 	for _, name := range []string{
 		gateway.PostgresTLSServerName, config.Mattermost.TLSServerName,
 		config.Object.TLSServerName, config.Control.TLSServerName, config.Bot.TLSServerName,
+		config.Credential.TLSServerName,
 	} {
 		if name == "" || net.ParseIP(name) != nil {
 			return errors.New("interaction gateway TLS server name is invalid")
@@ -170,6 +188,7 @@ func (config Config) validate() error {
 		config.Control.ClientCertificateFile, config.Control.ClientPrivateKeyFile,
 		config.Control.ApplicationGrantFile, config.Bot.CAFile, config.Bot.ClientCertificateFile,
 		config.Bot.ClientPrivateKeyFile,
+		config.Credential.CAFile, config.Credential.TokenFile,
 	} {
 		if !filepath.IsAbs(path) {
 			return errors.New("interaction gateway runtime path is invalid")
@@ -181,6 +200,7 @@ func (config Config) validate() error {
 	for _, raw := range []string{
 		gateway.ActionCallbackURL, gateway.DialogCallbackURL, gateway.ArtifactDownloadBaseURL,
 		config.Mattermost.SiteURL, config.Object.Endpoint, config.Bot.URL,
+		config.Credential.Address,
 	} {
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
@@ -204,6 +224,10 @@ func (config Config) validate() error {
 		gateway.TeamSelectorTTL < time.Minute || gateway.TeamSelectorTTL > 24*time.Hour ||
 		gateway.TeamRecoveryInterval < time.Second || gateway.TeamRecoveryInterval > time.Minute ||
 		gateway.TeamRecoveryWindow <= gateway.TeamRecoveryInterval || gateway.TeamRecoveryWindow > time.Hour ||
+		gateway.BotOperationLease <= gateway.OperationTimeout ||
+		gateway.BotSelectorTTL < time.Minute || gateway.BotSelectorTTL > 24*time.Hour ||
+		gateway.BotRecoveryInterval < time.Second || gateway.BotRecoveryInterval > time.Minute ||
+		gateway.BotRecoveryWindow <= gateway.BotRecoveryInterval || gateway.BotRecoveryWindow > time.Hour ||
 		gateway.ExpiryInterval < time.Second || gateway.ReadinessInterval < time.Second ||
 		gateway.OperationTimeout < time.Second || gateway.OperationTimeout > time.Minute ||
 		gateway.InboundLease <= gateway.OperationTimeout || gateway.DeliveryLease <= gateway.OperationTimeout ||
@@ -213,6 +237,14 @@ func (config Config) validate() error {
 	}
 	if config.Bot.Timeout < time.Second || config.Bot.Timeout > time.Minute {
 		return errors.New("interaction gateway bot-service timeout is invalid")
+	}
+	if config.Credential.Timeout < time.Second || config.Credential.Timeout > 30*time.Second ||
+		config.Credential.Mount == "" || strings.Contains(config.Credential.Mount, "/") ||
+		config.Credential.AuthMount == "" || strings.Contains(config.Credential.AuthMount, "/") ||
+		config.Credential.Role == "" || strings.ContainsAny(config.Credential.Role, " /\r\n\x00") ||
+		config.Credential.PathPrefix == "" || strings.HasPrefix(config.Credential.PathPrefix, "/") ||
+		strings.Contains(config.Credential.PathPrefix, "..") {
+		return errors.New("interaction gateway bot credential configuration is invalid")
 	}
 	return nil
 }

@@ -78,6 +78,45 @@ type VerifiedCommandAuthority struct {
 	FullMethod     string `json:"full_method"`
 }
 
+// AgentMattermostBotIdentityIntentSHA256 связывает provider receipt с одной
+// typed Agent bind/rebind/revoke командой. JTI, idempotency key и receipt не
+// входят в semantic bytes; target stable key отдельно проверяется владельцем
+// уже после owner-scoped lock Agent.
+func AgentMattermostBotIdentityIntentSHA256(
+	authority VerifiedCommandAuthority,
+	request *controlplanev1.ManageAgentMattermostBotIdentityRequest,
+	targetStableKey string,
+) (string, error) {
+	if request == nil || request.GetAgentId() == "" ||
+		request.GetExpectedVersion() == 0 || targetStableKey == "" ||
+		authority.FullMethod != controlplanev1.ControlPlaneService_ManageAgentMattermostBotIdentity_FullMethodName {
+		return "", errors.New("agent Mattermost bot identity intent is invalid")
+	}
+	action := strings.ToLower(strings.TrimPrefix(request.GetAction().String(), "AGENT_MATTERMOST_BOT_IDENTITY_ACTION_"))
+	if action != "bind" && action != "rebind" && action != "revoke" {
+		return "", errors.New("agent Mattermost bot identity action is invalid")
+	}
+	type typedIntent struct {
+		AgentID string `json:"agent_id"`
+	}
+	encoded, err := json.Marshal(typedIntent{AgentID: request.GetAgentId()})
+	if err != nil {
+		return "", errors.New("encode agent Mattermost bot identity intent")
+	}
+	return hashSemanticBusinessIntent(semanticBusinessIntent{
+		ContractVersion: 1,
+		Authority:       authority,
+		TargetKind:      "agent_bot_identity",
+		TargetResource:  request.GetAgentId(),
+		TargetStableKey: targetStableKey,
+		Action:          action,
+		ExpectedVersion: request.GetExpectedVersion(),
+		Name:            "agent Mattermost bot identity",
+		TypedIntentType: "controlplane.v1.ManageAgentMattermostBotIdentityRequest",
+		TypedIntent:     encoded,
+	})
+}
+
 type semanticBusinessIntent struct {
 	ContractVersion uint32                   `json:"contract_version"`
 	Authority       VerifiedCommandAuthority `json:"authority"`

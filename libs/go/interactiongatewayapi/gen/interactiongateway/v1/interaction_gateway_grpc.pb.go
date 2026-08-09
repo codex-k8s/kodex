@@ -465,3 +465,418 @@ var MattermostTeamService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "interactiongateway/v1/interaction_gateway.proto",
 }
+
+const (
+	AgentMattermostBotIdentityService_ListAgentMattermostBotIdentities_FullMethodName              = "/interactiongateway.v1.AgentMattermostBotIdentityService/ListAgentMattermostBotIdentities"
+	AgentMattermostBotIdentityService_CreateAndBindAgentMattermostBotIdentity_FullMethodName       = "/interactiongateway.v1.AgentMattermostBotIdentityService/CreateAndBindAgentMattermostBotIdentity"
+	AgentMattermostBotIdentityService_BindAgentMattermostBotIdentity_FullMethodName                = "/interactiongateway.v1.AgentMattermostBotIdentityService/BindAgentMattermostBotIdentity"
+	AgentMattermostBotIdentityService_GetAgentMattermostBotIdentity_FullMethodName                 = "/interactiongateway.v1.AgentMattermostBotIdentityService/GetAgentMattermostBotIdentity"
+	AgentMattermostBotIdentityService_RebindAgentMattermostBotIdentity_FullMethodName              = "/interactiongateway.v1.AgentMattermostBotIdentityService/RebindAgentMattermostBotIdentity"
+	AgentMattermostBotIdentityService_RevokeAgentMattermostBotIdentity_FullMethodName              = "/interactiongateway.v1.AgentMattermostBotIdentityService/RevokeAgentMattermostBotIdentity"
+	AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityOperation_FullMethodName        = "/interactiongateway.v1.AgentMattermostBotIdentityService/GetAgentMattermostBotIdentityOperation"
+	AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityProviderReadback_FullMethodName = "/interactiongateway.v1.AgentMattermostBotIdentityService/GetAgentMattermostBotIdentityProviderReadback"
+	AgentMattermostBotIdentityService_CheckAgentMattermostBotIdentityReadiness_FullMethodName      = "/interactiongateway.v1.AgentMattermostBotIdentityService/CheckAgentMattermostBotIdentityReadiness"
+)
+
+// AgentMattermostBotIdentityServiceClient is the client API for AgentMattermostBotIdentityService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// AgentMattermostBotIdentityService владеет только Mattermost provider
+// identity/effect/readback. Agent aggregate и его lifecycle остаются в
+// control-plane; transport request не содержит actor/tenant authority.
+type AgentMattermostBotIdentityServiceClient interface {
+	ListAgentMattermostBotIdentities(ctx context.Context, in *ListAgentMattermostBotIdentitiesRequest, opts ...grpc.CallOption) (*ListAgentMattermostBotIdentitiesResponse, error)
+	CreateAndBindAgentMattermostBotIdentity(ctx context.Context, in *CreateAndBindAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*CreateAndBindAgentMattermostBotIdentityResponse, error)
+	BindAgentMattermostBotIdentity(ctx context.Context, in *BindAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*BindAgentMattermostBotIdentityResponse, error)
+	GetAgentMattermostBotIdentity(ctx context.Context, in *GetAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*GetAgentMattermostBotIdentityResponse, error)
+	RebindAgentMattermostBotIdentity(ctx context.Context, in *RebindAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*RebindAgentMattermostBotIdentityResponse, error)
+	RevokeAgentMattermostBotIdentity(ctx context.Context, in *RevokeAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*RevokeAgentMattermostBotIdentityResponse, error)
+	GetAgentMattermostBotIdentityOperation(ctx context.Context, in *GetAgentMattermostBotIdentityOperationRequest, opts ...grpc.CallOption) (*GetAgentMattermostBotIdentityOperationResponse, error)
+	GetAgentMattermostBotIdentityProviderReadback(ctx context.Context, in *GetAgentMattermostBotIdentityProviderReadbackRequest, opts ...grpc.CallOption) (*GetAgentMattermostBotIdentityProviderReadbackResponse, error)
+	CheckAgentMattermostBotIdentityReadiness(ctx context.Context, in *CheckAgentMattermostBotIdentityReadinessRequest, opts ...grpc.CallOption) (*CheckAgentMattermostBotIdentityReadinessResponse, error)
+}
+
+type agentMattermostBotIdentityServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAgentMattermostBotIdentityServiceClient(cc grpc.ClientConnInterface) AgentMattermostBotIdentityServiceClient {
+	return &agentMattermostBotIdentityServiceClient{cc}
+}
+
+func (c *agentMattermostBotIdentityServiceClient) ListAgentMattermostBotIdentities(ctx context.Context, in *ListAgentMattermostBotIdentitiesRequest, opts ...grpc.CallOption) (*ListAgentMattermostBotIdentitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentMattermostBotIdentitiesResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_ListAgentMattermostBotIdentities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) CreateAndBindAgentMattermostBotIdentity(ctx context.Context, in *CreateAndBindAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*CreateAndBindAgentMattermostBotIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAndBindAgentMattermostBotIdentityResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_CreateAndBindAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) BindAgentMattermostBotIdentity(ctx context.Context, in *BindAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*BindAgentMattermostBotIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindAgentMattermostBotIdentityResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_BindAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) GetAgentMattermostBotIdentity(ctx context.Context, in *GetAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*GetAgentMattermostBotIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentMattermostBotIdentityResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_GetAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) RebindAgentMattermostBotIdentity(ctx context.Context, in *RebindAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*RebindAgentMattermostBotIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindAgentMattermostBotIdentityResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_RebindAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) RevokeAgentMattermostBotIdentity(ctx context.Context, in *RevokeAgentMattermostBotIdentityRequest, opts ...grpc.CallOption) (*RevokeAgentMattermostBotIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeAgentMattermostBotIdentityResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_RevokeAgentMattermostBotIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) GetAgentMattermostBotIdentityOperation(ctx context.Context, in *GetAgentMattermostBotIdentityOperationRequest, opts ...grpc.CallOption) (*GetAgentMattermostBotIdentityOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentMattermostBotIdentityOperationResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) GetAgentMattermostBotIdentityProviderReadback(ctx context.Context, in *GetAgentMattermostBotIdentityProviderReadbackRequest, opts ...grpc.CallOption) (*GetAgentMattermostBotIdentityProviderReadbackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentMattermostBotIdentityProviderReadbackResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityProviderReadback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentMattermostBotIdentityServiceClient) CheckAgentMattermostBotIdentityReadiness(ctx context.Context, in *CheckAgentMattermostBotIdentityReadinessRequest, opts ...grpc.CallOption) (*CheckAgentMattermostBotIdentityReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckAgentMattermostBotIdentityReadinessResponse)
+	err := c.cc.Invoke(ctx, AgentMattermostBotIdentityService_CheckAgentMattermostBotIdentityReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AgentMattermostBotIdentityServiceServer is the server API for AgentMattermostBotIdentityService service.
+// All implementations must embed UnimplementedAgentMattermostBotIdentityServiceServer
+// for forward compatibility.
+//
+// AgentMattermostBotIdentityService владеет только Mattermost provider
+// identity/effect/readback. Agent aggregate и его lifecycle остаются в
+// control-plane; transport request не содержит actor/tenant authority.
+type AgentMattermostBotIdentityServiceServer interface {
+	ListAgentMattermostBotIdentities(context.Context, *ListAgentMattermostBotIdentitiesRequest) (*ListAgentMattermostBotIdentitiesResponse, error)
+	CreateAndBindAgentMattermostBotIdentity(context.Context, *CreateAndBindAgentMattermostBotIdentityRequest) (*CreateAndBindAgentMattermostBotIdentityResponse, error)
+	BindAgentMattermostBotIdentity(context.Context, *BindAgentMattermostBotIdentityRequest) (*BindAgentMattermostBotIdentityResponse, error)
+	GetAgentMattermostBotIdentity(context.Context, *GetAgentMattermostBotIdentityRequest) (*GetAgentMattermostBotIdentityResponse, error)
+	RebindAgentMattermostBotIdentity(context.Context, *RebindAgentMattermostBotIdentityRequest) (*RebindAgentMattermostBotIdentityResponse, error)
+	RevokeAgentMattermostBotIdentity(context.Context, *RevokeAgentMattermostBotIdentityRequest) (*RevokeAgentMattermostBotIdentityResponse, error)
+	GetAgentMattermostBotIdentityOperation(context.Context, *GetAgentMattermostBotIdentityOperationRequest) (*GetAgentMattermostBotIdentityOperationResponse, error)
+	GetAgentMattermostBotIdentityProviderReadback(context.Context, *GetAgentMattermostBotIdentityProviderReadbackRequest) (*GetAgentMattermostBotIdentityProviderReadbackResponse, error)
+	CheckAgentMattermostBotIdentityReadiness(context.Context, *CheckAgentMattermostBotIdentityReadinessRequest) (*CheckAgentMattermostBotIdentityReadinessResponse, error)
+	mustEmbedUnimplementedAgentMattermostBotIdentityServiceServer()
+}
+
+// UnimplementedAgentMattermostBotIdentityServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAgentMattermostBotIdentityServiceServer struct{}
+
+func (UnimplementedAgentMattermostBotIdentityServiceServer) ListAgentMattermostBotIdentities(context.Context, *ListAgentMattermostBotIdentitiesRequest) (*ListAgentMattermostBotIdentitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAgentMattermostBotIdentities not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) CreateAndBindAgentMattermostBotIdentity(context.Context, *CreateAndBindAgentMattermostBotIdentityRequest) (*CreateAndBindAgentMattermostBotIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAndBindAgentMattermostBotIdentity not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) BindAgentMattermostBotIdentity(context.Context, *BindAgentMattermostBotIdentityRequest) (*BindAgentMattermostBotIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindAgentMattermostBotIdentity not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) GetAgentMattermostBotIdentity(context.Context, *GetAgentMattermostBotIdentityRequest) (*GetAgentMattermostBotIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentMattermostBotIdentity not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) RebindAgentMattermostBotIdentity(context.Context, *RebindAgentMattermostBotIdentityRequest) (*RebindAgentMattermostBotIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindAgentMattermostBotIdentity not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) RevokeAgentMattermostBotIdentity(context.Context, *RevokeAgentMattermostBotIdentityRequest) (*RevokeAgentMattermostBotIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeAgentMattermostBotIdentity not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) GetAgentMattermostBotIdentityOperation(context.Context, *GetAgentMattermostBotIdentityOperationRequest) (*GetAgentMattermostBotIdentityOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentMattermostBotIdentityOperation not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) GetAgentMattermostBotIdentityProviderReadback(context.Context, *GetAgentMattermostBotIdentityProviderReadbackRequest) (*GetAgentMattermostBotIdentityProviderReadbackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentMattermostBotIdentityProviderReadback not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) CheckAgentMattermostBotIdentityReadiness(context.Context, *CheckAgentMattermostBotIdentityReadinessRequest) (*CheckAgentMattermostBotIdentityReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckAgentMattermostBotIdentityReadiness not implemented")
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) mustEmbedUnimplementedAgentMattermostBotIdentityServiceServer() {
+}
+func (UnimplementedAgentMattermostBotIdentityServiceServer) testEmbeddedByValue() {}
+
+// UnsafeAgentMattermostBotIdentityServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AgentMattermostBotIdentityServiceServer will
+// result in compilation errors.
+type UnsafeAgentMattermostBotIdentityServiceServer interface {
+	mustEmbedUnimplementedAgentMattermostBotIdentityServiceServer()
+}
+
+func RegisterAgentMattermostBotIdentityServiceServer(s grpc.ServiceRegistrar, srv AgentMattermostBotIdentityServiceServer) {
+	// If the following call panics, it indicates UnimplementedAgentMattermostBotIdentityServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AgentMattermostBotIdentityService_ServiceDesc, srv)
+}
+
+func _AgentMattermostBotIdentityService_ListAgentMattermostBotIdentities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentMattermostBotIdentitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).ListAgentMattermostBotIdentities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_ListAgentMattermostBotIdentities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).ListAgentMattermostBotIdentities(ctx, req.(*ListAgentMattermostBotIdentitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_CreateAndBindAgentMattermostBotIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAndBindAgentMattermostBotIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).CreateAndBindAgentMattermostBotIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_CreateAndBindAgentMattermostBotIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).CreateAndBindAgentMattermostBotIdentity(ctx, req.(*CreateAndBindAgentMattermostBotIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_BindAgentMattermostBotIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindAgentMattermostBotIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).BindAgentMattermostBotIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_BindAgentMattermostBotIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).BindAgentMattermostBotIdentity(ctx, req.(*BindAgentMattermostBotIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_GetAgentMattermostBotIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentMattermostBotIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).GetAgentMattermostBotIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_GetAgentMattermostBotIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).GetAgentMattermostBotIdentity(ctx, req.(*GetAgentMattermostBotIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_RebindAgentMattermostBotIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindAgentMattermostBotIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).RebindAgentMattermostBotIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_RebindAgentMattermostBotIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).RebindAgentMattermostBotIdentity(ctx, req.(*RebindAgentMattermostBotIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_RevokeAgentMattermostBotIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeAgentMattermostBotIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).RevokeAgentMattermostBotIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_RevokeAgentMattermostBotIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).RevokeAgentMattermostBotIdentity(ctx, req.(*RevokeAgentMattermostBotIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentMattermostBotIdentityOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).GetAgentMattermostBotIdentityOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).GetAgentMattermostBotIdentityOperation(ctx, req.(*GetAgentMattermostBotIdentityOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityProviderReadback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentMattermostBotIdentityProviderReadbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).GetAgentMattermostBotIdentityProviderReadback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityProviderReadback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).GetAgentMattermostBotIdentityProviderReadback(ctx, req.(*GetAgentMattermostBotIdentityProviderReadbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentMattermostBotIdentityService_CheckAgentMattermostBotIdentityReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckAgentMattermostBotIdentityReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentMattermostBotIdentityServiceServer).CheckAgentMattermostBotIdentityReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentMattermostBotIdentityService_CheckAgentMattermostBotIdentityReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentMattermostBotIdentityServiceServer).CheckAgentMattermostBotIdentityReadiness(ctx, req.(*CheckAgentMattermostBotIdentityReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AgentMattermostBotIdentityService_ServiceDesc is the grpc.ServiceDesc for AgentMattermostBotIdentityService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AgentMattermostBotIdentityService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "interactiongateway.v1.AgentMattermostBotIdentityService",
+	HandlerType: (*AgentMattermostBotIdentityServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListAgentMattermostBotIdentities",
+			Handler:    _AgentMattermostBotIdentityService_ListAgentMattermostBotIdentities_Handler,
+		},
+		{
+			MethodName: "CreateAndBindAgentMattermostBotIdentity",
+			Handler:    _AgentMattermostBotIdentityService_CreateAndBindAgentMattermostBotIdentity_Handler,
+		},
+		{
+			MethodName: "BindAgentMattermostBotIdentity",
+			Handler:    _AgentMattermostBotIdentityService_BindAgentMattermostBotIdentity_Handler,
+		},
+		{
+			MethodName: "GetAgentMattermostBotIdentity",
+			Handler:    _AgentMattermostBotIdentityService_GetAgentMattermostBotIdentity_Handler,
+		},
+		{
+			MethodName: "RebindAgentMattermostBotIdentity",
+			Handler:    _AgentMattermostBotIdentityService_RebindAgentMattermostBotIdentity_Handler,
+		},
+		{
+			MethodName: "RevokeAgentMattermostBotIdentity",
+			Handler:    _AgentMattermostBotIdentityService_RevokeAgentMattermostBotIdentity_Handler,
+		},
+		{
+			MethodName: "GetAgentMattermostBotIdentityOperation",
+			Handler:    _AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityOperation_Handler,
+		},
+		{
+			MethodName: "GetAgentMattermostBotIdentityProviderReadback",
+			Handler:    _AgentMattermostBotIdentityService_GetAgentMattermostBotIdentityProviderReadback_Handler,
+		},
+		{
+			MethodName: "CheckAgentMattermostBotIdentityReadiness",
+			Handler:    _AgentMattermostBotIdentityService_CheckAgentMattermostBotIdentityReadiness_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "interactiongateway/v1/interaction_gateway.proto",
+}

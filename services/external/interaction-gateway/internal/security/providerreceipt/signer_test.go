@@ -1,6 +1,7 @@
 package providerreceipt
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -10,6 +11,63 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	domaincontrol "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/client/controlplane"
 )
+
+func TestSignerProducesVersionedAgentReceiptWithoutSecretValue(t *testing.T) {
+	key, err := internalrpcauth.GenerateES256Key("provider-readback-agent-g1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := internalrpcauth.MarshalPrivateJWK(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "private.jwk")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	signer, err := New(Config{Issuer: "https://interaction-gateway.example.invalid",
+		PrivateJWKFile: path, MaximumTTL: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential, err := signer.Sign(domaincontrol.ProviderEffectReceipt{
+		FullMethod: "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity",
+		ActorID:    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", OrganizationID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		ProjectID: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", WorkspaceID: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+		ProviderTeamRef: "provider-team", ProviderObjectRef: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+		ProviderUsername: "agent-bot", Action: "rebind", Effect: "agent_bot_identity",
+		EffectVersion: 2, EffectGeneration: 3,
+		EffectSHA256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		ReceiptID:    "ffffffff-ffff-4fff-8fff-ffffffffffff", ReceiptRevision: 3,
+		CredentialBindingID: "11111111-1111-4111-8111-111111111111", CredentialBindingVersion: 4,
+		CredentialBindingSHA256: "2222222222222222222222222222222222222222222222222222222222222222",
+		Provider:                "mattermost", MaskedLabel: "Agent bot", MaskedStatus: "AVAILABLE", Eligible: true,
+		Capabilities: []string{"mattermost.post", "mattermost.readback"},
+		TargetKind:   "agent_bot_identity", TargetResourceID: "33333333-3333-4333-8333-333333333333",
+		TargetStableKey:     "agent-primary",
+		CommandIntentSHA256: "4444444444444444444444444444444444444444444444444444444444444444",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := internalrpcauth.VerifyCanonicalJSON(credential.CompactJWS, key.PublicOnly(),
+		internalrpcauth.ProtectedHeaderExpectation{Type: credentialType, KeyID: key.KeyID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload claims
+	if err := json.Unmarshal(verified.CanonicalPayload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.ContractVersion != 1 || payload.TargetKind != "agent_bot_identity" ||
+		payload.EffectGeneration != 3 || payload.CredentialBindingVersion != 4 ||
+		payload.CommandIntentSHA256 != "4444444444444444444444444444444444444444444444444444444444444444" {
+		t.Fatalf("Agent receipt exact fields mismatch: %#v", payload)
+	}
+	if bytes.Contains(verified.CanonicalPayload, []byte("secret-token-value")) {
+		t.Fatal("Agent receipt contains secret value")
+	}
+}
 
 func TestSignerProducesCanonicalExactBoundReceipt(t *testing.T) {
 	key, err := internalrpcauth.GenerateES256Key("provider-readback-g1")

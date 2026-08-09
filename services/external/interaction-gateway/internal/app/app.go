@@ -22,17 +22,21 @@ import (
 	"github.com/codex-k8s/matter-codex/libs/go/serviceruntime"
 	controlclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/clients/controlplane"
 	domainerrs "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/errs"
+	domainbotidentity "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/botidentity"
 	domainservice "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/gateway"
 	domainteam "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/domain/service/team"
 	botclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/botservice"
+	credentialclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/credential"
 	mattermostclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/mattermost"
 	objectclient "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/integration/objectstore"
 	internalobservability "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/observability"
+	postgresbotidentity "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/botidentity"
 	postgresgateway "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/gateway"
 	postgresteam "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/repository/postgres/team"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/mattermostevent"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/providerreceipt"
 	"github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/security/readbackgrant"
+	botidentitygrpc "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/grpc/botidentity"
 	teamgrpc "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/grpc/team"
 	apihttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/api"
 	generatedhttp "github.com/codex-k8s/matter-codex/services/external/interaction-gateway/internal/transport/http/generated"
@@ -158,10 +162,26 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err := mattermost.UseRuntimeRoutes(teamRepository); err != nil {
 		return err
 	}
+	botIdentityRepository, err := postgresbotidentity.New(current.pool, postgresbotidentity.Config{
+		PrincipalGeneration: config.Gateway.PostgresPrincipalGeneration,
+		OrganizationID:      organizationID, AllowedProjectIDs: projectIDs,
+	})
+	if err != nil {
+		return err
+	}
 	receiptSigner, err := providerreceipt.New(providerreceipt.Config{
 		Issuer:         config.Gateway.ProviderReceiptIssuer,
 		PrivateJWKFile: config.Gateway.ProviderReceiptPrivateJWKFile,
 		MaximumTTL:     config.Gateway.ProviderReceiptTTL,
+	})
+	if err != nil {
+		return err
+	}
+	credentialStore, err := credentialclient.New(credentialclient.Config{
+		Address: config.Credential.Address, TLSServerName: config.Credential.TLSServerName,
+		CAFile: config.Credential.CAFile, TokenFile: config.Credential.TokenFile,
+		AuthMount: config.Credential.AuthMount, Role: config.Credential.Role,
+		Mount: config.Credential.Mount, PathPrefix: config.Credential.PathPrefix, Timeout: config.Credential.Timeout,
 	})
 	if err != nil {
 		return err
@@ -172,6 +192,18 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		RecoveryWindow: config.Gateway.TeamRecoveryWindow,
 	})
 	if err != nil {
+		return err
+	}
+	botIdentityService, err := domainbotidentity.New(botIdentityRepository, mattermost, credentialStore,
+		control, teamService, receiptSigner, current.business, domainbotidentity.Config{
+			InstanceID: config.Gateway.InstanceID, Lease: config.Gateway.BotOperationLease,
+			SelectorTTL: config.Gateway.BotSelectorTTL, RecoveryInterval: config.Gateway.BotRecoveryInterval,
+			RecoveryWindow: config.Gateway.BotRecoveryWindow,
+		})
+	if err != nil {
+		return err
+	}
+	if err := mattermost.UseRuntimeBotIdentities(botIdentityService); err != nil {
 		return err
 	}
 	current.authority, err = authorityclient.DialLocal(startup, authorityclient.LocalConfig{
@@ -185,6 +217,10 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	}
 	authorityChecker := authorityVerifierChecker{client: current.authority.Verifier()}
 	teamTransport, err := teamgrpc.New(teamService)
+	if err != nil {
+		return err
+	}
+	botIdentityTransport, err := botidentitygrpc.New(botIdentityService)
 	if err != nil {
 		return err
 	}
@@ -282,7 +318,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		{"PostgreSQL", repository.Check},
 		{"control-plane", control.Check},
 		{"Mattermost Team", teamService.Check},
-		{"Mattermost event", service.CheckInteraction},
+		{"Mattermost Agent bot identity", botIdentityService.Check},
 		{"internal authority verifier", authorityChecker.Check},
 		{"bot-service runtime transport", bot.Check},
 		{"S3", objects.Check},
@@ -291,15 +327,6 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		if err := check.run(startup); err != nil {
 			return errors.New("startup barrier: " + check.name + " working path is not ready")
 		}
-	}
-	if err := service.ReconcileLifecycle(startup); err != nil {
-		return errors.New("startup barrier: Mattermost lifecycle reconciliation failed")
-	}
-	if err := mattermost.Check(startup); err != nil {
-		return errors.New("startup barrier: Mattermost mapping readback failed")
-	}
-	if err := service.CatchUp(startup); err != nil {
-		return errors.New("startup barrier: Mattermost catch-up failed")
 	}
 	publicTLSConfig, err := publicTLS(config.Gateway)
 	if err != nil {
@@ -329,6 +356,7 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 		stdgrpc.ChainUnaryInterceptor(authorityclient.VerifierUnaryServerInterceptor(current.authority.Verifier())),
 	)
 	interactiongatewayv1.RegisterMattermostTeamServiceServer(current.teamServer, teamTransport)
+	interactiongatewayv1.RegisterAgentMattermostBotIdentityServiceServer(current.teamServer, botIdentityTransport)
 	current.teamConn, err = net.Listen("tcp", config.Gateway.TeamRPCListen)
 	if err != nil {
 		return errors.New("listen Mattermost team gRPC server")
@@ -344,8 +372,10 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 	if err := current.technical.Listen(); err != nil {
 		return err
 	}
-	current.readiness.Set(true, "ready")
-	current.metrics.SetReady(true)
+	// Management gRPC должен подняться и при ещё не назначенной первой Agent
+	// identity. Общая readiness остаётся закрытой до exact joined route check.
+	current.readiness.Set(false, "runtime route is not ready")
+	current.metrics.SetReady(false)
 	current.workers = serviceruntime.StartWorkers(
 		lifecycle,
 		publicWorker(current.public, current.publicConn, shutdownBase, config.Gateway.ShutdownTimeout),
@@ -368,7 +398,10 @@ func Run(lifecycle context.Context, shutdownBase context.Context, version string
 			teamService.ProcessRecovery),
 		periodicWorker("mapping_recovery", config.Gateway.TeamRecoveryInterval, config.Gateway.OperationTimeout, current.business, current.logger,
 			teamService.ProcessMappingRecovery),
+		periodicWorker("agent_bot_recovery", config.Gateway.BotRecoveryInterval, config.Gateway.OperationTimeout,
+			current.business, current.logger, botIdentityService.ProcessRecovery),
 		readinessWorker(repository.Check, control.Check, service.CheckInteraction, mattermost.Check, teamService.Check,
+			botIdentityService.Check,
 			authorityChecker.Check, bot.Check, objects.Check, readbackCheck,
 			current.readiness, current.metrics, current.business, current.logger,
 			config.Gateway.ReadinessInterval, config.Gateway.OperationTimeout),
@@ -495,7 +528,10 @@ func webSocketWorker(service *domainservice.Service, metrics *internalobservabil
 	return func(ctx context.Context) error {
 		for ctx.Err() == nil {
 			catchUpContext, cancel := context.WithTimeout(ctx, 30*time.Second)
-			err := service.CatchUp(catchUpContext)
+			err := service.ReconcileLifecycle(catchUpContext)
+			if err == nil {
+				err = service.CatchUp(catchUpContext)
+			}
 			cancel()
 			if err == nil {
 				err = service.Listen(ctx)
@@ -547,6 +583,7 @@ func readinessWorker(
 	interactionCheck func(context.Context) error,
 	mattermostCheck func(context.Context) error,
 	teamCheck func(context.Context) error,
+	botIdentityCheck func(context.Context) error,
 	authorityCheck func(context.Context) error,
 	botCheck func(context.Context) error,
 	objectCheck func(context.Context) error,
@@ -560,7 +597,7 @@ func readinessWorker(
 ) serviceruntime.Worker {
 	checkFunctions := []func(context.Context) error{
 		repositoryCheck, controlCheck, interactionCheck, mattermostCheck,
-		teamCheck, authorityCheck, botCheck, objectCheck, readbackCheck,
+		teamCheck, botIdentityCheck, authorityCheck, botCheck, objectCheck, readbackCheck,
 	}
 	return periodicWorker("readiness", interval, timeout, business, logger, func(ctx context.Context) (bool, error) {
 		for _, check := range checkFunctions {

@@ -41,6 +41,25 @@ func TestStaleMappingStopsReclaimedInboundDeliveryAndArtifact(t *testing.T) {
 		}
 	})
 
+	t.Run("reclaimed inbound with stale bot generation", func(t *testing.T) {
+		repository := &securityRepository{inbound: entity.InboundEvent{
+			Kind: enum.InboundPost, Attempts: 1, OrganizationID: boundary.OrganizationID,
+			ProjectID: boundary.ProjectID, TeamID: boundary.TeamID, ChannelID: boundary.ChannelID,
+			BotStableKey: "agent-primary", BotProviderUserID: "provider-user", BotProviderGeneration: 4,
+		}}
+		guard := &acceptingMappingGuard{}
+		mattermost := &securityMattermost{boundary: boundary, validateErr: errors.New("stale generation")}
+		service := securityServiceWithGuard(repository, mattermost, guard, now)
+
+		processed, err := service.ProcessWaiting(context.Background())
+		if !processed || !errors.Is(err, domainerrs.ErrUnavailable) ||
+			repository.inboundRetryCode != "MATTERMOST_BOT_IDENTITY_NOT_CURRENT" ||
+			mattermost.validateCalls != 1 || guard.calls != 1 {
+			t.Fatalf("stale reclaimed bot generation was not fenced: processed=%v err=%v code=%q validation=%d mapping=%d",
+				processed, err, repository.inboundRetryCode, mattermost.validateCalls, guard.calls)
+		}
+	})
+
 	t.Run("direct delivery", func(t *testing.T) {
 		repository := &securityRepository{delivery: entity.Delivery{
 			State: enum.DeliveryPending, Attempts: 1, OrganizationID: boundary.OrganizationID,
@@ -84,6 +103,12 @@ func TestStaleMappingStopsReclaimedInboundDeliveryAndArtifact(t *testing.T) {
 
 func securityService(repository *securityRepository, mattermost *securityMattermost,
 	guard *rejectingMappingGuard, now time.Time,
+) *Service {
+	return securityServiceWithGuard(repository, mattermost, guard, now)
+}
+
+func securityServiceWithGuard(repository *securityRepository, mattermost *securityMattermost,
+	guard MappingGuard, now time.Time,
 ) *Service {
 	return &Service{
 		repository: repository, mattermost: mattermost, mapping: guard, observer: securityObserver{},
@@ -131,8 +156,10 @@ func (repository *securityRepository) GetDownloadGrant(context.Context, string) 
 
 type securityMattermost struct {
 	domainmattermost.Client
-	boundary     entity.Boundary
-	publishCalls int
+	boundary      entity.Boundary
+	publishCalls  int
+	validateCalls int
+	validateErr   error
 }
 
 func (client *securityMattermost) ResolveMappedChannel(context.Context, string, string) (entity.Boundary, error) {
@@ -147,6 +174,13 @@ func (client *securityMattermost) AuthenticateArtifactDownload(context.Context, 
 	return nil
 }
 
+func (client *securityMattermost) ValidateRuntimeBotIdentity(context.Context, string, string, string, string,
+	uint64,
+) error {
+	client.validateCalls++
+	return client.validateErr
+}
+
 func (client *securityMattermost) Publish(context.Context, entity.Delivery, []string) (domainmattermost.Published, error) {
 	client.publishCalls++
 	return domainmattermost.Published{}, nil
@@ -159,6 +193,15 @@ func (guard *rejectingMappingGuard) RequireBoundTeam(context.Context, entity.Tea
 ) (entity.WorkspaceMattermostMapping, error) {
 	guard.calls++
 	return entity.WorkspaceMattermostMapping{}, domainerrs.ErrUnauthorized
+}
+
+type acceptingMappingGuard struct{ calls int }
+
+func (guard *acceptingMappingGuard) RequireBoundTeam(context.Context, entity.TeamPrincipal,
+	string,
+) (entity.WorkspaceMattermostMapping, error) {
+	guard.calls++
+	return entity.WorkspaceMattermostMapping{State: "BOUND"}, nil
 }
 
 type securityObserver struct{}

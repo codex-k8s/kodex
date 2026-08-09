@@ -9,6 +9,7 @@ SELECT id, kind, state, organization_id, project_id, session_id, turn_id,
        recipient_actor_id, owner_gate_payload_sha256, delivery_recorded_at,
        created_at, updated_at, COALESCE(owner_delivery_fence, 0), owner_delivery_token_ciphertext,
        owner_delivery_expires_at, COALESCE(owner_turn_version, 0), owner_runtime_revision_id,
-       COALESCE(owner_runtime_revision_version, 0), owner_delivery_recorded_at
+       COALESCE(owner_runtime_revision_version, 0), owner_delivery_recorded_at,
+       bot_provider_user_id, bot_provider_generation
 FROM interaction_gateway_deliveries
 WHERE id = $1 AND organization_id = $2::uuid AND project_id = $3::uuid;

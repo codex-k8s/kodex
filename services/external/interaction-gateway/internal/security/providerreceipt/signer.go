@@ -116,7 +116,13 @@ func (signer *Signer) Sign(input domaincontrol.ProviderEffectReceipt) (domaincon
 		EffectVersion: input.EffectVersion, EffectGeneration: input.EffectGeneration,
 		EffectSHA256: input.EffectSHA256, ReceiptID: input.ReceiptID,
 		ReceiptRevision: input.ReceiptRevision, IssuedAt: input.IssuedAt, NotBefore: input.NotBefore,
-		ExpiresAt: input.ExpiresAt, MaskedStatus: input.MaskedStatus, Eligible: input.Eligible,
+		ExpiresAt:                input.ExpiresAt,
+		CredentialBindingID:      input.CredentialBindingID,
+		CredentialBindingVersion: input.CredentialBindingVersion,
+		CredentialBindingSHA256:  input.CredentialBindingSHA256,
+		ProviderUsername:         input.ProviderUsername, MaskedStatus: input.MaskedStatus,
+		Provider: input.Provider, MaskedLabel: input.MaskedLabel,
+		Capabilities: append([]string(nil), input.Capabilities...), Eligible: input.Eligible,
 		TargetKind: input.TargetKind, TargetResourceID: input.TargetResourceID,
 		TargetStableKey: input.TargetStableKey, CommandIntentSHA256: input.CommandIntentSHA256,
 	}
@@ -130,15 +136,44 @@ func (signer *Signer) Sign(input domaincontrol.ProviderEffectReceipt) (domaincon
 }
 
 func validReceipt(input domaincontrol.ProviderEffectReceipt) bool {
+	targetValid := input.TargetKind == "workspace_mattermost_mapping" &&
+		input.TargetStableKey == "workspace-"+strings.ReplaceAll(input.WorkspaceID, "-", "")
+	if input.TargetKind == "agent_bot_identity" {
+		targetValid = validAgentReceipt(input)
+	}
 	return uuid.Validate(input.ActorID) == nil && uuid.Validate(input.OrganizationID) == nil &&
 		uuid.Validate(input.ProjectID) == nil && uuid.Validate(input.WorkspaceID) == nil &&
 		input.ProjectID == input.WorkspaceID && input.Audience == Audience && strings.HasPrefix(input.FullMethod, "/controlplane.v1.ControlPlaneService/") &&
 		input.Action != "" && input.Effect != "" && input.EffectVersion > 0 && input.EffectGeneration > 0 &&
 		validDigest(input.EffectSHA256) && uuid.Validate(input.ReceiptID) == nil && input.ReceiptRevision > 0 &&
-		input.MaskedStatus != "" && len(input.MaskedStatus) <= 64 && input.TargetKind == "workspace_mattermost_mapping" &&
+		input.MaskedStatus != "" && len(input.MaskedStatus) <= 64 && targetValid &&
 		(input.TargetResourceID == "" || uuid.Validate(input.TargetResourceID) == nil) &&
-		input.TargetStableKey == "workspace-"+strings.ReplaceAll(input.WorkspaceID, "-", "") &&
 		validDigest(input.CommandIntentSHA256)
+}
+
+func validAgentReceipt(input domaincontrol.ProviderEffectReceipt) bool {
+	if uuid.Validate(input.TargetResourceID) != nil || input.TargetStableKey == "" ||
+		len(input.TargetStableKey) > 128 || strings.ContainsAny(input.TargetStableKey, "\x00\r\n") ||
+		input.ProviderObjectRef == "" || input.ProviderTeamRef == "" || input.ProviderUsername == "" ||
+		input.ReceiptRevision != input.EffectGeneration {
+		return false
+	}
+	if input.FullMethod == "/controlplane.v1.ControlPlaneService/GetAgent" {
+		return input.Action == "read" && input.Effect == "agent_bot_identity_source_readback" &&
+			input.ProviderObjectRef == input.ProviderTeamRef && input.ProviderUsername == "source-readback" &&
+			input.TargetStableKey == "agent-source-"+strings.ReplaceAll(input.TargetResourceID, "-", "") &&
+			input.CredentialBindingID == "" && input.CredentialBindingVersion == 0 &&
+			input.CredentialBindingSHA256 == "" && len(input.Capabilities) == 0
+	}
+	if input.FullMethod != "/controlplane.v1.ControlPlaneService/ManageAgentMattermostBotIdentity" ||
+		(input.Action != "bind" && input.Action != "rebind" && input.Action != "revoke") ||
+		input.Effect != "agent_bot_identity" || uuid.Validate(input.ProviderObjectRef) != nil ||
+		uuid.Validate(input.CredentialBindingID) != nil || input.CredentialBindingVersion == 0 ||
+		!validDigest(input.CredentialBindingSHA256) || input.Provider != "mattermost" ||
+		input.MaskedLabel == "" || len(input.MaskedLabel) > 64 || len(input.Capabilities) != 2 {
+		return false
+	}
+	return input.Capabilities[0] == "mattermost.post" && input.Capabilities[1] == "mattermost.readback"
 }
 
 func validDigest(value string) bool {

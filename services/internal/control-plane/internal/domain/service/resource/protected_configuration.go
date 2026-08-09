@@ -10,6 +10,7 @@ import (
 	"time"
 
 	controlplanecontract "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi"
+	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/matter-codex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/errs"
 	domainrepo "github.com/codex-k8s/matter-codex/services/internal/control-plane/internal/domain/repository/controlplane"
@@ -247,6 +248,27 @@ func protectedCreateLike(action string) bool {
 }
 
 func protectedProviderIntentSHA256(input ManageProtectedConfigurationInput) (string, error) {
+	if input.Kind == enum.KindAgent &&
+		(input.Action == "bind_bot" || input.Action == "rebind_bot" || input.Action == "revoke_bot") {
+		action := controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND
+		switch input.Action {
+		case "rebind_bot":
+			action = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND
+		case "revoke_bot":
+			action = controlplanev1.AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE
+		}
+		return controlplanecontract.AgentMattermostBotIdentityIntentSHA256(
+			controlplanecontract.VerifiedCommandAuthority{
+				ActorID: input.Principal.ActorID, OrganizationID: input.Principal.OrganizationID,
+				ProjectID: input.Principal.ProjectID, WorkloadID: input.Principal.CallerWorkload,
+				FullMethod: input.FullMethod,
+			},
+			&controlplanev1.ManageAgentMattermostBotIdentityRequest{
+				Action: action, AgentId: input.ResourceID, ExpectedVersion: input.ExpectedVersion,
+			},
+			input.ProviderReceipt.TargetStableKey,
+		)
+	}
 	return canonicalHash(struct {
 		Identity        commandIdentity
 		FullMethod      string

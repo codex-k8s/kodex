@@ -22,6 +22,77 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ErrorReason задаёт закрытый машинный класс ошибки source RPC.
+type ErrorReason int32
+
+const (
+	ErrorReason_ERROR_REASON_UNSPECIFIED          ErrorReason = 0
+	ErrorReason_ERROR_REASON_INVALID_REQUEST      ErrorReason = 1
+	ErrorReason_ERROR_REASON_UNAUTHENTICATED      ErrorReason = 2
+	ErrorReason_ERROR_REASON_PERMISSION_DENIED    ErrorReason = 3
+	ErrorReason_ERROR_REASON_NOT_FOUND            ErrorReason = 4
+	ErrorReason_ERROR_REASON_STATE_CONFLICT       ErrorReason = 5
+	ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT ErrorReason = 6
+	ErrorReason_ERROR_REASON_VERSION_MISMATCH     ErrorReason = 7
+	ErrorReason_ERROR_REASON_UNAVAILABLE          ErrorReason = 8
+	ErrorReason_ERROR_REASON_INTERNAL             ErrorReason = 9
+)
+
+// Enum value maps for ErrorReason.
+var (
+	ErrorReason_name = map[int32]string{
+		0: "ERROR_REASON_UNSPECIFIED",
+		1: "ERROR_REASON_INVALID_REQUEST",
+		2: "ERROR_REASON_UNAUTHENTICATED",
+		3: "ERROR_REASON_PERMISSION_DENIED",
+		4: "ERROR_REASON_NOT_FOUND",
+		5: "ERROR_REASON_STATE_CONFLICT",
+		6: "ERROR_REASON_IDEMPOTENCY_CONFLICT",
+		7: "ERROR_REASON_VERSION_MISMATCH",
+		8: "ERROR_REASON_UNAVAILABLE",
+		9: "ERROR_REASON_INTERNAL",
+	}
+	ErrorReason_value = map[string]int32{
+		"ERROR_REASON_UNSPECIFIED":          0,
+		"ERROR_REASON_INVALID_REQUEST":      1,
+		"ERROR_REASON_UNAUTHENTICATED":      2,
+		"ERROR_REASON_PERMISSION_DENIED":    3,
+		"ERROR_REASON_NOT_FOUND":            4,
+		"ERROR_REASON_STATE_CONFLICT":       5,
+		"ERROR_REASON_IDEMPOTENCY_CONFLICT": 6,
+		"ERROR_REASON_VERSION_MISMATCH":     7,
+		"ERROR_REASON_UNAVAILABLE":          8,
+		"ERROR_REASON_INTERNAL":             9,
+	}
+)
+
+func (x ErrorReason) Enum() *ErrorReason {
+	p := new(ErrorReason)
+	*p = x
+	return p
+}
+
+func (x ErrorReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ErrorReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[0].Descriptor()
+}
+
+func (ErrorReason) Type() protoreflect.EnumType {
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[0]
+}
+
+func (x ErrorReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ErrorReason.Descriptor instead.
+func (ErrorReason) EnumDescriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{0}
+}
+
 type MattermostTeamStatus int32
 
 const (
@@ -55,11 +126,11 @@ func (x MattermostTeamStatus) String() string {
 }
 
 func (MattermostTeamStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[0].Descriptor()
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[1].Descriptor()
 }
 
 func (MattermostTeamStatus) Type() protoreflect.EnumType {
-	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[0]
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[1]
 }
 
 func (x MattermostTeamStatus) Number() protoreflect.EnumNumber {
@@ -68,7 +139,7 @@ func (x MattermostTeamStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MattermostTeamStatus.Descriptor instead.
 func (MattermostTeamStatus) EnumDescriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{0}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{1}
 }
 
 type MattermostTeamOperationState int32
@@ -113,11 +184,11 @@ func (x MattermostTeamOperationState) String() string {
 }
 
 func (MattermostTeamOperationState) Descriptor() protoreflect.EnumDescriptor {
-	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[1].Descriptor()
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[2].Descriptor()
 }
 
 func (MattermostTeamOperationState) Type() protoreflect.EnumType {
-	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[1]
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[2]
 }
 
 func (x MattermostTeamOperationState) Number() protoreflect.EnumNumber {
@@ -126,7 +197,7 @@ func (x MattermostTeamOperationState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MattermostTeamOperationState.Descriptor instead.
 func (MattermostTeamOperationState) EnumDescriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{1}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{2}
 }
 
 type WorkspaceMattermostMappingState int32
@@ -162,11 +233,11 @@ func (x WorkspaceMattermostMappingState) String() string {
 }
 
 func (WorkspaceMattermostMappingState) Descriptor() protoreflect.EnumDescriptor {
-	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[2].Descriptor()
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[3].Descriptor()
 }
 
 func (WorkspaceMattermostMappingState) Type() protoreflect.EnumType {
-	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[2]
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[3]
 }
 
 func (x WorkspaceMattermostMappingState) Number() protoreflect.EnumNumber {
@@ -175,7 +246,7 @@ func (x WorkspaceMattermostMappingState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use WorkspaceMattermostMappingState.Descriptor instead.
 func (WorkspaceMattermostMappingState) EnumDescriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{2}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{3}
 }
 
 type WorkspaceMattermostMappingAction int32
@@ -214,11 +285,11 @@ func (x WorkspaceMattermostMappingAction) String() string {
 }
 
 func (WorkspaceMattermostMappingAction) Descriptor() protoreflect.EnumDescriptor {
-	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[3].Descriptor()
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[4].Descriptor()
 }
 
 func (WorkspaceMattermostMappingAction) Type() protoreflect.EnumType {
-	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[3]
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[4]
 }
 
 func (x WorkspaceMattermostMappingAction) Number() protoreflect.EnumNumber {
@@ -227,7 +298,7 @@ func (x WorkspaceMattermostMappingAction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use WorkspaceMattermostMappingAction.Descriptor instead.
 func (WorkspaceMattermostMappingAction) EnumDescriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{3}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{4}
 }
 
 type WorkspaceMattermostMappingOperationState int32
@@ -272,11 +343,11 @@ func (x WorkspaceMattermostMappingOperationState) String() string {
 }
 
 func (WorkspaceMattermostMappingOperationState) Descriptor() protoreflect.EnumDescriptor {
-	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[4].Descriptor()
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[5].Descriptor()
 }
 
 func (WorkspaceMattermostMappingOperationState) Type() protoreflect.EnumType {
-	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[4]
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[5]
 }
 
 func (x WorkspaceMattermostMappingOperationState) Number() protoreflect.EnumNumber {
@@ -285,7 +356,250 @@ func (x WorkspaceMattermostMappingOperationState) Number() protoreflect.EnumNumb
 
 // Deprecated: Use WorkspaceMattermostMappingOperationState.Descriptor instead.
 func (WorkspaceMattermostMappingOperationState) EnumDescriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{4}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{5}
+}
+
+type AgentMattermostBotIdentityStatus int32
+
+const (
+	AgentMattermostBotIdentityStatus_AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNSPECIFIED AgentMattermostBotIdentityStatus = 0
+	AgentMattermostBotIdentityStatus_AGENT_MATTERMOST_BOT_IDENTITY_STATUS_AVAILABLE   AgentMattermostBotIdentityStatus = 1
+	AgentMattermostBotIdentityStatus_AGENT_MATTERMOST_BOT_IDENTITY_STATUS_REVOKED     AgentMattermostBotIdentityStatus = 2
+	AgentMattermostBotIdentityStatus_AGENT_MATTERMOST_BOT_IDENTITY_STATUS_DELETED     AgentMattermostBotIdentityStatus = 3
+	AgentMattermostBotIdentityStatus_AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNKNOWN     AgentMattermostBotIdentityStatus = 4
+)
+
+// Enum value maps for AgentMattermostBotIdentityStatus.
+var (
+	AgentMattermostBotIdentityStatus_name = map[int32]string{
+		0: "AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNSPECIFIED",
+		1: "AGENT_MATTERMOST_BOT_IDENTITY_STATUS_AVAILABLE",
+		2: "AGENT_MATTERMOST_BOT_IDENTITY_STATUS_REVOKED",
+		3: "AGENT_MATTERMOST_BOT_IDENTITY_STATUS_DELETED",
+		4: "AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNKNOWN",
+	}
+	AgentMattermostBotIdentityStatus_value = map[string]int32{
+		"AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNSPECIFIED": 0,
+		"AGENT_MATTERMOST_BOT_IDENTITY_STATUS_AVAILABLE":   1,
+		"AGENT_MATTERMOST_BOT_IDENTITY_STATUS_REVOKED":     2,
+		"AGENT_MATTERMOST_BOT_IDENTITY_STATUS_DELETED":     3,
+		"AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNKNOWN":     4,
+	}
+)
+
+func (x AgentMattermostBotIdentityStatus) Enum() *AgentMattermostBotIdentityStatus {
+	p := new(AgentMattermostBotIdentityStatus)
+	*p = x
+	return p
+}
+
+func (x AgentMattermostBotIdentityStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AgentMattermostBotIdentityStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[6].Descriptor()
+}
+
+func (AgentMattermostBotIdentityStatus) Type() protoreflect.EnumType {
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[6]
+}
+
+func (x AgentMattermostBotIdentityStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AgentMattermostBotIdentityStatus.Descriptor instead.
+func (AgentMattermostBotIdentityStatus) EnumDescriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{6}
+}
+
+type AgentMattermostBotIdentityAction int32
+
+const (
+	AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_UNSPECIFIED     AgentMattermostBotIdentityAction = 0
+	AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_CREATE_AND_BIND AgentMattermostBotIdentityAction = 1
+	AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND            AgentMattermostBotIdentityAction = 2
+	AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND          AgentMattermostBotIdentityAction = 3
+	AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE          AgentMattermostBotIdentityAction = 4
+)
+
+// Enum value maps for AgentMattermostBotIdentityAction.
+var (
+	AgentMattermostBotIdentityAction_name = map[int32]string{
+		0: "AGENT_MATTERMOST_BOT_IDENTITY_ACTION_UNSPECIFIED",
+		1: "AGENT_MATTERMOST_BOT_IDENTITY_ACTION_CREATE_AND_BIND",
+		2: "AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND",
+		3: "AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND",
+		4: "AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE",
+	}
+	AgentMattermostBotIdentityAction_value = map[string]int32{
+		"AGENT_MATTERMOST_BOT_IDENTITY_ACTION_UNSPECIFIED":     0,
+		"AGENT_MATTERMOST_BOT_IDENTITY_ACTION_CREATE_AND_BIND": 1,
+		"AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND":            2,
+		"AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND":          3,
+		"AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE":          4,
+	}
+)
+
+func (x AgentMattermostBotIdentityAction) Enum() *AgentMattermostBotIdentityAction {
+	p := new(AgentMattermostBotIdentityAction)
+	*p = x
+	return p
+}
+
+func (x AgentMattermostBotIdentityAction) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AgentMattermostBotIdentityAction) Descriptor() protoreflect.EnumDescriptor {
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[7].Descriptor()
+}
+
+func (AgentMattermostBotIdentityAction) Type() protoreflect.EnumType {
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[7]
+}
+
+func (x AgentMattermostBotIdentityAction) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AgentMattermostBotIdentityAction.Descriptor instead.
+func (AgentMattermostBotIdentityAction) EnumDescriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{7}
+}
+
+type AgentMattermostBotIdentityOperationState int32
+
+const (
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_UNSPECIFIED        AgentMattermostBotIdentityOperationState = 0
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_EFFECT_PENDING     AgentMattermostBotIdentityOperationState = 1
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_MEMBERSHIP_PENDING AgentMattermostBotIdentityOperationState = 2
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_AMBIGUOUS          AgentMattermostBotIdentityOperationState = 3
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_PROVIDER_ACCEPTED  AgentMattermostBotIdentityOperationState = 4
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_BOUND              AgentMattermostBotIdentityOperationState = 5
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REVOKED            AgentMattermostBotIdentityOperationState = 6
+	AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REPAIR_REQUIRED    AgentMattermostBotIdentityOperationState = 7
+)
+
+// Enum value maps for AgentMattermostBotIdentityOperationState.
+var (
+	AgentMattermostBotIdentityOperationState_name = map[int32]string{
+		0: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_UNSPECIFIED",
+		1: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_EFFECT_PENDING",
+		2: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_MEMBERSHIP_PENDING",
+		3: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_AMBIGUOUS",
+		4: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_PROVIDER_ACCEPTED",
+		5: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_BOUND",
+		6: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REVOKED",
+		7: "AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REPAIR_REQUIRED",
+	}
+	AgentMattermostBotIdentityOperationState_value = map[string]int32{
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_UNSPECIFIED":        0,
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_EFFECT_PENDING":     1,
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_MEMBERSHIP_PENDING": 2,
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_AMBIGUOUS":          3,
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_PROVIDER_ACCEPTED":  4,
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_BOUND":              5,
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REVOKED":            6,
+		"AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REPAIR_REQUIRED":    7,
+	}
+)
+
+func (x AgentMattermostBotIdentityOperationState) Enum() *AgentMattermostBotIdentityOperationState {
+	p := new(AgentMattermostBotIdentityOperationState)
+	*p = x
+	return p
+}
+
+func (x AgentMattermostBotIdentityOperationState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AgentMattermostBotIdentityOperationState) Descriptor() protoreflect.EnumDescriptor {
+	return file_interactiongateway_v1_interaction_gateway_proto_enumTypes[8].Descriptor()
+}
+
+func (AgentMattermostBotIdentityOperationState) Type() protoreflect.EnumType {
+	return &file_interactiongateway_v1_interaction_gateway_proto_enumTypes[8]
+}
+
+func (x AgentMattermostBotIdentityOperationState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AgentMattermostBotIdentityOperationState.Descriptor instead.
+func (AgentMattermostBotIdentityOperationState) EnumDescriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{8}
+}
+
+// ErrorDetail связывает reason/code/retryable с безопасным correlation ID.
+type ErrorDetail struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        ErrorReason            `protobuf:"varint,1,opt,name=reason,proto3,enum=interactiongateway.v1.ErrorReason" json:"reason,omitempty"`
+	Code          string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	CorrelationId string                 `protobuf:"bytes,3,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	Retryable     bool                   `protobuf:"varint,4,opt,name=retryable,proto3" json:"retryable,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ErrorDetail) Reset() {
+	*x = ErrorDetail{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ErrorDetail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ErrorDetail) ProtoMessage() {}
+
+func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ErrorDetail.ProtoReflect.Descriptor instead.
+func (*ErrorDetail) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ErrorDetail) GetReason() ErrorReason {
+	if x != nil {
+		return x.Reason
+	}
+	return ErrorReason_ERROR_REASON_UNSPECIFIED
+}
+
+func (x *ErrorDetail) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *ErrorDetail) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *ErrorDetail) GetRetryable() bool {
+	if x != nil {
+		return x.Retryable
+	}
+	return false
 }
 
 type MattermostTeamView struct {
@@ -304,7 +618,7 @@ type MattermostTeamView struct {
 
 func (x *MattermostTeamView) Reset() {
 	*x = MattermostTeamView{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[0]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -316,7 +630,7 @@ func (x *MattermostTeamView) String() string {
 func (*MattermostTeamView) ProtoMessage() {}
 
 func (x *MattermostTeamView) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[0]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -329,7 +643,7 @@ func (x *MattermostTeamView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MattermostTeamView.ProtoReflect.Descriptor instead.
 func (*MattermostTeamView) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{0}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *MattermostTeamView) GetSelector() string {
@@ -406,7 +720,7 @@ type MattermostTeamOperationView struct {
 
 func (x *MattermostTeamOperationView) Reset() {
 	*x = MattermostTeamOperationView{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[1]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -418,7 +732,7 @@ func (x *MattermostTeamOperationView) String() string {
 func (*MattermostTeamOperationView) ProtoMessage() {}
 
 func (x *MattermostTeamOperationView) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[1]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -431,7 +745,7 @@ func (x *MattermostTeamOperationView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MattermostTeamOperationView.ProtoReflect.Descriptor instead.
 func (*MattermostTeamOperationView) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{1}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MattermostTeamOperationView) GetOperationId() string {
@@ -521,7 +835,7 @@ type WorkspaceMattermostTeamBindingView struct {
 
 func (x *WorkspaceMattermostTeamBindingView) Reset() {
 	*x = WorkspaceMattermostTeamBindingView{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[2]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -533,7 +847,7 @@ func (x *WorkspaceMattermostTeamBindingView) String() string {
 func (*WorkspaceMattermostTeamBindingView) ProtoMessage() {}
 
 func (x *WorkspaceMattermostTeamBindingView) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[2]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -546,7 +860,7 @@ func (x *WorkspaceMattermostTeamBindingView) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use WorkspaceMattermostTeamBindingView.ProtoReflect.Descriptor instead.
 func (*WorkspaceMattermostTeamBindingView) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{2}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *WorkspaceMattermostTeamBindingView) GetMappingRef() string {
@@ -629,7 +943,7 @@ type WorkspaceMattermostMappingOperationView struct {
 
 func (x *WorkspaceMattermostMappingOperationView) Reset() {
 	*x = WorkspaceMattermostMappingOperationView{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -641,7 +955,7 @@ func (x *WorkspaceMattermostMappingOperationView) String() string {
 func (*WorkspaceMattermostMappingOperationView) ProtoMessage() {}
 
 func (x *WorkspaceMattermostMappingOperationView) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[3]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -654,7 +968,7 @@ func (x *WorkspaceMattermostMappingOperationView) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use WorkspaceMattermostMappingOperationView.ProtoReflect.Descriptor instead.
 func (*WorkspaceMattermostMappingOperationView) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{3}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *WorkspaceMattermostMappingOperationView) GetOperationId() string {
@@ -730,7 +1044,7 @@ type ListMattermostTeamsRequest struct {
 
 func (x *ListMattermostTeamsRequest) Reset() {
 	*x = ListMattermostTeamsRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -742,7 +1056,7 @@ func (x *ListMattermostTeamsRequest) String() string {
 func (*ListMattermostTeamsRequest) ProtoMessage() {}
 
 func (x *ListMattermostTeamsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[4]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -755,7 +1069,7 @@ func (x *ListMattermostTeamsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMattermostTeamsRequest.ProtoReflect.Descriptor instead.
 func (*ListMattermostTeamsRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{4}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListMattermostTeamsRequest) GetPageSize() uint32 {
@@ -782,7 +1096,7 @@ type ListMattermostTeamsResponse struct {
 
 func (x *ListMattermostTeamsResponse) Reset() {
 	*x = ListMattermostTeamsResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -794,7 +1108,7 @@ func (x *ListMattermostTeamsResponse) String() string {
 func (*ListMattermostTeamsResponse) ProtoMessage() {}
 
 func (x *ListMattermostTeamsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[5]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +1121,7 @@ func (x *ListMattermostTeamsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMattermostTeamsResponse.ProtoReflect.Descriptor instead.
 func (*ListMattermostTeamsResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{5}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListMattermostTeamsResponse) GetTeams() []*MattermostTeamView {
@@ -835,7 +1149,7 @@ type CreateMattermostTeamRequest struct {
 
 func (x *CreateMattermostTeamRequest) Reset() {
 	*x = CreateMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -847,7 +1161,7 @@ func (x *CreateMattermostTeamRequest) String() string {
 func (*CreateMattermostTeamRequest) ProtoMessage() {}
 
 func (x *CreateMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[6]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -860,7 +1174,7 @@ func (x *CreateMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*CreateMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{6}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CreateMattermostTeamRequest) GetDisplayName() string {
@@ -895,7 +1209,7 @@ type CreateMattermostTeamResponse struct {
 
 func (x *CreateMattermostTeamResponse) Reset() {
 	*x = CreateMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +1221,7 @@ func (x *CreateMattermostTeamResponse) String() string {
 func (*CreateMattermostTeamResponse) ProtoMessage() {}
 
 func (x *CreateMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[7]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +1234,7 @@ func (x *CreateMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*CreateMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{7}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateMattermostTeamResponse) GetOperation() *MattermostTeamOperationView {
@@ -954,7 +1268,7 @@ type LinkMattermostTeamRequest struct {
 
 func (x *LinkMattermostTeamRequest) Reset() {
 	*x = LinkMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -966,7 +1280,7 @@ func (x *LinkMattermostTeamRequest) String() string {
 func (*LinkMattermostTeamRequest) ProtoMessage() {}
 
 func (x *LinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[8]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -979,7 +1293,7 @@ func (x *LinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*LinkMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{8}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *LinkMattermostTeamRequest) GetSelector() string {
@@ -1006,7 +1320,7 @@ type LinkMattermostTeamResponse struct {
 
 func (x *LinkMattermostTeamResponse) Reset() {
 	*x = LinkMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1018,7 +1332,7 @@ func (x *LinkMattermostTeamResponse) String() string {
 func (*LinkMattermostTeamResponse) ProtoMessage() {}
 
 func (x *LinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[9]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1031,7 +1345,7 @@ func (x *LinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*LinkMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{9}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LinkMattermostTeamResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
@@ -1056,7 +1370,7 @@ type GetMattermostTeamBindingRequest struct {
 
 func (x *GetMattermostTeamBindingRequest) Reset() {
 	*x = GetMattermostTeamBindingRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1068,7 +1382,7 @@ func (x *GetMattermostTeamBindingRequest) String() string {
 func (*GetMattermostTeamBindingRequest) ProtoMessage() {}
 
 func (x *GetMattermostTeamBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[10]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1081,7 +1395,7 @@ func (x *GetMattermostTeamBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMattermostTeamBindingRequest.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamBindingRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{10}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{11}
 }
 
 type GetMattermostTeamBindingResponse struct {
@@ -1093,7 +1407,7 @@ type GetMattermostTeamBindingResponse struct {
 
 func (x *GetMattermostTeamBindingResponse) Reset() {
 	*x = GetMattermostTeamBindingResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1105,7 +1419,7 @@ func (x *GetMattermostTeamBindingResponse) String() string {
 func (*GetMattermostTeamBindingResponse) ProtoMessage() {}
 
 func (x *GetMattermostTeamBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[11]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1118,7 +1432,7 @@ func (x *GetMattermostTeamBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMattermostTeamBindingResponse.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamBindingResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{11}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetMattermostTeamBindingResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
@@ -1140,7 +1454,7 @@ type RelinkMattermostTeamRequest struct {
 
 func (x *RelinkMattermostTeamRequest) Reset() {
 	*x = RelinkMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1152,7 +1466,7 @@ func (x *RelinkMattermostTeamRequest) String() string {
 func (*RelinkMattermostTeamRequest) ProtoMessage() {}
 
 func (x *RelinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[12]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1165,7 +1479,7 @@ func (x *RelinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelinkMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*RelinkMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{12}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RelinkMattermostTeamRequest) GetSelector() string {
@@ -1206,7 +1520,7 @@ type RelinkMattermostTeamResponse struct {
 
 func (x *RelinkMattermostTeamResponse) Reset() {
 	*x = RelinkMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1218,7 +1532,7 @@ func (x *RelinkMattermostTeamResponse) String() string {
 func (*RelinkMattermostTeamResponse) ProtoMessage() {}
 
 func (x *RelinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[13]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1231,7 +1545,7 @@ func (x *RelinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelinkMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*RelinkMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{13}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RelinkMattermostTeamResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
@@ -1259,7 +1573,7 @@ type UnlinkMattermostTeamRequest struct {
 
 func (x *UnlinkMattermostTeamRequest) Reset() {
 	*x = UnlinkMattermostTeamRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1271,7 +1585,7 @@ func (x *UnlinkMattermostTeamRequest) String() string {
 func (*UnlinkMattermostTeamRequest) ProtoMessage() {}
 
 func (x *UnlinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[14]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1284,7 +1598,7 @@ func (x *UnlinkMattermostTeamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkMattermostTeamRequest.ProtoReflect.Descriptor instead.
 func (*UnlinkMattermostTeamRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{14}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *UnlinkMattermostTeamRequest) GetExpectedMappingVersion() uint64 {
@@ -1318,7 +1632,7 @@ type UnlinkMattermostTeamResponse struct {
 
 func (x *UnlinkMattermostTeamResponse) Reset() {
 	*x = UnlinkMattermostTeamResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1330,7 +1644,7 @@ func (x *UnlinkMattermostTeamResponse) String() string {
 func (*UnlinkMattermostTeamResponse) ProtoMessage() {}
 
 func (x *UnlinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[15]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1343,7 +1657,7 @@ func (x *UnlinkMattermostTeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkMattermostTeamResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkMattermostTeamResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{15}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UnlinkMattermostTeamResponse) GetBinding() *WorkspaceMattermostTeamBindingView {
@@ -1370,7 +1684,7 @@ type GetMattermostTeamMappingOperationRequest struct {
 
 func (x *GetMattermostTeamMappingOperationRequest) Reset() {
 	*x = GetMattermostTeamMappingOperationRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1382,7 +1696,7 @@ func (x *GetMattermostTeamMappingOperationRequest) String() string {
 func (*GetMattermostTeamMappingOperationRequest) ProtoMessage() {}
 
 func (x *GetMattermostTeamMappingOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[16]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1395,7 +1709,7 @@ func (x *GetMattermostTeamMappingOperationRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use GetMattermostTeamMappingOperationRequest.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamMappingOperationRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{16}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetMattermostTeamMappingOperationRequest) GetAction() WorkspaceMattermostMappingAction {
@@ -1421,7 +1735,7 @@ type GetMattermostTeamMappingOperationResponse struct {
 
 func (x *GetMattermostTeamMappingOperationResponse) Reset() {
 	*x = GetMattermostTeamMappingOperationResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1433,7 +1747,7 @@ func (x *GetMattermostTeamMappingOperationResponse) String() string {
 func (*GetMattermostTeamMappingOperationResponse) ProtoMessage() {}
 
 func (x *GetMattermostTeamMappingOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[17]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1446,7 +1760,7 @@ func (x *GetMattermostTeamMappingOperationResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use GetMattermostTeamMappingOperationResponse.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamMappingOperationResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{17}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetMattermostTeamMappingOperationResponse) GetOperation() *WorkspaceMattermostMappingOperationView {
@@ -1465,7 +1779,7 @@ type GetMattermostTeamProviderReadbackRequest struct {
 
 func (x *GetMattermostTeamProviderReadbackRequest) Reset() {
 	*x = GetMattermostTeamProviderReadbackRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1477,7 +1791,7 @@ func (x *GetMattermostTeamProviderReadbackRequest) String() string {
 func (*GetMattermostTeamProviderReadbackRequest) ProtoMessage() {}
 
 func (x *GetMattermostTeamProviderReadbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[18]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1490,7 +1804,7 @@ func (x *GetMattermostTeamProviderReadbackRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use GetMattermostTeamProviderReadbackRequest.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamProviderReadbackRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{18}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetMattermostTeamProviderReadbackRequest) GetSelector() string {
@@ -1509,7 +1823,7 @@ type GetMattermostTeamProviderReadbackResponse struct {
 
 func (x *GetMattermostTeamProviderReadbackResponse) Reset() {
 	*x = GetMattermostTeamProviderReadbackResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[19]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1521,7 +1835,7 @@ func (x *GetMattermostTeamProviderReadbackResponse) String() string {
 func (*GetMattermostTeamProviderReadbackResponse) ProtoMessage() {}
 
 func (x *GetMattermostTeamProviderReadbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[19]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1534,7 +1848,7 @@ func (x *GetMattermostTeamProviderReadbackResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use GetMattermostTeamProviderReadbackResponse.ProtoReflect.Descriptor instead.
 func (*GetMattermostTeamProviderReadbackResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{19}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetMattermostTeamProviderReadbackResponse) GetTeam() *MattermostTeamView {
@@ -1552,7 +1866,7 @@ type MattermostTeamServiceCheckReadinessRequest struct {
 
 func (x *MattermostTeamServiceCheckReadinessRequest) Reset() {
 	*x = MattermostTeamServiceCheckReadinessRequest{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[20]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1564,7 +1878,7 @@ func (x *MattermostTeamServiceCheckReadinessRequest) String() string {
 func (*MattermostTeamServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *MattermostTeamServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[20]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1577,7 +1891,7 @@ func (x *MattermostTeamServiceCheckReadinessRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use MattermostTeamServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*MattermostTeamServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{20}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{21}
 }
 
 type MattermostTeamServiceCheckReadinessResponse struct {
@@ -1595,7 +1909,7 @@ type MattermostTeamServiceCheckReadinessResponse struct {
 
 func (x *MattermostTeamServiceCheckReadinessResponse) Reset() {
 	*x = MattermostTeamServiceCheckReadinessResponse{}
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[21]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1607,7 +1921,7 @@ func (x *MattermostTeamServiceCheckReadinessResponse) String() string {
 func (*MattermostTeamServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *MattermostTeamServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[21]
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1620,7 +1934,7 @@ func (x *MattermostTeamServiceCheckReadinessResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use MattermostTeamServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*MattermostTeamServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{21}
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *MattermostTeamServiceCheckReadinessResponse) GetReady() bool {
@@ -1672,11 +1986,1380 @@ func (x *MattermostTeamServiceCheckReadinessResponse) GetMappingReady() bool {
 	return false
 }
 
+type AgentMattermostBotIdentityView struct {
+	state                  protoimpl.MessageState           `protogen:"open.v1"`
+	IdentityRef            string                           `protobuf:"bytes,1,opt,name=identity_ref,json=identityRef,proto3" json:"identity_ref,omitempty"`
+	Selector               string                           `protobuf:"bytes,2,opt,name=selector,proto3" json:"selector,omitempty"`
+	Username               string                           `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	DisplayName            string                           `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Status                 AgentMattermostBotIdentityStatus `protobuf:"varint,5,opt,name=status,proto3,enum=interactiongateway.v1.AgentMattermostBotIdentityStatus" json:"status,omitempty"`
+	ProviderVersion        uint64                           `protobuf:"varint,6,opt,name=provider_version,json=providerVersion,proto3" json:"provider_version,omitempty"`
+	ProviderGeneration     uint64                           `protobuf:"varint,7,opt,name=provider_generation,json=providerGeneration,proto3" json:"provider_generation,omitempty"`
+	ProviderSnapshotSha256 string                           `protobuf:"bytes,8,opt,name=provider_snapshot_sha256,json=providerSnapshotSha256,proto3" json:"provider_snapshot_sha256,omitempty"`
+	ObservedAt             *timestamppb.Timestamp           `protobuf:"bytes,10,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	UpdatedAt              *timestamppb.Timestamp           `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *AgentMattermostBotIdentityView) Reset() {
+	*x = AgentMattermostBotIdentityView{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentMattermostBotIdentityView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentMattermostBotIdentityView) ProtoMessage() {}
+
+func (x *AgentMattermostBotIdentityView) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentMattermostBotIdentityView.ProtoReflect.Descriptor instead.
+func (*AgentMattermostBotIdentityView) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *AgentMattermostBotIdentityView) GetIdentityRef() string {
+	if x != nil {
+		return x.IdentityRef
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityView) GetSelector() string {
+	if x != nil {
+		return x.Selector
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityView) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityView) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityView) GetStatus() AgentMattermostBotIdentityStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AgentMattermostBotIdentityStatus_AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNSPECIFIED
+}
+
+func (x *AgentMattermostBotIdentityView) GetProviderVersion() uint64 {
+	if x != nil {
+		return x.ProviderVersion
+	}
+	return 0
+}
+
+func (x *AgentMattermostBotIdentityView) GetProviderGeneration() uint64 {
+	if x != nil {
+		return x.ProviderGeneration
+	}
+	return 0
+}
+
+func (x *AgentMattermostBotIdentityView) GetProviderSnapshotSha256() string {
+	if x != nil {
+		return x.ProviderSnapshotSha256
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityView) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
+func (x *AgentMattermostBotIdentityView) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type AgentMattermostBotIdentityBindingView struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	AgentRef      string                          `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	AgentVersion  uint64                          `protobuf:"varint,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	Identity      *AgentMattermostBotIdentityView `protobuf:"bytes,3,opt,name=identity,proto3" json:"identity,omitempty"`
+	ReceiptSha256 string                          `protobuf:"bytes,4,opt,name=receipt_sha256,json=receiptSha256,proto3" json:"receipt_sha256,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp          `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentMattermostBotIdentityBindingView) Reset() {
+	*x = AgentMattermostBotIdentityBindingView{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentMattermostBotIdentityBindingView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentMattermostBotIdentityBindingView) ProtoMessage() {}
+
+func (x *AgentMattermostBotIdentityBindingView) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentMattermostBotIdentityBindingView.ProtoReflect.Descriptor instead.
+func (*AgentMattermostBotIdentityBindingView) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *AgentMattermostBotIdentityBindingView) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityBindingView) GetAgentVersion() uint64 {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return 0
+}
+
+func (x *AgentMattermostBotIdentityBindingView) GetIdentity() *AgentMattermostBotIdentityView {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *AgentMattermostBotIdentityBindingView) GetReceiptSha256() string {
+	if x != nil {
+		return x.ReceiptSha256
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityBindingView) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type AgentMattermostBotIdentityOperationView struct {
+	state                 protoimpl.MessageState                   `protogen:"open.v1"`
+	OperationId           string                                   `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	Action                AgentMattermostBotIdentityAction         `protobuf:"varint,2,opt,name=action,proto3,enum=interactiongateway.v1.AgentMattermostBotIdentityAction" json:"action,omitempty"`
+	State                 AgentMattermostBotIdentityOperationState `protobuf:"varint,3,opt,name=state,proto3,enum=interactiongateway.v1.AgentMattermostBotIdentityOperationState" json:"state,omitempty"`
+	AgentRef              string                                   `protobuf:"bytes,4,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	ExpectedAgentVersion  uint64                                   `protobuf:"varint,5,opt,name=expected_agent_version,json=expectedAgentVersion,proto3" json:"expected_agent_version,omitempty"`
+	PredecessorGeneration uint64                                   `protobuf:"varint,6,opt,name=predecessor_generation,json=predecessorGeneration,proto3" json:"predecessor_generation,omitempty"`
+	RequestSha256         string                                   `protobuf:"bytes,7,opt,name=request_sha256,json=requestSha256,proto3" json:"request_sha256,omitempty"`
+	FailureCode           string                                   `protobuf:"bytes,8,opt,name=failure_code,json=failureCode,proto3" json:"failure_code,omitempty"`
+	RetryNotBefore        *timestamppb.Timestamp                   `protobuf:"bytes,9,opt,name=retry_not_before,json=retryNotBefore,proto3" json:"retry_not_before,omitempty"`
+	RecoveryDeadline      *timestamppb.Timestamp                   `protobuf:"bytes,10,opt,name=recovery_deadline,json=recoveryDeadline,proto3" json:"recovery_deadline,omitempty"`
+	CreatedAt             *timestamppb.Timestamp                   `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt             *timestamppb.Timestamp                   `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Result                *AgentMattermostBotIdentityBindingView   `protobuf:"bytes,13,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *AgentMattermostBotIdentityOperationView) Reset() {
+	*x = AgentMattermostBotIdentityOperationView{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentMattermostBotIdentityOperationView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentMattermostBotIdentityOperationView) ProtoMessage() {}
+
+func (x *AgentMattermostBotIdentityOperationView) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentMattermostBotIdentityOperationView.ProtoReflect.Descriptor instead.
+func (*AgentMattermostBotIdentityOperationView) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetAction() AgentMattermostBotIdentityAction {
+	if x != nil {
+		return x.Action
+	}
+	return AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_UNSPECIFIED
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetState() AgentMattermostBotIdentityOperationState {
+	if x != nil {
+		return x.State
+	}
+	return AgentMattermostBotIdentityOperationState_AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_UNSPECIFIED
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetExpectedAgentVersion() uint64 {
+	if x != nil {
+		return x.ExpectedAgentVersion
+	}
+	return 0
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetPredecessorGeneration() uint64 {
+	if x != nil {
+		return x.PredecessorGeneration
+	}
+	return 0
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetRequestSha256() string {
+	if x != nil {
+		return x.RequestSha256
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetFailureCode() string {
+	if x != nil {
+		return x.FailureCode
+	}
+	return ""
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetRetryNotBefore() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RetryNotBefore
+	}
+	return nil
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetRecoveryDeadline() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RecoveryDeadline
+	}
+	return nil
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *AgentMattermostBotIdentityOperationView) GetResult() *AgentMattermostBotIdentityBindingView {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+type ListAgentMattermostBotIdentitiesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageSize      uint32                 `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Cursor        string                 `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentMattermostBotIdentitiesRequest) Reset() {
+	*x = ListAgentMattermostBotIdentitiesRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentMattermostBotIdentitiesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentMattermostBotIdentitiesRequest) ProtoMessage() {}
+
+func (x *ListAgentMattermostBotIdentitiesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentMattermostBotIdentitiesRequest.ProtoReflect.Descriptor instead.
+func (*ListAgentMattermostBotIdentitiesRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ListAgentMattermostBotIdentitiesRequest) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListAgentMattermostBotIdentitiesRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type ListAgentMattermostBotIdentitiesResponse struct {
+	state         protoimpl.MessageState            `protogen:"open.v1"`
+	Identities    []*AgentMattermostBotIdentityView `protobuf:"bytes,1,rep,name=identities,proto3" json:"identities,omitempty"`
+	NextCursor    string                            `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentMattermostBotIdentitiesResponse) Reset() {
+	*x = ListAgentMattermostBotIdentitiesResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentMattermostBotIdentitiesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentMattermostBotIdentitiesResponse) ProtoMessage() {}
+
+func (x *ListAgentMattermostBotIdentitiesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentMattermostBotIdentitiesResponse.ProtoReflect.Descriptor instead.
+func (*ListAgentMattermostBotIdentitiesResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ListAgentMattermostBotIdentitiesResponse) GetIdentities() []*AgentMattermostBotIdentityView {
+	if x != nil {
+		return x.Identities
+	}
+	return nil
+}
+
+func (x *ListAgentMattermostBotIdentitiesResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+type CreateAndBindAgentMattermostBotIdentityRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	AgentRef             string                 `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	ExpectedAgentVersion uint64                 `protobuf:"varint,2,opt,name=expected_agent_version,json=expectedAgentVersion,proto3" json:"expected_agent_version,omitempty"`
+	UsernameIntent       string                 `protobuf:"bytes,3,opt,name=username_intent,json=usernameIntent,proto3" json:"username_intent,omitempty"`
+	DisplayName          string                 `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	IdempotencyKey       string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) Reset() {
+	*x = CreateAndBindAgentMattermostBotIdentityRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAndBindAgentMattermostBotIdentityRequest) ProtoMessage() {}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAndBindAgentMattermostBotIdentityRequest.ProtoReflect.Descriptor instead.
+func (*CreateAndBindAgentMattermostBotIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) GetExpectedAgentVersion() uint64 {
+	if x != nil {
+		return x.ExpectedAgentVersion
+	}
+	return 0
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) GetUsernameIntent() string {
+	if x != nil {
+		return x.UsernameIntent
+	}
+	return ""
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type CreateAndBindAgentMattermostBotIdentityResponse struct {
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Operation     *AgentMattermostBotIdentityOperationView `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	Binding       *AgentMattermostBotIdentityBindingView   `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityResponse) Reset() {
+	*x = CreateAndBindAgentMattermostBotIdentityResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAndBindAgentMattermostBotIdentityResponse) ProtoMessage() {}
+
+func (x *CreateAndBindAgentMattermostBotIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAndBindAgentMattermostBotIdentityResponse.ProtoReflect.Descriptor instead.
+func (*CreateAndBindAgentMattermostBotIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityResponse) GetOperation() *AgentMattermostBotIdentityOperationView {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *CreateAndBindAgentMattermostBotIdentityResponse) GetBinding() *AgentMattermostBotIdentityBindingView {
+	if x != nil {
+		return x.Binding
+	}
+	return nil
+}
+
+type BindAgentMattermostBotIdentityRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	AgentRef             string                 `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	ExpectedAgentVersion uint64                 `protobuf:"varint,2,opt,name=expected_agent_version,json=expectedAgentVersion,proto3" json:"expected_agent_version,omitempty"`
+	IdentitySelector     string                 `protobuf:"bytes,3,opt,name=identity_selector,json=identitySelector,proto3" json:"identity_selector,omitempty"`
+	IdempotencyKey       string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *BindAgentMattermostBotIdentityRequest) Reset() {
+	*x = BindAgentMattermostBotIdentityRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindAgentMattermostBotIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindAgentMattermostBotIdentityRequest) ProtoMessage() {}
+
+func (x *BindAgentMattermostBotIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindAgentMattermostBotIdentityRequest.ProtoReflect.Descriptor instead.
+func (*BindAgentMattermostBotIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *BindAgentMattermostBotIdentityRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *BindAgentMattermostBotIdentityRequest) GetExpectedAgentVersion() uint64 {
+	if x != nil {
+		return x.ExpectedAgentVersion
+	}
+	return 0
+}
+
+func (x *BindAgentMattermostBotIdentityRequest) GetIdentitySelector() string {
+	if x != nil {
+		return x.IdentitySelector
+	}
+	return ""
+}
+
+func (x *BindAgentMattermostBotIdentityRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type BindAgentMattermostBotIdentityResponse struct {
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Operation     *AgentMattermostBotIdentityOperationView `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	Binding       *AgentMattermostBotIdentityBindingView   `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BindAgentMattermostBotIdentityResponse) Reset() {
+	*x = BindAgentMattermostBotIdentityResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindAgentMattermostBotIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindAgentMattermostBotIdentityResponse) ProtoMessage() {}
+
+func (x *BindAgentMattermostBotIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindAgentMattermostBotIdentityResponse.ProtoReflect.Descriptor instead.
+func (*BindAgentMattermostBotIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *BindAgentMattermostBotIdentityResponse) GetOperation() *AgentMattermostBotIdentityOperationView {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *BindAgentMattermostBotIdentityResponse) GetBinding() *AgentMattermostBotIdentityBindingView {
+	if x != nil {
+		return x.Binding
+	}
+	return nil
+}
+
+type GetAgentMattermostBotIdentityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentRef      string                 `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentMattermostBotIdentityRequest) Reset() {
+	*x = GetAgentMattermostBotIdentityRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentMattermostBotIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentMattermostBotIdentityRequest) ProtoMessage() {}
+
+func (x *GetAgentMattermostBotIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentMattermostBotIdentityRequest.ProtoReflect.Descriptor instead.
+func (*GetAgentMattermostBotIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *GetAgentMattermostBotIdentityRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+type GetAgentMattermostBotIdentityResponse struct {
+	state         protoimpl.MessageState                 `protogen:"open.v1"`
+	Binding       *AgentMattermostBotIdentityBindingView `protobuf:"bytes,1,opt,name=binding,proto3" json:"binding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentMattermostBotIdentityResponse) Reset() {
+	*x = GetAgentMattermostBotIdentityResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentMattermostBotIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentMattermostBotIdentityResponse) ProtoMessage() {}
+
+func (x *GetAgentMattermostBotIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentMattermostBotIdentityResponse.ProtoReflect.Descriptor instead.
+func (*GetAgentMattermostBotIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *GetAgentMattermostBotIdentityResponse) GetBinding() *AgentMattermostBotIdentityBindingView {
+	if x != nil {
+		return x.Binding
+	}
+	return nil
+}
+
+type RebindAgentMattermostBotIdentityRequest struct {
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	AgentRef                   string                 `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	ExpectedAgentVersion       uint64                 `protobuf:"varint,2,opt,name=expected_agent_version,json=expectedAgentVersion,proto3" json:"expected_agent_version,omitempty"`
+	ExpectedProviderGeneration uint64                 `protobuf:"varint,3,opt,name=expected_provider_generation,json=expectedProviderGeneration,proto3" json:"expected_provider_generation,omitempty"`
+	IdentitySelector           string                 `protobuf:"bytes,4,opt,name=identity_selector,json=identitySelector,proto3" json:"identity_selector,omitempty"`
+	IdempotencyKey             string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *RebindAgentMattermostBotIdentityRequest) Reset() {
+	*x = RebindAgentMattermostBotIdentityRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RebindAgentMattermostBotIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RebindAgentMattermostBotIdentityRequest) ProtoMessage() {}
+
+func (x *RebindAgentMattermostBotIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RebindAgentMattermostBotIdentityRequest.ProtoReflect.Descriptor instead.
+func (*RebindAgentMattermostBotIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *RebindAgentMattermostBotIdentityRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *RebindAgentMattermostBotIdentityRequest) GetExpectedAgentVersion() uint64 {
+	if x != nil {
+		return x.ExpectedAgentVersion
+	}
+	return 0
+}
+
+func (x *RebindAgentMattermostBotIdentityRequest) GetExpectedProviderGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedProviderGeneration
+	}
+	return 0
+}
+
+func (x *RebindAgentMattermostBotIdentityRequest) GetIdentitySelector() string {
+	if x != nil {
+		return x.IdentitySelector
+	}
+	return ""
+}
+
+func (x *RebindAgentMattermostBotIdentityRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type RebindAgentMattermostBotIdentityResponse struct {
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Operation     *AgentMattermostBotIdentityOperationView `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	Binding       *AgentMattermostBotIdentityBindingView   `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RebindAgentMattermostBotIdentityResponse) Reset() {
+	*x = RebindAgentMattermostBotIdentityResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RebindAgentMattermostBotIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RebindAgentMattermostBotIdentityResponse) ProtoMessage() {}
+
+func (x *RebindAgentMattermostBotIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RebindAgentMattermostBotIdentityResponse.ProtoReflect.Descriptor instead.
+func (*RebindAgentMattermostBotIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *RebindAgentMattermostBotIdentityResponse) GetOperation() *AgentMattermostBotIdentityOperationView {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *RebindAgentMattermostBotIdentityResponse) GetBinding() *AgentMattermostBotIdentityBindingView {
+	if x != nil {
+		return x.Binding
+	}
+	return nil
+}
+
+type RevokeAgentMattermostBotIdentityRequest struct {
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	AgentRef                   string                 `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	ExpectedAgentVersion       uint64                 `protobuf:"varint,2,opt,name=expected_agent_version,json=expectedAgentVersion,proto3" json:"expected_agent_version,omitempty"`
+	ExpectedProviderGeneration uint64                 `protobuf:"varint,3,opt,name=expected_provider_generation,json=expectedProviderGeneration,proto3" json:"expected_provider_generation,omitempty"`
+	IdempotencyKey             string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *RevokeAgentMattermostBotIdentityRequest) Reset() {
+	*x = RevokeAgentMattermostBotIdentityRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeAgentMattermostBotIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeAgentMattermostBotIdentityRequest) ProtoMessage() {}
+
+func (x *RevokeAgentMattermostBotIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeAgentMattermostBotIdentityRequest.ProtoReflect.Descriptor instead.
+func (*RevokeAgentMattermostBotIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *RevokeAgentMattermostBotIdentityRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *RevokeAgentMattermostBotIdentityRequest) GetExpectedAgentVersion() uint64 {
+	if x != nil {
+		return x.ExpectedAgentVersion
+	}
+	return 0
+}
+
+func (x *RevokeAgentMattermostBotIdentityRequest) GetExpectedProviderGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedProviderGeneration
+	}
+	return 0
+}
+
+func (x *RevokeAgentMattermostBotIdentityRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type RevokeAgentMattermostBotIdentityResponse struct {
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Operation     *AgentMattermostBotIdentityOperationView `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	Binding       *AgentMattermostBotIdentityBindingView   `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeAgentMattermostBotIdentityResponse) Reset() {
+	*x = RevokeAgentMattermostBotIdentityResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeAgentMattermostBotIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeAgentMattermostBotIdentityResponse) ProtoMessage() {}
+
+func (x *RevokeAgentMattermostBotIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeAgentMattermostBotIdentityResponse.ProtoReflect.Descriptor instead.
+func (*RevokeAgentMattermostBotIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *RevokeAgentMattermostBotIdentityResponse) GetOperation() *AgentMattermostBotIdentityOperationView {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *RevokeAgentMattermostBotIdentityResponse) GetBinding() *AgentMattermostBotIdentityBindingView {
+	if x != nil {
+		return x.Binding
+	}
+	return nil
+}
+
+type GetAgentMattermostBotIdentityOperationRequest struct {
+	state          protoimpl.MessageState           `protogen:"open.v1"`
+	AgentRef       string                           `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	Action         AgentMattermostBotIdentityAction `protobuf:"varint,2,opt,name=action,proto3,enum=interactiongateway.v1.AgentMattermostBotIdentityAction" json:"action,omitempty"`
+	IdempotencyKey string                           `protobuf:"bytes,3,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetAgentMattermostBotIdentityOperationRequest) Reset() {
+	*x = GetAgentMattermostBotIdentityOperationRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentMattermostBotIdentityOperationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentMattermostBotIdentityOperationRequest) ProtoMessage() {}
+
+func (x *GetAgentMattermostBotIdentityOperationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentMattermostBotIdentityOperationRequest.ProtoReflect.Descriptor instead.
+func (*GetAgentMattermostBotIdentityOperationRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *GetAgentMattermostBotIdentityOperationRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *GetAgentMattermostBotIdentityOperationRequest) GetAction() AgentMattermostBotIdentityAction {
+	if x != nil {
+		return x.Action
+	}
+	return AgentMattermostBotIdentityAction_AGENT_MATTERMOST_BOT_IDENTITY_ACTION_UNSPECIFIED
+}
+
+func (x *GetAgentMattermostBotIdentityOperationRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+type GetAgentMattermostBotIdentityOperationResponse struct {
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Operation     *AgentMattermostBotIdentityOperationView `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentMattermostBotIdentityOperationResponse) Reset() {
+	*x = GetAgentMattermostBotIdentityOperationResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentMattermostBotIdentityOperationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentMattermostBotIdentityOperationResponse) ProtoMessage() {}
+
+func (x *GetAgentMattermostBotIdentityOperationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentMattermostBotIdentityOperationResponse.ProtoReflect.Descriptor instead.
+func (*GetAgentMattermostBotIdentityOperationResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *GetAgentMattermostBotIdentityOperationResponse) GetOperation() *AgentMattermostBotIdentityOperationView {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+type GetAgentMattermostBotIdentityProviderReadbackRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AgentRef         string                 `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	IdentitySelector string                 `protobuf:"bytes,2,opt,name=identity_selector,json=identitySelector,proto3" json:"identity_selector,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackRequest) Reset() {
+	*x = GetAgentMattermostBotIdentityProviderReadbackRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentMattermostBotIdentityProviderReadbackRequest) ProtoMessage() {}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentMattermostBotIdentityProviderReadbackRequest.ProtoReflect.Descriptor instead.
+func (*GetAgentMattermostBotIdentityProviderReadbackRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackRequest) GetIdentitySelector() string {
+	if x != nil {
+		return x.IdentitySelector
+	}
+	return ""
+}
+
+type GetAgentMattermostBotIdentityProviderReadbackResponse struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	Identity      *AgentMattermostBotIdentityView `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackResponse) Reset() {
+	*x = GetAgentMattermostBotIdentityProviderReadbackResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentMattermostBotIdentityProviderReadbackResponse) ProtoMessage() {}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentMattermostBotIdentityProviderReadbackResponse.ProtoReflect.Descriptor instead.
+func (*GetAgentMattermostBotIdentityProviderReadbackResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *GetAgentMattermostBotIdentityProviderReadbackResponse) GetIdentity() *AgentMattermostBotIdentityView {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type CheckAgentMattermostBotIdentityReadinessRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentRef      string                 `protobuf:"bytes,1,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessRequest) Reset() {
+	*x = CheckAgentMattermostBotIdentityReadinessRequest{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckAgentMattermostBotIdentityReadinessRequest) ProtoMessage() {}
+
+func (x *CheckAgentMattermostBotIdentityReadinessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckAgentMattermostBotIdentityReadinessRequest.ProtoReflect.Descriptor instead.
+func (*CheckAgentMattermostBotIdentityReadinessRequest) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessRequest) GetAgentRef() string {
+	if x != nil {
+		return x.AgentRef
+	}
+	return ""
+}
+
+type CheckAgentMattermostBotIdentityReadinessResponse struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Ready                   bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
+	SchemaVersion           uint64                 `protobuf:"varint,2,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	AuthorityReady          bool                   `protobuf:"varint,3,opt,name=authority_ready,json=authorityReady,proto3" json:"authority_ready,omitempty"`
+	PostgresReady           bool                   `protobuf:"varint,4,opt,name=postgres_ready,json=postgresReady,proto3" json:"postgres_ready,omitempty"`
+	MattermostReady         bool                   `protobuf:"varint,5,opt,name=mattermost_ready,json=mattermostReady,proto3" json:"mattermost_ready,omitempty"`
+	ControlPlaneReady       bool                   `protobuf:"varint,6,opt,name=control_plane_ready,json=controlPlaneReady,proto3" json:"control_plane_ready,omitempty"`
+	IdentityGenerationReady bool                   `protobuf:"varint,7,opt,name=identity_generation_ready,json=identityGenerationReady,proto3" json:"identity_generation_ready,omitempty"`
+	FailureCode             string                 `protobuf:"bytes,8,opt,name=failure_code,json=failureCode,proto3" json:"failure_code,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) Reset() {
+	*x = CheckAgentMattermostBotIdentityReadinessResponse{}
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckAgentMattermostBotIdentityReadinessResponse) ProtoMessage() {}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_interactiongateway_v1_interaction_gateway_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckAgentMattermostBotIdentityReadinessResponse.ProtoReflect.Descriptor instead.
+func (*CheckAgentMattermostBotIdentityReadinessResponse) Descriptor() ([]byte, []int) {
+	return file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetSchemaVersion() uint64 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetAuthorityReady() bool {
+	if x != nil {
+		return x.AuthorityReady
+	}
+	return false
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetPostgresReady() bool {
+	if x != nil {
+		return x.PostgresReady
+	}
+	return false
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetMattermostReady() bool {
+	if x != nil {
+		return x.MattermostReady
+	}
+	return false
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetControlPlaneReady() bool {
+	if x != nil {
+		return x.ControlPlaneReady
+	}
+	return false
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetIdentityGenerationReady() bool {
+	if x != nil {
+		return x.IdentityGenerationReady
+	}
+	return false
+}
+
+func (x *CheckAgentMattermostBotIdentityReadinessResponse) GetFailureCode() string {
+	if x != nil {
+		return x.FailureCode
+	}
+	return ""
+}
+
 var File_interactiongateway_v1_interaction_gateway_proto protoreflect.FileDescriptor
 
 const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\n" +
-	"/interactiongateway/v1/interaction_gateway.proto\x12\x15interactiongateway.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x99\x03\n" +
+	"/interactiongateway/v1/interaction_gateway.proto\x12\x15interactiongateway.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa2\x01\n" +
+	"\vErrorDetail\x12:\n" +
+	"\x06reason\x18\x01 \x01(\x0e2\".interactiongateway.v1.ErrorReasonR\x06reason\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\x12%\n" +
+	"\x0ecorrelation_id\x18\x03 \x01(\tR\rcorrelationId\x12\x1c\n" +
+	"\tretryable\x18\x04 \x01(\bR\tretryable\"\x99\x03\n" +
 	"\x12MattermostTeamView\x12\x1a\n" +
 	"\bselector\x18\x01 \x01(\tR\bselector\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x12\n" +
@@ -1784,7 +3467,126 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\x0epostgres_ready\x18\x04 \x01(\bR\rpostgresReady\x12)\n" +
 	"\x10mattermost_ready\x18\x05 \x01(\bR\x0fmattermostReady\x12.\n" +
 	"\x13control_plane_ready\x18\x06 \x01(\bR\x11controlPlaneReady\x12#\n" +
-	"\rmapping_ready\x18\a \x01(\bR\fmappingReady*\x85\x01\n" +
+	"\rmapping_ready\x18\a \x01(\bR\fmappingReady\"\x83\x04\n" +
+	"\x1eAgentMattermostBotIdentityView\x12!\n" +
+	"\fidentity_ref\x18\x01 \x01(\tR\videntityRef\x12\x1a\n" +
+	"\bselector\x18\x02 \x01(\tR\bselector\x12\x1a\n" +
+	"\busername\x18\x03 \x01(\tR\busername\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12O\n" +
+	"\x06status\x18\x05 \x01(\x0e27.interactiongateway.v1.AgentMattermostBotIdentityStatusR\x06status\x12)\n" +
+	"\x10provider_version\x18\x06 \x01(\x04R\x0fproviderVersion\x12/\n" +
+	"\x13provider_generation\x18\a \x01(\x04R\x12providerGeneration\x128\n" +
+	"\x18provider_snapshot_sha256\x18\b \x01(\tR\x16providerSnapshotSha256\x12;\n" +
+	"\vobserved_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtJ\x04\b\t\x10\n" +
+	"\"\x9e\x02\n" +
+	"%AgentMattermostBotIdentityBindingView\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x12#\n" +
+	"\ragent_version\x18\x02 \x01(\x04R\fagentVersion\x12Q\n" +
+	"\bidentity\x18\x03 \x01(\v25.interactiongateway.v1.AgentMattermostBotIdentityViewR\bidentity\x12%\n" +
+	"\x0ereceipt_sha256\x18\x04 \x01(\tR\rreceiptSha256\x129\n" +
+	"\n" +
+	"updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa3\x06\n" +
+	"'AgentMattermostBotIdentityOperationView\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12O\n" +
+	"\x06action\x18\x02 \x01(\x0e27.interactiongateway.v1.AgentMattermostBotIdentityActionR\x06action\x12U\n" +
+	"\x05state\x18\x03 \x01(\x0e2?.interactiongateway.v1.AgentMattermostBotIdentityOperationStateR\x05state\x12\x1b\n" +
+	"\tagent_ref\x18\x04 \x01(\tR\bagentRef\x124\n" +
+	"\x16expected_agent_version\x18\x05 \x01(\x04R\x14expectedAgentVersion\x125\n" +
+	"\x16predecessor_generation\x18\x06 \x01(\x04R\x15predecessorGeneration\x12%\n" +
+	"\x0erequest_sha256\x18\a \x01(\tR\rrequestSha256\x12!\n" +
+	"\ffailure_code\x18\b \x01(\tR\vfailureCode\x12D\n" +
+	"\x10retry_not_before\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x0eretryNotBefore\x12G\n" +
+	"\x11recovery_deadline\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\x10recoveryDeadline\x129\n" +
+	"\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12T\n" +
+	"\x06result\x18\r \x01(\v2<.interactiongateway.v1.AgentMattermostBotIdentityBindingViewR\x06result\"^\n" +
+	"'ListAgentMattermostBotIdentitiesRequest\x12\x1b\n" +
+	"\tpage_size\x18\x01 \x01(\rR\bpageSize\x12\x16\n" +
+	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"\xa2\x01\n" +
+	"(ListAgentMattermostBotIdentitiesResponse\x12U\n" +
+	"\n" +
+	"identities\x18\x01 \x03(\v25.interactiongateway.v1.AgentMattermostBotIdentityViewR\n" +
+	"identities\x12\x1f\n" +
+	"\vnext_cursor\x18\x02 \x01(\tR\n" +
+	"nextCursor\"\xf8\x01\n" +
+	".CreateAndBindAgentMattermostBotIdentityRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x124\n" +
+	"\x16expected_agent_version\x18\x02 \x01(\x04R\x14expectedAgentVersion\x12'\n" +
+	"\x0fusername_intent\x18\x03 \x01(\tR\x0eusernameIntent\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12'\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"\xe7\x01\n" +
+	"/CreateAndBindAgentMattermostBotIdentityResponse\x12\\\n" +
+	"\toperation\x18\x01 \x01(\v2>.interactiongateway.v1.AgentMattermostBotIdentityOperationViewR\toperation\x12V\n" +
+	"\abinding\x18\x02 \x01(\v2<.interactiongateway.v1.AgentMattermostBotIdentityBindingViewR\abinding\"\xd0\x01\n" +
+	"%BindAgentMattermostBotIdentityRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x124\n" +
+	"\x16expected_agent_version\x18\x02 \x01(\x04R\x14expectedAgentVersion\x12+\n" +
+	"\x11identity_selector\x18\x03 \x01(\tR\x10identitySelector\x12'\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"\xde\x01\n" +
+	"&BindAgentMattermostBotIdentityResponse\x12\\\n" +
+	"\toperation\x18\x01 \x01(\v2>.interactiongateway.v1.AgentMattermostBotIdentityOperationViewR\toperation\x12V\n" +
+	"\abinding\x18\x02 \x01(\v2<.interactiongateway.v1.AgentMattermostBotIdentityBindingViewR\abinding\"C\n" +
+	"$GetAgentMattermostBotIdentityRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\"\x7f\n" +
+	"%GetAgentMattermostBotIdentityResponse\x12V\n" +
+	"\abinding\x18\x01 \x01(\v2<.interactiongateway.v1.AgentMattermostBotIdentityBindingViewR\abinding\"\x94\x02\n" +
+	"'RebindAgentMattermostBotIdentityRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x124\n" +
+	"\x16expected_agent_version\x18\x02 \x01(\x04R\x14expectedAgentVersion\x12@\n" +
+	"\x1cexpected_provider_generation\x18\x03 \x01(\x04R\x1aexpectedProviderGeneration\x12+\n" +
+	"\x11identity_selector\x18\x04 \x01(\tR\x10identitySelector\x12'\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"\xe0\x01\n" +
+	"(RebindAgentMattermostBotIdentityResponse\x12\\\n" +
+	"\toperation\x18\x01 \x01(\v2>.interactiongateway.v1.AgentMattermostBotIdentityOperationViewR\toperation\x12V\n" +
+	"\abinding\x18\x02 \x01(\v2<.interactiongateway.v1.AgentMattermostBotIdentityBindingViewR\abinding\"\xe7\x01\n" +
+	"'RevokeAgentMattermostBotIdentityRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x124\n" +
+	"\x16expected_agent_version\x18\x02 \x01(\x04R\x14expectedAgentVersion\x12@\n" +
+	"\x1cexpected_provider_generation\x18\x03 \x01(\x04R\x1aexpectedProviderGeneration\x12'\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"\xe0\x01\n" +
+	"(RevokeAgentMattermostBotIdentityResponse\x12\\\n" +
+	"\toperation\x18\x01 \x01(\v2>.interactiongateway.v1.AgentMattermostBotIdentityOperationViewR\toperation\x12V\n" +
+	"\abinding\x18\x02 \x01(\v2<.interactiongateway.v1.AgentMattermostBotIdentityBindingViewR\abinding\"\xc6\x01\n" +
+	"-GetAgentMattermostBotIdentityOperationRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x12O\n" +
+	"\x06action\x18\x02 \x01(\x0e27.interactiongateway.v1.AgentMattermostBotIdentityActionR\x06action\x12'\n" +
+	"\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\"\x8e\x01\n" +
+	".GetAgentMattermostBotIdentityOperationResponse\x12\\\n" +
+	"\toperation\x18\x01 \x01(\v2>.interactiongateway.v1.AgentMattermostBotIdentityOperationViewR\toperation\"\x80\x01\n" +
+	"4GetAgentMattermostBotIdentityProviderReadbackRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x12+\n" +
+	"\x11identity_selector\x18\x02 \x01(\tR\x10identitySelector\"\x8a\x01\n" +
+	"5GetAgentMattermostBotIdentityProviderReadbackResponse\x12Q\n" +
+	"\bidentity\x18\x01 \x01(\v25.interactiongateway.v1.AgentMattermostBotIdentityViewR\bidentity\"N\n" +
+	"/CheckAgentMattermostBotIdentityReadinessRequest\x12\x1b\n" +
+	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\"\xf9\x02\n" +
+	"0CheckAgentMattermostBotIdentityReadinessResponse\x12\x14\n" +
+	"\x05ready\x18\x01 \x01(\bR\x05ready\x12%\n" +
+	"\x0eschema_version\x18\x02 \x01(\x04R\rschemaVersion\x12'\n" +
+	"\x0fauthority_ready\x18\x03 \x01(\bR\x0eauthorityReady\x12%\n" +
+	"\x0epostgres_ready\x18\x04 \x01(\bR\rpostgresReady\x12)\n" +
+	"\x10mattermost_ready\x18\x05 \x01(\bR\x0fmattermostReady\x12.\n" +
+	"\x13control_plane_ready\x18\x06 \x01(\bR\x11controlPlaneReady\x12:\n" +
+	"\x19identity_generation_ready\x18\a \x01(\bR\x17identityGenerationReady\x12!\n" +
+	"\ffailure_code\x18\b \x01(\tR\vfailureCode*\xd3\x02\n" +
+	"\vErrorReason\x12\x1c\n" +
+	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cERROR_REASON_INVALID_REQUEST\x10\x01\x12 \n" +
+	"\x1cERROR_REASON_UNAUTHENTICATED\x10\x02\x12\"\n" +
+	"\x1eERROR_REASON_PERMISSION_DENIED\x10\x03\x12\x1a\n" +
+	"\x16ERROR_REASON_NOT_FOUND\x10\x04\x12\x1f\n" +
+	"\x1bERROR_REASON_STATE_CONFLICT\x10\x05\x12%\n" +
+	"!ERROR_REASON_IDEMPOTENCY_CONFLICT\x10\x06\x12!\n" +
+	"\x1dERROR_REASON_VERSION_MISMATCH\x10\a\x12\x1c\n" +
+	"\x18ERROR_REASON_UNAVAILABLE\x10\b\x12\x19\n" +
+	"\x15ERROR_REASON_INTERNAL\x10\t*\x85\x01\n" +
 	"\x14MattermostTeamStatus\x12&\n" +
 	"\"MATTERMOST_TEAM_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dMATTERMOST_TEAM_STATUS_ACTIVE\x10\x01\x12\"\n" +
@@ -1811,7 +3613,28 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"6WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_AMBIGUOUS\x10\x02\x126\n" +
 	"2WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_BOUND\x10\x03\x129\n" +
 	"5WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_UNLINKED\x10\x04\x12@\n" +
-	"<WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED\x10\x052\x8d\n" +
+	"<WORKSPACE_MATTERMOST_MAPPING_OPERATION_STATE_REPAIR_REQUIRED\x10\x05*\xa2\x02\n" +
+	" AgentMattermostBotIdentityStatus\x124\n" +
+	"0AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNSPECIFIED\x10\x00\x122\n" +
+	".AGENT_MATTERMOST_BOT_IDENTITY_STATUS_AVAILABLE\x10\x01\x120\n" +
+	",AGENT_MATTERMOST_BOT_IDENTITY_STATUS_REVOKED\x10\x02\x120\n" +
+	",AGENT_MATTERMOST_BOT_IDENTITY_STATUS_DELETED\x10\x03\x120\n" +
+	",AGENT_MATTERMOST_BOT_IDENTITY_STATUS_UNKNOWN\x10\x04*\xa3\x02\n" +
+	" AgentMattermostBotIdentityAction\x124\n" +
+	"0AGENT_MATTERMOST_BOT_IDENTITY_ACTION_UNSPECIFIED\x10\x00\x128\n" +
+	"4AGENT_MATTERMOST_BOT_IDENTITY_ACTION_CREATE_AND_BIND\x10\x01\x12-\n" +
+	")AGENT_MATTERMOST_BOT_IDENTITY_ACTION_BIND\x10\x02\x12/\n" +
+	"+AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REBIND\x10\x03\x12/\n" +
+	"+AGENT_MATTERMOST_BOT_IDENTITY_ACTION_REVOKE\x10\x04*\xaa\x04\n" +
+	"(AgentMattermostBotIdentityOperationState\x12=\n" +
+	"9AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_UNSPECIFIED\x10\x00\x12@\n" +
+	"<AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_EFFECT_PENDING\x10\x01\x12D\n" +
+	"@AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_MEMBERSHIP_PENDING\x10\x02\x12;\n" +
+	"7AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_AMBIGUOUS\x10\x03\x12C\n" +
+	"?AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_PROVIDER_ACCEPTED\x10\x04\x127\n" +
+	"3AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_BOUND\x10\x05\x129\n" +
+	"5AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REVOKED\x10\x06\x12A\n" +
+	"=AGENT_MATTERMOST_BOT_IDENTITY_OPERATION_STATE_REPAIR_REQUIRED\x10\a2\x8d\n" +
 	"\n" +
 	"\x15MattermostTeamService\x12|\n" +
 	"\x13ListMattermostTeams\x121.interactiongateway.v1.ListMattermostTeamsRequest\x1a2.interactiongateway.v1.ListMattermostTeamsResponse\x12\x7f\n" +
@@ -1822,7 +3645,17 @@ const file_interactiongateway_v1_interaction_gateway_proto_rawDesc = "" +
 	"\x14UnlinkMattermostTeam\x122.interactiongateway.v1.UnlinkMattermostTeamRequest\x1a3.interactiongateway.v1.UnlinkMattermostTeamResponse\x12\xa6\x01\n" +
 	"!GetMattermostTeamMappingOperation\x12?.interactiongateway.v1.GetMattermostTeamMappingOperationRequest\x1a@.interactiongateway.v1.GetMattermostTeamMappingOperationResponse\x12\xa6\x01\n" +
 	"!GetMattermostTeamProviderReadback\x12?.interactiongateway.v1.GetMattermostTeamProviderReadbackRequest\x1a@.interactiongateway.v1.GetMattermostTeamProviderReadbackResponse\x12\x97\x01\n" +
-	"\x0eCheckReadiness\x12A.interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest\x1aB.interactiongateway.v1.MattermostTeamServiceCheckReadinessResponseBpZngithub.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1;interactiongatewayv1b\x06proto3"
+	"\x0eCheckReadiness\x12A.interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest\x1aB.interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse2\xd0\f\n" +
+	"!AgentMattermostBotIdentityService\x12\xa3\x01\n" +
+	" ListAgentMattermostBotIdentities\x12>.interactiongateway.v1.ListAgentMattermostBotIdentitiesRequest\x1a?.interactiongateway.v1.ListAgentMattermostBotIdentitiesResponse\x12\xb8\x01\n" +
+	"'CreateAndBindAgentMattermostBotIdentity\x12E.interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityRequest\x1aF.interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityResponse\x12\x9d\x01\n" +
+	"\x1eBindAgentMattermostBotIdentity\x12<.interactiongateway.v1.BindAgentMattermostBotIdentityRequest\x1a=.interactiongateway.v1.BindAgentMattermostBotIdentityResponse\x12\x9a\x01\n" +
+	"\x1dGetAgentMattermostBotIdentity\x12;.interactiongateway.v1.GetAgentMattermostBotIdentityRequest\x1a<.interactiongateway.v1.GetAgentMattermostBotIdentityResponse\x12\xa3\x01\n" +
+	" RebindAgentMattermostBotIdentity\x12>.interactiongateway.v1.RebindAgentMattermostBotIdentityRequest\x1a?.interactiongateway.v1.RebindAgentMattermostBotIdentityResponse\x12\xa3\x01\n" +
+	" RevokeAgentMattermostBotIdentity\x12>.interactiongateway.v1.RevokeAgentMattermostBotIdentityRequest\x1a?.interactiongateway.v1.RevokeAgentMattermostBotIdentityResponse\x12\xb5\x01\n" +
+	"&GetAgentMattermostBotIdentityOperation\x12D.interactiongateway.v1.GetAgentMattermostBotIdentityOperationRequest\x1aE.interactiongateway.v1.GetAgentMattermostBotIdentityOperationResponse\x12\xca\x01\n" +
+	"-GetAgentMattermostBotIdentityProviderReadback\x12K.interactiongateway.v1.GetAgentMattermostBotIdentityProviderReadbackRequest\x1aL.interactiongateway.v1.GetAgentMattermostBotIdentityProviderReadbackResponse\x12\xbb\x01\n" +
+	"(CheckAgentMattermostBotIdentityReadiness\x12F.interactiongateway.v1.CheckAgentMattermostBotIdentityReadinessRequest\x1aG.interactiongateway.v1.CheckAgentMattermostBotIdentityReadinessResponseBpZngithub.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi/gen/interactiongateway/v1;interactiongatewayv1b\x06proto3"
 
 var (
 	file_interactiongateway_v1_interaction_gateway_proto_rawDescOnce sync.Once
@@ -1836,96 +3669,166 @@ func file_interactiongateway_v1_interaction_gateway_proto_rawDescGZIP() []byte {
 	return file_interactiongateway_v1_interaction_gateway_proto_rawDescData
 }
 
-var file_interactiongateway_v1_interaction_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_interactiongateway_v1_interaction_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_interactiongateway_v1_interaction_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
+var file_interactiongateway_v1_interaction_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_interactiongateway_v1_interaction_gateway_proto_goTypes = []any{
-	(MattermostTeamStatus)(0),                           // 0: interactiongateway.v1.MattermostTeamStatus
-	(MattermostTeamOperationState)(0),                   // 1: interactiongateway.v1.MattermostTeamOperationState
-	(WorkspaceMattermostMappingState)(0),                // 2: interactiongateway.v1.WorkspaceMattermostMappingState
-	(WorkspaceMattermostMappingAction)(0),               // 3: interactiongateway.v1.WorkspaceMattermostMappingAction
-	(WorkspaceMattermostMappingOperationState)(0),       // 4: interactiongateway.v1.WorkspaceMattermostMappingOperationState
-	(*MattermostTeamView)(nil),                          // 5: interactiongateway.v1.MattermostTeamView
-	(*MattermostTeamOperationView)(nil),                 // 6: interactiongateway.v1.MattermostTeamOperationView
-	(*WorkspaceMattermostTeamBindingView)(nil),          // 7: interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	(*WorkspaceMattermostMappingOperationView)(nil),     // 8: interactiongateway.v1.WorkspaceMattermostMappingOperationView
-	(*ListMattermostTeamsRequest)(nil),                  // 9: interactiongateway.v1.ListMattermostTeamsRequest
-	(*ListMattermostTeamsResponse)(nil),                 // 10: interactiongateway.v1.ListMattermostTeamsResponse
-	(*CreateMattermostTeamRequest)(nil),                 // 11: interactiongateway.v1.CreateMattermostTeamRequest
-	(*CreateMattermostTeamResponse)(nil),                // 12: interactiongateway.v1.CreateMattermostTeamResponse
-	(*LinkMattermostTeamRequest)(nil),                   // 13: interactiongateway.v1.LinkMattermostTeamRequest
-	(*LinkMattermostTeamResponse)(nil),                  // 14: interactiongateway.v1.LinkMattermostTeamResponse
-	(*GetMattermostTeamBindingRequest)(nil),             // 15: interactiongateway.v1.GetMattermostTeamBindingRequest
-	(*GetMattermostTeamBindingResponse)(nil),            // 16: interactiongateway.v1.GetMattermostTeamBindingResponse
-	(*RelinkMattermostTeamRequest)(nil),                 // 17: interactiongateway.v1.RelinkMattermostTeamRequest
-	(*RelinkMattermostTeamResponse)(nil),                // 18: interactiongateway.v1.RelinkMattermostTeamResponse
-	(*UnlinkMattermostTeamRequest)(nil),                 // 19: interactiongateway.v1.UnlinkMattermostTeamRequest
-	(*UnlinkMattermostTeamResponse)(nil),                // 20: interactiongateway.v1.UnlinkMattermostTeamResponse
-	(*GetMattermostTeamMappingOperationRequest)(nil),    // 21: interactiongateway.v1.GetMattermostTeamMappingOperationRequest
-	(*GetMattermostTeamMappingOperationResponse)(nil),   // 22: interactiongateway.v1.GetMattermostTeamMappingOperationResponse
-	(*GetMattermostTeamProviderReadbackRequest)(nil),    // 23: interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
-	(*GetMattermostTeamProviderReadbackResponse)(nil),   // 24: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
-	(*MattermostTeamServiceCheckReadinessRequest)(nil),  // 25: interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
-	(*MattermostTeamServiceCheckReadinessResponse)(nil), // 26: interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
-	(*timestamppb.Timestamp)(nil),                       // 27: google.protobuf.Timestamp
+	(ErrorReason)(0),                                              // 0: interactiongateway.v1.ErrorReason
+	(MattermostTeamStatus)(0),                                     // 1: interactiongateway.v1.MattermostTeamStatus
+	(MattermostTeamOperationState)(0),                             // 2: interactiongateway.v1.MattermostTeamOperationState
+	(WorkspaceMattermostMappingState)(0),                          // 3: interactiongateway.v1.WorkspaceMattermostMappingState
+	(WorkspaceMattermostMappingAction)(0),                         // 4: interactiongateway.v1.WorkspaceMattermostMappingAction
+	(WorkspaceMattermostMappingOperationState)(0),                 // 5: interactiongateway.v1.WorkspaceMattermostMappingOperationState
+	(AgentMattermostBotIdentityStatus)(0),                         // 6: interactiongateway.v1.AgentMattermostBotIdentityStatus
+	(AgentMattermostBotIdentityAction)(0),                         // 7: interactiongateway.v1.AgentMattermostBotIdentityAction
+	(AgentMattermostBotIdentityOperationState)(0),                 // 8: interactiongateway.v1.AgentMattermostBotIdentityOperationState
+	(*ErrorDetail)(nil),                                           // 9: interactiongateway.v1.ErrorDetail
+	(*MattermostTeamView)(nil),                                    // 10: interactiongateway.v1.MattermostTeamView
+	(*MattermostTeamOperationView)(nil),                           // 11: interactiongateway.v1.MattermostTeamOperationView
+	(*WorkspaceMattermostTeamBindingView)(nil),                    // 12: interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	(*WorkspaceMattermostMappingOperationView)(nil),               // 13: interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	(*ListMattermostTeamsRequest)(nil),                            // 14: interactiongateway.v1.ListMattermostTeamsRequest
+	(*ListMattermostTeamsResponse)(nil),                           // 15: interactiongateway.v1.ListMattermostTeamsResponse
+	(*CreateMattermostTeamRequest)(nil),                           // 16: interactiongateway.v1.CreateMattermostTeamRequest
+	(*CreateMattermostTeamResponse)(nil),                          // 17: interactiongateway.v1.CreateMattermostTeamResponse
+	(*LinkMattermostTeamRequest)(nil),                             // 18: interactiongateway.v1.LinkMattermostTeamRequest
+	(*LinkMattermostTeamResponse)(nil),                            // 19: interactiongateway.v1.LinkMattermostTeamResponse
+	(*GetMattermostTeamBindingRequest)(nil),                       // 20: interactiongateway.v1.GetMattermostTeamBindingRequest
+	(*GetMattermostTeamBindingResponse)(nil),                      // 21: interactiongateway.v1.GetMattermostTeamBindingResponse
+	(*RelinkMattermostTeamRequest)(nil),                           // 22: interactiongateway.v1.RelinkMattermostTeamRequest
+	(*RelinkMattermostTeamResponse)(nil),                          // 23: interactiongateway.v1.RelinkMattermostTeamResponse
+	(*UnlinkMattermostTeamRequest)(nil),                           // 24: interactiongateway.v1.UnlinkMattermostTeamRequest
+	(*UnlinkMattermostTeamResponse)(nil),                          // 25: interactiongateway.v1.UnlinkMattermostTeamResponse
+	(*GetMattermostTeamMappingOperationRequest)(nil),              // 26: interactiongateway.v1.GetMattermostTeamMappingOperationRequest
+	(*GetMattermostTeamMappingOperationResponse)(nil),             // 27: interactiongateway.v1.GetMattermostTeamMappingOperationResponse
+	(*GetMattermostTeamProviderReadbackRequest)(nil),              // 28: interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
+	(*GetMattermostTeamProviderReadbackResponse)(nil),             // 29: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
+	(*MattermostTeamServiceCheckReadinessRequest)(nil),            // 30: interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
+	(*MattermostTeamServiceCheckReadinessResponse)(nil),           // 31: interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
+	(*AgentMattermostBotIdentityView)(nil),                        // 32: interactiongateway.v1.AgentMattermostBotIdentityView
+	(*AgentMattermostBotIdentityBindingView)(nil),                 // 33: interactiongateway.v1.AgentMattermostBotIdentityBindingView
+	(*AgentMattermostBotIdentityOperationView)(nil),               // 34: interactiongateway.v1.AgentMattermostBotIdentityOperationView
+	(*ListAgentMattermostBotIdentitiesRequest)(nil),               // 35: interactiongateway.v1.ListAgentMattermostBotIdentitiesRequest
+	(*ListAgentMattermostBotIdentitiesResponse)(nil),              // 36: interactiongateway.v1.ListAgentMattermostBotIdentitiesResponse
+	(*CreateAndBindAgentMattermostBotIdentityRequest)(nil),        // 37: interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityRequest
+	(*CreateAndBindAgentMattermostBotIdentityResponse)(nil),       // 38: interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityResponse
+	(*BindAgentMattermostBotIdentityRequest)(nil),                 // 39: interactiongateway.v1.BindAgentMattermostBotIdentityRequest
+	(*BindAgentMattermostBotIdentityResponse)(nil),                // 40: interactiongateway.v1.BindAgentMattermostBotIdentityResponse
+	(*GetAgentMattermostBotIdentityRequest)(nil),                  // 41: interactiongateway.v1.GetAgentMattermostBotIdentityRequest
+	(*GetAgentMattermostBotIdentityResponse)(nil),                 // 42: interactiongateway.v1.GetAgentMattermostBotIdentityResponse
+	(*RebindAgentMattermostBotIdentityRequest)(nil),               // 43: interactiongateway.v1.RebindAgentMattermostBotIdentityRequest
+	(*RebindAgentMattermostBotIdentityResponse)(nil),              // 44: interactiongateway.v1.RebindAgentMattermostBotIdentityResponse
+	(*RevokeAgentMattermostBotIdentityRequest)(nil),               // 45: interactiongateway.v1.RevokeAgentMattermostBotIdentityRequest
+	(*RevokeAgentMattermostBotIdentityResponse)(nil),              // 46: interactiongateway.v1.RevokeAgentMattermostBotIdentityResponse
+	(*GetAgentMattermostBotIdentityOperationRequest)(nil),         // 47: interactiongateway.v1.GetAgentMattermostBotIdentityOperationRequest
+	(*GetAgentMattermostBotIdentityOperationResponse)(nil),        // 48: interactiongateway.v1.GetAgentMattermostBotIdentityOperationResponse
+	(*GetAgentMattermostBotIdentityProviderReadbackRequest)(nil),  // 49: interactiongateway.v1.GetAgentMattermostBotIdentityProviderReadbackRequest
+	(*GetAgentMattermostBotIdentityProviderReadbackResponse)(nil), // 50: interactiongateway.v1.GetAgentMattermostBotIdentityProviderReadbackResponse
+	(*CheckAgentMattermostBotIdentityReadinessRequest)(nil),       // 51: interactiongateway.v1.CheckAgentMattermostBotIdentityReadinessRequest
+	(*CheckAgentMattermostBotIdentityReadinessResponse)(nil),      // 52: interactiongateway.v1.CheckAgentMattermostBotIdentityReadinessResponse
+	(*timestamppb.Timestamp)(nil),                                 // 53: google.protobuf.Timestamp
 }
 var file_interactiongateway_v1_interaction_gateway_proto_depIdxs = []int32{
-	0,  // 0: interactiongateway.v1.MattermostTeamView.status:type_name -> interactiongateway.v1.MattermostTeamStatus
-	27, // 1: interactiongateway.v1.MattermostTeamView.created_at:type_name -> google.protobuf.Timestamp
-	27, // 2: interactiongateway.v1.MattermostTeamView.updated_at:type_name -> google.protobuf.Timestamp
-	27, // 3: interactiongateway.v1.MattermostTeamView.observed_at:type_name -> google.protobuf.Timestamp
-	1,  // 4: interactiongateway.v1.MattermostTeamOperationView.state:type_name -> interactiongateway.v1.MattermostTeamOperationState
-	5,  // 5: interactiongateway.v1.MattermostTeamOperationView.team:type_name -> interactiongateway.v1.MattermostTeamView
-	27, // 6: interactiongateway.v1.MattermostTeamOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
-	27, // 7: interactiongateway.v1.MattermostTeamOperationView.created_at:type_name -> google.protobuf.Timestamp
-	27, // 8: interactiongateway.v1.MattermostTeamOperationView.updated_at:type_name -> google.protobuf.Timestamp
-	2,  // 9: interactiongateway.v1.WorkspaceMattermostTeamBindingView.state:type_name -> interactiongateway.v1.WorkspaceMattermostMappingState
-	5,  // 10: interactiongateway.v1.WorkspaceMattermostTeamBindingView.team:type_name -> interactiongateway.v1.MattermostTeamView
-	27, // 11: interactiongateway.v1.WorkspaceMattermostTeamBindingView.provider_observed_at:type_name -> google.protobuf.Timestamp
-	27, // 12: interactiongateway.v1.WorkspaceMattermostTeamBindingView.updated_at:type_name -> google.protobuf.Timestamp
-	3,  // 13: interactiongateway.v1.WorkspaceMattermostMappingOperationView.action:type_name -> interactiongateway.v1.WorkspaceMattermostMappingAction
-	4,  // 14: interactiongateway.v1.WorkspaceMattermostMappingOperationView.state:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationState
-	27, // 15: interactiongateway.v1.WorkspaceMattermostMappingOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
-	27, // 16: interactiongateway.v1.WorkspaceMattermostMappingOperationView.recovery_deadline:type_name -> google.protobuf.Timestamp
-	27, // 17: interactiongateway.v1.WorkspaceMattermostMappingOperationView.created_at:type_name -> google.protobuf.Timestamp
-	27, // 18: interactiongateway.v1.WorkspaceMattermostMappingOperationView.updated_at:type_name -> google.protobuf.Timestamp
-	7,  // 19: interactiongateway.v1.WorkspaceMattermostMappingOperationView.result:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	5,  // 20: interactiongateway.v1.ListMattermostTeamsResponse.teams:type_name -> interactiongateway.v1.MattermostTeamView
-	6,  // 21: interactiongateway.v1.CreateMattermostTeamResponse.operation:type_name -> interactiongateway.v1.MattermostTeamOperationView
-	7,  // 22: interactiongateway.v1.CreateMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	8,  // 23: interactiongateway.v1.CreateMattermostTeamResponse.mapping_operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
-	7,  // 24: interactiongateway.v1.LinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	8,  // 25: interactiongateway.v1.LinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
-	7,  // 26: interactiongateway.v1.GetMattermostTeamBindingResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	7,  // 27: interactiongateway.v1.RelinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	8,  // 28: interactiongateway.v1.RelinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
-	7,  // 29: interactiongateway.v1.UnlinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
-	8,  // 30: interactiongateway.v1.UnlinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
-	3,  // 31: interactiongateway.v1.GetMattermostTeamMappingOperationRequest.action:type_name -> interactiongateway.v1.WorkspaceMattermostMappingAction
-	8,  // 32: interactiongateway.v1.GetMattermostTeamMappingOperationResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
-	5,  // 33: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse.team:type_name -> interactiongateway.v1.MattermostTeamView
-	9,  // 34: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:input_type -> interactiongateway.v1.ListMattermostTeamsRequest
-	11, // 35: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:input_type -> interactiongateway.v1.CreateMattermostTeamRequest
-	13, // 36: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:input_type -> interactiongateway.v1.LinkMattermostTeamRequest
-	15, // 37: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:input_type -> interactiongateway.v1.GetMattermostTeamBindingRequest
-	17, // 38: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:input_type -> interactiongateway.v1.RelinkMattermostTeamRequest
-	19, // 39: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:input_type -> interactiongateway.v1.UnlinkMattermostTeamRequest
-	21, // 40: interactiongateway.v1.MattermostTeamService.GetMattermostTeamMappingOperation:input_type -> interactiongateway.v1.GetMattermostTeamMappingOperationRequest
-	23, // 41: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:input_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
-	25, // 42: interactiongateway.v1.MattermostTeamService.CheckReadiness:input_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
-	10, // 43: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:output_type -> interactiongateway.v1.ListMattermostTeamsResponse
-	12, // 44: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:output_type -> interactiongateway.v1.CreateMattermostTeamResponse
-	14, // 45: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:output_type -> interactiongateway.v1.LinkMattermostTeamResponse
-	16, // 46: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:output_type -> interactiongateway.v1.GetMattermostTeamBindingResponse
-	18, // 47: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:output_type -> interactiongateway.v1.RelinkMattermostTeamResponse
-	20, // 48: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:output_type -> interactiongateway.v1.UnlinkMattermostTeamResponse
-	22, // 49: interactiongateway.v1.MattermostTeamService.GetMattermostTeamMappingOperation:output_type -> interactiongateway.v1.GetMattermostTeamMappingOperationResponse
-	24, // 50: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:output_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
-	26, // 51: interactiongateway.v1.MattermostTeamService.CheckReadiness:output_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
-	43, // [43:52] is the sub-list for method output_type
-	34, // [34:43] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	0,  // 0: interactiongateway.v1.ErrorDetail.reason:type_name -> interactiongateway.v1.ErrorReason
+	1,  // 1: interactiongateway.v1.MattermostTeamView.status:type_name -> interactiongateway.v1.MattermostTeamStatus
+	53, // 2: interactiongateway.v1.MattermostTeamView.created_at:type_name -> google.protobuf.Timestamp
+	53, // 3: interactiongateway.v1.MattermostTeamView.updated_at:type_name -> google.protobuf.Timestamp
+	53, // 4: interactiongateway.v1.MattermostTeamView.observed_at:type_name -> google.protobuf.Timestamp
+	2,  // 5: interactiongateway.v1.MattermostTeamOperationView.state:type_name -> interactiongateway.v1.MattermostTeamOperationState
+	10, // 6: interactiongateway.v1.MattermostTeamOperationView.team:type_name -> interactiongateway.v1.MattermostTeamView
+	53, // 7: interactiongateway.v1.MattermostTeamOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
+	53, // 8: interactiongateway.v1.MattermostTeamOperationView.created_at:type_name -> google.protobuf.Timestamp
+	53, // 9: interactiongateway.v1.MattermostTeamOperationView.updated_at:type_name -> google.protobuf.Timestamp
+	3,  // 10: interactiongateway.v1.WorkspaceMattermostTeamBindingView.state:type_name -> interactiongateway.v1.WorkspaceMattermostMappingState
+	10, // 11: interactiongateway.v1.WorkspaceMattermostTeamBindingView.team:type_name -> interactiongateway.v1.MattermostTeamView
+	53, // 12: interactiongateway.v1.WorkspaceMattermostTeamBindingView.provider_observed_at:type_name -> google.protobuf.Timestamp
+	53, // 13: interactiongateway.v1.WorkspaceMattermostTeamBindingView.updated_at:type_name -> google.protobuf.Timestamp
+	4,  // 14: interactiongateway.v1.WorkspaceMattermostMappingOperationView.action:type_name -> interactiongateway.v1.WorkspaceMattermostMappingAction
+	5,  // 15: interactiongateway.v1.WorkspaceMattermostMappingOperationView.state:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationState
+	53, // 16: interactiongateway.v1.WorkspaceMattermostMappingOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
+	53, // 17: interactiongateway.v1.WorkspaceMattermostMappingOperationView.recovery_deadline:type_name -> google.protobuf.Timestamp
+	53, // 18: interactiongateway.v1.WorkspaceMattermostMappingOperationView.created_at:type_name -> google.protobuf.Timestamp
+	53, // 19: interactiongateway.v1.WorkspaceMattermostMappingOperationView.updated_at:type_name -> google.protobuf.Timestamp
+	12, // 20: interactiongateway.v1.WorkspaceMattermostMappingOperationView.result:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	10, // 21: interactiongateway.v1.ListMattermostTeamsResponse.teams:type_name -> interactiongateway.v1.MattermostTeamView
+	11, // 22: interactiongateway.v1.CreateMattermostTeamResponse.operation:type_name -> interactiongateway.v1.MattermostTeamOperationView
+	12, // 23: interactiongateway.v1.CreateMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	13, // 24: interactiongateway.v1.CreateMattermostTeamResponse.mapping_operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	12, // 25: interactiongateway.v1.LinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	13, // 26: interactiongateway.v1.LinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	12, // 27: interactiongateway.v1.GetMattermostTeamBindingResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	12, // 28: interactiongateway.v1.RelinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	13, // 29: interactiongateway.v1.RelinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	12, // 30: interactiongateway.v1.UnlinkMattermostTeamResponse.binding:type_name -> interactiongateway.v1.WorkspaceMattermostTeamBindingView
+	13, // 31: interactiongateway.v1.UnlinkMattermostTeamResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	4,  // 32: interactiongateway.v1.GetMattermostTeamMappingOperationRequest.action:type_name -> interactiongateway.v1.WorkspaceMattermostMappingAction
+	13, // 33: interactiongateway.v1.GetMattermostTeamMappingOperationResponse.operation:type_name -> interactiongateway.v1.WorkspaceMattermostMappingOperationView
+	10, // 34: interactiongateway.v1.GetMattermostTeamProviderReadbackResponse.team:type_name -> interactiongateway.v1.MattermostTeamView
+	6,  // 35: interactiongateway.v1.AgentMattermostBotIdentityView.status:type_name -> interactiongateway.v1.AgentMattermostBotIdentityStatus
+	53, // 36: interactiongateway.v1.AgentMattermostBotIdentityView.observed_at:type_name -> google.protobuf.Timestamp
+	53, // 37: interactiongateway.v1.AgentMattermostBotIdentityView.updated_at:type_name -> google.protobuf.Timestamp
+	32, // 38: interactiongateway.v1.AgentMattermostBotIdentityBindingView.identity:type_name -> interactiongateway.v1.AgentMattermostBotIdentityView
+	53, // 39: interactiongateway.v1.AgentMattermostBotIdentityBindingView.updated_at:type_name -> google.protobuf.Timestamp
+	7,  // 40: interactiongateway.v1.AgentMattermostBotIdentityOperationView.action:type_name -> interactiongateway.v1.AgentMattermostBotIdentityAction
+	8,  // 41: interactiongateway.v1.AgentMattermostBotIdentityOperationView.state:type_name -> interactiongateway.v1.AgentMattermostBotIdentityOperationState
+	53, // 42: interactiongateway.v1.AgentMattermostBotIdentityOperationView.retry_not_before:type_name -> google.protobuf.Timestamp
+	53, // 43: interactiongateway.v1.AgentMattermostBotIdentityOperationView.recovery_deadline:type_name -> google.protobuf.Timestamp
+	53, // 44: interactiongateway.v1.AgentMattermostBotIdentityOperationView.created_at:type_name -> google.protobuf.Timestamp
+	53, // 45: interactiongateway.v1.AgentMattermostBotIdentityOperationView.updated_at:type_name -> google.protobuf.Timestamp
+	33, // 46: interactiongateway.v1.AgentMattermostBotIdentityOperationView.result:type_name -> interactiongateway.v1.AgentMattermostBotIdentityBindingView
+	32, // 47: interactiongateway.v1.ListAgentMattermostBotIdentitiesResponse.identities:type_name -> interactiongateway.v1.AgentMattermostBotIdentityView
+	34, // 48: interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityResponse.operation:type_name -> interactiongateway.v1.AgentMattermostBotIdentityOperationView
+	33, // 49: interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityResponse.binding:type_name -> interactiongateway.v1.AgentMattermostBotIdentityBindingView
+	34, // 50: interactiongateway.v1.BindAgentMattermostBotIdentityResponse.operation:type_name -> interactiongateway.v1.AgentMattermostBotIdentityOperationView
+	33, // 51: interactiongateway.v1.BindAgentMattermostBotIdentityResponse.binding:type_name -> interactiongateway.v1.AgentMattermostBotIdentityBindingView
+	33, // 52: interactiongateway.v1.GetAgentMattermostBotIdentityResponse.binding:type_name -> interactiongateway.v1.AgentMattermostBotIdentityBindingView
+	34, // 53: interactiongateway.v1.RebindAgentMattermostBotIdentityResponse.operation:type_name -> interactiongateway.v1.AgentMattermostBotIdentityOperationView
+	33, // 54: interactiongateway.v1.RebindAgentMattermostBotIdentityResponse.binding:type_name -> interactiongateway.v1.AgentMattermostBotIdentityBindingView
+	34, // 55: interactiongateway.v1.RevokeAgentMattermostBotIdentityResponse.operation:type_name -> interactiongateway.v1.AgentMattermostBotIdentityOperationView
+	33, // 56: interactiongateway.v1.RevokeAgentMattermostBotIdentityResponse.binding:type_name -> interactiongateway.v1.AgentMattermostBotIdentityBindingView
+	7,  // 57: interactiongateway.v1.GetAgentMattermostBotIdentityOperationRequest.action:type_name -> interactiongateway.v1.AgentMattermostBotIdentityAction
+	34, // 58: interactiongateway.v1.GetAgentMattermostBotIdentityOperationResponse.operation:type_name -> interactiongateway.v1.AgentMattermostBotIdentityOperationView
+	32, // 59: interactiongateway.v1.GetAgentMattermostBotIdentityProviderReadbackResponse.identity:type_name -> interactiongateway.v1.AgentMattermostBotIdentityView
+	14, // 60: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:input_type -> interactiongateway.v1.ListMattermostTeamsRequest
+	16, // 61: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:input_type -> interactiongateway.v1.CreateMattermostTeamRequest
+	18, // 62: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:input_type -> interactiongateway.v1.LinkMattermostTeamRequest
+	20, // 63: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:input_type -> interactiongateway.v1.GetMattermostTeamBindingRequest
+	22, // 64: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:input_type -> interactiongateway.v1.RelinkMattermostTeamRequest
+	24, // 65: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:input_type -> interactiongateway.v1.UnlinkMattermostTeamRequest
+	26, // 66: interactiongateway.v1.MattermostTeamService.GetMattermostTeamMappingOperation:input_type -> interactiongateway.v1.GetMattermostTeamMappingOperationRequest
+	28, // 67: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:input_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackRequest
+	30, // 68: interactiongateway.v1.MattermostTeamService.CheckReadiness:input_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessRequest
+	35, // 69: interactiongateway.v1.AgentMattermostBotIdentityService.ListAgentMattermostBotIdentities:input_type -> interactiongateway.v1.ListAgentMattermostBotIdentitiesRequest
+	37, // 70: interactiongateway.v1.AgentMattermostBotIdentityService.CreateAndBindAgentMattermostBotIdentity:input_type -> interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityRequest
+	39, // 71: interactiongateway.v1.AgentMattermostBotIdentityService.BindAgentMattermostBotIdentity:input_type -> interactiongateway.v1.BindAgentMattermostBotIdentityRequest
+	41, // 72: interactiongateway.v1.AgentMattermostBotIdentityService.GetAgentMattermostBotIdentity:input_type -> interactiongateway.v1.GetAgentMattermostBotIdentityRequest
+	43, // 73: interactiongateway.v1.AgentMattermostBotIdentityService.RebindAgentMattermostBotIdentity:input_type -> interactiongateway.v1.RebindAgentMattermostBotIdentityRequest
+	45, // 74: interactiongateway.v1.AgentMattermostBotIdentityService.RevokeAgentMattermostBotIdentity:input_type -> interactiongateway.v1.RevokeAgentMattermostBotIdentityRequest
+	47, // 75: interactiongateway.v1.AgentMattermostBotIdentityService.GetAgentMattermostBotIdentityOperation:input_type -> interactiongateway.v1.GetAgentMattermostBotIdentityOperationRequest
+	49, // 76: interactiongateway.v1.AgentMattermostBotIdentityService.GetAgentMattermostBotIdentityProviderReadback:input_type -> interactiongateway.v1.GetAgentMattermostBotIdentityProviderReadbackRequest
+	51, // 77: interactiongateway.v1.AgentMattermostBotIdentityService.CheckAgentMattermostBotIdentityReadiness:input_type -> interactiongateway.v1.CheckAgentMattermostBotIdentityReadinessRequest
+	15, // 78: interactiongateway.v1.MattermostTeamService.ListMattermostTeams:output_type -> interactiongateway.v1.ListMattermostTeamsResponse
+	17, // 79: interactiongateway.v1.MattermostTeamService.CreateMattermostTeam:output_type -> interactiongateway.v1.CreateMattermostTeamResponse
+	19, // 80: interactiongateway.v1.MattermostTeamService.LinkMattermostTeam:output_type -> interactiongateway.v1.LinkMattermostTeamResponse
+	21, // 81: interactiongateway.v1.MattermostTeamService.GetMattermostTeamBinding:output_type -> interactiongateway.v1.GetMattermostTeamBindingResponse
+	23, // 82: interactiongateway.v1.MattermostTeamService.RelinkMattermostTeam:output_type -> interactiongateway.v1.RelinkMattermostTeamResponse
+	25, // 83: interactiongateway.v1.MattermostTeamService.UnlinkMattermostTeam:output_type -> interactiongateway.v1.UnlinkMattermostTeamResponse
+	27, // 84: interactiongateway.v1.MattermostTeamService.GetMattermostTeamMappingOperation:output_type -> interactiongateway.v1.GetMattermostTeamMappingOperationResponse
+	29, // 85: interactiongateway.v1.MattermostTeamService.GetMattermostTeamProviderReadback:output_type -> interactiongateway.v1.GetMattermostTeamProviderReadbackResponse
+	31, // 86: interactiongateway.v1.MattermostTeamService.CheckReadiness:output_type -> interactiongateway.v1.MattermostTeamServiceCheckReadinessResponse
+	36, // 87: interactiongateway.v1.AgentMattermostBotIdentityService.ListAgentMattermostBotIdentities:output_type -> interactiongateway.v1.ListAgentMattermostBotIdentitiesResponse
+	38, // 88: interactiongateway.v1.AgentMattermostBotIdentityService.CreateAndBindAgentMattermostBotIdentity:output_type -> interactiongateway.v1.CreateAndBindAgentMattermostBotIdentityResponse
+	40, // 89: interactiongateway.v1.AgentMattermostBotIdentityService.BindAgentMattermostBotIdentity:output_type -> interactiongateway.v1.BindAgentMattermostBotIdentityResponse
+	42, // 90: interactiongateway.v1.AgentMattermostBotIdentityService.GetAgentMattermostBotIdentity:output_type -> interactiongateway.v1.GetAgentMattermostBotIdentityResponse
+	44, // 91: interactiongateway.v1.AgentMattermostBotIdentityService.RebindAgentMattermostBotIdentity:output_type -> interactiongateway.v1.RebindAgentMattermostBotIdentityResponse
+	46, // 92: interactiongateway.v1.AgentMattermostBotIdentityService.RevokeAgentMattermostBotIdentity:output_type -> interactiongateway.v1.RevokeAgentMattermostBotIdentityResponse
+	48, // 93: interactiongateway.v1.AgentMattermostBotIdentityService.GetAgentMattermostBotIdentityOperation:output_type -> interactiongateway.v1.GetAgentMattermostBotIdentityOperationResponse
+	50, // 94: interactiongateway.v1.AgentMattermostBotIdentityService.GetAgentMattermostBotIdentityProviderReadback:output_type -> interactiongateway.v1.GetAgentMattermostBotIdentityProviderReadbackResponse
+	52, // 95: interactiongateway.v1.AgentMattermostBotIdentityService.CheckAgentMattermostBotIdentityReadiness:output_type -> interactiongateway.v1.CheckAgentMattermostBotIdentityReadinessResponse
+	78, // [78:96] is the sub-list for method output_type
+	60, // [60:78] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_interactiongateway_v1_interaction_gateway_proto_init() }
@@ -1938,10 +3841,10 @@ func file_interactiongateway_v1_interaction_gateway_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_interactiongateway_v1_interaction_gateway_proto_rawDesc), len(file_interactiongateway_v1_interaction_gateway_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   22,
+			NumEnums:      9,
+			NumMessages:   44,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_interactiongateway_v1_interaction_gateway_proto_goTypes,
 		DependencyIndexes: file_interactiongateway_v1_interaction_gateway_proto_depIdxs,

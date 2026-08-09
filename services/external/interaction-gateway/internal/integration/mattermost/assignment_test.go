@@ -14,18 +14,18 @@ func TestExplicitMentionsClosedResolution(t *testing.T) {
 	}
 }
 
-func TestResolveAssignmentRequiresExactMattermostIdentity(t *testing.T) {
+func TestResolveAssignmentDefersProviderIdentityToRuntimeAdmission(t *testing.T) {
 	current := &index{assignments: map[string]AgentAssignment{
 		"team\x00channel\x00agent-b": {
 			MentionUsername: "agent-b", MattermostUserID: "user-b", RoleID: "role-b", BotStableKey: "bot-b",
 		},
 	}}
-	if _, err := current.resolveAssignment("team", "channel", "agent-b", "user-a"); err == nil {
-		t.Fatal("assignment accepted mismatched Mattermost user")
-	}
-	assignment, err := current.resolveAssignment("team", "channel", "agent-b", "user-b")
+	assignment, err := current.resolveAssignment("team", "channel", "agent-b", "user-current")
 	if err != nil || assignment.RoleID != "role-b" || assignment.BotStableKey != "bot-b" {
-		t.Fatal("exact assignment was not resolved")
+		t.Fatal("server-owned stable key assignment was not resolved")
+	}
+	if _, err := current.resolveAssignment("team", "channel", "agent-b", ""); err == nil {
+		t.Fatal("assignment accepted missing provider readback identity")
 	}
 }
 
@@ -75,5 +75,19 @@ func TestIgnoredBotKeepsCursorAuthorityBoundary(t *testing.T) {
 	if err != nil || !boundary.IgnoredBot || boundary.OrganizationID != "organization" ||
 		boundary.ProjectID != "project" || boundary.ChannelID != "channel" {
 		t.Fatalf("ignored bot lost server-owned boundary: %+v, %v", boundary, err)
+	}
+}
+
+func TestRuntimeAdmissionAllowsOnlyDefaultOrAssignedStableKey(t *testing.T) {
+	current := &index{templates: map[string]ChannelBinding{
+		"template": {Assignments: []AgentAssignment{{BotStableKey: "assigned-bot"}}},
+	}}
+	client := &Client{index: current}
+	route := entity.MattermostRuntimeRoute{TemplateKey: "template",
+		Boundary: entity.Boundary{BotStableKey: "default-bot"}}
+	if !client.runtimeStableKeyAllowed(route, "default-bot") ||
+		!client.runtimeStableKeyAllowed(route, "assigned-bot") ||
+		client.runtimeStableKeyAllowed(route, "foreign-bot") {
+		t.Fatal("runtime stable key escaped the server-owned route template")
 	}
 }
