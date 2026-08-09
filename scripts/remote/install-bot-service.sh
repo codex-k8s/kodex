@@ -535,6 +535,7 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "$SHOULD_BUILD_AGENT_RUNNER"
   tar -C "$REPO_ROOT" -czf "$AGENT_RUNNER_ARCHIVE" \
     go.mod \
     go.sum \
+    libs/go \
     scripts/build-agent-runner-image.sh \
     services/jobs/agent-runner
   if [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" = "kaniko" ]; then
@@ -581,7 +582,7 @@ if [ "$DRY_RUN_MODE" = "none" ] && mattercodex_bool "${MATTERCODEX_BOT_SERVICE_B
     apps/control-center \
     go.mod \
     go.sum \
-    libs/go/i18n \
+    libs/go \
     services/external/bot-service
   if [ "$MATTERCODEX_IMAGE_BUILD_STRATEGY" = "kaniko" ]; then
     run_kaniko_build_remote \
