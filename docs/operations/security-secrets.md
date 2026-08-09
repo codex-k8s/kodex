@@ -4,11 +4,27 @@ title: Безопасность и секреты
 type: operations
 status: approved
 owner: security
-version: 0.1.0
-updated: 2026-07-16
+version: 0.3.0
+updated: 2026-08-09
 ---
 
 # Безопасность и секреты
+
+В `direct-production single-node prototype` до полного Vault lifecycle допустимы
+materialized Kubernetes Secrets. Их значения создаются криптографически
+безопасно owner-controlled code-first скриптом, записываются через файловый ввод
+и не попадают в аргументы, Git, логи или отчёты. Скрипт сохраняет существующий
+Secret и закрыто отклоняет неожиданный набор ключей. Долговечная ротация,
+восстановление и hardened supply chain вынесены в #256.
+
+Одноразовый owner-controlled bootstrap является единственным writer Secret и
+Certificate для нового namespace. Routine deploy ServiceAccount не имеет
+`get|list|watch|create|update|patch` для Secrets и не управляет cert-manager.
+Application material manifest принимается только файлом, проверяется по exact
+множеству Secret/CA ConfigMap имён, required keys и непустых data, применяется
+без вывода значений. Без полного
+readback bootstrap не создаёт безопасную readiness-отметку, поэтому deploy
+закрыто останавливается до первой мутации.
 
 ## Границы доверия
 

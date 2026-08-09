@@ -1,0 +1,24 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/actions/gha-runner-scale-set-controller
+  tag: 0.14.2@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d
+  pullPolicy: IfNotPresent
+flags:
+  logLevel: info
+  logFormat: text
+  watchSingleNamespace: mattercodex-ci
+  runnerMaxConcurrentReconciles: 2
+env:
+  - {name: HTTPS_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+  - {name: HTTP_PROXY, value: http://mattercodex-ci-egress-proxy.mattercodex-ci.svc.cluster.local:8080}
+  - {name: NO_PROXY, value: "kubernetes.default.svc,localhost,127.0.0.1"}
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: {type: RuntimeDefault}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: [ALL]}
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {memory: 512Mi}

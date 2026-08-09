@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mattercodex-ci
+  labels:
+    mattercodex.dev/profile: direct-production-single-node-prototype
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mattercodex-ci-deploy
+  labels:
+    mattercodex.dev/profile: direct-production-single-node-prototype
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mattercodex-buildkit-config
+  namespace: mattercodex-ci
+data:
+  buildkitd.toml: |
+    root = "/home/user/.local/share/buildkit"
+    [worker.oci]
+      enabled = true
+      rootless = true
+      snapshotter = "native"
+      gc = true
+    [registry."matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000"]
+      http = true
+      insecure = true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mattercodex-production-deployer
+  namespace: mattercodex-ci-deploy
+automountServiceAccountToken: true
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: mattercodex-ci-workload-allowlist
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods, services]
+        scope: Namespaced
+      - apiGroups: [actions.github.com]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [autoscalingrunnersets]
+        scope: Namespaced
+  validations:
+    - expression: >-
+        object.kind != 'Service' ||
+        (object.metadata.name == 'mattercodex-ci-egress-proxy' &&
+         object.spec.type == 'ClusterIP' && size(object.spec.ports) == 1 &&
+         object.spec.ports[0].port == 8080)
+      message: CI Service is outside the machine allowlist.
+    - expression: >-
+        object.kind != 'Pod' ||
+        ((object.metadata.labels['app.kubernetes.io/name'] == 'gha-rs-controller' &&
+          object.metadata.labels['app.kubernetes.io/instance'] in ['mattercodex-arc-build','mattercodex-arc-deploy']) ||
+         object.metadata.labels['app.kubernetes.io/name'] == 'mattercodex-ci-egress-proxy' ||
+         object.metadata.labels['mattercodex.dev/arc-role'] == 'listener' ||
+         object.metadata.labels['actions.github.com/scale-set-name'] in ['mattercodex-build','mattercodex-deploy'])
+      message: CI Pod identity is outside the machine allowlist.
+    - expression: >-
+        object.kind != 'Pod' ||
+        object.metadata.labels['mattercodex.dev/arc-role'] == 'listener' ||
+        (object.metadata.namespace == 'mattercodex-ci' &&
+          object.spec.serviceAccountName in ['mattercodex-arc-build-gha-rs-controller',
+            'mattercodex-build-gha-rs-no-permission','mattercodex-ci-egress-proxy']) ||
+        (object.metadata.namespace == 'mattercodex-ci-deploy' &&
+          object.spec.serviceAccountName in ['mattercodex-arc-deploy-gha-rs-controller',
+            'mattercodex-production-deployer','mattercodex-ci-egress-proxy'])
+      message: CI Pod ServiceAccount is outside the machine allowlist.
+    - expression: >-
+        object.kind != 'Pod' ||
+        (object.spec.containers.all(c, c.image in [
+           'ghcr.io/actions/gha-runner-scale-set-controller:0.14.2@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d',
+           'ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda',
+           'docker.io/moby/buildkit:v0.32.2-rootless@sha256:504731e577c20559c00f968f33219f30115e70be29ab96728d1d06e963fc494b',
+           'docker.io/envoyproxy/envoy:distroless-v1.35.3@sha256:f9080877fdbaecc788e79e200d912382e57f780b63752160e27dfe34f5d0aa36']) &&
+         (!has(object.spec.initContainers) || object.spec.initContainers.all(c,
+           c.image == 'docker.io/moby/buildkit:v0.32.2-rootless@sha256:504731e577c20559c00f968f33219f30115e70be29ab96728d1d06e963fc494b')) &&
+         (!has(object.spec.volumes) || object.spec.volumes.all(v, !has(v.hostPath) && !has(v.persistentVolumeClaim))) &&
+         (!has(object.spec.hostNetwork) || object.spec.hostNetwork == false) &&
+         (!has(object.spec.hostPID) || object.spec.hostPID == false) &&
+         (!has(object.spec.hostIPC) || object.spec.hostIPC == false))
+      message: CI Pod image, volume or host namespace is outside the machine allowlist.
+    - expression: >-
+        object.apiVersion != 'actions.github.com/v1alpha1' ||
+        (object.metadata.namespace == 'mattercodex-ci' && object.metadata.name == 'mattercodex-build' &&
+          object.spec.githubConfigUrl == 'https://github.com/codex-k8s/matter-codex' &&
+          object.spec.runnerGroup == 'mattercodex-production-build' &&
+          object.spec.runnerScaleSetName == 'mattercodex-build' &&
+          object.spec.minRunners == 0 && object.spec.maxRunners == 1 &&
+          object.spec.template.spec.serviceAccountName == 'mattercodex-build-gha-rs-no-permission' &&
+          object.spec.template.spec.automountServiceAccountToken == false) ||
+        (object.metadata.namespace == 'mattercodex-ci-deploy' && object.metadata.name == 'mattercodex-deploy' &&
+          object.spec.githubConfigUrl == 'https://github.com/codex-k8s/matter-codex' &&
+          object.spec.runnerGroup == 'mattercodex-production-deploy' &&
+          object.spec.runnerScaleSetName == 'mattercodex-deploy' &&
+          object.spec.minRunners == 0 && object.spec.maxRunners == 1 &&
+          object.spec.template.spec.serviceAccountName == 'mattercodex-production-deployer' &&
+          object.spec.template.spec.automountServiceAccountToken == true)
+      message: ARC scale set scope or credential boundary is outside the machine allowlist.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: mattercodex-ci-workload-allowlist
+spec:
+  policyName: mattercodex-ci-workload-allowlist
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [mattercodex-ci, mattercodex-ci-deploy]

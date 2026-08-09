@@ -4,11 +4,21 @@ title: Agent runner runbook
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
-updated: 2026-08-04
+version: 1.3.0
+updated: 2026-08-09
 ---
 
 # Agent runner runbook
+
+## Сборка direct-production prototype
+
+Wave A собирает `agent-runner` на repository-scoped ephemeral ARC runner через
+rootless BuildKit. `tools/release/build-release.sh` обязательно проходит через
+защищённый `scripts/build-agent-runner-image.sh`; узкий shim переводит только его
+проверенный argv в локальный BuildKit UDS и отклоняет другой Dockerfile,
+destination либо option. Результатом является immutable digest в exact release
+lock. Legacy Kaniko path bot-service не используется для новых сборок и в этой
+волне не удаляется.
 
 ## Сигналы
 

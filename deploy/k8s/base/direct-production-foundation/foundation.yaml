@@ -1,0 +1,717 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: direct-production-prototype
+  namespace: mattercodex-system
+spec:
+  hard:
+    pods: "80"
+    persistentvolumeclaims: "16"
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    requests.storage: 160Gi
+    limits.memory: 28Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: direct-production-prototype
+  namespace: mattercodex-system
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: "50m"
+        memory: "128Mi"
+      default:
+        memory: "2Gi"
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mattercodex-prototype-selfsigned
+  namespace: mattercodex-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-prototype-ca
+  namespace: mattercodex-system
+spec:
+  isCA: true
+  commonName: mattercodex-prototype-ca
+  secretName: mattercodex-prototype-ca
+  duration: 8760h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: mattercodex-prototype-selfsigned
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: mattercodex-prototype-ca
+  namespace: mattercodex-system
+spec:
+  ca:
+    secretName: mattercodex-prototype-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-postgresql
+  namespace: mattercodex-system
+spec:
+  secretName: mattercodex-postgresql-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - mattercodex-postgresql
+    - mattercodex-postgresql.mattercodex-system.svc
+    - mattercodex-postgresql.mattercodex-system.svc.cluster.local
+    - postgresql.mattercodex-system.svc.cluster.local
+    - control-plane-postgresql-rw.mattercodex-system.svc.cluster.local
+    - internal-rpc-authority-postgresql-rw.mattercodex-system.svc.cluster.local
+    - runtime-controller-postgresql-rw.mattercodex-system.svc.cluster.local
+    - interaction-gateway-postgresql-rw.mattercodex-system.svc.cluster.local
+    - integration-gateway-postgresql-rw.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-redis
+  namespace: mattercodex-system
+spec:
+  secretName: mattercodex-redis-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - mattercodex-redis
+    - mattercodex-redis.mattercodex-system.svc
+    - mattercodex-redis.mattercodex-system.svc.cluster.local
+    - redis.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-nats
+  namespace: mattercodex-system
+spec:
+  secretName: mattercodex-nats-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - mattercodex-nats
+    - mattercodex-nats.mattercodex-system.svc
+    - mattercodex-nats.mattercodex-system.svc.cluster.local
+    - nats.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mattercodex-object-store
+  namespace: mattercodex-system
+spec:
+  secretName: mattercodex-object-store-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - mattercodex-object-store
+    - mattercodex-object-store.mattercodex-system.svc
+    - mattercodex-object-store.mattercodex-system.svc.cluster.local
+    - object-store.mattercodex-system.svc.cluster.local
+  usages: [server auth]
+  issuerRef: {name: mattercodex-prototype-ca, kind: Issuer}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mattercodex-postgresql-init
+  namespace: mattercodex-system
+data:
+  10-mattercodex-databases.sh: |
+    #!/bin/sh
+    set -eu
+    psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<EOSQL
+    CREATE ROLE control_plane_runtime LOGIN PASSWORD '${CONTROL_PLANE_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE internal_rpc_authority_runtime LOGIN PASSWORD '${INTERNAL_RPC_AUTHORITY_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE runtime_controller_runtime LOGIN PASSWORD '${RUNTIME_CONTROLLER_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE interaction_gateway_runtime LOGIN PASSWORD '${INTERACTION_GATEWAY_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    CREATE ROLE integration_gateway_runtime LOGIN PASSWORD '${INTEGRATION_GATEWAY_POSTGRES_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    CREATE DATABASE control_plane OWNER control_plane_runtime;
+    CREATE DATABASE internal_rpc_authority OWNER internal_rpc_authority_runtime;
+    CREATE DATABASE runtime_controller OWNER runtime_controller_runtime;
+    CREATE DATABASE interaction_gateway OWNER interaction_gateway_runtime;
+    CREATE DATABASE integration_gateway OWNER integration_gateway_runtime;
+    EOSQL
+  pg_hba.conf: |
+    local all all scram-sha-256
+    hostnossl all all 0.0.0.0/0 reject
+    hostnossl all all ::/0 reject
+    hostssl all all 0.0.0.0/0 scram-sha-256
+    hostssl all all ::/0 scram-sha-256
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mattercodex-postgresql
+  namespace: mattercodex-system
+spec:
+  serviceName: mattercodex-postgresql
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: mattercodex-postgresql, app.kubernetes.io/component: database}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, fsGroup: 70, fsGroupChangePolicy: OnRootMismatch}
+      containers:
+        - name: postgresql
+          image: docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7
+          imagePullPolicy: IfNotPresent
+          args:
+            - -c
+            - ssl=on
+            - -c
+            - ssl_cert_file=/var/run/tls/tls.crt
+            - -c
+            - ssl_key_file=/var/run/tls/tls.key
+            - -c
+            - ssl_ca_file=/var/run/tls/ca.crt
+            - -c
+            - password_encryption=scram-sha-256
+            - -c
+            - hba_file=/var/run/config/pg_hba.conf
+          env:
+            - {name: POSTGRES_USER, value: postgres}
+            - {name: POSTGRES_DB, value: postgres}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: mattercodex-postgresql-bootstrap, key: password}}
+          envFrom:
+            - secretRef: {name: mattercodex-postgresql-app-passwords}
+          ports: [{name: postgresql, containerPort: 5432, protocol: TCP}]
+          startupProbe:
+            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            periodSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            exec: {command: [psql, "host=mattercodex-postgresql dbname=postgres user=postgres sslmode=verify-full sslrootcert=/var/run/tls/ca.crt", --no-password, --tuples-only, --command, "SELECT 1"]}
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {memory: 3Gi}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql}
+            - {name: tls, mountPath: /var/run/tls, readOnly: true}
+            - {name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
+            - {name: postgresql-config, mountPath: /var/run/config, readOnly: true}
+            - {name: run, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tls
+          secret: {secretName: mattercodex-postgresql-tls, defaultMode: 0440}
+        - name: init
+          configMap: {name: mattercodex-postgresql-init, defaultMode: 0550}
+        - name: postgresql-config
+          configMap:
+            name: mattercodex-postgresql-init
+            items: [{key: pg_hba.conf, path: pg_hba.conf}]
+        - {name: run, emptyDir: {sizeLimit: 64Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: 64Mi}}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: local-path
+        resources: {requests: {storage: 20Gi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mattercodex-postgresql, namespace: mattercodex-system}
+spec:
+  selector: {app.kubernetes.io/name: mattercodex-postgresql}
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql, protocol: TCP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgresql, namespace: mattercodex-system}
+spec:
+  selector: {app.kubernetes.io/name: mattercodex-postgresql}
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: control-plane-postgresql-rw, namespace: mattercodex-system}
+spec:
+  selector: {app.kubernetes.io/name: mattercodex-postgresql}
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: internal-rpc-authority-postgresql-rw, namespace: mattercodex-system}
+spec:
+  selector: {app.kubernetes.io/name: mattercodex-postgresql}
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: runtime-controller-postgresql-rw, namespace: mattercodex-system}
+spec:
+  selector: {app.kubernetes.io/name: mattercodex-postgresql}
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: interaction-gateway-postgresql-rw, namespace: mattercodex-system}
+spec:
+  selector: {app.kubernetes.io/name: mattercodex-postgresql}
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: integration-gateway-postgresql-rw, namespace: mattercodex-system}
+spec:
+  selector: {app.kubernetes.io/name: mattercodex-postgresql}
+  ports: [{name: postgresql, port: 5432, targetPort: postgresql}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: mattercodex-redis-config, namespace: mattercodex-system}
+data:
+  redis.conf: |
+    bind 0.0.0.0
+    port 0
+    tls-port 6379
+    tls-cert-file /var/run/tls/tls.crt
+    tls-key-file /var/run/tls/tls.key
+    tls-ca-cert-file /var/run/tls/ca.crt
+    tls-auth-clients no
+    appendonly yes
+    appendfsync everysec
+    requirepass __MATTERCODEX_REDIS_PASSWORD__
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: mattercodex-redis, namespace: mattercodex-system}
+spec:
+  serviceName: mattercodex-redis
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector: {matchLabels: {app.kubernetes.io/name: mattercodex-redis}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: mattercodex-redis, app.kubernetes.io/component: cache}}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, fsGroup: 999, fsGroupChangePolicy: OnRootMismatch}
+      initContainers:
+        - name: render-config
+          image: docker.io/library/redis:8.4.5-alpine@sha256:bd4a0d37e7cd830117ffec9329052b4a1887afa060c265e1768f82b177ff6f43
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              umask 077
+              password=$(cat /var/run/credentials/password)
+              sed "s/__MATTERCODEX_REDIS_PASSWORD__/$password/" /var/run/config/redis.conf > /var/run/runtime/redis.conf
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          volumeMounts:
+            - {name: config, mountPath: /var/run/config, readOnly: true}
+            - {name: credentials, mountPath: /var/run/credentials, readOnly: true}
+            - {name: runtime, mountPath: /var/run/runtime}
+      containers:
+        - name: redis
+          image: docker.io/library/redis:8.4.5-alpine@sha256:bd4a0d37e7cd830117ffec9329052b4a1887afa060c265e1768f82b177ff6f43
+          args: [/var/run/runtime/redis.conf]
+          env:
+            - name: REDISCLI_AUTH
+              valueFrom: {secretKeyRef: {name: mattercodex-redis-credentials, key: password}}
+          ports: [{name: redis-tls, containerPort: 6379}]
+          readinessProbe: {exec: {command: [redis-cli, --tls, --sni, mattercodex-redis, --cacert, /var/run/tls/ca.crt, -h, mattercodex-redis, ping]}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
+          livenessProbe: {exec: {command: [redis-cli, --tls, --sni, mattercodex-redis, --cacert, /var/run/tls/ca.crt, -h, mattercodex-redis, ping]}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {memory: 1Gi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: runtime, mountPath: /var/run/runtime, readOnly: true}
+            - {name: tls, mountPath: /var/run/tls, readOnly: true}
+      volumes:
+        - {name: config, configMap: {name: mattercodex-redis-config}}
+        - {name: credentials, secret: {secretName: mattercodex-redis-credentials, defaultMode: 0440}}
+        - {name: runtime, emptyDir: {sizeLimit: 8Mi}}
+        - {name: tls, secret: {secretName: mattercodex-redis-tls, defaultMode: 0440}}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec: {accessModes: [ReadWriteOnce], storageClassName: local-path, resources: {requests: {storage: 5Gi}}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mattercodex-redis, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-redis}, ports: [{name: redis-tls, port: 6379, targetPort: redis-tls}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-redis}, ports: [{name: redis-tls, port: 6379, targetPort: redis-tls}]}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: mattercodex-nats-config, namespace: mattercodex-system}
+data:
+  nats.conf: |
+    server_name: mattercodex-nats
+    port: 4222
+    http_port: 8222
+    authorization {
+      users: [{user: $NATS_USER, password: $NATS_PASSWORD}]
+    }
+    tls {
+      cert_file: "/var/run/tls/tls.crt"
+      key_file: "/var/run/tls/tls.key"
+      ca_file: "/var/run/tls/ca.crt"
+      verify: false
+      timeout: 2
+    }
+    jetstream {
+      store_dir: "/data/jetstream"
+      max_mem_store: 512Mi
+      max_file_store: 8Gi
+    }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: mattercodex-nats, namespace: mattercodex-system}
+spec:
+  serviceName: mattercodex-nats
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector: {matchLabels: {app.kubernetes.io/name: mattercodex-nats}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: mattercodex-nats, app.kubernetes.io/component: broker}}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, fsGroupChangePolicy: OnRootMismatch}
+      containers:
+        - name: nats
+          image: docker.io/library/nats:2.14.4-alpine@sha256:f2123f533c2b0cada0a5c5ec434fb2b8cfe1cf220215ef9d7517e1372917ad66
+          args: [-c, /etc/nats/nats.conf]
+          env:
+            - {name: NATS_USER, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: username}}}
+            - {name: NATS_PASSWORD, valueFrom: {secretKeyRef: {name: mattercodex-nats-credentials, key: password}}}
+          ports: [{name: client-tls, containerPort: 4222}, {name: monitoring, containerPort: 8222}]
+          startupProbe: {tcpSocket: {port: client-tls}, periodSeconds: 3, failureThreshold: 40}
+          readinessProbe: {httpGet: {path: "/healthz?js-enabled-only=true", port: monitoring}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
+          livenessProbe: {httpGet: {path: /healthz, port: monitoring}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
+          resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 1Gi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: config, mountPath: /etc/nats, readOnly: true}
+            - {name: tls, mountPath: /var/run/tls, readOnly: true}
+      volumes:
+        - {name: config, configMap: {name: mattercodex-nats-config}}
+        - {name: tls, secret: {secretName: mattercodex-nats-tls, defaultMode: 0440}}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec: {accessModes: [ReadWriteOnce], storageClassName: local-path, resources: {requests: {storage: 10Gi}}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mattercodex-nats, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-nats}, ports: [{name: client-tls, port: 4222, targetPort: client-tls}, {name: monitoring, port: 8222, targetPort: monitoring}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: nats, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-nats}, ports: [{name: client-tls, port: 4222, targetPort: client-tls}]}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: mattercodex-object-store, namespace: mattercodex-system}
+spec:
+  serviceName: mattercodex-object-store
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector: {matchLabels: {app.kubernetes.io/name: mattercodex-object-store}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: mattercodex-object-store, app.kubernetes.io/component: object-store}}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, fsGroupChangePolicy: OnRootMismatch}
+      containers:
+        - name: minio
+          image: docker.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          args: [server, --certs-dir, /var/run/certs, --address, ":9000", --console-address, ":9001", /data]
+          env:
+            - {name: MINIO_ROOT_USER, valueFrom: {secretKeyRef: {name: mattercodex-object-store-credentials, key: username}}}
+            - {name: MINIO_ROOT_PASSWORD, valueFrom: {secretKeyRef: {name: mattercodex-object-store-credentials, key: password}}}
+          ports: [{name: s3-tls, containerPort: 9000}]
+          startupProbe: {httpGet: {scheme: HTTPS, path: /minio/health/live, port: s3-tls}, periodSeconds: 3, failureThreshold: 60}
+          readinessProbe: {httpGet: {scheme: HTTPS, path: /minio/health/ready, port: s3-tls}, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 6}
+          livenessProbe: {httpGet: {scheme: HTTPS, path: /minio/health/live, port: s3-tls}, periodSeconds: 15, timeoutSeconds: 3, failureThreshold: 4}
+          resources: {requests: {cpu: 200m, memory: 512Mi}, limits: {memory: 3Gi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - name: tls
+              mountPath: /var/run/certs
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: mattercodex-object-store-tls
+            defaultMode: 0440
+            items:
+              - {key: tls.crt, path: public.crt}
+              - {key: tls.key, path: private.key}
+              - {key: ca.crt, path: CAs/ca.crt}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec: {accessModes: [ReadWriteOnce], storageClassName: local-path, resources: {requests: {storage: 30Gi}}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mattercodex-object-store, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-object-store}, ports: [{name: s3-tls, port: 9000, targetPort: s3-tls}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: object-store, namespace: mattercodex-system}
+spec: {selector: {app.kubernetes.io/name: mattercodex-object-store}, ports: [{name: s3-tls, port: 9000, targetPort: s3-tls}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mattercodex-object-store-bootstrap, namespace: mattercodex-system}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: mattercodex-object-store-bootstrap}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: mattercodex-object-store-bootstrap, app.kubernetes.io/component: object-store-reconciler}}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+      containers:
+        - name: mc
+          image: docker.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              export MC_HOST_prototype="https://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@mattercodex-object-store.mattercodex-system.svc.cluster.local:9000"
+              while true; do
+                if mc mb --ignore-existing prototype/mattercodex-instruction-artifacts >/dev/null 2>&1 &&
+                   mc mb --ignore-existing prototype/mattercodex-interaction-artifacts >/dev/null 2>&1 &&
+                   mc mb --ignore-existing prototype/mattercodex-runtime-artifacts >/dev/null 2>&1 &&
+                   mc version enable prototype/mattercodex-instruction-artifacts >/dev/null 2>&1 &&
+                   mc version enable prototype/mattercodex-interaction-artifacts >/dev/null 2>&1 &&
+                   mc version enable prototype/mattercodex-runtime-artifacts >/dev/null 2>&1; then
+                  touch /var/run/status/ready
+                else
+                  rm -f /var/run/status/ready
+                fi
+                sleep 60
+              done
+          env:
+            - {name: MINIO_ROOT_USER, valueFrom: {secretKeyRef: {name: mattercodex-object-store-credentials, key: username}}}
+            - {name: MINIO_ROOT_PASSWORD, valueFrom: {secretKeyRef: {name: mattercodex-object-store-credentials, key: password}}}
+            - {name: SSL_CERT_FILE, value: /var/run/ca/ca.crt}
+          readinessProbe: {exec: {command: [/bin/sh, -ec, test -f /var/run/status/ready]}, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 6}
+          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {memory: 256Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          volumeMounts:
+            - {name: ca, mountPath: /var/run/ca, readOnly: true}
+            - {name: status, mountPath: /var/run/status}
+            - {name: config, mountPath: /.mc}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: ca
+          secret:
+            secretName: mattercodex-object-store-tls
+            items: [{key: ca.crt, path: ca.crt}]
+        - {name: status, emptyDir: {sizeLimit: 1Mi}}
+        - {name: config, emptyDir: {sizeLimit: 4Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: 8Mi}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny, namespace: mattercodex-system}
+spec: {podSelector: {}, policyTypes: [Ingress, Egress]}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: dns-egress, namespace: mattercodex-system}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: postgresql-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql]
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: postgresql-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [control-plane, internal-rpc-authority, runtime-controller, interaction-gateway, integration-gateway, mattercodex-postgresql]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-postgresql}}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: redis-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-redis}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
+      ports:
+        - {protocol: TCP, port: 6379}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: redis-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-redis}}
+      ports: [{protocol: TCP, port: 6379}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: nats-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-nats}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [control-plane, runtime-controller]
+      ports:
+        - {protocol: TCP, port: 4222}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: nats-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [control-plane, runtime-controller]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-nats}}
+      ports:
+        - {protocol: TCP, port: 4222}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: object-store-exact-clients, namespace: mattercodex-system}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-object-store}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [control-plane, runtime-controller, interaction-gateway, mattercodex-object-store-bootstrap]
+      ports:
+        - {protocol: TCP, port: 9000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: object-store-client-egress, namespace: mattercodex-system}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [control-plane, runtime-controller, interaction-gateway, mattercodex-object-store-bootstrap]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: mattercodex-system}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: mattercodex-object-store}}
+      ports: [{protocol: TCP, port: 9000}]

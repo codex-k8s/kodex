@@ -4,11 +4,30 @@ title: Развертывание и откат
 type: operations
 status: approved
 owner: sre
-version: 0.3.0
-updated: 2026-07-18
+version: 0.6.0
+updated: 2026-08-09
 ---
 
 # Развертывание и откат
+
+## Direct-production single-node prototype
+
+В профиле `direct-production single-node prototype` staging отсутствует. До
+cutover новый контур разворачивается только dark в `mattercodex-system`, а
+legacy-контур `matter-kodex-prod` остаётся пользовательским и не изменяется.
+Build и deploy запускаются только через `workflow_dispatch` для exact SHA и
+проверенного release lock. Rollback выбирает ранее сохранённый exact lock и не
+выполняет schema down, удаление PVC или изменение legacy traffic. Процедура и
+bounded smoke определены в `RUN-MC-015`.
+
+Build и deploy jobs доступны только через non-default runner group, закреплённый
+owner bootstrap за exact workflow path на full merged SHA. Workflow проверяет
+собственный `workflow_dispatch`, exact workflow path/ref `main`, текущий run/head
+SHA, main-only Environment, а также immutable `actor` и `triggering_actor` против
+owner-controlled Actions variable; затем сохраняет безопасное gate evidence и
+передаёт его production script. Caller-controlled значение `approved` не
+используется. Такая граница работает и для private repository, где тариф может
+не предоставлять required reviewers.
 
 ## Процесс
 

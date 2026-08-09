@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() { printf 'Protected BuildKit shim failed: %s\n' "$*" >&2; exit 1; }
+[[ "${1:-}" == build ]] || fail "only docker build is supported"
+shift
+[[ "${1:-}" == --network=host ]] || fail "exact network option is required"
+shift
+[[ "${1:-}" == -f && -n "${2:-}" ]] || fail "exact Dockerfile option is required"
+dockerfile=$2
+shift 2
+[[ "${1:-}" == -t && -n "${2:-}" ]] || fail "exact tag option is required"
+destination=$2
+shift 2
+[[ "${1:-}" == -- && -n "${2:-}" && $# -eq 2 ]] || fail "exact context terminator is required"
+context=$2
+[[ "$destination" == matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000/mattercodex/agent-runner:* ]] || fail "destination is not allowed"
+[[ "$dockerfile" == services/jobs/agent-runner/Dockerfile || "$dockerfile" == "$context/services/jobs/agent-runner/Dockerfile" ]] || fail "Dockerfile is not allowed"
+[[ -n "${MATTERCODEX_BUILDKIT_METADATA_FILE:-}" ]] || fail "metadata file is required"
+buildctl_path=${BUILDCTL_PATH:-/var/run/mattercodex-tools/buildctl}
+buildkit_host=${BUILDKIT_HOST:-unix:///var/run/buildkit/buildkitd.sock}
+exec "$buildctl_path" --addr "$buildkit_host" build \
+  --frontend dockerfile.v0 \
+  --local context="$context" \
+  --local dockerfile="$context/services/jobs/agent-runner" \
+  --opt filename=Dockerfile \
+  --opt network=host \
+  --output "type=image,name=$destination,push=true" \
+  --metadata-file "$MATTERCODEX_BUILDKIT_METADATA_FILE"
