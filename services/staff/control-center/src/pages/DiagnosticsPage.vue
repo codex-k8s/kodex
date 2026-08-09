@@ -4,14 +4,17 @@ import { onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useOperationsStore } from "@/features/operations/store";
-import { formatDuration } from "@/shared/lib/format";
+import { useOwnerControlStore } from "@/features/owner-control/store";
+import { formatDateTime, formatDuration } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const store = useOperationsStore();
+const owner = useOwnerControlStore();
 const { locale } = useI18n();
-onMounted(store.loadDiagnostics);
+const load = () => Promise.all([store.loadDiagnostics(), owner.loadHealth()]);
+onMounted(load);
 </script>
 
 <template>
@@ -20,11 +23,7 @@ onMounted(store.loadDiagnostics);
       :title="$t('diagnostics.title')"
       :subtitle="$t('diagnostics.subtitle')"
       ><template #actions
-        ><button
-          class="button button--secondary"
-          type="button"
-          @click="store.loadDiagnostics"
-        >
+        ><button class="button button--secondary" type="button" @click="load">
           <RefreshCw :size="15" aria-hidden="true" />{{ $t("common.refresh") }}
         </button></template
       ></PageHeader
@@ -80,5 +79,41 @@ onMounted(store.loadDiagnostics);
         </article>
       </div>
     </AsyncPanel>
+    <section class="panel" style="margin-top: 15px">
+      <header class="panel__header">
+        <h2>{{ $t("diagnostics.health") }}</h2>
+      </header>
+      <AsyncPanel
+        :phase="owner.health.phase"
+        :problem="owner.health.problem"
+        @retry="owner.loadHealth"
+      >
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ $t("diagnostics.component") }}</th>
+                <th>{{ $t("diagnostics.source") }}</th>
+                <th>{{ $t("common.state") }}</th>
+                <th>{{ $t("diagnostics.value") }}</th>
+                <th>{{ $t("diagnostics.observedAt") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="item in owner.health.data"
+                :key="`${item.source}-${item.component}`"
+              >
+                <td class="data-table__name">{{ item.component }}</td>
+                <td>{{ item.source }}</td>
+                <td><StatusBadge :state="item.status" /></td>
+                <td>{{ item.value }}</td>
+                <td>{{ formatDateTime(item.observedAt, locale) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </AsyncPanel>
+    </section>
   </div>
 </template>

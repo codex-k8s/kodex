@@ -21,9 +21,9 @@ import type {
   ResolveOwnerGate,
   ResolveOwnerGateResult,
   Resource,
-  ResourcePage,
   RestoreOperation,
   RestoreOperationPage,
+  RunPage,
 } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
@@ -35,7 +35,7 @@ type MutationHeaders = {
   "If-Match": string;
 };
 
-export async function fetchRuns(): Promise<ResourcePage> {
+export async function fetchRuns(): Promise<RunPage> {
   return (
     await unwrap(
       listRuns({ query: { pageSize: 100 }, signal: requestSignal() }),

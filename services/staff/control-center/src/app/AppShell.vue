@@ -2,7 +2,9 @@
 import {
   Activity,
   Boxes,
+  BookOpenText,
   BriefcaseBusiness,
+  CloudCog,
   DatabaseBackup,
   Gauge,
   GitCompareArrows,
@@ -12,9 +14,11 @@ import {
   Menu,
   Moon,
   Play,
+  PlugZap,
   ScrollText,
   Search,
   Sun,
+  UserRoundCog,
   X,
   Zap,
 } from "@lucide/vue";
@@ -35,10 +39,15 @@ const menuOpen = ref(false);
 const searchQuery = ref("");
 const searchKind = ref<ResourceKind>("PROJECT");
 const theme = ref(localStorage.getItem("mattercodex.theme") ?? "system");
+const updateRegistration = ref<ServiceWorkerRegistration | null>(null);
 
 const navigation = [
   { to: "/", label: "nav.overview", icon: LayoutDashboard },
   { to: "/workspaces", label: "nav.workspaces", icon: BriefcaseBusiness },
+  { to: "/people", label: "nav.people", icon: UserRoundCog },
+  { to: "/instructions", label: "nav.instructions", icon: BookOpenText },
+  { to: "/providers", label: "nav.providers", icon: CloudCog },
+  { to: "/integrations", label: "nav.integrations", icon: PlugZap },
   { to: "/role-images", label: "nav.roleImages", icon: Boxes },
   { to: "/automations", label: "nav.automations", icon: Zap },
   { to: "/runs", label: "nav.runs", icon: Play },
@@ -62,6 +71,23 @@ function applyTheme(): void {
   localStorage.setItem("mattercodex.theme", theme.value);
 }
 
+function handlePwaUpdate(event: Event): void {
+  updateRegistration.value = (
+    event as CustomEvent<ServiceWorkerRegistration>
+  ).detail;
+}
+
+function applyPwaUpdate(): void {
+  const registration = updateRegistration.value;
+  if (!registration?.waiting) return;
+  navigator.serviceWorker.addEventListener(
+    "controllerchange",
+    () => window.location.reload(),
+    { once: true },
+  );
+  registration.waiting.postMessage({ type: "SKIP_WAITING" });
+}
+
 function setLocale(value: string): void {
   locale.value = value === "en" ? "en" : "ru";
   document.documentElement.lang = locale.value;
@@ -80,13 +106,17 @@ async function submitSearch(): Promise<void> {
 
 onMounted(() => {
   applyTheme();
+  window.addEventListener("mattercodex:pwa-update", handlePwaUpdate);
   realtime.start();
 });
-onBeforeUnmount(() => realtime.stop());
+onBeforeUnmount(() => {
+  window.removeEventListener("mattercodex:pwa-update", handlePwaUpdate);
+  realtime.stop();
+});
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'app-shell--offline': !realtime.online }">
     <aside class="sidebar" :class="{ 'sidebar--open': menuOpen }">
       <div class="sidebar__brand">
         <div class="brand-mark" aria-hidden="true">M</div>
@@ -184,10 +214,20 @@ onBeforeUnmount(() => realtime.stop());
         <div class="topbar__spacer" />
         <div
           class="realtime-indicator"
-          :class="{ 'realtime-indicator--offline': !realtime.connected }"
+          :class="{
+            'realtime-indicator--offline':
+              !realtime.online || !realtime.connected || realtime.replacing,
+          }"
         >
-          <span aria-hidden="true" />{{
-            realtime.connected ? $t("app.realtime") : $t("app.realtimeOffline")
+          <span aria-hidden="true" />
+          {{
+            !realtime.online
+              ? $t("app.offline")
+              : !realtime.connected
+                ? $t("app.realtimeOffline")
+                : realtime.replacing
+                  ? $t("app.realtimeReplacing")
+                  : $t("app.realtime")
           }}
         </div>
         <label class="compact-select">
@@ -214,6 +254,36 @@ onBeforeUnmount(() => realtime.stop());
           </select>
         </label>
       </header>
+      <div
+        v-if="!realtime.online"
+        class="connectivity-banner"
+        role="status"
+        aria-live="polite"
+      >
+        {{ $t("app.offlineNotice") }}
+      </div>
+      <div
+        v-else-if="realtime.replacing"
+        class="connectivity-banner connectivity-banner--info"
+        role="status"
+        aria-live="polite"
+      >
+        {{ $t("app.replacingNotice") }}
+      </div>
+      <div
+        v-if="updateRegistration"
+        class="connectivity-banner connectivity-banner--update"
+        role="status"
+      >
+        <span>{{ $t("app.updateAvailable") }}</span>
+        <button
+          class="button button--secondary"
+          type="button"
+          @click="applyPwaUpdate"
+        >
+          {{ $t("app.applyUpdate") }}
+        </button>
+      </div>
       <main class="content"><RouterView /></main>
     </div>
   </div>

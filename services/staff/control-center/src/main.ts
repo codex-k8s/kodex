@@ -17,7 +17,24 @@ async function bootstrap(): Promise<void> {
   app.use(router);
   app.mount("#app");
   if ("serviceWorker" in navigator && import.meta.env.PROD) {
-    await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    const registration = await navigator.serviceWorker.register("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+    const notify = () => {
+      if (!registration.waiting) return;
+      window.dispatchEvent(
+        new CustomEvent("mattercodex:pwa-update", { detail: registration }),
+      );
+    };
+    notify();
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      worker?.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller)
+          notify();
+      });
+    });
   }
 }
 

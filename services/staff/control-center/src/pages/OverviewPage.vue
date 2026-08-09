@@ -106,11 +106,11 @@ onMounted(load);
                 </tr>
                 <tr
                   v-for="incident in operations.incidents.data"
-                  :key="incident.incidentId"
+                  :key="incident.incidentRef"
                 >
                   <td><AlertTriangle :size="16" aria-hidden="true" /></td>
                   <td class="data-table__name">{{ incident.kind }}</td>
-                  <td><StatusBadge state="FAILED" /></td>
+                  <td><StatusBadge :state="incident.severity" /></td>
                   <td>{{ formatDateTime(incident.occurredAt, locale) }}</td>
                 </tr>
                 <tr
@@ -168,8 +168,11 @@ onMounted(load);
         <div v-else class="data-table-wrap">
           <table class="data-table">
             <tbody>
-              <tr v-for="run in operations.runs.data.slice(0, 8)" :key="run.id">
-                <td class="data-table__name">{{ run.name }}</td>
+              <tr
+                v-for="run in operations.runs.data.slice(0, 8)"
+                :key="run.runRef"
+              >
+                <td class="data-table__name">{{ run.displayName }}</td>
                 <td><StatusBadge :state="run.state" /></td>
                 <td>{{ formatDateTime(run.updatedAt, locale) }}</td>
               </tr>

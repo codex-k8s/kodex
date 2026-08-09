@@ -24,6 +24,26 @@ export const router = createRouter({
       component: () => import("@/pages/RoleImagesPage.vue"),
     },
     {
+      path: "/people",
+      name: "people",
+      component: () => import("@/pages/PeoplePage.vue"),
+    },
+    {
+      path: "/instructions",
+      name: "instructions",
+      component: () => import("@/pages/InstructionsPage.vue"),
+    },
+    {
+      path: "/providers",
+      name: "providers",
+      component: () => import("@/pages/ProvidersPage.vue"),
+    },
+    {
+      path: "/integrations",
+      name: "integrations",
+      component: () => import("@/pages/IntegrationsPage.vue"),
+    },
+    {
       path: "/automations",
       name: "automations",
       component: () => import("@/pages/SchedulesPage.vue"),

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { RefreshCw, ScrollText } from "@lucide/vue";
-import { onMounted } from "vue";
+import { Download, RefreshCw, ScrollText } from "@lucide/vue";
+import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useOperationsStore } from "@/features/operations/store";
+import { useOwnerControlStore } from "@/features/owner-control/store";
 import { formatDateTime } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
@@ -11,6 +12,25 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const { locale } = useI18n();
 const store = useOperationsStore();
+const owner = useOwnerControlStore();
+const exporting = ref(false);
+
+async function exportAudit(): Promise<void> {
+  exporting.value = true;
+  try {
+    const content = await owner.exportAuditFile();
+    const url = URL.createObjectURL(
+      new Blob([content], { type: "text/csv;charset=utf-8" }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `mattercodex-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    exporting.value = false;
+  }
+}
 onMounted(store.loadAudit);
 </script>
 
@@ -24,6 +44,14 @@ onMounted(store.loadAudit);
           @click="store.loadAudit"
         >
           <RefreshCw :size="15" aria-hidden="true" />{{ $t("common.refresh") }}
+        </button>
+        <button
+          class="button button--primary"
+          type="button"
+          :disabled="exporting"
+          @click="exportAudit"
+        >
+          <Download :size="15" aria-hidden="true" />{{ $t("audit.export") }}
         </button></template
       ></PageHeader
     >

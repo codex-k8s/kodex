@@ -15,6 +15,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import { useProjectsStore } from "@/features/projects/store";
 import { useWorkspaceResourcesStore } from "@/features/workspace-resources/store";
+import WorkspaceTeamPanel from "@/features/workspace-team/WorkspaceTeamPanel.vue";
 import type {
   ChatRoomType,
   Resource,
@@ -192,6 +193,7 @@ onMounted(load);
       @retry="load"
     >
       <div class="section-stack">
+        <WorkspaceTeamPanel />
         <section class="panel">
           <header class="panel__header">
             <h2>{{ $t("workspaces.repositories") }}</h2>

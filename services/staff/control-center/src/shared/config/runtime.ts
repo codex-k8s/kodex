@@ -28,12 +28,21 @@ function requiredString(source: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function exactKeys(
+  source: Record<string, unknown>,
+  allowed: readonly string[],
+): void {
+  if (Object.keys(source).some((key) => !allowed.includes(key)))
+    throw new Error("Runtime config contains unknown fields");
+}
+
 function exactUrl(value: string, protocols: readonly string[]): string {
   const parsed = new URL(value);
   if (
     !protocols.includes(parsed.protocol) ||
     parsed.username ||
     parsed.password ||
+    parsed.search ||
     parsed.hash
   ) {
     throw new Error("Runtime config URL is invalid");
@@ -45,6 +54,20 @@ function parseConfig(value: unknown): RuntimeConfig {
   if (!isRecord(value) || !isRecord(value.oidc)) {
     throw new Error("Runtime config shape is invalid");
   }
+  exactKeys(value, [
+    "environment",
+    "apiBaseUrl",
+    "realtimeUrl",
+    "requestTimeoutMs",
+    "oidc",
+  ]);
+  exactKeys(value.oidc, [
+    "authority",
+    "clientId",
+    "redirectUri",
+    "postLogoutRedirectUri",
+    "scope",
+  ]);
   const timeout = value.requestTimeoutMs;
   if (
     typeof timeout !== "number" ||
@@ -54,17 +77,25 @@ function parseConfig(value: unknown): RuntimeConfig {
   ) {
     throw new Error("Runtime config request timeout is invalid");
   }
+  const apiBaseUrl = exactUrl(requiredString(value, "apiBaseUrl"), ["https:"]);
+  const realtimeUrl = exactUrl(requiredString(value, "realtimeUrl"), ["wss:"]);
+  const redirectUri = exactUrl(requiredString(value.oidc, "redirectUri"), [
+    "https:",
+  ]);
+  if (
+    new URL(apiBaseUrl).origin !== new URL(redirectUri).origin ||
+    new URL(realtimeUrl).host !== new URL(apiBaseUrl).host
+  )
+    throw new Error("Runtime API origin is invalid");
   return {
     environment: requiredString(value, "environment"),
-    apiBaseUrl: exactUrl(requiredString(value, "apiBaseUrl"), ["https:"]),
-    realtimeUrl: exactUrl(requiredString(value, "realtimeUrl"), ["wss:"]),
+    apiBaseUrl,
+    realtimeUrl,
     requestTimeoutMs: timeout,
     oidc: {
       authority: exactUrl(requiredString(value.oidc, "authority"), ["https:"]),
       clientId: requiredString(value.oidc, "clientId"),
-      redirectUri: exactUrl(requiredString(value.oidc, "redirectUri"), [
-        "https:",
-      ]),
+      redirectUri,
       postLogoutRedirectUri: exactUrl(
         requiredString(value.oidc, "postLogoutRedirectUri"),
         ["https:"],

@@ -7,6 +7,7 @@ interface Resource {
   reservedName: string;
   state: LifecycleState;
   version: number;
+  projectionSha256: string;
   projectId?: string;
   parentId?: string;
   spec: ResourceSpecProjection;

@@ -91,6 +91,9 @@ const generatedFiles = readdirSync(output).filter((name) =>
 const anonymousFiles = generatedFiles.filter((name) =>
   /^AnonymousSchema_\d+\.ts$/.test(name),
 );
+if (anonymousFiles.length === 0) {
+  process.exit(0);
+}
 const replacements = new Map();
 for (const filename of anonymousFiles) {
   const source = readFileSync(resolve(output, filename), "utf8");

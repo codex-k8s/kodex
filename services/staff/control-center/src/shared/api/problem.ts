@@ -3,6 +3,7 @@ import type { Problem } from "@/shared/api/generated/openapi/types.gen";
 export type ProblemKind =
   | "unauthorized"
   | "forbidden"
+  | "not-found"
   | "conflict"
   | "unavailable"
   | "unknown";
@@ -69,11 +70,13 @@ export function normalizeProblem(
       ? "unauthorized"
       : status === 403
         ? "forbidden"
-        : status === 409 || status === 412
-          ? "conflict"
-          : status === 429 || status >= 500
-            ? "unavailable"
-            : "unknown";
+        : status === 404
+          ? "not-found"
+          : status === 409 || status === 412
+            ? "conflict"
+            : status === 0 || status === 429 || status >= 500
+              ? "unavailable"
+              : "unknown";
   return new AppProblem(
     correlationId === undefined
       ? { status, code, retryable, kind }

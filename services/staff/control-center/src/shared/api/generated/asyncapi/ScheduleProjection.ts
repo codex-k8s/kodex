@@ -7,11 +7,11 @@ import {ScheduleSessionPolicy} from './ScheduleSessionPolicy';
 import {ScheduleNotificationPolicy} from './ScheduleNotificationPolicy';
 import {ScheduleTargetType} from './ScheduleTargetType';
 import {ConfigurationOwnershipProjection} from './ConfigurationOwnershipProjection';
-interface CronScheduleProjection {
+interface ScheduleProjection {
   targetResourceId: string;
   targetKind: ResourceKind;
   targetVersion: number;
-  cron: string;
+  cron?: string;
   intervalSeconds?: number;
   timezone: string;
   nextRunAt: string;
@@ -39,4 +39,4 @@ interface CronScheduleProjection {
   executionSessionId?: string;
   ownership: ConfigurationOwnershipProjection;
 }
-export { CronScheduleProjection };
+export { ScheduleProjection };

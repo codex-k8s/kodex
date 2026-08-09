@@ -1,35 +1,123 @@
 <script setup lang="ts">
 import { DatabaseBackup, RefreshCw, RotateCcw } from "@lucide/vue";
-import { onMounted } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { useOperationsStore } from "@/features/operations/store";
-import type { Backup } from "@/shared/api/generated/openapi/types.gen";
-import { formatDateTime } from "@/shared/lib/format";
+import { useOwnerControlStore } from "@/features/owner-control/store";
+import type {
+  Resource,
+  WorkspaceRestoreView,
+} from "@/shared/api/generated/openapi/types.gen";
+import { formatDateTime, shortDigest } from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
+const store = useOwnerControlStore();
 const { locale, t } = useI18n();
-const store = useOperationsStore();
+const backupOpen = ref(false);
+const restoreOpen = ref(false);
+const selectedBackup = ref<Resource | null>(null);
+const backupForm = reactive({
+  name: "",
+  scope: "WORKSPACE" as "WORKSPACE" | "ALL_WORKSPACES",
+  retainUntil: "",
+});
+const restoreName = ref("");
 
-async function restore(backup: Backup): Promise<void> {
-  if (backup.restorable && window.confirm(t("backups.confirmRestore")))
-    await store.restore(backup);
+async function createBackup(): Promise<void> {
+  const ok = await store.saveWorkspaceBackup({
+    action: "CREATE",
+    name: backupForm.name.trim(),
+    scope: backupForm.scope,
+    ...(backupForm.retainUntil
+      ? { retainUntil: new Date(backupForm.retainUntil).toISOString() }
+      : {}),
+  });
+  if (ok) backupOpen.value = false;
 }
-async function load(): Promise<void> {
-  await Promise.all([store.loadBackups(), store.loadRestores()]);
+
+function beginRestore(backup: Resource): void {
+  selectedBackup.value = backup;
+  restoreName.value = `${backup.name}-restore`;
+  restoreOpen.value = true;
 }
-onMounted(load);
+
+async function createRestore(): Promise<void> {
+  const backup = selectedBackup.value;
+  const projection = backup?.spec.workspaceBackup;
+  if (!backup || !projection) return;
+  const ok = await store.saveWorkspaceRestore({
+    action: "CREATE",
+    backupRef: backup.id,
+    backupVersion: backup.version,
+    membershipSha256: projection.membershipSha256,
+    name: restoreName.value.trim(),
+  });
+  if (ok) restoreOpen.value = false;
+}
+
+async function backupAction(
+  backup: Resource,
+  action: "CANCEL" | "RETRY",
+): Promise<void> {
+  if (
+    !window.confirm(t("backups.confirmAction", { action, name: backup.name }))
+  )
+    return;
+  await store.saveWorkspaceBackup(
+    { action, backupRef: backup.id, terminalReasonCode: "OWNER_REQUEST" },
+    backup.version,
+  );
+}
+
+async function restoreAction(
+  value: WorkspaceRestoreView,
+  action: "CANCEL" | "RETRY",
+): Promise<void> {
+  if (
+    !window.confirm(
+      t("backups.confirmAction", { action, name: value.displayName }),
+    )
+  )
+    return;
+  await store.saveWorkspaceRestore(
+    {
+      action,
+      restoreRef: value.restoreRef,
+      terminalReasonCode: "OWNER_REQUEST",
+    },
+    value.version,
+  );
+}
+
+onMounted(store.loadWorkspaceRecovery);
 </script>
 
 <template>
   <div class="page">
-    <PageHeader :title="$t('backups.title')" :subtitle="$t('backups.subtitle')"
+    <PageHeader
+      :title="$t('backups.title')"
+      :subtitle="$t('backups.ownerSubtitle')"
       ><template #actions
-        ><button class="button button--secondary" type="button" @click="load">
-          <RefreshCw :size="15" aria-hidden="true" />{{ $t("common.refresh") }}
+        ><button
+          class="button button--secondary"
+          type="button"
+          @click="store.loadWorkspaceRecovery"
+        >
+          <RefreshCw :size="15" aria-hidden="true" />{{
+            $t("common.refresh")
+          }}</button
+        ><button
+          class="button button--primary"
+          type="button"
+          @click="backupOpen = true"
+        >
+          <DatabaseBackup :size="15" aria-hidden="true" />{{
+            $t("backups.create")
+          }}
         </button></template
       ></PageHeader
     >
@@ -40,15 +128,16 @@ onMounted(load);
           <h2>{{ $t("backups.backups") }}</h2>
         </header>
         <AsyncPanel
-          :phase="store.backups.phase"
-          :problem="store.backups.problem"
-          @retry="store.loadBackups"
+          :phase="store.workspaceBackups.phase"
+          :problem="store.workspaceBackups.problem"
+          @retry="store.loadWorkspaceRecovery"
           ><div class="data-table-wrap">
             <table class="data-table">
               <thead>
                 <tr>
+                  <th>{{ $t("common.name") }}</th>
                   <th>{{ $t("backups.scope") }}</th>
-                  <th>{{ $t("common.revision") }}</th>
+                  <th>{{ $t("backups.members") }}</th>
                   <th>{{ $t("common.state") }}</th>
                   <th>{{ $t("backups.retainUntil") }}</th>
                   <th>
@@ -57,27 +146,48 @@ onMounted(load);
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in store.backups.data" :key="item.backupId">
-                  <td class="data-table__name">
-                    <DatabaseBackup :size="16" aria-hidden="true" />{{
-                      item.scope
+                <tr v-for="item in store.workspaceBackups.data" :key="item.id">
+                  <td class="data-table__name">{{ item.name }}</td>
+                  <td>{{ item.spec.workspaceBackup?.scope }}</td>
+                  <td>{{ item.spec.workspaceBackup?.memberCount }}</td>
+                  <td>
+                    <StatusBadge
+                      :state="item.spec.workspaceBackup?.state ?? item.state"
+                    />
+                  </td>
+                  <td>
+                    {{
+                      formatDateTime(
+                        item.spec.workspaceBackup?.retainUntil,
+                        locale,
+                      )
                     }}
                   </td>
-                  <td>v{{ item.sourceVersion }}</td>
-                  <td><StatusBadge :state="item.state" /></td>
-                  <td>{{ formatDateTime(item.retainUntil, locale) }}</td>
                   <td>
                     <div class="data-table__actions">
                       <button
-                        v-if="item.restorable"
+                        v-if="item.spec.workspaceBackup?.state === 'AVAILABLE'"
                         class="button button--text"
                         type="button"
-                        :disabled="store.mutating"
-                        @click="restore(item)"
+                        @click="beginRestore(item)"
                       >
                         <RotateCcw :size="14" aria-hidden="true" />{{
                           $t("backups.restore")
-                        }}
+                        }}</button
+                      ><button
+                        v-if="item.spec.workspaceBackup?.state === 'VERIFYING'"
+                        class="button button--text"
+                        type="button"
+                        @click="backupAction(item, 'CANCEL')"
+                      >
+                        {{ $t("common.cancel") }}</button
+                      ><button
+                        v-if="item.spec.workspaceBackup?.state === 'FAILED'"
+                        class="button button--text"
+                        type="button"
+                        @click="backupAction(item, 'RETRY')"
+                      >
+                        {{ $t("common.retry") }}
                       </button>
                     </div>
                   </td>
@@ -92,28 +202,50 @@ onMounted(load);
           <h2>{{ $t("backups.restores") }}</h2>
         </header>
         <AsyncPanel
-          :phase="store.restores.phase"
-          :problem="store.restores.problem"
-          @retry="store.loadRestores"
+          :phase="store.workspaceRestores.phase"
+          :problem="store.workspaceRestores.problem"
+          @retry="store.loadWorkspaceRecovery"
           ><div class="data-table-wrap">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>{{ $t("backups.scope") }}</th>
+                  <th>{{ $t("common.name") }}</th>
+                  <th>{{ $t("backups.attempt") }}</th>
+                  <th>{{ $t("backups.members") }}</th>
                   <th>{{ $t("common.state") }}</th>
-                  <th>{{ $t("backups.nextAction") }}</th>
                   <th>{{ $t("common.updatedAt") }}</th>
+                  <th>
+                    <span class="sr-only">{{ $t("common.actions") }}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 <tr
-                  v-for="item in store.restores.data"
-                  :key="item.restoreOperationId"
+                  v-for="item in store.workspaceRestores.data"
+                  :key="item.restoreRef"
                 >
-                  <td>{{ item.scope }}</td>
+                  <td class="data-table__name">{{ item.displayName }}</td>
+                  <td>{{ item.attempt }}</td>
+                  <td>{{ item.memberCount }}</td>
                   <td><StatusBadge :state="item.state" /></td>
-                  <td>{{ item.nextAction }}</td>
                   <td>{{ formatDateTime(item.updatedAt, locale) }}</td>
+                  <td>
+                    <div class="data-table__actions">
+                      <button
+                        v-for="nextAction in item.nextActions"
+                        :key="nextAction"
+                        class="button button--text"
+                        type="button"
+                        @click="restoreAction(item, nextAction)"
+                      >
+                        {{
+                          nextAction === "CANCEL"
+                            ? $t("common.cancel")
+                            : $t("common.retry")
+                        }}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -121,5 +253,65 @@ onMounted(load);
         >
       </section>
     </div>
+    <ModalDialog
+      :open="backupOpen"
+      :title="$t('backups.create')"
+      @close="backupOpen = false"
+      ><form class="form-grid" @submit.prevent="createBackup">
+        <label class="form-field"
+          ><span>{{ $t("common.name") }}</span
+          ><input v-model="backupForm.name" required maxlength="120" /></label
+        ><label class="form-field"
+          ><span>{{ $t("backups.scope") }}</span
+          ><select v-model="backupForm.scope">
+            <option value="WORKSPACE">WORKSPACE</option>
+            <option value="ALL_WORKSPACES">ALL_WORKSPACES</option>
+          </select></label
+        ><label class="form-field form-field--full"
+          ><span>{{ $t("backups.retainUntil") }}</span
+          ><input v-model="backupForm.retainUntil" type="datetime-local"
+        /></label>
+        <div class="button-row form-field--full">
+          <button
+            class="button button--primary"
+            type="submit"
+            :disabled="store.mutating"
+          >
+            {{ $t("backups.create") }}
+          </button>
+        </div>
+      </form></ModalDialog
+    >
+    <ModalDialog
+      :open="restoreOpen"
+      :title="$t('backups.restore')"
+      @close="restoreOpen = false"
+      ><form class="form-grid" @submit.prevent="createRestore">
+        <div class="summary-card form-field--full">
+          <strong>{{ selectedBackup?.name }}</strong
+          ><span
+            >{{ $t("common.version", { version: selectedBackup?.version }) }} ·
+            {{
+              shortDigest(
+                selectedBackup?.spec.workspaceBackup?.membershipSha256,
+              )
+            }}</span
+          >
+        </div>
+        <label class="form-field form-field--full"
+          ><span>{{ $t("common.name") }}</span
+          ><input v-model="restoreName" required maxlength="120"
+        /></label>
+        <div class="button-row form-field--full">
+          <button
+            class="button button--danger"
+            type="submit"
+            :disabled="store.mutating"
+          >
+            {{ $t("backups.restore") }}
+          </button>
+        </div>
+      </form></ModalDialog
+    >
   </div>
 </template>

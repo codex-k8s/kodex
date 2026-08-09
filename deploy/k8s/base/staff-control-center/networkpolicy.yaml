@@ -35,7 +35,10 @@ spec:
           podSelector: {matchLabels: {k8s-app: kube-dns}}
       ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
     - to:
-        - podSelector:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mattercodex-system
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: control-api-gateway
               app.kubernetes.io/component: external-gateway

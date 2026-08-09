@@ -4,10 +4,1049 @@ export type ClientOptions = {
     baseUrl: 'https://control-api.mattercodex.local/api/v1' | (string & {});
 };
 
+export type Sha256 = string;
+
+/**
+ * MattermostTeamStatus
+ */
+export type MattermostTeamStatus = 'ACTIVE' | 'DELETED';
+
+export type MattermostTeam = {
+    selector: string;
+    displayName: string;
+    slug: string;
+    status: MattermostTeamStatus;
+    providerSnapshotSha256: Sha256;
+    createdAt: string;
+    updatedAt: string;
+    observedAt: string;
+};
+
+export type MattermostTeamPage = {
+    teams: Array<MattermostTeam>;
+    nextPageToken?: string;
+};
+
+export type MattermostTeamBinding = {
+    mappingRef: string;
+    mappingVersion: number;
+    mappingGeneration: number;
+    state: 'BOUND' | 'UNLINKED';
+    team: MattermostTeam;
+    providerEffectVersion: number;
+    providerEffectGeneration: number;
+    providerObservedAt: string;
+    updatedAt: string;
+};
+
+export type MattermostMappingOperation = {
+    operationRef: string;
+    action: 'BIND' | 'RELINK' | 'UNLINK';
+    state: 'PENDING' | 'AMBIGUOUS' | 'BOUND' | 'UNLINKED' | 'REPAIR_REQUIRED';
+    failureCode?: string;
+    retryNotBefore?: string;
+    recoveryDeadline?: string;
+    createdAt: string;
+    updatedAt: string;
+    result?: MattermostTeamBinding;
+};
+
+export type MattermostTeamMutationResult = {
+    binding?: MattermostTeamBinding;
+    operation: MattermostMappingOperation;
+    providerOperationState?: 'PENDING' | 'AMBIGUOUS' | 'PROVIDER_ACCEPTED' | 'REPAIR_REQUIRED' | 'EFFECT_PENDING';
+};
+
+export type CreateMattermostTeam = {
+    displayName: string;
+    slugIntent: string;
+};
+
+export type LinkMattermostTeam = {
+    selector: string;
+};
+
+export type RelinkMattermostTeam = {
+    selector: string;
+    expectedGeneration: number;
+};
+
+export type ProtectedConfigurationAction = 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'DELETE' | 'PAUSE' | 'RESUME' | 'ENABLE' | 'DISABLE';
+
+export type RoleDefinitionCommand = {
+    action: ProtectedConfigurationAction;
+    resourceRef?: string;
+    name?: string;
+    stableKey?: string;
+    description?: string;
+    capabilities?: Array<string>;
+    allowedTargetRoleDefinitionRefs?: Array<string>;
+    roleImageRecipeRef?: string;
+    roleImageRecipeVersion?: number;
+    roleImageRecipeSha256?: Sha256;
+};
+
+export type AgentCommand = {
+    action: ProtectedConfigurationAction;
+    resourceRef?: string;
+    name?: string;
+    stableKey?: string;
+    /**
+     * Только selectionKey из authoritative owner configuration catalog.
+     */
+    runtimeSelectionKey?: string;
+    instructionSetStableKey?: string;
+    providerPoolStableKey?: string;
+    capabilities?: Array<string>;
+    enabled?: boolean;
+};
+
+/**
+ * OwnerProjectionStatus
+ */
+export type OwnerProjectionStatus = 'PRESENT' | 'UNAVAILABLE' | 'STALE' | 'INELIGIBLE';
+
+/**
+ * OwnerDisplayValue
+ */
+export type OwnerDisplayValue = {
+    status: OwnerProjectionStatus;
+    value: string;
+};
+
+export type OwnerSafeSelection = {
+    selector: string;
+    displayName: string;
+    status: OwnerProjectionStatus;
+    version: number;
+    digestSha256?: Sha256;
+    maskedStatus?: string;
+};
+
+export type AgentRuntimeSelection = {
+    selectionKey: string;
+    displayName: string;
+    roleDefinitionVersion: number;
+    roleDefinitionSha256: Sha256;
+    runtimeProfileVersion: number;
+    runtimeProfileSha256: Sha256;
+    status: OwnerProjectionStatus;
+};
+
+/**
+ * AgentBindingStatus
+ */
+export type AgentBindingStatus = 'UNBOUND' | 'BOUND' | 'REVOKED';
+
+export type AgentBotIdentitySummary = {
+    status: AgentBindingStatus;
+    username: string;
+    maskedStatus: string;
+    providerGeneration: number;
+};
+
+export type AgentView = {
+    agentRef: string;
+    displayName: string;
+    stableKey: string;
+    version: number;
+    state: LifecycleState;
+    enabled: boolean;
+    capabilities: Array<string>;
+    botIdentity: AgentBotIdentitySummary;
+    runtimeSelection: AgentRuntimeSelection;
+    instructionSelection: OwnerSafeSelection;
+    providerPoolSelection: OwnerSafeSelection;
+};
+
+export type AgentPage = {
+    agents: Array<AgentView>;
+    nextPageToken?: string;
+};
+
+/**
+ * AgentHistoryAction
+ */
+export type AgentHistoryAction = 'CREATE' | 'UPDATE' | 'RECONCILE_GIT' | 'PAUSE' | 'RESUME' | 'DISABLE' | 'ENABLE' | 'BIND_BOT' | 'REBIND_BOT' | 'REVOKE_BOT' | 'ARCHIVE' | 'DELETE';
+
+export type AgentHistoryEntry = {
+    agent: AgentView;
+    action: AgentHistoryAction;
+    snapshotSha256: Sha256;
+    occurredAt: string;
+};
+
+export type AgentHistoryPage = {
+    entries: Array<AgentHistoryEntry>;
+    nextPageToken?: string;
+};
+
+export type RuntimeSelectionCatalogEntry = {
+    selectionKey: string;
+    displayName: string;
+    description: string;
+    roleDefinitionVersion: number;
+    roleDefinitionSha256: Sha256;
+    runtimeProfileVersion: number;
+    runtimeProfileSha256: Sha256;
+    capabilities: Array<string>;
+    status: OwnerProjectionStatus;
+};
+
+/**
+ * AgentBotIdentityStatus
+ */
+export type AgentBotIdentityStatus = 'AVAILABLE' | 'REVOKED' | 'DELETED' | 'UNKNOWN';
+
+/**
+ * AgentBotIdentityAction
+ */
+export type AgentBotIdentityAction = 'CREATE_AND_BIND' | 'BIND' | 'REBIND' | 'REVOKE';
+
+/**
+ * AgentBotIdentityOperationState
+ */
+export type AgentBotIdentityOperationState = 'EFFECT_PENDING' | 'MEMBERSHIP_PENDING' | 'AMBIGUOUS' | 'PROVIDER_ACCEPTED' | 'BOUND' | 'REVOKED' | 'REPAIR_REQUIRED';
+
+export type AgentBotIdentity = {
+    selector: string;
+    username: string;
+    displayName: string;
+    status: AgentBotIdentityStatus;
+    providerVersion: number;
+    providerGeneration: number;
+    providerSnapshotSha256: Sha256;
+    observedAt: string;
+    updatedAt: string;
+};
+
+export type AgentBotIdentityPage = {
+    identities: Array<AgentBotIdentity>;
+    nextPageToken?: string;
+};
+
+export type AgentBotIdentityBinding = {
+    agentRef: string;
+    agentVersion: number;
+    identity: AgentBotIdentity;
+    receiptSha256: Sha256;
+    updatedAt: string;
+};
+
+export type AgentBotIdentityOperation = {
+    operationRef: string;
+    action: AgentBotIdentityAction;
+    state: AgentBotIdentityOperationState;
+    agentRef: string;
+    expectedAgentVersion: number;
+    predecessorGeneration: number;
+    failureCode?: string;
+    retryNotBefore?: string;
+    recoveryDeadline?: string;
+    createdAt: string;
+    updatedAt: string;
+    result?: AgentBotIdentityBinding;
+};
+
+export type AgentBotIdentityCommand = {
+    action: AgentBotIdentityAction;
+    identitySelector?: string;
+    usernameIntent?: string;
+    displayName?: string;
+    expectedProviderGeneration?: number;
+};
+
+export type AgentBotIdentityCommandResult = {
+    operation: AgentBotIdentityOperation;
+    binding?: AgentBotIdentityBinding;
+};
+
+export type AgentAssignmentCommand = {
+    action: 'ASSIGN' | 'UNASSIGN';
+    resourceRef?: string;
+    name?: string;
+    agentStableKey?: string;
+    roomStableKey?: string;
+};
+
+export type InstructionSetCommand = {
+    action: 'CREATE' | 'UPDATE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'DETACH' | 'COPY' | 'ARCHIVE' | 'DELETE';
+    resourceRef?: string;
+    name?: string;
+    stableKey?: string;
+    locale?: string;
+    content?: string;
+    targetVersion?: number;
+};
+
+export type ResourceHistoryEntry = {
+    resource: Resource;
+    action: string;
+    snapshotSha256: Sha256;
+    occurredAt: string;
+};
+
+export type ResourceHistoryPage = {
+    entries: Array<ResourceHistoryEntry>;
+    nextPageToken?: string;
+};
+
+export type InstructionSetComparison = {
+    left: ResourceHistoryEntry;
+    right: ResourceHistoryEntry;
+    contentEqual: boolean;
+    comparisonSha256: Sha256;
+};
+
+export type ProviderCapability = {
+    name: string;
+    risk: string;
+    requiresApproval: boolean;
+};
+
+export type Provider = {
+    providerRef: string;
+    version: number;
+    digestSha256: Sha256;
+    displayName: string;
+    authorizationModes: Array<string>;
+    capabilities: Array<ProviderCapability>;
+};
+
+export type ProviderCatalog = {
+    providers: Array<Provider>;
+    version: number;
+    digestSha256: Sha256;
+};
+
+export type ProviderAuthorizationState = 'PENDING' | 'CODE_ISSUED' | 'AUTHORIZED' | 'DENIED' | 'EXPIRED' | 'FAILED' | 'CANCELLED';
+
+export type ProviderAuthorization = {
+    authorizationRef: string;
+    providerRef: string;
+    connectionRef?: string;
+    attempt: number;
+    version: number;
+    generation: number;
+    state: ProviderAuthorizationState;
+    verificationUrl?: string;
+    userCode?: string;
+    codeExpiresAt?: string;
+    expiresAt: string;
+    failureCategory?: string;
+    updatedAt: string;
+};
+
+export type StartProviderAuthorization = {
+    providerRef: string;
+    connectionStableKey: string;
+    displayName: string;
+};
+
+/**
+ * ProviderConnectionState
+ */
+export type ProviderConnectionState = 'PENDING' | 'VALID' | 'INVALID' | 'REVOKED';
+
+/**
+ * ProviderCapacity
+ */
+export type ProviderCapacity = {
+    usage: number;
+    limit: number;
+    revision: number;
+    observedAt: string;
+    windowDurationSeconds: number;
+    resetsAt?: string;
+    expiresAt: string;
+    digestSha256: Sha256;
+};
+
+export type ProviderConnection = {
+    connectionRef: string;
+    stableKey: string;
+    providerRef: string;
+    displayName: string;
+    version: number;
+    generation: number;
+    state: ProviderConnectionState;
+    maskedLabel: string;
+    maskedAccount: string;
+    capabilities: Array<string>;
+    capabilityDigestSha256: Sha256;
+    observationDigestSha256: Sha256;
+    observedAt: string;
+    updatedAt: string;
+    activeCredentialGeneration: number;
+    capacity?: ProviderCapacity;
+};
+
+export type ProviderConnectionPage = {
+    connections: Array<ProviderConnection>;
+    nextPageToken?: string;
+};
+
+export type ProviderPoolMemberInput = {
+    connectionRef: string;
+    connectionVersion: number;
+    connectionGeneration: number;
+    weight: number;
+};
+
+export type ProviderPoolMemberView = {
+    connectionRef: string;
+    connectionVersion: number;
+    connectionGeneration: number;
+    observationDigestSha256: Sha256;
+    weight: number;
+    eligible: boolean;
+};
+
+export type ProviderPoolCommand = {
+    action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'DELETE';
+    poolRef?: string;
+    stableKey?: string;
+    displayName?: string;
+    policy?: 'least_used' | 'weighted';
+    members?: Array<ProviderPoolMemberInput>;
+};
+
+export type ProviderPoolView = {
+    poolRef: string;
+    stableKey: string;
+    displayName: string;
+    policy: 'least_used' | 'weighted';
+    version: number;
+    desiredDigestSha256: Sha256;
+    observationVersion: number;
+    observationDigestSha256: Sha256;
+    effectiveDigestSha256: Sha256;
+    state: ProviderPoolState;
+    members: Array<ProviderPoolMemberView>;
+    updatedAt: string;
+};
+
+/**
+ * ProviderPoolState
+ */
+export type ProviderPoolState = 'PENDING' | 'ACTIVE' | 'ARCHIVED' | 'DELETED';
+
+export type ProviderPoolPage = {
+    pools: Array<ProviderPoolView>;
+    nextPageToken?: string;
+};
+
+export type IntegrationDefinition = {
+    definitionRef: string;
+    version: number;
+    digestSha256: Sha256;
+    displayName: string;
+    state: IntegrationDefinitionState;
+    capabilities: Array<ProviderCapability>;
+};
+
+/**
+ * IntegrationDefinitionState
+ */
+export type IntegrationDefinitionState = 'ACTIVE' | 'ARCHIVED';
+
+export type IntegrationDefinitionPage = {
+    definitions: Array<IntegrationDefinition>;
+};
+
+export type ConfigureIntegration = {
+    configurationRef?: string;
+    stableKey: string;
+    definitionRef: string;
+    definitionVersion: number;
+    definitionDigestSha256: Sha256;
+    connectionRef: string;
+    connectionVersion: number;
+    connectionGeneration: number;
+    capabilities: Array<string>;
+    effectKind: IntegrationEffectKind;
+};
+
+export type IntegrationConfiguration = {
+    configurationRef: string;
+    stableKey: string;
+    version: number;
+    digestSha256: Sha256;
+    definitionRef: string;
+    definitionVersion: number;
+    definitionDigestSha256: Sha256;
+    connectionRef: string;
+    connectionVersion: number;
+    connectionGeneration: number;
+    capabilities: Array<string>;
+    capabilityDigestSha256: Sha256;
+    effectKind: IntegrationEffectKind;
+    state: IntegrationConfigurationState;
+    updatedAt: string;
+};
+
+/**
+ * IntegrationEffectKind
+ */
+export type IntegrationEffectKind = 'MCP_TOOL' | 'CLI' | 'ENVIRONMENT';
+
+/**
+ * IntegrationConfigurationState
+ */
+export type IntegrationConfigurationState = 'ACTIVE' | 'ARCHIVED';
+
+export type IntegrationConfigurationPage = {
+    configurations: Array<IntegrationConfiguration>;
+    nextPageToken?: string;
+};
+
+export type TestIntegrationConnection = {
+    connectionRef: string;
+    connectionVersion: number;
+    connectionGeneration: number;
+    definitionRef: string;
+    definitionVersion: number;
+    definitionDigestSha256: Sha256;
+    configurationRef?: string;
+    configurationVersion?: number;
+    configurationDigestSha256?: Sha256;
+};
+
+export type IntegrationTestCategory = 'PENDING' | 'OK' | 'CREDENTIAL_UNAVAILABLE' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'ENDPOINT_UNAVAILABLE' | 'TIMEOUT' | 'PROTOCOL_ERROR';
+
+export type IntegrationTestReceipt = {
+    testRef: string;
+    connectionRef: string;
+    connectionVersion: number;
+    connectionGeneration: number;
+    definitionRef: string;
+    definitionVersion: number;
+    definitionDigestSha256: Sha256;
+    configurationRef?: string;
+    configurationVersion?: number;
+    configurationDigestSha256?: Sha256;
+    category: IntegrationTestCategory;
+    receiptSha256: Sha256;
+    testedAt: string;
+    expiresAt: string;
+};
+
+/**
+ * IntegrationApproval
+ */
+export type IntegrationApproval = {
+    approvalRef: string;
+    invocationRef: string;
+    version: number;
+    status: IntegrationApprovalStatus;
+    requestHash: string;
+    redactedPreview: IntegrationApprovalRedactedPreview;
+    expiresAt: string;
+    decidedAt?: string;
+    reasonCode?: string;
+};
+
+/**
+ * IntegrationApprovalStatus
+ */
+export type IntegrationApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
+
+/**
+ * IntegrationApprovalRedactedPreview
+ */
+export type IntegrationApprovalRedactedPreview = {
+    summary: string;
+    fields: Array<string>;
+};
+
+export type IntegrationApprovalPage = {
+    approvals: Array<IntegrationApproval>;
+    nextPageToken?: string;
+};
+
+export type DecideIntegrationApproval = {
+    expectedRequestHash: string;
+    decision: 'APPROVE' | 'REJECT';
+    reasonCode: string;
+};
+
+export type ScheduleSelector = {
+    kind: 'AGENT' | 'INSTRUCTION_SET' | 'PROVIDER_POOL';
+    ref: string;
+    stableKey: string;
+    displayName: string;
+    state: LifecycleState;
+    version: number;
+    digestSha256: Sha256;
+};
+
+export type ScheduleSelectorCatalog = {
+    selectors: Array<ScheduleSelector>;
+    runtimeSelections: Array<RuntimeSelectionCatalogEntry>;
+    presets: Array<SchedulePreset>;
+    defaults: ScheduleDefaults;
+    complete: true;
+};
+
+export type SchedulePreset = {
+    key: string;
+    displayName: string;
+    description: string;
+    revision: number;
+    digestSha256: Sha256;
+    cron: string;
+};
+
+export type ScheduleDefaults = {
+    revision: number;
+    digestSha256: Sha256;
+    calendar: 'GREGORIAN' | 'BUSINESS';
+    overlapPolicy: ScheduleOverlapPolicy;
+    misfirePolicy: ScheduleMisfirePolicy;
+    deliveryPolicy: 'AT_LEAST_ONCE' | 'EXACTLY_ONCE_EFFECT';
+    maximumAttempts: number;
+    initialBackoffSeconds: number;
+    maximumBackoffSeconds: number;
+    deadLetterAfterSeconds: number;
+    sessionPolicy: ScheduleSessionPolicy;
+    notificationPolicy: ScheduleNotificationPolicy;
+    maximumExecutionSeconds: number;
+    coalesce: boolean;
+};
+
+export type OwnerSchedulePromptIntent = {
+    inlineMarkdown?: string;
+    artifactSelector?: string;
+};
+
+export type OwnerScheduleAdvancedOverrides = {
+    cron?: string;
+    intervalSeconds?: number;
+    calendar?: 'GREGORIAN' | 'BUSINESS';
+    overlapPolicy?: ScheduleOverlapPolicy;
+    misfirePolicy?: ScheduleMisfirePolicy;
+    misfireGraceSeconds?: number;
+    deliveryPolicy?: 'AT_LEAST_ONCE' | 'EXACTLY_ONCE_EFFECT';
+    maximumAttempts?: number;
+    initialBackoffSeconds?: number;
+    maximumBackoffSeconds?: number;
+    deadLetterAfterSeconds?: number;
+    sessionPolicy?: ScheduleSessionPolicy;
+    notificationPolicy?: ScheduleNotificationPolicy;
+    maximumExecutionSeconds?: number;
+    coalesce?: boolean;
+};
+
+export type OwnerScheduleIntent = {
+    timezone: string;
+    presetKey: string;
+    prompt: OwnerSchedulePromptIntent;
+    roomStableKey?: string;
+    advancedOverrides?: OwnerScheduleAdvancedOverrides;
+};
+
+export type CreateScheduleFromSelections = {
+    name: string;
+    agentStableKey: string;
+    instructionSetStableKey: string;
+    providerPoolStableKey: string;
+    intent: OwnerScheduleIntent;
+};
+
+export type BindScheduleConfiguration = {
+    name: string;
+    agentStableKey: string;
+    instructionSetStableKey: string;
+    providerPoolStableKey: string;
+    intent: OwnerScheduleIntent;
+};
+
+export type OwnerConfigurationCatalog = {
+    runtimeSelections: Array<RuntimeSelectionCatalogEntry>;
+    schedulePresets: Array<SchedulePreset>;
+    scheduleDefaults: ScheduleDefaults;
+    nextPageToken?: string;
+};
+
+export type OwnerSchedulePromptView = {
+    kind: 'INLINE' | 'SELECTOR';
+    inlineMarkdown?: string;
+    artifactSelector?: string;
+    displayName: string;
+    status: OwnerProjectionStatus;
+    version: number;
+    digestSha256?: Sha256;
+};
+
+export type OwnerScheduleView = {
+    scheduleRef: string;
+    displayName: string;
+    version: number;
+    state: LifecycleState;
+    presetKey: string;
+    presetRevision: number;
+    presetSha256: Sha256;
+    defaultsRevision: number;
+    defaultsSha256: Sha256;
+    timezone: string;
+    cron?: string;
+    intervalSeconds?: number;
+    advancedOverrides: Array<string>;
+    calendar: 'GREGORIAN' | 'BUSINESS';
+    overlapPolicy: ScheduleOverlapPolicy;
+    misfirePolicy: ScheduleMisfirePolicy;
+    misfireGraceSeconds: number;
+    deliveryPolicy: 'AT_LEAST_ONCE' | 'EXACTLY_ONCE_EFFECT';
+    maximumAttempts: number;
+    initialBackoffSeconds: number;
+    maximumBackoffSeconds: number;
+    deadLetterAfterSeconds: number;
+    sessionPolicy: ScheduleSessionPolicy;
+    notificationPolicy: ScheduleNotificationPolicy;
+    maximumExecutionSeconds: number;
+    coalesce: boolean;
+    nextRunAt?: string;
+    agentSelection: OwnerSafeSelection;
+    instructionSelection: OwnerSafeSelection;
+    providerPoolSelection: OwnerSafeSelection;
+    roomSelection: OwnerSafeSelection;
+    prompt: OwnerSchedulePromptView;
+};
+
+export type OwnerSchedulePage = {
+    items: Array<OwnerScheduleView>;
+    nextPageToken?: string;
+};
+
+export type RunCommand = {
+    action: 'CANCEL' | 'RETRY';
+    reasonCode: string;
+};
+
+/**
+ * RunNextAction
+ */
+export type RunNextAction = 'CANCEL' | 'RETRY';
+
+export type RunView = {
+    runRef: string;
+    displayName: string;
+    version: number;
+    state: LifecycleState;
+    workspace: OwnerDisplayValue;
+    trigger: OwnerDisplayValue;
+    runtimeStatus: OwnerDisplayValue;
+    attempt: number;
+    startedAt?: string;
+    updatedAt: string;
+    durationSeconds: number;
+    nextActions: Array<RunNextAction>;
+    initiator: OwnerDisplayValue;
+    agent: OwnerDisplayValue;
+    role: OwnerDisplayValue;
+    model: OwnerDisplayValue;
+    provider: OwnerDisplayValue;
+};
+
+export type RunPage = {
+    runs: Array<RunView>;
+    nextPageToken?: string;
+};
+
+export type RunSessionView = {
+    sessionRef: string;
+    displayName: string;
+    state: LifecycleState;
+    version: number;
+    updatedAt: string;
+};
+
+export type RunTurnView = {
+    turnRef: string;
+    displayName: string;
+    state: LifecycleState;
+    version: number;
+    updatedAt: string;
+};
+
+export type RunCommandResult = {
+    run: RunView;
+    incidents: Array<IncidentView>;
+    incidentsNextPageToken?: string;
+};
+
+export type RunDetail = {
+    run: RunView;
+    session?: RunSessionView;
+    turn?: RunTurnView;
+    incidents: Array<IncidentView>;
+    incidentsNextPageToken?: string;
+};
+
+/**
+ * RunTimelineKind
+ */
+export type RunTimelineKind = 'STATE_CHANGE';
+
+/**
+ * RunTimelineOutcome
+ */
+export type RunTimelineOutcome = 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'RETRIED' | 'REQUIRES_OWNER' | 'OTHER';
+
+export type RunTimelineEntry = {
+    eventRef: string;
+    kind: RunTimelineKind;
+    display: string;
+    outcome: RunTimelineOutcome;
+    version: number;
+    occurredAt: string;
+    nextActions: Array<RunNextAction>;
+};
+
+export type RunTimelinePage = {
+    run: RunView;
+    entries: Array<RunTimelineEntry>;
+    nextActions: Array<RunNextAction>;
+    nextPageToken?: string;
+};
+
+/**
+ * RunLineageKind
+ */
+export type RunLineageKind = 'PROCESS' | 'ATTEMPT';
+
+/**
+ * RunLineageState
+ */
+export type RunLineageState = 'PENDING' | 'ADMITTED' | 'QUEUED' | 'CLAIMED' | 'RUNNING' | 'WAITING_OWNER' | 'WAITING_EXTERNAL' | 'BLOCKED' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'RETRIED' | 'SUSPENDED';
+
+export type RunLineageNode = {
+    nodeRef: string;
+    parentRef?: string;
+    kind: RunLineageKind;
+    state: RunLineageState;
+    version: number;
+    attempt: number;
+    createdAt: string;
+    updatedAt: string;
+    displayName: string;
+    agent: OwnerDisplayValue;
+    role: OwnerDisplayValue;
+    model: OwnerDisplayValue;
+    provider: OwnerDisplayValue;
+};
+
+export type RunLineage = {
+    run: RunView;
+    nodes: Array<RunLineageNode>;
+    nextActions: Array<RunNextAction>;
+    truncated: boolean;
+    nextPageToken?: string;
+};
+
+/**
+ * RunArtifactStatus
+ */
+export type RunArtifactStatus = 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+
+export type RunArtifactView = {
+    artifactRef: string;
+    displayName: string;
+    kind: string;
+    mediaType: string;
+    sizeBytes: number;
+    sha256: Sha256;
+    status: RunArtifactStatus;
+    createdAt: string;
+};
+
+export type RunArtifactPage = {
+    artifacts: Array<RunArtifactView>;
+    nextActions: Array<RunNextAction>;
+    nextPageToken?: string;
+};
+
+/**
+ * IncidentState
+ */
+export type IncidentState = 'OPEN' | 'ACKNOWLEDGED' | 'RETRYING' | 'RELEASED' | 'CLOSED';
+
+export type IncidentHistoryEntry = {
+    version: number;
+    state: IncidentState;
+    action: 'ACKNOWLEDGE' | 'RETRY' | 'RELEASE' | 'CLOSE';
+    reasonCode: string;
+    occurredAt: string;
+    executionFence: number;
+    nextActions: Array<IncidentNextAction>;
+};
+
+export type IncidentHistoryPage = {
+    entries: Array<IncidentHistoryEntry>;
+    nextActions: Array<IncidentNextAction>;
+    nextPageToken?: string;
+};
+
+export type IncidentCommand = {
+    action: 'ACKNOWLEDGE' | 'RETRY' | 'RELEASE' | 'CLOSE';
+    reasonCode: string;
+};
+
+export type IncidentCommandResult = {
+    incident: IncidentView;
+};
+
+/**
+ * IncidentNextAction
+ */
+export type IncidentNextAction = 'ACKNOWLEDGE' | 'RETRY' | 'RELEASE' | 'CLOSE';
+
+/**
+ * IncidentSeverity
+ */
+export type IncidentSeverity = 'WARNING' | 'ERROR' | 'CRITICAL';
+
+export type IncidentView = {
+    incidentRef: string;
+    version: number;
+    kind: RuntimeIncidentKind;
+    state: IncidentState;
+    severity: IncidentSeverity;
+    impact: string;
+    workspace: OwnerDisplayValue;
+    run: OwnerDisplayValue;
+    safeCorrelation: string;
+    diagnosticSummary: string;
+    runbookUrl: string;
+    occurredAt: string;
+    updatedAt: string;
+    nextActions: Array<IncidentNextAction>;
+    executionFence: number;
+};
+
+/**
+ * HealthObservation
+ */
+export type HealthObservation = {
+    source: HealthObservationSource;
+    component: string;
+    status: HealthObservationStatus;
+    value: number;
+    version: number;
+    digestSha256?: Sha256;
+    observedAt: string;
+};
+
+/**
+ * HealthObservationSource
+ */
+export type HealthObservationSource = 'CONTROL_PLANE' | 'INTERACTION_GATEWAY' | 'INTEGRATION_GATEWAY';
+
+/**
+ * HealthObservationStatus
+ */
+export type HealthObservationStatus = 'OK' | 'DEGRADED' | 'UNAVAILABLE' | 'UNKNOWN';
+
+export type HealthSeries = {
+    observations: Array<HealthObservation>;
+    complete: true;
+};
+
+export type WorkspaceBackupCommand = {
+    action: 'CREATE' | 'CANCEL' | 'RETRY';
+    backupRef?: string;
+    scope?: 'WORKSPACE' | 'ALL_WORKSPACES';
+    name?: string;
+    terminalReasonCode?: string;
+    retainUntil?: string;
+};
+
+export type WorkspaceRestoreCommand = {
+    action: 'CREATE' | 'CANCEL' | 'RETRY';
+    restoreRef?: string;
+    backupRef?: string;
+    backupVersion?: number;
+    membershipSha256?: Sha256;
+    name?: string;
+    terminalReasonCode?: string;
+};
+
+/**
+ * WorkspaceRestoreState
+ */
+export type WorkspaceRestoreState = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
+
+/**
+ * WorkspaceRestoreNextAction
+ */
+export type WorkspaceRestoreNextAction = 'CANCEL' | 'RETRY';
+
+export type WorkspaceRestoreView = {
+    restoreRef: string;
+    displayName: string;
+    version: number;
+    state: WorkspaceRestoreState;
+    attempt: number;
+    generation: number;
+    memberCount: number;
+    terminalReasonCode: string;
+    createdAt: string;
+    updatedAt: string;
+    nextActions: Array<WorkspaceRestoreNextAction>;
+};
+
+export type WorkspaceRestorePage = {
+    restores: Array<WorkspaceRestoreView>;
+    nextPageToken?: string;
+};
+
+/**
+ * ConfigurationChangeKind
+ */
+export type ConfigurationChangeKind = 'ADDED' | 'REMOVED' | 'CHANGED';
+
+/**
+ * ConfigurationChangeDisplay
+ */
+export type ConfigurationChangeDisplay = 'TEXT' | 'REDACTED';
+
+export type ConfigurationDiffChange = {
+    kind: ConfigurationChangeKind;
+    path: string;
+    display: ConfigurationChangeDisplay;
+    before: string;
+    after: string;
+};
+
+export type ConfigurationVersionRef = {
+    version: number;
+    contentSha256: Sha256;
+    snapshotSha256: Sha256;
+};
+
+export type ConfigurationDiff = {
+    left: ConfigurationVersionRef;
+    right: ConfigurationVersionRef;
+    changes: Array<ConfigurationDiffChange>;
+    truncated: boolean;
+    nextPageToken?: string;
+};
+
+export type ConfigurationSourceDetail = {
+    resourceRef: string;
+    displayName: string;
+    version: number;
+    managedBy: ConfigurationManagedBy;
+    source: string;
+    sourceRevision: number;
+    sourceSha256?: Sha256;
+    updatedAt: string;
+};
+
 /**
  * ResourceKind
  */
-export type ResourceKind = 'PROJECT' | 'TEAM' | 'CHAT' | 'ROLE' | 'PROMPT_PROFILE' | 'CREDENTIAL_BINDING' | 'REPOSITORY_WORKSPACE' | 'INTEGRATION' | 'RUNTIME_REVISION' | 'SESSION' | 'TURN' | 'PROCESS_RUN' | 'SCHEDULE' | 'OWNER_GATE' | 'MEMORY_RECORD' | 'WORK_CLAIM' | 'ARTIFACT' | 'ROLE_IMAGE_RECIPE' | 'IMAGE_BUILD' | 'IMAGE_ARTIFACT';
+export type ResourceKind = 'PROJECT' | 'TEAM' | 'CHAT' | 'ROLE' | 'PROMPT_PROFILE' | 'CREDENTIAL_BINDING' | 'REPOSITORY_WORKSPACE' | 'INTEGRATION' | 'RUNTIME_REVISION' | 'SESSION' | 'TURN' | 'PROCESS_RUN' | 'SCHEDULE' | 'OWNER_GATE' | 'MEMORY_RECORD' | 'WORK_CLAIM' | 'ARTIFACT' | 'ROLE_IMAGE_RECIPE' | 'IMAGE_BUILD' | 'IMAGE_ARTIFACT' | 'ROLE_DEFINITION' | 'AGENT' | 'AGENT_ASSIGNMENT' | 'INSTRUCTION_SET' | 'PROVIDER_CONNECTION_REFERENCE' | 'PROVIDER_POOL' | 'WORKSPACE_BACKUP' | 'WORKSPACE_RESTORE' | 'WORKSPACE_MATTERMOST_MAPPING';
 
 /**
  * MutableResourceKind
@@ -50,6 +1089,16 @@ export type ProviderPoolPolicy = 'least_used' | 'weighted';
 export type OwnerGateDecision = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED';
 
 /**
+ * OwnerGateDeliveryState
+ */
+export type OwnerGateDeliveryState = 'AWAITING_DELIVERY_PROOF' | 'READY' | 'TERMINAL' | 'EXPIRED';
+
+/**
+ * OwnerGateNextAction
+ */
+export type OwnerGateNextAction = 'WAIT_FOR_DELIVERY' | 'RESOLVE' | 'READ_TERMINAL' | 'NONE';
+
+/**
  * ArtifactScanStatus
  */
 export type ArtifactScanStatus = 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
@@ -70,26 +1119,51 @@ export type UpdateProject = {
     spec: ProjectSpec;
 };
 
+/**
+ * ScheduleOverlapPolicy
+ */
 export type ScheduleOverlapPolicy = 'FORBID' | 'SKIP' | 'QUEUE';
 
+/**
+ * ScheduleMisfirePolicy
+ */
 export type ScheduleMisfirePolicy = 'SKIP' | 'RUN_ONCE' | 'CATCH_UP' | 'WITHIN_GRACE';
 
+/**
+ * ScheduleSessionPolicy
+ */
 export type ScheduleSessionPolicy = 'NEW' | 'PERSISTENT' | 'ROLLING';
 
+/**
+ * ScheduleNotificationPolicy
+ */
 export type ScheduleNotificationPolicy = 'ALWAYS' | 'ON_ACTION' | 'ON_FAILURE' | 'ON_ACTION_OR_FAILURE' | 'AUDIT_ONLY';
 
+/**
+ * ScheduleTargetType
+ */
 export type ScheduleTargetType = 'AGENT' | 'PLAYBOOK';
+
+/**
+ * ScheduleCalendar
+ */
+export type ScheduleCalendar = 'GREGORIAN' | 'BUSINESS';
+
+/**
+ * ScheduleDeliveryPolicy
+ */
+export type ScheduleDeliveryPolicy = 'AT_LEAST_ONCE' | 'EXACTLY_ONCE_EFFECT';
 
 export type ScheduleInput = unknown & {
     targetResourceId: string;
     cron?: string;
     intervalSeconds?: number;
     timezone: string;
-    calendar: 'GREGORIAN' | 'BUSINESS';
+    calendar: ScheduleCalendar;
     overlapPolicy: ScheduleOverlapPolicy;
     misfirePolicy: ScheduleMisfirePolicy;
     misfireGraceSeconds: number;
-    deliveryPolicy: 'AT_LEAST_ONCE' | 'EXACTLY_ONCE_EFFECT';
+    deliveryPolicy: ScheduleDeliveryPolicy;
     maximumAttempts: number;
     initialBackoffSeconds: number;
     maximumBackoffSeconds: number;
@@ -516,10 +1590,6 @@ export type RuntimeRevisionProjection = {
  * SessionProjection
  */
 export type SessionProjection = {
-    agentId: string;
-    providerAccountBindingId: string;
-    conversationId?: string;
-    archiveRef?: string;
     lastTurnSequence: number;
 };
 
@@ -555,7 +1625,10 @@ export type ProcessRunProjection = {
     currentAttempt?: number;
 };
 
-export type ScheduleProjection = unknown & {
+/**
+ * ScheduleProjection
+ */
+export type ScheduleProjection = {
     targetResourceId: string;
     targetKind: ResourceKind;
     targetVersion: number;
@@ -563,11 +1636,11 @@ export type ScheduleProjection = unknown & {
     intervalSeconds?: number;
     timezone: string;
     nextRunAt: string;
-    calendar: 'GREGORIAN' | 'BUSINESS';
+    calendar: ScheduleCalendar;
     overlapPolicy: ScheduleOverlapPolicy;
     misfirePolicy: ScheduleMisfirePolicy;
     misfireGraceSeconds: number;
-    deliveryPolicy: 'AT_LEAST_ONCE' | 'EXACTLY_ONCE_EFFECT';
+    deliveryPolicy: ScheduleDeliveryPolicy;
     maximumAttempts: number;
     initialBackoffSeconds: number;
     maximumBackoffSeconds: number;
@@ -637,10 +1710,10 @@ export type OwnerGateProjection = {
     turnId: string;
     attempt: number;
     immutableInputSha256: string;
-    deliveryState: 'AWAITING_DELIVERY_PROOF' | 'READY' | 'TERMINAL' | 'EXPIRED';
+    deliveryState: OwnerGateDeliveryState;
     resolvable: boolean;
     deliveredAt?: string;
-    nextAction: 'WAIT_FOR_DELIVERY' | 'RESOLVE' | 'READ_TERMINAL' | 'NONE';
+    nextAction: OwnerGateNextAction;
 };
 
 export type ResolveOwnerGateDecision = 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED';
@@ -851,6 +1924,171 @@ export type ImageArtifactProjection = {
 export type ImageAdmissionVerdict = 'ACCEPTED' | 'REJECTED';
 
 /**
+ * RoleDefinitionProjection
+ */
+export type RoleDefinitionProjection = {
+    stableKey: string;
+    description: string;
+    capabilities: Array<string>;
+    allowedTargetRoleDefinitionRefs: Array<string>;
+    roleImageRecipeRef?: string;
+    roleImageRecipeVersion: number;
+    roleImageRecipeSha256?: Sha256;
+    ownership: ConfigurationOwnershipProjection;
+};
+
+/**
+ * AgentProjection
+ */
+export type AgentProjection = {
+    stableKey: string;
+    roleDefinitionRef: string;
+    instructionSetRef: string;
+    providerPoolRef: string;
+    runtimeProfileRef?: string;
+    capabilities: Array<string>;
+    botUsername?: string;
+    botMaskedStatus?: string;
+    enabled: boolean;
+    ownership: ConfigurationOwnershipProjection;
+};
+
+/**
+ * AgentAssignmentProjection
+ */
+export type AgentAssignmentProjection = {
+    agentRef: string;
+    workspaceRef: string;
+    roomRef?: string;
+    generation: number;
+};
+
+/**
+ * InstructionValidationProblem
+ */
+export type InstructionValidationProblem = {
+    code: string;
+    field: string;
+    line: number;
+    column: number;
+    message: string;
+};
+
+/**
+ * InstructionSetProjection
+ */
+export type InstructionSetProjection = {
+    stableKey: string;
+    locale: string;
+    currentVersion: number;
+    publishedVersion: number;
+    content: string;
+    contentSha256: Sha256;
+    versionState: InstructionVersionState;
+    validationSucceeded: boolean;
+    validationProblems: Array<InstructionValidationProblem>;
+    ownership: ConfigurationOwnershipProjection;
+};
+
+/**
+ * InstructionVersionState
+ */
+export type InstructionVersionState = 'DRAFT' | 'VALIDATED' | 'PUBLISHED' | 'REJECTED' | 'ARCHIVED';
+
+/**
+ * ProviderConnectionReferenceProjection
+ */
+export type ProviderConnectionReferenceProjection = {
+    stableKey: string;
+    provider: string;
+    referenceVersion: number;
+    maskedLabel: string;
+    maskedStatus: ProviderConnectionMaskedStatus;
+    capabilities: Array<string>;
+    eligible: boolean;
+    observedAt: string;
+    observedUsage: number;
+    observedLimit: number;
+    observationExpiresAt: string;
+};
+
+/**
+ * ProviderConnectionMaskedStatus
+ */
+export type ProviderConnectionMaskedStatus = 'AVAILABLE' | 'DEGRADED' | 'INELIGIBLE' | 'ARCHIVED';
+
+/**
+ * ProviderPoolResourceProjection
+ */
+export type ProviderPoolResourceProjection = {
+    stableKey: string;
+    policy: ProviderPoolPolicy;
+    policyRevision: number;
+    observationMaxAgeSeconds: number;
+    eligibleMembers: number;
+    totalMembers: number;
+    eligibilitySnapshotSha256: Sha256;
+    ownership: ConfigurationOwnershipProjection;
+};
+
+/**
+ * WorkspaceBackupProjection
+ */
+export type WorkspaceBackupProjection = {
+    scope: WorkspaceBackupScope;
+    memberCount: number;
+    membershipSha256: Sha256;
+    state: WorkspaceBackupState;
+    attempt: number;
+    generation: number;
+    terminalReasonCode?: string;
+    retainUntil: string;
+};
+
+/**
+ * WorkspaceBackupScope
+ */
+export type WorkspaceBackupScope = 'WORKSPACE' | 'ALL_WORKSPACES';
+
+/**
+ * WorkspaceBackupState
+ */
+export type WorkspaceBackupState = 'VERIFYING' | 'AVAILABLE' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
+
+/**
+ * WorkspaceRestoreProjection
+ */
+export type WorkspaceRestoreProjection = {
+    backupRef: string;
+    backupVersion: number;
+    membershipSha256: Sha256;
+    memberCount: number;
+    state: WorkspaceRestoreState;
+    attempt: number;
+    generation: number;
+    partial: boolean;
+    terminalReasonCode?: string;
+};
+
+/**
+ * WorkspaceMattermostMappingProjection
+ */
+export type WorkspaceMattermostMappingProjection = {
+    workspaceRef: string;
+    workspaceVersion: number;
+    mappingGeneration: number;
+    state: WorkspaceMattermostMappingState;
+    providerObservedAt: string;
+    providerEffectVersion: number;
+    providerEffectGeneration: number;
+};
+
+/**
+ * WorkspaceMattermostMappingState
+ */
+export type WorkspaceMattermostMappingState = 'BOUND' | 'UNLINKED';
+
+/**
  * ResourceSpecProjection
  */
 export type ResourceSpecProjection = {
@@ -874,6 +2112,15 @@ export type ResourceSpecProjection = {
     roleImageRecipe?: RoleImageRecipeProjection;
     imageBuild?: ImageBuildProjection;
     imageArtifact?: ImageArtifactProjection;
+    roleDefinition?: RoleDefinitionProjection;
+    agent?: AgentProjection;
+    agentAssignment?: AgentAssignmentProjection;
+    instructionSet?: InstructionSetProjection;
+    providerConnectionReference?: ProviderConnectionReferenceProjection;
+    providerPool?: ProviderPoolResourceProjection;
+    workspaceBackup?: WorkspaceBackupProjection;
+    workspaceRestore?: WorkspaceRestoreProjection;
+    workspaceMattermostMapping?: WorkspaceMattermostMappingProjection;
 };
 
 /**
@@ -885,6 +2132,7 @@ export type Resource = {
     name: string;
     state: LifecycleState;
     version: number;
+    projectionSha256: Sha256;
     projectId?: string;
     parentId?: string;
     spec: ResourceSpecProjection;
@@ -951,21 +2199,8 @@ export type ConfigurationChangePage = {
  */
 export type RuntimeIncidentKind = 'HEARTBEAT_MISSED' | 'RECONCILE_FAILED' | 'WORKLOAD_UNAVAILABLE';
 
-/**
- * RuntimeIncident
- */
-export type RuntimeIncident = {
-    incidentId: string;
-    executionId: string;
-    executionFence: number;
-    kind: RuntimeIncidentKind;
-    evidenceSha256: string;
-    workloadId: string;
-    occurredAt: string;
-};
-
 export type IncidentPage = {
-    incidents: Array<RuntimeIncident>;
+    incidents: Array<IncidentView>;
     nextPageToken?: string;
 };
 
@@ -995,7 +2230,37 @@ export type IdempotencyKey = string;
 
 export type IfMatch = string;
 
+export type OptionalIfMatch = string;
+
 export type ResourceId = string;
+
+export type ResourceRef = string;
+
+export type Selector = string;
+
+export type ProviderRef = string;
+
+export type AuthorizationRef = string;
+
+export type ConnectionRef = string;
+
+export type PoolRef = string;
+
+export type DefinitionRef = string;
+
+export type ConfigurationRef = string;
+
+export type TestRef = string;
+
+export type ApprovalRef = string;
+
+export type RunRef = string;
+
+export type IncidentRef = string;
+
+export type BackupRef = string;
+
+export type RestoreRef = string;
 
 export type ResourceKindQuery = ResourceKind;
 
@@ -1048,6 +2313,10 @@ export type DeleteOwnerSessionErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type DeleteOwnerSessionError = DeleteOwnerSessionErrors[keyof DeleteOwnerSessionErrors];
@@ -1100,6 +2369,10 @@ export type CreateOwnerSessionErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type CreateOwnerSessionError = CreateOwnerSessionErrors[keyof CreateOwnerSessionErrors];
@@ -1148,6 +2421,10 @@ export type ListProjectsErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type ListProjectsError = ListProjectsErrors[keyof ListProjectsErrors];
@@ -2955,15 +4232,19 @@ export type ListRunsErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type ListRunsError = ListRunsErrors[keyof ListRunsErrors];
 
 export type ListRunsResponses = {
     /**
-     * Авторитетные PROCESS_RUN resources.
+     * Авторитетные безопасные Run projections.
      */
-    200: ResourcePage;
+    200: RunPage;
 };
 
 export type ListRunsResponse = ListRunsResponses[keyof ListRunsResponses];
@@ -3006,6 +4287,10 @@ export type ListAuditEventsErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type ListAuditEventsError = ListAuditEventsErrors[keyof ListAuditEventsErrors];
@@ -3054,6 +4339,10 @@ export type ListIncidentsErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type ListIncidentsError = ListIncidentsErrors[keyof ListIncidentsErrors];
@@ -3102,6 +4391,10 @@ export type ListConfigurationChangesErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type ListConfigurationChangesError = ListConfigurationChangesErrors[keyof ListConfigurationChangesErrors];
@@ -3143,6 +4436,10 @@ export type GetDiagnosticsErrors = {
      * Защищённый control-plane path временно недоступен.
      */
     503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
 };
 
 export type GetDiagnosticsError = GetDiagnosticsErrors[keyof GetDiagnosticsErrors];
@@ -3155,3 +4452,2352 @@ export type GetDiagnosticsResponses = {
 };
 
 export type GetDiagnosticsResponse = GetDiagnosticsResponses[keyof GetDiagnosticsResponses];
+
+export type ListMattermostTeamsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/mattermost/teams';
+};
+
+export type ListMattermostTeamsErrors = {
+    /**
+     * Owner credential или session недействительны.
+     */
+    401: Problem;
+    /**
+     * CSRF/Origin или exact permission отклонены.
+     */
+    403: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListMattermostTeamsError = ListMattermostTeamsErrors[keyof ListMattermostTeamsErrors];
+
+export type ListMattermostTeamsResponses = {
+    /**
+     * Safe Team catalog.
+     */
+    200: MattermostTeamPage;
+};
+
+export type ListMattermostTeamsResponse = ListMattermostTeamsResponses[keyof ListMattermostTeamsResponses];
+
+export type CreateMattermostTeamData = {
+    body: CreateMattermostTeam;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/mattermost/teams';
+};
+
+export type CreateMattermostTeamErrors = {
+    /**
+     * Запрос не соответствует закрытому контракту.
+     */
+    400: Problem;
+    /**
+     * Idempotency либо lifecycle conflict.
+     */
+    409: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type CreateMattermostTeamError = CreateMattermostTeamErrors[keyof CreateMattermostTeamErrors];
+
+export type CreateMattermostTeamResponses = {
+    /**
+     * Provider operation принята.
+     */
+    202: MattermostTeamMutationResult;
+};
+
+export type CreateMattermostTeamResponse = CreateMattermostTeamResponses[keyof CreateMattermostTeamResponses];
+
+export type GetMattermostTeamProviderReadbackData = {
+    body?: never;
+    path: {
+        selector: string;
+    };
+    query?: never;
+    url: '/mattermost/teams/{selector}';
+};
+
+export type GetMattermostTeamProviderReadbackErrors = {
+    /**
+     * Ресурс отсутствует либо скрыт другой областью.
+     */
+    404: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetMattermostTeamProviderReadbackError = GetMattermostTeamProviderReadbackErrors[keyof GetMattermostTeamProviderReadbackErrors];
+
+export type GetMattermostTeamProviderReadbackResponses = {
+    /**
+     * Fresh provider readback.
+     */
+    200: MattermostTeam;
+};
+
+export type GetMattermostTeamProviderReadbackResponse = GetMattermostTeamProviderReadbackResponses[keyof GetMattermostTeamProviderReadbackResponses];
+
+export type UnlinkMattermostTeamData = {
+    body?: never;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path?: never;
+    query: {
+        generation: number;
+    };
+    url: '/mattermost/team-binding';
+};
+
+export type UnlinkMattermostTeamErrors = {
+    /**
+     * If-Match не совпал с авторитетной версией.
+     */
+    412: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type UnlinkMattermostTeamError = UnlinkMattermostTeamErrors[keyof UnlinkMattermostTeamErrors];
+
+export type UnlinkMattermostTeamResponses = {
+    /**
+     * Terminal mapping readback.
+     */
+    200: MattermostTeamMutationResult;
+};
+
+export type UnlinkMattermostTeamResponse = UnlinkMattermostTeamResponses[keyof UnlinkMattermostTeamResponses];
+
+export type GetMattermostTeamBindingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/mattermost/team-binding';
+};
+
+export type GetMattermostTeamBindingErrors = {
+    /**
+     * Ресурс отсутствует либо скрыт другой областью.
+     */
+    404: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetMattermostTeamBindingError = GetMattermostTeamBindingErrors[keyof GetMattermostTeamBindingErrors];
+
+export type GetMattermostTeamBindingResponses = {
+    /**
+     * Current binding.
+     */
+    200: MattermostTeamBinding;
+};
+
+export type GetMattermostTeamBindingResponse = GetMattermostTeamBindingResponses[keyof GetMattermostTeamBindingResponses];
+
+export type LinkMattermostTeamData = {
+    body: LinkMattermostTeam;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/mattermost/team-binding';
+};
+
+export type LinkMattermostTeamErrors = {
+    /**
+     * Idempotency либо lifecycle conflict.
+     */
+    409: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type LinkMattermostTeamError = LinkMattermostTeamErrors[keyof LinkMattermostTeamErrors];
+
+export type LinkMattermostTeamResponses = {
+    /**
+     * Authoritative binding.
+     */
+    200: MattermostTeamMutationResult;
+};
+
+export type LinkMattermostTeamResponse = LinkMattermostTeamResponses[keyof LinkMattermostTeamResponses];
+
+export type RelinkMattermostTeamData = {
+    body: RelinkMattermostTeam;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/mattermost/team-binding';
+};
+
+export type RelinkMattermostTeamErrors = {
+    /**
+     * If-Match не совпал с авторитетной версией.
+     */
+    412: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type RelinkMattermostTeamError = RelinkMattermostTeamErrors[keyof RelinkMattermostTeamErrors];
+
+export type RelinkMattermostTeamResponses = {
+    /**
+     * Authoritative binding.
+     */
+    200: MattermostTeamMutationResult;
+};
+
+export type RelinkMattermostTeamResponse = RelinkMattermostTeamResponses[keyof RelinkMattermostTeamResponses];
+
+export type GetMattermostTeamMappingOperationData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query: {
+        action: 'BIND' | 'RELINK' | 'UNLINK';
+    };
+    url: '/mattermost/team-operations';
+};
+
+export type GetMattermostTeamMappingOperationErrors = {
+    /**
+     * Ресурс отсутствует либо скрыт другой областью.
+     */
+    404: Problem;
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetMattermostTeamMappingOperationError = GetMattermostTeamMappingOperationErrors[keyof GetMattermostTeamMappingOperationErrors];
+
+export type GetMattermostTeamMappingOperationResponses = {
+    /**
+     * Durable operation readback.
+     */
+    200: MattermostMappingOperation;
+};
+
+export type GetMattermostTeamMappingOperationResponse = GetMattermostTeamMappingOperationResponses[keyof GetMattermostTeamMappingOperationResponses];
+
+export type ListRoleDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/role-definitions';
+};
+
+export type ListRoleDefinitionsErrors = {
+    /**
+     * Защищённый control-plane path временно недоступен.
+     */
+    503: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListRoleDefinitionsError = ListRoleDefinitionsErrors[keyof ListRoleDefinitionsErrors];
+
+export type ListRoleDefinitionsResponses = {
+    /**
+     * RoleDefinition page.
+     */
+    200: ResourcePage;
+};
+
+export type ListRoleDefinitionsResponse = ListRoleDefinitionsResponses[keyof ListRoleDefinitionsResponses];
+
+export type GetRoleDefinitionData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: never;
+    url: '/role-definitions/{resourceRef}';
+};
+
+export type GetRoleDefinitionErrors = {
+    /**
+     * Ресурс отсутствует либо скрыт другой областью.
+     */
+    404: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetRoleDefinitionError = GetRoleDefinitionErrors[keyof GetRoleDefinitionErrors];
+
+export type GetRoleDefinitionResponses = {
+    /**
+     * Current RoleDefinition.
+     */
+    200: Resource;
+};
+
+export type GetRoleDefinitionResponse = GetRoleDefinitionResponses[keyof GetRoleDefinitionResponses];
+
+export type ListRoleDefinitionHistoryData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/role-definitions/{resourceRef}/history';
+};
+
+export type ListRoleDefinitionHistoryErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListRoleDefinitionHistoryError = ListRoleDefinitionHistoryErrors[keyof ListRoleDefinitionHistoryErrors];
+
+export type ListRoleDefinitionHistoryResponses = {
+    /**
+     * History page.
+     */
+    200: ResourceHistoryPage;
+};
+
+export type ListRoleDefinitionHistoryResponse = ListRoleDefinitionHistoryResponses[keyof ListRoleDefinitionHistoryResponses];
+
+export type ManageRoleDefinitionData = {
+    body: RoleDefinitionCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/role-definitions/commands';
+};
+
+export type ManageRoleDefinitionErrors = {
+    /**
+     * If-Match не совпал с авторитетной версией.
+     */
+    412: Problem;
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageRoleDefinitionError = ManageRoleDefinitionErrors[keyof ManageRoleDefinitionErrors];
+
+export type ManageRoleDefinitionResponses = {
+    /**
+     * Authoritative RoleDefinition.
+     */
+    200: Resource;
+    /**
+     * Created RoleDefinition.
+     */
+    201: Resource;
+};
+
+export type ManageRoleDefinitionResponse = ManageRoleDefinitionResponses[keyof ManageRoleDefinitionResponses];
+
+export type ListAgentsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/agents';
+};
+
+export type ListAgentsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListAgentsError = ListAgentsErrors[keyof ListAgentsErrors];
+
+export type ListAgentsResponses = {
+    /**
+     * Безопасная owner Agent page.
+     */
+    200: AgentPage;
+};
+
+export type ListAgentsResponse = ListAgentsResponses[keyof ListAgentsResponses];
+
+export type GetAgentData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: never;
+    url: '/agents/{resourceRef}';
+};
+
+export type GetAgentErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetAgentError = GetAgentErrors[keyof GetAgentErrors];
+
+export type GetAgentResponses = {
+    /**
+     * Безопасная current Agent projection.
+     */
+    200: AgentView;
+};
+
+export type GetAgentResponse = GetAgentResponses[keyof GetAgentResponses];
+
+export type ListAgentHistoryData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/agents/{resourceRef}/history';
+};
+
+export type ListAgentHistoryErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListAgentHistoryError = ListAgentHistoryErrors[keyof ListAgentHistoryErrors];
+
+export type ListAgentHistoryResponses = {
+    /**
+     * Безопасная immutable Agent history.
+     */
+    200: AgentHistoryPage;
+};
+
+export type ListAgentHistoryResponse = ListAgentHistoryResponses[keyof ListAgentHistoryResponses];
+
+export type ManageAgentData = {
+    body: AgentCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/agents/commands';
+};
+
+export type ManageAgentErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageAgentError = ManageAgentErrors[keyof ManageAgentErrors];
+
+export type ManageAgentResponses = {
+    /**
+     * Authoritative Agent projection.
+     */
+    200: AgentView;
+    /**
+     * Created Agent projection.
+     */
+    201: AgentView;
+};
+
+export type ManageAgentResponse = ManageAgentResponses[keyof ManageAgentResponses];
+
+export type GetOwnerConfigurationCatalogData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/owner-configuration/catalog';
+};
+
+export type GetOwnerConfigurationCatalogErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetOwnerConfigurationCatalogError = GetOwnerConfigurationCatalogErrors[keyof GetOwnerConfigurationCatalogErrors];
+
+export type GetOwnerConfigurationCatalogResponses = {
+    /**
+     * Versioned owner configuration catalog.
+     */
+    200: OwnerConfigurationCatalog;
+};
+
+export type GetOwnerConfigurationCatalogResponse = GetOwnerConfigurationCatalogResponses[keyof GetOwnerConfigurationCatalogResponses];
+
+export type ListAgentBotIdentitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/agent-bot-identities';
+};
+
+export type ListAgentBotIdentitiesErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListAgentBotIdentitiesError = ListAgentBotIdentitiesErrors[keyof ListAgentBotIdentitiesErrors];
+
+export type ListAgentBotIdentitiesResponses = {
+    /**
+     * Безопасный selector catalog без provider IDs.
+     */
+    200: AgentBotIdentityPage;
+};
+
+export type ListAgentBotIdentitiesResponse = ListAgentBotIdentitiesResponses[keyof ListAgentBotIdentitiesResponses];
+
+export type GetAgentBotIdentityData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: never;
+    url: '/agents/{resourceRef}/bot-identity';
+};
+
+export type GetAgentBotIdentityErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetAgentBotIdentityError = GetAgentBotIdentityErrors[keyof GetAgentBotIdentityErrors];
+
+export type GetAgentBotIdentityResponses = {
+    /**
+     * Authoritative safe binding.
+     */
+    200: AgentBotIdentityBinding;
+};
+
+export type GetAgentBotIdentityResponse = GetAgentBotIdentityResponses[keyof GetAgentBotIdentityResponses];
+
+export type ManageAgentBotIdentityData = {
+    body: AgentBotIdentityCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        resourceRef: string;
+    };
+    query?: never;
+    url: '/agents/{resourceRef}/bot-identity';
+};
+
+export type ManageAgentBotIdentityErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageAgentBotIdentityError = ManageAgentBotIdentityErrors[keyof ManageAgentBotIdentityErrors];
+
+export type ManageAgentBotIdentityResponses = {
+    /**
+     * Durable bot operation и authoritative binding.
+     */
+    200: AgentBotIdentityCommandResult;
+    /**
+     * Provider effect принят.
+     */
+    202: AgentBotIdentityCommandResult;
+};
+
+export type ManageAgentBotIdentityResponse = ManageAgentBotIdentityResponses[keyof ManageAgentBotIdentityResponses];
+
+export type GetAgentBotIdentityOperationData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        resourceRef: string;
+    };
+    query: {
+        action: AgentBotIdentityAction;
+    };
+    url: '/agents/{resourceRef}/bot-identity/operations';
+};
+
+export type GetAgentBotIdentityOperationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetAgentBotIdentityOperationError = GetAgentBotIdentityOperationErrors[keyof GetAgentBotIdentityOperationErrors];
+
+export type GetAgentBotIdentityOperationResponses = {
+    /**
+     * Durable bot identity operation.
+     */
+    200: AgentBotIdentityOperation;
+};
+
+export type GetAgentBotIdentityOperationResponse = GetAgentBotIdentityOperationResponses[keyof GetAgentBotIdentityOperationResponses];
+
+export type GetAgentBotIdentityProviderReadbackData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query: {
+        identitySelector: string;
+    };
+    url: '/agents/{resourceRef}/bot-identity/provider-readback';
+};
+
+export type GetAgentBotIdentityProviderReadbackErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetAgentBotIdentityProviderReadbackError = GetAgentBotIdentityProviderReadbackErrors[keyof GetAgentBotIdentityProviderReadbackErrors];
+
+export type GetAgentBotIdentityProviderReadbackResponses = {
+    /**
+     * Safe provider readback.
+     */
+    200: AgentBotIdentity;
+};
+
+export type GetAgentBotIdentityProviderReadbackResponse = GetAgentBotIdentityProviderReadbackResponses[keyof GetAgentBotIdentityProviderReadbackResponses];
+
+export type ListAgentAssignmentsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        agentRef?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/agent-assignments';
+};
+
+export type ListAgentAssignmentsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListAgentAssignmentsError = ListAgentAssignmentsErrors[keyof ListAgentAssignmentsErrors];
+
+export type ListAgentAssignmentsResponses = {
+    /**
+     * Assignment page.
+     */
+    200: ResourcePage;
+};
+
+export type ListAgentAssignmentsResponse = ListAgentAssignmentsResponses[keyof ListAgentAssignmentsResponses];
+
+export type GetAgentAssignmentData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: never;
+    url: '/agent-assignments/{resourceRef}';
+};
+
+export type GetAgentAssignmentErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetAgentAssignmentError = GetAgentAssignmentErrors[keyof GetAgentAssignmentErrors];
+
+export type GetAgentAssignmentResponses = {
+    /**
+     * Current assignment.
+     */
+    200: Resource;
+};
+
+export type GetAgentAssignmentResponse = GetAgentAssignmentResponses[keyof GetAgentAssignmentResponses];
+
+export type ListAgentAssignmentHistoryData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/agent-assignments/{resourceRef}/history';
+};
+
+export type ListAgentAssignmentHistoryErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListAgentAssignmentHistoryError = ListAgentAssignmentHistoryErrors[keyof ListAgentAssignmentHistoryErrors];
+
+export type ListAgentAssignmentHistoryResponses = {
+    /**
+     * History page.
+     */
+    200: ResourceHistoryPage;
+};
+
+export type ListAgentAssignmentHistoryResponse = ListAgentAssignmentHistoryResponses[keyof ListAgentAssignmentHistoryResponses];
+
+export type ManageAgentAssignmentData = {
+    body: AgentAssignmentCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/agent-assignments/commands';
+};
+
+export type ManageAgentAssignmentErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageAgentAssignmentError = ManageAgentAssignmentErrors[keyof ManageAgentAssignmentErrors];
+
+export type ManageAgentAssignmentResponses = {
+    /**
+     * Authoritative assignment.
+     */
+    200: Resource;
+    /**
+     * Created assignment.
+     */
+    201: Resource;
+};
+
+export type ManageAgentAssignmentResponse = ManageAgentAssignmentResponses[keyof ManageAgentAssignmentResponses];
+
+export type ListInstructionSetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/instruction-sets';
+};
+
+export type ListInstructionSetsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListInstructionSetsError = ListInstructionSetsErrors[keyof ListInstructionSetsErrors];
+
+export type ListInstructionSetsResponses = {
+    /**
+     * InstructionSet page.
+     */
+    200: ResourcePage;
+};
+
+export type ListInstructionSetsResponse = ListInstructionSetsResponses[keyof ListInstructionSetsResponses];
+
+export type GetInstructionSetData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: never;
+    url: '/instruction-sets/{resourceRef}';
+};
+
+export type GetInstructionSetErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetInstructionSetError = GetInstructionSetErrors[keyof GetInstructionSetErrors];
+
+export type GetInstructionSetResponses = {
+    /**
+     * Current InstructionSet.
+     */
+    200: Resource;
+};
+
+export type GetInstructionSetResponse = GetInstructionSetResponses[keyof GetInstructionSetResponses];
+
+export type ListInstructionSetHistoryData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/instruction-sets/{resourceRef}/history';
+};
+
+export type ListInstructionSetHistoryErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListInstructionSetHistoryError = ListInstructionSetHistoryErrors[keyof ListInstructionSetHistoryErrors];
+
+export type ListInstructionSetHistoryResponses = {
+    /**
+     * History page.
+     */
+    200: ResourceHistoryPage;
+};
+
+export type ListInstructionSetHistoryResponse = ListInstructionSetHistoryResponses[keyof ListInstructionSetHistoryResponses];
+
+export type CompareInstructionSetVersionsData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query: {
+        leftVersion: number;
+        rightVersion: number;
+    };
+    url: '/instruction-sets/{resourceRef}/compare';
+};
+
+export type CompareInstructionSetVersionsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type CompareInstructionSetVersionsError = CompareInstructionSetVersionsErrors[keyof CompareInstructionSetVersionsErrors];
+
+export type CompareInstructionSetVersionsResponses = {
+    /**
+     * Authoritative compare.
+     */
+    200: InstructionSetComparison;
+};
+
+export type CompareInstructionSetVersionsResponse = CompareInstructionSetVersionsResponses[keyof CompareInstructionSetVersionsResponses];
+
+export type ManageInstructionSetData = {
+    body: InstructionSetCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/instruction-sets/commands';
+};
+
+export type ManageInstructionSetErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageInstructionSetError = ManageInstructionSetErrors[keyof ManageInstructionSetErrors];
+
+export type ManageInstructionSetResponses = {
+    /**
+     * Authoritative InstructionSet.
+     */
+    200: Resource;
+    /**
+     * Created InstructionSet.
+     */
+    201: Resource;
+};
+
+export type ManageInstructionSetResponse = ManageInstructionSetResponses[keyof ManageInstructionSetResponses];
+
+export type ListProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/providers';
+};
+
+export type ListProvidersErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListProvidersError = ListProvidersErrors[keyof ListProvidersErrors];
+
+export type ListProvidersResponses = {
+    /**
+     * Provider catalog.
+     */
+    200: ProviderCatalog;
+};
+
+export type ListProvidersResponse = ListProvidersResponses[keyof ListProvidersResponses];
+
+export type GetProviderData = {
+    body?: never;
+    path: {
+        providerRef: string;
+    };
+    query: {
+        version: number;
+        digestSha256: Sha256;
+    };
+    url: '/providers/{providerRef}';
+};
+
+export type GetProviderErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetProviderError = GetProviderErrors[keyof GetProviderErrors];
+
+export type GetProviderResponses = {
+    /**
+     * Provider definition.
+     */
+    200: Provider;
+};
+
+export type GetProviderResponse = GetProviderResponses[keyof GetProviderResponses];
+
+export type StartProviderAuthorizationData = {
+    body: StartProviderAuthorization;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/provider-authorizations';
+};
+
+export type StartProviderAuthorizationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type StartProviderAuthorizationError = StartProviderAuthorizationErrors[keyof StartProviderAuthorizationErrors];
+
+export type StartProviderAuthorizationResponses = {
+    /**
+     * Authorization attempt.
+     */
+    202: ProviderAuthorization;
+};
+
+export type StartProviderAuthorizationResponse = StartProviderAuthorizationResponses[keyof StartProviderAuthorizationResponses];
+
+export type CancelProviderAuthorizationData = {
+    body?: never;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        authorizationRef: string;
+    };
+    query?: never;
+    url: '/provider-authorizations/{authorizationRef}';
+};
+
+export type CancelProviderAuthorizationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type CancelProviderAuthorizationError = CancelProviderAuthorizationErrors[keyof CancelProviderAuthorizationErrors];
+
+export type CancelProviderAuthorizationResponses = {
+    /**
+     * Cancelled authorization.
+     */
+    200: ProviderAuthorization;
+};
+
+export type CancelProviderAuthorizationResponse = CancelProviderAuthorizationResponses[keyof CancelProviderAuthorizationResponses];
+
+export type GetProviderAuthorizationData = {
+    body?: never;
+    path: {
+        authorizationRef: string;
+    };
+    query?: never;
+    url: '/provider-authorizations/{authorizationRef}';
+};
+
+export type GetProviderAuthorizationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetProviderAuthorizationError = GetProviderAuthorizationErrors[keyof GetProviderAuthorizationErrors];
+
+export type GetProviderAuthorizationResponses = {
+    /**
+     * Authorization readback.
+     */
+    200: ProviderAuthorization;
+};
+
+export type GetProviderAuthorizationResponse = GetProviderAuthorizationResponses[keyof GetProviderAuthorizationResponses];
+
+export type RestartProviderAuthorizationData = {
+    body?: never;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        authorizationRef: string;
+    };
+    query?: never;
+    url: '/provider-authorizations/{authorizationRef}/new-code';
+};
+
+export type RestartProviderAuthorizationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type RestartProviderAuthorizationError = RestartProviderAuthorizationErrors[keyof RestartProviderAuthorizationErrors];
+
+export type RestartProviderAuthorizationResponses = {
+    /**
+     * Fresh authorization attempt.
+     */
+    202: ProviderAuthorization;
+};
+
+export type RestartProviderAuthorizationResponse = RestartProviderAuthorizationResponses[keyof RestartProviderAuthorizationResponses];
+
+export type ListProviderConnectionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        state?: ProviderConnectionState;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/provider-connections';
+};
+
+export type ListProviderConnectionsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListProviderConnectionsError = ListProviderConnectionsErrors[keyof ListProviderConnectionsErrors];
+
+export type ListProviderConnectionsResponses = {
+    /**
+     * Provider connection page.
+     */
+    200: ProviderConnectionPage;
+};
+
+export type ListProviderConnectionsResponse = ListProviderConnectionsResponses[keyof ListProviderConnectionsResponses];
+
+export type RevokeProviderConnectionData = {
+    body?: never;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        connectionRef: string;
+    };
+    query: {
+        generation: number;
+    };
+    url: '/provider-connections/{connectionRef}';
+};
+
+export type RevokeProviderConnectionErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type RevokeProviderConnectionError = RevokeProviderConnectionErrors[keyof RevokeProviderConnectionErrors];
+
+export type RevokeProviderConnectionResponses = {
+    /**
+     * Revoked connection.
+     */
+    200: ProviderConnection;
+};
+
+export type RevokeProviderConnectionResponse = RevokeProviderConnectionResponses[keyof RevokeProviderConnectionResponses];
+
+export type GetProviderConnectionData = {
+    body?: never;
+    path: {
+        connectionRef: string;
+    };
+    query?: never;
+    url: '/provider-connections/{connectionRef}';
+};
+
+export type GetProviderConnectionErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetProviderConnectionError = GetProviderConnectionErrors[keyof GetProviderConnectionErrors];
+
+export type GetProviderConnectionResponses = {
+    /**
+     * Provider connection.
+     */
+    200: ProviderConnection;
+};
+
+export type GetProviderConnectionResponse = GetProviderConnectionResponses[keyof GetProviderConnectionResponses];
+
+export type ReauthorizeProviderConnectionData = {
+    body?: never;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        connectionRef: string;
+    };
+    query: {
+        generation: number;
+    };
+    url: '/provider-connections/{connectionRef}/reauthorize';
+};
+
+export type ReauthorizeProviderConnectionErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ReauthorizeProviderConnectionError = ReauthorizeProviderConnectionErrors[keyof ReauthorizeProviderConnectionErrors];
+
+export type ReauthorizeProviderConnectionResponses = {
+    /**
+     * Authorization attempt.
+     */
+    202: ProviderAuthorization;
+};
+
+export type ReauthorizeProviderConnectionResponse = ReauthorizeProviderConnectionResponses[keyof ReauthorizeProviderConnectionResponses];
+
+export type ListProviderPoolsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/provider-pools';
+};
+
+export type ListProviderPoolsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListProviderPoolsError = ListProviderPoolsErrors[keyof ListProviderPoolsErrors];
+
+export type ListProviderPoolsResponses = {
+    /**
+     * Pool page.
+     */
+    200: ProviderPoolPage;
+};
+
+export type ListProviderPoolsResponse = ListProviderPoolsResponses[keyof ListProviderPoolsResponses];
+
+export type GetProviderPoolData = {
+    body?: never;
+    path: {
+        poolRef: string;
+    };
+    query?: never;
+    url: '/provider-pools/{poolRef}';
+};
+
+export type GetProviderPoolErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetProviderPoolError = GetProviderPoolErrors[keyof GetProviderPoolErrors];
+
+export type GetProviderPoolResponses = {
+    /**
+     * Provider pool.
+     */
+    200: ProviderPoolView;
+};
+
+export type GetProviderPoolResponse = GetProviderPoolResponses[keyof GetProviderPoolResponses];
+
+export type ManageProviderPoolData = {
+    body: ProviderPoolCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/provider-pools/commands';
+};
+
+export type ManageProviderPoolErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageProviderPoolError = ManageProviderPoolErrors[keyof ManageProviderPoolErrors];
+
+export type ManageProviderPoolResponses = {
+    /**
+     * Authoritative pool.
+     */
+    200: ProviderPoolView;
+    /**
+     * Created pool.
+     */
+    201: ProviderPoolView;
+};
+
+export type ManageProviderPoolResponse = ManageProviderPoolResponses[keyof ManageProviderPoolResponses];
+
+export type ListIntegrationDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/integration-definitions';
+};
+
+export type ListIntegrationDefinitionsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListIntegrationDefinitionsError = ListIntegrationDefinitionsErrors[keyof ListIntegrationDefinitionsErrors];
+
+export type ListIntegrationDefinitionsResponses = {
+    /**
+     * Definition catalog.
+     */
+    200: IntegrationDefinitionPage;
+};
+
+export type ListIntegrationDefinitionsResponse = ListIntegrationDefinitionsResponses[keyof ListIntegrationDefinitionsResponses];
+
+export type GetIntegrationDefinitionData = {
+    body?: never;
+    path: {
+        definitionRef: string;
+    };
+    query: {
+        version: number;
+        digestSha256: Sha256;
+    };
+    url: '/integration-definitions/{definitionRef}';
+};
+
+export type GetIntegrationDefinitionErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetIntegrationDefinitionError = GetIntegrationDefinitionErrors[keyof GetIntegrationDefinitionErrors];
+
+export type GetIntegrationDefinitionResponses = {
+    /**
+     * Integration definition.
+     */
+    200: IntegrationDefinition;
+};
+
+export type GetIntegrationDefinitionResponse = GetIntegrationDefinitionResponses[keyof GetIntegrationDefinitionResponses];
+
+export type ListIntegrationConfigurationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/integration-configurations';
+};
+
+export type ListIntegrationConfigurationsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListIntegrationConfigurationsError = ListIntegrationConfigurationsErrors[keyof ListIntegrationConfigurationsErrors];
+
+export type ListIntegrationConfigurationsResponses = {
+    /**
+     * Configuration page.
+     */
+    200: IntegrationConfigurationPage;
+};
+
+export type ListIntegrationConfigurationsResponse = ListIntegrationConfigurationsResponses[keyof ListIntegrationConfigurationsResponses];
+
+export type ConfigureIntegrationData = {
+    body: ConfigureIntegration;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/integration-configurations';
+};
+
+export type ConfigureIntegrationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ConfigureIntegrationError = ConfigureIntegrationErrors[keyof ConfigureIntegrationErrors];
+
+export type ConfigureIntegrationResponses = {
+    /**
+     * Integration configuration.
+     */
+    200: IntegrationConfiguration;
+    /**
+     * Created configuration.
+     */
+    201: IntegrationConfiguration;
+};
+
+export type ConfigureIntegrationResponse = ConfigureIntegrationResponses[keyof ConfigureIntegrationResponses];
+
+export type GetIntegrationConfigurationData = {
+    body?: never;
+    path: {
+        configurationRef: string;
+    };
+    query?: never;
+    url: '/integration-configurations/{configurationRef}';
+};
+
+export type GetIntegrationConfigurationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetIntegrationConfigurationError = GetIntegrationConfigurationErrors[keyof GetIntegrationConfigurationErrors];
+
+export type GetIntegrationConfigurationResponses = {
+    /**
+     * Configuration.
+     */
+    200: IntegrationConfiguration;
+};
+
+export type GetIntegrationConfigurationResponse = GetIntegrationConfigurationResponses[keyof GetIntegrationConfigurationResponses];
+
+export type TestIntegrationConnectionData = {
+    body: TestIntegrationConnection;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/integration-tests';
+};
+
+export type TestIntegrationConnectionErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type TestIntegrationConnectionError = TestIntegrationConnectionErrors[keyof TestIntegrationConnectionErrors];
+
+export type TestIntegrationConnectionResponses = {
+    /**
+     * Test receipt.
+     */
+    202: IntegrationTestReceipt;
+};
+
+export type TestIntegrationConnectionResponse = TestIntegrationConnectionResponses[keyof TestIntegrationConnectionResponses];
+
+export type GetIntegrationTestReceiptData = {
+    body?: never;
+    path: {
+        testRef: string;
+    };
+    query?: never;
+    url: '/integration-tests/{testRef}';
+};
+
+export type GetIntegrationTestReceiptErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetIntegrationTestReceiptError = GetIntegrationTestReceiptErrors[keyof GetIntegrationTestReceiptErrors];
+
+export type GetIntegrationTestReceiptResponses = {
+    /**
+     * Test receipt.
+     */
+    200: IntegrationTestReceipt;
+};
+
+export type GetIntegrationTestReceiptResponse = GetIntegrationTestReceiptResponses[keyof GetIntegrationTestReceiptResponses];
+
+export type ListIntegrationApprovalsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/integration-approvals';
+};
+
+export type ListIntegrationApprovalsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListIntegrationApprovalsError = ListIntegrationApprovalsErrors[keyof ListIntegrationApprovalsErrors];
+
+export type ListIntegrationApprovalsResponses = {
+    /**
+     * Approval page.
+     */
+    200: IntegrationApprovalPage;
+};
+
+export type ListIntegrationApprovalsResponse = ListIntegrationApprovalsResponses[keyof ListIntegrationApprovalsResponses];
+
+export type GetIntegrationApprovalData = {
+    body?: never;
+    path: {
+        approvalRef: string;
+    };
+    query?: never;
+    url: '/integration-approvals/{approvalRef}';
+};
+
+export type GetIntegrationApprovalErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetIntegrationApprovalError = GetIntegrationApprovalErrors[keyof GetIntegrationApprovalErrors];
+
+export type GetIntegrationApprovalResponses = {
+    /**
+     * Approval.
+     */
+    200: IntegrationApproval;
+};
+
+export type GetIntegrationApprovalResponse = GetIntegrationApprovalResponses[keyof GetIntegrationApprovalResponses];
+
+export type DecideIntegrationApprovalData = {
+    body: DecideIntegrationApproval;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        approvalRef: string;
+    };
+    query?: never;
+    url: '/integration-approvals/{approvalRef}/decision';
+};
+
+export type DecideIntegrationApprovalErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type DecideIntegrationApprovalError = DecideIntegrationApprovalErrors[keyof DecideIntegrationApprovalErrors];
+
+export type DecideIntegrationApprovalResponses = {
+    /**
+     * Terminal approval readback.
+     */
+    200: IntegrationApproval;
+};
+
+export type DecideIntegrationApprovalResponse = DecideIntegrationApprovalResponses[keyof DecideIntegrationApprovalResponses];
+
+export type ListScheduleSelectorsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/schedule-selectors';
+};
+
+export type ListScheduleSelectorsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListScheduleSelectorsError = ListScheduleSelectorsErrors[keyof ListScheduleSelectorsErrors];
+
+export type ListScheduleSelectorsResponses = {
+    /**
+     * Versioned selectors, presets и defaults из owner catalogs.
+     */
+    200: ScheduleSelectorCatalog;
+};
+
+export type ListScheduleSelectorsResponse = ListScheduleSelectorsResponses[keyof ListScheduleSelectorsResponses];
+
+export type ListOwnerSchedulesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/owner-schedules';
+};
+
+export type ListOwnerSchedulesErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListOwnerSchedulesError = ListOwnerSchedulesErrors[keyof ListOwnerSchedulesErrors];
+
+export type ListOwnerSchedulesResponses = {
+    /**
+     * Schedule projections with authoritative effective values.
+     */
+    200: OwnerSchedulePage;
+};
+
+export type ListOwnerSchedulesResponse = ListOwnerSchedulesResponses[keyof ListOwnerSchedulesResponses];
+
+export type GetOwnerScheduleData = {
+    body?: never;
+    path: {
+        scheduleRef: string;
+    };
+    query?: never;
+    url: '/owner-schedules/{scheduleRef}';
+};
+
+export type GetOwnerScheduleErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetOwnerScheduleError = GetOwnerScheduleErrors[keyof GetOwnerScheduleErrors];
+
+export type GetOwnerScheduleResponses = {
+    /**
+     * Current Schedule projection with authoritative effective values.
+     */
+    200: OwnerScheduleView;
+};
+
+export type GetOwnerScheduleResponse = GetOwnerScheduleResponses[keyof GetOwnerScheduleResponses];
+
+export type CreateScheduleFromSelectionsData = {
+    body: CreateScheduleFromSelections;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/schedules/from-selections';
+};
+
+export type CreateScheduleFromSelectionsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type CreateScheduleFromSelectionsError = CreateScheduleFromSelectionsErrors[keyof CreateScheduleFromSelectionsErrors];
+
+export type CreateScheduleFromSelectionsResponses = {
+    /**
+     * Authoritative Schedule projection with effective values.
+     */
+    201: OwnerScheduleView;
+};
+
+export type CreateScheduleFromSelectionsResponse = CreateScheduleFromSelectionsResponses[keyof CreateScheduleFromSelectionsResponses];
+
+export type BindScheduleConfigurationData = {
+    body: BindScheduleConfiguration;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        scheduleRef: string;
+    };
+    query?: never;
+    url: '/schedules/{scheduleRef}/configuration';
+};
+
+export type BindScheduleConfigurationErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type BindScheduleConfigurationError = BindScheduleConfigurationErrors[keyof BindScheduleConfigurationErrors];
+
+export type BindScheduleConfigurationResponses = {
+    /**
+     * Current Schedule projection with effective values.
+     */
+    200: OwnerScheduleView;
+};
+
+export type BindScheduleConfigurationResponse = BindScheduleConfigurationResponses[keyof BindScheduleConfigurationResponses];
+
+export type GetRunDetailData = {
+    body?: never;
+    path: {
+        runRef: string;
+    };
+    query?: never;
+    url: '/runs/{runRef}';
+};
+
+export type GetRunDetailErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetRunDetailError = GetRunDetailErrors[keyof GetRunDetailErrors];
+
+export type GetRunDetailResponses = {
+    /**
+     * Безопасный owner Run detail.
+     */
+    200: RunDetail;
+};
+
+export type GetRunDetailResponse = GetRunDetailResponses[keyof GetRunDetailResponses];
+
+export type ListRunTimelineData = {
+    body?: never;
+    path: {
+        runRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/runs/{runRef}/timeline';
+};
+
+export type ListRunTimelineErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListRunTimelineError = ListRunTimelineErrors[keyof ListRunTimelineErrors];
+
+export type ListRunTimelineResponses = {
+    /**
+     * Безопасная typed timeline page.
+     */
+    200: RunTimelinePage;
+};
+
+export type ListRunTimelineResponse = ListRunTimelineResponses[keyof ListRunTimelineResponses];
+
+export type GetRunLineageData = {
+    body?: never;
+    path: {
+        runRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/runs/{runRef}/lineage';
+};
+
+export type GetRunLineageErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetRunLineageError = GetRunLineageErrors[keyof GetRunLineageErrors];
+
+export type GetRunLineageResponses = {
+    /**
+     * Bounded typed lineage page.
+     */
+    200: RunLineage;
+};
+
+export type GetRunLineageResponse = GetRunLineageResponses[keyof GetRunLineageResponses];
+
+export type ListRunArtifactsData = {
+    body?: never;
+    path: {
+        runRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/runs/{runRef}/artifacts';
+};
+
+export type ListRunArtifactsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListRunArtifactsError = ListRunArtifactsErrors[keyof ListRunArtifactsErrors];
+
+export type ListRunArtifactsResponses = {
+    /**
+     * Безопасная typed artifact page.
+     */
+    200: RunArtifactPage;
+};
+
+export type ListRunArtifactsResponse = ListRunArtifactsResponses[keyof ListRunArtifactsResponses];
+
+export type ManageRunData = {
+    body: RunCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        runRef: string;
+    };
+    query?: never;
+    url: '/runs/{runRef}/commands';
+};
+
+export type ManageRunErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageRunError = ManageRunErrors[keyof ManageRunErrors];
+
+export type ManageRunResponses = {
+    /**
+     * Run command typed readback.
+     */
+    200: RunCommandResult;
+};
+
+export type ManageRunResponse = ManageRunResponses[keyof ManageRunResponses];
+
+export type GetIncidentData = {
+    body?: never;
+    path: {
+        incidentRef: string;
+    };
+    query?: never;
+    url: '/incidents/{incidentRef}';
+};
+
+export type GetIncidentErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetIncidentError = GetIncidentErrors[keyof GetIncidentErrors];
+
+export type GetIncidentResponses = {
+    /**
+     * Безопасная owner Incident projection.
+     */
+    200: IncidentView;
+};
+
+export type GetIncidentResponse = GetIncidentResponses[keyof GetIncidentResponses];
+
+export type ListIncidentHistoryData = {
+    body?: never;
+    path: {
+        incidentRef: string;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/incidents/{incidentRef}/history';
+};
+
+export type ListIncidentHistoryErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListIncidentHistoryError = ListIncidentHistoryErrors[keyof ListIncidentHistoryErrors];
+
+export type ListIncidentHistoryResponses = {
+    /**
+     * Incident history with current authoritative actions.
+     */
+    200: IncidentHistoryPage;
+};
+
+export type ListIncidentHistoryResponse = ListIncidentHistoryResponses[keyof ListIncidentHistoryResponses];
+
+export type ManageIncidentData = {
+    body: IncidentCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match': string;
+    };
+    path: {
+        incidentRef: string;
+    };
+    query?: never;
+    url: '/incidents/{incidentRef}/commands';
+};
+
+export type ManageIncidentErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageIncidentError = ManageIncidentErrors[keyof ManageIncidentErrors];
+
+export type ManageIncidentResponses = {
+    /**
+     * Incident command typed readback.
+     */
+    200: IncidentCommandResult;
+};
+
+export type ManageIncidentResponse = ManageIncidentResponses[keyof ManageIncidentResponses];
+
+export type GetHealthSeriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/health-series';
+};
+
+export type GetHealthSeriesErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetHealthSeriesError = GetHealthSeriesErrors[keyof GetHealthSeriesErrors];
+
+export type GetHealthSeriesResponses = {
+    /**
+     * Current exact observations, включая valid degraded state; не synthetic history.
+     */
+    200: HealthSeries;
+};
+
+export type GetHealthSeriesResponse = GetHealthSeriesResponses[keyof GetHealthSeriesResponses];
+
+export type ListWorkspaceBackupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/workspace-backups';
+};
+
+export type ListWorkspaceBackupsErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListWorkspaceBackupsError = ListWorkspaceBackupsErrors[keyof ListWorkspaceBackupsErrors];
+
+export type ListWorkspaceBackupsResponses = {
+    /**
+     * Backup resource page.
+     */
+    200: ResourcePage;
+};
+
+export type ListWorkspaceBackupsResponse = ListWorkspaceBackupsResponses[keyof ListWorkspaceBackupsResponses];
+
+export type GetWorkspaceBackupData = {
+    body?: never;
+    path: {
+        backupRef: string;
+    };
+    query?: never;
+    url: '/workspace-backups/{backupRef}';
+};
+
+export type GetWorkspaceBackupErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetWorkspaceBackupError = GetWorkspaceBackupErrors[keyof GetWorkspaceBackupErrors];
+
+export type GetWorkspaceBackupResponses = {
+    /**
+     * Backup readback.
+     */
+    200: Resource;
+};
+
+export type GetWorkspaceBackupResponse = GetWorkspaceBackupResponses[keyof GetWorkspaceBackupResponses];
+
+export type ManageWorkspaceBackupData = {
+    body: WorkspaceBackupCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspace-backups/commands';
+};
+
+export type ManageWorkspaceBackupErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageWorkspaceBackupError = ManageWorkspaceBackupErrors[keyof ManageWorkspaceBackupErrors];
+
+export type ManageWorkspaceBackupResponses = {
+    /**
+     * Backup readback.
+     */
+    200: Resource;
+    /**
+     * Backup operation accepted.
+     */
+    202: Resource;
+};
+
+export type ManageWorkspaceBackupResponse = ManageWorkspaceBackupResponses[keyof ManageWorkspaceBackupResponses];
+
+export type ListWorkspaceRestoresData = {
+    body?: never;
+    path?: never;
+    query?: {
+        backupRef?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/workspace-restores';
+};
+
+export type ListWorkspaceRestoresErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ListWorkspaceRestoresError = ListWorkspaceRestoresErrors[keyof ListWorkspaceRestoresErrors];
+
+export type ListWorkspaceRestoresResponses = {
+    /**
+     * Typed restore page.
+     */
+    200: WorkspaceRestorePage;
+};
+
+export type ListWorkspaceRestoresResponse = ListWorkspaceRestoresResponses[keyof ListWorkspaceRestoresResponses];
+
+export type GetWorkspaceRestoreData = {
+    body?: never;
+    path: {
+        restoreRef: string;
+    };
+    query?: never;
+    url: '/workspace-restores/{restoreRef}';
+};
+
+export type GetWorkspaceRestoreErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetWorkspaceRestoreError = GetWorkspaceRestoreErrors[keyof GetWorkspaceRestoreErrors];
+
+export type GetWorkspaceRestoreResponses = {
+    /**
+     * Typed restore readback.
+     */
+    200: WorkspaceRestoreView;
+};
+
+export type GetWorkspaceRestoreResponse = GetWorkspaceRestoreResponses[keyof GetWorkspaceRestoreResponses];
+
+export type ManageWorkspaceRestoreData = {
+    body: WorkspaceRestoreCommand;
+    headers: {
+        'X-CSRF-Token': string;
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/workspace-restores/commands';
+};
+
+export type ManageWorkspaceRestoreErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ManageWorkspaceRestoreError = ManageWorkspaceRestoreErrors[keyof ManageWorkspaceRestoreErrors];
+
+export type ManageWorkspaceRestoreResponses = {
+    /**
+     * Typed restore readback.
+     */
+    200: WorkspaceRestoreView;
+    /**
+     * Restore accepted.
+     */
+    202: WorkspaceRestoreView;
+};
+
+export type ManageWorkspaceRestoreResponse = ManageWorkspaceRestoreResponses[keyof ManageWorkspaceRestoreResponses];
+
+export type ExportAuditData = {
+    body?: never;
+    path?: never;
+    query?: {
+        resourceKind?: ResourceKind;
+        resourceRef?: string;
+        action?: string;
+    };
+    url: '/audit/export';
+};
+
+export type ExportAuditErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type ExportAuditError = ExportAuditErrors[keyof ExportAuditErrors];
+
+export type ExportAuditResponses = {
+    /**
+     * Полный bounded audit export не более 500 rows.
+     */
+    200: string;
+};
+
+export type ExportAuditResponse = ExportAuditResponses[keyof ExportAuditResponses];
+
+export type GetConfigurationDiffData = {
+    body?: never;
+    path?: never;
+    query: {
+        instructionSetRef: string;
+        leftVersion: number;
+        rightVersion: number;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/configuration-diff';
+};
+
+export type GetConfigurationDiffErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetConfigurationDiffError = GetConfigurationDiffErrors[keyof GetConfigurationDiffErrors];
+
+export type GetConfigurationDiffResponses = {
+    /**
+     * Bounded redacted authoritative diff page.
+     */
+    200: ConfigurationDiff;
+};
+
+export type GetConfigurationDiffResponse = GetConfigurationDiffResponses[keyof GetConfigurationDiffResponses];
+
+export type GetConfigurationSourceDetailData = {
+    body?: never;
+    path: {
+        resourceRef: string;
+    };
+    query: {
+        kind: 'ROLE_DEFINITION' | 'AGENT' | 'INSTRUCTION_SET' | 'PROVIDER_POOL';
+    };
+    url: '/configuration-source/{resourceRef}';
+};
+
+export type GetConfigurationSourceDetailErrors = {
+    /**
+     * Единый typed Problem для достижимой ошибки boundary/downstream.
+     */
+    default: Problem;
+};
+
+export type GetConfigurationSourceDetailError = GetConfigurationSourceDetailErrors[keyof GetConfigurationSourceDetailErrors];
+
+export type GetConfigurationSourceDetailResponses = {
+    /**
+     * Safe owner source detail.
+     */
+    200: ConfigurationSourceDetail;
+};
+
+export type GetConfigurationSourceDetailResponse = GetConfigurationSourceDetailResponses[keyof GetConfigurationSourceDetailResponses];

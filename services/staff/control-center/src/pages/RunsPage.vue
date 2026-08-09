@@ -1,29 +1,35 @@
 <script setup lang="ts">
 import { CheckCircle2, RefreshCw } from "@lucide/vue";
-import { onMounted, reactive } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useOperationsStore } from "@/features/operations/store";
+import { useOwnerControlStore } from "@/features/owner-control/store";
 import type {
   ResolveOwnerGate,
   Resource,
+  RunCommand,
 } from "@/shared/api/generated/openapi/types.gen";
-import { formatDateTime } from "@/shared/lib/format";
+import {
+  formatDateTime,
+  formatDuration,
+  shortDigest,
+} from "@/shared/lib/format";
 import AsyncPanel from "@/shared/ui/AsyncPanel.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageHeader from "@/shared/ui/PageHeader.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const { locale } = useI18n();
-const store = useOperationsStore();
+const operations = useOperationsStore();
+const owner = useOwnerControlStore();
+const detailOpen = ref(false);
+const runCommand = reactive<RunCommand>({ action: "CANCEL", reasonCode: "" });
 const decisions = reactive<Record<string, ResolveOwnerGate>>({});
 
 function decisionFor(gate: Resource): ResolveOwnerGate {
-  const existing = decisions[gate.id];
-  if (existing) return existing;
-  const initial: ResolveOwnerGate = { decision: "APPROVED", reason: "" };
-  decisions[gate.id] = initial;
-  return initial;
+  return (decisions[gate.id] ??= { decision: "APPROVED", reason: "" });
 }
 
 function canResolve(gate: Resource): boolean {
@@ -36,7 +42,7 @@ function canResolve(gate: Resource): boolean {
 async function resolve(gate: Resource): Promise<void> {
   const decision = decisionFor(gate);
   if (decision.reason.trim().length < 3) return;
-  const success = await store.resolveOwnerGate(gate, {
+  const success = await operations.resolveOwnerGate(gate, {
     ...decision,
     reason: decision.reason.trim(),
   });
@@ -44,7 +50,21 @@ async function resolve(gate: Resource): Promise<void> {
 }
 
 async function load(): Promise<void> {
-  await Promise.all([store.loadRuns(), store.loadGates()]);
+  await Promise.all([operations.loadRuns(), operations.loadGates()]);
+}
+
+async function showRun(runRef: string): Promise<void> {
+  detailOpen.value = true;
+  runCommand.reasonCode = "";
+  await owner.loadRun(runRef);
+}
+
+async function executeRunCommand(): Promise<void> {
+  if (runCommand.reasonCode.trim().length < 2) return;
+  await owner.executeRunAction({
+    action: runCommand.action,
+    reasonCode: runCommand.reasonCode.trim(),
+  });
 }
 
 onMounted(load);
@@ -52,69 +72,69 @@ onMounted(load);
 
 <template>
   <div class="page">
-    <PageHeader :title="$t('runs.title')" :subtitle="$t('runs.subtitle')"
+    <PageHeader :title="$t('runs.title')" :subtitle="$t('runs.ownerSubtitle')"
       ><template #actions
         ><button class="button button--secondary" type="button" @click="load">
           <RefreshCw :size="15" aria-hidden="true" />{{ $t("common.refresh") }}
         </button></template
       ></PageHeader
     >
-    <ProblemNotice :problem="store.mutationProblem" />
+    <ProblemNotice
+      :problem="operations.mutationProblem ?? owner.mutationProblem"
+    />
     <div class="section-stack" style="margin-top: 15px">
       <section class="panel">
         <header class="panel__header">
           <h2>{{ $t("runs.run") }}</h2>
         </header>
         <AsyncPanel
-          :phase="store.runs.phase"
-          :problem="store.runs.problem"
-          @retry="store.loadRuns"
-        >
-          <div class="data-table-wrap">
+          :phase="operations.runs.phase"
+          :problem="operations.runs.problem"
+          @retry="operations.loadRuns"
+          ><div class="data-table-wrap">
             <table class="data-table">
               <thead>
                 <tr>
                   <th>{{ $t("common.name") }}</th>
                   <th>{{ $t("common.state") }}</th>
-                  <th>{{ $t("runs.playbook") }}</th>
-                  <th>{{ $t("runs.policy") }}</th>
+                  <th>{{ $t("runs.workspace") }}</th>
+                  <th>{{ $t("runs.agent") }}</th>
+                  <th>{{ $t("runs.duration") }}</th>
                   <th>{{ $t("common.updatedAt") }}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in store.runs.data" :key="item.id">
-                  <td class="data-table__name">{{ item.name }}</td>
+                <tr
+                  v-for="item in operations.runs.data"
+                  :key="item.runRef"
+                  class="clickable-row"
+                  tabindex="0"
+                  @click="showRun(item.runRef)"
+                  @keydown.enter="showRun(item.runRef)"
+                >
+                  <td class="data-table__name">{{ item.displayName }}</td>
                   <td><StatusBadge :state="item.state" /></td>
-                  <td>
-                    {{
-                      item.spec.processRun?.playbookRef ?? $t("common.noValue")
-                    }}
-                  </td>
-                  <td>
-                    {{
-                      item.spec.processRun?.policyRevision ??
-                      $t("common.noValue")
-                    }}
-                  </td>
+                  <td>{{ item.workspace.value }}</td>
+                  <td>{{ item.agent.value }}</td>
+                  <td>{{ formatDuration(item.durationSeconds, locale) }}</td>
                   <td>{{ formatDateTime(item.updatedAt, locale) }}</td>
                 </tr>
               </tbody>
             </table>
-          </div>
-        </AsyncPanel>
+          </div></AsyncPanel
+        >
       </section>
       <section class="panel">
         <header class="panel__header">
           <h2>{{ $t("runs.gates") }}</h2>
         </header>
         <AsyncPanel
-          :phase="store.gates.phase"
-          :problem="store.gates.problem"
-          @retry="store.loadGates"
-        >
-          <div class="panel__body section-stack">
+          :phase="operations.gates.phase"
+          :problem="operations.gates.problem"
+          @retry="operations.loadGates"
+          ><div class="panel__body section-stack">
             <article
-              v-for="gate in store.gates.data"
+              v-for="gate in operations.gates.data"
               :key="gate.id"
               class="gate-row"
             >
@@ -147,8 +167,7 @@ onMounted(load);
                     </option>
                     <option value="CANCELLED">{{ $t("common.cancel") }}</option>
                   </select></label
-                >
-                <label class="form-field"
+                ><label class="form-field"
                   ><span>{{ $t("runs.reason") }}</span
                   ><input
                     v-model="decisionFor(gate).reason"
@@ -161,7 +180,7 @@ onMounted(load);
                   <button
                     class="button button--primary"
                     type="submit"
-                    :disabled="store.mutating"
+                    :disabled="operations.mutating"
                   >
                     <CheckCircle2 :size="15" aria-hidden="true" />{{
                       $t("runs.resolve")
@@ -170,9 +189,151 @@ onMounted(load);
                 </div>
               </form>
             </article>
-          </div>
-        </AsyncPanel>
+          </div></AsyncPanel
+        >
       </section>
     </div>
+
+    <ModalDialog
+      :open="detailOpen"
+      :title="owner.runDetail.data?.run.displayName ?? $t('runs.details')"
+      @close="detailOpen = false"
+      ><AsyncPanel
+        :phase="owner.runDetail.phase"
+        :problem="owner.runDetail.problem"
+        @retry="
+          owner.runDetail.data && owner.loadRun(owner.runDetail.data.run.runRef)
+        "
+        ><div v-if="owner.runDetail.data" class="section-stack">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <small>{{ $t("common.state") }}</small
+              ><StatusBadge :state="owner.runDetail.data.run.state" /><span>{{
+                owner.runDetail.data.run.runtimeStatus.value
+              }}</span>
+            </div>
+            <div class="summary-card">
+              <small>{{ $t("runs.attempt") }}</small
+              ><strong>{{ owner.runDetail.data.run.attempt }}</strong
+              ><span>{{ owner.runDetail.data.run.trigger.value }}</span>
+            </div>
+          </div>
+          <dl class="detail-list">
+            <div>
+              <dt>{{ $t("runs.initiator") }}</dt>
+              <dd>{{ owner.runDetail.data.run.initiator.value }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("runs.agent") }}</dt>
+              <dd>{{ owner.runDetail.data.run.agent.value }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("runs.role") }}</dt>
+              <dd>{{ owner.runDetail.data.run.role.value }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("runs.model") }}</dt>
+              <dd>{{ owner.runDetail.data.run.model.value }}</dd>
+            </div>
+            <div>
+              <dt>{{ $t("runs.provider") }}</dt>
+              <dd>{{ owner.runDetail.data.run.provider.value }}</dd>
+            </div>
+          </dl>
+          <form
+            v-if="owner.runDetail.data.run.nextActions.length"
+            class="inline-form"
+            @submit.prevent="executeRunCommand"
+          >
+            <label class="form-field"
+              ><span>{{ $t("common.actions") }}</span
+              ><select v-model="runCommand.action">
+                <option
+                  v-for="action in owner.runDetail.data.run.nextActions"
+                  :key="action"
+                  :value="action"
+                >
+                  {{ action }}
+                </option>
+              </select></label
+            ><label class="form-field"
+              ><span>{{ $t("runs.reasonCode") }}</span
+              ><input
+                v-model="runCommand.reasonCode"
+                required
+                minlength="2"
+                maxlength="80" /></label
+            ><button
+              class="button button--danger"
+              type="submit"
+              :disabled="owner.mutating"
+            >
+              {{ $t("common.confirm") }}
+            </button>
+          </form>
+          <section>
+            <h3>{{ $t("runs.timeline") }}</h3>
+            <div class="timeline">
+              <article
+                v-for="entry in owner.runTimeline.data"
+                :key="entry.eventRef"
+              >
+                <strong>{{ entry.display }}</strong
+                ><span
+                  >{{ entry.outcome }} ·
+                  {{ formatDateTime(entry.occurredAt, locale) }}</span
+                >
+              </article>
+            </div>
+          </section>
+          <section>
+            <h3>{{ $t("runs.lineage") }}</h3>
+            <div class="lineage">
+              <article
+                v-for="node in owner.runLineage.data?.nodes ?? []"
+                :key="node.nodeRef"
+                :style="{ marginInlineStart: node.parentRef ? '22px' : '0' }"
+              >
+                <strong>{{ node.displayName }}</strong
+                ><StatusBadge :state="node.state" /><span
+                  >{{ node.kind }} · {{ $t("runs.attempt") }}
+                  {{ node.attempt }}</span
+                >
+              </article>
+            </div>
+          </section>
+          <section>
+            <h3>{{ $t("runs.artifacts") }}</h3>
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>{{ $t("common.name") }}</th>
+                    <th>{{ $t("runs.mediaType") }}</th>
+                    <th>{{ $t("runs.size") }}</th>
+                    <th>{{ $t("common.state") }}</th>
+                    <th>SHA-256</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="artifact in owner.runArtifacts.data"
+                    :key="artifact.artifactRef"
+                  >
+                    <td>{{ artifact.displayName }}</td>
+                    <td>{{ artifact.mediaType }}</td>
+                    <td>{{ artifact.sizeBytes }}</td>
+                    <td><StatusBadge :state="artifact.status" /></td>
+                    <td>
+                      <code>{{ shortDigest(artifact.sha256) }}</code>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div></AsyncPanel
+      ></ModalDialog
+    >
   </div>
 </template>

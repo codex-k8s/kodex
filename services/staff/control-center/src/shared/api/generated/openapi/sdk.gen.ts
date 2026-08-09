@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CopyAccessResourceData, CopyAccessResourceErrors, CopyAccessResourceResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateResourceData, CreateResourceErrors, CreateResourceResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteResourceData, DeleteResourceErrors, DeleteResourceResponses, DeleteScheduleData, DeleteScheduleErrors, DeleteScheduleResponses, DetachAccessResourceData, DetachAccessResourceErrors, DetachAccessResourceResponses, GetBackupData, GetBackupErrors, GetBackupResponses, GetDiagnosticsData, GetDiagnosticsErrors, GetDiagnosticsResponses, GetResourceData, GetResourceErrors, GetResourceResponses, GetRestoreOperationData, GetRestoreOperationErrors, GetRestoreOperationResponses, GetRoleImageBuildData, GetRoleImageBuildErrors, GetRoleImageBuildResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListBackupsData, ListBackupsErrors, ListBackupsResponses, ListConfigurationChangesData, ListConfigurationChangesErrors, ListConfigurationChangesResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListResourcesData, ListResourcesErrors, ListResourcesResponses, ListRestoreOperationsData, ListRestoreOperationsErrors, ListRestoreOperationsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListScheduleOccurrencesData, ListScheduleOccurrencesErrors, ListScheduleOccurrencesResponses, ManageAccessResourceData, ManageAccessResourceErrors, ManageAccessResourceResponses, ManageImageBuildData, ManageImageBuildErrors, ManageImageBuildResponses, ManageRoleImageRecipeData, ManageRoleImageRecipeErrors, ManageRoleImageRecipeResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, ResolveScheduleRecoveryData, ResolveScheduleRecoveryErrors, ResolveScheduleRecoveryResponses, RestoreBackupData, RestoreBackupErrors, RestoreBackupResponses, RunScheduleNowData, RunScheduleNowErrors, RunScheduleNowResponses, SearchResourcesData, SearchResourcesErrors, SearchResourcesResponses, TransitionResourceData, TransitionResourceErrors, TransitionResourceResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateResourceData, UpdateResourceErrors, UpdateResourceResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses } from './types.gen';
+import type { BindScheduleConfigurationData, BindScheduleConfigurationErrors, BindScheduleConfigurationResponses, CancelProviderAuthorizationData, CancelProviderAuthorizationErrors, CancelProviderAuthorizationResponses, CompareInstructionSetVersionsData, CompareInstructionSetVersionsErrors, CompareInstructionSetVersionsResponses, ConfigureIntegrationData, ConfigureIntegrationErrors, ConfigureIntegrationResponses, CopyAccessResourceData, CopyAccessResourceErrors, CopyAccessResourceResponses, CreateMattermostTeamData, CreateMattermostTeamErrors, CreateMattermostTeamResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateResourceData, CreateResourceErrors, CreateResourceResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleFromSelectionsData, CreateScheduleFromSelectionsErrors, CreateScheduleFromSelectionsResponses, CreateScheduleResponses, DecideIntegrationApprovalData, DecideIntegrationApprovalErrors, DecideIntegrationApprovalResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteResourceData, DeleteResourceErrors, DeleteResourceResponses, DeleteScheduleData, DeleteScheduleErrors, DeleteScheduleResponses, DetachAccessResourceData, DetachAccessResourceErrors, DetachAccessResourceResponses, ExportAuditData, ExportAuditErrors, ExportAuditResponses, GetAgentAssignmentData, GetAgentAssignmentErrors, GetAgentAssignmentResponses, GetAgentBotIdentityData, GetAgentBotIdentityErrors, GetAgentBotIdentityOperationData, GetAgentBotIdentityOperationErrors, GetAgentBotIdentityOperationResponses, GetAgentBotIdentityProviderReadbackData, GetAgentBotIdentityProviderReadbackErrors, GetAgentBotIdentityProviderReadbackResponses, GetAgentBotIdentityResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetBackupData, GetBackupErrors, GetBackupResponses, GetConfigurationDiffData, GetConfigurationDiffErrors, GetConfigurationDiffResponses, GetConfigurationSourceDetailData, GetConfigurationSourceDetailErrors, GetConfigurationSourceDetailResponses, GetDiagnosticsData, GetDiagnosticsErrors, GetDiagnosticsResponses, GetHealthSeriesData, GetHealthSeriesErrors, GetHealthSeriesResponses, GetIncidentData, GetIncidentErrors, GetIncidentResponses, GetInstructionSetData, GetInstructionSetErrors, GetInstructionSetResponses, GetIntegrationApprovalData, GetIntegrationApprovalErrors, GetIntegrationApprovalResponses, GetIntegrationConfigurationData, GetIntegrationConfigurationErrors, GetIntegrationConfigurationResponses, GetIntegrationDefinitionData, GetIntegrationDefinitionErrors, GetIntegrationDefinitionResponses, GetIntegrationTestReceiptData, GetIntegrationTestReceiptErrors, GetIntegrationTestReceiptResponses, GetMattermostTeamBindingData, GetMattermostTeamBindingErrors, GetMattermostTeamBindingResponses, GetMattermostTeamMappingOperationData, GetMattermostTeamMappingOperationErrors, GetMattermostTeamMappingOperationResponses, GetMattermostTeamProviderReadbackData, GetMattermostTeamProviderReadbackErrors, GetMattermostTeamProviderReadbackResponses, GetOwnerConfigurationCatalogData, GetOwnerConfigurationCatalogErrors, GetOwnerConfigurationCatalogResponses, GetOwnerScheduleData, GetOwnerScheduleErrors, GetOwnerScheduleResponses, GetProviderAuthorizationData, GetProviderAuthorizationErrors, GetProviderAuthorizationResponses, GetProviderConnectionData, GetProviderConnectionErrors, GetProviderConnectionResponses, GetProviderData, GetProviderErrors, GetProviderPoolData, GetProviderPoolErrors, GetProviderPoolResponses, GetProviderResponses, GetResourceData, GetResourceErrors, GetResourceResponses, GetRestoreOperationData, GetRestoreOperationErrors, GetRestoreOperationResponses, GetRoleDefinitionData, GetRoleDefinitionErrors, GetRoleDefinitionResponses, GetRoleImageBuildData, GetRoleImageBuildErrors, GetRoleImageBuildResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunDetailData, GetRunDetailErrors, GetRunDetailResponses, GetRunLineageData, GetRunLineageErrors, GetRunLineageResponses, GetWorkspaceBackupData, GetWorkspaceBackupErrors, GetWorkspaceBackupResponses, GetWorkspaceRestoreData, GetWorkspaceRestoreErrors, GetWorkspaceRestoreResponses, LinkMattermostTeamData, LinkMattermostTeamErrors, LinkMattermostTeamResponses, ListAgentAssignmentHistoryData, ListAgentAssignmentHistoryErrors, ListAgentAssignmentHistoryResponses, ListAgentAssignmentsData, ListAgentAssignmentsErrors, ListAgentAssignmentsResponses, ListAgentBotIdentitiesData, ListAgentBotIdentitiesErrors, ListAgentBotIdentitiesResponses, ListAgentHistoryData, ListAgentHistoryErrors, ListAgentHistoryResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListBackupsData, ListBackupsErrors, ListBackupsResponses, ListConfigurationChangesData, ListConfigurationChangesErrors, ListConfigurationChangesResponses, ListIncidentHistoryData, ListIncidentHistoryErrors, ListIncidentHistoryResponses, ListIncidentsData, ListIncidentsErrors, ListIncidentsResponses, ListInstructionSetHistoryData, ListInstructionSetHistoryErrors, ListInstructionSetHistoryResponses, ListInstructionSetsData, ListInstructionSetsErrors, ListInstructionSetsResponses, ListIntegrationApprovalsData, ListIntegrationApprovalsErrors, ListIntegrationApprovalsResponses, ListIntegrationConfigurationsData, ListIntegrationConfigurationsErrors, ListIntegrationConfigurationsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListMattermostTeamsData, ListMattermostTeamsErrors, ListMattermostTeamsResponses, ListOwnerSchedulesData, ListOwnerSchedulesErrors, ListOwnerSchedulesResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListProviderConnectionsData, ListProviderConnectionsErrors, ListProviderConnectionsResponses, ListProviderPoolsData, ListProviderPoolsErrors, ListProviderPoolsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListResourcesData, ListResourcesErrors, ListResourcesResponses, ListRestoreOperationsData, ListRestoreOperationsErrors, ListRestoreOperationsResponses, ListRoleDefinitionHistoryData, ListRoleDefinitionHistoryErrors, ListRoleDefinitionHistoryResponses, ListRoleDefinitionsData, ListRoleDefinitionsErrors, ListRoleDefinitionsResponses, ListRunArtifactsData, ListRunArtifactsErrors, ListRunArtifactsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRunTimelineData, ListRunTimelineErrors, ListRunTimelineResponses, ListScheduleOccurrencesData, ListScheduleOccurrencesErrors, ListScheduleOccurrencesResponses, ListScheduleSelectorsData, ListScheduleSelectorsErrors, ListScheduleSelectorsResponses, ListWorkspaceBackupsData, ListWorkspaceBackupsErrors, ListWorkspaceBackupsResponses, ListWorkspaceRestoresData, ListWorkspaceRestoresErrors, ListWorkspaceRestoresResponses, ManageAccessResourceData, ManageAccessResourceErrors, ManageAccessResourceResponses, ManageAgentAssignmentData, ManageAgentAssignmentErrors, ManageAgentAssignmentResponses, ManageAgentBotIdentityData, ManageAgentBotIdentityErrors, ManageAgentBotIdentityResponses, ManageAgentData, ManageAgentErrors, ManageAgentResponses, ManageImageBuildData, ManageImageBuildErrors, ManageImageBuildResponses, ManageIncidentData, ManageIncidentErrors, ManageIncidentResponses, ManageInstructionSetData, ManageInstructionSetErrors, ManageInstructionSetResponses, ManageProviderPoolData, ManageProviderPoolErrors, ManageProviderPoolResponses, ManageRoleDefinitionData, ManageRoleDefinitionErrors, ManageRoleDefinitionResponses, ManageRoleImageRecipeData, ManageRoleImageRecipeErrors, ManageRoleImageRecipeResponses, ManageRunData, ManageRunErrors, ManageRunResponses, ManageWorkspaceBackupData, ManageWorkspaceBackupErrors, ManageWorkspaceBackupResponses, ManageWorkspaceRestoreData, ManageWorkspaceRestoreErrors, ManageWorkspaceRestoreResponses, ReauthorizeProviderConnectionData, ReauthorizeProviderConnectionErrors, ReauthorizeProviderConnectionResponses, RelinkMattermostTeamData, RelinkMattermostTeamErrors, RelinkMattermostTeamResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, ResolveScheduleRecoveryData, ResolveScheduleRecoveryErrors, ResolveScheduleRecoveryResponses, RestartProviderAuthorizationData, RestartProviderAuthorizationErrors, RestartProviderAuthorizationResponses, RestoreBackupData, RestoreBackupErrors, RestoreBackupResponses, RevokeProviderConnectionData, RevokeProviderConnectionErrors, RevokeProviderConnectionResponses, RunScheduleNowData, RunScheduleNowErrors, RunScheduleNowResponses, SearchResourcesData, SearchResourcesErrors, SearchResourcesResponses, StartProviderAuthorizationData, StartProviderAuthorizationErrors, StartProviderAuthorizationResponses, TestIntegrationConnectionData, TestIntegrationConnectionErrors, TestIntegrationConnectionResponses, TransitionResourceData, TransitionResourceErrors, TransitionResourceResponses, UnlinkMattermostTeamData, UnlinkMattermostTeamErrors, UnlinkMattermostTeamResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateResourceData, UpdateResourceErrors, UpdateResourceResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -552,5 +552,1082 @@ export const getDiagnostics = <ThrowOnError extends boolean = false>(options?: O
             type: 'apiKey'
         }],
     url: '/diagnostics',
+    ...options
+});
+
+/**
+ * Получить авторитетный owner Team catalog
+ */
+export const listMattermostTeams = <ThrowOnError extends boolean = false>(options?: Options<ListMattermostTeamsData, ThrowOnError>): RequestResult<ListMattermostTeamsResponses, ListMattermostTeamsErrors, ThrowOnError> => (options?.client ?? client).get<ListMattermostTeamsResponses, ListMattermostTeamsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/teams',
+    ...options
+});
+
+/**
+ * Создать Team и получить durable readback
+ */
+export const createMattermostTeam = <ThrowOnError extends boolean = false>(options: Options<CreateMattermostTeamData, ThrowOnError>): RequestResult<CreateMattermostTeamResponses, CreateMattermostTeamErrors, ThrowOnError> => (options.client ?? client).post<CreateMattermostTeamResponses, CreateMattermostTeamErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/teams',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Повторно разрешить opaque Team selector provider-side
+ */
+export const getMattermostTeamProviderReadback = <ThrowOnError extends boolean = false>(options: Options<GetMattermostTeamProviderReadbackData, ThrowOnError>): RequestResult<GetMattermostTeamProviderReadbackResponses, GetMattermostTeamProviderReadbackErrors, ThrowOnError> => (options.client ?? client).get<GetMattermostTeamProviderReadbackResponses, GetMattermostTeamProviderReadbackErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/teams/{selector}',
+    ...options
+});
+
+/**
+ * Закрыть exact Workspace Team mapping
+ */
+export const unlinkMattermostTeam = <ThrowOnError extends boolean = false>(options: Options<UnlinkMattermostTeamData, ThrowOnError>): RequestResult<UnlinkMattermostTeamResponses, UnlinkMattermostTeamErrors, ThrowOnError> => (options.client ?? client).delete<UnlinkMattermostTeamResponses, UnlinkMattermostTeamErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/team-binding',
+    ...options
+});
+
+/**
+ * Прочитать current Workspace Team binding
+ */
+export const getMattermostTeamBinding = <ThrowOnError extends boolean = false>(options?: Options<GetMattermostTeamBindingData, ThrowOnError>): RequestResult<GetMattermostTeamBindingResponses, GetMattermostTeamBindingErrors, ThrowOnError> => (options?.client ?? client).get<GetMattermostTeamBindingResponses, GetMattermostTeamBindingErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/team-binding',
+    ...options
+});
+
+/**
+ * Связать Workspace с Team из owner catalog
+ */
+export const linkMattermostTeam = <ThrowOnError extends boolean = false>(options: Options<LinkMattermostTeamData, ThrowOnError>): RequestResult<LinkMattermostTeamResponses, LinkMattermostTeamErrors, ThrowOnError> => (options.client ?? client).post<LinkMattermostTeamResponses, LinkMattermostTeamErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/team-binding',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Пересвязать Workspace с другой Team
+ */
+export const relinkMattermostTeam = <ThrowOnError extends boolean = false>(options: Options<RelinkMattermostTeamData, ThrowOnError>): RequestResult<RelinkMattermostTeamResponses, RelinkMattermostTeamErrors, ThrowOnError> => (options.client ?? client).put<RelinkMattermostTeamResponses, RelinkMattermostTeamErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/team-binding',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Восстановить durable outcome mapping command
+ */
+export const getMattermostTeamMappingOperation = <ThrowOnError extends boolean = false>(options: Options<GetMattermostTeamMappingOperationData, ThrowOnError>): RequestResult<GetMattermostTeamMappingOperationResponses, GetMattermostTeamMappingOperationErrors, ThrowOnError> => (options.client ?? client).get<GetMattermostTeamMappingOperationResponses, GetMattermostTeamMappingOperationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/mattermost/team-operations',
+    ...options
+});
+
+/**
+ * Получить owner RoleDefinition catalog
+ */
+export const listRoleDefinitions = <ThrowOnError extends boolean = false>(options?: Options<ListRoleDefinitionsData, ThrowOnError>): RequestResult<ListRoleDefinitionsResponses, ListRoleDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<ListRoleDefinitionsResponses, ListRoleDefinitionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/role-definitions',
+    ...options
+});
+
+/**
+ * Прочитать exact RoleDefinition
+ */
+export const getRoleDefinition = <ThrowOnError extends boolean = false>(options: Options<GetRoleDefinitionData, ThrowOnError>): RequestResult<GetRoleDefinitionResponses, GetRoleDefinitionErrors, ThrowOnError> => (options.client ?? client).get<GetRoleDefinitionResponses, GetRoleDefinitionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/role-definitions/{resourceRef}',
+    ...options
+});
+
+/**
+ * Получить immutable RoleDefinition history
+ */
+export const listRoleDefinitionHistory = <ThrowOnError extends boolean = false>(options: Options<ListRoleDefinitionHistoryData, ThrowOnError>): RequestResult<ListRoleDefinitionHistoryResponses, ListRoleDefinitionHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListRoleDefinitionHistoryResponses, ListRoleDefinitionHistoryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/role-definitions/{resourceRef}/history',
+    ...options
+});
+
+/**
+ * Выполнить специализированную RoleDefinition command
+ */
+export const manageRoleDefinition = <ThrowOnError extends boolean = false>(options: Options<ManageRoleDefinitionData, ThrowOnError>): RequestResult<ManageRoleDefinitionResponses, ManageRoleDefinitionErrors, ThrowOnError> => (options.client ?? client).post<ManageRoleDefinitionResponses, ManageRoleDefinitionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/role-definitions/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить owner Agent catalog
+ */
+export const listAgents = <ThrowOnError extends boolean = false>(options?: Options<ListAgentsData, ThrowOnError>): RequestResult<ListAgentsResponses, ListAgentsErrors, ThrowOnError> => (options?.client ?? client).get<ListAgentsResponses, ListAgentsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents',
+    ...options
+});
+
+/**
+ * Прочитать exact Agent
+ */
+export const getAgent = <ThrowOnError extends boolean = false>(options: Options<GetAgentData, ThrowOnError>): RequestResult<GetAgentResponses, GetAgentErrors, ThrowOnError> => (options.client ?? client).get<GetAgentResponses, GetAgentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents/{resourceRef}',
+    ...options
+});
+
+/**
+ * Получить immutable Agent history
+ */
+export const listAgentHistory = <ThrowOnError extends boolean = false>(options: Options<ListAgentHistoryData, ThrowOnError>): RequestResult<ListAgentHistoryResponses, ListAgentHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListAgentHistoryResponses, ListAgentHistoryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents/{resourceRef}/history',
+    ...options
+});
+
+/**
+ * Выполнить специализированную Agent command
+ */
+export const manageAgent = <ThrowOnError extends boolean = false>(options: Options<ManageAgentData, ThrowOnError>): RequestResult<ManageAgentResponses, ManageAgentErrors, ThrowOnError> => (options.client ?? client).post<ManageAgentResponses, ManageAgentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить server-authored runtime и Schedule catalog
+ */
+export const getOwnerConfigurationCatalog = <ThrowOnError extends boolean = false>(options?: Options<GetOwnerConfigurationCatalogData, ThrowOnError>): RequestResult<GetOwnerConfigurationCatalogResponses, GetOwnerConfigurationCatalogErrors, ThrowOnError> => (options?.client ?? client).get<GetOwnerConfigurationCatalogResponses, GetOwnerConfigurationCatalogErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/owner-configuration/catalog',
+    ...options
+});
+
+/**
+ * Получить безопасный Mattermost bot identity catalog
+ */
+export const listAgentBotIdentities = <ThrowOnError extends boolean = false>(options?: Options<ListAgentBotIdentitiesData, ThrowOnError>): RequestResult<ListAgentBotIdentitiesResponses, ListAgentBotIdentitiesErrors, ThrowOnError> => (options?.client ?? client).get<ListAgentBotIdentitiesResponses, ListAgentBotIdentitiesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agent-bot-identities',
+    ...options
+});
+
+/**
+ * Получить текущую Mattermost bot identity binding
+ */
+export const getAgentBotIdentity = <ThrowOnError extends boolean = false>(options: Options<GetAgentBotIdentityData, ThrowOnError>): RequestResult<GetAgentBotIdentityResponses, GetAgentBotIdentityErrors, ThrowOnError> => (options.client ?? client).get<GetAgentBotIdentityResponses, GetAgentBotIdentityErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents/{resourceRef}/bot-identity',
+    ...options
+});
+
+/**
+ * Создать, bind, rebind или revoke Mattermost bot identity
+ */
+export const manageAgentBotIdentity = <ThrowOnError extends boolean = false>(options: Options<ManageAgentBotIdentityData, ThrowOnError>): RequestResult<ManageAgentBotIdentityResponses, ManageAgentBotIdentityErrors, ThrowOnError> => (options.client ?? client).post<ManageAgentBotIdentityResponses, ManageAgentBotIdentityErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents/{resourceRef}/bot-identity',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить durable bot identity operation readback
+ */
+export const getAgentBotIdentityOperation = <ThrowOnError extends boolean = false>(options: Options<GetAgentBotIdentityOperationData, ThrowOnError>): RequestResult<GetAgentBotIdentityOperationResponses, GetAgentBotIdentityOperationErrors, ThrowOnError> => (options.client ?? client).get<GetAgentBotIdentityOperationResponses, GetAgentBotIdentityOperationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents/{resourceRef}/bot-identity/operations',
+    ...options
+});
+
+/**
+ * Повторно разрешить opaque bot selector owner-side
+ */
+export const getAgentBotIdentityProviderReadback = <ThrowOnError extends boolean = false>(options: Options<GetAgentBotIdentityProviderReadbackData, ThrowOnError>): RequestResult<GetAgentBotIdentityProviderReadbackResponses, GetAgentBotIdentityProviderReadbackErrors, ThrowOnError> => (options.client ?? client).get<GetAgentBotIdentityProviderReadbackResponses, GetAgentBotIdentityProviderReadbackErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agents/{resourceRef}/bot-identity/provider-readback',
+    ...options
+});
+
+/**
+ * Получить owner AgentAssignment catalog
+ */
+export const listAgentAssignments = <ThrowOnError extends boolean = false>(options?: Options<ListAgentAssignmentsData, ThrowOnError>): RequestResult<ListAgentAssignmentsResponses, ListAgentAssignmentsErrors, ThrowOnError> => (options?.client ?? client).get<ListAgentAssignmentsResponses, ListAgentAssignmentsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agent-assignments',
+    ...options
+});
+
+/**
+ * Прочитать exact AgentAssignment
+ */
+export const getAgentAssignment = <ThrowOnError extends boolean = false>(options: Options<GetAgentAssignmentData, ThrowOnError>): RequestResult<GetAgentAssignmentResponses, GetAgentAssignmentErrors, ThrowOnError> => (options.client ?? client).get<GetAgentAssignmentResponses, GetAgentAssignmentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agent-assignments/{resourceRef}',
+    ...options
+});
+
+/**
+ * Получить immutable AgentAssignment history
+ */
+export const listAgentAssignmentHistory = <ThrowOnError extends boolean = false>(options: Options<ListAgentAssignmentHistoryData, ThrowOnError>): RequestResult<ListAgentAssignmentHistoryResponses, ListAgentAssignmentHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListAgentAssignmentHistoryResponses, ListAgentAssignmentHistoryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agent-assignments/{resourceRef}/history',
+    ...options
+});
+
+/**
+ * Назначить или снять Agent
+ */
+export const manageAgentAssignment = <ThrowOnError extends boolean = false>(options: Options<ManageAgentAssignmentData, ThrowOnError>): RequestResult<ManageAgentAssignmentResponses, ManageAgentAssignmentErrors, ThrowOnError> => (options.client ?? client).post<ManageAgentAssignmentResponses, ManageAgentAssignmentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/agent-assignments/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить owner InstructionSet catalog
+ */
+export const listInstructionSets = <ThrowOnError extends boolean = false>(options?: Options<ListInstructionSetsData, ThrowOnError>): RequestResult<ListInstructionSetsResponses, ListInstructionSetsErrors, ThrowOnError> => (options?.client ?? client).get<ListInstructionSetsResponses, ListInstructionSetsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/instruction-sets',
+    ...options
+});
+
+/**
+ * Прочитать exact InstructionSet
+ */
+export const getInstructionSet = <ThrowOnError extends boolean = false>(options: Options<GetInstructionSetData, ThrowOnError>): RequestResult<GetInstructionSetResponses, GetInstructionSetErrors, ThrowOnError> => (options.client ?? client).get<GetInstructionSetResponses, GetInstructionSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/instruction-sets/{resourceRef}',
+    ...options
+});
+
+/**
+ * Получить immutable InstructionSet history
+ */
+export const listInstructionSetHistory = <ThrowOnError extends boolean = false>(options: Options<ListInstructionSetHistoryData, ThrowOnError>): RequestResult<ListInstructionSetHistoryResponses, ListInstructionSetHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListInstructionSetHistoryResponses, ListInstructionSetHistoryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/instruction-sets/{resourceRef}/history',
+    ...options
+});
+
+/**
+ * Сравнить две immutable версии InstructionSet
+ */
+export const compareInstructionSetVersions = <ThrowOnError extends boolean = false>(options: Options<CompareInstructionSetVersionsData, ThrowOnError>): RequestResult<CompareInstructionSetVersionsResponses, CompareInstructionSetVersionsErrors, ThrowOnError> => (options.client ?? client).get<CompareInstructionSetVersionsResponses, CompareInstructionSetVersionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/instruction-sets/{resourceRef}/compare',
+    ...options
+});
+
+/**
+ * Выполнить специализированную InstructionSet command
+ */
+export const manageInstructionSet = <ThrowOnError extends boolean = false>(options: Options<ManageInstructionSetData, ThrowOnError>): RequestResult<ManageInstructionSetResponses, ManageInstructionSetErrors, ThrowOnError> => (options.client ?? client).post<ManageInstructionSetResponses, ManageInstructionSetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/instruction-sets/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить versioned provider catalog
+ */
+export const listProviders = <ThrowOnError extends boolean = false>(options?: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options?.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/providers',
+    ...options
+});
+
+/**
+ * Прочитать exact provider definition
+ */
+export const getProvider = <ThrowOnError extends boolean = false>(options: Options<GetProviderData, ThrowOnError>): RequestResult<GetProviderResponses, GetProviderErrors, ThrowOnError> => (options.client ?? client).get<GetProviderResponses, GetProviderErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/providers/{providerRef}',
+    ...options
+});
+
+/**
+ * Начать provider authorization без secret input
+ */
+export const startProviderAuthorization = <ThrowOnError extends boolean = false>(options: Options<StartProviderAuthorizationData, ThrowOnError>): RequestResult<StartProviderAuthorizationResponses, StartProviderAuthorizationErrors, ThrowOnError> => (options.client ?? client).post<StartProviderAuthorizationResponses, StartProviderAuthorizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-authorizations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Отменить exact provider authorization attempt
+ */
+export const cancelProviderAuthorization = <ThrowOnError extends boolean = false>(options: Options<CancelProviderAuthorizationData, ThrowOnError>): RequestResult<CancelProviderAuthorizationResponses, CancelProviderAuthorizationErrors, ThrowOnError> => (options.client ?? client).delete<CancelProviderAuthorizationResponses, CancelProviderAuthorizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-authorizations/{authorizationRef}',
+    ...options
+});
+
+/**
+ * Получить status/current code provider authorization
+ */
+export const getProviderAuthorization = <ThrowOnError extends boolean = false>(options: Options<GetProviderAuthorizationData, ThrowOnError>): RequestResult<GetProviderAuthorizationResponses, GetProviderAuthorizationErrors, ThrowOnError> => (options.client ?? client).get<GetProviderAuthorizationResponses, GetProviderAuthorizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-authorizations/{authorizationRef}',
+    ...options
+});
+
+/**
+ * Создать fresh authorization attempt и новый short code
+ */
+export const restartProviderAuthorization = <ThrowOnError extends boolean = false>(options: Options<RestartProviderAuthorizationData, ThrowOnError>): RequestResult<RestartProviderAuthorizationResponses, RestartProviderAuthorizationErrors, ThrowOnError> => (options.client ?? client).post<RestartProviderAuthorizationResponses, RestartProviderAuthorizationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-authorizations/{authorizationRef}/new-code',
+    ...options
+});
+
+/**
+ * Получить masked provider accounts
+ */
+export const listProviderConnections = <ThrowOnError extends boolean = false>(options?: Options<ListProviderConnectionsData, ThrowOnError>): RequestResult<ListProviderConnectionsResponses, ListProviderConnectionsErrors, ThrowOnError> => (options?.client ?? client).get<ListProviderConnectionsResponses, ListProviderConnectionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-connections',
+    ...options
+});
+
+/**
+ * Отозвать provider account
+ */
+export const revokeProviderConnection = <ThrowOnError extends boolean = false>(options: Options<RevokeProviderConnectionData, ThrowOnError>): RequestResult<RevokeProviderConnectionResponses, RevokeProviderConnectionErrors, ThrowOnError> => (options.client ?? client).delete<RevokeProviderConnectionResponses, RevokeProviderConnectionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-connections/{connectionRef}',
+    ...options
+});
+
+/**
+ * Получить masked provider account readback
+ */
+export const getProviderConnection = <ThrowOnError extends boolean = false>(options: Options<GetProviderConnectionData, ThrowOnError>): RequestResult<GetProviderConnectionResponses, GetProviderConnectionErrors, ThrowOnError> => (options.client ?? client).get<GetProviderConnectionResponses, GetProviderConnectionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-connections/{connectionRef}',
+    ...options
+});
+
+/**
+ * Начать fresh reauthorization attempt
+ */
+export const reauthorizeProviderConnection = <ThrowOnError extends boolean = false>(options: Options<ReauthorizeProviderConnectionData, ThrowOnError>): RequestResult<ReauthorizeProviderConnectionResponses, ReauthorizeProviderConnectionErrors, ThrowOnError> => (options.client ?? client).post<ReauthorizeProviderConnectionResponses, ReauthorizeProviderConnectionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-connections/{connectionRef}/reauthorize',
+    ...options
+});
+
+/**
+ * Получить provider pools
+ */
+export const listProviderPools = <ThrowOnError extends boolean = false>(options?: Options<ListProviderPoolsData, ThrowOnError>): RequestResult<ListProviderPoolsResponses, ListProviderPoolsErrors, ThrowOnError> => (options?.client ?? client).get<ListProviderPoolsResponses, ListProviderPoolsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-pools',
+    ...options
+});
+
+/**
+ * Получить exact provider pool
+ */
+export const getProviderPool = <ThrowOnError extends boolean = false>(options: Options<GetProviderPoolData, ThrowOnError>): RequestResult<GetProviderPoolResponses, GetProviderPoolErrors, ThrowOnError> => (options.client ?? client).get<GetProviderPoolResponses, GetProviderPoolErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-pools/{poolRef}',
+    ...options
+});
+
+/**
+ * Выполнить specialized provider pool command
+ */
+export const manageProviderPool = <ThrowOnError extends boolean = false>(options: Options<ManageProviderPoolData, ThrowOnError>): RequestResult<ManageProviderPoolResponses, ManageProviderPoolErrors, ThrowOnError> => (options.client ?? client).post<ManageProviderPoolResponses, ManageProviderPoolErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/provider-pools/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить IntegrationDefinition catalog
+ */
+export const listIntegrationDefinitions = <ThrowOnError extends boolean = false>(options?: Options<ListIntegrationDefinitionsData, ThrowOnError>): RequestResult<ListIntegrationDefinitionsResponses, ListIntegrationDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<ListIntegrationDefinitionsResponses, ListIntegrationDefinitionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-definitions',
+    ...options
+});
+
+/**
+ * Получить exact IntegrationDefinition и capabilities
+ */
+export const getIntegrationDefinition = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationDefinitionData, ThrowOnError>): RequestResult<GetIntegrationDefinitionResponses, GetIntegrationDefinitionErrors, ThrowOnError> => (options.client ?? client).get<GetIntegrationDefinitionResponses, GetIntegrationDefinitionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-definitions/{definitionRef}',
+    ...options
+});
+
+/**
+ * Получить owner integration configurations
+ */
+export const listIntegrationConfigurations = <ThrowOnError extends boolean = false>(options?: Options<ListIntegrationConfigurationsData, ThrowOnError>): RequestResult<ListIntegrationConfigurationsResponses, ListIntegrationConfigurationsErrors, ThrowOnError> => (options?.client ?? client).get<ListIntegrationConfigurationsResponses, ListIntegrationConfigurationsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-configurations',
+    ...options
+});
+
+/**
+ * Настроить IntegrationDefinition через catalog refs
+ */
+export const configureIntegration = <ThrowOnError extends boolean = false>(options: Options<ConfigureIntegrationData, ThrowOnError>): RequestResult<ConfigureIntegrationResponses, ConfigureIntegrationErrors, ThrowOnError> => (options.client ?? client).post<ConfigureIntegrationResponses, ConfigureIntegrationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-configurations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить exact integration configuration
+ */
+export const getIntegrationConfiguration = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationConfigurationData, ThrowOnError>): RequestResult<GetIntegrationConfigurationResponses, GetIntegrationConfigurationErrors, ThrowOnError> => (options.client ?? client).get<GetIntegrationConfigurationResponses, GetIntegrationConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-configurations/{configurationRef}',
+    ...options
+});
+
+/**
+ * Проверить exact integration configuration/connection
+ */
+export const testIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<TestIntegrationConnectionData, ThrowOnError>): RequestResult<TestIntegrationConnectionResponses, TestIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).post<TestIntegrationConnectionResponses, TestIntegrationConnectionErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-tests',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить exact integration test receipt
+ */
+export const getIntegrationTestReceipt = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationTestReceiptData, ThrowOnError>): RequestResult<GetIntegrationTestReceiptResponses, GetIntegrationTestReceiptErrors, ThrowOnError> => (options.client ?? client).get<GetIntegrationTestReceiptResponses, GetIntegrationTestReceiptErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-tests/{testRef}',
+    ...options
+});
+
+/**
+ * Получить ApprovalRequest list
+ */
+export const listIntegrationApprovals = <ThrowOnError extends boolean = false>(options?: Options<ListIntegrationApprovalsData, ThrowOnError>): RequestResult<ListIntegrationApprovalsResponses, ListIntegrationApprovalsErrors, ThrowOnError> => (options?.client ?? client).get<ListIntegrationApprovalsResponses, ListIntegrationApprovalsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-approvals',
+    ...options
+});
+
+/**
+ * Получить exact ApprovalRequest
+ */
+export const getIntegrationApproval = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationApprovalData, ThrowOnError>): RequestResult<GetIntegrationApprovalResponses, GetIntegrationApprovalErrors, ThrowOnError> => (options.client ?? client).get<GetIntegrationApprovalResponses, GetIntegrationApprovalErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-approvals/{approvalRef}',
+    ...options
+});
+
+/**
+ * Принять one-winner approval decision
+ */
+export const decideIntegrationApproval = <ThrowOnError extends boolean = false>(options: Options<DecideIntegrationApprovalData, ThrowOnError>): RequestResult<DecideIntegrationApprovalResponses, DecideIntegrationApprovalErrors, ThrowOnError> => (options.client ?? client).post<DecideIntegrationApprovalResponses, DecideIntegrationApprovalErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/integration-approvals/{approvalRef}/decision',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить UI-friendly selectors для Schedule
+ */
+export const listScheduleSelectors = <ThrowOnError extends boolean = false>(options?: Options<ListScheduleSelectorsData, ThrowOnError>): RequestResult<ListScheduleSelectorsResponses, ListScheduleSelectorsErrors, ThrowOnError> => (options?.client ?? client).get<ListScheduleSelectorsResponses, ListScheduleSelectorsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/schedule-selectors',
+    ...options
+});
+
+/**
+ * Получить owner-facing Schedule projections
+ */
+export const listOwnerSchedules = <ThrowOnError extends boolean = false>(options?: Options<ListOwnerSchedulesData, ThrowOnError>): RequestResult<ListOwnerSchedulesResponses, ListOwnerSchedulesErrors, ThrowOnError> => (options?.client ?? client).get<ListOwnerSchedulesResponses, ListOwnerSchedulesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/owner-schedules',
+    ...options
+});
+
+/**
+ * Получить exact owner-facing Schedule projection
+ */
+export const getOwnerSchedule = <ThrowOnError extends boolean = false>(options: Options<GetOwnerScheduleData, ThrowOnError>): RequestResult<GetOwnerScheduleResponses, GetOwnerScheduleErrors, ThrowOnError> => (options.client ?? client).get<GetOwnerScheduleResponses, GetOwnerScheduleErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/owner-schedules/{scheduleRef}',
+    ...options
+});
+
+/**
+ * Создать Schedule из display selections
+ */
+export const createScheduleFromSelections = <ThrowOnError extends boolean = false>(options: Options<CreateScheduleFromSelectionsData, ThrowOnError>): RequestResult<CreateScheduleFromSelectionsResponses, CreateScheduleFromSelectionsErrors, ThrowOnError> => (options.client ?? client).post<CreateScheduleFromSelectionsResponses, CreateScheduleFromSelectionsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/schedules/from-selections',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Обновить Schedule basic intent и exact current selections
+ */
+export const bindScheduleConfiguration = <ThrowOnError extends boolean = false>(options: Options<BindScheduleConfigurationData, ThrowOnError>): RequestResult<BindScheduleConfigurationResponses, BindScheduleConfigurationErrors, ThrowOnError> => (options.client ?? client).put<BindScheduleConfigurationResponses, BindScheduleConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/schedules/{scheduleRef}/configuration',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить typed Run detail
+ */
+export const getRunDetail = <ThrowOnError extends boolean = false>(options: Options<GetRunDetailData, ThrowOnError>): RequestResult<GetRunDetailResponses, GetRunDetailErrors, ThrowOnError> => (options.client ?? client).get<GetRunDetailResponses, GetRunDetailErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/runs/{runRef}',
+    ...options
+});
+
+/**
+ * Получить bounded Run timeline
+ */
+export const listRunTimeline = <ThrowOnError extends boolean = false>(options: Options<ListRunTimelineData, ThrowOnError>): RequestResult<ListRunTimelineResponses, ListRunTimelineErrors, ThrowOnError> => (options.client ?? client).get<ListRunTimelineResponses, ListRunTimelineErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/runs/{runRef}/timeline',
+    ...options
+});
+
+/**
+ * Получить полный versioned Run lineage
+ */
+export const getRunLineage = <ThrowOnError extends boolean = false>(options: Options<GetRunLineageData, ThrowOnError>): RequestResult<GetRunLineageResponses, GetRunLineageErrors, ThrowOnError> => (options.client ?? client).get<GetRunLineageResponses, GetRunLineageErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/runs/{runRef}/lineage',
+    ...options
+});
+
+/**
+ * Получить безопасные Run artifacts
+ */
+export const listRunArtifacts = <ThrowOnError extends boolean = false>(options: Options<ListRunArtifactsData, ThrowOnError>): RequestResult<ListRunArtifactsResponses, ListRunArtifactsErrors, ThrowOnError> => (options.client ?? client).get<ListRunArtifactsResponses, ListRunArtifactsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/runs/{runRef}/artifacts',
+    ...options
+});
+
+/**
+ * Cancel или retry exact Run
+ */
+export const manageRun = <ThrowOnError extends boolean = false>(options: Options<ManageRunData, ThrowOnError>): RequestResult<ManageRunResponses, ManageRunErrors, ThrowOnError> => (options.client ?? client).post<ManageRunResponses, ManageRunErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/runs/{runRef}/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить exact runtime incident
+ */
+export const getIncident = <ThrowOnError extends boolean = false>(options: Options<GetIncidentData, ThrowOnError>): RequestResult<GetIncidentResponses, GetIncidentErrors, ThrowOnError> => (options.client ?? client).get<GetIncidentResponses, GetIncidentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/incidents/{incidentRef}',
+    ...options
+});
+
+/**
+ * Получить incident lifecycle history
+ */
+export const listIncidentHistory = <ThrowOnError extends boolean = false>(options: Options<ListIncidentHistoryData, ThrowOnError>): RequestResult<ListIncidentHistoryResponses, ListIncidentHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListIncidentHistoryResponses, ListIncidentHistoryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/incidents/{incidentRef}/history',
+    ...options
+});
+
+/**
+ * Ack/retry/release/close exact incident
+ */
+export const manageIncident = <ThrowOnError extends boolean = false>(options: Options<ManageIncidentData, ThrowOnError>): RequestResult<ManageIncidentResponses, ManageIncidentErrors, ThrowOnError> => (options.client ?? client).post<ManageIncidentResponses, ManageIncidentErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/incidents/{incidentRef}/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить bounded current health observations
+ */
+export const getHealthSeries = <ThrowOnError extends boolean = false>(options?: Options<GetHealthSeriesData, ThrowOnError>): RequestResult<GetHealthSeriesResponses, GetHealthSeriesErrors, ThrowOnError> => (options?.client ?? client).get<GetHealthSeriesResponses, GetHealthSeriesErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/health-series',
+    ...options
+});
+
+/**
+ * Получить Workspace/All Workspaces backups
+ */
+export const listWorkspaceBackups = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspaceBackupsData, ThrowOnError>): RequestResult<ListWorkspaceBackupsResponses, ListWorkspaceBackupsErrors, ThrowOnError> => (options?.client ?? client).get<ListWorkspaceBackupsResponses, ListWorkspaceBackupsErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/workspace-backups',
+    ...options
+});
+
+/**
+ * Получить exact Workspace backup
+ */
+export const getWorkspaceBackup = <ThrowOnError extends boolean = false>(options: Options<GetWorkspaceBackupData, ThrowOnError>): RequestResult<GetWorkspaceBackupResponses, GetWorkspaceBackupErrors, ThrowOnError> => (options.client ?? client).get<GetWorkspaceBackupResponses, GetWorkspaceBackupErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/workspace-backups/{backupRef}',
+    ...options
+});
+
+/**
+ * Create/cancel/retry Workspace backup
+ */
+export const manageWorkspaceBackup = <ThrowOnError extends boolean = false>(options: Options<ManageWorkspaceBackupData, ThrowOnError>): RequestResult<ManageWorkspaceBackupResponses, ManageWorkspaceBackupErrors, ThrowOnError> => (options.client ?? client).post<ManageWorkspaceBackupResponses, ManageWorkspaceBackupErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/workspace-backups/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Получить Workspace restore operations
+ */
+export const listWorkspaceRestores = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspaceRestoresData, ThrowOnError>): RequestResult<ListWorkspaceRestoresResponses, ListWorkspaceRestoresErrors, ThrowOnError> => (options?.client ?? client).get<ListWorkspaceRestoresResponses, ListWorkspaceRestoresErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/workspace-restores',
+    ...options
+});
+
+/**
+ * Получить exact Workspace restore readback
+ */
+export const getWorkspaceRestore = <ThrowOnError extends boolean = false>(options: Options<GetWorkspaceRestoreData, ThrowOnError>): RequestResult<GetWorkspaceRestoreResponses, GetWorkspaceRestoreErrors, ThrowOnError> => (options.client ?? client).get<GetWorkspaceRestoreResponses, GetWorkspaceRestoreErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/workspace-restores/{restoreRef}',
+    ...options
+});
+
+/**
+ * Create/cancel/retry Workspace restore
+ */
+export const manageWorkspaceRestore = <ThrowOnError extends boolean = false>(options: Options<ManageWorkspaceRestoreData, ThrowOnError>): RequestResult<ManageWorkspaceRestoreResponses, ManageWorkspaceRestoreErrors, ThrowOnError> => (options.client ?? client).post<ManageWorkspaceRestoreResponses, ManageWorkspaceRestoreErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/workspace-restores/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Экспортировать bounded safe audit CSV
+ */
+export const exportAudit = <ThrowOnError extends boolean = false>(options?: Options<ExportAuditData, ThrowOnError>): RequestResult<ExportAuditResponses, ExportAuditErrors, ThrowOnError> => (options?.client ?? client).get<ExportAuditResponses, ExportAuditErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/audit/export',
+    ...options
+});
+
+/**
+ * Получить authoritative InstructionSet version diff
+ */
+export const getConfigurationDiff = <ThrowOnError extends boolean = false>(options: Options<GetConfigurationDiffData, ThrowOnError>): RequestResult<GetConfigurationDiffResponses, GetConfigurationDiffErrors, ThrowOnError> => (options.client ?? client).get<GetConfigurationDiffResponses, GetConfigurationDiffErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/configuration-diff',
+    ...options
+});
+
+/**
+ * Получить human-readable configuration source detail
+ */
+export const getConfigurationSourceDetail = <ThrowOnError extends boolean = false>(options: Options<GetConfigurationSourceDetailData, ThrowOnError>): RequestResult<GetConfigurationSourceDetailResponses, GetConfigurationSourceDetailErrors, ThrowOnError> => (options.client ?? client).get<GetConfigurationSourceDetailResponses, GetConfigurationSourceDetailErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-mattercodex-session',
+            type: 'apiKey'
+        }],
+    url: '/configuration-source/{resourceRef}',
     ...options
 });

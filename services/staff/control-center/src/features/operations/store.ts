@@ -18,10 +18,11 @@ import type {
   Backup,
   ConfigurationChange,
   Diagnostics,
+  IncidentView,
   ResolveOwnerGate,
   Resource,
   RestoreOperation,
-  RuntimeIncident,
+  RunView,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import {
@@ -34,9 +35,9 @@ import {
 } from "@/shared/lib/remote";
 
 export const useOperationsStore = defineStore("operations", () => {
-  const runs = reactive(remoteState<Resource[]>([]));
+  const runs = reactive(remoteState<RunView[]>([]));
   const gates = reactive(remoteState<Resource[]>([]));
-  const incidents = reactive(remoteState<RuntimeIncident[]>([]));
+  const incidents = reactive(remoteState<IncidentView[]>([]));
   const backups = reactive(remoteState<Backup[]>([]));
   const restores = reactive(remoteState<RestoreOperation[]>([]));
   const audit = reactive(remoteState<AuditEvent[]>([]));
@@ -63,7 +64,7 @@ export const useOperationsStore = defineStore("operations", () => {
   const loadRuns = () =>
     loadInto(
       runs,
-      async () => (await fetchRuns()).resources,
+      async () => (await fetchRuns()).runs,
       (items) => items.length === 0,
     );
   const loadGates = () =>
@@ -142,22 +143,19 @@ export const useOperationsStore = defineStore("operations", () => {
     );
   };
 
-  function replaceRealtimeResources(
-    channel: "RUNS" | "RESOURCES",
-    items: Resource[],
-  ): void {
-    if (channel === "RUNS") {
-      invalidate(runs);
-      runs.data = items.filter((item) => item.kind === "PROCESS_RUN");
-      runs.phase = runs.data.length ? "ready" : "empty";
-    } else {
-      invalidate(gates);
-      gates.data = items.filter((item) => item.kind === "OWNER_GATE");
-      gates.phase = gates.data.length ? "ready" : "empty";
-    }
+  function replaceRealtimeRuns(items: RunView[]): void {
+    invalidate(runs);
+    runs.data = items;
+    runs.phase = items.length ? "ready" : "empty";
   }
 
-  function replaceRealtimeIncidents(items: RuntimeIncident[]): void {
+  function replaceRealtimeResources(items: Resource[]): void {
+    invalidate(gates);
+    gates.data = items.filter((item) => item.kind === "OWNER_GATE");
+    gates.phase = gates.data.length ? "ready" : "empty";
+  }
+
+  function replaceRealtimeIncidents(items: IncidentView[]): void {
     invalidate(incidents);
     incidents.data = items;
     incidents.phase = items.length ? "ready" : "empty";
@@ -190,6 +188,7 @@ export const useOperationsStore = defineStore("operations", () => {
     loadDiagnostics,
     resolveOwnerGate,
     restore,
+    replaceRealtimeRuns,
     replaceRealtimeResources,
     replaceRealtimeIncidents,
     replaceRealtimeChanges,
