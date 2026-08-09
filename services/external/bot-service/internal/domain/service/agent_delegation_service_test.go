@@ -659,6 +659,54 @@ func TestContinueAgentThreadReusesExactRoleThreadAndSession(t *testing.T) {
 	}
 }
 
+func TestContinueAgentThreadDoesNotHoldTargetRuntimeGuardAroundDispatch(t *testing.T) {
+	svc, baseStore, dispatcher, _ := agentDelegationTestService()
+	started, err := svc.StartAgentThread(context.Background(), "source-session", "source-token", StartAgentThreadCommand{
+		TargetChat: "architecture", TargetAgent: "architect", Title: "Проверка инфраструктуры",
+		Message: "Проверь первую версию.", WorkItemKey: "issue-261-initial",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentThread() error = %v", err)
+	}
+	previous := baseStore.agentDelegations[started.DelegationID]
+	targetSession := baseStore.agentSessions["target-session"]
+	targetSessionKey := agentSessionKey(2, 2, agentSessionScopeThreadRole, previous.TargetRootPostID)
+	delete(baseStore.agentSessions, "target-session")
+	targetSession.SessionKey = targetSessionKey
+	targetSession.Status = agentSessionStatusIdle
+	targetSession.ActiveTurnID = 0
+	targetSession.ActiveRunID = ""
+	baseStore.agentSessions[targetSessionKey] = targetSession
+	targetRole := baseStore.agentRoles[2]
+	targetRole.KubernetesAccess = "cluster-admin"
+	baseStore.agentRoles[2] = targetRole
+	store := &admittedAdminStore{
+		fakeAdminStore: baseStore,
+		allowed:        true,
+		frozenSessions: map[string]bool{targetSessionKey: true},
+	}
+	svc.cfg.Store = store
+	dispatcher.calls = 0
+	dispatcher.queued = AgentTurnQueued{RunID: "target-run-2", TurnID: 3, SessionID: targetSession.ID, SessionKey: targetSessionKey}
+	dispatcher.beforeEnqueue = func() {
+		if store.runtimeGuardDepth != 0 {
+			t.Fatalf("dispatcher called while target runtime guard is held: depth=%d", store.runtimeGuardDepth)
+		}
+	}
+
+	result, err := svc.ContinueAgentThread(context.Background(), "source-session", "source-token", ContinueAgentThreadCommand{
+		DelegationID: started.DelegationID,
+		Message:      "Продолжи работу в существующей cluster-admin сессии.",
+		WorkItemKey:  "issue-261-continuation",
+	})
+	if err != nil {
+		t.Fatalf("ContinueAgentThread() error = %v", err)
+	}
+	if result.TargetRunID != "target-run-2" || dispatcher.calls != 1 {
+		t.Fatalf("result=%#v dispatcher calls=%d", result, dispatcher.calls)
+	}
+}
+
 func TestContinueAgentThreadRejectsForeignSourceSession(t *testing.T) {
 	svc, store, dispatcher, publisher := agentDelegationTestService()
 	store.agentDelegations = map[int64]entity.AgentDelegation{1: {
