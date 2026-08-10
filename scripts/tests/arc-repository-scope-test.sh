@@ -76,7 +76,10 @@ yq -e '
     .securityContext.appArmorProfile.type == "Unconfined" and
     .securityContext.seccompProfile.type == "Unconfined" and
     (.securityContext.capabilities.drop | length) == 1 and
-    .securityContext.capabilities.drop[0] == "ALL")] | length) == 1
+    .securityContext.capabilities.drop[0] == "ALL" and
+    (.securityContext.capabilities.add | length) == 2 and
+    (.securityContext.capabilities.add | any_c(. == "SETUID")) and
+    (.securityContext.capabilities.add | any_c(. == "SETGID")))] | length) == 1
 ' "$repository_root/infra/arc/build-runner-values.yaml" >/dev/null
 yq -e '
   .githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
