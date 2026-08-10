@@ -7,10 +7,12 @@ bootstrap="$repository_root/infra/arc/bootstrap.sh"
 policy_bootstrap="$repository_root/infra/github/bootstrap-actions-policy.sh"
 materializer="$repository_root/infra/github/materialize-actions-policy-inputs.sh"
 owner_gate="$repository_root/infra/arc/job-started-owner-gate.sh"
+network_policy_renderer="$repository_root/infra/arc/render-network-policy.sh"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
-bash -n "$bootstrap" "$policy_bootstrap" "$materializer" "$owner_gate"
+bash -n "$bootstrap" "$policy_bootstrap" "$materializer" "$owner_gate" \
+  "$network_policy_renderer"
 
 printf '%040d\n' 0 >"$temporary_directory/workflow-sha"
 printf '1\n' >"$temporary_directory/build-owner"
@@ -112,5 +114,24 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
   printf 'Envoy CONNECT termination is not configured on the exact route\n' >&2
   exit 1
 }
+
+"$network_policy_renderer" "$temporary_directory/rendered-network-policy.yaml"
+for proxy_namespace in mattercodex-ci mattercodex-ci-deploy; do
+  rendered_config="$temporary_directory/envoy-$proxy_namespace.yaml"
+  PROXY_NAMESPACE=$proxy_namespace yq -r '
+    select(.kind == "ConfigMap" and .metadata.namespace == strenv(PROXY_NAMESPACE) and
+      .metadata.name == "mattercodex-ci-egress-proxy") | .data."envoy.yaml"
+  ' "$temporary_directory/rendered-network-policy.yaml" >"$rendered_config"
+  expected_checksum=$(sha256sum "$rendered_config" | awk '{print $1}')
+  PROXY_NAMESPACE=$proxy_namespace CONFIG_CHECKSUM=$expected_checksum yq -e '
+    select(.kind == "Deployment" and .metadata.namespace == strenv(PROXY_NAMESPACE) and
+      .metadata.name == "mattercodex-ci-egress-proxy") |
+    .spec.template.metadata.annotations."mattercodex.dev/envoy-config-sha256" ==
+      strenv(CONFIG_CHECKSUM)
+  ' "$temporary_directory/rendered-network-policy.yaml" >/dev/null || {
+    printf 'Rendered Envoy checksum does not trigger an exact proxy rollout\n' >&2
+    exit 1
+  }
+done
 
 printf 'ARC repository-scope negative checks completed\n'
