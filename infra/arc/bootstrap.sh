@@ -68,10 +68,6 @@ done
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
-"$repository_root/infra/github/bootstrap-actions-policy.sh" --mode readback \
-  --workflow-sha-file "$workflow_sha_file" \
-  --build-owner-actor-id-file "$build_owner_actor_file" \
-  --deploy-owner-actor-id-file "$deploy_owner_actor_file" >/dev/null
 lock_file="$script_directory/chart.lock"
 credential_secret=mattercodex-github-runner-auth
 owner_gate_config=mattercodex-runner-owner-gate
@@ -147,6 +143,25 @@ validate_github_pat_file() {
     fail "GitHub PAT cannot read the repository runners API"
 }
 
+run_actions_policy() {
+  local policy_mode=$1
+  if [[ "$credential_mode" == pat ]]; then
+    (
+      GH_TOKEN=$(<"$github_pat_file")
+      export GH_TOKEN
+      "$repository_root/infra/github/bootstrap-actions-policy.sh" --mode "$policy_mode" \
+        --workflow-sha-file "$workflow_sha_file" \
+        --build-owner-actor-id-file "$build_owner_actor_file" \
+        --deploy-owner-actor-id-file "$deploy_owner_actor_file"
+    )
+    return
+  fi
+  "$repository_root/infra/github/bootstrap-actions-policy.sh" --mode "$policy_mode" \
+    --workflow-sha-file "$workflow_sha_file" \
+    --build-owner-actor-id-file "$build_owner_actor_file" \
+    --deploy-owner-actor-id-file "$deploy_owner_actor_file"
+}
+
 verify_credential_secret() {
   local namespace=$1 keys
   keys=$(kubectl --context "$expected_context" -n "$namespace" get secret "$credential_secret" -o json |
@@ -188,6 +203,7 @@ case "$credential_mode" in
   pat) validate_github_pat_file ;;
   app) validate_github_app_files ;;
 esac
+run_actions_policy readback >/dev/null
 
 render_owner_gate_config() {
   local namespace=$1 workflow_path=$2 job=$3 owner_actor_file=$4 output=$5 gate_directory
@@ -387,10 +403,7 @@ readback_scale_set "$build_namespace" mattercodex-build \
   matter-codex-registry.matter-kodex-prod.svc.cluster.local,localhost,127.0.0.1
 readback_scale_set "$deploy_namespace" mattercodex-deploy \
   mattercodex-production-deployer true "$kubernetes_api_no_proxy"
-"$repository_root/infra/github/bootstrap-actions-policy.sh" --mode readback \
-  --workflow-sha-file "$workflow_sha_file" \
-  --build-owner-actor-id-file "$build_owner_actor_file" \
-  --deploy-owner-actor-id-file "$deploy_owner_actor_file" >/dev/null
+run_actions_policy readback >/dev/null
 require_denied "deploy runner unexpectedly has Secret read access" \
   kubectl --context "$expected_context" auth can-i get secrets -n "$deploy_namespace" \
   --as=system:serviceaccount:mattercodex-ci-deploy:mattercodex-production-deployer
