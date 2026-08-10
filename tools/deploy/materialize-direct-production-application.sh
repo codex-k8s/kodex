@@ -138,7 +138,8 @@ load_resource_json() {
   done < <(jq -r '(.data // {} | keys[]),(.binaryData // {} | keys[])' "$json" | LC_ALL=C sort -u)
 }
 load_cluster_resource_if_present() {
-  local kind=$1 name=$2 json="$temporary_directory/cluster-$kind-$name.json"
+  local kind=$1 name=$2
+  local json="$temporary_directory/cluster-$kind-$name.json"
   [[ -n "$expected_context" ]] || return 1
   if kubectl --context "$expected_context" -n "$namespace" get "${kind,,}/$name" -o json >"$json" 2>/dev/null; then
     load_resource_json "$kind" "$name" "$json"
@@ -147,7 +148,8 @@ load_cluster_resource_if_present() {
   return 1
 }
 load_cluster_secret_key() {
-  local source_namespace=$1 name=$2 key=$3 destination=$4 json="$temporary_directory/source-$source_namespace-$name.json"
+  local source_namespace=$1 name=$2 key=$3 destination=$4
+  local json="$temporary_directory/source-$source_namespace-$name.json"
   [[ -n "$expected_context" ]] || return 1
   if [[ ! -f "$json" ]]; then
     kubectl --context "$expected_context" -n "$source_namespace" get secret "$name" -o json >"$json" 2>/dev/null || return 1
