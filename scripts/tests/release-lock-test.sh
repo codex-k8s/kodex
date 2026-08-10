@@ -11,6 +11,18 @@ digest=sha256:2222222222222222222222222222222222222222222222222222222222222222
 jq --arg source_sha "$source_sha" --arg digest "$digest" '
   {schema_version:1,profile:"direct-production single-node prototype",source_sha:$source_sha,build_run_id:"123",registry_push:"matter-codex-registry.matter-kodex-prod.svc.cluster.local:5000",node_pull:"localhost:5001",images:[.images[]|{component,repository:("mattercodex/"+.component),digest:$digest,pull_ref:("localhost:5001/mattercodex/"+.component+"@"+$digest)}]}
 ' "$repository_root/tools/release/images.json" | jq -S . >"$temporary_directory/valid.json"
+jq -e '
+  ([.images[] | select(.component == "role-image-builder" and .target == "runtime")] | length) == 1 and
+  all(.images[] | select(.component != "role-image-builder"); has("target") | not)
+' "$repository_root/tools/release/images.json" >/dev/null || {
+  printf 'Release image catalog does not select the exact role-image-builder runtime target\n' >&2
+  exit 1
+}
+grep -Fq 'target_options=(--opt "target=$target")' \
+  "$repository_root/tools/release/build-release.sh" || {
+    printf 'Release builder does not pass the exact Dockerfile target to BuildKit\n' >&2
+    exit 1
+  }
 lock_sha=$(sha256sum "$temporary_directory/valid.json" | awk '{print $1}')
 "$validator" --lock "$temporary_directory/valid.json" --source-sha "$source_sha" --sha256 "$lock_sha" >/dev/null
 "$renderer" --lock "$temporary_directory/valid.json" --source-sha "$source_sha" \
