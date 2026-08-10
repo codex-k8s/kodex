@@ -221,6 +221,8 @@ func (store *Store) Check(ctx context.Context) error {
 	return nil
 }
 
+func (store *Store) Close() { store.client.CloseIdleConnections() }
+
 func (store *Store) read(ctx context.Context, bindingID string, version uint64) (readResponse, error) {
 	query := ""
 	if version > 0 {

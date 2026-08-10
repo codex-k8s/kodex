@@ -47,9 +47,10 @@ type FetchSource struct {
 }
 
 type Catalog struct {
-	path    string
-	version uint64
-	sources map[string]RepositorySource
+	path        string
+	version     uint64
+	sources     map[string]RepositorySource
+	credentials map[string]uint64
 }
 
 func NewCatalog(path string) (*Catalog, error) {
@@ -70,7 +71,7 @@ func NewCatalog(path string) (*Catalog, error) {
 	if decoder.Decode(&file) != nil || file.Version == 0 || len(file.Sources) == 0 || len(file.Sources) > 32 {
 		return nil, errors.New("Git source catalog is invalid")
 	}
-	catalog := &Catalog{path: path, version: file.Version, sources: make(map[string]RepositorySource, len(file.Sources))}
+	catalog := &Catalog{path: path, version: file.Version, sources: make(map[string]RepositorySource, len(file.Sources)), credentials: make(map[string]uint64, len(file.Sources))}
 	for _, source := range file.Sources {
 		parsed, parseErr := url.Parse(source.URL)
 		if parseErr != nil || parsed.Scheme != "https" || parsed.Hostname() != source.TLSServerName || source.TLSServerName != "github.com" || len(source.URL) > 320 || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
@@ -78,6 +79,9 @@ func NewCatalog(path string) (*Catalog, error) {
 			uuid.Validate(source.CredentialBindingID) != nil || source.CredentialBindingVersion == 0 || source.CredentialSecretRef == "" ||
 			source.MaximumBytes < 1024 || source.MaximumBytes > 8<<20 || len(source.Refs) == 0 || len(source.Paths) == 0 || len(source.Refs) > 16 || len(source.Paths) > 64 {
 			return nil, errors.New("Git repository source is invalid")
+		}
+		if source.CredentialSecretRef != "mattercodex/integration-gateway/git-credentials/"+source.RepositoryKey {
+			return nil, errors.New("Git credential reference is not registered")
 		}
 		for key, ref := range source.Refs {
 			if !keyPattern.MatchString(key) || !strings.HasPrefix(ref, "refs/") || strings.ContainsAny(ref, "\x00\r\n :") {
@@ -93,8 +97,12 @@ func NewCatalog(path string) (*Catalog, error) {
 		if _, duplicate := catalog.sources[source.RepositoryKey]; duplicate {
 			return nil, errors.New("Git repository source is duplicated")
 		}
+		if version, duplicate := catalog.credentials[source.CredentialSecretRef]; duplicate && version != source.CredentialBindingVersion {
+			return nil, errors.New("Git credential reference version is ambiguous")
+		}
 		source.Digest = digestSource(source)
 		catalog.sources[source.RepositoryKey] = source
+		catalog.credentials[source.CredentialSecretRef] = source.CredentialBindingVersion
 	}
 	return catalog, nil
 }
@@ -161,4 +169,14 @@ func (catalog *Catalog) Check(context.Context) error {
 		return errors.New("Git source catalog is unavailable")
 	}
 	return nil
+}
+
+// CredentialRegistry возвращает только exact server-owned Secret refs и версии
+// из уже проверенного Git source catalog.
+func (catalog *Catalog) CredentialRegistry() map[string]uint64 {
+	registry := make(map[string]uint64, len(catalog.credentials))
+	for ref, version := range catalog.credentials {
+		registry[ref] = version
+	}
+	return registry
 }

@@ -237,6 +237,8 @@ func (vault *Vault) Check(ctx context.Context) error {
 	return errors.New("Vault credential path capability is unavailable")
 }
 
+func (vault *Vault) Close() { vault.client.CloseIdleConnections() }
+
 func (vault *Vault) validRef(ref string) bool {
 	clean := path.Clean(ref)
 	return clean == ref && strings.HasPrefix(ref, vault.config.PathPrefix+"/") && !strings.ContainsAny(ref, "\x00\r\n")

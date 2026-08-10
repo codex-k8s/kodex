@@ -6,6 +6,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/matter-codex/libs/go/exactkubernetessecret v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/i18n v0.0.0
 	github.com/codex-k8s/matter-codex/libs/go/interactiongatewayapi v0.0.0
@@ -122,6 +123,8 @@ require (
 replace github.com/codex-k8s/matter-codex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
 
 replace github.com/codex-k8s/matter-codex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
+
+replace github.com/codex-k8s/matter-codex/libs/go/exactkubernetessecret => ../../../libs/go/exactkubernetessecret
 
 replace github.com/codex-k8s/matter-codex/libs/go/grpcserver => ../../../libs/go/grpcserver
 

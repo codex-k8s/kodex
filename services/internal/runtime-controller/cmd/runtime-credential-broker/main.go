@@ -25,7 +25,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	ststypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	controlplanev1 "github.com/codex-k8s/matter-codex/libs/go/controlplaneapi/gen/controlplane/v1"
 	sharedclient "github.com/codex-k8s/matter-codex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/matter-codex/services/internal/runtime-controller/internal/domain/types/entity"
@@ -535,6 +534,13 @@ func checkAuthorityFiles(mode string) error {
 		"/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
 	}
 	if mode == "s3-archive" || mode == "s3-restore" {
+		backend, err := configuredS3CredentialBackend()
+		if err != nil {
+			return err
+		}
+		if backend == s3CredentialBackendDirectSTS {
+			return errors.New("direct-production S3 STS provider requires an external OIDC or identity-plugin binding")
+		}
 		paths = append(paths, vaultTokenFile, requiredEnv("RUNTIME_VAULT_CA_FILE"),
 			requiredEnv("RUNTIME_S3_CA_FILE"), s3KMSKeyARNFile)
 		if mode == "s3-archive" {
@@ -1105,80 +1111,26 @@ func materializeS3Credential(
 	}
 	policyDigest := sha256.Sum256(policyRaw)
 	policySHA256 := hex.EncodeToString(policyDigest[:])
-	vaultClient, vaultAddress, err := newVaultClient()
+	provider, err := newS3CredentialProvider()
 	if err != nil {
 		return nil, err
 	}
-	kubernetesJWT, err := os.ReadFile(vaultTokenFile)
-	if err != nil || len(kubernetesJWT) < 20 || len(kubernetesJWT) > 1<<20 {
-		return nil, errors.New("read runtime S3 broker identity")
-	}
-	vaultRole := "runtime-s3-" + action + "-exchanger"
-	login := vaultResponse{}
-	if err := vaultRequest(ctx, vaultClient, http.MethodPost, vaultAddress+"/v1/auth/kubernetes/login", "", map[string]any{
-		"role": vaultRole, "jwt": string(kubernetesJWT),
-	}, &login); err != nil || login.Auth == nil || login.Auth.ClientToken == "" || login.Auth.Accessor == "" {
-		return nil, errors.New("authenticate exact runtime S3 broker identity")
-	}
-	tags := map[string]string{
-		"organization_id":     execution.OrganizationID,
-		"project_id":          execution.ProjectID,
-		"session_id":          execution.SessionID,
-		"execution_id":        execution.ID,
-		"source_execution_id": sourceExecutionID,
-	}
-	if action == "restore" {
-		_, archiveReference := restoreArchiveSource(execution)
-		tags["archive_version_id"] = exactVersionID(archiveReference)
-	}
-	bootstrap := vaultResponse{}
-	if err := vaultRequest(ctx, vaultClient, http.MethodPost, vaultAddress+"/v1/aws/sts/runtime-"+action+"-exchanger",
-		login.Auth.ClientToken, map[string]any{
-			"ttl": "15m", "role_session_name": "mcx-broker-" + shortID(execution.ID) + "-" + action,
-		}, &bootstrap); err != nil {
-		return nil, errors.New("issue runtime S3 broker credential")
-	}
-	bootstrapAccessKey, accessOK := bootstrap.Data["access_key"].(string)
-	bootstrapSecretKey, secretOK := bootstrap.Data["secret_key"].(string)
-	bootstrapToken, tokenOK := bootstrap.Data["security_token"].(string)
-	if !accessOK || !secretOK || !tokenOK || bootstrapAccessKey == "" || bootstrapSecretKey == "" || bootstrapToken == "" ||
-		bootstrap.LeaseID == "" || bootstrap.LeaseDuration < 60 || bootstrap.LeaseDuration > int64(maximumSTSTTL/time.Second) {
-		return nil, errors.New("runtime S3 broker credential response is invalid")
-	}
-	stsClient, roleARN, err := newS3STSClient(action, bootstrapAccessKey, bootstrapSecretKey, bootstrapToken)
-	if err != nil {
+	defer provider.Close()
+	if err = provider.Check(ctx, action); err != nil {
 		return nil, err
 	}
-	tagValues := make([]ststypes.Tag, 0, len(tags))
-	tagNames := make([]string, 0, len(tags))
-	for name := range tags {
-		tagNames = append(tagNames, name)
-	}
-	sort.Strings(tagNames)
-	for _, name := range tagNames {
-		tagValues = append(tagValues, ststypes.Tag{Key: aws.String(name), Value: aws.String(tags[name])})
-	}
-	sessionName := "mcx-" + shortID(execution.ID) + "-" + action
-	duration := int32(maximumSTSTTL / time.Second)
-	assumed, err := stsClient.AssumeRole(ctx, &sts.AssumeRoleInput{
-		RoleArn: aws.String(roleARN), RoleSessionName: aws.String(sessionName), DurationSeconds: &duration,
-		Policy: aws.String(string(policyRaw)), Tags: tagValues,
+	issued, err := provider.Issue(ctx, s3CredentialRequest{
+		Execution: execution, Action: action, SourceExecutionID: sourceExecutionID, PolicyRaw: policyRaw,
 	})
-	if err != nil || assumed.Credentials == nil || assumed.AssumedRoleUser == nil {
-		return nil, errors.New("assume exact runtime S3 execution role")
+	if err != nil {
+		return nil, err
 	}
-	accessKeyID := aws.ToString(assumed.Credentials.AccessKeyId)
-	secretAccessKey := aws.ToString(assumed.Credentials.SecretAccessKey)
-	sessionToken := aws.ToString(assumed.Credentials.SessionToken)
-	expiresAt := aws.ToTime(assumed.Credentials.Expiration).UTC()
-	if !accessOK || !secretOK || !tokenOK || accessKeyID == "" || secretAccessKey == "" || sessionToken == "" ||
-		expiresAt.Before(time.Now().UTC().Add(time.Minute)) || expiresAt.After(time.Now().UTC().Add(maximumSTSTTL+time.Minute)) {
-		return nil, errors.New("runtime S3 credential response is invalid")
-	}
+	accessKeyID, secretAccessKey, sessionToken, expiresAt := issued.AccessKeyID, issued.SecretAccessKey, issued.SessionToken, issued.ExpiresAt
+	sessionName := issued.SessionName
 	readbackRaw, err := json.Marshal(struct {
 		BootstrapLeaseID, LoginAccessor, AssumedRoleARN, PolicySHA256 string
 		ExecutionID, Action, SourceExecutionID, ExpiresAt             string
-	}{bootstrap.LeaseID, login.Auth.Accessor, aws.ToString(assumed.AssumedRoleUser.Arn), policySHA256,
+	}{issued.BootstrapLeaseID, issued.LoginAccessor, issued.AssumedRoleARN, policySHA256,
 		execution.ID, action, sourceExecutionID,
 		expiresAt.Format(time.RFC3339)})
 	if err != nil {
@@ -1208,7 +1160,7 @@ func materializeS3Credential(
 			"runtime.mattercodex.dev/bucket":                 requiredEnv("RUNTIME_S3_BUCKET"),
 			"runtime.mattercodex.dev/workload-ticket-sha256": hex.EncodeToString(actionTicketDigest[:]),
 			"runtime.mattercodex.dev/sts-session-name":       sessionName,
-			"runtime.mattercodex.dev/assumed-role-arn":       aws.ToString(assumed.AssumedRoleUser.Arn),
+			"runtime.mattercodex.dev/assumed-role-arn":       issued.AssumedRoleARN,
 			"runtime.mattercodex.dev/inline-policy-sha256":   policySHA256,
 			"runtime.mattercodex.dev/readback-sha256":        hex.EncodeToString(readbackDigest[:]),
 			"runtime.mattercodex.dev/expires-at":             expiresAt.Format(time.RFC3339),
@@ -1636,6 +1588,10 @@ func vaultRequest(ctx context.Context, client *http.Client, method, endpoint, to
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
 		return errors.New("vault request was rejected")
+	}
+	if target == nil {
+		_, err = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+		return err
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 1<<20))
 	if decoder.Decode(target) != nil || decoder.Decode(&struct{}{}) != io.EOF {

@@ -46,6 +46,26 @@ func TestAuthorityReceiptRejectsCrossExecutionReplay(t *testing.T) {
 	}
 }
 
+func TestS3CredentialBackendRequiresExactProfile(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		profile, backend string
+		ok               bool
+	}{
+		{profile: "production", backend: "vault-aws", ok: true},
+		{profile: directProductionPrototypeProfile, backend: "direct-production-s3-sts", ok: true},
+		{profile: directProductionPrototypeProfile, backend: "vault-aws"},
+		{profile: "production", backend: "direct-production-s3-sts"},
+		{profile: directProductionPrototypeProfile, backend: "static"},
+	}
+	for _, test := range tests {
+		_, err := selectS3CredentialBackend(test.profile, test.backend)
+		if (err == nil) != test.ok {
+			t.Fatalf("selectS3CredentialBackend(%q, %q) error=%v, want ok=%v", test.profile, test.backend, err, test.ok)
+		}
+	}
+}
+
 func TestExactS3PolicyBindsRestoreVersionAndForbidsBroadActions(t *testing.T) {
 	t.Setenv("RUNTIME_S3_BUCKET", "runtime-bucket")
 	t.Setenv("RUNTIME_S3_REGION", "region")
