@@ -95,7 +95,9 @@ template:
           runAsNonRoot: true
           runAsUser: 1000
           runAsGroup: 1000
-          allowPrivilegeEscalation: false
+          # RootlessKit requires the image's setuid newuidmap/newgidmap helpers.
+          # hostUsers:false keeps that elevation inside the pod user namespace.
+          allowPrivilegeEscalation: true
           procMount: Unmasked
           appArmorProfile: {type: Unconfined}
           seccompProfile: {type: Unconfined}

@@ -66,7 +66,16 @@ yq -e '
   ([.template.spec.volumes[] | select(.name == "owner-gate" and
     .configMap.name == "mattercodex-runner-owner-gate")] | length) == 1 and
   ([.template.spec.volumes[] | select(.name == "tools" and
-    .emptyDir.sizeLimit == "256Mi")] | length) == 1
+    .emptyDir.sizeLimit == "256Mi")] | length) == 1 and
+  .template.spec.hostUsers == false and
+  ([.template.spec.containers[] | select(.name == "buildkitd" and
+    .securityContext.runAsNonRoot == true and
+    .securityContext.runAsUser == 1000 and
+    .securityContext.allowPrivilegeEscalation == true and
+    .securityContext.appArmorProfile.type == "Unconfined" and
+    .securityContext.seccompProfile.type == "Unconfined" and
+    (.securityContext.capabilities.drop | length) == 1 and
+    .securityContext.capabilities.drop[0] == "ALL")] | length) == 1
 ' "$repository_root/infra/arc/build-runner-values.yaml" >/dev/null
 yq -e '
   .githubConfigUrl == "https://github.com/codex-k8s/matter-codex" and
