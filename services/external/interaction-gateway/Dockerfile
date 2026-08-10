@@ -11,6 +11,7 @@ COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/i18n/ libs/go/i18n/
+COPY libs/go/interactiongatewayapi/ libs/go/interactiongatewayapi/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/

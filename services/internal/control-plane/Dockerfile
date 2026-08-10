@@ -13,6 +13,9 @@ COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
 COPY libs/go/eventing/ libs/go/eventing/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
+COPY libs/go/integrationgatewayapi/ libs/go/integrationgatewayapi/
+COPY libs/go/integrationgatewayauth/ libs/go/integrationgatewayauth/
+COPY libs/go/interactiongatewayapi/ libs/go/interactiongatewayapi/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY services/internal/control-plane/ services/internal/control-plane/
