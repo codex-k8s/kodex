@@ -95,7 +95,6 @@ yq eval-all '
     }
   ) |
   with(select(.kind == "Deployment");
-    .spec.replicas = 1 |
     (.spec.template.spec.containers[]?.env[]? | select(.name == "CONTROL_PLANE_NATS_REPLICAS").value) = "1"
   ) |
   with(select(.kind == "CronJob");
