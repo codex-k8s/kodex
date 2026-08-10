@@ -155,8 +155,8 @@ func loadConfig() (Config, error) {
 		ProviderReceiptPrivateJWKFile:     "/var/run/secrets/mattercodex/integration-gateway/provider-receipt/private.jwk",
 		GitReceiptIssuer:                  "https://integration-gateway.mattercodex-system.svc.cluster.local/authority/git-reconciliation",
 		GitReceiptPrivateJWKFile:          "/var/run/secrets/mattercodex/integration-gateway/git-receipt/private.jwk",
-		OIDCIssuer:                        "https://sso.mattercodex.local", OIDCAudience: "mattercodex-integration-gateway",
-		OIDCTLSServerName: "sso.mattercodex.local", OIDCCAFile: "/var/run/config/mattercodex/integration-gateway/oidc/ca.pem",
+		OIDCIssuer:                        "https://sso.kodex.works/realms/mattercodex", OIDCAudience: "mattercodex-integration-gateway",
+		OIDCTLSServerName: "sso.kodex.works", OIDCCAFile: "/var/run/config/mattercodex/integration-gateway/oidc/ca.pem",
 		OIDCProviderSnapshotFile: "/var/run/config/mattercodex/integration-gateway/oidc/provider-snapshot.json",
 		SessionTTL:               30 * time.Minute, InvocationTTL: 7 * 24 * time.Hour, RequestDeadline: 30 * time.Second,
 		StartupTimeout: 15 * time.Second, ShutdownTimeout: 10 * time.Second, ReadinessInterval: 10 * time.Second,
@@ -252,7 +252,7 @@ func (config Config) validate() error {
 	}
 	if oidcSelection == oidcBackendDirectFile && (config.OIDCProviderSnapshotFile != "/var/run/config/mattercodex/integration-gateway/oidc/provider-snapshot.json" ||
 		!validSHA256(config.OIDCProviderSnapshotSHA256) || config.OIDCProviderSnapshotGeneration == 0 ||
-		config.OIDCIssuer != "https://sso.mattercodex.local" || config.OIDCAudience != "mattercodex-integration-gateway") {
+		config.OIDCIssuer != "https://sso.kodex.works/realms/mattercodex" || config.OIDCAudience != "mattercodex-integration-gateway") {
 		return errors.New("integration direct OIDC registry is invalid")
 	}
 	return nil

@@ -65,7 +65,10 @@ SCOPE="$scope" yq eval-all '
 
 # Direct-production prototype заменяет Vault CSI mounts на материализованные
 # владельцем Kubernetes Secrets, сохраняя имена и пути файлов интерфейса.
-yq eval-all '
+# Field path передаётся через окружение: literal single quotes внутри shell-
+# quoted yq program иначе теряются при разборе Bash.
+profile_field_path="metadata.labels['mattercodex.dev/profile']"
+PROFILE_FIELD_PATH="$profile_field_path" yq eval-all '
   select(.kind != null) |
   with(select(.metadata.namespace != null); .metadata.namespace = "mattercodex-system") |
   .metadata.labels."mattercodex.dev/profile" = "direct-production-single-node-prototype" |
@@ -83,7 +86,7 @@ yq eval-all '
           .name == "internal-rpc-authority-verifier");
         .env = ((.env // []) | map(select((.name | test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_")) | not))) + [
           {"name":"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND","value":"direct-production-kubernetes-file"},
-          {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":"metadata.labels['mattercodex.dev/profile']"}}}
+          {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":strenv(PROFILE_FIELD_PATH)}}}
         ] |
         .volumeMounts = ((.volumeMounts // []) |
           map(select((.name | contains("vault")) | not)))
@@ -99,7 +102,7 @@ yq eval-all '
           .name == "internal-rpc-authority-verifier");
         .env = ((.env // []) | map(select((.name | test("^INTERNAL_RPC_AUTHORITY_(PUBLISHER_)?VAULT_")) | not))) + [
           {"name":"INTERNAL_RPC_AUTHORITY_SECRET_BACKEND","value":"direct-production-kubernetes-file"},
-          {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":"metadata.labels['mattercodex.dev/profile']"}}}
+          {"name":"INTERNAL_RPC_AUTHORITY_DEPLOYMENT_PROFILE","valueFrom":{"fieldRef":{"fieldPath":strenv(PROFILE_FIELD_PATH)}}}
         ] |
         .volumeMounts = ((.volumeMounts // []) |
           map(select((.name | contains("vault")) | not)))

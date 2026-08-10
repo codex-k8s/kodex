@@ -21,7 +21,7 @@ func TestFileVerifierRejectsChangedTrustAndClaims(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issuer, audience, keyID := "https://sso.mattercodex.local", "mattercodex-integration-gateway", "provider-key-1"
+	issuer, audience, keyID := "https://sso.kodex.works/realms/mattercodex", "mattercodex-integration-gateway", "provider-key-1"
 	path, digest := writeProviderSnapshot(t, issuer, audience, keyID, &privateKey.PublicKey)
 	config := FileConfig{Issuer: issuer, Audience: audience, File: path, ExpectedSHA256: digest, ExpectedGeneration: 7}
 	verifier, err := NewFile(config)

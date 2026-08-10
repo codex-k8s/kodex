@@ -13,10 +13,10 @@ metadata:
 spec:
   ingressClassName: nginx
   tls:
-    - hosts: [control.mattercodex.local]
+    - hosts: [control.kodex.works]
       secretName: staff-control-center-public-tls
   rules:
-    - host: control.mattercodex.local
+    - host: control.kodex.works
       http:
         paths:
           - path: /
