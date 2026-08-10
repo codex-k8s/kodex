@@ -183,7 +183,29 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
   exit 1
 }
 
-"$network_policy_renderer" "$temporary_directory/rendered-network-policy.yaml"
+"$network_policy_renderer" 10.43.198.224/32 192.0.2.10/32 \
+  "$temporary_directory/rendered-network-policy.yaml"
+yq -o=json eval-all '.' "$temporary_directory/rendered-network-policy.yaml" | jq -sc -e '
+  map(select(.kind == "NetworkPolicy" and .metadata.namespace == "mattercodex-ci" and
+    .metadata.name == "build-registry")) |
+  length == 1 and
+  ([.[0].spec.egress[0].to[] | select(.ipBlock != null) | .ipBlock.cidr] | sort) ==
+    ["10.43.198.224/32","192.0.2.10/32"] and
+  ([.[0].spec.egress[0].ports[].port] | sort) == [5000,5001]
+' >/dev/null || {
+  printf 'Rendered build registry hostNetwork destination is not exact\n' >&2
+  exit 1
+}
+if "$network_policy_renderer" 0.0.0.0/0 192.0.2.10/32 \
+  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  printf 'Registry network policy renderer accepted a non-/32 destination\n' >&2
+  exit 1
+fi
+if "$network_policy_renderer" 999.0.0.1/32 192.0.2.10/32 \
+  "$temporary_directory/forbidden-registry-network-policy.yaml" >/dev/null 2>&1; then
+  printf 'Registry network policy renderer accepted an invalid IPv4 destination\n' >&2
+  exit 1
+fi
 for proxy_namespace in mattercodex-ci mattercodex-ci-deploy; do
   rendered_config="$temporary_directory/envoy-$proxy_namespace.yaml"
   PROXY_NAMESPACE=$proxy_namespace yq -r '

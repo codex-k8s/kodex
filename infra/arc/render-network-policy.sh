@@ -1,19 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-output=${1:-}
-[[ -n "$output" ]] || { printf 'Usage: %s <output>\n' "$0" >&2; exit 2; }
+registry_service_cidr=${1:-}
+registry_endpoint_cidr=${2:-}
+output=${3:-}
+valid_ipv4_cidr() {
+  local cidr=$1 address first second third fourth
+  [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/32$ ]] || return 1
+  address=${cidr%/32}
+  IFS=. read -r first second third fourth <<<"$address"
+  ((first <= 255 && second <= 255 && third <= 255 && fourth <= 255))
+}
+if ! valid_ipv4_cidr "$registry_service_cidr" ||
+   ! valid_ipv4_cidr "$registry_endpoint_cidr" || [[ -z "$output" ]]; then
+  printf 'Usage: %s <registry-service-ipv4/32> <registry-endpoint-ipv4/32> <output>\n' "$0" >&2
+  exit 2
+fi
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 source_file="$script_directory/network-policy.yaml"
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
-yq eval-all '.' "$source_file" >"$temporary_directory/build-unannotated.yaml"
+REGISTRY_SERVICE_CIDR=$registry_service_cidr REGISTRY_ENDPOINT_CIDR=$registry_endpoint_cidr \
+  yq eval-all '
+    (.. | select(tag == "!!str")) |=
+      sub("__REGISTRY_SERVICE_CIDR__"; strenv(REGISTRY_SERVICE_CIDR)) |
+    (.. | select(tag == "!!str")) |=
+      sub("__REGISTRY_ENDPOINT_CIDR__"; strenv(REGISTRY_ENDPOINT_CIDR))
+  ' "$source_file" >"$temporary_directory/resolved-source.yaml"
+if rg -q '__REGISTRY_(SERVICE|ENDPOINT)_CIDR__' "$temporary_directory/resolved-source.yaml"; then
+  printf 'Registry CIDR placeholder remained after render\n' >&2
+  exit 1
+fi
+yq eval-all '.' "$temporary_directory/resolved-source.yaml" >"$temporary_directory/build-unannotated.yaml"
 yq eval-all '
   select(.metadata.name != "build-registry") |
   .metadata.namespace = "mattercodex-ci-deploy" |
   (.. | select(tag == "!!str")) |= sub("mattercodex-ci\\.svc"; "mattercodex-ci-deploy.svc") |
   (.. | select(tag == "!!str")) |= sub("build-runner"; "deploy-runner")
-' "$source_file" >"$temporary_directory/deploy-unannotated.yaml"
+' "$temporary_directory/resolved-source.yaml" >"$temporary_directory/deploy-unannotated.yaml"
 
 annotate_proxy_config() {
   local input=$1 output=$2 config_checksum
