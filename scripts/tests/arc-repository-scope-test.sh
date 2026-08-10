@@ -147,7 +147,7 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
   $virtual_host.routes as $routes |
   $hcm.upgrade_configs[0] as $hcm_upgrade |
   ($virtual_host.domains == ["*"]) and
-  ($routes | length == 11) and
+  ($routes | length == 12) and
   (all($routes[];
     .match.connect_matcher == {} and
     (.match.headers | length == 1) and .match.headers[0].name == ":authority" and
@@ -158,10 +158,13 @@ yq -o=json '.' "$temporary_directory/envoy.yaml" | jq -e '
     .route.upgrade_configs[0].connect_config == {})) and
   (all("github.com:443", "broker.actions.githubusercontent.com:443",
     "raw.githubusercontent.com:443", "avatars.githubassets.com:443",
-    "ghcr.io:443", "registry-1.docker.io:443";
+    "ghcr.io:443", "registry-1.docker.io:443",
+    "githubactionsresults.blob.core.windows.net:443";
       authority_allowed($routes; .))) and
   (all("example.com:443", "github.com:80", "github.com.attacker.invalid:443",
-    "broker.actions.githubusercontent.com.attacker.invalid:443";
+    "broker.actions.githubusercontent.com.attacker.invalid:443",
+    "blob.core.windows.net:443",
+    "githubactionsresults.blob.core.windows.net.attacker.invalid:443";
       (authority_allowed($routes; .) | not))) and
   ($hcm_upgrade.upgrade_type == "CONNECT") and
   ($hcm_upgrade | has("connect_config") | not) and
