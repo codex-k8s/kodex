@@ -73,10 +73,18 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 
 kubernetes_api_service_ip=$(kubectl --context "$expected_context" -n default get service kubernetes \
   -o json | jq -er '.spec.clusterIP | select(type == "string" and length > 0 and . != "None")')
+rendered_network_policy="$temporary_directory/network-policy.yaml"
+"$script_directory/render-network-policy.sh" "$rendered_network_policy"
+egress_proxy_config_sha256=$(yq -r '
+  select(.kind == "ConfigMap" and .metadata.namespace == "mattercodex-ci" and
+    .metadata.name == "mattercodex-ci-egress-proxy") | .data."envoy.yaml"
+' "$rendered_network_policy" | sha256sum | awk '{print $1}')
+[[ "$egress_proxy_config_sha256" =~ ^[a-f0-9]{64}$ ]] ||
+  fail "rendered egress proxy config SHA-256 is invalid"
 rendered_values_directory="$temporary_directory/helm-values"
 mkdir -p -- "$rendered_values_directory"
 "$script_directory/render-helm-values.sh" "$kubernetes_api_service_ip" \
-  "$rendered_values_directory" >/dev/null
+  "$egress_proxy_config_sha256" "$rendered_values_directory" >/dev/null
 controller_values="$rendered_values_directory/controller-values.yaml"
 controller_deploy_values="$rendered_values_directory/controller-deploy-values.yaml"
 build_runner_values="$rendered_values_directory/build-runner-values.yaml"
@@ -199,8 +207,6 @@ render_owner_gate_config "$deploy_namespace" .github/workflows/deploy-production
 
 controller_chart=$(pull_chart gha-runner-scale-set-controller)
 runner_chart=$(pull_chart gha-runner-scale-set)
-rendered_network_policy="$temporary_directory/network-policy.yaml"
-"$script_directory/render-network-policy.sh" "$rendered_network_policy"
 server_minor=$(kubectl --context "$expected_context" version -o json |
   jq -r '.serverVersion.minor | sub("[^0-9].*$"; "") | tonumber')
 ((server_minor >= 33)) || fail "Kubernetes 1.33 or newer is required for stable Pod user namespaces"
@@ -278,9 +284,12 @@ for controller_spec in \
   kubectl --context "$expected_context" -n "$namespace" rollout status \
     "deployment/$controller_name" --timeout=5m >/dev/null
   kubectl --context "$expected_context" -n "$namespace" get deployment "$controller_name" -o json |
-    jq -e --arg no_proxy "$kubernetes_api_no_proxy" '
-      [.spec.template.spec.containers[].env[]? |
-        select(.name == "NO_PROXY" and .value == $no_proxy)] | length == 1
+    jq -e --arg no_proxy "$kubernetes_api_no_proxy" \
+      --arg proxy_sha "$egress_proxy_config_sha256" '
+      (.spec.template.metadata.annotations."mattercodex.dev/egress-proxy-config-sha256" ==
+        $proxy_sha) and
+      ([.spec.template.spec.containers[].env[]? |
+        select(.name == "NO_PROXY" and .value == $no_proxy)] | length == 1)
     ' >/dev/null || fail "controller Kubernetes API NO_PROXY readback mismatch: $controller_name"
 done
 for proxy_namespace in "$build_namespace" "$deploy_namespace"; do
